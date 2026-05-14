@@ -43,5 +43,6 @@ AUDIT_INTERNE.md
 .DS_Store
 Thumbs.db
 
-# Models (trop volumineux pour git)
-models/
+# Models (trop volumineux pour git, mais garder l'arborescence)
+models/cohere-asr/*
+!models/cohere-asr/.gitkeep

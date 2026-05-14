@@ -12,8 +12,7 @@ class WorkflowRunner:
     def __init__(self, store: JobStore, config: dict | None = None):
         self.store = store
         self.config = config or {}
-        dash_url = self.config.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
-        self.vram = VRAMManager(dashboard_url=dash_url)
+        self.vram = VRAMManager(config=self.config)
 
     def run_analyze(self, job: Job, audio_path: str) -> dict:
         from pathlib import Path
@@ -76,7 +75,8 @@ class WorkflowRunner:
                 launched = self.vram.launch_qwen_35b()
                 if launched:
                     try:
-                        runner = OpenCodeRunner(str(fs.job_dir / "summary"))
+                        opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
+                        runner = OpenCodeRunner(str(fs.job_dir / "summary"), opencode_bin=opencode_bin)
                         parsed = runner.run_summary(
                             str(transcript_path),
                             str(context_path),
@@ -251,7 +251,8 @@ class WorkflowRunner:
             return {"success": False, "error": "Qwen 35B non disponible"}
 
         try:
-            runner = OpenCodeRunner(str(fs.job_dir / "metadata"))
+            opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
+            runner = OpenCodeRunner(str(fs.job_dir / "metadata"), opencode_bin=opencode_bin)
             result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path))
             if result["success"] and result["corrected_srt"]:
                 fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])

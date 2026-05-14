@@ -7,11 +7,18 @@ _DEFAULT_CONFIG = {
     "server": {"host": "0.0.0.0", "port": 7870, "debug": True},
     "storage": {"jobs_dir": "./jobs", "database_url": "sqlite:///transcrIA.db"},
     "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME"},
-    "services": {"dashboard_llm_url": "http://127.0.0.1:5001", "srt_editor_easy_url": "http://127.0.0.1:7861"},
+    "services": {
+        "dashboard_llm_url": "http://127.0.0.1:5001",
+        "srt_editor_easy_url": "http://127.0.0.1:7861",
+        "arbitrage_script": "./scripts/launch_arbitrage.sh",
+        "stop_script": "./scripts/stop_qwen.sh",
+        "qwen_port": 8080,
+        "vllm_port": 8000,
+    },
     "models": {
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",
-        "cohere_model_path": "./models/Whisper/cohere-asr/cohere-transcribe-03-2026",
+        "cohere_model_path": "./models/cohere-asr/cohere-transcribe-03-2026",
         "pyannote_model": "pyannote/speaker-diarization-community-1",
     },
     "workflow": {

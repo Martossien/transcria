@@ -14,7 +14,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "/root/.opencode/bin/opencode")
+_DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
 PROVIDER = "local"
 MODEL = "qwen3-35b-arbitrage"
 
@@ -24,15 +24,16 @@ _PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 class OpenCodeRunner:
     """Lance opencode pour exécuter des tâches LLM complexes (résumé, arbitrage)."""
 
-    def __init__(self, work_dir: str, model: str = None, provider: str = None):
+    def __init__(self, work_dir: str, model: str = None, provider: str = None, opencode_bin: str = None):
         self.work_dir = Path(work_dir).resolve()
         self.model = model or MODEL
         self.provider = provider or PROVIDER
         self.model_ref = f"{self.provider}/{self.model}"
+        self.opencode_bin = opencode_bin or _DEFAULT_OPENCODE_BIN
 
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
-        if not os.path.isfile(OPENCODE_BIN):
-            return {"success": False, "error": f"opencode introuvable: {OPENCODE_BIN}"}
+        if not os.path.isfile(self.opencode_bin):
+            return {"success": False, "error": f"opencode introuvable: {self.opencode_bin}"}
 
         prompt_file = os.path.abspath(prompt_file)
         if not os.path.isfile(prompt_file):
@@ -41,7 +42,7 @@ class OpenCodeRunner:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            OPENCODE_BIN, "run", "--format", "json",
+            self.opencode_bin, "run", "--format", "json",
             "--model", self.model_ref,
             instruction,
             "-f", prompt_file,

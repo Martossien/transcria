@@ -7,11 +7,6 @@ import time
 logger = logging.getLogger(__name__)
 
 
-import os
-
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
 class VRAMManager:
     """Cycle de vie GPU : libère, lance, utilise, arrête les modèles."""
 
@@ -20,14 +15,20 @@ class VRAMManager:
     QWEN35_VRAM_MB = 60000
     MIN_FREE_MB = 4000
 
-    QWEN_PORT = 8080
-    VLLM_PORT = 8000
-
-    ARBITRAGE_SCRIPT = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT", "/root/launch_arbitrage2.sh")
-    STOP_SCRIPT = os.environ.get("TRANSCRIA_STOP_SCRIPT", "/root/stop_qwen36_27b_vllm.sh")
-
-    def __init__(self, dashboard_url: str = "http://127.0.0.1:5001"):
-        self.dashboard_url = dashboard_url.rstrip("/")
+    def __init__(self, config: dict, dashboard_url: str | None = None):
+        self.config = config
+        services = config.get("services", {})
+        self.qwen_port: int = services.get("qwen_port", 8080)
+        self.vllm_port: int = services.get("vllm_port", 8000)
+        self.arbitrage_script: str = os.environ.get(
+            "TRANSCRIA_ARBITRAGE_SCRIPT",
+            services.get("arbitrage_script", "./scripts/launch_arbitrage.sh"),
+        )
+        self.stop_script: str = os.environ.get(
+            "TRANSCRIA_STOP_SCRIPT",
+            services.get("stop_script", "./scripts/stop_qwen.sh"),
+        )
+        self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
         self._qwen_pid: int | None = None
 
@@ -184,43 +185,52 @@ class VRAMManager:
             return False
 
     def stop_vllm_port_8000(self) -> bool:
-        """Tue le vLLM sur le port 8000 (Voxtral Mini 4B)."""
-        logger.info("Arrêt vLLM port 8000...")
-        ok = self._kill_port(self.VLLM_PORT)
+        """Tue le vLLM sur le port configuré (défaut 8000)."""
+        logger.info("Arrêt vLLM port %d...", self.vllm_port)
+        ok = self._kill_port(self.vllm_port)
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
         except ImportError: pass
         return ok
 
     def launch_qwen_35b(self) -> bool:
-        """Lance Qwen 3.6 35B UD-Q8_XL via le script d'arbitrage (port 8080, 2 GPUs)."""
-        if not os.path.isfile(self.ARBITRAGE_SCRIPT):
-            logger.error("Script d'arbitrage introuvable: %s", self.ARBITRAGE_SCRIPT)
+        """Lance Qwen 3.6 35B UD-Q8_XL via le script d'arbitrage (port configuré, 2 GPUs)."""
+        if not os.path.isfile(self.arbitrage_script):
+            logger.error("Script d'arbitrage introuvable: %s", self.arbitrage_script)
             return False
 
-        if self.is_port_open(self.QWEN_PORT):
-            logger.info("Port %d déjà occupé — nettoyage avant lancement", self.QWEN_PORT)
-            self._kill_port(self.QWEN_PORT)
+        if self.is_port_open(self.qwen_port):
+            logger.info("Port %d déjà occupé — nettoyage avant lancement", self.qwen_port)
+            self._kill_port(self.qwen_port)
             time.sleep(3)
 
-        logger.info("Lancement Qwen 35B via %s...", self.ARBITRAGE_SCRIPT)
+        logger.info("Lancement Qwen 35B via %s...", self.arbitrage_script)
         try:
             proc = subprocess.Popen(
-                ["/bin/bash", self.ARBITRAGE_SCRIPT],
+                ["/bin/bash", self.arbitrage_script],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
             self._qwen_pid = proc.pid
-            logger.info("Qwen 35B lancé — PID %d, attente du port 8080...", proc.pid)
-            return self._wait_for_port(self.QWEN_PORT, timeout=600)
+            logger.info("Qwen 35B lancé — PID %d, attente du port %d...", proc.pid, self.qwen_port)
+            return self._wait_for_port(self.qwen_port, timeout=600)
         except Exception as exc:
             logger.error("Échec lancement Qwen 35B: %s", exc)
             return False
 
     def stop_qwen_35b(self) -> bool:
-        """Arrête Qwen 35B sur le port 8080."""
-        logger.info("Arrêt Qwen 35B port 8080...")
-        ok = self._kill_port(self.QWEN_PORT)
+        """Arrête Qwen 35B via le script d'arrêt, puis kill port en fallback."""
+        logger.info("Arrêt Qwen 35B port %d...", self.qwen_port)
+        if os.path.isfile(self.stop_script):
+            try:
+                subprocess.run(
+                    ["/bin/bash", self.stop_script],
+                    capture_output=True, text=True, timeout=30,
+                )
+                logger.info("Script d'arrêt exécuté: %s", self.stop_script)
+            except Exception as exc:
+                logger.warning("Échec script d'arrêt: %s", exc)
+        self._kill_port(self.qwen_port)
         self._qwen_pid = None
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
