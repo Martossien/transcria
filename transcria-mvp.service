@@ -1,0 +1,24 @@
+[Unit]
+Description=TranscrIA MVP — Portail de transcription de réunion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/transcria-mvp
+Environment=PORT=7870
+Environment=HOST=0.0.0.0
+Environment=DEBUG=false
+Environment=LOG_FILE=/var/log/transcrIA.log
+Environment=PID_FILE=/run/transcrIA.pid
+ExecStart=/opt/transcria-mvp/start.sh
+ExecStop=/opt/transcria-mvp/stop.sh
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

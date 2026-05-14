@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier' if user else 'Nouvel' }} utilisateur — TranscIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">{{ 'Modifier' if user else 'Créer un' }} utilisateur</h1>
+<div class="card">
+  <div class="card-body">
+    <form method="POST">
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Nom d'utilisateur</label>
+          <input type="text" name="username" class="form-control" value="{{ user.username if user else '' }}" {{ 'readonly' if user else 'required' }}>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Nom affiché</label>
+          <input type="text" name="display_name" class="form-control" value="{{ user.display_name if user else '' }}">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="email" name="email" class="form-control" value="{{ user.email if user else '' }}">
+      </div>
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Rôle</label>
+          <select name="role" class="form-select">
+            {% for r in roles %}
+            <option value="{{ r.value }}" {{ 'selected' if user and user.role == r.value }}>{{ r.value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Mot de passe {{ '(laisser vide pour ne pas changer)' if user else '' }}</label>
+          <input type="password" name="password" class="form-control" {{ '' if user else 'required' }}>
+        </div>
+      </div>
+      {% if user %}
+      <div class="mb-3 form-check">
+        <input type="checkbox" name="is_active" value="1" class="form-check-input" id="is_active" {{ 'checked' if user.is_active }}>
+        <label class="form-check-label" for="is_active">Compte actif</label>
+      </div>
+      {% endif %}
+      <button type="submit" class="btn btn-primary">{{ 'Enregistrer' if user else 'Créer' }}</button>
+      <a href="/admin/users" class="btn btn-outline-secondary">Annuler</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

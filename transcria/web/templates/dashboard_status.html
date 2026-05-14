@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}État système — TranscIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">État technique du système</h1>
+{% if status and status.available %}
+<div class="row">
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">CPU</div>
+      <div class="card-body">
+        <p>Charge: <strong>{{ status.cpu.load if status.cpu else '—' }}%</strong></p>
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">RAM</div>
+      <div class="card-body">
+        <p>Utilisée: <strong>{{ status.ram.used if status.ram else '—' }} Go</strong> / {{ status.ram.total if status.ram else '—' }} Go</p>
+      </div>
+    </div>
+    <div class="card mb-3">
+      <div class="card-header">Services</div>
+      <div class="card-body">
+        {% if status.services %}
+        {% for name, state in status.services.items() %}
+        <div class="d-flex justify-content-between mb-1">
+          <span>{{ name }}</span>
+          <span class="badge bg-{{ 'success' if state == 'UP' else 'danger' if state == 'DOWN' else 'warning' }}">{{ state }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">Aucun service.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card mb-3">
+      <div class="card-header">GPU</div>
+      <div class="card-body">
+        {% if status.gpus %}
+        {% for gpu in status.gpus %}
+        <div class="mb-3 p-2 border rounded">
+          <strong>{{ gpu.name }}</strong><br>
+          <small>VRAM: {{ gpu.memory.used }} / {{ gpu.memory.total }} Go</small><br>
+          <small>Utilisation: {{ gpu.gpu_util }}% | Temp: {{ gpu.temp }}°C</small>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted">Aucun GPU détecté.</p>
+        {% endif %}
+      </div>
+    </div>
+    {% if status.model %}
+    <div class="card mb-3">
+      <div class="card-header">Modèle actif</div>
+      <div class="card-body"><strong>{{ status.model }}</strong></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i> Dashboard LLM indisponible sur {{ app_config.services.dashboard_llm_url if app_config else 'port 5001' }}.
+  <br><small>Le dashboard doit être lancé pour afficher l'état technique.</small>
+</div>
+{% endif %}
+<a href="/" class="btn btn-outline-secondary">Retour</a>
+{% endblock %}

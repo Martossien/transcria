@@ -1,0 +1,44 @@
+# Configuration de production (contient des secrets et chemins absolus)
+config.yaml
+
+# Runtime data
+instance/
+jobs/
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Pytest
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+venv/
+.venv/
+
+# Logs
+*.log
+
+# Agent internal data
+.agents/
+.codex/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models (trop volumineux pour git)
+models/

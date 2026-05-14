@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Résultat — TranscIA{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">{{ job.title }} <span class="badge bg-success">Terminé</span></h1>
+
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="text-muted">Score qualité</h5>
+        <span class="display-4 {{ 'text-success' if quality_report.quality_score >= 80 else 'text-warning' if quality_report.quality_score >= 50 else 'text-danger' }}">
+          {{ quality_report.quality_score or '—' }}<small style="font-size:0.4em">/100</small>
+        </span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="text-muted">Points à vérifier</h5>
+        <span class="display-4 {{ 'text-success' if review_points|length == 0 else 'text-warning' }}">{{ review_points|length }}</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card text-center">
+      <div class="card-body">
+        <h5 class="text-muted">Contrôles</h5>
+        <span class="display-4 text-muted">{{ quality_report.total_checks or 0 }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if review_points %}
+<div class="card mb-4">
+  <div class="card-header">Points à vérifier</div>
+  <div class="card-body">
+    <ul class="mb-0">
+      {% for point in review_points %}
+      <li class="mb-1">{{ point }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<div class="d-flex flex-wrap gap-2 mb-4">
+  <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success"><i class="bi bi-download"></i> Télécharger le SRT</a>
+  <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Télécharger l'audio</a>
+  <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-primary"><i class="bi bi-archive"></i> Package complet</a>
+  <a href="{{ srt_editor_url }}" target="_blank" class="btn btn-outline-info"><i class="bi bi-pencil-square"></i> SRT Editor EASY</a>
+</div>
+
+{% if srt_content %}
+<details>
+  <summary class="text-muted mb-2">Aperçu du SRT</summary>
+  <pre class="srt-preview">{{ srt_content[:5000] }}</pre>
+</details>
+{% endif %}
+
+<div class="mt-3">
+  <a href="/jobs/{{ job.id }}" class="btn btn-outline-primary btn-sm">Retour au traitement</a>
+  <a href="/" class="btn btn-outline-secondary btn-sm">Accueil</a>
+</div>
+{% endblock %}

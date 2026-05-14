@@ -1,0 +1,881 @@
+{% extends "base.html" %}
+{% block title %}Traitement — TranscIA{% endblock %}
+{% block head %}
+<style>
+  .wizard-container { max-width: 900px; margin: 0 auto; }
+  .step-section { margin-bottom: 32px; padding: 24px; background: var(--card); border-radius: 12px; border: 2px solid var(--border); }
+  .step-section.current-step { border-color: var(--primary); }
+  .step-section h3 { font-size: 1.1rem; margin-bottom: 16px; }
+  .step-section h3 .step-icon { margin-right: 8px; }
+  .step-section .btn { margin-top: 12px; }
+  .participant-row, .lexicon-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .participant-row input, .lexicon-row input, .participant-row select, .lexicon-row select { flex: 1; min-width: 120px; }
+  .speaker-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
+  .speaker-item select { min-width: 200px; }
+  .quality-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
+  .quality-warning { background: #fef3c7; color: #92400e; }
+  .quality-error { background: #fee2e2; color: #991b1b; }
+  .quality-ok { background: #dcfce7; color: #166534; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .clips-audio { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; background: #fafafa; border-radius: 6px; border-left: 3px solid #2563eb; }
+  .clips-audio audio { display: block; width: 100%; height: 32px; margin: 3px 0; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="wizard-container">
+
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1 class="h4 mb-1">{{ job.title }}</h1>
+      <small class="text-muted">Créé le {{ job.created_at.strftime('%d/%m/%Y à %H:%M') }}</small>
+    </div>
+    <div>
+      <span class="badge bg-{{ 'success' if job.state == 'completed' else 'primary' if job.state in ('ready_to_process', 'transcribing') else 'secondary' }} fs-6">{{ job.state }}</span>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="progress-container mb-4">
+    {% for step in steps %}
+      {% set sid = step.id %}
+      {% set status = statuses.get(sid, 'todo') %}
+      <div class="progress-step {% if status == 'done' %}done{% elif status == 'in_progress' %}current{% elif status == 'error' %}error{% endif %}"
+           title="{{ step.label }}">
+        {{ step.order }}. {{ step.label[:10] }}
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Step 1: File upload -->
+  {% set file_status = statuses.get('file', 'todo') %}
+  <div class="step-section {% if file_status == 'todo' or file_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-1-circle-fill step-icon"></i> Fichier audio</h3>
+    {% if file_status == 'done' %}
+      <div class="alert alert-success mb-0">
+        <i class="bi bi-check-circle"></i> Fichier reçu.
+        {% if audio_analysis %}
+          <strong>{{ audio_analysis.get('format', '') }}</strong> —
+          {{ (audio_analysis.get('size_bytes', 0) / (1024*1024))|round(1) }} Mo
+          {% if audio_analysis.get('duration_seconds') %}
+          — {{ (audio_analysis.duration_seconds / 60)|round(1) }} min
+          {% endif %}
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="text-muted">Déposez le fichier audio ou vidéo de la réunion.</p>
+      <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg" class="form-control mb-2">
+      <button class="btn btn-primary" onclick="uploadFile()">
+        <span id="upload-spinner" class="spinner d-none"></span> Téléverser
+      </button>
+      <div id="upload-result" class="mt-2"></div>
+    {% endif %}
+  </div>
+
+  <!-- Step 2: Audio analysis -->
+  {% set analyze_status = statuses.get('analyze', 'todo') %}
+  {% if file_status == 'done' %}
+  <div class="step-section {% if analyze_status == 'todo' or analyze_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-2-circle-fill step-icon"></i> Analyse audio</h3>
+    {% if audio_analysis and audio_analysis.get('duration_seconds') %}
+      <div class="row">
+        <div class="col-md-3"><strong>Durée</strong><br>{{ (audio_analysis.duration_seconds / 60)|round(1) }} minutes</div>
+        <div class="col-md-2"><strong>Format</strong><br>{{ audio_analysis.get('format', '?') }}</div>
+        <div class="col-md-2"><strong>Codec</strong><br>{{ audio_analysis.get('codec', '?') }}</div>
+        <div class="col-md-2"><strong>Canaux</strong><br>{{ audio_analysis.get('channels', '?') }}</div>
+        <div class="col-md-3"><strong>Fréquence</strong><br>{{ audio_analysis.get('sample_rate_hz', '?') }} Hz</div>
+      </div>
+      {% if audio_analysis.get('needs_conversion') %}
+        <div class="alert alert-warning mt-3 mb-0">Conversion requise pour le traitement (effectuée automatiquement).</div>
+      {% endif %}
+      {% if audio_analysis.get('estimated_quality_minutes') %}
+        <div class="alert alert-info mt-2 mb-0">
+          <strong><i class="bi bi-clock"></i> Temps de traitement estimé : ~{{ (audio_analysis.estimated_quality_minutes)|round(0)|int }} minutes</strong>
+          <span class="text-muted small ms-2">(mode qualité, dépend de la charge GPU)</span>
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques.</p>
+      <button class="btn btn-primary" onclick="analyzeAudio()">
+        <span id="analyze-spinner" class="spinner d-none"></span> Analyser le fichier
+      </button>
+      <div id="analyze-result" class="mt-2"></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Step 3: Quick summary -->
+  {% set summary_status = statuses.get('summary', 'todo') %}
+  {% if file_status == 'done' and audio_analysis %}
+  <div class="step-section {% if summary_status == 'todo' or summary_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-3-circle-fill step-icon"></i> Résumé de contrôle</h3>
+    {% if summary and summary.get('summary_text') and summary.summary_text not in ['Résumé de contrôle indisponible (LLM non configurée).', 'Résumé indisponible.'] %}
+      <div class="card bg-light mb-3">
+        <div class="card-body">
+          <h6 class="card-title"><i class="bi bi-magic"></i> Résumé généré par l'IA</h6>
+          {% if meeting.get('speaker_count_llm') %}
+          <p class="mb-1"><span class="badge bg-primary">{{ meeting.speaker_count_llm }} participants détectés</span></p>
+          {% endif %}
+          <p class="mb-0 small">{{ summary.summary_text[:1500] }}</p>
+          {% if meeting.get('title_suggere') %}
+          <div class="mt-2 small text-muted">
+            <strong>Titre suggéré :</strong> {{ meeting.title_suggere }}<br>
+            <strong>Type suggéré :</strong> {{ meeting.type_suggere }}<br>
+            <strong>Sujet :</strong> {{ meeting.sujet_suggere }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% if summary.get('transcript_short') %}
+      <details class="mb-3">
+        <summary class="text-muted">Extrait de transcription (début)</summary>
+        <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
+      </details>
+      {% endif %}
+      <p><strong>Est-ce bien le fichier attendu ?</strong></p>
+      <button class="btn btn-success btn-sm me-2" onclick="validateSummary('yes')">Oui, continuer</button>
+      <button class="btn btn-warning btn-sm me-2" onclick="validateSummary('maybe')">Continuer quand même</button>
+      <button class="btn btn-danger btn-sm" onclick="validateSummary('no')">Non, arrêter</button>
+    {% elif summary and summary.get('transcript_short') %}
+      <div class="alert alert-info">
+        {% if meeting.get('speaker_count_llm') %}
+        <span class="badge bg-primary me-2">{{ meeting.speaker_count_llm }} participants détectés</span>
+        {% endif %}
+        <strong>Résumé :</strong> {{ summary.summary_text }}<br>
+        <small>Extrait disponible ci-dessous pour vérifier.</small>
+      </div>
+      <details class="mb-3">
+        <summary class="text-muted">Extrait de transcription (début)</summary>
+        <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
+      </details>
+      <button class="btn btn-success btn-sm me-2" onclick="validateSummary('yes')">Oui, continuer</button>
+      <button class="btn btn-warning btn-sm" onclick="validateSummary('maybe')">Continuer quand même</button>
+    {% else %}
+      <p class="text-muted">Générez un résumé rapide pour vérifier le contenu du fichier.</p>
+      <button class="btn btn-primary" onclick="generateSummary()">
+        <span id="summary-spinner" class="spinner d-none"></span> Générer le résumé
+      </button>
+      <div id="summary-result" class="mt-3"></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Step 4: Meeting Context -->
+  {% set ctx_status = statuses.get('context', 'todo') %}
+  {% if summary_status == 'done' %}
+  <div class="step-section {% if ctx_status == 'todo' or ctx_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-4-circle-fill step-icon"></i> Contexte de la réunion</h3>
+
+    {% if meeting.get('summary_llm') or meeting.get('summary') %}
+    {% set synthese = meeting.get('summary') or meeting.summary_llm %}
+    {% if not meeting.get('summary') and '## Synthèse' in meeting.summary_llm %}
+      {% set synthese = meeting.summary_llm.split('## Synthèse')[1].split('##')[0] if meeting.summary_llm.split('## Synthèse')|length > 1 else meeting.summary_llm %}
+    {% endif %}
+    <details class="mb-3" open>
+      <summary class="text-muted fw-bold">📋 Résumé de la réunion — modifiez-le avant d'enregistrer</summary>
+      <textarea name="summary" class="form-control form-control-sm mt-2" rows="12"
+                style="font-size: 0.85rem;">{{ synthese.strip() }}</textarea>
+      <div class="form-text small">Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.</div>
+    </details>
+    {% endif %}
+
+    {% if meeting.get('title_suggere') or meeting.get('type_suggere') %}
+    <div class="alert alert-info mb-3 small">
+      <strong><i class="bi bi-magic"></i> Champs suggérés :</strong>
+      {% if meeting.get('title_suggere') %}
+        <span class="badge bg-dark me-1">📌 Titre</span> {{ meeting.title_suggere }}<br>
+      {% endif %}
+      {% if meeting.get('type_suggere') %}
+        <span class="badge bg-dark me-1">🏷 Type</span> {{ meeting.type_suggere }}<br>
+      {% endif %}
+      {% if meeting.get('sujet_suggere') %}
+        <span class="badge bg-dark me-1">📝 Sujet</span> {{ meeting.sujet_suggere }}
+      {% endif %}
+      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" onclick="prefillContext()">Appliquer les suggestions</button>
+    </div>
+    {% endif %}
+
+    <form id="context-form">
+      <div class="row">
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">Titre de la réunion</label>
+          <input type="text" name="title" class="form-control form-control-sm" value="{{ meeting.title or meeting.title_suggere or job.title }}">
+        </div>
+        <div class="col-md-3 mb-2">
+          <label class="form-label small">Date</label>
+          <input type="date" name="date" class="form-control form-control-sm" value="{{ meeting.date }}">
+        </div>
+        <div class="col-md-3 mb-2">
+          <label class="form-label small">Langue</label>
+          <select name="language" class="form-select form-select-sm">
+            <option value="fr" {{ 'selected' if meeting.language == 'fr' }}>Français</option>
+            <option value="en" {{ 'selected' if meeting.language == 'en' }}>English</option>
+            <option value="de" {{ 'selected' if meeting.language == 'de' }}>Deutsch</option>
+            <option value="it" {{ 'selected' if meeting.language == 'it' }}>Italiano</option>
+            <option value="es" {{ 'selected' if meeting.language == 'es' }}>Español</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">Type de réunion</label>
+          <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select">
+            {% for mt in meeting_types %}
+            <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">Service / Domaine</label>
+          <input type="text" name="service" class="form-control form-control-sm" value="{{ meeting.service }}">
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">Sujet</label>
+        <input type="text" name="topic" class="form-control form-control-sm" id="topic_input" value="{{ meeting.topic or meeting.sujet_suggere }}">
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">Objectif</label>
+        <textarea name="objective" class="form-control form-control-sm" id="objective_input" rows="2">{{ meeting.objective or meeting.objectif_suggere }}</textarea>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">Notes / Ordre du jour</label>
+        <textarea name="notes" class="form-control form-control-sm" id="notes_input" rows="2">{{ meeting.notes or meeting.notes_suggeres }}</textarea>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="saveContext()">Enregistrer le contexte</button>
+      <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Step 5: Participants & Locuteurs (merged) -->
+  {% set part_status = statuses.get('participants', 'todo') %}
+  {% set spk_status = statuses.get('speakers', 'todo') %}
+  {% if ctx_status == 'done' %}
+  {% set merged_ready = (part_status == 'todo' or part_status == 'in_progress' or spk_status == 'todo' or spk_status == 'in_progress' or spk_status == 'done') %}
+  <div class="step-section {% if part_status in ('todo','in_progress') or spk_status in ('todo','in_progress') %}current-step{% endif %}">
+    <h3><i class="bi bi-5-circle-fill step-icon"></i> Participants &amp; Locuteurs</h3>
+    <p class="text-muted small mb-2">Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.</p>
+
+    {% if not speakers.get('speakers') %}
+    <button class="btn btn-primary btn-sm mb-3" onclick="detectSpeakers()">
+      <span id="speaker-spinner" class="spinner d-none"></span> 🔍 Détecter les locuteurs
+    </button>
+    <div id="speaker-result" class="mt-2"></div>
+    {% endif %}
+
+    {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
+    <div class="alert alert-success mb-3 small">
+      <strong><i class="bi bi-mic-fill"></i> {{ speakers.speakers|length }} locuteur(s) détecté(s)</strong>
+      {% for s in speakers.speakers %}
+        <span class="badge bg-secondary me-1">{{ s.speaker_id }}: {{ (s.speaking_time_seconds / 60)|round(1) }} min</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if meeting.get('participants_detectes') and participants|length == 0 %}
+    <div class="alert alert-info mb-3 small">
+      <strong><i class="bi bi-people"></i> Participants identifiés dans la transcription :</strong>
+      {% for line in meeting.participants_detectes.split('\n') %}
+        {% if line.strip() %}<span class="me-2">👤 {{ line.strip() }}</span>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="participants-list">
+      {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
+        {% for s in speakers.speakers %}
+        <div class="speaker-item" id="spk-{{ s.speaker_id }}">
+          <strong>{{ s.speaker_id }}</strong>
+          <span class="text-muted small">{{ s.speaking_time_seconds|round(0) }}s, {{ s.turn_count }} interventions</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="loadClips('{{ s.speaker_id }}')"><i class="bi bi-play-fill"></i></button>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle dans la réunion" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
+        </div>
+        {% endfor %}
+      {% elif participants|length > 0 %}
+        {% for p in participants %}
+        <div class="speaker-item">
+          <span class="text-muted small">participant</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ p.name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ p.function }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle" value="{{ p.role }}" style="max-width:150px;">
+          {% if p.is_animator %}<span class="badge bg-warning text-dark">Animateur</span>{% endif %}
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+        </div>
+        {% endfor %}
+      {% elif meeting.get('participants_detectes') %}
+        {% for line in meeting.participants_detectes.split('\n') %}
+        {% if line.strip() and 'non identifiable' not in line.lower() %}
+        {% set cleaned = line.replace('👤 ', '').strip() %}
+        {% set parts = cleaned.split(':') %}
+        {% set name = parts[0].strip() if parts|length > 0 else cleaned %}
+        {% set role = parts[1].strip() if parts|length > 1 else '' %}
+        <div class="speaker-item">
+          <span class="text-muted small">suggéré</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle" value="{{ role }}" style="max-width:150px;">
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+        </div>
+        {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="addParticipantRow()">+ Ajouter un participant</button>
+    <br>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="saveParticipantsAndSpeakers()">Valider participants &amp; locuteurs</button>
+    <span id="participants-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Validé</span>
+  </div>
+  {% endif %}
+
+  <!-- Step 6: Lexicon -->
+  {% set lex_status = statuses.get('lexicon', 'todo') %}
+  {% if part_status == 'done' or spk_status == 'done' %}
+  <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-6-circle-fill step-icon"></i> Lexique de session</h3>
+    <p class="text-muted small">Ajoutez uniquement les mots importants pour cette réunion.</p>
+    <div id="lexicon-list">
+      {% for t in lexicon %}
+      <div class="lexicon-row">
+        <input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" value="{{ t.term }}" style="max-width: 150px;">
+        <select class="form-select form-select-sm lex-cat" style="max-width: 120px;">
+          {% for cat in lexicon_categories %}
+          <option value="{{ cat }}" {{ 'selected' if t.category == cat }}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+        <select class="form-select form-select-sm lex-prio" style="max-width: 110px;">
+          {% for prio in lexicon_priorities %}
+          <option value="{{ prio }}" {{ 'selected' if t.priority == prio }}>{{ prio }}</option>
+          {% endfor %}
+        </select>
+        <input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" value="{{ t.replace_by or t.term }}" style="max-width: 150px;">
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="addLexiconTerm()">+ Ajouter un terme</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" onclick="importLexiconFile()">+ Importer depuis un fichier .txt</button>
+    <input type="file" id="lexicon-file-input" accept=".txt,.csv" class="d-none" onchange="handleLexiconFile(this)">
+    <br>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="saveLexicon()">Enregistrer le lexique</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" onclick="skipLexicon()">Continuer sans lexique</button>
+    <span id="lexicon-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
+  </div>
+  {% endif %}
+
+  <!-- Step 7: Processing choice -->
+  {% set proc_status = statuses.get('processing', 'todo') %}
+  {% set merged_done = (part_status == 'done' or spk_status == 'done') %}
+  {% if merged_done or lex_status == 'skipped' %}
+  <div class="step-section {% if proc_status == 'todo' %}current-step{% endif %}">
+    <h3><i class="bi bi-7-circle-fill step-icon"></i> Choix du traitement</h3>
+    <div class="row">
+      <div class="col-md-6">
+        <div class="card border-primary h-100">
+          <div class="card-body text-center">
+            <h5 class="card-title"><i class="bi bi-lightning-fill text-warning"></i> Traitement rapide</h5>
+            <p class="card-text small">Produit rapidement un SRT exploitable. Utilise Cohere ASR. Recommandé pour une première version.</p>
+            <button class="btn btn-primary" onclick="startProcessing('fast')">Choisir rapide</button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-body text-center">
+            <h5 class="card-title"><i class="bi bi-star-fill text-success"></i> Traitement qualité</h5>
+            <p class="card-text small">Utilise Cohere ASR comme base, contexte, locuteurs et lexique. Contrôle qualité renforcé.</p>
+            <button class="btn btn-success" onclick="startProcessing('quality')">Choisir qualité</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="processing-result" class="mt-3"></div>
+  </div>
+  {% endif %}
+
+  <!-- Step 9: Quality -->
+  {% set qual_status = statuses.get('quality', 'todo') %}
+  {% if proc_status == 'done' %}
+  <div class="step-section {% if qual_status == 'todo' %}current-step{% endif %}">
+    <h3><i class="bi bi-8-circle-fill step-icon"></i> Contrôle qualité</h3>
+    {% if quality_report and quality_report.get('checks') %}
+      <div class="mb-3">
+        <strong>Score qualité :</strong>
+        <span class="quality-badge {{ 'quality-ok' if quality_report.quality_score >= 80 else 'quality-warning' if quality_report.quality_score >= 50 else 'quality-error' }}">
+          {{ quality_report.quality_score }}/100
+        </span>
+      </div>
+      <p class="text-muted small">
+        Points à vérifier : {{ quality_report.warnings }} —
+        Termes métier suspects : {{ quality_report.checks|selectattr('type', 'equalto', 'missing_lexicon_terms')|list|length }}
+      </p>
+      {% for check in quality_report.checks[:5] %}
+      <div class="small mb-1">
+        <span class="quality-badge {{ 'quality-error' if check.severity == 'error' else 'quality-warning' }}">{{ check.type }}</span>
+        {% if check.count %}({{ check.count }}){% endif %}
+        {% if check.terms %}{{ check.terms[:3]|join(', ') }}{% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">Le contrôle qualité sera effectué après le traitement.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Step 10: Export -->
+  {% set exp_status = statuses.get('export', 'todo') %}
+  {% if qual_status == 'done' %}
+  <div class="step-section {% if exp_status == 'todo' %}current-step{% endif %}">
+    <h3><i class="bi bi-9-circle-fill step-icon"></i> Export et résultats</h3>
+    {% if srt_content %}
+      <details class="mb-3">
+        <summary class="text-muted">Aperçu du SRT généré</summary>
+        <pre class="srt-preview mt-2">{{ srt_content[:3000] }}</pre>
+      </details>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> Télécharger le SRT</a>
+        <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Télécharger l'audio</a>
+        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-primary btn-sm"><i class="bi bi-archive"></i> Package complet</a>
+        <a href="{{ srt_editor_url }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> Ouvrir SRT Editor EASY</a>
+        <button class="btn btn-outline-info btn-sm" onclick="pushToEditor()">
+          <span id="push-spinner" class="spinner d-none"></span> Envoyer vers SRT Editor
+        </button>
+      </div>
+      <p class="text-muted small mt-2">
+        Pour corriger le SRT, ouvrez <a href="{{ srt_editor_url }}" target="_blank">SRT Editor EASY</a> puis importez le fichier audio et le fichier SRT générés.
+      </p>
+    {% else %}
+      <p class="text-muted">Le package final sera disponible après le traitement complet.</p>
+    {% endif %}
+    <div id="export-result" class="mt-3"></div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const JOB_ID = "{{ job.id }}";
+const API_BASE = "";
+
+(function(){
+  // Auto-fill participants from LLM only if no speakers have mapped names yet
+  {% if meeting.get('participants_detectes') and speakers.get('speakers') %}
+  const hasMapped = document.querySelector('.speaker-name')?.value?.trim();
+  if (!hasMapped) {
+    const llmLines = {{ meeting.participants_detectes.split('\n') | map('trim') | reject('eq', '') | list | tojson }};
+    const nameInputs = document.querySelectorAll('.speaker-name');
+    const roleInputs = document.querySelectorAll('.speaker-role');
+    llmLines.forEach((line, i) => {
+      if (i < nameInputs.length) {
+        const cleaned = line.replace('👤 ', '').trim();
+        const parts = cleaned.split(':');
+        nameInputs[i].value = (parts[0] || cleaned).trim();
+        if (parts.length > 1 && i < roleInputs.length) roleInputs[i].value = parts[1].trim();
+      }
+    });
+  }
+  {% endif %}
+
+  // Auto-fill lexicon from LLM suggestions
+  {% if meeting.get('termes_suspects') and lexicon|length == 0 %}
+  const lexTerms = {{ meeting.termes_suspects | tojson }};
+  const lexList = document.getElementById('lexicon-list');
+  if (lexList && lexTerms.length > 0 && lexList.children.length === 0) {
+    lexTerms.forEach(t => {
+      const row = document.createElement('div');
+      row.className = 'lexicon-row';
+      const term = (t.term || '').replace(/'/g, "\\'");
+      row.innerHTML = '<input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" value="' + term + '" style="max-width:150px;">' +
+        '<select class="form-select form-select-sm lex-cat" style="max-width:120px;">{% for cat in lexicon_categories %}<option value="{{ cat }}" ' + (t.category === '{{ cat }}' ? 'selected' : '') + '>{{ cat }}</option>{% endfor %}</select>' +
+        '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">{% for prio in lexicon_priorities %}<option value="{{ prio }}" ' + (t.priority === '{{ prio }}' ? 'selected' : '') + '>{{ prio }}</option>{% endfor %}</select>' +
+        '<input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" value="' + term + '" style="max-width:150px;">' +
+        '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+      lexList.appendChild(row);
+    });
+  }
+  {% endif %}
+})();
+
+function showSpinner(id) { document.getElementById(id).classList.remove('d-none'); }
+function hideSpinner(id) { document.getElementById(id).classList.add('d-none'); }
+
+function api(endpoint, method = 'POST', body = null) {
+  const opts = { method: method, headers: {} };
+  if (body instanceof FormData) {
+    opts.body = body;
+  } else if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  return fetch(endpoint, opts).then(r => r.json().then(d => ({ status: r.status, data: d })));
+}
+
+async function uploadFile() {
+  const fileInput = document.getElementById('file-upload');
+  const file = fileInput.files[0];
+  if (!file) return alert('Veuillez choisir un fichier.');
+  showSpinner('upload-spinner');
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch('/api/jobs/' + JOB_ID + '/upload', { method: 'POST', body: formData });
+  const data = await res.json();
+  hideSpinner('upload-spinner');
+  if (res.ok) {
+    document.getElementById('upload-result').innerHTML = '<div class="alert alert-success">Fichier téléversé avec succès. Rechargement...</div>';
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    document.getElementById('upload-result').innerHTML = '<div class="alert alert-danger">Erreur: ' + (data.error || data) + '</div>';
+  }
+}
+
+async function analyzeAudio() {
+  showSpinner('analyze-spinner');
+  const res = await fetch('/api/jobs/' + JOB_ID + '/analyze', { method: 'POST' });
+  const data = await res.json();
+  hideSpinner('analyze-spinner');
+  if (data.error) {
+    document.getElementById('analyze-result').innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+  } else {
+    location.reload();
+  }
+}
+
+async function generateSummary() {
+  showSpinner('summary-spinner');
+  const res = await fetch('/api/jobs/' + JOB_ID + '/summary', { method: 'POST' });
+  const data = await res.json();
+  hideSpinner('summary-spinner');
+  if (data.error) {
+    document.getElementById('summary-result').innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+  } else {
+    location.reload();
+  }
+}
+
+async function validateSummary(choice) {
+  if (choice === 'no') {
+    await fetch('/api/jobs/' + JOB_ID + '/process', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mode:'cancel'}) });
+  }
+  location.reload();
+}
+
+function prefillContext() {
+  {% if meeting.get('title_suggere') %}
+  document.querySelector('input[name="title"]').value = "{{ meeting.title_suggere | replace('"', '\\"') }}";
+  {% endif %}
+  {% if meeting.get('sujet_suggere') %}
+  document.getElementById('topic_input').value = "{{ meeting.sujet_suggere | replace('"', '\\"') }}";
+  {% endif %}
+  {% if meeting.get('objectif_suggere') %}
+  document.getElementById('objective_input').value = "{{ meeting.objectif_suggere | replace('"', '\\"') }}";
+  {% endif %}
+  {% if meeting.get('notes_suggeres') %}
+  document.getElementById('notes_input').value = "{{ meeting.notes_suggeres | replace('"', '\\"') }}";
+  {% endif %}
+  {% if meeting.get('type_suggere') %}
+  const sel = document.getElementById('meeting_type_select');
+  for (let o of sel.options) { if (o.value === "{{ meeting.type_suggere }}") { o.selected = true; break; } }
+  {% endif %}
+}
+
+function prefillParticipants() {
+  const container = document.getElementById('participants-list');
+  container.innerHTML = '';
+  {% if meeting.get('participants_detectes') %}
+  {% set lines = meeting.participants_detectes.split('\n') %}
+  {% for line in lines %}
+  {% if line.strip() and 'non identifiable' not in line.lower() %}
+  {% set parts = line.replace('👤 ', '').strip().split(':') %}
+  {% set name = parts[0].strip() if parts|length > 0 else line.strip() %}
+  {% set role = parts[1].strip() if parts|length > 1 else '' %}
+  {% set func = '' %}
+  {% if '(' in name and ')' in name %}
+    {% set func = name.split('(')[1].split(')')[0] if '(' in name else '' %}
+    {% set name = name.split('(')[0].strip() %}
+  {% endif %}
+  (function(){
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+    row.innerHTML = '<input type="text" class="form-control form-control-sm" placeholder="Nom" style="max-width:180px;" value="{{ name }}">' +
+      '<input type="text" class="form-control form-control-sm" placeholder="Fonction" style="max-width:150px;" value="{{ func }}">' +
+      '<input type="text" class="form-control form-control-sm" placeholder="Rôle dans la réunion" style="max-width:180px;" value="{{ role }}">' +
+      '<label class="form-check-label small"><input type="checkbox"> Animateur</label>' +
+      '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+    container.appendChild(row);
+  })();
+  {% endif %}
+  {% endfor %}
+  {% endif %}
+}
+
+async function saveContext() {
+  const form = document.getElementById('context-form');
+  const fd = new FormData(form);
+  const data = Object.fromEntries(fd.entries());
+  const res = await fetch('/api/jobs/' + JOB_ID + '/context', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  if (res.ok) {
+    document.getElementById('context-saved').classList.remove('d-none');
+    setTimeout(() => location.reload(), 500);
+  }
+}
+
+function addParticipant() {
+  const container = document.getElementById('participants-list');
+  const idx = container.children.length;
+  const row = document.createElement('div');
+  row.className = 'participant-row';
+  row.innerHTML = `
+    <input type="text" class="form-control form-control-sm" placeholder="Nom" style="max-width:180px;">
+    <input type="text" class="form-control form-control-sm" placeholder="Fonction" style="max-width:150px;">
+    <input type="text" class="form-control form-control-sm" placeholder="Rôle dans la réunion" style="max-width:180px;">
+    <label class="form-check-label small"><input type="checkbox"> Animateur</label>
+    <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>`;
+  container.appendChild(row);
+}
+
+function addParticipantBulk() {
+  document.getElementById('bulk-import').classList.toggle('d-none');
+}
+
+function importBulk() {
+  const text = document.getElementById('bulk-text').value;
+  if (!text) return;
+  const lines = text.split('\n').filter(l => l.trim());
+  const container = document.getElementById('participants-list');
+  container.innerHTML = '';
+  for (const line of lines) {
+    let name = line.trim(), func = '', role = '';
+    if (line.includes(',')) {
+      const parts = line.split(',').map(p => p.trim());
+      name = parts[0] || '';
+      func = parts[1] || '';
+      role = parts[2] || '';
+    }
+    const row = document.createElement('div');
+    row.className = 'participant-row';
+    row.innerHTML = `
+      <input type="text" class="form-control form-control-sm" placeholder="Nom" style="max-width:180px;" value="${name}">
+      <input type="text" class="form-control form-control-sm" placeholder="Fonction" style="max-width:150px;" value="${func}">
+      <input type="text" class="form-control form-control-sm" placeholder="Rôle dans la réunion" style="max-width:180px;" value="${role}">
+      <label class="form-check-label small"><input type="checkbox"> Animateur</label>
+      <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>`;
+    container.appendChild(row);
+  }
+  document.getElementById('bulk-import').classList.add('d-none');
+}
+
+async function saveParticipants() {
+  const rows = document.querySelectorAll('#participants-list .participant-row');
+  const data = [];
+  rows.forEach((row, i) => {
+    const inputs = row.querySelectorAll('input[type="text"]');
+    const cb = row.querySelector('input[type="checkbox"]');
+    data.push({
+      id: 'p' + (i + 1),
+      name: inputs[0]?.value || '',
+      function: inputs[1]?.value || '',
+      role: inputs[2]?.value || '',
+      is_animator: cb?.checked || false,
+      expected: true
+    });
+  });
+  const res = await fetch('/api/jobs/' + JOB_ID + '/participants', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  if (res.ok) {
+    document.getElementById('participants-saved').classList.remove('d-none');
+    setTimeout(() => location.reload(), 500);
+  }
+}
+
+function addLexiconTerm() {
+  const container = document.getElementById('lexicon-list');
+  const row = document.createElement('div');
+  row.className = 'lexicon-row';
+  row.innerHTML = '<input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" style="max-width:150px;">' +
+    '<select class="form-select form-select-sm lex-cat" style="max-width:120px;">{% for cat in lexicon_categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}</select>' +
+    '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">{% for prio in lexicon_priorities %}<option value="{{ prio }}">{{ prio }}</option>{% endfor %}</select>' +
+    '<input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" style="max-width:150px;">' +
+    '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+  container.appendChild(row);
+}
+
+function importLexiconFile() { document.getElementById('lexicon-file-input').click(); }
+
+function handleLexiconFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const res = await fetch('/api/jobs/' + JOB_ID + '/lexicon', { method: 'POST', headers: {'Content-Type':'text/plain'}, body: e.target.result });
+    if (res.ok) location.reload();
+  };
+  reader.readAsText(file);
+}
+
+async function saveLexicon() {
+  const rows = document.querySelectorAll('#lexicon-list .lexicon-row');
+  const data = [];
+  rows.forEach((row, i) => {
+    const termEl = row.querySelector('.lex-term');
+    const catEl = row.querySelector('.lex-cat');
+    const prioEl = row.querySelector('.lex-prio');
+    const replEl = row.querySelector('.lex-replace');
+    data.push({
+      term: termEl?.value || '',
+      category: catEl?.value || 'autre',
+      priority: prioEl?.value || 'normale',
+      replace_by: replEl?.value || '',
+      variants: []
+    });
+  });
+  const res = await fetch('/api/jobs/' + JOB_ID + '/lexicon', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+  if (res.ok) {
+    document.getElementById('lexicon-saved').classList.remove('d-none');
+    setTimeout(() => location.reload(), 500);
+  }
+}
+
+async function skipLexicon() {
+  await fetch('/api/jobs/' + JOB_ID + '/lexicon', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify([]) });
+  location.reload();
+}
+
+function addParticipantRow() {
+  const container = document.getElementById('participants-list');
+  const row = document.createElement('div');
+  row.className = 'speaker-item';
+  row.innerHTML = '<span class="text-muted small">nouveau</span>' +
+    '<input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" style="max-width:150px;">' +
+    '<input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" style="max-width:130px;">' +
+    '<input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle" style="max-width:150px;">' +
+    '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+  container.appendChild(row);
+}
+
+async function saveParticipantsAndSpeakers() {
+  const items = document.querySelectorAll('#participants-list .speaker-item');
+  const participants = [];
+  const mapping = {};
+  let pi = 0;
+  items.forEach(row => {
+    const nameEl = row.querySelector('.speaker-name');
+    const funcEl = row.querySelector('.speaker-func');
+    const roleEl = row.querySelector('.speaker-role');
+    const name = nameEl?.value?.trim() || '';
+    const func = funcEl?.value?.trim() || '';
+    const role = roleEl?.value?.trim() || '';
+    if (name) {
+      pi++;
+      const pid = 'p' + pi;
+      participants.push({id: pid, name, function: func, role, is_animator: false, expected: true});
+      const spkLabel = row.querySelector('strong');
+      if (spkLabel) {
+        mapping[spkLabel.textContent] = {name, participant_id: pid, function: func, role: role};
+      }
+    }
+  });
+  await fetch('/api/jobs/' + JOB_ID + '/participants', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(participants)
+  });
+  if (Object.keys(mapping).length > 0) {
+    await fetch('/api/jobs/' + JOB_ID + '/speakers/map', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(mapping)
+    });
+  }
+  document.getElementById('participants-saved').classList.remove('d-none');
+  setTimeout(() => location.reload(), 800);
+}
+
+async function loadClips(speakerId) {
+  const container = document.getElementById('spk-' + speakerId);
+  if (!container) return;
+  let audioDiv = container.parentElement.querySelector('.clips-audio');
+  if (audioDiv) { audioDiv.remove(); return; }
+  
+  audioDiv = document.createElement('div');
+  audioDiv.className = 'clips-audio';
+  audioDiv.innerHTML = '<small class="text-muted"><span class="spinner"></span> Chargement...</small>';
+  container.parentElement.appendChild(audioDiv);
+  
+  try {
+    const r = await fetch('/api/jobs/' + JOB_ID + '/speakers/clips');
+    const data = await r.json();
+    const clips = (data.clips || {})[speakerId] || [];
+    if (clips.length === 0) {
+      audioDiv.innerHTML = '<small class="text-muted">Aucun extrait disponible</small>';
+      return;
+    }
+    let html = '';
+    clips.forEach((path, i) => {
+      const fname = path.split('/').pop();
+      html += '<small class="text-muted">Extrait ' + (i+1) + ' :</small>' +
+        '<audio controls preload="none">' +
+        '<source src="/api/jobs/' + JOB_ID + '/speakers/clip/' + fname + '" type="audio/wav">' +
+        '</audio>';
+    });
+    audioDiv.innerHTML = html;
+  } catch(e) {
+    audioDiv.innerHTML = '<small class="text-danger">Erreur chargement</small>';
+  }
+}
+
+async function detectSpeakers() {
+  showSpinner('speaker-spinner');
+  const res = await fetch('/api/jobs/' + JOB_ID + '/speakers/detect', { method: 'POST' });
+  hideSpinner('speaker-spinner');
+  if (res.ok) { location.reload(); }
+  else {
+    const data = await res.json();
+    document.getElementById('speaker-result').innerHTML = '<div class="alert alert-warning">' + (data.error || data.message || 'Indisponible') + '</div>';
+  }
+}
+
+async function saveSpeakerMapping() {
+  const selects = document.querySelectorAll('.speaker-mapping');
+  const mapping = {};
+  selects.forEach(sel => {
+    if (sel.value) mapping[sel.dataset.speaker] = { name: sel.options[sel.selectedIndex].text, participant_id: sel.value };
+  });
+  const res = await fetch('/api/jobs/' + JOB_ID + '/speakers/map', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(mapping) });
+  if (res.ok) {
+    document.getElementById('speakers-saved').classList.remove('d-none');
+    setTimeout(() => location.reload(), 500);
+  }
+}
+
+async function skipSpeakers() {
+  await fetch('/api/jobs/' + JOB_ID + '/speakers/map', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({}) });
+  location.reload();
+}
+
+async function startProcessing(mode) {
+  const div = document.getElementById('processing-result');
+  div.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> Traitement en cours... Veuillez patienter.</div>';
+  const res = await fetch('/api/jobs/' + JOB_ID + '/process', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({mode: mode}) });
+  const data = await res.json();
+  if (data.error) {
+    div.innerHTML = '<div class="alert alert-danger">Erreur: ' + data.error + '</div>';
+  } else {
+    div.innerHTML = '<div class="alert alert-success">Traitement terminé. Rechargement...</div>';
+    setTimeout(() => location.reload(), 1000);
+  }
+}
+
+async function pushToEditor() {
+  showSpinner('push-spinner');
+  const res = await fetch('/api/jobs/' + JOB_ID + '/push-to-editor', { method: 'POST' });
+  const data = await res.json();
+  hideSpinner('push-spinner');
+  const ediv = document.getElementById('export-result');
+  if (data.error) {
+    ediv.innerHTML = '<div class="alert alert-danger">' + data.error + '</div>';
+  } else {
+    ediv.innerHTML = '<div class="alert alert-success">Fichiers envoyés vers SRT Editor EASY. <a href="' + (data.editor_url || '{{ srt_editor_url }}') + '" target="_blank">Ouvrir</a></div>';
+  }
+}
+</script>
+{% endblock %}

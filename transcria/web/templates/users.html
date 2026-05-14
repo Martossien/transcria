@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Utilisateurs — TranscIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Gestion des utilisateurs</h1>
+<a href="/admin/users/new" class="btn btn-primary mb-3"><i class="bi bi-person-plus"></i> Nouvel utilisateur</a>
+
+<table class="table table-hover">
+  <thead>
+    <tr>
+      <th>Utilisateur</th>
+      <th>Nom affiché</th>
+      <th>Email</th>
+      <th>Rôle</th>
+      <th>Actif</th>
+      <th>Dernière connexion</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td><strong>{{ u.username }}</strong></td>
+      <td>{{ u.display_name }}</td>
+      <td>{{ u.email }}</td>
+      <td><span class="badge bg-{{ 'danger' if u.role == 'admin' else 'primary' if u.role == 'manager' else 'secondary' }}">{{ u.role }}</span></td>
+      <td>{{ 'Oui' if u.is_active else 'Non' }}</td>
+      <td><small>{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '-' }}</small></td>
+      <td><a href="/admin/users/{{ u.id }}/edit" class="btn btn-sm btn-outline-secondary">Modifier</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

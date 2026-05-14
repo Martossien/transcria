@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Accueil — TranscIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="h3 mb-0">Mes traitements</h1>
+  <form method="POST" action="/jobs/new" class="d-flex gap-2">
+    <input type="text" name="title" class="form-control" placeholder="Nom de la réunion" style="width: 250px;">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nouveau traitement</button>
+  </form>
+</div>
+
+{% if jobs %}
+<div class="row">
+  {% for job in jobs %}
+  <div class="col-md-6 col-lg-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="card-title text-truncate">{{ job.title }}</h6>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="badge bg-{% if job.state == 'completed' %}success{% elif job.state == 'failed' %}danger{% else %}secondary{% endif %}">
+            {{ job.state }}
+          </span>
+          <small class="text-muted">{{ job.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+        </div>
+        <div class="mt-2 d-flex gap-1 flex-wrap">
+          <a href="/jobs/{{ job.id }}" class="btn btn-sm btn-outline-primary">Ouvrir</a>
+          {% if job.state == 'completed' or job.state == 'export_ready' %}
+          <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-sm btn-outline-success">SRT</a>
+          <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-sm btn-outline-secondary">Package</a>
+          {% endif %}
+          {% if Permission.DELETE_JOBS in user_permissions %}
+          <form method="POST" action="/jobs/{{ job.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Supprimer ce traitement ? Cette action est irréversible.')">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Supprimer</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5">
+  <i class="bi bi-inbox" style="font-size: 3rem; color: var(--text-muted);"></i>
+  <p class="mt-3 text-muted">Aucun traitement pour le moment.</p>
+  <p class="text-muted">Créez votre premier traitement pour transcrire une réunion.</p>
+</div>
+{% endif %}
+{% endblock %}
