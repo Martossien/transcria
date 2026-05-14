@@ -9,6 +9,8 @@ from transcria.config import get_config, set_config
 from transcria.database import db
 from transcria.logging_setup import setup_logging
 
+_WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transcria", "web")
+
 
 def create_app(config_path: str | None = None) -> Flask:
     cfg = get_config() if config_path is None else __import__("transcria.config").load_config(config_path)
@@ -18,7 +20,7 @@ def create_app(config_path: str | None = None) -> Flask:
     debug = cfg.get("server", {}).get("debug", False)
     setup_logging(debug=debug)
 
-    app = Flask(__name__, template_folder="transcria/web/templates", static_folder="transcria/web/static")
+    app = Flask(__name__, template_folder=os.path.join(_WEB_DIR, "templates"), static_folder=os.path.join(_WEB_DIR, "static"))
     app.secret_key = os.environ.get("TRANSCRIA_SECRET", os.urandom(32).hex())
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.get("storage", {}).get("database_url", "sqlite:///transcrIA.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
