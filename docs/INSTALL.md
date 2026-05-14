@@ -176,25 +176,54 @@ $HOME/.opencode/bin/opencode --version
 
 Configurer le provider local dans `$HOME/.config/opencode/opencode.json` :
 
+```bash
+mkdir -p $HOME/.config/opencode
+```
+
 ```json
 {
-  "providers": {
+  "$schema": "https://opencode.ai/config.json",
+  "share": "manual",
+  "provider": {
     "local": {
-      "type": "openai",
-      "baseURL": "http://127.0.0.1:8080/v1",
-      "apiKey": "unused"
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Qwen 3.6 35B Arbitrage llama.cpp (Local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:8080/v1",
+        "apiKey": "dummy-key",
+        "timeout": 9999999
+      },
+      "models": {
+        "qwen3-35b-arbitrage": {
+          "name": "Qwen 3.6 35B Arbitrage",
+          "limit": {
+            "context": 263144,
+            "output": 81920
+          }
+        }
+      }
     }
   },
-  "models": {
-    "qwen3-35b-arbitrage": {
-      "provider": "local",
-      "contextLength": 263000
-    }
+  "permission": {
+    "edit": { "*": "allow" },
+    "bash": "allow",
+    "read": "allow",
+    "write": "allow",
+    "glob": "allow",
+    "grep": "allow"
   }
 }
 ```
 
-Le chemin du binaire est configurable via `config.yaml` (`workflow.arbitration_llm.opencode_bin`) ou la variable d'environnement `TRANSCRIA_OPENCODE_BIN`.
+> **Points clés** :
+> - `baseURL` doit correspondre au `qwen_port` de `config.yaml` (défaut 8080)
+> - `npm: "@ai-sdk/openai-compatible"` est requis — c'est le driver OpenAI-compatible d'opencode
+> - `timeout: 9999999` évite les timeouts sur les longues générations
+> - `limit.context: 263144` correspond au `--ctx-size` de llama-server
+> - `limit.output: 81920` correspond au `--n-predict` de llama-server
+> - Les permissions `allow` sont nécessaires pour que l'agent puisse lire/écrire les fichiers SRT et contexte
+
+Le chemin du binaire est configurable via `config.yaml` (`workflow.arbitration_llm.opencode_bin`) ou la variable d'environnement `TRANSCRIA_OPENCODE_BIN`. Si `opencode` est dans le PATH (ex: `$HOME/.opencode/bin/opencode`), il sera trouvé automatiquement.
 
 ---
 
