@@ -32,8 +32,13 @@ class OpenCodeRunner:
         self.opencode_bin = opencode_bin or _DEFAULT_OPENCODE_BIN
 
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
-        if not os.path.isfile(self.opencode_bin):
+        import shutil
+
+        opencode_path = shutil.which(self.opencode_bin)
+        if not opencode_path and not os.path.isfile(self.opencode_bin):
             return {"success": False, "error": f"opencode introuvable: {self.opencode_bin}"}
+        if not opencode_path:
+            opencode_path = os.path.abspath(self.opencode_bin)
 
         prompt_file = os.path.abspath(prompt_file)
         if not os.path.isfile(prompt_file):
@@ -42,7 +47,7 @@ class OpenCodeRunner:
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            self.opencode_bin, "run", "--format", "json",
+            opencode_path, "run", "--format", "json",
             "--model", self.model_ref,
             instruction,
             "-f", prompt_file,

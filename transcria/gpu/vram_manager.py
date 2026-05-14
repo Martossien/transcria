@@ -230,12 +230,12 @@ class VRAMManager:
                 logger.info("Script d'arrêt exécuté: %s", self.stop_script)
             except Exception as exc:
                 logger.warning("Échec script d'arrêt: %s", exc)
-        self._kill_port(self.qwen_port)
+        port_ok = self._kill_port(self.qwen_port)
         self._qwen_pid = None
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
         except ImportError: pass
-        return ok
+        return port_ok
 
     def free_all_gpus(self) -> bool:
         """Libère les 2 GPUs : arrête tout modèle chargé."""

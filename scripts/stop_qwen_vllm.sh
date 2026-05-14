@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-PID_FILE="${VLLM_PID_FILE:-/tmp/vllm_qwen.pid}"
+PID_FILE=/root/.vllm_qwen36_27b.pid
 TIMEOUT=90
 
 echo "=== Arrêt vLLM Qwen3.6-27B-FP8 ==="
