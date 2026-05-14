@@ -700,6 +700,29 @@ rm -f transcrIA.db
 # Au prochain démarrage, la base sera recréée avec l'utilisateur admin par défaut
 ```
 
+### Crash au démarrage avec `speechbrain` ou `k2_fsa`
+
+Si l'application crash au démarrage avec une erreur liée à `speechbrain`, `k2_fsa` ou le reloader Werkzeug rechargeant les modules CUDA :
+
+**Cause** : Le mode debug Flask (`debug: true` dans `config.yaml`) active le reloader Werkzeug, qui recharge les modules au changement de fichier. Quand `speechbrain`/`k2_fsa` sont importés par pyannote, le reloader les recharge et provoque un crash CUDA (les tensors sont invalidés).
+
+**Solution** : Mettre `debug: false` dans `config.yaml` :
+
+```yaml
+server:
+  debug: false
+```
+
+Ou lancer sans `--debug` :
+
+```bash
+python app.py            # debug false par défaut
+# Éviter :
+python app.py --debug   # crash avec speechbrain/k2_fsa
+```
+
+> **Note** : `HF_HUB_OFFLINE=1` est forcé au démarrage dans `app.py`. Les modèles doivent être pré-téléchargés.
+
 ---
 
 ## Résumé des commandes essentielles
@@ -731,7 +754,9 @@ export HF_TOKEN=votre_token_huggingface
 python -m pytest tests/ -q
 
 # 6. Lancer
-python app.py --debug
+python app.py
+# ou en production :
+./start.sh --port 7870
 # ou en production :
 ./start.sh --port 7870
 ```
