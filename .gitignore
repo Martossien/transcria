@@ -3,7 +3,7 @@ config.yaml
 
 # Runtime data
 instance/
-jobs/
+/jobs/
 *.db
 
 # Python
@@ -31,6 +31,9 @@ venv/
 
 # Logs
 *.log
+
+# Audit interne (document de travail)
+AUDIT_INTERNE.md
 
 # Agent internal data
 .agents/
