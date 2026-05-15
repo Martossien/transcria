@@ -32,21 +32,25 @@
 ## Prérequis
 
 - Python 3.11+
-- 2× GPU NVIDIA (≥ 16 Go VRAM chacun pour le cycle complet)
-- CUDA 12.x
-- ffmpeg / ffprobe (binaires système)
-- opencode CLI (pour le moteur LLM)
+- GPU(s) NVIDIA avec CUDA 12.x (1× GPU 16 Go minimum, 2× GPU 24 Go pour le cycle complet avec Qwen 35B)
+- ffmpeg / ffprobe (binaires système, `apt install ffmpeg`)
+- opencode CLI (pour le moteur LLM, voir [INSTALL.md](docs/INSTALL.md))
 - Un modèle LLM compatible OpenAI API sur le port 8080
 
 ## Installation
 
 ```bash
-git clone https://github.com/<org>/transcria-mvp.git
-cd transcria-mvp
-python -m venv venv
+git clone https://github.com/Martossien/transcria.git
+cd transcria
+python3 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
+pip install accelerate
 ```
+
+> **Important** : PyTorch doit être installé **avec CUDA** via `--index-url`. L'installation pip classique installe la version CPU-only. Voir [docs/INSTALL.md](docs/INSTALL.md) pour le guide complet (création du venv, téléchargement des modèles, configuration, dépannage).
 
 ### Configuration
 
@@ -65,9 +69,9 @@ Variables d'environnement :
 | `TRANSCRIA_HOST` | Hôte d'écoute | `0.0.0.0` |
 | `TRANSCRIA_DEBUG` | Mode debug | `false` |
 | `HF_TOKEN` | Token HuggingFace (pour pyannote) | — |
-| `TRANSCRIA_ARBITRAGE_SCRIPT` | Script de lancement LLM | `/root/launch_arbitrage2.sh` |
-| `TRANSCRIA_STOP_SCRIPT` | Script d'arrêt LLM | `/root/stop_qwen36_27b_vllm.sh` |
-| `TRANSCRIA_OPENCODE_BIN` | Chemin vers opencode | `/root/.opencode/bin/opencode` |
+| `TRANSCRIA_ARBITRAGE_SCRIPT` | Script de lancement LLM | `./scripts/launch_arbitrage.sh` |
+| `TRANSCRIA_STOP_SCRIPT` | Script d'arrêt LLM | `./scripts/stop_qwen.sh` |
+| `TRANSCRIA_OPENCODE_BIN` | Chemin vers opencode | `opencode` (dans le PATH) |
 
 ### Initialisation
 
@@ -103,8 +107,16 @@ Ouvrir `http://localhost:7870` dans un navigateur.
 ## Tests
 
 ```bash
-pip install -r requirements-dev.txt
+source venv/bin/activate
+
+# Tests unitaires (385 tests, mock, pas de GPU requis)
 python -m pytest tests/ -q
+
+# Test E2E complet (nécessite les GPUs, voir tests/E2E_README.md)
+python tests/test_e2e_workflow.py
+
+# Test E2E sans LLM (plus rapide, 1 GPU suffit)
+python tests/test_e2e_workflow.py --skip-llm
 ```
 
 ## Structure du projet
@@ -128,7 +140,7 @@ transcria-mvp/
 │   ├── gpu/                        # VRAMManager, OpenCodeRunner
 │   └── web/                        # Routes Flask + templates Jinja2
 ├── configs/prompts/                # Prompts LLM (summary, correction, arbitration)
-├── tests/                          # 17 fichiers pytest
+├── tests/                          # 22 fichiers pytest + E2E workflow
 └── docs/                           # Documentation technique
 ```
 
@@ -136,6 +148,7 @@ transcria-mvp/
 
 | Document | Contenu |
 |---|---|
+| [INSTALL.md](docs/INSTALL.md) | Guide d'installation complet (venv, modèles, config, dépannage) |
 | [TECHNICAL.md](docs/TECHNICAL.md) | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | [BUGS.md](docs/BUGS.md) | 15 bugs documentés avec causes et corrections |
 | [DATA_MODEL.md](docs/DATA_MODEL.md) | Schéma de données, états, transitions, arborescence disque |
