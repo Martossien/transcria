@@ -3,7 +3,7 @@ export CUDA_HOME=/usr/local/cuda-12.8
 export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
-numactl --interleave=all /root/llama.cpp/build/bin/llama-server \
+numactl --interleave=all /home/admin_ia/llama.cpp/build/bin/llama-server \
 --model /root/models/qwen3-35b-arbitrage/UD-Q8_K_XL/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf \
 --alias qwen3-35b-arbitrage-ud-q8_k_xl \
 --host 0.0.0.0 --port 8080 \
@@ -22,7 +22,7 @@ numactl --interleave=all /root/llama.cpp/build/bin/llama-server \
 --verbose \
 --n-gpu-layers all \
 --split-mode layer \
---tensor-split 1,1 \
+--tensor-split 1,1,1 \
 --numa distribute \
 --cache-type-k q8_0 \
 --cache-type-v q8_0 \
@@ -33,4 +33,4 @@ numactl --interleave=all /root/llama.cpp/build/bin/llama-server \
 --presence-penalty 0.0 \
 --repeat-penalty 1.05 \
 --fit on \
---fit-target 3200,4000
+--fit-target 4000,4000,4000

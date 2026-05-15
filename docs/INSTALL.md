@@ -8,7 +8,7 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 
 1. [Prérequis matériels et logiciels](#1-prérequis-matériels-et-logiciels)
 2. [Installation du système](#2-installation-du-système)
-3. [Environnement Conda (recommandé)](#3-environnement-conda-recommandé)
+3. [Environnement Python (venv)](#3-environnement-python-venv)
 4. [Installation de TranscrIA](#4-installation-de-transcria)
 5. [Modèles IA](#5-modèles-ia)
 6. [Configuration](#6-configuration)
@@ -79,43 +79,156 @@ ffprobe -version
 
 ---
 
-## 3. Environnement Conda (recommandé)
+## 3. Environnement Python (venv)
 
-Conda est recommandé pour gérer les dépendances CUDA et PyTorch de façon reproductible.
+TranscrIA utilise un **virtualenv Python** (`venv/`) pour isoler toutes les dépendances, y compris PyTorch avec CUDA et pyannote. C'est la méthode recommandée — simple, reproductible, sans conflit système.
 
-### Installer Miniforge (Conda + Mamba)
+### Pourquoi un venv et pas conda ?
+
+- Le venv est dans le répertoire du projet (`venv/`), pas besoin de conda ou de configurer le PATH
+- Il contient **tout** ce qu'il faut : PyTorch CUDA, transformers, pyannote, accelerate, librosa, Flask...
+- Pas de risque de conflit avec d'autres projets ou de Python système cassé
+- Les scripts de lancement (`start.sh`, tests, app.py) utilisent `venv/bin/python` directement
+
+### Prérequis
+
+- Python 3.11+ installé sur le système (`python3 --version`)
+- pip à jour (`pip install --upgrade pip`)
+- CUDA Toolkit 12.x installé (`nvidia-smi` doit afficher la version CUDA)
+- ffmpeg installé (`apt install ffmpeg`)
+
+### Créer le venv et installer les dépendances
 
 ```bash
-wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
-bash Miniforge3-Linux-x86_64.sh -b -p $HOME/miniforge3
-source $HOME/miniforge3/etc/profile.d/conda.sh
-conda init bash
-source ~/.bashrc
+cd /chemin/vers/transcria
+
+# Créer le venv
+python3 -m venv venv
+
+# Activer le venv
+source venv/bin/activate
+
+# Mettre pip à jour
+pip install --upgrade pip
+
+# Installer PyTorch avec CUDA (ADAPTER la version CUDA à votre driver)
+# Vérifiez votre version CUDA : nvidia-smi | grep "CUDA Version"
+# Pour CUDA 12.6 :
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# Pour CUDA 12.4 :
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Installer les dépendances du projet
+pip install -r requirements.txt
+
+# Installer accelerate (requis par Cohere ASR pour device_map)
+pip install accelerate
+
+# Installer les dépendances de développement (tests)
+pip install -r requirements-dev.txt
 ```
 
-### Créer l'environnement TranscrIA
+### Contenu du venv — ce qui est installé
+
+Le venv contient **tous les composants nécessaires** au pipeline complet :
+
+| Composant | Package | Rôle |
+|---|---|---|
+| ASR | `torch`, `transformers`, `accelerate` | Cohere Transcribe (modèle 2B sur GPU) |
+| Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs (~2 Go VRAM) |
+| Audio | `librosa`, `soundfile`, `torchaudio` | Chargement/conversion audio |
+| LLM | `opencode` (CLI externe) | Qwen 35B résumé/correction via llama.cpp |
+| Web | `flask`, `flask-login`, `flask-sqlalchemy` | Serveur web + auth |
+| Config | `pyyaml` | Lecture config.yaml |
+| Qualité | `numpy`, `scikit-learn` (via pyannote) | Rapport qualité |
+
+### Vérifier l'installation
 
 ```bash
-conda create -n transcria python=3.11 -y
-conda activate transcria
-```
+source venv/bin/activate
 
-### Installer PyTorch avec CUDA 12.4
-
-```bash
-conda install -y pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
-```
-
-> **Alternative pip** si conda ne trouve pas les wheels :
-> ```bash
-> pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
-> ```
-
-### Vérifier PyTorch + CUDA
-
-```bash
+# Vérifier PyTorch + CUDA
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, GPUs: {torch.cuda.device_count()}')"
-# Exemple : PyTorch 2.5.1, CUDA 12.4, GPUs: 2
+# Attendu : PyTorch 2.12.0+cu126, CUDA 12.6, GPUs: 8
+
+# Vérifier tous les composants du pipeline
+python -c "
+from transcria.stt.cohere_transcriber import CohereTranscriber
+from transcria.stt.diarization import DiarizerService
+
+t = CohereTranscriber()
+print(f'Cohere ASR disponible : {t.available}')
+print(f'Cohere device          : {t.device}')
+
+ds = DiarizerService({})
+print(f'Pyannote disponible    : {ds.available}')
+
+import flask, transformers, pyannote.audio
+print(f'Flask {flask.__version__}')
+print(f'Transformers {transformers.__version__}')
+print(f'pyannote.audio {pyannote.audio.__version__}')
+"
+# Attendu :
+# Cohere ASR disponible : True
+# Cohere device          : cuda:0
+# Pyannote disponible    : True
+# Flask 3.x
+# Transformers 4.x ou 5.x
+# pyannote.audio 4.x
+```
+
+### Pièges connus lors de l'installation
+
+#### 1. `ModuleNotFoundError: No module named 'transformers'`
+
+Vous n'êtes pas dans le venv. Toujours activer avant de lancer :
+```bash
+source venv/bin/activate
+```
+Ou utiliser le binaire directement :
+```bash
+venv/bin/python app.py
+venv/bin/python -m pytest tests/ -q
+```
+
+#### 2. `Using a device_map requires accelerate`
+
+Le package `accelerate` est nécessaire pour que Cohere ASR utilise `device_map`. Sans lui, le modèle ne se charge pas sur GPU :
+```bash
+pip install accelerate
+```
+
+#### 3. `ValueError: Unable to compare versions for numpy`
+
+Si vous avez un `numpy-*.dist-info` corrompu (fichiers METADATA vides) dans votre venv :
+```bash
+# Trouver et supprimer les dist-info corrompus
+find venv/lib/python*/site-packages/ -name "numpy-*.dist-info" -exec ls -la {}/METADATA \;
+# Si METADATA fait 0 octets, supprimer le dist-info en question
+rm -rf venv/lib/python*/site-packages/numpy-2.2.5.dist-info  # si corrompu
+pip install --force-reinstall numpy
+```
+
+#### 4. torchcodec / FFmpeg
+
+Torchaudio peut afficher des warnings `torchcodec is not installed correctly` — c'est non bloquant, il utilise soundfile/librosa en fallback. Pour corriger complètement :
+```bash
+sudo apt install ffmpeg libavutil-dev libavcodec-dev libavformat-dev libswresample-dev
+```
+
+#### 5. Ne PAS utiliser le Python système
+
+Le Python système (`/usr/bin/python3`) n'a pas les dépendances CUDA. **Toujours** utiliser le venv :
+```bash
+# BON
+source venv/bin/activate
+python app.py
+
+# OU directement
+venv/bin/python app.py
+
+# MAUVAIS — il manque torch, pyannote, etc.
+python app.py
 ```
 
 ---
@@ -132,21 +245,21 @@ cd transcria
 ### Installer les dépendances Python
 
 ```bash
-# Avec Conda (recommandé) — PyTorch déjà installé
-pip install -r requirements.txt
+# Activer le venv
+source venv/bin/activate
 
-# Installer les dépendances de développement (tests)
-pip install -r requirements-dev.txt
+# Si le venv n'existe pas encore, le créer (voir section 3)
+# pip install -r requirements.txt
+# pip install accelerate
 ```
-
-Versions testées et compatibles dans `requirements.txt` :
 
 | Package | Version requise | Notes |
 |---|---|---|
-| `torch` | >=2.1, <3.0 | Installer via `conda install` avec CUDA 12.4 |
+| `torch` | >=2.1, <3.0 | Installer via `--index-url` avec CUDA (voir section 3) |
 | `torchaudio` | >=2.1, <3.0 | Installer avec PyTorch (même version) |
-| `transformers` | >=4.40, <5.0 | Cohere ASR + pyannote |
-| `pyannote.audio` | >=4.0, <5.0 | Diarisation (nécessite HF_TOKEN) |
+| `transformers` | >=4.40 | Cohere ASR + pyannote |
+| `accelerate` | >=0.24 | Requis pour device_map dans Cohere ASR |
+| `pyannote.audio` | >=4.0, <5.0 | Diarisation (nécessite HF_TOKEN, voir section 5) |
 | `numpy` | >=1.26, <3.0 | Compatible pyannote 4.x et torch 2.x |
 | `librosa` | >=0.11, <0.12 | Traitement audio |
 | `soundfile` | >=0.13, <1.0 | Lecture/écriture WAV |
@@ -158,7 +271,7 @@ Versions testées et compatibles dans `requirements.txt` :
 | `pyyaml` | >=6.0, <7.0 | Configuration YAML |
 | `requests` | >=2.31, <3.0 | Appels HTTP |
 
-> **Important** : Si PyTorch est installé via Conda avec CUDA, pip l'ignorera. Sinon, l'installation pip peut être longue (~6 Go de wheels CUDA).
+> **Important** : PyTorch doit être installé **avec CUDA** (voir section 3). L'installation pip classique installe la version CPU-only par défaut. Utilisez toujours `--index-url https://download.pytorch.org/whl/cu12X`.
 
 ### Installer opencode CLI (moteur LLM)
 
@@ -486,32 +599,73 @@ Variables configurables : `QWEN_PORT`, `MODEL_PATH`, `LLAMA_BIN`, `CUDA_HOME`.
 ### Vérifier les dépendances Python
 
 ```bash
-conda activate transcria
+source venv/bin/activate
+
+# Vérification de base
 python -c "
 import flask; print(f'Flask {flask.__version__}')
 import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')
 import transformers; print(f'Transformers {transformers.__version__}')
 import soundfile; print(f'soundfile OK')
 import numpy; print(f'NumPy {numpy.__version__}')
+import accelerate; print(f'accelerate {accelerate.__version__}')
 "
+
+# Vérification complète du pipeline
+python -c "
+from transcria.stt.cohere_transcriber import CohereTranscriber
+from transcria.stt.diarization import DiarizerService
+
+print('=== Vérification du pipeline TranscrIA ===')
+print()
+
+t = CohereTranscriber()
+print(f'Cohere ASR disponible : {t.available}')
+print(f'Cohere device          : {t.device}')
+print()
+
+ds = DiarizerService({})
+print(f'Pyannote disponible    : {ds.available}')
+print()
+
+import torch
+print(f'GPUs détectés          : {torch.cuda.device_count()}')
+for i in range(torch.cuda.device_count()):
+    print(f'  GPU {i}: {torch.cuda.get_device_name(i)}, {torch.cuda.get_device_properties(i).total_mem / 1e9:.1f} Go')
+"
+# Attendu :
+# Cohere ASR disponible : True
+# Cohere device          : cuda:0
+# Pyannote disponible    : True
+# GPUs détectés          : 8
+#   GPU 0: NVIDIA GeForce RTX 3090, 24.6 Go
+#   ...
 ```
+
+Si `Cohere ASR disponible : False`, vérifiez que `accelerate` est installé.
+Si `Pyannote disponible : False`, vérifiez que `pyannote.audio` est installé et que `HF_TOKEN` est configuré.
 
 ### Vérifier GPU
 
 ```bash
-python -c "
-import torch
-print(f'GPUs détectés : {torch.cuda.device_count()}')
-for i in range(torch.cuda.device_count()):
-    print(f'  GPU {i}: {torch.cuda.get_device_name(i)}, {torch.cuda.get_device_properties(i).total_mem / 1e9:.1f} Go')
-"
+nvidia-smi
+# Doit afficher vos GPU avec CUDA 12.x
 ```
 
 ### Lancer les tests unitaires
 
 ```bash
+source venv/bin/activate
 python -m pytest tests/ -q
-# Devrait afficher : 263 passed
+# Résultat attendu : 385 passed
+```
+
+### Lancer le test E2E complet (avec GPU)
+
+```bash
+source venv/bin/activate
+python tests/test_e2e_workflow.py
+# Voir tests/E2E_README.md pour les options (--keep, --skip-llm, --skip-diarization)
 ```
 
 ### Vérifier ffmpeg
@@ -524,6 +678,7 @@ ffprobe -version | head -1
 ### Vérifier la configuration
 
 ```bash
+source venv/bin/activate
 python -c "
 from transcria.config import load_config
 cfg = load_config()
@@ -543,15 +698,15 @@ print(f'Script    : {cfg[\"services\"][\"arbitrage_script\"]}')
 ### Mode développement
 
 ```bash
-conda activate transcria
+source venv/bin/activate
 python app.py --debug
 ```
 
 ### Mode production avec start.sh
 
 ```bash
-# Configurer le virtualenv (si conda)
-export VENV="$HOME/miniforge3/envs/transcria"
+# Configurer le virtualenv du projet
+export VENV="$(pwd)/venv"
 
 # Lancer
 ./start.sh --port 7870
@@ -563,6 +718,8 @@ export VENV="$HOME/miniforge3/envs/transcria"
 ./stop.sh
 ```
 
+> **Note** : `start.sh` cherche un fichier `$VENV/bin/activate` et l'active si `VENV` est défini. Par défaut `VENV` est vide, l'application utilise alors le Python du PATH. Définissez toujours `VENV` pour pointer vers le venv du projet.
+
 ### Variables d'environnement pour start.sh
 
 ```bash
@@ -571,7 +728,7 @@ export HOST=0.0.0.0
 export DEBUG=false
 export LOG_FILE=/var/log/transcrIA.log
 export PID_FILE=/run/transcrIA.pid
-export VENV=$HOME/miniforge3/envs/transcria
+export VENV=/chemin/absolu/vers/transcria/venv
 ```
 
 ---
@@ -616,16 +773,23 @@ Environment=PID_FILE=/run/transcrIA.pid
 
 ### Erreur « ModuleNotFoundError: torch »
 
-PyTorch n'est pas installé ou pas dans le bon environnement :
+PyTorch n'est pas installé ou pas dans le bon environnement. Toujours activer le venv :
 
 ```bash
-conda activate transcria
+source venv/bin/activate
 python -c "import torch; print(torch.__version__)"
 ```
 
-Si absent :
+Si absent, installer avec CUDA (adapter cu124/cu126 à votre version) :
 ```bash
-conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+```
+
+### Erreur « Using a device_map requires accelerate »
+
+Le package `accelerate` est nécessaire pour que Cohere ASR utilise `device_map` :
+```bash
+pip install accelerate
 ```
 
 ### Erreur « CUDA out of memory »
@@ -652,13 +816,19 @@ chmod +x /opt/transcria/scripts/launch_arbitrage.sh
 ### Erreur « pyannote non disponible »
 
 ```bash
-conda activate transcria
+source venv/bin/activate
 pip install pyannote.audio
 export HF_TOKEN=votre_token
 ```
 
 Vérifier l'acceptation des conditions sur HuggingFace :
 - [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1)
+
+Puis vérifier :
+```bash
+python -c "from transcria.stt.diarization import DiarizerService; print(DiarizerService({}).available)"
+# Attendu : True
+```
 
 ### Erreur « opencode introuvable »
 
@@ -728,21 +898,33 @@ python app.py --debug   # crash avec speechbrain/k2_fsa
 ## Résumé des commandes essentielles
 
 ```bash
-# 1. Créer l'environnement
-conda create -n transcria python=3.11 -y
-conda activate transcria
-conda install pytorch torchvision torchaudio pytorch-cuda=12.4 -c pytorch -c nvidia
-
-# 2. Installer TranscrIA
+# 1. Cloner et créer le venv
 git clone https://github.com/Martossien/transcria.git
 cd transcria
-pip install -r requirements.txt
+python3 -m venv venv
+source venv/bin/activate
 
-# 3. Configurer
+# 2. Installer PyTorch avec CUDA (adapter cu124/cu126 à votre driver)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+
+# 3. Installer les dépendances
+pip install -r requirements.txt
+pip install accelerate
+
+# 4. Vérifier l'installation
+python -c "
+from transcria.stt.cohere_transcriber import CohereTranscriber
+from transcria.stt.diarization import DiarizerService
+print('Cohere:', CohereTranscriber().available)
+print('Pyannote:', DiarizerService({}).available)
+import torch; print('CUDA:', torch.cuda.is_available(), torch.cuda.device_count(), 'GPUs')
+"
+
+# 5. Configurer
 cp config.example.yaml config.yaml
 # Éditer config.yaml (mot de passe admin, chemins des modèles, scripts LLM)
 
-# 4. Télécharger les modèles
+# 6. Télécharger les modèles
 mkdir -p models/cohere-asr/cohere-transcribe-03-2026
 # Placer les fichiers du modèle Cohere dans ce répertoire
 mkdir -p models/qwen3-35b-arbitrage/UD-Q8_K_XL
@@ -750,13 +932,13 @@ mkdir -p models/qwen3-35b-arbitrage/UD-Q8_K_XL
 export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
-# 5. Tester
-python -m pytest tests/ -q
+# 7. Tester
+python -m pytest tests/ -q          # 385 tests unitaires (mock, pas de GPU requis)
+python tests/test_e2e_workflow.py     # Test E2E complet (nécessite les GPUs)
 
-# 6. Lancer
+# 8. Lancer
 python app.py
 # ou en production :
-./start.sh --port 7870
-# ou en production :
+export VENV="$(pwd)/venv"
 ./start.sh --port 7870
 ```
