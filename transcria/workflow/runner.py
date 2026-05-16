@@ -264,7 +264,7 @@ class WorkflowRunner:
 
         if updated or created:
             fs.save_json("context/participants.json", participants)
-            sl.info("Rôles LLM → participants.json", updated=updated, created=created)
+            sl.info("Rôles LLM → participants.json : %d mis à jour, %d créés", updated, created)
 
     @staticmethod
     def _truncate_at_word(text: str, max_chars: int = 120) -> str:
