@@ -7,6 +7,17 @@ Le format suit une logique proche de Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- Pré-remplissage automatique des rôles participants : la LLM de résumé détecte les rôles SPEAKER_XX et les écrit dans `context/participants.json` après la création du mapping locuteurs (section 5 du wizard pré-remplie).
+- Stockage des rôles LLM dans `meeting_context.json["speaker_roles_llm"]` pour persistance inter-phases et réapplication après mapping.
+- Récupération des processus opencode orphelins au démarrage du service (`job_executor._kill_orphaned_opencode`) — les jobs interrompus pendant une inférence LLM ne bloquent plus les GPUs.
+- Suivi des PID opencode par fichier `.opencode.pid` dans le répertoire du job (jamais de kill aveugle par nom de processus).
+- `OpenCodeRunner` utilise `subprocess.Popen` + `_terminate_proc()` (SIGTERM puis SIGKILL) à la place de `subprocess.run()` qui ne tuait pas le processus en cas de timeout.
+- Endpoint `POST /api/jobs/<id>/speakers/map` réapplique maintenant les rôles LLM en production après la création du mapping.
+- Parser `_parse_structured_summary()` supporte deux formats SPEAKER_XX : `SPEAKER_XX [label] : rôle` (Format A) et `SPEAKER_XX : rôle` (Format B sans label).
+- `summary_prompt.txt` v1.3 : chasse systématique aux variantes STT en deux passes, format SPEAKER_XX obligatoire si diarization fournie.
+- Test E2E : pyannote lancé en pré-résumé si `diarization_context.md` absent, puis rôles appliqués après l'étape mapping.
+
+### Changed
 - Worker interne sérialisé pour exécuter les traitements longs hors de la requête HTTP.
 - Endpoint `/ready` pour distinguer l’état “process vivant” et “service prêt”.
 - Endpoint `/metrics` enrichi avec la capacité et l’activité du worker.

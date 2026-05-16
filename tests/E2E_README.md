@@ -70,28 +70,46 @@ Le test utilise `tests/test1.mp3` (291 Ko, 29.2s, voix française). Si absent, l
 
 ## Utilisation
 
+> **⚠️ Utiliser impérativement `venv/bin/python`**
+>
+> Le Python système (`/usr/bin/python`, Python 3.13) n'a **pas** accès aux packages du venv
+> (`pyannote`, `torch`, `cohere_transcriber`). Lancer avec `python tests/test_e2e_workflow.py`
+> depuis le shell système donne « pyannote non disponible » **sans erreur explicite**.
+>
+> Deux façons correctes de lancer le test :
+> ```bash
+> # Option 1 : chemin direct (recommandé, sans polluer le shell)
+> venv/bin/python tests/test_e2e_workflow.py
+>
+> # Option 2 : activer le venv puis lancer
+> source venv/bin/activate
+> python tests/test_e2e_workflow.py
+> ```
+
 ### Lancement complet
 
 ```bash
 cd /chemin/vers/transcria
-source venv/bin/activate
-python tests/test_e2e_workflow.py
+venv/bin/python tests/test_e2e_workflow.py
 ```
 
 ### Options
 
 ```bash
 # Conserver le job après le test (ne pas supprimer le répertoire jobs/<id>)
-python tests/test_e2e_workflow.py --keep
+venv/bin/python tests/test_e2e_workflow.py --keep
 
 # Sauter les étapes LLM (Qwen résumé + correction) — plus rapide, pas de GPU requis
-python tests/test_e2e_workflow.py --skip-llm
+venv/bin/python tests/test_e2e_workflow.py --skip-llm
 
 # Sauter la diarisation pyannote
-python tests/test_e2e_workflow.py --skip-diarization
+venv/bin/python tests/test_e2e_workflow.py --skip-diarization
+
+# Utiliser un autre fichier audio (ex : test2.mp3)
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3
 
 # Combiner les options
-python tests/test_e2e_workflow.py --keep --skip-llm
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --keep --skip-llm
 ```
 
 ### Durée estimée

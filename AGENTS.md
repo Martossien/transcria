@@ -29,8 +29,10 @@ python app.py
 # Tests
 python -m pytest tests/ -q           # 412 tests (22 modules, mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
-python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
-python tests/test_e2e_workflow.py              # E2E complet (GPUs + LLM requis)
+# ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
+venv/bin/python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
+venv/bin/python tests/test_e2e_workflow.py              # E2E complet (GPUs + LLM requis)
+venv/bin/python tests/test_e2e_workflow.py --keep       # Conserve le job pour inspection
 
 # Lint / format — AUCUN linter configuré dans le projet.
 # Le projet ne suit pas black/ruff/flake8. Respecte le style existant.
@@ -199,6 +201,20 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan (worker sérialisé, `workflow.execution.max_concurrent_jobs=1`). Supervision : `/health`, `/ready`, `/metrics`.
 
+### Pré-remplissage des rôles participants (LLM → section 5)
+La phase summary (LLM Qwen) déduit les rôles de chaque SPEAKER_XX depuis la transcription. Le flux :
+1. `OpenCodeRunner._parse_structured_summary()` extrait `speaker_roles` (`{"SPEAKER_00": {"label": "Alice", "role": "..."}, ...}`)
+2. `WorkflowRunner._apply_llm_suggestions()` stocke ces rôles dans `meeting_context.json["speaker_roles_llm"]`
+3. `WorkflowRunner._apply_speaker_roles()` est appelé **après** la création du mapping SPEAKER_XX → participant, soit :
+   - Dans le test E2E : à l'étape 12 (mapping), après `SpeakerDetector.save_mapping()`
+   - En production : dans `api_speakers_map` (endpoint `/api/jobs/<id>/speakers/map`), après `SpeakerDetector.save_mapping()`
+4. Le résultat est écrit dans `context/participants.json["role"]` pour chaque participant
+
+**Important :** `_apply_speaker_roles()` nécessite que `speakers/speaker_mapping.json` existe déjà (lien SPEAKER_XX → participant_id). Ne pas l'appeler avant la création du mapping.
+
+### Récupération des opencode orphelins au démarrage
+`job_executor._kill_orphaned_opencode(job_id, jobs_dir, sl)` tue les processus opencode de TranscrIA laissés vivants après un redémarrage brutal. Il lit les fichiers `.opencode.pid` dans `jobs/<id>/` (écrits par `OpenCodeRunner.run()`). La réconciliation est appelée automatiquement par `init_job_executor()` au démarrage du service.
+
 ### Config singleton
 `get_config()` retourne un singleton chargé une fois au démarrage. `set_config()` le met à jour en mémoire. `save_config()` écrit sur disque. Les modules qui capturent `get_config()` au démarrage ne voient pas les mises à jour ultérieures.
 
@@ -225,6 +241,9 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 ### tests/ couvre le métier, moins les intégrations GPU
 412 tests dans 22 modules couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
+### E2E : utiliser impérativement `venv/bin/python`, pas `python`
+Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).
+
 ## Règles absolues
 
 1. **Toujours** vérifier `_require_job_access(job, current_user)` dans les routes API qui modifient un job.
@@ -236,6 +255,7 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.
 9. **Toujours** passer par `workflow/transitions.py` pour la logique de lancement/annulation/reprise de traitement.
+10. **Ne jamais** tuer un processus opencode par nom de processus — utiliser uniquement les fichiers `.opencode.pid` dans le répertoire du job (cf. `_kill_orphaned_opencode`). Il peut y avoir d'autres opencode sur la machine non liés à TranscrIA.
 
 ## Documentation complémentaire
 
