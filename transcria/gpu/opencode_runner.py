@@ -280,11 +280,22 @@ class OpenCodeRunner:
         part_match = re.search(r"## Participants probables\s*\n(.+?)(?:\n##|\Z)", text, re.DOTALL)
         if part_match:
             participants = []
+            speaker_roles: dict[str, dict] = {}
             for line in part_match.group(1).strip().split("\n"):
                 line = line.strip("- ").strip()
-                if line and "non identifiable" not in line.lower():
-                    participants.append(line)
+                if not line or "non identifiable" in line.lower():
+                    continue
+                participants.append(line)
+                # Extraire SPEAKER_XX + rôle si la LLM a suivi le format demandé
+                m = re.match(r"(SPEAKER_\d+)\s+(.+?)\s*:\s*(.+)", line)
+                if m:
+                    speaker_id = m.group(1)
+                    label = m.group(2).strip().strip("[]")
+                    role = m.group(3).strip()
+                    speaker_roles[speaker_id] = {"label": label, "role": role}
             fields["participants_detectes"] = "\n".join(participants)
+            if speaker_roles:
+                fields["speaker_roles"] = speaker_roles
 
         # Parse "Termes suspects" for lexicon pre-fill
         termes_suspects = []

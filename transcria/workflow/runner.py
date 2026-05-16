@@ -193,6 +193,11 @@ class WorkflowRunner:
         meeting_ctx["summary_llm"] = summary_text
         fs.save_json("context/meeting_context.json", meeting_ctx)
 
+        # Mettre à jour participants.json avec les rôles déduits par la LLM
+        speaker_roles = parsed.get("speaker_roles", {})
+        if speaker_roles:
+            WorkflowRunner._apply_speaker_roles(fs, speaker_roles, sl)
+
         fs.save_text(
             "summary/summary.md",
             f"# Résumé de contrôle\n\n{summary_text}\n\n---\n\n"
@@ -200,6 +205,62 @@ class WorkflowRunner:
             f"{result.get('transcript_short', '')}\n",
         )
         sl.info("Résumé LLM généré", chars=len(summary_text))
+
+    @staticmethod
+    def _apply_speaker_roles(fs, speaker_roles: dict, sl) -> None:
+        """Met à jour participants.json avec les rôles déduits par la LLM pour chaque SPEAKER_XX."""
+        mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
+        mapping = mapping_data.get("mapping", {})
+        participants = fs.load_json("context/participants.json") or []
+        if not isinstance(participants, list):
+            participants = []
+
+        # Index participants par id et par nom (insensible à la casse)
+        by_id = {p["id"]: p for p in participants if p.get("id")}
+        by_name = {p["name"].lower(): p for p in participants if p.get("name")}
+
+        updated = 0
+        created = 0
+        for speaker_id, info in speaker_roles.items():
+            role = info.get("role", "").strip()
+            label = info.get("label", "").strip()
+            if not role:
+                continue
+
+            # Trouver le participant via speaker_mapping → participant_id ou nom
+            participant = None
+            spk_map = mapping.get(speaker_id, {})
+            pid = spk_map.get("participant_id", "")
+            name = spk_map.get("name", "")
+
+            if pid and pid in by_id:
+                participant = by_id[pid]
+            elif name and name.lower() in by_name:
+                participant = by_name[name.lower()]
+
+            if participant is not None:
+                if not participant.get("role"):
+                    participant["role"] = role
+                    updated += 1
+            else:
+                # Créer une entrée minimale si participants.json est vide ou SPEAKER_XX inconnu
+                new_p = {
+                    "id": speaker_id.lower().replace("_", ""),
+                    "name": label or name or speaker_id,
+                    "function": "",
+                    "service": "",
+                    "role": role,
+                    "is_animator": False,
+                    "expected": True,
+                    "comment": "",
+                }
+                participants.append(new_p)
+                by_id[new_p["id"]] = new_p
+                created += 1
+
+        if updated or created:
+            fs.save_json("context/participants.json", participants)
+            sl.info("Rôles LLM → participants.json", updated=updated, created=created)
 
     @staticmethod
     def _truncate_at_word(text: str, max_chars: int = 120) -> str:

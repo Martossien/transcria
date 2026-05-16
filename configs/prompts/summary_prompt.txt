@@ -76,8 +76,8 @@ Méthode :
 - **Nombre de participants détectés :** [nombre estimé de personnes ayant parlé, basé sur les prénoms/noms/tours de parole]
 
 ## Participants probables
-- [Nom ou fonction 1] : [rôle dans la réunion si identifiable]
-- [Nom ou fonction 2] : [rôle dans la réunion si identifiable]
+- SPEAKER_XX [Nom ou fonction 1] : [rôle dans la réunion si identifiable]
+- SPEAKER_XX [Nom ou fonction 2] : [rôle dans la réunion si identifiable]
 - ... (si non identifiable : "Impossible de déterminer les participants depuis la transcription")
 
 ## Synthèse
@@ -127,6 +127,8 @@ normale sinon).
 - Les participants sont les personnes qui PARLENT dans la réunion, pas celles mentionnées.
 - Si la diarization acoustique est fournie, le nombre de participants ayant parlé doit
   suivre le nombre de locuteurs détectés acoustiquement, sauf incohérence explicite.
+- Si la diarization est fournie, chaque participant doit être préfixé par son identifiant
+  SPEAKER_XX issu de la diarization (ex : "SPEAKER_00 [Alice] : animatrice").
 - Le temps de parole peut aider à inférer les rôles probables : animateur, intervenant
   principal, intervenant ponctuel.
 - La passe 2 est aussi importante que la passe 1. Ne la saute pas, ne la bâcle pas.
