@@ -263,6 +263,9 @@ def job_wizard(job_id: str):
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
         srt_editor_url=SrtEditorLink.resolve_public_url(cfg, request.host),
+        llm_timeout=int(
+            cfg.get("workflow", {}).get("arbitration_llm", {}).get("timeout_seconds", 7200)
+        ),
     )
 
 

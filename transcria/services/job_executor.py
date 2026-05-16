@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from flask import Flask
 
+from transcria.database import db
+from transcria.jobs.filesystem import JobFilesystem
+from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger, inject_correlation_id
 from transcria.services.pipeline_service import PipelineService
@@ -98,10 +102,73 @@ _executor_service: JobExecutorService | None = None
 _executor_lock = threading.Lock()
 
 
+def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
+    """Au démarrage, récupère les jobs bloqués en 'running' suite à un redémarrage.
+
+    Pour chaque job interrompu :
+    - transcription_corrigee.srt présent → LLM a fini → COMPLETED
+    - transcription.srt présent → transcription OK, correction interrompue → FAILED (relançable)
+    - aucun fichier → FAILED
+    """
+    sl = get_structured_logger(__name__)
+    jobs_dir = config.get("storage", {}).get("jobs_dir", "./jobs")
+
+    try:
+        with app.app_context():
+            all_jobs = list(
+                db.session.execute(db.select(Job)).scalars().all()
+            )
+            recovered, failed_count = 0, 0
+            for job in all_jobs:
+                exec_status = job.get_extra_data().get("execution", {}).get("status")
+                if exec_status != "running":
+                    continue
+
+                fs = JobFilesystem(jobs_dir, job.id)
+                corrected = fs.job_dir / "metadata" / "transcription_corrigee.srt"
+                transcribed = fs.job_dir / "metadata" / "transcription.srt"
+
+                if corrected.is_file() and corrected.stat().st_size > 0:
+                    mark_execution_completed(job.id)
+                    JobStore.update_state(job.id, JobState.COMPLETED)
+                    sl.info(
+                        "Réconciliation: job récupéré → COMPLETED",
+                        job_id=job.id,
+                        reason="transcription_corrigee.srt présent",
+                    )
+                    recovered += 1
+                else:
+                    reason = (
+                        "transcription OK, correction interrompue"
+                        if transcribed.is_file()
+                        else "aucun fichier produit"
+                    )
+                    mark_execution_failed(job.id, "Interrompu par redémarrage du service")
+                    JobStore.update_state(
+                        job.id, JobState.FAILED, "Interrompu par redémarrage du service"
+                    )
+                    sl.warning(
+                        "Réconciliation: job → FAILED (relançable)",
+                        job_id=job.id,
+                        reason=reason,
+                    )
+                    failed_count += 1
+
+            if recovered or failed_count:
+                sl.info(
+                    "Réconciliation terminée",
+                    recovered=recovered,
+                    failed=failed_count,
+                )
+    except Exception as exc:
+        sl.warning("Réconciliation: erreur ignorée", error=str(exc))
+
+
 def init_job_executor(app: Flask, config: dict) -> JobExecutorService:
     global _executor_service
     with _executor_lock:
         _executor_service = JobExecutorService(app, config)
+        _reconcile_interrupted_jobs(app, config)
         return _executor_service
 
 

@@ -310,16 +310,38 @@ var TranscrIA = window.TranscrIA || {};
     var _TERMINAL_STATES = ['completed', 'export_ready', 'failed', 'cancelled'];
     var _REPROCESSABLE_STATES = ['completed', 'quality_checked', 'export_ready', 'failed', 'cancelled'];
 
+    var _LLM_TIMEOUT_S = parseInt(
+        (document.getElementById('wizard-root') || {}).dataset.llmTimeout || '7200', 10
+    );
+    var _LLM_WARN_S = Math.floor(_LLM_TIMEOUT_S * 0.5); // warning à 50% du timeout
+
     function _buildProcessingPoller(div, startTime) {
-        function elapsed() {
-            var s = Math.floor((Date.now() - startTime) / 1000);
+        var _warnShown = false;
+
+        function elapsedS() { return Math.floor((Date.now() - startTime) / 1000); }
+        function elapsedStr() {
+            var s = elapsedS();
             return s < 60 ? s + 's' : Math.floor(s / 60) + 'min ' + (s % 60) + 's';
         }
+
         function setInfo(msg) {
             div.innerHTML = '<div class="alert alert-info d-flex align-items-center gap-2">' +
                 '<span class="spinner-border spinner-border-sm" role="status"></span>' +
                 '<span>' + msg + '</span></div>';
         }
+
+        function showLlmWarning() {
+            div.innerHTML =
+                '<div class="alert alert-warning">' +
+                '<strong>⚠ Le traitement LLM prend plus de temps que prévu (' + elapsedStr() + ').</strong><br>' +
+                'La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, ' +
+                'vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service.' +
+                '<div class="mt-2 d-flex gap-2">' +
+                '<button class="btn btn-sm btn-warning" onclick="TranscrIA.cancelProcessing()">Annuler le traitement</button>' +
+                '<button class="btn btn-sm btn-outline-secondary" onclick="TranscrIA._resumePolling()">Continuer à attendre</button>' +
+                '</div></div>';
+        }
+
         function poll() {
             W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
                 if (!r || r.data.error) { setTimeout(poll, 4000); return; }
@@ -327,21 +349,44 @@ var TranscrIA = window.TranscrIA || {};
                 var label = _STATE_LABELS[state] || state;
                 if (_TERMINAL_STATES.indexOf(state) !== -1) {
                     if (state === 'failed') {
-                        div.innerHTML = '<div class="alert alert-danger">Échec du traitement après ' + elapsed() + '.</div>';
+                        div.innerHTML = '<div class="alert alert-danger">Échec du traitement après ' + elapsedStr() + '.</div>';
                     } else if (state === 'cancelled') {
-                        div.innerHTML = '<div class="alert alert-warning">Traitement annulé.</div>';
+                        div.innerHTML = '<div class="alert alert-warning">Traitement annulé après ' + elapsedStr() + '.</div>';
                     } else {
-                        div.innerHTML = '<div class="alert alert-success">Traitement terminé en ' + elapsed() + '. Chargement…</div>';
+                        div.innerHTML = '<div class="alert alert-success">Traitement terminé en ' + elapsedStr() + '. Chargement…</div>';
                         location.reload();
                     }
                 } else {
-                    setInfo(label + ' (' + elapsed() + ' écoulées)');
+                    // Afficher le warning si on est en arbitrating depuis trop longtemps
+                    if (state === 'arbitrating' && !_warnShown && elapsedS() >= _LLM_WARN_S) {
+                        _warnShown = true;
+                        showLlmWarning();
+                    } else if (!_warnShown) {
+                        setInfo(label + ' (' + elapsedStr() + ' écoulées)');
+                    }
                     setTimeout(poll, 4000);
                 }
             });
         }
+
         return { setInfo: setInfo, poll: poll };
     }
+
+    W.cancelProcessing = function () {
+        W.api('/api/jobs/' + JOB_ID + '/process', 'POST', { mode: 'cancel' }).then(function () {
+            location.reload();
+        });
+    };
+
+    W._resumePolling = function () {
+        // L'utilisateur choisit de continuer à attendre : on masque le warning,
+        // on recrée un poller et on reprend le polling.
+        var div = document.getElementById('processing-result');
+        var startTime = Date.now();
+        var poller = _buildProcessingPoller(div, startTime);
+        poller.setInfo('En attente de la fin du traitement LLM…');
+        setTimeout(poller.poll, 4000);
+    };
 
     W.startProcessing = function (mode) {
         console.log('[TranscrIA] startProcessing(' + mode + ')');
