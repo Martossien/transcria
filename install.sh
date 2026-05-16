@@ -298,11 +298,21 @@ if [[ ! -f "$ENV_FILE" ]]; then
     cp "$INSTALL_DIR/.env.example" "$ENV_FILE"
 fi
 
-# Générer TRANSCRIA_SECRET si valeur par défaut
+# Générer TRANSCRIA_SECRET si absent ou valeur par défaut
 if grep -q 'change-me-to-a-random-secret' "$ENV_FILE" 2>/dev/null; then
     SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
     sed -i "s/change-me-to-a-random-secret/$SECRET/" "$ENV_FILE"
     log_ok "Clé secrète Flask générée dans .env"
+elif ! grep -qE '^TRANSCRIA_SECRET=.{8,}' "$ENV_FILE" 2>/dev/null; then
+    SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+    if grep -q '^TRANSCRIA_SECRET=' "$ENV_FILE" 2>/dev/null; then
+        sed -i "s|^TRANSCRIA_SECRET=.*|TRANSCRIA_SECRET=$SECRET|" "$ENV_FILE"
+    else
+        echo "TRANSCRIA_SECRET=$SECRET" >> "$ENV_FILE"
+    fi
+    log_ok "Clé secrète Flask générée dans .env"
+else
+    log_ok "TRANSCRIA_SECRET présent dans .env"
 fi
 
 # ============================================================================

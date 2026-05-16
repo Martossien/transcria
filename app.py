@@ -25,7 +25,20 @@ def create_app(config_path: str | None = None) -> Flask:
     setup_logging(debug=debug)
 
     app = Flask(__name__, template_folder=os.path.join(_WEB_DIR, "templates"), static_folder=os.path.join(_WEB_DIR, "static"))
-    app.secret_key = os.environ.get("TRANSCRIA_SECRET", os.urandom(32).hex())
+
+    _secret = os.environ.get("TRANSCRIA_SECRET", "")
+    if _secret:
+        app.secret_key = _secret
+    else:
+        app.secret_key = os.urandom(32).hex()
+        if not debug:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "TRANSCRIA_SECRET absent de l'environnement — clé de session éphémère utilisée. "
+                "Toutes les sessions seront invalidées à chaque redémarrage. "
+                "Définissez TRANSCRIA_SECRET dans .env (générer : python3 -c "
+                "\"import secrets; print(secrets.token_hex(32))\")."
+            )
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.get("storage", {}).get("database_url", "sqlite:///transcrIA.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["MAX_CONTENT_LENGTH"] = int(cfg.get("security", {}).get("max_upload_size_mb", 1024)) * 1024 * 1024
