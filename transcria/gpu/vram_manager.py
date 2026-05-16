@@ -200,9 +200,21 @@ class VRAMManager:
             return False
 
         if self.is_port_open(self.qwen_port):
-            logger.info("Port %d déjà occupé — nettoyage avant lancement", self.qwen_port)
-            self._kill_port(self.qwen_port)
-            time.sleep(3)
+            # Vérifier que le serveur existant répond bien à l'API avant de l'utiliser
+            try:
+                import urllib.request
+                urllib.request.urlopen(
+                    f"http://127.0.0.1:{self.qwen_port}/v1/models", timeout=5
+                )
+                logger.info(
+                    "Qwen 35B déjà disponible sur le port %d — réutilisation du serveur existant",
+                    self.qwen_port,
+                )
+                return True
+            except Exception:
+                logger.info("Port %d occupé mais serveur non fonctionnel — nettoyage", self.qwen_port)
+                self._kill_port(self.qwen_port)
+                time.sleep(3)
 
         logger.info("Lancement Qwen 35B via %s...", self.arbitrage_script)
         try:

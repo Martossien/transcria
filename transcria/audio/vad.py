@@ -57,7 +57,7 @@ class SileroVAD:
     def available(self) -> bool:
         if self._available is None:
             try:
-                from faster_whisper.vad import get_vad_model, VadOptions  # noqa: F401
+                from faster_whisper.vad import get_speech_timestamps, VadOptions  # noqa: F401
                 self._available = True
             except (ImportError, Exception) as exc:
                 logger.debug("SileroVAD non disponible: %s", exc)
@@ -67,8 +67,9 @@ class SileroVAD:
     def _load(self) -> None:
         if self._model is not None:
             return
-        from faster_whisper.vad import get_vad_model, VadOptions
-        self._model = get_vad_model()
+        from faster_whisper.vad import get_speech_timestamps, VadOptions
+        # get_speech_timestamps est une fonction module-level, pas une méthode du modèle
+        self._model = get_speech_timestamps
         self._VadOptions = VadOptions
         logger.debug("Silero VAD chargé")
 
@@ -90,7 +91,7 @@ class SileroVAD:
                 speech_pad_ms=self.speech_pad_ms,
             )
             audio_f32 = audio.astype(np.float32)
-            raw = self._model.get_speech_timestamps(audio_f32, opts)
+            raw = self._model(audio_f32, opts, sampling_rate=sample_rate)
             timestamps = [
                 {"start": chunk["start"] / sample_rate, "end": chunk["end"] / sample_rate}
                 for chunk in raw
