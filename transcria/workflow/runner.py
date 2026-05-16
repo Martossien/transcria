@@ -191,10 +191,14 @@ class WorkflowRunner:
             meeting_ctx["termes_suspects"] = parsed["termes_suspects"]
 
         meeting_ctx["summary_llm"] = summary_text
+        # Stocker les rôles LLM dans meeting_context pour que l'UI puisse les afficher
+        # et qu'ils puissent être réappliqués après la création du mapping
+        speaker_roles = parsed.get("speaker_roles", {})
+        if speaker_roles:
+            meeting_ctx["speaker_roles_llm"] = speaker_roles
         fs.save_json("context/meeting_context.json", meeting_ctx)
 
-        # Mettre à jour participants.json avec les rôles déduits par la LLM
-        speaker_roles = parsed.get("speaker_roles", {})
+        # Tentative d'application immédiate des rôles (fonctionne si speaker_mapping.json existe déjà)
         if speaker_roles:
             WorkflowRunner._apply_speaker_roles(fs, speaker_roles, sl)
 

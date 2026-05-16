@@ -556,6 +556,8 @@ def main():
                 RESULTS["convert"] = False
             timer_end("convert")
 
+        _pending_speaker_roles: dict = {}
+
         # ─────────────────────────────────────────────────────────────
         #  4. TRANSCRIPTION STT — GPU CHECKPOINT
         # ─────────────────────────────────────────────────────────────
@@ -616,9 +618,19 @@ def main():
                         from transcria.gpu.opencode_runner import OpenCodeRunner
                         oc_runner = OpenCodeRunner(str(fs.job_dir / "summary"))
                         print("    ⏳ Génération du résumé...")
+                        # Générer diarization_context.md si absent (ordre prod : pyannote avant LLM)
+                        diarization_ctx = fs.job_dir / "summary" / "diarization_context.md"
+                        if not diarization_ctx.exists():
+                            try:
+                                from transcria.workflow.runner import WorkflowRunner
+                                _r = WorkflowRunner(JobStore, cfg)
+                                _r._run_pyannote_after_transcription(job, str(audio_path), cfg)
+                            except Exception as _e:
+                                warn(f"Pyannote pré-résumé échoué (ignoré): {_e}")
                         summary_result = oc_runner.run_summary(
                             str(fs.job_dir / "summary" / "quick_transcript.txt"),
                             str(fs.job_dir / "context" / "job_context.yaml") if (fs.job_dir / "context" / "job_context.yaml").exists() else None,
+                            diarization_context_path=str(diarization_ctx) if diarization_ctx.exists() else None,
                         )
 
                         vram.stop_qwen_35b()
@@ -641,6 +653,11 @@ def main():
                                     meeting_ctx["speaker_count_llm"] = summary_result["speaker_count"]
                                 meeting_ctx["summary_text"] = summary_text
                                 fs.save_json("context/meeting_context.json", meeting_ctx)
+                                # Stocker les rôles LLM — seront appliqués APRÈS ParticipantsManager.save()
+                                # pour ne pas être écrasés (étape 7)
+                                _pending_speaker_roles = summary_result.get("speaker_roles", {})
+                                if _pending_speaker_roles:
+                                    ok(f"Rôles LLM détectés (application différée) : {list(_pending_speaker_roles.keys())}")
                         else:
                             warn("Résumé LLM indisponible ou vide")
 
@@ -759,6 +776,14 @@ def main():
             ok(f"Mapping : {len(mapping)} locuteurs")
         else:
             warn("Aucun locuteur — mapping ignoré")
+        # Appliquer les rôles LLM APRÈS le mapping — speaker_mapping.json est maintenant disponible
+        # pour relier SPEAKER_XX → participant_id → participants.json
+        if _pending_speaker_roles:
+            import logging as _logging
+            WorkflowRunner._apply_speaker_roles(
+                fs, _pending_speaker_roles, _logging.getLogger("e2e.summary")
+            )
+            ok(f"Rôles LLM appliqués : {list(_pending_speaker_roles.keys())}")
         JobStore.update_state(job.id, JS.READY_TO_PROCESS)
         RESULTS["mapping"] = True
         timer_end("mapping")

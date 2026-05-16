@@ -471,9 +471,17 @@ def api_speakers_map(job_id: str):
 
     mapping = request.get_json() or {}
     from transcria.stt.speaker_detection import SpeakerDetector
+    from transcria.workflow.runner import WorkflowRunner
 
     SpeakerDetector.save_mapping(job.id, cfg["storage"]["jobs_dir"], mapping)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
+
+    # Réappliquer les rôles LLM maintenant que le mapping SPEAKER_XX → participant existe
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+    speaker_roles_llm = meeting_ctx.get("speaker_roles_llm", {})
+    if speaker_roles_llm:
+        WorkflowRunner._apply_speaker_roles(fs, speaker_roles_llm, logger)
 
     advance_preprocessing_state(job.id, job.state)
     return jsonify({"status": "ok"})

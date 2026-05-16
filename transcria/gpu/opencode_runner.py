@@ -286,13 +286,21 @@ class OpenCodeRunner:
                 if not line or "non identifiable" in line.lower():
                     continue
                 participants.append(line)
-                # Extraire SPEAKER_XX + rôle si la LLM a suivi le format demandé
-                m = re.match(r"(SPEAKER_\d+)\s+(.+?)\s*:\s*(.+)", line)
+                # Extraire SPEAKER_XX + rôle — deux formats acceptés :
+                # Format A : "SPEAKER_XX [label] : rôle"
+                # Format B : "SPEAKER_XX : rôle" (sans label)
+                m = re.match(r"(SPEAKER_\d+)\s+([^:]+?)\s*:\s*(.+)", line)
                 if m:
                     speaker_id = m.group(1)
                     label = m.group(2).strip().strip("[]")
                     role = m.group(3).strip()
                     speaker_roles[speaker_id] = {"label": label, "role": role}
+                else:
+                    m = re.match(r"(SPEAKER_\d+)\s*:\s*(.+)", line)
+                    if m:
+                        speaker_id = m.group(1)
+                        role = m.group(2).strip()
+                        speaker_roles[speaker_id] = {"label": "", "role": role}
             fields["participants_detectes"] = "\n".join(participants)
             if speaker_roles:
                 fields["speaker_roles"] = speaker_roles
