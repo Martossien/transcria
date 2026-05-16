@@ -29,18 +29,28 @@ class WorkflowRunner:
         sl.set_context(job_id=job.id, step="summary")
 
         self.store.update_state(job.id, JobState.SUMMARY_RUNNING)
-        sl.info("DÉBUT résumé")
+        t0 = time.monotonic()
+        sl.info("━━━ DÉBUT résumé ━━━")
 
+        sl.info("[1/3] Cohere ASR quick transcription — chargement GPU")
         result = self._run_cohere_transcription(job, audio_path, config, sl)
+        sl.info("[1/3] Cohere ASR terminé — %d segments, %.1fs",
+                result.get("segment_count", 0), time.monotonic() - t0)
         if result.get("error") and not result.get("transcript_text"):
+            sl.error("[1/3] Cohere ASR ÉCHEC — abandon résumé", error=result["error"])
             return result
 
+        sl.info("[2/3] Pyannote diarization — début")
         self._run_pyannote_after_transcription(job, audio_path, config)
+        sl.info("[2/3] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
 
+        sl.info("[3/3] LLM résumé via Qwen — début")
         self._run_llm_summary(job, result, config, sl)
+        sl.info("[3/3] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
         self.store.update_state(job.id, JobState.SUMMARY_DONE)
-        sl.info("FIN résumé", transcript_chars=len(result.get("transcript_text", "")))
+        sl.info("━━━ FIN résumé ━━━ (%.1fs total)", time.monotonic() - t0,
+                transcript_chars=len(result.get("transcript_text", "")))
         return result
 
     @staticmethod
@@ -112,7 +122,11 @@ class WorkflowRunner:
         self, job: Job, result: dict, config: dict, sl
     ) -> None:
         llm_config = config.get("workflow", {}).get("summary_llm", {})
-        if not llm_config.get("enabled") or not result.get("transcript_text"):
+        if not llm_config.get("enabled"):
+            sl.info("LLM résumé désactivé dans la config")
+            return
+        if not result.get("transcript_text"):
+            sl.warning("LLM résumé sauté — transcription vide")
             return
 
         from transcria.gpu.opencode_runner import OpenCodeRunner
@@ -122,12 +136,14 @@ class WorkflowRunner:
         context_path = fs.job_dir / "context" / "job_context.yaml"
         diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
-        sl.info("Phase LLM: libération GPUs + lancement opencode")
+        sl.info("LLM résumé: libération GPUs en cours")
         self.vram.free_all_gpus()
+        sl.info("LLM résumé: lancement Qwen 35B sur port %d",
+                config.get("services", {}).get("qwen_port", 8080))
         launched = self.vram.launch_qwen_35b()
 
         if not launched:
-            logger.warning("Qwen 35B non disponible — résumé sauté")
+            sl.warning("Qwen 35B NON DISPONIBLE — résumé LLM sauté (transcription rapide conservée)")
             return
 
         try:

@@ -152,6 +152,18 @@ class VRAMManager:
 
     # ── Service lifecycle ─────────────────────────────────
 
+    def _get_port_pid(self, port: int) -> str:
+        """Retourne le(s) PID qui écoutent sur ce port, pour les logs."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+                capture_output=True, text=True, timeout=5
+            )
+            pids = [p.strip() for p in result.stdout.strip().split("\n") if p.strip()]
+            return ",".join(pids) if pids else "inconnu"
+        except Exception:
+            return "inconnu"
+
     def _kill_port(self, port: int) -> bool:
         """Tue uniquement le processus qui écoute sur ce port (LISTEN)."""
         import signal
@@ -206,13 +218,15 @@ class VRAMManager:
                 urllib.request.urlopen(
                     f"http://127.0.0.1:{self.qwen_port}/v1/models", timeout=5
                 )
+                pid_info = self._get_port_pid(self.qwen_port)
                 logger.info(
-                    "Qwen 35B déjà disponible sur le port %d — réutilisation du serveur existant",
-                    self.qwen_port,
+                    "Qwen 35B déjà actif sur port %d (PID %s) — réutilisation sans redémarrage",
+                    self.qwen_port, pid_info,
                 )
                 return True
             except Exception:
-                logger.info("Port %d occupé mais serveur non fonctionnel — nettoyage", self.qwen_port)
+                logger.info("Port %d occupé mais /v1/models ne répond pas — nettoyage et relance",
+                            self.qwen_port)
                 self._kill_port(self.qwen_port)
                 time.sleep(3)
 

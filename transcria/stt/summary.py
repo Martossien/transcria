@@ -27,16 +27,23 @@ class SummaryGenerator:
 
         device = f"cuda:{gpu_index}" if gpu_index is not None else None
         backend = self.config.get("models", {}).get("stt_backend", "cohere")
-        sl.info("DÉBUT transcription rapide", backend=backend, gpu=gpu_index)
+        sl.info("━━━ DÉBUT transcription rapide ━━━ backend=%s gpu=%s", backend, gpu_index)
 
         # Charger l'audio une fois pour VAD + transcription
+        sl.info("[summary] Chargement audio: %s", audio_path)
         audio, sr = librosa.load(str(audio_path), sr=_SR, mono=True)
+        total_duration = len(audio) / sr
+        sl.info("[summary] Audio chargé: %.1fs (%.1f min)", total_duration, total_duration / 60)
 
-        # VAD pré-transcription : Cohere ne reçoit que les zones de parole
+        # VAD pré-transcription
+        sl.info("[summary] VAD: détection zones de parole")
         vad = SileroVAD()
         vad_chunks = vad.build_speech_chunks(audio, sample_rate=sr)
-        sl.info("VAD summary: %d chunks à transcrire", len(vad_chunks))
+        sl.info("[summary] VAD: %d chunks à transcrire (%.1f%% de l'audio)",
+                len(vad_chunks),
+                100 * sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001))
 
+        sl.info("[summary] Chargement du transcripteur Cohere sur %s", device)
         transcriber = create_transcriber(self.config, device=device)
         segments = []
 
@@ -54,7 +61,9 @@ class SummaryGenerator:
                 seg["end"] = round(chunk["start"] + seg["end"], 3)
                 segments.append(seg)
 
+        sl.info("[summary] Transcription terminée: %d segments produits", len(segments))
         transcriber.offload()
+        sl.info("[summary] Cohere offloadé du GPU")
 
         transcript_text = "\n".join(
             f"[{seg.get('start', 0):.1f}s → {seg.get('end', 0):.1f}s] "
