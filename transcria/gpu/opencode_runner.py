@@ -304,14 +304,10 @@ class OpenCodeRunner:
         if report_file.is_file():
             report = report_file.read_text(encoding="utf-8").strip()
 
-        # opencode peut écrire les artefacts puis rester bloqué avant de quitter.
-        # Dans ce cas, on préfère exploiter les sorties déjà produites.
-        # On efface "error" pour que pipeline_service ne déclenche pas un FAILED.
-        if (
-            not result["success"]
-            and "timeout" in result.get("error", "").lower()
-            and corrected_srt
-        ):
+        # Recovery : si transcription_corrigee.srt est présent et non-vide, la correction
+        # est faite quelle que soit la raison de sortie d'opencode — timeout, SIGTERM (-15),
+        # SIGKILL (-9), ou tout autre code non-zéro. Le fichier est la source de vérité.
+        if not result["success"] and corrected_srt:
             result = {
                 **result,
                 "success": True,
