@@ -295,16 +295,67 @@ var TranscrIA = window.TranscrIA || {};
         });
     };
 
+    var _STATE_LABELS = {
+        'ready_to_process': 'Démarrage…',
+        'transcribing':     'Transcription ASR en cours…',
+        'diarizing':        'Identification des locuteurs…',
+        'arbitrating':      'Correction LLM en cours…',
+        'quality_checking': 'Rapport qualité…',
+        'quality_checked':  'Export en cours…',
+        'export_ready':     'Finalisation…',
+        'completed':        'Terminé.',
+        'failed':           'Échec du traitement.',
+        'cancelled':        'Traitement annulé.',
+    };
+    var _TERMINAL_STATES = ['completed', 'export_ready', 'failed', 'cancelled'];
+
     W.startProcessing = function (mode) {
         console.log('[TranscrIA] startProcessing(' + mode + ')');
         var div = document.getElementById('processing-result');
-        div.innerHTML = '<div class="alert alert-info"><span class="spinner"></span> Traitement en cours...</div>';
+        var startTime = Date.now();
+
+        function elapsed() {
+            var s = Math.floor((Date.now() - startTime) / 1000);
+            return s < 60 ? s + 's' : Math.floor(s / 60) + 'min ' + (s % 60) + 's';
+        }
+
+        function setInfo(msg) {
+            div.innerHTML = '<div class="alert alert-info d-flex align-items-center gap-2">' +
+                '<span class="spinner-border spinner-border-sm" role="status"></span>' +
+                '<span>' + msg + '</span></div>';
+        }
+
+        function pollStatus() {
+            W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
+                if (!r || r.data.error) {
+                    setTimeout(pollStatus, 4000);
+                    return;
+                }
+                var state = r.data.state;
+                var label = _STATE_LABELS[state] || state;
+                if (_TERMINAL_STATES.indexOf(state) !== -1) {
+                    if (state === 'failed') {
+                        div.innerHTML = '<div class="alert alert-danger">Échec du traitement après ' + elapsed() + '.</div>';
+                    } else if (state === 'cancelled') {
+                        div.innerHTML = '<div class="alert alert-warning">Traitement annulé.</div>';
+                    } else {
+                        div.innerHTML = '<div class="alert alert-success">Traitement terminé en ' + elapsed() + '. Chargement…</div>';
+                        location.reload();
+                    }
+                } else {
+                    setInfo(label + ' (' + elapsed() + ' écoulées)');
+                    setTimeout(pollStatus, 4000);
+                }
+            });
+        }
+
+        setInfo('Soumission du traitement…');
         W.api('/api/jobs/' + JOB_ID + '/process', 'POST', { mode: mode }).then(function (r) {
             if (r.data.error) {
-                div.innerHTML = '<div class="alert alert-danger">Erreur: ' + r.data.error + '</div>';
+                div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
             } else {
-                div.innerHTML = '<div class="alert alert-success">Traitement planifié. Suivi en cours...</div>';
-                W.reloadAfter(1500);
+                setInfo('Traitement démarré. Transcription ASR en cours… (0s écoulées)');
+                setTimeout(pollStatus, 4000);
             }
         });
     };

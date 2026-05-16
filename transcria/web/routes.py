@@ -532,6 +532,19 @@ def api_process(job_id: str):
     }), 202
 
 
+@web_bp.route("/api/jobs/<job_id>/status", methods=["GET"])
+@login_required
+def api_job_status(job_id: str):
+    """Endpoint léger de polling — état courant du job pendant le traitement."""
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+    return jsonify({
+        "state": job.state,
+        "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
+    })
+
+
 @web_bp.route("/api/jobs/<job_id>/quality", methods=["POST"])
 @login_required
 def api_quality(job_id: str):
