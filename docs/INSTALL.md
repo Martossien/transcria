@@ -7,16 +7,17 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 ## Table des matières
 
 1. [Prérequis matériels et logiciels](#1-prérequis-matériels-et-logiciels)
-2. [Installation du système](#2-installation-du-système)
-3. [Environnement Python (venv)](#3-environnement-python-venv)
-4. [Installation de TranscrIA](#4-installation-de-transcria)
-5. [Modèles IA](#5-modèles-ia)
-6. [Configuration](#6-configuration)
-7. [Services externes](#7-services-externes)
-8. [Vérification de l'installation](#8-vérification-de-linstallation)
-9. [Lancement](#9-lancement)
-10. [Service systemd](#10-service-systemd)
-11. [Dépannage](#11-dépannage)
+2. [Script d'installation automatique (install.sh)](#2-script-dinstallation-automatique-installsh)
+3. [Installation du système](#3-installation-du-système)
+4. [Environnement Python (venv)](#4-environnement-python-venv)
+5. [Installation de TranscrIA](#5-installation-de-transcria)
+6. [Modèles IA](#6-modèles-ia)
+7. [Configuration](#7-configuration)
+8. [Services externes](#8-services-externes)
+9. [Vérification de l'installation](#9-vérification-de-linstallation)
+10. [Lancement](#10-lancement)
+11. [Service systemd](#11-service-systemd)
+12. [Dépannage](#12-dépannage)
 
 ---
 
@@ -52,7 +53,57 @@ nvidia-smi
 
 ---
 
-## 2. Installation du système
+## 2. Script d'installation automatique (install.sh)
+
+**C'est la méthode recommandée** pour toute installation fraîche. Le script gère l'ensemble de la chaîne en une seule commande et guide interactivement les valeurs qui ne peuvent pas être auto-détectées.
+
+```bash
+git clone https://github.com/Martossien/transcria.git
+cd transcria
+./install.sh
+```
+
+### Ce que fait install.sh
+
+| Étape | Action |
+|---|---|
+| Prérequis | Vérifie Python 3.11+, nvidia-smi, ffmpeg/ffprobe, lsof |
+| Venv | Crée ou réutilise `venv/`, met pip à jour |
+| PyTorch | Détecte la version CUDA (`nvidia-smi`) et installe le wheel correspondant (`cu121`/`cu124`/`cu126`) |
+| Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
+| Répertoires | Crée `jobs/`, `models/`, `instance/` |
+| Config | Génère `config.yaml` via `scripts/bootstrap_config.py` (auto-détection des binaires et chemins) |
+| Modèles IA | Vérifie Cohere ASR, cache pyannote HF, Qwen GGUF — affiche un tableau OK/MANQUANT |
+| Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
+| opencode | Détecte dans PATH / `~/.opencode/bin/` — propose l'installation + génère `opencode.json` |
+| Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
+| Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
+| Résumé | Bilan clair OK/MANQUANT pour chaque modèle et les valeurs restantes à corriger |
+
+### Options
+
+```bash
+./install.sh --help                # Afficher toutes les options
+./install.sh --no-service          # Sauter l'installation systemd
+./install.sh --no-torch            # PyTorch déjà installé (évite la réinstallation)
+./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126)
+./install.sh --user monuser        # Utilisateur pour le service systemd (défaut: $USER)
+./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
+./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
+./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
+```
+
+### Ce que install.sh ne fait pas
+
+- Installer les pilotes NVIDIA ou le CUDA Toolkit (section 3)
+- Télécharger le modèle Qwen 35B GGUF (~48 Go) automatiquement (trop volumineux)
+- Compiler llama.cpp
+
+Ces étapes sont documentées dans les sections suivantes.
+
+---
+
+## 3. Installation du système
 
 ### Ubuntu 22.04/24.04
 
@@ -78,7 +129,7 @@ ffprobe -version
 
 ---
 
-## 3. Environnement Python (venv)
+## 4. Environnement Python (venv)
 
 TranscrIA utilise un **virtualenv Python** (`venv/`) pour isoler toutes les dépendances, y compris PyTorch avec CUDA et pyannote. C'est la méthode recommandée — simple, reproductible, sans conflit système.
 
@@ -235,7 +286,7 @@ python app.py
 
 ---
 
-## 4. Installation de TranscrIA
+## 5. Installation de TranscrIA
 
 ### Cloner le dépôt
 
@@ -342,7 +393,7 @@ Le chemin du binaire est configurable via `config.yaml` (`workflow.arbitration_l
 
 ---
 
-## 5. Modèles IA
+## 6. Modèles IA
 
 ### Cohere Transcribe (ASR, modèle 2B Fast-Conformer)
 
@@ -475,7 +526,7 @@ Si vous préférez vLLM au lieu de llama.cpp, utilisez `stop_qwen_vllm.sh` comme
 
 ---
 
-## 6. Configuration
+## 7. Configuration
 
 ### Fichier config.yaml
 
@@ -578,7 +629,7 @@ mkdir -p jobs
 
 ---
 
-## 7. Services externes
+## 8. Services externes
 
 ### Dashboard LLM (port 5001)
 
@@ -607,7 +658,7 @@ Variables configurables : `QWEN_PORT`, `MODEL_PATH`, `LLAMA_BIN`, `CUDA_HOME`.
 
 ---
 
-## 8. Vérification de l'installation
+## 9. Vérification de l'installation
 
 ### Vérifier les dépendances Python
 
@@ -706,7 +757,7 @@ print(f'Script    : {cfg[\"services\"][\"arbitrage_script\"]}')
 
 ---
 
-## 9. Lancement
+## 10. Lancement
 
 ### Mode développement
 
@@ -746,7 +797,7 @@ export VENV=/chemin/absolu/vers/transcria/venv
 
 ---
 
-## 10. Service systemd
+## 11. Service systemd
 
 Le fichier `transcria.service` est fourni pour un lancement automatique.
 
@@ -837,7 +888,7 @@ Environment=PID_FILE=/tmp/transcrIA.pid
 
 ---
 
-## 11. Dépannage
+## 12. Dépannage
 
 ### Erreur « ModuleNotFoundError: torch »
 

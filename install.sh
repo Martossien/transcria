@@ -1,0 +1,748 @@
+#!/bin/bash
+# ============================================================================
+# install.sh — Installation de TranscrIA (service de transcription de réunions)
+#
+# Usage :
+#   ./install.sh [OPTIONS]
+#
+# Options :
+#   --no-service       Ne pas installer le service systemd
+#   --no-torch         Sauter l'installation de PyTorch (déjà installé)
+#   --cuda VERSION     Forcer la version CUDA (ex: cu126, cu124, cu121)
+#   --user USER        Utilisateur pour le service systemd (défaut: $USER)
+#   --install-dir DIR  Répertoire d'installation (défaut: répertoire courant)
+#   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
+#   --force-config     Régénérer config.yaml même s'il existe déjà
+#   --non-interactive  Pas de prompts (CI/scripts)
+#
+# Le script doit être lancé depuis le répertoire du dépôt TranscrIA.
+# ============================================================================
+
+set -euo pipefail
+
+# ── Couleurs ─────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log_info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
+log_ok()      { echo -e "${GREEN}[OK]${NC}    $*"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $*"; }
+log_section() { echo -e "\n${BOLD}${BLUE}═══ $* ═══${NC}"; }
+
+# ── Defaults ─────────────────────────────────────────────────────────────────
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_USER="${USER:-admin_ia}"
+INSTALL_SERVICE=true
+INSTALL_TORCH=true
+FORCE_CUDA=""
+HF_TOKEN=""
+FORCE_CONFIG=false
+NON_INTERACTIVE=false
+PYTHON_BIN=""
+
+# ── Parsing des arguments ─────────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-service)      INSTALL_SERVICE=false; shift ;;
+        --no-torch)        INSTALL_TORCH=false; shift ;;
+        --cuda)            FORCE_CUDA="$2"; shift 2 ;;
+        --user)            SERVICE_USER="$2"; shift 2 ;;
+        --install-dir)     INSTALL_DIR="$2"; shift 2 ;;
+        --hf-token)        HF_TOKEN="$2"; shift 2 ;;
+        --force-config)    FORCE_CONFIG=true; shift ;;
+        --non-interactive) NON_INTERACTIVE=true; shift ;;
+        -h|--help)
+            awk 'NR>1 && /^[^#]/{exit} NR>1 && /^#/{sub(/^# ?/,""); print}' "$0"
+            exit 0 ;;
+        *) log_error "Argument inconnu: $1"; exit 1 ;;
+    esac
+done
+
+cd "$INSTALL_DIR"
+VENV="$INSTALL_DIR/venv"
+CONFIG_PATH="$INSTALL_DIR/config.yaml"
+ENV_FILE="$INSTALL_DIR/.env"
+
+# Helper pour les prompts interactifs
+ask() {
+    # ask VARNAME "Question" "défaut"
+    local varname="$1" question="$2" default="${3:-}"
+    if [[ "$NON_INTERACTIVE" = true ]]; then
+        eval "$varname=\"$default\""
+        return
+    fi
+    if [[ -n "$default" ]]; then
+        echo -n "  $question [$default] : "
+    else
+        echo -n "  $question : "
+    fi
+    local answer
+    read -r answer
+    eval "$varname=\"${answer:-$default}\""
+}
+
+ask_yn() {
+    # ask_yn "Question" → exit 0 si oui, exit 1 si non
+    local question="$1"
+    if [[ "$NON_INTERACTIVE" = true ]]; then return 1; fi
+    echo -n "  $question [o/N] : "
+    local answer; read -r answer
+    [[ "$answer" =~ ^[oOyY]$ ]]
+}
+
+# Helper YAML — lit une clé dans config.yaml
+yaml_get() {
+    local key="$1"
+    python3 -c "
+import yaml, sys
+try:
+    with open('$CONFIG_PATH') as f:
+        c = yaml.safe_load(f)
+    keys = '$key'.split('.')
+    v = c
+    for k in keys:
+        v = v[k]
+    print(v if v is not None else '')
+except Exception:
+    print('')
+" 2>/dev/null || echo ""
+}
+
+# Helper YAML — écrit une valeur dans config.yaml
+yaml_set() {
+    local key="$1" value="$2"
+    python3 -c "
+import yaml, sys
+
+key_path = '$key'.split('.')
+value = '''$value'''
+
+with open('$CONFIG_PATH') as f:
+    c = yaml.safe_load(f) or {}
+
+node = c
+for k in key_path[:-1]:
+    node = node.setdefault(k, {})
+node[key_path[-1]] = value
+
+with open('$CONFIG_PATH', 'w') as f:
+    yaml.safe_dump(c, f, allow_unicode=True, sort_keys=False)
+" 2>/dev/null
+}
+
+# ============================================================================
+# SECTION 1 — Vérification des prérequis
+# ============================================================================
+log_section "Vérification des prérequis"
+
+PYTHON_BIN=""
+for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null; then
+        version=$("$candidate" --version 2>&1 | awk '{print $2}')
+        major=$(echo "$version" | cut -d. -f1)
+        minor=$(echo "$version" | cut -d. -f2)
+        if [[ "$major" -ge 3 && "$minor" -ge 11 ]]; then
+            PYTHON_BIN="$candidate"
+            log_ok "Python $version : $(which $candidate)"
+            break
+        fi
+    fi
+done
+if [[ -z "$PYTHON_BIN" ]]; then
+    log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
+    exit 1
+fi
+
+GPU_COUNT=0
+CUDA_VER_FROM_SMI=""
+if command -v nvidia-smi &>/dev/null; then
+    GPU_COUNT=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l || echo 0)
+    CUDA_VER_FROM_SMI=$(nvidia-smi 2>/dev/null | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+' | head -1 || echo "")
+    log_ok "nvidia-smi — $GPU_COUNT GPU(s), CUDA $CUDA_VER_FROM_SMI"
+else
+    log_warn "nvidia-smi non trouvé — fonctionnement sans GPU (transcription très lente)"
+fi
+
+for bin in ffmpeg ffprobe; do
+    if command -v "$bin" &>/dev/null; then
+        log_ok "$bin : $(which $bin)"
+    else
+        log_error "$bin manquant. Installer avec: apt install ffmpeg"
+        exit 1
+    fi
+done
+
+if command -v lsof &>/dev/null; then
+    log_ok "lsof : $(which lsof)"
+else
+    log_warn "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof"
+fi
+
+# ============================================================================
+# SECTION 2 — Environnement Python (venv)
+# ============================================================================
+log_section "Environnement Python"
+
+if [[ -f "$VENV/bin/activate" ]]; then
+    log_ok "Venv existant : $VENV"
+else
+    log_info "Création du venv..."
+    "$PYTHON_BIN" -m venv "$VENV"
+    log_ok "Venv créé : $VENV"
+fi
+
+source "$VENV/bin/activate"
+log_info "Mise à jour de pip..."
+pip install --upgrade pip --quiet
+
+# ============================================================================
+# SECTION 3 — PyTorch avec CUDA
+# ============================================================================
+log_section "PyTorch"
+
+if [[ "$INSTALL_TORCH" = true ]]; then
+    CUDA_TAG="${FORCE_CUDA}"
+    if [[ -z "$CUDA_TAG" ]]; then
+        if [[ -n "$CUDA_VER_FROM_SMI" ]]; then
+            MAJOR=$(echo "$CUDA_VER_FROM_SMI" | cut -d. -f1)
+            MINOR=$(echo "$CUDA_VER_FROM_SMI" | cut -d. -f2)
+            if   [[ "$MAJOR" -ge 12 && "$MINOR" -ge 6 ]]; then CUDA_TAG="cu126"
+            elif [[ "$MAJOR" -ge 12 && "$MINOR" -ge 4 ]]; then CUDA_TAG="cu124"
+            elif [[ "$MAJOR" -ge 12 && "$MINOR" -ge 1 ]]; then CUDA_TAG="cu121"
+            else
+                log_warn "CUDA $CUDA_VER_FROM_SMI — cu121 utilisé par défaut"
+                CUDA_TAG="cu121"
+            fi
+        else
+            log_warn "CUDA non détecté — PyTorch CPU uniquement"
+            CUDA_TAG="cpu"
+        fi
+    fi
+
+    TORCH_INSTALLED=false
+    if python -c "import torch" &>/dev/null 2>&1; then
+        INSTALLED_CUDA=$(python -c "import torch; print(torch.version.cuda or 'cpu')" 2>/dev/null || echo "")
+        if [[ -n "$INSTALLED_CUDA" && "$INSTALLED_CUDA" != "None" ]]; then
+            log_ok "PyTorch déjà installé (CUDA $INSTALLED_CUDA)"
+            TORCH_INSTALLED=true
+        fi
+    fi
+
+    if [[ "$TORCH_INSTALLED" = false ]]; then
+        if [[ "$CUDA_TAG" = "cpu" ]]; then
+            log_info "Installation PyTorch CPU..."
+            pip install torch torchvision torchaudio --quiet
+        else
+            log_info "Installation PyTorch $CUDA_TAG..."
+            pip install torch torchvision torchaudio \
+                --index-url "https://download.pytorch.org/whl/${CUDA_TAG}" --quiet
+        fi
+        log_ok "PyTorch installé"
+    fi
+else
+    log_info "Skippé (--no-torch)"
+fi
+
+# ============================================================================
+# SECTION 4 — Dépendances Python
+# ============================================================================
+log_section "Dépendances Python"
+
+log_info "Installation requirements.txt..."
+pip install -r "$INSTALL_DIR/requirements.txt" --quiet
+log_ok "requirements.txt installé"
+
+log_info "Installation accelerate (requis pour Cohere ASR device_map)..."
+pip install accelerate --quiet
+log_ok "accelerate installé"
+
+pip install python-dotenv --quiet
+
+# ============================================================================
+# SECTION 5 — Répertoires
+# ============================================================================
+log_section "Répertoires"
+
+mkdir -p "$INSTALL_DIR/jobs" "$INSTALL_DIR/models/cohere-asr" "$INSTALL_DIR/instance"
+log_ok "jobs/, models/, instance/ prêts"
+
+# ============================================================================
+# SECTION 6 — Configuration (config.yaml)
+# ============================================================================
+log_section "Configuration"
+
+if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = false ]]; then
+    log_ok "config.yaml existant conservé"
+    log_info "(--force-config pour régénérer)"
+else
+    if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = true ]]; then
+        BACKUP="$CONFIG_PATH.bak.$(date +%Y%m%d_%H%M%S)"
+        cp "$CONFIG_PATH" "$BACKUP"
+        log_info "Ancien config.yaml sauvegardé : $BACKUP"
+    fi
+    log_info "Génération via bootstrap_config.py (auto-détection)..."
+    python "$INSTALL_DIR/scripts/bootstrap_config.py" \
+        --example "$INSTALL_DIR/config.example.yaml" \
+        --output "$CONFIG_PATH" \
+        --force 2>&1 | sed 's/^/  /'
+    log_ok "config.yaml généré"
+fi
+
+# Créer .env à partir du template si absent
+if [[ ! -f "$ENV_FILE" ]]; then
+    cp "$INSTALL_DIR/.env.example" "$ENV_FILE"
+fi
+
+# Générer TRANSCRIA_SECRET si valeur par défaut
+if grep -q 'change-me-to-a-random-secret' "$ENV_FILE" 2>/dev/null; then
+    SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")
+    sed -i "s/change-me-to-a-random-secret/$SECRET/" "$ENV_FILE"
+    log_ok "Clé secrète Flask générée dans .env"
+fi
+
+# ============================================================================
+# SECTION 7 — Vérification des modèles IA
+# ============================================================================
+log_section "Vérification des modèles IA"
+
+# ── Cohere ASR ───────────────────────────────────────────────────────────────
+COHERE_PATH=$(yaml_get "models.cohere_model_path")
+# Résoudre chemin relatif
+if [[ "$COHERE_PATH" = ./* ]]; then
+    COHERE_PATH="$INSTALL_DIR/${COHERE_PATH#./}"
+fi
+COHERE_OK=false
+if [[ -n "$COHERE_PATH" ]] && [[ -d "$COHERE_PATH" ]] && \
+   [[ $(ls "$COHERE_PATH" 2>/dev/null | wc -l) -gt 0 ]]; then
+    COHERE_OK=true
+    log_ok "Cohere ASR       : $COHERE_PATH"
+else
+    log_warn "Cohere ASR       : ABSENT  ($COHERE_PATH)"
+fi
+
+# ── pyannote (cache HuggingFace) ─────────────────────────────────────────────
+HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}/hub"
+PYANNOTE_CACHE=$(find "$HF_CACHE" -maxdepth 1 -name "models--pyannote--speaker-diarization*" \
+    -type d 2>/dev/null | head -1 || true)
+PYANNOTE_OK=false
+if [[ -n "$PYANNOTE_CACHE" ]]; then
+    PYANNOTE_OK=true
+    log_ok "pyannote cache   : $(basename "$PYANNOTE_CACHE")"
+else
+    log_warn "pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)"
+fi
+
+# ── Qwen 35B GGUF ────────────────────────────────────────────────────────────
+QWEN_GGUF=$(find "$INSTALL_DIR/models" -name "*.gguf" 2>/dev/null | head -1 || true)
+QWEN_OK=false
+if [[ -n "$QWEN_GGUF" ]]; then
+    QWEN_OK=true
+    log_ok "Qwen GGUF        : $QWEN_GGUF"
+else
+    log_warn "Qwen GGUF        : ABSENT  (résumé/correction LLM non disponible)"
+fi
+
+# ── Tableau récap ─────────────────────────────────────────────────────────────
+echo ""
+echo "  ┌─────────────────────────────────┬──────────┬─────────────────────────────────────────────────────────────────┐"
+echo "  │ Modèle                          │  Statut  │ Info                                                            │"
+echo "  ├─────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤"
+printf "  │ %-31s │ %s │ %-63s │\n" \
+    "Cohere ASR (STT ~6 Go)" \
+    "$( [[ "$COHERE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
+    "$( [[ "$COHERE_OK" = true ]] && echo "$(basename "$COHERE_PATH")" || echo "huggingface-cli download CohereLabs/...")"
+printf "  │ %-31s │ %s │ %-63s │\n" \
+    "pyannote diarization (~2 Go)" \
+    "$( [[ "$PYANNOTE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
+    "$( [[ "$PYANNOTE_OK" = true ]] && echo "$(basename "$PYANNOTE_CACHE")" || echo "HF_TOKEN requis + accepter conditions HF")"
+printf "  │ %-31s │ %s │ %-63s │\n" \
+    "Qwen 35B GGUF (~48 Go)" \
+    "$( [[ "$QWEN_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
+    "$( [[ "$QWEN_OK" = true ]] && echo "$(basename "$QWEN_GGUF")" || echo "bartowski/Qwen3.6-35B-A3B-GGUF")"
+echo "  └─────────────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────┘"
+
+# ============================================================================
+# SECTION 8 — Configuration interactive des valeurs manquantes
+# ============================================================================
+log_section "Configuration interactive"
+
+CHANGED_CONFIG=false
+
+# ── Mot de passe admin ────────────────────────────────────────────────────────
+CURRENT_PWD=$(yaml_get "auth.first_admin_password")
+if [[ "$CURRENT_PWD" = "CHANGE-ME" ]]; then
+    echo ""
+    log_warn "Mot de passe admin : valeur par défaut 'CHANGE-ME'"
+    if ask_yn "Définir le mot de passe admin maintenant ?"; then
+        echo -n "  Nouveau mot de passe (min 8 caractères) : "
+        read -rs ADMIN_PASS; echo ""
+        if [[ ${#ADMIN_PASS} -ge 8 ]]; then
+            yaml_set "auth.first_admin_password" "$ADMIN_PASS"
+            log_ok "Mot de passe admin défini"
+            CHANGED_CONFIG=true
+        else
+            log_warn "Trop court — inchangé. Éditez config.yaml manuellement."
+        fi
+    fi
+fi
+
+# ── Chemin du modèle Cohere ───────────────────────────────────────────────────
+if [[ "$COHERE_OK" = false ]]; then
+    echo ""
+    log_warn "Le modèle Cohere ASR est introuvable au chemin configuré."
+    log_info "Chemin actuel dans config.yaml : $(yaml_get 'models.cohere_model_path')"
+    echo ""
+    echo "  Options :"
+    echo "   1. Entrer le chemin où le modèle est déjà téléchargé"
+    echo "   2. Télécharger maintenant (nécessite huggingface-cli + accès CohereLabs)"
+    echo "   3. Ignorer (pipeline STT non fonctionnel)"
+    echo ""
+    if [[ "$NON_INTERACTIVE" = false ]]; then
+        echo -n "  Votre choix [1/2/3] : "
+        read -r COHERE_CHOICE
+        case "$COHERE_CHOICE" in
+            1)
+                ask COHERE_NEW_PATH "Chemin absolu du modèle Cohere" "$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
+                if [[ -d "$COHERE_NEW_PATH" ]]; then
+                    yaml_set "models.cohere_model_path" "$COHERE_NEW_PATH"
+                    log_ok "cohere_model_path mis à jour : $COHERE_NEW_PATH"
+                    COHERE_OK=true
+                    CHANGED_CONFIG=true
+                else
+                    log_warn "Chemin introuvable — config inchangée"
+                fi
+                ;;
+            2)
+                DEST="$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
+                mkdir -p "$DEST"
+                log_info "Téléchargement de CohereLabs/cohere-transcribe-03-2026..."
+                if command -v huggingface-cli &>/dev/null; then
+                    huggingface-cli download CohereLabs/cohere-transcribe-03-2026 \
+                        --local-dir "$DEST" --local-dir-use-symlinks False && \
+                    yaml_set "models.cohere_model_path" "$DEST" && \
+                    log_ok "Modèle Cohere téléchargé et configuré" && \
+                    COHERE_OK=true && CHANGED_CONFIG=true || \
+                    log_error "Téléchargement échoué — vérifiez vos accès HuggingFace"
+                else
+                    log_warn "huggingface-cli non trouvé — installer avec: pip install huggingface_hub"
+                    log_info "Commande manuelle :"
+                    log_info "  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 --local-dir $DEST --local-dir-use-symlinks False"
+                fi
+                ;;
+            *)
+                log_info "Modèle Cohere ignoré — pipeline STT désactivé"
+                ;;
+        esac
+    fi
+fi
+
+# ── HF_TOKEN pour pyannote ────────────────────────────────────────────────────
+# Lire le token depuis .env ou argument CLI
+CURRENT_HF_TOKEN="${HF_TOKEN}"
+if [[ -z "$CURRENT_HF_TOKEN" ]]; then
+    CURRENT_HF_TOKEN=$(grep -oP '^HF_TOKEN=\K.+' "$ENV_FILE" 2>/dev/null || true)
+fi
+
+if [[ "$PYANNOTE_OK" = false ]]; then
+    echo ""
+    if [[ -z "$CURRENT_HF_TOKEN" ]]; then
+        log_warn "HF_TOKEN manquant — requis pour télécharger pyannote"
+        log_info "(Créer un token sur https://huggingface.co/settings/tokens)"
+        log_info "(Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-community-1)"
+        if [[ "$NON_INTERACTIVE" = false ]]; then
+            echo -n "  HF_TOKEN (laisser vide pour ignorer) : "
+            read -rs CURRENT_HF_TOKEN; echo ""
+        fi
+    fi
+
+    if [[ -n "$CURRENT_HF_TOKEN" ]]; then
+        # Sauvegarder dans .env
+        if grep -q '^# HF_TOKEN=' "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^# HF_TOKEN=.*|HF_TOKEN=$CURRENT_HF_TOKEN|" "$ENV_FILE"
+        elif grep -q '^HF_TOKEN=' "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^HF_TOKEN=.*|HF_TOKEN=$CURRENT_HF_TOKEN|" "$ENV_FILE"
+        else
+            echo "HF_TOKEN=$CURRENT_HF_TOKEN" >> "$ENV_FILE"
+        fi
+        log_ok "HF_TOKEN sauvegardé dans .env"
+
+        if ask_yn "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"; then
+            log_info "Téléchargement pyannote (peut prendre quelques minutes)..."
+            HF_TOKEN="$CURRENT_HF_TOKEN" python -c "
+from pyannote.audio import Pipeline
+import os
+Pipeline.from_pretrained('pyannote/speaker-diarization-community-1',
+    use_auth_token=os.environ['HF_TOKEN'])
+print('pyannote téléchargé')
+" && log_ok "pyannote téléchargé" && PYANNOTE_OK=true || \
+            log_error "Téléchargement pyannote échoué — vérifiez le token et les conditions HF"
+        fi
+    fi
+fi
+
+[[ "$CHANGED_CONFIG" = true ]] && log_ok "config.yaml mis à jour" || true
+
+# ============================================================================
+# SECTION 9 — opencode (moteur LLM pour résumé/correction)
+# ============================================================================
+log_section "opencode (moteur LLM)"
+
+# Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
+OPENCODE_BIN=""
+if command -v opencode &>/dev/null; then
+    OPENCODE_BIN=$(which opencode)
+elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
+    OPENCODE_BIN="$HOME/.opencode/bin/opencode"
+else
+    CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
+    if [[ -n "$CFG_BIN" && -x "$CFG_BIN" ]]; then
+        OPENCODE_BIN="$CFG_BIN"
+    fi
+fi
+
+if [[ -n "$OPENCODE_BIN" ]]; then
+    OPENCODE_VER=$("$OPENCODE_BIN" --version 2>/dev/null | head -1 || echo "version inconnue")
+    log_ok "opencode trouvé : $OPENCODE_BIN ($OPENCODE_VER)"
+    yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
+else
+    log_warn "opencode non trouvé"
+    echo ""
+    if ask_yn "Installer opencode dans ~/.opencode/bin/ ?"; then
+        OPENCODE_DEST="$HOME/.opencode/bin/opencode"
+        mkdir -p "$(dirname "$OPENCODE_DEST")"
+        log_info "Téléchargement opencode (linux-x64)..."
+        if curl -fsSL -o "$OPENCODE_DEST" \
+            "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
+            chmod +x "$OPENCODE_DEST"
+            log_ok "opencode installé : $OPENCODE_DEST"
+            OPENCODE_BIN="$OPENCODE_DEST"
+            yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
+
+            # Configurer opencode.json pour le provider local (llama.cpp)
+            QWEN_PORT=$(yaml_get "services.qwen_port")
+            OPENCODE_CFG="$HOME/.config/opencode/opencode.json"
+            mkdir -p "$(dirname "$OPENCODE_CFG")"
+            if [[ ! -f "$OPENCODE_CFG" ]]; then
+                cat > "$OPENCODE_CFG" << EOF
+{
+  "\$schema": "https://opencode.ai/config.json",
+  "share": "manual",
+  "provider": {
+    "local": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Qwen 3.6 35B Arbitrage llama.cpp (Local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:${QWEN_PORT:-8080}/v1",
+        "apiKey": "dummy-key",
+        "timeout": 9999999
+      },
+      "models": {
+        "qwen3-35b-arbitrage": {
+          "name": "Qwen 3.6 35B Arbitrage",
+          "limit": {
+            "context": 263144,
+            "output": 81920
+          }
+        }
+      }
+    }
+  },
+  "permission": {
+    "edit": { "*": "allow" },
+    "bash": "allow",
+    "read": "allow",
+    "write": "allow",
+    "glob": "allow",
+    "grep": "allow"
+  }
+}
+EOF
+                log_ok "opencode.json configuré : $OPENCODE_CFG"
+            else
+                log_info "opencode.json existant conservé : $OPENCODE_CFG"
+            fi
+
+            # Ajouter au PATH dans .bashrc/.profile si nécessaire
+            OPENCODE_DIR="$(dirname "$OPENCODE_DEST")"
+            if ! echo "$PATH" | grep -q "$OPENCODE_DIR"; then
+                for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+                    if [[ -f "$rc" ]] && ! grep -q "$OPENCODE_DIR" "$rc" 2>/dev/null; then
+                        echo "export PATH=\"$OPENCODE_DIR:\$PATH\"" >> "$rc"
+                        log_ok "PATH mis à jour dans $rc"
+                        break
+                    fi
+                done
+                log_info "Relancez votre shell ou : export PATH=\"$OPENCODE_DIR:\$PATH\""
+            fi
+        else
+            log_error "Téléchargement opencode échoué — vérifiez la connectivité"
+            log_info "Installation manuelle :"
+            log_info "  mkdir -p ~/.opencode/bin"
+            log_info "  curl -fsSL -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"
+            log_info "  chmod +x ~/.opencode/bin/opencode"
+        fi
+    else
+        log_info "opencode ignoré — résumé/correction LLM désactivé"
+        log_info "Pour installer plus tard : https://opencode.ai"
+    fi
+fi
+
+# ============================================================================
+# SECTION 10 — Vérification des imports Python
+# ============================================================================
+log_section "Vérification des imports"
+
+python -c "
+errors = []
+warnings = []
+
+try:
+    import torch
+    cuda_ok = torch.cuda.is_available()
+    gpu_count = torch.cuda.device_count()
+    print(f'torch {torch.__version__}, CUDA {torch.version.cuda}, {gpu_count} GPU(s)')
+    if not cuda_ok:
+        warnings.append('CUDA non disponible — fonctionnement CPU uniquement')
+except ImportError as e:
+    errors.append(f'torch: {e}')
+
+try:
+    import flask
+    print(f'flask {flask.__version__}')
+except ImportError as e:
+    errors.append(f'flask: {e}')
+
+try:
+    import transformers
+    print(f'transformers {transformers.__version__}')
+except ImportError as e:
+    errors.append(f'transformers: {e}')
+
+try:
+    import accelerate
+    print(f'accelerate {accelerate.__version__}')
+except ImportError as e:
+    errors.append(f'accelerate: {e}')
+
+try:
+    import soundfile, librosa
+    print(f'soundfile OK, librosa {librosa.__version__}')
+except ImportError as e:
+    warnings.append(f'audio: {e}')
+
+try:
+    import pyannote.audio
+    print(f'pyannote.audio {pyannote.audio.__version__}')
+except ImportError as e:
+    warnings.append(f'pyannote.audio: {e}')
+
+for e in errors:
+    print(f'ERROR: {e}')
+for w in warnings:
+    print(f'WARN: {w}')
+" 2>&1 | while IFS= read -r line; do
+    if [[ "$line" == ERROR:* ]]; then   log_error "${line#ERROR: }"
+    elif [[ "$line" == WARN:* ]]; then  log_warn  "${line#WARN: }"
+    else                                log_ok    "$line"
+    fi
+done
+
+# ============================================================================
+# SECTION 11 — Service systemd
+# ============================================================================
+if [[ "$INSTALL_SERVICE" = true ]]; then
+    log_section "Service systemd"
+
+    SERVICE_SRC="$INSTALL_DIR/transcria.service"
+    SERVICE_DST="/etc/systemd/system/transcria.service"
+
+    if [[ ! -f "$SERVICE_SRC" ]]; then
+        log_warn "transcria.service introuvable — service non installé"
+    else
+        if id "$SERVICE_USER" &>/dev/null 2>&1; then
+            SERVICE_HOME=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
+        else
+            SERVICE_HOME="/home/$SERVICE_USER"
+        fi
+
+        TMP_SERVICE=$(mktemp)
+        sed \
+            -e "s|/home/admin_ia/transcria|$INSTALL_DIR|g" \
+            -e "s|User=root|User=$SERVICE_USER|g" \
+            -e "s|Environment=VENV=.*|Environment=VENV=$VENV|g" \
+            -e "s|HF_HOME=/home/admin_ia/|HF_HOME=${SERVICE_HOME}/|g" \
+            -e "s|TRANSFORMERS_CACHE=/home/admin_ia/|TRANSFORMERS_CACHE=${SERVICE_HOME}/|g" \
+            "$SERVICE_SRC" > "$TMP_SERVICE"
+
+        if [[ $EUID -eq 0 ]]; then
+            cp "$TMP_SERVICE" "$SERVICE_DST"
+            chmod 644 "$SERVICE_DST"
+            systemctl daemon-reload
+            systemctl enable transcria
+            log_ok "Service transcria installé et activé"
+        elif command -v sudo &>/dev/null; then
+            sudo cp "$TMP_SERVICE" "$SERVICE_DST"
+            sudo chmod 644 "$SERVICE_DST"
+            sudo systemctl daemon-reload
+            sudo systemctl enable transcria
+            log_ok "Service transcria installé et activé"
+        else
+            ADAPTED="$INSTALL_DIR/transcria.service.adapted"
+            cp "$TMP_SERVICE" "$ADAPTED"
+            log_warn "sudo indisponible — fichier adapté : $ADAPTED"
+            log_warn "Pour installer :"
+            log_warn "  sudo cp $ADAPTED $SERVICE_DST"
+            log_warn "  sudo systemctl daemon-reload && sudo systemctl enable transcria"
+        fi
+        rm -f "$TMP_SERVICE"
+    fi
+fi
+
+# ============================================================================
+# SECTION 12 — Résumé final
+# ============================================================================
+log_section "Résumé de l'installation"
+
+echo ""
+echo -e "${BOLD}${GREEN}TranscrIA installé dans : $INSTALL_DIR${NC}"
+echo ""
+
+# Bilan des modèles
+echo -e "${BOLD}Modèles IA :${NC}"
+$COHERE_OK  && echo -e "  ${GREEN}[OK]${NC} Cohere ASR" \
+            || echo -e "  ${YELLOW}[MANQUANT]${NC} Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026"
+$PYANNOTE_OK && echo -e "  ${GREEN}[OK]${NC} pyannote diarization" \
+            || echo -e "  ${YELLOW}[MANQUANT]${NC} pyannote — HF_TOKEN dans .env + accepter conditions HuggingFace"
+$QWEN_OK    && echo -e "  ${GREEN}[OK]${NC} Qwen 35B GGUF" \
+            || echo -e "  ${YELLOW}[MANQUANT]${NC} Qwen 35B GGUF (~48 Go) — bartowski/Qwen3.6-35B-A3B-GGUF"
+
+[[ -n "$OPENCODE_BIN" ]] \
+    && echo -e "  ${GREEN}[OK]${NC} opencode : $OPENCODE_BIN" \
+    || echo -e "  ${YELLOW}[MANQUANT]${NC} opencode — résumé/correction LLM désactivé"
+
+# Vérifier s'il reste des CHANGE-ME dans config.yaml
+REMAINING_CHANGES=$(grep -c 'CHANGE-ME' "$CONFIG_PATH" 2>/dev/null || true)
+echo ""
+echo -e "${BOLD}Configuration :${NC}"
+if [[ "$REMAINING_CHANGES" -gt 0 ]]; then
+    echo -e "  ${YELLOW}[WARN]${NC} $CONFIG_PATH contient encore ${REMAINING_CHANGES} valeur(s) 'CHANGE-ME'"
+    echo "         Éditer config.yaml avant le premier démarrage"
+else
+    echo -e "  ${GREEN}[OK]${NC} config.yaml — aucune valeur par défaut restante"
+fi
+
+echo ""
+echo -e "${BOLD}Lancer TranscrIA :${NC}"
+echo "  export VENV=\"$VENV\""
+echo "  $INSTALL_DIR/start.sh --port 7870"
+echo "  # ou : sudo systemctl start transcria"
+echo ""
+echo "  Interface : http://localhost:7870"
+echo "  Logs      : tail -f /var/log/transcrIA.log"
+echo "  Statut    : $INSTALL_DIR/status.sh"
+echo ""

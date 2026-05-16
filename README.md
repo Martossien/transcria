@@ -46,26 +46,40 @@
 ```bash
 git clone https://github.com/Martossien/transcria.git
 cd transcria
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements.txt
-pip install accelerate
-python scripts/bootstrap_config.py --output config.yaml
+./install.sh
+```
+
+`install.sh` prend en charge toute l’installation en une seule commande :
+
+- Détecte la version CUDA et installe le bon wheel PyTorch
+- Crée le venv, installe toutes les dépendances
+- Génère `config.yaml` via auto-détection (opencode, ffmpeg, chemins modèles)
+- Vérifie la présence des modèles IA (Cohere ASR, pyannote, Qwen GGUF) et propose de télécharger les manquants
+- Guide interactivement les valeurs critiques (mot de passe admin, HF_TOKEN, chemin opencode)
+- Installe et active le service systemd
+
+Options disponibles :
+
+```bash
+./install.sh --help           # Afficher toutes les options
+./install.sh --no-service     # Sans installation systemd
+./install.sh --no-torch       # PyTorch déjà installé
+./install.sh --cuda cu124     # Forcer la version CUDA
+./install.sh --hf-token TOKEN # Token HuggingFace pour pyannote
+./install.sh --non-interactive # Mode CI/script (pas de prompts)
 ```
 
 > Guide complet (modèles, configuration, dépannage, service systemd) : **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ### Configuration
 
-Le bootstrap ci-dessus remplit automatiquement ce qu’il peut détecter.
-Vérifier ensuite `config.yaml`, en particulier :
-- le mot de passe admin initial
-- les chemins de modèles réellement installés
+`install.sh` remplit automatiquement `config.yaml` et guide les valeurs critiques.
+Vérifier ensuite en particulier :
+- le mot de passe admin initial (`auth.first_admin_password`)
+- les chemins des modèles IA si installés hors des répertoires par défaut
 - les scripts et endpoints LLM si votre environnement diffère du template
 
-L'interface d'administration (`/admin/config`) valide la configuration et détecte automatiquement l'environnement (GPUs, binaires, RAM).
+L’interface d’administration (`/admin/config`) valide la configuration et détecte automatiquement l’environnement (GPUs, binaires, RAM).
 
 Variables d'environnement (optionnelles, surchargent `config.yaml`) :
 
