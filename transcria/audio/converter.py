@@ -1,12 +1,14 @@
 import subprocess
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 
 class AudioConverter:
-    FFMPEG_BIN = "ffmpeg"
+    FFMPEG_BIN = shutil.which("ffmpeg") or "ffmpeg"
 
     @classmethod
     def convert_to_wav_mono_16k(cls, input_path: Path | str, output_path: Path | str) -> bool:

@@ -30,6 +30,32 @@ class TestAuthentication:
         assert r.status_code == 200
 
 
+class TestObservability:
+    def test_health_endpoint_public(self, client):
+        r = client.get("/health")
+        assert r.status_code == 200
+        data = json.loads(r.data)
+        assert data["status"] == "ok"
+        assert data["service"] == "transcria"
+        assert data["database"]["status"] == "ok"
+
+    def test_metrics_endpoint_public(self, client):
+        r = client.get("/metrics")
+        assert r.status_code == 200
+        body = r.data.decode("utf-8")
+        assert "transcria_up 1" in body
+        assert "transcria_ready 1" in body
+        assert "transcria_jobs_total" in body
+        assert "# TYPE transcria_jobs_state gauge" in body
+
+    def test_ready_endpoint_public(self, client):
+        r = client.get("/ready")
+        assert r.status_code == 200
+        data = json.loads(r.data)
+        assert data["status"] == "ready"
+        assert data["worker"]["healthy"] is True
+
+
 class TestAdminUsers:
     def test_user_list_page(self, admin_client):
         r = admin_client.get("/admin/users")
@@ -198,6 +224,10 @@ class TestApiSystem:
         assert r.status_code == 200
         data = json.loads(r.data)
         assert isinstance(data, dict)
+
+    def test_system_status_api_operator_forbidden(self, operator_client):
+        r = operator_client.get("/api/system/status")
+        assert r.status_code == 403
 
     def test_system_page_admin_only(self, admin_client):
         r = admin_client.get("/system")

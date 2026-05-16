@@ -1,4 +1,4 @@
-# TranscrIA MVP — Référence de configuration (config.yaml)
+# TranscrIA — Référence de configuration (config.yaml)
 
 ## Vue d'ensemble
 
@@ -24,8 +24,8 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 | Paramètre | `config.example.yaml` | `config.yaml` (production) |
 |---|---|---|
 | `models.cohere_model_path` | `./models/Whisper/...` (relatif) | `/opt/transcria-mvp/models/Whisper/...` (absolu) |
-| `workflow.summary_llm.model_id` | `local/qwen3-35b` | `qwen3-35b-arbitrage-ud-q8_k_xl` |
-| `workflow.summary_llm.timeout_seconds` | 120 | 300 |
+| `workflow.summary_llm.model_id` | `local/qwen3-35b` | `local/qwen3-35b-arbitrage` |
+| `workflow.summary_llm.timeout_seconds` | 1800 | 1800 |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
 ---
@@ -134,6 +134,18 @@ Paramètres contrôlant les fonctionnalités du workflow.
 - `enable_quality_mode=false` : le mode "Qualité" n'est pas proposé dans le formulaire de traitement. Seul le mode "Rapide" est disponible.
 - `enable_external_srt_editor_link=false` : le bouton SRT Editor est masqué dans le template.
 
+#### `workflow.execution`
+
+Configuration du worker interne qui exécute les traitements longs hors requête HTTP.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne |
+
+**Redémarrage requis :** oui — le worker est instancié au démarrage de l’application.
+
+**Note :** la valeur par défaut `1` est volontaire sur un service GPU partagé. Monter plus haut sans revoir la stratégie VRAM augmentera fortement le risque de contention et d’échec.
+
 #### `workflow.summary_llm`
 
 Configuration du LLM de résumé (Qwen 35B).
@@ -141,24 +153,24 @@ Configuration du LLM de résumé (Qwen 35B).
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active la Phase 2 (opencode+Qwen) du résumé |
-| `model_id` | string | `"local/qwen3-35b"` | Identifiant du modèle pour l'API vLLM |
+| `model_id` | string | `"local/qwen3-35b"` | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
-| `timeout_seconds` | int | `120` | Timeout de la requête de résumé |
+| `timeout_seconds` | int | `1800` | Timeout du résumé via opencode |
 | `use_chat_api` | bool | absent dans `_DEFAULT_CONFIG` | Ancien paramètre du chemin API direct, non utilisé par le chemin opencode actif |
 
 **Redémarrage requis :** non — lus à chaque appel dans `OpenCodeRunner` et `SummaryGenerator._llm_summarize()`.
 
 **Impact si modifié :**
 - `enabled=false` : la Phase 2 est sautée. Le résumé affiche "Résumé de contrôle indisponible (LLM non configurée)."
-- `model_id` : utilisé par le chemin API direct `_llm_summarize()` qui n'est pas appelé dans le workflow actuel. Le chemin actif `OpenCodeRunner` utilise ses constantes `PROVIDER = "local"` et `MODEL = "qwen3-35b-arbitrage"`.
-- `timeout_seconds` : 120s peut être insuffisant pour les réunions longues. La production utilise 300s.
+- `model_id` : utilisé par le chemin actif `OpenCodeRunner.run_summary()` pour choisir le modèle du résumé opencode.
+- `timeout_seconds` : 1800s offre une marge raisonnable pour les réunions longues. Ajuster au besoin selon la charge réelle du service.
 - `use_chat_api` : conservé pour compatibilité documentaire/production, mais le code `_llm_summarize()` utilise aujourd'hui directement `/chat/completions` et ce chemin n'est pas appelé par le workflow.
 
 **Note sur la dualité de résumé :** Il existe DEUX chemins de résumé LLM :
 1. `_llm_summarize()` dans `summary.py` : appel API direct (requests.post). Actuellement **non appelé** (le commentaire dit "Le résumé LLM est fait dans WorkflowRunner.run_summary Phase 2").
 2. `OpenCodeRunner.run_summary()` dans `opencode_runner.py` : lance le CLI opencode avec un prompt fichier. C'est le chemin actif.
 
-Les paramètres `model_id`, `api_base`, `timeout_seconds`, `use_chat_api` ne concernent que le chemin 1 (inactif), sauf `enabled` qui contrôle l'appel à la phase opencode dans `WorkflowRunner.run_summary()`. Le chemin 2 utilise `opencode run --model local/qwen3-35b-arbitrage` (constantes dans `OpenCodeRunner`).
+Les paramètres `api_base` et `use_chat_api` ne concernent que le chemin 1 (inactif). Les paramètres `enabled`, `model_id` et `timeout_seconds` pilotent le chemin actif `OpenCodeRunner.run_summary()`.
 
 #### `workflow.arbitration_llm`
 
@@ -169,12 +181,12 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `enabled` | bool | `false` | Active l'arbitrage LLM |
 | `model_id` | string | `"local/qwen3-35b-arbitrage"` | Identifiant du modèle |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
-| `timeout_seconds` | int | `600` | Timeout (10 min pour la correction complète) |
+| `timeout_seconds` | int | `7200` | Timeout de la correction SRT via opencode |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
 
 **Redémarrage requis :** non.
 
-**État actuel :** `enabled=false`. La correction SRT utilise `OpenCodeRunner.run_correction()` qui ignore ce flag — elle est toujours appelée si le mode qualité est sélectionné. Ce flag semble destiné à une future phase d'arbitrage multi-modèles (comparaison de plusieurs transcriptions).
+**État actuel :** la correction SRT utilise `OpenCodeRunner.run_correction()` et lit `model_id`, `timeout_seconds` et `opencode_bin` depuis cette section.
 
 ---
 
@@ -182,7 +194,7 @@ Configuration du LLM d'arbitrage/correction SRT.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `retention_days` | int | `7` | Durée de rétention des jobs terminaux (`completed`, `failed`, `cancelled`) |
+| `retention_days` | int | `365` | Durée de rétention des jobs terminaux (`completed`, `failed`, `cancelled`) |
 | `allow_job_delete` | bool | `true` | Autorise la suppression de jobs (vérifié dans la route `delete_job`) |
 | `allowed_upload_extensions` | list[str] | `[".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]` | Extensions autorisées pour l'upload |
 
@@ -251,8 +263,6 @@ Ces valeurs sont hardcodées et ne peuvent pas être modifiées via config.yaml.
 |---|---|---|
 | `summary_prompt.txt` | `OpenCodeRunner.run_summary()` | Prompt système pour le résumé structuré (133 lignes) |
 | `correction_prompt.txt` | `OpenCodeRunner.run_correction()` | Prompt système pour la correction SRT (224 lignes) |
-| `arbitration_prompt.txt` | Non utilisé actuellement | Prompt système pour l'arbitrage futur (48 lignes) |
-| `speaker_identification_prompt.txt` | Non utilisé actuellement | Prompt pour identification de locuteurs (25 lignes) |
 
 Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (remonte de 2 niveaux).
 

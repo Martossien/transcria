@@ -2,6 +2,7 @@ import logging
 import copy
 import os
 import re
+import time
 from pathlib import Path
 
 from flask import (
@@ -18,6 +19,7 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
+from sqlalchemy import func
 import yaml
 
 from transcria.audio.analyzer import AudioAnalyzer
@@ -27,13 +29,27 @@ from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
 from transcria.context.participants import ParticipantsManager
+from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
 from transcria.integrations.srt_editor_link import SrtEditorLink
 from transcria.jobs.filesystem import JobFilesystem
-from transcria.jobs.models import WORKFLOW_STEPS, JobState
+from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.workflow.states import WorkflowState
-from transcria.config import get_config, get_config_path, load_config, save_config, set_config
+from transcria.config import _deep_merge, get_config, get_config_path, load_config, save_config, set_config
+from transcria.config.config_schema import validate_config
+from transcria.config.system_detector import SystemDetector
+from transcria.services.job_service import JobService
+from transcria.services.job_executor import get_job_executor
+from transcria.services.pipeline_service import PipelineService
+from transcria.services.config_service import ConfigService
+from transcria.workflow.transitions import (
+    advance_preprocessing_state,
+    can_start_processing,
+    get_execution_status,
+    is_execution_active,
+    request_execution_cancel,
+)
 
 web_bp = Blueprint("web", __name__)
 logger = logging.getLogger(__name__)
@@ -41,6 +57,7 @@ logger = logging.getLogger(__name__)
 MEETING_TYPES_LIST = MEETING_TYPES
 DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
+PROCESS_START_TIME = time.time()
 
 
 def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str:
@@ -82,18 +99,6 @@ def _get_job_for_api(job_id: str):
     return job, None
 
 
-def _pipeline_failed(result) -> bool:
-    return isinstance(result, dict) and (result.get("error") or result.get("success") is False)
-
-
-def _pipeline_error_response(step: str, result):
-    payload = dict(result) if isinstance(result, dict) else {"result": result}
-    payload.setdefault("error", f"Échec étape {step}")
-    payload["status"] = "error"
-    payload["step"] = step
-    return jsonify(payload), 500
-
-
 def _config_for_display(cfg: dict) -> dict:
     display_cfg = copy.deepcopy(cfg)
     auth_cfg = display_cfg.get("auth")
@@ -127,6 +132,59 @@ def _extract_synthese(md_text: str) -> str:
     return md_text[:800]
 
 
+def _check_database_health() -> tuple[bool, str | None]:
+    try:
+        db.session.execute(db.select(1)).scalar()
+        return True, None
+    except Exception as exc:
+        logger.exception("Healthcheck base de données en échec")
+        return False, str(exc)
+
+
+def _collect_job_state_counts() -> dict[str, int]:
+    rows = db.session.execute(
+        db.select(Job.state, func.count(Job.id)).group_by(Job.state)
+    ).all()
+    return {state: count for state, count in rows}
+
+
+def _render_prometheus_metrics() -> str:
+    db_ok, _ = _check_database_health()
+    state_counts = _collect_job_state_counts() if db_ok else {}
+    executor = get_job_executor()
+    runtime = executor.get_runtime_snapshot() if executor else {
+        "queued_jobs": 0,
+        "running_jobs": 0,
+        "max_workers": 0,
+    }
+    lines = [
+        "# HELP transcria_up Indique si le service TranscrIA est disponible.",
+        "# TYPE transcria_up gauge",
+        f"transcria_up {1 if db_ok else 0}",
+        "# HELP transcria_ready Indique si le service accepte de nouveaux jobs.",
+        "# TYPE transcria_ready gauge",
+        f"transcria_ready {1 if db_ok and executor is not None else 0}",
+        "# HELP transcria_process_start_time_seconds Horodatage Unix du démarrage du process web.",
+        "# TYPE transcria_process_start_time_seconds gauge",
+        f"transcria_process_start_time_seconds {PROCESS_START_TIME:.0f}",
+        "# HELP transcria_jobs_total Nombre total de jobs en base.",
+        "# TYPE transcria_jobs_total gauge",
+        f"transcria_jobs_total {sum(state_counts.values())}",
+        "# HELP transcria_worker_jobs Nombre de jobs suivis par le worker interne.",
+        "# TYPE transcria_worker_jobs gauge",
+        f'transcria_worker_jobs{{status="queued"}} {runtime["queued_jobs"]}',
+        f'transcria_worker_jobs{{status="running"}} {runtime["running_jobs"]}',
+        "# HELP transcria_worker_capacity Nombre maximal de jobs simultanés pour le worker interne.",
+        "# TYPE transcria_worker_capacity gauge",
+        f"transcria_worker_capacity {runtime['max_workers']}",
+        "# HELP transcria_jobs_state Nombre de jobs par état.",
+        "# TYPE transcria_jobs_state gauge",
+    ]
+    for state in sorted(state_counts):
+        lines.append(f'transcria_jobs_state{{state="{state}"}} {state_counts[state]}')
+    return "\n".join(lines) + "\n"
+
+
 @web_bp.route("/")
 @login_required
 def index():
@@ -156,7 +214,10 @@ def job_wizard(job_id: str):
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
 
-    statuses = WorkflowState.compute_statuses(job.state)
+    statuses = WorkflowState.compute_statuses(
+        job.state,
+        job.get_extra_data().get("last_non_terminal_state"),
+    )
     steps = WorkflowState.get_steps()
     next_step = WorkflowState.get_next_step(statuses)
 
@@ -231,6 +292,42 @@ def job_result(job_id: str):
 
 # --- API endpoints ---
 
+@web_bp.route("/health")
+def health():
+    db_ok, db_error = _check_database_health()
+    payload = {
+        "status": "ok" if db_ok else "degraded",
+        "service": "transcria",
+        "database": {
+            "status": "ok" if db_ok else "error",
+        },
+    }
+    if db_error:
+        payload["database"]["error"] = db_error
+    return jsonify(payload), (200 if db_ok else 503)
+
+
+@web_bp.route("/ready")
+def ready():
+    db_ok, db_error = _check_database_health()
+    executor = get_job_executor()
+    runtime = executor.get_runtime_snapshot() if executor else None
+    ready_ok = db_ok and executor is not None
+    payload = {
+        "status": "ready" if ready_ok else "not_ready",
+        "service": "transcria",
+        "database": {"status": "ok" if db_ok else "error"},
+        "worker": runtime or {"healthy": False},
+    }
+    if db_error:
+        payload["database"]["error"] = db_error
+    return jsonify(payload), (200 if ready_ok else 503)
+
+
+@web_bp.route("/metrics")
+def metrics():
+    return Response(_render_prometheus_metrics(), mimetype="text/plain; version=0.0.4; charset=utf-8")
+
 @web_bp.route("/api/jobs/<job_id>/upload", methods=["POST"])
 @login_required
 def api_upload(job_id: str):
@@ -250,11 +347,9 @@ def api_upload(job_id: str):
     if ext not in allowed:
         return jsonify({"error": f"Format non supporté: {ext}"}), 400
 
-    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-    info = fs.save_upload(file.read(), file.filename)
+    info = JobService.upload(job.id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
     if job.title == DEFAULT_JOB_TITLE:
         job.title = _clean_job_title(Path(file.filename).stem or file.filename)
-    JobStore.update_state(job.id, JobState.UPLOADED)
     return jsonify(info)
 
 
@@ -266,14 +361,9 @@ def api_analyze(job_id: str):
     if error_response:
         return error_response
 
-    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-    audio_path = fs.get_original_audio_path()
-    if audio_path is None:
-        return jsonify({"error": "Aucun fichier audio trouvé"}), 400
-
-    result = AudioAnalyzer.analyze(audio_path)
-    fs.save_json("metadata/audio_analysis.json", result)
-    JobStore.update_state(job.id, JobState.ANALYZED)
+    result = JobService.analyze(job.id, cfg["storage"]["jobs_dir"], cfg)
+    if result.get("error"):
+        return jsonify(result), 400
     return jsonify(result)
 
 
@@ -343,8 +433,7 @@ def api_lexicon(job_id: str):
         data = request.get_json() or []
         LexiconManager.save(job, cfg["storage"]["jobs_dir"], data)
 
-    if job.state in (JobState.PARTICIPANTS_DONE.value, JobState.CONTEXT_DONE.value):
-        JobStore.update_state(job.id, JobState.LEXICON_DONE)
+    advance_preprocessing_state(job.id, job.state)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
     return jsonify({"status": "ok"})
 
@@ -383,8 +472,7 @@ def api_speakers_map(job_id: str):
     SpeakerDetector.save_mapping(job.id, cfg["storage"]["jobs_dir"], mapping)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
 
-    if job.state == JobState.SPEAKER_DETECTION_DONE.value:
-        JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
+    advance_preprocessing_state(job.id, job.state)
     return jsonify({"status": "ok"})
 
 
@@ -402,42 +490,46 @@ def api_process(job_id: str):
         return jsonify({"error": "Aucun fichier audio"}), 400
 
     mode = (request.get_json(silent=True) or {}).get("mode", "fast") if request.is_json else "fast"
-    job.processing_mode = mode
+    if mode == "cancel":
+        request_execution_cancel(job.id)
+        if not is_execution_active(job) or get_execution_status(job) == "queued":
+            JobStore.update_state(job.id, JobState.CANCELLED)
+            return jsonify({"status": "cancelled"})
+        return jsonify({"status": "cancel_requested"})
 
-    from transcria.workflow.runner import WorkflowRunner
+    if mode not in ("fast", "quality"):
+        return jsonify({"error": f"Mode de traitement invalide: {mode}"}), 400
 
-    runner = WorkflowRunner(JobStore, cfg)
+    if mode == "quality" and not cfg.get("workflow", {}).get("enable_quality_mode", True):
+        return jsonify({"error": "Le mode qualité est désactivé par la configuration"}), 400
 
-    transcribe_result = runner.run_transcription(job, audio_path, cfg)
-    if _pipeline_failed(transcribe_result):
-        return _pipeline_error_response("transcription", transcribe_result)
+    if not can_start_processing(job.state):
+        return jsonify(
+            {
+                "error": "Le job n'est pas prêt pour le traitement",
+                "current_state": job.state,
+            }
+        ), 409
 
-    if mode == "quality" and cfg["workflow"].get("enable_quality_mode", True):
-        diarization_result = runner.run_diarization(job, audio_path, cfg)
-        if _pipeline_failed(diarization_result):
-            return _pipeline_error_response("diarization", diarization_result)
-        correction_result = runner.run_correction(job, cfg)
-        if _pipeline_failed(correction_result):
-            return _pipeline_error_response("correction", correction_result)
-        quality_result = runner.run_quality_checks(job, cfg)
-        if _pipeline_failed(quality_result):
-            return _pipeline_error_response("quality", quality_result)
-        export_result = runner.build_export(job, cfg)
-        if _pipeline_failed(export_result):
-            return _pipeline_error_response("export", export_result)
-    else:
-        correction_result = runner.run_correction(job, cfg)
-        if _pipeline_failed(correction_result):
-            return _pipeline_error_response("correction", correction_result)
-        quality_result = runner.run_quality_checks(job, cfg)
-        if _pipeline_failed(quality_result):
-            return _pipeline_error_response("quality", quality_result)
-        export_result = runner.build_export(job, cfg)
-        if _pipeline_failed(export_result):
-            return _pipeline_error_response("export", export_result)
+    if is_execution_active(job):
+        return jsonify({"error": "Un traitement est déjà en cours", "execution_status": get_execution_status(job)}), 409
 
-    JobStore.update_state(job.id, JobState.COMPLETED)
-    return jsonify({"status": "completed", "transcription": transcribe_result, "export": export_result})
+    JobStore.update(job.id, processing_mode=mode)
+    if job.state != JobState.READY_TO_PROCESS.value:
+        JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
+    executor = get_job_executor()
+    if executor is None:
+        return jsonify({"error": "Worker de traitement indisponible"}), 503
+    result = executor.submit_process(job.id, str(audio_path), mode)
+    if not result.get("accepted"):
+        return jsonify({"error": "Un traitement est déjà en cours", "execution_status": "active"}), 409
+    return jsonify({
+        "status": "queued",
+        "job_id": job.id,
+        "mode": mode,
+        "state": JobState.READY_TO_PROCESS.value,
+        "execution_status": "queued",
+    }), 202
 
 
 @web_bp.route("/api/jobs/<job_id>/quality", methods=["POST"])
@@ -589,49 +681,58 @@ def system_status():
     return render_template("dashboard_status.html", status=status, app_config=cfg)
 
 
+def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None, status: int = 200):
+    return render_template(
+        "admin_config.html",
+        config_yaml=config_yaml,
+        config_path=config_path,
+        system_info=ConfigService.detect_system(),
+        validation_errors=validation_errors or [],
+    ), status
+
+
 @web_bp.route("/admin/config", methods=["GET", "POST"])
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_config():
-    cfg = get_config()
-    config_path = get_config_path()
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+
     if request.method == "POST":
         raw_yaml = request.form.get("config_yaml", "")
         try:
             loaded = yaml.safe_load(raw_yaml) or {}
         except yaml.YAMLError as exc:
             flash(f"YAML invalide : {exc}", "error")
-            return render_template(
-                "admin_config.html",
-                config_yaml=raw_yaml,
-                config_path=config_path,
-            ), 400
+            return _render_config_form(raw_yaml, config_path, [], 400)
 
         if not isinstance(loaded, dict):
             flash("La configuration doit être un objet YAML racine.", "error")
-            return render_template(
-                "admin_config.html",
-                config_yaml=raw_yaml,
-                config_path=config_path,
-            ), 400
+            return _render_config_form(raw_yaml, config_path, [], 400)
 
         loaded = _restore_masked_config_secrets(loaded, cfg)
-        saved_path = save_config(loaded, config_path)
-        effective_config = load_config(config_path)
-        set_config(effective_config)
-        flash(f"Configuration sauvegardée dans {saved_path}.", "success")
-        cfg = effective_config
+        loaded = _deep_merge(cfg, loaded)
+        ok, errors, warnings = ConfigService.save_if_valid(loaded, config_path)
+
+        for warn in warnings:
+            flash(warn, "warning")
+
+        if not ok:
+            for err in errors:
+                flash(err, "error")
+            flash(f"{len(errors)} erreur(s) de validation. Sauvegarde annulée.", "error")
+            return _render_config_form(raw_yaml, config_path, errors, 400)
+
+        flash(f"Configuration sauvegardée dans {config_path}.", "success")
+        cfg = ConfigService.get_singleton()
 
     config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)
-    return render_template(
-        "admin_config.html",
-        config_yaml=config_yaml,
-        config_path=config_path,
-    )
+    return _render_config_form(config_yaml, config_path)
 
 
 @web_bp.route("/api/system/status")
 @login_required
+@requires(Permission.ACCESS_SYSTEM)
 def api_system_status():
     cfg = get_config()
     db_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
@@ -650,8 +751,6 @@ def delete_job(job_id: str):
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
 
-    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-    fs.cleanup()
-    JobStore.delete_job(job.id)
+    JobService.delete(job.id, cfg["storage"]["jobs_dir"])
     flash("Traitement supprimé.", "info")
     return redirect(url_for("web.index"))

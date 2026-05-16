@@ -12,12 +12,24 @@ class QualityReporter:
     def __init__(self, config: dict):
         self.config = config
 
+    def _thresholds(self) -> dict:
+        t = self.config.get("quality", {}).get("thresholds", {})
+        return {
+            "short_segment_s": t.get("short_segment_s", 0.5),
+            "long_segment_s": t.get("long_segment_s", 60),
+            "gap_s": t.get("gap_s", 5),
+            "coverage_ratio": t.get("coverage_ratio", 0.8),
+            "low_word_rate": t.get("low_word_rate", 0.5),
+            "high_word_rate": t.get("high_word_rate", 10),
+        }
+
     def run_all_checks(self, job: Job) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
 
         srt_content = fs.load_text("metadata/transcription.srt") or ""
         segments = fs.load_json("metadata/transcription_segments.json") or []
         lexicon = fs.load_json("context/session_lexicon.json") or []
+        thresholds = self._thresholds()
 
         logger.info("Rapport qualité job %s: %d segments, %d termes lexique, %d octets SRT",
                      job.id, len(segments), len(lexicon), len(srt_content))
@@ -36,7 +48,7 @@ class QualityReporter:
             warnings += len(empty_segments)
 
         # 2. Segments très courts
-        very_short = [s for s in segments if s.get("text") and (s.get("end", 0) - s.get("start", 0)) < 0.5]
+        very_short = [s for s in segments if s.get("text") and (s.get("end", 0) - s.get("start", 0)) < thresholds["short_segment_s"]]
         total_checks += 1
         if very_short:
             checks.append({"type": "short_segments", "count": len(very_short), "severity": "warning"})
@@ -44,7 +56,7 @@ class QualityReporter:
             warnings += len(very_short)
 
         # 3. Segments très longs
-        very_long = [s for s in segments if s.get("text") and (s.get("end", 0) - s.get("start", 0)) > 60]
+        very_long = [s for s in segments if s.get("text") and (s.get("end", 0) - s.get("start", 0)) > thresholds["long_segment_s"]]
         total_checks += 1
         if very_long:
             checks.append({"type": "long_segments", "count": len(very_long), "severity": "warning"})
@@ -57,11 +69,11 @@ class QualityReporter:
             gaps = []
             for i in range(len(segments) - 1):
                 gap = segments[i + 1]["start"] - segments[i]["end"]
-                if gap > 5:
+                if gap > thresholds["gap_s"]:
                     gaps.append({"index": i, "gap_seconds": round(gap, 2)})
             if gaps:
                 checks.append({"type": "time_gaps", "count": len(gaps), "severity": "info"})
-                review_points.append(f"Trous temporels (> 5s) : {len(gaps)} — vérifier la couverture audio.")
+                review_points.append(f"Trous temporels (>{thresholds['gap_s']}s) : {len(gaps)} — vérifier la couverture audio.")
 
         # 5. Chevauchements
         total_checks += 1
@@ -114,7 +126,7 @@ class QualityReporter:
         total_checks += 1
         if audio_duration > 0:
             coverage_ratio = duration_covered / audio_duration
-            if coverage_ratio < 0.8:
+            if coverage_ratio < thresholds["coverage_ratio"]:
                 checks.append({"type": "low_coverage", "ratio": round(coverage_ratio, 2), "severity": "error"})
                 review_points.append(f"Couverture faible : {coverage_ratio:.0%} — possible perte de transcription.")
                 warnings += 1
@@ -124,10 +136,10 @@ class QualityReporter:
         if duration_covered > 0 and srt_content.strip():
             word_count = len(srt_content.split())
             words_per_second = word_count / duration_covered
-            if words_per_second < 0.5:
+            if words_per_second < thresholds["low_word_rate"]:
                 checks.append({"type": "low_word_rate", "rate": round(words_per_second, 2), "severity": "info"})
                 review_points.append(f"Débit de mots faible : {words_per_second:.1f} mots/s.")
-            if words_per_second > 10:
+            if words_per_second > thresholds["high_word_rate"]:
                 checks.append({"type": "high_word_rate", "rate": round(words_per_second, 2), "severity": "warning"})
                 review_points.append(f"Débit de mots élevé : {words_per_second:.1f} mots/s — possible erreur.")
 

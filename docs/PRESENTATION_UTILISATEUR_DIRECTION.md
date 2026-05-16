@@ -1,10 +1,10 @@
-# TranscrIA MVP — Présentation utilisateur et direction
+# TranscrIA — Présentation utilisateur et direction
 
 ## Synthèse
 
 TranscrIA est un portail web de transcription et de valorisation de réunions. Il transforme un enregistrement audio ou vidéo en livrables exploitables : transcription SRT, résumé structuré, contexte de réunion, participants, lexique métier, rapport qualité et package ZIP final.
 
-L'objectif du MVP est de proposer une interface simple à des utilisateurs non techniciens, tout en orchestrant en arrière-plan des traitements avancés : transcription automatique, détection des locuteurs, correction par IA, prise en compte du vocabulaire métier et contrôle qualité.
+l'objectif est de proposer une interface simple à des utilisateurs non techniciens, tout en orchestrant en arrière-plan des traitements avancés : transcription automatique, détection des locuteurs, correction par IA, prise en compte du vocabulaire métier et contrôle qualité.
 
 Le projet vise un usage professionnel : comptes rendus de réunion, préparation de relecture, archivage, sous-titrage, analyse de contenus audio et sécurisation d'un processus qui serait sinon long, manuel et difficile à homogénéiser.
 
@@ -302,7 +302,7 @@ La gestion GPU, le lancement des modèles et les étapes techniques sont masqué
 
 ---
 
-## Limites Du MVP
+## Limites Actuelles
 
 Le MVP est fonctionnel, mais certaines limites restent importantes à connaître lors d'une présentation :
 
@@ -314,7 +314,7 @@ Le MVP est fonctionnel, mais certaines limites restent importantes à connaître
 - les traitements longs dépendent fortement de la disponibilité GPU ;
 - le mode sans authentification n'est volontairement pas supporté.
 
-Ces limites sont normales pour un MVP orienté production assistée : l'objectif n'est pas de supprimer la relecture humaine, mais de réduire fortement le travail préparatoire et de rendre la relecture plus fiable.
+Ces limites sont connues pour un outil de production assistée : l'objectif n'est pas de supprimer la relecture humaine, mais de réduire fortement le travail préparatoire et de rendre la relecture plus fiable.
 
 ---
 
@@ -359,6 +359,6 @@ TranscrIA est un portail web qui transforme un enregistrement de réunion en liv
 
 ## Conclusion
 
-TranscrIA MVP démontre qu'il est possible de rendre un pipeline IA complexe accessible depuis une interface web claire. Le projet ne remplace pas la validation humaine, mais il accélère fortement la production d'une base fiable : transcription horodatée, résumé structuré, locuteurs, lexique, contrôle qualité et package complet.
+TranscrIA démontre qu'il est possible de rendre un pipeline IA complexe accessible depuis une interface web claire. Le projet ne remplace pas la validation humaine, mais il accélère fortement la production d'une base fiable : transcription horodatée, résumé structuré, locuteurs, lexique, contrôle qualité et package complet.
 
 Pour une direction, la valeur se situe dans la standardisation, la réduction du temps de traitement, la maîtrise locale des données et la possibilité de faire évoluer progressivement le niveau de qualité.

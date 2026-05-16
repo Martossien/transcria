@@ -298,46 +298,115 @@ class TestPipelineErrors:
         assert r.status_code == 200
         return jid
 
-    def test_process_stops_after_transcription_error(self, admin_client, monkeypatch):
-        from transcria.workflow.runner import WorkflowRunner
+    def test_process_stops_after_transcription_error(self, admin_client, monkeypatch, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.services.job_executor import get_job_executor
 
         jid = self._create_uploaded_job(admin_client)
-        called = {"correction": False}
-
-        monkeypatch.setattr(WorkflowRunner, "run_transcription", lambda self, job, audio_path, cfg: {"error": "stt down"})
-
-        def fail_if_called(self, job, cfg):
-            called["correction"] = True
-            return {"success": True}
-
-        monkeypatch.setattr(WorkflowRunner, "run_correction", fail_if_called)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+        executor = get_job_executor()
+        monkeypatch.setattr(
+            executor,
+            "submit_process",
+            lambda job_id, audio_path, mode: {"accepted": True, "status": "queued", "mode": mode},
+        )
 
         r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
 
-        assert r.status_code == 500
-        assert json.loads(r.data)["step"] == "transcription"
-        assert called["correction"] is False
+        assert r.status_code == 202
+        assert json.loads(r.data)["status"] == "queued"
 
-    def test_process_stops_after_correction_error(self, admin_client, monkeypatch):
-        from transcria.workflow.runner import WorkflowRunner
+    def test_process_stops_after_correction_error(self, admin_client, monkeypatch, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.services.job_executor import get_job_executor
 
         jid = self._create_uploaded_job(admin_client)
-        called = {"quality": False}
-
-        monkeypatch.setattr(WorkflowRunner, "run_transcription", lambda self, job, audio_path, cfg: {"text": "ok"})
-        monkeypatch.setattr(WorkflowRunner, "run_correction", lambda self, job, cfg: {"success": False, "error": "qwen down"})
-
-        def fail_if_called(self, job, cfg):
-            called["quality"] = True
-            return {}
-
-        monkeypatch.setattr(WorkflowRunner, "run_quality_checks", fail_if_called)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+        executor = get_job_executor()
+        monkeypatch.setattr(
+            executor,
+            "submit_process",
+            lambda job_id, audio_path, mode: {"accepted": False, "reason": "already_active"},
+        )
 
         r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
 
-        assert r.status_code == 500
-        assert json.loads(r.data)["step"] == "correction"
-        assert called["quality"] is False
+        assert r.status_code == 409
+        assert "cours" in json.loads(r.data)["error"]
+
+    def test_process_rejects_invalid_mode(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "turbo"})
+
+        assert r.status_code == 400
+        assert "invalide" in json.loads(r.data)["error"]
+
+    def test_process_rejects_when_job_not_ready(self, admin_client):
+        jid = self._create_uploaded_job(admin_client)
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
+
+        assert r.status_code == 409
+        assert json.loads(r.data)["current_state"] == "uploaded"
+
+    def test_process_allows_retry_from_stale_transcribing_state(self, admin_client, app, monkeypatch):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.services.job_executor import get_job_executor
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.TRANSCRIBING)
+
+        executor = get_job_executor()
+        monkeypatch.setattr(
+            executor,
+            "submit_process",
+            lambda job_id, audio_path, mode: {"accepted": True, "status": "queued", "mode": mode},
+        )
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
+
+        assert r.status_code == 202
+        assert json.loads(r.data)["status"] == "queued"
+
+    def test_process_cancel_marks_job_cancelled(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        jid = self._create_uploaded_job(admin_client)
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "cancel"})
+
+        assert r.status_code == 200
+        assert json.loads(r.data)["status"] == "cancelled"
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.CANCELLED.value
+
+    def test_process_rejects_when_execution_already_active(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.workflow.transitions import mark_execution_queued
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+            mark_execution_queued(jid, "fast")
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
+
+        assert r.status_code == 409
+        assert json.loads(r.data)["execution_status"] == "queued"
 
 
 class TestApiErrorResponses:
@@ -375,6 +444,22 @@ class TestSpeakerMappingEdgeCases:
         r = admin_client.post(f"/api/jobs/{jid}/speakers/map", json={})
         assert r.status_code == 200
 
+    def test_map_speakers_after_lexicon_moves_job_to_ready(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        r = admin_client.post("/jobs/new", data={"title": "SpkReady"}, follow_redirects=True)
+        jid = r.request.path.rstrip("/").split("/")[-1]
+
+        with app.app_context():
+            JobStore.update_state(jid, JobState.LEXICON_DONE)
+
+        r = admin_client.post(f"/api/jobs/{jid}/speakers/map", json={})
+        assert r.status_code == 200
+
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.READY_TO_PROCESS.value
+
     def test_map_speakers_nonexistent_job(self, admin_client):
         r = admin_client.post("/api/jobs/fake-job-speakers/map", json={"SPEAKER_00": "test"})
         assert r.status_code == 404
@@ -396,3 +481,35 @@ class TestLexiconEdgeCases:
         jid = r.request.path.rstrip("/").split("/")[-1]
         r = admin_client.post(f"/api/jobs/{jid}/lexicon", json=[])
         assert r.status_code == 200
+
+    def test_lexicon_from_participants_moves_job_to_ready(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        r = admin_client.post("/jobs/new", data={"title": "LexSkipReady"}, follow_redirects=True)
+        jid = r.request.path.rstrip("/").split("/")[-1]
+
+        with app.app_context():
+            JobStore.update_state(jid, JobState.PARTICIPANTS_DONE)
+
+        r = admin_client.post(f"/api/jobs/{jid}/lexicon", json=[])
+        assert r.status_code == 200
+
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.READY_TO_PROCESS.value
+
+    def test_lexicon_after_speaker_detection_moves_job_to_ready(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        r = admin_client.post("/jobs/new", data={"title": "LexReady"}, follow_redirects=True)
+        jid = r.request.path.rstrip("/").split("/")[-1]
+
+        with app.app_context():
+            JobStore.update_state(jid, JobState.SPEAKER_DETECTION_DONE)
+
+        r = admin_client.post(f"/api/jobs/{jid}/lexicon", json=[])
+        assert r.status_code == 200
+
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.READY_TO_PROCESS.value

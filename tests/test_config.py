@@ -1,9 +1,12 @@
 import os
 import tempfile
+import importlib.util
+from pathlib import Path
 
 import pytest
 
 from transcria.config import get_config_path, load_config, save_config, _deep_merge
+from transcria.config.config_schema import validate_config
 
 
 class TestConfigLoading:
@@ -113,6 +116,28 @@ auth:
         finally:
             os.unlink(path)
 
+    def test_load_config_allows_long_llm_timeouts(self):
+        content = """workflow:
+  summary_llm:
+    enabled: true
+    model_id: "local/qwen3-35b"
+    api_base: "http://127.0.0.1:8080/v1"
+    timeout_seconds: 1800
+  arbitration_llm:
+    enabled: true
+    model_id: "local/qwen3-35b-arbitrage"
+    api_base: "http://127.0.0.1:8080/v1"
+    timeout_seconds: 7200
+    opencode_bin: "opencode"
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(content)
+            f.flush()
+            cfg = load_config(f.name)
+        os.unlink(f.name)
+        assert cfg["workflow"]["summary_llm"]["timeout_seconds"] == 1800
+        assert cfg["workflow"]["arbitration_llm"]["timeout_seconds"] == 7200
+
     def test_get_config_path_uses_env(self):
         old = os.environ.get("TRANSCRIA_CONFIG")
         try:
@@ -126,6 +151,28 @@ auth:
 
 
 class TestAppDebugResolution:
+    def test_create_app_accepts_explicit_config_path(self):
+        from app import create_app
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(
+                "server:\n"
+                "  debug: false\n"
+                "storage:\n"
+                "  database_url: \"sqlite:///:memory:\"\n"
+                "  jobs_dir: /tmp/transcria_test_jobs_create_app\n"
+                "auth:\n"
+                "  first_admin_username: admin\n"
+                "  first_admin_password: admin-change-me\n"
+            )
+            f.flush()
+            path = f.name
+        try:
+            app = create_app(path)
+            assert app.config["SQLALCHEMY_DATABASE_URI"] == "sqlite:///:memory:"
+        finally:
+            os.unlink(path)
+
     def test_no_debug_cli_overrides_config_and_env(self):
         from app import resolve_debug_flag
 
@@ -141,3 +188,28 @@ class TestAppDebugResolution:
         from app import resolve_debug_flag
 
         assert resolve_debug_flag(None, None, True) is True
+
+
+class TestBootstrapConfig:
+    def test_validate_config_accepts_execution_section(self):
+        cfg = load_config()
+        cfg["workflow"]["execution"] = {"max_concurrent_jobs": 1}
+        result = validate_config(cfg)
+        assert result.is_valid
+
+    def test_bootstrap_config_generates_output(self, tmp_path):
+        module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"
+        spec = importlib.util.spec_from_file_location("bootstrap_config", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        example_path = Path(__file__).resolve().parents[1] / "config.example.yaml"
+        output_path = tmp_path / "config.generated.yaml"
+
+        merged, messages = module.bootstrap_config(example_path, output_path, force=True)
+
+        assert output_path.is_file()
+        assert merged["storage"]["jobs_dir"].endswith("jobs")
+        assert "workflow" in merged
+        assert isinstance(messages, list)

@@ -4,6 +4,8 @@ import time
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.gpu.vram_manager import VRAMManager
+from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+from transcria.logging_setup import get_structured_logger
 
 logger = logging.getLogger(__name__)
 
@@ -23,108 +25,165 @@ class WorkflowRunner:
         return result
 
     def run_summary(self, job: Job, audio_path: str, config: dict) -> dict:
-        from pathlib import Path
-
-        from transcria.jobs.filesystem import JobFilesystem as _JFS
+        sl = get_structured_logger(__name__)
+        sl.set_context(job_id=job.id, step="summary")
 
         self.store.update_state(job.id, JobState.SUMMARY_RUNNING)
+        sl.info("DÉBUT résumé")
 
-        # Phase 1: Transcrire avec Cohere sur GPU libre
-        gpu = self.vram.ensure_free(VRAMManager.COHERE_VRAM_MB)
-        if gpu is None:
-            logger.warning("VRAM insuffisante pour le résumé Cohere")
-            self.store.update_state(job.id, JobState.FAILED, "VRAM insuffisante")
-            return {"error": "VRAM insuffisante", "transcript_text": "", "summary_text": "Résumé indisponible."}
+        result = self._run_cohere_transcription(job, audio_path, config, sl)
+        if result.get("error") and not result.get("transcript_text"):
+            return result
+
+        self._run_pyannote_after_transcription(job, audio_path, config)
+
+        self._run_llm_summary(job, result, config, sl)
+
+        self.store.update_state(job.id, JobState.SUMMARY_DONE)
+        sl.info("FIN résumé", transcript_chars=len(result.get("transcript_text", "")))
+        return result
+
+    @staticmethod
+    def _get_fs(config: dict, job_id: str):
+        from transcria.jobs.filesystem import JobFilesystem
+        return JobFilesystem(
+            config.get("storage", {}).get("jobs_dir", "./jobs"), job_id
+        )
+
+    def _run_cohere_transcription(
+        self, job: Job, audio_path: str, config: dict, sl
+    ) -> dict:
+        from pathlib import Path
+        from transcria.stt.summary import SummaryGenerator
 
         try:
-            from transcria.stt.summary import SummaryGenerator
-
-            generator = SummaryGenerator(config)
-            result = generator.generate_quick_summary(job, Path(audio_path), gpu_index=gpu)
-            self.vram.untrack_model("cohere-summary")
-            self.vram.offload_all()
-
-            # Après Cohere, lancer pyannote pour avoir les données avant l'étape Participants
-            speakers_result = None
-            if config.get("workflow", {}).get("enable_speaker_detection", True):
-                try:
-                    logger.info("Lancement pyannote après transcription (pour étape Participants)")
-                    speakers_result = self.run_speaker_detection(job, audio_path, config)
-                    if speakers_result.get("available") and speakers_result.get("speakers"):
-                        fs = _JFS(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-                        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
-                        meeting_ctx["speaker_count_pyannote"] = len(speakers_result["speakers"])
-                        fs.save_json("context/meeting_context.json", meeting_ctx)
-                        self._write_diarization_context(fs, speakers_result)
-                        logger.info("pyannote: %d locuteurs détectés", len(speakers_result["speakers"]))
-                except Exception as exc:
-                    logger.warning("pyannote après transcription ignoré: %s", exc)
-
-            # Phase 2: Résumé via opencode — libérer GPUs, lancer Qwen 35B
-            llm_config = config.get("workflow", {}).get("summary_llm", {})
-            if llm_config.get("enabled") and result.get("transcript_text"):
-                from transcria.gpu.opencode_runner import OpenCodeRunner
-
-                fs = _JFS(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-                transcript_path = fs.job_dir / "summary" / "quick_transcript.txt"
-                context_path = fs.job_dir / "context" / "job_context.yaml"
-                diarization_context_path = fs.job_dir / "summary" / "diarization_context.md"
-
-                logger.info("Phase 2: opencode — libération GPUs + lancement Qwen 35B")
-                self.vram.free_all_gpus()
-                launched = self.vram.launch_qwen_35b()
-                if launched:
-                    try:
-                        opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
-                        runner = OpenCodeRunner(str(fs.job_dir / "summary"), opencode_bin=opencode_bin)
-                        parsed = runner.run_summary(
-                            str(transcript_path),
-                            str(context_path),
-                            str(diarization_context_path),
-                        )
-                        summary_text = parsed.get("summary_text", "")
-                        if summary_text and "indisponible" not in summary_text.lower():
-                            result["summary_text"] = summary_text
-                            # Pré-remplir le contexte avec les suggestions de la LLM
-                            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
-                            if parsed.get("title_suggere"):
-                                meeting_ctx["title_suggere"] = parsed["title_suggere"]
-                            if parsed.get("type_suggere"):
-                                meeting_ctx["type_suggere"] = parsed["type_suggere"]
-                            if parsed.get("sujet_suggere"):
-                                meeting_ctx["sujet_suggere"] = parsed["sujet_suggere"]
-                            if parsed.get("objectif_suggere"):
-                                meeting_ctx["objectif_suggere"] = parsed["objectif_suggere"]
-                            if parsed.get("notes_suggeres"):
-                                meeting_ctx["notes_suggeres"] = parsed["notes_suggeres"]
-                            if parsed.get("participants_detectes"):
-                                meeting_ctx["participants_detectes"] = parsed["participants_detectes"]
-                            if parsed.get("speaker_count", 0) > 0:
-                                meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
-                            if parsed.get("termes_suspects"):
-                                meeting_ctx["termes_suspects"] = parsed["termes_suspects"]
-                            meeting_ctx["summary_llm"] = summary_text
-                            fs.save_json("context/meeting_context.json", meeting_ctx)
-
-                            fs.save_text("summary/summary.md",
-                                f"# Résumé de contrôle\n\n{summary_text}\n\n---\n\n"
-                                f"## Extrait de transcription\n\n{result.get('transcript_short','')}\n")
-                            logger.info("Résumé opencode Qwen 35B généré (%d caractères)", len(summary_text))
-                    except Exception as exc:
-                        logger.warning("Erreur opencode: %s", exc)
-                    finally:
-                        self.vram.stop_qwen_35b()
-                else:
-                    logger.warning("Qwen 35B non disponible — résumé sauté")
-
-            self.store.update_state(job.id, JobState.SUMMARY_DONE)
-            return result
-        except Exception as exc:
-            logger.exception("Échec génération résumé")
-            self.vram.offload_all()
-            self.vram.stop_qwen_35b()
+            with GPUSession(
+                self.vram, "cohere-summary", self.vram.cohere_vram_mb
+            ) as gs:
+                generator = SummaryGenerator(config)
+                result = generator.generate_quick_summary(
+                    job, Path(audio_path), gpu_index=gs.gpu_index
+                )
+                sl.info("Cohere quick transcription OK",
+                        segments=len(result.get("transcript_short", "")))
+        except GPUSessionError as exc:
+            sl.warning("VRAM insuffisante pour Cohere", error=str(exc))
             self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc), "transcript_text": "", "summary_text": "Résumé indisponible."}
+            return {
+                "error": str(exc),
+                "transcript_text": "",
+                "summary_text": "Résumé indisponible.",
+            }
+        except Exception as exc:
+            sl.exception("Échec transcription Cohere")
+            self.vram.offload_all()
+            self.store.update_state(job.id, JobState.FAILED, str(exc))
+            return {
+                "error": str(exc),
+                "transcript_text": "",
+                "summary_text": "Résumé indisponible.",
+            }
+
+        return result
+
+    def _run_pyannote_after_transcription(
+        self, job: Job, audio_path: str, config: dict
+    ) -> None:
+        if not config.get("workflow", {}).get("enable_speaker_detection", True):
+            return
+
+        try:
+            speakers_result = self.run_speaker_detection(job, audio_path, config)
+            if not speakers_result.get("available") or not speakers_result.get("speakers"):
+                return
+
+            fs = self._get_fs(config, job.id)
+            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+            meeting_ctx["speaker_count_pyannote"] = len(speakers_result["speakers"])
+            fs.save_json("context/meeting_context.json", meeting_ctx)
+            self._write_diarization_context(fs, speakers_result)
+
+            logger.info("pyannote: %d locuteurs détectés",
+                        len(speakers_result["speakers"]))
+        except Exception as exc:
+            logger.warning("pyannote après transcription ignoré: %s", exc)
+
+    def _run_llm_summary(
+        self, job: Job, result: dict, config: dict, sl
+    ) -> None:
+        llm_config = config.get("workflow", {}).get("summary_llm", {})
+        if not llm_config.get("enabled") or not result.get("transcript_text"):
+            return
+
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+
+        fs = self._get_fs(config, job.id)
+        transcript_path = fs.job_dir / "summary" / "quick_transcript.txt"
+        context_path = fs.job_dir / "context" / "job_context.yaml"
+        diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
+
+        sl.info("Phase LLM: libération GPUs + lancement opencode")
+        self.vram.free_all_gpus()
+        launched = self.vram.launch_qwen_35b()
+
+        if not launched:
+            logger.warning("Qwen 35B non disponible — résumé sauté")
+            return
+
+        try:
+            model_id = llm_config.get("model_id")
+            opencode_bin = config.get("workflow", {}).get(
+                "arbitration_llm", {}
+            ).get("opencode_bin")
+            runner = OpenCodeRunner(
+                str(fs.job_dir / "summary"),
+                model=model_id,
+                opencode_bin=opencode_bin,
+                config=config,
+            )
+            parsed = runner.run_summary(
+                str(transcript_path),
+                str(context_path),
+                str(diarization_ctx_path),
+            )
+            self._apply_llm_suggestions(fs, result, parsed, sl)
+        except Exception as exc:
+            logger.warning("Erreur opencode: %s", exc)
+        finally:
+            self.vram.stop_qwen_35b()
+
+    @staticmethod
+    def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:
+        summary_text = parsed.get("summary_text", "")
+        if not summary_text or "indisponible" in summary_text.lower():
+            return
+
+        result["summary_text"] = summary_text
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+
+        suggestion_fields = [
+            "title_suggere", "type_suggere", "sujet_suggere",
+            "objectif_suggere", "notes_suggeres", "participants_detectes",
+        ]
+        for field in suggestion_fields:
+            if parsed.get(field):
+                meeting_ctx[field] = parsed[field]
+
+        if parsed.get("speaker_count", 0) > 0:
+            meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
+        if parsed.get("termes_suspects"):
+            meeting_ctx["termes_suspects"] = parsed["termes_suspects"]
+
+        meeting_ctx["summary_llm"] = summary_text
+        fs.save_json("context/meeting_context.json", meeting_ctx)
+
+        fs.save_text(
+            "summary/summary.md",
+            f"# Résumé de contrôle\n\n{summary_text}\n\n---\n\n"
+            f"## Extrait de transcription\n\n"
+            f"{result.get('transcript_short', '')}\n",
+        )
+        sl.info("Résumé LLM généré", chars=len(summary_text))
 
     @staticmethod
     def _write_diarization_context(fs, speakers_result: dict) -> str | None:
@@ -185,7 +244,7 @@ class WorkflowRunner:
 
         self.store.update_state(job.id, JobState.TRANSCRIBING)
 
-        gpu = self.vram.ensure_free(VRAMManager.COHERE_VRAM_MB)
+        gpu = self.vram.ensure_free(self.vram.cohere_vram_mb)
         if gpu is None:
             self.store.update_state(job.id, JobState.FAILED, "VRAM insuffisante")
             return {"error": "VRAM insuffisante pour la transcription"}
@@ -195,7 +254,7 @@ class WorkflowRunner:
 
             transcriber = Transcriber(config, gpu_index=gpu)
             result = transcriber.transcribe(job, Path(audio_path))
-            self.vram.track_model("cohere-transcription", gpu, VRAMManager.COHERE_VRAM_MB)
+            self.vram.track_model("cohere-transcription", gpu, self.vram.cohere_vram_mb)
             return result
         except Exception as exc:
             logger.exception("Échec transcription")
@@ -252,13 +311,19 @@ class WorkflowRunner:
 
         try:
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
-            runner = OpenCodeRunner(str(fs.job_dir / "metadata"), opencode_bin=opencode_bin)
+            runner = OpenCodeRunner(
+                str(fs.job_dir / "metadata"),
+                opencode_bin=opencode_bin,
+                config=config,
+            )
             result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path))
             if result["success"] and result["corrected_srt"]:
                 fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
                 if result["report"]:
                     fs.save_text("metadata/correction_report.md", result["report"])
                 logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
+                if result.get("warning"):
+                    logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
             return result
         except Exception as exc:
             logger.exception("Échec correction SRT")

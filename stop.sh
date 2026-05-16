@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# stop.sh — Arrête le serveur TranscrIA MVP
+# stop.sh — Arrête le serveur TranscrIA
 # Usage : ./stop.sh [--force]
 # ============================================================================
 

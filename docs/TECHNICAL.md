@@ -1,8 +1,8 @@
-# TranscrIA MVP — Documentation technique
+# TranscrIA — Documentation technique
 
 ## 1. Vue d'ensemble
 
-TranscrIA MVP est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
+TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
 
 **Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / pyannote / opencode (Qwen 35B) / Bootstrap 5
 
@@ -10,14 +10,19 @@ TranscrIA MVP est un portail guidé de transcription de réunion destiné aux ut
 
 **Démarrage :**
 ```bash
-cd transcria-mvp && pip install -r requirements.txt && python app.py
+cd transcria && pip install -r requirements.txt && python app.py
 # → http://0.0.0.0:7870
 # Admin: admin / admin-change-me
 ```
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 261 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 412 tests pytest collectés — `python -m pytest tests/ -q`
+
+**Supervision locale :**
+- `GET /health` retourne un statut JSON simple du service et de la base SQLite
+- `GET /ready` retourne l’état de préparation du worker interne
+- `GET /metrics` expose des métriques Prometheus légères (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`)
 
 ---
 
@@ -116,10 +121,8 @@ transcria-mvp/
 │   └── prompts/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe)
-│       ├── arbitration_prompt.txt  # Prompt arbitrage multi-modèle (futur)
-│       └── speaker_identification_prompt.txt
 │
-├── tests/                         # 261 tests pytest collectés
+├── tests/                         # 412 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 11 tests — CRUD utilisateurs
@@ -180,24 +183,24 @@ workflow:
     enabled: true
     model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
     api_base: "http://127.0.0.1:8080/v1"
-    timeout_seconds: 300
+    timeout_seconds: 1800
     use_chat_api: true
   arbitration_llm:
     enabled: false
     model_id: "local/qwen3-35b-arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
-    timeout_seconds: 600
+    timeout_seconds: 7200
     opencode_bin: "opencode"
 
 security:
-  retention_days: 7
+  retention_days: 365
   allow_job_delete: true
   allowed_upload_extensions: [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]
 ```
 
 **Notes :**
-- `config.example.yaml` (version template) diffère : `timeout_seconds: 120`, pas de `use_chat_api`, `cohere_model_path` relatif (`./models/...`), `model_id: "local/qwen3-35b"`)
-- Le vrai `config.yaml` en production a : `timeout_seconds: 300`, `use_chat_api: true`, chemin absolu pour `cohere_model_path`
+- `config.example.yaml` (version template) diffère encore sur certains chemins/modèles, mais les timeouts LLM sont désormais calibrés pour des traitements longs
+- Le vrai `config.yaml` du service peut monter plus haut sur `arbitration_llm.timeout_seconds` pour des réunions de plusieurs heures
 
 ---
 
@@ -660,7 +663,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/download/package` | GET | login_required + owner check | Téléchargement ZIP |
 | `/api/jobs/<id>/download/audio` | GET | login_required + owner check | Téléchargement audio |
 | `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY |
-| `/api/system/status` | GET | login_required | État système JSON |
+| `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 
 **Templates** (`web/templates/`)
 | Template | Description |
@@ -845,15 +848,15 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 - Taille max d'upload : 1 Go (`MAX_CONTENT_LENGTH`)
 - Clé secrète Flask : `TRANSCRIA_SECRET` env var ou `os.urandom(32).hex()`
 
-**Vulnérabilités connues** : voir `docs/BUGS.md`
+**Vulnérabilités connues** : les sujets actifs sont suivis dans la documentation courante et les tests de non-régression du dépôt.
 
 ---
 
 ## 11. Tests
 
-**261 tests collectés** couvrant tous les modules. Lancer avec :
+**412 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
-cd transcria-mvp && python -m pytest tests/ -v
+cd transcria && python -m pytest tests/ -v
 ```
 
 Organisation :

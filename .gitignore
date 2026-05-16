@@ -46,3 +46,10 @@ Thumbs.db
 # Models (trop volumineux pour git, mais garder l'arborescence)
 models/cohere-asr/*
 !models/cohere-asr/.gitkeep
+
+# Backups de développement (historique de refactoring)
+backup/
+
+# Documentation interne (plans de refactoring, archives)
+docs/plan_refactoring_*.md
+docs/archive/

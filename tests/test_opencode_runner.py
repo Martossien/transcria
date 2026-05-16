@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from transcria.gpu.opencode_runner import OpenCodeRunner, _PROMPTS_DIR
+from transcria.gpu.opencode_runner import OpenCodeRunner, _get_prompts_dir
 
 
 def _make_runner(tmp_path, **kwargs):
@@ -40,6 +40,20 @@ class TestOpenCodeRunnerInit:
     def test_work_dir_resolved(self, tmp_path):
         runner = _make_runner(tmp_path)
         assert runner.work_dir == tmp_path.resolve()
+
+    def test_correction_timeout_comes_from_config(self, tmp_path):
+        runner = _make_runner(
+            tmp_path,
+            config={"workflow": {"arbitration_llm": {"timeout_seconds": 1234}}},
+        )
+        assert runner._get_correction_timeout() == 1234
+
+    def test_summary_timeout_comes_from_config(self, tmp_path):
+        runner = _make_runner(
+            tmp_path,
+            config={"workflow": {"summary_llm": {"timeout_seconds": 4321}}},
+        )
+        assert runner._get_summary_timeout() == 4321
 
 
 class TestOpenCodeRunnerRun:
@@ -321,10 +335,35 @@ validation, synthèse
 
 
 class TestOpenCodeRunnerRunSummary:
+    def test_run_summary_uses_configured_timeout(self, tmp_path, monkeypatch):
+        (tmp_path / "quick_transcript.txt").write_text("Bonjour", encoding="utf-8")
+        prompt_dir = os.path.join(_get_prompts_dir())
+        os.makedirs(prompt_dir, exist_ok=True)
+        prompt_file = os.path.join(prompt_dir, "summary_prompt.txt")
+        if not os.path.isfile(prompt_file):
+            with open(prompt_file, "w", encoding="utf-8") as f:
+                f.write("Tu es un assistant.")
+
+        captured = {}
+
+        def fake_run(self, instruction, prompt_file_arg, timeout=600):
+            captured["timeout"] = timeout
+            return {"success": True, "output": "Résumé généré", "files": [], "events_count": 1, "tool_calls": 0}
+
+        monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
+
+        runner = _make_runner(
+            tmp_path,
+            config={"workflow": {"summary_llm": {"timeout_seconds": 4321}}},
+        )
+        result = runner.run_summary(str(tmp_path / "quick_transcript.txt"))
+        assert result["summary_text"] == "Résumé généré"
+        assert captured["timeout"] == 4321
+
     def test_run_summary_reads_summary_md(self, tmp_path, monkeypatch):
         (tmp_path / "summary.md").write_text("# Résumé\n\n**Titre suggéré :** Mon titre\n", encoding="utf-8")
         (tmp_path / "quick_transcript.txt").write_text("[0s->1s] Bonjour", encoding="utf-8")
-        prompt_dir = os.path.join(_PROMPTS_DIR)
+        prompt_dir = os.path.join(_get_prompts_dir())
         os.makedirs(prompt_dir, exist_ok=True)
         prompt_file = os.path.join(prompt_dir, "summary_prompt.txt")
         if not os.path.isfile(prompt_file):
@@ -343,7 +382,7 @@ class TestOpenCodeRunnerRunSummary:
 
     def test_run_summary_fallback_to_output_when_no_md(self, tmp_path, monkeypatch):
         (tmp_path / "quick_transcript.txt").write_text("Bonjour", encoding="utf-8")
-        prompt_dir = os.path.join(_PROMPTS_DIR)
+        prompt_dir = os.path.join(_get_prompts_dir())
         os.makedirs(prompt_dir, exist_ok=True)
         prompt_file = os.path.join(prompt_dir, "summary_prompt.txt")
         if not os.path.isfile(prompt_file):
@@ -373,7 +412,7 @@ class TestOpenCodeRunnerRunSummary:
         (tmp_path / "quick_transcript.txt").write_text("Bonjour", encoding="utf-8")
         (tmp_path / "diarization_context.md").write_text("# Diarization", encoding="utf-8")
         (tmp_path / "job_context.yaml").write_text("meeting: {}", encoding="utf-8")
-        prompt_dir = os.path.join(_PROMPTS_DIR)
+        prompt_dir = os.path.join(_get_prompts_dir())
         os.makedirs(prompt_dir, exist_ok=True)
         prompt_file = os.path.join(prompt_dir, "summary_prompt.txt")
         if not os.path.isfile(prompt_file):
@@ -475,3 +514,30 @@ class TestOpenCodeRunnerRunCorrection:
         assert result["success"] is True
         assert result["corrected_srt"] == ""
         assert result["report"] == ""
+
+    def test_run_correction_timeout_with_partial_files_returns_success(self, tmp_path, monkeypatch):
+        (tmp_path / "metadata").mkdir()
+        (tmp_path / "metadata" / "transcription.srt").write_text("1\n00:00:00,000 --> 00:00:05,000\nTest\n", encoding="utf-8")
+
+        def fake_run(self, instruction, prompt_file_arg, timeout=600):
+            (tmp_path / "metadata" / "transcription_corrigee.srt").write_text(
+                "1\n00:00:00,000 --> 00:00:05,000\nTest corrigé\n",
+                encoding="utf-8",
+            )
+            (tmp_path / "metadata" / "correction_report.md").write_text(
+                "# Rapport\nFichier écrit avant timeout\n",
+                encoding="utf-8",
+            )
+            return {"success": False, "error": "opencode timeout après 900s", "files": [], "events_count": 0, "tool_calls": 0}
+
+        monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
+
+        runner = _make_runner(tmp_path / "metadata")
+        result = runner.run_correction(
+            str(tmp_path / "metadata" / "transcription.srt"),
+            str(tmp_path / "context" / "job_context.yaml"),
+            str(tmp_path / "context" / "session_lexicon.json"),
+        )
+        assert result["success"] is True
+        assert "corrigé" in result["corrected_srt"]
+        assert "timeout" in result["warning"].lower()

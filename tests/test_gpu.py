@@ -66,10 +66,12 @@ class TestVRAMManagerInstantiation:
         mgr = VRAMManager(config=cfg)
         assert mgr.dashboard_url == "http://10.0.0.1:5001"
 
-    def test_constants(self):
-        assert VRAMManager.COHERE_VRAM_MB > 0
-        assert VRAMManager.PYANNOTE_VRAM_MB > 0
-        assert VRAMManager.MIN_FREE_MB > 0
+    def test_vram_defaults(self):
+        cfg = {}
+        mgr = VRAMManager(config=cfg)
+        assert mgr.cohere_vram_mb > 0
+        assert mgr.pyannote_vram_mb > 0
+        assert mgr.min_free_mb > 0
 
 
 class TestVRAMManagerTracking:
@@ -206,7 +208,7 @@ class TestVRAMManagerEnsureFree:
         monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
             {"id": 0, "memory": {"free": 20.0, "total": 24.0, "used": 4.0}},
         ])
-        result = mgr.ensure_free(VRAMManager.COHERE_VRAM_MB, preferred_gpu=0)
+        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
         assert result == 0
 
     def test_ensure_free_prefers_alternative_gpu(self, monkeypatch):
@@ -215,7 +217,7 @@ class TestVRAMManagerEnsureFree:
             {"id": 0, "memory": {"free": 0.5, "total": 24.0, "used": 23.5}},
             {"id": 1, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
         ])
-        result = mgr.ensure_free(VRAMManager.COHERE_VRAM_MB, preferred_gpu=0)
+        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
         assert result == 1
 
     def test_ensure_free_returns_none_when_no_gpu(self, monkeypatch):
@@ -237,7 +239,7 @@ class TestVRAMManagerEnsureFree:
         monkeypatch.setattr(VRAMManager, "get_gpu_info", fake_gpu_info)
         monkeypatch.setattr(VRAMManager, "_free_memory", lambda self, gpu_index: None)
         monkeypatch.setattr(time, "sleep", lambda s: None)
-        result = mgr.ensure_free(VRAMManager.COHERE_VRAM_MB, preferred_gpu=0)
+        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
         assert result is None
 
     def test_ensure_free_tries_free_memory_then_retry(self, monkeypatch):
@@ -259,7 +261,7 @@ class TestVRAMManagerEnsureFree:
         monkeypatch.setattr(VRAMManager, "get_gpu_info", fake_gpu_info)
         monkeypatch.setattr(VRAMManager, "_free_memory", lambda self, gpu_index: None)
         monkeypatch.setattr(time, "sleep", lambda s: None)
-        result = mgr.ensure_free(VRAMManager.COHERE_VRAM_MB, preferred_gpu=0)
+        result = mgr.ensure_free(mgr.cohere_vram_mb, preferred_gpu=0)
         assert result == 0
 
 

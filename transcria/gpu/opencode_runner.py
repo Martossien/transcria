@@ -2,12 +2,13 @@
 """Orchestrateur opencode pour le résumé et l'arbitrage de transcription.
 
 Utilise opencode (déjà configuré dans ~/.config/opencode/opencode.json)
-avec le provider 'local' (Qwen 35B Arbitrage, port 8080, 263K contexte).
+avec le provider configurable.
 """
 
 import json
 import logging
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -15,21 +16,60 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
-PROVIDER = "local"
-MODEL = "qwen3-35b-arbitrage"
 
-_PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "configs", "prompts")
+def _get_prompts_dir(config: dict | None = None) -> str:
+    if config:
+        custom = config.get("workflow", {}).get("prompts_dir")
+        if custom:
+            return custom
+    return os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "..", "configs", "prompts",
+    )
 
 
 class OpenCodeRunner:
     """Lance opencode pour exécuter des tâches LLM complexes (résumé, arbitrage)."""
 
-    def __init__(self, work_dir: str, model: str = None, provider: str = None, opencode_bin: str = None):
+    def __init__(
+        self,
+        work_dir: str,
+        model: str | None = None,
+        provider: str | None = None,
+        opencode_bin: str | None = None,
+        config: dict | None = None,
+    ):
         self.work_dir = Path(work_dir).resolve()
-        self.model = model or MODEL
-        self.provider = provider or PROVIDER
+        self._config = config
+
+        if config:
+            llm = config.get("workflow", {}).get("arbitration_llm", {})
+            self.model = model or llm.get("model_id", "local/qwen3-35b-arbitrage")
+            self.opencode_bin = opencode_bin or llm.get("opencode_bin") or _DEFAULT_OPENCODE_BIN
+        else:
+            self.model = model or "local/qwen3-35b-arbitrage"
+            self.opencode_bin = opencode_bin or _DEFAULT_OPENCODE_BIN
+
+        if "/" in self.model:
+            self.provider, self.model = self.model.split("/", 1)
+        else:
+            self.provider = provider or "local"
+
         self.model_ref = f"{self.provider}/{self.model}"
-        self.opencode_bin = opencode_bin or _DEFAULT_OPENCODE_BIN
+
+    def _get_correction_timeout(self) -> int:
+        llm = (self._config or {}).get("workflow", {}).get("arbitration_llm", {})
+        try:
+            return int(llm.get("timeout_seconds", 900))
+        except (TypeError, ValueError):
+            return 900
+
+    def _get_summary_timeout(self) -> int:
+        llm = (self._config or {}).get("workflow", {}).get("summary_llm", {})
+        try:
+            return int(llm.get("timeout_seconds", 600))
+        except (TypeError, ValueError):
+            return 600
 
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         import shutil
@@ -124,7 +164,7 @@ class OpenCodeRunner:
              "sujet_suggere": str, "objectif_suggere": str, "notes_suggeres": str,
              "participants_detectes": str, "mots_cles": str}
         """
-        prompt_file = os.path.join(_PROMPTS_DIR, "summary_prompt.txt")
+        prompt_file = os.path.join(_get_prompts_dir(self._config), "summary_prompt.txt")
         prompt_file = os.path.abspath(prompt_file)
 
         instruction = (
@@ -143,7 +183,11 @@ class OpenCodeRunner:
             "dans un fichier summary.md en suivant scrupuleusement le format du prompt système."
         )
 
-        result = self.run(instruction, prompt_file)
+        result = self.run(
+            instruction,
+            prompt_file,
+            timeout=self._get_summary_timeout(),
+        )
         summary_text = ""
         parsed = {}
 
@@ -238,7 +282,7 @@ class OpenCodeRunner:
         Returns:
             {"success": bool, "corrected_srt": str, "report": str, "error": str}
         """
-        prompt_file = os.path.join(_PROMPTS_DIR, "correction_prompt.txt")
+        prompt_file = os.path.join(_get_prompts_dir(self._config), "correction_prompt.txt")
         prompt_file = os.path.abspath(prompt_file)
 
         instruction = (
@@ -248,21 +292,35 @@ class OpenCodeRunner:
             f"puis écris transcription_corrigee.srt et correction_report.md dans ce répertoire."
         )
 
-        result = self.run(instruction, prompt_file, timeout=900)
+        timeout = self._get_correction_timeout()
+        result = self.run(instruction, prompt_file, timeout=timeout)
         corrected_srt = ""
         report = ""
 
-        if result["success"]:
-            corrected_file = self.work_dir / "transcription_corrigee.srt"
-            if corrected_file.is_file():
-                corrected_srt = corrected_file.read_text(encoding="utf-8").strip()
-            report_file = self.work_dir / "correction_report.md"
-            if report_file.is_file():
-                report = report_file.read_text(encoding="utf-8").strip()
+        corrected_file = self.work_dir / "transcription_corrigee.srt"
+        report_file = self.work_dir / "correction_report.md"
+        if corrected_file.is_file():
+            corrected_srt = corrected_file.read_text(encoding="utf-8").strip()
+        if report_file.is_file():
+            report = report_file.read_text(encoding="utf-8").strip()
+
+        # opencode peut écrire les artefacts puis rester bloqué avant de quitter.
+        # Dans ce cas, on préfère exploiter les sorties déjà produites.
+        if (
+            not result["success"]
+            and "timeout" in result.get("error", "").lower()
+            and corrected_srt
+        ):
+            result = {
+                **result,
+                "success": True,
+                "warning": result.get("error", ""),
+            }
 
         return {
             "success": result["success"],
             "corrected_srt": corrected_srt,
             "report": report,
             "error": result.get("error", ""),
+            "warning": result.get("warning", ""),
         }

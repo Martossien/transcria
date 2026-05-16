@@ -29,19 +29,6 @@ class JobState(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-WORKFLOW_STEPS = [
-    {"id": "file", "label": "Fichier", "order": 1, "states": [JobState.CREATED, JobState.UPLOADED]},
-    {"id": "analyze", "label": "Analyse", "order": 2, "states": [JobState.ANALYZED]},
-    {"id": "summary", "label": "Résumé", "order": 3, "states": [JobState.SUMMARY_RUNNING, JobState.SUMMARY_DONE]},
-    {"id": "context", "label": "Contexte", "order": 4, "states": [JobState.CONTEXT_DONE]},
-    {"id": "participants", "label": "Participants & Locuteurs", "order": 5, "states": [JobState.PARTICIPANTS_DONE, JobState.SPEAKER_DETECTION_RUNNING, JobState.SPEAKER_DETECTION_DONE]},
-    {"id": "lexicon", "label": "Lexique", "order": 6, "states": [JobState.LEXICON_DONE]},
-    {"id": "processing", "label": "Traitement", "order": 7, "states": [JobState.TRANSCRIBING, JobState.DIARIZING, JobState.ARBITRATING]},
-    {"id": "quality", "label": "Qualité", "order": 8, "states": [JobState.QUALITY_CHECKING, JobState.QUALITY_CHECKED]},
-    {"id": "export", "label": "Export", "order": 9, "states": [JobState.EXPORT_READY, JobState.COMPLETED]},
-]
-
-
 class Job(db.Model):
     __tablename__ = "jobs"
 
@@ -91,6 +78,8 @@ def get_state_order(state: JobState) -> int:
 
 
 def get_step_for_state(state: JobState | str) -> dict | None:
+    from transcria.workflow.steps import WORKFLOW_STEPS
+
     state_val = state.value if isinstance(state, JobState) else state
     for step in WORKFLOW_STEPS:
         for s in step["states"]:

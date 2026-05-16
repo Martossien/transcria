@@ -1,4 +1,4 @@
-# Guide d'installation et de configuration de TranscrIA MVP
+# Guide d'installation et de configuration de TranscrIA
 
 Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusqu'au premier transcodage.
 
@@ -42,7 +42,6 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | NVIDIA Driver | 535+ | `apt install nvidia-driver-535` |
 | ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` |
 | lsof | — | `apt install lsof` |
-| Conda / Mamba | Dernière version | Voir section suivante |
 
 ### Vérification GPU
 
@@ -126,6 +125,9 @@ pip install accelerate
 
 # Installer les dépendances de développement (tests)
 pip install -r requirements-dev.txt
+
+# Générer une première config préremplie
+python scripts/bootstrap_config.py --output config.yaml
 ```
 
 ### Contenu du venv — ce qui est installé
@@ -478,10 +480,11 @@ Si vous préférez vLLM au lieu de llama.cpp, utilisez `stop_qwen_vllm.sh` comme
 ### Fichier config.yaml
 
 ```bash
-cp config.example.yaml config.yaml
+python scripts/bootstrap_config.py --output config.yaml
 ```
 
-Éditer `config.yaml` pour votre environnement :
+Le bootstrap remplit automatiquement une partie de la configuration à partir des chemins et binaires détectés.
+Éditer ensuite `config.yaml` pour votre environnement :
 
 ```yaml
 server:
@@ -507,10 +510,19 @@ services:
   vllm_port: 8000
 
 models:
+  stt_backend: "cohere"                     # ou "whisper" pour utiliser Whisper (via faster-whisper)
   default_stt_model: "cohere-transcribe-03-2026"
-  fallback_stt_model: "large-v3"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
+  # Si stt_backend = "whisper", configurer le modèle :
+  # whisper:
+  #   model_size: "large-v3"           # tiny, small, medium, large-v3
+
+gpu:
+  cohere_vram_mb: 6000                     # VRAM réservée pour Cohere ASR
+  pyannote_vram_mb: 2000                   # VRAM réservée pour pyannote
+  llm_vram_mb: 60000                       # VRAM réservée pour le LLM
+  min_free_vram_mb: 4000                   # VRAM libre minimale à garder
 
 workflow:
   enable_quick_summary: true
@@ -521,17 +533,18 @@ workflow:
     enabled: true
     model_id: "local/qwen3-35b"
     api_base: "http://127.0.0.1:8080/v1"
-    timeout_seconds: 120
+    timeout_seconds: 1800
   arbitration_llm:
     enabled: false
     model_id: "local/qwen3-35b-arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
-    timeout_seconds: 600
+    timeout_seconds: 7200
     opencode_bin: "opencode"
 
 security:
   retention_days: 365
   allow_job_delete: true
+  max_upload_size_mb: 1024
   allowed_upload_extensions:
     - ".mp3"
     - ".wav"
@@ -657,7 +670,7 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 385 passed
+# Résultat attendu : 379 passed
 ```
 
 ### Lancer le test E2E complet (avec GPU)
@@ -735,24 +748,42 @@ export VENV=/chemin/absolu/vers/transcria/venv
 
 ## 10. Service systemd
 
-Le fichier `transcria-mvp.service` est fourni pour un lancement automatique.
+Le fichier `transcria.service` est fourni pour un lancement automatique.
 
 ```bash
-# Adapter les chemins dans transcria-mvp.service
-sudo sed -i "s|/opt/transcria-mvp|$(pwd)|g" transcria-mvp.service
-sudo sed -i "s|User=root|User=$USER|g" transcria-mvp.service
+# Adapter les chemins dans transcria.service
+sudo sed -i "s|/home/admin_ia/transcria|$(pwd)|g" transcria.service
+sudo sed -i "s|User=root|User=$USER|g" transcria.service
 
 # Installer le service
-sudo cp transcria-mvp.service /etc/systemd/system/
+sudo cp transcria.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable transcria-mvp
-sudo systemctl start transcria-mvp
+sudo systemctl enable transcria
+sudo systemctl start transcria
 
 # Vérifier
-sudo systemctl status transcria-mvp
+sudo systemctl status transcria
 
 # Logs
-sudo journalctl -u transcria-mvp -f
+sudo journalctl -u transcria -f
+```
+
+### Endpoints de supervision
+
+Le service expose trois endpoints publics utiles pour la supervision locale ou un reverse proxy :
+
+```text
+GET /health   -> JSON simple, 200 si l'application et SQLite répondent
+GET /ready    -> JSON simple, 200 si le worker interne est prêt
+GET /metrics  -> texte Prometheus, métriques de base du service et des jobs
+```
+
+Exemple :
+
+```bash
+curl http://127.0.0.1:7870/health
+curl http://127.0.0.1:7870/ready
+curl http://127.0.0.1:7870/metrics
 ```
 
 ### Variables d'environnement pour systemd
@@ -765,6 +796,43 @@ Environment=HOST=0.0.0.0
 Environment=DEBUG=false
 Environment=LOG_FILE=/var/log/transcrIA.log
 Environment=PID_FILE=/run/transcrIA.pid
+Environment=VENV=/chemin/absolu/vers/transcria/venv
+```
+
+### 🚨 Points critiques pour le service systemd
+
+Lorsque le service tourne sous un utilisateur différent de celui qui a installé les modèles (ex: `root`), les erreurs suivantes sont fréquentes :
+
+#### 1. Modèles IA introuvables
+
+L'application force `HF_HUB_OFFLINE=1`. Si le service tourne en `root` mais les modèles sont dans le cache de l'utilisateur, ajouter les variables d'environnement :
+
+```ini
+Environment=HF_HOME=/home/<votre_user>/.cache/huggingface
+Environment=TRANSFORMERS_CACHE=/home/<votre_user>/.cache/huggingface/hub
+```
+
+#### 2. Configuration opencode manquante pour le service
+
+L'orchestrateur LLM (`opencode`) cherche sa configuration dans `$HOME/.config/opencode/opencode.json`. Si le service tourne sous un autre utilisateur, copier la configuration :
+
+```bash
+sudo mkdir -p /root/.config/opencode
+sudo cp $HOME/.config/opencode/opencode.json /root/.config/opencode/opencode.json
+```
+
+#### 3. Permissions du venv et des répertoires
+
+```bash
+sudo chown -R $USER:$USER venv/ jobs/ instance/
+```
+
+#### 4. PID file accessible
+
+Si l'utilisateur du service n'a pas les droits d'écriture sur `/run/`, changer le `PID_FILE` :
+
+```ini
+Environment=PID_FILE=/tmp/transcrIA.pid
 ```
 
 ---
@@ -856,10 +924,46 @@ lsof -ti tcp:7870 -sTCP:LISTEN
 tail -f /var/log/transcrIA.log
 
 # Logs systemd
-sudo journalctl -u transcria-mvp -f
+sudo journalctl -u transcria -f
 
 # Statut en temps réel
 ./status.sh
+```
+
+### Le résumé LLM ne se génère pas (opencode exit 1)
+
+**Symptôme** : L'étape « Résumé de contrôle » affiche « Résumé de contrôle indisponible (LLM non configurée) » ou opencode s'exécute trop rapidement.
+
+**Causes probables** :
+1. **Config opencode manquante** pour l'utilisateur du service. Copier :
+   ```bash
+   sudo mkdir -p /root/.config/opencode
+   sudo cp $HOME/.config/opencode/opencode.json /root/.config/opencode/opencode.json
+   ```
+2. **Modèle Cohere introuvable** (cache HF inaccessible). Vérifier avec :
+   ```bash
+   sudo -u <user> HF_HOME=/home/<votre_user>/.cache/huggingface venv/bin/python -c "
+   from transcria.stt.cohere_transcriber import CohereTranscriber
+   t = CohereTranscriber()
+   print('Disponible:', t.available)
+   loaded = t.load()
+   print('Chargé:', loaded)
+   "
+   ```
+
+### Transcription vide ou « Cohere ASR non disponible »
+
+**Cause** : `HF_HUB_OFFLINE=1` est forcé et le modèle Cohere n'est pas dans le cache de l'utilisateur qui exécute le service.
+
+**Vérification** :
+```bash
+# Vérifier que le modèle est dans le cache
+ls ~/.cache/huggingface/hub/models--CohereLabs--cohere-transcribe*/snapshots/
+
+# Si le service tourne en root, vérifier le cache de root :
+sudo ls /root/.cache/huggingface/hub/
+
+# Solution : définir HF_HOME dans le service systemd (voir section 10)
 ```
 
 ### Réinitialiser la base de données
@@ -921,8 +1025,8 @@ import torch; print('CUDA:', torch.cuda.is_available(), torch.cuda.device_count(
 "
 
 # 5. Configurer
-cp config.example.yaml config.yaml
-# Éditer config.yaml (mot de passe admin, chemins des modèles, scripts LLM)
+python scripts/bootstrap_config.py --output config.yaml
+# Vérifier config.yaml (mot de passe admin, chemins des modèles, scripts LLM)
 
 # 6. Télécharger les modèles
 mkdir -p models/cohere-asr/cohere-transcribe-03-2026
@@ -933,7 +1037,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q          # 385 tests unitaires (mock, pas de GPU requis)
+python -m pytest tests/ -q          # 412 tests unitaires (mock, pas de GPU requis)
 python tests/test_e2e_workflow.py     # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

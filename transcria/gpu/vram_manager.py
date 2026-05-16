@@ -10,16 +10,16 @@ logger = logging.getLogger(__name__)
 class VRAMManager:
     """Cycle de vie GPU : libère, lance, utilise, arrête les modèles."""
 
-    COHERE_VRAM_MB = 6000
-    PYANNOTE_VRAM_MB = 2000
-    QWEN35_VRAM_MB = 60000
-    MIN_FREE_MB = 4000
-
     def __init__(self, config: dict, dashboard_url: str | None = None):
         self.config = config
         services = config.get("services", {})
+        gpu_cfg = config.get("gpu", {})
         self.qwen_port: int = services.get("qwen_port", 8080)
         self.vllm_port: int = services.get("vllm_port", 8000)
+        self.cohere_vram_mb: int = gpu_cfg.get("cohere_vram_mb", 6000)
+        self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
+        self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
+        self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
         self.arbitrage_script: str = os.environ.get(
             "TRANSCRIA_ARBITRAGE_SCRIPT",
             services.get("arbitrage_script", "./scripts/launch_arbitrage.sh"),
@@ -68,14 +68,14 @@ class VRAMManager:
         best_idx, best_free = None, 0
         for g in self.get_gpu_info():
             free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
-            if free_mb >= required_mb + self.MIN_FREE_MB and free_mb > best_free:
+            if free_mb >= required_mb + self.min_free_mb and free_mb > best_free:
                 best_free, best_idx = free_mb, g["id"]
         return best_idx
 
     def ensure_free(self, required_mb: int, preferred_gpu: int = 0) -> int | None:
         free = self.get_free_vram_mb(preferred_gpu)
         logger.info("VRAM GPU %d: %d Mo libre, besoin %d Mo", preferred_gpu, free, required_mb)
-        if free >= required_mb + self.MIN_FREE_MB:
+        if free >= required_mb + self.min_free_mb:
             return preferred_gpu
         best = self.get_best_gpu(required_mb)
         if best is not None:
@@ -88,7 +88,7 @@ class VRAMManager:
             pass
         time.sleep(1)
         free_after = self.get_free_vram_mb(preferred_gpu)
-        if free_after >= required_mb + self.MIN_FREE_MB:
+        if free_after >= required_mb + self.min_free_mb:
             return preferred_gpu
         return self.get_best_gpu(required_mb)
 

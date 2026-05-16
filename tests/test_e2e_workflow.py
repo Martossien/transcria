@@ -8,11 +8,16 @@ vérifie qu'une activité GPU a bien eu lieu.
 
 Utilisation :
     python tests/test_e2e_workflow.py [--keep] [--skip-llm] [--skip-diarization]
+                                      [--stt-backend cohere|whisper]
+                                      [--test-services] [--test-new-components]
 
 Options :
-    --keep              Ne pas supprimer le job à la fin
-    --skip-llm          Sauter les étapes LLM (Qwen résumé + correction)
-    --skip-diarization  Sauter la diarisation pyannote
+    --keep                  Ne pas supprimer le job à la fin
+    --skip-llm              Sauter les étapes LLM (Qwen résumé + correction)
+    --skip-diarization      Sauter la diarisation pyannote
+    --stt-backend BACKEND   Choix du moteur STT (cohere, whisper)
+    --test-services         Tester via le Service Layer (JobService, PipelineService)
+    --test-new-components   Tester GPUSession, TranscriberFactory, LLMBackend
 """
 
 import json
@@ -35,6 +40,14 @@ TEST_JOB_TITLE = "E2E GPU Checkpoint"
 KEEP_JOB = "--keep" in sys.argv
 SKIP_LLM = "--skip-llm" in sys.argv
 SKIP_DIAR = "--skip-diarization" in sys.argv
+TEST_SERVICES = "--test-services" in sys.argv
+TEST_NEW_COMPONENTS = "--test-new-components" in sys.argv
+STT_BACKEND = "cohere"
+for i, a in enumerate(sys.argv):
+    if a.startswith("--stt-backend="):
+        STT_BACKEND = a.split("=", 1)[1]
+    elif a == "--stt-backend" and i + 1 < len(sys.argv):
+        STT_BACKEND = sys.argv[i + 1]
 
 STEP = 0
 RESULTS = {}
@@ -236,6 +249,189 @@ def print_summary():
         print(f"\n  ❌ {fail_tests} test(s) échoué(s). Voir les détails ci-dessus.")
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  Tests des nouveaux composants (Phases 2-4)
+# ═══════════════════════════════════════════════════════════════════
+
+def _test_gpu_session(cfg):
+    step("Test GPUSession (context manager)")
+    timer_start("gpu_session")
+    try:
+        from transcria.gpu.vram_manager import VRAMManager
+        from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+
+        vram = VRAMManager(config=cfg)
+        gpu_before = gpu_checkpoint("AVANT GPUSession")
+        gpu_during = gpu_before
+        try:
+            with GPUSession(vram, "test-session", vram.cohere_vram_mb) as gs:
+                ok(f"GPUSession alloué: GPU {gs.gpu_index} ({vram.cohere_vram_mb} Mo)")
+                gpu_during = gpu_checkpoint("PENDANT GPUSession")
+                verify_gpu_activity(gpu_before, gpu_during, "GPUSession", expected_min_vram_mb=500)
+        except GPUSessionError as exc:
+            warn(f"GPUSession refusée (VRAM probablement insuffisante): {exc}")
+        gpu_after = gpu_checkpoint("APRÈS GPUSession (libéré)")
+        verify_gpu_activity(gpu_during, gpu_after, "GPUSession libération",
+                           expected_min_vram_mb=-10000)
+        RESULTS["gpu_session"] = True
+    except Exception as e:
+        fail("Échec GPUSession", str(e))
+        RESULTS["gpu_session"] = False
+        traceback.print_exc()
+    timer_end("gpu_session")
+
+
+def _test_llm_backend(cfg):
+    step("Test LLMBackend factory")
+    timer_start("llm_backend")
+    try:
+        from transcria.gpu.llm_backend import (
+            create_llm_backend, ScriptLLMBackend, OllamaLLMBackend, HTTPLLMBackend
+        )
+
+        backend = create_llm_backend(cfg)
+        ok(f"Backend LLM détecté: {backend.backend_type} "
+           f"(model={backend.model_id}, port={backend.port})")
+
+        services = cfg.get("services", {})
+        if services.get("ollama_url"):
+            b2 = create_llm_backend(cfg, backend_type="ollama")
+            ok(f"Ollama backend créé: {b2.backend_type}")
+            b2.is_available()
+            ok(f"Ollama available: {b2.is_available()}")
+
+        b3 = create_llm_backend(cfg, backend_type="http")
+        ok(f"HTTP backend créé: {b3.backend_type} (base_url={b3.base_url})")
+
+        RESULTS["llm_backend"] = True
+    except Exception as e:
+        fail("Échec LLMBackend", str(e))
+        RESULTS["llm_backend"] = False
+        traceback.print_exc()
+    timer_end("llm_backend")
+
+
+def _test_transcriber_factory(cfg, fs):
+    step("Test TranscriberFactory")
+    timer_start("transcriber_factory")
+    try:
+        from transcria.stt.transcriber_factory import (
+            create_transcriber, list_available_backends, get_backend_vram_mb
+        )
+
+        backends = list_available_backends()
+        ok(f"Backends STT disponibles: {backends}")
+
+        for b in backends:
+            vram = get_backend_vram_mb(b, cfg)
+            ok(f"  {b}: ~{vram} Mo VRAM")
+
+        transcriber = create_transcriber(cfg, backend=STT_BACKEND)
+        ok(f"Transcriber créé: {transcriber.model_name} (available={transcriber.available})")
+        ok(f"  VRAM: {transcriber.vram_mb} Mo, Langues: {len(transcriber.supported_languages)}")
+
+        if transcriber.available and STT_BACKEND == "whisper" and not SKIP_DIAR:
+            ok("Test chargement + transcription rapide whisper...")
+            loaded = transcriber.load()
+            if loaded:
+                audio_path = fs.job_dir / "input" / "original.mp3"
+                if audio_path.exists():
+                    segs = transcriber.transcribe(audio_path, language="fr")
+                    ok(f"  Segments: {len(segs)}")
+                    srt = transcriber.segments_to_srt(segs)
+                    ok(f"  SRT produit: {len(srt)} caractères")
+                transcriber.offload()
+
+        RESULTS["transcriber_factory"] = True
+    except Exception as e:
+        fail("Échec TranscriberFactory", str(e))
+        RESULTS["transcriber_factory"] = False
+        traceback.print_exc()
+    timer_end("transcriber_factory")
+
+
+def _test_summary_via_runner(job, audio_path, cfg):
+    step("Test Summary via WorkflowRunner (run_cohere_transcription)")
+    timer_start("runner_cohere")
+    try:
+        from transcria.workflow.runner import WorkflowRunner
+        from transcria.jobs.store import JobStore
+        from transcria.logging_setup import get_structured_logger
+
+        runner = WorkflowRunner(JobStore, cfg)
+        sl = get_structured_logger("e2e.test")
+        sl.set_context(job_id=job.id, step="runner_cohere")
+
+        gpu_before = gpu_checkpoint("AVANT runner cohere")
+        result = runner._run_cohere_transcription(job, audio_path, cfg, sl)
+        gpu_after = gpu_checkpoint("APRÈS runner cohere")
+        verify_gpu_activity(gpu_before, gpu_after, "Runner Cohere", expected_min_vram_mb=500)
+
+        ok(f"Transcription via runner: {result.get('segment_count', 0)} segments")
+        ok(f"Texte: {(result.get('transcript_text', '') or '')[:80]}...")
+
+        RESULTS["runner_cohere"] = True
+    except Exception as e:
+        fail("Échec runner cohere", str(e))
+        RESULTS["runner_cohere"] = False
+        traceback.print_exc()
+    timer_end("runner_cohere")
+
+
+def _test_job_service(cfg):
+    step("Test JobService (upload + analyze)")
+    timer_start("job_service")
+    try:
+        from transcria.services.job_service import JobService
+        from transcria.auth.store import UserStore
+
+        admin = UserStore.get_by_username("admin")
+        jr = JobService.create(admin.id, "E2E JobService Test")
+        job_id = jr["job_id"]
+        ok(f"JobService job créé: {job_id}")
+
+        upload_result = JobService.upload(
+            job_id, AUDIO_FILE.read_bytes(), AUDIO_FILE.name, cfg["storage"]["jobs_dir"]
+        )
+        ok(f"Upload via service: {upload_result.get('original_filename', '?')}")
+
+        analyze_result = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
+        ok(f"Analyze via service: {analyze_result.get('duration_seconds', 0):.1f}s")
+
+        JobService.delete(job_id, cfg["storage"]["jobs_dir"])
+        ok("JobService job supprimé")
+        RESULTS["job_service"] = True
+    except Exception as e:
+        fail("Échec JobService", str(e))
+        RESULTS["job_service"] = False
+        traceback.print_exc()
+    timer_end("job_service")
+
+
+def _test_pipeline_service(job, audio_path, cfg):
+    step("Test PipelineService")
+    timer_start("pipeline_service")
+    try:
+        from transcria.services.pipeline_service import PipelineService
+        from transcria.jobs.store import JobStore
+
+        pipeline = PipelineService(cfg)
+        ok("PipelineService initialisé")
+
+        steps = pipeline._define_pipeline_steps(job, audio_path, "fast")
+        ok(f"Étapes pipeline fast: {[s['name'] for s in steps]}")
+
+        quality_steps = pipeline._define_pipeline_steps(job, audio_path, "quality")
+        ok(f"Étapes pipeline quality: {[s['name'] for s in quality_steps]}")
+
+        RESULTS["pipeline_service"] = True
+    except Exception as e:
+        fail("Échec PipelineService", str(e))
+        RESULTS["pipeline_service"] = False
+        traceback.print_exc()
+    timer_end("pipeline_service")
+
+
 # ─── Main ─────────────────────────────────────────────────────
 
 def main():
@@ -261,6 +457,8 @@ def main():
     timer_start("init")
     try:
         cfg = load_config()
+        if STT_BACKEND != "cohere":
+            cfg.setdefault("models", {})["stt_backend"] = STT_BACKEND
         set_config(cfg)
         app = create_app()
         app.config.update({"TESTING": True})
@@ -289,7 +487,7 @@ def main():
         from transcria.audio.analyzer import AudioAnalyzer
         from transcria.audio.converter import AudioConverter
         from transcria.workflow.runner import WorkflowRunner
-        from transcria.stt.cohere_transcriber import CohereTranscriber
+        from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
         from transcria.stt.diarization import DiarizerService
         from transcria.gpu.vram_manager import VRAMManager
         from transcria.context.meeting_context import MeetingContextManager
@@ -354,35 +552,35 @@ def main():
             timer_end("convert")
 
         # ─────────────────────────────────────────────────────────────
-        #  4. COHERE ASR — GPU CHECKPOINT
+        #  4. TRANSCRIPTION STT — GPU CHECKPOINT
         # ─────────────────────────────────────────────────────────────
-        step("Transcription Cohere ASR")
-        timer_start("cohere_asr")
-        gpu_before_cohere = gpu_checkpoint("AVANT Cohere ASR")
+        step(f"Transcription STT ({STT_BACKEND})")
+        timer_start("stt_asr")
+        gpu_before_stt = gpu_checkpoint(f"AVANT {STT_BACKEND} ASR")
 
         try:
-            gpu = vram.ensure_free(VRAMManager.COHERE_VRAM_MB)
+            from transcria.stt.transcriber_factory import get_backend_vram_mb
+            vram_needed = get_backend_vram_mb(STT_BACKEND, cfg)
+
+            gpu = vram.ensure_free(vram_needed)
             if gpu is None:
-                fail("VRAM insuffisante pour Cohere ASR")
-                RESULTS["cohere_asr"] = False
+                fail(f"VRAM insuffisante pour {STT_BACKEND}")
+                RESULTS["stt_asr"] = False
             else:
-                ok(f"VRAM: GPU {gpu} alloué ({VRAMManager.COHERE_VRAM_MB} Mo requis)")
+                ok(f"VRAM: GPU {gpu} alloué ({vram_needed} Mo requis pour {STT_BACKEND})")
 
-                cohere = CohereTranscriber(
-                    model_path=cfg.get("models", {}).get("cohere_model_path"),
-                    device=f"cuda:{gpu}",
-                )
-                if not cohere.available:
-                    warn("Cohere non disponible, téléchargement...")
-                    loaded = cohere.load()
-                    ok(f"Cohere chargé : {loaded}")
+                transcriber = create_transcriber(cfg, backend=STT_BACKEND, device=f"cuda:{gpu}")
+                if not transcriber.available:
+                    warn(f"{STT_BACKEND} non disponible, chargement...")
+                    loaded = transcriber.load()
+                    ok(f"{STT_BACKEND} chargé : {loaded}")
 
-                print("    ⏳ Transcription en cours...")
-                segments = cohere.transcribe(audio_path, language="fr", chunk_length_s=30)
-                cohere.offload()
+                print(f"    ⏳ Transcription {STT_BACKEND} en cours...")
+                segments = transcriber.transcribe(audio_path, language="fr", chunk_length_s=30)
+                transcriber.offload()
 
-                gpu_after_cohere = gpu_checkpoint("APRÈS Cohere ASR (offload)")
-                verify_gpu_activity(gpu_before_cohere, gpu_after_cohere, "Cohere ASR", expected_min_vram_mb=500)
+                gpu_after_stt = gpu_checkpoint(f"APRÈS {STT_BACKEND} ASR (offload)")
+                verify_gpu_activity(gpu_before_stt, gpu_after_stt, f"{STT_BACKEND} ASR", expected_min_vram_mb=500)
 
                 transcript_text = "\n".join(
                     f"[{s.get('start', 0):.1f}s → {s.get('end', 0):.1f}s] {s.get('speaker', '')} {s.get('text', s.get('error', ''))}"
@@ -454,12 +652,12 @@ def main():
                     fs.save_text("summary/summary.md", summary_text)
 
                 JobStore.update_state(job.id, JS.SUMMARY_DONE)
-                RESULTS["cohere_asr"] = True
+                RESULTS["stt_asr"] = True
         except Exception as e:
             fail("Échec transcription", str(e))
-            RESULTS["cohere_asr"] = False
+            RESULTS["stt_asr"] = False
             traceback.print_exc()
-        timer_end("cohere_asr")
+        timer_end("stt_asr")
 
         # ─────────────────────────────────────────────────────────────
         #  5. PYANNOTE DIARIZATION — GPU CHECKPOINT
@@ -659,6 +857,17 @@ def main():
         gpu_final = gpu_checkpoint("État final GPU")
         RESULTS["verify"] = missing == 0
         timer_end("verify")
+
+        # ── TESTS NOUVEAUX COMPOSANTS ──
+        if TEST_NEW_COMPONENTS:
+            _test_gpu_session(cfg)
+            _test_llm_backend(cfg)
+            _test_transcriber_factory(cfg, fs)
+            _test_summary_via_runner(job, str(audio_path), cfg)
+
+        if TEST_SERVICES:
+            _test_job_service(cfg)
+            _test_pipeline_service(job, str(audio_path), cfg)
 
         # ── Résumé ──
         section("Détails du contenu du job")

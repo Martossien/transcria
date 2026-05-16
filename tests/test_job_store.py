@@ -91,6 +91,22 @@ class TestJobStore:
             assert updated.title == "New Title"
             assert updated.processing_mode == "quality"
 
+    def test_update_extra_data(self, app, owner_id):
+        with app.app_context():
+            from transcria.database import db
+
+            job = JobStore.create_job(owner_id, "Extra")
+            job.set_extra_data({"existing": True})
+            db.session.commit()
+
+            updated = JobStore.update_extra_data(
+                job.id,
+                lambda extra: {**extra, "execution": {"status": "queued"}},
+            )
+
+            assert updated.get_extra_data()["existing"] is True
+            assert updated.get_extra_data()["execution"]["status"] == "queued"
+
     def test_delete_job(self, app, owner_id):
         with app.app_context():
             job = JobStore.create_job(owner_id, "Delete Me")

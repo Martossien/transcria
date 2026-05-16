@@ -1,4 +1,4 @@
-# TranscrIA MVP — Modèle de données
+# TranscrIA — Modèle de données
 
 ## 1. Base de données (SQLAlchemy / SQLite)
 
@@ -133,9 +133,6 @@ Mode qualité (ajoute pyannote à l'étape Traitement) :
 ```
 TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 ```
-
-`ARBITRATING` existe encore dans `JobState` et dans le mapping de l'étape Traitement, mais `WorkflowRunner.run_correction()` ne met pas actuellement cet état avant d'appeler opencode.
-
 ### Transitions par route API
 
 | Route | État départ | État arrivée | Condition |
@@ -146,12 +143,17 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 | `POST /api/jobs/<id>/summary` | `ANALYZED` | `SUMMARY_DONE` | Cohere+pyannote+LLM OK |
 | `POST /api/jobs/<id>/context` | `SUMMARY_DONE` | `CONTEXT_DONE` | Formulaire validé |
 | `POST /api/jobs/<id>/participants` | `CONTEXT_DONE` | `PARTICIPANTS_DONE` | Liste validée |
-| `POST /api/jobs/<id>/lexicon` | `PARTICIPANTS_DONE` | `LEXICON_DONE` | Lexique validé |
+| `POST /api/jobs/<id>/lexicon` | `PARTICIPANTS_DONE` | `READY_TO_PROCESS` | Lexique validé sans mapping supplémentaire |
+| `POST /api/jobs/<id>/lexicon` | `CONTEXT_DONE` | `LEXICON_DONE` | Lexique validé avant participants |
+| `POST /api/jobs/<id>/lexicon` | `SPEAKER_DETECTION_DONE` | `READY_TO_PROCESS` | Lexique validé après détection locuteurs |
 | `POST /api/jobs/<id>/speakers/detect` | — | `SPEAKER_DETECTION_DONE` | Pyannote OK |
 | `POST /api/jobs/<id>/speakers/map` | `SPEAKER_DETECTION_DONE` | `READY_TO_PROCESS` | Mapping validé |
-| `POST /api/jobs/<id>/process` | `READY_TO_PROCESS` | `COMPLETED` | Tout le pipeline |
+| `POST /api/jobs/<id>/speakers/map` | `PARTICIPANTS_DONE` | `READY_TO_PROCESS` | Mapping validé après participants |
+| `POST /api/jobs/<id>/speakers/map` | `LEXICON_DONE` | `READY_TO_PROCESS` | Mapping validé après lexique |
+| `POST /api/jobs/<id>/process` | `READY_TO_PROCESS` et états de reprise autorisés | `READY_TO_PROCESS` | Mise en file du traitement par le worker interne |
+| `POST /api/jobs/<id>/process` | — | `CANCELLED` | Si `mode="cancel"` |
 
-**Attention :** `api_upload` vérifie désormais que le job est encore en état `created`. Les autres routes API de workflow ne valident pas toutes la transition d'état courante avant d'exécuter l'action.
+**Attention :** `api_process` ne bloque plus la requête jusqu’à `COMPLETED`. Le traitement est planifié puis exécuté en arrière-plan, avec progression visible via l’état du job et les endpoints de supervision.
 
 ### WORKFLOW_STEPS — 9 étapes affichées
 

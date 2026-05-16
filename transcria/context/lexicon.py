@@ -67,7 +67,8 @@ class LexiconManager:
 
     @staticmethod
     def load_global_lexicon(config: dict) -> list[str]:
-        path = Path("configs/lexique_metier.txt")
+        path_str = config.get("models", {}).get("global_lexicon_path", "configs/lexique_metier.txt")
+        path = Path(path_str)
         if not path.is_file():
             return []
         terms = []

@@ -6,6 +6,46 @@
   <a href="/" class="btn btn-outline-secondary">Retour</a>
 </div>
 
+{% if system_info and system_info.gpus %}
+<div class="card mb-3">
+  <div class="card-header">Environnement détecté</div>
+  <div class="card-body py-2 small">
+    <div class="row">
+      <div class="col-md-6">
+        <strong>GPUs :</strong> {{ system_info.gpu_count }} × {{ system_info.gpus[0].name or 'NVIDIA' }} ({{ system_info.total_vram_gb }} Go VRAM)
+        {% if system_info.cuda_version %}<br><strong>CUDA :</strong> {{ system_info.cuda_version }}{% endif %}
+        <br><strong>RAM :</strong> {{ system_info.ram_total_gb }} Go
+      </div>
+      <div class="col-md-6">
+        <strong>Binaires :</strong>
+        {% for b in system_info.binaries %}
+          <span class="badge bg-{{ 'success' if b.available else 'danger' }} me-1">{{ b.name }}</span>
+        {% endfor %}
+        <br><strong>Disque :</strong> {{ system_info.disk_free_gb }} Go libres sur {{ system_info.disk_path }}
+      </div>
+    </div>
+    {% if system_info.warnings %}
+    <div class="mt-2">
+      {% for w in system_info.warnings %}
+      <div class="alert alert-warning py-1 mb-1 small">{{ w }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if validation_errors %}
+<div class="alert alert-danger">
+  <strong>Erreurs de validation ({{ validation_errors|length }}) :</strong>
+  <ul class="mb-0 mt-1 small">
+    {% for err in validation_errors %}
+    <li>{{ err }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>config.yaml</span>

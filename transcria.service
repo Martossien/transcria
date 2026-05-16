@@ -1,0 +1,27 @@
+[Unit]
+Description=TranscrIA — Portail de transcription de réunion
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/run/transcrIA.pid
+User=root
+Environment=PORT=7870
+Environment=HOST=0.0.0.0
+Environment=DEBUG=false
+Environment=LOG_FILE=/var/log/transcrIA.log
+Environment=PID_FILE=/run/transcrIA.pid
+Environment=VENV=/home/admin_ia/transcria/venv
+Environment=HF_HOME=/home/admin_ia/.cache/huggingface
+Environment=TRANSFORMERS_CACHE=/home/admin_ia/.cache/huggingface/hub
+ExecStart=/home/admin_ia/transcria/start.sh
+ExecStop=/home/admin_ia/transcria/stop.sh
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

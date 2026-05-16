@@ -1,5 +1,7 @@
 import enum
 
+from transcria.workflow.steps import WORKFLOW_STEPS
+
 
 class StepStatus(str, enum.Enum):
     TODO = "todo"
@@ -11,35 +13,36 @@ class StepStatus(str, enum.Enum):
 
 
 class WorkflowState:
-    STEPS = [
-        {"id": "file", "label": "Fichier", "order": 1, "route": "upload"},
-        {"id": "analyze", "label": "Analyse", "order": 2, "route": "analyze"},
-        {"id": "summary", "label": "Résumé", "order": 3, "route": "summary"},
-        {"id": "context", "label": "Contexte", "order": 4, "route": "context"},
-        {"id": "participants", "label": "Participants & Locuteurs", "order": 5, "route": "participants"},
-        {"id": "lexicon", "label": "Lexique", "order": 6, "route": "lexicon"},
-        {"id": "processing", "label": "Traitement", "order": 7, "route": "processing"},
-        {"id": "quality", "label": "Qualité", "order": 8, "route": "quality"},
-        {"id": "export", "label": "Export", "order": 9, "route": "export"},
-    ]
+    STEPS = WORKFLOW_STEPS
 
     @classmethod
     def get_steps(cls) -> list[dict]:
         return [dict(s) for s in cls.STEPS]
 
     @classmethod
-    def compute_statuses(cls, job_state: str) -> dict[str, StepStatus]:
+    def compute_statuses(
+        cls, job_state: str, last_non_terminal_state: str | None = None
+    ) -> dict[str, StepStatus]:
         from transcria.jobs.models import JobState
 
-        state_order = list(JobState)
-        current_idx = -1
-        for i, s in enumerate(state_order):
-            if s.value == job_state:
-                current_idx = i
-                break
-
-        statuses: dict[str, StepStatus] = {s["id"]: StepStatus.TODO for s in cls.STEPS}
+        statuses: dict[str, StepStatus] = {
+            s["id"]: StepStatus.TODO for s in cls.STEPS
+        }
         raw = job_state
+
+        if raw == JobState.FAILED.value and last_non_terminal_state:
+            statuses = cls.compute_statuses(last_non_terminal_state)
+            for s_id, status in list(statuses.items()):
+                if status == StepStatus.IN_PROGRESS:
+                    statuses[s_id] = StepStatus.ERROR
+            return statuses
+
+        if raw == JobState.CANCELLED.value and last_non_terminal_state:
+            statuses = cls.compute_statuses(last_non_terminal_state)
+            for s_id, status in list(statuses.items()):
+                if status == StepStatus.IN_PROGRESS:
+                    statuses[s_id] = StepStatus.SKIPPED
+            return statuses
 
         if raw in (JobState.CREATED.value,):
             pass
@@ -91,25 +94,31 @@ class WorkflowState:
                 statuses[s] = StepStatus.DONE
             statuses["processing"] = StepStatus.IN_PROGRESS
         elif raw == JobState.QUALITY_CHECKING.value:
-            for s in ("file", "analyze", "summary", "context", "participants", "lexicon", "processing"):
+            for s in (
+                "file", "analyze", "summary", "context",
+                "participants", "lexicon", "processing",
+            ):
                 statuses[s] = StepStatus.DONE
             statuses["quality"] = StepStatus.IN_PROGRESS
         elif raw == JobState.QUALITY_CHECKED.value:
-            for s in ("file", "analyze", "summary", "context", "participants", "lexicon", "processing"):
+            for s in (
+                "file", "analyze", "summary", "context",
+                "participants", "lexicon", "processing",
+            ):
                 statuses[s] = StepStatus.DONE
             statuses["quality"] = StepStatus.DONE
             statuses["export"] = StepStatus.IN_PROGRESS
         elif raw in (JobState.EXPORT_READY.value, JobState.COMPLETED.value):
-            for s in ("file", "analyze", "summary", "context", "participants", "lexicon", "processing", "quality", "export"):
+            for s in (
+                "file", "analyze", "summary", "context",
+                "participants", "lexicon", "processing",
+                "quality", "export",
+            ):
                 statuses[s] = StepStatus.DONE
         elif raw == JobState.FAILED.value:
-            for s_id in statuses:
-                if statuses[s_id] == StepStatus.IN_PROGRESS:
-                    statuses[s_id] = StepStatus.ERROR
+            statuses["file"] = StepStatus.ERROR
         elif raw == JobState.CANCELLED.value:
-            for s_id in statuses:
-                if statuses[s_id] == StepStatus.IN_PROGRESS:
-                    statuses[s_id] = StepStatus.SKIPPED
+            statuses["file"] = StepStatus.SKIPPED
 
         return statuses
 

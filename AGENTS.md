@@ -1,6 +1,6 @@
 # AGENTS.md — Guide pour agents de codage
 
-> Ce fichier est le point d'entrée pour tout LLM de codage intervenant sur TranscrIA MVP.
+> Ce fichier est le point d'entrée pour tout LLM de codage intervenant sur TranscrIA.
 > Lis-le intégralement avant de modifier le code.
 
 ## Commandes essentielles
@@ -41,29 +41,32 @@ python -m pytest tests/test_auth.py -v
 ## Structure du projet
 
 ```
-transcria-mvp/
+transcria/
   app.py                    # create_app() + main()
   config.yaml               # Configuration production (pas dans git)
   config.example.yaml       # Template de configuration
   transcria/
-    config.py                # load_config / get_config / set_config (singleton)
+    config/                  # Package : loader.py, config_schema.py, system_detector.py
     database.py              # db = SQLAlchemy()
-    logging_setup.py         # RotatingFileHandler + stdout
+    logging_setup.py         # StructuredLogger (correlation_id, contexte, rotation)
     auth/                    # User, Role, Permission, UserStore, routes /login /admin/users
     jobs/                    # Job, JobState (20 états), JobStore, JobFilesystem
     workflow/                # WorkflowRunner, WorkflowState, WorkflowSteps
     audio/                   # AudioAnalyzer (ffprobe), AudioConverter (ffmpeg)
-    stt/                     # CohereTranscriber, Transcriber, DiarizerService, SpeakerDetector, SummaryGenerator
+    stt/                     # BaseTranscriber (ABC), CohereTranscriber, WhisperTranscriber
+    │                        # Transcriber, TranscriberFactory, DiarizerService, SpeakerDetector, SummaryGenerator
     context/                 # MeetingContextManager, ParticipantsManager, LexiconManager, JobContextBuilder
-    quality/                 # QualityReporter (9 checks, score /100)
+    quality/                 # QualityReporter (9 checks, score /100, seuils configurables)
     exports/                 # PackageBuilder (ZIP)
     integrations/            # DashboardClient, SrtEditorLink
-    gpu/                     # VRAMManager (cycle GPU), OpenCodeRunner (opencode CLI)
-    web/                     # routes.py (30+ endpoints) + templates/ + static/
+    gpu/                     # VRAMManager, GPUSession, OpenCodeRunner, LLMBackend (script/ollama/http)
+    services/                # JobService, PipelineService, ConfigService, JobExecutorService
+    web/                     # routes.py (30+ endpoints) + templates/ + static/js/
   jobs/                      # Données runtime (1 sous-répertoire par job)
-  configs/                   # prompts/ (summary, correction, arbitration, speaker_identification) + lexique_metier.txt
-  tests/                     # 17 fichiers pytest
-  docs/                      # TECHNICAL.md, BUGS.md, DATA_MODEL.md, CONFIG_REFERENCE.md
+  configs/                   # prompts/ (summary, correction) + lexique_metier.txt
+  scripts/                   # scripts shell + bootstrap_config.py
+  tests/                     # 20+ modules pytest
+  docs/                      # TECHNICAL.md, DATA_MODEL.md, CONFIG_REFERENCE.md, INSTALL.md
 ```
 
 ## Conventions de code
@@ -106,40 +109,27 @@ Le cycle est : Cohere→(offload)→pyannote→(offload+free GPUs)→Qwen→(off
 ### Workflow (9 étapes affichées)
 Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspond à un `JobState`. Voir `docs/DATA_MODEL.md` pour les transitions.
 
+### Modèle service/worker
+Le portail web ne doit plus exécuter les traitements longs directement dans la requête HTTP.
+`/api/jobs/<id>/process` planifie le traitement, puis `JobExecutorService` l'exécute en arrière-plan avec un worker sérialisé par défaut (`workflow.execution.max_concurrent_jobs=1`).
+La supervision du service passe par `/health`, `/ready` et `/metrics`.
+
 ### Stockage par job
 Chaque job a un répertoire `jobs/<job_id>/` avec 7 sous-répertoires. Voir `docs/DATA_MODEL.md` pour l'arborescence complète et les fichiers produits à chaque étape.
 
 ### Config singleton
-`get_config()` retourne un singleton chargé une fois. `set_config()` le met à jour en mémoire. Il n'y a PAS de `save_config()` pour écrire sur disque. Les modules qui appellent `get_config()` une seule fois au démarrage ne voient pas les mises à jour via `set_config()`.
+`get_config()` retourne un singleton chargé une fois. `set_config()` le met à jour en mémoire. `save_config()` écrit sur disque. Les modules qui appellent `get_config()` une seule fois au démarrage ne voient pas les mises à jour via `set_config()`.
 
 ## Pièges connus
-
-### BUG-001 : 8 routes API sans vérification d'accès propriétaire
-Les routes `api_analyze`, `api_summary`, `api_context`, `api_participants`, `api_lexicon`, `api_speakers_detect`, `api_speakers_map`, `api_process` n'appellent pas `_require_job_access()`. N'importe quel utilisateur authentifié accède aux jobs d'autrui.
-
-### BUG-002 : Route push-to-editor sans décorateur @web_bp.route
-`api_push_to_editor` (routes.py) n'a pas de `@web_bp.route(...)`. La route n'existe pas.
-
-### BUG-003 : Variable speakers_map non définie
-`Transcriber.transcribe()` ligne 36 référence `speakers_map` qui n'existe pas. Corriger en `speaker_mapping or {}`.
-
-### BUG-012 : Titre du job écrasé par le nom du fichier
-`api_upload` (routes.py:182) fait `job.title = file.filename`. Et `run_analyze` (runner.py:23) remplace par `result.get("format")`. Le titre utilisateur est perdu.
-
-### BUG-015 : Données de diarization non transmises au LLM de résumé
-Pyannote tourne avant le LLM dans `run_summary()`, mais ses résultats (nombre de locuteurs, temps de parole) ne sont pas inclus dans l'input du LLM. Voir `docs/BUGS.md` pour les détails complets.
-
-### _STEPS incohérent (10 vs 9)
-`workflow/steps.py` a `_STEPS` avec 10 entrées (speakers séparé), mais le workflow affiche 9 étapes (participants+speakers fusionnés). Les méthodes `get_step_index()` et `get_next_step_id()` utilisent les index de `_STEPS`.
 
 ### Cohere ne fait PAS de diarization
 Cohere V2 est un modèle ASR pur. `CohereTranscriber.transcribe()` retourne `{start, end, text}` — **pas de `speaker`**. Les labels de locuteurs viennent uniquement de pyannote via `_apply_speakers()`.
 
-### JobContextBuilder.build() appelé une seule fois
-`JobContextBuilder.build()` n'est appelé qu'à l'étape 4 (speakers/map). Le fichier `job_context.yaml` n'existe pas avant cette étape. Les étapes qui le référencent (résumé, arbitrage) ne le trouvent pas.
+### `job_context.yaml` n'est pas garanti avant toutes les phases LLM
+Le résumé LLM tente de lire `context/job_context.yaml`, mais ce fichier n'est construit qu'après certaines étapes de saisie (`lexicon`, `speakers/map`). Le code gère ce cas en tolérant un chemin absent, mais il ne faut pas supposer sa présence avant le mapping locuteurs ou le lexique.
 
-### tests/ ne couvre pas les routes web
-Les tests pytest couvrent les stores, la config, le contexte, la qualité, les exports, les edge cases. Les routes Flask sont testées via `test_web_api.py` mais les templates ne sont pas testés.
+### tests/ couvre bien le métier, moins les intégrations lourdes
+Les tests pytest couvrent les stores, la config, le contexte, la qualité, les exports, les routes Flask (`test_web_api.py`, `test_web_edge_cases.py`) et le workflow, y compris le worker interne et les transitions. En revanche, beaucoup de tests mockent encore les dépendances GPU/LLM, donc certains bugs d'intégration passent sous le radar.
 
 ## Règles absolues
 
@@ -149,13 +139,15 @@ Les tests pytest couvrent les stores, la config, le contexte, la qualité, les e
 4. **Ne pas** modifier `JobState` ou `WORKFLOW_STEPS` sans mettre à jour `WorkflowState.compute_statuses()`.
 5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`.
 6. **Toujours** préserver les champs LLM dans `MeetingContextManager.save()` (la liste `llm_fields`).
-7. **Ne pas** appeler `JobContextBuilder.build()` avant l'étape speakers/map (les fichiers participants/mapping n'existent pas).
+7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
+8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.
+9. **Toujours** passer par `workflow/transitions.py` pour la logique de lancement/annulation/reprise de traitement.
 
 ## Documentation complémentaire
 
 | Fichier | Contenu |
 |---|---|
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
-| `docs/BUGS.md` | 15 bugs documentés avec causes racines et corrections proposées |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
+| `docs/INSTALL.md` | Guide d'installation complet |

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# start.sh — Démarre le serveur TranscrIA MVP
+# start.sh — Démarre le serveur TranscrIA
 # Usage : ./start.sh [--port PORT] [--host HOST] [--debug]
 # Logs  : /var/log/transcrIA.log
 # PID   : /run/transcrIA.pid
@@ -53,7 +53,7 @@ fi
 
 # ── Démarrage ──────────────────────────────────────────────
 echo "================================================================"
-echo " TranscrIA MVP"
+echo " TranscrIA"
 echo " Port  : $PORT"
 echo " Host  : $HOST"
 echo " Debug : $DEBUG"

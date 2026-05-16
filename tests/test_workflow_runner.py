@@ -80,6 +80,131 @@ class TestWorkflowRunnerRunAnalyze:
                 runner.run_analyze(job, "/nonexistent/audio.mp3")
 
 
+class TestWorkflowRunnerRunCorrection:
+    def test_run_correction_passes_config_and_keeps_partial_timeout_output(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {"enabled": False},
+                    "arbitration_llm": {"timeout_seconds": 1234, "opencode_bin": "opencode"},
+                },
+            )
+            job = JobStore.create_job(owner_id, "Correction Partial Timeout")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")
+            fs.save_text("context/job_context.yaml", "meeting: {}\n")
+            fs.save_text("context/session_lexicon.json", "[]\n")
+
+            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+
+            captured = {}
+
+            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+                captured["config_timeout"] = self._get_correction_timeout()
+                return {
+                    "success": True,
+                    "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nBonjour corrigé\n",
+                    "report": "# Rapport\n",
+                    "warning": "opencode timeout après 1234s",
+                    "error": "",
+                }
+
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+
+            result = runner.run_correction(job, cfg)
+
+            assert result["success"] is True
+            assert captured["config_timeout"] == 1234
+            assert "corrigé" in fs.load_text("metadata/transcription_corrigee.srt")
+
+
+class TestWorkflowRunnerRunSummaryOpencodeConfig:
+    def test_run_summary_uses_summary_llm_model_id(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {
+                        "enabled": True,
+                        "model_id": "local/summary-model-test",
+                        "timeout_seconds": 4321,
+                    },
+                    "arbitration_llm": {
+                        "timeout_seconds": 1234,
+                        "opencode_bin": "opencode",
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Summary Model Config")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("summary/quick_transcript.txt", "Bonjour")
+
+            result = {"transcript_text": "Bonjour", "transcript_short": "Bonjour"}
+            captured = {}
+
+            def fake_run_summary(self, transcript_path, context_path=None, diarization_context_path=None):
+                captured["model_ref"] = self.model_ref
+                captured["summary_timeout"] = self._get_summary_timeout()
+                return {"summary_text": "Résumé", "title_suggere": "Titre"}
+
+            monkeypatch.setattr(OpenCodeRunner, "run_summary", fake_run_summary)
+
+            runner._run_llm_summary(job, result, cfg, type("SL", (), {"info": lambda *a, **k: None})())
+
+            assert captured["model_ref"] == "local/summary-model-test"
+            assert captured["summary_timeout"] == 4321
+
+
+class TestPipelineServiceStateRecovery:
+    def test_pipeline_marks_job_failed_when_step_returns_error(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Pipeline Failure State")
+            service = PipelineService(cfg)
+
+            monkeypatch.setattr(
+                service.runner,
+                "run_transcription",
+                lambda job_obj, audio_path, config: {"segments": []},
+            )
+            monkeypatch.setattr(
+                service.runner,
+                "run_correction",
+                lambda job_obj, config: {"error": "qwen down"},
+            )
+
+            result = service.run_process(job, "/tmp/fake.wav", "fast")
+            updated = JobStore.get_by_id(job.id)
+
+            assert result["error"] == "qwen down"
+            assert updated.state == JobState.FAILED.value
+
+
 class TestWorkflowRunnerRunSummary:
     def test_run_summary_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():

@@ -1,5 +1,6 @@
 import json
 import logging
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -7,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class AudioAnalyzer:
-    FFPROBE_BIN = "ffprobe"
+    FFPROBE_BIN = shutil.which("ffprobe") or "ffprobe"
 
     @classmethod
     def analyze(cls, file_path: Path | str) -> dict:

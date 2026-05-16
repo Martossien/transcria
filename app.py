@@ -1,19 +1,23 @@
 import os
 
+from dotenv import load_dotenv as _load_dotenv
+
+_load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from flask import Flask
 
-from transcria.config import get_config, set_config
+from transcria.config import get_config, load_config, set_config
 from transcria.database import db
-from transcria.logging_setup import setup_logging
+from transcria.logging_setup import inject_correlation_id, setup_logging
 
 _WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transcria", "web")
 
 
 def create_app(config_path: str | None = None) -> Flask:
-    cfg = get_config() if config_path is None else __import__("transcria.config").load_config(config_path)
+    cfg = get_config() if config_path is None else load_config(config_path)
     if config_path:
         set_config(cfg)
 
@@ -24,7 +28,7 @@ def create_app(config_path: str | None = None) -> Flask:
     app.secret_key = os.environ.get("TRANSCRIA_SECRET", os.urandom(32).hex())
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.get("storage", {}).get("database_url", "sqlite:///transcrIA.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = int(cfg.get("security", {}).get("max_upload_size_mb", 1024)) * 1024 * 1024
 
     db.init_app(app)
 
@@ -42,6 +46,7 @@ def create_app(config_path: str | None = None) -> Flask:
         return UserStore.get_by_id(user_id)
 
     from transcria.auth.routes import auth_bp, inject_user_context
+    from transcria.services.job_executor import init_job_executor
     from transcria.web.routes import web_bp
 
     app.register_blueprint(auth_bp)
@@ -53,9 +58,14 @@ def create_app(config_path: str | None = None) -> Flask:
 
     app.jinja_env.globals["Permission"] = transcria.auth.permissions.Permission
 
+    @app.before_request
+    def _assign_correlation_id() -> None:
+        inject_correlation_id()
+
     with app.app_context():
         db.create_all()
         UserStore.ensure_admin(cfg)
+        init_job_executor(app, cfg)
 
     return app
 
@@ -71,7 +81,7 @@ def resolve_debug_flag(cli_debug: bool | None, env_debug: str | None, config_deb
 def main() -> None:
     import argparse, os
 
-    parser = argparse.ArgumentParser(description="TranscrIA MVP — Portail de transcription")
+    parser = argparse.ArgumentParser(description="TranscrIA — Portail de transcription")
     parser.add_argument("--port", type=int, default=int(os.environ.get("TRANSCRIA_PORT", 0)))
     parser.add_argument("--host", type=str, default=os.environ.get("TRANSCRIA_HOST", ""))
     parser.add_argument("--debug", action="store_true", default=None)

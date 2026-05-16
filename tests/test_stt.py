@@ -107,10 +107,10 @@ class TestTranscriber:
             )
 
             transcriber = Transcriber(cfg, gpu_index=0)
-            transcriber.cohere.transcribe = lambda *args, **kwargs: [
+            transcriber.transcriber.transcribe = lambda *args, **kwargs: [
                 {"start": 0, "end": 2, "text": "Bonjour"}
             ]
-            transcriber.cohere.segments_to_srt = lambda segments, mapping=None: "1\n00:00:00,000 --> 00:00:02,000\nAlice: Bonjour\n"
+            transcriber.transcriber.segments_to_srt = lambda segments, mapping=None: "1\n00:00:00,000 --> 00:00:02,000\nAlice: Bonjour\n"
 
             result = transcriber.transcribe(job, Path("/tmp/fake.wav"))
 

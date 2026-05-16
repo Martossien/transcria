@@ -35,6 +35,10 @@ class JobStore:
         job = db.session.get(Job, job_id)
         if job is None:
             return None
+        if state in (JobState.FAILED, JobState.CANCELLED):
+            extra = job.get_extra_data()
+            extra["last_non_terminal_state"] = job.state
+            job.set_extra_data(extra)
         job.state = state.value
         if error_message is not None:
             job.error_message = error_message
@@ -49,6 +53,17 @@ class JobStore:
         for key, value in kwargs.items():
             if hasattr(job, key):
                 setattr(job, key, value)
+        db.session.commit()
+        return job
+
+    @staticmethod
+    def update_extra_data(job_id: str, updater) -> Job | None:
+        job = db.session.get(Job, job_id)
+        if job is None:
+            return None
+        extra = job.get_extra_data()
+        new_extra = updater(dict(extra))
+        job.set_extra_data(new_extra or {})
         db.session.commit()
         return job
 

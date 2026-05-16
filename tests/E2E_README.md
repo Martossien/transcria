@@ -20,7 +20,7 @@ Utiliser le **venv du projet** (pas le conda `transcript`, pas le Python systèm
 
 ```bash
 # Activer le venv
-source /home/admin_ia/transcria/venv/bin/activate
+source venv/bin/activate
 
 # Vérifier que tous les composants sont disponibles
 python -c "
@@ -50,7 +50,7 @@ Diarizer available: True
 Si le venv n'est pas encore configuré :
 
 ```bash
-cd /home/admin_ia/transcria
+cd /chemin/vers/transcria
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -73,7 +73,7 @@ Le test utilise `tests/test1.mp3` (291 Ko, 29.2s, voix française). Si absent, l
 ### Lancement complet
 
 ```bash
-cd /home/admin_ia/transcria
+cd /chemin/vers/transcria
 source venv/bin/activate
 python tests/test_e2e_workflow.py
 ```
@@ -197,7 +197,7 @@ python -c "from transcria.stt.diarization import DiarizerService; print(Diarizer
 
 Si `torchaudio.load()` échoue avec une erreur `torchcodec` :
 - Le module torchaudio fallback sur soundfile/librosa devrait fonctionner
-- Pour corriger complètement : installer ffmpeg dans le venv (`conda install -c conda-forge ffmpeg` ou `apt install ffmpeg`)
+- Pour corriger complètement : installer ffmpeg dans le venv (`apt install ffmpeg` ou `apt install ffmpeg`)
 
 ### « opencode introuvable »
 
@@ -216,12 +216,12 @@ nvidia-smi
 
 ## Tests unitaires
 
-Les tests unitaires (385 tests) s'exécutent avec pytest :
+Les tests unitaires (379 tests) s'exécutent avec pytest :
 
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 385 passed
+# Résultat attendu : 379 passed
 ```
 
 Ces tests mock les appels GPU et ne nécessitent pas de vrai matériel.

@@ -4,6 +4,7 @@ from transcria.workflow.states import WorkflowState, StepStatus
 from transcria.workflow.steps import WorkflowSteps
 from transcria.jobs.models import JobState
 from transcria.workflow.runner import WorkflowRunner
+from transcria.workflow.transitions import can_start_processing, next_preprocessing_state
 
 
 class TestWorkflowState:
@@ -61,6 +62,25 @@ class TestWorkflowState:
             st in (StepStatus.TODO, StepStatus.DONE) for st in statuses.values()
         )
 
+    def test_compute_statuses_failed_uses_last_state(self):
+        statuses = WorkflowState.compute_statuses("failed", "summary_running")
+        assert statuses["file"] == StepStatus.DONE
+        assert statuses["analyze"] == StepStatus.DONE
+        assert statuses["summary"] == StepStatus.ERROR
+
+    def test_compute_statuses_cancelled_uses_last_state(self):
+        statuses = WorkflowState.compute_statuses("cancelled", "quality_checking")
+        assert statuses["processing"] == StepStatus.DONE
+        assert statuses["quality"] == StepStatus.SKIPPED
+
+    def test_compute_statuses_failed_without_history_marks_first_step(self):
+        statuses = WorkflowState.compute_statuses("failed")
+        assert statuses["file"] == StepStatus.ERROR
+
+    def test_compute_statuses_cancelled_without_history_marks_first_step(self):
+        statuses = WorkflowState.compute_statuses("cancelled")
+        assert statuses["file"] == StepStatus.SKIPPED
+
     def test_get_next_step_created(self):
         statuses = WorkflowState.compute_statuses("created")
         next_s = WorkflowState.get_next_step(statuses)
@@ -84,7 +104,36 @@ class TestWorkflowState:
                 assert sid in valid_ids, f"Unknown step id {sid} for state {state.value}"
 
 
+class TestWorkflowTransitions:
+    def test_can_start_processing_accepts_retryable_states(self):
+        assert can_start_processing(JobState.READY_TO_PROCESS.value) is True
+        assert can_start_processing(JobState.TRANSCRIBING.value) is True
+        assert can_start_processing(JobState.CANCELLED.value) is True
+
+    def test_can_start_processing_rejects_preprocessing_states(self):
+        assert can_start_processing(JobState.UPLOADED.value) is False
+        assert can_start_processing(JobState.SUMMARY_DONE.value) is False
+
+    def test_next_preprocessing_state_moves_to_ready(self):
+        assert next_preprocessing_state(JobState.LEXICON_DONE.value) == JobState.READY_TO_PROCESS
+        assert next_preprocessing_state(JobState.PARTICIPANTS_DONE.value) == JobState.READY_TO_PROCESS
+
+    def test_next_preprocessing_state_none_for_irrelevant_state(self):
+        assert next_preprocessing_state(JobState.UPLOADED.value) is None
+
+
 class TestWorkflowRunner:
+    def test_job_store_persists_last_non_terminal_state_before_failure(self, app, owner_id):
+        with app.app_context():
+            from transcria.jobs.store import JobStore
+
+            job = JobStore.create_job(owner_id, "Failure State Memory")
+            JobStore.update_state(job.id, JobState.SUMMARY_RUNNING)
+            JobStore.update_state(job.id, JobState.FAILED, "boom")
+
+            updated = JobStore.get_by_id(job.id)
+            assert updated.get_extra_data().get("last_non_terminal_state") == JobState.SUMMARY_RUNNING.value
+
     def test_write_diarization_context_for_summary_llm(self, app, owner_id):
         with app.app_context():
             from transcria.config import get_config
@@ -158,6 +207,25 @@ class TestWorkflowRunner:
             assert result["error"] == "quality boom"
             assert updated.state == JobState.FAILED.value
             assert updated.error_message == "quality boom"
+
+    def test_job_context_builder_uses_summary_llm_when_available(self, app, owner_id):
+        with app.app_context():
+            from transcria.config import get_config
+            from transcria.context.job_context_builder import JobContextBuilder
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.jobs.store import JobStore
+
+            cfg = get_config()
+            job = JobStore.create_job(owner_id, "Summary Context")
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json(
+                "context/meeting_context.json",
+                {"title": "Titre", "summary_llm": "# Résumé\n\nContenu utile"},
+            )
+
+            context = JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
+
+            assert context["meeting"]["summary_control"] == "# Résumé\n\nContenu utile"
 
     def test_build_export_marks_failed_on_error_result(self, app, owner_id, monkeypatch):
         with app.app_context():

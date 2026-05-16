@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# status.sh — Affiche l'état du serveur TranscrIA MVP
+# status.sh — Affiche l'état du serveur TranscrIA
 # Usage : ./status.sh
 # ============================================================================
 
@@ -8,7 +8,7 @@ PID_FILE="${PID_FILE:-/run/transcrIA.pid}"
 PORT="${PORT:-7870}"
 HOST="${HOST:-127.0.0.1}"
 
-echo "=== TranscrIA MVP ==="
+echo "=== TranscrIA ==="
 
 # PID
 if [ -f "$PID_FILE" ]; then
