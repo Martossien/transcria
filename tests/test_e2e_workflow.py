@@ -8,10 +8,11 @@ vérifie qu'une activité GPU a bien eu lieu.
 
 Utilisation :
     python tests/test_e2e_workflow.py [--keep] [--skip-llm] [--skip-diarization]
-                                      [--stt-backend cohere|whisper]
+                                      [--audio FICHIER] [--stt-backend cohere|whisper]
                                       [--test-services] [--test-new-components]
 
 Options :
+    --audio FICHIER         Fichier audio à utiliser (défaut: tests/test1.mp3)
     --keep                  Ne pas supprimer le job à la fin
     --skip-llm              Sauter les étapes LLM (Qwen résumé + correction)
     --skip-diarization      Sauter la diarisation pyannote
@@ -48,6 +49,10 @@ for i, a in enumerate(sys.argv):
         STT_BACKEND = a.split("=", 1)[1]
     elif a == "--stt-backend" and i + 1 < len(sys.argv):
         STT_BACKEND = sys.argv[i + 1]
+    elif a.startswith("--audio="):
+        AUDIO_FILE = Path(a.split("=", 1)[1])
+    elif a == "--audio" and i + 1 < len(sys.argv):
+        AUDIO_FILE = Path(sys.argv[i + 1])
 
 STEP = 0
 RESULTS = {}
