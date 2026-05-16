@@ -38,6 +38,8 @@ class Transcriber:
 
         sl.info("DÉBUT transcription", backend=backend, gpu=self.gpu_index)
 
+        vad_enabled = self.config.get("workflow", {}).get("enable_vad", True)
+
         # Choisir le mode de chunking selon la disponibilité des exclusive_turns
         if speaker_turns and speaker_turns.get("exclusive_turns"):
             # Chunking par tours pyannote : charger l'audio une seule fois en mémoire,
@@ -46,6 +48,8 @@ class Transcriber:
             total_duration = len(audio) / sr
             chunks = self._build_chunks_from_turns(audio, total_duration, speaker_turns)
             if chunks:
+                if vad_enabled:
+                    chunks = self._apply_vad_filter(chunks, audio, sl)
                 sl.info("Mode transcription: tours pyannote (%d chunks)", len(chunks), backend=backend)
                 segments = self._transcribe_by_chunks(chunks, lang, speaker_mapping, sl)
                 chunking_mode = "pyannote_turns"
@@ -157,6 +161,44 @@ class Transcriber:
             "speaker": speaker,
             "audio": audio[int(start * _SR):int(end * _SR)],
         }
+
+    def _apply_vad_filter(
+        self, chunks: list[dict], audio: np.ndarray, sl
+    ) -> list[dict]:
+        """Filtre les chunks pyannote qui ne contiennent pas de parole selon Silero VAD.
+
+        Exécuté une seule fois sur l'audio complet (déjà chargé) — pas de surcoût I/O.
+        Si VAD indisponible ou aucune zone détectée, retourne les chunks inchangés.
+        """
+        from transcria.audio.vad import SileroVAD
+
+        vad = SileroVAD()
+        speech_zones = vad.get_speech_timestamps(audio, _SR)
+        if not speech_zones:
+            sl.info("VAD: indisponible ou aucune parole détectée — pas de filtrage")
+            return chunks
+
+        filtered, removed = [], 0
+        for chunk in chunks:
+            overlaps = any(
+                z["start"] < chunk["end"] and z["end"] > chunk["start"]
+                for z in speech_zones
+            )
+            if overlaps:
+                filtered.append(chunk)
+            else:
+                removed += 1
+                logger.debug(
+                    "VAD: chunk filtré [%.1fs-%.1fs] %s (aucune parole détectée)",
+                    chunk["start"], chunk["end"], chunk["speaker"],
+                )
+
+        if removed:
+            sl.info("VAD: %d chunks filtrés sur %d (bruit/silence)", removed, len(chunks))
+        else:
+            sl.info("VAD: tous les %d chunks contiennent de la parole", len(chunks))
+
+        return filtered or chunks  # sécurité : ne jamais retourner une liste vide
 
     def _transcribe_by_chunks(
         self,

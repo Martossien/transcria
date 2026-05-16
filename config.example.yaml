@@ -38,6 +38,7 @@ workflow:
   enable_speaker_detection: true
   enable_quality_mode: true
   enable_external_srt_editor_link: true
+  enable_vad: true
   execution:
     max_concurrent_jobs: 1
   summary_llm:
