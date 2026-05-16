@@ -118,7 +118,7 @@ class DiarizerService:
             return result
 
     def _extract_clips(self, audio_path: Path, turns: list, speakers: list, fs: JobFilesystem,
-                       num_clips: int = 3, min_duration: float = 3.0, max_duration: float = 12.0) -> None:
+                       num_clips: int = 3, min_duration: float = 1.5, max_duration: float = 12.0) -> None:
         """Extrait des extraits audio WAV pour chaque locuteur."""
         try:
             import torchaudio
