@@ -66,7 +66,16 @@ class PipelineService:
             result = method()
             elapsed = time.monotonic() - t0
 
-            if result.get("error"):
+            # Une étape échoue si "success" est explicitement False,
+            # ou si "error" est non-vide sans "success" dans le résultat.
+            # Ne pas échouer si success=True même avec un champ "error" résiduel
+            # (cas : opencode timeout récupéré avec les fichiers déjà produits).
+            step_failed = (
+                result.get("success") is False
+                if "success" in result
+                else bool(result.get("error"))
+            )
+            if step_failed:
                 sl.error("Étape échouée", step=step_cfg["name"],
                          error=result.get("error"),
                          duree=round(elapsed, 1))

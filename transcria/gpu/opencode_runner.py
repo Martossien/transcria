@@ -306,6 +306,7 @@ class OpenCodeRunner:
 
         # opencode peut écrire les artefacts puis rester bloqué avant de quitter.
         # Dans ce cas, on préfère exploiter les sorties déjà produites.
+        # On efface "error" pour que pipeline_service ne déclenche pas un FAILED.
         if (
             not result["success"]
             and "timeout" in result.get("error", "").lower()
@@ -315,6 +316,7 @@ class OpenCodeRunner:
                 **result,
                 "success": True,
                 "warning": result.get("error", ""),
+                "error": "",
             }
 
         return {
