@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
+import signal as _sig
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -102,6 +105,46 @@ _executor_service: JobExecutorService | None = None
 _executor_lock = threading.Lock()
 
 
+def _kill_orphaned_opencode(job_id: str, jobs_dir: str, sl) -> None:
+    """Tue les processus opencode orphelins de TranscrIA identifiés par .opencode.pid.
+
+    Seuls les processus dont le PID est dans un .opencode.pid du répertoire du job
+    sont ciblés — jamais les opencode lancés par d'autres applications sur la machine.
+    """
+    job_path = Path(jobs_dir) / job_id
+    if not job_path.is_dir():
+        return
+    for pid_file in job_path.rglob(".opencode.pid"):
+        try:
+            pid = int(pid_file.read_text().strip())
+        except (ValueError, OSError):
+            pid_file.unlink(missing_ok=True)
+            continue
+        if pid <= 1:
+            pid_file.unlink(missing_ok=True)
+            continue
+        try:
+            os.kill(pid, _sig.SIGTERM)
+            sl.warning(
+                "Réconciliation: SIGTERM opencode orphelin PID=%d (job %s)", pid, job_id
+            )
+            time.sleep(2)
+            try:
+                os.kill(pid, 0)  # Encore vivant ?
+                os.kill(pid, _sig.SIGKILL)
+                sl.warning(
+                    "Réconciliation: SIGKILL opencode orphelin PID=%d (job %s)", pid, job_id
+                )
+            except ProcessLookupError:
+                pass
+        except ProcessLookupError:
+            pass  # Déjà terminé
+        except PermissionError:
+            sl.warning("Réconciliation: permission refusée pour tuer PID=%d (job %s)", pid, job_id)
+        finally:
+            pid_file.unlink(missing_ok=True)
+
+
 def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
     """Au démarrage, récupère les jobs bloqués en 'running' suite à un redémarrage.
 
@@ -127,6 +170,9 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
                 fs = JobFilesystem(jobs_dir, job.id)
                 corrected = fs.job_dir / "metadata" / "transcription_corrigee.srt"
                 transcribed = fs.job_dir / "metadata" / "transcription.srt"
+
+                # Tuer tout opencode zombie appartenant à ce job (et uniquement lui)
+                _kill_orphaned_opencode(job.id, jobs_dir, sl)
 
                 if corrected.is_file() and corrected.stat().st_size > 0:
                     mark_execution_completed(job.id)

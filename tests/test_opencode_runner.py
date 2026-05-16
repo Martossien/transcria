@@ -13,13 +13,34 @@ def _make_runner(tmp_path, **kwargs):
     return OpenCodeRunner(str(tmp_path), **kwargs)
 
 
-def _fake_subprocess_run(stdout="", stderr="", returncode=0, side_effect=None):
-    """Return a function that simulates subprocess.run."""
-    def fake_run(cmd, **kw):
-        if side_effect:
-            raise side_effect
-        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
-    return fake_run
+class _FakePopen:
+    """Simule subprocess.Popen pour les tests de OpenCodeRunner."""
+    def __init__(self, stdout="", stderr="", returncode=0, communicate_exc=None):
+        self.pid = 99999
+        self._stdout = stdout
+        self._stderr = stderr
+        self.returncode = returncode
+        self._communicate_exc = communicate_exc
+
+    def communicate(self, timeout=None):
+        if self._communicate_exc is not None:
+            raise self._communicate_exc
+        return self._stdout, self._stderr
+
+    def send_signal(self, sig):
+        pass
+
+    def wait(self, timeout=None):
+        pass
+
+
+def _fake_popen(stdout="", stderr="", returncode=0, communicate_exc=None, popen_exc=None):
+    """Retourne une factory Popen simulée."""
+    def factory(cmd, **kw):
+        if popen_exc is not None:
+            raise popen_exc
+        return _FakePopen(stdout, stderr, returncode, communicate_exc)
+    return factory
 
 
 class TestOpenCodeRunnerInit:
@@ -79,8 +100,8 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(side_effect=subprocess.TimeoutExpired(cmd=[], timeout=600)))
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
 
         runner = _make_runner(tmp_path)
         result = runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
@@ -92,8 +113,8 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(side_effect=OSError("fork failed")))
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(popen_exc=OSError("fork failed")))
 
         runner = _make_runner(tmp_path)
         result = runner.run("test instruction", "/tmp/prompt.txt")
@@ -105,8 +126,8 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(stdout="", stderr="Error: model not found", returncode=1))
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(stdout="", stderr="Error: model not found", returncode=1))
 
         runner = _make_runner(tmp_path)
         result = runner.run("test instruction", "/tmp/prompt.txt")
@@ -127,8 +148,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
         monkeypatch.setattr(time, "time", lambda: 1000000)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(stdout=stdout, stderr="", returncode=0))
+        monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout=stdout, returncode=0))
 
         runner = _make_runner(tmp_path)
         result = runner.run("Fais un résumé", "/tmp/prompt.txt")
@@ -152,8 +172,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
         monkeypatch.setattr(time, "time", lambda: 1000000)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(stdout=stdout, stderr="", returncode=0))
+        monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout=stdout, returncode=0))
 
         runner = _make_runner(tmp_path)
         result = runner.run("Test", "/tmp/prompt.txt")
@@ -168,8 +187,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
         monkeypatch.setattr(time, "time", lambda: 1000000)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(stdout="", stderr="", returncode=0))
+        monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout="", returncode=0))
 
         runner = _make_runner(tmp_path)
         result = runner.run("Test", "/tmp/prompt.txt")
@@ -181,18 +199,17 @@ class TestOpenCodeRunnerRun:
     def test_run_with_absolute_path_opencode_bin(self, tmp_path, monkeypatch):
         import shutil
         opencode_bin = str(tmp_path / "custom_opencode")
-
         captured_cmd = {}
 
-        def fake_run(cmd, **kw):
+        def capturing_popen(cmd, **kw):
             captured_cmd["cmd"] = cmd
-            return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
+            return _FakePopen(stdout="{}", returncode=0)
 
         monkeypatch.setattr(shutil, "which", lambda name: None)
         (tmp_path / "custom_opencode").write_text("#!/bin/bash\n")
         monkeypatch.setattr(os.path, "isfile", lambda p: p == str(tmp_path / "custom_opencode") or p.endswith(".txt"))
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
-        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(subprocess, "Popen", capturing_popen)
 
         runner = _make_runner(tmp_path, opencode_bin=opencode_bin)
         result = runner.run("Test", "/tmp/prompt.txt")
@@ -206,8 +223,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
         monkeypatch.setattr(time, "time", lambda: 1000000)
-        monkeypatch.setattr(subprocess, "run",
-            _fake_subprocess_run(stdout="{}", stderr="", returncode=0))
+        monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout="{}", returncode=0))
 
         runner = OpenCodeRunner(str(work_dir))
         result = runner.run("Test", "/tmp/prompt.txt")

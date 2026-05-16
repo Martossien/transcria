@@ -71,9 +71,23 @@ class OpenCodeRunner:
         except (TypeError, ValueError):
             return 600
 
-    def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
-        import shutil
+    def _terminate_proc(self, proc: subprocess.Popen) -> None:
+        """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire."""
+        import signal as _sig
+        try:
+            proc.send_signal(_sig.SIGTERM)
+        except ProcessLookupError:
+            return
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                proc.send_signal(_sig.SIGKILL)
+                proc.wait(timeout=5)
+            except (ProcessLookupError, subprocess.TimeoutExpired):
+                pass
 
+    def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         opencode_path = shutil.which(self.opencode_bin)
         if not opencode_path and not os.path.isfile(self.opencode_bin):
             return {"success": False, "error": f"opencode introuvable: {self.opencode_bin}"}
@@ -96,22 +110,41 @@ class OpenCodeRunner:
         logger.info("opencode run --model %s (cwd=%s)", self.model_ref, self.work_dir)
         logger.debug("CMD: %s", " ".join(cmd))
 
+        pid_file = self.work_dir / ".opencode.pid"
+        proc = None
+        stdout, stderr = "", ""
+
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True, text=True,
-                timeout=timeout,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
                 cwd=str(self.work_dir),
             )
-        except subprocess.TimeoutExpired:
-            return {"success": False, "error": f"opencode timeout après {timeout}s"}
+            pid_file.write_text(str(proc.pid))
+            logger.info("opencode démarré PID=%d (job_dir=%s)", proc.pid, self.work_dir.name)
+
+            try:
+                stdout, stderr = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                logger.warning(
+                    "opencode timeout après %ds — arrêt forcé PID=%d", timeout, proc.pid
+                )
+                self._terminate_proc(proc)
+                return {"success": False, "error": f"opencode timeout après {timeout}s"}
+
         except Exception as exc:
+            if proc is not None:
+                self._terminate_proc(proc)
             return {"success": False, "error": f"Échec lancement opencode: {exc}"}
+        finally:
+            pid_file.unlink(missing_ok=True)
 
         total_text, total_tools = 0, 0
         events: list[dict] = []
 
-        for line in proc.stdout.strip().split("\n"):
+        for line in stdout.strip().split("\n"):
             line = line.strip()
             if not line:
                 continue
@@ -132,7 +165,7 @@ class OpenCodeRunner:
                      proc.returncode, total_text, total_tools, len(events))
 
         if proc.returncode != 0:
-            err = proc.stderr[:500] if proc.stderr else ""
+            err = stderr[:500] if stderr else ""
             return {"success": False, "error": f"opencode exit {proc.returncode}: {err}"}
 
         # Extraire le texte produit
