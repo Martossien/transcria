@@ -186,10 +186,57 @@ class WorkflowRunner:
         sl.info("Résumé LLM généré", chars=len(summary_text))
 
     @staticmethod
+    def _truncate_at_word(text: str, max_chars: int = 120) -> str:
+        """Coupe à max_chars caractères en respectant la frontière de mot la plus proche."""
+        if len(text) <= max_chars:
+            return text
+        cut = text[:max_chars].rsplit(" ", 1)
+        return (cut[0] if len(cut) > 1 else text[:max_chars]) + "…"
+
+    @staticmethod
+    def _extract_speaker_phrases(fs, speakers_result: dict, n: int = 3) -> dict[str, list[str]]:
+        """Pour chaque locuteur, extrait les n plus longs tours et retourne les phrases ASR correspondantes."""
+        turns_data = speakers_result.get("turns") or []
+        segments_data = (fs.load_json("summary/summary.json") or {}).get("segments") or []
+        if not turns_data or not segments_data:
+            return {}
+
+        # Regrouper les tours par locuteur, trier par durée décroissante
+        from collections import defaultdict
+        by_speaker: dict = defaultdict(list)
+        for t in turns_data:
+            by_speaker[t["speaker"]].append(t)
+
+        phrases: dict[str, list[str]] = {}
+        for speaker, spk_turns in by_speaker.items():
+            top_turns = sorted(spk_turns, key=lambda t: t["duration"], reverse=True)[:n]
+            spk_phrases = []
+            for turn in top_turns:
+                t_start, t_end = turn["start"], turn["end"]
+                # Trouver les segments ASR qui chevauchent ce tour
+                overlapping = [
+                    seg["text"].strip()
+                    for seg in segments_data
+                    if seg.get("text") and
+                    seg.get("start", 0) < t_end and
+                    seg.get("end", 0) > t_start
+                ]
+                if overlapping:
+                    raw = " ".join(overlapping)
+                    phrase = WorkflowRunner._truncate_at_word(raw, 120)
+                    spk_phrases.append(phrase)
+            if spk_phrases:
+                phrases[speaker] = spk_phrases
+
+        return phrases
+
+    @staticmethod
     def _write_diarization_context(fs, speakers_result: dict) -> str | None:
         speakers = speakers_result.get("speakers") or []
         if not speakers:
             return None
+
+        phrases = WorkflowRunner._extract_speaker_phrases(fs, speakers_result)
 
         total_time = sum(float(spk.get("speaking_time_seconds", 0) or 0) for spk in speakers)
         lines = [
@@ -204,11 +251,16 @@ class WorkflowRunner:
             speaking_time = float(spk.get("speaking_time_seconds", 0) or 0)
             turns = int(spk.get("turn_count", 0) or 0)
             pct = round(100 * speaking_time / total_time, 1) if total_time > 0 else 0
+            speaker_id = spk.get("speaker_id", spk.get("label", "SPEAKER_XX"))
             lines.append(
-                f"| {spk.get('speaker_id', spk.get('label', 'SPEAKER_XX'))} "
+                f"| {speaker_id} "
                 f"| {speaking_time:.1f}s ({speaking_time / 60:.1f}min) "
                 f"| {turns} | {pct}% |"
             )
+            # Ajouter les phrases exemples sous la ligne du tableau
+            for phrase in phrases.get(speaker_id, []):
+                lines.append(f'|   → *"{phrase}"* | | | |')
+
         lines.extend(
             [
                 "",
