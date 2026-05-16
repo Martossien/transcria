@@ -545,6 +545,61 @@ def api_job_status(job_id: str):
     })
 
 
+_REPROCESSABLE_STATES = {
+    JobState.COMPLETED.value,
+    JobState.QUALITY_CHECKED.value,
+    JobState.EXPORT_READY.value,
+    JobState.FAILED.value,
+    JobState.CANCELLED.value,
+}
+
+
+@web_bp.route("/api/jobs/<job_id>/reprocess", methods=["POST"])
+@login_required
+def api_reprocess(job_id: str):
+    """Relance le traitement d'un job déjà terminé (lexique modifié, prompt mis à jour…)."""
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    if job.state not in _REPROCESSABLE_STATES:
+        return jsonify({
+            "error": "Le job ne peut pas être relancé dans son état actuel",
+            "current_state": job.state,
+        }), 409
+
+    if is_execution_active(job):
+        return jsonify({"error": "Un traitement est déjà en cours"}), 409
+
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    audio_path = fs.get_original_audio_path()
+    if audio_path is None:
+        return jsonify({"error": "Fichier audio introuvable"}), 400
+
+    mode = (request.get_json(silent=True) or {}).get("mode", "fast")
+    if mode not in ("fast", "quality"):
+        return jsonify({"error": f"Mode invalide: {mode}"}), 400
+
+    JobStore.update(job.id, processing_mode=mode)
+    JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
+
+    executor = get_job_executor()
+    if executor is None:
+        return jsonify({"error": "Worker de traitement indisponible"}), 503
+
+    result = executor.submit_process(job.id, str(audio_path), mode)
+    if not result.get("accepted"):
+        return jsonify({"error": "Un traitement est déjà en cours"}), 409
+
+    return jsonify({
+        "status": "queued",
+        "job_id": job.id,
+        "mode": mode,
+        "reprocess": True,
+    }), 202
+
+
 @web_bp.route("/api/jobs/<job_id>/quality", methods=["POST"])
 @login_required
 def api_quality(job_id: str):

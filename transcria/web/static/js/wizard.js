@@ -308,29 +308,21 @@ var TranscrIA = window.TranscrIA || {};
         'cancelled':        'Traitement annulé.',
     };
     var _TERMINAL_STATES = ['completed', 'export_ready', 'failed', 'cancelled'];
+    var _REPROCESSABLE_STATES = ['completed', 'quality_checked', 'export_ready', 'failed', 'cancelled'];
 
-    W.startProcessing = function (mode) {
-        console.log('[TranscrIA] startProcessing(' + mode + ')');
-        var div = document.getElementById('processing-result');
-        var startTime = Date.now();
-
+    function _buildProcessingPoller(div, startTime) {
         function elapsed() {
             var s = Math.floor((Date.now() - startTime) / 1000);
             return s < 60 ? s + 's' : Math.floor(s / 60) + 'min ' + (s % 60) + 's';
         }
-
         function setInfo(msg) {
             div.innerHTML = '<div class="alert alert-info d-flex align-items-center gap-2">' +
                 '<span class="spinner-border spinner-border-sm" role="status"></span>' +
                 '<span>' + msg + '</span></div>';
         }
-
-        function pollStatus() {
+        function poll() {
             W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
-                if (!r || r.data.error) {
-                    setTimeout(pollStatus, 4000);
-                    return;
-                }
+                if (!r || r.data.error) { setTimeout(poll, 4000); return; }
                 var state = r.data.state;
                 var label = _STATE_LABELS[state] || state;
                 if (_TERMINAL_STATES.indexOf(state) !== -1) {
@@ -344,18 +336,53 @@ var TranscrIA = window.TranscrIA || {};
                     }
                 } else {
                     setInfo(label + ' (' + elapsed() + ' écoulées)');
-                    setTimeout(pollStatus, 4000);
+                    setTimeout(poll, 4000);
                 }
             });
         }
+        return { setInfo: setInfo, poll: poll };
+    }
 
-        setInfo('Soumission du traitement…');
+    W.startProcessing = function (mode) {
+        console.log('[TranscrIA] startProcessing(' + mode + ')');
+        var div = document.getElementById('processing-result');
+        var startTime = Date.now();
+        var poller = _buildProcessingPoller(div, startTime);
+
+        poller.setInfo('Soumission du traitement…');
         W.api('/api/jobs/' + JOB_ID + '/process', 'POST', { mode: mode }).then(function (r) {
+            if (r.status === 409 && _REPROCESSABLE_STATES.indexOf(r.data.current_state) !== -1) {
+                // Job déjà terminé — proposer de relancer
+                div.innerHTML =
+                    '<div class="alert alert-warning">' +
+                    '<strong>Ce job a déjà été traité.</strong> ' +
+                    'Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)' +
+                    '<div class="mt-2 d-flex gap-2">' +
+                    '<button class="btn btn-sm btn-primary" onclick="TranscrIA.confirmReprocess(\'' + mode + '\')">Oui, relancer</button>' +
+                    '<button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'processing-result\').innerHTML=\'\'">Annuler</button>' +
+                    '</div></div>';
+            } else if (r.data.error) {
+                div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
+            } else {
+                poller.setInfo('Traitement démarré. Transcription ASR en cours… (0s écoulées)');
+                setTimeout(poller.poll, 4000);
+            }
+        });
+    };
+
+    W.confirmReprocess = function (mode) {
+        console.log('[TranscrIA] confirmReprocess(' + mode + ')');
+        var div = document.getElementById('processing-result');
+        var startTime = Date.now();
+        var poller = _buildProcessingPoller(div, startTime);
+
+        poller.setInfo('Relancement du traitement…');
+        W.api('/api/jobs/' + JOB_ID + '/reprocess', 'POST', { mode: mode || 'fast' }).then(function (r) {
             if (r.data.error) {
                 div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
             } else {
-                setInfo('Traitement démarré. Transcription ASR en cours… (0s écoulées)');
-                setTimeout(pollStatus, 4000);
+                poller.setInfo('Traitement relancé. Transcription ASR en cours… (0s écoulées)');
+                setTimeout(poller.poll, 4000);
             }
         });
     };
