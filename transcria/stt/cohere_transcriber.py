@@ -97,11 +97,21 @@ class CohereTranscriber(BaseTranscriber):
 
     def transcribe(
         self,
-        audio_path: Path,
+        audio_path: "Path | None",
         language: str = "fr",
         chunk_length_s: int = 30,
         progress_callback=None,
+        audio_array: "np.ndarray | None" = None,
+        sample_rate: int = 16000,
     ) -> list[dict]:
+        """Transcrit un fichier audio ou un numpy array en segments {start, end, text}.
+
+        Args:
+            audio_path: chemin du fichier audio. Ignoré si audio_array est fourni.
+            audio_array: tableau numpy (float32, mono, 16 kHz). Evite les I/O disque
+                lors du chunking par tours pyannote.
+            sample_rate: fréquence d'échantillonnage de audio_array (défaut 16000).
+        """
         import torch
         import time as _time
 
@@ -113,15 +123,19 @@ class CohereTranscriber(BaseTranscriber):
 
         _t0 = _time.time()
         ch_len = chunk_length_s or self.chunk_length_s
-        logger.info(
-            "Transcription Cohere: chargement audio %s", audio_path
-        )
-        audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+
+        if audio_array is not None:
+            audio = audio_array.astype(np.float32)
+            sr = sample_rate
+            logger.debug("Transcription Cohere: audio fourni en mémoire (%d échantillons)", len(audio))
+        else:
+            logger.info("Transcription Cohere: chargement audio %s", audio_path)
+            audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+
         total_samples = len(audio)
-        sample_rate = 16000
-        chunk_samples = ch_len * sample_rate
+        chunk_samples = ch_len * sr
         segments: list[dict] = []
-        total_duration = total_samples / sample_rate
+        total_duration = total_samples / sr
         logger.info(
             "Audio chargé: %.1f min, %d échantillons, %d chunks attendus",
             total_duration / 60,
@@ -139,12 +153,12 @@ class CohereTranscriber(BaseTranscriber):
         for start_sample in range(0, total_samples, chunk_samples):
             end_sample = min(start_sample + chunk_samples, total_samples)
             chunk = audio[start_sample:end_sample]
-            if len(chunk) < sample_rate * 0.5:
+            if len(chunk) < sr * 0.5:
                 continue
 
             inputs = self._processor(
                 chunk,
-                sampling_rate=sample_rate,
+                sampling_rate=sr,
                 return_tensors="pt",
                 language=lang_code,
             )
@@ -170,8 +184,8 @@ class CohereTranscriber(BaseTranscriber):
             text = self._processor.decode(
                 generated_ids[0], skip_special_tokens=True
             )
-            start_seconds = start_sample / sample_rate
-            end_seconds = end_sample / sample_rate
+            start_seconds = start_sample / sr
+            end_seconds = end_sample / sr
 
             segments.append({
                 "start": round(start_seconds, 3),

@@ -84,15 +84,17 @@ transcria/
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
       converter.py          # AudioConverter (ffmpeg)
+    audio/
+      vad.py                # SileroVAD — détection de parole via faster_whisper
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
-      cohere_transcriber.py # CohereTranscriber — Cohere ASR (device_map, GPU)
+      cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
       whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
-      transcription.py      # Transcriber (orchestration)
-      diarization.py        # DiarizerService — pyannote
+      transcription.py      # Transcriber — chunking par tours pyannote ou 30s fixe
+      diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization
       speaker_detection.py  # SpeakerDetector
-      summary.py            # SummaryGenerator — résumé rapide LLM
+      summary.py            # SummaryGenerator — VAD pré-transcription + Cohere
     context/
       meeting_context.py    # MeetingContextManager
       participants.py       # ParticipantsManager
@@ -179,6 +181,18 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 
 Le cycle est : Cohere→(offload)→pyannote→(offload+free GPUs)→Qwen→(offload). `VRAMManager` gère ce cycle, vérifie la disponibilité via le dashboard LLM (port 5001) ou `nvidia-smi` en fallback.
 
+### Pipeline STT — deux modes de chunking
+
+**Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement à `CohereTranscriber.transcribe()`. Chaque chunk a un speaker connu → attribution 100% fiable, pas d'overlap matching.
+
+**Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
+
+**VAD Silero (pré-transcription) :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées. Fallback transparent si `faster_whisper` indisponible (chunking 30s). La transcription finale utilise les tours pyannote comme VAD implicite.
+
+**`CohereTranscriber.transcribe()` accepte deux formes d'entrée :**
+- `transcribe(audio_path=Path(...))` — charge l'audio depuis le disque (usage standard)
+- `transcribe(audio_path=None, audio_array=np.ndarray, sample_rate=16000)` — audio déjà en mémoire (chunking par tours, évite les I/O)
+
 ### Workflow (9 étapes affichées)
 Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspond à un `JobState`. Les transitions passent obligatoirement par `workflow/transitions.py`. Voir `docs/DATA_MODEL.md` pour le détail des états.
 
@@ -201,6 +215,12 @@ Le résumé LLM tente de lire `context/job_context.yaml`, mais ce fichier n'est 
 
 ### Mode debug et speechbrain/k2_fsa
 `server.debug: true` active le reloader Werkzeug, qui recharge les modules CUDA et provoque un crash avec `speechbrain`/`k2_fsa` (importés par pyannote). **Toujours garder `debug: false` en production.**
+
+### `exclusive_turns` absent au premier run
+Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la transcription finale tourne. `Transcriber.transcribe()` bascule automatiquement en mode 30s_fallback. C'est normal : `exclusive_turns` est produit par la phase summary (étape 3), qui précède toujours la transcription finale (étape 7).
+
+### `CohereTranscriber` — ne pas passer `audio_path=None` sans `audio_array`
+Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
 ### tests/ couvre le métier, moins les intégrations GPU
 412 tests dans 22 modules couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.

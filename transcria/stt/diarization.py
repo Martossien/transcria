@@ -78,7 +78,30 @@ class DiarizerService:
                     "turn_count": sum(1 for t in turns if t["speaker"] == spk),
                 }
 
-            result = {"available": True, "turns": turns, "speakers": speakers_list, "stats": stats}
+            # Exclusive diarization : chaque instant = un seul locuteur, sans chevauchement.
+            # Utilisée par le chunking ASR pour éviter l'overlap matching approximatif.
+            exclusive_turns = []
+            try:
+                exclusive_ann = diarization.exclusive_speaker_diarization
+                for segment, _, speaker in exclusive_ann.itertracks(yield_label=True):
+                    exclusive_turns.append({
+                        "start": round(segment.start, 3),
+                        "end": round(segment.end, 3),
+                        "speaker": speaker,
+                        "duration": round(segment.end - segment.start, 3),
+                    })
+                logger.info("Exclusive diarization: %d turns (vs %d standard)", len(exclusive_turns), len(turns))
+            except AttributeError:
+                logger.warning("exclusive_speaker_diarization non disponible — fallback sur turns standard")
+                exclusive_turns = turns
+
+            result = {
+                "available": True,
+                "turns": turns,
+                "exclusive_turns": exclusive_turns,
+                "speakers": speakers_list,
+                "stats": stats,
+            }
             fs.save_json("speakers/speaker_turns.json", result)
             fs.save_json("speakers/speaker_stats.json", {"stats": stats, "speakers": speakers_list})
 
