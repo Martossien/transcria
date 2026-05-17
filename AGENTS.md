@@ -21,7 +21,13 @@ python scripts/bootstrap_config.py --output config.yaml
 source venv/bin/activate
 python app.py
 
-# Lancer l'application (production)
+# Lancer l'application (production — service systemd)
+sudo systemctl restart transcria.service   # redémarre proprement
+sudo systemctl stop transcria.service
+sudo systemctl status transcria.service
+sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
+
+# Scripts legacy (si systemd non disponible)
 ./start.sh    # log: /var/log/transcrIA.log, PID: /run/transcrIA.pid
 ./stop.sh
 ./status.sh
@@ -135,6 +141,7 @@ transcria/
     launch_arbitrage.sh     # Lance llama-server (Qwen 35B, 2 GPUs, contexte 263K)
     stop_qwen.sh            # Arrête llama-server proprement
     stop_qwen_vllm.sh       # Arrête vLLM (si utilisé à la place de llama.cpp)
+    check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
   tests/                    # 21 modules test_*.py + E2E, 412 tests (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
@@ -181,7 +188,14 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 2. **pyannote** : ~2 Go VRAM
 3. **Qwen 35B** : ~48 Go VRAM sur 2 GPUs
 
-Le cycle est : Cohere→(offload)→pyannote→(offload+free GPUs)→Qwen→(offload). `VRAMManager` gère ce cycle, vérifie la disponibilité via le dashboard LLM (port 5001) ou `nvidia-smi` en fallback.
+Le cycle est : Cohere→(offload)→pyannote→(offload)→LLM arbitrage→(stop). `VRAMManager` gère ce cycle, vérifie la disponibilité via le dashboard LLM (port 5001) ou `nvidia-smi` en fallback.
+
+**`ensure_arbitrage_llm_ready(expected_model_id)`** est le point d'entrée unique avant tout usage de la LLM d'arbitrage. Elle vérifie l'état réel du serveur (`/v1/models` + inférence test) et choisit parmi trois chemins logués explicitement :
+- **CAS A** : LLM active et bon modèle → réutilisation directe, zéro redémarrage
+- **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
+- **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
+
+`services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `free_all_gpus()` reste disponible pour les resets forcés mais ne doit plus être appelé avant la LLM d'arbitrage.
 
 ### Pipeline STT — deux modes de chunking
 

@@ -19,6 +19,10 @@ services:
   stop_script: "./scripts/stop_qwen.sh"
   qwen_port: 8080
   vllm_port: 8000
+  # model_id tel que rapporté par /v1/models (alias llama-server ou vllm)
+  # utilisé par ensure_arbitrage_llm_ready() pour éviter un redémarrage inutile
+  # lancer scripts/check_arbitrage_llm.sh pour obtenir la valeur exacte
+  arbitrage_api_model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
 
 models:
   stt_backend: "cohere"

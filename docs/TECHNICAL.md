@@ -389,12 +389,13 @@ Cycle de vie GPU dans `run_summary` :
 ```
 Phase 1: ensure_free(6 Go) → GPU → Cohere ASR → offload
 Phase 1b: pyannote (si enable_speaker_detection) → sauvegarde speaker_count + diarization_context.md
-Phase 2: free_all_gpus() → launch_qwen_35b() → opencode run → stop_qwen_35b()
+Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run → stop_qwen_35b()
+  (CAS A: réutilisation directe si LLM déjà saine — CAS C: libération GPU + lancement)
 ```
 
 Cycle de vie GPU dans `run_correction` :
 ```
-free_all_gpus() → launch_qwen_35b() → opencode run → stop_qwen_35b()
+ensure_arbitrage_llm_ready(api_model_id) → opencode run → stop_qwen_35b()
 ```
 
 ---
@@ -404,9 +405,9 @@ free_all_gpus() → launch_qwen_35b() → opencode run → stop_qwen_35b()
 **`analyzer.py` — `AudioAnalyzer`** (méthodes de classe)
 | Méthode | Description |
 |---|---|
-| `analyze(file_path)` | Appelle ffprobe, retourne dict avec duration_seconds, codec, channels, sample_rate_hz, needs_conversion, estimated_fast_minutes, estimated_quality_minutes, size_bytes, format |
+| `analyze(file_path)` | Appelle ffprobe, retourne dict avec duration_seconds, codec, channels, sample_rate_hz, needs_conversion, estimated_machine_minutes, estimated_human_minutes, estimated_total_minutes, size_bytes, format |
 | `_needs_conversion(info)` | Vérifie si codec ≠ PCM 16-bit LE, channels ≠ 1, sample_rate ≠ 16000 |
-| `_estimate_time(info, fast)` | Estimation temps de traitement (×0.15 rapide, ×0.30 qualité) |
+| `_estimate_time(info)` | Retourne (machine_min, human_min) — machine = (durée×0.35+130s)×1.25 avec marge 25%, humain = 5min par tranche de 30min |
 | `_format_duration(seconds)` / `format_estimate(info)` | Formatage humain de l'estimation (`1h04`, `12min30s`) |
 
 **`converter.py` — `AudioConverter`** (méthodes de classe)
@@ -604,10 +605,12 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `ensure_free(required_mb, preferred_gpu)` | Vérifie/libère/alloue GPU (SIGTERM puis SIGKILL si >4Go) |
 | `_free_memory(gpu_index)` | Kill processus GPU > 4Go (SIGTERM puis SIGKILL après 2s) |
 | `stop_vllm_port_8000()` | Tue vLLM sur port 8000 via _kill_port |
-| `launch_qwen_35b()` | Lance `services.arbitrage_script` (défaut `scripts/launch_arbitrage.sh`) → attend port Qwen (timeout 600s) |
+| `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
+| `launch_qwen_35b()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
 | `stop_qwen_35b()` | Tue processus sur port 8080 |
-| `free_all_gpus()` | stop_vllm + stop_qwen + offload_all + sleep 2s |
+| `free_all_gpus()` | stop_vllm + stop_qwen + offload_all (reset forcé uniquement) |
 | `is_port_open(port)` | Vérifie `/v1/models` accessible + teste une inférence réelle `/v1/completions` |
+| `_log_all_gpus(label)` | Logue VRAM libre/totale/utilisée de chaque GPU (utilisé par ensure_free lors d'un basculement) |
 | `_wait_for_port(port, timeout)` | Boucle d'attente avec `is_port_open` toutes les 5s |
 | `track_model / untrack_model` | Enregistre/désenregistre un modèle chargé |
 | `offload_all()` | Vide `_loaded_models` + gc + cuda.empty_cache |
@@ -735,13 +738,13 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 Étape 5 - Résumé :
   Phase 1 : ensure_free(6 Go) → GPU → Cohere ASR (transcription 30s chunks) → offload
   Phase 1b: pyannote (si enable_speaker_detection) → speaker_count_pyannote + summary/diarization_context.md
-  Phase 2 : free_all_gpus() → launch_qwen_35b() → opencode run_summary avec diarization_context si disponible → parse résultats → stop_qwen_35b()
+  Phase 2 : ensure_arbitrage_llm_ready(api_model_id) → opencode run_summary avec diarization_context → parse résultats → stop_qwen_35b()
   → meeting_context enrichi (title_suggere, type_suggere, sujet_suggere, participants_detectes, termes_suspects, summary_llm)
 
 Étape 9 - Traitement (mode quality) :
   Cohere ASR (GPU 0, ensure_free 6Go) → _apply_speakers → sauvegarde SRT et segments
   → pyannote diarization (GPU 0)
-  → opencode+Qwen correction SRT (GPU 0+1, free_all + launch_qwen_35b)
+  → ensure_arbitrage_llm_ready(api_model_id) → opencode correction SRT → stop_qwen_35b()
   → qualité (9 checks, score /100)
   → export ZIP
 
