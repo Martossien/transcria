@@ -275,41 +275,48 @@ class WorkflowRunner:
         return (cut[0] if len(cut) > 1 else text[:max_chars]) + "…"
 
     @staticmethod
-    def _extract_speaker_phrases(fs, speakers_result: dict, n: int = 3) -> dict[str, list[str]]:
-        """Pour chaque locuteur, extrait les n plus longs tours et retourne les phrases ASR correspondantes."""
+    def _build_labeled_segments(
+        fs, speakers_result: dict, min_purity: float = 0.6
+    ) -> list[tuple[str, str]]:
+        """Pour chaque segment ASR, détermine le locuteur dominant.
+
+        Un segment est attribué à un locuteur si ce dernier couvre ≥ min_purity
+        du temps de parole total détecté dans le segment. Sinon : 'mixte'.
+        Retourne une liste ordonnée (label, texte).
+        """
         turns_data = speakers_result.get("turns") or []
         segments_data = (fs.load_json("summary/summary.json") or {}).get("segments") or []
         if not turns_data or not segments_data:
-            return {}
+            return []
 
-        # Regrouper les tours par locuteur, trier par durée décroissante
-        from collections import defaultdict
-        by_speaker: dict = defaultdict(list)
-        for t in turns_data:
-            by_speaker[t["speaker"]].append(t)
+        result = []
+        for seg in segments_data:
+            text = seg.get("text", "").strip()
+            if not text:
+                continue
+            s_start, s_end = seg.get("start", 0.0), seg.get("end", 0.0)
+            if s_end <= s_start:
+                continue
 
-        phrases: dict[str, list[str]] = {}
-        for speaker, spk_turns in by_speaker.items():
-            top_turns = sorted(spk_turns, key=lambda t: t["duration"], reverse=True)[:n]
-            spk_phrases = []
-            for turn in top_turns:
-                t_start, t_end = turn["start"], turn["end"]
-                # Trouver les segments ASR qui chevauchent ce tour
-                overlapping = [
-                    seg["text"].strip()
-                    for seg in segments_data
-                    if seg.get("text") and
-                    seg.get("start", 0) < t_end and
-                    seg.get("end", 0) > t_start
-                ]
-                if overlapping:
-                    raw = " ".join(overlapping)
-                    phrase = WorkflowRunner._truncate_at_word(raw, 120)
-                    spk_phrases.append(phrase)
-            if spk_phrases:
-                phrases[speaker] = spk_phrases
+            # Chevauchement par locuteur
+            overlap: dict[str, float] = {}
+            for turn in turns_data:
+                ov = min(turn["end"], s_end) - max(turn["start"], s_start)
+                if ov > 0:
+                    spk = turn["speaker"]
+                    overlap[spk] = overlap.get(spk, 0.0) + ov
 
-        return phrases
+            if not overlap:
+                result.append(("?", text))
+                continue
+
+            total_ov = sum(overlap.values())
+            dominant = max(overlap, key=lambda k: overlap[k])
+            purity = overlap[dominant] / total_ov if total_ov > 0 else 0.0
+            label = dominant if purity >= min_purity else "mixte"
+            result.append((label, WorkflowRunner._truncate_at_word(text, 120)))
+
+        return result
 
     @staticmethod
     def _write_diarization_context(fs, speakers_result: dict) -> str | None:
@@ -317,7 +324,7 @@ class WorkflowRunner:
         if not speakers:
             return None
 
-        phrases = WorkflowRunner._extract_speaker_phrases(fs, speakers_result)
+        labeled = WorkflowRunner._build_labeled_segments(fs, speakers_result)
 
         total_time = sum(float(spk.get("speaking_time_seconds", 0) or 0) for spk in speakers)
         lines = [
@@ -338,9 +345,18 @@ class WorkflowRunner:
                 f"| {speaking_time:.1f}s ({speaking_time / 60:.1f}min) "
                 f"| {turns} | {pct}% |"
             )
-            # Ajouter les phrases exemples sous la ligne du tableau
-            for phrase in phrases.get(speaker_id, []):
-                lines.append(f'|   → *"{phrase}"* | | | |')
+
+        if labeled:
+            lines.extend([
+                "",
+                "## Transcription labellisée (attribution acoustique)",
+                "",
+                "*(segments où un seul locuteur domine ≥ 60 % du temps parlé —"
+                " `mixte` = alternance rapide entre locuteurs)*",
+                "",
+            ])
+            for label, text in labeled:
+                lines.append(f"**[{label}]** {text}")
 
         lines.extend(
             [

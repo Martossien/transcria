@@ -478,12 +478,36 @@
   nameInputs.forEach(function(el) { if (el.value.trim()) hasAny = true; });
   if (!hasAny) {
     var llmParts = {{ meeting.get('participants_detectes', '').split('\n')|map('trim')|reject('eq', '')|list|tojson }};
-    var roles = document.querySelectorAll('.speaker-role');
-    llmParts.forEach(function(line, i) {
+    llmParts.forEach(function(line) {
       var cleaned = line.replace('👤 ', '').trim();
       var parts = cleaned.split(':');
-      if (i < nameInputs.length) nameInputs[i].value = (parts[0] || cleaned).trim();
-      if (parts.length > 1 && i < roles.length) roles[i].value = parts[1].trim();
+      var name = (parts[0] || cleaned).trim();
+      var role = parts.length > 1 ? parts[1].trim() : '';
+      // Chercher la ligne HTML correspondant au SPEAKER_XX de cette entrée LLM
+      // Extraire le label seul depuis "SPEAKER_XX [label]" → "label"
+      var labelMatch = name.match(/\[([^\]]+)\]/);
+      var displayName = labelMatch ? labelMatch[1].trim() : name;
+      var m = name.match(/^(SPEAKER_\d+)/);
+      if (m) {
+        var row = document.getElementById('spk-' + m[1]);
+        if (row) {
+          var ni = row.querySelector('.speaker-name');
+          var ri = row.querySelector('.speaker-role');
+          if (ni && !ni.value.trim()) ni.value = displayName;
+          if (ri && !ri.value.trim()) ri.value = role;
+          return;
+        }
+      }
+      // Fallback : remplir le premier champ vide (si pas de préfixe SPEAKER_XX)
+      var unfilled = Array.from(nameInputs).find(function(el) { return !el.value.trim(); });
+      if (unfilled) {
+        unfilled.value = displayName;
+        if (role) {
+          var row2 = unfilled.closest('.speaker-item');
+          var ri2 = row2 && row2.querySelector('.speaker-role');
+          if (ri2 && !ri2.value.trim()) ri2.value = role;
+        }
+      }
     });
   }
 
