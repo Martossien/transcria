@@ -244,6 +244,78 @@ class VRAMManager:
             logger.error("Échec lancement Qwen 35B: %s", exc)
             return False
 
+    def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
+        """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
+
+        Trois cas tracés explicitement dans les logs :
+          A — LLM saine + bon modèle  → réutilisation directe, zéro redémarrage
+          B — LLM saine + mauvais modèle → redémarrage (warning logué)
+          C — LLM absente ou non saine → libération GPU + lancement depuis zéro
+        """
+        import requests
+
+        active_model_id: str | None = None
+        server_healthy = False
+
+        try:
+            r = requests.get(
+                f"http://127.0.0.1:{self.qwen_port}/v1/models", timeout=5
+            )
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                if data:
+                    active_model_id = data[0].get("id", "")
+                    r2 = requests.post(
+                        f"http://127.0.0.1:{self.qwen_port}/v1/completions",
+                        json={
+                            "model": active_model_id,
+                            "prompt": "Bonjour",
+                            "max_tokens": 5,
+                            "temperature": 0,
+                        },
+                        timeout=30,
+                    )
+                    if r2.status_code == 200:
+                        choices = r2.json().get("choices", [])
+                        server_healthy = (
+                            len(choices) > 0
+                            and len(choices[0].get("text", "")) > 0
+                        )
+        except Exception as exc:
+            logger.debug("Sondage LLM d'arbitrage port %d: %s", self.qwen_port, exc)
+
+        pid_info = self._get_port_pid(self.qwen_port)
+
+        # Cas A : saine + bon modèle → réutilisation, aucun redémarrage
+        if server_healthy and (
+            expected_model_id is None or active_model_id == expected_model_id
+        ):
+            logger.info(
+                "[arbitrage_llm] CAS A — LLM active et saine, réutilisation directe "
+                "(port %d, PID %s, model: %s)",
+                self.qwen_port, pid_info, active_model_id,
+            )
+            return True
+
+        # Cas B : saine mais mauvais modèle → redémarrage avec warning
+        if server_healthy and expected_model_id and active_model_id != expected_model_id:
+            logger.warning(
+                "[arbitrage_llm] CAS B — Mauvais modèle actif sur port %d "
+                "(trouvé: %s, attendu: %s, PID %s) — redémarrage forcé",
+                self.qwen_port, active_model_id, expected_model_id, pid_info,
+            )
+        else:
+            # Cas C : port fermé ou inférence échouée → lancement depuis zéro
+            logger.info(
+                "[arbitrage_llm] CAS C — LLM non disponible sur port %d "
+                "(model détecté: %s, health: %s) — libération GPU et lancement",
+                self.qwen_port, active_model_id or "aucun", server_healthy,
+            )
+
+        self.stop_vllm_port_8000()
+        self.stop_qwen_35b()
+        return self.launch_qwen_35b()
+
     def stop_qwen_35b(self) -> bool:
         """Arrête Qwen 35B via le script d'arrêt, puis kill port en fallback."""
         logger.info("Arrêt Qwen 35B port %d...", self.qwen_port)

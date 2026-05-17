@@ -136,11 +136,13 @@ class WorkflowRunner:
         context_path = fs.job_dir / "context" / "job_context.yaml"
         diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
-        sl.info("LLM résumé: libération GPUs en cours")
-        self.vram.free_all_gpus()
-        sl.info("LLM résumé: lancement Qwen 35B sur port %d",
-                config.get("services", {}).get("qwen_port", 8080))
-        launched = self.vram.launch_qwen_35b()
+        model_id = llm_config.get("model_id")
+        sl.info(
+            "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
+            model_id or "non contraint",
+            config.get("services", {}).get("qwen_port", 8080),
+        )
+        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=model_id)
 
         if not launched:
             sl.warning("Qwen 35B NON DISPONIBLE — résumé LLM sauté (transcription rapide conservée)")
@@ -480,9 +482,13 @@ class WorkflowRunner:
         if not srt_path.is_file():
             return {"success": False, "error": "SRT source introuvable"}
 
-        logger.info("Phase 3: correction SRT via opencode — libération GPUs + lancement Qwen 35B")
-        self.vram.free_all_gpus()
-        launched = self.vram.launch_qwen_35b()
+        model_id = config.get("workflow", {}).get("summary_llm", {}).get("model_id")
+        logger.info(
+            "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
+            model_id or "non contraint",
+            config.get("services", {}).get("qwen_port", 8080),
+        )
+        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=model_id)
         if not launched:
             return {"success": False, "error": "Qwen 35B non disponible"}
 
