@@ -72,14 +72,50 @@ class VRAMManager:
                 best_free, best_idx = free_mb, g["id"]
         return best_idx
 
+    def _log_all_gpus(self, label: str = "") -> None:
+        """Logue la VRAM libre de chaque GPU — utile pour le débogage des basculements."""
+        gpus = self.get_gpu_info()
+        prefix = f"[{label}] " if label else ""
+        for g in gpus:
+            free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
+            used_mb = int(g.get("memory", {}).get("used", 0) * 1024)
+            total_mb = int(g.get("memory", {}).get("total", 0) * 1024)
+            logger.info(
+                "%sGPU %d — libre: %d Mo / total: %d Mo (utilisé: %d Mo) [%s]",
+                prefix, g.get("id", "?"), free_mb, total_mb, used_mb,
+                g.get("name", "inconnu"),
+            )
+
     def ensure_free(self, required_mb: int, preferred_gpu: int = 0) -> int | None:
         free = self.get_free_vram_mb(preferred_gpu)
-        logger.info("VRAM GPU %d: %d Mo libre, besoin %d Mo", preferred_gpu, free, required_mb)
+        logger.info(
+            "VRAM GPU %d: %d Mo libre, besoin %d Mo",
+            preferred_gpu, free, required_mb,
+        )
         if free >= required_mb + self.min_free_mb:
+            logger.info("GPU %d sélectionné (%d Mo disponibles)", preferred_gpu, free)
             return preferred_gpu
+
+        # GPU préféré insuffisant — état de tous les GPUs avant basculement
+        logger.info(
+            "GPU %d insuffisant (%d Mo < besoin %d Mo) — scan de tous les GPUs",
+            preferred_gpu, free, required_mb + self.min_free_mb,
+        )
+        self._log_all_gpus(label="scan")
+
         best = self.get_best_gpu(required_mb)
         if best is not None:
+            best_free = self.get_free_vram_mb(best)
+            logger.info(
+                "Basculement GPU %d → GPU %d (%d Mo libre)",
+                preferred_gpu, best, best_free,
+            )
             return best
+
+        logger.warning(
+            "Aucun GPU avec %d Mo libre — tentative libération VRAM sur GPU %d",
+            required_mb, preferred_gpu,
+        )
         self._free_memory(preferred_gpu)
         gc.collect()
         try:
@@ -88,9 +124,25 @@ class VRAMManager:
             pass
         time.sleep(1)
         free_after = self.get_free_vram_mb(preferred_gpu)
+        logger.info("GPU %d après libération: %d Mo libre", preferred_gpu, free_after)
         if free_after >= required_mb + self.min_free_mb:
+            logger.info("GPU %d sélectionné après libération", preferred_gpu)
             return preferred_gpu
-        return self.get_best_gpu(required_mb)
+
+        best_after = self.get_best_gpu(required_mb)
+        if best_after is not None:
+            best_after_free = self.get_free_vram_mb(best_after)
+            logger.info(
+                "Basculement GPU %d → GPU %d après libération (%d Mo libre)",
+                preferred_gpu, best_after, best_after_free,
+            )
+        else:
+            logger.error(
+                "Aucun GPU disponible avec %d Mo après libération — état final:",
+                required_mb,
+            )
+            self._log_all_gpus(label="échec")
+        return best_after
 
     def _free_memory(self, gpu_index: int) -> None:
         """Tente de libérer la VRAM en tuant les processus GPU > 4 Go."""

@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import shutil
 import subprocess
 from pathlib import Path
@@ -49,13 +50,23 @@ class AudioAnalyzer:
                     break
 
             result["needs_conversion"] = cls._needs_conversion(result)
-            result["estimated_fast_minutes"] = cls._estimate_time(result, fast=True)
-            result["estimated_quality_minutes"] = cls._estimate_time(result, fast=False)
+            machine_min, human_min = cls._estimate_time(result)
+            result["estimated_machine_minutes"] = machine_min
+            result["estimated_human_minutes"] = human_min
+            result["estimated_total_minutes"] = (
+                round(machine_min + human_min, 1) if machine_min is not None else None
+            )
+            # Compat ancienne clé utilisée dans le template
+            result["estimated_quality_minutes"] = result["estimated_total_minutes"]
+            result["estimated_fast_minutes"] = result["estimated_total_minutes"]
 
         except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as exc:
             logger.warning("ffprobe indisponible ou échec analyse: %s", exc)
             result["error"] = str(exc)
             result["needs_conversion"] = False
+            result["estimated_machine_minutes"] = None
+            result["estimated_human_minutes"] = None
+            result["estimated_total_minutes"] = None
             result["estimated_fast_minutes"] = None
             result["estimated_quality_minutes"] = None
 
@@ -75,14 +86,21 @@ class AudioAnalyzer:
         return False
 
     @staticmethod
-    def _estimate_time(info: dict, fast: bool = True) -> float | None:
+    def _estimate_time(info: dict) -> tuple[float | None, int]:
+        """Retourne (machine_minutes, human_minutes).
+
+        machine_minutes : temps GPU avec marge de 25 %
+          formule mesurée : (durée_s × 0.35 + 130s) × 1.25
+        human_minutes : temps de validation utilisateur
+          5 min par tranche de 30 min d'audio (arrondi au-dessus)
+        """
         duration = info.get("duration_seconds", 0)
         if duration <= 0:
-            return None
-        duration_min = duration / 60
-        if fast:
-            return round(duration_min * 0.15, 1)
-        return round(duration_min * 0.30, 1)
+            return None, 0
+        machine_sec = (duration * 0.35 + 130) * 1.25
+        machine_min = round(machine_sec / 60, 1)
+        human_min = math.ceil(duration / 1800) * 5
+        return machine_min, human_min
 
     @classmethod
     def _format_duration(cls, seconds: float | None) -> str:

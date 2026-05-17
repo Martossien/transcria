@@ -96,10 +96,13 @@
       {% if audio_analysis.get('needs_conversion') %}
         <div class="alert alert-warning mt-3 mb-0">Conversion requise pour le traitement (effectuée automatiquement).</div>
       {% endif %}
-      {% if audio_analysis.get('estimated_quality_minutes') %}
+      {% if audio_analysis.get('estimated_total_minutes') %}
         <div class="alert alert-info mt-2 mb-0">
-          <strong><i class="bi bi-clock"></i> Temps de traitement estimé : ~{{ (audio_analysis.estimated_quality_minutes)|round(0)|int }} minutes</strong>
-          <span class="text-muted small ms-2">(mode qualité, dépend de la charge GPU)</span>
+          <strong><i class="bi bi-clock"></i> Temps total estimé : ~{{ audio_analysis.estimated_total_minutes|round(0)|int }} min</strong>
+          <span class="text-muted small ms-2">
+            (traitement machine ~{{ audio_analysis.estimated_machine_minutes|round(0)|int }} min
+            + validation ~{{ audio_analysis.estimated_human_minutes }} min)
+          </span>
         </div>
       {% endif %}
     {% else %}
