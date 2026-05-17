@@ -324,20 +324,25 @@ Les prochaines évolutions peuvent renforcer la précision et l'expérience util
 
 ### Amélioration de la transcription
 
-Un axe consiste à mieux exploiter Cohere ASR :
+Améliorations apportées :
 
-- filtrage VAD post-transcription pour supprimer les segments générés sur silence ou bruit ;
+- filtrage VAD Silero en pré-transcription pour supprimer les segments générés sur silence ou bruit (phase summary) ;
+- chunking par tours de parole pyannote (`exclusive_speaker_diarization`) pour la transcription finale, attribution locuteur 100 % fiable ;
+- fallback 30s transparent si pyannote indisponible ;
+
+Améliorations restantes :
+
 - rapprochement avec le découpage natif recommandé par Cohere ;
 - tests A/B sur des réunions longues.
 
 ### Chunking basé sur les tours de parole
 
-Une amélioration plus structurante consiste à utiliser pyannote avant la transcription finale pour découper l'audio par tour de parole. Cela permettrait :
+**Implémenté.** La transcription finale utilise les tours pyannote exclusifs pour découper l'audio par locuteur. Résultat :
 
-- des segments naturellement mono-locuteur ;
-- des timestamps plus précis ;
-- moins d'erreurs d'attribution `SPEAKER_XX` ;
-- une meilleure lisibilité dans l'éditeur SRT.
+- segments naturellement mono-locuteur ;
+- timestamps hérités du découpage pyannote ;
+- attribution `SPEAKER_XX` 100 % fiable (pas d'overlap matching) ;
+- meilleure lisibilité dans l'éditeur SRT.
 
 ### Expérience utilisateur
 

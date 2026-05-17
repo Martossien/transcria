@@ -187,8 +187,9 @@ class WorkflowRunner:
 
         if parsed.get("speaker_count", 0) > 0:
             meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
-        if parsed.get("termes_suspects"):
-            meeting_ctx["termes_suspects"] = parsed["termes_suspects"]
+        termes_suspects = parsed.get("termes_suspects") or []
+        if termes_suspects:
+            meeting_ctx["termes_suspects"] = termes_suspects
 
         meeting_ctx["summary_llm"] = summary_text
         # Stocker les rôles LLM dans meeting_context pour que l'UI puisse les afficher
@@ -208,7 +209,7 @@ class WorkflowRunner:
             f"## Extrait de transcription\n\n"
             f"{result.get('transcript_short', '')}\n",
         )
-        sl.info("Résumé LLM généré", chars=len(summary_text))
+        sl.info("Résumé LLM généré", chars=len(summary_text), termes_suspects=len(termes_suspects))
 
     @staticmethod
     def _apply_speaker_roles(fs, speaker_roles: dict, sl) -> None:

@@ -53,6 +53,9 @@ class JobContextBuilder:
                     "category": t.get("category", ""),
                     "priority": t.get("priority", "normale"),
                     "variants": t.get("variants", []),
+                    "replace_by": t.get("replace_by", ""),
+                    "comment": t.get("comment", ""),
+                    "contexts": t.get("contexts", []),
                 }
                 for t in lexicon
             ],

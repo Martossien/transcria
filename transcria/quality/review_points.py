@@ -22,6 +22,13 @@ class ReviewPoints:
             elif ctype == "missing_lexicon_terms":
                 terms_list = check.get("terms", [])
                 points.append(f"Termes lexique absents : {', '.join(terms_list[:10])}")
+            elif ctype == "unresolved_lexicon_variants":
+                details = []
+                for item in check.get("exact_variants", [])[:5]:
+                    details.append(f"{item.get('variant')} → {item.get('term')}")
+                for item in check.get("close_forms", [])[:5]:
+                    details.append(f"{item.get('form')} proche de {item.get('term')}")
+                points.append(f"Variantes lexique non résolues : {', '.join(details)}")
             elif ctype == "low_coverage":
                 ratio = check.get("ratio", 0)
                 points.append(f"Couverture faible : {ratio:.0%} — possible perte de transcription.")

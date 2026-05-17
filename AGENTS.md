@@ -33,7 +33,7 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 412 tests (21 modules test_*.py + E2E, mock, pas de GPU requis)
+python -m pytest tests/ -q           # 426 tests (21 modules test_*.py + E2E, mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
@@ -92,7 +92,6 @@ transcria/
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
       converter.py          # AudioConverter (ffmpeg)
-    audio/
       vad.py                # SileroVAD — détection de parole via faster_whisper
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
@@ -106,10 +105,10 @@ transcria/
     context/
       meeting_context.py    # MeetingContextManager
       participants.py       # ParticipantsManager
-      lexicon.py            # LexiconManager
+      lexicon.py            # LexiconManager (20 catégories, variants, contexts)
       job_context_builder.py# JobContextBuilder — assemble job_context.yaml/json
     quality/
-      quality_report.py     # QualityReporter (9 checks, score /100)
+      quality_report.py     # QualityReporter (10 checks, score /100)
       srt_checks.py         # Checks sur le SRT
       lexicon_checks.py     # Checks sur le lexique
       review_points.py      # Points de relecture
@@ -142,7 +141,7 @@ transcria/
     stop_qwen.sh            # Arrête llama-server proprement
     stop_qwen_vllm.sh       # Arrête vLLM (si utilisé à la place de llama.cpp)
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # 21 modules test_*.py + E2E, 412 tests (mocks GPU/LLM)
+  tests/                    # 21 modules test_*.py + E2E, 426 tests (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -254,8 +253,11 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 ### `CohereTranscriber` — ne pas passer `audio_path=None` sans `audio_array`
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
+### VAD Silero — fallback transparent
+`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` et en post-filtrage par `Transcriber._apply_vad_filter()`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif.
+
 ### tests/ couvre le métier, moins les intégrations GPU
-412 tests dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+426 tests dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).
@@ -272,6 +274,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.
 9. **Toujours** passer par `workflow/transitions.py` pour la logique de lancement/annulation/reprise de traitement.
 10. **Ne jamais** tuer un processus opencode par nom de processus — utiliser uniquement les fichiers `.opencode.pid` dans le répertoire du job (cf. `_kill_orphaned_opencode`). Il peut y avoir d'autres opencode sur la machine non liés à TranscrIA.
+11. **Ne jamais** hardcoder un domaine métier réel dans les prompts, le code applicatif, l'UI ou les tests (exemples : organismes, sigles, produits, secteurs, métiers issus de jobs réels). TranscrIA doit rester neutre et réutilisable par tout type d'organisation. Les exemples doivent utiliser des placeholders génériques (`SIGLE_A`, `Organisation A`, `Terme métier A`, `Variante phonétique A`) et le code ne doit contenir aucun mapping métier spécifique.
 
 ## Documentation complémentaire
 

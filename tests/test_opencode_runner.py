@@ -336,6 +336,71 @@ validation, synthèse
         assert any(t["term"] == "Kubernetes" for t in terms)
         assert len(terms) >= 1
 
+    def test_parse_termes_suspects_with_variants_and_comment(self):
+        text = """## Termes douteux à valider
+
+- **SIGLE_REF** [sigle / métier] (critique) | variantes_suspectes: SIGLE_ERR | commentaire: une variante semble une erreur STT à valider. | contextes: [00:12:34] SPEAKER_01: "extrait contenant SIGLE_ERR"
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        term = result["termes_suspects"][0]
+        assert term["term"] == "SIGLE_REF"
+        assert term["category"] == "sigle / métier"
+        assert term["priority"] == "critique"
+        assert term["variants"] == ["SIGLE_ERR"]
+        assert "variante semble" in term["comment"]
+        assert term["contexts"] == [{
+            "variant": "",
+            "timecode": "00:12:34",
+            "speaker": "SPEAKER_01",
+            "quote": "extrait contenant SIGLE_ERR",
+            "reason": "",
+        }]
+
+    def test_parse_termes_suspects_with_multiple_contexts(self):
+        text = """## Termes douteux à valider
+
+- **Terme métier A** [métier] (critique) | variantes_suspectes: Variante A ; Variante B | commentaire: deux formes douteuses. | contextes: [00:01:02] SPEAKER_00: "extrait Variante A" || [00:03:04] SPEAKER_01: "extrait Variante B" (contexte clair)
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        contexts = result["termes_suspects"][0]["contexts"]
+        assert len(contexts) == 2
+        assert contexts[0]["quote"] == "extrait Variante A"
+        assert contexts[1]["reason"] == "contexte clair"
+
+    def test_parse_termes_suspects_normalizes_empty_and_duplicate_variants(self):
+        text = """## Termes douteux à valider
+
+- **Forme validée** [organisation] (normale) | variantes_suspectes: (aucune) ; forme validée ; Graphie suspecte ; graphie suspecte | commentaire: forme sensible à valider.
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        term = result["termes_suspects"][0]
+        assert term["term"] == "Forme validée"
+        assert term["variants"] == ["Graphie suspecte"]
+
+    def test_parse_termes_suspects_legacy_heading(self):
+        text = """## Termes suspects
+
+- **Terme métier A** [métier] (importante)
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        assert result["termes_suspects"][0]["term"] == "Terme métier A"
+
+    def test_parse_termes_suspects_legacy_slash_as_variants(self):
+        text = """## Termes suspects
+
+- **Terme métier A / Variante phonétique A** [métier / spécialité] (critique) : variantes STT probables
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        term = result["termes_suspects"][0]
+        assert term["term"] == "Terme métier A"
+        assert term["variants"] == ["Variante phonétique A"]
+        assert term["comment"] == "variantes STT probables"
+
     def test_parse_termes_suspects_excludes_non_identifiable(self):
         text = """## Termes suspects
 

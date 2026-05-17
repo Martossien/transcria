@@ -71,6 +71,70 @@ class OpenCodeRunner:
         except (TypeError, ValueError):
             return 600
 
+    @staticmethod
+    def _normalize_summary_variants(value, term: str = "") -> list[str]:
+        import re
+
+        if isinstance(value, list):
+            candidates = value
+        elif isinstance(value, str):
+            candidates = re.split(r'\s*[;,]\s*', value)
+        else:
+            candidates = []
+
+        normalized = []
+        seen = set()
+        term_key = term.strip().casefold()
+        empty_markers = {"aucun", "aucune", "(aucun)", "(aucune)", "néant", "neant", "n/a", "na", "-"}
+        for candidate in candidates:
+            text = str(candidate).strip()
+            key = text.casefold()
+            if not text or key in empty_markers:
+                continue
+            if term_key and key == term_key:
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized.append(text)
+        return normalized
+
+    @staticmethod
+    def _parse_summary_contexts(value: str) -> list[dict]:
+        import re
+
+        contexts = []
+        if not value:
+            return contexts
+        chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=\[[^\]]+\])', value) if chunk.strip()]
+        if len(chunks) == 1 and " ; " in value:
+            chunks = [chunk.strip() for chunk in value.split(" ; ") if chunk.strip()]
+        for chunk in chunks[:3]:
+            text = chunk.strip()
+            match = re.match(
+                r'\[(?P<timecode>[^\]]+)\]\s*(?:(?P<speaker>SPEAKER_\d+)\s*:\s*)?[«"](?P<quote>.+?)[»"](?:\s*\((?P<reason>.+)\))?$',
+                text,
+            )
+            if match:
+                contexts.append({
+                    "variant": "",
+                    "timecode": match.group("timecode").strip(),
+                    "speaker": (match.group("speaker") or "").strip(),
+                    "quote": match.group("quote").strip(),
+                    "reason": (match.group("reason") or "").strip(),
+                })
+            else:
+                cleaned = text.strip("[] ")
+                if cleaned:
+                    contexts.append({
+                        "variant": "",
+                        "timecode": "",
+                        "speaker": "",
+                        "quote": cleaned[:500],
+                        "reason": "",
+                    })
+        return contexts
+
     def _terminate_proc(self, proc: subprocess.Popen) -> None:
         """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire."""
         import signal as _sig
@@ -305,25 +369,79 @@ class OpenCodeRunner:
             if speaker_roles:
                 fields["speaker_roles"] = speaker_roles
 
-        # Parse "Termes suspects" for lexicon pre-fill
+        # Parse lexicon pre-fill sections. Keep old headings for compatibility with
+        # summaries produced before the prompt was narrowed to "termes douteux".
         termes_suspects = []
-        ts_match = re.search(r'## Termes suspects.*?\n(.+?)(?:\n##|\Z)', text, re.DOTALL)
+        ts_match = re.search(r'## Termes (?:suspects|douteux).*?\n(.+?)(?:\n##|\Z)', text, re.DOTALL | re.IGNORECASE)
         if ts_match:
             for line in ts_match.group(1).strip().split('\n'):
                 line = line.strip('- ').strip()
-                if not line or 'non identifiable' in line.lower():
+                if not line or 'non identifiable' in line.lower() or "aucun terme suspect" in line.lower():
                     continue
                 term_match = re.match(r'\*\*(.+?)\*\*\s*\[(.+?)\]\s*\((.+?)\)', line)
                 if term_match:
+                    raw_term = term_match.group(1).strip()
+                    category = term_match.group(2).strip()
+                    priority = term_match.group(3).strip()
+                    suffix = line[term_match.end():].strip()
+                    variants: list[str] = []
+                    comment = ""
+
+                    variants_match = re.search(
+                        r'(?:^|\|)\s*variantes?(?:_suspectes)?\s*:\s*(.+?)(?=\s*\|\s*(?:commentaire|justification|contextes?)\s*:|\s*$)',
+                        suffix,
+                        re.IGNORECASE,
+                    )
+                    if variants_match:
+                        variants = OpenCodeRunner._normalize_summary_variants(variants_match.group(1).strip(), term=raw_term)
+
+                    comment_match = re.search(
+                        r'(?:^|\|)\s*(?:commentaire|justification)\s*:\s*(.+?)(?=\s*\|\s*contextes?\s*:|\s*$)',
+                        suffix,
+                        re.IGNORECASE,
+                    )
+                    if comment_match:
+                        comment = comment_match.group(1).strip()
+                    elif suffix.startswith(":"):
+                        comment = suffix[1:].strip()
+
+                    contexts = []
+                    contexts_match = re.search(
+                        r'(?:^|\|)\s*contextes?\s*:\s*(.+)$',
+                        suffix,
+                        re.IGNORECASE,
+                    )
+                    if contexts_match:
+                        contexts = OpenCodeRunner._parse_summary_contexts(contexts_match.group(1).strip())
+
+                    term = raw_term
+                    if not variants and "/" in raw_term:
+                        parts = [p.strip() for p in raw_term.split("/") if p.strip()]
+                        if parts:
+                            term = parts[0]
+                            variants = OpenCodeRunner._normalize_summary_variants(parts[1:], term=term)
+                            if not comment:
+                                comment = f"Variantes suspectes détectées par la LLM : {raw_term}"
+
                     termes_suspects.append({
-                        "term": term_match.group(1).strip(),
-                        "category": term_match.group(2).strip(),
-                        "priority": term_match.group(3).strip(),
+                        "term": term,
+                        "category": category,
+                        "priority": priority,
+                        "variants": variants,
+                        "comment": comment,
+                        "contexts": contexts,
                     })
                 else:
                     word = re.match(r'[\*]*(.+?)[\*]*(?:\s*\[|\s*\()', line)
                     if word:
-                        termes_suspects.append({"term": word.group(1).strip(), "category": "autre", "priority": "normale"})
+                        termes_suspects.append({
+                            "term": word.group(1).strip(),
+                            "category": "mot suspect",
+                            "priority": "normale",
+                            "variants": [],
+                            "comment": "",
+                            "contexts": [],
+                        })
         fields["termes_suspects"] = termes_suspects
 
         return fields

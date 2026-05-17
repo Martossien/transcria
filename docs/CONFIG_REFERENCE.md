@@ -25,7 +25,7 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 |---|---|---|
 | `models.cohere_model_path` | `./models/cohere-asr/...` (relatif) | peut être absolu selon l'installation |
 | `workflow.summary_llm.model_id` | `local/qwen3-35b` | `local/qwen3-35b-arbitrage` |
-| `workflow.summary_llm.timeout_seconds` | 1800 | 1800 |
+| `workflow.summary_llm.timeout_seconds` | 1800 | typ. 1800+ |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
 ---
@@ -157,7 +157,7 @@ Configuration du LLM de résumé (Qwen 35B).
 | `enabled` | bool | `true` | Active la Phase 2 (opencode+Qwen) du résumé |
 | `model_id` | string | `"local/qwen3-35b"` | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
-| `timeout_seconds` | int | `1800` | Timeout du résumé via opencode |
+| `timeout_seconds` | int | `120` | Timeout du résumé via opencode |
 | `use_chat_api` | bool | absent dans `_DEFAULT_CONFIG` | Ancien paramètre du chemin API direct, non utilisé par le chemin opencode actif |
 
 **Redémarrage requis :** non — lus à chaque appel dans `OpenCodeRunner` et `SummaryGenerator._llm_summarize()`.
@@ -165,7 +165,7 @@ Configuration du LLM de résumé (Qwen 35B).
 **Impact si modifié :**
 - `enabled=false` : la Phase 2 est sautée. Le résumé affiche "Résumé de contrôle indisponible (LLM non configurée)."
 - `model_id` : utilisé par le chemin actif `OpenCodeRunner.run_summary()` pour choisir le modèle du résumé opencode.
-- `timeout_seconds` : 1800s offre une marge raisonnable pour les réunions longues. Ajuster au besoin selon la charge réelle du service.
+- `timeout_seconds` : défaut 120s (conservateur). En production, monter à 1800+ pour les réunions longues.
 - `use_chat_api` : conservé pour compatibilité documentaire/production, mais le code `_llm_summarize()` utilise aujourd'hui directement `/chat/completions` et ce chemin n'est pas appelé par le workflow.
 
 **Note sur la dualité de résumé :** Il existe DEUX chemins de résumé LLM :
@@ -183,7 +183,7 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `enabled` | bool | `false` | Active l'arbitrage LLM |
 | `model_id` | string | `"local/qwen3-35b-arbitrage"` | Identifiant du modèle |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
-| `timeout_seconds` | int | `7200` | Timeout de la correction SRT via opencode |
+| `timeout_seconds` | int | `600` | Timeout de la correction SRT via opencode |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
 
 **Redémarrage requis :** non.

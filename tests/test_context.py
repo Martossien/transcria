@@ -115,6 +115,45 @@ class TestLexicon:
         loaded = LexiconManager.get(job, tmp_dir)
         assert len(loaded) == 2
 
+    def test_save_variants_from_string_and_comment(self, tmp_dir):
+        job = _fake_job()
+        saved = LexiconManager.save(job, tmp_dir, [{
+            "term": "SIGLE_REF",
+            "category": "sigle / métier",
+            "priority": "critique",
+            "variants": "SIGLE_ERR, forme développée du sigle",
+            "comment": "Une variante semble une erreur STT.",
+        }])
+        assert saved[0]["variants"] == ["SIGLE_ERR", "forme développée du sigle"]
+        assert saved[0]["comment"] == "Une variante semble une erreur STT."
+
+    def test_save_variants_ignores_empty_markers_and_term_itself(self, tmp_dir):
+        job = _fake_job()
+        saved = LexiconManager.save(job, tmp_dir, [{
+            "term": "Forme validée",
+            "category": "organisation",
+            "priority": "normale",
+            "variants": ["(aucune)", "forme validée", "Graphie suspecte", "graphie suspecte"],
+        }])
+        assert saved[0]["variants"] == ["Graphie suspecte"]
+
+    def test_save_contexts(self, tmp_dir):
+        job = _fake_job()
+        saved = LexiconManager.save(job, tmp_dir, [{
+            "term": "Terme validé",
+            "category": "mot suspect",
+            "priority": "normale",
+            "contexts": [{
+                "variant": "Terme suspect",
+                "timecode": "00:01:02",
+                "speaker": "SPEAKER_00",
+                "quote": "Un extrait contenant Terme suspect.",
+                "reason": "Contexte utile.",
+            }],
+        }])
+        assert saved[0]["contexts"][0]["quote"] == "Un extrait contenant Terme suspect."
+        assert saved[0]["contexts"][0]["timecode"] == "00:01:02"
+
     def test_get_empty_list_when_no_file(self, tmp_dir):
         job = _fake_job()
         assert LexiconManager.get(job, tmp_dir) == []
@@ -136,8 +175,10 @@ class TestLexicon:
 
     def test_categories_and_priorities(self):
         assert "personne" in LEXICON_CATEGORIES
+        assert "organisation" in LEXICON_CATEGORIES
         assert "technique" in LEXICON_CATEGORIES
         assert "médical" in LEXICON_CATEGORIES
+        assert "mot suspect" in LEXICON_CATEGORIES
         assert "critique" in LEXICON_PRIORITIES
         assert "normale" in LEXICON_PRIORITIES
 
@@ -152,7 +193,14 @@ class TestJobContextBuilder:
         job = _fake_job("j-ctx-1")
         MeetingContextManager.save(job, tmp_dir, {"title": "Test", "language": "fr"})
         ParticipantsManager.save(job, tmp_dir, [{"name": "Alice", "function": "Dev"}])
-        LexiconManager.save(job, tmp_dir, [{"term": "API", "category": "technique"}])
+        LexiconManager.save(job, tmp_dir, [{
+            "term": "API",
+            "category": "technique",
+            "variants": ["A P I"],
+            "replace_by": "API",
+            "comment": "Sigle technique.",
+            "contexts": [{"timecode": "00:01:02", "quote": "Contexte API."}],
+        }])
 
         result = JobContextBuilder.build(job, tmp_dir)
         assert result["job_id"] == "j-ctx-1"
@@ -160,6 +208,9 @@ class TestJobContextBuilder:
         assert result["meeting"]["title"] == "Test"
         assert len(result["participants"]) == 1
         assert len(result["lexicon"]) == 1
+        assert result["lexicon"][0]["replace_by"] == "API"
+        assert result["lexicon"][0]["comment"] == "Sigle technique."
+        assert result["lexicon"][0]["contexts"][0]["quote"] == "Contexte API."
         assert result["processing"]["default_stt_model"] == "cohere-transcribe-03-2026"
 
     def test_build_writes_files(self, tmp_dir):

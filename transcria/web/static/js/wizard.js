@@ -227,21 +227,92 @@ var TranscrIA = window.TranscrIA || {};
         });
     };
 
-    W.addLexiconTerm = function () {
-        console.log('[TranscrIA] addLexiconTerm()');
+    W.formatLexiconVariants = function (variants) {
+        if (Array.isArray(variants)) return variants.join(', ');
+        return variants || '';
+    };
+
+    W.parseLexiconContexts = function (row) {
+        var node = row.querySelector('.lex-contexts-json');
+        if (!node) return [];
+        try {
+            var parsed = JSON.parse(node.textContent || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    W.renderLexiconContexts = function (contexts) {
+        if (!Array.isArray(contexts) || contexts.length === 0) return '';
+        var html = '<details class="lex-contexts mt-2">' +
+            '<summary class="small text-muted">Contexte proposé (' + contexts.length + ')</summary>' +
+            '<div class="small mt-2">';
+        contexts.forEach(function (c) {
+            var meta = (c.timecode || 'sans timecode') + (c.speaker ? ' — ' + c.speaker : '');
+            html += '<div class="lex-context-item">' +
+                '<span class="text-muted"></span>' +
+                '<div class="lex-context-quote"></div>' +
+                (c.reason ? '<div class="text-muted lex-context-reason"></div>' : '') +
+                '</div>';
+        });
+        html += '</div></details>';
+        return html;
+    };
+
+    W.fillLexiconContexts = function (row, contexts) {
+        var items = row.querySelectorAll('.lex-context-item');
+        contexts.forEach(function (c, index) {
+            var item = items[index];
+            if (!item) return;
+            var meta = (c.timecode || 'sans timecode') + (c.speaker ? ' — ' + c.speaker : '');
+            var metaEl = item.querySelector('span');
+            var quoteEl = item.querySelector('.lex-context-quote');
+            var reasonEl = item.querySelector('.lex-context-reason');
+            if (metaEl) metaEl.textContent = meta;
+            if (quoteEl) quoteEl.textContent = '« ' + (c.quote || '') + ' »';
+            if (reasonEl) reasonEl.textContent = c.reason || '';
+        });
+    };
+
+    W.renderLexiconRow = function (term) {
         var container = document.getElementById('lexicon-list');
         var row = document.createElement('div');
-        row.className = 'lexicon-row';
-        row.innerHTML = '<input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" style="max-width:150px;">' +
-            '<select class="form-select form-select-sm lex-cat" style="max-width:120px;">' +
-            (document.getElementById('lexicon-cat-tpl') ? document.getElementById('lexicon-cat-tpl').innerHTML : '') +
-            '</select>' +
+        var t = term || {};
+        row.className = 'lexicon-row lexicon-card';
+        row.innerHTML = '<div class="lexicon-grid">' +
+            '<label class="form-label small mb-1">Forme validée</label>' +
+            '<label class="form-label small mb-1">Formes suspectes observées</label>' +
+            '<label class="form-label small mb-1">Catégorie</label>' +
+            '<label class="form-label small mb-1">Priorité</label>' +
+            '<input type="text" class="form-control form-control-sm lex-term" placeholder="Ex: Forme validée" value="" data-field="term">' +
+            '<input type="text" class="form-control form-control-sm lex-variants" placeholder="Ex: Forme douteuse A, forme douteuse B" value="" data-field="variants">' +
+            '<input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="Catégorie libre" value="" data-field="category">' +
             '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">' +
             (document.getElementById('lexicon-prio-tpl') ? document.getElementById('lexicon-prio-tpl').innerHTML : '') +
             '</select>' +
-            '<input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" style="max-width:150px;">' +
-            '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+            '</div>' +
+            '<input type="hidden" class="lex-replace" value="">' +
+            '<script type="application/json" class="lex-contexts-json">[]</script>' +
+            '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
+            W.renderLexiconContexts(t.contexts || []) +
+            '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>';
         container.appendChild(row);
+
+        row.querySelector('.lex-term').value = t.term || '';
+        row.querySelector('.lex-variants').value = W.formatLexiconVariants(t.variants);
+        row.querySelector('.lex-cat').value = t.category || '';
+        row.querySelector('.lex-prio').value = t.priority || 'normale';
+        row.querySelector('.lex-replace').value = t.replace_by || '';
+        row.querySelector('.lex-comment').value = t.comment || '';
+        row.querySelector('.lex-contexts-json').textContent = JSON.stringify(t.contexts || []);
+        W.fillLexiconContexts(row, t.contexts || []);
+        return row;
+    };
+
+    W.addLexiconTerm = function () {
+        console.log('[TranscrIA] addLexiconTerm()');
+        W.renderLexiconRow({});
     };
 
     W.importLexiconFile = function () {
@@ -272,12 +343,16 @@ var TranscrIA = window.TranscrIA || {};
             var catEl = row.querySelector('.lex-cat');
             var prioEl = row.querySelector('.lex-prio');
             var replEl = row.querySelector('.lex-replace');
+            var variantsEl = row.querySelector('.lex-variants');
+            var commentEl = row.querySelector('.lex-comment');
             data.push({
                 term: (termEl && termEl.value || ''),
-                category: (catEl && catEl.value || 'autre'),
+                category: (catEl && catEl.value || 'mot suspect'),
                 priority: (prioEl && prioEl.value || 'normale'),
                 replace_by: (replEl && replEl.value || ''),
-                variants: []
+                variants: (variantsEl && variantsEl.value || '').split(',').map(function (v) { return v.trim(); }).filter(Boolean),
+                comment: (commentEl && commentEl.value || ''),
+                contexts: W.parseLexiconContexts(row)
             });
         });
         W.api('/api/jobs/' + JOB_ID + '/lexicon', 'POST', data).then(function (r) {

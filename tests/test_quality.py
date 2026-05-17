@@ -64,6 +64,21 @@ class TestLexiconChecker:
         assert result["variants_found"][0]["variant"] == "ORG"
         assert result["variants_found"][0]["canonical"] == "ORGANISATION"
 
+    def test_detects_unresolved_exact_variant(self):
+        lexicon = [{"term": "Terme validé", "variants": ["Terme suspect"]}]
+        result = LexiconChecker.find_unresolved_terms("Le Terme suspect reste présent.", lexicon)
+        assert result["exact_variants"] == [{"term": "Terme validé", "variant": "Terme suspect"}]
+
+    def test_detects_unresolved_close_accent_form(self):
+        lexicon = [{"term": "Élément", "variants": ["Elementt"]}]
+        result = LexiconChecker.find_unresolved_terms("Un Element reste présent.", lexicon)
+        assert result["close_forms"] == [{"term": "Élément", "form": "Element"}]
+
+    def test_ignores_case_only_close_form(self):
+        lexicon = [{"term": "Élément", "variants": ["Elementt"]}]
+        result = LexiconChecker.find_unresolved_terms("Un élément reste présent.", lexicon)
+        assert result["close_forms"] == []
+
     def test_empty_lexicon(self):
         result = LexiconChecker.check("some text", [])
         assert result["found"] == []
@@ -96,3 +111,15 @@ class TestReviewPoints:
         points = ReviewPoints.generate(report)
         assert len(points) == 1
         assert "50%" in points[0]
+
+    def test_handles_unresolved_lexicon_variants(self):
+        report = {"checks": [{
+            "type": "unresolved_lexicon_variants",
+            "exact_variants": [{"term": "Terme validé", "variant": "Terme suspect"}],
+            "close_forms": [{"term": "Élément", "form": "Element"}],
+            "severity": "warning",
+        }]}
+        points = ReviewPoints.generate(report)
+        assert len(points) == 1
+        assert "Terme suspect" in points[0]
+        assert "Element proche de Élément" in points[0]

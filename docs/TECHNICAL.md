@@ -19,7 +19,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 412 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 426 tests pytest collectés — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -64,15 +64,19 @@ transcria/
 │   ├── audio/                     # Analyse et conversion audio
 │   │   ├── __init__.py
 │   │   ├── analyzer.py            # AudioAnalyzer (ffprobe → JSON)
-│   │   └── converter.py           # AudioConverter (ffmpeg → WAV 16kHz mono)
+│   │   ├── converter.py           # AudioConverter (ffmpeg → WAV 16kHz mono)
+│   │   └── vad.py                 # SileroVAD (détection de parole via faster_whisper)
 │   │
 │   ├── stt/                       # Speech-to-Text
 │   │   ├── __init__.py
+│   │   ├── base_transcriber.py    # BaseTranscriber (ABC)
 │   │   ├── cohere_transcriber.py  # CohereTranscriber (load, transcribe, segments_to_srt, offload)
-│   │   ├── transcription.py       # Transcriber (pipeline Cohere + _apply_speakers)
-│   │   ├── diarization.py         # DiarizerService (pyannote GPU + _extract_clips WAV)
+│   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper)
+│   │   ├── transcriber_factory.py # TranscriberFactory
+│   │   ├── transcription.py       # Transcriber (pipeline 2 modes + _apply_speakers)
+│   │   ├── diarization.py         # DiarizerService (pyannote GPU + exclusive_turns)
 │   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping)
-│   │   └── summary.py             # SummaryGenerator (quick transcript + VAD Silero)
+│   │   └── summary.py             # SummaryGenerator (VAD Silero + quick transcript)
 │   │
 │   ├── context/                   # Contexte de réunion
 │   │   ├── __init__.py
@@ -101,8 +105,14 @@ transcria/
 │   │   ├── __init__.py
 │   │   ├── vram_manager.py        # VRAMManager
 │   │   ├── gpu_session.py         # GPUSession context manager
-│   │   ├── llm_backend.py         # LLMBackend
+│   │   ├── llm_backend.py         # LLMBackend + 3 implémentations + factory
 │   │   └── opencode_runner.py     # OpenCodeRunner
+│   │
+│   ├── services/                  # Services métier
+│   │   ├── job_executor.py       # JobExecutorService (worker thread)
+│   │   ├── job_service.py        # JobService
+│   │   ├── pipeline_service.py   # PipelineService
+│   │   └── config_service.py     # ConfigService
 │   │
 │   └── web/                       # Interface utilisateur
 │       ├── __init__.py
@@ -124,7 +134,7 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe)
 │
-├── tests/                         # 412 tests pytest collectés
+├── tests/                         # 426 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 11 tests — CRUD utilisateurs
@@ -203,6 +213,7 @@ security:
 **Notes :**
 - `config.example.yaml` (version template) diffère encore sur certains chemins/modèles, mais les timeouts LLM sont désormais calibrés pour des traitements longs
 - Le vrai `config.yaml` du service peut monter plus haut sur `arbitration_llm.timeout_seconds` pour des réunions de plusieurs heures
+- Les valeurs par défaut dans `_DEFAULT_CONFIG` sont plus basses : `summary_llm.timeout_seconds: 120`, `arbitration_llm.timeout_seconds: 600`. Les valeurs 1800/7200 ci-dessus sont des valeurs production adaptées aux réunions longues.
 
 ---
 
@@ -377,7 +388,7 @@ Contient `_STEPS` (9 entrées, sans étape `speakers` séparée) et des helpers 
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession | GPUSession auto |
 | `run_correction(job, config)` | opencode+Qwen 35B : correction speakers+lexique+orthographe | LLM arbitrage |
-| `run_quality_checks(job, config)` | 9 contrôles qualité | — |
+| `run_quality_checks(job, config)` | 10 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |
 
 Pipeline de traitement complet (`api_process`) :
@@ -419,28 +430,72 @@ L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` 
 |---|---|
 | `convert_to_wav_mono_16k(input_path, output_path)` | ffmpeg → PCM 16kHz mono, timeout 300s |
 
+**`vad.py` — `SileroVAD`**
+| Méthode/Propriété | Description |
+|---|---|
+| `available` | Propriété : True si `faster_whisper` importable |
+| `get_speech_timestamps(audio_path)` | Détecte les zones de parole via Silero (faster_whisper) |
+| `build_speech_chunks(audio_path, max_chunk_s)` | Découpe l'audio en chunks VAD (fallback 30s si indisponible) |
+| `_fallback_chunks(duration, chunk_s)` | Chunking 30s fixe de secours |
+
 ---
 
 ### 4.5 STT (`transcria/stt/`)
 
-**`cohere_transcriber.py` — `CohereTranscriber`**
+**`base_transcriber.py` — `BaseTranscriber` (ABC)**
+| Méthode/Propriété | Description |
+|---|---|
+| `available` | Propriété abstraite : True si le backend est utilisable |
+| `load()` | Méthode abstraite : charge le modèle en VRAM |
+| `transcribe(...)` | Méthode abstraite : transcription → segments `[{start, end, text}]` |
+| `offload()` | Méthode abstraite : libère le modèle de la VRAM |
+| `segments_to_srt(segments, speaker_map)` | Conversion segments → SRT standard avec préfixe speaker |
+
+**`cohere_transcriber.py` — `CohereTranscriber`** (étend BaseTranscriber)
 | Méthode/Propriété | Description |
 |---|---|
 | `__init__(model_path, device)` | Initialise avec chemin modèle et device (`cuda:0` par détection auto) |
 | `available` | Vérifie torch + transformers importables |
 | `load()` | Charge `CohereTranscribeModel` via `AutoModelForSpeechSeq2Seq` + `AutoProcessor` (trust_remote_code=True, bfloat16) |
-| `transcribe(audio_path, language, chunk_length_s, progress_callback)` | Segmentation en chunks de 30s → inférence → segments [{start, end, text}] |
+| `transcribe(audio_path, audio_array, sample_rate, language, chunk_length_s, progress_callback)` | Si `audio_array` fourni → inférence directe sur numpy array ; sinon charge depuis `audio_path`. Segmentation en chunks de 30s → segments `[{start, end, text}]` |
 | `segments_to_srt(segments, speaker_map)` | Conversion segments → SRT standard avec préfixe speaker |
 | `offload()` | Libère modèle + processor + gc + cuda.empty_cache |
 | `_seconds_to_srt_time(seconds)` | Conversion timestamp SRT (HH:MM:SS,mmm) |
 
 Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SUPPORTED_LANGUAGES` (14 langues)
 
+> **Note :** `audio_array` + `sample_rate` permettent de passer un `np.ndarray` déjà en mémoire (chunking par tours pyannote), évitant les I/O disque.
+
+**`whisper_transcriber.py` — `WhisperTranscriber`** (étend BaseTranscriber)
+| Méthode/Propriété | Description |
+|---|---|
+| `available` | Vérifie `faster_whisper` importable |
+| `load()` | Charge `faster_whisper.WhisperModel` sur device spécifié |
+| `transcribe(audio_path, language)` | Transcription generator-based via faster-whisper → segments `[{start, end, text}]` |
+| `offload()` | Libère modèle + gc + cuda.empty_cache |
+| `available_sizes()` | Retourne les tailles de modèle disponibles |
+| `vram_for_size(size)` | VRAM estimée par taille de modèle |
+
+**`transcriber_factory.py` — `TranscriberFactory`**
+| Méthode | Description |
+|---|---|
+| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere` ou `whisper`) |
+| `list_available_backends()` | Liste les backends disponibles |
+| `get_backend_vram_mb(backend)` | VRAM estimée pour un backend |
+
 **`transcription.py` — `Transcriber`**
+
+Deux modes de chunking :
+- **Mode pyannote_turns (prioritaire)** : si `speaker_turns.json` contient `exclusive_turns`, charge l'audio une seule fois, découpe par tours pyannote → `np.ndarray` → `CohereTranscriber.transcribe(audio_array=...)`. Attribution speaker 100% fiable.
+  - `_build_chunks_from_turns()` : découpe l'audio par tours exclusifs
+  - `_apply_vad_filter()` : filtre les chunks VAD Silero
+  - `_transcribe_by_chunks()` : transcrit chaque chunk avec le backend choisi
+- **Mode 30s_fallback** : chunking 30s fixe + `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
+
 | Méthode | Description |
 |---|---|
 | `__init__(config, gpu_index)` | Initialise avec config et gpu_index |
-| `transcribe(job, audio_path)` | Cohere → sauvegarde segments.json → applique speaker_map si available → sauvegarde SRT |
+| `transcribe(job, audio_path)` | Cohere → sauvegarde SRT + `segments.json` + `speakers_map.json` |
 | `_apply_speakers(segments, speaker_turns, speaker_mapping)` | Overlap speaker-to-segment : pour chaque segment, trouve le turn avec le plus grand overlap |
 
 > **Note :** `Transcriber.transcribe()` sauvegarde `metadata/speakers_map.json` avec `speaker_map = speaker_mapping or {}`.
@@ -450,7 +505,7 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 |---|---|
 | `__init__(config, device)` | Initialise avec config et device (fourni par GPUSession, jamais hardcodé) |
 | `available` | Vérifie `pyannote.audio` importable |
-| `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns [{start, end, speaker, duration}] → stats → sauvegarde |
+| `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
 | `offload()` | gc.collect() + cuda.empty_cache() — libère VRAM avant sortie du GPUSession |
 | `_extract_clips(audio_path, turns, speakers, fs)` | Extrait des extraits WAV par locuteur (3 clips, 3-12s) |
 | `_load_audio_gpu(audio_path, device)` | torchaudio → resample 16kHz → tensor GPU |
@@ -467,7 +522,7 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 | Méthode | Description |
 |---|---|
 | `__init__(config)` | Extrait `summary_llm` de la config |
-| `generate_quick_summary(job, audio_path, gpu_index)` | Charge Cohere → transcrit → sauvegarde quick_transcript.txt et summary.json → retourne dict |
+| `generate_quick_summary(job, audio_path, gpu_index)` | SileroVAD pré-transcription via `build_speech_chunks()` → transcrit chaque chunk VAD avec `audio_array` via Cohere → sauvegarde quick_transcript.txt et summary.json → retourne dict (`transcript_text`, `transcript_short`, `summary_text`, `segment_count`) |
 | `_llm_summarize(transcript, fs)` | Appel `/v1/chat/completions` avec prompt système |
 
 > **Note :** `_llm_summarize` n'est plus appelé directement dans le workflow. Le résumé LLM est géré par `WorkflowRunner.run_summary` via `OpenCodeRunner`.
@@ -527,7 +582,7 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 | `check(text, lexicon)` | Retourne {found, missing, variants_found} — comparaison insensible à la casse |
 
 **`quality_report.py` — `QualityReporter`**
-9 contrôles systématiques :
+10 contrôles systématiques :
 1. Segments vides (texte vide)
 2. Segments très courts (< 0.5s)
 3. Segments très longs (> 60s)
@@ -535,6 +590,7 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 5. Chevauchements (end > next start)
 6. Locuteurs non mappés (SPEAKER_XX)
 7. Termes normalisés du lexique absents (`replace_by`) dans le SRT corrigé
+7bis. Variantes de lexique non résolues (formes exactes et proches après correction)
 8. Couverture audio (< 80%)
 9. Ratio mots/seconde suspect (< 0.5 ou > 10)
 
@@ -622,6 +678,16 @@ Les valeurs clés sont lues depuis `config.yaml` :
 
 **`opencode_runner.py` — `OpenCodeRunner`**
 
+**`llm_backend.py` — `LLMBackend` + implémentations**
+
+| Classe | Description |
+|---|---|
+| `LLMBackend(config, port)` | Classe abstraite : `backend_type`, `base_url`, `model_id`, `is_available()`, `ensure_available()`, `shutdown()` |
+| `ScriptLLMBackend` | Lancement via script shell (`launch_arbitrage.sh`), arrêt via stop script |
+| `OllamaLLMBackend` | Lancement/arrêt via `ollama serve` et API native |
+| `HTTPLLMBackend` | Connexion à une LLM externe déjà disponible (HTTP, pas de lancement local) |
+| `create_llm_backend(config, backend_type)` | Factory : instancie le bon backend selon `config` et `backend_type` |
+
 Constantes : `OPENCODE_BIN = "opencode"`, `PROVIDER = "local"`, `MODEL = "qwen3-35b-arbitrage"`
 
 | Méthode | Description |
@@ -684,6 +750,45 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `users.html` | Liste des utilisateurs (admin) |
 | `user_form.html` | Formulaire création/édition utilisateur |
 | `dashboard_status.html` | État technique (GPU, CPU, RAM, services) |
+
+---
+
+### 4.12 Services (`transcria/services/`)
+
+**`job_executor.py` — `JobExecutorService`**
+| Méthode | Description |
+|---|---|
+| `__init__()` | Initialise le `ThreadPoolExecutor` (max_concurrent_jobs depuis config) |
+| `_kill_orphaned_opencode(job_id, jobs_dir, sl)` | Tue les processus opencode orphelins via fichiers `.opencode.pid` |
+| `_reconcile_interrupted_jobs(jobs_dir, sl)` | Réconcilie les jobs interrompus après redémarrage brutal |
+| `init_job_executor(config, app)` | Point d'entrée d'initialisation du worker au démarrage du service |
+
+**`job_service.py` — `JobService`** (toutes méthodes statiques)
+| Méthode | Description |
+|---|---|
+| `create(owner_id, title)` | Création d'un job |
+| `upload(job_id, file)` | Upload fichier audio |
+| `analyze(job_id, config)` | Analyse audio via ffprobe |
+| `get_context(job_id, jobs_dir)` | Récupère le contexte complet d'un job |
+| `delete(job_id)` | Suppression d'un job |
+
+**`pipeline_service.py` — `PipelineService`**
+| Méthode | Description |
+|---|---|
+| `run_process(job_id, config)` | Lance le pipeline complet de traitement |
+| `_run_pipeline_steps(job, audio_path, config)` | Exécution séquentielle des étapes du pipeline |
+| `_define_pipeline_steps(config)` | Définit les étapes actives selon la config |
+| `_release_arbitrage_llm(config)` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_qwen_35b()`) |
+
+**`config_service.py` — `ConfigService`** (toutes méthodes statiques)
+| Méthode | Description |
+|---|---|
+| `load(path)` | Charge la config depuis un fichier YAML |
+| `save(path, config)` | Sauvegarde la config sur disque |
+| `get_singleton()` | Retourne le singleton config en mémoire |
+| `set_singleton(config)` | Met à jour le singleton en mémoire |
+| `validate(config)` | Valide la config via `validate_config()` |
+| `detect_system()` | Auto-détection via `SystemDetector.detect()` |
 
 ---
 
@@ -751,7 +856,7 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
   GPUSession(cohere-transcription, 6 Go) → GPU auto → Cohere ASR 29 chunks pyannote → offload → SRT
   → GPUSession(pyannote, 2 Go) → GPU auto → diarization supplémentaire → offload
   → ensure_arbitrage_llm_ready(api_model_id) → CAS A (LLM déjà chargée si résumé vient de tourner) → opencode correction SRT
-  → qualité (9 checks, score /100) → export ZIP
+  → qualité (10 checks, score /100) → export ZIP
   → _release_arbitrage_llm() : is_arbitrage_llm_running() → stop_qwen_35b() [fin pipeline]
 
 Étape 9 - Traitement (mode fast) :
@@ -875,7 +980,7 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 
 ## 11. Tests
 
-**412 tests collectés** couvrant tous les modules. Lancer avec :
+**426 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```

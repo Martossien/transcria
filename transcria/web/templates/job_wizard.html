@@ -10,6 +10,10 @@
   .step-section .btn { margin-top: 12px; }
   .participant-row, .lexicon-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
   .participant-row input, .lexicon-row input, .participant-row select, .lexicon-row select { flex: 1; min-width: 120px; }
+  .lexicon-card { position: relative; display: block; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  .lexicon-grid { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.8fr) minmax(160px, 1fr) 120px; gap: 6px 10px; align-items: end; padding-right: 34px; }
+  .lexicon-card .lex-remove { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+  @media (max-width: 760px) { .lexicon-grid { grid-template-columns: 1fr; padding-right: 0; } .lexicon-card .lex-remove { position: static; margin-top: 8px; } }
   .speaker-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
   .speaker-item select { min-width: 200px; }
   .quality-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
@@ -347,23 +351,42 @@
   {% if part_status == 'done' or spk_status == 'done' %}
   <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-6-circle-fill step-icon"></i> Lexique de session</h3>
-    <p class="text-muted small">Ajoutez uniquement les mots importants pour cette réunion.</p>
+    <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
     <div id="lexicon-list">
       {% for t in lexicon %}
-      <div class="lexicon-row">
-        <input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" value="{{ t.term }}" style="max-width: 150px;">
-        <select class="form-select form-select-sm lex-cat" style="max-width: 120px;">
-          {% for cat in lexicon_categories %}
-          <option value="{{ cat }}" {{ 'selected' if t.category == cat }}>{{ cat }}</option>
-          {% endfor %}
-        </select>
-        <select class="form-select form-select-sm lex-prio" style="max-width: 110px;">
-          {% for prio in lexicon_priorities %}
-          <option value="{{ prio }}" {{ 'selected' if t.priority == prio }}>{{ prio }}</option>
-          {% endfor %}
-        </select>
-        <input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" value="{{ t.replace_by or t.term }}" style="max-width: 150px;">
-        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+      <div class="lexicon-row lexicon-card">
+        <div class="lexicon-grid">
+          <label class="form-label small mb-1">Forme validée</label>
+          <label class="form-label small mb-1">Formes suspectes observées</label>
+          <label class="form-label small mb-1">Catégorie</label>
+          <label class="form-label small mb-1">Priorité</label>
+          <input type="text" class="form-control form-control-sm lex-term" placeholder="Ex: Forme validée" value="{{ t.term }}">
+          <input type="text" class="form-control form-control-sm lex-variants" placeholder="Ex: Forme douteuse A, forme douteuse B" value="{{ (t.variants or [])|join(', ') }}">
+          <input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="Catégorie libre" value="{{ t.category }}">
+          <select class="form-select form-select-sm lex-prio">
+            {% for prio in lexicon_priorities %}
+            <option value="{{ prio }}" {{ 'selected' if t.priority == prio }}>{{ prio }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <input type="hidden" class="lex-replace" value="{{ t.replace_by or '' }}">
+        <script type="application/json" class="lex-contexts-json">{{ (t.contexts or [])|tojson }}</script>
+        <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>
+        {% if t.contexts %}
+        <details class="lex-contexts mt-2">
+          <summary class="small text-muted">Contexte proposé ({{ t.contexts|length }})</summary>
+          <div class="small mt-2">
+            {% for c in t.contexts %}
+            <div class="lex-context-item">
+              <span class="text-muted">{{ c.timecode or 'sans timecode' }}{% if c.speaker %} — {{ c.speaker }}{% endif %}</span>
+              <div>« {{ c.quote }} »</div>
+              {% if c.reason %}<div class="text-muted">{{ c.reason }}</div>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
       </div>
       {% endfor %}
     </div>
@@ -471,6 +494,8 @@
 <script>window.__JOB_ID__ = "{{ job.id }}";</script>
 <script src="{{ url_for('static', filename='js/wizard-api.js') }}"></script>
 <script src="{{ url_for('static', filename='js/wizard.js') }}"></script>
+<datalist id="lexicon-cat-list">{% for cat in lexicon_categories %}<option value="{{ cat }}"></option>{% endfor %}</datalist>
+<template id="lexicon-prio-tpl">{% for prio in lexicon_priorities %}<option value="{{ prio }}">{{ prio }}</option>{% endfor %}</template>
 <script>
 (function(){
   var JOB_ID = window.__JOB_ID__;
@@ -520,21 +545,11 @@
   var lexList = document.getElementById('lexicon-list');
   if (lexList && lexTerms.length > 0 && lexList.children.length === 0) {
     lexTerms.forEach(function(t) {
-      var row = document.createElement('div');
-      row.className = 'lexicon-row';
-      var term = (t.term || '').replace(/'/g, "\\'");
-      row.innerHTML = '<input type="text" class="form-control form-control-sm lex-term" placeholder="Terme" value="' + term + '" style="max-width:150px;">' +
-        '<select class="form-select form-select-sm lex-cat" style="max-width:120px;">{% for cat in lexicon_categories %}<option value="{{ cat }}" ' + (t.category === '{{ cat }}' ? 'selected' : '') + '>{{ cat }}</option>{% endfor %}</select>' +
-        '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">{% for prio in lexicon_priorities %}<option value="{{ prio }}" ' + (t.priority === '{{ prio }}' ? 'selected' : '') + '>{{ prio }}</option>{% endfor %}</select>' +
-        '<input type="text" class="form-control form-control-sm lex-replace" placeholder="Remplacer par" value="' + term + '" style="max-width:150px;">' +
-        '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
-      lexList.appendChild(row);
+      TranscrIA.renderLexiconRow(t);
     });
   }
   {% endif %}
 })();
 </script>
 
-<template id="lexicon-cat-tpl">{% for cat in lexicon_categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}</template>
-<template id="lexicon-prio-tpl">{% for prio in lexicon_priorities %}<option value="{{ prio }}">{{ prio }}</option>{% endfor %}</template>
 {% endblock %}

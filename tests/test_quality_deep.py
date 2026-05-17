@@ -246,3 +246,53 @@ class TestQualityReportIntegration:
 
         assert "low_coverage" in [c["type"] for c in report["checks"]]
         assert report["quality_score"] < 100
+
+    def test_report_flags_unresolved_lexicon_variants_after_correction(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "test-q-lexicon")
+        srt = (
+            "1\n"
+            "00:00:00,000 --> 00:00:03,000\n"
+            "SPEAKER_00: Le Terme suspect reste dans le texte.\n\n"
+            "2\n"
+            "00:00:03,000 --> 00:00:06,000\n"
+            "SPEAKER_00: Un Element reste aussi dans le texte.\n"
+        )
+        fs.save_text("metadata/transcription.srt", srt)
+        fs.save_text("metadata/transcription_corrigee.srt", srt)
+        fs.save_json("metadata/transcription_segments.json", _parse_srt(srt))
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 6})
+        fs.save_json("context/session_lexicon.json", [
+            {"term": "Terme validé", "variants": ["Terme suspect"]},
+            {"term": "Élément", "variants": ["Elementt"]},
+        ])
+
+        reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+        job = Job(id="test-q-lexicon", owner_id="u1", title="Test", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+
+        check = [c for c in report["checks"] if c["type"] == "unresolved_lexicon_variants"]
+        assert check
+        assert check[0]["count"] == 2
+        assert "Terme suspect" in str(report["review_points"])
+        assert "Element proche de Élément" in str(report["review_points"])
+
+    def test_micro_overlaps_are_reported_but_not_over_penalized(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "test-q-overlaps")
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:02,000\nBonjour\n")
+        fs.save_json("metadata/transcription_segments.json", [
+            {"start": 0.0, "end": 2.0, "text": "A"},
+            {"start": 1.8, "end": 3.0, "text": "B"},
+            {"start": 2.7, "end": 4.0, "text": "C"},
+        ])
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 4})
+        fs.save_json("context/session_lexicon.json", [])
+
+        reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+        job = Job(id="test-q-overlaps", owner_id="u1", title="Test", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+
+        overlap_check = [c for c in report["checks"] if c["type"] == "overlaps"][0]
+        assert overlap_check["count"] == 2
+        assert overlap_check["significant_count"] == 0
+        assert overlap_check["severity"] == "info"
+        assert report["quality_score"] == 100

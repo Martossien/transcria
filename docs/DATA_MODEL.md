@@ -86,7 +86,7 @@ Décorateur : `@requires(Permission.VIEW_ALL_JOBS)` → 401 si non authentifié,
 | `TRANSCRIBING` | `"transcribing"` | Traitement | Cohere ASR transcription finale en cours |
 | `DIARIZING` | `"diarizing"` | Traitement | Pyannote diarization finale en cours |
 | `ARBITRATING` | `"arbitrating"` | Traitement | Correction opencode+Qwen en cours |
-| `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 9 contrôles en cours |
+| `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 10 contrôles en cours |
 | `QUALITY_CHECKED` | `"quality_checked"` | Qualité | Contrôles terminés |
 | `EXPORT_READY` | `"export_ready"` | Export | Package ZIP prêt |
 | `COMPLETED` | `"completed"` | Export | Workflow terminé |
@@ -207,7 +207,7 @@ jobs/<job_id>/
 │   └── job_context.json           # Même contexte en JSON
 │
 ├── speakers/
-│   ├── speaker_turns.json          # Tours pyannote [{start, end, speaker, duration}]
+│   ├── speaker_turns.json          # Tours pyannote [{turns: [...], exclusive_turns: [...]}] (exclusive_turns via exclusive_speaker_diarization, sans chevauchements)
 │   ├── speaker_stats.json         # Stats par locuteur [{speaker_id, speaking_time_seconds, turn_count, ...}]
 │   ├── speaker_mapping.json       # Mapping locuteur→participant [{mapping, speakers}]
 │   ├── speaker_clips.json         # Index des extraits audio (BUG-011 : souvent absent)
@@ -327,10 +327,21 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
     "variants": ["ebitda", "Ebitda"],
     "priority": "importante",
     "replace_by": "",
-    "comment": "Résultat opérationnel courant"
+    "comment": "Résultat opérationnel courant",
+    "contexts": [
+      {
+        "variant": "",
+        "timecode": "00:05",
+        "speaker": "SPEAKER_00",
+        "quote": "L'ebitda est à 12M",
+        "reason": ""
+      }
+    ]
   }
 ]
 ```
+
+**Catégories LexiconManager** (`LEXICON_CATEGORIES`) : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect (20 catégories).
 
 ### job_context.yaml
 
@@ -342,7 +353,7 @@ Ce fichier est construit après le mapping des locuteurs puis reconstruit après
 
 ```json
 {
-  "total_checks": 9,
+  "total_checks": 10,
   "warnings": 3,
   "checks": [
     {"type": "empty_segments", "count": 2, "severity": "warning"},
@@ -353,7 +364,7 @@ Ce fichier est construit après le mapping des locuteurs puis reconstruit après
 }
 ```
 
-Score = `max(0, 100 - warnings * 5)`. Les 9 contrôles : segments vides, très courts, très longs, trous temporels, chevauchements, locuteurs non mappés, termes lexique absents, couverture audio, ratio mots/durée.
+Score = `max(0, 100 - warnings * 5)`. Les 10 contrôles : segments vides, très courts, très longs, trous temporels, chevauchements, locuteurs non mappés, variantes lexique non résolues (variantes exactes + formes proches trouvées après correction), termes lexique absents, couverture audio, ratio mots/durée.
 
 ---
 

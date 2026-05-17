@@ -4,6 +4,7 @@ from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.quality.lexicon_checks import LexiconChecker
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class QualityReporter:
             "coverage_ratio": t.get("coverage_ratio", 0.8),
             "low_word_rate": t.get("low_word_rate", 0.5),
             "high_word_rate": t.get("high_word_rate", 10),
+            "significant_overlap_s": t.get("significant_overlap_s", 1.0),
         }
 
     def run_all_checks(self, job: Job) -> dict:
@@ -79,16 +81,29 @@ class QualityReporter:
         total_checks += 1
         if len(segments) >= 2:
             overlaps = []
+            significant_overlaps = []
             for i in range(len(segments) - 1):
                 if segments[i + 1]["start"] < segments[i]["end"]:
-                    overlaps.append({
+                    overlap = round(segments[i]["end"] - segments[i + 1]["start"], 2)
+                    item = {
                         "index": i,
-                        "overlap_seconds": round(segments[i]["end"] - segments[i + 1]["start"], 2),
-                    })
+                        "overlap_seconds": overlap,
+                    }
+                    overlaps.append(item)
+                    if overlap >= thresholds["significant_overlap_s"]:
+                        significant_overlaps.append(item)
             if overlaps:
-                checks.append({"type": "overlaps", "count": len(overlaps), "severity": "warning"})
-                review_points.append(f"Chevauchements : {len(overlaps)} — vérifier les timestamps.")
-                warnings += len(overlaps)
+                severity = "warning" if significant_overlaps else "info"
+                checks.append({
+                    "type": "overlaps",
+                    "count": len(overlaps),
+                    "significant_count": len(significant_overlaps),
+                    "severity": severity,
+                })
+                review_points.append(
+                    f"Chevauchements : {len(overlaps)} dont {len(significant_overlaps)} ≥ {thresholds['significant_overlap_s']}s — vérifier les timestamps."
+                )
+                warnings += len(significant_overlaps)
 
         # 6. Locuteurs non mappés
         total_checks += 1
@@ -118,6 +133,34 @@ class QualityReporter:
                 f"Termes du lexique normalisés absents : {', '.join(missing_corrected[:10])}"
             )
             warnings += len(missing_corrected)
+
+        # 7bis. Variantes lexique non résolues après correction
+        total_checks += 1
+        unresolved = LexiconChecker.find_unresolved_terms(corrected_srt, lexicon)
+        unresolved_count = len(unresolved["exact_variants"]) + len(unresolved["close_forms"])
+        if unresolved_count:
+            checks.append({
+                "type": "unresolved_lexicon_variants",
+                "exact_variants": unresolved["exact_variants"],
+                "close_forms": unresolved["close_forms"],
+                "count": unresolved_count,
+                "severity": "warning",
+            })
+            details = []
+            if unresolved["exact_variants"]:
+                details.extend(
+                    f"{item['variant']} → {item['term']}"
+                    for item in unresolved["exact_variants"][:5]
+                )
+            if unresolved["close_forms"]:
+                details.extend(
+                    f"{item['form']} proche de {item['term']}"
+                    for item in unresolved["close_forms"][:5]
+                )
+            review_points.append(
+                "Variantes lexique non résolues après correction : " + ", ".join(details)
+            )
+            warnings += unresolved_count
 
         # 8. Couverture audio
         duration_covered = sum(s.get("end", 0) - s.get("start", 0) for s in segments)
