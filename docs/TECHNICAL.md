@@ -372,11 +372,11 @@ Contient `_STEPS` (9 entrées, sans étape `speakers` séparée) et des helpers 
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode/Qwen résumé | GPU 0 → GPU 0+1 |
-| `run_speaker_detection(job, audio_path, config)` | pyannote diarization + formatage | GPU 0 |
-| `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPU 0 |
-| `run_diarization(job, audio_path, config)` | pyannote speaker mapping | GPU 0 |
-| `run_correction(job, config)` | opencode+Qwen 35B : correction speakers+lexique+orthographe | GPU 0+1 |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode/Qwen résumé | GPUSession auto |
+| `run_speaker_detection(job, audio_path, config)` | pyannote diarization + formatage via GPUSession | GPUSession auto |
+| `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
+| `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession | GPUSession auto |
+| `run_correction(job, config)` | opencode+Qwen 35B : correction speakers+lexique+orthographe | LLM arbitrage |
 | `run_quality_checks(job, config)` | 9 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |
 
@@ -387,16 +387,20 @@ run_transcription → run_diarization (si quality) → run_correction → run_qu
 
 Cycle de vie GPU dans `run_summary` :
 ```
-Phase 1: ensure_free(6 Go) → GPU → Cohere ASR → offload
-Phase 1b: pyannote (si enable_speaker_detection) → sauvegarde speaker_count + diarization_context.md
-Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run → stop_qwen_35b()
-  (CAS A: réutilisation directe si LLM déjà saine — CAS C: libération GPU + lancement)
+Phase 1: GPUSession(cohere-summary, 6 Go) → GPU auto → Cohere ASR → offload
+Phase 1b: GPUSession(pyannote, 2 Go) → GPU auto → diarization → offload → diarization_context.md
+Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run
+  (CAS A: réutilisation directe — CAS C: libération GPU + lancement)
+  → LLM reste vivante pour la phase correction
 ```
 
 Cycle de vie GPU dans `run_correction` :
 ```
-ensure_arbitrage_llm_ready(api_model_id) → opencode run → stop_qwen_35b()
+ensure_arbitrage_llm_ready(api_model_id) → opencode run
+  (CAS A garanti si run_summary vient de tourner — LLM déjà chargée, même PID)
 ```
+
+L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` via `finally` en fin de pipeline.
 
 ---
 
@@ -444,9 +448,10 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 **`diarization.py` — `DiarizerService`**
 | Méthode | Description |
 |---|---|
-| `__init__(config, device)` | Initialise avec config et device |
+| `__init__(config, device)` | Initialise avec config et device (fourni par GPUSession, jamais hardcodé) |
 | `available` | Vérifie `pyannote.audio` importable |
 | `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns [{start, end, speaker, duration}] → stats → sauvegarde |
+| `offload()` | gc.collect() + cuda.empty_cache() — libère VRAM avant sortie du GPUSession |
 | `_extract_clips(audio_path, turns, speakers, fs)` | Extrait des extraits WAV par locuteur (3 clips, 3-12s) |
 | `_load_audio_gpu(audio_path, device)` | torchaudio → resample 16kHz → tensor GPU |
 
@@ -602,12 +607,12 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `get_gpu_info()` | Dashboard API ou fallback PyTorch |
 | `get_free_vram_mb(gpu_index)` | VRAM libre en Mo |
 | `get_best_gpu(required_mb)` | Meilleur GPU disponible (≥ required + MIN_FREE) |
-| `ensure_free(required_mb, preferred_gpu)` | Vérifie/libère/alloue GPU (SIGTERM puis SIGKILL si >4Go) |
-| `_free_memory(gpu_index)` | Kill processus GPU > 4Go (SIGTERM puis SIGKILL après 2s) |
-| `stop_vllm_port_8000()` | Tue vLLM sur port 8000 via _kill_port |
+| `ensure_free(required_mb, preferred_gpu)` | Scanne tous les GPUs si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
+| `is_arbitrage_llm_running()` | Retourne True si un processus écoute sur `qwen_port` (lsof) — utilisé par `_release_arbitrage_llm` avant d'appeler stop |
 | `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
 | `launch_qwen_35b()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
-| `stop_qwen_35b()` | Tue processus sur port 8080 |
+| `stop_qwen_35b()` | Tue processus sur port 8080 (appelé par `_release_arbitrage_llm` en fin de pipeline) |
+| `stop_vllm_port_8000()` | Tue vLLM sur port 8000 via _kill_port |
 | `free_all_gpus()` | stop_vllm + stop_qwen + offload_all (reset forcé uniquement) |
 | `is_port_open(port)` | Vérifie `/v1/models` accessible + teste une inférence réelle `/v1/completions` |
 | `_log_all_gpus(label)` | Logue VRAM libre/totale/utilisée de chaque GPU (utilisé par ensure_free lors d'un basculement) |
@@ -736,21 +741,22 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 
 ```
 Étape 5 - Résumé :
-  Phase 1 : ensure_free(6 Go) → GPU → Cohere ASR (transcription 30s chunks) → offload
-  Phase 1b: pyannote (si enable_speaker_detection) → speaker_count_pyannote + summary/diarization_context.md
-  Phase 2 : ensure_arbitrage_llm_ready(api_model_id) → opencode run_summary avec diarization_context → parse résultats → stop_qwen_35b()
+  Phase 1 : GPUSession(cohere-summary, 6 Go) → GPU auto → Cohere ASR (8 chunks VAD) → offload
+  Phase 1b: GPUSession(pyannote, 2 Go) → GPU auto → diarization → offload → diarization_context.md
+  Phase 2 : ensure_arbitrage_llm_ready(api_model_id) → CAS A/B/C → opencode run_summary
   → meeting_context enrichi (title_suggere, type_suggere, sujet_suggere, participants_detectes, termes_suspects, summary_llm)
+  → LLM reste vivante (pas de stop ici)
 
 Étape 9 - Traitement (mode quality) :
-  Cohere ASR (GPU 0, ensure_free 6Go) → _apply_speakers → sauvegarde SRT et segments
-  → pyannote diarization (GPU 0)
-  → ensure_arbitrage_llm_ready(api_model_id) → opencode correction SRT → stop_qwen_35b()
-  → qualité (9 checks, score /100)
-  → export ZIP
+  GPUSession(cohere-transcription, 6 Go) → GPU auto → Cohere ASR 29 chunks pyannote → offload → SRT
+  → GPUSession(pyannote, 2 Go) → GPU auto → diarization supplémentaire → offload
+  → ensure_arbitrage_llm_ready(api_model_id) → CAS A (LLM déjà chargée si résumé vient de tourner) → opencode correction SRT
+  → qualité (9 checks, score /100) → export ZIP
+  → _release_arbitrage_llm() : is_arbitrage_llm_running() → stop_qwen_35b() [fin pipeline]
 
 Étape 9 - Traitement (mode fast) :
-  Cohere ASR → correction opencode → qualité → export
-  (pas de diarization supplémentaire)
+  Cohere ASR → ensure_arbitrage_llm_ready → correction opencode → qualité → export
+  → _release_arbitrage_llm() [fin pipeline]
 ```
 
 ---
@@ -777,15 +783,26 @@ Observation machine (17 mai 2026) avec la LLM d'arbitrage active :
 ### 7.2 Cycle de vie automatique
 
 ```
-Transcription (Phase 1):
-  ensure_free(6 Go) → GPU trouvé → charge Cohere → transcrit → offload
+Cohere ASR (résumé ou transcription) :
+  GPUSession(cohere-*, 6 Go)
+    → ensure_free() → scan tous GPUs → GPU avec le plus de VRAM libre
+    → charge modèle → transcrit → offload auto à la sortie du context manager
 
-Résumé LLM (Phase 2):
-  free_all_gpus() → stop vLLM 8000 → launch_qwen_35b → attend port 8080
-  → opencode run → summary → stop_qwen_35b()
+pyannote (diarization ou speaker_detection) :
+  GPUSession(pyannote, 2 Go)
+    → ensure_free() → GPU auto (évite GPU 0/1/2 si Qwen actif sur ces GPUs)
+    → diarize() → diarizer.offload() → offload_all() à la sortie
 
-Correction SRT (Phase 3):
-  free_all_gpus() → launch_qwen_35b → opencode run → stop_qwen_35b()
+LLM arbitrage (résumé puis correction) :
+  ensure_arbitrage_llm_ready(api_model_id)
+    → CAS A : LLM déjà saine → opencode démarre immédiatement
+    → CAS C : lancement llama-server → attente port → opencode
+  [LLM reste vivante entre résumé et correction — même PID, CAS A garanti]
+
+Fin de pipeline :
+  PipelineService._release_arbitrage_llm()
+    → is_arbitrage_llm_running() → si True : stop_qwen_35b()
+  [unique point d'arrêt de la LLM, dans le finally de _execute_pipeline]
 ```
 
 ### 7.3 Monitoring

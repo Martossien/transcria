@@ -204,6 +204,17 @@ class VRAMManager:
 
     # ── Service lifecycle ─────────────────────────────────
 
+    def is_arbitrage_llm_running(self) -> bool:
+        """Retourne True si un processus écoute sur le port de la LLM d'arbitrage."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{self.qwen_port}", "-sTCP:LISTEN"],
+                capture_output=True, text=True, timeout=5,
+            )
+            return bool(result.stdout.strip())
+        except Exception:
+            return False
+
     def _get_port_pid(self, port: int) -> str:
         """Retourne le(s) PID qui écoutent sur ce port, pour les logs."""
         try:

@@ -136,13 +136,13 @@ class WorkflowRunner:
         context_path = fs.job_dir / "context" / "job_context.yaml"
         diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
-        model_id = llm_config.get("model_id")
+        api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
         sl.info(
             "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
-            model_id or "non contraint",
+            api_model_id or "non contraint",
             config.get("services", {}).get("qwen_port", 8080),
         )
-        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=model_id)
+        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
 
         if not launched:
             sl.warning("Qwen 35B NON DISPONIBLE — résumé LLM sauté (transcription rapide conservée)")
@@ -167,8 +167,6 @@ class WorkflowRunner:
             self._apply_llm_suggestions(fs, result, parsed, sl)
         except Exception as exc:
             logger.warning("Erreur opencode: %s", exc)
-        finally:
-            self.vram.stop_qwen_35b()
 
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:
@@ -407,12 +405,20 @@ class WorkflowRunner:
         try:
             from transcria.stt.speaker_detection import SpeakerDetector
 
-            detector = SpeakerDetector(config)
-            import torch
-            device = "cuda:0" if torch.cuda.is_available() else "cpu"
-            result = detector.detect(job, Path(audio_path), device=device)
+            with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                device = f"cuda:{gpu.gpu_index}"
+                logger.info(
+                    "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
+                    device, self.vram.pyannote_vram_mb,
+                )
+                detector = SpeakerDetector(config)
+                result = detector.detect(job, Path(audio_path), device=device)
             self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
             return result
+        except GPUSessionError as exc:
+            logger.error("[speaker_detection] VRAM insuffisante: %s", exc)
+            self.store.update_state(job.id, JobState.FAILED, str(exc))
+            return {"error": str(exc), "speakers": []}
         except Exception as exc:
             logger.exception("Échec détection locuteurs")
             self.store.update_state(job.id, JobState.FAILED, str(exc))
@@ -448,9 +454,20 @@ class WorkflowRunner:
         try:
             from transcria.stt.diarization import DiarizerService
 
-            diarizer = DiarizerService(config)
-            result = diarizer.diarize(job, Path(audio_path))
+            with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                device = f"cuda:{gpu.gpu_index}"
+                logger.info(
+                    "[diarization] GPU sélectionné: %s (%d Mo réservés)",
+                    device, self.vram.pyannote_vram_mb,
+                )
+                diarizer = DiarizerService(config, device=device)
+                result = diarizer.diarize(job, Path(audio_path))
+                diarizer.offload()
             return result
+        except GPUSessionError as exc:
+            logger.error("[diarization] VRAM insuffisante: %s", exc)
+            self.store.update_state(job.id, JobState.FAILED, str(exc))
+            return {"error": str(exc)}
         except Exception as exc:
             logger.exception("Échec diarisation")
             return {"error": str(exc)}
@@ -482,13 +499,13 @@ class WorkflowRunner:
         if not srt_path.is_file():
             return {"success": False, "error": "SRT source introuvable"}
 
-        model_id = config.get("workflow", {}).get("summary_llm", {}).get("model_id")
+        api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
         logger.info(
             "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
-            model_id or "non contraint",
+            api_model_id or "non contraint",
             config.get("services", {}).get("qwen_port", 8080),
         )
-        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=model_id)
+        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
         if not launched:
             return {"success": False, "error": "Qwen 35B non disponible"}
 
@@ -511,8 +528,6 @@ class WorkflowRunner:
         except Exception as exc:
             logger.exception("Échec correction SRT")
             return {"success": False, "error": str(exc)}
-        finally:
-            self.vram.stop_qwen_35b()
 
     def build_export(self, job: Job, config: dict) -> dict:
         try:

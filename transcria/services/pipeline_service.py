@@ -40,6 +40,14 @@ class PipelineService:
     def _execute_pipeline(
         self, job: Job, audio_path: str, mode: str, sl
     ) -> dict:
+        try:
+            return self._run_pipeline_steps(job, audio_path, mode, sl)
+        finally:
+            self._release_arbitrage_llm()
+
+    def _run_pipeline_steps(
+        self, job: Job, audio_path: str, mode: str, sl
+    ) -> dict:
         if self._is_cancel_requested(job.id):
             JobStore.update_state(job.id, JobState.CANCELLED)
             return {"error": "Traitement annulé", "step": "transcription", "cancelled": True}
@@ -86,6 +94,13 @@ class PipelineService:
 
         JobStore.update_state(job.id, JobState.COMPLETED)
         return {"status": "completed", "transcription": transcribe_result}
+
+    def _release_arbitrage_llm(self) -> None:
+        if self.runner.vram.is_arbitrage_llm_running():
+            logger.info("[pipeline] Arrêt LLM arbitrage en fin de pipeline")
+            self.runner.vram.stop_qwen_35b()
+        else:
+            logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
 
     @staticmethod
     def _is_cancel_requested(job_id: str) -> bool:

@@ -186,16 +186,18 @@ transcria/
 L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne tiennent pas tous en mémoire simultanément :
 1. **Cohere ASR** : ~6 Go VRAM
 2. **pyannote** : ~2 Go VRAM
-3. **Qwen 35B** : ~48 Go VRAM sur 2 GPUs
+3. **Qwen 35B** : ~48–60 Go VRAM sur 2–3 GPUs (selon tensor-split)
 
-Le cycle est : Cohere→(offload)→pyannote→(offload)→LLM arbitrage→(stop). `VRAMManager` gère ce cycle, vérifie la disponibilité via le dashboard LLM (port 5001) ou `nvidia-smi` en fallback.
+**`GPUSession`** est le context manager utilisé pour Cohere et pyannote. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
 **`ensure_arbitrage_llm_ready(expected_model_id)`** est le point d'entrée unique avant tout usage de la LLM d'arbitrage. Elle vérifie l'état réel du serveur (`/v1/models` + inférence test) et choisit parmi trois chemins logués explicitement :
 - **CAS A** : LLM active et bon modèle → réutilisation directe, zéro redémarrage
 - **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
 - **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
 
-`services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `free_all_gpus()` reste disponible pour les resets forcés mais ne doit plus être appelé avant la LLM d'arbitrage.
+**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_qwen_35b()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
+
+`services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
 ### Pipeline STT — deux modes de chunking
 

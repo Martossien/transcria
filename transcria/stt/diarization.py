@@ -161,6 +161,14 @@ class DiarizerService:
         except Exception as exc:
             logger.warning("Extraction clips audio ignorée: %s", exc)
 
+    def offload(self) -> None:
+        import gc
+        import torch
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        logger.debug("DiarizerService: VRAM libérée (gc + cuda.empty_cache)")
+
     @staticmethod
     def _load_audio_gpu(audio_path: Path, device: str = "cuda:0"):
         import torch
