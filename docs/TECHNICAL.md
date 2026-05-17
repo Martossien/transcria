@@ -8,9 +8,11 @@ TranscrIA est un portail guidé de transcription de réunion destiné aux utilis
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
-**Démarrage :**
+**Démarrage (dev) :**
 ```bash
-cd transcria && pip install -r requirements.txt && python app.py
+cd transcria
+source venv/bin/activate
+python app.py
 # → http://0.0.0.0:7870
 # Admin: admin / admin-change-me
 ```
@@ -29,14 +31,14 @@ cd transcria && pip install -r requirements.txt && python app.py
 ## 2. Architecture
 
 ```
-transcria-mvp/
+transcria/
 ├── app.py                         # Point d'entrée Flask (create_app + main)
 ├── config.yaml / config.example.yaml
 ├── requirements.txt
 │
 ├── transcria/                      # Package principal
 │   ├── __init__.py
-│   ├── config.py                  # Chargement/sauvegarde YAML + deep merge + singleton
+│   ├── config/                    # loader.py, config_schema.py, system_detector.py
 │   ├── database.py                # Instance SQLAlchemy
 │   ├── logging_setup.py           # Configuration logging (RotatingFileHandler)
 │   │
@@ -49,17 +51,15 @@ transcria-mvp/
 │   │
 │   ├── jobs/                      # Gestion des traitements
 │   │   ├── __init__.py
-│   │   ├── models.py              # Modèle Job, JobState (20 états), WORKFLOW_STEPS (9 étapes)
+│   │   ├── models.py              # Modèle Job, JobState (20 états)
 │   │   ├── store.py               # JobStore (CRUD jobs, count_jobs)
 │   │   └── filesystem.py          # JobFilesystem (I/O disque, save_json/load_json/save_text/load_text/save_upload)
 │   │
-│   ├── workflow/                   # Moteur de workflow 9 étapes affichées
+│   ├── workflow/                  # Moteur de workflow 9 étapes affichées
 │   │   ├── __init__.py
 │   │   ├── states.py              # WorkflowState (compute_statuses, get_next_step), StepStatus
-│   │   ├── steps.py               # WorkflowSteps (helpers: step_requires_upload, step_requires_speakers)
-│   │   └── runner.py              # WorkflowRunner (run_analyze, run_summary, run_speaker_detection,
-│   │                                #   run_transcription, run_diarization, run_quality_checks,
-│   │                                #   run_correction, build_export)
+│   │   ├── steps.py               # WORKFLOW_STEPS + helpers de navigation
+│   │   └── runner.py              # WorkflowRunner
 │   │
 │   ├── audio/                     # Analyse et conversion audio
 │   │   ├── __init__.py
@@ -72,7 +72,7 @@ transcria-mvp/
 │   │   ├── transcription.py       # Transcriber (pipeline Cohere + _apply_speakers)
 │   │   ├── diarization.py         # DiarizerService (pyannote GPU + _extract_clips WAV)
 │   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping)
-│   │   └── summary.py             # SummaryGenerator (Cohere transcription rapide, _llm_summarize)
+│   │   └── summary.py             # SummaryGenerator (quick transcript + VAD Silero)
 │   │
 │   ├── context/                   # Contexte de réunion
 │   │   ├── __init__.py
@@ -99,8 +99,10 @@ transcria-mvp/
 │   │
 │   ├── gpu/                       # Gestion GPU
 │   │   ├── __init__.py
-│   │   ├── vram_manager.py        # VRAMManager (cycle de vie GPU, launch/stop LLM, is_port_open)
-│   │   └── opencode_runner.py    # OpenCodeRunner (run, run_summary, run_correction, _parse_structured_summary)
+│   │   ├── vram_manager.py        # VRAMManager
+│   │   ├── gpu_session.py         # GPUSession context manager
+│   │   ├── llm_backend.py         # LLMBackend
+│   │   └── opencode_runner.py     # OpenCodeRunner
 │   │
 │   └── web/                       # Interface utilisateur
 │       ├── __init__.py
@@ -171,7 +173,7 @@ services:
 models:
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"
-  cohere_model_path: "./models/Whisper/cohere-asr/cohere-transcribe-03-2026"
+  cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
 
 workflow:
@@ -588,14 +590,11 @@ Tous les appels sont en try/except avec log debug si le dashboard est indisponib
 
 **`vram_manager.py` — `VRAMManager`**
 
-Constantes :
-- `COHERE_VRAM_MB = 6000`
-- `PYANNOTE_VRAM_MB = 2000`
-- `QWEN35_VRAM_MB = 60000`
-- `MIN_FREE_MB = 4000`
-- `QWEN_PORT = 8080`, `VLLM_PORT = 8000`
-- `ARBITRAGE_SCRIPT = "launch_arbitrage2.sh"`
-- `STOP_SCRIPT = "stop_qwen36_27b_vllm.sh"`
+Les valeurs clés sont lues depuis `config.yaml` :
+- `services.arbitrage_script` (défaut `./scripts/launch_arbitrage.sh`)
+- `services.stop_script` (défaut `./scripts/stop_qwen.sh`)
+- `services.qwen_port` (8080), `services.vllm_port` (8000)
+- `gpu.cohere_vram_mb`, `gpu.pyannote_vram_mb`, `gpu.llm_vram_mb`, `gpu.min_free_vram_mb`
 
 | Méthode | Description |
 |---|---|
@@ -605,7 +604,7 @@ Constantes :
 | `ensure_free(required_mb, preferred_gpu)` | Vérifie/libère/alloue GPU (SIGTERM puis SIGKILL si >4Go) |
 | `_free_memory(gpu_index)` | Kill processus GPU > 4Go (SIGTERM puis SIGKILL après 2s) |
 | `stop_vllm_port_8000()` | Tue vLLM sur port 8000 via _kill_port |
-| `launch_qwen_35b()` | Lance `launch_arbitrage2.sh` → attend port 8080 (timeout 600s) |
+| `launch_qwen_35b()` | Lance `services.arbitrage_script` (défaut `scripts/launch_arbitrage.sh`) → attend port Qwen (timeout 600s) |
 | `stop_qwen_35b()` | Tue processus sur port 8080 |
 | `free_all_gpus()` | stop_vllm + stop_qwen + offload_all + sleep 2s |
 | `is_port_open(port)` | Vérifie `/v1/models` accessible + teste une inférence réelle `/v1/completions` |
@@ -761,11 +760,16 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 |---|---|---|---|---|
 | Cohere ASR (2B) | 1 GPU | ~5-6 Go | Python (transformer) | — |
 | pyannote community-1 | 1 GPU | ~2 Go | Python (pyannote.audio) | — |
-| Qwen 35B UD-Q8_XL | 2 GPUs | ~48 Go | `launch_arbitrage2.sh` | 8080 |
-| Qwen 35B Q4_K_M | 2 GPUs | ~40 Go | `launch_arbitrage.sh` | 8080 |
-| Qwen 27B FP8 vLLM | 2 GPUs | ~32 Go | `launch_qwen36_27b_vllm.sh` | 8080 |
-| GLM-4.7 IQ5_K | 2 GPUs | ~30 Go | `systemctl start launch_llm` | 8080 |
-| Voxtral Mini 4B vLLM | 1 GPU | ~32 Go | Manuel (vllm serve) | 8000 |
+| Qwen 3.6 35B (actuel) | variable (selon script/config machine) | variable | `launch_arbitrage.sh` (llama.cpp) | 8080 |
+| vLLM (optionnel) | variable | variable | externe au repo | 8000 |
+
+Le backend d'arbitrage fourni dans ce repo est **llama.cpp** (`llama-server`) via `scripts/launch_arbitrage.sh`.
+Le modèle actuellement utilisé est `Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf`, mais il est modifiable (chemin modèle et paramètres du script, `workflow.*.model_id`, provider opencode).
+
+Observation machine (17 mai 2026) avec la LLM d'arbitrage active :
+- `launch_arbitrage.sh` utilise `--tensor-split 1,1,1` (répartition sur 3 GPUs sur cette machine).
+- `nvidia-smi` montre `llama-server` chargé sur GPU 0/1/2 avec ~18.7 GiB / ~15.6 GiB / ~15.7 GiB.
+- Cette empreinte dépend du quantization, des flags (`ctx-size`, cache KV, etc.) et de la topologie GPU.
 
 ### 7.2 Cycle de vie automatique
 
@@ -791,10 +795,7 @@ Le dashboard-llm (port 5001) fournit l'état GPU en temps réel via `/api/v1/gpu
 
 ## 8. opencode
 
-Le fichier `~/.config/opencode/opencode.json` définit 3 providers :
-- `local` → Qwen 35B Arbitrage (llama.cpp, 263K contexte)
-- `arbitrage2` → Qwen 27B FP8 (vLLM, 135K contexte)
-- `ik_local` → GLM 4.7 IQ5 (131K contexte)
+Le fichier `~/.config/opencode/opencode.json` doit au minimum définir le provider `local` utilisé par `model_id` (par défaut `local/qwen3-35b-arbitrage`).
 
 `OpenCodeRunner` appelle :
 ```

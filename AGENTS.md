@@ -27,7 +27,7 @@ python app.py
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 412 tests (22 modules, mock, pas de GPU requis)
+python -m pytest tests/ -q           # 412 tests (21 modules test_*.py + E2E, mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
@@ -128,14 +128,14 @@ transcria/
       static/js/            # wizard.js, wizard-api.js
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
-    prompts/                # Prompts LLM (summary.md, correction.md)
+    prompts/                # Prompts LLM (summary_prompt.txt, correction_prompt.txt)
     lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
     launch_arbitrage.sh     # Lance llama-server (Qwen 35B, 2 GPUs, contexte 263K)
     stop_qwen.sh            # Arrête llama-server proprement
     stop_qwen_vllm.sh       # Arrête vLLM (si utilisé à la place de llama.cpp)
-  tests/                    # 22 modules pytest, 412 tests (mocks GPU/LLM)
+  tests/                    # 21 modules test_*.py + E2E, 412 tests (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -239,7 +239,7 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-412 tests dans 22 modules couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+412 tests dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).

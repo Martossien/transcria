@@ -4,7 +4,7 @@
 
 La configuration est chargée depuis `config.yaml` (ou le chemin dans la variable d'environnement `TRANSCRIA_CONFIG`). Le mécanisme de chargement :
 
-1. `load_config()` part de `_DEFAULT_CONFIG` (valeurs hardcodées dans `config.py`)
+1. `load_config()` part de `_DEFAULT_CONFIG` (valeurs hardcodées dans `transcria/config/loader.py`)
 2. Si le fichier YAML existe, il est chargé et fusionné récursivement via `_deep_merge()`
 3. `get_config()` retourne un singleton — première appel charge, appels suivants réutilisent
 4. `save_config(cfg)` écrit un YAML sur disque (`TRANSCRIA_CONFIG` si défini, sinon `config.yaml`) en normalisant les valeurs non supportées
@@ -17,13 +17,13 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 |---|---|---|
 | `config.example.yaml` | Template pour nouveau déploiement | Oui |
 | `config.yaml` | Configuration de production | **Non** (chemins absolus, secrets) |
-| `_DEFAULT_CONFIG` dans `config.py` | Valeurs par défaut si YAML absent | Dans le code |
+| `_DEFAULT_CONFIG` dans `transcria/config/loader.py` | Valeurs par défaut si YAML absent | Dans le code |
 
 ### Différences connues config.example.yaml vs config.yaml production
 
 | Paramètre | `config.example.yaml` | `config.yaml` (production) |
 |---|---|---|
-| `models.cohere_model_path` | `./models/Whisper/...` (relatif) | `/opt/transcria-mvp/models/Whisper/...` (absolu) |
+| `models.cohere_model_path` | `./models/cohere-asr/...` (relatif) | peut être absolu selon l'installation |
 | `workflow.summary_llm.model_id` | `local/qwen3-35b` | `local/qwen3-35b-arbitrage` |
 | `workflow.summary_llm.timeout_seconds` | 1800 | 1800 |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
@@ -46,7 +46,7 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 ```bash
 python app.py --host 127.0.0.1 --port 8080 --debug
 python app.py --no-debug
-# ou variables d'environnement : TRANSCIA_HOST, TRANSCRIA_PORT, TRANSCIA_DEBUG
+# ou variables d'environnement : TRANSCRIA_HOST, TRANSCRIA_PORT, TRANSCRIA_DEBUG
 ```
 
 **Sécurité :** `debug=true` en production expose les stack traces. Le port par défaut 7870 est choisi pour ne pas entrer en conflit avec le dashboard (5001) et SRT Editor (7861).
@@ -101,9 +101,10 @@ python app.py --no-debug
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Identifiant du modèle STT par défaut (non utilisé — Cohere est hardcoded) |
-| `fallback_stt_model` | string | `"large-v3"` | Modèle Whisper de fallback (non utilisé dans le code actuel) |
-| `cohere_model_path` | string | `"./models/Whisper/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
+| `stt_backend` | string | `"cohere"` | Backend STT (`cohere` ou `whisper`) |
+| `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
+| `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
+| `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
 | `pyannote_model` | string | `"pyannote/speaker-diarization-community-1"` | Nom du modèle pyannote HuggingFace |
 
 **Redémarrage requis :** non — les chemins sont lus à chaque transcription/diarization.
@@ -111,7 +112,7 @@ python app.py --no-debug
 **Impact si modifié :**
 - `cohere_model_path` : si le chemin est invalide, `CohereTranscriber.load()` échoue avec un avertissement. Le chemin est résolu en absolu si c'est un répertoire local (`os.path.abspath`). Si le chemin commence par `CohereLabs/` ou `cohere/`, HuggingFace download est utilisé.
 - `pyannote_model` : doit être un modèle HuggingFace valide. Nécessite d'accepter les conditions sur huggingface.co et configurer `HF_TOKEN` pour les modèles gated.
-- `default_stt_model` et `fallback_stt_model` : **non utilisés** dans le code actuel. Présents pour une future sélection de modèle.
+- `stt_backend` pilote la sélection du backend via `TranscriberFactory`.
 
 ---
 
@@ -214,8 +215,8 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `TRANSCRIA_CONFIG` | Chemin vers le fichier config.yaml | `config.yaml` |
 | `TRANSCRIA_SECRET` | Clé secrète Flask (sessions) | `os.urandom(32).hex()` (aléatoire à chaque redémarrage) |
 | `TRANSCRIA_PORT` | Port d'écoute (surcharge CLI prioritaire) | Valeur de `config.yaml` ou 7870 |
-| `TRANSCIA_HOST` | Hôte d'écoute | Valeur de `config.yaml` ou `0.0.0.0` |
-| `TRANSCIA_DEBUG` | Mode debug (`"true"` = activé) | Valeur de `config.yaml` ou `false` |
+| `TRANSCRIA_HOST` | Hôte d'écoute | Valeur de `config.yaml` ou `0.0.0.0` |
+| `TRANSCRIA_DEBUG` | Mode debug (`"true"` = activé) | Valeur de `config.yaml` ou `false` |
 | `HF_TOKEN` | Token HuggingFace pour pyannote | Requis si modèle gated |
 
 **Sécurité :** `TRANSCRIA_SECRET` est aléatoire par défaut, ce qui invalide les sessions existantes à chaque redémarrage du serveur. En production, définir une valeur fixe.
@@ -238,22 +239,28 @@ Limites :
 
 ---
 
-## 8. Scripts externes (hardcodés dans VRAMManager)
+## 8. Scripts externes (configurables via config + env)
 
-Ce ne sont pas des paramètres config mais des constantes dans `gpu/vram_manager.py` :
+`VRAMManager` lit ces valeurs dans `config.yaml` avec fallback :
 
-| Constante | Valeur | Description |
+| Paramètre | Défaut | Description |
 |---|---|---|
-| `ARBITRAGE_SCRIPT` | `launch_arbitrage2.sh` | Script bash de lancement Qwen 35B |
-| `STOP_SCRIPT` | `stop_qwen36_27b_vllm.sh` | Script bash d'arrêt vLLM |
-| `QWEN_PORT` | `8080` | Port du serveur Qwen 35B |
-| `VLLM_PORT` | `8000` | Port du serveur vLLM (Voxtral Mini 4B) |
-| `COHERE_VRAM_MB` | `6000` | VRAM estimée pour Cohere ASR |
-| `PYANNOTE_VRAM_MB` | `2000` | VRAM estimée pour pyannote |
-| `QWEN35_VRAM_MB` | `60000` | VRAM estimée pour Qwen 35B |
-| `MIN_FREE_MB` | `4000` | VRAM minimale libre requise |
+| `services.arbitrage_script` | `./scripts/launch_arbitrage.sh` | Script bash de lancement Qwen |
+| `services.stop_script` | `./scripts/stop_qwen.sh` | Script bash d'arrêt Qwen |
+| `services.qwen_port` | `8080` | Port du serveur Qwen |
+| `services.vllm_port` | `8000` | Port vLLM |
+| `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
+| `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
+| `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |
+| `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre |
 
-Ces valeurs sont hardcodées et ne peuvent pas être modifiées via config.yaml. Pour les changer, il faut modifier `vram_manager.py`.
+Overrides environnement :
+- `TRANSCRIA_ARBITRAGE_SCRIPT`
+- `TRANSCRIA_STOP_SCRIPT`
+
+Note d'exploitation :
+- Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec Qwen 3.6 35B.
+- Le nombre de GPUs et la VRAM réellement consommée ne sont pas figés : ils dépendent du script (ex: `--tensor-split`), du modèle GGUF, du contexte et de la machine.
 
 ---
 
@@ -283,8 +290,8 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `services.srt_editor_easy_url` | Non | Oui (template) |
 | `models.cohere_model_path` | Non | Oui (CohereTranscriber) |
 | `models.pyannote_model` | Non | Oui (DiarizerService) |
-| `models.default_stt_model` | Non (inutilisé) | — |
-| `models.fallback_stt_model` | Non (inutilisé) | — |
+| `models.default_stt_model` | Non | Oui (chargé à la création des services STT) |
+| `models.fallback_stt_model` | Non | Oui |
 | `workflow.enable_*` | Non | Oui |
 | `workflow.summary_llm.*` | Non | Oui (SummaryGenerator, OpenCodeRunner) |
 | `workflow.arbitration_llm.*` | Non | Oui |
