@@ -16,8 +16,7 @@ Tu vas travailler en DEUX passes distinctes.
    transcription. Il contient :
    - Le nombre de locuteurs réels détectés (prime sur la transcription pour compter les participants).
    - Une transcription labellisée : chaque segment est attribué au SPEAKER_XX dont la voix
-     a été mesurée acoustiquement. Les segments `[mixte]` contiennent plusieurs locuteurs
-     alternant rapidement — leur texte ne peut pas être attribué individuellement.
+     a été mesurée acoustiquement (uniquement les segments à locuteur unique).
    - Une section "Ce que dit chaque locuteur" : la liste des phrases certaines de chaque
      SPEAKER_XX. **C'est ta source primaire pour attribuer les rôles.** Déduis le rôle
      de chaque SPEAKER_XX depuis ce qu'il dit dans ses segments certains : qui invite

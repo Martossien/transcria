@@ -346,16 +346,17 @@ class WorkflowRunner:
                 f"| {turns} | {pct}% |"
             )
 
-        if labeled:
+        # Ne garder que les segments clairement attribués (hors mixte et inconnus)
+        labeled_clean = [(lbl, txt) for lbl, txt in labeled if lbl not in ("mixte", "?")]
+        if labeled_clean:
             lines.extend([
                 "",
                 "## Transcription labellisée (attribution acoustique)",
                 "",
-                "*(segments où un seul locuteur domine ≥ 60 % du temps parlé —"
-                " `[mixte]` = plusieurs locuteurs alternent dans ce segment, impossible d'attribuer individuellement)*",
+                "*(uniquement les segments où un seul locuteur parle nettement)*",
                 "",
             ])
-            for label, text in labeled:
+            for label, text in labeled_clean:
                 lines.append(f"**[{label}]** {text}")
 
             # Résumé des phrases certaines par locuteur (hors mixte)
