@@ -352,17 +352,40 @@ class WorkflowRunner:
                 "## Transcription labellisée (attribution acoustique)",
                 "",
                 "*(segments où un seul locuteur domine ≥ 60 % du temps parlé —"
-                " `mixte` = alternance rapide entre locuteurs)*",
+                " `[mixte]` = plusieurs locuteurs alternent dans ce segment, impossible d'attribuer individuellement)*",
                 "",
             ])
             for label, text in labeled:
                 lines.append(f"**[{label}]** {text}")
 
+            # Résumé des phrases certaines par locuteur (hors mixte)
+            from collections import defaultdict
+            by_spk: dict = defaultdict(list)
+            for label, text in labeled:
+                if label not in ("mixte", "?"):
+                    by_spk[label].append(f'« {text} »')
+
+            if by_spk:
+                lines.extend([
+                    "",
+                    "## Ce que dit chaque locuteur (phrases acoustiquement certaines, hors segments mixtes)",
+                    "",
+                    "*(Source primaire pour identifier les rôles — ces phrases ont été produites"
+                    " physiquement par ce SPEAKER_XX)*",
+                    "",
+                ])
+                for spk_id in sorted(by_spk.keys()):
+                    lines.append(f"- **{spk_id}** : {' | '.join(by_spk[spk_id])}")
+
         lines.extend(
             [
                 "",
-                "**Consigne :** utilise ces données acoustiques pour déterminer le nombre réel de participants ayant parlé. "
-                "Les noms mentionnés dans la transcription mais sans locuteur acoustique correspondant ne doivent pas être comptés comme participants.",
+                "**Consigne :** utilise la section 'Ce que dit chaque locuteur' comme données primaires"
+                " pour attribuer les SPEAKER_XX à leurs rôles. Déduis le rôle de chaque locuteur depuis"
+                " ce qu'il dit dans ses segments certains (qui pose des questions, qui offre, qui commande,"
+                " qui réagit, qui encaisse). Ne renverse pas ce mapping : si SPEAKER_XX dit un impératif"
+                " ('Goûtez', 'Tenez', 'Regardez') ou annonce un prix, il est l'animateur/hôte/vendeur."
+                " Le nombre de locuteurs détectés acoustiquement prime sur les noms mentionnés dans la transcription.",
                 "",
             ]
         )
