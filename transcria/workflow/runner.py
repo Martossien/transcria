@@ -276,13 +276,15 @@ class WorkflowRunner:
 
     @staticmethod
     def _build_labeled_segments(
-        fs, speakers_result: dict, min_purity: float = 0.6
+        fs, speakers_result: dict
     ) -> list[tuple[str, str]]:
-        """Pour chaque segment ASR, détermine le locuteur dominant.
+        """Pour chaque segment ASR, attribue le texte à un locuteur uniquement si
+        un seul SPEAKER_XX a des tours pyannote dans ce segment.
 
-        Un segment est attribué à un locuteur si ce dernier couvre ≥ min_purity
-        du temps de parole total détecté dans le segment. Sinon : 'mixte'.
-        Retourne une liste ordonnée (label, texte).
+        Dès que deux locuteurs distincts se chevauchent avec le segment, le texte
+        contient les deux voix et ne peut pas être attribué sans timestamps mot par
+        mot — le segment est ignoré (cf. WhisperX / forced alignment).
+        Retourne une liste ordonnée (speaker_id, texte).
         """
         turns_data = speakers_result.get("turns") or []
         segments_data = (fs.load_json("summary/summary.json") or {}).get("segments") or []
@@ -307,14 +309,16 @@ class WorkflowRunner:
                     overlap[spk] = overlap.get(spk, 0.0) + ov
 
             if not overlap:
-                result.append(("?", text))
-                continue
+                continue  # aucun tour pyannote — segment ignoré
 
-            total_ov = sum(overlap.values())
-            dominant = max(overlap, key=lambda k: overlap[k])
-            purity = overlap[dominant] / total_ov if total_ov > 0 else 0.0
-            label = dominant if purity >= min_purity else "mixte"
-            result.append((label, WorkflowRunner._truncate_at_word(text, 120)))
+            # N'attribuer que si UN SEUL locuteur distinct a des tours dans ce segment.
+            # Dès que deux locuteurs différents se chevauchent avec le segment ASR,
+            # le texte contient les deux voix — impossible de l'attribuer sans timestamps
+            # mot par mot (cf. WhisperX / forced alignment).
+            unique_speakers = set(overlap.keys())
+            if len(unique_speakers) == 1:
+                label = next(iter(unique_speakers))
+                result.append((label, WorkflowRunner._truncate_at_word(text, 120)))
 
         return result
 
