@@ -178,7 +178,15 @@ Si une entrée n'a aucune variante :
 - elle ne déclenche pas de remplacement automatique ;
 - elle doit être mentionnée dans le rapport comme entrée de validation/préservation.
 
-### 6.4 Interdictions lexicales
+### 6.4 Variantes courtes ou génériques
+
+Si une variante listée dans `variants` est un mot courant de la langue française — un mot d'usage général, non spécialisé, présent dans le dictionnaire (exemples : `code`, `table`, `plan`, `groupe`, `service`) — elle ne déclenche jamais un remplacement automatique.
+
+Pour ce type de variante, ne corriger vers la cible que si le contexte immédiat du segment confirme explicitement qu'il s'agit du concept référencé dans le lexique.
+
+Si le contexte est ambigu ou si le mot est utilisé dans son sens courant, conserver la forme source et le justifier dans le rapport.
+
+### 6.5 Interdictions lexicales
 
 Ne jamais :
 
@@ -467,7 +475,8 @@ Pour chaque entrée du lexique :
 - vérifier que les variantes exactes et graphies proches ont été corrigées, justifiées ou marquées `[INCERTAIN]` ;
 - vérifier qu'aucune variante fautive manifeste ne subsiste sans explication ;
 - vérifier que les entrées sans variante n'ont pas déclenché de remplacement automatique ;
-- vérifier qu'aucune correction lexicale n'a substitué une entité différente.
+- vérifier qu'aucune correction lexicale n'a substitué une entité différente ;
+- vérifier que les variantes courtes ou génériques (§6.4) n'ont pas été appliquées à des usages courants non confirmés par le contexte du segment.
 
 ### 13.5 Noms propres et acronymes
 
