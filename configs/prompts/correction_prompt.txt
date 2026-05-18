@@ -519,7 +519,65 @@ Si un contrôle échoue, réécrire le fichier fautif avant de rendre.
 
 ---
 
-## 14. Instruction finale d'exécution
+## 14. Vérification par @general
+
+Après avoir écrit `transcription_corrigee.srt` et `correction_report.md` et
+effectué les vérifications finales (section 13), invoquer @general avec
+l'instruction ci-dessous.
+
+Remplacer <WORK_DIR> par le chemin absolu du répertoire de travail courant
+avant d'envoyer l'instruction.
+
+@general Tu es chargé de vérifier qu'une correction de transcription SRT a bien
+été appliquée. Tu travailles uniquement à partir des fichiers présents sur le
+disque dans le répertoire <WORK_DIR>.
+
+Lis dans cet ordre :
+
+1. <WORK_DIR>/../context/session_lexicon.json
+   Extrais pour chaque entrée : le champ `term`, la cible de correction
+   (`replace_by` si ce champ est présent et non vide, sinon `term`), et la
+   liste `variants`.
+
+2. <WORK_DIR>/correction_report.md
+   Note toutes les corrections lexicales déclarées : variantes corrigées et
+   numéros de segments associés.
+
+3. <WORK_DIR>/transcription_corrigee.srt
+   Lis-le intégralement.
+
+Pour chaque entrée du lexique ayant des `variants`, recherche dans le SRT :
+- les occurrences exactes des variantes listées ;
+- les graphies très proches : casse, accents, lettres manquantes ou doublées,
+  transcription phonétique proche.
+
+Pour chaque occurrence trouvée :
+- compare avec les corrections déclarées dans le rapport — si une variante est
+  encore présente malgré une déclaration de correction, c'est une correction
+  non appliquée ;
+- si le contexte du segment confirme qu'il s'agit du même concept, corriger
+  vers la cible en utilisant l'outil Edit sur la ligne exacte concernée ;
+- si c'est une entité distincte ou un usage manifestement volontaire du
+  locuteur, conserver et justifier ;
+- si le doute est réel, conserver avec `[INCERTAIN: raison]` via Edit.
+
+Utilise uniquement l'outil Edit pour appliquer les corrections — une correction
+= un appel Edit ciblé sur la ligne concernée. Ne jamais réécrire le fichier
+entier avec Write.
+
+Ajoute ensuite en fin de <WORK_DIR>/correction_report.md une section
+`## Vérification @general` contenant :
+- les variantes trouvées et corrigées (numéro de segment, variante → cible) ;
+- les variantes trouvées et conservées avec justification ;
+- les corrections déclarées dans le rapport mais absentes du SRT ;
+- la conclusion : SRT conforme / N corrections apportées.
+
+Retourne à @build : nombre de variantes trouvées, nombre de corrections
+appliquées (oui/non pour chacune).
+
+---
+
+## 15. Instruction finale d'exécution
 
 Tu dois utiliser les outils Read et Write.
 
@@ -535,64 +593,11 @@ Procédure obligatoire :
 8. Appliquer les corrections locuteurs, lexicales, orthographiques et les marqueurs nécessaires.
 9. Écrire `transcription_corrigee.srt` avec la totalité des segments corrigés.
 10. Écrire `correction_report.md` avec le rapport Markdown uniquement.
-11. Effectuer toutes les vérifications finales.
+11. Effectuer toutes les vérifications finales (section 13).
 12. Si une erreur est détectée, corriger les fichiers avant de rendre.
-13. Lancer la vérification par sous-agent (section 15).
+13. Invoquer @general pour la vérification finale (section 14).
 
 Ne crée aucun fichier intermédiaire.
 Ne rends jamais une correction partielle.
 Ne répartis jamais le SRT sur plusieurs fichiers.
-
----
-
-## 15. Vérification finale par sous-agent
-
-Après avoir écrit et vérifié les deux fichiers, lance un sous-agent avec
-l'instruction suivante :
-
-> Tu travailles dans le répertoire {work_dir}.
->
-> Ta mission est de vérifier que toutes les corrections lexicales déclarées
-> dans le rapport ont été effectivement appliquées dans le SRT corrigé, et
-> de détecter les variantes restantes.
->
-> Procédure :
->
-> 1. Lire `session_lexicon.json` et extraire pour chaque entrée :
->    le `term`, la cible (`replace_by` si présent et non vide, sinon `term`),
->    et la liste `variants`.
->
-> 2. Lire `correction_report.md` et noter toutes les corrections lexicales
->    déclarées par l'agent principal (variantes corrigées, segments concernés).
->
-> 3. Lire `transcription_corrigee.srt` intégralement.
->
-> 4. Pour chaque entrée du lexique ayant des `variants` :
->    a. Rechercher dans le SRT toutes les occurrences exactes des variantes
->       listées ainsi que les graphies très proches (casse, accents, lettres
->       manquantes ou doublées, transcription phonétique proche).
->    b. Croiser avec les corrections déclarées dans le rapport : si une
->       correction est déclarée mais la variante est encore présente dans
->       le SRT, c'est une correction non appliquée.
->    c. Pour chaque occurrence trouvée, choisir explicitement :
->       - corriger vers la cible si le contexte du segment le confirme ;
->       - conserver avec justification si c'est une entité distincte ou un
->         usage manifestement volontaire du locuteur ;
->       - conserver avec `[INCERTAIN: raison]` si le doute reste réel.
->
-> 5. Si des corrections ont été apportées, réécrire `transcription_corrigee.srt`
->    en intégrant toutes les corrections (ne pas écrire uniquement les segments
->    modifiés — réécrire le fichier complet avec la totalité des segments).
->
-> 6. Ajouter en fin de `correction_report.md` une section
->    `## Vérification sous-agent` contenant :
->    - les variantes trouvées et corrigées (avec numéro de segment) ;
->    - les variantes trouvées et conservées avec justification ;
->    - les corrections déclarées dans le rapport mais non appliquées dans
->      le SRT (hallucinations de rapport) ;
->    - la conclusion : SRT conforme / N corrections apportées.
-
-Le sous-agent lit les fichiers réels depuis le disque — il ne peut pas se
-fier à la mémoire de travail de l'agent parent. C'est cette indépendance
-qui garantit la fiabilité de la vérification.
 
