@@ -293,13 +293,22 @@ class OpenCodeRunner:
             if summary_file.is_file():
                 summary_text = summary_file.read_text(encoding="utf-8").strip()
             else:
+                logger.warning("run_summary: summary.md absent de %s — recherche de fallback *.md", self.work_dir)
                 for f in sorted(self.work_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
                     summary_text = f.read_text(encoding="utf-8").strip()
+                    logger.warning("run_summary: fallback sur %s (%d octets)", f.name, len(summary_text))
                     break
             if not summary_text and result["output"]:
+                logger.warning("run_summary: aucun fichier .md trouvé, repli sur stdout (%d octets)", len(result["output"]))
                 summary_text = result["output"]
 
-        if summary_text:
+        if not summary_text:
+            logger.warning(
+                "run_summary: résumé vide après opencode (events=%d, output=%d octets) — meeting_context ne sera pas mis à jour",
+                result.get("events_count", 0),
+                len(result.get("output", "")),
+            )
+        else:
             parsed = self._parse_structured_summary(summary_text)
 
         parsed["summary_text"] = summary_text or "Résumé indisponible."
@@ -337,11 +346,17 @@ class OpenCodeRunner:
                     value = value.replace("\n", " ").strip()
                 fields[key] = value
 
+        missing_critical = [k for k in ("title_suggere", "type_suggere", "sujet_suggere") if not fields[k]]
+        if missing_critical:
+            logger.warning("_parse_structured_summary: champs critiques non extraits — %s", missing_critical)
+
         nb_match = re.search(r"\*\*Nombre de participants détectés\s*:\s*\*\*\s*(\d+)", text)
         if nb_match:
             fields["speaker_count"] = int(nb_match.group(1))
 
         part_match = re.search(r"## Participants probables\s*\n(.+?)(?:\n##|\Z)", text, re.DOTALL)
+        if not part_match:
+            logger.warning("_parse_structured_summary: section '## Participants probables' introuvable")
         if part_match:
             participants = []
             speaker_roles: dict[str, dict] = {}
@@ -373,6 +388,8 @@ class OpenCodeRunner:
         # summaries produced before the prompt was narrowed to "termes douteux".
         termes_suspects = []
         ts_match = re.search(r'## Termes (?:suspects|douteux).*?\n(.+?)(?:\n##|\Z)', text, re.DOTALL | re.IGNORECASE)
+        if not ts_match:
+            logger.warning("_parse_structured_summary: section '## Termes suspects/douteux' introuvable")
         if ts_match:
             for line in ts_match.group(1).strip().split('\n'):
                 line = line.strip('- ').strip()
@@ -442,6 +459,10 @@ class OpenCodeRunner:
                             "comment": "",
                             "contexts": [],
                         })
+        if ts_match and not termes_suspects:
+            logger.warning("_parse_structured_summary: section termes présente mais aucun terme extrait (format inattendu ?)")
+        else:
+            logger.debug("_parse_structured_summary: %d termes suspects extraits", len(termes_suspects))
         fields["termes_suspects"] = termes_suspects
 
         return fields

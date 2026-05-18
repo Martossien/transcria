@@ -238,6 +238,17 @@ La phase summary (LLM Qwen) déduit les rôles de chaque SPEAKER_XX depuis la tr
 
 ## Pièges connus
 
+### Sentinelle `_apply_llm_suggestions` — comparaison exacte uniquement
+`WorkflowRunner._apply_llm_suggestions()` (runner.py) garde un test d'early return pour détecter un résumé indisponible. Ce test est intentionnellement une **comparaison exacte** :
+```python
+if not summary_text or summary_text.strip() == "Résumé indisponible.":
+```
+Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
+
+### `correction_prompt.txt` — version courante : v1.5
+La v1.5 (2026-05-18) ajoute la règle **`mapped_name` immuable** : le modèle doit recopier le `mapped_name` verbatim, caractère par caractère, sans normalisation de casse, accent ou orthographe. Trois niveaux de défense dans le prompt : définition absolue (Section 1 LOCUTEURS), extraction préalable obligatoire de la table `speaker_id → mapped_name` avant tout segment (Étape B de la PREMIÈRE ACTION), vérification finale (check 10 de la VÉRIFICATION FINALE).
+Cas concret qui a motivé cette v1.5 : `mapped_name = "stephen"` → la LLM corrigeait en `"Stéphane"` via la règle de correction orthographique des noms propres, car "Stéphane" est prononcé dans l'audio. La v1.5 interdit explicitement ce comportement.
+
 ### Cohere ne fait PAS de diarization
 `CohereTranscriber.transcribe()` retourne `{start, end, text}` — **pas de `speaker`**. Les labels de locuteurs viennent uniquement de pyannote via `_apply_speakers()`.
 

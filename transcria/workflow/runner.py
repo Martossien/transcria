@@ -171,7 +171,8 @@ class WorkflowRunner:
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:
         summary_text = parsed.get("summary_text", "")
-        if not summary_text or "indisponible" in summary_text.lower():
+        if not summary_text or summary_text.strip() == "Résumé indisponible.":
+            logger.warning("_apply_llm_suggestions: résumé indisponible — meeting_context non mis à jour")
             return
 
         result["summary_text"] = summary_text
@@ -184,6 +185,10 @@ class WorkflowRunner:
         for field in suggestion_fields:
             if parsed.get(field):
                 meeting_ctx[field] = parsed[field]
+
+        empty_fields = [f for f in suggestion_fields if not parsed.get(f)]
+        if empty_fields:
+            logger.warning("_apply_llm_suggestions: champs LLM non renseignés — %s", empty_fields)
 
         if parsed.get("speaker_count", 0) > 0:
             meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
@@ -203,11 +208,17 @@ class WorkflowRunner:
         if speaker_roles:
             WorkflowRunner._apply_speaker_roles(fs, speaker_roles, sl)
 
+        # summary_text commence déjà par "# Résumé de contrôle" (écrit par opencode).
+        # On n'ajoute que la section transcript en fin de fichier.
+        transcript_short = result.get("transcript_short", "")
         fs.save_text(
             "summary/summary.md",
-            f"# Résumé de contrôle\n\n{summary_text}\n\n---\n\n"
-            f"## Extrait de transcription\n\n"
-            f"{result.get('transcript_short', '')}\n",
+            summary_text
+            + (
+                f"\n\n---\n\n## Extrait de transcription\n\n{transcript_short}\n"
+                if transcript_short
+                else "\n"
+            ),
         )
         sl.info("Résumé LLM généré", chars=len(summary_text), termes_suspects=len(termes_suspects))
 
