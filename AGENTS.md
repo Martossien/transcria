@@ -245,9 +245,15 @@ if not summary_text or summary_text.strip() == "Résumé indisponible.":
 ```
 Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
 
-### `correction_prompt.txt` — version courante : v1.5
-La v1.5 (2026-05-18) ajoute la règle **`mapped_name` immuable** : le modèle doit recopier le `mapped_name` verbatim, caractère par caractère, sans normalisation de casse, accent ou orthographe. Trois niveaux de défense dans le prompt : définition absolue (Section 1 LOCUTEURS), extraction préalable obligatoire de la table `speaker_id → mapped_name` avant tout segment (Étape B de la PREMIÈRE ACTION), vérification finale (check 10 de la VÉRIFICATION FINALE).
-Cas concret qui a motivé cette v1.5 : `mapped_name = "stephen"` → la LLM corrigeait en `"Stéphane"` via la règle de correction orthographique des noms propres, car "Stéphane" est prononcé dans l'audio. La v1.5 interdit explicitement ce comportement.
+### `correction_prompt.txt` — version courante : v1.6
+
+**v1.6 (2026-05-18) — anti-split SRT** : la LLM peut, sur de longues transcriptions, écrire la première moitié du SRT corrigé dans `correction_report.md` et la seconde dans `transcription_corrigee.srt`. La v1.6 ferme cette ouverture via :
+- Section SORTIES renforcée : `transcription_corrigee.srt` doit contenir la **totalité** des segments (1→N), `correction_report.md` est du Markdown pur (aucune ligne SRT tolérée).
+- Checks 11 (complétude SRT) et 12 (séparation fichiers) ajoutés à la VÉRIFICATION FINALE.
+- Instruction inline `run_correction()` mise à jour avec les mêmes contraintes.
+
+**v1.5 (2026-05-18) — `mapped_name` immuable** : le modèle doit recopier le `mapped_name` verbatim, caractère par caractère, sans normalisation de casse, accent ou orthographe. Trois niveaux de défense : définition absolue (Section 1 LOCUTEURS), extraction préalable obligatoire de la table `speaker_id → mapped_name` avant tout segment (Étape B de la PREMIÈRE ACTION), vérification finale (check 10 de la VÉRIFICATION FINALE).
+Cas concret qui a motivé cette v1.5 : `mapped_name = "stephen"` → la LLM corrigeait en `"Stéphane"` car "Stéphane" est prononcé dans l'audio.
 
 ### Cohere ne fait PAS de diarization
 `CohereTranscriber.transcribe()` retourne `{start, end, text}` — **pas de `speaker`**. Les labels de locuteurs viennent uniquement de pyannote via `_apply_speakers()`.

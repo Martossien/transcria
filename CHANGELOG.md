@@ -7,6 +7,7 @@ Le format suit une logique proche de Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- `correction_prompt.txt` v1.6 : anti-split SRT — règles absolues dans SORTIES (totalité des segments dans un seul `transcription_corrigee.srt`, séparation stricte SRT/Markdown entre les deux fichiers), checks 11 et 12 en VÉRIFICATION FINALE (complétude SRT, séparation fichiers), INSTRUCTIONS mises à jour. Instruction inline `run_correction()` (opencode_runner.py) renforcée avec les mêmes contraintes.
 - `correction_prompt.txt` v1.5 : règle `mapped_name` immuable — le modèle recopie le `mapped_name` verbatim (casse, accents, orthographe) sans aucune normalisation ni interprétation. Trois niveaux de défense : définition en Section 1, extraction préalable de la table `speaker_id → mapped_name` avant tout segment (Étape B de la PREMIÈRE ACTION), vérification finale (check 10). Clarification de la sémantique de `replace_by` vide.
 - Logs WARNING dans `_parse_structured_summary()` (opencode_runner.py) pour les cas d’échec de parsing : sections `## Participants probables` et `## Termes suspects/douteux` introuvables, champs critiques non extraits (`title_suggere`, `type_suggere`, `sujet_suggere`), termes à zéro malgré section présente.
 - Logs WARNING dans `_apply_llm_suggestions()` (runner.py) quand le résumé est indisponible (sentinel) et quand des champs LLM restent vides après parse.

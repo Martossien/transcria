@@ -478,9 +478,14 @@ class OpenCodeRunner:
 
         instruction = (
             f"Tu travailles dans le répertoire {self.work_dir}. "
-            f"Lis transcription.srt, lis ../context/job_context.yaml, lis ../context/session_lexicon.json. "
+            f"Lis transcription.srt (tous les segments, du 1 au dernier), "
+            f"lis ../context/job_context.yaml, lis ../context/session_lexicon.json. "
             f"Compte les entrées du lexique, applique les corrections, "
-            f"puis écris transcription_corrigee.srt et correction_report.md dans ce répertoire."
+            f"puis écris exactement 2 fichiers dans ce répertoire : "
+            f"(1) transcription_corrigee.srt — la TOTALITE des segments de 1 a N, "
+            f"contenu SRT uniquement, jamais tronque, jamais reparti sur un autre fichier ; "
+            f"(2) correction_report.md — rapport Markdown uniquement, "
+            f"aucune ligne SRT dans ce fichier."
         )
 
         timeout = self._get_correction_timeout()
