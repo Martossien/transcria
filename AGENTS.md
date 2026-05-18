@@ -247,6 +247,8 @@ Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résum�
 
 ### `correction_prompt.txt` — version courante : v1.6
 
+**summary_prompt.txt v2.0 (2026-05-19)** : restructuration complète. Points critiques pour la compatibilité parser : section `## Participants probables` (match exact), section `## Termes douteux à valider` (match `## Termes (?:suspects|douteux).*?`), format terme `**TERME** [cat] (prio) | variantes_suspectes: ... | commentaire: ... | contextes: ...`, `(aucune)` filtré par `empty_markers`, séparateur `||` pour contextes multiples (`_parse_summary_contexts`), `(non identifiable)` pour participants absents.
+
 **v1.7 (2026-05-18) — vérification par sous-agent** : section 15 ajoutée. Après écriture des fichiers, un sous-agent relit le SRT corrigé et le lexique depuis le disque à froid, croise avec les corrections déclarées dans le rapport pour détecter les hallucinations (corrections déclarées mais non appliquées), corrige les variantes restantes, et documente le résultat dans `## Vérification sous-agent`. L'indépendance du sous-agent (lecture des fichiers réels, pas de mémoire de travail partagée) est le point clé.
 
 **v1.6 (2026-05-18) — anti-split SRT** : la LLM peut, sur de longues transcriptions, écrire la première moitié du SRT corrigé dans `correction_report.md` et la seconde dans `transcription_corrigee.srt`. La v1.6 ferme cette ouverture via :

@@ -131,7 +131,7 @@ transcria/
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
 │   └── prompts/
-│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v1.3
+│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.7
 │
 ├── tests/                         # 426 tests pytest collectés
