@@ -400,6 +400,7 @@ Cycle de vie GPU dans `run_summary` :
 ```
 Phase 1: GPUSession(cohere-summary, 6 Go) → GPU auto → Cohere ASR → offload
 Phase 1b: GPUSession(pyannote, 2 Go) → GPU auto → diarization → offload → diarization_context.md
+           (extraits ≤200 chars/segment + section "Indices prénoms" : apostrophes directes & noms propres mid-phrase)
 Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run
   (CAS A: réutilisation directe — CAS C: libération GPU + lancement)
   → LLM reste vivante pour la phase correction

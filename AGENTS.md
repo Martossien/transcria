@@ -245,7 +245,24 @@ if not summary_text or summary_text.strip() == "Résumé indisponible.":
 ```
 Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
 
-### `correction_prompt.txt` — version courante : v1.6
+### opencode — provider `local` requis dans `~/.opencode/config.json`
+`OpenCodeRunner` invoque opencode avec `--model local/qwen3-35b-arbitrage`. Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.opencode/config.json` avec un `baseUrl` pointant sur le serveur llama.cpp (port 8080 par défaut). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder. Exemple minimal :
+```json
+{
+  "providers": {
+    "local": {
+      "type": "openai",
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "apiKey": "sk-no-key-required",
+      "models": ["qwen3-35b-arbitrage"],
+      "validate": false
+    }
+  }
+}
+```
+`validate: false` est nécessaire car le nom court (`qwen3-35b-arbitrage`) diffère de l'alias complet rapporté par llama-server (`qwen3-35b-arbitrage-ud-q8_k_xl`). llama.cpp ignore le `model` dans la requête et utilise le modèle chargé.
+
+### `correction_prompt.txt` — version courante : v1.9
 
 **summary_prompt.txt v2.0 (2026-05-19)** : restructuration complète. Points critiques pour la compatibilité parser : section `## Participants probables` (match exact), section `## Termes douteux à valider` (match `## Termes (?:suspects|douteux).*?`), format terme `**TERME** [cat] (prio) | variantes_suspectes: ... | commentaire: ... | contextes: ...`, `(aucune)` filtré par `empty_markers`, séparateur `||` pour contextes multiples (`_parse_summary_contexts`), `(non identifiable)` pour participants absents.
 
@@ -305,3 +322,4 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
+| `docs/VAD_PYANNOTE_PISTES.md` | VAD Silero : avantages/inconvénients, métriques de détection de dégradation, tuning pyannote, pistes d'amélioration |

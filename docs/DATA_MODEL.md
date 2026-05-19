@@ -196,6 +196,13 @@ jobs/<job_id>/
 │   ├── quick_transcript.txt        # Transcription Cohere brut (format: [0.0s → 30.0s]  texte)
 │   ├── summary.json               # Segments bruts sauvegardés par SummaryGenerator
 │   ├── diarization_context.md      # Contexte acoustique pyannote transmis au LLM de résumé
+│   │                               #   § Stats locuteurs (temps, tours, %)
+│   │                               #   § Transcription labellisée (≤200 chars/segment, segments exclusifs)
+│   │                               #   § "Ce que dit chaque locuteur" (toutes phrases par SPEAKER_XX)
+│   │                               #   § "Indices pour identifier les prénoms" :
+│   │                               #       - Apostrophes directes (fin de tour → changement locuteur)
+│   │                               #       - Noms propres mid-phrase par locuteur
+│   │                               #   § Consigne d'attribution des rôles
 │   └── summary.md                 # Résumé structuré par opencode+Qwen
 │
 ├── context/
