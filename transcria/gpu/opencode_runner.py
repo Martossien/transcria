@@ -362,7 +362,7 @@ class OpenCodeRunner:
             speaker_roles: dict[str, dict] = {}
             for line in part_match.group(1).strip().split("\n"):
                 line = line.strip("- ").strip()
-                if not line or "non identifiable" in line.lower():
+                if not line or line.strip("- ()").lower() in ("non identifiable", "(non identifiable)"):
                     continue
                 participants.append(line)
                 # Extraire SPEAKER_XX + rôle — deux formats acceptés :

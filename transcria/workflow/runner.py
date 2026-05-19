@@ -330,9 +330,70 @@ class WorkflowRunner:
             unique_speakers = set(overlap.keys())
             if len(unique_speakers) == 1:
                 label = next(iter(unique_speakers))
-                result.append((label, WorkflowRunner._truncate_at_word(text, 120)))
+                result.append((label, WorkflowRunner._truncate_at_word(text, 200)))
 
         return result
+
+    @staticmethod
+    def _extract_name_hints(labeled_clean: list) -> tuple[dict, list]:
+        """
+        Retourne deux structures pour aider le LLM à identifier les prénoms :
+        - spk_tops : mots en majuscule en milieu de phrase par locuteur (prénoms potentiels)
+        - address_hints : (locuteur_A, prénom, locuteur_B) quand A termine son tour
+          en appelant B par son prénom (apostrophe directe)
+        """
+        import re
+        from collections import defaultdict, Counter
+
+        _SKIP = frozenset({
+            "Le", "La", "Les", "Un", "Une", "Des", "Du", "De", "Ce", "Ça", "Ca",
+            "Je", "Tu", "Il", "Elle", "On", "Nous", "Vous", "Ils", "Elles", "Y",
+            "Et", "Ou", "Mais", "Donc", "Car", "Or", "Si", "Ni",
+            "Euh", "Ben", "Bon", "Ah", "Oh", "Non", "Oui", "Ouais", "OK",
+            "Alors", "Apres", "Après", "Parce", "Quand", "Comme", "Avec",
+            "Pour", "Dans", "Sur", "Par", "Entre", "Vers",
+            "Tout", "Tous", "Toute", "Toutes", "Cette", "Ces",
+            "Mon", "Ton", "Son", "Ma", "Ta", "Sa", "Notre", "Votre", "Leur", "Leurs",
+            "Aussi", "Même", "Encore", "Voilà", "Voila", "Ici", "Là", "Bien", "Très",
+            "Ça", "Cela", "Celui", "Celle", "Ceux", "Celles", "Moi", "Toi", "Lui", "Eux",
+        })
+
+        spk_caps: dict = defaultdict(Counter)
+        for label, text in labeled_clean:
+            words = text.rstrip("…").split()
+            for i, word in enumerate(words):
+                if i == 0:
+                    continue
+                prev = words[i - 1].rstrip()
+                if prev and prev[-1] in ".!?":
+                    continue
+                # Nettoyer ponctuation et caractères non-latins
+                bare = re.sub(r"[,\.!?;:«»\"\'()\[\]؀-ۿ一-鿿぀-ヿ]+", "", word).strip()
+                if not bare or not bare[0].isupper() or bare in _SKIP or len(bare) < 3:
+                    continue
+                if bare.isupper():  # sigle tout en majuscules — ignorer
+                    continue
+                spk_caps[label][bare] += 1
+
+        address_hints = []
+        for i in range(len(labeled_clean) - 1):
+            curr_label, curr_text = labeled_clean[i]
+            next_label, _ = labeled_clean[i + 1]
+            if curr_label == next_label:
+                continue
+            clean = curr_text.rstrip("…").strip()
+            m = re.search(r"\b([A-ZÁÀÂÉÈÊËÎÏÔÙÛÜÇ][a-záàâéèêëîïôùûüç]{2,})[,\s]*$", clean)
+            if m:
+                name = m.group(1)
+                if name not in _SKIP and len(name) >= 3:
+                    address_hints.append((curr_label, name, next_label))
+
+        spk_tops = {
+            spk: [w for w, _ in counter.most_common(8)]
+            for spk, counter in spk_caps.items()
+            if counter
+        }
+        return spk_tops, address_hints
 
     @staticmethod
     def _write_diarization_context(fs, speakers_result: dict) -> str | None:
@@ -394,6 +455,39 @@ class WorkflowRunner:
                 for spk_id in sorted(by_spk.keys()):
                     lines.append(f"- **{spk_id}** : {' | '.join(by_spk[spk_id])}")
 
+            # Section indices prénoms
+            spk_tops, address_hints = WorkflowRunner._extract_name_hints(labeled_clean)
+            if spk_tops or address_hints:
+                lines.extend([
+                    "",
+                    "## Indices pour identifier les prénoms des locuteurs",
+                    "",
+                    "*(Ces données sont des indices bruts — le LLM doit raisonner sur leur pertinence)*",
+                    "",
+                ])
+                if address_hints:
+                    lines.append("### Apostrophes directes détectées (fin de tour → changement de locuteur)")
+                    lines.append("")
+                    lines.append("*(Si SPEAKER_A termine son tour en prononçant un prénom et que SPEAKER_B prend la parole,"
+                                 " SPEAKER_B est probablement ce prénom)*")
+                    lines.append("")
+                    seen_hints: set = set()
+                    for curr_spk, name, next_spk in address_hints:
+                        key = (curr_spk, name, next_spk)
+                        if key not in seen_hints:
+                            lines.append(f"- {curr_spk} dit « …{name} » → {next_spk} prend la parole")
+                            seen_hints.add(key)
+                if spk_tops:
+                    lines.extend(["", "### Noms propres en milieu de phrase par locuteur"])
+                    lines.append("")
+                    lines.append("*(mots en majuscule hors début de phrase et hors sigles —"
+                                 " peuvent être des personnes mentionnées ou le prénom du locuteur lui-même)*")
+                    lines.append("")
+                    for spk_id in sorted(spk_tops.keys()):
+                        names = spk_tops[spk_id]
+                        if names:
+                            lines.append(f"- **{spk_id}** : {', '.join(names)}")
+
         lines.extend(
             [
                 "",
@@ -402,7 +496,11 @@ class WorkflowRunner:
                 " ce qu'il dit dans ses segments certains (qui pose des questions, qui offre, qui commande,"
                 " qui réagit, qui encaisse). Ne renverse pas ce mapping : si SPEAKER_XX dit un impératif"
                 " ('Goûtez', 'Tenez', 'Regardez') ou annonce un prix, il est l'animateur/hôte/vendeur."
-                " Le nombre de locuteurs détectés acoustiquement prime sur les noms mentionnés dans la transcription.",
+                " Le nombre de locuteurs détectés acoustiquement prime sur les noms mentionnés dans la transcription."
+                " Pour les prénoms : utilise en priorité les apostrophes directes ci-dessus"
+                " (un locuteur qui appelle la personne suivante par son prénom en fin de tour)."
+                " Si un prénom apparaît dans la liste 'Noms propres' d'un locuteur dans un contexte"
+                " d'auto-désignation (ex : 'moi, Prénom' ou 'je suis Prénom'), c'est un indice fort.",
                 "",
             ]
         )
