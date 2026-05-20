@@ -264,6 +264,7 @@ def job_wizard(job_id: str):
             if normalized["role"]:
                 s["mapped_role"] = normalized["role"]
     audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
+    audio_scene = fs.load_json("metadata/audio_scene.json") or {}
     quality_report = fs.load_json("quality/quality_report.json") or {}
     srt_content = fs.load_text("metadata/transcription.srt") or ""
 
@@ -279,6 +280,7 @@ def job_wizard(job_id: str):
         lexicon=lexicon,
         speakers=speakers_data,
         audio_analysis=audio_analysis,
+        audio_scene=audio_scene,
         quality_report=quality_report,
         srt_content=srt_content,
         meeting_types=MEETING_TYPES_LIST,

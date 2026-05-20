@@ -299,6 +299,23 @@
 
     <div id="participants-list">
       {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
+        {# Indice genre global issu de l'analyse acoustique de scène #}
+        {% set scene_gender = audio_scene.get('gender', {}) if audio_scene else {} %}
+        {% if scene_gender.get('has_gender_data') %}
+        <div class="alert alert-light border py-1 px-2 mb-2 small d-flex align-items-center gap-2">
+          <i class="bi bi-soundwave text-secondary"></i>
+          <span>
+            <strong>Analyse acoustique globale :</strong>
+            {{ (scene_gender.male_ratio * 100)|round|int }}% voix masculine,
+            {{ (scene_gender.female_ratio * 100)|round|int }}% voix féminine
+            {% if scene_gender.dominant == 'male' %}
+              — <span class="text-primary">voix masculine dominante</span>
+            {% elif scene_gender.dominant == 'female' %}
+              — <span class="text-danger">voix féminine dominante</span>
+            {% endif %}
+          </span>
+        </div>
+        {% endif %}
         {% for s in speakers.speakers %}
         <div class="speaker-item" id="spk-{{ s.speaker_id }}">
           <strong>{{ s.speaker_id }}</strong>
@@ -307,6 +324,11 @@
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle dans la réunion" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
+          <select class="form-select form-select-sm speaker-gender" style="max-width:130px;" title="Genre vocal (modifiable)">
+            <option value="" {% if not s.get('gender') %}selected{% endif %}>Non déterminé</option>
+            <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>Féminin ♀</option>
+            <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>Masculin ♂</option>
+          </select>
         </div>
         {% endfor %}
       {% elif participants|length > 0 %}

@@ -142,9 +142,11 @@ var TranscrIA = window.TranscrIA || {};
             var nameEl = row.querySelector('.speaker-name');
             var funcEl = row.querySelector('.speaker-func');
             var roleEl = row.querySelector('.speaker-role');
+            var genderEl = row.querySelector('.speaker-gender');
             var name = (nameEl && nameEl.value || '').trim();
             var func = (funcEl && funcEl.value || '').trim();
             var role = (roleEl && roleEl.value || '').trim();
+            var gender = (genderEl && genderEl.value || '').trim();
             if (name) {
                 pi++;
                 var pid = 'p' + pi;
@@ -153,7 +155,7 @@ var TranscrIA = window.TranscrIA || {};
                 var spkLabel = row.querySelector('strong');
                 if (spkLabel) {
                     mapping[spkLabel.textContent] = { name: name, participant_id: pid,
-                        function: func, role: role };
+                        function: func, role: role, gender: gender };
                 }
             }
         });
