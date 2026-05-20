@@ -28,19 +28,76 @@ _DEFAULT_CONFIG = {
         "cohere_model_path": "./models/cohere-asr/cohere-transcribe-03-2026",
         "pyannote_model": "pyannote/speaker-diarization-community-1",
     },
+    "whisper": {
+        "model_size": "large-v3",
+        "compute_type": "float16",
+        "cpu_threads": 4,
+        "chunk_length_s": 30,
+        "beam_size": 5,
+        "best_of": 5,
+        "vad_filter": True,
+        "word_timestamps": True,
+        "condition_on_previous_text": False,
+        "no_speech_threshold": 0.2,
+        "compression_ratio_threshold": 2.0,
+        "log_prob_threshold": -1.0,
+        "hallucination_silence_threshold": 3.0,
+        "repetition_penalty": 1.0,
+        "no_repeat_ngram_size": 0,
+        "suppress_numerals": False,
+        "hotwords": None,
+        "initial_prompt": None,
+        "collapse_repetition_loops": True,
+        "repetition_loop_min_repeats": 4,
+        "repetition_loop_max_phrase_words": 10,
+        "repetition_loop_keep_repeats": 2,
+        "forced_alignment": {
+            "enabled": False,
+            "backend": "torchaudio_ctc",
+            "bundle_name": "VOXPOPULI_ASR_BASE_10K_FR",
+            "max_segment_s": 30.0,
+        },
+    },
     "workflow": {
         "enable_quick_summary": True,
         "enable_speaker_detection": True,
         "enable_quality_mode": True,
         "enable_external_srt_editor_link": True,
         "enable_vad": True,
+        "audio_quality": {
+            "force_quality_backend": True,
+            "degraded_levels": ["degrade"],
+            "suspect_levels": ["suspect"],
+            "min_bit_rate": 64000,
+            "min_sample_rate_hz": 16000,
+            "max_non_latin_segments": 2,
+            "max_short_segment_ratio": 0.2,
+            "min_speech_ratio": 0.35,
+            "max_speech_ratio": 0.95,
+        },
+        "quality_transcription": {
+            "force_stt_backend": "whisper",
+            "enabled_for_modes": ["quality"],
+            "force_on_degraded_summary": True,
+            "degraded_summary_levels": ["degrade"],
+        },
         "vad": {
             "enabled_summary": True,
             "enabled_final": False,
+            "adaptive": True,
             "threshold": 0.5,
+            "threshold_low_quality": 0.35,
+            "threshold_high_noise": 0.6,
             "min_speech_duration_ms": 250,
             "min_silence_duration_ms": 400,
+            "min_silence_duration_ms_low_quality": 250,
             "speech_pad_ms": 200,
+            "speech_pad_ms_low_quality": 350,
+        },
+        "speaker_realignment": {
+            "enabled": True,
+            "min_word_overlap_s": 0.01,
+            "punctuation_chars": ".,;:!?)]}»",
         },
         "summary_llm": {
             "enabled": True,
@@ -68,6 +125,12 @@ _DEFAULT_CONFIG = {
             "hollywood",
         ],
     },
+    "diarization": {
+        "cache_enabled": True,
+        "cache_audio_fingerprint": True,
+        "embedding_cache_enabled": True,
+        "embedding_clip_seconds": 12.0,
+    },
     "security": {
         "retention_days": 365,
         "allow_job_delete": True,
@@ -87,6 +150,11 @@ def _deep_merge(base: dict, override: dict) -> dict:
         else:
             result[key] = value
     return result
+
+
+def get_default_config() -> dict:
+    """Retourne une copie isolée de la configuration par défaut."""
+    return copy.deepcopy(_DEFAULT_CONFIG)
 
 
 def _normalize_config(cfg: dict) -> dict:

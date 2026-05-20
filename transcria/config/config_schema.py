@@ -30,7 +30,9 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result)
+    _check_whisper(cfg.get("whisper", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
+    _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
     return result
@@ -126,9 +128,144 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
     _check_bool(wf, "enable_external_srt_editor_link", "workflow.enable_external_srt_editor_link", r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
+    _check_audio_quality(wf.get("audio_quality", {}), r)
+    _check_quality_transcription(wf.get("quality_transcription", {}), r)
+    _check_vad_section(wf.get("vad", {}), r)
+    _check_speaker_realignment(wf.get("speaker_realignment", {}), r)
 
     _check_llm_section(wf.get("summary_llm", {}), "workflow.summary_llm", r, is_summary=True)
     _check_llm_section(wf.get("arbitration_llm", {}), "workflow.arbitration_llm", r, is_summary=False)
+
+
+def _check_whisper(whisper: dict, r: ValidationResult) -> None:
+    if not whisper:
+        return
+    if not isinstance(whisper, dict):
+        r.add_error("whisper: doit être un objet YAML")
+        return
+    _check_str(whisper, "model_size", "whisper.model_size", r)
+    _check_str(whisper, "compute_type", "whisper.compute_type", r)
+    _check_int_range(whisper, "cpu_threads", "whisper.cpu_threads", 1, 128, r)
+    _check_int_range(whisper, "chunk_length_s", "whisper.chunk_length_s", 1, 300, r)
+    _check_int_range(whisper, "beam_size", "whisper.beam_size", 1, 32, r)
+    _check_int_range(whisper, "best_of", "whisper.best_of", 1, 32, r)
+    for key in (
+        "vad_filter", "word_timestamps", "condition_on_previous_text",
+        "suppress_numerals", "collapse_repetition_loops",
+    ):
+        _check_bool(whisper, key, f"whisper.{key}", r)
+    _check_optional_number(whisper, "no_speech_threshold", "whisper.no_speech_threshold", r)
+    _check_optional_number(whisper, "compression_ratio_threshold", "whisper.compression_ratio_threshold", r)
+    _check_optional_number(whisper, "log_prob_threshold", "whisper.log_prob_threshold", r)
+    _check_optional_number(whisper, "hallucination_silence_threshold", "whisper.hallucination_silence_threshold", r)
+    _check_optional_number(whisper, "repetition_penalty", "whisper.repetition_penalty", r)
+    _check_int_range(whisper, "no_repeat_ngram_size", "whisper.no_repeat_ngram_size", 0, 20, r)
+    _check_int_range(whisper, "repetition_loop_min_repeats", "whisper.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(whisper, "repetition_loop_max_phrase_words", "whisper.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(whisper, "repetition_loop_keep_repeats", "whisper.repetition_loop_keep_repeats", 1, 20, r)
+    for key in ("hotwords", "initial_prompt"):
+        val = whisper.get(key)
+        if val is not None and not isinstance(val, str):
+            r.add_error(f"whisper.{key}: doit être une chaîne ou null")
+    forced = whisper.get("forced_alignment", {})
+    if forced is not None:
+        if not isinstance(forced, dict):
+            r.add_error("whisper.forced_alignment: doit être un objet YAML")
+        else:
+            _check_bool(forced, "enabled", "whisper.forced_alignment.enabled", r)
+            backend = forced.get("backend", "torchaudio_ctc")
+            if backend != "torchaudio_ctc":
+                r.add_error("whisper.forced_alignment.backend: doit valoir torchaudio_ctc")
+            for key in ("bundle_name",):
+                val = forced.get(key)
+                if val is not None and not isinstance(val, str):
+                    r.add_error(f"whisper.forced_alignment.{key}: doit être une chaîne ou null")
+            _check_optional_number(forced, "max_segment_s", "whisper.forced_alignment.max_segment_s", r)
+
+
+def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:
+    if cfg is None:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.quality_transcription: doit être un objet YAML")
+        return
+    backend = cfg.get("force_stt_backend")
+    if backend is not None and backend not in {"cohere", "whisper"}:
+        r.add_error("workflow.quality_transcription.force_stt_backend: doit valoir cohere ou whisper")
+    _check_bool(cfg, "force_on_degraded_summary", "workflow.quality_transcription.force_on_degraded_summary", r)
+    modes = cfg.get("enabled_for_modes", [])
+    if not isinstance(modes, list):
+        r.add_error("workflow.quality_transcription.enabled_for_modes: doit être une liste")
+        return
+    for mode in modes:
+        if mode not in {"fast", "quality"}:
+            r.add_error("workflow.quality_transcription.enabled_for_modes: valeurs acceptées fast, quality")
+    degraded_levels = cfg.get("degraded_summary_levels", [])
+    if not isinstance(degraded_levels, list):
+        r.add_error("workflow.quality_transcription.degraded_summary_levels: doit être une liste")
+        return
+    for level in degraded_levels:
+        if not isinstance(level, str) or not level.strip():
+            r.add_error("workflow.quality_transcription.degraded_summary_levels: valeurs chaîne non vides attendues")
+
+
+def _check_audio_quality(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.audio_quality: doit être un objet YAML")
+        return
+    _check_bool(cfg, "force_quality_backend", "workflow.audio_quality.force_quality_backend", r)
+    for key in ("degraded_levels", "suspect_levels"):
+        values = cfg.get(key, [])
+        if not isinstance(values, list):
+            r.add_error(f"workflow.audio_quality.{key}: doit être une liste")
+    for key in (
+        "min_bit_rate", "min_sample_rate_hz", "max_non_latin_segments",
+        "min_speech_ratio", "max_speech_ratio", "max_short_segment_ratio",
+    ):
+        _check_optional_number(cfg, key, f"workflow.audio_quality.{key}", r)
+
+
+def _check_vad_section(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.vad: doit être un objet YAML")
+        return
+    for key in ("enabled_summary", "enabled_final", "adaptive"):
+        _check_bool(cfg, key, f"workflow.vad.{key}", r)
+    for key in (
+        "threshold", "threshold_low_quality", "threshold_high_noise",
+        "min_speech_duration_ms", "min_silence_duration_ms",
+        "min_silence_duration_ms_low_quality", "speech_pad_ms",
+        "speech_pad_ms_low_quality",
+    ):
+        _check_optional_number(cfg, key, f"workflow.vad.{key}", r)
+
+
+def _check_speaker_realignment(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.speaker_realignment: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.speaker_realignment.enabled", r)
+    _check_optional_number(cfg, "min_word_overlap_s", "workflow.speaker_realignment.min_word_overlap_s", r)
+    value = cfg.get("punctuation_chars")
+    if value is not None and not isinstance(value, str):
+        r.add_error("workflow.speaker_realignment.punctuation_chars: doit être une chaîne")
+
+
+def _check_diarization(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("diarization: doit être un objet YAML")
+        return
+    for key in ("cache_enabled", "cache_audio_fingerprint", "embedding_cache_enabled"):
+        _check_bool(cfg, key, f"diarization.{key}", r)
+    _check_optional_number(cfg, "embedding_clip_seconds", "diarization.embedding_clip_seconds", r)
 
 
 def _check_llm_section(
@@ -232,6 +369,14 @@ def _check_int_range(
     val = int(val)
     if val < vmin or val > vmax:
         r.add_error(f"{path}={val}: doit être entre {vmin} et {vmax}")
+
+
+def _check_optional_number(obj: dict, key: str, path: str, r: ValidationResult) -> None:
+    val = obj.get(key)
+    if val is None:
+        return
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        r.add_error(f"{path}: doit être un nombre ou null")
 
 
 def _check_port_value(val: Any, path: str, r: ValidationResult) -> None:
