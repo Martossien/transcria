@@ -127,6 +127,7 @@ Paramètres contrôlant les fonctionnalités du workflow.
 | `enable_speaker_detection` | bool | `true` | Active la détection pyannote des locuteurs |
 | `enable_quality_mode` | bool | `true` | Active le mode "Qualité" (diarization finale + correction SRT) |
 | `enable_external_srt_editor_link` | bool | `true` | Affiche le bouton "Ouvrir dans SRT Editor EASY" |
+| `enable_vad` | bool | `true` | Ancien interrupteur global VAD, conservé pour compatibilité |
 
 **Redémarrage requis :** non — ces booléens sont lus à chaque appel dans `WorkflowRunner` et les templates.
 
@@ -135,6 +136,23 @@ Paramètres contrôlant les fonctionnalités du workflow.
 - `enable_speaker_detection=false` : `SpeakerDetector.detect()` n'est pas appelé dans `run_summary()`. L'étape Participants n'aura pas de locuteurs pyannote, seulement les suggestions LLM (moins précises).
 - `enable_quality_mode=false` : le mode "Qualité" n'est pas proposé dans le formulaire de traitement. Seul le mode "Rapide" est disponible.
 - `enable_external_srt_editor_link=false` : le bouton SRT Editor est masqué dans le template.
+
+#### `workflow.vad`
+
+Paramètres Silero VAD. La configuration fine évite de traiter le VAD comme un interrupteur
+global alors que le résumé et la transcription finale n'ont pas les mêmes risques.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled_summary` | bool | `true` | Active le VAD avant la transcription rapide Cohere du résumé |
+| `enabled_final` | bool | `false` | Active un filtrage VAD supplémentaire sur les chunks pyannote de la transcription finale |
+| `threshold` | float | `0.5` | Seuil Silero |
+| `min_speech_duration_ms` | int | `250` | Durée minimale de parole détectée |
+| `min_silence_duration_ms` | int | `400` | Durée minimale de silence séparant deux zones |
+| `speech_pad_ms` | int | `200` | Marge ajoutée autour des zones vocales |
+
+**Recommandation actuelle :** VAD actif sur le résumé, désactivé par défaut sur la transcription finale.
+La transcription finale utilise déjà les `exclusive_turns` pyannote comme VAD implicite.
 
 #### `workflow.execution`
 
@@ -150,11 +168,11 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 
 #### `workflow.summary_llm`
 
-Configuration du LLM de résumé (Qwen 35B).
+Configuration de la LLM de résumé.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `enabled` | bool | `true` | Active la Phase 2 (opencode+Qwen) du résumé |
+| `enabled` | bool | `true` | Active la Phase 2 LLM du résumé |
 | `model_id` | string | `"local/qwen3-35b"` | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
 | `timeout_seconds` | int | `120` | Timeout du résumé via opencode |
@@ -246,10 +264,12 @@ Limites :
 
 | Paramètre | Défaut | Description |
 |---|---|---|
-| `services.arbitrage_script` | `./scripts/launch_arbitrage.sh` | Script bash de lancement Qwen |
-| `services.stop_script` | `./scripts/stop_qwen.sh` | Script bash d'arrêt Qwen |
-| `services.qwen_port` | `8080` | Port du serveur Qwen |
-| `services.vllm_port` | `8000` | Port vLLM |
+| `services.arbitrage_script` | `./scripts/launch_arbitrage.sh` | Script bash de lancement de la LLM d'arbitrage |
+| `services.stop_script` | `./scripts/stop_arbitrage_llm.sh` | Script bash d'arrêt de la LLM d'arbitrage |
+| `services.arbitrage_llm_port` | `8080` | Port du serveur LLM d'arbitrage |
+| `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
+| `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
+| `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
 | `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
 | `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
 | `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |
@@ -260,12 +280,23 @@ Overrides environnement :
 - `TRANSCRIA_STOP_SCRIPT`
 
 Note d'exploitation :
-- Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec Qwen 3.6 35B.
+- Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec le modèle local configuré sur cette machine.
+- `services.llm_cleanup_ports` est volontairement générique : il peut contenir des ports vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre serveur OpenAI-compatible concurrent.
 - Le nombre de GPUs et la VRAM réellement consommée ne sont pas figés : ils dépendent du script (ex: `--tensor-split`), du modèle GGUF, du contexte et de la machine.
 
 ---
 
-## 9. Fichiers de prompts opencode (configs/prompts/)
+## 9. Qualité SRT
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `quality.asr_noise_markers` | list[string] | liste courte configurable | Expressions courtes à traiter comme bruit ASR probable quand elles apparaissent dans un segment très court |
+
+Ces marqueurs ne corrigent pas le SRT automatiquement. Ils alimentent seulement le rapport qualité pour orienter la relecture humaine vers les segments courts suspects.
+
+---
+
+## 10. Fichiers de prompts opencode (configs/prompts/)
 
 | Fichier | Utilisé par | Description |
 |---|---|---|
@@ -294,8 +325,10 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `models.default_stt_model` | Non | Oui (chargé à la création des services STT) |
 | `models.fallback_stt_model` | Non | Oui |
 | `workflow.enable_*` | Non | Oui |
+| `workflow.vad.*` | Non | Oui |
 | `workflow.summary_llm.*` | Non | Oui (SummaryGenerator, OpenCodeRunner) |
 | `workflow.arbitration_llm.*` | Non | Oui |
+| `quality.asr_noise_markers` | Non | Oui |
 | `security.retention_days` | Non | Oui (purge à l'accueil) |
 | `security.allow_job_delete` | Non | Oui (route) |
 | `security.allowed_upload_extensions` | Non | Oui (route) |

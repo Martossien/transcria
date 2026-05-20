@@ -133,10 +133,12 @@ class WhisperTranscriber(BaseTranscriber):
 
     def transcribe(
         self,
-        audio_path: Path,
+        audio_path: Path | None,
         language: str = "fr",
         chunk_length_s: int = 30,
         progress_callback=None,
+        audio_array=None,
+        sample_rate: int = 16000,
     ) -> list[dict]:
         if not self.load():
             return [{"error": "Faster-Whisper non disponible"}]
@@ -150,15 +152,18 @@ class WhisperTranscriber(BaseTranscriber):
 
         logger.info(
             "Transcription Faster-Whisper: %s, langue=%s, chunks=%ds",
-            audio_path.name,
+            audio_path.name if audio_path else "audio_array",
             lang_code,
             ch_len,
         )
 
         segments = []
+        audio_input = audio_array if audio_array is not None else str(audio_path)
+        if audio_input is None:
+            return [{"error": "Faster-Whisper: audio_path ou audio_array requis"}]
 
         gen_segments, info = self._model.transcribe(
-            str(audio_path),
+            audio_input,
             language=lang_code,
             beam_size=self.beam_size,
             best_of=self.best_of,

@@ -14,8 +14,15 @@ class VRAMManager:
         self.config = config
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
-        self.qwen_port: int = services.get("qwen_port", 8080)
-        self.vllm_port: int = services.get("vllm_port", 8000)
+        self.arbitrage_llm_port: int = services.get(
+            "arbitrage_llm_port",
+            services.get("qwen_port", 8080),
+        )
+        self.qwen_port: int = self.arbitrage_llm_port  # compat ancienne API/tests
+        self.llm_cleanup_ports: list[int] = list(
+            services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
+        )
+        self.vllm_port: int = self.llm_cleanup_ports[0] if self.llm_cleanup_ports else services.get("vllm_port", 8000)
         self.cohere_vram_mb: int = gpu_cfg.get("cohere_vram_mb", 6000)
         self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
@@ -26,11 +33,12 @@ class VRAMManager:
         )
         self.stop_script: str = os.environ.get(
             "TRANSCRIA_STOP_SCRIPT",
-            services.get("stop_script", "./scripts/stop_qwen.sh"),
+            services.get("stop_script", "./scripts/stop_arbitrage_llm.sh"),
         )
         self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
-        self._qwen_pid: int | None = None
+        self._arbitrage_llm_pid: int | None = None
+        self._qwen_pid: int | None = None  # compat ancienne API/tests
 
     # ── GPU Info ──────────────────────────────────────────
 
@@ -208,7 +216,7 @@ class VRAMManager:
         """Retourne True si un processus écoute sur le port de la LLM d'arbitrage."""
         try:
             result = subprocess.run(
-                ["lsof", "-ti", f"tcp:{self.qwen_port}", "-sTCP:LISTEN"],
+                ["lsof", "-ti", f"tcp:{self.arbitrage_llm_port}", "-sTCP:LISTEN"],
                 capture_output=True, text=True, timeout=5,
             )
             return bool(result.stdout.strip())
@@ -259,53 +267,68 @@ class VRAMManager:
             logger.warning("Échec kill port %d: %s", port, exc)
             return False
 
-    def stop_vllm_port_8000(self) -> bool:
-        """Tue le vLLM sur le port configuré (défaut 8000)."""
-        logger.info("Arrêt vLLM port %d...", self.vllm_port)
-        ok = self._kill_port(self.vllm_port)
+    def stop_cleanup_llm_ports(self) -> bool:
+        """Libère les ports de backends LLM concurrents configurés."""
+        ok = True
+        for port in self.llm_cleanup_ports:
+            logger.info("Arrêt backend LLM concurrent port %d...", port)
+            ok = self._kill_port(port) and ok
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
         except ImportError: pass
         return ok
 
-    def launch_qwen_35b(self) -> bool:
-        """Lance Qwen 3.6 35B UD-Q8_XL via le script d'arbitrage (port configuré, 2 GPUs)."""
+    def stop_vllm_port_8000(self) -> bool:
+        """Alias compatibilité : utiliser stop_cleanup_llm_ports()."""
+        return self.stop_cleanup_llm_ports()
+
+    def launch_arbitrage_llm(self) -> bool:
+        """Lance la LLM d'arbitrage via le script configuré."""
         if not os.path.isfile(self.arbitrage_script):
             logger.error("Script d'arbitrage introuvable: %s", self.arbitrage_script)
             return False
 
-        if self.is_port_open(self.qwen_port):
+        if self.is_port_open(self.arbitrage_llm_port):
             # Vérifier que le serveur existant répond bien à l'API avant de l'utiliser
             try:
                 import urllib.request
                 urllib.request.urlopen(
-                    f"http://127.0.0.1:{self.qwen_port}/v1/models", timeout=5
+                    f"http://127.0.0.1:{self.arbitrage_llm_port}/v1/models", timeout=5
                 )
-                pid_info = self._get_port_pid(self.qwen_port)
+                pid_info = self._get_port_pid(self.arbitrage_llm_port)
                 logger.info(
-                    "Qwen 35B déjà actif sur port %d (PID %s) — réutilisation sans redémarrage",
-                    self.qwen_port, pid_info,
+                    "LLM d'arbitrage déjà active sur port %d (PID %s) — réutilisation sans redémarrage",
+                    self.arbitrage_llm_port, pid_info,
                 )
                 return True
             except Exception:
                 logger.info("Port %d occupé mais /v1/models ne répond pas — nettoyage et relance",
-                            self.qwen_port)
-                self._kill_port(self.qwen_port)
+                            self.arbitrage_llm_port)
+                self._kill_port(self.arbitrage_llm_port)
                 time.sleep(3)
 
-        logger.info("Lancement Qwen 35B via %s...", self.arbitrage_script)
+        logger.info("Lancement LLM d'arbitrage via %s...", self.arbitrage_script)
         try:
             proc = subprocess.Popen(
                 ["/bin/bash", self.arbitrage_script],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
+            self._arbitrage_llm_pid = proc.pid
             self._qwen_pid = proc.pid
-            logger.info("Qwen 35B lancé — PID %d, attente du port %d...", proc.pid, self.qwen_port)
-            return self._wait_for_port(self.qwen_port, timeout=600)
+            logger.info(
+                "LLM d'arbitrage lancée — PID %d, attente du port %d...",
+                proc.pid,
+                self.arbitrage_llm_port,
+            )
+            return self._wait_for_port(self.arbitrage_llm_port, timeout=600)
         except Exception as exc:
-            logger.error("Échec lancement Qwen 35B: %s", exc)
+            logger.error("Échec lancement LLM d'arbitrage: %s", exc)
             return False
+
+    def launch_qwen_35b(self) -> bool:
+        """Alias compatibilité : utiliser launch_arbitrage_llm()."""
+        return self.launch_arbitrage_llm()
 
     def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
         """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
@@ -322,14 +345,14 @@ class VRAMManager:
 
         try:
             r = requests.get(
-                f"http://127.0.0.1:{self.qwen_port}/v1/models", timeout=5
+                f"http://127.0.0.1:{self.arbitrage_llm_port}/v1/models", timeout=5
             )
             if r.status_code == 200:
                 data = r.json().get("data", [])
                 if data:
                     active_model_id = data[0].get("id", "")
                     r2 = requests.post(
-                        f"http://127.0.0.1:{self.qwen_port}/v1/completions",
+                        f"http://127.0.0.1:{self.arbitrage_llm_port}/v1/completions",
                         json={
                             "model": active_model_id,
                             "prompt": "Bonjour",
@@ -345,9 +368,9 @@ class VRAMManager:
                             and len(choices[0].get("text", "")) > 0
                         )
         except Exception as exc:
-            logger.debug("Sondage LLM d'arbitrage port %d: %s", self.qwen_port, exc)
+            logger.debug("Sondage LLM d'arbitrage port %d: %s", self.arbitrage_llm_port, exc)
 
-        pid_info = self._get_port_pid(self.qwen_port)
+        pid_info = self._get_port_pid(self.arbitrage_llm_port)
 
         # Cas A : saine + bon modèle → réutilisation, aucun redémarrage
         if server_healthy and (
@@ -356,7 +379,7 @@ class VRAMManager:
             logger.info(
                 "[arbitrage_llm] CAS A — LLM active et saine, réutilisation directe "
                 "(port %d, PID %s, model: %s)",
-                self.qwen_port, pid_info, active_model_id,
+                self.arbitrage_llm_port, pid_info, active_model_id,
             )
             return True
 
@@ -365,23 +388,23 @@ class VRAMManager:
             logger.warning(
                 "[arbitrage_llm] CAS B — Mauvais modèle actif sur port %d "
                 "(trouvé: %s, attendu: %s, PID %s) — redémarrage forcé",
-                self.qwen_port, active_model_id, expected_model_id, pid_info,
+                self.arbitrage_llm_port, active_model_id, expected_model_id, pid_info,
             )
         else:
             # Cas C : port fermé ou inférence échouée → lancement depuis zéro
             logger.info(
                 "[arbitrage_llm] CAS C — LLM non disponible sur port %d "
                 "(model détecté: %s, health: %s) — libération GPU et lancement",
-                self.qwen_port, active_model_id or "aucun", server_healthy,
+                self.arbitrage_llm_port, active_model_id or "aucun", server_healthy,
             )
 
-        self.stop_vllm_port_8000()
+        self.stop_cleanup_llm_ports()
         self.stop_qwen_35b()
         return self.launch_qwen_35b()
 
-    def stop_qwen_35b(self) -> bool:
-        """Arrête Qwen 35B via le script d'arrêt, puis kill port en fallback."""
-        logger.info("Arrêt Qwen 35B port %d...", self.qwen_port)
+    def stop_arbitrage_llm(self) -> bool:
+        """Arrête la LLM d'arbitrage via le script d'arrêt, puis kill port en fallback."""
+        logger.info("Arrêt LLM d'arbitrage port %d...", self.arbitrage_llm_port)
         if os.path.isfile(self.stop_script):
             try:
                 subprocess.run(
@@ -391,17 +414,22 @@ class VRAMManager:
                 logger.info("Script d'arrêt exécuté: %s", self.stop_script)
             except Exception as exc:
                 logger.warning("Échec script d'arrêt: %s", exc)
-        port_ok = self._kill_port(self.qwen_port)
+        port_ok = self._kill_port(self.arbitrage_llm_port)
+        self._arbitrage_llm_pid = None
         self._qwen_pid = None
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
         except ImportError: pass
         return port_ok
 
+    def stop_qwen_35b(self) -> bool:
+        """Alias compatibilité : utiliser stop_arbitrage_llm()."""
+        return self.stop_arbitrage_llm()
+
     def free_all_gpus(self) -> bool:
         """Libère les 2 GPUs : arrête tout modèle chargé."""
         logger.info("Libération des 2 GPUs...")
-        ok1 = self.stop_vllm_port_8000()
+        ok1 = self.stop_cleanup_llm_ports()
         ok2 = self.stop_qwen_35b()
         self.offload_all()
         time.sleep(2)

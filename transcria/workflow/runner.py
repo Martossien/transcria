@@ -44,7 +44,7 @@ class WorkflowRunner:
         self._run_pyannote_after_transcription(job, audio_path, config)
         sl.info("[2/3] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
 
-        sl.info("[3/3] LLM résumé via Qwen — début")
+        sl.info("[3/3] LLM résumé via arbitrage — début")
         self._run_llm_summary(job, result, config, sl)
         sl.info("[3/3] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
@@ -137,15 +137,19 @@ class WorkflowRunner:
         diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+        arbitrage_port = config.get("services", {}).get(
+            "arbitrage_llm_port",
+            config.get("services", {}).get("qwen_port", 8080),
+        )
         sl.info(
             "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",
-            config.get("services", {}).get("qwen_port", 8080),
+            arbitrage_port,
         )
         launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
 
         if not launched:
-            sl.warning("Qwen 35B NON DISPONIBLE — résumé LLM sauté (transcription rapide conservée)")
+            sl.warning("LLM d'arbitrage non disponible — résumé LLM sauté (transcription rapide conservée)")
             return
 
         try:
@@ -223,6 +227,20 @@ class WorkflowRunner:
         sl.info("Résumé LLM généré", chars=len(summary_text), termes_suspects=len(termes_suspects))
 
     @staticmethod
+    def _normalize_speaker_role_info(info: dict) -> dict:
+        """Normalise les anciens formats où le label était inclus dans le rôle."""
+        import re
+
+        label = str(info.get("label", "") or "").strip()
+        role = str(info.get("role", "") or "").strip()
+        if not label and role:
+            split = re.split(r"\s+[—–-]\s+", role, maxsplit=1)
+            if len(split) == 2 and split[0].strip() and split[1].strip():
+                label = split[0].strip()
+                role = split[1].strip()
+        return {"label": label, "role": role}
+
+    @staticmethod
     def _apply_speaker_roles(fs, speaker_roles: dict, sl) -> None:
         """Met à jour participants.json avec les rôles déduits par la LLM pour chaque SPEAKER_XX."""
         mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
@@ -238,8 +256,9 @@ class WorkflowRunner:
         updated = 0
         created = 0
         for speaker_id, info in speaker_roles.items():
-            role = info.get("role", "").strip()
-            label = info.get("label", "").strip()
+            normalized = WorkflowRunner._normalize_speaker_role_info(info)
+            role = normalized["role"]
+            label = normalized["label"]
             if not role:
                 continue
 
@@ -255,9 +274,19 @@ class WorkflowRunner:
                 participant = by_name[name.lower()]
 
             if participant is not None:
+                if label and participant.get("name") in ("", speaker_id):
+                    participant["name"] = label
                 if not participant.get("role"):
                     participant["role"] = role
                     updated += 1
+                else:
+                    current_role = str(participant.get("role", "") or "").strip()
+                    current_normalized = WorkflowRunner._normalize_speaker_role_info(
+                        {"label": "", "role": current_role}
+                    )
+                    if current_normalized["label"] and current_normalized["role"]:
+                        participant["role"] = current_normalized["role"]
+                        updated += 1
             else:
                 # Créer une entrée minimale si participants.json est vide ou SPEAKER_XX inconnu
                 new_p = {
@@ -597,7 +626,7 @@ class WorkflowRunner:
             return {"error": str(exc)}
 
     def run_correction(self, job: Job, config: dict) -> dict:
-        """Phase 3: correction du SRT via opencode + Qwen 35B (speakers, lexique, orthographe)."""
+        """Phase 3: correction du SRT via opencode + LLM d'arbitrage."""
         from transcria.gpu.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
 
@@ -610,14 +639,18 @@ class WorkflowRunner:
             return {"success": False, "error": "SRT source introuvable"}
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+        arbitrage_port = config.get("services", {}).get(
+            "arbitrage_llm_port",
+            config.get("services", {}).get("qwen_port", 8080),
+        )
         logger.info(
             "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",
-            config.get("services", {}).get("qwen_port", 8080),
+            arbitrage_port,
         )
         launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
         if not launched:
-            return {"success": False, "error": "Qwen 35B non disponible"}
+            return {"success": False, "error": "LLM d'arbitrage non disponible"}
 
         try:
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")

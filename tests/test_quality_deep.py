@@ -296,3 +296,23 @@ class TestQualityReportIntegration:
         assert overlap_check["significant_count"] == 0
         assert overlap_check["severity"] == "info"
         assert report["quality_score"] == 100
+
+    def test_asr_noise_markers_are_configurable(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "test-q-noise-markers")
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:00,700\nmarqueur test\n")
+        fs.save_json("metadata/transcription_segments.json", [
+            {"start": 0.0, "end": 0.7, "text": "marqueur test"},
+        ])
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 1})
+        fs.save_json("context/session_lexicon.json", [])
+
+        reporter = QualityReporter({
+            "storage": {"jobs_dir": tmp_dir},
+            "quality": {"asr_noise_markers": ["marqueur test"]},
+        })
+        job = Job(id="test-q-noise-markers", owner_id="u1", title="Test", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+
+        checks = [c for c in report["checks"] if c["type"] == "suspicious_short_segments"]
+        assert checks
+        assert report["review_load"]["suspicious_short_segments"] == 1

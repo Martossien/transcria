@@ -4,7 +4,7 @@
 
 TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
 
-**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / pyannote / opencode (Qwen 35B) / Bootstrap 5
+**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / pyannote / opencode (LLM locale d'arbitrage) / Bootstrap 5
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
@@ -383,11 +383,11 @@ Contient `_STEPS` (9 entrées, sans étape `speakers` séparée) et des helpers 
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode/Qwen résumé | GPUSession auto |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé | GPUSession auto |
 | `run_speaker_detection(job, audio_path, config)` | pyannote diarization + formatage via GPUSession | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession | GPUSession auto |
-| `run_correction(job, config)` | opencode+Qwen 35B : correction speakers+lexique+orthographe | LLM arbitrage |
+| `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers+lexique+orthographe | LLM arbitrage |
 | `run_quality_checks(job, config)` | 10 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |
 
@@ -655,8 +655,8 @@ Tous les appels sont en try/except avec log debug si le dashboard est indisponib
 
 Les valeurs clés sont lues depuis `config.yaml` :
 - `services.arbitrage_script` (défaut `./scripts/launch_arbitrage.sh`)
-- `services.stop_script` (défaut `./scripts/stop_qwen.sh`)
-- `services.qwen_port` (8080), `services.vllm_port` (8000)
+- `services.stop_script` (défaut `./scripts/stop_arbitrage_llm.sh`)
+- `services.arbitrage_llm_port` (8080), `services.llm_cleanup_ports` (`[8000]`)
 - `gpu.cohere_vram_mb`, `gpu.pyannote_vram_mb`, `gpu.llm_vram_mb`, `gpu.min_free_vram_mb`
 
 | Méthode | Description |
@@ -665,12 +665,12 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `get_free_vram_mb(gpu_index)` | VRAM libre en Mo |
 | `get_best_gpu(required_mb)` | Meilleur GPU disponible (≥ required + MIN_FREE) |
 | `ensure_free(required_mb, preferred_gpu)` | Scanne tous les GPUs si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
-| `is_arbitrage_llm_running()` | Retourne True si un processus écoute sur `qwen_port` (lsof) — utilisé par `_release_arbitrage_llm` avant d'appeler stop |
+| `is_arbitrage_llm_running()` | Retourne True si un processus écoute sur `arbitrage_llm_port` (lsof) — utilisé par `_release_arbitrage_llm` avant d'appeler stop |
 | `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
-| `launch_qwen_35b()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
-| `stop_qwen_35b()` | Tue processus sur port 8080 (appelé par `_release_arbitrage_llm` en fin de pipeline) |
-| `stop_vllm_port_8000()` | Tue vLLM sur port 8000 via _kill_port |
-| `free_all_gpus()` | stop_vllm + stop_qwen + offload_all (reset forcé uniquement) |
+| `launch_arbitrage_llm()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
+| `stop_arbitrage_llm()` | Arrête la LLM d'arbitrage via `services.stop_script`, puis libère `arbitrage_llm_port` en fallback |
+| `stop_cleanup_llm_ports()` | Libère les ports `services.llm_cleanup_ports` (vLLM, SGLang, llama.cpp, ik_llama.cpp ou autre backend concurrent) |
+| `free_all_gpus()` | stop_cleanup_llm_ports + stop_arbitrage_llm + offload_all (reset forcé uniquement) |
 | `is_port_open(port)` | Vérifie `/v1/models` accessible + teste une inférence réelle `/v1/completions` |
 | `_log_all_gpus(label)` | Logue VRAM libre/totale/utilisée de chaque GPU (utilisé par ensure_free lors d'un basculement) |
 | `_wait_for_port(port, timeout)` | Boucle d'attente avec `is_port_open` toutes les 5s |
@@ -695,7 +695,7 @@ Constantes : `OPENCODE_BIN = "opencode"`, `PROVIDER = "local"`, `MODEL = "qwen3-
 |---|---|
 | `__init__(work_dir, model, provider)` | Initialise avec répertoire de travail et modèle |
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.run` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
-| `run_summary(transcript_path, context_path, diarization_context_path)` | Génère un résumé structuré via opencode + Qwen 35B. Inclut la diarization acoustique si disponible, lit le fichier summary.md produit et le parse |
+| `run_summary(transcript_path, context_path, diarization_context_path)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible, lit le fichier summary.md produit et le parse |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + session_lexicon.json, écrit transcription_corrigee.srt + correction_report.md |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects) |
 
@@ -779,7 +779,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `run_process(job_id, config)` | Lance le pipeline complet de traitement |
 | `_run_pipeline_steps(job, audio_path, config)` | Exécution séquentielle des étapes du pipeline |
 | `_define_pipeline_steps(config)` | Définit les étapes actives selon la config |
-| `_release_arbitrage_llm(config)` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_qwen_35b()`) |
+| `_release_arbitrage_llm(config)` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_arbitrage_llm()`) |
 
 **`config_service.py` — `ConfigService`** (toutes méthodes statiques)
 | Méthode | Description |
@@ -836,11 +836,11 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 2. Nouveau job   → /jobs/new
 3. Upload        → glisser-déposer fichier audio (mp3, wav, m4a, mp4, flac, ogg)
 4. Analyse       → ffprobe automatique (durée, codec, canaux, estimation temps)
-5. Résumé        → Cohere ASR transcrit → pyannote détecte locuteurs → opencode+Qwen résume
+5. Résumé        → Cohere ASR transcrit → pyannote détecte locuteurs → opencode résume
 6. Contexte      → formulaire pré-rempli avec suggestions IA (titre, type, sujet, objectif)
 7. Participants & Locuteurs → SPEAKER avec bouton écoute + champs nom/fonction/rôle pré-remplis
 8. Lexique       → termes suspects détectés par l'IA, champ "Remplacer par" pré-rempli
-9. Traitement    → Cohere ASR → correction opencode+Qwen (speakers+lexique) → qualité → export
+9. Traitement    → Cohere ASR → correction opencode + LLM d'arbitrage (speakers+lexique) → qualité → export
 ```
 
 ### Pipeline de traitement détaillé
@@ -858,7 +858,7 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
   → GPUSession(pyannote, 2 Go) → GPU auto → diarization supplémentaire → offload
   → ensure_arbitrage_llm_ready(api_model_id) → CAS A (LLM déjà chargée si résumé vient de tourner) → opencode correction SRT
   → qualité (10 checks, score /100) → export ZIP
-  → _release_arbitrage_llm() : is_arbitrage_llm_running() → stop_qwen_35b() [fin pipeline]
+  → _release_arbitrage_llm() : is_arbitrage_llm_running() → stop_arbitrage_llm() [fin pipeline]
 
 Étape 9 - Traitement (mode fast) :
   Cohere ASR → ensure_arbitrage_llm_ready → correction opencode → qualité → export
@@ -875,11 +875,11 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 |---|---|---|---|---|
 | Cohere ASR (2B) | 1 GPU | ~5-6 Go | Python (transformer) | — |
 | pyannote community-1 | 1 GPU | ~2 Go | Python (pyannote.audio) | — |
-| Qwen 3.6 35B (actuel) | variable (selon script/config machine) | variable | `launch_arbitrage.sh` (llama.cpp) | 8080 |
-| vLLM (optionnel) | variable | variable | externe au repo | 8000 |
+| LLM d'arbitrage locale | variable (selon script/config machine) | variable | `services.arbitrage_script` | `services.arbitrage_llm_port` |
+| Backend LLM concurrent éventuel | variable | variable | externe au repo | `services.llm_cleanup_ports` |
 
 Le backend d'arbitrage fourni dans ce repo est **llama.cpp** (`llama-server`) via `scripts/launch_arbitrage.sh`.
-Le modèle actuellement utilisé est `Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf`, mais il est modifiable (chemin modèle et paramètres du script, `workflow.*.model_id`, provider opencode).
+Le modèle actuellement utilisé sur cette machine est configurable : chemin modèle et paramètres du script, `workflow.*.model_id`, provider opencode et `services.arbitrage_api_model_id`.
 
 Observation machine (17 mai 2026) avec la LLM d'arbitrage active :
 - `launch_arbitrage.sh` utilise `--tensor-split 1,1,1` (répartition sur 3 GPUs sur cette machine).
@@ -896,7 +896,7 @@ Cohere ASR (résumé ou transcription) :
 
 pyannote (diarization ou speaker_detection) :
   GPUSession(pyannote, 2 Go)
-    → ensure_free() → GPU auto (évite GPU 0/1/2 si Qwen actif sur ces GPUs)
+    → ensure_free() → GPU auto (évite les GPUs occupés par la LLM d'arbitrage)
     → diarize() → diarizer.offload() → offload_all() à la sortie
 
 LLM arbitrage (résumé puis correction) :
@@ -907,7 +907,7 @@ LLM arbitrage (résumé puis correction) :
 
 Fin de pipeline :
   PipelineService._release_arbitrage_llm()
-    → is_arbitrage_llm_running() → si True : stop_qwen_35b()
+    → is_arbitrage_llm_running() → si True : stop_arbitrage_llm()
   [unique point d'arrêt de la LLM, dans le finally de _execute_pipeline]
 ```
 

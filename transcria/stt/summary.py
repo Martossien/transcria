@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
@@ -8,6 +9,7 @@ from transcria.logging_setup import get_structured_logger
 logger = logging.getLogger(__name__)
 
 _SR = 16000
+_NON_LATIN_RE = re.compile(r"[\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]")
 
 
 class SummaryGenerator:
@@ -35,10 +37,24 @@ class SummaryGenerator:
         total_duration = len(audio) / sr
         sl.info("[summary] Audio chargé: %.1fs (%.1f min)", total_duration, total_duration / 60)
 
-        # VAD pré-transcription
-        sl.info("[summary] VAD: détection zones de parole")
-        vad = SileroVAD()
-        vad_chunks = vad.build_speech_chunks(audio, sample_rate=sr)
+        vad_cfg = self.config.get("workflow", {}).get("vad", {})
+        vad_enabled = vad_cfg.get(
+            "enabled_summary",
+            self.config.get("workflow", {}).get("enable_vad", True),
+        )
+        if vad_enabled:
+            sl.info("[summary] VAD: détection zones de parole")
+            vad = SileroVAD(
+                threshold=vad_cfg.get("threshold", 0.5),
+                min_speech_duration_ms=vad_cfg.get("min_speech_duration_ms", 250),
+                min_silence_duration_ms=vad_cfg.get("min_silence_duration_ms", 400),
+                speech_pad_ms=vad_cfg.get("speech_pad_ms", 200),
+            )
+            vad_chunks = vad.build_speech_chunks(audio, sample_rate=sr)
+        else:
+            sl.info("[summary] VAD désactivé — chunking 30s fixe")
+            vad = SileroVAD()
+            vad_chunks = vad._fallback_chunks(audio, sr, 30, total_duration)
         sl.info("[summary] VAD: %d chunks à transcrire (%.1f%% de l'audio)",
                 len(vad_chunks),
                 100 * sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001))
@@ -70,8 +86,10 @@ class SummaryGenerator:
             f"{seg.get('speaker', '')} {seg.get('text', seg.get('error', ''))}"
             for seg in segments
         )
+        speech_ratio = sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001)
+        diagnostics = self._build_diagnostics(segments, speech_ratio)
         fs.save_text("summary/quick_transcript.txt", transcript_text)
-        fs.save_json("summary/summary.json", {"segments": segments})
+        fs.save_json("summary/summary.json", {"segments": segments, "diagnostics": diagnostics})
 
         summary_text = "Résumé de contrôle indisponible (LLM non configurée)."
         transcript_short = "\n".join(
@@ -97,4 +115,41 @@ class SummaryGenerator:
             "transcript_short": transcript_short,
             "summary_text": summary_text,
             "segment_count": len(segments),
+            "diagnostics": diagnostics,
+        }
+
+    @staticmethod
+    def _build_diagnostics(segments: list[dict], speech_ratio: float) -> dict:
+        short_segments = [
+            s for s in segments
+            if s.get("text") and (s.get("end", 0) - s.get("start", 0)) < 1.0
+        ]
+        non_latin_segments = [
+            s for s in segments
+            if _NON_LATIN_RE.search(s.get("text", ""))
+        ]
+        flags = []
+        if speech_ratio < 0.4:
+            flags.append("vad_agressif")
+        elif speech_ratio > 0.9:
+            flags.append("vad_peu_selectif")
+        if len(non_latin_segments) >= 3:
+            flags.append("hallucinations_non_latines")
+        if len(short_segments) >= 20:
+            flags.append("segments_courts_nombreux")
+
+        if "hallucinations_non_latines" in flags or "segments_courts_nombreux" in flags:
+            level = "degrade"
+        elif flags:
+            level = "suspect"
+        else:
+            level = "ok"
+
+        return {
+            "level": level,
+            "flags": flags,
+            "speech_ratio": round(speech_ratio, 3),
+            "segment_count": len(segments),
+            "short_segment_count": len(short_segments),
+            "non_latin_segment_count": len(non_latin_segments),
         }

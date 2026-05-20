@@ -7,12 +7,22 @@ Le format suit une logique proche de Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- Scripts LLM génériques : `scripts/stop_llm_backend.sh` (arrêt par port/PID file/pattern) et `scripts/stop_arbitrage_llm.sh` (wrapper standard). `stop_qwen.sh` et `stop_qwen_vllm.sh` restent des wrappers legacy.
+- Configuration LLM générique : `services.arbitrage_llm_port`, `services.llm_cleanup_ports`, compatibilité lecture avec `qwen_port` et `vllm_port`.
+- Configuration VAD fine : `workflow.vad.enabled_summary`, `enabled_final`, `threshold`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms`.
+- Diagnostics summary ASR/VAD dans `summary/summary.json` (`level`, `flags`, ratio parole, segments courts, segments non latins).
+- Garde-fous qualité SRT dans `QualityReporter` : noms de locuteurs modifiés, segments marqués étrangers, segments non latins, segments courts suspects et `review_load`.
+- `quality.asr_noise_markers` : marqueurs configurables de bruit ASR court, sans modification de code.
+- Support `audio_array` dans `WhisperTranscriber`, aligné avec l'interface Cohere pour préparer un fallback Whisper ciblé sans l'activer automatiquement.
 - `docs/VAD_PYANNOTE_PISTES.md` : documentation complète sur le VAD Silero (avantages, inconvénients, métriques de détection de dégradation) et le tuning pyannote (hyperparamètres, méthode sans/avec annotations), plus pistes d'amélioration globales (speaker embeddings, fine-tuning ASR, session opencode persistante, validation format LLM).
 - `WorkflowRunner._extract_name_hints()` (runner.py) : nouvelle méthode statique qui analyse les segments labellisés pour extraire deux types d'indices d'identification des locuteurs — apostrophes directes (locuteur A termine son tour en appelant B par son prénom juste avant que B prenne la parole) et noms propres en milieu de phrase par locuteur (mots capitalisés hors début de phrase, hors sigles, hors mots fonction). Les indices sont injectés dans une section dédiée de `diarization_context.md`.
 - `diarization_context.md` enrichi : extraits de segments portés de 120 à 200 caractères (`_build_labeled_segments`), nouvelle section `## Indices pour identifier les prénoms des locuteurs` avec sous-sections `### Apostrophes directes détectées` et `### Noms propres en milieu de phrase par locuteur`, consigne enrichie (priorité aux apostrophes directes, auto-désignation comme indice fort).
 
 ### Fixed
-- Parser `_parse_participants()` (opencode_runner.py ligne 365) : le test `"non identifiable" in line.lower()` supprimait toutes les lignes de participants dont la description contenait cette phrase (ex : `SPEAKER_02 [Fonction non identifiable avec certitude]`). Remplacé par une comparaison exacte au placeholder standalone `(non identifiable)` uniquement — les participants avec un rôle partiel sont désormais correctement conservés.
+- Pré-remplissage Participants & Locuteurs : séparation robuste entre `label` et `role` pour les formats `SPEAKER_XX [Fonction A] : rôle` et `SPEAKER_XX : Fonction A — rôle`; l'UI et `_apply_speaker_roles()` normalisent aussi les anciens résumés déjà produits.
+- `SpeakerDetector.save_mapping()` réécrit `speaker_stats.json` après mapping afin d'éviter un état stale `validation: pending`.
+- Généralisation des arrêts de backends LLM concurrents : plus de dépendance structurelle à vLLM dans le chemin principal.
+- Parser `_parse_structured_summary()` : les lignes de participants contenant le placeholder `non identifiable` sont ignorées pour éviter de préremplir un faux participant.
 
 ### Added
 - `summary_prompt.txt` v2.0 : restructuration complète — 10 sections numérotées, double passe formalisée (§5), règles explicites quoi lister / quoi exclure (§6.1/6.2), hiérarchie `### Passe 1` / `### Passe 2` correcte, `(non identifiable)` aligné sur le parser Python, séparateur `||` pour contextes multiples, exemples de format (§6.9), `Tu dois utiliser les outils Read et Write` en §10, vérification finale 12 points. Compatibilité totale avec `_parse_structured_summary()`.

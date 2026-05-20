@@ -382,7 +382,7 @@ mkdir -p $HOME/.config/opencode
 ```
 
 > **Points clés** :
-> - `baseURL` doit correspondre au `qwen_port` de `config.yaml` (défaut 8080)
+> - `baseURL` doit correspondre à `services.arbitrage_llm_port` dans `config.yaml` (défaut 8080)
 > - `npm: "@ai-sdk/openai-compatible"` est requis — c'est le driver OpenAI-compatible d'opencode
 > - `timeout: 9999999` évite les timeouts sur les longues générations
 > - `limit.context: 263144` correspond au `--ctx-size` de llama-server
@@ -442,12 +442,12 @@ Source : [huggingface.co/pyannote/speaker-diarization-community-1](https://huggi
 
 ### Qwen 35B (résumé/correction, llama.cpp par défaut)
 
-Le modèle Qwen 3.6 35B UD-Q8_K_XL est servi par **llama.cpp** (llama-server) via le script d'arbitrage. vLLM est supporté comme alternative.
+Le modèle local d'arbitrage est servi par **llama.cpp** (llama-server) via le script d'arbitrage fourni. D'autres backends OpenAI-compatibles sont possibles si la config pointe vers le bon port et les bons scripts.
 
 Pré-requis :
 - **llama.cpp** compilé avec support CUDA (binaire `llama-server`)
-- Modèle GGUF : `Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf` (~48 Go)
-- L'API doit être exposée sur le port `qwen_port` (défaut 8080 dans `config.yaml`)
+- Modèle GGUF local configuré dans `scripts/launch_arbitrage.sh`
+- L'API doit être exposée sur `services.arbitrage_llm_port` (défaut 8080 dans `config.yaml`)
 
 #### Installer llama.cpp
 
@@ -486,9 +486,11 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 
 | Script | Description |
 |---|---|
-| `scripts/launch_arbitrage.sh` | Lance Qwen 35B via llama-server (par défaut) |
-| `scripts/stop_qwen.sh` | Arrête llama-server sur le port configuré |
-| `scripts/stop_qwen_vllm.sh` | Arrête vLLM (si vous utilisez vLLM comme alternative) |
+| `scripts/launch_arbitrage.sh` | Lance la LLM d'arbitrage via llama-server (configuration locale par défaut) |
+| `scripts/stop_llm_backend.sh` | Arrêt générique par port, PID file ou pattern explicite |
+| `scripts/stop_arbitrage_llm.sh` | Wrapper configuré pour la LLM d'arbitrage |
+| `scripts/stop_qwen.sh` | Wrapper de compatibilité vers `stop_arbitrage_llm.sh` |
+| `scripts/stop_qwen_vllm.sh` | Wrapper legacy pour un ancien déploiement vLLM spécifique |
 
 **Variables configurables** dans `launch_arbitrage.sh` :
 
@@ -516,13 +518,15 @@ Configuration dans `config.yaml` :
 ```yaml
 services:
   arbitrage_script: "./scripts/launch_arbitrage.sh"
-  stop_script: "./scripts/stop_qwen.sh"
-  qwen_port: 8080
+  stop_script: "./scripts/stop_arbitrage_llm.sh"
+  arbitrage_llm_port: 8080
+  llm_cleanup_ports:
+    - 8000
 ```
 
-#### Alternative : vLLM
+#### Backends LLM alternatifs
 
-Si vous préférez vLLM au lieu de llama.cpp, utilisez `stop_qwen_vllm.sh` comme script d'arrêt et adaptez le script de lancement.
+TranscrIA attend une API OpenAI-compatible. Le backend peut être llama.cpp, SGLang, vLLM, ik_llama.cpp ou autre. Adaptez `arbitrage_script`, `stop_script`, `arbitrage_llm_port` et `llm_cleanup_ports` au backend réellement utilisé.
 
 ---
 
@@ -556,9 +560,10 @@ services:
   dashboard_llm_url: "http://127.0.0.1:5001"
   srt_editor_easy_url: "http://127.0.0.1:7861"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
-  stop_script: "./scripts/stop_qwen.sh"
-  qwen_port: 8080
-  vllm_port: 8000
+  stop_script: "./scripts/stop_arbitrage_llm.sh"
+  arbitrage_llm_port: 8080
+  llm_cleanup_ports:
+    - 8000
 
 models:
   stt_backend: "cohere"                     # ou "whisper" pour utiliser Whisper (via faster-whisper)
@@ -641,7 +646,7 @@ TranscrIA utilise le Dashboard LLM pour vérifier la disponibilité des GPUs. Si
 
 ### Scripts d'arbitrage LLM
 
-TranscrIA lance et arrête Qwen 35B via deux scripts shell (fournis dans `scripts/`) :
+TranscrIA lance et arrête la LLM d'arbitrage via des scripts shell configurables dans `config.yaml` :
 
 **`scripts/launch_arbitrage.sh`** — lance llama-server avec :
 1. Configuration CUDA (`CUDA_HOME`)
@@ -649,12 +654,14 @@ TranscrIA lance et arrête Qwen 35B via deux scripts shell (fournis dans `script
 3. Modèle GGUF sur 2 GPUs (`--tensor-split 1,1`, `--split-mode layer`)
 4. API OpenAI-compatible sur le port configuré (`--port 8080`)
 
-**`scripts/stop_qwen.sh`** — arrête proprement :
+**`scripts/stop_arbitrage_llm.sh`** — arrête proprement :
 1. SIGTERM sur les processus du port
 2. Attente max 60s
 3. SIGKILL en fallback
 
-Variables configurables : `QWEN_PORT`, `MODEL_PATH`, `LLAMA_BIN`, `CUDA_HOME`.
+`scripts/stop_llm_backend.sh` est le script générique utilisé en dessous : il peut cibler un port, un PID file ou un pattern explicite. `scripts/stop_qwen.sh` reste un wrapper de compatibilité.
+
+Variables configurables : `ARBITRAGE_LLM_PORT`, `ARBITRAGE_LLM_PID_FILE`, `ARBITRAGE_LLM_STOP_PATTERN`, `MODEL_PATH`, `LLAMA_BIN`, `CUDA_HOME`.
 
 ---
 
@@ -750,7 +757,7 @@ print(f'Serveur   : {cfg[\"server\"][\"host\"]}:{cfg[\"server\"][\"port\"]}')
 print(f'Jobs dir  : {cfg[\"storage\"][\"jobs_dir\"]}')
 print(f'Dashboard : {cfg[\"services\"][\"dashboard_llm_url\"]}')
 print(f'Cohere    : {cfg[\"models\"][\"cohere_model_path\"]}')
-print(f'Qwen port : {cfg[\"services\"][\"qwen_port\"]}')
+print(f'LLM port  : {cfg[\"services\"].get(\"arbitrage_llm_port\")}')
 print(f'Script    : {cfg[\"services\"][\"arbitrage_script\"]}')
 "
 ```

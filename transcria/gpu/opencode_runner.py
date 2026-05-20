@@ -315,6 +315,30 @@ class OpenCodeRunner:
         return parsed
 
     @staticmethod
+    def _parse_participant_line(line: str) -> tuple[str | None, str, str]:
+        """Extrait speaker_id, label et rôle depuis une ligne Participants probables."""
+        import re
+
+        text = line.strip("- ").strip()
+        if not text:
+            return None, "", ""
+
+        match = re.match(r"^(SPEAKER_\d+)\s+\[([^\]]+)\]\s*:\s*(.+)$", text)
+        if match:
+            return match.group(1), match.group(2).strip(), match.group(3).strip()
+
+        match = re.match(r"^(SPEAKER_\d+)\s*:\s*(.+)$", text)
+        if match:
+            speaker_id = match.group(1)
+            rest = match.group(2).strip()
+            split = re.split(r"\s+[—–-]\s+", rest, maxsplit=1)
+            if len(split) == 2:
+                return speaker_id, split[0].strip(), split[1].strip()
+            return speaker_id, "", rest
+
+        return None, "", ""
+
+    @staticmethod
     def _parse_structured_summary(text: str) -> dict:
         """Parse le markdown structuré en dictionnaire de champs."""
         import re
@@ -362,24 +386,17 @@ class OpenCodeRunner:
             speaker_roles: dict[str, dict] = {}
             for line in part_match.group(1).strip().split("\n"):
                 line = line.strip("- ").strip()
-                if not line or line.strip("- ()").lower() in ("non identifiable", "(non identifiable)"):
+                if not line or "non identifiable" in line.lower():
                     continue
                 participants.append(line)
-                # Extraire SPEAKER_XX + rôle — deux formats acceptés :
-                # Format A : "SPEAKER_XX [label] : rôle"
-                # Format B : "SPEAKER_XX : rôle" (sans label)
-                m = re.match(r"(SPEAKER_\d+)\s+([^:]+?)\s*:\s*(.+)", line)
-                if m:
-                    speaker_id = m.group(1)
-                    label = m.group(2).strip().strip("[]")
-                    role = m.group(3).strip()
+                # Extraire SPEAKER_XX + label + rôle.
+                # Formats acceptés :
+                # - "SPEAKER_XX [label] : rôle"
+                # - "SPEAKER_XX : label — rôle"
+                # - "SPEAKER_XX : rôle" (sans label)
+                speaker_id, label, role = OpenCodeRunner._parse_participant_line(line)
+                if speaker_id and role:
                     speaker_roles[speaker_id] = {"label": label, "role": role}
-                else:
-                    m = re.match(r"(SPEAKER_\d+)\s*:\s*(.+)", line)
-                    if m:
-                        speaker_id = m.group(1)
-                        role = m.group(2).strip()
-                        speaker_roles[speaker_id] = {"label": "", "role": role}
             fields["participants_detectes"] = "\n".join(participants)
             if speaker_roles:
                 fields["speaker_roles"] = speaker_roles

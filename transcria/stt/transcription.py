@@ -38,7 +38,11 @@ class Transcriber:
 
         sl.info("DÉBUT transcription", backend=backend, gpu=self.gpu_index)
 
-        vad_enabled = self.config.get("workflow", {}).get("enable_vad", True)
+        vad_cfg = self.config.get("workflow", {}).get("vad", {})
+        vad_enabled = vad_cfg.get(
+            "enabled_final",
+            self.config.get("workflow", {}).get("enable_vad", False),
+        )
 
         # Choisir le mode de chunking selon la disponibilité des exclusive_turns
         if speaker_turns and speaker_turns.get("exclusive_turns"):
@@ -49,7 +53,7 @@ class Transcriber:
             chunks = self._build_chunks_from_turns(audio, total_duration, speaker_turns)
             if chunks:
                 if vad_enabled:
-                    chunks = self._apply_vad_filter(chunks, audio, sl)
+                    chunks = self._apply_vad_filter(chunks, audio, sl, vad_cfg)
                 sl.info("Mode transcription: tours pyannote (%d chunks)", len(chunks), backend=backend)
                 segments = self._transcribe_by_chunks(chunks, lang, speaker_mapping, sl)
                 chunking_mode = "pyannote_turns"
@@ -163,7 +167,7 @@ class Transcriber:
         }
 
     def _apply_vad_filter(
-        self, chunks: list[dict], audio: np.ndarray, sl
+        self, chunks: list[dict], audio: np.ndarray, sl, vad_cfg: dict | None = None
     ) -> list[dict]:
         """Filtre les chunks pyannote qui ne contiennent pas de parole selon Silero VAD.
 
@@ -172,7 +176,13 @@ class Transcriber:
         """
         from transcria.audio.vad import SileroVAD
 
-        vad = SileroVAD()
+        vad_cfg = vad_cfg or {}
+        vad = SileroVAD(
+            threshold=vad_cfg.get("threshold", 0.5),
+            min_speech_duration_ms=vad_cfg.get("min_speech_duration_ms", 250),
+            min_silence_duration_ms=vad_cfg.get("min_silence_duration_ms", 400),
+            speech_pad_ms=vad_cfg.get("speech_pad_ms", 200),
+        )
         speech_zones = vad.get_speech_timestamps(audio, _SR)
         if not speech_zones:
             sl.info("VAD: indisponible ou aucune parole détectée — pas de filtrage")

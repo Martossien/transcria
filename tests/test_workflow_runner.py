@@ -7,6 +7,7 @@ from transcria.workflow.states import WorkflowState, StepStatus
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.gpu.vram_manager import VRAMManager
+from transcria.jobs.filesystem import JobFilesystem
 
 
 def _default_config(**overrides):
@@ -78,6 +79,34 @@ class TestWorkflowRunnerRunAnalyze:
 
             with pytest.raises(FileNotFoundError):
                 runner.run_analyze(job, "/nonexistent/audio.mp3")
+
+
+class TestWorkflowRunnerSpeakerRoles:
+    def test_apply_speaker_roles_splits_legacy_label_in_role(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "job-speaker-roles")
+        fs.save_json("speakers/speaker_mapping.json", {
+            "mapping": {
+                "SPEAKER_00": {"name": "Fonction A", "participant_id": "p1"},
+            }
+        })
+        fs.save_json("context/participants.json", [
+            {"id": "p1", "name": "Fonction A", "function": "", "service": "", "role": ""},
+        ])
+
+        class Log:
+            @staticmethod
+            def info(*args, **kwargs):
+                pass
+
+        WorkflowRunner._apply_speaker_roles(
+            fs,
+            {"SPEAKER_00": {"label": "", "role": "Fonction A — décrit une action observée"}},
+            Log(),
+        )
+
+        participants = fs.load_json("context/participants.json")
+        assert participants[0]["name"] == "Fonction A"
+        assert participants[0]["role"] == "décrit une action observée"
 
 
 class TestWorkflowRunnerRunCorrection:

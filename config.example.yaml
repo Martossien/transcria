@@ -16,10 +16,13 @@ services:
   dashboard_llm_url: "http://127.0.0.1:5001"
   srt_editor_easy_url: "http://127.0.0.1:7861"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
-  stop_script: "./scripts/stop_qwen.sh"
-  qwen_port: 8080
-  vllm_port: 8000
-  # model_id tel que rapporté par /v1/models (alias llama-server ou vllm)
+  stop_script: "./scripts/stop_arbitrage_llm.sh"
+  arbitrage_llm_port: 8080
+  # Ports de backends LLM concurrents à libérer avant de lancer la LLM d'arbitrage
+  # Exemples: vLLM, SGLang, llama.cpp, ik_llama.cpp exposés sur un autre port
+  llm_cleanup_ports:
+    - 8000
+  # model_id tel que rapporté par /v1/models (alias du backend OpenAI-compatible)
   # utilisé par ensure_arbitrage_llm_ready() pour éviter un redémarrage inutile
   # lancer scripts/check_arbitrage_llm.sh pour obtenir la valeur exacte
   arbitrage_api_model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
@@ -43,6 +46,13 @@ workflow:
   enable_quality_mode: true
   enable_external_srt_editor_link: true
   enable_vad: true
+  vad:
+    enabled_summary: true
+    enabled_final: false
+    threshold: 0.5
+    min_speech_duration_ms: 250
+    min_silence_duration_ms: 400
+    speech_pad_ms: 200
   execution:
     max_concurrent_jobs: 1
   summary_llm:
@@ -56,6 +66,17 @@ workflow:
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"
+
+quality:
+  asr_noise_markers:
+    - "thank you"
+    - "thanks"
+    - "gracias"
+    - "obrigado"
+    - "e aí"
+    - "come on"
+    - "absolutely"
+    - "hollywood"
 
 security:
   retention_days: 365

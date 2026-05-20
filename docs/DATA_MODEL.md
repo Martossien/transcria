@@ -85,7 +85,7 @@ Décorateur : `@requires(Permission.VIEW_ALL_JOBS)` → 401 si non authentifié,
 | `READY_TO_PROCESS` | `"ready_to_process"` | Traitement | Toutes les étapes préparatoires terminées |
 | `TRANSCRIBING` | `"transcribing"` | Traitement | Cohere ASR transcription finale en cours |
 | `DIARIZING` | `"diarizing"` | Traitement | Pyannote diarization finale en cours |
-| `ARBITRATING` | `"arbitrating"` | Traitement | Correction opencode+Qwen en cours |
+| `ARBITRATING` | `"arbitrating"` | Traitement | Correction opencode + LLM d'arbitrage en cours |
 | `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 10 contrôles en cours |
 | `QUALITY_CHECKED` | `"quality_checked"` | Qualité | Contrôles terminés |
 | `EXPORT_READY` | `"export_ready"` | Export | Package ZIP prêt |
@@ -203,7 +203,7 @@ jobs/<job_id>/
 │   │                               #       - Apostrophes directes (fin de tour → changement locuteur)
 │   │                               #       - Noms propres mid-phrase par locuteur
 │   │                               #   § Consigne d'attribution des rôles
-│   └── summary.md                 # Résumé structuré par opencode+Qwen
+│   └── summary.md                 # Résumé structuré par opencode + LLM d'arbitrage
 │
 ├── context/
 │   ├── meeting_context.json       # Contexte de réunion (titre, type, langue, suggestions LLM)

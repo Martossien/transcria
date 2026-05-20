@@ -138,6 +138,44 @@ auth:
         assert cfg["workflow"]["summary_llm"]["timeout_seconds"] == 1800
         assert cfg["workflow"]["arbitration_llm"]["timeout_seconds"] == 7200
 
+    def test_legacy_enable_vad_without_vad_section_is_preserved(self):
+        content = """workflow:
+  enable_vad: false
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(content)
+            f.flush()
+            cfg = load_config(f.name)
+        os.unlink(f.name)
+        assert cfg["workflow"]["vad"]["enabled_summary"] is False
+        assert cfg["workflow"]["vad"]["enabled_final"] is False
+
+    def test_explicit_vad_section_overrides_legacy_enable_vad(self):
+        content = """workflow:
+  enable_vad: true
+  vad:
+    enabled_summary: true
+    enabled_final: false
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(content)
+            f.flush()
+            cfg = load_config(f.name)
+        os.unlink(f.name)
+        assert cfg["workflow"]["vad"]["enabled_summary"] is True
+        assert cfg["workflow"]["vad"]["enabled_final"] is False
+
+    def test_legacy_vllm_port_maps_to_cleanup_ports(self):
+        content = """services:
+  vllm_port: 8123
+"""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write(content)
+            f.flush()
+            cfg = load_config(f.name)
+        os.unlink(f.name)
+        assert cfg["services"]["llm_cleanup_ports"] == [8123]
+
     def test_get_config_path_uses_env(self):
         old = os.environ.get("TRANSCRIA_CONFIG")
         try:

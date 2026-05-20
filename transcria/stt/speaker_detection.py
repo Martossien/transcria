@@ -76,6 +76,7 @@ class SpeakerDetector:
                 spk["mapped_name"] = SpeakerDetector._clean_name(raw_name, spk_id)
                 spk["validation"] = "user_validated"
 
+        fs.save_json("speakers/speaker_stats.json", {"speakers": speakers})
         fs.save_json("speakers/speaker_mapping.json", {"mapping": mapping, "speakers": speakers})
         participant_list = mapping.get("__participants__", [])
         if participant_list:

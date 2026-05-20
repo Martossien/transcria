@@ -54,7 +54,7 @@ venv/bin/python tests/test_e2e_workflow.py --keep       # Conserve le job pour i
 - **python-dotenv** pour charger `.env` au démarrage (`app.py`)
 - **torch + transformers + accelerate** pour Cohere ASR (device_map GPU)
 - **pyannote.audio** pour la diarisation (dans `requirements.txt`, modèle téléchargé séparément)
-- **opencode** (CLI externe) pour orchestrer Qwen 35B (résumé + arbitrage)
+- **opencode** (CLI externe) pour orchestrer la LLM locale d'arbitrage (résumé + correction)
 
 ## Structure du projet
 
@@ -137,9 +137,11 @@ transcria/
     lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
-    launch_arbitrage.sh     # Lance llama-server (Qwen 35B, 2 GPUs, contexte 263K)
-    stop_qwen.sh            # Arrête llama-server proprement
-    stop_qwen_vllm.sh       # Arrête vLLM (si utilisé à la place de llama.cpp)
+    launch_arbitrage.sh     # Lance le backend LLM local configuré (llama-server par défaut)
+    stop_llm_backend.sh     # Arrêt générique par port, PID file ou pattern explicite
+    stop_arbitrage_llm.sh   # Wrapper d'arrêt standard de la LLM d'arbitrage
+    stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
+    stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
   tests/                    # 21 modules test_*.py + E2E, 426 tests (mocks GPU/LLM)
     conftest.py
@@ -185,7 +187,7 @@ transcria/
 L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne tiennent pas tous en mémoire simultanément :
 1. **Cohere ASR** : ~6 Go VRAM
 2. **pyannote** : ~2 Go VRAM
-3. **Qwen 35B** : ~48–60 Go VRAM sur 2–3 GPUs (selon tensor-split)
+3. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
 
 **`GPUSession`** est le context manager utilisé pour Cohere et pyannote. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
@@ -194,9 +196,9 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 - **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
 - **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
 
-**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_qwen_35b()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
+**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`, alias legacy `stop_qwen_35b()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
 
-`services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `free_all_gpus()` reste disponible pour les resets forcés uniquement.
+`services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `services.arbitrage_llm_port` remplace `qwen_port` pour les nouvelles configs. `services.llm_cleanup_ports` remplace `vllm_port` et liste les ports de backends LLM concurrents à libérer avant lancement. Les anciens noms restent lus par compatibilité. `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
 ### Pipeline STT — deux modes de chunking
 
@@ -204,7 +206,7 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 
 **Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
 
-**VAD Silero (pré-transcription) :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées. Fallback transparent si `faster_whisper` indisponible (chunking 30s). La transcription finale utilise les tours pyannote comme VAD implicite.
+**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite et le filtrage VAD final peut dégrader Cohere sur certains sons. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
 **`CohereTranscriber.transcribe()` accepte deux formes d'entrée :**
 - `transcribe(audio_path=Path(...))` — charge l'audio depuis le disque (usage standard)
@@ -217,7 +219,7 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan (worker sérialisé, `workflow.execution.max_concurrent_jobs=1`). Supervision : `/health`, `/ready`, `/metrics`.
 
 ### Pré-remplissage des rôles participants (LLM → section 5)
-La phase summary (LLM Qwen) déduit les rôles de chaque SPEAKER_XX depuis la transcription. Le flux :
+La phase summary (LLM d'arbitrage) déduit les rôles de chaque SPEAKER_XX depuis la transcription. Le flux :
 1. `OpenCodeRunner._parse_structured_summary()` extrait `speaker_roles` (`{"SPEAKER_00": {"label": "Alice", "role": "..."}, ...}`)
 2. `WorkflowRunner._apply_llm_suggestions()` stocke ces rôles dans `meeting_context.json["speaker_roles_llm"]`
 3. `WorkflowRunner._apply_speaker_roles()` est appelé **après** la création du mapping SPEAKER_XX → participant, soit :
@@ -226,6 +228,12 @@ La phase summary (LLM Qwen) déduit les rôles de chaque SPEAKER_XX depuis la tr
 4. Le résultat est écrit dans `context/participants.json["role"]` pour chaque participant
 
 **Important :** `_apply_speaker_roles()` nécessite que `speakers/speaker_mapping.json` existe déjà (lien SPEAKER_XX → participant_id). Ne pas l'appeler avant la création du mapping.
+
+Le parser accepte deux formats pour les participants probables :
+- `SPEAKER_XX [Fonction A] : rôle détaillé`
+- `SPEAKER_XX : Fonction A — rôle détaillé`
+
+Le format avec crochets est le format cible du prompt. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
 
 ### Récupération des opencode orphelins au démarrage
 `job_executor._kill_orphaned_opencode(job_id, jobs_dir, sl)` tue les processus opencode de TranscrIA laissés vivants après un redémarrage brutal. Il lit les fichiers `.opencode.pid` dans `jobs/<id>/` (écrits par `OpenCodeRunner.run()`). La réconciliation est appelée automatiquement par `init_job_executor()` au démarrage du service.
@@ -291,8 +299,11 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 ### `CohereTranscriber` — ne pas passer `audio_path=None` sans `audio_array`
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
-### VAD Silero — fallback transparent
-`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` et en post-filtrage par `Transcriber._apply_vad_filter()`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif.
+### VAD Silero — fallback transparent et activation séparée
+`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`, et peut être utilisé en post-filtrage par `Transcriber._apply_vad_filter()` si `workflow.vad.enabled_final=true`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif. Les paramètres `threshold`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms` sont configurables dans `workflow.vad`.
+
+### Qualité SRT — garde-fous déterministes
+`QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
 426 tests dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.

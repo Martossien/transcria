@@ -16,7 +16,7 @@ def _default_config(**overrides):
             "arbitrage_script": "/bin/true",
             "stop_script": "/bin/true",
             "qwen_port": 8080,
-            "vllm_port": 8000,
+            "llm_cleanup_ports": [8000],
         }
     }
     for k, v in overrides.items():
@@ -43,9 +43,10 @@ class TestVRAMManagerInstantiation:
         assert mgr.dashboard_url == "http://10.0.0.1:9999"
 
     def test_config_overrides(self):
-        cfg = _default_config(qwen_port=9999, vllm_port=8888)
+        cfg = _default_config(qwen_port=9999, llm_cleanup_ports=[8888])
         mgr = VRAMManager(config=cfg)
         assert mgr.qwen_port == 9999
+        assert mgr.llm_cleanup_ports == [8888]
         assert mgr.vllm_port == 8888
 
     def test_script_paths_from_config(self):
@@ -698,32 +699,38 @@ class TestVRAMManagerStopQwen:
         assert mgr._qwen_pid is None
 
 
-class TestVRAMManagerStopVllm:
-    def test_stop_vllm_kills_configured_port(self, monkeypatch):
-        mgr = VRAMManager(config=_default_config(vllm_port=12345))
+class TestVRAMManagerStopCleanupLlmPorts:
+    def test_stop_cleanup_llm_ports_kills_configured_port(self, monkeypatch):
+        mgr = VRAMManager(config=_default_config(llm_cleanup_ports=[12345]))
+        monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: port == 12345)
+        result = mgr.stop_cleanup_llm_ports()
+        assert result is True
+
+    def test_legacy_stop_vllm_alias_uses_cleanup_ports(self, monkeypatch):
+        mgr = VRAMManager(config=_default_config(llm_cleanup_ports=[12345]))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: port == 12345)
         result = mgr.stop_vllm_port_8000()
         assert result is True
 
 
 class TestVRAMManagerFreeAllGpus:
-    def test_free_all_gpus_calls_stop_vllm_and_qwen(self, monkeypatch):
+    def test_free_all_gpus_calls_cleanup_ports_and_qwen(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        calls = {"vllm": False, "qwen": False}
+        calls = {"cleanup": False, "qwen": False}
 
-        monkeypatch.setattr(mgr, "stop_vllm_port_8000", lambda: calls.__setitem__("vllm", True) or True)
+        monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: calls.__setitem__("cleanup", True) or True)
         monkeypatch.setattr(mgr, "stop_qwen_35b", lambda: calls.__setitem__("qwen", True) or True)
         monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
         result = mgr.free_all_gpus()
-        assert calls["vllm"] is True
+        assert calls["cleanup"] is True
         assert calls["qwen"] is True
         assert result is True
 
     def test_free_all_gpus_returns_false_if_stop_fails(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        monkeypatch.setattr(mgr, "stop_vllm_port_8000", lambda: False)
+        monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: False)
         monkeypatch.setattr(mgr, "stop_qwen_35b", lambda: False)
         monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
         monkeypatch.setattr(time, "sleep", lambda s: None)

@@ -2,28 +2,33 @@
 
 ## Généralisation de la LLM d'arbitrage
 
-### Contexte
-La LLM d'arbitrage (actuellement Qwen 35B via llama.cpp) est partiellement nommée en dur dans le code et la config.
-La méthode `ensure_arbitrage_llm_ready()` est générique, mais les éléments suivants restent couplés à Qwen.
+Statut 2026-05-20 : socle implémenté. Les noms génériques existent côté code, config et scripts
+(`arbitrage_llm_port`, `launch_arbitrage_llm()`, `stop_arbitrage_llm()`), avec aliases
+compatibles pour les anciennes configs/tests (`qwen_port`, `launch_qwen_35b()`,
+`stop_qwen_35b()`). `llm_cleanup_ports` remplace le port `vllm_port` trop spécifique
+pour couvrir vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre backend concurrent.
+`stop_llm_backend.sh` est le script générique, `stop_arbitrage_llm.sh` le wrapper standard,
+et `stop_qwen.sh` / `stop_qwen_vllm.sh` sont des wrappers legacy.
 
-### À corriger dans le code
+### Contexte
+La LLM d'arbitrage est désormais pilotée par config. Le modèle local livré sur la machine
+peut rester un Qwen via llama.cpp, mais le code principal ne doit pas dépendre de ce nom.
+
+### Implémenté dans le code
 
 **`transcria/gpu/vram_manager.py`**
-- `launch_qwen_35b()` → renommer `launch_arbitrage_llm()`
-- `stop_qwen_35b()` → renommer `stop_arbitrage_llm()`
-- `self.qwen_port` → renommer `self.arbitrage_llm_port`
-- `self._qwen_pid` → renommer `self._arbitrage_llm_pid`
+- `launch_qwen_35b()` → renommer `launch_arbitrage_llm()` — **implémenté, alias conservé**
+- `stop_qwen_35b()` → renommer `stop_arbitrage_llm()` — **implémenté, alias conservé**
+- `self.qwen_port` → renommer `self.arbitrage_llm_port` — **implémenté, alias conservé**
+- `self._qwen_pid` → renommer `self._arbitrage_llm_pid` — **implémenté, alias conservé**
+- `self.vllm_port` / `stop_vllm_port_8000()` → généraliser en `llm_cleanup_ports` / `stop_cleanup_llm_ports()` — **implémenté, alias conservé**
 - `self.llm_vram_mb` → déjà générique, OK
 
-**`transcria/workflow/runner.py`**
-- Tous les appels `self.vram.launch_qwen_35b()` → `launch_arbitrage_llm()`
-- Tous les appels `self.vram.stop_qwen_35b()` → `stop_arbitrage_llm()`
-- `finally: self.vram.stop_qwen_35b()` (×2) → idem
-
-### À corriger dans la config (`configs/`)
+### Implémenté dans la config (`configs/`)
 
 **Clé de port**
-- `services.qwen_port` → renommer `services.arbitrage_llm_port`
+- `services.qwen_port` → renommer `services.arbitrage_llm_port` — **implémenté avec compatibilité lecture**
+- `services.vllm_port` → remplacer par `services.llm_cleanup_ports` — **implémenté avec compatibilité lecture**
 
 **Script d'arbitrage**
 - `services.arbitrage_script` → déjà générique, OK
@@ -32,13 +37,14 @@ La méthode `ensure_arbitrage_llm_ready()` est générique, mais les éléments 
 **Section LLM**
 - `workflow.summary_llm.model_id` → déjà générique, OK
 
-### À corriger dans les templates / UI
-- Vérifier que l'UI n'affiche nulle part "Qwen" en dur (chercher dans `transcria/web/templates/`)
-
 ### Principe cible
 Tout ce qui touche à la LLM d'arbitrage doit être piloté par la config.
 Changer de modèle (Qwen → Mistral, LLaMA, etc.) ne doit nécessiter qu'un changement de config,
 zéro modification de code.
+
+### Reste à faire
+- Nettoyer progressivement les libellés historiques des tests E2E et des documents de présentation
+  lorsqu'ils ne décrivent plus explicitement le modèle déployé.
 
 ---
 

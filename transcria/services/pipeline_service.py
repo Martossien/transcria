@@ -98,7 +98,7 @@ class PipelineService:
     def _release_arbitrage_llm(self) -> None:
         if self.runner.vram.is_arbitrage_llm_running():
             logger.info("[pipeline] Arrêt LLM arbitrage en fin de pipeline")
-            self.runner.vram.stop_qwen_35b()
+            self.runner.vram.stop_arbitrage_llm()
         else:
             logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
 

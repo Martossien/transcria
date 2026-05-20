@@ -20,10 +20,12 @@ class BaseTranscriber(ABC):
     @abstractmethod
     def transcribe(
         self,
-        audio_path: Path,
+        audio_path: Path | None,
         language: str = "fr",
         chunk_length_s: int = 30,
         progress_callback=None,
+        audio_array=None,
+        sample_rate: int = 16000,
     ) -> list[dict]:
         ...
 

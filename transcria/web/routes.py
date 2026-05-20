@@ -230,6 +230,7 @@ def job_wizard(job_id: str):
     mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
     mapped_speakers = mapping_data.get("speakers", [])
     participants = ParticipantsManager.get(job, cfg["storage"]["jobs_dir"])
+    speaker_role_hints = meeting.get("speaker_roles_llm", {}) if isinstance(meeting, dict) else {}
     if mapped_speakers:
         for s in speakers_data.get("speakers", []):
             for ms in mapped_speakers:
@@ -241,6 +242,19 @@ def job_wizard(job_id: str):
                 if p.get("id") == s.get("mapped_to") or p.get("name") == s.get("mapped_name"):
                     s["mapped_func"] = p.get("function", "")
                     s["mapped_role"] = p.get("role", "")
+    elif speaker_role_hints:
+        from transcria.workflow.runner import WorkflowRunner
+
+        for s in speakers_data.get("speakers", []):
+            speaker_id = s.get("speaker_id")
+            hint = speaker_role_hints.get(speaker_id)
+            if not hint:
+                continue
+            normalized = WorkflowRunner._normalize_speaker_role_info(hint)
+            if normalized["label"]:
+                s["mapped_name"] = normalized["label"]
+            if normalized["role"]:
+                s["mapped_role"] = normalized["role"]
     audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
     quality_report = fs.load_json("quality/quality_report.json") or {}
     srt_content = fs.load_text("metadata/transcription.srt") or ""

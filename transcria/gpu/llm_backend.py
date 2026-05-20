@@ -10,7 +10,8 @@ class LLMBackend(ABC):
 
     def __init__(self, config: dict, port: int | None = None):
         self.config = config
-        self.port = port or config.get("services", {}).get("qwen_port", 8080)
+        services = config.get("services", {})
+        self.port = port or services.get("arbitrage_llm_port", services.get("qwen_port", 8080))
         self._pid: int | None = None
 
     @property
@@ -108,7 +109,8 @@ def create_llm_backend(config: dict, backend_type: str | None = None) -> LLMBack
     elif backend_type == "script":
         return ScriptLLMBackend(config)
     elif backend_type == "http":
-        port = llm.get("port") or config.get("services", {}).get("qwen_port", 8080)
+        services = config.get("services", {})
+        port = llm.get("port") or services.get("arbitrage_llm_port", services.get("qwen_port", 8080))
         return HTTPLLMBackend(config, port=port)
     else:
         services = config.get("services", {})
@@ -136,7 +138,7 @@ class ScriptLLMBackend(LLMBackend):
         super().__init__(config, port)
         svc = config.get("services", {})
         self.launch_script: str = svc.get("arbitrage_script", "./scripts/launch_arbitrage.sh")
-        self.stop_script: str = svc.get("stop_script", "./scripts/stop_qwen.sh")
+        self.stop_script: str = svc.get("stop_script", "./scripts/stop_arbitrage_llm.sh")
         self._launched_by_us = False
 
     @property

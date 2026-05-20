@@ -313,6 +313,35 @@ Quelques paragraphes de texte sans autres champs structurés.
         assert "Sophie Durand" in result["participants_detectes"]
         assert "Non identifiable" not in result["participants_detectes"]
 
+    def test_parse_speaker_roles_splits_label_dash_role(self):
+        text = """## Participants probables
+
+- SPEAKER_01 : Fonction B — décrit une action observée
+- SPEAKER_00 : Fonction A — décrit une autre action observée
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        assert result["speaker_roles"]["SPEAKER_00"] == {
+            "label": "Fonction A",
+            "role": "décrit une autre action observée",
+        }
+        assert result["speaker_roles"]["SPEAKER_01"] == {
+            "label": "Fonction B",
+            "role": "décrit une action observée",
+        }
+
+    def test_parse_speaker_roles_bracket_format(self):
+        text = """## Participants probables
+
+- SPEAKER_00 [Fonction A] : décrit une action observée
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        assert result["speaker_roles"]["SPEAKER_00"] == {
+            "label": "Fonction A",
+            "role": "décrit une action observée",
+        }
+
     def test_parse_mots_cles_multiline(self):
         text = """**Mots-clés**
 

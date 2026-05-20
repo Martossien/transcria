@@ -104,10 +104,10 @@ Règles :
 
 Indices utiles pour les rôles :
 
-- une personne qui invite, présente, encaisse, annonce un prix, guide ou anime peut
-  être hôte, vendeur, animateur ou intervenant principal ;
-- une personne qui répond, commande, réagit ou pose des questions peut être client,
-  participant ou interlocuteur ;
+- une personne qui invite, présente, guide ou anime peut être intervenant principal,
+  animateur, référent ou autre rôle de facilitation selon le contexte ;
+- une personne qui répond, réagit ou pose des questions peut être participant,
+  interlocuteur, demandeur ou autre rôle adapté au contexte ;
 - le temps de parole peut aider, mais ne doit pas contredire les segments certains.
 
 Si aucune diarization n'est fournie, déduire les participants et rôles uniquement
@@ -309,6 +309,10 @@ Le fichier doit respecter strictement le format Markdown suivant :
 ## Participants probables
 - SPEAKER_XX [Nom ou fonction] : [rôle probable si identifiable]
 - SPEAKER_YY [Nom ou fonction] : [rôle probable si identifiable]
+
+Respecte exactement ce format pour les locuteurs : le nom ou la fonction courte doit être
+entre crochets après `SPEAKER_XX`, et le rôle détaillé doit être après `:`.
+Exemple : `- SPEAKER_00 [Fonction A] : décrit une action ou une responsabilité observée`.
 
 ## Synthèse
 [8 à 15 lignes de résumé factuel couvrant les sujets abordés, décisions, actions

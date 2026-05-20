@@ -31,6 +31,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
+    _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
     return result
 
@@ -74,8 +75,19 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
 def _check_services(svc: dict, r: ValidationResult) -> None:
     _check_str(svc, "dashboard_llm_url", "services.dashboard_llm_url", r)
     _check_str(svc, "srt_editor_easy_url", "services.srt_editor_easy_url", r)
-    _check_int_range(svc, "qwen_port", "services.qwen_port", 1, 65535, r)
-    _check_int_range(svc, "vllm_port", "services.vllm_port", 1, 65535, r)
+    if "arbitrage_llm_port" in svc:
+        _check_int_range(svc, "arbitrage_llm_port", "services.arbitrage_llm_port", 1, 65535, r)
+    else:
+        _check_int_range(svc, "qwen_port", "services.qwen_port", 1, 65535, r)
+    if "llm_cleanup_ports" in svc:
+        ports = svc.get("llm_cleanup_ports")
+        if not isinstance(ports, list):
+            r.add_error("services.llm_cleanup_ports: doit être une liste de ports")
+        else:
+            for i, port in enumerate(ports):
+                _check_port_value(port, f"services.llm_cleanup_ports[{i}]", r)
+    elif "vllm_port" in svc:
+        _check_int_range(svc, "vllm_port", "services.vllm_port", 1, 65535, r)
 
     for key in ("arbitrage_script", "stop_script"):
         val = svc.get(key, "")
@@ -157,6 +169,18 @@ def _check_execution_section(exec_cfg: dict, prefix: str, r: ValidationResult) -
         _check_int_range(exec_cfg, "max_concurrent_jobs", f"{prefix}.max_concurrent_jobs", 1, 8, r)
 
 
+def _check_quality(quality: dict, r: ValidationResult) -> None:
+    markers = quality.get("asr_noise_markers", [])
+    if markers is None:
+        return
+    if not isinstance(markers, list):
+        r.add_error("quality.asr_noise_markers: doit être une liste")
+        return
+    for i, marker in enumerate(markers):
+        if not isinstance(marker, str) or not marker.strip():
+            r.add_error(f"quality.asr_noise_markers[{i}]: doit être une chaîne non vide")
+
+
 def _check_security(sec: dict, r: ValidationResult) -> None:
     _check_int_range(sec, "retention_days", "security.retention_days", 0, 3650, r)
     _check_bool(sec, "allow_job_delete", "security.allow_job_delete", r)
@@ -208,6 +232,15 @@ def _check_int_range(
     val = int(val)
     if val < vmin or val > vmax:
         r.add_error(f"{path}={val}: doit être entre {vmin} et {vmax}")
+
+
+def _check_port_value(val: Any, path: str, r: ValidationResult) -> None:
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        r.add_error(f"{path}: doit être un port numérique")
+        return
+    port = int(val)
+    if port < 1 or port > 65535:
+        r.add_error(f"{path}={port}: doit être entre 1 et 65535")
 
 
 def sanitize_llm_config(wf: dict) -> dict:
