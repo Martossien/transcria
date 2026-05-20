@@ -21,6 +21,7 @@ class SummaryGenerator:
         import librosa
 
         from transcria.audio.vad import SileroVAD
+        from transcria.audio.vad_adaptive import AdaptiveVADConfig
         from transcria.stt.transcriber_factory import create_transcriber
 
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
@@ -38,6 +39,8 @@ class SummaryGenerator:
         sl.info("[summary] Audio chargé: %.1fs (%.1f min)", total_duration, total_duration / 60)
 
         vad_cfg = self.config.get("workflow", {}).get("vad", {})
+        audio_quality = fs.load_json("metadata/audio_quality_decision.json") or {}
+        vad_cfg = AdaptiveVADConfig.resolve(vad_cfg, audio_quality)
         vad_enabled = vad_cfg.get(
             "enabled_summary",
             self.config.get("workflow", {}).get("enable_vad", True),

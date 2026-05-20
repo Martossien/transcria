@@ -1,5 +1,6 @@
 import logging
 import os
+import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
@@ -33,6 +34,10 @@ class DiarizerService:
 
     def diarize(self, job: Job, audio_path: Path) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+        cached = self._load_cached_result(fs, audio_path)
+        if cached is not None:
+            logger.info("Diarization: checkpoint réutilisé (%d locuteurs)", len(cached.get("speakers", [])))
+            return cached
 
         if not self.available:
             logger.warning("pyannote non disponible")
@@ -104,9 +109,11 @@ class DiarizerService:
             }
             fs.save_json("speakers/speaker_turns.json", result)
             fs.save_json("speakers/speaker_stats.json", {"stats": stats, "speakers": speakers_list})
+            self._save_cache_metadata(fs, audio_path, result)
 
             # Extraire des extraits audio par locuteur
             self._extract_clips(audio_path, turns, speakers_list, fs)
+            self._cache_speaker_embeddings(audio_path, turns, speakers_list, fs)
 
             logger.info("Diarization: %d locuteurs, %d segments", len(speakers_list), len(turns))
             return result
@@ -116,6 +123,106 @@ class DiarizerService:
             result = {"available": False, "turns": [], "speakers": [], "error": str(exc)}
             fs.save_json("speakers/speaker_turns.json", result)
             return result
+
+    def _load_cached_result(self, fs: JobFilesystem, audio_path: Path) -> dict | None:
+        diar_cfg = self.config.get("diarization", {})
+        if not diar_cfg.get("cache_enabled", True):
+            return None
+        result = fs.load_json("speakers/speaker_turns.json")
+        metadata = fs.load_json("speakers/diarization_checkpoint.json")
+        if not isinstance(result, dict) or not isinstance(metadata, dict):
+            return None
+        if not result.get("available"):
+            return None
+        if metadata.get("model_name") != self.model_name:
+            return None
+        if diar_cfg.get("cache_audio_fingerprint", True):
+            if metadata.get("audio_fingerprint") != self._audio_fingerprint(audio_path):
+                return None
+        return result
+
+    def _save_cache_metadata(self, fs: JobFilesystem, audio_path: Path, result: dict) -> None:
+        if not self.config.get("diarization", {}).get("cache_enabled", True):
+            return
+        fs.save_json("speakers/diarization_checkpoint.json", {
+            "model_name": self.model_name,
+            "audio_fingerprint": self._audio_fingerprint(audio_path),
+            "speaker_count": len(result.get("speakers", [])),
+            "turn_count": len(result.get("turns", [])),
+        })
+
+    def _cache_speaker_embeddings(
+        self,
+        audio_path: Path,
+        turns: list[dict],
+        speakers: list[str],
+        fs: JobFilesystem,
+    ) -> None:
+        diar_cfg = self.config.get("diarization", {})
+        if not diar_cfg.get("embedding_cache_enabled", True):
+            return
+        try:
+            import torchaudio
+
+            wave, sr = torchaudio.load(str(audio_path))
+            if wave.shape[0] > 1:
+                wave = wave.mean(dim=0, keepdim=True)
+            if sr != 16000:
+                import torchaudio.transforms as T
+                wave = T.Resample(sr, 16000)(wave)
+                sr = 16000
+            audio = wave.squeeze(0).numpy()
+            max_seconds = float(diar_cfg.get("embedding_clip_seconds", 12.0))
+            embeddings = {}
+            for speaker in speakers:
+                samples = []
+                remaining = max_seconds
+                for turn in sorted([t for t in turns if t["speaker"] == speaker], key=lambda t: t["duration"], reverse=True):
+                    if remaining <= 0:
+                        break
+                    dur = min(float(turn["duration"]), remaining)
+                    start = int(float(turn["start"]) * sr)
+                    end = int((float(turn["start"]) + dur) * sr)
+                    clip = audio[start:end]
+                    if len(clip):
+                        samples.append(clip)
+                        remaining -= dur
+                if samples:
+                    merged = np.concatenate(samples)
+                    embeddings[speaker] = self._acoustic_embedding(merged, sr)
+            fs.save_json("speakers/speaker_embeddings.json", {
+                "type": "acoustic_checkpoint",
+                "model_name": self.model_name,
+                "audio_fingerprint": self._audio_fingerprint(audio_path),
+                "embeddings": embeddings,
+            })
+        except Exception as exc:
+            logger.warning("Checkpoint embeddings locuteurs ignoré: %s", exc)
+
+    @staticmethod
+    def _acoustic_embedding(audio: np.ndarray, sample_rate: int) -> dict:
+        if audio.size == 0:
+            return {}
+        audio = audio.astype(np.float32)
+        abs_audio = np.abs(audio)
+        rms = float(np.sqrt(np.mean(np.square(audio))))
+        zcr = float(np.mean(np.abs(np.diff(np.signbit(audio)))))
+        duration = float(audio.size / sample_rate)
+        return {
+            "duration_seconds": round(duration, 3),
+            "rms": round(rms, 6),
+            "peak": round(float(np.max(abs_audio)), 6),
+            "zero_crossing_rate": round(zcr, 6),
+        }
+
+    @staticmethod
+    def _audio_fingerprint(audio_path: Path) -> str:
+        stat = audio_path.stat()
+        h = hashlib.sha256()
+        h.update(str(audio_path.resolve()).encode("utf-8"))
+        h.update(str(stat.st_size).encode("ascii"))
+        h.update(str(int(stat.st_mtime)).encode("ascii"))
+        return h.hexdigest()
 
     def _extract_clips(self, audio_path: Path, turns: list, speakers: list, fs: JobFilesystem,
                        num_clips: int = 3, min_duration: float = 1.5, max_duration: float = 12.0) -> None:
