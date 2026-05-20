@@ -38,7 +38,11 @@ class Transcriber:
 
         sl.info("DÉBUT transcription", backend=backend, gpu=self.gpu_index)
 
+        from transcria.audio.vad_adaptive import AdaptiveVADConfig
+
         vad_cfg = self.config.get("workflow", {}).get("vad", {})
+        audio_quality = fs.load_json("metadata/audio_quality_decision.json") or {}
+        vad_cfg = AdaptiveVADConfig.resolve(vad_cfg, audio_quality)
         vad_enabled = vad_cfg.get(
             "enabled_final",
             self.config.get("workflow", {}).get("enable_vad", False),
@@ -71,6 +75,13 @@ class Transcriber:
             if speaker_turns and speaker_turns.get("turns"):
                 segments = self._apply_speakers(segments, speaker_turns, speaker_mapping)
             chunking_mode = "30s_fallback"
+
+        segments = self._apply_forced_alignment_if_enabled(
+            audio_path, segments, lang, backend, sl
+        )
+        segments = self._apply_speaker_realignment(
+            segments, speaker_turns, speaker_mapping, sl
+        )
 
         speaker_map = speaker_mapping or {}
         srt_content = self.transcriber.segments_to_srt(segments, speaker_map.get("mapping"))
@@ -234,6 +245,7 @@ class Transcriber:
                     continue
                 seg["start"] = round(chunk["start"] + seg["start"], 3)
                 seg["end"] = round(chunk["start"] + seg["end"], 3)
+                self._offset_words(seg, chunk["start"])
                 raw_speaker = chunk["speaker"]
                 seg["speaker"] = mapping.get(raw_speaker, raw_speaker)
                 segments.append(seg)
@@ -253,6 +265,57 @@ class Transcriber:
             if s.get("mapped_name"):
                 mapping[s["speaker_id"]] = s["mapped_name"]
         return mapping
+
+    @staticmethod
+    def _offset_words(seg: dict, offset_s: float) -> None:
+        for word in seg.get("words") or []:
+            if "start" in word:
+                word["start"] = round(offset_s + word["start"], 3)
+            if "end" in word:
+                word["end"] = round(offset_s + word["end"], 3)
+
+    def _apply_forced_alignment_if_enabled(
+        self,
+        audio_path: Path,
+        segments: list[dict],
+        language: str,
+        backend: str,
+        sl,
+    ) -> list[dict]:
+        if backend != "whisper":
+            return segments
+        try:
+            from transcria.stt.forced_alignment import ForcedAlignmentService
+
+            device = f"cuda:{self.gpu_index}" if self.gpu_index is not None else "cpu"
+            aligner = ForcedAlignmentService(self.config, device=device)
+            aligned = aligner.align_segments(audio_path, segments, language=language)
+            if aligned is not segments:
+                sl.info("Alignement mot-à-mot terminé", backend=backend)
+            return aligned
+        except Exception as exc:
+            logger.warning("Alignement mot-à-mot ignoré: %s", exc)
+            return segments
+
+    def _apply_speaker_realignment(
+        self,
+        segments: list[dict],
+        speaker_turns: dict | None,
+        speaker_mapping: dict | None,
+        sl,
+    ) -> list[dict]:
+        try:
+            from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
+
+            realigned = SpeakerPunctuationRealigner(self.config).realign(
+                segments, speaker_turns, speaker_mapping
+            )
+            if realigned is not segments:
+                sl.info("Réalignement locuteur mot-à-mot appliqué", segments=len(realigned))
+            return realigned
+        except Exception as exc:
+            logger.warning("Réalignement locuteur mot-à-mot ignoré: %s", exc)
+            return segments
 
     # ── Fallback overlap matching (conservé pour le mode 30s) ─────────────────
 
