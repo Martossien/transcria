@@ -119,7 +119,8 @@ class WorkflowRunner:
             meeting_ctx = fs.load_json("context/meeting_context.json") or {}
             meeting_ctx["speaker_count_pyannote"] = len(speakers_result["speakers"])
             fs.save_json("context/meeting_context.json", meeting_ctx)
-            self._write_diarization_context(fs, speakers_result)
+            audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+            self._write_diarization_context(fs, speakers_result, audio_scene)
 
             logger.info("pyannote: %d locuteurs détectés",
                         len(speakers_result["speakers"]))
@@ -332,7 +333,7 @@ class WorkflowRunner:
 
         Dès que deux locuteurs distincts se chevauchent avec le segment, le texte
         contient les deux voix et ne peut pas être attribué sans timestamps mot par
-        mot — le segment est ignoré (cf. WhisperX / forced alignment).
+        mot — le segment est ignoré sans alignement mot-à-mot fiable.
         Retourne une liste ordonnée (speaker_id, texte).
         """
         turns_data = speakers_result.get("turns") or []
@@ -363,7 +364,7 @@ class WorkflowRunner:
             # N'attribuer que si UN SEUL locuteur distinct a des tours dans ce segment.
             # Dès que deux locuteurs différents se chevauchent avec le segment ASR,
             # le texte contient les deux voix — impossible de l'attribuer sans timestamps
-            # mot par mot (cf. WhisperX / forced alignment).
+            # mot par mot fiable.
             unique_speakers = set(overlap.keys())
             if len(unique_speakers) == 1:
                 label = next(iter(unique_speakers))
@@ -433,7 +434,56 @@ class WorkflowRunner:
         return spk_tops, address_hints
 
     @staticmethod
-    def _write_diarization_context(fs, speakers_result: dict) -> str | None:
+    def _build_gender_section(audio_scene: dict) -> list:
+        """Construit la section genre vocal pour le contexte de diarisation.
+
+        Retourne une liste de lignes Markdown ou ``[]`` si aucune donnée de genre.
+        La détection est globale (non attribuée par locuteur) — la section fournit
+        un indice supplémentaire au LLM d'identification.
+        """
+        gender = (audio_scene or {}).get("gender") or {}
+        if not gender.get("has_gender_data"):
+            return []
+
+        dominant = gender.get("dominant")
+        male_ratio = float(gender.get("male_ratio") or 0.0)
+        female_ratio = float(gender.get("female_ratio") or 0.0)
+
+        stats_labels = ((audio_scene or {}).get("stats") or {}).get("labels") or {}
+        male_dur = float((stats_labels.get("male") or {}).get("duration_s", 0.0))
+        female_dur = float((stats_labels.get("female") or {}).get("duration_s", 0.0))
+
+        if dominant == "male":
+            dominant_label, dominant_pct = "Masculin", round(male_ratio * 100, 1)
+        elif dominant == "female":
+            dominant_label, dominant_pct = "Féminin", round(female_ratio * 100, 1)
+        else:
+            dominant_label, dominant_pct = "Indéterminé", 50.0
+
+        lines = [
+            "",
+            "## Genre vocal estimé (analyse acoustique globale)",
+            "",
+            "*(Estimation par fréquence fondamentale — indicatif,"
+            " non attribué par locuteur)*",
+            "",
+            f"- Genre dominant : **{dominant_label}** ({dominant_pct}% de la parole genrée)",
+            f"- Parole masculine estimée : {male_dur:.1f}s"
+            f" | féminine : {female_dur:.1f}s",
+        ]
+
+        if dominant_pct >= 80 and dominant in ("male", "female"):
+            adj = "masculine" if dominant == "male" else "féminine"
+            lines.append(
+                f"- Indice fort : {dominant_pct}% de la parole genrée est {adj}"
+            )
+
+        return lines
+
+    @staticmethod
+    def _write_diarization_context(
+        fs, speakers_result: dict, audio_scene: dict | None = None
+    ) -> str | None:
         speakers = speakers_result.get("speakers") or []
         if not speakers:
             return None
@@ -525,6 +575,11 @@ class WorkflowRunner:
                         if names:
                             lines.append(f"- **{spk_id}** : {', '.join(names)}")
 
+        # Section genre vocal (si analyse de scène disponible)
+        gender_lines = WorkflowRunner._build_gender_section(audio_scene or {})
+        if gender_lines:
+            lines.extend(gender_lines)
+
         lines.extend(
             [
                 "",
@@ -581,7 +636,11 @@ class WorkflowRunner:
 
         self.store.update_state(job.id, JobState.TRANSCRIBING)
 
-        gpu = self.vram.ensure_free(self.vram.cohere_vram_mb)
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        backend = config.get("models", {}).get("stt_backend", "cohere")
+        required_vram_mb = get_backend_vram_mb(backend, config)
+        gpu = self.vram.ensure_free(required_vram_mb)
         if gpu is None:
             self.store.update_state(job.id, JobState.FAILED, "VRAM insuffisante")
             return {"error": "VRAM insuffisante pour la transcription"}
@@ -591,7 +650,7 @@ class WorkflowRunner:
 
             transcriber = Transcriber(config, gpu_index=gpu)
             result = transcriber.transcribe(job, Path(audio_path))
-            self.vram.track_model("cohere-transcription", gpu, self.vram.cohere_vram_mb)
+            self.vram.track_model(f"{backend}-transcription", gpu, required_vram_mb)
             return result
         except Exception as exc:
             logger.exception("Échec transcription")
