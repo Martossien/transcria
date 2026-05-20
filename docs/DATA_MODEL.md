@@ -220,6 +220,8 @@ jobs/<job_id>/
 │
 ├── metadata/
 │   ├── audio_analysis.json         # Résultat ffprobe (durée, codec, canaux, bitrate)
+│   ├── audio_quality_decision.json # Décision déterministe Cohere/Whisper selon qualité audio
+│   ├── audio_scene.json            # Analyse de scène (has_music, has_noise, speech_ratio, gender, stats)
 │   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
@@ -250,6 +252,8 @@ jobs/<job_id>/
 ├── speakers/
 │   ├── speaker_turns.json          # Tours pyannote [{turns: [...], exclusive_turns: [...]}] (exclusive_turns via exclusive_speaker_diarization, sans chevauchements)
 │   ├── speaker_stats.json         # Stats par locuteur [{speaker_id, speaking_time_seconds, turn_count, ...}]
+│   ├── diarization_checkpoint.json # Empreinte audio + modèle pyannote pour réutiliser speaker_turns.json
+│   ├── speaker_embeddings.json    # Checkpoint acoustique par locuteur pour comparaison/reprise
 │   ├── speaker_mapping.json       # Mapping locuteur→participant [{mapping, speakers}]
 │   ├── speaker_clips.json         # Index des extraits audio (BUG-011 : souvent absent)
 │   └── samples/
@@ -273,14 +277,15 @@ jobs/<job_id>/
 | Upload | `input/original.<ext>` | `JobFilesystem.save_upload()` |
 | Analyse | `metadata/audio_analysis.json` | `AudioAnalyzer.analyze()` |
 | Résumé (Phase 1) | `summary/quick_transcript.txt`, `summary/summary.json`, `summary/summary.md` | `SummaryGenerator.generate_quick_summary()` |
-| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `DiarizerService.diarize()` + `WorkflowRunner._write_diarization_context()` |
+| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `DiarizerService.diarize()` + `WorkflowRunner._write_diarization_context()` |
 | Résumé (Phase 2) | `summary/summary.md` (écrasé) | `OpenCodeRunner.run_summary()` |
 | Contexte | `context/meeting_context.json` | `MeetingContextManager.save()` |
 | Participants | `context/participants.json` | `ParticipantsManager.save()` |
 | Locuteurs (detect) | `speakers/speaker_stats.json` (écrasé) | `SpeakerDetector.detect()` |
 | Locuteurs (map) | `speakers/speaker_mapping.json`, `context/job_context.yaml`, `context/job_context.json` | `SpeakerDetector.save_mapping()` + `JobContextBuilder.build()` |
 | Lexique | `context/session_lexicon.json`, `context/session_lexicon.txt`, `context/job_context.yaml`, `context/job_context.json` | `LexiconManager.save()` + `JobContextBuilder.build()` |
-| Traitement | `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/speakers_map.json` | `Transcriber.transcribe()` |
+| Pré-traitement | `metadata/audio_scene.json` (si `workflow.audio_scene.enabled=true`) | `PipelineService._run_audio_scene_analysis()` + `AudioSceneAnalyzer` |
+| Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
 | Traitement (quality) | `metadata/transcription_corrigee.srt` | `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` |
@@ -333,6 +338,7 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
       "turn_count": 42,
       "mapped_to": "p1",
       "mapped_name": "Marie Dupont",
+      "gender": "female",
       "validation": "user_validated"
     }
   ],
@@ -389,6 +395,36 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
 Assemblé par `JobContextBuilder.build()` à partir de `meeting_context.json`, `participants.json`, `speaker_mapping.json`, `session_lexicon.json`. Voir `context/job_context_builder.py` pour le schéma complet.
 
 Ce fichier est construit après le mapping des locuteurs puis reconstruit après la sauvegarde du lexique afin d'inclure `session_lexicon.json`. Il n'existe pas encore au moment du résumé ; le résumé LLM reçoit donc un fichier dédié `summary/diarization_context.md` pour les données pyannote disponibles à cette étape.
+
+### audio_scene.json
+
+Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`{}`) si désactivé ou en échec.
+
+```json
+{
+  "has_music": false,
+  "has_noise": true,
+  "speech_ratio": 0.82,
+  "gender": {
+    "has_gender_data": true,
+    "male_ratio": 0.65,
+    "female_ratio": 0.35,
+    "dominant": "male"
+  },
+  "stats": {
+    "labels": {
+      "male":   {"duration_s": 310.5, "ratio": 0.53},
+      "female": {"duration_s": 167.2, "ratio": 0.28},
+      "noise":  {"duration_s": 108.3, "ratio": 0.18}
+    },
+    "total_duration_s": 586.0
+  }
+}
+```
+
+- `has_music=true` → `SourceSeparationDecider` force la séparation de sources (prioritaire sur le score).
+- La section `gender` est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+- `stats.labels` peut contenir : `speech`, `male`, `female`, `music`, `noise`.
 
 ### quality_report.json
 

@@ -33,7 +33,8 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 445 tests collectés (21 modules test_*.py + E2E, mock, pas de GPU requis)
+python -m pytest tests/ -q           # 507 tests collectés ; 504 passent (mock, pas de GPU requis)
+# ⚠️  2 échecs pré-existants connus dans TestWorkflowRunnerRunCorrection (non liés au code courant)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -54,6 +55,7 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 - **PyYAML** pour la configuration
 - **python-dotenv** pour charger `.env` au démarrage (`app.py`)
 - **torch + transformers + accelerate** pour Cohere ASR (device_map GPU)
+- **faster-whisper** pour Whisper large-v3 qualité, VAD Silero et timestamps mot-à-mot
 - **pyannote.audio** pour la diarisation (dans `requirements.txt`, modèle téléchargé séparément)
 - **opencode** (CLI externe) pour orchestrer la LLM locale d'arbitrage (résumé + correction)
 
@@ -95,13 +97,19 @@ transcria/
       analyzer.py           # AudioAnalyzer (ffprobe)
       converter.py          # AudioConverter (ffmpeg)
       vad.py                # SileroVAD — détection de parole via faster_whisper
+      vad_adaptive.py       # AdaptiveVADConfig — seuils VAD selon qualité audio
+      scene_analyzer.py     # AudioSceneAnalyzer — orchestrateur subprocess analyse de scène
+      _scene_analysis_worker.py # Worker subprocess : pipeline RMS→flatness/ZCR→pitch YIN (librosa)
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
-      whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3
+      whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3 qualité
+      anti_hallucination.py # Détection/réduction boucles répétitives ASR
+      forced_alignment.py   # Alignement CTC natif torchaudio optionnel
+      speaker_realignment.py# Réalignement locuteur/ponctuation au niveau mot
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
-      transcription.py      # Transcriber — chunking par tours pyannote ou 30s fixe
-      diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization
+      transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment
+      diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization + checkpoints
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + Cohere
     context/
@@ -110,6 +118,7 @@ transcria/
       lexicon.py            # LexiconManager (20 catégories, variants, contexts)
       job_context_builder.py# JobContextBuilder — assemble job_context.yaml/json
     quality/
+      audio_quality.py      # AudioQualityEvaluator — décision Cohere/Whisper selon diagnostics
       quality_report.py     # QualityReporter (10 checks, score /100)
       srt_checks.py         # Checks sur le SRT
       lexicon_checks.py     # Checks sur le lexique
@@ -127,7 +136,7 @@ transcria/
     services/
       job_executor.py       # JobExecutorService — worker interne (thread)
       job_service.py        # JobService
-      pipeline_service.py   # PipelineService
+      pipeline_service.py   # PipelineService — _run_audio_scene_analysis + _run_source_separation avant STT
       config_service.py     # ConfigService
     web/
       routes.py             # web_bp : 28 endpoints (pages + API JSON)
@@ -145,7 +154,7 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # 21 modules test_*.py + E2E, 445 tests collectés (mocks GPU/LLM)
+  tests/                    # modules test_*.py + E2E, 507 tests collectés (504 passent, mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -188,8 +197,9 @@ transcria/
 ### Cycle GPU (VRAMManager)
 L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne tiennent pas tous en mémoire simultanément :
 1. **Cohere ASR** : ~6 Go VRAM
-2. **pyannote** : ~2 Go VRAM
-3. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
+2. **Whisper large-v3 qualité** : ~10 Go VRAM selon compute_type
+3. **pyannote** : ~2 Go VRAM
+4. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
 
 **`GPUSession`** est le context manager utilisé pour Cohere et pyannote. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
@@ -206,11 +216,30 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 ### Pipeline STT — deux modes de chunking
 
-**Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement à `CohereTranscriber.transcribe()`. Chaque chunk a un speaker connu → attribution 100% fiable, pas d'overlap matching.
+**Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement au backend STT actif (Cohere ou Whisper). Chaque chunk a un speaker connu ; si des timestamps mots existent, `SpeakerPunctuationRealigner` peut corriger un segment qui traverse plusieurs tours.
 
 **Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
 
-**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite et le filtrage VAD final peut dégrader Cohere sur certains sons. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
+**Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute deux étapes systématiques avant la transcription finale :
+1. `_run_audio_scene_analysis()` — crée `AudioSceneAnalyzer(config)`, appelle `analyze(audio_path)` dans un subprocess isolé (librosa CPU), sauvegarde le résultat dans `metadata/audio_scene.json` si non vide. Retourne `{}` si désactivé, timeout ou erreur.
+2. `_run_source_separation()` — charge `metadata/audio_analysis.json` + `metadata/audio_quality_decision.json`, appelle `SourceSeparationDecider.should_separate(analysis, quality, audio_scene=scene)`. Si séparation décidée, `SourceSeparationService.separate()` produit `vocals.wav` dans le répertoire input. La piste vocale extraite remplace `audio_path` pour la suite du pipeline.
+
+Ces deux étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources.
+
+**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
+
+
+**Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` force `whisper` quand le mode est dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job dégradé. La décision est écrite dans `metadata/audio_quality_decision.json`. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
+
+**Analyse de scène audio (`AudioSceneAnalyzer`) :**
+- Entrée : chemin audio + config `workflow.audio_scene` (seuils, timeout, detect_gender)
+- Pipeline subprocess : énergie RMS → classification spectrale (flatness/ZCR → speech/music/noise) → estimation genre YIN (pitch)
+- Sortie JSON : `{has_music, has_noise, speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}}`
+- `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : si `audio_scene.has_music=True` → séparation forcée (prioritaire sur le score). Si `audio_scene=None` → logique score seule.
+- `WorkflowRunner._build_gender_section(audio_scene)` : méthode statique qui génère les lignes Markdown de distribution H/F pour `diarization_context.md` (visible par la LLM de résumé). Vide si `has_gender_data=False`.
+- UI : bannière genre global dans l'étape Participants (si `audio_scene.gender.has_gender_data`), select genre par locuteur (Non déterminé/Féminin/Masculin). Le genre est persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()` (champ `gender`).
+
+**Checkpoints pyannote :** `DiarizerService` réutilise `speakers/speaker_turns.json` si `speakers/diarization_checkpoint.json` correspond au même modèle et à la même empreinte audio. `speakers/speaker_embeddings.json` stocke un checkpoint acoustique simple par locuteur. Ne pas supprimer ces fichiers sans mettre à jour `docs/DATA_MODEL.md`.
 
 **`CohereTranscriber.transcribe()` accepte deux formes d'entrée :**
 - `transcribe(audio_path=Path(...))` — charge l'audio depuis le disque (usage standard)
@@ -313,13 +342,13 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
 ### VAD Silero — fallback transparent et activation séparée
-`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`, et peut être utilisé en post-filtrage par `Transcriber._apply_vad_filter()` si `workflow.vad.enabled_final=true`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif. Les paramètres `threshold`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms` sont configurables dans `workflow.vad`.
+`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`, et peut être utilisé en post-filtrage par `Transcriber._apply_vad_filter()` si `workflow.vad.enabled_final=true`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif. Les paramètres `threshold`, `threshold_low_quality`, `threshold_high_noise`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms` et variantes low-quality sont configurables dans `workflow.vad`.
 
 ### Qualité SRT — garde-fous déterministes
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-445 tests collectés dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+458 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).
@@ -330,7 +359,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 2. **Jamais** committer `config.yaml` (contient des chemins absolus de production) ni `.env` (secrets).
 3. **Toujours** passer `config: dict` en paramètre aux fonctions du moteur, jamais `get_config()` direct (sauf dans les routes).
 4. **Ne pas** modifier `JobState` ou `WORKFLOW_STEPS` sans mettre à jour `WorkflowState.compute_statuses()`.
-5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`.
+5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`.
 6. **Toujours** préserver les champs LLM dans `MeetingContextManager.save()` (la liste `llm_fields`).
 7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.
@@ -347,4 +376,4 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
-| `docs/VAD_PYANNOTE_PISTES.md` | VAD Silero : avantages/inconvénients, métriques de détection de dégradation, tuning pyannote, pistes d'amélioration |
+| `docs/VAD_PYANNOTE_PISTES.md` | VAD Silero/adaptatif, métriques de détection de dégradation, tuning pyannote, checkpoints et pistes d'amélioration |

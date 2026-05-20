@@ -4,7 +4,7 @@
 
 TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
 
-**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / pyannote / opencode (LLM locale d'arbitrage) / Bootstrap 5
+**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
@@ -21,7 +21,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 445 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 458 tests pytest collectés — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -68,16 +68,20 @@ transcria/
 │   │   ├── __init__.py
 │   │   ├── analyzer.py            # AudioAnalyzer (ffprobe → JSON)
 │   │   ├── converter.py           # AudioConverter (ffmpeg → WAV 16kHz mono)
-│   │   └── vad.py                 # SileroVAD (détection de parole via faster_whisper)
+│   │   ├── vad.py                 # SileroVAD (détection de parole via faster_whisper)
+│   │   └── vad_adaptive.py        # Adaptation VAD selon audio_quality_decision
 │   │
 │   ├── stt/                       # Speech-to-Text
 │   │   ├── __init__.py
 │   │   ├── base_transcriber.py    # BaseTranscriber (ABC)
 │   │   ├── cohere_transcriber.py  # CohereTranscriber (load, transcribe, segments_to_srt, offload)
-│   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper)
+│   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper large-v3 qualité)
+│   │   ├── anti_hallucination.py  # Réduction boucles ASR répétitives
+│   │   ├── forced_alignment.py    # Alignement CTC natif torchaudio optionnel
+│   │   ├── speaker_realignment.py # Réalignement locuteur/ponctuation au niveau mot
 │   │   ├── transcriber_factory.py # TranscriberFactory
-│   │   ├── transcription.py       # Transcriber (pipeline 2 modes + _apply_speakers)
-│   │   ├── diarization.py         # DiarizerService (pyannote GPU + exclusive_turns)
+│   │   ├── transcription.py       # Transcriber (pyannote_turns, fallback 30s, alignement, realignment)
+│   │   ├── diarization.py         # DiarizerService (pyannote GPU + exclusive_turns + checkpoints)
 │   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping)
 │   │   └── summary.py             # SummaryGenerator (VAD Silero + quick transcript)
 │   │
@@ -93,7 +97,8 @@ transcria/
 │   │   ├── srt_checks.py          # SRTChecker (check_segment, check_segments)
 │   │   ├── lexicon_checks.py      # LexiconChecker (check → found/missing/variants_found)
 │   │   ├── review_points.py       # ReviewPoints (generate → phrases utilisateur)
-│   │   └── quality_report.py      # QualityReporter (9 contrôles, score /100, markdown)
+│   │   ├── audio_quality.py       # Décision qualité audio pour forcer Whisper
+│   │   └── quality_report.py      # QualityReporter (contrôles, score /100, markdown)
 │   │
 │   ├── exports/                   # Package ZIP final
 │   │   ├── __init__.py
@@ -137,7 +142,7 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.7
 │
-├── tests/                         # 445 tests pytest collectés
+├── tests/                         # 458 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 11 tests — CRUD utilisateurs
@@ -184,16 +189,40 @@ services:
   srt_editor_easy_url: "http://127.0.0.1:7861" # Éditeur SRT externe
 
 models:
+  stt_backend: "cohere"
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
+
+
+whisper:
+  model_size: "large-v3"
+  word_timestamps: true
+  condition_on_previous_text: false
+  collapse_repetition_loops: true
+  forced_alignment:
+    enabled: false
+    backend: "torchaudio_ctc"
 
 workflow:
   enable_quick_summary: true
   enable_speaker_detection: true
   enable_quality_mode: true
   enable_external_srt_editor_link: true
+  audio_quality:
+    force_quality_backend: true
+    degraded_levels: ["degrade"]
+  quality_transcription:
+    force_stt_backend: "whisper"
+    enabled_for_modes: ["quality"]
+    force_on_degraded_summary: true
+  vad:
+    enabled_summary: true
+    enabled_final: false
+    adaptive: true
+  speaker_realignment:
+    enabled: true
   summary_llm:
     enabled: true
     model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
@@ -217,6 +246,17 @@ security:
 - `config.example.yaml` (version template) diffère encore sur certains chemins/modèles, mais les timeouts LLM sont désormais calibrés pour des traitements longs
 - Le vrai `config.yaml` du service peut monter plus haut sur `arbitration_llm.timeout_seconds` pour des réunions de plusieurs heures
 - Les valeurs par défaut dans `_DEFAULT_CONFIG` sont plus basses : `summary_llm.timeout_seconds: 120`, `arbitration_llm.timeout_seconds: 600`. Les valeurs 1800/7200 ci-dessus sont des valeurs production adaptées aux réunions longues.
+
+
+## 3.1 Pipeline STT qualité
+
+Le backend normal reste `models.stt_backend` (`cohere` par défaut). `PipelineService._config_for_mode()` force `whisper` quand le mode demandé est listé dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job en qualité dégradée. La décision est écrite dans `metadata/audio_quality_decision.json`.
+
+Whisper large-v3 apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
+
+Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale.
+
+Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutiliser les tours si l'audio et le modèle n'ont pas changé, et `speakers/speaker_embeddings.json` comme checkpoint acoustique par locuteur.
 
 ---
 
@@ -1009,7 +1049,7 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 
 ## 11. Tests
 
-**445 tests collectés** couvrant tous les modules. Lancer avec :
+**458 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```

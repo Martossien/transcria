@@ -4,7 +4,7 @@
 
 TranscrIA est un portail web de transcription et de valorisation de réunions. Il transforme un enregistrement audio ou vidéo en livrables exploitables : transcription SRT, résumé structuré, contexte de réunion, participants, lexique métier, rapport qualité et package ZIP final.
 
-l'objectif est de proposer une interface simple à des utilisateurs non techniciens, tout en orchestrant en arrière-plan des traitements avancés : transcription automatique, détection des locuteurs, correction par IA, prise en compte du vocabulaire métier et contrôle qualité.
+l'objectif est de proposer une interface simple à des utilisateurs non techniciens, tout en orchestrant en arrière-plan des traitements avancés : transcription automatique Cohere/Whisper selon la qualité audio, détection des locuteurs, correction par IA, prise en compte du vocabulaire métier et contrôle qualité.
 
 Le projet vise un usage professionnel : comptes rendus de réunion, préparation de relecture, archivage, sous-titrage, analyse de contenus audio et sécurisation d'un processus qui serait sinon long, manuel et difficile à homogénéiser.
 
@@ -64,7 +64,7 @@ Pour une direction, TranscrIA apporte un cadre :
 | Participants | Liste des personnes attendues ou identifiées |
 | Mapping locuteurs | Association entre `SPEAKER_XX` et les participants réels |
 | Lexique de session | Termes métier, acronymes, noms propres et corrections attendues |
-| Rapport qualité | Points à vérifier : segments vides, trous temporels, locuteurs non mappés, couverture audio |
+| Rapport qualité | Points à vérifier : segments vides, trous temporels, locuteurs non mappés, couverture audio, diagnostic ASR/VAD |
 | Package ZIP | Ensemble des fichiers utiles pour archivage, relecture ou transmission |
 
 ---
@@ -114,7 +114,7 @@ Cette étape donne à l'utilisateur une première vision de la complexité du fi
 
 ### 5. Résumé de contrôle
 
-Le système lance une transcription rapide avec Cohere ASR, puis peut exécuter pyannote pour détecter les locuteurs. Ces informations alimentent ensuite un résumé structuré généré via opencode et la LLM d'arbitrage configurée.
+Le système lance une transcription rapide avec Cohere ASR, applique un VAD adaptatif, puis peut exécuter pyannote pour détecter les locuteurs. Les diagnostics produits peuvent forcer Whisper large-v3 si le son est dégradé. Ces informations alimentent ensuite un résumé structuré généré via opencode et la LLM d'arbitrage configurée.
 
 Le résumé aide l'utilisateur à comprendre rapidement le contenu avant de compléter les champs métier :
 
@@ -369,3 +369,8 @@ TranscrIA est un portail web qui transforme un enregistrement de réunion en liv
 TranscrIA démontre qu'il est possible de rendre un pipeline IA complexe accessible depuis une interface web claire. Le projet ne remplace pas la validation humaine, mais il accélère fortement la production d'une base fiable : transcription horodatée, résumé structuré, locuteurs, lexique, contrôle qualité et package complet.
 
 Pour une direction, la valeur se situe dans la standardisation, la réduction du temps de traitement, la maîtrise locale des données et la possibilité de faire évoluer progressivement le niveau de qualité.
+
+
+### Qualité audio et transcription renforcée
+
+Le workflow garde Cohere comme backend rapide par défaut, mais bascule sur Whisper large-v3 en mode qualité ou quand les diagnostics signalent un son dégradé. Les traitements ajoutent des timestamps mot-à-mot, des garde-fous anti-hallucination, un réalignement locuteur/ponctuation et des checkpoints pyannote pour éviter de relancer inutilement la diarisation.

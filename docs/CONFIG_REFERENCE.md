@@ -117,6 +117,50 @@ python app.py --no-debug
 - `pyannote_model` : doit être un modèle HuggingFace valide. Nécessite d'accepter les conditions sur huggingface.co et configurer `HF_TOKEN` pour les modèles gated.
 - `stt_backend` pilote la sélection du backend via `TranscriberFactory`.
 
+### `whisper`
+
+Paramètres du backend Whisper qualité (`faster-whisper`, Large V3 par défaut).
+Ces réglages sont utilisés quand `models.stt_backend=whisper`, et le mode qualité
+peut les activer automatiquement via `workflow.quality_transcription`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `model_size` | string | `"large-v3"` | Modèle faster-whisper |
+| `compute_type` | string | `"float16"` | Type de calcul CTranslate2 (`float16` GPU recommandé, `int8` CPU) |
+| `cpu_threads` | int | `4` | Threads CPU |
+| `chunk_length_s` | int | `30` | Taille de chunk Whisper |
+| `beam_size` | int | `5` | Beam search |
+| `best_of` | int | `5` | Nombre de candidats |
+| `vad_filter` | bool | `true` | VAD interne faster-whisper |
+| `word_timestamps` | bool | `true` | Timestamps mot-à-mot natifs faster-whisper |
+| `condition_on_previous_text` | bool | `false` | Désactivé pour limiter les boucles/hallucinations |
+| `no_speech_threshold` | float/null | `0.2` | Seuil non-parole |
+| `compression_ratio_threshold` | float/null | `2.0` | Détection de texte compressé/répétitif |
+| `log_prob_threshold` | float/null | `-1.0` | Seuil log-probabilité |
+| `hallucination_silence_threshold` | float/null | `3.0` | Coupure hallucinations sur silence |
+| `repetition_penalty` | float | `1.0` | Pénalité de répétition |
+| `no_repeat_ngram_size` | int | `0` | Interdiction de n-grammes répétés |
+| `suppress_numerals` | bool | `false` | Supprime chiffres/symboles pendant l'ASR pour faciliter l'alignement CTC ; désactivé par défaut pour préserver les nombres |
+| `hotwords` | string/null | `null` | Mots-clés/hints pour termes rares |
+| `initial_prompt` | string/null | `null` | Prompt initial Whisper |
+| `collapse_repetition_loops` | bool | `true` | Réduit les boucles textuelles répétées après ASR |
+| `repetition_loop_min_repeats` | int | `4` | Nombre minimum de répétitions consécutives suspectes |
+| `repetition_loop_max_phrase_words` | int | `10` | Taille maximale d'une phrase répétée détectée |
+| `repetition_loop_keep_repeats` | int | `2` | Occurrences conservées après réduction d'une boucle |
+
+#### `whisper.forced_alignment`
+
+Alignement forcé CTC optionnel via torchaudio. Il est désactivé par défaut pour
+éviter tout téléchargement de modèle non demandé ; si le backend CTC n'est pas
+disponible, TranscrIA conserve les timestamps faster-whisper sans échec.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active l'alignement CTC optionnel |
+| `backend` | string | `torchaudio_ctc` | Backend d'alignement natif supporté |
+| `bundle_name` | string/null | `VOXPOPULI_ASR_BASE_10K_FR` | Bundle torchaudio utilisé pour l'alignement |
+| `max_segment_s` | float | `30.0` | Durée maximale d'un segment aligné |
+
 ---
 
 ### `workflow`
@@ -130,6 +174,36 @@ Paramètres contrôlant les fonctionnalités du workflow.
 | `enable_quality_mode` | bool | `true` | Active le mode "Qualité" (diarization finale + correction SRT) |
 | `enable_external_srt_editor_link` | bool | `true` | Affiche le bouton "Ouvrir dans SRT Editor EASY" |
 | `enable_vad` | bool | `true` | Ancien interrupteur global VAD, conservé pour compatibilité |
+
+#### `workflow.quality_transcription`
+
+Contrôle le basculement vers le backend STT de qualité. Par défaut, Cohere reste
+le backend principal, mais Whisper large-v3 est utilisé en mode qualité ou si le
+résumé rapide a diagnostiqué un son dégradé.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `force_stt_backend` | string/null | `whisper` | Backend forcé quand une règle qualité s'applique |
+| `enabled_for_modes` | list[string] | `["quality"]` | Modes de traitement qui forcent le backend qualité |
+| `force_on_degraded_summary` | bool | `true` | Force le backend qualité si `summary/summary.json` signale un niveau dégradé |
+| `degraded_summary_levels` | list[string] | `["degrade"]` | Niveaux de diagnostic considérés comme dégradés |
+
+#### `workflow.audio_quality`
+
+Agrège les signaux ffprobe et les diagnostics du résumé rapide pour décider si
+le backend qualité doit être forcé, même hors mode qualité.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `force_quality_backend` | bool | `true` | Autorise le forçage Whisper sur qualité dégradée |
+| `degraded_levels` | list[string] | `["degrade"]` | Niveaux de résumé considérés dégradés |
+| `suspect_levels` | list[string] | `["suspect"]` | Niveaux de résumé suspects, pondérés plus faiblement |
+| `min_bit_rate` | number/null | `64000` | Bitrate minimal avant signal qualité faible |
+| `min_sample_rate_hz` | number/null | `16000` | Fréquence minimale avant signal qualité faible |
+| `max_non_latin_segments` | number/null | `2` | Nombre maximal de segments non latins toléré |
+| `max_short_segment_ratio` | number/null | `0.2` | Ratio maximal de segments courts suspects |
+| `min_speech_ratio` | number/null | `0.35` | Ratio VAD minimal avant suspicion de VAD trop agressif |
+| `max_speech_ratio` | number/null | `0.95` | Ratio VAD maximal avant suspicion de VAD peu sélectif |
 
 **Redémarrage requis :** non — ces booléens sont lus à chaque appel dans `WorkflowRunner` et les templates.
 
@@ -148,13 +222,84 @@ global alors que le résumé et la transcription finale n'ont pas les mêmes ris
 |---|---|---|---|
 | `enabled_summary` | bool | `true` | Active le VAD avant la transcription rapide Cohere du résumé |
 | `enabled_final` | bool | `false` | Active un filtrage VAD supplémentaire sur les chunks pyannote de la transcription finale |
+| `adaptive` | bool | `true` | Ajuste les seuils VAD selon `metadata/audio_quality_decision.json` |
 | `threshold` | float | `0.5` | Seuil Silero |
+| `threshold_low_quality` | float | `0.35` | Seuil appliqué si audio dégradé/faible qualité |
+| `threshold_high_noise` | float | `0.6` | Seuil appliqué si VAD peu sélectif |
 | `min_speech_duration_ms` | int | `250` | Durée minimale de parole détectée |
 | `min_silence_duration_ms` | int | `400` | Durée minimale de silence séparant deux zones |
+| `min_silence_duration_ms_low_quality` | int | `250` | Silence minimal si audio faible qualité |
 | `speech_pad_ms` | int | `200` | Marge ajoutée autour des zones vocales |
+| `speech_pad_ms_low_quality` | int | `350` | Marge si audio faible qualité |
 
 **Recommandation actuelle :** VAD actif sur le résumé, désactivé par défaut sur la transcription finale.
 La transcription finale utilise déjà les `exclusive_turns` pyannote comme VAD implicite.
+
+#### `workflow.audio_scene`
+
+Analyse acoustique de scène exécutée dans un subprocess CPU isolé (librosa).
+Produit les signaux `has_music`, `has_noise`, `speech_ratio` et la distribution H/F
+à partir du pitch YIN. Le subprocess se termine avant le chargement GPU.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active l'analyse de scène (désactivé par défaut, librosa requis) |
+| `timeout_s` | int | `120` | Durée maximale allouée au subprocess (secondes) |
+| `detect_gender` | bool | `true` | Sous-classification speech → male/female via pitch YIN |
+| `thresholds.energy_ratio` | float | `0.03` | Fraction RMS moyenne en-dessous de laquelle une trame est inactive |
+| `thresholds.min_segment_s` | float | `0.3` | Segments plus courts ignorés |
+| `thresholds.noise_flatness_min` | float | `0.40` | Spectral flatness > seuil → bruit |
+| `thresholds.music_flatness_max` | float | `0.12` | Flatness < seuil ET ZCR < zcr_max → musique |
+| `thresholds.music_zcr_max` | float | `0.10` | Zero crossing rate maximal pour la classe musique |
+| `thresholds.female_pitch_hz` | float | `165.0` | Pitch médian ≥ seuil → voix féminine |
+
+**Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_scene_analysis()`.
+
+**Impact :** quand `enabled=true`, le résultat est sauvegardé dans `metadata/audio_scene.json` et transmis à `SourceSeparationDecider` (signaux de scène prioritaires sur le score si `has_music=True`). La distribution H/F est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+
+#### `workflow.source_separation`
+
+Séparation de sources vocales via Demucs. Ne s'active **jamais automatiquement** :
+c'est `SourceSeparationDecider` qui décide sur la base des signaux de
+`audio_quality_decision.json` et `audio_scene` (musique détectée → séparation forcée).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active la séparation de sources (demucs requis) |
+| `backend` | string | `"demucs"` | Backend de séparation (`demucs` uniquement) |
+| `model` | string | `"htdemucs"` | Modèle Demucs (`htdemucs` ou `htdemucs_ft` fine-tuned) |
+| `device` | string | `"auto"` | Périphérique de calcul (`auto`, `cpu`, `cuda`, `cuda:0`…) |
+| `segment_s` | int | `10` | Batch en secondes (compromis mémoire/qualité) |
+| `stem` | string | `"vocals"` | Tige extraite (`vocals`, `drums`, `bass`, `other`) |
+| `decision.min_score` | int | `3` | Seuil de score pour activer la séparation |
+| `decision.min_duration_s` | int | `60` | Audio < seuil → séparation non déclenchée (surcoût injustifié) |
+
+**Redémarrage requis :** non.
+
+**Impact :** si `should_separate()` retourne `True`, la piste vocale extraite (`vocals.wav`) remplace l'audio d'entrée pour le reste du pipeline STT. En cas d'erreur Demucs, l'audio original est conservé sans interruption (dégradation gracieuse).
+
+#### `workflow.speaker_realignment`
+
+Réaligne les locuteurs au niveau mot quand les timestamps `words` Whisper/CTC
+sont disponibles et qu'un segment ASR traverse plusieurs tours pyannote.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active le réalignement locuteur mot-à-mot |
+| `min_word_overlap_s` | float | `0.01` | Chevauchement minimal mot/tour pour attribuer un locuteur |
+| `punctuation_chars` | string | `".,;:!?)]}»"` | Ponctuations attachées au mot précédent |
+
+### `diarization`
+
+Paramètres de cache pour éviter de relancer pyannote quand l'audio et le modèle
+n'ont pas changé.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `cache_enabled` | bool | `true` | Réutilise `speaker_turns.json` si le checkpoint correspond |
+| `cache_audio_fingerprint` | bool | `true` | Vérifie taille/mtime/chemin de l'audio avant réutilisation |
+| `embedding_cache_enabled` | bool | `true` | Écrit un checkpoint acoustique par locuteur |
+| `embedding_clip_seconds` | float | `12.0` | Durée maximale utilisée par locuteur pour le checkpoint |
 
 #### `workflow.execution`
 
@@ -329,6 +474,8 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `models.fallback_stt_model` | Non | Oui |
 | `workflow.enable_*` | Non | Oui |
 | `workflow.vad.*` | Non | Oui |
+| `workflow.audio_scene.*` | Non | Oui (PipelineService) |
+| `workflow.source_separation.*` | Non | Oui (PipelineService) |
 | `workflow.summary_llm.*` | Non | Oui (SummaryGenerator, OpenCodeRunner) |
 | `workflow.arbitration_llm.*` | Non | Oui |
 | `quality.asr_noise_markers` | Non | Oui |

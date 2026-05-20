@@ -187,9 +187,9 @@ Le venv contient **tous les composants nécessaires** au pipeline complet :
 
 | Composant | Package | Rôle |
 |---|---|---|
-| ASR | `torch`, `transformers`, `accelerate` | Cohere Transcribe (modèle 2B sur GPU) |
+| ASR | `torch`, `transformers`, `accelerate`, `faster-whisper` | Cohere Transcribe + Whisper large-v3 qualité/fallback |
 | Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs (~2 Go VRAM) |
-| Audio | `librosa`, `soundfile`, `torchaudio` | Chargement/conversion audio |
+| Audio | `librosa`, `soundfile`, `torchaudio` | Chargement/conversion audio + alignement CTC optionnel |
 | LLM | `opencode` (CLI externe) | LLM d'arbitrage résumé/correction via backend OpenAI-compatible |
 | Web | `flask`, `flask-login`, `flask-sqlalchemy` | Serveur web + auth |
 | Config | `pyyaml` | Lecture config.yaml |
@@ -208,10 +208,14 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.versio
 python -c "
 from transcria.stt.cohere_transcriber import CohereTranscriber
 from transcria.stt.diarization import DiarizerService
+from transcria.stt.whisper_transcriber import WhisperTranscriber
 
 t = CohereTranscriber()
 print(f'Cohere ASR disponible : {t.available}')
 print(f'Cohere device          : {t.device}')
+
+w = WhisperTranscriber(model_size='large-v3')
+print(f'Whisper disponible    : {w.available}')
 
 ds = DiarizerService({})
 print(f'Pyannote disponible    : {ds.available}')
@@ -224,6 +228,7 @@ print(f'pyannote.audio {pyannote.audio.__version__}')
 # Attendu :
 # Cohere ASR disponible : True
 # Cohere device          : cuda:0
+# Whisper disponible     : True
 # Pyannote disponible    : True
 # Flask 3.x
 # Transformers 4.x ou 5.x
@@ -312,6 +317,7 @@ source venv/bin/activate
 | `torchaudio` | >=2.1, <3.0 | Installer avec PyTorch (même version) |
 | `transformers` | >=4.40 | Cohere ASR + pyannote |
 | `accelerate` | >=0.24 | Requis pour device_map dans Cohere ASR |
+| `faster-whisper` | >=1.2, <2.0 | Whisper large-v3, VAD Silero, timestamps mot-à-mot |
 | `pyannote.audio` | >=4.0, <5.0 | Diarisation (nécessite HF_TOKEN, voir section 5) |
 | `numpy` | >=1.26, <3.0 | Compatible pyannote 4.x et torch 2.x |
 | `librosa` | >=0.11, <0.12 | Traitement audio |
@@ -571,9 +577,14 @@ models:
   default_stt_model: "cohere-transcribe-03-2026"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
-  # Si stt_backend = "whisper", configurer le modèle :
-  # whisper:
-  #   model_size: "large-v3"           # tiny, small, medium, large-v3
+whisper:
+  model_size: "large-v3"
+  word_timestamps: true
+  condition_on_previous_text: false
+  collapse_repetition_loops: true
+  forced_alignment:
+    enabled: false
+    backend: "torchaudio_ctc"
 
 gpu:
   cohere_vram_mb: 6000                     # VRAM réservée pour Cohere ASR
@@ -586,6 +597,19 @@ workflow:
   enable_speaker_detection: true
   enable_quality_mode: true
   enable_external_srt_editor_link: true
+  audio_quality:
+    force_quality_backend: true
+    degraded_levels: ["degrade"]
+  quality_transcription:
+    force_stt_backend: "whisper"
+    enabled_for_modes: ["quality"]
+    force_on_degraded_summary: true
+  vad:
+    enabled_summary: true
+    enabled_final: false
+    adaptive: true
+  speaker_realignment:
+    enabled: true
   summary_llm:
     enabled: true
     model_id: "local/qwen3-35b"
@@ -708,6 +732,7 @@ for i in range(torch.cuda.device_count()):
 # Attendu :
 # Cohere ASR disponible : True
 # Cohere device          : cuda:0
+# Whisper disponible     : True
 # Pyannote disponible    : True
 # GPUs détectés          : 8
 #   GPU 0: NVIDIA GeForce RTX 3090, 24.6 Go
@@ -729,7 +754,7 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 445 passed
+# Résultat attendu : 458 passed
 ```
 
 ### Lancer le test E2E complet (avec GPU)
@@ -927,7 +952,8 @@ pip install accelerate
 Les modèles ne tiennent pas en VRAM. Le cycle GPU charge les modèles séquentiellement :
 1. Cohere (~6 Go) → offload
 2. pyannote (~2 Go) → offload
-3. LLM d'arbitrage locale (VRAM selon modèle/backend ; ex. ~48 Go pour un 35B quantifié sur 2 GPUs)
+3. Whisper large-v3 qualité si demandé ou audio dégradé (~10 Go selon compute_type) → offload
+4. LLM d'arbitrage locale (VRAM selon modèle/backend ; ex. ~48 Go pour un 35B quantifié sur 2 GPUs)
 
 Vérifier la VRAM disponible :
 ```bash
@@ -1099,7 +1125,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q                      # 445 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q                      # 458 tests collectés (mock, pas de GPU requis)
 venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

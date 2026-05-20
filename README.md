@@ -6,17 +6,19 @@
 
 ## Fonctionnalités
 
-- **Transcription ASR** — Cohere Transcribe (2B, Fast-Conformer) ou Whisper large-v3 (via faster-whisper), sélectionnable en config
-- **Diarisation** avec pyannote community-1 (extraits audio par locuteur)
+- **Transcription ASR** — Cohere Transcribe par défaut, Whisper large-v3 qualité/fallback via faster-whisper, sélection automatique sur audio dégradé
+- **Diarisation** avec pyannote community-1, exclusive turns, cache de checkpoint et extraits audio par locuteur
+- **Analyse de scène audio** — subprocess CPU isolé (librosa) : classification speech/music/noise via énergie RMS + flatness spectrale + ZCR, estimation du genre H/F par pitch YIN ; résultat disponible dans l'UI et le contexte LLM
+- **Séparation de sources** optionnelle (Demucs) : déclenchée automatiquement si musique détectée ou score qualité dégradé
 - **Résumé LLM** via opencode CLI et une LLM locale/OpenAI-compatible configurée
 - **Correction SRT** par LLM (orthographe, lexique métier, attribution locuteurs)
-- **Contrôle qualité** automatisé (9 checks, score /100, seuils configurables)
+- **Contrôle qualité** automatisé (score /100, diagnostics ASR/VAD, seuils configurables)
 - **Export ZIP** complet (SRT, contexte, participants, lexique, rapport qualité)
 - **Interface web** guidée en 9 étapes (wizard Flask + Bootstrap 5)
 - **Worker interne** sérialisé pour exécuter les traitements longs hors requête HTTP
 - **Authentification**, rôles, groupes utilisateurs, admins de groupe et visibilité partagée des jobs
 - **Configuration** YAML avec validation, détection automatique de l'environnement et interface admin
-- **Cycle GPU** orchestré (STT → pyannote → LLM d'arbitrage), context manager GPUSession
+- **Cycle GPU** orchestré (STT → pyannote → LLM d'arbitrage), context manager GPUSession, choix STT qualité piloté par diagnostics
 
 ## Stack technique
 
@@ -24,8 +26,8 @@
 |---|---|
 | Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
-| ASR | Cohere Transcribe 03-2026 ou Whisper (faster-whisper, large-v3 par défaut) |
-| Diarisation | pyannote community-1 |
+| ASR | Cohere Transcribe 03-2026 par défaut ; Whisper large-v3/faster-whisper en qualité ou audio dégradé |
+| Diarisation | pyannote community-1 + exclusive turns + checkpoints locuteurs |
 | LLM | opencode CLI + backend OpenAI-compatible configuré : script (llama.cpp), Ollama, HTTP, SGLang, vLLM, etc. |
 | GPU | VRAMManager, GPUSession (context manager), LLMBackend (script/ollama/http) |
 | Monitoring | Dashboard LLM (optionnel, port 5001) |
@@ -54,7 +56,7 @@ cd transcria
 - Détecte la version CUDA et installe le bon wheel PyTorch
 - Crée le venv, installe toutes les dépendances
 - Génère `config.yaml` via auto-détection (opencode, ffmpeg, chemins modèles)
-- Vérifie la présence des modèles IA (Cohere ASR, pyannote, modèle LLM local configuré) et propose de télécharger les manquants quand c'est possible
+- Vérifie la présence des modèles IA (Cohere ASR, faster-whisper, pyannote, modèle LLM local configuré) et propose de télécharger les manquants quand c'est possible
 - Guide interactivement les valeurs critiques (mot de passe admin, HF_TOKEN, chemin opencode)
 - Installe et active le service systemd
 
@@ -106,6 +108,13 @@ Variables d'environnement (optionnelles, surchargent `config.yaml`) :
 Ouvrir `http://localhost:7870`. Au premier lancement, l'utilisateur `admin` est créé avec le mot de passe défini dans `config.yaml`.
 Si le mot de passe reste `admin-change-me`, un warning explicite est écrit dans les logs au premier démarrage.
 
+
+### Choix ASR qualité
+
+Le backend normal reste `models.stt_backend` (`cohere` en production). Le mode qualité force `whisper` via `workflow.quality_transcription`. Si le résumé rapide signale un son dégradé, `PipelineService` écrit `metadata/audio_quality_decision.json` et force aussi Whisper, même en mode rapide, selon les seuils configurés dans `workflow.audio_quality`.
+
+Whisper Large V3 ajoute les timestamps mot-à-mot, les garde-fous anti-hallucination, l'alignement CTC optionnel (`whisper.forced_alignment`) et le réalignement locuteur/ponctuation quand les mots traversent plusieurs tours pyannote.
+
 ### Gestion des utilisateurs et groupes
 
 Les rôles applicatifs définissent les droits globaux :
@@ -137,19 +146,19 @@ GET /metrics  -> métriques Prometheus légères
 
 1. **Fichier** — Dépôt du fichier audio/vidéo
 2. **Analyse** — ffprobe (durée, codec, canaux, fréquence)
-3. **Résumé** — Transcription STT + résumé LLM + diarisation pyannote
+3. **Résumé** — Transcription rapide Cohere + VAD adaptatif + résumé LLM + diarisation pyannote + analyse de scène (genre H/F)
 4. **Contexte** — Suggestions LLM pré-remplies (titre, type, sujet, objectif)
-5. **Participants** — Locuteurs détectés avec extraits audio écoutables
+5. **Participants** — Locuteurs détectés avec extraits audio écoutables + indicateur de genre vocal estimé
 6. **Lexique** — Termes métier (import .txt/.csv, catégories, priorités)
-7. **Traitement** — Transcription finale + correction LLM (orthographe, locuteurs, lexique)
-8. **Qualité** — Score /100 sur 9 critères, points de relecture
+7. **Traitement** — Transcription finale Cohere/Whisper selon mode et qualité audio + réalignement locuteur mot-à-mot + correction LLM
+8. **Qualité** — Score /100, diagnostics ASR/VAD, points de relecture
 9. **Export** — Package ZIP (SRT corrigé, contexte, participants, lexique, rapports)
 
 ## Tests
 
 ```bash
 source venv/bin/activate
-python -m pytest tests/ -q                          # 445 tests collectés (mock, pas de GPU pour la plupart)
+python -m pytest tests/ -q                          # 507 tests collectés, 504 passent (mock, pas de GPU pour la plupart)
 python tests/test_e2e_workflow.py --skip-llm        # E2E rapide (1 GPU)
 python tests/test_e2e_workflow.py                   # E2E complet (GPUs + LLM requis)
 python tests/test_e2e_workflow.py --stt-backend whisper  # Avec Whisper large-v3
@@ -170,12 +179,12 @@ transcria/
 │   ├── auth/                    # Utilisateurs, groupes, rôles, permissions, routes /login
 │   ├── jobs/                    # Modèle Job (20 états), CRUD, filesystem
 │   ├── workflow/                # Étapes (9), calcul d'état, runner
-│   ├── audio/                   # Analyse (ffprobe), conversion (ffmpeg)
-│   ├── stt/                     # BaseTranscriber (ABC), CohereTranscriber, WhisperTranscriber
+│   ├── audio/                   # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif, analyse de scène
+│   ├── stt/                     # BaseTranscriber, Cohere, Whisper, anti-hallucination
 │   │                            #   Transcriber, DiarizerService, SpeakerDetector, SummaryGenerator
-│   │                            #   TranscriberFactory
+│   │                            #   alignement CTC, réalignement locuteur, TranscriberFactory
 │   ├── context/                 # Contexte réunion, participants, lexique
-│   ├── quality/                 # 9 checks qualité, score /100, seuils configurables
+│   ├── quality/                 # Checks qualité, score /100, décision qualité audio
 │   ├── exports/                 # PackageBuilder (ZIP)
 │   ├── integrations/            # DashboardClient, SrtEditorLink
 │   ├── gpu/                     # VRAMManager, GPUSession, OpenCodeRunner, LLMBackend

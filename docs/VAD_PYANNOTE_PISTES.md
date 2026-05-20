@@ -40,16 +40,16 @@ Comparer `duration_seconds` (audio_analysis.json) vs somme des durées VAD chunk
 
 ---
 
-## 3. Pistes d'amélioration VAD
+## 3. État actuel VAD et décision qualité
 
-### Court terme
-- **Exposer le seuil VAD dans config.yaml** (`vad_threshold`, actuellement hardcodé dans `vad.py`) pour permettre de l'ajuster par type de réunion sans redéploiement
-- **Log du ratio parole/silence** après chaque VAD pour détecter les cas dégradés automatiquement
-- **Filtrage post-VAD** : supprimer les segments ASR dont la langue détectée n'est pas `fr` et la durée < 1 s (heuristique anti-hallucination)
+Les seuils VAD sont exposés dans `workflow.vad` : `threshold`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms` et variantes adaptatives. `AdaptiveVADConfig` ajuste les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la config globale.
 
-### Moyen terme
-- **VAD adaptatif par contexte** : téléphonie → seuil plus permissif ; salle de réunion → seuil standard
-- **Désactivation ciblée** : si le ratio de texte "non-latin" dans `quick_transcript.txt` dépasse un seuil (ex : > 3 %), relancer sans VAD et comparer
+`AudioQualityEvaluator` combine `metadata/audio_analysis.json` et `summary/summary.json` : bitrate, sample rate, ratio parole, segments non latins, segments courts et niveau de diagnostic. Si le score est dégradé, `PipelineService` force Whisper large-v3 via `workflow.quality_transcription`.
+
+### Pistes restantes
+- Comparaison automatique Cohere/Whisper sur un échantillon court avant transcription longue.
+- Tuning des seuils VAD par profil audio utilisateur si des jeux de validation sont disponibles.
+- Mesure terrain du gain `torchaudio_ctc` avant activation par défaut.
 
 ---
 
@@ -82,7 +82,7 @@ Si on dispose d'un segment de 5–10 min avec les vrais changements de locuteur 
 ## 5. Autres pistes pour améliorer la qualité globale
 
 ### Identification des locuteurs (court terme)
-- **Speaker embedding** : comparer les embeddings pyannote entre réunions du même groupe → si Sylvain/Bertrand/Stephen reviennent souvent, un profil vocal pourrait être mémorisé et réutilisé pour nommer automatiquement les SPEAKER_XX
+- **Checkpoint embeddings** : `speakers/speaker_embeddings.json` stocke déjà un checkpoint acoustique simple par locuteur ; l’étape suivante serait un vrai profil vocal inter-jobs si le cadre de confidentialité le permet
 - **Prompt diarization enrichi** : ajouter les noms connus de l'organisation dans le contexte job (champ "participants attendus") → le LLM peut faire le matching sans avoir à les déduire acoustiquement
 
 ### Qualité ASR (moyen terme)

@@ -8,7 +8,7 @@
 2. `WorkflowRunner.run_summary()` : transcription rapide, pyannote, résumé LLM si activé
 3. validation du contexte, des participants et du lexique via les managers applicatifs
 4. mapping des `SPEAKER_XX` sans noms humains injectés
-5. `PipelineService.run_process(..., mode="quality")` : transcription finale, correction LLM, qualité, export
+5. `PipelineService.run_process(..., mode="quality")` : transcription finale Whisper qualité, réalignement locuteur, correction LLM, qualité, export
 
 Le test ne préremplit plus de participants fictifs. Il crée une entrée par locuteur détecté et laisse la LLM remplir les rôles ou noms si elle les déduit.
 
@@ -23,6 +23,7 @@ venv/bin/python tests/test_e2e_workflow.py --help
 Le test complet nécessite :
 - un `config.yaml` valide ;
 - Cohere ASR disponible dans le venv ;
+- faster-whisper disponible si `--stt-backend whisper` ou mode qualité ;
 - pyannote disponible si la diarisation est activée ;
 - opencode et la LLM d'arbitrage OpenAI-compatible configurés si le LLM n'est pas sauté ;
 - ffmpeg/ffprobe ;
@@ -63,6 +64,7 @@ Options utiles :
 
 Le test contrôle notamment :
 - `metadata/audio_analysis.json`
+- `metadata/audio_quality_decision.json` si décision qualité écrite
 - `summary/quick_transcript.txt`
 - `summary/summary.json`
 - `summary/summary.md`
@@ -71,6 +73,8 @@ Le test contrôle notamment :
 - `context/session_lexicon.json`
 - `context/job_context.yaml`
 - `speakers/speaker_stats.json`
+- `speakers/diarization_checkpoint.json` si cache pyannote actif
+- `speakers/speaker_embeddings.json` si checkpoint embeddings actif
 - `speakers/speaker_mapping.json`
 - `metadata/transcription.srt`
 - `metadata/transcription_corrigee.srt` si LLM activé

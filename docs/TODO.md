@@ -52,6 +52,35 @@ zéro modification de code.
 
 ---
 
+
+## Qualité STT Whisper/VAD/pyannote
+
+### Implémenté
+- Whisper large-v3 est utilisé en mode qualité via `workflow.quality_transcription` et peut être forcé automatiquement si `AudioQualityEvaluator` classe le job dégradé.
+- `metadata/audio_quality_decision.json` trace la décision Cohere/Whisper.
+- `workflow.vad.adaptive` ajuste les seuils VAD à partir des diagnostics qualité audio.
+- `speaker_realignment.py` réaligne les segments avec timestamps mots et tours pyannote.
+- `forced_alignment.py` fournit un alignement CTC natif torchaudio, sans dépendance WhisperX, désactivé par défaut.
+- `speakers/diarization_checkpoint.json` et `speakers/speaker_embeddings.json` ajoutent un cache/reprise pyannote par job.
+
+## Analyse de scène audio et intégration pipeline
+
+### Implémenté (2026-05-21)
+- `transcria/audio/scene_analyzer.py` : `AudioSceneAnalyzer` — subprocess isolé librosa, pipeline RMS → flatness/ZCR → pitch YIN.
+- `transcria/audio/_scene_analysis_worker.py` : worker subprocess avec fonctions pures testables unitairement (`_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_frames_to_segments`) et fonctions librosa isolées (`_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`).
+- `PipelineService._run_audio_scene_analysis()` + `_run_source_separation()` : intégrées avant la transcription. Le subprocess se termine avant le chargement GPU. `metadata/audio_scene.json` sauvegardé si non vide.
+- `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : `has_music=True` → séparation prioritaire.
+- `WorkflowRunner._build_gender_section(audio_scene)` + injection dans `_write_diarization_context(fs, speakers_result, audio_scene)`.
+- UI : bannière genre global + select genre par locuteur dans `job_wizard.html` / `wizard.js`. Champ `gender` persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()`.
+- 504 tests passent (507 collectés) ; 2 échecs pré-existants dans `TestWorkflowRunnerRunCorrection`.
+
+### Reste à valider terrain
+- Activer `whisper.forced_alignment.enabled` seulement après tests sur vrais audios longs.
+- Mesurer le gain du VAD adaptatif par profil audio avant de créer des presets plus spécialisés.
+- Comparer Cohere/Whisper sur un corpus interne anonymisé pour ajuster les seuils de `workflow.audio_quality`.
+
+---
+
 ## Gestion utilisateurs et sécurité admin
 
 ### Implémenté
