@@ -735,9 +735,12 @@ python -m pytest tests/ -q
 ### Lancer le test E2E complet (avec GPU)
 
 ```bash
-source venv/bin/activate
-python tests/test_e2e_workflow.py
-# Voir tests/E2E_README.md pour les options (--keep, --skip-llm, --skip-diarization)
+# Toujours utiliser venv/bin/python (pyannote et Cohere ne sont disponibles que dans le venv)
+venv/bin/python tests/test_e2e_workflow.py                          # run complet
+venv/bin/python tests/test_e2e_workflow.py --skip-llm               # sans LLM (plus rapide)
+venv/bin/python tests/test_e2e_workflow.py --keep                   # conserve le job après le test
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # autre fichier audio
+# Voir tests/E2E_README.md pour la liste complète des options
 ```
 
 ### Vérifier ffmpeg
@@ -1096,8 +1099,8 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q          # 445 tests collectés (mock, pas de GPU requis pour la plupart)
-python tests/test_e2e_workflow.py     # Test E2E complet (nécessite les GPUs)
+python -m pytest tests/ -q                      # 445 tests collectés (mock, pas de GPU requis)
+venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer
 python app.py

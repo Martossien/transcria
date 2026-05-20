@@ -36,9 +36,10 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 python -m pytest tests/ -q           # 445 tests collectés (21 modules test_*.py + E2E, mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
-venv/bin/python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
-venv/bin/python tests/test_e2e_workflow.py              # E2E complet (GPUs + LLM requis)
-venv/bin/python tests/test_e2e_workflow.py --keep       # Conserve le job pour inspection
+venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
+venv/bin/python tests/test_e2e_workflow.py                          # E2E complet (GPUs + LLM requis)
+venv/bin/python tests/test_e2e_workflow.py --keep                   # Conserve le job pour inspection
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fichier audio
 
 # Lint / format — AUCUN linter configuré dans le projet.
 # Le projet ne suit pas black/ruff/flake8. Respecte le style existant.
@@ -235,7 +236,7 @@ La phase summary (LLM d'arbitrage) déduit les rôles de chaque SPEAKER_XX depui
 1. `OpenCodeRunner._parse_structured_summary()` extrait `speaker_roles` (`{"SPEAKER_00": {"label": "Alice", "role": "..."}, ...}`)
 2. `WorkflowRunner._apply_llm_suggestions()` stocke ces rôles dans `meeting_context.json["speaker_roles_llm"]`
 3. `WorkflowRunner._apply_speaker_roles()` est appelé **après** la création du mapping SPEAKER_XX → participant, soit :
-   - Dans le test E2E : à l'étape 12 (mapping), après `SpeakerDetector.save_mapping()`
+   - Dans le test E2E : à l'étape 7 (mapping), après `SpeakerDetector.save_mapping()`
    - En production : dans `api_speakers_map` (endpoint `/api/jobs/<id>/speakers/map`), après `SpeakerDetector.save_mapping()`
 4. Le résultat est écrit dans `context/participants.json["role"]` pour chaque participant
 
