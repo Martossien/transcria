@@ -28,6 +28,8 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 | `workflow.summary_llm.timeout_seconds` | 1800 | typ. 1800+ |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
+Les valeurs `local/qwen*`, `qwen_port` et scripts `stop_qwen*` sont historiques. Elles restent supportées pour compatibilité avec les anciennes installations, mais les nouvelles configurations doivent utiliser les clés génériques `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`.
+
 ---
 
 ## Sections et paramètres
@@ -282,6 +284,7 @@ Overrides environnement :
 Note d'exploitation :
 - Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec le modèle local configuré sur cette machine.
 - `services.llm_cleanup_ports` est volontairement générique : il peut contenir des ports vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre serveur OpenAI-compatible concurrent.
+- Les noms `qwen_port`, `launch_qwen_35b()` et `stop_qwen_35b()` sont des aliases de compatibilité ancienne version, pas des noms à réutiliser dans une nouvelle intégration.
 - Le nombre de GPUs et la VRAM réellement consommée ne sont pas figés : ils dépendent du script (ex: `--tensor-split`), du modèle GGUF, du contexte et de la machine.
 
 ---

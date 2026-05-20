@@ -2,7 +2,7 @@
 {% block title %}Accueil — TranscIA{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="h3 mb-0">Mes traitements</h1>
+  <h1 class="h3 mb-0">Traitements</h1>
   <form method="POST" action="/jobs/new" class="d-flex gap-2">
     <input type="text" name="title" class="form-control" placeholder="Nom de la réunion" style="width: 250px;">
     <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nouveau traitement</button>
@@ -16,6 +16,9 @@
     <div class="card">
       <div class="card-body">
         <h6 class="card-title text-truncate">{{ job.title }}</h6>
+        {% if job.owner_id != current_user.id %}
+        <div class="small text-muted mb-2">Partagé par {{ job.owner.display_name or job.owner.username }}</div>
+        {% endif %}
         <div class="d-flex justify-content-between align-items-center">
           <span class="badge bg-{% if job.state == 'completed' %}success{% elif job.state == 'failed' %}danger{% else %}secondary{% endif %}">
             {{ job.state }}

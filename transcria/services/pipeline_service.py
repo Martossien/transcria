@@ -1,5 +1,6 @@
 import logging
 import time
+from functools import partial
 
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
@@ -117,20 +118,20 @@ class PipelineService:
         ):
             steps.append({
                 "name": "diarization",
-                "method": lambda: self.runner.run_diarization(job, audio_path, self.config),
+                "method": partial(self.runner.run_diarization, job, audio_path, self.config),
             })
 
         steps.append({
             "name": "correction",
-            "method": lambda: self.runner.run_correction(job, self.config),
+            "method": partial(self.runner.run_correction, job, self.config),
         })
         steps.append({
             "name": "quality",
-            "method": lambda: self.runner.run_quality_checks(job, self.config),
+            "method": partial(self.runner.run_quality_checks, job, self.config),
         })
         steps.append({
             "name": "export",
-            "method": lambda: self.runner.build_export(job, self.config),
+            "method": partial(self.runner.build_export, job, self.config),
         })
 
         return steps

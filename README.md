@@ -8,15 +8,15 @@
 
 - **Transcription ASR** — Cohere Transcribe (2B, Fast-Conformer) ou Whisper large-v3 (via faster-whisper), sélectionnable en config
 - **Diarisation** avec pyannote community-1 (extraits audio par locuteur)
-- **Résumé LLM** via Qwen 3.6 35B (opencode CLI, 263K contexte)
+- **Résumé LLM** via opencode CLI et une LLM locale/OpenAI-compatible configurée
 - **Correction SRT** par LLM (orthographe, lexique métier, attribution locuteurs)
 - **Contrôle qualité** automatisé (9 checks, score /100, seuils configurables)
 - **Export ZIP** complet (SRT, contexte, participants, lexique, rapport qualité)
 - **Interface web** guidée en 9 étapes (wizard Flask + Bootstrap 5)
 - **Worker interne** sérialisé pour exécuter les traitements longs hors requête HTTP
-- **Authentification** et rôles (admin, manager, operator, viewer)
+- **Authentification**, rôles, groupes utilisateurs, admins de groupe et visibilité partagée des jobs
 - **Configuration** YAML avec validation, détection automatique de l'environnement et interface admin
-- **Cycle GPU** orchestré (STT → pyannote → Qwen 35B), context manager GPUSession
+- **Cycle GPU** orchestré (STT → pyannote → LLM d'arbitrage), context manager GPUSession
 
 ## Stack technique
 
@@ -26,7 +26,7 @@
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
 | ASR | Cohere Transcribe 03-2026 ou Whisper (faster-whisper, large-v3 par défaut) |
 | Diarisation | pyannote community-1 |
-| LLM | Qwen 3.6 35B via opencode CLI — backends supportés : script (llama.cpp), Ollama, HTTP |
+| LLM | opencode CLI + backend OpenAI-compatible configuré : script (llama.cpp), Ollama, HTTP, SGLang, vLLM, etc. |
 | GPU | VRAMManager, GPUSession (context manager), LLMBackend (script/ollama/http) |
 | Monitoring | Dashboard LLM (optionnel, port 5001) |
 | Éditeur SRT | SRT Editor EASY (optionnel, port 7861) |
@@ -36,7 +36,7 @@
 - Python 3.11+
 - GPU(s) NVIDIA avec CUDA 12.x :
   - 1 GPU 16 Go minimum pour le pipeline ASR seul
-  - 2+ GPUs 24 Go recommandés pour le cycle complet avec Qwen 35B (~48 Go VRAM)
+  - 2+ GPUs 24 Go recommandés pour le cycle complet avec une LLM locale 30B/35B quantifiée (~48 Go VRAM selon modèle/backend)
 - ffmpeg / ffprobe (`apt install ffmpeg`)
 - opencode CLI (pour le moteur LLM)
 - Les modèles IA pré-téléchargés (l'application fonctionne en mode offline)
@@ -54,7 +54,7 @@ cd transcria
 - Détecte la version CUDA et installe le bon wheel PyTorch
 - Crée le venv, installe toutes les dépendances
 - Génère `config.yaml` via auto-détection (opencode, ffmpeg, chemins modèles)
-- Vérifie la présence des modèles IA (Cohere ASR, pyannote, Qwen GGUF) et propose de télécharger les manquants
+- Vérifie la présence des modèles IA (Cohere ASR, pyannote, modèle LLM local configuré) et propose de télécharger les manquants quand c'est possible
 - Guide interactivement les valeurs critiques (mot de passe admin, HF_TOKEN, chemin opencode)
 - Installe et active le service systemd
 
@@ -79,6 +79,8 @@ Vérifier ensuite en particulier :
 - les chemins des modèles IA si installés hors des répertoires par défaut
 - les scripts et endpoints LLM si votre environnement diffère du template
 
+Les noms `qwen_*` encore présents dans certains scripts, tests ou clés de compatibilité sont historiques. Les nouvelles configurations doivent utiliser les noms génériques (`arbitrage_llm_port`, `launch_arbitrage_llm`, `stop_arbitrage_llm`, `llm_cleanup_ports`). Qwen reste seulement le modèle d'exemple du déploiement local fourni.
+
 L’interface d’administration (`/admin/config`) valide la configuration et détecte automatiquement l’environnement (GPUs, binaires, RAM).
 
 Variables d'environnement (optionnelles, surchargent `config.yaml`) :
@@ -102,6 +104,26 @@ Variables d'environnement (optionnelles, surchargent `config.yaml`) :
 ```
 
 Ouvrir `http://localhost:7870`. Au premier lancement, l'utilisateur `admin` est créé avec le mot de passe défini dans `config.yaml`.
+Si le mot de passe reste `admin-change-me`, un warning explicite est écrit dans les logs au premier démarrage.
+
+### Gestion des utilisateurs et groupes
+
+Les rôles applicatifs définissent les droits globaux :
+
+| Rôle | Usage |
+|---|---|
+| `admin` | Administration complète : utilisateurs, groupes, configuration, système, suppression de jobs |
+| `manager` | Création, relance, qualité, téléchargement |
+| `operator` | Création de jobs, qualité, téléchargement |
+| `viewer` | Lecture/téléchargement uniquement |
+
+Fonctions disponibles :
+- l'admin global crée et désactive les comptes, change les rôles et réinitialise les mots de passe ;
+- chaque utilisateur connecté peut changer son propre mot de passe via **Mot de passe** dans la barre de navigation ;
+- en cas d'oubli, le reset passe par un admin global ; le reset email n'est pas activé tant qu'il n'y a pas de configuration SMTP/tokens ;
+- l'admin global crée des groupes et désigne un ou plusieurs admins de groupe ;
+- les admins de groupe ajoutent ou retirent des utilisateurs existants de leurs groupes ;
+- les membres d'un même groupe voient les jobs des autres membres, avec l'indication "Partagé par ..." sur la page d'accueil.
 
 ### Supervision
 
@@ -127,7 +149,7 @@ GET /metrics  -> métriques Prometheus légères
 
 ```bash
 source venv/bin/activate
-python -m pytest tests/ -q                          # 412 tests unitaires (mock, pas de GPU)
+python -m pytest tests/ -q                          # 445 tests collectés (mock, pas de GPU pour la plupart)
 python tests/test_e2e_workflow.py --skip-llm        # E2E rapide (1 GPU)
 python tests/test_e2e_workflow.py                   # E2E complet (GPUs + LLM requis)
 python tests/test_e2e_workflow.py --stt-backend whisper  # Avec Whisper large-v3
@@ -145,7 +167,7 @@ transcria/
 │   ├── config/                  # Chargement YAML, validation, détection système
 │   ├── database.py              # Instance SQLAlchemy
 │   ├── logging_setup.py         # Logger structuré (correlation_id, contexte)
-│   ├── auth/                    # Utilisateurs, rôles, permissions, routes /login
+│   ├── auth/                    # Utilisateurs, groupes, rôles, permissions, routes /login
 │   ├── jobs/                    # Modèle Job (20 états), CRUD, filesystem
 │   ├── workflow/                # Étapes (9), calcul d'état, runner
 │   ├── audio/                   # Analyse (ffprobe), conversion (ffmpeg)

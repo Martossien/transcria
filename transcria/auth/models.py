@@ -63,3 +63,54 @@ class User(UserMixin, db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
         }
+
+
+class GroupRole(str, enum.Enum):
+    MEMBER = "member"
+    GROUP_ADMIN = "group_admin"
+
+
+class Group(db.Model):
+    __tablename__ = "groups"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    description = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    memberships = db.relationship(
+        "GroupMembership",
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class GroupMembership(db.Model):
+    __tablename__ = "group_memberships"
+    __table_args__ = (
+        db.UniqueConstraint("group_id", "user_id", name="uq_group_membership"),
+    )
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=False, index=True)
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
+    role = db.Column(db.String(30), nullable=False, default=GroupRole.MEMBER.value)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    group = db.relationship("Group", back_populates="memberships")
+    user = db.relationship("User", backref="group_memberships")
+
+    @property
+    def role_enum(self) -> GroupRole:
+        try:
+            return GroupRole(self.role)
+        except ValueError:
+            return GroupRole.MEMBER

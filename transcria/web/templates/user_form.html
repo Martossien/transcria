@@ -29,14 +29,22 @@
           </select>
         </div>
         <div class="col-md-6 mb-3">
-          <label class="form-label">Mot de passe {{ '(laisser vide pour ne pas changer)' if user else '' }}</label>
-          <input type="password" name="password" class="form-control" {{ '' if user else 'required' }}>
+          <label class="form-label">{{ 'Réinitialiser le mot de passe' if user else 'Mot de passe' }}</label>
+          <input type="password" name="password" class="form-control" minlength="8" autocomplete="new-password" {{ '' if user else 'required' }}>
+          {% if user %}
+          <div class="form-text">Laisser vide pour ne pas changer.</div>
+          {% endif %}
         </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Confirmation du mot de passe</label>
+        <input type="password" name="password_confirm" class="form-control" minlength="8" autocomplete="new-password" {{ '' if user else 'required' }}>
       </div>
       {% if user %}
       <div class="mb-3 form-check">
         <input type="checkbox" name="is_active" value="1" class="form-check-input" id="is_active" {{ 'checked' if user.is_active }}>
         <label class="form-check-label" for="is_active">Compte actif</label>
+        <div class="form-text">Désactiver un compte bloque la connexion sans supprimer ses traitements ni son historique.</div>
       </div>
       {% endif %}
       <button type="submit" class="btn btn-primary">{{ 'Enregistrer' if user else 'Créer' }}</button>

@@ -1,7 +1,9 @@
 import pytest
 
+from transcria.database import db
+from transcria.auth.models import GroupRole, Role, User
 from transcria.auth.store import UserStore
-from transcria.auth.models import Role
+from transcria.auth.groups import GroupStore
 
 
 class TestUserStore:
@@ -73,9 +75,6 @@ class TestUserStore:
 
     def test_ensure_admin_creates_first_admin(self, app):
         with app.app_context():
-            from transcria.database import db
-            from transcria.auth.models import User
-
             original_users = list(db.session.query(User).all())
             db.session.query(User).delete()
             db.session.commit()
@@ -104,3 +103,56 @@ class TestUserStore:
             assert count > 0
             UserStore.ensure_admin({"auth": {"first_admin_username": "x", "first_admin_password": "x"}})
             assert UserStore.get_by_username("x") is None
+
+    def test_ensure_admin_warns_when_default_password_is_used(self, app, caplog):
+        with app.app_context():
+            original_users = list(db.session.query(User).all())
+            db.session.query(User).delete()
+            db.session.commit()
+
+            try:
+                caplog.set_level("WARNING", logger="transcria.auth.store")
+                UserStore.ensure_admin(
+                    {"auth": {"first_admin_username": "admin", "first_admin_password": "admin-change-me"}}
+                )
+
+                assert "mot de passe par défaut" in caplog.text
+            finally:
+                db.session.query(User).delete()
+                db.session.commit()
+                for u in original_users:
+                    db.session.add(User(
+                        id=u.id, username=u.username, display_name=u.display_name,
+                        email=u.email, password_hash=u.password_hash, role=u.role,
+                        is_active=u.is_active, created_at=u.created_at, last_login=u.last_login,
+                    ))
+                db.session.commit()
+
+
+class TestGroupStore:
+    def test_create_group_and_membership(self, app):
+        with app.app_context():
+            suffix = __import__("uuid").uuid4().hex[:8]
+            user = UserStore.create_user(username=f"group_user_{suffix}", password="pw")
+            group = GroupStore.create_group(f"Groupe {suffix}", "Description")
+
+            membership = GroupStore.add_member(group.id, user.id, GroupRole.GROUP_ADMIN)
+
+            assert membership is not None
+            assert membership.role == GroupRole.GROUP_ADMIN.value
+            assert group.id in GroupStore.user_group_ids(user.id)
+            assert GroupStore.can_manage_group(user, group.id) is True
+
+    def test_users_share_group(self, app):
+        with app.app_context():
+            suffix = __import__("uuid").uuid4().hex[:8]
+            user_a = UserStore.create_user(username=f"group_a_{suffix}", password="pw")
+            user_b = UserStore.create_user(username=f"group_b_{suffix}", password="pw")
+            user_c = UserStore.create_user(username=f"group_c_{suffix}", password="pw")
+            group = GroupStore.create_group(f"Partage {suffix}")
+
+            GroupStore.add_member(group.id, user_a.id)
+            GroupStore.add_member(group.id, user_b.id)
+
+            assert GroupStore.users_share_group(user_a.id, user_b.id) is True
+            assert GroupStore.users_share_group(user_a.id, user_c.id) is False

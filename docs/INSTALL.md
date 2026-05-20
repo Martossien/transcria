@@ -32,7 +32,7 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | GPU | 1× NVIDIA 16 Go VRAM | 2× NVIDIA 24+ Go VRAM (ex: RTX 3090/4090/5090) |
 | Disque | 100 Go SSD | 500+ Go NVMe |
 
-> **Note GPU** : Le cycle complet (Cohere + pyannote + Qwen 35B) nécessite ~68 Go de VRAM. Avec 2× GPU 24 Go, les modèles sont chargés/séquentiellement (Cohere → pyannote → Qwen). Avec un seul GPU, seul le pipeline ASR+diarisation fonctionnera (sans résumé LLM).
+> **Note GPU** : Le cycle complet (Cohere + pyannote + LLM locale d'arbitrage) nécessite une VRAM importante, selon le modèle et le backend. Avec 2× GPU 24 Go, les modèles sont chargés séquentiellement. Avec un seul GPU, seul le pipeline ASR+diarisation peut être réaliste sans résumé/correction LLM locale.
 
 ### Logiciels système
 
@@ -73,7 +73,7 @@ cd transcria
 | Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
 | Répertoires | Crée `jobs/`, `models/`, `instance/` |
 | Config | Génère `config.yaml` via `scripts/bootstrap_config.py` (auto-détection des binaires et chemins) |
-| Modèles IA | Vérifie Cohere ASR, cache pyannote HF, Qwen GGUF — affiche un tableau OK/MANQUANT |
+| Modèles IA | Vérifie Cohere ASR, cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
 | opencode | Détecte dans PATH / `~/.opencode/bin/` — propose l'installation + génère `opencode.json` |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
@@ -190,7 +190,7 @@ Le venv contient **tous les composants nécessaires** au pipeline complet :
 | ASR | `torch`, `transformers`, `accelerate` | Cohere Transcribe (modèle 2B sur GPU) |
 | Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs (~2 Go VRAM) |
 | Audio | `librosa`, `soundfile`, `torchaudio` | Chargement/conversion audio |
-| LLM | `opencode` (CLI externe) | Qwen 35B résumé/correction via llama.cpp |
+| LLM | `opencode` (CLI externe) | LLM d'arbitrage résumé/correction via backend OpenAI-compatible |
 | Web | `flask`, `flask-login`, `flask-sqlalchemy` | Serveur web + auth |
 | Config | `pyyaml` | Lecture config.yaml |
 | Qualité | `numpy`, `scikit-learn` (via pyannote) | Rapport qualité |
@@ -328,7 +328,7 @@ source venv/bin/activate
 
 ### Installer opencode CLI (moteur LLM)
 
-opencode est l'orchestrateur qui drive Qwen 35B pour le résumé et la correction SRT.
+opencode est l'orchestrateur qui pilote la LLM d'arbitrage pour le résumé et la correction SRT. La configuration ci-dessous utilise Qwen comme exemple historique local ; vous pouvez utiliser un autre modèle si le provider expose une API compatible et si `workflow.*.model_id` est aligné.
 
 ```bash
 # Télécharger opencode
@@ -440,9 +440,10 @@ Source : [huggingface.co/pyannote/speaker-diarization-community-1](https://huggi
 
 > **Note** : pyannote.audio **4.x** est requis (version majeure avec breaking changes par rapport à 3.x). Vous devez accepter les conditions d'utilisation sur la page HuggingFace avant de pouvoir télécharger le modèle.
 
-### Qwen 35B (résumé/correction, llama.cpp par défaut)
+### LLM locale d'arbitrage (résumé/correction, llama.cpp par défaut)
 
 Le modèle local d'arbitrage est servi par **llama.cpp** (llama-server) via le script d'arbitrage fourni. D'autres backends OpenAI-compatibles sont possibles si la config pointe vers le bon port et les bons scripts.
+Les références Qwen ci-dessous correspondent au modèle d'exemple historique du dépôt ; elles ne sont pas une obligation applicative. Les noms `qwen_*` restants sont des compatibilités anciennes versions.
 
 Pré-requis :
 - **llama.cpp** compilé avec support CUDA (binaire `llama-server`)
@@ -489,7 +490,7 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 | `scripts/launch_arbitrage.sh` | Lance la LLM d'arbitrage via llama-server (configuration locale par défaut) |
 | `scripts/stop_llm_backend.sh` | Arrêt générique par port, PID file ou pattern explicite |
 | `scripts/stop_arbitrage_llm.sh` | Wrapper configuré pour la LLM d'arbitrage |
-| `scripts/stop_qwen.sh` | Wrapper de compatibilité vers `stop_arbitrage_llm.sh` |
+| `scripts/stop_qwen.sh` | Wrapper de compatibilité ancienne version vers `stop_arbitrage_llm.sh` |
 | `scripts/stop_qwen_vllm.sh` | Wrapper legacy pour un ancien déploiement vLLM spécifique |
 
 **Variables configurables** dans `launch_arbitrage.sh` :
@@ -728,7 +729,7 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 426 passed
+# Résultat attendu : 445 passed
 ```
 
 ### Lancer le test E2E complet (avec GPU)
@@ -923,7 +924,7 @@ pip install accelerate
 Les modèles ne tiennent pas en VRAM. Le cycle GPU charge les modèles séquentiellement :
 1. Cohere (~6 Go) → offload
 2. pyannote (~2 Go) → offload
-3. Qwen 35B (~48 Go sur 2 GPUs)
+3. LLM d'arbitrage locale (VRAM selon modèle/backend ; ex. ~48 Go pour un 35B quantifié sur 2 GPUs)
 
 Vérifier la VRAM disponible :
 ```bash
@@ -1095,7 +1096,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q          # 426 tests unitaires (mock, pas de GPU requis)
+python -m pytest tests/ -q          # 445 tests collectés (mock, pas de GPU requis pour la plupart)
 python tests/test_e2e_workflow.py     # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

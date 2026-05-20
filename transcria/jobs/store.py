@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func
+from sqlalchemy import or_
 
-from transcria.auth.models import Role
+from transcria.auth.groups import GroupStore
+from transcria.auth.models import GroupMembership, Role
 from transcria.database import db
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
@@ -24,6 +26,16 @@ class JobStore:
     def list_for_user(user, include_all: bool = False) -> list[Job]:
         if include_all or user.has_role(Role.ADMIN):
             return list(db.session.execute(db.select(Job).order_by(Job.created_at.desc())).scalars().all())
+        group_ids = GroupStore.user_group_ids(user.id)
+        if group_ids:
+            owner_ids = db.select(GroupMembership.user_id).filter(GroupMembership.group_id.in_(group_ids))
+            return list(
+                db.session.execute(
+                    db.select(Job)
+                    .filter(or_(Job.owner_id == user.id, Job.owner_id.in_(owner_ids)))
+                    .order_by(Job.created_at.desc())
+                ).scalars().all()
+            )
         return list(
             db.session.execute(
                 db.select(Job).filter_by(owner_id=user.id).order_by(Job.created_at.desc())

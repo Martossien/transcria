@@ -18,6 +18,31 @@
 
 **Relations :** `User.jobs` → liste de jobs (backref)
 
+### Table `groups`
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK, default=uuid4 | Identifiant unique |
+| `name` | String(120) | UNIQUE, NOT NULL, INDEX | Nom du groupe |
+| `description` | String(255) | NOT NULL, default="" | Description courte |
+| `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
+
+**Relations :** `Group.memberships` → adhésions du groupe
+
+### Table `group_memberships`
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK, default=uuid4 | Identifiant unique |
+| `group_id` | String(36) | FK → groups.id, NOT NULL, INDEX | Groupe |
+| `user_id` | String(36) | FK → users.id, NOT NULL, INDEX | Utilisateur membre |
+| `role` | String(20) | NOT NULL, default="member" | Rôle dans le groupe (`member` ou `group_admin`) |
+| `created_at` | DateTime | NOT NULL, default=utcnow | Date d'ajout |
+
+**Contraintes :** unicité `(group_id, user_id)`.
+
+**Relations :** `GroupMembership.group` → Group, `GroupMembership.user` → User.
+
 ### Table `jobs`
 
 | Colonne | Type | Contraintes | Description |
@@ -67,6 +92,15 @@
 | `RETRY_PROCESSING` | x | x | | |
 
 Décorateur : `@requires(Permission.VIEW_ALL_JOBS)` → 401 si non authentifié, 403 si pas la permission.
+
+### GroupRole (auth/models.py)
+
+| Valeur | Description |
+|---|---|
+| `member` | Membre standard du groupe. Voit les jobs des autres membres du même groupe. |
+| `group_admin` | Peut gérer les membres du groupe existant (ajout/retrait/rôle groupe). Ne crée pas d'utilisateurs. |
+
+Les admins globaux (`Role.ADMIN`) peuvent créer, renommer et supprimer les groupes. Un admin de groupe ne peut pas se retirer lui-même ni laisser son groupe sans aucun `group_admin`.
 
 ### JobState (jobs/models.py) — 20 états
 

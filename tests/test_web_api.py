@@ -29,6 +29,60 @@ class TestAuthentication:
         r = admin_client.get("/")
         assert r.status_code == 200
 
+    def test_user_can_change_own_password(self, app):
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            user = UserStore.create_user(username="password_self", password="oldpass123", role=Role.OPERATOR)
+            user_id = user.id
+
+        client = app.test_client()
+        client.post("/login", data={"username": "password_self", "password": "oldpass123"})
+        r = client.post(
+            "/account/password",
+            data={
+                "current_password": "oldpass123",
+                "new_password": "newpass123",
+                "confirm_password": "newpass123",
+            },
+            follow_redirects=True,
+        )
+
+        assert r.status_code == 200
+        with app.app_context():
+            from transcria.auth.store import UserStore
+
+            user = UserStore.get_by_id(user_id)
+            assert user.check_password("newpass123")
+            assert not user.check_password("oldpass123")
+
+    def test_user_change_password_requires_current_password(self, app):
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            user = UserStore.create_user(username="password_wrong_current", password="oldpass123", role=Role.OPERATOR)
+            user_id = user.id
+
+        client = app.test_client()
+        client.post("/login", data={"username": "password_wrong_current", "password": "oldpass123"})
+        r = client.post(
+            "/account/password",
+            data={
+                "current_password": "badpass123",
+                "new_password": "newpass123",
+                "confirm_password": "newpass123",
+            },
+        )
+
+        assert r.status_code == 400
+        with app.app_context():
+            from transcria.auth.store import UserStore
+
+            user = UserStore.get_by_id(user_id)
+            assert user.check_password("oldpass123")
+
 
 class TestObservability:
     def test_health_endpoint_public(self, client):
@@ -102,6 +156,61 @@ class TestAdminUsers:
             from transcria.auth.store import UserStore
 
             assert UserStore.get_by_id(user_id).is_active is False
+
+    def test_admin_can_reset_user_password(self, admin_client, app):
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            user = UserStore.create_user(username="reset_web", password="oldpass123", role=Role.OPERATOR)
+            user_id = user.id
+
+        r = admin_client.post(
+            f"/admin/users/{user_id}/edit",
+            data={
+                "display_name": "",
+                "email": "",
+                "role": "operator",
+                "password": "newpass123",
+                "password_confirm": "newpass123",
+                "is_active": "1",
+            },
+            follow_redirects=True,
+        )
+
+        assert r.status_code == 200
+        with app.app_context():
+            from transcria.auth.store import UserStore
+
+            user = UserStore.get_by_id(user_id)
+            assert user.check_password("newpass123")
+            assert not user.check_password("oldpass123")
+
+    def test_admin_reset_user_password_rejects_mismatch(self, admin_client, app):
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            user = UserStore.create_user(username="reset_mismatch_web", password="oldpass123", role=Role.OPERATOR)
+            user_id = user.id
+
+        r = admin_client.post(
+            f"/admin/users/{user_id}/edit",
+            data={
+                "display_name": "",
+                "email": "",
+                "role": "operator",
+                "password": "newpass123",
+                "password_confirm": "different123",
+                "is_active": "1",
+            },
+        )
+
+        assert r.status_code == 400
+        with app.app_context():
+            from transcria.auth.store import UserStore
+
+            assert UserStore.get_by_id(user_id).check_password("oldpass123")
 
 
 class TestAdminConfig:

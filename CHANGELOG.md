@@ -7,6 +7,8 @@ Le format suit une logique proche de Keep a Changelog.
 ## [Unreleased]
 
 ### Added
+- Gestion des mots de passe : route `/account/password` pour changement par l'utilisateur avec mot de passe actuel, confirmation et longueur minimale ; reset admin clarifié avec confirmation.
+- Gestion des groupes utilisateurs : tables `groups` / `group_memberships`, `GroupStore`, routes `/admin/groups`, admins de groupe, visibilité automatique des jobs entre membres d'un même groupe.
 - Scripts LLM génériques : `scripts/stop_llm_backend.sh` (arrêt par port/PID file/pattern) et `scripts/stop_arbitrage_llm.sh` (wrapper standard). `stop_qwen.sh` et `stop_qwen_vllm.sh` restent des wrappers legacy.
 - Configuration LLM générique : `services.arbitrage_llm_port`, `services.llm_cleanup_ports`, compatibilité lecture avec `qwen_port` et `vllm_port`.
 - Configuration VAD fine : `workflow.vad.enabled_summary`, `enabled_final`, `threshold`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms`.
@@ -43,6 +45,8 @@ Le format suit une logique proche de Keep a Changelog.
 - Test E2E : pyannote lancé en pré-résumé si `diarization_context.md` absent, puis rôles appliqués après l’étape mapping.
 
 ### Changed
+- `PipelineService._define_pipeline_steps()` utilise `functools.partial` au lieu de lambdas pour rendre les captures d'arguments explicites.
+- Documentation README/TODO/install/technique clarifiée : Qwen est un exemple historique ou un alias legacy, pas une dépendance applicative de la LLM d'arbitrage.
 - Worker interne sérialisé pour exécuter les traitements longs hors de la requête HTTP.
 - Endpoint `/ready` pour distinguer l’état “process vivant” et “service prêt”.
 - Endpoint `/metrics` enrichi avec la capacité et l’activité du worker.
@@ -55,6 +59,7 @@ Le format suit une logique proche de Keep a Changelog.
 - La documentation active a été réalignée sur le mode service longue durée.
 
 ### Fixed
+- Warning explicite lors de la création du premier admin si le mot de passe initial reste `admin-change-me`, `CHANGE-ME` ou vide.
 - `_apply_llm_suggestions()` : faux positif silencieux — le test `”indisponible” in summary_text.lower()` déclenchait un early return quand le résumé LLM mentionnait légitimement le mot “indisponible” dans son contenu (ex : “fallback quand X est indisponible”), laissant `meeting_context.json` non mis à jour malgré un résumé valide. Remplacé par une comparaison exacte à la sentinelle `”Résumé indisponible.”`.
 - `_apply_llm_suggestions()` : suppression du double header `# Résumé de contrôle` dans `summary.md` — opencode écrit ce header lui-même, `_apply_llm_suggestions` n’ajoute plus que l’extrait de transcription en fin de fichier (et seulement s’il est non vide).
 - Régression de supervision causée par l’absence de `/health` et `/metrics`.

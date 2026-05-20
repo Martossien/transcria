@@ -23,8 +23,9 @@ from sqlalchemy import func
 import yaml
 
 from transcria.audio.analyzer import AudioAnalyzer
+from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
-from transcria.auth.permissions import Permission, get_user_permissions, requires
+from transcria.auth.permissions import Permission, requires
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
@@ -66,7 +67,14 @@ def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str
 
 
 def _can_access_job(job, user) -> bool:
-    return job is not None and (job.owner_id == user.id or user.has_role(Role.ADMIN))
+    return (
+        job is not None
+        and (
+            job.owner_id == user.id
+            or user.has_role(Role.ADMIN)
+            or GroupStore.users_share_group(user.id, job.owner_id)
+        )
+    )
 
 
 def _require_job_access(job, user):

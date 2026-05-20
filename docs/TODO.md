@@ -13,6 +13,8 @@ et `stop_qwen.sh` / `stop_qwen_vllm.sh` sont des wrappers legacy.
 ### Contexte
 La LLM d'arbitrage est désormais pilotée par config. Le modèle local livré sur la machine
 peut rester un Qwen via llama.cpp, mais le code principal ne doit pas dépendre de ce nom.
+Toute référence `qwen_*` restante doit être comprise comme alias de compatibilité ancienne version
+ou exemple de modèle déployé localement, jamais comme contrat applicatif.
 
 ### Implémenté dans le code
 
@@ -45,6 +47,44 @@ zéro modification de code.
 ### Reste à faire
 - Nettoyer progressivement les libellés historiques des tests E2E et des documents de présentation
   lorsqu'ils ne décrivent plus explicitement le modèle déployé.
+- À terme, remplacer les valeurs par défaut `local/qwen*` dans les templates de configuration par
+  des placeholders neutres, en conservant une note de migration pour les installations existantes.
+
+---
+
+## Gestion utilisateurs et sécurité admin
+
+### Implémenté
+- Groupes utilisateurs, admins de groupe et visibilité des jobs entre membres d'un même groupe.
+- Changement de mot de passe par l'utilisateur connecté (`/account/password`) avec ancien mot de passe,
+  confirmation et longueur minimale de 8 caractères.
+- Reset de mot de passe par admin global dans `/admin/users/<id>/edit`.
+- Warning explicite au premier démarrage si le premier admin est créé avec `admin-change-me`, `CHANGE-ME`
+  ou un mot de passe vide.
+- Désactivation de compte conservée : elle bloque la connexion sans supprimer les jobs ni l'historique.
+
+### Décisions
+- Pas de reset email dans cette version : il faudrait une configuration SMTP, des tokens expirables,
+  une limite de tentatives et des logs d'audit dédiés. Le reset admin est plus sûr pour le périmètre actuel.
+- Pas de création d'utilisateurs par les admins de groupe : ils gèrent seulement les membres existants.
+
+---
+
+## Notes audit code qualité
+
+### Traité
+- `PipelineService._define_pipeline_steps()` utilise `functools.partial` au lieu de lambdas pour éviter
+  les ambiguïtés de fermeture si la liste d'étapes évolue.
+- Le mot de passe admin par défaut déclenche un warning logué lors de la création du premier admin.
+
+### À surveiller sans modifier maintenant
+- Migrations de schéma : le projet utilise `db.create_all()` avec Flask-SQLAlchemy. Les nouvelles tables
+  sont créées automatiquement, mais les modifications de colonnes existantes nécessiteront Flask-Migrate
+  ou une migration manuelle documentée.
+- Annulation de job : le flag `execution.cancel_requested` est stocké en base et consulté entre les étapes
+  longues du pipeline. Un `threading.Event` par job réduirait quelques lectures SQLite, mais serait volatil
+  au redémarrage et demanderait de synchroniser état mémoire + état DB. À garder comme amélioration future
+  si la charge SQLite devient mesurable, pas comme priorité actuelle.
 
 ---
 

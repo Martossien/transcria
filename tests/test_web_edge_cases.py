@@ -230,6 +230,25 @@ class TestJobAccessControl:
 
         assert r.status_code == 403
 
+    def test_group_member_can_open_group_job_page(self, app):
+        owner_name, owner_pw, owner_id, owner_job_id, owner_title = self._create_operator_with_job(app, "SharedGroup")
+        member_name, member_pw, member_id, _, _ = self._create_operator_with_job(app, "GroupMember")
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+
+            group = GroupStore.create_group(f"Equipe {uuid.uuid4().hex[:8]}")
+            GroupStore.add_member(group.id, owner_id)
+            GroupStore.add_member(group.id, member_id)
+
+        client = self._login(app, member_name, member_pw)
+        r = client.get(f"/jobs/{owner_job_id}")
+        index = client.get("/")
+
+        assert r.status_code == 200
+        assert index.status_code == 200
+        assert owner_title.encode() in index.data
+        assert b"Partag" in index.data
+
     def test_operator_cannot_call_foreign_job_apis(self, app):
         owner_name, owner_pw, _, _, _ = self._create_operator_with_job(app, "Owner")
         _, _, _, foreign_job_id, _ = self._create_operator_with_job(app, "Foreign")
@@ -284,6 +303,104 @@ class TestJobAccessControl:
                 assert JobStore.get_by_id(job_id) is not None
         finally:
             set_config(original_cfg)
+
+
+class TestGroupManagement:
+    def _login(self, app, username, password):
+        client = app.test_client()
+        client.post("/login", data={"username": username, "password": password}, follow_redirects=True)
+        return client
+
+    def test_admin_can_create_group_and_add_member(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            suffix = uuid.uuid4().hex[:8]
+            user = UserStore.create_user(username=f"gm_{suffix}", password="pw", role=Role.OPERATOR)
+            user_id = user.id
+
+        group_name = f"Groupe web {uuid.uuid4().hex[:8]}"
+        r = admin_client.post(
+            "/admin/groups/new",
+            data={"name": group_name, "description": "Test"},
+            follow_redirects=False,
+        )
+        assert r.status_code == 302
+
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            group = GroupStore.get_by_name(group_name)
+            assert group is not None
+            group_id = group.id
+
+        r = admin_client.post(
+            f"/admin/groups/{group_id}/edit",
+            data={"action": "add_member", "user_id": user_id, "role": "member"},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            assert GroupStore.users_share_group(user_id, user_id) is True
+            assert len(GroupStore.list_members(group_id)) == 1
+
+    def test_group_admin_can_manage_members_but_not_create_groups(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.models import GroupRole, Role
+            from transcria.auth.store import UserStore
+
+            suffix = uuid.uuid4().hex[:8]
+            admin_user = UserStore.create_user(username=f"gadmin_{suffix}", password="pw", role=Role.OPERATOR)
+            member_user = UserStore.create_user(username=f"gmember_{suffix}", password="pw", role=Role.OPERATOR)
+            group = GroupStore.create_group(f"Groupe admin {suffix}")
+            GroupStore.add_member(group.id, admin_user.id, GroupRole.GROUP_ADMIN)
+            admin_username = admin_user.username
+            member_user_id = member_user.id
+            group_id = group.id
+
+        client = self._login(app, admin_username, "pw")
+        forbidden = client.get("/admin/groups/new")
+        assert forbidden.status_code == 403
+
+        r = client.post(
+            f"/admin/groups/{group_id}/edit",
+            data={"action": "add_member", "user_id": member_user_id, "role": "member"},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            assert len(GroupStore.list_members(group_id)) == 2
+
+    def test_group_admin_cannot_remove_last_group_admin(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.models import GroupRole, Role
+            from transcria.auth.store import UserStore
+
+            suffix = uuid.uuid4().hex[:8]
+            admin_user = UserStore.create_user(username=f"gsolo_{suffix}", password="pw", role=Role.OPERATOR)
+            group = GroupStore.create_group(f"Groupe solo {suffix}")
+            GroupStore.add_member(group.id, admin_user.id, GroupRole.GROUP_ADMIN)
+            admin_username = admin_user.username
+            admin_user_id = admin_user.id
+            group_id = group.id
+
+        client = self._login(app, admin_username, "pw")
+        r = client.post(
+            f"/admin/groups/{group_id}/edit",
+            data={"action": "remove_member", "user_id": admin_user_id},
+            follow_redirects=True,
+        )
+        assert r.status_code == 200
+
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            assert GroupStore.get_membership(group_id, admin_user_id) is not None
 
 
 class TestPipelineErrors:

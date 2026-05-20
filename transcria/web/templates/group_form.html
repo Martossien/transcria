@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier' if group else 'Nouveau' }} groupe — TranscIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">{{ 'Gérer le groupe' if group else 'Créer un groupe' }}</h1>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="action" value="update_group">
+      <div class="row">
+        <div class="col-md-5 mb-3">
+          <label class="form-label">Nom du groupe</label>
+          <input type="text" name="name" class="form-control" value="{{ group.name if group else '' }}" required {{ '' if Permission.MANAGE_USERS in user_permissions else 'readonly' }}>
+        </div>
+        <div class="col-md-7 mb-3">
+          <label class="form-label">Description</label>
+          <input type="text" name="description" class="form-control" value="{{ group.description if group else '' }}" {{ '' if Permission.MANAGE_USERS in user_permissions else 'readonly' }}>
+        </div>
+      </div>
+      {% if Permission.MANAGE_USERS in user_permissions %}
+      <button type="submit" class="btn btn-primary">{{ 'Enregistrer' if group else 'Créer' }}</button>
+      {% endif %}
+      <a href="/admin/groups" class="btn btn-outline-secondary">Retour</a>
+    </form>
+  </div>
+</div>
+
+{% if group %}
+<div class="card mb-4">
+  <div class="card-header">Membres</div>
+  <div class="card-body">
+    {% if members %}
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Utilisateur</th>
+          <th>Nom affiché</th>
+          <th>Rôle groupe</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for membership in members %}
+        <tr>
+          <td><strong>{{ membership.user.username }}</strong></td>
+          <td>{{ membership.user.display_name }}</td>
+          <td>
+            <span class="badge bg-{{ 'primary' if membership.role == 'group_admin' else 'secondary' }}">
+              {{ 'admin groupe' if membership.role == 'group_admin' else 'membre' }}
+            </span>
+          </td>
+          <td>
+            <form method="POST" class="d-inline" onsubmit="return confirm('Retirer cet utilisateur du groupe ?')">
+              <input type="hidden" name="action" value="remove_member">
+              <input type="hidden" name="user_id" value="{{ membership.user_id }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger">Retirer</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted mb-0">Aucun membre dans ce groupe.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">Ajouter un membre existant</div>
+  <div class="card-body">
+    <form method="POST" class="row g-3 align-items-end">
+      <input type="hidden" name="action" value="add_member">
+      <div class="col-md-6">
+        <label class="form-label">Utilisateur</label>
+        <select name="user_id" class="form-select" required>
+          <option value="">Choisir...</option>
+          {% for user in users %}
+          <option value="{{ user.id }}">{{ user.username }}{% if user.display_name %} — {{ user.display_name }}{% endif %}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Rôle groupe</label>
+        <select name="role" class="form-select">
+          <option value="{{ group_roles.MEMBER.value }}">membre</option>
+          <option value="{{ group_roles.GROUP_ADMIN.value }}">admin groupe</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">Ajouter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if Permission.MANAGE_USERS in user_permissions %}
+<form method="POST" onsubmit="return confirm('Supprimer ce groupe ? Les utilisateurs ne seront pas supprimés.')">
+  <input type="hidden" name="action" value="delete_group">
+  <button type="submit" class="btn btn-outline-danger">Supprimer le groupe</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

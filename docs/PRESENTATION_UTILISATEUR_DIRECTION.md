@@ -114,7 +114,7 @@ Cette étape donne à l'utilisateur une première vision de la complexité du fi
 
 ### 5. Résumé de contrôle
 
-Le système lance une transcription rapide avec Cohere ASR, puis peut exécuter pyannote pour détecter les locuteurs. Ces informations alimentent ensuite un résumé structuré généré par Qwen via opencode.
+Le système lance une transcription rapide avec Cohere ASR, puis peut exécuter pyannote pour détecter les locuteurs. Ces informations alimentent ensuite un résumé structuré généré via opencode et la LLM d'arbitrage configurée.
 
 Le résumé aide l'utilisateur à comprendre rapidement le contenu avant de compléter les champs métier :
 
@@ -189,6 +189,8 @@ Un administrateur peut :
 - désactiver un compte ;
 - réinitialiser un mot de passe.
 
+Les utilisateurs connectés peuvent aussi changer eux-mêmes leur mot de passe depuis la barre de navigation. En cas d'oubli, la procédure actuelle passe par une réinitialisation par l'administrateur ; le reset par email est volontairement reporté tant que l'infrastructure mail et les tokens temporaires ne sont pas configurés.
+
 ### Gestion de la configuration
 
 Une page d'administration permet d'éditer la configuration YAML de l'application.
@@ -257,7 +259,7 @@ En arrière-plan, TranscrIA coordonne plusieurs briques :
 - SQLite pour la base applicative ;
 - Cohere ASR pour la transcription ;
 - pyannote pour la diarisation ;
-- Qwen 35B via opencode pour le résumé et la correction ;
+- LLM d'arbitrage via opencode pour le résumé et la correction ;
 - un dashboard LLM pour surveiller les ressources GPU ;
 - SRT Editor EASY pour la relecture externe si activée.
 

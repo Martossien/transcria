@@ -33,7 +33,7 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 426 tests (21 modules test_*.py + E2E, mock, pas de GPU requis)
+python -m pytest tests/ -q           # 445 tests collectés (21 modules test_*.py + E2E, mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm   # E2E rapide (1 GPU)
@@ -76,10 +76,11 @@ transcria/
     database.py             # db = SQLAlchemy()
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
-      models.py             # User, Role
+      models.py             # User, Role, Group, GroupMembership, GroupRole
       permissions.py        # Permission (enum), décorateurs de permission
       store.py              # UserStore — méthodes statiques
-      routes.py             # auth_bp : /login, /logout, /admin/users
+      groups.py             # GroupStore — groupes, membres, admins de groupe
+      routes.py             # auth_bp : /login, /logout, /admin/users, /admin/groups
     jobs/
       models.py             # Job, JobState (20 états)
       store.py              # JobStore — méthodes statiques
@@ -143,7 +144,7 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # 21 modules test_*.py + E2E, 426 tests (mocks GPU/LLM)
+  tests/                    # 21 modules test_*.py + E2E, 445 tests collectés (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -200,6 +201,8 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 
 `services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `services.arbitrage_llm_port` remplace `qwen_port` pour les nouvelles configs. `services.llm_cleanup_ports` remplace `vllm_port` et liste les ports de backends LLM concurrents à libérer avant lancement. Les anciens noms restent lus par compatibilité. `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
+Les références `qwen_*` encore présentes sont des aliases de compatibilité ancienne version ou des exemples de modèle local. Ne pas introduire de nouvelle dépendance fonctionnelle au nom Qwen : le contrat applicatif est "LLM d'arbitrage OpenAI-compatible configurée".
+
 ### Pipeline STT — deux modes de chunking
 
 **Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement à `CohereTranscriber.transcribe()`. Chaque chunk a un speaker connu → attribution 100% fiable, pas d'overlap matching.
@@ -217,6 +220,15 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan (worker sérialisé, `workflow.execution.max_concurrent_jobs=1`). Supervision : `/health`, `/ready`, `/metrics`.
+
+### Groupes utilisateurs et visibilité des jobs
+Les jobs restent propriétaires d'un utilisateur (`Job.owner_id`). Les groupes (`Group`, `GroupMembership`) ajoutent une visibilité croisée : un membre voit les jobs des autres membres des groupes auxquels il appartient. Cette règle est centralisée dans `JobStore.list_for_user()` pour la liste et `_can_access_job()` / `_require_job_access()` pour les pages et API job.
+
+Les admins globaux (`Role.ADMIN`) créent, renomment et suppriment les groupes. Les `group_admin` peuvent gérer les membres existants de leurs groupes, mais ne créent pas d'utilisateurs. Un admin de groupe ne peut pas se retirer lui-même ni laisser son groupe sans aucun admin de groupe.
+
+### Gestion des mots de passe
+Les utilisateurs authentifiés changent leur propre mot de passe via `/account/password`. La route vérifie le mot de passe actuel, la confirmation et une longueur minimale de 8 caractères. Le reset en cas d'oubli passe par l'admin global dans `/admin/users/<id>/edit`; ne pas ajouter de reset email sans configuration SMTP, tokens expirables et protections anti-abus documentées.
+Si `UserStore.ensure_admin()` crée le premier admin avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide, un warning doit être logué.
 
 ### Pré-remplissage des rôles participants (LLM → section 5)
 La phase summary (LLM d'arbitrage) déduit les rôles de chaque SPEAKER_XX depuis la transcription. Le flux :
@@ -306,7 +318,7 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-426 tests dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+445 tests collectés dans 21 modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).
@@ -324,6 +336,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 9. **Toujours** passer par `workflow/transitions.py` pour la logique de lancement/annulation/reprise de traitement.
 10. **Ne jamais** tuer un processus opencode par nom de processus — utiliser uniquement les fichiers `.opencode.pid` dans le répertoire du job (cf. `_kill_orphaned_opencode`). Il peut y avoir d'autres opencode sur la machine non liés à TranscrIA.
 11. **Ne jamais** hardcoder un domaine métier réel dans les prompts, le code applicatif, l'UI ou les tests (exemples : organismes, sigles, produits, secteurs, métiers issus de jobs réels). TranscrIA doit rester neutre et réutilisable par tout type d'organisation. Les exemples doivent utiliser des placeholders génériques (`SIGLE_A`, `Organisation A`, `Terme métier A`, `Variante phonétique A`) et le code ne doit contenir aucun mapping métier spécifique.
+12. **Toujours** appliquer la même règle d'accès groupe sur les pages et API job : si un membre peut voir un job via groupe, les endpoints job correspondants doivent passer par `_require_job_access()` ou une vérification équivalente.
 
 ## Documentation complémentaire
 

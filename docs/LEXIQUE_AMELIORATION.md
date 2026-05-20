@@ -322,7 +322,7 @@ Fallback recommandé : si l'ancien format contient `/`, prendre la première par
 | 6 | Ajouter `contexts` pour afficher 1 à 3 extraits de validation dans l'UI | `summary_prompt.txt`, `opencode_runner.py`, `lexicon.py`, `job_wizard.html`, `wizard.js` | moyen UX | **Partiel** — `contexts` sauvegardé dans `session_lexicon.json` (3 max, `_normalize_contexts()`), produit par la LLM via `summary_prompt.txt`, mais affichage UI incomplet |
 | 7 | Modifier `correction_prompt.txt` pour correction contextuelle, sans remplacement global aveugle | `configs/prompts/correction_prompt.txt` | moyen | **Implémenté** — v1.4 avec `[INCERTAIN]`, correction par variante, pas de remplacement global |
 | 8 | Ajouter un contrôle qualité signalant les variantes exactes ou graphies proches non résolues après correction | `quality_report.py`, `lexicon_checks.py`, tests | faible | **Partiel** — `LexiconChecker.find_unresolved_terms()` + check 7bis dans `quality_report.py:137-163`, mais reporting fine-grained des formes proches à compléter |
-| 9 | Ajuster les tests unitaires du parser, du contexte, du lexique et de la qualité | `tests/` | faible | **Implémenté** — tests à jour (426 tests passent) |
+| 9 | Ajuster les tests unitaires du parser, du contexte, du lexique et de la qualité | `tests/` | faible | **Implémenté** — tests à jour |
 
 ---
 

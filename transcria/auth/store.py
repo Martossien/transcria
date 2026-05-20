@@ -1,7 +1,12 @@
+import logging
+
 from sqlalchemy import func
 
 from transcria.auth.models import User, Role
 from transcria.database import db
+
+logger = logging.getLogger(__name__)
+DEFAULT_ADMIN_PASSWORDS = {"admin-change-me", "CHANGE-ME", ""}
 
 
 class UserStore:
@@ -74,3 +79,8 @@ class UserStore:
         username = config.get("auth", {}).get("first_admin_username", "admin")
         password = config.get("auth", {}).get("first_admin_password", "admin-change-me")
         UserStore.create_user(username=username, password=password, display_name="Administrateur", role=Role.ADMIN)
+        if password in DEFAULT_ADMIN_PASSWORDS:
+            logger.warning(
+                "Premier compte admin créé avec un mot de passe par défaut ou vide. "
+                "Changez immédiatement auth.first_admin_password puis le mot de passe du compte admin."
+            )

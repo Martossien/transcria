@@ -8,6 +8,8 @@ TranscrIA est un portail guidé de transcription de réunion destiné aux utilis
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
+**Note LLM :** Qwen est le modèle d'exemple du déploiement local historique. Les noms `qwen_*` conservés dans le code/config sont des aliases de compatibilité ancienne version ; le contrat courant est une LLM d'arbitrage OpenAI-compatible configurée par `services.*` et `workflow.*.model_id`.
+
 **Démarrage (dev) :**
 ```bash
 cd transcria
@@ -19,7 +21,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 426 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 445 tests pytest collectés — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -44,10 +46,11 @@ transcria/
 │   │
 │   ├── auth/                      # Authentification & rôles
 │   │   ├── __init__.py
-│   │   ├── models.py              # Modèle User, énumération Role, ROLE_HIERARCHY
+│   │   ├── models.py              # User, Group, GroupMembership, Role, GroupRole
+│   │   ├── groups.py              # GroupStore (CRUD groupes, membres, droits admin groupe)
 │   │   ├── store.py               # UserStore (CRUD utilisateurs, count_users, ensure_admin)
 │   │   ├── permissions.py         # Permission enum, _ROLE_PERMISSIONS, @requires()
-│   │   └── routes.py              # Routes /login, /logout, /admin/users (+ inject_user_context)
+│   │   └── routes.py              # Routes /login, /logout, /admin/users, /admin/groups
 │   │
 │   ├── jobs/                      # Gestion des traitements
 │   │   ├── __init__.py
@@ -134,7 +137,7 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.7
 │
-├── tests/                         # 426 tests pytest collectés
+├── tests/                         # 445 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 11 tests — CRUD utilisateurs
@@ -225,8 +228,11 @@ security:
 | Classe/Enum | Rôle |
 |---|---|
 | `Role` | Enum : `admin`, `manager`, `operator`, `viewer` |
+| `GroupRole` | Enum : `member`, `group_admin` |
 | `ROLE_HIERARCHY` | Niveaux : VIEWER=0 → ADMIN=3 |
 | `User` | Modèle SQLAlchemy (hérite `UserMixin`) |
+| `Group` | Groupe de partage de jobs |
+| `GroupMembership` | Association User↔Group avec rôle de groupe |
 
 | Propriété/Méthode | Description |
 |---|---|
@@ -250,6 +256,16 @@ security:
 | `UserStore.count_users()` | Compte les utilisateurs |
 | `UserStore.ensure_admin(config)` | Crée l'admin initial si aucun utilisateur |
 
+**`groups.py`**
+| Méthode | Description |
+|---|---|
+| `GroupStore.create_group(name, description)` | Création d'un groupe par admin global |
+| `GroupStore.list_for_admin(user)` | Liste tous les groupes pour admin global, sinon seulement les groupes administrés |
+| `GroupStore.add_member(group_id, user_id, role)` | Ajoute ou met à jour un membre actif existant |
+| `GroupStore.remove_member(group_id, user_id)` | Retire un membre |
+| `GroupStore.users_share_group(user_a_id, user_b_id)` | Teste la visibilité croisée des jobs |
+| `GroupStore.can_manage_group(user, group_id)` | Autorise admin global ou `group_admin` du groupe |
+
 **`permissions.py`**
 | Élément | Description |
 |---|---|
@@ -263,11 +279,20 @@ security:
 |---|---|---|
 | `/login` | GET, POST | Aucun |
 | `/logout` | GET | Authentifié |
+| `/account/password` | GET, POST | Authentifié |
 | `/admin/users` | GET | `MANAGE_USERS` |
 | `/admin/users/new` | GET, POST | `MANAGE_USERS` |
 | `/admin/users/<id>/edit` | GET, POST | `MANAGE_USERS` |
+| `/admin/groups` | GET | Admin global ou admin d'au moins un groupe |
+| `/admin/groups/new` | GET, POST | `MANAGE_USERS` |
+| `/admin/groups/<id>/edit` | GET, POST | Admin global ou `group_admin` du groupe |
 
-`inject_user_context()` est un context processor Flask injectant `current_user` et `user_permissions` dans les templates.
+`inject_user_context()` est un context processor Flask injectant `current_user`, `user_permissions` et `can_manage_groups` dans les templates.
+
+**Gestion des mots de passe :** les utilisateurs authentifiés changent leur mot de passe via `/account/password`, avec vérification du mot de passe actuel, confirmation et minimum de 8 caractères. En cas d'oubli, le chemin prévu est le reset par un admin global dans `/admin/users/<id>/edit`; il n'y a pas de reset email tant qu'aucune configuration SMTP/tokens n'est définie.
+Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte admin initial est créé avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide.
+
+**Règle de visibilité jobs par groupe :** un job reste propriété d'un utilisateur (`jobs.owner_id`). Les membres d'un même groupe voient les jobs des autres membres via `JobStore.list_for_user()` et `_can_access_job()`. Il n'y a pas encore de partage job par job ni de notion de groupe propriétaire.
 
 ---
 
@@ -298,7 +323,7 @@ security:
 |---|---|
 | `JobStore.create_job(owner_id, title)` | Création traitement |
 | `JobStore.get_by_id(job_id)` | Recherche |
-| `JobStore.list_for_user(user, include_all)` | ADMIN voit tout, MANAGER/OPERATOR/VIEWER voient leurs propres jobs sauf `include_all=True` |
+| `JobStore.list_for_user(user, include_all)` | ADMIN voit tout ; les autres voient leurs propres jobs et les jobs des membres des groupes partagés, sauf `include_all=True` |
 | `JobStore.update_state(job_id, state, error)` | Transition d'état |
 | `JobStore.update(job_id, **kw)` | Mise à jour partielle |
 | `JobStore.delete_job(job_id)` | Suppression |
@@ -880,6 +905,7 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 
 Le backend d'arbitrage fourni dans ce repo est **llama.cpp** (`llama-server`) via `scripts/launch_arbitrage.sh`.
 Le modèle actuellement utilisé sur cette machine est configurable : chemin modèle et paramètres du script, `workflow.*.model_id`, provider opencode et `services.arbitrage_api_model_id`.
+Les références Qwen dans cette section décrivent le modèle d'exemple historique ; elles ne doivent pas être interprétées comme une dépendance applicative.
 
 Observation machine (17 mai 2026) avec la LLM d'arbitrage active :
 - `launch_arbitrage.sh` utilise `--tensor-split 1,1,1` (répartition sur 3 GPUs sur cette machine).
@@ -934,6 +960,8 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 
 ## 9. Base de données
 
+TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par défaut. Au démarrage, `db.create_all()` crée les tables absentes. Cela suffit pour ajouter de nouvelles tables comme `groups`, mais ne migre pas les colonnes existantes. Toute évolution destructive ou ajout de colonne sur table existante doit passer par Flask-Migrate ou une migration manuelle documentée et testée.
+
 ### 9.1 Tables
 
 **users**
@@ -981,7 +1009,7 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 
 ## 11. Tests
 
-**426 tests collectés** couvrant tous les modules. Lancer avec :
+**445 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```

@@ -16,6 +16,14 @@ class WorkflowRunner:
         self.config = config or {}
         self.vram = VRAMManager(config=self.config)
 
+    @staticmethod
+    def _cuda_available() -> bool:
+        try:
+            import torch
+            return bool(torch.cuda.is_available())
+        except Exception:
+            return False
+
     def run_analyze(self, job: Job, audio_path: str) -> dict:
         from pathlib import Path
         from transcria.audio.analyzer import AudioAnalyzer
@@ -544,13 +552,18 @@ class WorkflowRunner:
         try:
             from transcria.stt.speaker_detection import SpeakerDetector
 
-            with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
-                device = f"cuda:{gpu.gpu_index}"
-                logger.info(
-                    "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
-                    device, self.vram.pyannote_vram_mb,
-                )
-                detector = SpeakerDetector(config)
+            detector = SpeakerDetector(config)
+            if self._cuda_available():
+                with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                    device = f"cuda:{gpu.gpu_index}"
+                    logger.info(
+                        "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
+                        device, self.vram.pyannote_vram_mb,
+                    )
+                    result = detector.detect(job, Path(audio_path), device=device)
+            else:
+                logger.info("[speaker_detection] CUDA indisponible — pyannote sur CPU")
+                device = "cpu"
                 result = detector.detect(job, Path(audio_path), device=device)
             self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
             return result
@@ -593,13 +606,19 @@ class WorkflowRunner:
         try:
             from transcria.stt.diarization import DiarizerService
 
-            with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
-                device = f"cuda:{gpu.gpu_index}"
-                logger.info(
-                    "[diarization] GPU sélectionné: %s (%d Mo réservés)",
-                    device, self.vram.pyannote_vram_mb,
-                )
-                diarizer = DiarizerService(config, device=device)
+            if self._cuda_available():
+                with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                    device = f"cuda:{gpu.gpu_index}"
+                    logger.info(
+                        "[diarization] GPU sélectionné: %s (%d Mo réservés)",
+                        device, self.vram.pyannote_vram_mb,
+                    )
+                    diarizer = DiarizerService(config, device=device)
+                    result = diarizer.diarize(job, Path(audio_path))
+                    diarizer.offload()
+            else:
+                logger.info("[diarization] CUDA indisponible — pyannote sur CPU")
+                diarizer = DiarizerService(config, device="cpu")
                 result = diarizer.diarize(job, Path(audio_path))
                 diarizer.offload()
             return result

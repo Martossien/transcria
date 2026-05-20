@@ -46,12 +46,16 @@
         {% if Permission.MANAGE_USERS in user_permissions %}
         <a href="/admin/users" class="btn btn-sm btn-outline-secondary">Utilisateurs</a>
         {% endif %}
+        {% if can_manage_groups %}
+        <a href="/admin/groups" class="btn btn-sm btn-outline-secondary">Groupes</a>
+        {% endif %}
         {% if Permission.MANAGE_CONFIG in user_permissions %}
         <a href="/admin/config" class="btn btn-sm btn-outline-secondary">Configuration</a>
         {% endif %}
         {% if Permission.ACCESS_SYSTEM in user_permissions %}
         <a href="/system" class="btn btn-sm btn-outline-secondary">Système</a>
         {% endif %}
+        <a href="/account/password" class="btn btn-sm btn-outline-secondary">Mot de passe</a>
         <a href="/logout" class="btn btn-sm btn-outline-danger">Déconnexion</a>
       </div>
     </div>
