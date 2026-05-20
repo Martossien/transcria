@@ -24,6 +24,9 @@ class TestConfigLoading:
         cfg = load_config()
         assert cfg["server"]["port"] == 7870
         assert cfg["models"]["default_stt_model"] == "cohere-transcribe-03-2026"
+        assert cfg["whisper"]["model_size"] == "large-v3"
+        assert cfg["whisper"]["condition_on_previous_text"] is False
+        assert cfg["whisper"]["forced_alignment"]["backend"] == "torchaudio_ctc"
         assert cfg["auth"]["enabled"] is True
         assert ".mp3" in cfg["security"]["allowed_upload_extensions"]
 

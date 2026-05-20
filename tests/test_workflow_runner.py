@@ -208,6 +208,82 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
 
 
 class TestPipelineServiceStateRecovery:
+    def test_quality_mode_forces_configured_whisper_backend(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "cohere", "cohere_model_path": "/tmp/fake_model"},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {"enabled": False},
+                    "quality_transcription": {
+                        "force_stt_backend": "whisper",
+                        "enabled_for_modes": ["quality"],
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Quality Whisper")
+            service = PipelineService(cfg)
+            captured = {}
+
+            def fake_transcription(job_obj, audio_path, config):
+                captured["backend"] = config["models"]["stt_backend"]
+                return {"segments": []}
+
+            monkeypatch.setattr(service.runner, "run_transcription", fake_transcription)
+            monkeypatch.setattr(service.runner, "run_diarization", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "run_correction", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "run_quality_checks", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "build_export", lambda *args, **kwargs: {})
+
+            service.run_process(job, "/tmp/fake.wav", "quality")
+
+            assert captured["backend"] == "whisper"
+
+    def test_degraded_summary_forces_configured_whisper_backend(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "cohere", "cohere_model_path": "/tmp/fake_model"},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {"enabled": False},
+                    "quality_transcription": {
+                        "force_stt_backend": "whisper",
+                        "enabled_for_modes": ["quality"],
+                        "force_on_degraded_summary": True,
+                        "degraded_summary_levels": ["degrade"],
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Degraded Whisper")
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json("summary/summary.json", {"diagnostics": {"level": "degrade"}})
+
+            service = PipelineService(cfg)
+            captured = {}
+
+            def fake_transcription(job_obj, audio_path, config):
+                captured["backend"] = config["models"]["stt_backend"]
+                return {"segments": []}
+
+            monkeypatch.setattr(service.runner, "run_transcription", fake_transcription)
+            monkeypatch.setattr(service.runner, "run_correction", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "run_quality_checks", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "build_export", lambda *args, **kwargs: {})
+
+            service.run_process(job, "/tmp/fake.wav", "fast")
+
+            assert captured["backend"] == "whisper"
+
     def test_pipeline_marks_job_failed_when_step_returns_error(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
@@ -773,3 +849,83 @@ class TestWorkflowStateEdgeCasesExtended:
             next_s = WorkflowState.get_next_step(statuses)
             assert next_s is not None, f"No next step for state {state_val}"
             assert next_s["id"] == expected_step, f"Expected {expected_step} for {state_val}, got {next_s['id']}"
+
+
+# ---------------------------------------------------------------------------
+# Section genre dans diarization_context.md
+# ---------------------------------------------------------------------------
+
+
+class TestDiarizationContextGenderSection:
+    """_build_gender_section et son intégration dans _write_diarization_context."""
+
+    def _scene(self, dominant="male", male_ratio=0.70, female_ratio=0.30):
+        return {
+            "has_music": False,
+            "speech_ratio": 0.85,
+            "gender": {
+                "has_gender_data": True,
+                "dominant": dominant,
+                "male_ratio": male_ratio,
+                "female_ratio": female_ratio,
+            },
+            "stats": {
+                "labels": {
+                    "male": {"duration_s": 42.0, "ratio": male_ratio},
+                    "female": {"duration_s": 18.0, "ratio": female_ratio},
+                },
+                "total_duration_s": 60.0,
+            },
+        }
+
+    def _minimal_speakers_result(self):
+        return {
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "speaking_time_seconds": 60, "turn_count": 5}
+            ],
+            "turns": [],
+        }
+
+    # --- _build_gender_section : fonction pure ---
+
+    def test_build_gender_section_empty_scene_returns_empty_list(self):
+        assert WorkflowRunner._build_gender_section({}) == []
+
+    def test_build_gender_section_no_gender_data_returns_empty_list(self):
+        scene = {"gender": {"has_gender_data": False}}
+        assert WorkflowRunner._build_gender_section(scene) == []
+
+    def test_build_gender_section_includes_masculine_dominant(self):
+        lines = WorkflowRunner._build_gender_section(self._scene("male"))
+        combined = "\n".join(lines)
+        assert "Masculin" in combined
+
+    def test_build_gender_section_includes_feminine_dominant(self):
+        lines = WorkflowRunner._build_gender_section(
+            self._scene("female", male_ratio=0.25, female_ratio=0.75)
+        )
+        combined = "\n".join(lines)
+        assert "Féminin" in combined
+
+    def test_build_gender_section_includes_durations_from_stats(self):
+        lines = WorkflowRunner._build_gender_section(self._scene())
+        combined = "\n".join(lines)
+        assert "42.0" in combined
+        assert "18.0" in combined
+
+    # --- _write_diarization_context avec / sans audio_scene ---
+
+    def test_write_without_scene_has_no_gender_section(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "test-gender-job")
+        content = WorkflowRunner._write_diarization_context(fs, self._minimal_speakers_result())
+        assert content is not None
+        assert "Genre vocal estimé" not in content
+
+    def test_write_with_scene_includes_gender_section(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "test-gender-job")
+        content = WorkflowRunner._write_diarization_context(
+            fs, self._minimal_speakers_result(), audio_scene=self._scene()
+        )
+        assert content is not None
+        assert "Genre vocal estimé" in content
+        assert "Masculin" in content

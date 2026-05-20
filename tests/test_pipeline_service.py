@@ -1,0 +1,202 @@
+"""Tests PipelineService : intégration AudioSceneAnalyzer + SourceSeparationService."""
+import pytest
+from unittest.mock import MagicMock
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_svc(config=None):
+    """Instancie PipelineService sans déclencher __init__ (pas de WorkflowRunner)."""
+    from transcria.services.pipeline_service import PipelineService
+    svc = PipelineService.__new__(PipelineService)
+    svc.config = config or {}
+    svc.runner = MagicMock()
+    return svc
+
+
+def _job(job_id="test-job-001"):
+    j = MagicMock()
+    j.id = job_id
+    return j
+
+
+# ---------------------------------------------------------------------------
+# _run_audio_scene_analysis
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineAudioSceneAnalysis:
+    """Analyse de scène pré-transcription : désactivée / indisponible / exception / succès."""
+
+    def _cfg_disabled(self, tmp_path):
+        return {
+            "workflow": {"audio_scene": {"enabled": False}},
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+
+    def _cfg_enabled(self, tmp_path):
+        return {
+            "workflow": {"audio_scene": {"enabled": True, "timeout_s": 30}},
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+
+    def test_disabled_returns_empty_dict(self, tmp_path):
+        svc = _make_svc(self._cfg_disabled(tmp_path))
+        result = svc._run_audio_scene_analysis(_job(), str(tmp_path / "audio.wav"), MagicMock())
+        assert result == {}
+
+    def test_unavailable_returns_empty_dict(self, tmp_path, monkeypatch):
+        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+        monkeypatch.setattr(AudioSceneAnalyzer, "available", property(lambda self: False))
+
+        svc = _make_svc(self._cfg_enabled(tmp_path))
+        result = svc._run_audio_scene_analysis(_job(), str(tmp_path / "audio.wav"), MagicMock())
+        assert result == {}
+
+    def test_analyze_exception_returns_empty_dict(self, tmp_path, monkeypatch):
+        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+        monkeypatch.setattr(AudioSceneAnalyzer, "available", property(lambda self: True))
+        monkeypatch.setattr(
+            AudioSceneAnalyzer, "analyze",
+            lambda self, p: (_ for _ in ()).throw(RuntimeError("crash worker")),
+        )
+        svc = _make_svc(self._cfg_enabled(tmp_path))
+        result = svc._run_audio_scene_analysis(_job(), str(tmp_path / "audio.wav"), MagicMock())
+        assert result == {}
+
+    def test_success_returns_scene_and_saves_json(self, tmp_path, monkeypatch):
+        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+        from transcria.jobs.filesystem import JobFilesystem
+
+        scene = {"has_music": False, "has_noise": True, "speech_ratio": 0.87}
+        monkeypatch.setattr(AudioSceneAnalyzer, "available", property(lambda self: True))
+        monkeypatch.setattr(AudioSceneAnalyzer, "analyze", lambda self, p: scene)
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem, "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc(self._cfg_enabled(tmp_path))
+        result = svc._run_audio_scene_analysis(_job(), str(tmp_path / "audio.wav"), MagicMock())
+
+        assert result == scene
+        assert saved.get("path") == "metadata/audio_scene.json"
+        assert saved.get("data") == scene
+
+
+# ---------------------------------------------------------------------------
+# _run_source_separation
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineSourceSeparation:
+    """Décision + séparation : refus / succès / dégradation gracieuse."""
+
+    def _cfg(self, tmp_path):
+        return {
+            "workflow": {
+                "source_separation": {
+                    "enabled": True,
+                    "decision": {"min_score": 2, "min_duration_s": 60},
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+
+    def test_decider_says_no_returns_original_path(self, tmp_path, monkeypatch):
+        from transcria.audio.source_separation import SourceSeparationDecider
+        from transcria.jobs.filesystem import JobFilesystem
+
+        monkeypatch.setattr(JobFilesystem, "load_json", lambda self, p: None)
+        monkeypatch.setattr(
+            SourceSeparationDecider, "should_separate",
+            lambda self, *a, **kw: (False, ["score_insuffisant"]),
+        )
+        svc = _make_svc(self._cfg(tmp_path))
+        audio = str(tmp_path / "audio.wav")
+        result = svc._run_source_separation(_job(), audio, {}, MagicMock())
+        assert result == audio
+
+    def test_decider_says_yes_service_succeeds_returns_vocals(self, tmp_path, monkeypatch):
+        from transcria.audio.source_separation import SourceSeparationDecider, SourceSeparationService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.touch()
+        vocals = tmp_path / "vocals.wav"
+        vocals.touch()
+
+        monkeypatch.setattr(JobFilesystem, "load_json", lambda self, p: None)
+        monkeypatch.setattr(
+            SourceSeparationDecider, "should_separate",
+            lambda self, *a, **kw: (True, ["music_detected"]),
+        )
+        monkeypatch.setattr(SourceSeparationService, "separate", lambda self, src, dst: vocals)
+
+        svc = _make_svc(self._cfg(tmp_path))
+        result = svc._run_source_separation(_job(), str(audio), {"has_music": True}, MagicMock())
+        assert result == str(vocals)
+
+    def test_decider_says_yes_service_fails_returns_original(self, tmp_path, monkeypatch):
+        from transcria.audio.source_separation import SourceSeparationDecider, SourceSeparationService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.touch()
+
+        monkeypatch.setattr(JobFilesystem, "load_json", lambda self, p: None)
+        monkeypatch.setattr(
+            SourceSeparationDecider, "should_separate",
+            lambda self, *a, **kw: (True, ["music_detected"]),
+        )
+        # Dégradation gracieuse : service retourne le chemin source
+        monkeypatch.setattr(SourceSeparationService, "separate", lambda self, src, dst: src)
+
+        svc = _make_svc(self._cfg(tmp_path))
+        result = svc._run_source_separation(_job(), str(audio), {"has_music": True}, MagicMock())
+        assert result == str(audio)
+
+
+# ---------------------------------------------------------------------------
+# Ordre d'exécution dans _run_pipeline_steps
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineStepsOrder:
+    """scene_analysis et source_sep doivent être appelés AVANT la transcription."""
+
+    def test_pre_transcription_steps_run_before_transcription(self, monkeypatch):
+        import transcria.services.pipeline_service as ps_mod
+
+        monkeypatch.setattr(ps_mod, "JobStore", MagicMock())
+
+        svc = _make_svc({})
+        call_order: list = []
+
+        monkeypatch.setattr(svc, "_is_cancel_requested", lambda *a: False)
+        monkeypatch.setattr(svc, "_config_for_mode", lambda *a: {})
+        monkeypatch.setattr(
+            svc, "_run_audio_scene_analysis",
+            lambda *a: call_order.append("scene") or {},
+        )
+        monkeypatch.setattr(
+            svc, "_run_source_separation",
+            lambda *a: call_order.append("sep") or str(a[1]),
+        )
+
+        def fake_transcribe(*a):
+            call_order.append("transcription")
+            return {"segments": []}
+
+        svc.runner.run_transcription.side_effect = fake_transcribe
+        monkeypatch.setattr(svc, "_define_pipeline_steps", lambda *a: [])
+
+        svc._run_pipeline_steps(_job(), "/fake/audio.wav", "fast", MagicMock())
+
+        assert call_order.index("scene") < call_order.index("transcription")
+        assert call_order.index("sep") < call_order.index("transcription")

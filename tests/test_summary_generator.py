@@ -1,4 +1,7 @@
 """Tests for SummaryGenerator — generate_quick_summary."""
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -24,6 +27,11 @@ class TestSummaryGeneratorGenerateQuickSummary:
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.stt.cohere_transcriber import CohereTranscriber
             from transcria.audio.vad import SileroVAD
+            monkeypatch.setitem(
+                sys.modules,
+                "librosa",
+                SimpleNamespace(load=lambda *a, **kw: (_FAKE_AUDIO, 16000)),
+            )
             import librosa
 
             job = JobStore.create_job(owner_id, "Quick Summary")
@@ -35,7 +43,7 @@ class TestSummaryGeneratorGenerateQuickSummary:
             ]
 
             # Mock audio I/O et pipeline IA — pas de vrai fichier WAV requis
-            monkeypatch.setattr(librosa, "load", lambda *a, **kw: (_FAKE_AUDIO, 16000))
+            assert librosa.load("unused")[1] == 16000
             monkeypatch.setattr(SileroVAD, "build_speech_chunks",
                                 lambda self, audio, **kw: [{"start": 0.0, "end": 1.0, "audio": audio}])
             monkeypatch.setattr(CohereTranscriber, "load", lambda self: True)

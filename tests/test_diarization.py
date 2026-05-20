@@ -1,6 +1,7 @@
 """Tests for DiarizerService — config, fallback, and _extract_clips with mocked dependencies."""
 import json
 import pytest
+import numpy as np
 
 from transcria.stt.diarization import DiarizerService
 from transcria.jobs.filesystem import JobFilesystem
@@ -112,6 +113,32 @@ class TestDiarizerServiceExtractClips:
 
         assert hasattr(ds, "_extract_clips")
         assert callable(ds._extract_clips)
+
+    def test_load_cached_result_returns_valid_checkpoint(self, tmp_path):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"cache_enabled": True, "cache_audio_fingerprint": True}
+        job = Job(id="dia-cache-1", owner_id="u1", title="Cache", state=JobState.ANALYZED.value)
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_text("fake audio")
+        ds = DiarizerService(cfg, device="cpu")
+        result = {"available": True, "turns": [], "exclusive_turns": [], "speakers": ["SPEAKER_00"]}
+        fs.save_json("speakers/speaker_turns.json", result)
+        ds._save_cache_metadata(fs, audio_path, result)
+
+        cached = ds._load_cached_result(fs, audio_path)
+
+        assert cached == result
+
+    def test_acoustic_embedding_is_deterministic(self, tmp_path):
+        cfg = _default_cfg(tmp_path)
+        ds = DiarizerService(cfg, device="cpu")
+        audio = np.ones(1600, dtype=np.float32) * 0.5
+
+        embedding = ds._acoustic_embedding(audio, 16000)
+
+        assert embedding["duration_seconds"] == 0.1
+        assert embedding["rms"] == 0.5
 
 
 class TestDiarizerServiceConfigInit:
