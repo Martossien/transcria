@@ -79,7 +79,7 @@ class TestOpenCodeRunner:
 
         monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
 
-        parsed = OpenCodeRunner(str(tmp_path)).run_summary(
+        parsed = OpenCodeRunner(str(tmp_path), model="local/test-llm-arbitrage").run_summary(
             str(transcript),
             str(context),
             str(diarization),

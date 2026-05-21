@@ -172,7 +172,7 @@ class TestWorkflowRunner:
 
             monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
             monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             def raise_summary(*args, **kwargs):
                 raise RuntimeError("boom")

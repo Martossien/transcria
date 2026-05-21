@@ -10,6 +10,7 @@ from transcria.gpu.opencode_runner import OpenCodeRunner, _get_prompts_dir
 
 
 def _make_runner(tmp_path, **kwargs):
+    kwargs.setdefault("model", "local/test-llm-arbitrage")
     return OpenCodeRunner(str(tmp_path), **kwargs)
 
 
@@ -44,11 +45,28 @@ def _fake_popen(stdout="", stderr="", returncode=0, communicate_exc=None, popen_
 
 
 class TestOpenCodeRunnerInit:
-    def test_default_model_and_provider(self, tmp_path):
-        runner = _make_runner(tmp_path)
-        assert runner.model == "qwen3-35b-arbitrage"
+    def test_explicit_model_ref_format(self, tmp_path):
+        runner = _make_runner(tmp_path, model="local/test-llm-arbitrage")
+        assert runner.model == "test-llm-arbitrage"
         assert runner.provider == "local"
-        assert runner.model_ref == "local/qwen3-35b-arbitrage"
+        assert runner.model_ref == "local/test-llm-arbitrage"
+
+    def test_model_id_from_config(self, tmp_path):
+        runner = OpenCodeRunner(
+            str(tmp_path),
+            config={"workflow": {"arbitration_llm": {"model_id": "remote/test-llm"}}},
+        )
+        assert runner.model == "test-llm"
+        assert runner.provider == "remote"
+        assert runner.model_ref == "remote/test-llm"
+
+    def test_no_model_raises_value_error(self, tmp_path):
+        with pytest.raises(ValueError, match="model_id"):
+            OpenCodeRunner(str(tmp_path))
+
+    def test_no_model_in_config_raises_value_error(self, tmp_path):
+        with pytest.raises(ValueError, match="model_id"):
+            OpenCodeRunner(str(tmp_path), config={"workflow": {"arbitration_llm": {"model_id": ""}}})
 
     def test_custom_model_and_provider(self, tmp_path):
         runner = _make_runner(tmp_path, model="custom-model", provider="remote")
@@ -225,7 +243,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(time, "time", lambda: 1000000)
         monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout="{}", returncode=0))
 
-        runner = OpenCodeRunner(str(work_dir))
+        runner = OpenCodeRunner(str(work_dir), model="local/test-llm-arbitrage")
         result = runner.run("Test", "/tmp/prompt.txt")
         assert work_dir.is_dir()
 

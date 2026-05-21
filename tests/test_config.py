@@ -123,12 +123,12 @@ auth:
         content = """workflow:
   summary_llm:
     enabled: true
-    model_id: "local/qwen3-35b"
+    model_id: "local/test-llm"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
   arbitration_llm:
     enabled: true
-    model_id: "local/qwen3-35b-arbitrage"
+    model_id: "local/test-llm-arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"

@@ -43,9 +43,9 @@ class TestVRAMManagerInstantiation:
         assert mgr.dashboard_url == "http://10.0.0.1:9999"
 
     def test_config_overrides(self):
-        cfg = _default_config(qwen_port=9999, llm_cleanup_ports=[8888])
+        cfg = _default_config(arbitrage_llm_port=9999, llm_cleanup_ports=[8888])
         mgr = VRAMManager(config=cfg)
-        assert mgr.qwen_port == 9999
+        assert mgr.arbitrage_llm_port == 9999
         assert mgr.llm_cleanup_ports == [8888]
         assert mgr.vllm_port == 8888
 
@@ -479,7 +479,7 @@ class TestVRAMManagerIsPortOpen:
         import requests
 
         def fake_get(url, **kw):
-            r = type("R", (), {"status_code": 200, "json": lambda self: {"data": [{"id": "qwen3-35b"}]}})()
+            r = type("R", (), {"status_code": 200, "json": lambda self: {"data": [{"id": "test-llm"}]}})()
             r.raise_for_status = lambda: None
             return r
 
@@ -571,14 +571,14 @@ class TestVRAMManagerWaitForPort:
         assert result is False
 
 
-class TestVRAMManagerLaunchQwen:
-    def test_launch_qwen_script_not_found(self, monkeypatch):
+class TestVRAMManagerLaunchArbitrageLLM:
+    def test_launch_arbitrage_script_not_found(self, monkeypatch):
         mgr = VRAMManager(config=_default_config(arbitrage_script="/nonexistent/script.sh"))
         monkeypatch.setattr(os.path, "isfile", lambda p: False)
-        result = mgr.launch_qwen_35b()
+        result = mgr.launch_arbitrage_llm()
         assert result is False
 
-    def test_launch_qwen_script_exists_and_launches(self, monkeypatch):
+    def test_launch_arbitrage_script_exists_and_launches(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
@@ -594,11 +594,11 @@ class TestVRAMManagerLaunchQwen:
                 launched["done"] = True
 
         monkeypatch.setattr(subprocess, "Popen", FakePopen)
-        result = mgr.launch_qwen_35b()
+        result = mgr.launch_arbitrage_llm()
         assert result is True
         assert launched["done"]
 
-    def test_launch_qwen_kills_existing_port_then_launches(self, monkeypatch):
+    def test_launch_arbitrage_kills_existing_port_then_launches(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         check_n = {"n": 0}
 
@@ -618,10 +618,10 @@ class TestVRAMManagerLaunchQwen:
                 pass
 
         monkeypatch.setattr(subprocess, "Popen", FakePopen)
-        result = mgr.launch_qwen_35b()
+        result = mgr.launch_arbitrage_llm()
         assert result is True
 
-    def test_launch_qwen_popen_exception(self, monkeypatch):
+    def test_launch_arbitrage_popen_exception(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
@@ -631,10 +631,10 @@ class TestVRAMManagerLaunchQwen:
             raise OSError("Cannot fork")
 
         monkeypatch.setattr(subprocess, "Popen", fail_popen)
-        result = mgr.launch_qwen_35b()
+        result = mgr.launch_arbitrage_llm()
         assert result is False
 
-    def test_launch_qwen_wait_timeout(self, monkeypatch):
+    def test_launch_arbitrage_wait_timeout(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
@@ -645,12 +645,12 @@ class TestVRAMManagerLaunchQwen:
             pid = 99999
 
         monkeypatch.setattr(subprocess, "Popen", FakePopen)
-        result = mgr.launch_qwen_35b()
+        result = mgr.launch_arbitrage_llm()
         assert result is False
 
 
-class TestVRAMManagerStopQwen:
-    def test_stop_qwen_runs_script_and_kills_port(self, monkeypatch):
+class TestVRAMManagerStopArbitrageLLM:
+    def test_stop_arbitrage_runs_script_and_kills_port(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
 
@@ -664,39 +664,39 @@ class TestVRAMManagerStopQwen:
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
-        result = mgr.stop_qwen_35b()
+        result = mgr.stop_arbitrage_llm()
         assert result is True
         assert script_called["done"]
 
-    def test_stop_qwen_script_not_found_falls_back_to_kill_port(self, monkeypatch):
+    def test_stop_arbitrage_script_not_found_falls_back_to_kill_port(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: False)
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
-        result = mgr.stop_qwen_35b()
+        result = mgr.stop_arbitrage_llm()
         assert result is True
 
-    def test_stop_qwen_script_exception_falls_back(self, monkeypatch):
+    def test_stop_arbitrage_script_exception_falls_back(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: (_ for _ in ()).throw(OSError("fail")))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
-        result = mgr.stop_qwen_35b()
+        result = mgr.stop_arbitrage_llm()
         assert result is True
 
-    def test_stop_qwen_resets_pid(self, monkeypatch):
+    def test_stop_arbitrage_resets_pid(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        mgr._qwen_pid = 12345
+        mgr._arbitrage_llm_pid = 12345
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess([], 0, stdout="", stderr=""))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
-        mgr.stop_qwen_35b()
-        assert mgr._qwen_pid is None
+        mgr.stop_arbitrage_llm()
+        assert mgr._arbitrage_llm_pid is None
 
 
 class TestVRAMManagerStopCleanupLlmPorts:
@@ -714,24 +714,24 @@ class TestVRAMManagerStopCleanupLlmPorts:
 
 
 class TestVRAMManagerFreeAllGpus:
-    def test_free_all_gpus_calls_cleanup_ports_and_qwen(self, monkeypatch):
+    def test_free_all_gpus_calls_cleanup_ports_and_arbitrage(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        calls = {"cleanup": False, "qwen": False}
+        calls = {"cleanup": False, "arbitrage": False}
 
         monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: calls.__setitem__("cleanup", True) or True)
-        monkeypatch.setattr(mgr, "stop_qwen_35b", lambda: calls.__setitem__("qwen", True) or True)
+        monkeypatch.setattr(mgr, "stop_arbitrage_llm", lambda: calls.__setitem__("arbitrage", True) or True)
         monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
         result = mgr.free_all_gpus()
         assert calls["cleanup"] is True
-        assert calls["qwen"] is True
+        assert calls["arbitrage"] is True
         assert result is True
 
     def test_free_all_gpus_returns_false_if_stop_fails(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(mgr, "stop_cleanup_llm_ports", lambda: False)
-        monkeypatch.setattr(mgr, "stop_qwen_35b", lambda: False)
+        monkeypatch.setattr(mgr, "stop_arbitrage_llm", lambda: False)
         monkeypatch.setattr(mgr, "get_gpu_info", lambda: [])
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
