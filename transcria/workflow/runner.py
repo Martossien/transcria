@@ -120,7 +120,10 @@ class WorkflowRunner:
             meeting_ctx["speaker_count_pyannote"] = len(speakers_result["speakers"])
             fs.save_json("context/meeting_context.json", meeting_ctx)
             audio_scene = fs.load_json("metadata/audio_scene.json") or {}
-            self._write_diarization_context(fs, speakers_result, audio_scene)
+            speaker_genders = self._inject_speaker_genders(fs, audio_scene)
+            self._write_diarization_context(
+                fs, speakers_result, audio_scene, speaker_genders
+            )
 
             logger.info("pyannote: %d locuteurs détectés",
                         len(speakers_result["speakers"]))
@@ -146,10 +149,7 @@ class WorkflowRunner:
         diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        arbitrage_port = config.get("services", {}).get(
-            "arbitrage_llm_port",
-            config.get("services", {}).get("qwen_port", 8080),
-        )
+        arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
         sl.info(
             "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",
@@ -316,6 +316,37 @@ class WorkflowRunner:
             fs.save_json("context/participants.json", participants)
             sl.info("Rôles LLM → participants.json : %d mis à jour, %d créés", updated, created)
 
+        # Propager les noms LLM dans speaker_stats.json et speaker_mapping.json
+        # même si participants.json était déjà à jour (appel idempotent).
+        speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
+        spk_stats = speakers_data.get("speakers", [])
+        mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
+        spk_map = mapping_data.get("mapping", {})
+        spk_map_speakers = mapping_data.get("speakers", [])
+        propagated = 0
+        for speaker_id, info in speaker_roles.items():
+            norm = WorkflowRunner._normalize_speaker_role_info(info)
+            label = norm["label"]
+            if not label:
+                continue
+            for spk in spk_stats:
+                if spk.get("speaker_id") == speaker_id:
+                    spk["mapped_name"] = label
+                    propagated += 1
+            if speaker_id in spk_map:
+                spk_map[speaker_id]["name"] = label
+            for ms in spk_map_speakers:
+                if ms.get("speaker_id") == speaker_id:
+                    ms["mapped_name"] = label
+        if propagated:
+            fs.save_json("speakers/speaker_stats.json", {"speakers": spk_stats})
+            if spk_map or spk_map_speakers:
+                fs.save_json(
+                    "speakers/speaker_mapping.json",
+                    {"mapping": spk_map, "speakers": spk_map_speakers},
+                )
+            sl.info("Rôles LLM → speaker_stats.json propagés : %d locuteur(s)", propagated)
+
     @staticmethod
     def _truncate_at_word(text: str, max_chars: int = 120) -> str:
         """Coupe à max_chars caractères en respectant la frontière de mot la plus proche."""
@@ -434,6 +465,114 @@ class WorkflowRunner:
         return spk_tops, address_hints
 
     @staticmethod
+    def _assign_speaker_genders(
+        gender_segments: list,
+        turns: list,
+        min_overlap_s: float = 1.0,
+    ) -> dict:
+        """Croise les segments genre horodatés avec les tours pyannote.
+
+        Retourne {speaker_id: {"gender": "male"|"female"|"", "male_s": float, "female_s": float}}.
+        Le genre n'est attribué que si le total de chevauchement >= min_overlap_s
+        et que l'un des deux sexes domine l'autre.
+        """
+        if not gender_segments or not turns:
+            return {}
+
+        accum: dict = {}
+        for turn in turns:
+            spk = turn.get("speaker") or turn.get("speaker_id", "")
+            t_start = float(turn.get("start", 0.0))
+            t_end = float(turn.get("end", 0.0))
+            if not spk or t_end <= t_start:
+                continue
+            if spk not in accum:
+                accum[spk] = {"male_s": 0.0, "female_s": 0.0}
+            for seg in gender_segments:
+                s_start = float(seg.get("start", 0.0))
+                s_end = float(seg.get("end", 0.0))
+                label = seg.get("label", "")
+                overlap = min(t_end, s_end) - max(t_start, s_start)
+                if overlap <= 0 or label not in ("male", "female"):
+                    continue
+                accum[spk][f"{label}_s"] += overlap
+
+        result: dict = {}
+        for spk, counts in accum.items():
+            male_s = counts["male_s"]
+            female_s = counts["female_s"]
+            total = male_s + female_s
+            if total < min_overlap_s:
+                gender = ""
+            elif male_s > female_s:
+                gender = "male"
+            elif female_s > male_s:
+                gender = "female"
+            else:
+                gender = ""
+            result[spk] = {"gender": gender, "male_s": round(male_s, 2), "female_s": round(female_s, 2)}
+        return result
+
+    def _inject_speaker_genders(
+        self, fs, audio_scene: dict
+    ) -> dict:
+        """Attribue acoustiquement le genre à chaque locuteur et met à jour speaker_stats.json.
+
+        Lit les tours depuis speaker_turns.json (format flat, écrit par SpeakerDetector
+        et DiarizerService). Ne remplace jamais un choix utilisateur déjà présent.
+        Retourne le dict {speaker_id: {"gender", "male_s", "female_s"}}.
+        """
+        import time as _time
+        sl = get_structured_logger(__name__)
+
+        gender_segments = (audio_scene or {}).get("gender_segments") or []
+        if not gender_segments:
+            sl.info("[gender] Pas de segments genre horodatés — attribution locuteur ignorée")
+            return {}
+
+        # Charger les tours depuis speaker_turns.json (format plat, écrit par diarizer)
+        turns_data = fs.load_json("speakers/speaker_turns.json") or {}
+        turns = turns_data.get("turns") or []
+
+        if not turns:
+            sl.info("[gender] Aucun tour de parole disponible — attribution locuteur ignorée")
+            return {}
+
+        t0 = _time.monotonic()
+        speaker_genders = self._assign_speaker_genders(gender_segments, turns)
+        elapsed = round(_time.monotonic() - t0, 3)
+
+        # Mettre à jour speaker_stats.json uniquement si le champ gender est vide
+        speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
+        spk_stats = speakers_data.get("speakers") or []
+        updated = 0
+        for spk in spk_stats:
+            spk_id = spk.get("speaker_id", "")
+            if spk_id not in speaker_genders:
+                continue
+            if spk.get("gender"):
+                continue  # ne pas écraser un choix utilisateur
+            gender = speaker_genders[spk_id]["gender"]
+            if gender:
+                spk["gender"] = gender
+                updated += 1
+
+        if updated:
+            fs.save_json("speakers/speaker_stats.json", {"speakers": spk_stats})
+
+        detail = " | ".join(
+            f"{sid}={v['gender'] or '?'} ({v['female_s']:.1f}s♀/{v['male_s']:.1f}s♂)"
+            for sid, v in speaker_genders.items()
+        )
+        sl.info(
+            "[gender] Genre par locuteur estimé",
+            duree=elapsed,
+            detail=detail,
+            mis_a_jour=updated,
+        )
+        return speaker_genders
+
+    @staticmethod
     def _build_gender_section(audio_scene: dict) -> list:
         """Construit la section genre vocal pour le contexte de diarisation.
 
@@ -482,7 +621,8 @@ class WorkflowRunner:
 
     @staticmethod
     def _write_diarization_context(
-        fs, speakers_result: dict, audio_scene: dict | None = None
+        fs, speakers_result: dict, audio_scene: dict | None = None,
+        speaker_genders: dict | None = None,
     ) -> str | None:
         speakers = speakers_result.get("speakers") or []
         if not speakers:
@@ -575,10 +715,34 @@ class WorkflowRunner:
                         if names:
                             lines.append(f"- **{spk_id}** : {', '.join(names)}")
 
-        # Section genre vocal (si analyse de scène disponible)
+        # Section genre vocal global (si analyse de scène disponible)
         gender_lines = WorkflowRunner._build_gender_section(audio_scene or {})
         if gender_lines:
             lines.extend(gender_lines)
+
+        # Section genre par locuteur (si attribution acoustique disponible)
+        if speaker_genders:
+            _GENDER_FR = {"male": "Masculin", "female": "Féminin"}
+            _GENDER_SYM = {"male": "♂", "female": "♀"}
+            per_spk_lines = [
+                "",
+                "## Genre vocal par locuteur (estimation acoustique)",
+                "",
+                "*(Croisement tours pyannote × segments YIN — indicatif)*",
+                "",
+            ]
+            for sid in sorted(speaker_genders.keys()):
+                v = speaker_genders[sid]
+                gender = v.get("gender", "")
+                label = _GENDER_FR.get(gender, "Indéterminé")
+                sym = _GENDER_SYM.get(gender, "?")
+                female_s = v.get("female_s", 0.0)
+                male_s = v.get("male_s", 0.0)
+                per_spk_lines.append(
+                    f"- **{sid}** : {label} {sym}"
+                    f" ({female_s:.1f}s♀ / {male_s:.1f}s♂)"
+                )
+            lines.extend(per_spk_lines)
 
         lines.extend(
             [
@@ -680,6 +844,13 @@ class WorkflowRunner:
                 diarizer = DiarizerService(config, device="cpu")
                 result = diarizer.diarize(job, Path(audio_path))
                 diarizer.offload()
+
+            # Attribution genre par locuteur — audio_scene.json disponible à ce stade
+            # (PipelineService le produit avant d'appeler run_diarization)
+            fs = self._get_fs(config, job.id)
+            audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+            self._inject_speaker_genders(fs, audio_scene)
+
             return result
         except GPUSessionError as exc:
             logger.error("[diarization] VRAM insuffisante: %s", exc)
@@ -717,10 +888,7 @@ class WorkflowRunner:
             return {"success": False, "error": "SRT source introuvable"}
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        arbitrage_port = config.get("services", {}).get(
-            "arbitrage_llm_port",
-            config.get("services", {}).get("qwen_port", 8080),
-        )
+        arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
         logger.info(
             "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",

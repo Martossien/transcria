@@ -419,7 +419,12 @@ def main(argv: list) -> int:
     gender_stats = _compute_gender_stats(segments)
     signals = _compute_signals(stats, gender_stats)
 
-    print(json.dumps({**signals, "stats": stats}))
+    gender_segments = [
+        {"start": round(start, 3), "end": round(stop, 3), "label": label}
+        for label, start, stop in segments
+        if label in ("male", "female")
+    ]
+    print(json.dumps({**signals, "stats": stats, "gender_segments": gender_segments}))
     return 0
 
 
