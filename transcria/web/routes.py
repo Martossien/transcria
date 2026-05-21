@@ -245,11 +245,14 @@ def job_wizard(job_id: str):
                 if ms.get("speaker_id") == s.get("speaker_id"):
                     s["mapped_name"] = ms.get("mapped_name")
                     s["mapped_to"] = ms.get("mapped_to")
-            # Enrichir avec fonction/rôle depuis participants
+            # Enrichir avec nom/fonction/rôle depuis participants
             for p in participants:
                 if p.get("id") == s.get("mapped_to") or p.get("name") == s.get("mapped_name"):
                     s["mapped_func"] = p.get("function", "")
                     s["mapped_role"] = p.get("role", "")
+                    pname = p.get("name", "")
+                    if pname and not pname.upper().startswith("SPEAKER_"):
+                        s["mapped_name"] = pname
     elif speaker_role_hints:
         from transcria.workflow.runner import WorkflowRunner
 
