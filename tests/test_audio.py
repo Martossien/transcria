@@ -18,6 +18,12 @@ class TestSourceSeparationDecider:
                     "decision": {
                         "min_score": min_score,
                         "min_duration_s": min_duration_s,
+                        "scene_music_min_ratio": 0.05,
+                        "scene_music_min_duration_s": 10,
+                        "scene_noise_score_ratio": 0.35,
+                        "scene_noise_score": 1,
+                        "scene_problem_segments_score_threshold": 3,
+                        "scene_problem_segments_score": 1,
                     }
                 }
             }
@@ -91,15 +97,68 @@ class TestSourceSeparationDecider:
     def test_scene_music_detected_overrides_score(self):
         from transcria.audio.source_separation import SourceSeparationDecider
 
-        # Musique détectée → toujours séparer, même si le score seul ne suffit pas
+        # Musique au-dessus du seuil → séparer, même si le score seul ne suffit pas
         decider = SourceSeparationDecider(self._cfg(min_score=2))
         should, reasons = decider.should_separate(
             {"duration_seconds": 300},
             {"level": "ok", "reasons": []},
-            audio_scene={"has_music": True, "speech_ratio": 0.3},
+            audio_scene={"has_music": True, "speech_ratio": 0.3, "music_ratio": 0.08},
         )
         assert should is True
-        assert any("music" in r for r in reasons)
+        assert any("musique" in r for r in reasons)
+
+    def test_scene_music_below_threshold_does_not_override_score(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=2))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 300},
+            {"level": "ok", "reasons": []},
+            audio_scene={"has_music": True, "speech_ratio": 0.9, "music_ratio": 0.01},
+        )
+        assert should is False
+        assert reasons == []
+
+    def test_scene_music_duration_can_override_score(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=3))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 600},
+            {"level": "ok", "reasons": []},
+            audio_scene={
+                "has_music": True,
+                "music_ratio": 0.02,
+                "stats": {"total_duration_s": 600},
+            },
+        )
+        assert should is True
+        assert any("duration_s=12.0" in r for r in reasons)
+
+    def test_scene_noise_contributes_to_score_without_forcing_alone(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=2))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 300},
+            {"level": "ok", "reasons": []},
+            audio_scene={"has_noise": True, "noise_ratio": 0.40},
+        )
+        assert should is False
+        assert any("scene_bruit" in r for r in reasons)
+
+    def test_scene_noise_and_quality_signal_can_reach_score(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=2))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 300},
+            {"level": "suspect", "reasons": ["segments_courts_nombreux"]},
+            audio_scene={"has_noise": True, "noise_ratio": 0.40},
+        )
+        assert should is True
+        assert any("scene_bruit" in r for r in reasons)
+        assert "segments_courts_nombreux" in reasons
 
     def test_scene_no_music_does_not_force_separation(self):
         from transcria.audio.source_separation import SourceSeparationDecider

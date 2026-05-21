@@ -144,6 +144,12 @@ workflow:
     decision:
       min_score: 3            # seuil de score pour activer la séparation
       min_duration_s: 60      # audio < 60s → séparation non déclenchée (surcoût injustifié)
+      scene_music_min_ratio: 0.05       # musique suffisante pour forcer la séparation
+      scene_music_min_duration_s: 10    # ou durée musique minimale en secondes
+      scene_noise_score_ratio: 0.35     # bruit important → ajoute un score, ne force pas seul
+      scene_noise_score: 1
+      scene_problem_segments_score_threshold: 3
+      scene_problem_segments_score: 1
   speaker_realignment:
     enabled: true
     min_word_overlap_s: 0.01

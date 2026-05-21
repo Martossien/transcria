@@ -265,13 +265,13 @@ se termine avant le chargement GPU.
 
 **Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_scene_analysis()`.
 
-**Impact :** quand `enabled=true`, le résultat est sauvegardé dans `metadata/audio_scene.json` et transmis à `SourceSeparationDecider` (signaux de scène prioritaires sur le score si `has_music=True`). La distribution H/F est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+**Impact :** quand `enabled=true`, le résultat est sauvegardé dans `metadata/audio_scene.json` et transmis à `SourceSeparationDecider` avec des seuils explicites de ratio/durée. La distribution H/F est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
 
 #### `workflow.source_separation`
 
 Séparation de sources vocales via Demucs. Ne s'active **jamais automatiquement** :
 c'est `SourceSeparationDecider` qui décide sur la base des signaux de
-`audio_quality_decision.json` et `audio_scene` (musique détectée → séparation forcée).
+`audio_quality_decision.json` et `audio_scene`.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -283,6 +283,12 @@ c'est `SourceSeparationDecider` qui décide sur la base des signaux de
 | `stem` | string | `"vocals"` | Tige extraite (`vocals`, `drums`, `bass`, `other`) |
 | `decision.min_score` | int | `3` | Seuil de score pour activer la séparation |
 | `decision.min_duration_s` | int | `60` | Audio < seuil → séparation non déclenchée (surcoût injustifié) |
+| `decision.scene_music_min_ratio` | number/null | `0.05` | Ratio musique suffisant pour forcer la séparation |
+| `decision.scene_music_min_duration_s` | number/null | `10` | Durée musique suffisante pour forcer la séparation |
+| `decision.scene_noise_score_ratio` | number/null | `0.35` | Ratio bruit à partir duquel un score est ajouté |
+| `decision.scene_noise_score` | int | `1` | Score ajouté si le bruit de scène dépasse le seuil |
+| `decision.scene_problem_segments_score_threshold` | number/null | `3` | Nombre de zones problématiques au-delà duquel un score est ajouté |
+| `decision.scene_problem_segments_score` | int | `1` | Score ajouté si le nombre de zones problématiques dépasse le seuil |
 
 **Redémarrage requis :** non.
 

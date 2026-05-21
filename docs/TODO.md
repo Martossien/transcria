@@ -91,10 +91,11 @@ Ces améliorations doivent rester neutres, auditables et sans référence à des
    - Fait : `PipelineService` réévalue la décision qualité après `audio_scene.json` et avant la séparation de sources.
    - Garde-fou : `workflow.audio_quality.scene_affects_quality_score=false` par défaut, donc pas de forçage backend tant que les seuils ne sont pas validés sur corpus interne anonymisé.
 
-3. **Affiner la décision de séparation de sources**
-   - Remplacer le déclenchement binaire `has_music` seul par des seuils explicites sur les ratios et la durée.
-   - Conserver la séparation désactivée par défaut : elle rallonge fortement le traitement et doit être justifiée.
-   - Journaliser les raisons de décision avec les valeurs numériques utilisées.
+3. **Affiner la décision de séparation de sources** — démarré le 2026-05-21
+   - Fait : le déclenchement `has_music` passe par des seuils explicites de ratio et de durée.
+   - Fait : bruit et zones problématiques peuvent contribuer au score sans forcer seuls la séparation.
+   - Fait : les raisons de décision incluent les valeurs numériques utiles à l'audit.
+   - Garde-fou : la séparation reste désactivée par défaut et conserve `decision.min_score` / `decision.min_duration_s`.
 
 4. **Remonter les zones audio problématiques dans le rapport qualité**
    - Ajouter des points de relecture horodatés quand `problem_segments` contient musique, bruit ou silence long.

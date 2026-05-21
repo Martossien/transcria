@@ -98,15 +98,20 @@ class SourceSeparationDecider:
         if duration > 0 and duration < min_duration:
             return False, ["audio_trop_court"]
 
-        # --- Signaux de scène (priorité absolue sur le score) --------------
+        # --- Signaux de scène (priorité contrôlée par seuils explicites) ---
+        scene_score = 0
+        active_reasons: list[str] = []
         if audio_scene is not None:
-            if audio_scene.get("has_music"):
-                return True, ["music_detected"]
-            # Pas de musique → le score classique prend le relais
+            force_scene, scene_score, scene_reasons = self._score_audio_scene(
+                analysis,
+                audio_scene,
+            )
+            if force_scene:
+                return True, scene_reasons
+            active_reasons.extend(scene_reasons)
 
         # --- Scoring -------------------------------------------------------
-        score = 0
-        active_reasons: list[str] = []
+        score = scene_score
 
         for signal, weight in _SIGNAL_WEIGHTS.items():
             hit = False
@@ -126,6 +131,109 @@ class SourceSeparationDecider:
             return False, active_reasons
 
         return True, active_reasons
+
+    def _score_audio_scene(self, analysis: dict, audio_scene: dict) -> tuple[bool, int, list[str]]:
+        """Évalue les signaux de scène avec des seuils auditables."""
+        reasons: list[str] = []
+        score = 0
+
+        total_duration_s = self._scene_total_duration_s(analysis, audio_scene)
+
+        music_ratio = self._float_or_none(audio_scene.get("music_ratio"))
+        music_duration_s = self._duration_from_ratio(total_duration_s, music_ratio)
+        if audio_scene.get("has_music") and self._meets_ratio_or_duration_threshold(
+            music_ratio,
+            music_duration_s,
+            self.cfg.get("scene_music_min_ratio", 0.05),
+            self.cfg.get("scene_music_min_duration_s", 10),
+        ):
+            reasons.append(self._format_scene_reason(
+                "scene_musique",
+                music_ratio,
+                music_duration_s,
+            ))
+            return True, score, reasons
+
+        noise_ratio = self._float_or_none(audio_scene.get("noise_ratio"))
+        if audio_scene.get("has_noise") and self._above(
+            noise_ratio,
+            self.cfg.get("scene_noise_score_ratio", 0.35),
+        ):
+            score += int(self.cfg.get("scene_noise_score", 1))
+            reasons.append(self._format_scene_reason("scene_bruit", noise_ratio, None))
+
+        problem_count = self._problem_segment_count(audio_scene)
+        if self._above(problem_count, self.cfg.get("scene_problem_segments_score_threshold", 3)):
+            score += int(self.cfg.get("scene_problem_segments_score", 1))
+            reasons.append(f"scene_zones_problematiques:count={problem_count}")
+
+        return False, score, reasons
+
+    @staticmethod
+    def _scene_total_duration_s(analysis: dict, audio_scene: dict) -> float | None:
+        stats = audio_scene.get("stats") or {}
+        total = stats.get("total_duration_s")
+        if total is None:
+            total = analysis.get("duration_seconds")
+        return SourceSeparationDecider._float_or_none(total)
+
+    @staticmethod
+    def _duration_from_ratio(total_duration_s: float | None, ratio: float | None) -> float | None:
+        if total_duration_s is None or ratio is None:
+            return None
+        return total_duration_s * ratio
+
+    @staticmethod
+    def _meets_ratio_or_duration_threshold(
+        ratio: float | None,
+        duration_s: float | None,
+        min_ratio,
+        min_duration_s,
+    ) -> bool:
+        ratio_ok = SourceSeparationDecider._above_or_equal(ratio, min_ratio)
+        duration_ok = SourceSeparationDecider._above_or_equal(duration_s, min_duration_s)
+        return ratio_ok or duration_ok
+
+    @staticmethod
+    def _problem_segment_count(audio_scene: dict) -> int:
+        problem_segments = audio_scene.get("problem_segments") or []
+        return len(problem_segments) if isinstance(problem_segments, list) else 0
+
+    @staticmethod
+    def _format_scene_reason(label: str, ratio: float | None, duration_s: float | None) -> str:
+        parts = [label]
+        if ratio is not None:
+            parts.append(f"ratio={ratio:.3f}")
+        if duration_s is not None:
+            parts.append(f"duration_s={duration_s:.1f}")
+        return ":".join(parts)
+
+    @staticmethod
+    def _float_or_none(value) -> float | None:
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _above(value, threshold) -> bool:
+        if value is None or threshold is None:
+            return False
+        try:
+            return float(value) > float(threshold)
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _above_or_equal(value, threshold) -> bool:
+        if value is None or threshold is None:
+            return False
+        try:
+            return float(value) >= float(threshold)
+        except (TypeError, ValueError):
+            return False
 
 
 class SourceSeparationService:
