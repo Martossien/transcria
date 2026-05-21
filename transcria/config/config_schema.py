@@ -216,6 +216,7 @@ def _check_audio_quality(cfg: dict, r: ValidationResult) -> None:
         r.add_error("workflow.audio_quality: doit être un objet YAML")
         return
     _check_bool(cfg, "force_quality_backend", "workflow.audio_quality.force_quality_backend", r)
+    _check_bool(cfg, "scene_affects_quality_score", "workflow.audio_quality.scene_affects_quality_score", r)
     for key in ("degraded_levels", "suspect_levels"):
         values = cfg.get(key, [])
         if not isinstance(values, list):
@@ -223,6 +224,9 @@ def _check_audio_quality(cfg: dict, r: ValidationResult) -> None:
     for key in (
         "min_bit_rate", "min_sample_rate_hz", "max_non_latin_segments",
         "min_speech_ratio", "max_speech_ratio", "max_short_segment_ratio",
+        "max_scene_music_ratio", "max_scene_noise_ratio",
+        "max_scene_no_energy_ratio", "min_scene_speech_ratio",
+        "max_scene_problem_segments",
     ):
         _check_optional_number(cfg, key, f"workflow.audio_quality.{key}", r)
 

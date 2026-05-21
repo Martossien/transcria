@@ -74,6 +74,12 @@ _DEFAULT_CONFIG = {
             "max_short_segment_ratio": 0.2,
             "min_speech_ratio": 0.35,
             "max_speech_ratio": 0.95,
+            "scene_affects_quality_score": False,
+            "max_scene_music_ratio": 0.15,
+            "max_scene_noise_ratio": 0.20,
+            "max_scene_no_energy_ratio": 0.30,
+            "min_scene_speech_ratio": 0.55,
+            "max_scene_problem_segments": 3,
         },
         "quality_transcription": {
             "force_stt_backend": "whisper",

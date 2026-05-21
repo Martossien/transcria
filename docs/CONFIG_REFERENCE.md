@@ -190,8 +190,10 @@ résumé rapide a diagnostiqué un son dégradé.
 
 #### `workflow.audio_quality`
 
-Agrège les signaux ffprobe et les diagnostics du résumé rapide pour décider si
-le backend qualité doit être forcé, même hors mode qualité.
+Agrège les signaux ffprobe, les diagnostics du résumé rapide et, si disponible,
+l'analyse de scène audio pour décider si le backend qualité doit être forcé,
+même hors mode qualité. Par défaut, les signaux de scène sont enregistrés pour
+audit mais ne modifient pas le score.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -204,6 +206,12 @@ le backend qualité doit être forcé, même hors mode qualité.
 | `max_short_segment_ratio` | number/null | `0.2` | Ratio maximal de segments courts suspects |
 | `min_speech_ratio` | number/null | `0.35` | Ratio VAD minimal avant suspicion de VAD trop agressif |
 | `max_speech_ratio` | number/null | `0.95` | Ratio VAD maximal avant suspicion de VAD peu sélectif |
+| `scene_affects_quality_score` | bool | `false` | Si `true`, les signaux de scène contribuent au score qualité |
+| `max_scene_music_ratio` | number/null | `0.15` | Ratio musique maximal avant signal `scene_musique_importante` |
+| `max_scene_noise_ratio` | number/null | `0.20` | Ratio bruit maximal avant signal `scene_bruit_important` |
+| `max_scene_no_energy_ratio` | number/null | `0.30` | Ratio sans énergie maximal avant signal `scene_inactivite_importante` |
+| `min_scene_speech_ratio` | number/null | `0.55` | Ratio parole minimal avant signal `scene_parole_faible` |
+| `max_scene_problem_segments` | number/null | `3` | Nombre maximal de zones problématiques longues toléré |
 
 **Redémarrage requis :** non — ces booléens sont lus à chaque appel dans `WorkflowRunner` et les templates.
 

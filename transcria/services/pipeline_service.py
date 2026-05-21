@@ -58,6 +58,7 @@ class PipelineService:
 
         # Étapes pré-transcription : analyse de scène puis séparation optionnelle
         audio_scene = self._run_audio_scene_analysis(job, audio_path, sl)
+        self._refresh_audio_quality_with_scene(job, audio_scene, sl)
         audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
 
         sl.info("Transcription en cours", step="transcribe")
@@ -216,6 +217,41 @@ class PipelineService:
                 no_energy_ratio=scene.get("no_energy_ratio"),
                 problem_segments=len(scene.get("problem_segments") or []))
         return scene
+
+    def _refresh_audio_quality_with_scene(self, job: Job, audio_scene: dict, sl) -> None:
+        """Réévalue la décision qualité avec les signaux de scène disponibles."""
+        if not audio_scene:
+            return
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.quality.audio_quality import AudioQualityEvaluator
+
+            fs = JobFilesystem(
+                self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
+            )
+            summary = fs.load_json("summary/summary.json") or {}
+            audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
+            evaluation = AudioQualityEvaluator(self.config).evaluate(
+                audio_analysis,
+                summary,
+                audio_scene=audio_scene,
+            )
+            fs.save_json("metadata/audio_quality_decision.json", evaluation)
+            sl.info(
+                "[pipeline] Décision qualité enrichie par l'analyse de scène",
+                step="audio_quality",
+                level=evaluation.get("level"),
+                score=evaluation.get("score"),
+                reasons=evaluation.get("reasons"),
+                scene_findings=evaluation.get("scene_findings"),
+            )
+        except Exception as exc:
+            sl.warning(
+                "[pipeline] Enrichissement qualité par analyse de scène échoué",
+                step="audio_quality",
+                error=str(exc),
+            )
 
     def _run_source_separation(
         self, job: Job, audio_path: str, audio_scene: dict, sl

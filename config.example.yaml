@@ -89,6 +89,12 @@ workflow:
     max_short_segment_ratio: 0.2
     min_speech_ratio: 0.35
     max_speech_ratio: 0.95
+    scene_affects_quality_score: false  # audit seulement par défaut, pas de forçage backend
+    max_scene_music_ratio: 0.15
+    max_scene_noise_ratio: 0.20
+    max_scene_no_energy_ratio: 0.30
+    min_scene_speech_ratio: 0.55
+    max_scene_problem_segments: 3
   quality_transcription:
     # Le mode qualité utilise Whisper large-v3 optimisé ; le mode rapide garde models.stt_backend sauf diagnostic dégradé.
     force_stt_backend: "whisper"

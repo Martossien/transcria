@@ -238,6 +238,21 @@ class TestBootstrapConfig:
         result = validate_config(cfg)
         assert result.is_valid
 
+    def test_validate_config_accepts_audio_scene_quality_thresholds(self):
+        cfg = load_config()
+        cfg["workflow"]["audio_quality"].update({
+            "scene_affects_quality_score": False,
+            "max_scene_music_ratio": 0.15,
+            "max_scene_noise_ratio": 0.20,
+            "max_scene_no_energy_ratio": 0.30,
+            "min_scene_speech_ratio": 0.55,
+            "max_scene_problem_segments": 3,
+        })
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"
         spec = importlib.util.spec_from_file_location("bootstrap_config", module_path)

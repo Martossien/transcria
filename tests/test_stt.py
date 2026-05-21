@@ -254,6 +254,70 @@ class TestAudioQualityAndVad:
         assert result["force_quality_backend"] is True
         assert "bitrate_faible" in result["reasons"]
 
+    def test_audio_quality_records_scene_findings_without_forcing_by_default(self):
+        cfg = {
+            "workflow": {
+                "audio_quality": {
+                    "force_quality_backend": True,
+                    "scene_affects_quality_score": False,
+                    "max_scene_music_ratio": 0.15,
+                    "max_scene_noise_ratio": 0.20,
+                    "max_scene_no_energy_ratio": 0.30,
+                    "min_scene_speech_ratio": 0.55,
+                    "max_scene_problem_segments": 1,
+                }
+            }
+        }
+
+        result = AudioQualityEvaluator(cfg).evaluate(
+            {},
+            {"diagnostics": {}},
+            audio_scene={
+                "has_music": True,
+                "has_noise": True,
+                "speech_ratio": 0.5,
+                "music_ratio": 0.2,
+                "noise_ratio": 0.25,
+                "no_energy_ratio": 0.35,
+                "non_speech_ratio": 0.5,
+                "problem_segments": [{"label": "noise"}, {"label": "music"}],
+            },
+        )
+
+        assert result["level"] == "ok"
+        assert result["score"] == 0
+        assert result["force_quality_backend"] is False
+        assert "scene_musique_importante" in result["scene_findings"]
+        assert "scene_bruit_important" in result["scene_findings"]
+        assert result["scene_metrics"]["problem_segment_count"] == 2
+
+    def test_audio_quality_can_apply_scene_score_when_enabled(self):
+        cfg = {
+            "workflow": {
+                "audio_quality": {
+                    "force_quality_backend": True,
+                    "scene_affects_quality_score": True,
+                    "max_scene_noise_ratio": 0.20,
+                    "min_scene_speech_ratio": 0.55,
+                }
+            }
+        }
+
+        result = AudioQualityEvaluator(cfg).evaluate(
+            {},
+            {"diagnostics": {}},
+            audio_scene={
+                "has_noise": True,
+                "speech_ratio": 0.4,
+                "noise_ratio": 0.3,
+            },
+        )
+
+        assert result["level"] == "degrade"
+        assert result["force_quality_backend"] is True
+        assert "scene_bruit_important" in result["reasons"]
+        assert "scene_parole_faible" in result["reasons"]
+
     def test_adaptive_vad_relaxes_low_quality_audio(self):
         vad_cfg = {
             "adaptive": True,

@@ -220,7 +220,7 @@ jobs/<job_id>/
 │
 ├── metadata/
 │   ├── audio_analysis.json         # Résultat ffprobe (durée, codec, canaux, bitrate)
-│   ├── audio_quality_decision.json # Décision déterministe Cohere/Whisper selon qualité audio
+│   ├── audio_quality_decision.json # Décision qualité déterministe + signaux de scène si disponibles
 │   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
 │   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
@@ -441,6 +441,31 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
 - `scene_segments` expose la segmentation complète, y compris `noEnergy`, pour audit et diagnostics.
 - `problem_segments` filtre les longues zones `music`, `noise` ou `noEnergy` selon `workflow.audio_scene.thresholds.problem_segment_min_s`.
 - La section `gender` (globale) est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+
+### audio_quality_decision.json
+
+Produit par `AudioQualityEvaluator`. Quand `metadata/audio_scene.json` est disponible, `PipelineService` réévalue ce fichier avant la séparation de sources pour y ajouter les métriques de scène.
+
+```json
+{
+  "level": "suspect",
+  "score": 1,
+  "reasons": ["diagnostic_resume:suspect"],
+  "scene_findings": ["scene_bruit_detecte", "scene_bruit_important"],
+  "scene_metrics": {
+    "speech_ratio": 0.62,
+    "music_ratio": 0.0,
+    "noise_ratio": 0.24,
+    "no_energy_ratio": 0.14,
+    "non_speech_ratio": 0.38,
+    "problem_segment_count": 2
+  },
+  "force_quality_backend": false
+}
+```
+
+- `scene_findings` reste informatif par défaut : `workflow.audio_quality.scene_affects_quality_score=false`.
+- Si `scene_affects_quality_score=true`, ces signaux contribuent au score et peuvent donc forcer le backend qualité selon `force_quality_backend`.
 - `gender_segments` : liste des intervalles classés `"male"` ou `"female"` uniquement. Utilisée par `WorkflowRunner._inject_speaker_genders()` pour croiser avec `speaker_turns.json` et attribuer acoustiquement un genre à chaque SPEAKER_XX dans `speaker_stats.json`. Vide si `detect_gender=false` ou audio trop court.
 - `stats.labels` peut contenir : `speech`, `male`, `female`, `music`, `noise`.
 

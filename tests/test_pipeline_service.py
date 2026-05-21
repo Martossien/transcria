@@ -88,6 +88,47 @@ class TestPipelineAudioSceneAnalysis:
         assert saved.get("path") == "metadata/audio_scene.json"
         assert saved.get("data") == scene
 
+    def test_refresh_audio_quality_with_scene_saves_enriched_decision(self, tmp_path, monkeypatch):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        cfg = {
+            "workflow": {
+                "audio_quality": {
+                    "scene_affects_quality_score": False,
+                    "max_scene_noise_ratio": 0.20,
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+        scene = {
+            "has_noise": True,
+            "speech_ratio": 0.7,
+            "noise_ratio": 0.25,
+            "problem_segments": [{"label": "noise"}],
+        }
+
+        def fake_load_json(self, path):
+            if path == "summary/summary.json":
+                return {"diagnostics": {"level": "ok"}}
+            if path == "metadata/audio_analysis.json":
+                return {"duration_seconds": 180}
+            return {}
+
+        saved: dict = {}
+        monkeypatch.setattr(JobFilesystem, "load_json", fake_load_json)
+        monkeypatch.setattr(
+            JobFilesystem, "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc(cfg)
+        svc._refresh_audio_quality_with_scene(_job(), scene, MagicMock())
+
+        assert saved["path"] == "metadata/audio_quality_decision.json"
+        assert saved["data"]["level"] == "ok"
+        assert "scene_bruit_important" in saved["data"]["scene_findings"]
+        assert saved["data"]["scene_metrics"]["noise_ratio"] == pytest.approx(0.25)
+
 
 # ---------------------------------------------------------------------------
 # _run_source_separation

@@ -85,10 +85,11 @@ Ces améliorations doivent rester neutres, auditables et sans référence à des
    - Fait : logs pipeline enrichis avec les ratios et le nombre de zones problématiques.
    - Priorité haute : faible risque, bon support d'audit, base commune pour les décisions suivantes.
 
-2. **Brancher l'analyse de scène dans l'évaluation qualité**
-   - Faire consommer `audio_scene` par `AudioQualityEvaluator`.
-   - Signaler les audios où musique, bruit ou longues zones sans énergie risquent de dégrader la transcription.
-   - Ne pas changer automatiquement de backend tant que les seuils n'ont pas été validés sur corpus interne anonymisé.
+2. **Brancher l'analyse de scène dans l'évaluation qualité** — démarré le 2026-05-21
+   - Fait : `AudioQualityEvaluator.evaluate(..., audio_scene=...)` consomme les ratios et zones problématiques.
+   - Fait : `audio_quality_decision.json` expose `scene_findings` et `scene_metrics`.
+   - Fait : `PipelineService` réévalue la décision qualité après `audio_scene.json` et avant la séparation de sources.
+   - Garde-fou : `workflow.audio_quality.scene_affects_quality_score=false` par défaut, donc pas de forçage backend tant que les seuils ne sont pas validés sur corpus interne anonymisé.
 
 3. **Affiner la décision de séparation de sources**
    - Remplacer le déclenchement binaire `has_music` seul par des seuils explicites sur les ratios et la durée.

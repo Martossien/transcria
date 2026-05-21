@@ -8,12 +8,19 @@ class AudioQualityEvaluator:
         self.config = config
         self.cfg = config.get("workflow", {}).get("audio_quality", {}) or {}
 
-    def evaluate(self, audio_analysis: dict | None, summary: dict | None) -> dict:
+    def evaluate(
+        self,
+        audio_analysis: dict | None,
+        summary: dict | None,
+        audio_scene: dict | None = None,
+    ) -> dict:
         audio_analysis = audio_analysis or {}
         summary = summary or {}
+        audio_scene = audio_scene or {}
         diagnostics = summary.get("diagnostics") or {}
 
         reasons: list[str] = []
+        scene_findings: list[str] = []
         score = 0
 
         level = str(diagnostics.get("level", "") or "").strip()
@@ -59,15 +66,63 @@ class AudioQualityEvaluator:
             score += 1
             reasons.append("vad_peu_selectif")
 
+        scene_metrics = self._scene_metrics(audio_scene)
+        scene_findings = self._scene_findings(scene_metrics, audio_scene)
+        if bool(self.cfg.get("scene_affects_quality_score", False)):
+            for finding in scene_findings:
+                score += self._scene_weight(finding)
+                reasons.append(finding)
+
         level_out = "degrade" if score >= 3 else "suspect" if score > 0 else "ok"
         return {
             "level": level_out,
             "score": score,
             "reasons": reasons,
+            "scene_findings": scene_findings,
+            "scene_metrics": scene_metrics,
             "force_quality_backend": bool(
                 self.cfg.get("force_quality_backend", True) and level_out == "degrade"
             ),
         }
+
+    def _scene_metrics(self, audio_scene: dict) -> dict:
+        """Extrait les métriques audio_scene utiles à l'audit qualité."""
+        problem_segments = audio_scene.get("problem_segments") or []
+        return {
+            "speech_ratio": self._float_or_none(audio_scene.get("speech_ratio")),
+            "music_ratio": self._float_or_none(audio_scene.get("music_ratio")),
+            "noise_ratio": self._float_or_none(audio_scene.get("noise_ratio")),
+            "no_energy_ratio": self._float_or_none(audio_scene.get("no_energy_ratio")),
+            "non_speech_ratio": self._float_or_none(audio_scene.get("non_speech_ratio")),
+            "problem_segment_count": len(problem_segments) if isinstance(problem_segments, list) else 0,
+        }
+
+    def _scene_findings(self, metrics: dict, audio_scene: dict) -> list[str]:
+        """Retourne les signaux de scène sans modifier le score par défaut."""
+        findings: list[str] = []
+
+        if bool(audio_scene.get("has_music")):
+            findings.append("scene_musique_detectee")
+        if bool(audio_scene.get("has_noise")):
+            findings.append("scene_bruit_detecte")
+        if self._above(metrics.get("music_ratio"), self.cfg.get("max_scene_music_ratio")):
+            findings.append("scene_musique_importante")
+        if self._above(metrics.get("noise_ratio"), self.cfg.get("max_scene_noise_ratio")):
+            findings.append("scene_bruit_important")
+        if self._above(metrics.get("no_energy_ratio"), self.cfg.get("max_scene_no_energy_ratio")):
+            findings.append("scene_inactivite_importante")
+        if self._below(metrics.get("speech_ratio"), self.cfg.get("min_scene_speech_ratio")):
+            findings.append("scene_parole_faible")
+        if self._above(metrics.get("problem_segment_count"), self.cfg.get("max_scene_problem_segments")):
+            findings.append("scene_zones_problematiques")
+
+        return findings
+
+    @staticmethod
+    def _scene_weight(finding: str) -> int:
+        if finding in {"scene_musique_importante", "scene_bruit_important", "scene_parole_faible"}:
+            return 2
+        return 1
 
     @staticmethod
     def _below(value, threshold) -> bool:
@@ -86,3 +141,12 @@ class AudioQualityEvaluator:
             return float(value) > float(threshold)
         except (TypeError, ValueError):
             return False
+
+    @staticmethod
+    def _float_or_none(value):
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
