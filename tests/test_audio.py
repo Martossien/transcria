@@ -280,6 +280,87 @@ class TestSourceSeparationService:
 
 
 # ---------------------------------------------------------------------------
+# AudioSceneFilterService
+# ---------------------------------------------------------------------------
+
+
+class TestAudioSceneFilterService:
+    """Filtrage pré-STT par silence, sans changement de durée."""
+
+    def _cfg(self, enabled=True):
+        return {
+            "workflow": {
+                "audio_scene_filter": {
+                    "enabled": enabled,
+                    "enabled_for_modes": ["quality"],
+                    "target_labels": ["music", "noise"],
+                    "min_segment_s": 2.0,
+                    "min_total_muted_s": 2.0,
+                    "edge_keep_s": 0.15,
+                    "max_intervals": 10,
+                    "timeout_s": 30,
+                }
+            }
+        }
+
+    def test_disabled_filter_returns_false(self):
+        from transcria.audio.scene_filter import AudioSceneFilterService
+
+        service = AudioSceneFilterService(self._cfg(enabled=False))
+        should, reasons, intervals = service.should_filter("quality", {"problem_segments": []})
+
+        assert should is False
+        assert reasons == ["filtre_desactive"]
+        assert intervals == []
+
+    def test_filter_only_runs_for_enabled_modes(self):
+        from transcria.audio.scene_filter import AudioSceneFilterService
+
+        service = AudioSceneFilterService(self._cfg())
+        should, reasons, _ = service.should_filter("fast", {"problem_segments": []})
+
+        assert should is False
+        assert reasons == ["mode_non_active:fast"]
+
+    def test_builds_intervals_from_target_problem_segments(self):
+        from transcria.audio.scene_filter import AudioSceneFilterService
+
+        service = AudioSceneFilterService(self._cfg())
+        should, reasons, intervals = service.should_filter("quality", {
+            "problem_segments": [
+                {"label": "noise", "start": 10.0, "end": 14.0},
+                {"label": "noEnergy", "start": 20.0, "end": 30.0},
+                {"label": "music", "start": 40.0, "end": 41.0},
+            ]
+        })
+
+        assert should is True
+        assert reasons == ["intervals=1", "muted_s=3.7"]
+        assert intervals == [
+            {"label": "noise", "start": 10.15, "end": 13.85, "duration_s": 3.7}
+        ]
+
+    def test_apply_returns_original_on_ffmpeg_failure(self, tmp_path, monkeypatch):
+        import subprocess
+        from transcria.audio.scene_filter import AudioSceneFilterService
+
+        input_path = tmp_path / "input.wav"
+        output_path = tmp_path / "filtered.wav"
+        input_path.write_bytes(b"audio")
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **kw: (_ for _ in ()).throw(subprocess.CalledProcessError(1, [])),
+        )
+
+        service = AudioSceneFilterService(self._cfg())
+        result = service.apply(input_path, output_path, [
+            {"label": "noise", "start": 1.0, "end": 3.0, "duration_s": 2.0}
+        ])
+
+        assert result == input_path
+
+
+# ---------------------------------------------------------------------------
 # AudioSceneWorker — fonctions pures (importables sans dépendance audio lourde)
 # ---------------------------------------------------------------------------
 

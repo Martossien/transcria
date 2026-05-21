@@ -222,6 +222,7 @@ jobs/<job_id>/
 │   ├── audio_analysis.json         # Résultat ffprobe (durée, codec, canaux, bitrate)
 │   ├── audio_quality_decision.json # Décision qualité déterministe + signaux de scène si disponibles
 │   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
+│   ├── audio_scene_filter.json     # Filtrage pré-STT optionnel, timeline préservée
 │   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
@@ -441,6 +442,25 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
 - `scene_segments` expose la segmentation complète, y compris `noEnergy`, pour audit et diagnostics.
 - `problem_segments` filtre les longues zones `music`, `noise` ou `noEnergy` selon `workflow.audio_scene.thresholds.problem_segment_min_s`.
 - La section `gender` (globale) est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+
+### audio_scene_filter.json
+
+Produit uniquement si `workflow.audio_scene_filter.enabled=true` et si un filtrage a réellement été appliqué avant STT. Le filtre met les intervalles en silence sans retirer de durée.
+
+```json
+{
+  "input_path": "/jobs/<id>/input/original.wav",
+  "output_path": "/jobs/<id>/input/scene_filtered.wav",
+  "mode": "quality",
+  "reasons": ["intervals=2", "muted_s=18.5"],
+  "intervals": [
+    {"label": "noise", "start": 12.15, "end": 18.35, "duration_s": 6.2}
+  ],
+  "preserve_timeline": true
+}
+```
+
+- `preserve_timeline=true` est contractuel : ne pas remplacer ce filtre par une coupe d'audio sans remapper explicitement tous les timestamps.
 
 ### audio_quality_decision.json
 

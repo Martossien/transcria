@@ -204,6 +204,69 @@ class TestPipelineSourceSeparation:
 
 
 # ---------------------------------------------------------------------------
+# _run_audio_scene_filter
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineAudioSceneFilter:
+    """Filtrage scène : refus, succès et métadonnées d'audit."""
+
+    def _cfg(self, tmp_path):
+        return {
+            "workflow": {
+                "audio_scene_filter": {
+                    "enabled": True,
+                    "enabled_for_modes": ["quality"],
+                    "target_labels": ["noise"],
+                    "min_segment_s": 2.0,
+                    "min_total_muted_s": 2.0,
+                    "edge_keep_s": 0.0,
+                    "max_intervals": 10,
+                    "timeout_s": 30,
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+
+    def test_disabled_filter_returns_original_path(self, tmp_path):
+        svc = _make_svc({"workflow": {"audio_scene_filter": {"enabled": False}}})
+        audio = str(tmp_path / "audio.wav")
+
+        result = svc._run_audio_scene_filter(_job(), audio, "quality", {}, MagicMock())
+
+        assert result == audio
+
+    def test_success_saves_filter_metadata_and_returns_filtered_path(self, tmp_path, monkeypatch):
+        from transcria.audio.scene_filter import AudioSceneFilterService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"audio")
+        intervals = [{"label": "noise", "start": 1.0, "end": 4.0, "duration_s": 3.0}]
+        scene = {"problem_segments": intervals}
+
+        monkeypatch.setattr(
+            AudioSceneFilterService,
+            "apply",
+            lambda self, input_path, output_path, intervals: output_path,
+        )
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem, "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc(self._cfg(tmp_path))
+        result = svc._run_audio_scene_filter(_job(), str(audio), "quality", scene, MagicMock())
+
+        assert result.endswith("scene_filtered.wav")
+        assert saved["path"] == "metadata/audio_scene_filter.json"
+        assert saved["data"]["preserve_timeline"] is True
+        assert saved["data"]["intervals"] == intervals
+
+
+# ---------------------------------------------------------------------------
 # Ordre d'exécution dans _run_pipeline_steps
 # ---------------------------------------------------------------------------
 
@@ -229,6 +292,10 @@ class TestPipelineStepsOrder:
             svc, "_run_source_separation",
             lambda *a: call_order.append("sep") or str(a[1]),
         )
+        monkeypatch.setattr(
+            svc, "_run_audio_scene_filter",
+            lambda *a: call_order.append("filter") or str(a[1]),
+        )
 
         def fake_transcribe(*a):
             call_order.append("transcription")
@@ -241,3 +308,4 @@ class TestPipelineStepsOrder:
 
         assert call_order.index("scene") < call_order.index("transcription")
         assert call_order.index("sep") < call_order.index("transcription")
+        assert call_order.index("filter") < call_order.index("transcription")

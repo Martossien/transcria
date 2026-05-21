@@ -253,6 +253,23 @@ class TestBootstrapConfig:
 
         assert result.is_valid
 
+    def test_validate_config_accepts_audio_scene_filter_section(self):
+        cfg = load_config()
+        cfg["workflow"]["audio_scene_filter"] = {
+            "enabled": False,
+            "enabled_for_modes": ["quality"],
+            "target_labels": ["music", "noise"],
+            "min_segment_s": 2.0,
+            "min_total_muted_s": 2.0,
+            "edge_keep_s": 0.15,
+            "max_intervals": 100,
+            "timeout_s": 300,
+        }
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"
         spec = importlib.util.spec_from_file_location("bootstrap_config", module_path)

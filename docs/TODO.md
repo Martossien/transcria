@@ -102,10 +102,11 @@ Ces améliorations doivent rester neutres, auditables et sans référence à des
    - Fait : `review_points.json` et `quality_report.md` listent les zones musique/bruit/silence à relire.
    - Fait : `ReviewPoints.generate()` sait reformater ce check de façon déterministe.
 
-5. **Étudier un filtrage pré-STT en mode qualité uniquement**
-   - Tester un filtrage des zones non vocales avant transcription sur audios longs et bruités.
-   - Ne l'activer que si la complétude SRT et l'alignement locuteur restent stables.
-   - Risque moyen : gain potentiel sur hallucinations, mais risque de couper des paroles faibles.
+5. **Étudier un filtrage pré-STT en mode qualité uniquement** — démarré le 2026-05-21
+   - Fait : ajout d'un filtre optionnel `workflow.audio_scene_filter`, désactivé par défaut.
+   - Fait : le filtre met en silence les zones ciblées sans couper l'audio, pour préserver les timestamps.
+   - Fait : `metadata/audio_scene_filter.json` documente les intervalles, raisons et `preserve_timeline=true`.
+   - À valider terrain : activer seulement sur corpus interne anonymisé et comparer complétude SRT, hallucinations et alignement locuteur.
 
 6. **Étudier une normalisation audio légère**
    - Évaluer seulement des traitements simples, mesurables et réversibles.

@@ -99,6 +99,7 @@ transcria/
       vad_adaptive.py       # AdaptiveVADConfig — seuils VAD selon qualité audio
       scene_analyzer.py     # AudioSceneAnalyzer — orchestrateur subprocess analyse de scène
       _scene_analysis_worker.py # Worker subprocess : pipeline RMS→flatness/ZCR→pitch YIN (librosa)
+      scene_filter.py       # AudioSceneFilterService — silence optionnel des zones non vocales sans décaler les timestamps
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
@@ -222,8 +223,9 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 **Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute deux étapes systématiques avant la transcription finale :
 1. `_run_audio_scene_analysis()` — crée `AudioSceneAnalyzer(config)`, appelle `analyze(audio_path)` dans un subprocess isolé (librosa CPU), sauvegarde le résultat dans `metadata/audio_scene.json` si non vide. Retourne `{}` si désactivé, timeout ou erreur.
 2. `_run_source_separation()` — charge `metadata/audio_analysis.json` + `metadata/audio_quality_decision.json`, appelle `SourceSeparationDecider.should_separate(analysis, quality, audio_scene=scene)`. Si séparation décidée, `SourceSeparationService.separate()` produit `vocals.wav` dans le répertoire input. La piste vocale extraite remplace `audio_path` pour la suite du pipeline.
+3. `_run_audio_scene_filter()` — option désactivée par défaut (`workflow.audio_scene_filter.enabled=false`). Si activée pour le mode courant, met en silence les longues zones non vocales ciblées sans couper l'audio, produit `scene_filtered.wav`, et écrit `metadata/audio_scene_filter.json` avec `preserve_timeline=true`.
 
-Ces deux étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources.
+Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 
 **VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 

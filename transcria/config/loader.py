@@ -100,6 +100,16 @@ _DEFAULT_CONFIG = {
             "speech_pad_ms": 200,
             "speech_pad_ms_low_quality": 350,
         },
+        "audio_scene_filter": {
+            "enabled": False,
+            "enabled_for_modes": ["quality"],
+            "target_labels": ["music", "noise"],
+            "min_segment_s": 2.0,
+            "min_total_muted_s": 2.0,
+            "edge_keep_s": 0.15,
+            "max_intervals": 100,
+            "timeout_s": 300,
+        },
         "speaker_realignment": {
             "enabled": True,
             "min_word_overlap_s": 0.01,

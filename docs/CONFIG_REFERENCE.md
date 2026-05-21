@@ -267,6 +267,25 @@ se termine avant le chargement GPU.
 
 **Impact :** quand `enabled=true`, le résultat est sauvegardé dans `metadata/audio_scene.json` et transmis à `SourceSeparationDecider` avec des seuils explicites de ratio/durée. La distribution H/F est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
 
+#### `workflow.audio_scene_filter`
+
+Filtrage optionnel pré-STT basé sur `metadata/audio_scene.json`. Il ne coupe pas
+l'audio : il met en silence les zones ciblées pour préserver la durée totale et
+les timestamps du SRT. Désactivé par défaut.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active le filtrage par analyse de scène |
+| `enabled_for_modes` | list[string] | `["quality"]` | Modes où le filtre peut s'appliquer (`fast`, `quality`) |
+| `target_labels` | list[string] | `["music", "noise"]` | Labels de `problem_segments` à mettre en silence (`music`, `noise`, `noEnergy`) |
+| `min_segment_s` | float | `2.0` | Durée minimale après marge pour filtrer un intervalle |
+| `min_total_muted_s` | float | `2.0` | Durée totale minimale filtrée pour lancer ffmpeg |
+| `edge_keep_s` | float | `0.15` | Marge conservée au début/à la fin de chaque zone |
+| `max_intervals` | int | `100` | Nombre maximal d'intervalles filtrés |
+| `timeout_s` | int | `300` | Timeout ffmpeg en secondes |
+
+**Impact :** si le filtre s'applique, `input/scene_filtered.wav` remplace l'audio transmis au STT et `metadata/audio_scene_filter.json` documente les intervalles. En cas d'erreur ffmpeg, l'audio original est conservé.
+
 #### `workflow.source_separation`
 
 Séparation de sources vocales via Demucs. Ne s'active **jamais automatiquement** :
