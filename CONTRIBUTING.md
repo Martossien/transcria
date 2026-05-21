@@ -13,7 +13,7 @@ transcria/
   auth/            # Utilisateurs, rôles, permissions, routes /login
   jobs/            # Modèle Job (20 états), CRUD, filesystem
   workflow/        # Étapes (9), calcul d'état, runner
-  audio/           # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif
+  audio/           # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif, analyse de scène, filtrage, normalisation, séparation de sources
   stt/             # Transcribers, diarization, résumé, anti-hallucination, alignement, réalignement
   context/         # Contexte réunion, participants, lexique
   quality/         # Checks qualité, score /100, décision qualité audio

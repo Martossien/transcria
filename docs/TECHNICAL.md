@@ -21,7 +21,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 529 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 557 tests pytest collectés — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -69,7 +69,12 @@ transcria/
 │   │   ├── analyzer.py            # AudioAnalyzer (ffprobe → JSON)
 │   │   ├── converter.py           # AudioConverter (ffmpeg → WAV 16kHz mono)
 │   │   ├── vad.py                 # SileroVAD (détection de parole via faster_whisper)
-│   │   └── vad_adaptive.py        # Adaptation VAD selon audio_quality_decision
+│   │   ├── vad_adaptive.py        # Adaptation VAD selon audio_quality_decision
+│   │   ├── scene_analyzer.py      # AudioSceneAnalyzer — subprocess isolé librosa (RMS → flatness/ZCR → pitch YIN)
+│   │   ├── _scene_analysis_worker.py # Worker subprocess pur pour l'analyse de scène
+│   │   ├── scene_filter.py        # AudioSceneFilterService — mise en silence optionnelle pré-STT (timeline préservée)
+│   │   ├── normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle (timeline préservée)
+│   │   └── source_separation.py   # SourceSeparationDecider + SourceSeparationService (Demucs, optionnel)
 │   │
 │   ├── stt/                       # Speech-to-Text
 │   │   ├── __init__.py
@@ -114,7 +119,8 @@ transcria/
 │   │   ├── vram_manager.py        # VRAMManager
 │   │   ├── gpu_session.py         # GPUSession context manager
 │   │   ├── llm_backend.py         # LLMBackend + 3 implémentations + factory
-│   │   └── opencode_runner.py     # OpenCodeRunner
+│   │   ├── opencode_runner.py     # OpenCodeRunner
+│   │   └── _port_utils.py         # is_port_open() partagé entre vram_manager et llm_backend
 │   │
 │   ├── services/                  # Services métier
 │   │   ├── job_executor.py       # JobExecutorService (worker thread)
@@ -125,28 +131,31 @@ transcria/
 │   └── web/                       # Interface utilisateur
 │       ├── __init__.py
 │       ├── routes.py              # Routes Flask (pages + API REST)
-│       └── templates/             # 9 templates Jinja2 (Bootstrap 5)
+│       └── templates/             # 12 templates Jinja2 (Bootstrap 5)
 │           ├── base.html
 │           ├── login.html
+│           ├── change_password.html
 │           ├── index.html
 │           ├── job_wizard.html
 │           ├── job_result.html
 │           ├── dashboard_status.html
 │           ├── admin_config.html
 │           ├── users.html
-│           └── user_form.html
+│           ├── user_form.html
+│           ├── groups.html
+│           └── group_form.html
 │
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
 │   └── prompts/
-│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0
-│       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.7
+│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0 (394 lignes)
+│       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.9 (612 lignes)
 │
-├── tests/                         # 529 tests pytest collectés
+├── tests/                         # 557 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 14 tests — CRUD utilisateurs, groupes
-│   ├── test_config.py             # 21 tests — Chargement YAML, sauvegarde config, debug
+│   ├── test_config.py             # 24 tests — Chargement YAML, sauvegarde config, debug
 │   ├── test_context.py            # 19 tests — Meeting, participants, lexique, builder
 │   ├── test_diarization.py        # 12 tests — Diarisation, checkpoints, clips
 │   ├── test_edge_cases.py         # 17 tests — Cas limites contexte/exports/transitions
@@ -156,10 +165,11 @@ transcria/
 │   ├── test_jobs.py               # 19 tests — Job model, filesystem
 │   ├── test_job_store.py          # 15 tests — JobStore CRUD, purge rétention
 │   ├── test_opencode_runner.py    # 44 tests — opencode, parsing résumé, correction
-│   ├── test_pipeline_service.py   # 8 tests — Analyse de scène, séparation, ordre pipeline
-│   ├── test_quality.py            # 18 tests — SRTChecker, LexiconChecker
-│   ├── test_quality_deep.py       # 18 tests — Tests approfondis qualité avec SRT réel
-│   ├── test_stt.py                # 30 tests — STT, timestamps, alignement, speaker clips
+│   ├── test_audio.py              # 45 tests — Analyse de scène worker, AudioSceneAnalyzer, séparation sources
+│   ├── test_pipeline_service.py   # 13 tests — Analyse de scène, séparation, filtrage, normalisation, ordre pipeline
+│   ├── test_quality.py            # 19 tests — SRTChecker, LexiconChecker
+│   ├── test_quality_deep.py       # 19 tests — Tests approfondis qualité avec SRT réel
+│   ├── test_stt.py                # 32 tests — STT, timestamps, alignement, speaker clips
 │   ├── test_summary_generator.py  # 1 test — Résumé rapide
 │   ├── test_web_api.py            # 38 tests — Routes web (login, jobs, upload, admin config)
 │   ├── test_web_edge_cases.py     # 50 tests — Erreurs API, rôles, accès jobs, pipeline
@@ -509,6 +519,33 @@ L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` 
 | `build_speech_chunks(audio_path, max_chunk_s)` | Découpe l'audio en chunks VAD (fallback 30s si indisponible) |
 | `_fallback_chunks(duration, chunk_s)` | Chunking 30s fixe de secours |
 
+**`scene_analyzer.py` — `AudioSceneAnalyzer`**
+| Méthode | Description |
+|---|---|
+| `__init__(config)` | Lit `workflow.audio_scene` |
+| `analyze(audio_path)` | Lance le subprocess `_scene_analysis_worker` (librosa CPU) avec timeout ; retourne le dict JSON ou `{}` en cas d'erreur/désactivation |
+
+**`_scene_analysis_worker.py`** — Worker subprocess pur (fonctions testables unitairement)
+Fonctions principales : `_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_segments_to_dicts`, `_problem_segments`, `_frames_to_segments`, `_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`. Produit `scene_segments`, `problem_segments`, `gender_segments` horodatés et les ratios dans le JSON de sortie.
+
+**`scene_filter.py` — `AudioSceneFilterService`**
+| Méthode | Description |
+|---|---|
+| `should_filter(audio_scene, mode, config)` | Vérifie si le filtre doit s'appliquer selon `enabled_for_modes` et `problem_segments` |
+| `filter(audio_path, output_path, audio_scene, mode, config)` | Met en silence les `problem_segments` ciblés via ffmpeg sans changer la durée ; retourne le chemin de sortie ou `audio_path` si erreur |
+
+**`normalization.py` — `AudioNormalizationService`**
+| Méthode | Description |
+|---|---|
+| `should_normalize(mode, config)` | Vérifie si la normalisation doit s'appliquer selon `enabled_for_modes` |
+| `normalize(audio_path, output_path, mode, config)` | Applique `loudnorm` et high-pass optionnel via ffmpeg ; retourne le chemin de sortie ou `audio_path` si erreur |
+
+**`source_separation.py`** — Séparation de sources vocales (Demucs, optionnel)
+| Classe | Description |
+|---|---|
+| `SourceSeparationDecider` | `should_separate(analysis, quality, audio_scene)` — scoring pondéré sur signaux VAD/hallucinations/scène ; si `audio_scene.has_music=True` → séparation forcée sans calcul de score |
+| `SourceSeparationService` | `separate(audio_path, output_path)` — extraction piste vocale Demucs (`htdemucs`) ; dégradation gracieuse si demucs absent |
+
 ---
 
 ### 4.5 STT (`transcria/stt/`)
@@ -814,12 +851,15 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 |---|---|
 | `base.html` | Layout principal (navbar Bootstrap 5, flash messages, permissions) |
 | `login.html` | Page de connexion |
+| `change_password.html` | Formulaire changement de mot de passe utilisateur |
 | `index.html` | Accueil : liste des traitements + bouton nouveau |
 | `job_wizard.html` | Assistant 9 étapes avec formulaires interactifs (JS fetch API) |
 | `job_result.html` | Résultat : SRT, qualité, exports, lien SRT Editor |
 | `admin_config.html` | Éditeur YAML de configuration admin |
 | `users.html` | Liste des utilisateurs (admin) |
 | `user_form.html` | Formulaire création/édition utilisateur |
+| `groups.html` | Liste des groupes (admin global + admins de groupe) |
+| `group_form.html` | Formulaire création/édition groupe + membres |
 | `dashboard_status.html` | État technique (GPU, CPU, RAM, services) |
 
 ---
@@ -1054,7 +1094,7 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 
 ## 11. Tests
 
-**529 tests collectés** couvrant tous les modules. Lancer avec :
+**557 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```
@@ -1062,9 +1102,10 @@ cd transcria && python -m pytest tests/ -v
 Organisation :
 | Fichier | Tests | Couverture |
 |---|---|---|
+| `test_audio.py` | 45 | Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre |
 | `test_auth.py` | 17 | Rôles, modèles, permissions, décorateur |
 | `test_auth_store.py` | 14 | CRUD utilisateurs, groupes |
-| `test_config.py` | 21 | Chargement YAML, sauvegarde config, env var, debug |
+| `test_config.py` | 24 | Chargement YAML, sauvegarde config, env var, debug |
 | `test_context.py` | 19 | Meeting, participants, lexique, builder |
 | `test_diarization.py` | 12 | Diarisation, checkpoints, clips |
 | `test_edge_cases.py` | 17 | Cas limites, transitions workflow |
@@ -1074,10 +1115,10 @@ Organisation :
 | `test_jobs.py` | 19 | Job model, filesystem |
 | `test_job_store.py` | 15 | JobStore CRUD, purge rétention |
 | `test_opencode_runner.py` | 44 | opencode, parsing résumé, correction |
-| `test_pipeline_service.py` | 8 | Analyse de scène, séparation, ordre pipeline |
-| `test_quality.py` | 18 | SRT checks, lexique |
-| `test_quality_deep.py` | 18 | SRT réel, rapport intégré |
-| `test_stt.py` | 30 | Timestamps, segments SRT, speaker clips |
+| `test_pipeline_service.py` | 13 | Analyse de scène, filtrage, normalisation, séparation, ordre pipeline |
+| `test_quality.py` | 19 | SRT checks, lexique |
+| `test_quality_deep.py` | 19 | SRT réel, rapport intégré |
+| `test_stt.py` | 32 | Timestamps, segments SRT, speaker clips |
 | `test_summary_generator.py` | 1 | Génération résumé rapide |
 | `test_web_api.py` | 38 | Routes web, login, jobs, admin config |
 | `test_web_edge_cases.py` | 50 | Erreurs API, rôles, accès jobs, pipeline |
@@ -1094,10 +1135,18 @@ instance/
   transcrIA.db                    # Base SQLite
 
 jobs/{uuid}/
-  input/original.{ext}           # Fichier audio original
+  input/
+    original.{ext}               # Fichier audio original
+    vocals.wav                   # Piste vocale extraite (Demucs, si séparation appliquée)
+    scene_filtered.wav           # Audio filtré pré-STT (si audio_scene_filter activé)
+    normalized.wav               # Audio normalisé pré-STT (si audio_normalization activé)
   metadata/
-    audio_analysis.json           # Résultat ffprobe
-    transcription.srt             # SRT brut (Cohere)
+    audio_analysis.json          # Résultat ffprobe
+    audio_quality_decision.json  # Décision qualité (level, score, scene_findings, scene_metrics)
+    audio_scene.json             # Analyse de scène (ratios, segments, genre vocal) si activé
+    audio_scene_filter.json      # Filtrage pré-STT appliqué (preserve_timeline=true) si activé
+    audio_normalization.json     # Normalisation pré-STT appliquée (preserve_timeline=true) si activé
+    transcription.srt            # SRT brut (Cohere ou Whisper + speakers appliqués)
     transcription_corrigee.srt   # SRT corrigé (opencode)
     transcription_segments.json  # Segments détaillés
     speakers_map.json            # Mapping speakers
@@ -1115,8 +1164,10 @@ jobs/{uuid}/
     job_context.yaml              # Contexte agrégé (YAML)
     job_context.json              # Contexte agrégé (JSON)
   speakers/
-    speaker_turns.json            # Turns pyannote
-    speaker_stats.json            # Stats par locuteur
+    speaker_turns.json            # Turns pyannote (exclusive_turns inclus)
+    speaker_stats.json            # Stats par locuteur (gender inclus si attribution acoustique)
+    diarization_checkpoint.json   # Empreinte audio+modèle pour réutilisation pyannote
+    speaker_embeddings.json       # Checkpoint acoustique par locuteur
     speaker_mapping.json          # Mapping SPEAKER_XX → participant
     speaker_clips.json            # Liste des extraits audio
     samples/                      # Fichiers WAV extraits

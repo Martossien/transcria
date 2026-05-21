@@ -502,8 +502,8 @@ Ces marqueurs ne corrigent pas le SRT automatiquement. Ils alimentent seulement 
 
 | Fichier | Utilisé par | Description |
 |---|---|---|
-| `summary_prompt.txt` | `OpenCodeRunner.run_summary()` | Prompt système pour le résumé structuré (133 lignes) |
-| `correction_prompt.txt` | `OpenCodeRunner.run_correction()` | Prompt système pour la correction SRT (224 lignes) |
+| `summary_prompt.txt` | `OpenCodeRunner.run_summary()` | Prompt système pour le résumé structuré v2.0 (394 lignes) |
+| `correction_prompt.txt` | `OpenCodeRunner.run_correction()` | Prompt système pour la correction SRT v1.9 (612 lignes) |
 
 Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (remonte de 2 niveaux).
 

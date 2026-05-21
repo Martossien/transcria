@@ -134,6 +134,7 @@ transcria/
       gpu_session.py        # GPUSession — context manager
       llm_backend.py        # LLMBackend (script/ollama/http)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
+      _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
     services/
       job_executor.py       # JobExecutorService — worker interne (thread)
       job_service.py        # JobService
