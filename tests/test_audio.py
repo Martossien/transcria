@@ -361,6 +361,97 @@ class TestAudioSceneFilterService:
 
 
 # ---------------------------------------------------------------------------
+# AudioNormalizationService
+# ---------------------------------------------------------------------------
+
+
+class TestAudioNormalizationService:
+    """Normalisation ffmpeg légère, paramétrable et désactivée par défaut."""
+
+    def _cfg(self, enabled=True):
+        return {
+            "workflow": {
+                "audio_normalization": {
+                    "enabled": enabled,
+                    "enabled_for_modes": ["quality"],
+                    "loudnorm_enabled": True,
+                    "target_i": -23.0,
+                    "true_peak": -2.0,
+                    "lra": 11.0,
+                    "highpass_hz": 80,
+                    "timeout_s": 30,
+                }
+            }
+        }
+
+    def test_disabled_normalization_returns_false(self):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        service = AudioNormalizationService(self._cfg(enabled=False))
+        should, reasons, filters = service.should_normalize("quality")
+
+        assert should is False
+        assert reasons == ["normalisation_desactivee"]
+        assert filters == []
+
+    def test_normalization_only_runs_for_enabled_modes(self):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        service = AudioNormalizationService(self._cfg())
+        should, reasons, _ = service.should_normalize("fast")
+
+        assert should is False
+        assert reasons == ["mode_non_active:fast"]
+
+    def test_builds_configured_filters(self):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        service = AudioNormalizationService(self._cfg())
+        should, reasons, filters = service.should_normalize("quality")
+
+        assert should is True
+        assert reasons == ["filters=2"]
+        assert filters == ["highpass=f=80", "loudnorm=I=-23:TP=-2:LRA=11"]
+
+    def test_no_configured_filters_returns_false(self):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        cfg = {
+            "workflow": {
+                "audio_normalization": {
+                    "enabled": True,
+                    "enabled_for_modes": ["quality"],
+                    "loudnorm_enabled": False,
+                    "highpass_hz": None,
+                }
+            }
+        }
+        service = AudioNormalizationService(cfg)
+        should, reasons, filters = service.should_normalize("quality")
+
+        assert should is False
+        assert reasons == ["aucun_filtre_configure"]
+        assert filters == []
+
+    def test_apply_returns_original_on_ffmpeg_failure(self, tmp_path, monkeypatch):
+        import subprocess
+        from transcria.audio.normalization import AudioNormalizationService
+
+        input_path = tmp_path / "input.wav"
+        output_path = tmp_path / "normalized.wav"
+        input_path.write_bytes(b"audio")
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **kw: (_ for _ in ()).throw(subprocess.CalledProcessError(1, [])),
+        )
+
+        service = AudioNormalizationService(self._cfg())
+        result = service.apply(input_path, output_path, ["loudnorm=I=-23:TP=-2:LRA=11"])
+
+        assert result == input_path
+
+
+# ---------------------------------------------------------------------------
 # AudioSceneWorker — fonctions pures (importables sans dépendance audio lourde)
 # ---------------------------------------------------------------------------
 

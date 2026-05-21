@@ -267,6 +267,68 @@ class TestPipelineAudioSceneFilter:
 
 
 # ---------------------------------------------------------------------------
+# _run_audio_normalization
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineAudioNormalization:
+    """Normalisation pré-STT : refus, succès et métadonnées d'audit."""
+
+    def _cfg(self, tmp_path):
+        return {
+            "workflow": {
+                "audio_normalization": {
+                    "enabled": True,
+                    "enabled_for_modes": ["quality"],
+                    "loudnorm_enabled": True,
+                    "target_i": -23.0,
+                    "true_peak": -2.0,
+                    "lra": 11.0,
+                    "highpass_hz": 80,
+                    "timeout_s": 30,
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+
+    def test_disabled_normalization_returns_original_path(self, tmp_path):
+        svc = _make_svc({"workflow": {"audio_normalization": {"enabled": False}}})
+        audio = str(tmp_path / "audio.wav")
+
+        result = svc._run_audio_normalization(_job(), audio, "quality", MagicMock())
+
+        assert result == audio
+
+    def test_success_saves_normalization_metadata_and_returns_normalized_path(self, tmp_path, monkeypatch):
+        from transcria.audio.normalization import AudioNormalizationService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"audio")
+        filters = ["highpass=f=80", "loudnorm=I=-23:TP=-2:LRA=11"]
+
+        monkeypatch.setattr(
+            AudioNormalizationService,
+            "apply",
+            lambda self, input_path, output_path, filters: output_path,
+        )
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem, "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc(self._cfg(tmp_path))
+        result = svc._run_audio_normalization(_job(), str(audio), "quality", MagicMock())
+
+        assert result.endswith("normalized.wav")
+        assert saved["path"] == "metadata/audio_normalization.json"
+        assert saved["data"]["preserve_timeline"] is True
+        assert saved["data"]["filters"] == filters
+
+
+# ---------------------------------------------------------------------------
 # Ordre d'exécution dans _run_pipeline_steps
 # ---------------------------------------------------------------------------
 
@@ -296,6 +358,10 @@ class TestPipelineStepsOrder:
             svc, "_run_audio_scene_filter",
             lambda *a: call_order.append("filter") or str(a[1]),
         )
+        monkeypatch.setattr(
+            svc, "_run_audio_normalization",
+            lambda *a: call_order.append("normalization") or str(a[1]),
+        )
 
         def fake_transcribe(*a):
             call_order.append("transcription")
@@ -309,3 +375,4 @@ class TestPipelineStepsOrder:
         assert call_order.index("scene") < call_order.index("transcription")
         assert call_order.index("sep") < call_order.index("transcription")
         assert call_order.index("filter") < call_order.index("transcription")
+        assert call_order.index("normalization") < call_order.index("transcription")

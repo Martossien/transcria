@@ -61,6 +61,7 @@ class PipelineService:
         self._refresh_audio_quality_with_scene(job, audio_scene, sl)
         audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
         audio_path = self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl)
+        audio_path = self._run_audio_normalization(job, audio_path, mode, sl)
 
         sl.info("Transcription en cours", step="transcribe")
         t0 = time.monotonic()
@@ -354,6 +355,55 @@ class PipelineService:
 
         sl.info("[pipeline] Audio filtré par analyse de scène",
                 step="audio_scene_filter", output=result_path.name)
+        return str(result_path)
+
+    def _run_audio_normalization(
+        self,
+        job: Job,
+        audio_path: str,
+        mode: str,
+        sl,
+    ) -> str:
+        """Applique une normalisation légère sans changer la durée audio."""
+        from pathlib import Path
+        from transcria.audio.normalization import AudioNormalizationService
+
+        service = AudioNormalizationService(self.config)
+        should, reasons, filters = service.should_normalize(mode)
+        if not should:
+            sl.debug("[pipeline] Normalisation audio non appliquée", step="audio_normalization",
+                     reasons=reasons)
+            return audio_path
+
+        output_path = Path(audio_path).parent / "normalized.wav"
+        sl.info("[pipeline] Normalisation audio requise", step="audio_normalization",
+                reasons=reasons, filters=filters)
+        result_path = service.apply(Path(audio_path), output_path, filters)
+
+        if result_path == Path(audio_path):
+            sl.warning("[pipeline] Normalisation audio ignorée, audio original conservé",
+                       step="audio_normalization")
+            return audio_path
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(
+                self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
+            )
+            fs.save_json("metadata/audio_normalization.json", {
+                "input_path": str(audio_path),
+                "output_path": str(result_path),
+                "mode": mode,
+                "reasons": reasons,
+                "filters": filters,
+                "preserve_timeline": True,
+            })
+        except Exception as exc:
+            sl.warning("[pipeline] Sauvegarde audio_normalization.json échouée",
+                       step="audio_normalization", error=str(exc))
+
+        sl.info("[pipeline] Audio normalisé",
+                step="audio_normalization", output=result_path.name)
         return str(result_path)
 
     def _define_pipeline_steps(

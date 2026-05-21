@@ -132,6 +132,7 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_quality_transcription(wf.get("quality_transcription", {}), r)
     _check_vad_section(wf.get("vad", {}), r)
     _check_audio_scene_filter(wf.get("audio_scene_filter", {}), r)
+    _check_audio_normalization(wf.get("audio_normalization", {}), r)
     _check_speaker_realignment(wf.get("speaker_realignment", {}), r)
 
     _check_llm_section(wf.get("summary_llm", {}), "workflow.summary_llm", r, is_summary=True)
@@ -272,6 +273,25 @@ def _check_audio_scene_filter(cfg: dict, r: ValidationResult) -> None:
                 r.add_error("workflow.audio_scene_filter.target_labels: valeurs acceptées music, noise, noEnergy")
     for key in ("min_segment_s", "min_total_muted_s", "edge_keep_s", "max_intervals", "timeout_s"):
         _check_optional_number(cfg, key, f"workflow.audio_scene_filter.{key}", r)
+
+
+def _check_audio_normalization(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.audio_normalization: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.audio_normalization.enabled", r)
+    _check_bool(cfg, "loudnorm_enabled", "workflow.audio_normalization.loudnorm_enabled", r)
+    modes = cfg.get("enabled_for_modes", [])
+    if not isinstance(modes, list):
+        r.add_error("workflow.audio_normalization.enabled_for_modes: doit être une liste")
+    else:
+        for mode in modes:
+            if mode not in {"fast", "quality"}:
+                r.add_error("workflow.audio_normalization.enabled_for_modes: valeurs acceptées fast, quality")
+    for key in ("target_i", "true_peak", "lra", "highpass_hz", "timeout_s"):
+        _check_optional_number(cfg, key, f"workflow.audio_normalization.{key}", r)
 
 
 def _check_speaker_realignment(cfg: dict, r: ValidationResult) -> None:

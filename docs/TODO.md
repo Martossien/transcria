@@ -108,9 +108,11 @@ Ces améliorations doivent rester neutres, auditables et sans référence à des
    - Fait : `metadata/audio_scene_filter.json` documente les intervalles, raisons et `preserve_timeline=true`.
    - À valider terrain : activer seulement sur corpus interne anonymisé et comparer complétude SRT, hallucinations et alignement locuteur.
 
-6. **Étudier une normalisation audio légère**
-   - Évaluer seulement des traitements simples, mesurables et réversibles.
-   - Refuser tout traitement générique s'il rallonge trop le pipeline ou masque des signaux utiles à l'audit qualité.
+6. **Étudier une normalisation audio légère** — démarré le 2026-05-21
+   - Fait : ajout d'une normalisation optionnelle `workflow.audio_normalization`, désactivée par défaut.
+   - Fait : filtres explicites et paramétrables (`loudnorm`, high-pass optionnel), sans changement de durée.
+   - Fait : `metadata/audio_normalization.json` documente les filtres appliqués et `preserve_timeline=true`.
+   - À valider terrain : comparer hallucinations, score qualité, temps de traitement et stabilité des timestamps avant activation.
 
 ---
 

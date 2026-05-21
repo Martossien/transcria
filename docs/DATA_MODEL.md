@@ -223,6 +223,7 @@ jobs/<job_id>/
 │   ├── audio_quality_decision.json # Décision qualité déterministe + signaux de scène si disponibles
 │   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
 │   ├── audio_scene_filter.json     # Filtrage pré-STT optionnel, timeline préservée
+│   ├── audio_normalization.json    # Normalisation pré-STT optionnelle, timeline préservée
 │   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
@@ -461,6 +462,23 @@ Produit uniquement si `workflow.audio_scene_filter.enabled=true` et si un filtra
 ```
 
 - `preserve_timeline=true` est contractuel : ne pas remplacer ce filtre par une coupe d'audio sans remapper explicitement tous les timestamps.
+
+### audio_normalization.json
+
+Produit uniquement si `workflow.audio_normalization.enabled=true` et si la normalisation a réellement été appliquée avant STT.
+
+```json
+{
+  "input_path": "/jobs/<id>/input/scene_filtered.wav",
+  "output_path": "/jobs/<id>/input/normalized.wav",
+  "mode": "quality",
+  "reasons": ["filters=2"],
+  "filters": ["highpass=f=80", "loudnorm=I=-23:TP=-2:LRA=11"],
+  "preserve_timeline": true
+}
+```
+
+- La normalisation ne doit pas changer la durée audio. Si ffmpeg échoue ou ne produit pas de fichier exploitable, le pipeline conserve l'audio d'entrée.
 
 ### audio_quality_decision.json
 

@@ -100,6 +100,7 @@ transcria/
       scene_analyzer.py     # AudioSceneAnalyzer — orchestrateur subprocess analyse de scène
       _scene_analysis_worker.py # Worker subprocess : pipeline RMS→flatness/ZCR→pitch YIN (librosa)
       scene_filter.py       # AudioSceneFilterService — silence optionnel des zones non vocales sans décaler les timestamps
+      normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle sans décaler les timestamps
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
@@ -224,6 +225,7 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 1. `_run_audio_scene_analysis()` — crée `AudioSceneAnalyzer(config)`, appelle `analyze(audio_path)` dans un subprocess isolé (librosa CPU), sauvegarde le résultat dans `metadata/audio_scene.json` si non vide. Retourne `{}` si désactivé, timeout ou erreur.
 2. `_run_source_separation()` — charge `metadata/audio_analysis.json` + `metadata/audio_quality_decision.json`, appelle `SourceSeparationDecider.should_separate(analysis, quality, audio_scene=scene)`. Si séparation décidée, `SourceSeparationService.separate()` produit `vocals.wav` dans le répertoire input. La piste vocale extraite remplace `audio_path` pour la suite du pipeline.
 3. `_run_audio_scene_filter()` — option désactivée par défaut (`workflow.audio_scene_filter.enabled=false`). Si activée pour le mode courant, met en silence les longues zones non vocales ciblées sans couper l'audio, produit `scene_filtered.wav`, et écrit `metadata/audio_scene_filter.json` avec `preserve_timeline=true`.
+4. `_run_audio_normalization()` — option désactivée par défaut (`workflow.audio_normalization.enabled=false`). Si activée pour le mode courant, applique des filtres ffmpeg simples (`loudnorm`, high-pass optionnel), produit `normalized.wav`, et écrit `metadata/audio_normalization.json` avec `preserve_timeline=true`.
 
 Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 

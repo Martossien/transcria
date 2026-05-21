@@ -286,6 +286,25 @@ les timestamps du SRT. Désactivé par défaut.
 
 **Impact :** si le filtre s'applique, `input/scene_filtered.wav` remplace l'audio transmis au STT et `metadata/audio_scene_filter.json` documente les intervalles. En cas d'erreur ffmpeg, l'audio original est conservé.
 
+#### `workflow.audio_normalization`
+
+Normalisation audio légère optionnelle avant STT. Elle utilise ffmpeg, conserve
+la durée du média et reste désactivée par défaut tant que les gains ne sont pas
+validés sur corpus interne.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active la normalisation pré-STT |
+| `enabled_for_modes` | list[string] | `["quality"]` | Modes où la normalisation peut s'appliquer |
+| `loudnorm_enabled` | bool | `true` | Active le filtre loudness `loudnorm` |
+| `target_i` | float | `-23.0` | Loudness intégré cible |
+| `true_peak` | float | `-2.0` | True peak cible |
+| `lra` | float | `11.0` | Loudness range cible |
+| `highpass_hz` | float/null | `null` | Fréquence du high-pass optionnel ; `null` le désactive |
+| `timeout_s` | int | `300` | Timeout ffmpeg en secondes |
+
+**Impact :** si la normalisation s'applique, `input/normalized.wav` remplace l'audio transmis au STT et `metadata/audio_normalization.json` documente les filtres. En cas d'erreur ffmpeg, l'audio original est conservé.
+
 #### `workflow.source_separation`
 
 Séparation de sources vocales via Demucs. Ne s'active **jamais automatiquement** :

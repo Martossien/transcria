@@ -110,6 +110,16 @@ _DEFAULT_CONFIG = {
             "max_intervals": 100,
             "timeout_s": 300,
         },
+        "audio_normalization": {
+            "enabled": False,
+            "enabled_for_modes": ["quality"],
+            "loudnorm_enabled": True,
+            "target_i": -23.0,
+            "true_peak": -2.0,
+            "lra": 11.0,
+            "highpass_hz": None,
+            "timeout_s": 300,
+        },
         "speaker_realignment": {
             "enabled": True,
             "min_word_overlap_s": 0.01,

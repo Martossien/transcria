@@ -144,6 +144,18 @@ workflow:
     edge_keep_s: 0.15
     max_intervals: 100
     timeout_s: 300
+  audio_normalization:
+    # Option qualité expérimentale : normalisation légère avant STT, sans changer
+    # la durée audio. Désactivée par défaut tant que les gains ne sont pas mesurés.
+    enabled: false
+    enabled_for_modes:
+      - "quality"
+    loudnorm_enabled: true
+    target_i: -23.0
+    true_peak: -2.0
+    lra: 11.0
+    highpass_hz: null
+    timeout_s: 300
   source_separation:
     # Séparation de sources vocales via Demucs (pip install demucs).
     # Ne s'active JAMAIS automatiquement : c'est SourceSeparationDecider qui

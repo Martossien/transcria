@@ -270,6 +270,23 @@ class TestBootstrapConfig:
 
         assert result.is_valid
 
+    def test_validate_config_accepts_audio_normalization_section(self):
+        cfg = load_config()
+        cfg["workflow"]["audio_normalization"] = {
+            "enabled": False,
+            "enabled_for_modes": ["quality"],
+            "loudnorm_enabled": True,
+            "target_i": -23.0,
+            "true_peak": -2.0,
+            "lra": 11.0,
+            "highpass_hz": None,
+            "timeout_s": 300,
+        }
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"
         spec = importlib.util.spec_from_file_location("bootstrap_config", module_path)
