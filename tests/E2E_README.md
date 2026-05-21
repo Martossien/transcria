@@ -10,8 +10,10 @@
 3. validation du contexte, des participants et du lexique via les managers applicatifs
 4. mapping des `SPEAKER_XX` sans noms humains injectés
 5. `PipelineService.run_process(..., mode="quality")` :
-   - analyse de scène audio → `metadata/audio_scene.json` avec `gender_segments` horodatés
-   - séparation de sources optionnelle (Demucs)
+   - analyse de scène audio → `metadata/audio_scene.json` avec ratios, `scene_segments`, `problem_segments` et `gender_segments`
+   - séparation de sources optionnelle (Demucs) → `input/vocals.wav` si appliquée
+   - filtrage scène optionnel → `input/scene_filtered.wav` + `metadata/audio_scene_filter.json`
+   - normalisation audio optionnelle → `input/normalized.wav` + `metadata/audio_normalization.json`
    - transcription finale (Cohere ou Whisper qualité)
    - diarisation pyannote → `speaker_turns.json` → `_inject_speaker_genders` attribue le genre (avec `audio_scene.json` déjà disponible)
    - correction LLM d'arbitrage
@@ -37,6 +39,10 @@ Le test complet nécessite :
 - ffmpeg/ffprobe ;
 - GPU NVIDIA pour le pipeline complet.
 
+Les prétraitements `audio_scene_filter` et `audio_normalization` préservent la timeline :
+ils ne coupent pas l'audio. Les métadonnées associées doivent contenir
+`preserve_timeline=true`.
+
 ## Commandes
 
 Run complet sur l'audio par défaut :
@@ -57,6 +63,29 @@ Run plus rapide sans LLM :
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --skip-llm
 ```
 
+Run avec les prétraitements audio optionnels forcés :
+
+```bash
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --skip-llm \
+  --enable-audio-scene \
+  --enable-scene-filter \
+  --enable-audio-normalization \
+  --keep
+```
+
+Run avec séparation de sources forcée (nécessite Demucs fonctionnel ; la décision
+reste soumise aux seuils du pipeline) :
+
+```bash
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --enable-audio-scene \
+  --enable-source-separation \
+  --keep
+```
+
 Options utiles :
 
 ```bash
@@ -66,6 +95,10 @@ Options utiles :
 --skip-diarization        désactive pyannote
 --stt-backend cohere      backend STT par défaut
 --stt-backend whisper     test avec faster-whisper
+--enable-audio-scene          force l'analyse de scène audio
+--enable-scene-filter         force le filtre scène pré-STT (désactivé par défaut)
+--enable-audio-normalization  force la normalisation pré-STT (désactivée par défaut)
+--enable-source-separation    force l'activation du service de séparation (si seuils atteints)
 ```
 
 ## Artefacts vérifiés
@@ -73,7 +106,12 @@ Options utiles :
 Le test contrôle notamment :
 - `metadata/audio_analysis.json`
 - `metadata/audio_quality_decision.json` si décision qualité écrite
-- `metadata/audio_scene.json` (optionnel — contient `gender_segments` si `detect_gender=true`)
+- `metadata/audio_scene.json` (optionnel — ratios, `scene_segments`, `problem_segments`, `gender_segments`)
+- `metadata/audio_scene_filter.json` si filtrage scène appliqué (`preserve_timeline=true`)
+- `metadata/audio_normalization.json` si normalisation appliquée (`preserve_timeline=true`)
+- `input/vocals.wav` si séparation de sources appliquée
+- `input/scene_filtered.wav` si filtrage scène appliqué
+- `input/normalized.wav` si normalisation appliquée
 - `summary/quick_transcript.txt`
 - `summary/summary.json`
 - `summary/summary.md`

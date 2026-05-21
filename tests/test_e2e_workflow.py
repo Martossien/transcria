@@ -15,8 +15,13 @@ l'application :
 4. SpeakerDetector.save_mapping() + application des rôles LLM
 5. PipelineService.run_process(..., mode="quality") :
    - analyse de scène audio (subprocess librosa, pré-transcription) :
-     produit metadata/audio_scene.json avec gender_segments horodatés
+     produit metadata/audio_scene.json avec ratios, scene_segments,
+     problem_segments et gender_segments horodatés
    - séparation de sources optionnelle (Demucs, pré-transcription)
+   - filtrage scène optionnel : silence des zones non vocales longues sans
+     décaler la timeline
+   - normalisation audio optionnelle : filtres ffmpeg légers sans décaler la
+     timeline
    - transcription finale (Cohere ou Whisper quality)
    - diarisation pyannote (mode quality uniquement)
    - correction LLM d'arbitrage
@@ -72,6 +77,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-llm", action="store_true", help="Désactiver résumé/correction LLM")
     parser.add_argument("--skip-diarization", action="store_true", help="Désactiver pyannote")
     parser.add_argument("--stt-backend", choices=["cohere", "whisper"], default="cohere")
+    parser.add_argument("--enable-audio-scene", action="store_true", help="Forcer workflow.audio_scene.enabled=true")
+    parser.add_argument("--enable-scene-filter", action="store_true", help="Forcer le filtrage scène pré-STT")
+    parser.add_argument("--enable-audio-normalization", action="store_true", help="Forcer la normalisation audio pré-STT")
+    parser.add_argument("--enable-source-separation", action="store_true", help="Forcer workflow.source_separation.enabled=true")
     return parser.parse_args()
 
 
@@ -283,6 +292,47 @@ def assert_file(path: Path, label: str) -> bool:
     return False
 
 
+def print_json_artifact(fs, relative_path: str, label: str) -> dict | list | None:
+    path = fs.job_dir / relative_path
+    if not assert_file(path, label):
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        warn(f"{label}: JSON illisible ({exc})")
+        return None
+    if isinstance(data, dict):
+        preview_keys = ", ".join(list(data.keys())[:8])
+        print(f"    clés: {preview_keys}")
+    return data
+
+
+def apply_e2e_feature_flags(cfg: dict, args: argparse.Namespace) -> None:
+    workflow = cfg.setdefault("workflow", {})
+    if args.enable_audio_scene or args.enable_scene_filter:
+        workflow.setdefault("audio_scene", {})["enabled"] = True
+    if args.enable_scene_filter:
+        workflow.setdefault("audio_scene_filter", {})["enabled"] = True
+        workflow.setdefault("audio_scene_filter", {}).setdefault("enabled_for_modes", ["quality"])
+    if args.enable_audio_normalization:
+        workflow.setdefault("audio_normalization", {})["enabled"] = True
+        workflow.setdefault("audio_normalization", {}).setdefault("enabled_for_modes", ["quality"])
+    if args.enable_source_separation:
+        workflow.setdefault("source_separation", {})["enabled"] = True
+
+
+def print_preprocessing_config(cfg: dict) -> None:
+    workflow = cfg.get("workflow", {})
+    items = [
+        ("audio_scene", workflow.get("audio_scene", {}).get("enabled", False)),
+        ("source_separation", workflow.get("source_separation", {}).get("enabled", False)),
+        ("audio_scene_filter", workflow.get("audio_scene_filter", {}).get("enabled", False)),
+        ("audio_normalization", workflow.get("audio_normalization", {}).get("enabled", False)),
+    ]
+    for name, enabled in items:
+        print(f"  {name:22s}: {'oui' if enabled else 'non'}")
+
+
 def print_summary() -> None:
     section("RESUME FINAL")
     print(f"  Job ID : {RESULTS.get('job_id', 'N/A')}")
@@ -325,6 +375,11 @@ def main() -> int:
     print(f"  STT   : {args.stt_backend}")
     print(f"  LLM   : {'non' if args.skip_llm else 'oui'}")
     print(f"  Diar  : {'non' if args.skip_diarization else 'oui'}")
+    print("  Options pré-STT forcées :")
+    print(f"    audio_scene          : {'oui' if args.enable_audio_scene else 'config'}")
+    print(f"    source_separation    : {'oui' if args.enable_source_separation else 'config'}")
+    print(f"    audio_scene_filter   : {'oui' if args.enable_scene_filter else 'config'}")
+    print(f"    audio_normalization  : {'oui' if args.enable_audio_normalization else 'config'}")
     print(f"{'#' * 70}")
 
     section("Etat initial GPU")
@@ -334,12 +389,15 @@ def main() -> int:
     timer_start("init")
     cfg = load_config()
     cfg.setdefault("models", {})["stt_backend"] = args.stt_backend
+    apply_e2e_feature_flags(cfg, args)
     if args.skip_llm:
         cfg.setdefault("workflow", {}).setdefault("summary_llm", {})["enabled"] = False
         cfg.setdefault("workflow", {}).setdefault("arbitration_llm", {})["enabled"] = False
     if args.skip_diarization:
         cfg.setdefault("workflow", {})["enable_speaker_detection"] = False
     set_config(cfg)
+    section("Configuration pré-STT effective")
+    print_preprocessing_config(cfg)
 
     app = create_app()
     app.config.update({"TESTING": True})
@@ -534,12 +592,48 @@ def main() -> int:
         optional_artifacts = [
             ("metadata/audio_quality_decision.json", "Décision qualité audio"),
             ("metadata/audio_scene.json", "Analyse de scène audio"),
+            ("metadata/audio_scene_filter.json", "Filtrage scène audio"),
+            ("metadata/audio_normalization.json", "Normalisation audio"),
+            ("input/vocals.wav", "Piste vocale séparée"),
+            ("input/scene_filtered.wav", "Audio filtré scène"),
+            ("input/normalized.wav", "Audio normalisé"),
             ("speakers/diarization_checkpoint.json", "Checkpoint diarisation"),
             ("speakers/speaker_embeddings.json", "Embeddings locuteurs"),
             ("summary/diarization_context.md", "Contexte diarisation LLM"),
         ]
         for rel_path, label in optional_artifacts:
             assert_file(fs.job_dir / rel_path, label)
+
+        section("Prétraitements audio appliqués")
+        scene_data = print_json_artifact(fs, "metadata/audio_scene.json", "audio_scene.json")
+        if isinstance(scene_data, dict):
+            ok(
+                "audio_scene: "
+                f"speech_ratio={scene_data.get('speech_ratio')} "
+                f"music_ratio={scene_data.get('music_ratio')} "
+                f"noise_ratio={scene_data.get('noise_ratio')} "
+                f"problem_segments={len(scene_data.get('problem_segments') or [])}"
+            )
+        filter_data = print_json_artifact(fs, "metadata/audio_scene_filter.json", "audio_scene_filter.json")
+        if isinstance(filter_data, dict):
+            if filter_data.get("preserve_timeline") is True:
+                ok(f"audio_scene_filter: timeline préservée, {len(filter_data.get('intervals') or [])} intervalle(s)")
+            else:
+                RESULTS["audio_scene_filter_timeline"] = False
+                fail("audio_scene_filter: preserve_timeline absent ou false")
+        elif args.enable_scene_filter:
+            warn("audio_scene_filter forcé mais aucun filtrage appliqué (souvent faute de zones filtrables)")
+
+        normalization_data = print_json_artifact(fs, "metadata/audio_normalization.json", "audio_normalization.json")
+        if isinstance(normalization_data, dict):
+            if normalization_data.get("preserve_timeline") is True:
+                ok(f"audio_normalization: timeline préservée, filtres={normalization_data.get('filters')}")
+            else:
+                RESULTS["audio_normalization_timeline"] = False
+                fail("audio_normalization: preserve_timeline absent ou false")
+        elif args.enable_audio_normalization:
+            RESULTS["audio_normalization"] = False
+            fail("audio_normalization forcée mais metadata/audio_normalization.json absent")
 
         # Vérification genre par locuteur (attribution acoustique automatique)
         section("Genre vocal par locuteur (attribution acoustique)")
