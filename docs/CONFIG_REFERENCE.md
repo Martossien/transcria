@@ -24,11 +24,11 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 | Paramètre | `config.example.yaml` | `config.yaml` (production) |
 |---|---|---|
 | `models.cohere_model_path` | `./models/cohere-asr/...` (relatif) | peut être absolu selon l'installation |
-| `workflow.summary_llm.model_id` | `local/qwen3-35b` | `local/qwen3-35b-arbitrage` |
+| `workflow.summary_llm.model_id` | `local/votre-modele-llm-ici` | identifiant du modèle utilisé |
 | `workflow.summary_llm.timeout_seconds` | 1800 | typ. 1800+ |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
-Les valeurs `local/qwen*`, `qwen_port` et scripts `stop_qwen*` sont historiques. Elles restent supportées pour compatibilité avec les anciennes installations, mais les nouvelles configurations doivent utiliser les clés génériques `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`.
+La clé `qwen_port` reste lue pour compatibilité avec les anciennes installations (alias de `arbitrage_llm_port`). Les nouvelles configurations doivent utiliser `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`. Les méthodes Python `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
 
 ---
 
@@ -320,7 +320,7 @@ Configuration de la LLM de résumé.
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active la Phase 2 LLM du résumé |
-| `model_id` | string | `"local/qwen3-35b"` | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` |
+| `model_id` | string | `""` (obligatoire) | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` — doit être défini dans `config.yaml` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
 | `timeout_seconds` | int | `120` | Timeout du résumé via opencode |
 | `use_chat_api` | bool | absent dans `_DEFAULT_CONFIG` | Ancien paramètre du chemin API direct, non utilisé par le chemin opencode actif |
@@ -346,7 +346,7 @@ Configuration du LLM d'arbitrage/correction SRT.
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `false` | Active l'arbitrage LLM |
-| `model_id` | string | `"local/qwen3-35b-arbitrage"` | Identifiant du modèle |
+| `model_id` | string | `""` (obligatoire) | Identifiant du modèle — doit être défini dans `config.yaml`, `OpenCodeRunner` lève `ValueError` si absent |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
 | `timeout_seconds` | int | `600` | Timeout de la correction SRT via opencode |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
@@ -429,7 +429,7 @@ Overrides environnement :
 Note d'exploitation :
 - Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec le modèle local configuré sur cette machine.
 - `services.llm_cleanup_ports` est volontairement générique : il peut contenir des ports vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre serveur OpenAI-compatible concurrent.
-- Les noms `qwen_port`, `launch_qwen_35b()` et `stop_qwen_35b()` sont des aliases de compatibilité ancienne version, pas des noms à réutiliser dans une nouvelle intégration.
+- La clé `qwen_port` reste acceptée en lecture par `_normalize_config` (alias de `arbitrage_llm_port`). Les méthodes `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
 - Le nombre de GPUs et la VRAM réellement consommée ne sont pas figés : ils dépendent du script (ex: `--tensor-split`), du modèle GGUF, du contexte et de la machine.
 
 ---

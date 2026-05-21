@@ -33,8 +33,8 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 507 tests collectés ; 504 passent (mock, pas de GPU requis)
-# ⚠️  2 échecs pré-existants connus dans TestWorkflowRunnerRunCorrection (non liés au code courant)
+python -m pytest tests/ -q           # 523 tests collectés ; 523 passent (mock, pas de GPU requis)
+# ⚠️  4 échecs pré-existants connus (TestWorkflowRunnerRunCorrection ×2, TestAdminConfig ×2 — non liés au code courant)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -234,10 +234,13 @@ Ces deux étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. 
 **Analyse de scène audio (`AudioSceneAnalyzer`) :**
 - Entrée : chemin audio + config `workflow.audio_scene` (seuils, timeout, detect_gender)
 - Pipeline subprocess : énergie RMS → classification spectrale (flatness/ZCR → speech/music/noise) → estimation genre YIN (pitch)
-- Sortie JSON : `{has_music, has_noise, speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}}`
+- Sortie JSON : `{has_music, has_noise, speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}, gender_segments: [{start, end, label}]}`
+  - `gender_segments` : liste des intervalles horodatés classés `"male"` ou `"female"` uniquement, utilisés par `_inject_speaker_genders` pour croiser avec les tours pyannote.
 - `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : si `audio_scene.has_music=True` → séparation forcée (prioritaire sur le score). Si `audio_scene=None` → logique score seule.
 - `WorkflowRunner._build_gender_section(audio_scene)` : méthode statique qui génère les lignes Markdown de distribution H/F pour `diarization_context.md` (visible par la LLM de résumé). Vide si `has_gender_data=False`.
-- UI : bannière genre global dans l'étape Participants (si `audio_scene.gender.has_gender_data`), select genre par locuteur (Non déterminé/Féminin/Masculin). Le genre est persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()` (champ `gender`).
+- `WorkflowRunner._assign_speaker_genders(gender_segments, turns, min_overlap_s=1.0)` : méthode statique pure. Croise les segments genre avec les tours pyannote (format flat `{speaker, start, end}`). Retourne `{speaker_id: {gender, male_s, female_s}}`. Attribue uniquement si chevauchement total ≥ `min_overlap_s` ET l'un des deux sexes domine.
+- `WorkflowRunner._inject_speaker_genders(fs, audio_scene)` : lit `speakers/speaker_turns.json` sur disque, appelle `_assign_speaker_genders`, met à jour `speaker_stats.json` (ne jamais écraser `gender` déjà renseigné). Appelée depuis `_run_pyannote_after_transcription` et `run_diarization`. **Prérequis timing** : `speaker_turns.json` et `audio_scene.json` doivent exister avant l'appel — `run_diarization` est toujours appelé après `_run_audio_scene_analysis` dans PipelineService, ce qui garantit cet ordre.
+- UI : bannière genre global dans l'étape Participants (si `audio_scene.gender.has_gender_data`), select genre par locuteur (Non déterminé/Féminin/Masculin). Le genre est persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()` (champ `gender`). Pré-rempli automatiquement par `_inject_speaker_genders` si l'attribution acoustique réussit.
 
 **Checkpoints pyannote :** `DiarizerService` réutilise `speakers/speaker_turns.json` si `speakers/diarization_checkpoint.json` correspond au même modèle et à la même empreinte audio. `speakers/speaker_embeddings.json` stocke un checkpoint acoustique simple par locuteur. Ne pas supprimer ces fichiers sans mettre à jour `docs/DATA_MODEL.md`.
 
@@ -348,7 +351,10 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-458 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+523 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+
+### `_inject_speaker_genders` — ordre d'appel et prérequis disque
+`_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).
 
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).

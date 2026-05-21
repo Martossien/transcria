@@ -9,8 +9,8 @@
 
 TranscrIA utilise deux passages LLM complémentaires :
 
-1. **LLM résumé** (`summary_prompt.txt` → opencode/Qwen) : analyse la transcription rapide, repère les termes suspects, les variantes STT et les termes métier importants, puis pré-remplit l'étape 6.
-2. **LLM correction** (`correction_prompt.txt` → opencode/Qwen) : corrige le SRT final en s'appuyant sur le contexte, les participants et le lexique validés par l'utilisateur.
+1. **LLM résumé** (`summary_prompt.txt` → opencode (LLM d'arbitrage)) : analyse la transcription rapide, repère les termes suspects, les variantes STT et les termes métier importants, puis pré-remplit l'étape 6.
+2. **LLM correction** (`correction_prompt.txt` → opencode (LLM d'arbitrage)) : corrige le SRT final en s'appuyant sur le contexte, les participants et le lexique validés par l'utilisateur.
 
 Le lexique est donc le pont entre les deux phases. Il ne doit pas être un simple dictionnaire de remplacement mécanique : une transcription de réunion est de l'oral, avec sigles prononcés, formes développées, hésitations, homophonies, erreurs STT et entités proches. Le lexique doit fournir à la LLM de correction une **liste de formes douteuses validées par l’humain**, pas un glossaire et pas une règle de `grep`.
 

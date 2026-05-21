@@ -1,54 +1,49 @@
 # TODO — Dette technique et évolutions
 
-## Généralisation de la LLM d'arbitrage
+## Généralisation LLM d'arbitrage — ✅ Complété (2026-05-21)
 
-Statut 2026-05-20 : socle implémenté. Les noms génériques existent côté code, config et scripts
-(`arbitrage_llm_port`, `launch_arbitrage_llm()`, `stop_arbitrage_llm()`), avec aliases
-compatibles pour les anciennes configs/tests (`qwen_port`, `launch_qwen_35b()`,
-`stop_qwen_35b()`). `llm_cleanup_ports` remplace le port `vllm_port` trop spécifique
-pour couvrir vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre backend concurrent.
-`stop_llm_backend.sh` est le script générique, `stop_arbitrage_llm.sh` le wrapper standard,
-et `stop_qwen.sh` / `stop_qwen_vllm.sh` sont des wrappers legacy.
+**Principe fondamental :** l'application est 100 % indépendante du nom du modèle LLM.
+Changer de modèle ne nécessite qu'un changement de `config.yaml`, zéro modification de code.
+`OpenCodeRunner.__init__` lève `ValueError` si `model_id` est absent ou vide.
 
-### Contexte
-La LLM d'arbitrage est désormais pilotée par config. Le modèle local livré sur la machine
-peut rester un Qwen via llama.cpp, mais le code principal ne doit pas dépendre de ce nom.
-Toute référence `qwen_*` restante doit être comprise comme alias de compatibilité ancienne version
-ou exemple de modèle déployé localement, jamais comme contrat applicatif.
+---
 
-### Implémenté dans le code
+### Cat. A — Valeurs par défaut — ✅ Fait
 
-**`transcria/gpu/vram_manager.py`**
-- `launch_qwen_35b()` → renommer `launch_arbitrage_llm()` — **implémenté, alias conservé**
-- `stop_qwen_35b()` → renommer `stop_arbitrage_llm()` — **implémenté, alias conservé**
-- `self.qwen_port` → renommer `self.arbitrage_llm_port` — **implémenté, alias conservé**
-- `self._qwen_pid` → renommer `self._arbitrage_llm_pid` — **implémenté, alias conservé**
-- `self.vllm_port` / `stop_vllm_port_8000()` → généraliser en `llm_cleanup_ports` / `stop_cleanup_llm_ports()` — **implémenté, alias conservé**
-- `self.llm_vram_mb` → déjà générique, OK
+Ces valeurs sont utilisées quand `config.yaml` ne définit pas le `model_id`. Elles lient
+silencieusement l'application à Qwen si la config est incomplète.
 
-### Implémenté dans la config (`configs/`)
+- ✅ `config/loader.py` : `model_id` par défaut `""` dans `summary_llm` et `arbitration_llm`
+- ✅ `gpu/llm_backend.py` : fallbacks Qwen supprimés sur les trois backends
+- ✅ `gpu/opencode_runner.py` : `ValueError` levée si `model_id` absent ou vide
 
-**Clé de port**
-- `services.qwen_port` → renommer `services.arbitrage_llm_port` — **implémenté avec compatibilité lecture**
-- `services.vllm_port` → remplacer par `services.llm_cleanup_ports` — **implémenté avec compatibilité lecture**
+### Cat. B — Aliases de compatibilité — ✅ Supprimés
 
-**Script d'arbitrage**
-- `services.arbitrage_script` → déjà générique, OK
-- `services.stop_script` → déjà générique, OK
+- ✅ `vram_manager.py` : `qwen_port`, `_qwen_pid`, `launch_qwen_35b()`, `stop_qwen_35b()` supprimés
+- ✅ `workflow/runner.py` L. 151/722 : fallback `qwen_port` remplacé par `arbitrage_llm_port`
+- Conservé : `services.qwen_port` lu en fallback dans `loader.py` et `llm_backend.py`
+  (compatibilité installation existante)
 
-**Section LLM**
-- `workflow.summary_llm.model_id` → déjà générique, OK
+### Cat. C — Tests — ✅ Migrés
 
-### Principe cible
-Tout ce qui touche à la LLM d'arbitrage doit être piloté par la config.
-Changer de modèle (Qwen → Mistral, LLaMA, etc.) ne doit nécessiter qu'un changement de config,
-zéro modification de code.
+- ✅ `test_gpu.py` : classes renommées, mocks neutralisés (`test-llm`), `_arbitrage_llm_pid`
+- ✅ `test_opencode_runner.py` : défauts Qwen supprimés, tests `ValueError` ajoutés
+- ✅ `test_workflow_runner.py` : renommages, assertions simplifiées, `launch/stop_arbitrage_llm`
+- ✅ `test_config.py` : `local/test-llm` au lieu des valeurs Qwen
 
-### Reste à faire
-- Nettoyer progressivement les libellés historiques des tests E2E et des documents de présentation
-  lorsqu'ils ne décrivent plus explicitement le modèle déployé.
-- À terme, remplacer les valeurs par défaut `local/qwen*` dans les templates de configuration par
-  des placeholders neutres, en conservant une note de migration pour les installations existantes.
+### Cat. D — Scripts — ✅ Fait
+
+- ✅ `scripts/launch_arbitrage.sh.template` créé (variables `LLM_MODEL_PATH`, `LLM_ALIAS`, `LLM_PORT`)
+- ✅ `scripts/stop_qwen_vllm.sh` : PID file générique (`/root/.vllm_backend.pid`)
+- Conservé : `scripts/stop_qwen.sh`, `scripts/stop_qwen_vllm.sh` — wrappers legacy opérateurs
+
+### Cat. E — Config et docs — ✅ Fait
+
+- ✅ `config.example.yaml` : `model_id` → `local/votre-modele-llm-ici`, `arbitrage_api_model_id` commenté
+- ✅ `docs/CONFIG_REFERENCE.md` : valeurs par défaut mises à jour, note migration aliases
+- ✅ `docs/INSTALL.md` : `model_id` exemples neutralisés, variables ENV génériques
+- ✅ `docs/LEXIQUE_AMELIORATION.md` : `opencode/Qwen` → `opencode (LLM d'arbitrage)`
+- ✅ `docs/VAD_PYANNOTE_PISTES.md` : note migration mise à jour
 
 ---
 
@@ -57,27 +52,110 @@ zéro modification de code.
 
 ### Implémenté
 - Whisper large-v3 est utilisé en mode qualité via `workflow.quality_transcription` et peut être forcé automatiquement si `AudioQualityEvaluator` classe le job dégradé.
-- `metadata/audio_quality_decision.json` trace la décision Cohere/Whisper.
-- `workflow.vad.adaptive` ajuste les seuils VAD à partir des diagnostics qualité audio.
+- `metadata/audio_quality_decision.json` trace la décision Cohere/Whisper avec niveau, score et raisons.
+- `workflow.vad.adaptive` ajuste les seuils VAD à partir des diagnostics qualité audio via `AdaptiveVADConfig`.
 - `speaker_realignment.py` réaligne les segments avec timestamps mots et tours pyannote.
 - `forced_alignment.py` fournit un alignement CTC natif torchaudio, sans dépendance WhisperX, désactivé par défaut.
 - `speakers/diarization_checkpoint.json` et `speakers/speaker_embeddings.json` ajoutent un cache/reprise pyannote par job.
-
-## Analyse de scène audio et intégration pipeline
-
-### Implémenté (2026-05-21)
-- `transcria/audio/scene_analyzer.py` : `AudioSceneAnalyzer` — subprocess isolé librosa, pipeline RMS → flatness/ZCR → pitch YIN.
-- `transcria/audio/_scene_analysis_worker.py` : worker subprocess avec fonctions pures testables unitairement (`_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_frames_to_segments`) et fonctions librosa isolées (`_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`).
-- `PipelineService._run_audio_scene_analysis()` + `_run_source_separation()` : intégrées avant la transcription. Le subprocess se termine avant le chargement GPU. `metadata/audio_scene.json` sauvegardé si non vide.
-- `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : `has_music=True` → séparation prioritaire.
-- `WorkflowRunner._build_gender_section(audio_scene)` + injection dans `_write_diarization_context(fs, speakers_result, audio_scene)`.
-- UI : bannière genre global + select genre par locuteur dans `job_wizard.html` / `wizard.js`. Champ `gender` persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()`.
-- 504 tests passent (507 collectés) ; 2 échecs pré-existants dans `TestWorkflowRunnerRunCorrection`.
+- `AudioQualityEvaluator` dans `transcria/quality/audio_quality.py` : scoring déterministe basé sur bitrate, sample_rate, segments non-latins, taux courts, ratio VAD — retourne `level` (ok/suspect/degrade) et `force_quality_backend`.
 
 ### Reste à valider terrain
 - Activer `whisper.forced_alignment.enabled` seulement après tests sur vrais audios longs.
 - Mesurer le gain du VAD adaptatif par profil audio avant de créer des presets plus spécialisés.
 - Comparer Cohere/Whisper sur un corpus interne anonymisé pour ajuster les seuils de `workflow.audio_quality`.
+
+---
+
+## Analyse de scène audio et intégration pipeline
+
+### Implémenté (2026-05-21)
+- `transcria/audio/scene_analyzer.py` : `AudioSceneAnalyzer` — subprocess isolé librosa, pipeline RMS → flatness/ZCR → pitch YIN.
+- `transcria/audio/_scene_analysis_worker.py` : worker subprocess avec fonctions pures testables unitairement (`_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_frames_to_segments`) et fonctions librosa isolées (`_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`). Produit `gender_segments` horodatés dans le JSON de sortie.
+- `PipelineService._run_audio_scene_analysis()` : intégrée avant la transcription. Le subprocess se termine avant le chargement GPU. `metadata/audio_scene.json` sauvegardé si non vide.
+- `WorkflowRunner._build_gender_section(audio_scene)` + injection dans `_write_diarization_context(fs, speakers_result, audio_scene, speaker_genders)`.
+- UI : bannière genre global + select genre par locuteur dans `job_wizard.html` / `wizard.js`. Champ `gender` persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()`.
+
+---
+
+## Attribution automatique du genre par locuteur
+
+### Implémenté (2026-05-21)
+- `_scene_analysis_worker.py` : `gender_segments` ajouté au JSON de sortie — liste `[{start, end, label}]`, filtrée `male|female` uniquement.
+- `WorkflowRunner._assign_speaker_genders(gender_segments, turns, min_overlap_s=1.0)` : méthode statique pure. Croise les segments genre avec les tours pyannote. Attribue uniquement si chevauchement ≥ 1s et l'un des sexes domine.
+- `WorkflowRunner._inject_speaker_genders(fs, audio_scene)` : lit `speaker_turns.json`, appelle `_assign_speaker_genders`, met à jour `speaker_stats.json` sans jamais écraser un choix utilisateur. Appelée depuis `_run_pyannote_after_transcription` et `run_diarization`.
+- `_write_diarization_context` enrichi : section "Genre vocal par locuteur" ajoutée au contexte LLM quand `speaker_genders` est fourni.
+- 523 tests collectés, 523 passent ; 4 échecs pré-existants connus (non liés à ce module).
+
+### Reste à valider terrain
+- Activer `whisper.forced_alignment.enabled` seulement après tests sur vrais audios longs.
+- Mesurer le gain du VAD adaptatif par profil audio avant de créer des presets plus spécialisés.
+- Comparer Cohere/Whisper sur un corpus interne anonymisé pour ajuster les seuils de `workflow.audio_quality`.
+
+---
+
+## Séparation de sources vocales (Demucs)
+
+### Implémenté (2026-05-21)
+- `transcria/audio/source_separation.py` : deux classes distinctes.
+  - `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : scoring basé sur des
+    signaux pondérés (`vad_peu_selectif`, `segments_non_latins`, `segments_courts_nombreux`,
+    `diagnostic_resume:degrade`, `vad_agressif` négatif). Si `audio_scene.has_music=True`,
+    la séparation est forcée sans calcul de score (priorité absolue).
+  - `SourceSeparationService.separate(audio_path, output_path)` : extraction de la tige vocale
+    via Demucs (`htdemucs` par défaut). Dégradation gracieuse si demucs absent — retourne
+    `audio_path` d'origine avec un warning, sans exception.
+- `PipelineService._run_source_separation()` : intégrée après `_run_audio_scene_analysis()`,
+  avant `Transcriber.transcribe()`. Le chemin audio retourné (original ou `vocals.wav`) remplace
+  `audio_path` pour tout le reste du pipeline.
+- `config.example.yaml` section `workflow.source_separation` : paramètres complets
+  (`enabled`, `backend`, `model`, `device`, `segment_s`, `stem`, `decision.min_score`,
+  `decision.min_duration_s`). Désactivé par défaut (`enabled: false`).
+- Tests dans `tests/test_pipeline_service.py` : couverture décideur (refus, acceptance),
+  service (résultat ok, fallback sur l'original), ordre d'appel (scène puis séparation avant
+  transcription).
+
+### Dépendance optionnelle
+`demucs` n'est pas dans `requirements.txt` (dépendance optionnelle, GPU requis, ~2 Go modèle).
+Installation manuelle : `pip install demucs`. Absence gracieuse : `SourceSeparationService.available`
+retourne `False` et le pipeline conserve l'audio original sans erreur.
+
+### Reste à valider terrain
+- Tester sur des enregistrements avec fond musical réel pour valider le gain STT.
+- Mesurer l'impact sur la VRAM (Demucs en CPU vs GPU) et ajuster `segment_s` en conséquence.
+- Envisager d'activer `enabled: true` par défaut une fois les seuils de `decision` calibrés.
+
+---
+
+## Contrôles qualité étendus
+
+### Implémenté (2026-05-20 à 2026-05-21)
+`QualityReporter.run_all_checks()` compte **10 contrôles** (`total_checks`) plus des vérifications
+additionnelles loguées dans `checks` sans incrément de compteur.
+
+| Contrôle | Type JSON | Incrément total_checks |
+|---|---|---|
+| Segments vides | `empty_segments` | oui |
+| Segments très courts (< 0.5s) | `short_segments` | oui |
+| Segments très longs (> 60s) | `long_segments` | oui |
+| Trous temporels (> 5s) | `time_gaps` | oui |
+| Chevauchements | `overlaps` | oui |
+| Locuteurs non mappés (SPEAKER_XX) | `unmapped_speakers` | oui |
+| Termes normalisés absents du SRT corrigé | `missing_lexicon_terms` | oui |
+| Variantes lexique non résolues (exactes + graphies proches) | `unresolved_lexicon_variants` | oui |
+| Noms de locuteurs modifiés par la LLM (`mapped_name` violé) | `speaker_name_violations` | oui |
+| Couverture audio (< 80%) | `low_coverage` | oui |
+| Ratio mots/seconde suspect | `low_word_rate` / `high_word_rate` | oui |
+| Segments marqués `[ÉTRANGER]` | `foreign_segments` | non |
+| Segments avec écriture non latine (arabe, CJK…) | `non_latin_segments` | non |
+| Segments courts suspects (heuristique bruit ASR) | `suspicious_short_segments` | non |
+
+`review_load` dict résume les compteurs de relecture humaine : `foreign_segments`,
+`non_latin_segments`, `suspicious_short_segments`, `speaker_name_violations`.
+
+`asr_noise_markers` dans `config.yaml` section `quality` : liste de marqueurs courts configurables
+(ex: "thank you", "gracias") détectés comme bruit ASR dans les segments courts suspects.
+
+Toutes les seuils sont configurables dans `config.yaml` section `quality.thresholds`.
 
 ---
 
@@ -117,31 +195,44 @@ zéro modification de code.
 
 ---
 
-## Améliorations du lexique (suite)
+## Améliorations du lexique
 
 ### Contexte
 Voir `docs/LEXIQUE_AMELIORATION.md` pour le détail complet.
-Les actions 1 à 5 sont implémentées. Les actions 6 à 9 restent à faire.
+**Les actions 1 à 9 sont toutes implémentées.** Le tableau ci-dessous reflète l'état réel du code.
+
+| Priorité | Action | Fichiers | État |
+|---|---|---|---|
+| 1–5 | Améliorations initiales (catégories, variantes, contextes, priorités, replace_by) | `lexicon.py`, `job_wizard.html`, `wizard.js`, `correction_prompt.txt` | ✅ implémenté |
+| 6 | Afficher 1 à 3 extraits de validation (`contexts`) dans l'UI lexique | `job_wizard.html`, `wizard.js` | ❌ reste à faire |
+| 7 | Correction contextuelle dans `correction_prompt.txt` : ne pas corriger une variante courte hors contexte | `configs/prompts/correction_prompt.txt` | ✅ implémenté — v1.9 §6.4 "Variantes courtes ou génériques" |
+| 8 | Contrôle qualité signalant les variantes exactes ou graphies proches non résolues après correction | `quality_report.py`, `lexicon_checks.py`, tests | ✅ implémenté — check `unresolved_lexicon_variants` (exact + close_forms), `LexiconChecker.find_unresolved_terms()`, tests dans `test_quality.py` et `test_quality_deep.py` |
+| 9 | Ajuster les tests unitaires du parser, du contexte, du lexique et de la qualité | `tests/` | ✅ implémenté — couverts dans `test_quality.py`, `test_quality_deep.py`, `test_context.py` |
 
 ### Reste à faire
 
-| Priorité | Action | Fichiers | Risque |
-|---|---|---|---|
-| 6 | Ajouter `contexts` pour afficher 1 à 3 extraits de validation dans l'UI | `job_wizard.html`, `wizard.js` | moyen UX |
-| 7 | Modifier `correction_prompt.txt` pour correction contextuelle, sans remplacement global aveugle | `configs/prompts/correction_prompt.txt` | moyen |
-| 8 | Ajouter un contrôle qualité signalant les variantes exactes ou graphies proches non résolues après correction | `quality_report.py`, `lexicon_checks.py`, tests | faible |
-| 9 | Ajuster les tests unitaires du parser, du contexte, du lexique et de la qualité | `tests/` | faible |
+**Action 6 — Contextes lexique dans l'UI**
 
-### Remarque
-L'action 8 (check qualité variantes non résolues) est partiellement implémentée — `LexiconChecker.find_unresolved_terms()` existe et le check 7bis est dans `QualityReporter`. L'amélioration restante est le signalement plus fin des graphies proches dans le rapport.
+Afficher dans l'étape Lexique (wizard, onglet/accordéon par terme) les 1 à 3 extraits de
+validation stockés dans `session_lexicon.json[].contexts`. Ces extraits sont produits par la
+LLM de résumé et permettent à l'utilisateur de valider ou corriger un terme en voyant son
+contexte réel dans la transcription.
+
+- Fichiers à modifier : `transcria/web/templates/job_wizard.html` (section lexique),
+  `transcria/web/static/js/wizard.js` (rendu des items lexique).
+- Format JSON déjà existant : `contexts: [{variant, timecode, speaker, quote, reason}]`.
+- Risque : moyen (UX uniquement, pas de backend à modifier).
 
 ---
 
-## Refactoring code qualité
+## Refactoring code qualité — ✅ Complété (2026-05-21)
 
-### Doublons de code
-- `is_port_open()` et `_wait_for_port()` existent dans `vram_manager.py` et `llm_backend.py` — factoriser.
-- `import subprocess` en double dans `converter.py` (lignes 1 et 3).
+### Doublons de code — ✅ Factorisé
+- ✅ `is_port_open()` factorisé dans `transcria/gpu/_port_utils.py` ; `vram_manager.py` et
+  `llm_backend.py` délèguent via un wrapper mince (monkeypatch conservé sur les classes).
+- ✅ Double `import subprocess` supprimé dans `transcria/audio/converter.py`.
 
-### Style
-- `__import__("json")` dans `job_context_builder.py:69` — remplacer par un import normal.
+### Bugs mineurs — ✅ Corrigés
+- ✅ `__import__("json")` remplacé par `import json` normal dans `job_context_builder.py`.
+- ✅ `JobContextBuilder.build()` accepte `config: dict | None` ; `processing.default_stt_model`
+  et `processing.diarization_model` lus depuis `config["models"]` si fourni.

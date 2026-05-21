@@ -418,12 +418,17 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
       "noise":  {"duration_s": 108.3, "ratio": 0.18}
     },
     "total_duration_s": 586.0
-  }
+  },
+  "gender_segments": [
+    {"start": 1.568, "end": 4.210, "label": "female"},
+    {"start": 8.100, "end": 12.430, "label": "male"}
+  ]
 }
 ```
 
 - `has_music=true` → `SourceSeparationDecider` force la séparation de sources (prioritaire sur le score).
-- La section `gender` est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+- La section `gender` (globale) est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
+- `gender_segments` : liste des intervalles classés `"male"` ou `"female"` uniquement. Utilisée par `WorkflowRunner._inject_speaker_genders()` pour croiser avec `speaker_turns.json` et attribuer acoustiquement un genre à chaque SPEAKER_XX dans `speaker_stats.json`. Vide si `detect_gender=false` ou audio trop court.
 - `stats.labels` peut contenir : `speech`, `male`, `female`, `music`, `noise`.
 
 ### quality_report.json

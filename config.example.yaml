@@ -25,7 +25,7 @@ services:
   # model_id tel que rapporté par /v1/models (alias du backend OpenAI-compatible)
   # utilisé par ensure_arbitrage_llm_ready() pour éviter un redémarrage inutile
   # lancer scripts/check_arbitrage_llm.sh pour obtenir la valeur exacte
-  arbitrage_api_model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
+  # arbitrage_api_model_id: "votre-modele-llm-ici"
 
 models:
   stt_backend: "cohere"
@@ -145,12 +145,12 @@ workflow:
     max_concurrent_jobs: 1
   summary_llm:
     enabled: true
-    model_id: "local/qwen3-35b"
+    model_id: "local/votre-modele-llm-ici"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
   arbitration_llm:
     enabled: false
-    model_id: "local/qwen3-35b-arbitrage"
+    model_id: "local/votre-modele-llm-ici"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"

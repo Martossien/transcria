@@ -503,9 +503,10 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 
 | Variable | Défaut | Description |
 |---|---|---|
-| `QWEN_PORT` | `8080` | Port d'écoute du serveur LLM |
-| `MODEL_PATH` | `./models/qwen3-35b-arbitrage/UD-Q8_K_XL/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf` | Chemin du modèle GGUF |
-| `LLAMA_BIN` | `llama-server` | Chemin du binaire llama-server |
+| `LLM_PORT` | `8080` | Port d'écoute du serveur LLM |
+| `LLM_MODEL_PATH` | *(à définir)* | Chemin absolu vers le fichier GGUF ou répertoire SafeTensors |
+| `LLM_ALIAS` | *(à définir)* | Alias `model_id` retourné par `/v1/models` |
+| `LLAMA_SERVER_BIN` | `llama-server` | Chemin du binaire llama-server |
 | `CUDA_HOME` | `/usr/local/cuda` | Chemin du toolkit CUDA |
 
 **Arguments CLI** : `--port PORT`, `--model PATH`, `--llama-bin PATH`
@@ -612,12 +613,12 @@ workflow:
     enabled: true
   summary_llm:
     enabled: true
-    model_id: "local/qwen3-35b"
+    model_id: "local/votre-modele-llm-ici"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
   arbitration_llm:
     enabled: false
-    model_id: "local/qwen3-35b-arbitrage"
+    model_id: "local/votre-modele-llm-ici"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"
