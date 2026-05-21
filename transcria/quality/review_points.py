@@ -32,5 +32,13 @@ class ReviewPoints:
             elif ctype == "low_coverage":
                 ratio = check.get("ratio", 0)
                 points.append(f"Couverture faible : {ratio:.0%} — possible perte de transcription.")
+            elif ctype == "audio_problem_segments":
+                examples = check.get("examples", [])
+                details = ", ".join(
+                    f"{item.get('label')} {item.get('start_label')}→{item.get('end_label')}"
+                    for item in examples[:5]
+                )
+                suffix = f" — relire {details}." if details else "."
+                points.append(f"Zones audio problématiques : {count}{suffix}")
 
         return points

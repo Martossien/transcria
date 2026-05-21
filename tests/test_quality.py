@@ -112,6 +112,21 @@ class TestReviewPoints:
         assert len(points) == 1
         assert "50%" in points[0]
 
+    def test_handles_audio_problem_segments(self):
+        report = {"checks": [{
+            "type": "audio_problem_segments",
+            "count": 2,
+            "examples": [
+                {"label": "bruit", "start_label": "00:12", "end_label": "00:18"},
+                {"label": "musique", "start_label": "01:00", "end_label": "01:12"},
+            ],
+            "severity": "warning",
+        }]}
+        points = ReviewPoints.generate(report)
+        assert len(points) == 1
+        assert "Zones audio problématiques : 2" in points[0]
+        assert "bruit 00:12→00:18" in points[0]
+
     def test_handles_unresolved_lexicon_variants(self):
         report = {"checks": [{
             "type": "unresolved_lexicon_variants",

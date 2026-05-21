@@ -97,9 +97,10 @@ Ces améliorations doivent rester neutres, auditables et sans référence à des
    - Fait : les raisons de décision incluent les valeurs numériques utiles à l'audit.
    - Garde-fou : la séparation reste désactivée par défaut et conserve `decision.min_score` / `decision.min_duration_s`.
 
-4. **Remonter les zones audio problématiques dans le rapport qualité**
-   - Ajouter des points de relecture horodatés quand `problem_segments` contient musique, bruit ou silence long.
-   - Garder un format déterministe, exploitable par l'humain et par les tests.
+4. **Remonter les zones audio problématiques dans le rapport qualité** — démarré le 2026-05-21
+   - Fait : `QualityReporter` ajoute un check `audio_problem_segments` avec exemples horodatés.
+   - Fait : `review_points.json` et `quality_report.md` listent les zones musique/bruit/silence à relire.
+   - Fait : `ReviewPoints.generate()` sait reformater ce check de façon déterministe.
 
 5. **Étudier un filtrage pré-STT en mode qualité uniquement**
    - Tester un filtrage des zones non vocales avant transcription sur audios longs et bruités.

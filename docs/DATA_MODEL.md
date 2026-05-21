@@ -466,6 +466,28 @@ Produit par `AudioQualityEvaluator`. Quand `metadata/audio_scene.json` est dispo
 
 - `scene_findings` reste informatif par défaut : `workflow.audio_quality.scene_affects_quality_score=false`.
 - Si `scene_affects_quality_score=true`, ces signaux contribuent au score et peuvent donc forcer le backend qualité selon `force_quality_backend`.
+
+### quality_report.json
+
+Produit par `QualityReporter` à l'étape qualité. Si `metadata/audio_scene.json` contient des `problem_segments`, le rapport ajoute un check `audio_problem_segments` et des points de relecture horodatés.
+
+```json
+{
+  "type": "audio_problem_segments",
+  "count": 2,
+  "examples": [
+    {
+      "label": "bruit",
+      "start": 12.0,
+      "end": 18.5,
+      "start_label": "00:12",
+      "end_label": "00:18",
+      "duration_s": 6.5
+    }
+  ],
+  "severity": "warning"
+}
+```
 - `gender_segments` : liste des intervalles classés `"male"` ou `"female"` uniquement. Utilisée par `WorkflowRunner._inject_speaker_genders()` pour croiser avec `speaker_turns.json` et attribuer acoustiquement un genre à chaque SPEAKER_XX dans `speaker_stats.json`. Vide si `detect_gender=false` ou audio trop court.
 - `stats.labels` peut contenir : `speech`, `male`, `female`, `music`, `noise`.
 

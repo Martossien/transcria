@@ -57,6 +57,7 @@ class QualityReporter:
             "non_latin_segments": 0,
             "suspicious_short_segments": 0,
             "speaker_name_violations": 0,
+            "audio_problem_segments": 0,
         }
 
         # 1. Segments vides
@@ -265,7 +266,33 @@ class QualityReporter:
             )
             warnings += min(len(suspicious_short), 10)
 
-        # 8. Couverture audio
+        # 8. Zones audio problématiques détectées avant transcription
+        audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+        problem_segments = audio_scene.get("problem_segments") or []
+        total_checks += 1
+        if isinstance(problem_segments, list) and problem_segments:
+            examples = [
+                self._format_audio_problem_segment(segment)
+                for segment in problem_segments[:10]
+                if isinstance(segment, dict)
+            ]
+            review_load["audio_problem_segments"] = len(problem_segments)
+            checks.append({
+                "type": "audio_problem_segments",
+                "count": len(problem_segments),
+                "examples": examples,
+                "severity": "warning",
+            })
+            detail = ", ".join(
+                f"{item['label']} {item['start_label']}→{item['end_label']}"
+                for item in examples[:5]
+            )
+            review_points.append(
+                f"Zones audio problématiques : {len(problem_segments)} — relire {detail}."
+            )
+            warnings += min(len(problem_segments), 10)
+
+        # 9. Couverture audio
         duration_covered = sum(s.get("end", 0) - s.get("start", 0) for s in segments)
         audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
         audio_duration = audio_analysis.get("duration_seconds", 0)
@@ -277,7 +304,7 @@ class QualityReporter:
                 review_points.append(f"Couverture faible : {coverage_ratio:.0%} — possible perte de transcription.")
                 warnings += 1
 
-        # 9. Ratio mots/durée suspect
+        # 10. Ratio mots/durée suspect
         total_checks += 1
         if duration_covered > 0 and srt_content.strip():
             word_count = len(srt_content.split())
@@ -338,6 +365,45 @@ class QualityReporter:
             for key, value in report["review_load"].items():
                 lines.append(f"- {key}: {value}")
         return "\n".join(lines)
+
+    @classmethod
+    def _format_audio_problem_segment(cls, segment: dict) -> dict:
+        start = cls._float_or_zero(segment.get("start"))
+        end = cls._float_or_zero(segment.get("end"))
+        label = cls._audio_problem_label(segment.get("label"))
+        return {
+            "label": label,
+            "start": round(start, 3),
+            "end": round(end, 3),
+            "start_label": cls._format_seconds(start),
+            "end_label": cls._format_seconds(end),
+            "duration_s": round(max(0.0, end - start), 3),
+        }
+
+    @staticmethod
+    def _audio_problem_label(label) -> str:
+        labels = {
+            "music": "musique",
+            "noise": "bruit",
+            "noEnergy": "silence",
+        }
+        return labels.get(str(label), str(label or "zone_audio"))
+
+    @staticmethod
+    def _format_seconds(value: float) -> str:
+        total = max(0, int(round(value)))
+        minutes, seconds = divmod(total, 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours:
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _float_or_zero(value) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
 
     @staticmethod
     def _expected_speaker_names(speaker_mapping: dict) -> dict[str, str]:

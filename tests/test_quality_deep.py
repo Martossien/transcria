@@ -316,3 +316,30 @@ class TestQualityReportIntegration:
         checks = [c for c in report["checks"] if c["type"] == "suspicious_short_segments"]
         assert checks
         assert report["review_load"]["suspicious_short_segments"] == 1
+
+    def test_audio_scene_problem_segments_are_reported(self, tmp_dir):
+        fs = JobFilesystem(tmp_dir, "test-q-audio-scene")
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:02,000\nBonjour\n")
+        fs.save_json("metadata/transcription_segments.json", [
+            {"start": 0.0, "end": 2.0, "text": "Bonjour"},
+        ])
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 20})
+        fs.save_json("metadata/audio_scene.json", {
+            "problem_segments": [
+                {"label": "noise", "start": 12.0, "end": 18.5, "duration_s": 6.5},
+                {"label": "music", "start": 60.0, "end": 72.0, "duration_s": 12.0},
+            ],
+        })
+        fs.save_json("context/session_lexicon.json", [])
+
+        reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+        job = Job(id="test-q-audio-scene", owner_id="u1", title="Test", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+
+        checks = [c for c in report["checks"] if c["type"] == "audio_problem_segments"]
+        assert checks
+        assert checks[0]["count"] == 2
+        assert checks[0]["examples"][0]["label"] == "bruit"
+        assert checks[0]["examples"][0]["start_label"] == "00:12"
+        assert "Zones audio problématiques : 2" in str(report["review_points"])
+        assert report["review_load"]["audio_problem_segments"] == 2
