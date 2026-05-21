@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 _SPEECH_LABELS = frozenset({"speech", "male", "female"})
 _MUSIC_LABELS = frozenset({"music"})
 _NOISE_LABELS = frozenset({"noise"})
+_NO_ENERGY_LABELS = frozenset({"noEnergy"})
+_PROBLEM_LABELS = _MUSIC_LABELS | _NOISE_LABELS | _NO_ENERGY_LABELS
 
 _DEFAULT_CONFIG: dict = {
     "detect_gender": True,
@@ -48,6 +50,8 @@ _DEFAULT_CONFIG: dict = {
         "music_zcr_max": 0.10,
         # Pitch médian ≥ seuil → voix féminine
         "female_pitch_hz": 165.0,
+        # Durée minimale pour exposer une zone non vocale comme point de vigilance
+        "problem_segment_min_s": 2.0,
     },
 }
 
@@ -148,6 +152,10 @@ def _compute_signals(stats: dict, gender_stats: dict) -> dict:
         "has_noise": bool,
         "speech_ratio": float,   # fraction du total occupée par la parole
                                  # (speech + male + female)
+        "music_ratio": float,
+        "noise_ratio": float,
+        "no_energy_ratio": float,
+        "non_speech_ratio": float,
         "gender": {has_gender_data, dominant, male_ratio, female_ratio},
     }
     """
@@ -162,14 +170,61 @@ def _compute_signals(stats: dict, gender_stats: dict) -> dict:
         for lbl, info in labels.items()
         if lbl in _SPEECH_LABELS
     )
+    music_dur = sum(
+        info["duration_s"]
+        for lbl, info in labels.items()
+        if lbl in _MUSIC_LABELS
+    )
+    noise_dur = sum(
+        info["duration_s"]
+        for lbl, info in labels.items()
+        if lbl in _NOISE_LABELS
+    )
+    no_energy_dur = sum(
+        info["duration_s"]
+        for lbl, info in labels.items()
+        if lbl in _NO_ENERGY_LABELS
+    )
     speech_ratio = round(speech_dur / total, 4) if total > 0.0 else 0.0
+    music_ratio = round(music_dur / total, 4) if total > 0.0 else 0.0
+    noise_ratio = round(noise_dur / total, 4) if total > 0.0 else 0.0
+    no_energy_ratio = round(no_energy_dur / total, 4) if total > 0.0 else 0.0
+    non_speech_ratio = round((music_dur + noise_dur + no_energy_dur) / total, 4) if total > 0.0 else 0.0
 
     return {
         "has_music": has_music,
         "has_noise": has_noise,
         "speech_ratio": speech_ratio,
+        "music_ratio": music_ratio,
+        "noise_ratio": noise_ratio,
+        "no_energy_ratio": no_energy_ratio,
+        "non_speech_ratio": non_speech_ratio,
         "gender": gender_stats,
     }
+
+
+def _segments_to_dicts(segments: list) -> list:
+    """Convertit les tuples internes en dicts JSON stables."""
+    return [_segment_to_dict(label, start, stop) for label, start, stop in segments]
+
+
+def _segment_to_dict(label: str, start: float, stop: float) -> dict:
+    """Sérialise un segment audio en conservant une précision milliseconde."""
+    return {
+        "label": label,
+        "start": round(start, 3),
+        "end": round(stop, 3),
+        "duration_s": round(stop - start, 3),
+    }
+
+
+def _problem_segments(segments: list, min_duration_s: float) -> list:
+    """Retourne les longues zones non vocales utiles pour la relecture qualité."""
+    return [
+        _segment_to_dict(label, start, stop)
+        for label, start, stop in segments
+        if label in _PROBLEM_LABELS and stop - start >= min_duration_s
+    ]
 
 
 def _frames_to_segments(labels: list, frame_duration: float, min_duration_s: float) -> list:
@@ -331,7 +386,8 @@ def _analyze_audio(audio_path: str, config: dict) -> list:
 
     Retourne
     --------
-    Liste de (label, start_sec, stop_sec), sans segments 'noEnergy'.
+    Liste de (label, start_sec, stop_sec), incluant les segments 'noEnergy'
+    afin de produire des ratios et zones horodatées complets.
     """
     import librosa
 
@@ -347,12 +403,13 @@ def _analyze_audio(audio_path: str, config: dict) -> list:
     )
 
     frame_labels, frame_duration = _classify_scene_frames(signal, sr, thresholds)
-    all_segments = _frames_to_segments(frame_labels, frame_duration, min_segment_s)
-    segments = [(lab, s, e) for lab, s, e in all_segments if lab != "noEnergy"]
+    segments = _frames_to_segments(frame_labels, frame_duration, min_segment_s)
+    active_segments = [(lab, s, e) for lab, s, e in segments if lab != "noEnergy"]
 
     logger.info(
-        "[scene_worker] %d segments (speech/music/noise) avant classification genre",
+        "[scene_worker] %d segments dont %d actifs avant classification genre",
         len(segments),
+        len(active_segments),
     )
 
     if detect_gender:
@@ -418,13 +475,22 @@ def main(argv: list) -> int:
     stats = _compute_stats(segments)
     gender_stats = _compute_gender_stats(segments)
     signals = _compute_signals(stats, gender_stats)
+    problem_min_s = float(
+        config.get("thresholds", {}).get("problem_segment_min_s", 2.0)
+    )
 
     gender_segments = [
         {"start": round(start, 3), "end": round(stop, 3), "label": label}
         for label, start, stop in segments
         if label in ("male", "female")
     ]
-    print(json.dumps({**signals, "stats": stats, "gender_segments": gender_segments}))
+    print(json.dumps({
+        **signals,
+        "stats": stats,
+        "scene_segments": _segments_to_dicts(segments),
+        "problem_segments": _problem_segments(segments, problem_min_s),
+        "gender_segments": gender_segments,
+    }))
     return 0
 
 

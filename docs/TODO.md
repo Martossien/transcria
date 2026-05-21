@@ -70,10 +70,43 @@ silencieusement l'application à Qwen si la config est incomplète.
 
 ### Implémenté (2026-05-21)
 - `transcria/audio/scene_analyzer.py` : `AudioSceneAnalyzer` — subprocess isolé librosa, pipeline RMS → flatness/ZCR → pitch YIN.
-- `transcria/audio/_scene_analysis_worker.py` : worker subprocess avec fonctions pures testables unitairement (`_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_frames_to_segments`) et fonctions librosa isolées (`_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`). Produit `gender_segments` horodatés dans le JSON de sortie.
+- `transcria/audio/_scene_analysis_worker.py` : worker subprocess avec fonctions pures testables unitairement (`_compute_stats`, `_compute_gender_stats`, `_compute_signals`, `_segments_to_dicts`, `_problem_segments`, `_frames_to_segments`) et fonctions librosa isolées (`_classify_scene_frames`, `_estimate_gender_for_speech`, `_analyze_audio`). Produit `scene_segments`, `problem_segments`, ratios non vocaux et `gender_segments` horodatés dans le JSON de sortie.
 - `PipelineService._run_audio_scene_analysis()` : intégrée avant la transcription. Le subprocess se termine avant le chargement GPU. `metadata/audio_scene.json` sauvegardé si non vide.
 - `WorkflowRunner._build_gender_section(audio_scene)` + injection dans `_write_diarization_context(fs, speakers_result, audio_scene, speaker_genders)`.
 - UI : bannière genre global + select genre par locuteur dans `job_wizard.html` / `wizard.js`. Champ `gender` persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()`.
+
+### Prochaines priorités qualité audio
+Ces améliorations doivent rester neutres, auditables et sans référence à des projets externes dans le code, les logs ou les prompts. L'objectif est d'améliorer le livrable final en activant certains traitements uniquement quand l'analyse audio indique qu'ils sont utiles.
+
+1. **Enrichir `metadata/audio_scene.json` sans changer le comportement pipeline** — démarré le 2026-05-21
+   - Fait : ratios `music_ratio`, `noise_ratio`, `no_energy_ratio`, `non_speech_ratio`.
+   - Fait : `scene_segments` pour exposer la segmentation horodatée complète.
+   - Fait : `problem_segments` pour les longues zones non vocales à relire.
+   - Fait : logs pipeline enrichis avec les ratios et le nombre de zones problématiques.
+   - Priorité haute : faible risque, bon support d'audit, base commune pour les décisions suivantes.
+
+2. **Brancher l'analyse de scène dans l'évaluation qualité**
+   - Faire consommer `audio_scene` par `AudioQualityEvaluator`.
+   - Signaler les audios où musique, bruit ou longues zones sans énergie risquent de dégrader la transcription.
+   - Ne pas changer automatiquement de backend tant que les seuils n'ont pas été validés sur corpus interne anonymisé.
+
+3. **Affiner la décision de séparation de sources**
+   - Remplacer le déclenchement binaire `has_music` seul par des seuils explicites sur les ratios et la durée.
+   - Conserver la séparation désactivée par défaut : elle rallonge fortement le traitement et doit être justifiée.
+   - Journaliser les raisons de décision avec les valeurs numériques utilisées.
+
+4. **Remonter les zones audio problématiques dans le rapport qualité**
+   - Ajouter des points de relecture horodatés quand `problem_segments` contient musique, bruit ou silence long.
+   - Garder un format déterministe, exploitable par l'humain et par les tests.
+
+5. **Étudier un filtrage pré-STT en mode qualité uniquement**
+   - Tester un filtrage des zones non vocales avant transcription sur audios longs et bruités.
+   - Ne l'activer que si la complétude SRT et l'alignement locuteur restent stables.
+   - Risque moyen : gain potentiel sur hallucinations, mais risque de couper des paroles faibles.
+
+6. **Étudier une normalisation audio légère**
+   - Évaluer seulement des traitements simples, mesurables et réversibles.
+   - Refuser tout traitement générique s'il rallonge trop le pipeline ou masque des signaux utiles à l'audit qualité.
 
 ---
 

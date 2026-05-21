@@ -111,7 +111,7 @@ workflow:
     speech_pad_ms_low_quality: 350
   audio_scene:
     # Analyse acoustique de scène en subprocess isolé (librosa — aucune dépendance GPU).
-    # Produit : has_music, has_noise, speech_ratio, distribution H/F par segment.
+    # Produit : ratios parole/non-parole, segments horodatés, distribution H/F.
     # Quand enabled: true, SourceSeparationDecider priorise ces signaux sur le score.
     enabled: false
     timeout_s: 120            # durée maximale allouée au subprocess (secondes)
@@ -123,6 +123,7 @@ workflow:
       music_flatness_max: 0.12  # flatness < seuil ET ZCR < zcr_max → musique
       music_zcr_max: 0.10
       female_pitch_hz: 165.0  # pitch médian ≥ seuil → voix féminine
+      problem_segment_min_s: 2.0  # zone non vocale minimale exposée à la relecture
   source_separation:
     # Séparation de sources vocales via Demucs (pip install demucs).
     # Ne s'active JAMAIS automatiquement : c'est SourceSeparationDecider qui

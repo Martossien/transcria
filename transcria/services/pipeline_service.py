@@ -168,8 +168,9 @@ class PipelineService:
     def _run_audio_scene_analysis(self, job: Job, audio_path: str, sl) -> dict:
         """Lance l'analyse de scène audio en subprocess isolé (pré-transcription).
 
-        Retourne un dict de signaux (has_music, has_noise, speech_ratio, gender)
-        ou ``{}`` si désactivée, indisponible ou en échec.
+        Retourne un dict de signaux (has_music, has_noise, speech_ratio,
+        ratios non vocaux, gender, segments horodatés) ou ``{}`` si désactivée,
+        indisponible ou en échec.
         """
         from pathlib import Path
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
@@ -208,7 +209,12 @@ class PipelineService:
         sl.info("[pipeline] Analyse de scène terminée", step="audio_scene",
                 duree=round(time.monotonic() - t0, 1),
                 has_music=scene.get("has_music"),
-                speech_ratio=scene.get("speech_ratio"))
+                has_noise=scene.get("has_noise"),
+                speech_ratio=scene.get("speech_ratio"),
+                music_ratio=scene.get("music_ratio"),
+                noise_ratio=scene.get("noise_ratio"),
+                no_energy_ratio=scene.get("no_energy_ratio"),
+                problem_segments=len(scene.get("problem_segments") or []))
         return scene
 
     def _run_source_separation(

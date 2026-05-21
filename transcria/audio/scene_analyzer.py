@@ -15,7 +15,8 @@ Usage ::
     if analyzer.enabled and analyzer.available:
         scene = analyzer.analyze(audio_path)
         # scene = {"has_music": bool, "has_noise": bool, "speech_ratio": float,
-        #          "gender": {...}, "stats": {...}}
+        #          "music_ratio": float, "scene_segments": [...],
+        #          "problem_segments": [...], "gender": {...}, "stats": {...}}
 """
 
 import json
@@ -48,6 +49,7 @@ class AudioSceneAnalyzer:
              music_flatness_max: 0.12
              music_zcr_max: 0.10
              female_pitch_hz: 165.0
+             problem_segment_min_s: 2.0
     """
 
     def __init__(self, config: dict) -> None:
@@ -87,6 +89,7 @@ class AudioSceneAnalyzer:
         Retourne
         --------
         Dict avec les clés ``has_music``, ``has_noise``, ``speech_ratio``,
+        les ratios non vocaux, ``scene_segments``, ``problem_segments``,
         ``gender`` et ``stats``, ou ``{}`` en cas d'échec.
         """
         if not self._enabled:

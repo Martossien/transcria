@@ -221,13 +221,13 @@ class TestSourceSeparationService:
 
 
 # ---------------------------------------------------------------------------
-# AudioSceneWorker — fonctions pures (importables sans TensorFlow)
+# AudioSceneWorker — fonctions pures (importables sans dépendance audio lourde)
 # ---------------------------------------------------------------------------
 
 
 class TestAudioSceneWorkerStats:
     """_compute_stats, _compute_gender_stats et _compute_signals sont des fonctions
-    pures testables sans charger inaSpeechSegmenter ni TensorFlow."""
+    pures testables sans charger les dépendances d'analyse audio."""
 
     def _mixed_segments(self):
         return [
@@ -293,7 +293,7 @@ class TestAudioSceneWorkerStats:
     def test_compute_signals_speech_ratio_includes_male_and_female(self):
         from transcria.audio._scene_analysis_worker import _compute_signals
 
-        # Quand detect_gender=True, inaSpeechSegmenter remplace "speech" par "male"/"female"
+        # Quand detect_gender=True, l'analyse pitch remplace "speech" par "male"/"female"
         stats = {
             "labels": {
                 "male": {"duration_s": 6.0, "ratio": 0.6},
@@ -306,6 +306,54 @@ class TestAudioSceneWorkerStats:
 
         assert signals["speech_ratio"] == pytest.approx(1.0)
         assert signals["has_music"] is False
+
+    def test_compute_signals_exposes_non_speech_ratios(self):
+        from transcria.audio._scene_analysis_worker import _compute_signals
+
+        stats = {
+            "labels": {
+                "speech": {"duration_s": 10.0, "ratio": 0.5},
+                "music": {"duration_s": 4.0, "ratio": 0.2},
+                "noise": {"duration_s": 2.0, "ratio": 0.1},
+                "noEnergy": {"duration_s": 4.0, "ratio": 0.2},
+            },
+            "total_duration_s": 20.0,
+        }
+        gender_stats = {"has_gender_data": False, "male_ratio": 0.0, "female_ratio": 0.0, "dominant": None}
+
+        signals = _compute_signals(stats, gender_stats)
+
+        assert signals["speech_ratio"] == pytest.approx(0.5)
+        assert signals["music_ratio"] == pytest.approx(0.2)
+        assert signals["noise_ratio"] == pytest.approx(0.1)
+        assert signals["no_energy_ratio"] == pytest.approx(0.2)
+        assert signals["non_speech_ratio"] == pytest.approx(0.5)
+
+    def test_segments_to_dicts_adds_stable_duration(self):
+        from transcria.audio._scene_analysis_worker import _segments_to_dicts
+
+        out = _segments_to_dicts([("noise", 1.12345, 3.98765)])
+
+        assert out == [
+            {"label": "noise", "start": 1.123, "end": 3.988, "duration_s": 2.864}
+        ]
+
+    def test_problem_segments_keeps_only_long_non_speech_segments(self):
+        from transcria.audio._scene_analysis_worker import _problem_segments
+
+        segments = [
+            ("speech", 0.0, 10.0),
+            ("music", 10.0, 11.0),
+            ("noise", 11.0, 14.5),
+            ("noEnergy", 14.5, 17.0),
+        ]
+
+        out = _problem_segments(segments, min_duration_s=2.0)
+
+        assert out == [
+            {"label": "noise", "start": 11.0, "end": 14.5, "duration_s": 3.5},
+            {"label": "noEnergy", "start": 14.5, "end": 17.0, "duration_s": 2.5},
+        ]
 
 
 # ---------------------------------------------------------------------------
@@ -412,6 +460,10 @@ class TestSceneWorkerGenderSegments:
             "has_music": False,
             "has_noise": False,
             "speech_ratio": 0.8,
+            "music_ratio": 0.0,
+            "noise_ratio": 0.05,
+            "no_energy_ratio": 0.0,
+            "non_speech_ratio": 0.05,
             "gender": {
                 "has_gender_data": detect_gender and bool(segments_fixture),
                 "dominant": "female" if segments_fixture else None,
@@ -426,6 +478,12 @@ class TestSceneWorkerGenderSegments:
                 },
                 "total_duration_s": 10.5,
             },
+            "scene_segments": [
+                {"label": "female", "start": 0.0, "end": 2.5, "duration_s": 2.5},
+                {"label": "noise", "start": 2.5, "end": 3.0, "duration_s": 0.5},
+                {"label": "male", "start": 3.0, "end": 5.0, "duration_s": 2.0},
+            ],
+            "problem_segments": [],
             "gender_segments": segments_fixture,
         }
         return payload
@@ -474,3 +532,7 @@ class TestSceneWorkerGenderSegments:
         data = json.loads(result.stdout)
         assert "gender_segments" in data
         assert isinstance(data["gender_segments"], list)
+        assert "scene_segments" in data
+        assert isinstance(data["scene_segments"], list)
+        assert "problem_segments" in data
+        assert isinstance(data["problem_segments"], list)

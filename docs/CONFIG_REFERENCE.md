@@ -238,8 +238,9 @@ La transcription finale utilise déjà les `exclusive_turns` pyannote comme VAD 
 #### `workflow.audio_scene`
 
 Analyse acoustique de scène exécutée dans un subprocess CPU isolé (librosa).
-Produit les signaux `has_music`, `has_noise`, `speech_ratio` et la distribution H/F
-à partir du pitch YIN. Le subprocess se termine avant le chargement GPU.
+Produit les signaux `has_music`, `has_noise`, `speech_ratio`, les ratios non vocaux,
+les segments horodatés et la distribution H/F à partir du pitch YIN. Le subprocess
+se termine avant le chargement GPU.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -252,6 +253,7 @@ Produit les signaux `has_music`, `has_noise`, `speech_ratio` et la distribution 
 | `thresholds.music_flatness_max` | float | `0.12` | Flatness < seuil ET ZCR < zcr_max → musique |
 | `thresholds.music_zcr_max` | float | `0.10` | Zero crossing rate maximal pour la classe musique |
 | `thresholds.female_pitch_hz` | float | `165.0` | Pitch médian ≥ seuil → voix féminine |
+| `thresholds.problem_segment_min_s` | float | `2.0` | Durée minimale d'une zone non vocale exposée dans `problem_segments` |
 
 **Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_scene_analysis()`.
 

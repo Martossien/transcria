@@ -233,8 +233,9 @@ Ces deux étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. 
 **Analyse de scène audio (`AudioSceneAnalyzer`) :**
 - Entrée : chemin audio + config `workflow.audio_scene` (seuils, timeout, detect_gender)
 - Pipeline subprocess : énergie RMS → classification spectrale (flatness/ZCR → speech/music/noise) → estimation genre YIN (pitch)
-- Sortie JSON : `{has_music, has_noise, speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}, gender_segments: [{start, end, label}]}`
+- Sortie JSON : `{has_music, has_noise, speech_ratio, music_ratio, noise_ratio, no_energy_ratio, non_speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}, scene_segments: [{label, start, end, duration_s}], problem_segments: [{label, start, end, duration_s}], gender_segments: [{start, end, label}]}`
   - `gender_segments` : liste des intervalles horodatés classés `"male"` ou `"female"` uniquement, utilisés par `_inject_speaker_genders` pour croiser avec les tours pyannote.
+  - `problem_segments` : longues zones non vocales (`music`, `noise`, `noEnergy`) exposées pour diagnostic qualité sans changer automatiquement le pipeline.
 - `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : si `audio_scene.has_music=True` → séparation forcée (prioritaire sur le score). Si `audio_scene=None` → logique score seule.
 - `WorkflowRunner._build_gender_section(audio_scene)` : méthode statique qui génère les lignes Markdown de distribution H/F pour `diarization_context.md` (visible par la LLM de résumé). Vide si `has_gender_data=False`.
 - `WorkflowRunner._assign_speaker_genders(gender_segments, turns, min_overlap_s=1.0)` : méthode statique pure. Croise les segments genre avec les tours pyannote (format flat `{speaker, start, end}`). Retourne `{speaker_id: {gender, male_s, female_s}}`. Attribue uniquement si chevauchement total ≥ `min_overlap_s` ET l'un des deux sexes domine.

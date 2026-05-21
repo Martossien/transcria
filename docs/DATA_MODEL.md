@@ -221,7 +221,7 @@ jobs/<job_id>/
 ├── metadata/
 │   ├── audio_analysis.json         # Résultat ffprobe (durée, codec, canaux, bitrate)
 │   ├── audio_quality_decision.json # Décision déterministe Cohere/Whisper selon qualité audio
-│   ├── audio_scene.json            # Analyse de scène (has_music, has_noise, speech_ratio, gender, stats)
+│   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
 │   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
@@ -405,6 +405,10 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
   "has_music": false,
   "has_noise": true,
   "speech_ratio": 0.82,
+  "music_ratio": 0.0,
+  "noise_ratio": 0.18,
+  "no_energy_ratio": 0.0,
+  "non_speech_ratio": 0.18,
   "gender": {
     "has_gender_data": true,
     "male_ratio": 0.65,
@@ -419,6 +423,13 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
     },
     "total_duration_s": 586.0
   },
+  "scene_segments": [
+    {"label": "female", "start": 1.568, "end": 4.210, "duration_s": 2.642},
+    {"label": "noise", "start": 4.210, "end": 6.300, "duration_s": 2.09}
+  ],
+  "problem_segments": [
+    {"label": "noise", "start": 4.210, "end": 6.300, "duration_s": 2.09}
+  ],
   "gender_segments": [
     {"start": 1.568, "end": 4.210, "label": "female"},
     {"start": 8.100, "end": 12.430, "label": "male"}
@@ -427,6 +438,8 @@ Produit par `AudioSceneAnalyzer` si `workflow.audio_scene.enabled=true`. Vide (`
 ```
 
 - `has_music=true` → `SourceSeparationDecider` force la séparation de sources (prioritaire sur le score).
+- `scene_segments` expose la segmentation complète, y compris `noEnergy`, pour audit et diagnostics.
+- `problem_segments` filtre les longues zones `music`, `noise` ou `noEnergy` selon `workflow.audio_scene.thresholds.problem_segment_min_s`.
 - La section `gender` (globale) est injectée dans `summary/diarization_context.md` et affichée dans l'UI (étape Participants).
 - `gender_segments` : liste des intervalles classés `"male"` ou `"female"` uniquement. Utilisée par `WorkflowRunner._inject_speaker_genders()` pour croiser avec `speaker_turns.json` et attribuer acoustiquement un genre à chaque SPEAKER_XX dans `speaker_stats.json`. Vide si `detect_gender=false` ou audio trop court.
 - `stats.labels` peut contenir : `speech`, `male`, `female`, `music`, `noise`.
