@@ -158,7 +158,7 @@ GET /metrics  -> métriques Prometheus légères
 
 ```bash
 source venv/bin/activate
-python -m pytest tests/ -q                          # 529 tests collectés (mock, pas de GPU pour la plupart)
+python -m pytest tests/ -q                          # 557 tests collectés (mock, pas de GPU pour la plupart)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm        # E2E rapide (1 GPU)
 venv/bin/python tests/test_e2e_workflow.py                   # E2E complet (GPUs + LLM requis)
 venv/bin/python tests/test_e2e_workflow.py --stt-backend whisper  # Avec Whisper large-v3

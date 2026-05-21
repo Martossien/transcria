@@ -1,5 +1,7 @@
 """Tests pour les modules audio : séparation de sources, VAD adaptatif."""
 
+import os
+
 import pytest
 
 
@@ -233,7 +235,10 @@ class TestSourceSeparationService:
 
     def test_separate_with_demucs_installed(self, tmp_path, monkeypatch):
         """Vérifie la chaîne complète quand demucs est disponible (mock modèle)."""
-        pytest.importorskip("demucs")
+        if os.getenv("TRANSCRIA_REQUIRE_DEMUCS_TEST") == "1":
+            import demucs  # noqa: F401
+        else:
+            pytest.importorskip("demucs")
         torch = pytest.importorskip("torch")
         import torchaudio
 
@@ -745,21 +750,29 @@ class TestSceneWorkerGenderSegments:
         import json
         import subprocess
         import sys
+        import wave
 
         worker = (
             __import__("pathlib").Path(__file__).parent.parent
             / "transcria" / "audio" / "_scene_analysis_worker.py"
         )
         audio = tmp_path / "silence.wav"
-        audio.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt ")
+        with wave.open(str(audio), "wb") as wav:
+            wav.setnchannels(1)
+            wav.setsampwidth(2)
+            wav.setframerate(16000)
+            wav.writeframes(b"\x00\x00" * 16000)
 
+        env = os.environ.copy()
+        env.setdefault("NUMBA_CACHE_DIR", str(tmp_path / "numba_cache"))
         result = subprocess.run(
             [sys.executable, str(worker), str(audio)],
             capture_output=True,
+            text=True,
+            env=env,
             timeout=60,
         )
-        if result.returncode != 0:
-            pytest.skip("Dépendances audio manquantes — worker non exécutable en CI")
+        assert result.returncode == 0, result.stderr
         data = json.loads(result.stdout)
         assert "gender_segments" in data
         assert isinstance(data["gender_segments"], list)

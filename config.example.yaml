@@ -157,7 +157,7 @@ workflow:
     highpass_hz: null
     timeout_s: 300
   source_separation:
-    # Séparation de sources vocales via Demucs (pip install demucs).
+    # Séparation de sources vocales via Demucs (dépendance runtime).
     # Ne s'active JAMAIS automatiquement : c'est SourceSeparationDecider qui
     # décide, sur la base de audio_quality_decision.json et audio_scene, si la
     # séparation est susceptible d'améliorer la qualité STT pour ce job.

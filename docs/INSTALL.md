@@ -189,7 +189,7 @@ Le venv contient **tous les composants nécessaires** au pipeline complet :
 |---|---|---|
 | ASR | `torch`, `transformers`, `accelerate`, `faster-whisper` | Cohere Transcribe + Whisper large-v3 qualité/fallback |
 | Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs (~2 Go VRAM) |
-| Audio | `librosa`, `soundfile`, `torchaudio` | Chargement/conversion audio + alignement CTC optionnel |
+| Audio | `librosa`, `soundfile`, `torchaudio`, `demucs` | Chargement/conversion audio, séparation de sources + alignement CTC optionnel |
 | LLM | `opencode` (CLI externe) | LLM d'arbitrage résumé/correction via backend OpenAI-compatible |
 | Web | `flask`, `flask-login`, `flask-sqlalchemy` | Serveur web + auth |
 | Config | `pyyaml` | Lecture config.yaml |
@@ -322,6 +322,7 @@ source venv/bin/activate
 | `numpy` | >=1.26, <3.0 | Compatible pyannote 4.x et torch 2.x |
 | `librosa` | >=0.11, <0.12 | Traitement audio |
 | `soundfile` | >=0.13, <1.0 | Lecture/écriture WAV |
+| `demucs` | >=4.0, <5.0 | Séparation de sources vocales optionnelle |
 | `flask` | >=3.0, <4.0 | Serveur web |
 | `flask-login` | >=0.6, <1.0 | Authentification |
 | `flask-sqlalchemy` | >=3.1, <4.0 | ORM |
@@ -755,7 +756,14 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 529 tests collectés
+# Résultat attendu : 557 tests collectés
+```
+
+Le test d'intégration Demucs est ignoré si le package n'est pas importable dans
+l'environnement courant. Pour rendre cette vérification stricte :
+
+```bash
+TRANSCRIA_REQUIRE_DEMUCS_TEST=1 python -m pytest tests/test_audio.py::TestSourceSeparationService::test_separate_with_demucs_installed -q
 ```
 
 ### Lancer le test E2E complet (avec GPU)
@@ -1126,7 +1134,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q                      # 529 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q                      # 557 tests collectés (mock, pas de GPU requis)
 venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

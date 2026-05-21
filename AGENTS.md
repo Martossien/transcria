@@ -33,7 +33,7 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 529 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q           # 557 tests collectés (mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -155,7 +155,7 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # modules test_*.py + E2E, 529 tests collectés (mocks GPU/LLM)
+  tests/                    # modules test_*.py + E2E, 557 tests collectés (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -355,7 +355,7 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-529 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+557 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).
