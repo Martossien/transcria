@@ -4,6 +4,8 @@ import os
 import subprocess
 import time
 
+from transcria.gpu._port_utils import is_port_open as _check_port_open
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +20,6 @@ class VRAMManager:
             "arbitrage_llm_port",
             services.get("qwen_port", 8080),
         )
-        self.qwen_port: int = self.arbitrage_llm_port  # compat ancienne API/tests
         self.llm_cleanup_ports: list[int] = list(
             services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
         )
@@ -38,7 +39,6 @@ class VRAMManager:
         self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
         self._arbitrage_llm_pid: int | None = None
-        self._qwen_pid: int | None = None  # compat ancienne API/tests
 
     # ── GPU Info ──────────────────────────────────────────
 
@@ -315,7 +315,6 @@ class VRAMManager:
                 start_new_session=True,
             )
             self._arbitrage_llm_pid = proc.pid
-            self._qwen_pid = proc.pid
             logger.info(
                 "LLM d'arbitrage lancée — PID %d, attente du port %d...",
                 proc.pid,
@@ -325,10 +324,6 @@ class VRAMManager:
         except Exception as exc:
             logger.error("Échec lancement LLM d'arbitrage: %s", exc)
             return False
-
-    def launch_qwen_35b(self) -> bool:
-        """Alias compatibilité : utiliser launch_arbitrage_llm()."""
-        return self.launch_arbitrage_llm()
 
     def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
         """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
@@ -399,8 +394,8 @@ class VRAMManager:
             )
 
         self.stop_cleanup_llm_ports()
-        self.stop_qwen_35b()
-        return self.launch_qwen_35b()
+        self.stop_arbitrage_llm()
+        return self.launch_arbitrage_llm()
 
     def stop_arbitrage_llm(self) -> bool:
         """Arrête la LLM d'arbitrage via le script d'arrêt, puis kill port en fallback."""
@@ -416,21 +411,16 @@ class VRAMManager:
                 logger.warning("Échec script d'arrêt: %s", exc)
         port_ok = self._kill_port(self.arbitrage_llm_port)
         self._arbitrage_llm_pid = None
-        self._qwen_pid = None
         gc.collect()
         try: import torch; torch.cuda.empty_cache()
         except ImportError: pass
         return port_ok
 
-    def stop_qwen_35b(self) -> bool:
-        """Alias compatibilité : utiliser stop_arbitrage_llm()."""
-        return self.stop_arbitrage_llm()
-
     def free_all_gpus(self) -> bool:
         """Libère les 2 GPUs : arrête tout modèle chargé."""
         logger.info("Libération des 2 GPUs...")
         ok1 = self.stop_cleanup_llm_ports()
-        ok2 = self.stop_qwen_35b()
+        ok2 = self.stop_arbitrage_llm()
         self.offload_all()
         time.sleep(2)
         gpus = self.get_gpu_info()
@@ -441,34 +431,15 @@ class VRAMManager:
 
     @staticmethod
     def is_port_open(port: int) -> bool:
-        try:
-            import requests, json
-            r = requests.get(f"http://127.0.0.1:{port}/v1/models", timeout=5)
-            if r.status_code != 200:
-                return False
-            data = r.json()
-            if not data.get("data"):
-                return False
-            model_id = data["data"][0].get("id", "")
-            # Vérifier que le modèle répond réellement aux inférences
-            r2 = requests.post(
-                f"http://127.0.0.1:{port}/v1/completions",
-                json={"model": model_id, "prompt": "Bonjour", "max_tokens": 5, "temperature": 0},
-                timeout=30,
-            )
-            if r2.status_code == 200:
-                choices = r2.json().get("choices", [])
-                return len(choices) > 0 and len(choices[0].get("text", "")) > 0
-            return False
-        except Exception:
-            return False
+        return _check_port_open(port)
 
     @staticmethod
     def _wait_for_port(port: int, timeout: int = 300) -> bool:
-        deadline = time.time() + timeout
+        start = time.time()
+        deadline = start + timeout
         while time.time() < deadline:
             if VRAMManager.is_port_open(port):
-                logger.info("Port %d répond après %.0fs", port, time.time() - (deadline - timeout))
+                logger.info("Port %d répond après %.0fs", port, time.time() - start)
                 return True
             time.sleep(5)
         logger.error("Timeout attente port %d après %ds", port, timeout)

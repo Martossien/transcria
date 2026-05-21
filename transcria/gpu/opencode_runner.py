@@ -44,11 +44,17 @@ class OpenCodeRunner:
 
         if config:
             llm = config.get("workflow", {}).get("arbitration_llm", {})
-            self.model = model or llm.get("model_id", "local/qwen3-35b-arbitrage")
+            self.model = model or llm.get("model_id") or ""
             self.opencode_bin = opencode_bin or llm.get("opencode_bin") or _DEFAULT_OPENCODE_BIN
         else:
-            self.model = model or "local/qwen3-35b-arbitrage"
+            self.model = model or ""
             self.opencode_bin = opencode_bin or _DEFAULT_OPENCODE_BIN
+
+        if not self.model:
+            raise ValueError(
+                "Aucun model_id LLM d'arbitrage configuré. "
+                "Définissez workflow.arbitration_llm.model_id dans config.yaml."
+            )
 
         if "/" in self.model:
             self.provider, self.model = self.model.split("/", 1)

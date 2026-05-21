@@ -1,0 +1,32 @@
+#!/bin/bash
+# Template de lancement LLM d'arbitrage — copiez vers launch_arbitrage.sh et adaptez.
+# Variables à définir :
+#   LLM_MODEL_PATH   : chemin absolu vers le fichier GGUF (ou répertoire SafeTensors)
+#   LLM_ALIAS        : alias model_id retourné par /v1/models
+#   LLM_HOST         : adresse d'écoute (défaut 0.0.0.0)
+#   LLM_PORT         : port d'écoute (défaut 8080)
+#   LLAMA_SERVER_BIN : chemin vers llama-server (défaut /home/admin_ia/llama.cpp/build/bin/llama-server)
+
+export CUDA_HOME="${CUDA_HOME:-/usr/local/cuda-12.8}"
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
+
+LLM_MODEL_PATH="${LLM_MODEL_PATH:-/root/models/votre-modele/votre-modele.gguf}"
+LLM_ALIAS="${LLM_ALIAS:-votre-modele-alias}"
+LLM_HOST="${LLM_HOST:-0.0.0.0}"
+LLM_PORT="${LLM_PORT:-8080}"
+LLAMA_SERVER_BIN="${LLAMA_SERVER_BIN:-/home/admin_ia/llama.cpp/build/bin/llama-server}"
+
+numactl --interleave=all "$LLAMA_SERVER_BIN" \
+  --model "$LLM_MODEL_PATH" \
+  --alias "$LLM_ALIAS" \
+  --host "$LLM_HOST" --port "$LLM_PORT" \
+  --ctx-size 32768 \
+  --n-predict 4096 \
+  --no-mmap \
+  --threads 8 --threads-batch 16 \
+  --batch-size 512 --ubatch-size 256 \
+  --parallel 1 \
+  --flash-attn on \
+  --n-gpu-layers all \
+  --verbose

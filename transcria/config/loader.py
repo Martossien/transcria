@@ -101,13 +101,13 @@ _DEFAULT_CONFIG = {
         },
         "summary_llm": {
             "enabled": True,
-            "model_id": "local/qwen3-35b",
+            "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
             "timeout_seconds": 120,
         },
         "arbitration_llm": {
             "enabled": False,
-            "model_id": "local/qwen3-35b-arbitrage",
+            "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
             "timeout_seconds": 600,
             "opencode_bin": "opencode",

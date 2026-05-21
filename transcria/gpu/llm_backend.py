@@ -3,6 +3,8 @@ import subprocess
 import time
 from abc import ABC, abstractmethod
 
+from transcria.gpu._port_utils import is_port_open as _check_port_open
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,44 +55,15 @@ class LLMBackend(ABC):
 
     @staticmethod
     def is_port_open(port: int, timeout: int = 5) -> bool:
-        try:
-            import requests
-            r = requests.get(
-                f"http://127.0.0.1:{port}/v1/models", timeout=timeout
-            )
-            if r.status_code != 200:
-                return False
-            data = r.json()
-            if not data.get("data"):
-                return False
-            model_id = data["data"][0].get("id", "")
-            r2 = requests.post(
-                f"http://127.0.0.1:{port}/v1/completions",
-                json={
-                    "model": model_id,
-                    "prompt": "Bonjour",
-                    "max_tokens": 5,
-                    "temperature": 0,
-                },
-                timeout=30,
-            )
-            if r2.status_code == 200:
-                choices = r2.json().get("choices", [])
-                return len(choices) > 0 and len(choices[0].get("text", "")) > 0
-        except Exception:
-            return False
-        return False
+        return _check_port_open(port, timeout=timeout)
 
     @staticmethod
     def _wait_for_port(port: int, timeout: int = 300) -> bool:
-        deadline = time.time() + timeout
+        start = time.time()
+        deadline = start + timeout
         while time.time() < deadline:
             if LLMBackend.is_port_open(port):
-                logger.info(
-                    "Port %d répond après %.0fs",
-                    port,
-                    timeout - (deadline - time.time()),
-                )
+                logger.info("Port %d répond après %.0fs", port, time.time() - start)
                 return True
             time.sleep(5)
         logger.error("Timeout attente port %d après %ds", port, timeout)
@@ -143,9 +116,7 @@ class ScriptLLMBackend(LLMBackend):
 
     @property
     def model_id(self) -> str:
-        return self.config.get("workflow", {}).get(
-            "arbitration_llm", {}
-        ).get("model_id", "local/qwen3-35b-arbitrage")
+        return self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
 
     def is_available(self) -> bool:
         return self.is_port_open(self.port)
@@ -269,9 +240,7 @@ class OllamaLLMBackend(LLMBackend):
 
     @property
     def model_id(self) -> str:
-        return self.config.get("workflow", {}).get(
-            "arbitration_llm", {}
-        ).get("model_id", "qwen2.5:32b")
+        return self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
 
     def is_available(self) -> bool:
         try:
@@ -307,7 +276,7 @@ class HTTPLLMBackend(LLMBackend):
     def model_id(self) -> str:
         return self.config.get("workflow", {}).get(
             "arbitration_llm", {}
-        ).get("model_id", "qwen3-35b")
+        ).get("model_id") or ""
 
     @property
     def base_url(self) -> str:

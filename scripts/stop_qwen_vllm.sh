@@ -6,7 +6,7 @@
 set -euo pipefail
 
 PORT="${VLLM_PORT:-8000}"
-PID_FILE="${VLLM_PID_FILE:-/root/.vllm_qwen36_27b.pid}"
+PID_FILE="${VLLM_PID_FILE:-/root/.vllm_backend.pid}"
 PATTERN="${VLLM_STOP_PATTERN:-VLLM::(EngineCore|Worker_TP)|vllm serve}"
 TIMEOUT="${VLLM_STOP_TIMEOUT:-90}"
 

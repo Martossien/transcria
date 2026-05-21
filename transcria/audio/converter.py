@@ -1,4 +1,3 @@
-import subprocess
 import logging
 import shutil
 import subprocess

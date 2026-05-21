@@ -1,3 +1,4 @@
+import json
 import yaml
 from datetime import datetime, timezone
 
@@ -7,7 +8,7 @@ from transcria.jobs.models import Job
 
 class JobContextBuilder:
     @staticmethod
-    def build(job: Job, jobs_dir: str) -> dict:
+    def build(job: Job, jobs_dir: str, config: dict | None = None) -> dict:
         fs = JobFilesystem(jobs_dir, job.id)
 
         meeting = fs.load_json("context/meeting_context.json") or {}
@@ -60,11 +61,15 @@ class JobContextBuilder:
                 for t in lexicon
             ],
             "processing": {
-                "default_stt_model": "cohere-transcribe-03-2026",
-                "diarization_model": "pyannote/speaker-diarization-community-1",
+                "default_stt_model": (config or {}).get("models", {}).get(
+                    "cohere_model", "cohere-transcribe-03-2026"
+                ),
+                "diarization_model": (config or {}).get("models", {}).get(
+                    "pyannote_model", "pyannote/speaker-diarization-community-1"
+                ),
             },
         }
 
         fs.save_text("context/job_context.yaml", yaml.dump(context, allow_unicode=True, default_flow_style=False))
-        fs.save_text("context/job_context.json", __import__("json").dumps(context, ensure_ascii=False, indent=2, default=str))
+        fs.save_text("context/job_context.json", json.dumps(context, ensure_ascii=False, indent=2, default=str))
         return context

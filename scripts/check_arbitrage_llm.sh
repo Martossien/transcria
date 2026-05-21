@@ -4,7 +4,7 @@
 
 CONFIG="./config.yaml"
 
-# Lire le port depuis la config. qwen_port reste supporté pour les anciens fichiers.
+# Lire le port depuis la config (qwen_port accepté pour les anciens fichiers config).
 PORT=$(grep -m1 "arbitrage_llm_port:" "$CONFIG" 2>/dev/null | awk '{print $2}' | tr -d '[:space:]')
 if [ -z "$PORT" ]; then
     PORT=$(grep -m1 "qwen_port:" "$CONFIG" 2>/dev/null | awk '{print $2}' | tr -d '[:space:]')
