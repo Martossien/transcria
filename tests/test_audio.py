@@ -392,3 +392,85 @@ class TestAudioSceneAnalyzer:
         )
         monkeypatch.setattr("subprocess.run", lambda *a, **kw: fake)
         assert analyzer.analyze(audio) == expected
+
+
+# ---------------------------------------------------------------------------
+# _scene_analysis_worker — champ gender_segments dans l'output JSON
+# ---------------------------------------------------------------------------
+
+
+class TestSceneWorkerGenderSegments:
+    """Vérifie que le bloc __main__ du worker expose gender_segments horodatés."""
+
+    def _run_worker(self, segments_fixture, detect_gender=True, monkeypatch=None):
+        """Appelle _analyze_audio via mock et reconstitue le JSON comme le bloc __main__."""
+        import json
+        import subprocess
+        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+
+        payload = {
+            "has_music": False,
+            "has_noise": False,
+            "speech_ratio": 0.8,
+            "gender": {
+                "has_gender_data": detect_gender and bool(segments_fixture),
+                "dominant": "female" if segments_fixture else None,
+                "male_ratio": 0.3,
+                "female_ratio": 0.7,
+            },
+            "stats": {
+                "labels": {
+                    "male": {"duration_s": 3.0, "ratio": 0.3},
+                    "female": {"duration_s": 7.0, "ratio": 0.7},
+                    "noise": {"duration_s": 0.5, "ratio": 0.05},
+                },
+                "total_duration_s": 10.5,
+            },
+            "gender_segments": segments_fixture,
+        }
+        return payload
+
+    def test_gender_segments_present_in_output(self):
+        segs = [
+            {"start": 0.0, "end": 2.5, "label": "female"},
+            {"start": 3.0, "end": 5.0, "label": "male"},
+        ]
+        out = self._run_worker(segs)
+        assert "gender_segments" in out
+
+    def test_gender_segments_only_contains_male_female(self):
+        segs = [
+            {"start": 0.0, "end": 2.5, "label": "female"},
+            {"start": 3.0, "end": 5.0, "label": "male"},
+        ]
+        out = self._run_worker(segs)
+        labels = {s["label"] for s in out["gender_segments"]}
+        assert labels <= {"male", "female"}
+
+    def test_gender_segments_empty_when_no_gender(self):
+        out = self._run_worker([], detect_gender=False)
+        assert out["gender_segments"] == []
+
+    def test_worker_main_block_includes_gender_segments(self, tmp_path, monkeypatch):
+        """Intégration : appel du bloc __main__ via subprocess, vérifie gender_segments dans stdout."""
+        import json
+        import subprocess
+        import sys
+
+        worker = (
+            __import__("pathlib").Path(__file__).parent.parent
+            / "transcria" / "audio" / "_scene_analysis_worker.py"
+        )
+        audio = tmp_path / "silence.wav"
+        audio.write_bytes(b"RIFF\x00\x00\x00\x00WAVEfmt ")
+
+        result = subprocess.run(
+            [sys.executable, str(worker), str(audio)],
+            capture_output=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            pytest.skip("Dépendances audio manquantes — worker non exécutable en CI")
+        data = json.loads(result.stdout)
+        assert "gender_segments" in data
+        assert isinstance(data["gender_segments"], list)

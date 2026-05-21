@@ -7,14 +7,33 @@ l'application :
 
 1. JobService.create/upload/analyze
 2. WorkflowRunner.run_summary() : STT rapide, pyannote, résumé LLM
+   - pyannote détecte les locuteurs + attribut le genre par locuteur
+     (gender_segments × tours → speaker_stats.json, champ "gender")
+   - _write_diarization_context : section "Genre vocal par locuteur" dans
+     summary/diarization_context.md
 3. MeetingContextManager / ParticipantsManager / LexiconManager
 4. SpeakerDetector.save_mapping() + application des rôles LLM
-5. PipelineService.run_process(..., mode="quality") : transcription finale,
-   correction LLM, qualité, export
+5. PipelineService.run_process(..., mode="quality") :
+   - analyse de scène audio (subprocess librosa, pré-transcription) :
+     produit metadata/audio_scene.json avec gender_segments horodatés
+   - séparation de sources optionnelle (Demucs, pré-transcription)
+   - transcription finale (Cohere ou Whisper quality)
+   - diarisation pyannote (mode quality uniquement)
+   - correction LLM d'arbitrage
+   - contrôle qualité
+   - export ZIP
 
 Les participants ne sont pas préremplis avec des noms fictifs. Le test crée une
 entrée par SPEAKER_XX détecté et laisse la LLM appliquer les rôles/noms si elle
 les déduit.
+
+Note : arrêter et relancer le service TranscrIA avant d'exécuter ce test afin
+d'éviter les conflits de port ou d'état partagé. Utiliser le Python du venv
+pour que pyannote soit disponible :
+
+    systemctl stop transcria
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3
+    systemctl start transcria
 """
 
 from __future__ import annotations
@@ -419,7 +438,7 @@ def main() -> int:
         lexicon = build_lexicon_from_summary(fs)
         LexiconManager.save(job, cfg["storage"]["jobs_dir"], lexicon)
         advance_preprocessing_state(job.id, job.state)
-        JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
+        JobContextBuilder.build(job, cfg["storage"]["jobs_dir"], cfg)
         job = JobStore.get_by_id(job_id)
         ok(f"Lexique sauvegarde: {len(lexicon)} terme(s), etat={job.state}")
         RESULTS["lexicon"] = True
@@ -431,7 +450,7 @@ def main() -> int:
         mapping = build_mapping_from_speakers(fs, participants)
         if mapping:
             SpeakerDetector.save_mapping(job.id, cfg["storage"]["jobs_dir"], mapping)
-            JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
+            JobContextBuilder.build(job, cfg["storage"]["jobs_dir"], cfg)
             meeting_ctx = fs.load_json("context/meeting_context.json") or {}
             speaker_roles_llm = meeting_ctx.get("speaker_roles_llm", {})
             if speaker_roles_llm:
@@ -455,21 +474,12 @@ def main() -> int:
         timer_start("pipeline")
         gpu_checkpoint("avant pipeline")
         mode = "quality" if cfg.get("workflow", {}).get("enable_quality_mode", True) else "fast"
-        if args.skip_llm:
-            runner = WorkflowRunner(JobStore, cfg)
-            result = runner.run_transcription(job, str(audio_path), cfg)
-            if not result.get("error"):
-                quality = runner.run_quality_checks(job, cfg)
-                export = runner.build_export(job, cfg)
-                if quality.get("error"):
-                    result = {"error": quality["error"], "step": "quality"}
-                elif export.get("error"):
-                    result = {"error": export["error"], "step": "export"}
-                else:
-                    JobStore.update_state(job.id, JobState.COMPLETED)
-        else:
-            pipeline = PipelineService(cfg)
-            result = pipeline.run_process(job, str(audio_path), mode)
+        # PipelineService gère le cycle complet : analyse de scène, séparation
+        # optionnelle, transcription, diarisation (mode quality), correction,
+        # qualité, export. Quand --skip-llm, les LLM sont déjà désactivés dans
+        # cfg (lignes ci-dessus) : la correction est sautée automatiquement.
+        pipeline = PipelineService(cfg)
+        result = pipeline.run_process(job, str(audio_path), mode)
         gpu_checkpoint("apres pipeline")
         if result.get("error"):
             raise RuntimeError(f"{result.get('step')}: {result['error']}")
@@ -519,6 +529,44 @@ def main() -> int:
             warn("Export ZIP absent")
         RESULTS["verify"] = found == len(expected) + 1
         timer_end("verify")
+
+        section("Artefacts optionnels (selon config)")
+        optional_artifacts = [
+            ("metadata/audio_quality_decision.json", "Décision qualité audio"),
+            ("metadata/audio_scene.json", "Analyse de scène audio"),
+            ("speakers/diarization_checkpoint.json", "Checkpoint diarisation"),
+            ("speakers/speaker_embeddings.json", "Embeddings locuteurs"),
+            ("summary/diarization_context.md", "Contexte diarisation LLM"),
+        ]
+        for rel_path, label in optional_artifacts:
+            assert_file(fs.job_dir / rel_path, label)
+
+        # Vérification genre par locuteur (attribution acoustique automatique)
+        section("Genre vocal par locuteur (attribution acoustique)")
+        scene_path = fs.job_dir / "metadata" / "audio_scene.json"
+        if scene_path.exists():
+            scene = json.loads(scene_path.read_text())
+            gender_segs = scene.get("gender_segments") or []
+            print(f"  gender_segments dans audio_scene.json : {len(gender_segs)} segment(s)")
+            if gender_segs:
+                total_female = sum(s["end"] - s["start"] for s in gender_segs if s.get("label") == "female")
+                total_male = sum(s["end"] - s["start"] for s in gender_segs if s.get("label") == "male")
+                ok(f"Segments genre : {total_female:.1f}s féminin / {total_male:.1f}s masculin")
+            else:
+                warn("Pas de segments genre horodatés (detect_gender désactivé ou audio trop court)")
+        else:
+            warn("audio_scene.json absent — analyse de scène désactivée ou échouée")
+
+        stats_data = fs.load_json("speakers/speaker_stats.json") or {}
+        spk_list = stats_data.get("speakers") or []
+        gender_filled = [s for s in spk_list if s.get("gender")]
+        print(f"  Locuteurs avec genre attribué : {len(gender_filled)}/{len(spk_list)}")
+        for spk in spk_list:
+            spk_id = spk.get("speaker_id", "?")
+            gender = spk.get("gender") or "(non attribué)"
+            mapped = spk.get("mapped_name") or ""
+            label = f"{mapped} ({spk_id})" if mapped and not mapped.upper().startswith("SPEAKER_") else spk_id
+            print(f"    {label:30s}  genre={gender}")
 
         section("Participants finaux")
         for participant in ParticipantsManager.get(job, cfg["storage"]["jobs_dir"]):

@@ -18,12 +18,13 @@ def _default_config(**overrides):
             "enable_speaker_detection": True,
             "enable_quality_mode": True,
             "summary_llm": {"enabled": False},
+            "arbitration_llm": {"model_id": "local/test-llm-arbitrage"},
         },
         "services": {
             "dashboard_llm_url": "http://127.0.0.1:5001",
             "arbitrage_script": "/bin/true",
             "stop_script": "/bin/true",
-            "qwen_port": 8080,
+            "arbitrage_llm_port": 8080,
             "vllm_port": 8000,
         },
         "models": {"cohere_model_path": "/tmp/fake_model"},
@@ -119,7 +120,7 @@ class TestWorkflowRunnerRunCorrection:
                     "enable_speaker_detection": True,
                     "enable_quality_mode": True,
                     "summary_llm": {"enabled": False},
-                    "arbitration_llm": {"timeout_seconds": 1234, "opencode_bin": "opencode"},
+                    "arbitration_llm": {"model_id": "local/test-llm-arbitrage", "timeout_seconds": 1234, "opencode_bin": "opencode"},
                 },
             )
             job = JobStore.create_job(owner_id, "Correction Partial Timeout")
@@ -134,8 +135,8 @@ class TestWorkflowRunnerRunCorrection:
             fs.save_text("context/session_lexicon.json", "[]\n")
 
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             captured = {}
 
@@ -173,6 +174,7 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
                         "timeout_seconds": 4321,
                     },
                     "arbitration_llm": {
+                        "model_id": "local/test-llm-arbitrage",
                         "timeout_seconds": 1234,
                         "opencode_bin": "opencode",
                     },
@@ -182,8 +184,8 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             runner = WorkflowRunner(JobStore, cfg)
 
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.gpu.opencode_runner import OpenCodeRunner
@@ -368,7 +370,7 @@ class TestWorkflowRunnerRunSummary:
         with app.app_context():
             cfg = _default_config(
                 storage={"jobs_dir": str(tmp_path / "jobs")},
-                workflow={"enable_quick_summary": True, "enable_speaker_detection": True, "enable_quality_mode": True, "summary_llm": {"enabled": True}},
+                workflow={"enable_quick_summary": True, "enable_speaker_detection": True, "enable_quality_mode": True, "summary_llm": {"enabled": True}, "arbitration_llm": {"model_id": "local/test-llm-arbitrage"}},
             )
             job = JobStore.create_job(owner_id, "Summary LLM OK")
             runner = WorkflowRunner(JobStore, cfg)
@@ -379,8 +381,8 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
             monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             from transcria.stt.summary import SummaryGenerator
             from transcria.gpu.opencode_runner import OpenCodeRunner
@@ -442,7 +444,7 @@ class TestWorkflowRunnerRunSummary:
 
             monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
             monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             from transcria.stt.summary import SummaryGenerator
 
@@ -675,8 +677,8 @@ class TestWorkflowRunnerRunCorrection:
             runner = WorkflowRunner(JobStore, cfg)
 
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
 
             from transcria.gpu.opencode_runner import OpenCodeRunner
 
@@ -703,10 +705,10 @@ class TestWorkflowRunnerRunCorrection:
             assert saved_srt is not None
             assert "corrigé" in saved_srt
 
-    def test_run_correction_qwen_not_available(self, app, owner_id, monkeypatch, tmp_path):
+    def test_run_correction_llm_not_available(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
-            job = JobStore.create_job(owner_id, "Correction No Qwen")
+            job = JobStore.create_job(owner_id, "Correction No LLM")
             runner = WorkflowRunner(JobStore, cfg)
 
             from transcria.jobs.filesystem import JobFilesystem
@@ -714,11 +716,11 @@ class TestWorkflowRunnerRunCorrection:
             fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nTest\n")
 
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: False)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: False)
 
             result = runner.run_correction(job, cfg)
             assert result["success"] is False
-            assert "Qwen" in result["error"] or "non disponible" in result["error"]
+            assert "non disponible" in result["error"]
 
     def test_run_correction_missing_srt(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
@@ -730,22 +732,22 @@ class TestWorkflowRunnerRunCorrection:
             assert result["success"] is False
             assert "SRT" in result["error"]
 
-    def test_run_correction_exception_stops_qwen(self, app, owner_id, monkeypatch, tmp_path):
+    def test_run_correction_exception_stops_arbitrage_llm(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Correction Crash")
             runner = WorkflowRunner(JobStore, cfg)
 
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_qwen_35b", lambda: True)
+            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
 
             stop_called = {"v": False}
             def fake_stop():
                 stop_called["v"] = True
-            monkeypatch.setattr(runner.vram, "stop_qwen_35b", fake_stop)
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", fake_stop)
 
             from transcria.gpu.opencode_runner import OpenCodeRunner
-            monkeypatch.setattr(OpenCodeRunner, "run_correction", lambda self, s, c, l: (_ for _ in ()).throw(RuntimeError("Qwen crash")))
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", lambda self, s, c, l: (_ for _ in ()).throw(RuntimeError("LLM crash")))
 
             from transcria.jobs.filesystem import JobFilesystem
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
@@ -929,3 +931,245 @@ class TestDiarizationContextGenderSection:
         assert content is not None
         assert "Genre vocal estimé" in content
         assert "Masculin" in content
+
+
+# ---------------------------------------------------------------------------
+# _assign_speaker_genders — fonction pure
+# ---------------------------------------------------------------------------
+
+
+class TestAssignSpeakerGenders:
+    """Tests unitaires purs : aucun I/O, aucun mock."""
+
+    def _turns(self):
+        return [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 10.0},
+            {"speaker": "SPEAKER_01", "start": 10.0, "end": 20.0},
+        ]
+
+    def _gender_segs(self):
+        return [
+            {"start": 0.5, "end": 8.0, "label": "female"},
+            {"start": 10.5, "end": 18.0, "label": "male"},
+        ]
+
+    def test_majority_female_assigned_female(self):
+        result = WorkflowRunner._assign_speaker_genders(self._gender_segs(), self._turns())
+        assert result["SPEAKER_00"]["gender"] == "female"
+
+    def test_majority_male_assigned_male(self):
+        result = WorkflowRunner._assign_speaker_genders(self._gender_segs(), self._turns())
+        assert result["SPEAKER_01"]["gender"] == "male"
+
+    def test_below_min_overlap_returns_empty_gender(self):
+        short_segs = [{"start": 0.0, "end": 0.3, "label": "female"}]
+        turns = [{"speaker": "SPEAKER_00", "start": 0.0, "end": 5.0}]
+        result = WorkflowRunner._assign_speaker_genders(short_segs, turns, min_overlap_s=1.0)
+        assert result["SPEAKER_00"]["gender"] == ""
+
+    def test_empty_turns_returns_empty_dict(self):
+        assert WorkflowRunner._assign_speaker_genders(self._gender_segs(), []) == {}
+
+    def test_empty_gender_segments_returns_empty_dict(self):
+        assert WorkflowRunner._assign_speaker_genders([], self._turns()) == {}
+
+    def test_multiple_speakers_independently_assigned(self):
+        result = WorkflowRunner._assign_speaker_genders(self._gender_segs(), self._turns())
+        assert set(result.keys()) == {"SPEAKER_00", "SPEAKER_01"}
+
+    def test_partial_overlap_accumulated_correctly(self):
+        segs = [
+            {"start": 0.0, "end": 3.0, "label": "female"},
+            {"start": 3.0, "end": 8.0, "label": "male"},
+        ]
+        turns = [{"speaker": "SPEAKER_00", "start": 0.0, "end": 10.0}]
+        result = WorkflowRunner._assign_speaker_genders(segs, turns, min_overlap_s=1.0)
+        assert result["SPEAKER_00"]["female_s"] == pytest.approx(3.0, abs=0.01)
+        assert result["SPEAKER_00"]["male_s"] == pytest.approx(5.0, abs=0.01)
+        assert result["SPEAKER_00"]["gender"] == "male"
+
+    def test_tie_returns_empty_gender(self):
+        segs = [
+            {"start": 0.0, "end": 5.0, "label": "female"},
+            {"start": 5.0, "end": 10.0, "label": "male"},
+        ]
+        turns = [{"speaker": "SPEAKER_00", "start": 0.0, "end": 10.0}]
+        result = WorkflowRunner._assign_speaker_genders(segs, turns, min_overlap_s=1.0)
+        assert result["SPEAKER_00"]["gender"] == ""
+
+
+# ---------------------------------------------------------------------------
+# _inject_speaker_genders — intégration (fs sur disque, mock get_structured_logger)
+# ---------------------------------------------------------------------------
+
+
+class TestInjectSpeakerGenders:
+    """Vérifie que _inject_speaker_genders met à jour speaker_stats.json correctement."""
+
+    def _make_runner(self, app, owner_id, tmp_path, monkeypatch):
+        return WorkflowRunner(JobStore, _default_config())
+
+    def _make_fs(self, tmp_path, job_id="inject-gender-test"):
+        return JobFilesystem(str(tmp_path), job_id)
+
+    def _audio_scene_with_segs(self):
+        return {
+            "gender_segments": [
+                {"start": 0.0, "end": 5.0, "label": "female"},
+                {"start": 10.0, "end": 18.0, "label": "male"},
+            ]
+        }
+
+    def _speakers_result(self):
+        return {
+            "speakers": [
+                {
+                    "speaker_id": "SPEAKER_00",
+                    "speaking_time_seconds": 10,
+                    "turn_count": 2,
+                    "turns": [
+                        {"start": 0.0, "end": 5.0},
+                        {"start": 5.0, "end": 9.0},
+                    ],
+                },
+                {
+                    "speaker_id": "SPEAKER_01",
+                    "speaking_time_seconds": 8,
+                    "turn_count": 1,
+                    "turns": [{"start": 10.0, "end": 18.0}],
+                },
+            ],
+            "turns": [],
+        }
+
+    def _save_turns(self, fs, turns: list):
+        """Écrit speaker_turns.json au format produit par DiarizerService."""
+        fs.save_json("speakers/speaker_turns.json", {"available": True, "turns": turns})
+
+    def test_inject_updates_speaker_stats(self, app, owner_id, tmp_path, monkeypatch):
+        runner = self._make_runner(app, owner_id, tmp_path, monkeypatch)
+        fs = self._make_fs(tmp_path)
+        fs.save_json("speakers/speaker_stats.json", {
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "gender": "", "speaking_time_seconds": 10},
+                {"speaker_id": "SPEAKER_01", "gender": "", "speaking_time_seconds": 8},
+            ]
+        })
+        self._save_turns(fs, [
+            {"start": 0.0, "end": 10.0, "speaker": "SPEAKER_00"},
+            {"start": 10.0, "end": 18.0, "speaker": "SPEAKER_01"},
+        ])
+
+        result = runner._inject_speaker_genders(fs, self._audio_scene_with_segs())
+
+        assert isinstance(result, dict)
+        updated = fs.load_json("speakers/speaker_stats.json")
+        by_id = {s["speaker_id"]: s for s in updated["speakers"]}
+        assert by_id["SPEAKER_00"]["gender"] == "female"
+        assert by_id["SPEAKER_01"]["gender"] == "male"
+
+    def test_inject_does_not_overwrite_user_gender(self, app, owner_id, tmp_path, monkeypatch):
+        runner = self._make_runner(app, owner_id, tmp_path, monkeypatch)
+        fs = self._make_fs(tmp_path, "no-overwrite-test")
+        fs.save_json("speakers/speaker_stats.json", {
+            "speakers": [{"speaker_id": "SPEAKER_00", "gender": "male"}]
+        })
+        scene = {"gender_segments": [{"start": 0.0, "end": 10.0, "label": "female"}]}
+        self._save_turns(fs, [{"start": 0.0, "end": 10.0, "speaker": "SPEAKER_00"}])
+
+        runner._inject_speaker_genders(fs, scene)
+
+        updated = fs.load_json("speakers/speaker_stats.json")
+        assert updated["speakers"][0]["gender"] == "male"
+
+    def test_inject_no_gender_segments_skips(self, app, owner_id, tmp_path, monkeypatch):
+        runner = self._make_runner(app, owner_id, tmp_path, monkeypatch)
+        fs = self._make_fs(tmp_path, "no-segs-test")
+        fs.save_json("speakers/speaker_stats.json", {
+            "speakers": [{"speaker_id": "SPEAKER_00", "gender": ""}]
+        })
+
+        result = runner._inject_speaker_genders(fs, {})
+
+        assert result == {}
+        stats = fs.load_json("speakers/speaker_stats.json")
+        assert stats["speakers"][0]["gender"] == ""
+
+    def test_inject_returns_speaker_genders_dict(self, app, owner_id, tmp_path, monkeypatch):
+        runner = self._make_runner(app, owner_id, tmp_path, monkeypatch)
+        fs = self._make_fs(tmp_path, "return-dict-test")
+        fs.save_json("speakers/speaker_stats.json", {
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "gender": ""},
+                {"speaker_id": "SPEAKER_01", "gender": ""},
+            ]
+        })
+        self._save_turns(fs, [
+            {"start": 0.0, "end": 10.0, "speaker": "SPEAKER_00"},
+            {"start": 10.0, "end": 18.0, "speaker": "SPEAKER_01"},
+        ])
+
+        result = runner._inject_speaker_genders(fs, self._audio_scene_with_segs())
+
+        assert "SPEAKER_00" in result
+        assert "SPEAKER_01" in result
+        for v in result.values():
+            assert "gender" in v
+            assert "male_s" in v
+            assert "female_s" in v
+
+
+# ---------------------------------------------------------------------------
+# _write_diarization_context avec speaker_genders
+# ---------------------------------------------------------------------------
+
+
+class TestWriteDiarizationContextWithSpeakerGenders:
+    """Section per-speaker genre dans le contexte LLM."""
+
+    def _minimal_speakers_result(self):
+        return {
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "speaking_time_seconds": 20, "turn_count": 3},
+                {"speaker_id": "SPEAKER_01", "speaking_time_seconds": 15, "turn_count": 2},
+            ],
+            "turns": [],
+        }
+
+    def test_with_speaker_genders_includes_per_speaker_section(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "per-spk-gender-test")
+        speaker_genders = {
+            "SPEAKER_00": {"gender": "female", "female_s": 18.7, "male_s": 3.2},
+            "SPEAKER_01": {"gender": "male", "female_s": 1.1, "male_s": 12.4},
+        }
+
+        content = WorkflowRunner._write_diarization_context(
+            fs, self._minimal_speakers_result(), speaker_genders=speaker_genders
+        )
+
+        assert content is not None
+        assert "Genre vocal par locuteur" in content
+        assert "SPEAKER_00" in content
+        assert "Féminin" in content
+        assert "SPEAKER_01" in content
+        assert "Masculin" in content
+
+    def test_without_speaker_genders_no_per_speaker_section(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "no-per-spk-test")
+
+        content = WorkflowRunner._write_diarization_context(
+            fs, self._minimal_speakers_result()
+        )
+
+        assert content is not None
+        assert "Genre vocal par locuteur" not in content
+
+    def test_empty_speaker_genders_no_section(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "empty-per-spk-test")
+
+        content = WorkflowRunner._write_diarization_context(
+            fs, self._minimal_speakers_result(), speaker_genders={}
+        )
+
+        assert content is not None
+        assert "Genre vocal par locuteur" not in content
