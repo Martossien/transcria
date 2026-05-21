@@ -28,9 +28,9 @@ transcria/
 
 - **Pas de hardcoding** : ports, chemins, noms de modèles et seuils qualité/VAD/STT viennent de `config.yaml` ou `.env`
 - **Interfaces** : `BaseTranscriber` (ABC) pour les moteurs STT, `LLMBackend` (ABC) pour les LLM
-- **Service layer** : les routes Flask délèguent à `JobService`, `PipelineService`, `ConfigService`
+- **Service layer** : les routes Flask délèguent aux services quand le flux est partagé ou complexe, et utilisent encore certains stores/runner directement pour les endpoints courts
 - **Logging structuré** : chaque log inclut `correlation_id`, `job_id`, `step`
-- **Pas de lazy imports** : les dépendances circulaires sont résolues par l'architecture
+- **Imports locaux ciblés** : quelques endpoints gardent des imports locaux pour éviter les cycles ou limiter le coût d'import ; respecter ce pattern existant
 
 ## Ajouter un moteur STT
 

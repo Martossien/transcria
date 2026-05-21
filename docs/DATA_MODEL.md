@@ -171,7 +171,7 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 
 | Route | État départ | État arrivée | Condition |
 |---|---|---|---|
-| `POST /api/jobs` | — | `CREATED` | Création |
+| `POST /jobs/new` | — | `CREATED` | Création |
 | `POST /api/jobs/<id>/upload` | `CREATED` | `UPLOADED` | Fichier reçu |
 | `POST /api/jobs/<id>/analyze` | `UPLOADED` | `ANALYZED` | ffprobe OK |
 | `POST /api/jobs/<id>/summary` | `ANALYZED` | `SUMMARY_DONE` | Cohere+pyannote+LLM OK |
@@ -203,7 +203,7 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 | `quality` | Qualité | QUALITY_CHECKING, QUALITY_CHECKED | 8 |
 | `export` | Export | EXPORT_READY, COMPLETED | 9 |
 
-`_STEPS` dans `workflow/steps.py`, `WORKFLOW_STEPS` dans `jobs/models.py` et `WorkflowState.STEPS` dans `workflow/states.py` sont alignés sur ces 9 étapes.
+`WORKFLOW_STEPS` dans `workflow/steps.py`, `get_step_for_state()` dans `jobs/models.py` et `WorkflowState.STEPS` dans `workflow/states.py` sont alignés sur ces 9 étapes.
 
 ---
 

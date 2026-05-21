@@ -33,8 +33,7 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 523 tests collectés ; 523 passent (mock, pas de GPU requis)
-# ⚠️  4 échecs pré-existants connus (TestWorkflowRunnerRunCorrection ×2, TestAdminConfig ×2 — non liés au code courant)
+python -m pytest tests/ -q           # 529 tests collectés (mock, pas de GPU requis)
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -139,7 +138,7 @@ transcria/
       pipeline_service.py   # PipelineService — _run_audio_scene_analysis + _run_source_separation avant STT
       config_service.py     # ConfigService
     web/
-      routes.py             # web_bp : 28 endpoints (pages + API JSON)
+      routes.py             # web_bp : 30 routes (pages + API JSON)
       templates/            # base.html + templates par étape
       static/js/            # wizard.js, wizard-api.js
   jobs/                     # Données runtime (1 sous-répertoire par job)
@@ -154,7 +153,7 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # modules test_*.py + E2E, 507 tests collectés (504 passent, mocks GPU/LLM)
+  tests/                    # modules test_*.py + E2E, 529 tests collectés (mocks GPU/LLM)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -208,7 +207,7 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 - **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
 - **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
 
-**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`, alias legacy `stop_qwen_35b()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
+**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
 
 `services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `services.arbitrage_llm_port` remplace `qwen_port` pour les nouvelles configs. `services.llm_cleanup_ports` remplace `vllm_port` et liste les ports de backends LLM concurrents à libérer avant lancement. Les anciens noms restent lus par compatibilité. `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
@@ -298,8 +297,8 @@ if not summary_text or summary_text.strip() == "Résumé indisponible.":
 ```
 Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
 
-### opencode — provider `local` requis dans `~/.opencode/config.json`
-`OpenCodeRunner` invoque opencode avec `--model local/qwen3-35b-arbitrage`. Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.opencode/config.json` avec un `baseUrl` pointant sur le serveur llama.cpp (port 8080 par défaut). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder. Exemple minimal :
+### opencode — provider `local` requis dans `~/.config/opencode/opencode.json`
+`OpenCodeRunner` invoque opencode avec `--model <provider>/<model>` depuis `workflow.summary_llm.model_id` ou `workflow.arbitration_llm.model_id` (exemple historique : `local/qwen3-35b-arbitrage`). Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.config/opencode/opencode.json` avec un `baseUrl` pointant sur le serveur llama.cpp (port 8080 par défaut). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder. Exemple minimal :
 ```json
 {
   "providers": {
@@ -351,7 +350,7 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-523 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+529 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).

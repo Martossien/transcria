@@ -84,7 +84,7 @@ silencieusement l'application à Qwen si la config est incomplète.
 - `WorkflowRunner._assign_speaker_genders(gender_segments, turns, min_overlap_s=1.0)` : méthode statique pure. Croise les segments genre avec les tours pyannote. Attribue uniquement si chevauchement ≥ 1s et l'un des sexes domine.
 - `WorkflowRunner._inject_speaker_genders(fs, audio_scene)` : lit `speaker_turns.json`, appelle `_assign_speaker_genders`, met à jour `speaker_stats.json` sans jamais écraser un choix utilisateur. Appelée depuis `_run_pyannote_after_transcription` et `run_diarization`.
 - `_write_diarization_context` enrichi : section "Genre vocal par locuteur" ajoutée au contexte LLM quand `speaker_genders` est fourni.
-- 523 tests collectés, 523 passent ; 4 échecs pré-existants connus (non liés à ce module).
+- 529 tests collectés dans la suite pytest mockée.
 
 ### Reste à valider terrain
 - Activer `whisper.forced_alignment.enabled` seulement après tests sur vrais audios longs.

@@ -755,7 +755,7 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 458 passed
+# Résultat attendu : 529 tests collectés
 ```
 
 ### Lancer le test E2E complet (avec GPU)
@@ -1126,7 +1126,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q                      # 458 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q                      # 529 tests collectés (mock, pas de GPU requis)
 venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

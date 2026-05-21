@@ -21,7 +21,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 458 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** 529 tests pytest collectés — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -142,24 +142,29 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.7
 │
-├── tests/                         # 458 tests pytest collectés
+├── tests/                         # 529 tests pytest collectés
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
-│   ├── test_auth_store.py         # 11 tests — CRUD utilisateurs
-│   ├── test_config.py             # 14 tests — Chargement YAML, sauvegarde config, debug
-│   ├── test_context.py            # 16 tests — Meeting, participants, lexique, builder
+│   ├── test_auth_store.py         # 14 tests — CRUD utilisateurs, groupes
+│   ├── test_config.py             # 21 tests — Chargement YAML, sauvegarde config, debug
+│   ├── test_context.py            # 19 tests — Meeting, participants, lexique, builder
+│   ├── test_diarization.py        # 12 tests — Diarisation, checkpoints, clips
 │   ├── test_edge_cases.py         # 17 tests — Cas limites contexte/exports/transitions
 │   ├── test_exports.py            # 3 tests — PackageBuilder
-│   ├── test_gpu.py                # 9 tests — VRAMManager
+│   ├── test_gpu.py                # 59 tests — VRAMManager
 │   ├── test_integrations.py       # 12 tests — DashboardClient, SrtEditorLink, OpenCodeRunner
 │   ├── test_jobs.py               # 19 tests — Job model, filesystem
-│   ├── test_job_store.py          # 14 tests — JobStore CRUD, purge rétention
-│   ├── test_quality.py            # 14 tests — SRTChecker, LexiconChecker
-│   ├── test_quality_deep.py       # 15 tests — Tests approfondis qualité avec SRT réel
-│   ├── test_stt.py                # 12 tests — CohereTranscriber (timestamps, segments), speaker clips
-│   ├── test_web_api.py            # 30 tests — Routes web (login, jobs, upload, admin config)
-│   ├── test_web_edge_cases.py     # 38 tests — Erreurs API, rôles, accès jobs, pipeline
-│   └── test_workflow.py           # 20 tests — États, transitions, runner
+│   ├── test_job_store.py          # 15 tests — JobStore CRUD, purge rétention
+│   ├── test_opencode_runner.py    # 44 tests — opencode, parsing résumé, correction
+│   ├── test_pipeline_service.py   # 8 tests — Analyse de scène, séparation, ordre pipeline
+│   ├── test_quality.py            # 18 tests — SRTChecker, LexiconChecker
+│   ├── test_quality_deep.py       # 18 tests — Tests approfondis qualité avec SRT réel
+│   ├── test_stt.py                # 30 tests — STT, timestamps, alignement, speaker clips
+│   ├── test_summary_generator.py  # 1 test — Résumé rapide
+│   ├── test_web_api.py            # 38 tests — Routes web (login, jobs, upload, admin config)
+│   ├── test_web_edge_cases.py     # 50 tests — Erreurs API, rôles, accès jobs, pipeline
+│   ├── test_workflow.py           # 30 tests — États, transitions, runner
+│   └── test_workflow_runner.py    # 55 tests — Runner, correction, résumé, genre locuteur
 │
 ├── jobs/                          # Données des traitements (runtime)
 └── docs/                          # Documentation
@@ -347,7 +352,7 @@ Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte 
 |---|
 | `file` (Fichier), `analyze` (Analyse), `summary` (Résumé), `context` (Contexte), `participants` (Participants & Locuteurs), `lexicon` (Lexique), `processing` (Traitement), `quality` (Qualité), `export` (Export) |
 
-> **Note :** `WORKFLOW_STEPS`, `WorkflowState.STEPS` et `_STEPS` dans `workflow/steps.py` sont alignés sur les mêmes 9 étapes affichées. Les locuteurs sont fusionnés dans l'étape 5 "Participants & Locuteurs".
+> **Note :** `WORKFLOW_STEPS` dans `workflow/steps.py`, `WorkflowState.STEPS` et `get_step_for_state()` dans `jobs/models.py` sont alignés sur les mêmes 9 étapes affichées. Les locuteurs sont fusionnés dans l'étape 5 "Participants & Locuteurs".
 
 | Classe | Colonnes |
 |---|---|
@@ -356,7 +361,7 @@ Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte 
 | Fonction | Description |
 |---|---|
 | `get_state_order(state)` | Index dans l'énumération JobState |
-| `get_step_for_state(state)` | Retourne l'étape WORKFLOW_STEPS correspondante |
+| `get_step_for_state(state)` | Retourne l'étape `WORKFLOW_STEPS` correspondante |
 
 **`store.py`**
 | Méthode | Description |
@@ -439,7 +444,7 @@ jobs/{uuid}/
 **`StepStatus`** : `todo`, `in_progress`, `done`, `optional`, `error`, `skipped`
 
 **`steps.py` — `WorkflowSteps`**
-Contient `_STEPS` (9 entrées, sans étape `speakers` séparée) et des helpers :
+Contient `WORKFLOW_STEPS` (9 entrées, sans étape `speakers` séparée) et des helpers :
 - `step_requires_upload(step_id)` : retourne True pour file, analyze, summary, participants, processing, quality, export
 - `step_requires_speakers(step_id)` : retourne True pour processing, quality
 - `get_step_index(step_id)` / `get_next_step_id(step_id)`
@@ -754,12 +759,12 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `HTTPLLMBackend` | Connexion à une LLM externe déjà disponible (HTTP, pas de lancement local) |
 | `create_llm_backend(config, backend_type)` | Factory : instancie le bon backend selon `config` et `backend_type` |
 
-Constantes : `OPENCODE_BIN = "opencode"`, `PROVIDER = "local"`, `MODEL = "qwen3-35b-arbitrage"`
+Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRANSCRIA_OPENCODE_BIN`. Le modèle vient de `workflow.summary_llm.model_id` pour le résumé et de `workflow.arbitration_llm.model_id` pour la correction. Si le `model_id` est vide, `OpenCodeRunner` lève `ValueError`.
 
 | Méthode | Description |
 |---|---|
-| `__init__(work_dir, model, provider)` | Initialise avec répertoire de travail et modèle |
-| `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.run` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
+| `__init__(work_dir, model, provider, opencode_bin, config)` | Initialise avec répertoire de travail, modèle et binaire opencode configurables |
+| `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
 | `run_summary(transcript_path, context_path, diarization_context_path)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible, lit le fichier summary.md produit et le parse |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + session_lexicon.json, écrit transcription_corrigee.srt + correction_report.md |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects) |
@@ -841,10 +846,10 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 **`pipeline_service.py` — `PipelineService`**
 | Méthode | Description |
 |---|---|
-| `run_process(job_id, config)` | Lance le pipeline complet de traitement |
-| `_run_pipeline_steps(job, audio_path, config)` | Exécution séquentielle des étapes du pipeline |
-| `_define_pipeline_steps(config)` | Définit les étapes actives selon la config |
-| `_release_arbitrage_llm(config)` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_arbitrage_llm()`) |
+| `run_process(job, audio_path, mode)` | Lance le pipeline complet de traitement pour un job déjà chargé |
+| `_run_pipeline_steps(job, audio_path, mode, sl)` | Analyse de scène, séparation optionnelle, transcription, puis étapes séquentielles |
+| `_define_pipeline_steps(job, audio_path, mode)` | Définit les étapes actives selon le mode (`quality` ajoute la diarisation) |
+| `_release_arbitrage_llm()` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_arbitrage_llm()`) |
 
 **`config_service.py` — `ConfigService`** (toutes méthodes statiques)
 | Méthode | Description |
@@ -1049,7 +1054,7 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 
 ## 11. Tests
 
-**458 tests collectés** couvrant tous les modules. Lancer avec :
+**529 tests collectés** couvrant tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```
@@ -1058,21 +1063,26 @@ Organisation :
 | Fichier | Tests | Couverture |
 |---|---|---|
 | `test_auth.py` | 17 | Rôles, modèles, permissions, décorateur |
-| `test_auth_store.py` | 11 | CRUD utilisateurs |
-| `test_config.py` | 14 | Chargement YAML, sauvegarde config, env var, debug |
-| `test_context.py` | 16 | Meeting, participants, lexique, builder |
+| `test_auth_store.py` | 14 | CRUD utilisateurs, groupes |
+| `test_config.py` | 21 | Chargement YAML, sauvegarde config, env var, debug |
+| `test_context.py` | 19 | Meeting, participants, lexique, builder |
+| `test_diarization.py` | 12 | Diarisation, checkpoints, clips |
 | `test_edge_cases.py` | 17 | Cas limites, transitions workflow |
 | `test_exports.py` | 3 | PackageBuilder |
-| `test_gpu.py` | 9 | VRAMManager |
+| `test_gpu.py` | 59 | VRAMManager |
 | `test_integrations.py` | 12 | Dashboard, SRT Editor, OpenCodeRunner |
 | `test_jobs.py` | 19 | Job model, filesystem |
-| `test_job_store.py` | 14 | JobStore CRUD, purge rétention |
-| `test_quality.py` | 14 | SRT checks, lexique |
-| `test_quality_deep.py` | 15 | SRT réel, rapport intégré |
-| `test_stt.py` | 12 | Timestamps, segments SRT, speaker clips |
-| `test_web_api.py` | 30 | Routes web, login, jobs, admin config |
-| `test_web_edge_cases.py` | 38 | Erreurs API, rôles, accès jobs, pipeline |
-| `test_workflow.py` | 20 | États, transitions, runner |
+| `test_job_store.py` | 15 | JobStore CRUD, purge rétention |
+| `test_opencode_runner.py` | 44 | opencode, parsing résumé, correction |
+| `test_pipeline_service.py` | 8 | Analyse de scène, séparation, ordre pipeline |
+| `test_quality.py` | 18 | SRT checks, lexique |
+| `test_quality_deep.py` | 18 | SRT réel, rapport intégré |
+| `test_stt.py` | 30 | Timestamps, segments SRT, speaker clips |
+| `test_summary_generator.py` | 1 | Génération résumé rapide |
+| `test_web_api.py` | 38 | Routes web, login, jobs, admin config |
+| `test_web_edge_cases.py` | 50 | Erreurs API, rôles, accès jobs, pipeline |
+| `test_workflow.py` | 30 | États, transitions, runner |
+| `test_workflow_runner.py` | 55 | Runner, correction, résumé, genre locuteur |
 | `conftest.py` | — | Fixtures pytest (app, client, admin/operator/viewer) |
 
 ---

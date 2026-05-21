@@ -50,6 +50,6 @@ models/cohere-asr/*
 # Backups de développement (historique de refactoring)
 backup/
 
-# Documentation interne (plans de refactoring, archives)
+# Documentation interne (plans de refactoring, archives historiques)
 docs/plan_refactoring_*.md
 docs/archive/

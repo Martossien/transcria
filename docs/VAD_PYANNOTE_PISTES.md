@@ -94,4 +94,4 @@ Si on dispose d'un segment de 5–10 min avec les vrais changements de locuteur 
 - **Validation format LLM** : si le `summary.md` ne contient pas les sections attendues (`## Participants probables`, `## Termes douteux`), relancer avec un prompt de reprise plutôt que de silencieusement garder le fallback
 
 ### Robustesse (court terme, dette technique)
-- Les aliases `qwen_*` ont été supprimés du code (mai 2026). Les intégrations doivent utiliser `launch_arbitrage_llm()`, `stop_arbitrage_llm()`, `arbitrage_llm_port`. La clé config `qwen_port` reste acceptée en lecture uniquement pour les anciens fichiers `config.yaml`.
+- Les méthodes Python `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées (mai 2026). Les intégrations doivent utiliser `launch_arbitrage_llm()`, `stop_arbitrage_llm()`, `arbitrage_llm_port`. La clé config `qwen_port` et les wrappers shell `stop_qwen*.sh` restent acceptés uniquement pour compatibilité avec les anciennes installations.
