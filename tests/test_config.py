@@ -28,6 +28,7 @@ class TestConfigLoading:
         assert cfg["whisper"]["condition_on_previous_text"] is False
         assert cfg["whisper"]["forced_alignment"]["backend"] == "torchaudio_ctc"
         assert cfg["auth"]["enabled"] is True
+        assert cfg["security"]["max_upload_size_mb"] == 1024
         assert ".mp3" in cfg["security"]["allowed_upload_extensions"]
 
     def test_load_from_yaml_file(self):
@@ -286,6 +287,123 @@ class TestBootstrapConfig:
         result = validate_config(cfg)
 
         assert result.is_valid
+
+    def test_validate_config_accepts_audio_preflight_section(self):
+        cfg = load_config()
+        cfg["workflow"]["audio_preflight"] = {
+            "enabled": True,
+            "frame_ms": 30,
+            "low_rms_threshold": 0.02,
+            "very_low_rms_threshold": 0.008,
+            "silence_rms_threshold": 0.003,
+            "low_snr_db_threshold": 6.0,
+            "narrowband_hz_threshold": 3800.0,
+            "clipping_threshold": 0.98,
+            "clipping_ratio_threshold": 0.001,
+        }
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_validate_config_accepts_audio_decision_extensions(self):
+        cfg = load_config()
+        cfg["workflow"]["segment_reliability"] = {
+            "enabled": True,
+            "no_speech_prob_threshold": 0.5,
+            "low_word_confidence_ratio": 0.5,
+            "low_word_confidence_min": 0.4,
+            "micro_segment_s": 0.35,
+            "short_segment_s": 0.8,
+        }
+        cfg["workflow"]["pyannote_chunking"] = {
+            "merge_micro_chunks": True,
+            "micro_chunk_s": 0.35,
+            "micro_chunk_neighbor_gap_s": 0.4,
+            "isolated_min_chunk_s": 0.3,
+            "padding_s": 0.15,
+            "max_chunk_s": 30,
+            "min_chunk_s": 1.5,
+        }
+        cfg["workflow"]["audio_denoise"] = {
+            "enabled": False,
+            "enabled_for_modes": ["quality"],
+            "backend": "ffmpeg_afftdn",
+            "force": False,
+            "trigger_flags": ["snr_faible"],
+            "noise_reduction_db": 12.0,
+            "noise_floor_db": -25.0,
+            "timeout_s": 300,
+        }
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_default_config_declares_auto_loudnorm_threshold(self):
+        cfg = load_config()
+        assert cfg["workflow"]["audio_normalization"]["auto_loudnorm_rms_threshold"] == 0.02
+
+    def test_validate_config_rejects_invalid_max_upload_size(self):
+        cfg = load_config()
+        cfg["security"]["max_upload_size_mb"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("security.max_upload_size_mb" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_cohere_section(self):
+        cfg = load_config()
+        cfg["cohere"]["collapse_repetition_loops"] = "yes"
+        cfg["cohere"]["max_new_tokens"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("cohere.collapse_repetition_loops" in msg for msg in result.errors)
+        assert any("cohere.max_new_tokens" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_audio_scene_section(self):
+        cfg = load_config()
+        cfg["workflow"]["audio_scene"]["detect_gender"] = "true"
+        cfg["workflow"]["audio_scene"]["thresholds"]["energy_ratio"] = "low"
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("workflow.audio_scene.detect_gender" in msg for msg in result.errors)
+        assert any("workflow.audio_scene.thresholds.energy_ratio" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_source_separation_section(self):
+        cfg = load_config()
+        cfg["workflow"]["source_separation"]["backend"] = "spleeter"
+        cfg["workflow"]["source_separation"]["stem"] = "voice"
+        cfg["workflow"]["source_separation"]["decision"]["min_score"] = "high"
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("workflow.source_separation.backend" in msg for msg in result.errors)
+        assert any("workflow.source_separation.stem" in msg for msg in result.errors)
+        assert any("workflow.source_separation.decision.min_score" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_cleanup_quality_and_vad_auto(self):
+        cfg = load_config()
+        cfg["workflow"]["transcription_cleanup"]["merge_short_segments"] = "false"
+        cfg["workflow"]["transcription_cleanup"]["subtitle_artifact_patterns"] = [123]
+        cfg["workflow"]["vad"]["auto_enable_final_on_degraded"] = "true"
+        cfg["workflow"]["vad"]["auto_enable_final_levels"] = ["degrade", ""]
+        cfg["quality"]["thresholds"]["no_speech_prob_threshold"] = "0.5"
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("workflow.transcription_cleanup.merge_short_segments" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.subtitle_artifact_patterns[0]" in msg for msg in result.errors)
+        assert any("workflow.vad.auto_enable_final_on_degraded" in msg for msg in result.errors)
+        assert any("workflow.vad.auto_enable_final_levels[1]" in msg for msg in result.errors)
+        assert any("quality.thresholds.no_speech_prob_threshold" in msg for msg in result.errors)
 
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"

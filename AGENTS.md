@@ -12,6 +12,7 @@
 
 # Installation manuelle (si install.sh non adapté)
 python3 -m venv venv && source venv/bin/activate
+# Adapter le tag CUDA au driver local (cu121/cu124/cu126) ou utiliser ./install.sh --cuda.
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 pip install -r requirements-dev.txt  # pytest, pytest-cov
@@ -33,7 +34,7 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./status.sh
 
 # Tests
-python -m pytest tests/ -q           # 557 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q           # suite pytest mockée majoritaire, pas de GPU requis
 python -m pytest tests/test_auth.py -v
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -95,12 +96,16 @@ transcria/
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
       converter.py          # AudioConverter (ffmpeg)
+      preflight.py           # AudioPreflightAnalyzer — pré-diagnostic acoustique (RMS, SNR, bande passante, clipping, flags)
       vad.py                # SileroVAD — détection de parole via faster_whisper
       vad_adaptive.py       # AdaptiveVADConfig — seuils VAD selon qualité audio
+      vad_hysteresis.py      # HysteresisBinarizer — post-traitement hystérésis des scores VAD
       scene_analyzer.py     # AudioSceneAnalyzer — orchestrateur subprocess analyse de scène
       _scene_analysis_worker.py # Worker subprocess : pipeline RMS→flatness/ZCR→pitch YIN (librosa)
       scene_filter.py       # AudioSceneFilterService — silence optionnel des zones non vocales sans décaler les timestamps
-      normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle sans décaler les timestamps
+      denoise.py             # AudioDenoiseService — débruitage ffmpeg expérimental (afftdn, désactivé par défaut)
+      normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle, auto-loudnorm si RMS < seuil, weak_voice
+      source_separation.py  # SourceSeparationDecider + SourceSeparationService — separation vocaux/instrumentaux (demucs, désactivé par défaut)
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
@@ -108,8 +113,9 @@ transcria/
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       forced_alignment.py   # Alignement CTC natif torchaudio optionnel
       speaker_realignment.py# Réalignement locuteur/ponctuation au niveau mot
+      reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
-      transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment
+      transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization + checkpoints
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + Cohere
@@ -120,7 +126,7 @@ transcria/
       job_context_builder.py# JobContextBuilder — assemble job_context.yaml/json
     quality/
       audio_quality.py      # AudioQualityEvaluator — décision Cohere/Whisper selon diagnostics
-      quality_report.py     # QualityReporter (10 checks, score /100)
+      quality_report.py     # QualityReporter (16 checks, score /100)
       srt_checks.py         # Checks sur le SRT
       lexicon_checks.py     # Checks sur le lexique
       review_points.py      # Points de relecture
@@ -138,7 +144,7 @@ transcria/
     services/
       job_executor.py       # JobExecutorService — worker interne (thread)
       job_service.py        # JobService
-      pipeline_service.py   # PipelineService — _run_audio_scene_analysis + _run_source_separation avant STT
+      pipeline_service.py   # PipelineService — preflight, scene, quality refresh, source sep, filter, denoise, norm avant STT
       config_service.py     # ConfigService
     web/
       routes.py             # web_bp : 30 routes (pages + API JSON)
@@ -156,7 +162,10 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
-  tests/                    # modules test_*.py + E2E, 557 tests collectés (mocks GPU/LLM)
+    bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices 24/36 combos
+    bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
+    bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
+  tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires)
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     E2E_README.md
@@ -222,18 +231,31 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 **Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
 
-**Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute deux étapes systématiques avant la transcription finale :
+**Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute les étapes suivantes avant la transcription finale :
+0. `_run_audio_preflight()` — analyse pré-STT rapide (RMS, SNR estimé, bande passante, clipping, flags `audio_faible`/`audio_tres_faible`/`snr_faible`), sauvegarde `metadata/audio_preflight.json`. Retourne les flags utilisés par les étapes suivantes.
 1. `_run_audio_scene_analysis()` — crée `AudioSceneAnalyzer(config)`, appelle `analyze(audio_path)` dans un subprocess isolé (librosa CPU), sauvegarde le résultat dans `metadata/audio_scene.json` si non vide. Retourne `{}` si désactivé, timeout ou erreur.
-2. `_run_source_separation()` — charge `metadata/audio_analysis.json` + `metadata/audio_quality_decision.json`, appelle `SourceSeparationDecider.should_separate(analysis, quality, audio_scene=scene)`. Si séparation décidée, `SourceSeparationService.separate()` produit `vocals.wav` dans le répertoire input. La piste vocale extraite remplace `audio_path` pour la suite du pipeline.
-3. `_run_audio_scene_filter()` — option désactivée par défaut (`workflow.audio_scene_filter.enabled=false`). Si activée pour le mode courant, met en silence les longues zones non vocales ciblées sans couper l'audio, produit `scene_filtered.wav`, et écrit `metadata/audio_scene_filter.json` avec `preserve_timeline=true`.
-4. `_run_audio_normalization()` — option désactivée par défaut (`workflow.audio_normalization.enabled=false`). Si activée pour le mode courant, applique des filtres ffmpeg simples (`loudnorm`, high-pass optionnel), produit `normalized.wav`, et écrit `metadata/audio_normalization.json` avec `preserve_timeline=true`.
+2. `_refresh_audio_quality_with_scene()` — réévalue `AudioQualityEvaluator` avec les données de `audio_scene.json` et met à jour `metadata/audio_quality_decision.json` si la classification change (par ex. détection de musique).
+3. `_run_source_separation()` — charge `metadata/audio_analysis.json` + `metadata/audio_quality_decision.json`, appelle `SourceSeparationDecider.should_separate(analysis, quality, audio_scene=scene)`. Si séparation décidée, `SourceSeparationService.separate()` produit `vocals.wav` dans le répertoire input. La piste vocale extraite remplace `audio_path` pour la suite du pipeline.
+4. `_run_audio_scene_filter()` — option désactivée par défaut (`workflow.audio_scene_filter.enabled=false`). Si activée pour le mode courant, met en silence les longues zones non vocales ciblées sans couper l'audio, produit `scene_filtered.wav`, et écrit `metadata/audio_scene_filter.json` avec `preserve_timeline=true`.
+5. `_run_audio_denoise()` — option désactivée par défaut (`workflow.audio_denoise.enabled=false`). Si activé pour le mode courant et si les flags preflight correspondent (`trigger_flags`), applique un filtre ffmpeg `afftdn`, produit `denoised.wav`, et écrit `metadata/audio_denoise.json` avec `preserve_timeline=true`.
+6. `_run_audio_normalization()` — option désactivée par défaut (`workflow.audio_normalization.enabled=false`). Si activée pour le mode courant, applique des filtres ffmpeg simples (`loudnorm`, high-pass optionnel), produit `normalized.wav`, et écrit `metadata/audio_normalization.json` avec `preserve_timeline=true`. Inclut aussi le traitement `weak_voice` si le preflight détecte `audio_faible`/`audio_tres_faible` et que la normalisation n'est pas déjà active : applique un gain puis loudnorm.
 
 Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 
 **VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
+**VAD final auto sur audio dégradé :** si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que le niveau qualité du job est dans `workflow.vad.auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `workflow.vad.threshold_final_degraded` (défaut `0.6`). Ce mécanisme permet de filtrer les silences longs dans les fichiers CSE dégradés sans activer le VAD final par défaut sur les audios propres.
+
 
 **Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` force `whisper` quand le mode est dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job dégradé. La décision est écrite dans `metadata/audio_quality_decision.json`. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
+
+**Anti-hallucination Cohere :** `CohereTranscriber` applique aussi `collapse_repetition_loops` depuis `anti_hallucination.py` (paramètres `cohere.collapse_repetition_loops=true`, `cohere.repetition_loop_min_repeats=4`, `cohere.repetition_loop_max_phrase_words=10`, `cohere.repetition_loop_keep_repeats=2` dans `config.yaml`). Whisper utilise les mêmes paramètres sous `whisper.collapse_repetition_loops` etc. Les deux backends partagent la même logique de détection/réduction des boucles répétitives.
+
+**Nettoyage post-STT (`transcription_cleanup`) :** si `workflow.transcription_cleanup.enabled=true` (défaut), `Transcriber._cleanup_transcription_segments()` supprime les artefacts de sous-titrage (watermarks de diffusion : `"Sous-titrage ST' 501"`, `"FR 2021"`, `"Société Radio-Canada"`, etc.) et fusionne les micro-segments courts adjacents (même locuteur, gap court, texte bref). Les patterns d'artefacts sont configurables via `workflow.transcription_cleanup.subtitle_artifact_patterns` (liste de regex, défaut `[]` = utiliser les patterns intégrés) et `subtitle_artifact_words` (liste de phrases, défaut `[]` = utiliser les mots-clés intégrés). Les paramètres de fusion sont `merge_short_segments`, `short_segment_max_s` (défaut 0.45), `short_segment_max_words` (défaut 2), `merge_gap_s` (défaut 0.5), `merge_max_chars` (défaut 220), `remove_subtitle_artifacts` (défaut true).
+
+**Normalisation auto loudnorm :** si l'audio a un RMS < `workflow.audio_normalization.auto_loudnorm_rms_threshold` (défaut `0.02`) et que la normalisation n'est pas déjà activée, `PipelineService._run_audio_normalization()` force automatiquement un filtre `loudnorm=I=-23:TP=-2:LRA=11`. Ce mécanisme empêche Silero VAD de rejeter un audio trop silencieux (voix chuchotée, micro lointain). Le forçage est tracé dans `metadata/audio_normalization.json` avec `"forced": true`.
+
+**Checks qualité `suspect_no_speech_prob` et `suspect_low_word_confidence` :** `QualityReporter` détecte les segments suspects via deux checks configurables : `quality.thresholds.no_speech_prob_threshold` (défaut `0.5`, signale les segments avec `no_speech_prob` au-dessus du seuil) et `quality.thresholds.low_word_confidence_ratio` + `low_word_confidence_min` (défaut `0.5` et `0.4`, signale quand >50% des mots d'un segment ont une probabilité < 0.4). Le score composite hallucination combine ces deux signaux pour distinguer les vrais segments suspects des faux positifs (jingle, micro-fragment de diarisation).
 
 **Analyse de scène audio (`AudioSceneAnalyzer`) :**
 - Entrée : chemin audio + config `workflow.audio_scene` (seuils, timeout, detect_gender)
@@ -241,7 +263,7 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 - Sortie JSON : `{has_music, has_noise, speech_ratio, music_ratio, noise_ratio, no_energy_ratio, non_speech_ratio, gender: {has_gender_data, dominant, male_ratio, female_ratio}, stats: {labels, total_duration_s}, scene_segments: [{label, start, end, duration_s}], problem_segments: [{label, start, end, duration_s}], gender_segments: [{start, end, label}]}`
   - `gender_segments` : liste des intervalles horodatés classés `"male"` ou `"female"` uniquement, utilisés par `_inject_speaker_genders` pour croiser avec les tours pyannote.
   - `problem_segments` : longues zones non vocales (`music`, `noise`, `noEnergy`) exposées pour diagnostic qualité sans changer automatiquement le pipeline.
-- `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : si `audio_scene.has_music=True` → séparation forcée (prioritaire sur le score). Si `audio_scene=None` → logique score seule.
+- `SourceSeparationDecider.should_separate(analysis, quality, audio_scene)` : si `audio_scene.has_music=True` → séparation forcée **sauf si** `speech_ratio < scene_music_min_speech_ratio_for_force` (défaut 0.08, paramètre configurable), auquel cas la musique est ignorée comme faux positif sur parole quasi absente. Si `audio_scene=None` → logique score seule.
 - `WorkflowRunner._build_gender_section(audio_scene)` : méthode statique qui génère les lignes Markdown de distribution H/F pour `diarization_context.md` (visible par la LLM de résumé). Vide si `has_gender_data=False`.
 - `WorkflowRunner._assign_speaker_genders(gender_segments, turns, min_overlap_s=1.0)` : méthode statique pure. Croise les segments genre avec les tours pyannote (format flat `{speaker, start, end}`). Retourne `{speaker_id: {gender, male_s, female_s}}`. Attribue uniquement si chevauchement total ≥ `min_overlap_s` ET l'un des deux sexes domine.
 - `WorkflowRunner._inject_speaker_genders(fs, audio_scene)` : lit `speakers/speaker_turns.json` sur disque, appelle `_assign_speaker_genders`, met à jour `speaker_stats.json` (ne jamais écraser `gender` déjà renseigné). Appelée depuis `_run_pyannote_after_transcription` et `run_diarization`. **Prérequis timing** : `speaker_turns.json` et `audio_scene.json` doivent exister avant l'appel — `run_diarization` est toujours appelé après `_run_audio_scene_analysis` dans PipelineService, ce qui garantit cet ordre.
@@ -356,7 +378,7 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-557 tests collectés dans les modules `test_*.py` (plus E2E) couvrent stores, config, contexte, qualité, exports, routes Flask et workflow. La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+La suite pytest dans les modules `test_*.py` (plus E2E) couvre stores, config, contexte, qualité, exports, routes Flask et workflow. Le nombre de tests varie avec les ajouts ; la plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
 
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).
@@ -370,7 +392,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 2. **Jamais** committer `config.yaml` (contient des chemins absolus de production) ni `.env` (secrets).
 3. **Toujours** passer `config: dict` en paramètre aux fonctions du moteur, jamais `get_config()` direct (sauf dans les routes).
 4. **Ne pas** modifier `JobState` ou `WORKFLOW_STEPS` sans mettre à jour `WorkflowState.compute_statuses()`.
-5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`.
+5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `metadata/audio_normalization.json`, `metadata/audio_scene_filter.json`, `metadata/audio_preflight.json`, `metadata/audio_denoise.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`.
 6. **Toujours** préserver les champs LLM dans `MeetingContextManager.save()` (la liste `llm_fields`).
 7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.
@@ -387,4 +409,3 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
-| `docs/VAD_PYANNOTE_PISTES.md` | VAD Silero/adaptatif, métriques de détection de dégradation, tuning pyannote, checkpoints et pistes d'amélioration |

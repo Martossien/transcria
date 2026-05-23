@@ -34,6 +34,16 @@ models:
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
 
+cohere:
+  chunk_length_s: 30
+  max_new_tokens: 448
+  repetition_penalty: 1.2
+  no_repeat_ngram_size: 3
+  collapse_repetition_loops: true
+  repetition_loop_min_repeats: 4
+  repetition_loop_max_phrase_words: 10
+  repetition_loop_keep_repeats: 2
+
 whisper:
   # Backend qualité/fallback. Cohere reste le backend normal du workflow.
   model_size: "large-v3"
@@ -103,18 +113,68 @@ workflow:
     force_on_degraded_summary: true
     degraded_summary_levels:
       - "degrade"
+  audio_preflight:
+    # Diagnostic acoustique déterministe pré-STT. Il ne modifie jamais l'audio ;
+    # il produit metadata/audio_preflight.json pour logs, audit qualité et décisions futures.
+    enabled: true
+    frame_ms: 30
+    low_rms_threshold: 0.02
+    very_low_rms_threshold: 0.008
+    silence_rms_threshold: 0.003
+    low_snr_db_threshold: 6.0
+    narrowband_hz_threshold: 3800.0
+    clipping_threshold: 0.98
+    clipping_ratio_threshold: 0.001
+  segment_reliability:
+    # Ajoute reliability=ok|suspect|degrade sur chaque segment ASR.
+    # Ce score ne supprime rien ; il sert au rapport qualité et aux futures protections LLM.
+    enabled: true
+    no_speech_prob_threshold: 0.5
+    low_word_confidence_ratio: 0.5
+    low_word_confidence_min: 0.4
+    micro_segment_s: 0.35
+    short_segment_s: 0.8
+  pyannote_chunking:
+    # Post-traitement conservateur des tours pyannote avant STT.
+    # Objectif : réduire les micro-chunks sans perdre les interjections utiles.
+    merge_micro_chunks: true
+    micro_chunk_s: 0.35
+    micro_chunk_neighbor_gap_s: 0.4
+    isolated_min_chunk_s: 0.3
+    padding_s: 0.15
+    max_chunk_s: 30
+    min_chunk_s: 1.5
   vad:
     enabled_summary: true
     enabled_final: false
+    auto_enable_final_on_degraded: true
+    auto_enable_final_levels:
+      - "degrade"
+    hysteresis_enabled: false
+    onset: 0.5
+    offset: 0.35
     adaptive: true
     threshold: 0.5
     threshold_low_quality: 0.35
     threshold_high_noise: 0.6
+    threshold_final_degraded: 0.6
     min_speech_duration_ms: 250
     min_silence_duration_ms: 400
     min_silence_duration_ms_low_quality: 250
     speech_pad_ms: 200
     speech_pad_ms_low_quality: 350
+  transcription_cleanup:
+    enabled: true
+    remove_subtitle_artifacts: true
+    merge_short_segments: true
+    short_segment_max_s: 0.45
+    short_segment_max_words: 2
+    merge_gap_s: 0.5
+    merge_max_chars: 220
+    # Listes vides → défauts intégrés (marqueurs Radio-Canada/sous-titrage).
+    # Listes non vides → remplacent entièrement les défauts.
+    subtitle_artifact_patterns: []   # regex (ex. "\\bwatermark\\b")
+    subtitle_artifact_words: []      # mots exacts normalisés (ex. "noise")
   audio_scene:
     # Analyse acoustique de scène en subprocess isolé (librosa — aucune dépendance GPU).
     # Produit : ratios parole/non-parole, segments horodatés, distribution H/F.
@@ -156,6 +216,28 @@ workflow:
     lra: 11.0
     highpass_hz: null
     timeout_s: 300
+    auto_loudnorm_rms_threshold: 0.02
+    weak_voice:
+      enabled: true
+      target_rms: 0.05
+      max_gain: 8.0
+      loudnorm_after_gain: true
+      target_i: -23.0
+      true_peak: -2.0
+      lra: 11.0
+  audio_denoise:
+    # Option expérimentale de bench, désactivée par défaut.
+    # Débruitage parole expérimental via ffmpeg afftdn (désactivé par défaut).
+    enabled: false
+    enabled_for_modes:
+      - "quality"
+    backend: "ffmpeg_afftdn"
+    force: false
+    trigger_flags:
+      - "snr_faible"
+    noise_reduction_db: 12.0
+    noise_floor_db: -25.0
+    timeout_s: 300
   source_separation:
     # Séparation de sources vocales via Demucs (dépendance runtime).
     # Ne s'active JAMAIS automatiquement : c'est SourceSeparationDecider qui
@@ -170,8 +252,9 @@ workflow:
     decision:
       min_score: 3            # seuil de score pour activer la séparation
       min_duration_s: 60      # audio < 60s → séparation non déclenchée (surcoût injustifié)
-      scene_music_min_ratio: 0.05       # musique suffisante pour forcer la séparation
-      scene_music_min_duration_s: 10    # ou durée musique minimale en secondes
+      scene_music_min_ratio: 0.80       # musique suffisante pour forcer Demucs (évite les faux positifs de salle)
+      scene_music_min_duration_s: 60    # ou durée musique minimale en secondes
+      scene_music_min_speech_ratio_for_force: 0.08  # évite les faux positifs "musique" quand la parole détectée est quasi nulle
       scene_noise_score_ratio: 0.35     # bruit important → ajoute un score, ne force pas seul
       scene_noise_score: 1
       scene_problem_segments_score_threshold: 3
@@ -195,15 +278,73 @@ workflow:
     opencode_bin: "opencode"
 
 quality:
+  # Phrases détectées dans les segments courts (< 1 s) → signalées dans le rapport qualité.
+  # Aucun segment n'est supprimé automatiquement ; l'opérateur décide.
+  # Listes vides → pas de détection. Enrichir selon les hallucinations observées en production.
   asr_noise_markers:
+    # Formules courtes ambiguës (légitimes mais suspectes dans un segment < 1 s)
     - "thank you"
     - "thanks"
-    - "gracias"
-    - "obrigado"
-    - "e aí"
-    - "come on"
+    - "okay"
+    - "all right"
+    - "bye"
     - "absolutely"
+    # Fillers français sur silence/bruit court (Whisper génère ces phrases sur le vide)
+    # Observés sur test5.wav (voix chuchotée, bench extended 2026-05-23)
+    - "voilà"
+    - "et voilà"
+    - "voilà voilà"
+    - "c'est bon"
+    - "c'est ça"
+    - "c'est juste"
+    - "d'accord"
+    - "tout à fait"
+    - "très bien"
+    - "bien sûr"
+    - "effectivement"
+    - "exactement"
+    - "parfait"
+    # Outros YouTube / contenus viraux — anglais
+    - "thanks for watching"
+    - "thank you for watching"
+    - "thank you for watching please subscribe"
+    - "please subscribe to my channel"
+    - "like and subscribe"
+    - "don't forget to subscribe"
+    - "please like and subscribe"
+    # Outros YouTube — français
+    - "merci d'avoir regardé cette vidéo"
+    - "merci d'avoir regardé"
+    - "n'oubliez pas de vous abonner"
+    # Outros YouTube — autres langues (Whisper hallucine même sur audio FR)
+    - "gracias"
+    - "gracias por ver el video"
+    - "gracias por ver"
+    - "obrigado"
+    - "obrigado por assistir"
+    - "e aí"
+    # Crédits sous-titrage et services de transcription tiers
+    - "subtitles by the amara org community"
+    - "transcription by castingwords"
+    - "rev.com"
+    - "otter.ai"
+    # Descriptions acoustiques (Whisper remplace parfois les hallucinations par des labels)
+    - "music"
+    - "applause"
+    - "clapping"
+    - "typing"
+    - "buzzing"
+    # Artefacts de corpus divers documentés
+    - "come on"
     - "hollywood"
+  thresholds:
+    # Détection de confiance STT (champs Whisper word-level probability)
+    # Segments avec no_speech_prob > seuil → probable hallucination sur silence/bruit
+    no_speech_prob_threshold: 0.5
+    # Fraction de mots sous low_word_confidence_min → segment peu fiable
+    low_word_confidence_ratio: 0.5
+    # Seuil individuel : prob < cette valeur → mot "peu fiable"
+    low_word_confidence_min: 0.4
 
 diarization:
   cache_enabled: true

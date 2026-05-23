@@ -158,7 +158,7 @@ GET /metrics  -> métriques Prometheus légères
 
 ```bash
 source venv/bin/activate
-python -m pytest tests/ -q                          # 557 tests collectés (mock, pas de GPU pour la plupart)
+python -m pytest tests/ -q                          # suite pytest standard, GPU non requis pour la plupart
 venv/bin/python tests/test_e2e_workflow.py --skip-llm        # E2E rapide (1 GPU)
 venv/bin/python tests/test_e2e_workflow.py                   # E2E complet (GPUs + LLM requis)
 venv/bin/python tests/test_e2e_workflow.py --stt-backend whisper  # Avec Whisper large-v3
@@ -179,7 +179,7 @@ transcria/
 │   ├── auth/                    # Utilisateurs, groupes, rôles, permissions, routes /login
 │   ├── jobs/                    # Modèle Job (20 états), CRUD, filesystem
 │   ├── workflow/                # Étapes (9), calcul d'état, runner
-│   ├── audio/                   # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif, analyse de scène
+│   ├── audio/                   # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif, analyse de scène, filtrage, normalisation, séparation de sources
 │   ├── stt/                     # BaseTranscriber, Cohere, Whisper, anti-hallucination
 │   │                            #   Transcriber, DiarizerService, SpeakerDetector, SummaryGenerator
 │   │                            #   alignement CTC, réalignement locuteur, TranscriberFactory

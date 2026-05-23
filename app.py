@@ -41,6 +41,7 @@ def create_app(config_path: str | None = None) -> Flask:
             )
     app.config["SQLALCHEMY_DATABASE_URI"] = cfg.get("storage", {}).get("database_url", "sqlite:///transcrIA.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"connect_args": {"timeout": 30}}
     app.config["MAX_CONTENT_LENGTH"] = int(cfg.get("security", {}).get("max_upload_size_mb", 1024)) * 1024 * 1024
 
     db.init_app(app)

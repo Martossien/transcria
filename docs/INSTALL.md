@@ -202,7 +202,7 @@ source venv/bin/activate
 
 # Vérifier PyTorch + CUDA
 python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}, GPUs: {torch.cuda.device_count()}')"
-# Attendu : PyTorch 2.12.0+cu126, CUDA 12.6, GPUs: 8
+# Attendu : PyTorch avec CUDA disponible et le nombre de GPUs attendu
 
 # Vérifier tous les composants du pipeline
 python -c "
@@ -320,8 +320,8 @@ source venv/bin/activate
 | `faster-whisper` | >=1.2, <2.0 | Whisper large-v3, VAD Silero, timestamps mot-à-mot |
 | `pyannote.audio` | >=4.0, <5.0 | Diarisation (nécessite HF_TOKEN, voir section 5) |
 | `numpy` | >=1.26, <3.0 | Compatible pyannote 4.x et torch 2.x |
-| `librosa` | >=0.11, <0.12 | Traitement audio |
-| `soundfile` | >=0.13, <1.0 | Lecture/écriture WAV |
+| `librosa` | >=0.10, <0.12 | Traitement audio |
+| `soundfile` | >=0.12, <1.0 | Lecture/écriture WAV |
 | `demucs` | >=4.0, <5.0 | Séparation de sources vocales optionnelle |
 | `flask` | >=3.0, <4.0 | Serveur web |
 | `flask-login` | >=0.6, <1.0 | Authentification |
@@ -512,11 +512,11 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 
 **Arguments CLI** : `--port PORT`, `--model PATH`, `--llama-bin PATH`
 
-Le script lance llama-server avec les paramètres optimisés : contexte 263K, tensor-split 1,1 (2 GPUs), flash-attn, cache q8_0, numactl.
+Le script lance llama-server avec les paramètres optimisés : contexte 263K, tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl.
 
 > **⚠️ Adaptation requise** : Les paramètres du script `launch_arbitrage.sh` sont configurés pour un serveur bi-GPU avec 44 cœurs CPU. Vous **devez adapter** les options suivantes à votre machine :
 > - `--threads` / `--threads-batch` : nombre de cœurs CPU (actuellement 44/88)
-> - `--tensor-split 1,1` : répartition entre GPUs (actuellement 50/50 pour 2 GPUs identiques ; mettre `1` pour 1 seul GPU)
+> - `--tensor-split 1,1,1` : répartition entre GPUs (actuellement 33/33/33 pour 3 GPUs identiques ; mettre `1` pour 1 seul GPU)
 > - `--n-gpu-layers all` : conserver `all` pour charger tout le modèle sur GPU, ou un nombre entier si VRAM limitée
 > - `--ctx-size` : taille du contexte (263144 = max du modèle, réduire si VRAM limitée)
 > - `--numa distribute` / `numactl` : retirer si votre serveur n'a pas d'architecture NUMA
@@ -547,8 +547,11 @@ TranscrIA attend une API OpenAI-compatible. Le backend peut être llama.cpp, SGL
 python scripts/bootstrap_config.py --output config.yaml
 ```
 
-Le bootstrap remplit automatiquement une partie de la configuration à partir des chemins et binaires détectés.
-Éditer ensuite `config.yaml` pour votre environnement :
+Le bootstrap fusionne `config.example.yaml` avec les chemins et binaires détectés.
+`config.example.yaml` reste la référence complète. L'extrait ci-dessous ne montre
+que les valeurs généralement modifiées à l'installation ; les sections avancées
+(`audio_preflight`, `audio_denoise`, `source_separation`, `transcription_cleanup`,
+`pyannote_chunking`, etc.) sont générées avec leurs valeurs par défaut.
 
 ```yaml
 server:
@@ -678,7 +681,7 @@ TranscrIA lance et arrête la LLM d'arbitrage via des scripts shell configurable
 **`scripts/launch_arbitrage.sh`** — lance llama-server avec :
 1. Configuration CUDA (`CUDA_HOME`)
 2. `numactl --interleave=all` pour la performance NUMA
-3. Modèle GGUF sur 2 GPUs (`--tensor-split 1,1`, `--split-mode layer`)
+3. Modèle GGUF sur 3 GPUs (`--tensor-split 1,1,1`, `--split-mode layer`)
 4. API OpenAI-compatible sur le port configuré (`--port 8080`)
 
 **`scripts/stop_arbitrage_llm.sh`** — arrête proprement :
@@ -756,7 +759,7 @@ nvidia-smi
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
-# Résultat attendu : 557 tests collectés
+# Résultat attendu : suite pytest collectée et exécutée, GPU non requis pour la plupart
 ```
 
 Le test d'intégration Demucs est ignoré si le package n'est pas importable dans
@@ -1134,7 +1137,7 @@ export HF_TOKEN=votre_token_huggingface
 # pyannote se téléchargera au premier lancement
 
 # 7. Tester
-python -m pytest tests/ -q                      # 557 tests collectés (mock, pas de GPU requis)
+python -m pytest tests/ -q                      # suite pytest standard, GPU non requis pour la plupart
 venv/bin/python tests/test_e2e_workflow.py      # Test E2E complet (nécessite les GPUs)
 
 # 8. Lancer

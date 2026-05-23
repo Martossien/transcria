@@ -26,6 +26,7 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 | `models.cohere_model_path` | `./models/cohere-asr/...` (relatif) | peut être absolu selon l'installation |
 | `workflow.summary_llm.model_id` | `local/votre-modele-llm-ici` | identifiant du modèle utilisé |
 | `workflow.summary_llm.timeout_seconds` | 1800 | typ. 1800+ |
+| `workflow.arbitration_llm.timeout_seconds` | 7200 | typ. 7200 (défaut code : 600) |
 | `workflow.summary_llm.use_chat_api` | absent | `true` |
 
 La clé `qwen_port` reste lue pour compatibilité avec les anciennes installations (alias de `arbitrage_llm_port`). Les nouvelles configurations doivent utiliser `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`. Les méthodes Python `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
@@ -76,7 +77,7 @@ python app.py --no-debug
 |---|---|---|---|
 | `enabled` | bool | `true` | Toujours normalisé à `true` : le mode sans authentification n'est pas supporté |
 | `first_admin_username` | string | `"admin"` | Login du premier admin créé si la base est vide |
-| `first_admin_password` | string | `"admin-change-me"` | Mot de passe du premier admin |
+| `first_admin_password` | string | `"CHANGE-ME"` | Mot de passe du premier admin |
 
 **Redémarrage requis :** non pour le premier admin (lu une seule fois si la base est vide). `enabled=false` est ignoré et réécrit en `true` par `load_config()` / `save_config()`.
 
@@ -116,6 +117,23 @@ python app.py --no-debug
 - `cohere_model_path` : si le chemin est invalide, `CohereTranscriber.load()` échoue avec un avertissement. Le chemin est résolu en absolu si c'est un répertoire local (`os.path.abspath`). Si le chemin commence par `CohereLabs/` ou `cohere/`, HuggingFace download est utilisé.
 - `pyannote_model` : doit être un modèle HuggingFace valide. Nécessite d'accepter les conditions sur huggingface.co et configurer `HF_TOKEN` pour les modèles gated.
 - `stt_backend` pilote la sélection du backend via `TranscriberFactory`.
+
+### `cohere`
+
+Paramètres optionnels du backend Cohere ASR. Ces paramètres ne sont lus que si une section `[cohere]` existe dans `config.yaml`. En l'absence de cette section, les valeurs par défaut sont utilisées par `CohereTranscriber`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `chunk_length_s` | int | `30` | Durée des chunks ASR en secondes |
+| `max_new_tokens` | int | `448` | Nombre maximal de tokens générés par chunk |
+| `repetition_penalty` | float | `1.2` | Pénalité de répétition pour Cohere |
+| `no_repeat_ngram_size` | int | `3` | Taille des n-grams bloqués |
+| `collapse_repetition_loops` | bool | `true` | Activer la détection/réduction des boucles répétitives dans la transcription Cohere |
+| `repetition_loop_min_repeats` | int | `4` | Nombre minimal de répétitions pour détecter une boucle |
+| `repetition_loop_max_phrase_words` | int | `10` | Nombre maximal de mots dans une phrase répétée |
+| `repetition_loop_keep_repeats` | int | `2` | Nombre de répétitions à conserver après réduction |
+
+**Redémarrage requis :** oui — le modèle est chargé en mémoire GPU.
 
 ### `whisper`
 
@@ -230,6 +248,9 @@ global alors que le résumé et la transcription finale n'ont pas les mêmes ris
 |---|---|---|---|
 | `enabled_summary` | bool | `true` | Active le VAD avant la transcription rapide Cohere du résumé |
 | `enabled_final` | bool | `false` | Active un filtrage VAD supplémentaire sur les chunks pyannote de la transcription finale |
+| `auto_enable_final_on_degraded` | bool | `true` | Active automatiquement le VAD final si la décision qualité est dans `auto_enable_final_levels` |
+| `auto_enable_final_levels` | list | `["degrade"]` | Niveaux de qualité qui déclenchent le VAD final automatique |
+| `threshold_final_degraded` | float | `0.6` | Seuil VAD utilisé quand le VAD final est activé automatiquement sur audio dégradé |
 | `adaptive` | bool | `true` | Ajuste les seuils VAD selon `metadata/audio_quality_decision.json` |
 | `threshold` | float | `0.5` | Seuil Silero |
 | `threshold_low_quality` | float | `0.35` | Seuil appliqué si audio dégradé/faible qualité |
@@ -239,9 +260,14 @@ global alors que le résumé et la transcription finale n'ont pas les mêmes ris
 | `min_silence_duration_ms_low_quality` | int | `250` | Silence minimal si audio faible qualité |
 | `speech_pad_ms` | int | `200` | Marge ajoutée autour des zones vocales |
 | `speech_pad_ms_low_quality` | int | `350` | Marge si audio faible qualité |
+| `hysteresis_enabled` | bool | `false` | Activer la binarisation par hystérésis des scores VAD |
+| `onset` | float | `0.5` | Seuil d'apparition pour l'hystérésis (onset) |
+| `offset` | float | `0.35` | Seuil de disparition pour l'hystérésis (offset) |
 
 **Recommandation actuelle :** VAD actif sur le résumé, désactivé par défaut sur la transcription finale.
 La transcription finale utilise déjà les `exclusive_turns` pyannote comme VAD implicite.
+Sur audio dégradé (qualité `degrade`), le VAD final est activé automatiquement avec un seuil
+de 0.6, ce qui réduit le temps pipeline sans perte de contenu mesurable (validé sur CSE 1h40).
 
 #### `workflow.audio_scene`
 
@@ -286,6 +312,50 @@ les timestamps du SRT. Désactivé par défaut.
 
 **Impact :** si le filtre s'applique, `input/scene_filtered.wav` remplace l'audio transmis au STT et `metadata/audio_scene_filter.json` documente les intervalles. En cas d'erreur ffmpeg, l'audio original est conservé.
 
+#### `workflow.audio_preflight`
+
+Pré-diagnostic acoustique exécuté avant le pipeline STT. Analyse RMS, SNR estimé,
+bande passante et clipping pour produire des flags (`audio_faible`, `audio_tres_faible`,
+`snr_faible`, `bande_passante_faible`, `clipping`, `silence`) utilisés par les étapes
+ultérieures (normalisation auto, débruitage, VAD adaptatif). Le résultat est sauvegardé
+dans `metadata/audio_preflight.json`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer l'analyse pré-diagnostic acoustique avant le pipeline |
+| `frame_ms` | float | `30` | Durée en ms des trames d'analyse RMS |
+| `low_rms_threshold` | float | `0.02` | Seuil RMS en dessous duquel l'audio est signalé `audio_faible` |
+| `very_low_rms_threshold` | float | `0.008` | Seuil RMS en dessous duquel l'audio est signalé `audio_tres_faible` |
+| `silence_rms_threshold` | float | `0.003` | Seuil RMS pour le flag `silence` |
+| `low_snr_db_threshold` | float | `6.0` | SNR estimé en dessous duquel l'audio est signalé `snr_faible` |
+| `narrowband_hz_threshold` | float | `3800.0` | Bande passante en Hz en dessous de laquelle l'audio est signalé `bande_passante_faible` |
+| `clipping_threshold` | float | `0.98` | Seuil d'amplitude pour la détection de clipping |
+| `clipping_ratio_threshold` | float | `0.001` | Proportion d'échantillons clipping pour signaler le flag `clipping` |
+
+**Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_preflight()`.
+
+#### `workflow.audio_denoise`
+
+Débruitage audio optionnel via ffmpeg (filtre `afftdn`). Désactivé par défaut car
+expérimental. Le débruitage ne s'applique que si les flags preflight correspondent
+aux `trigger_flags` configurés (ou si `force=true`). Produit `input/denoised.wav` et
+`metadata/audio_denoise.json` avec `preserve_timeline=true`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Activer le débruitage ffmpeg (expérimental) |
+| `enabled_for_modes` | list | `["quality"]` | Modes dans lesquels le débruitage est activé |
+| `backend` | string | `"ffmpeg_afftdn"` | Backend de débruitage (actuellement seul `ffmpeg_afftdn` supporté) |
+| `force` | bool | `false` | Forcer le débruitage même si les flags preflight ne correspondent pas |
+| `trigger_flags` | list | `["snr_faible"]` | Flags preflight qui déclenchent le débruitage |
+| `noise_reduction_db` | float | `12.0` | Réduction de bruit en dB pour le filtre afftdn |
+| `noise_floor_db` | float | `-25.0` | Niveau de bruit plancher en dB |
+| `timeout_s` | float | `300` | Timeout en secondes pour l'opération ffmpeg |
+
+**Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_denoise()`.
+
+**Impact :** si le débruitage s'applique, `input/denoised.wav` remplace l'audio transmis au STT et `metadata/audio_denoise.json` documente l'opération. En cas d'erreur ffmpeg, l'audio original est conservé.
+
 #### `workflow.audio_normalization`
 
 Normalisation audio légère optionnelle avant STT. Elle utilise ffmpeg, conserve
@@ -301,7 +371,30 @@ validés sur corpus interne.
 | `true_peak` | float | `-2.0` | True peak cible |
 | `lra` | float | `11.0` | Loudness range cible |
 | `highpass_hz` | float/null | `null` | Fréquence du high-pass optionnel ; `null` le désactive |
+| `auto_loudnorm_rms_threshold` | float | `0.02` | Seuil RMS en dessous duquel `loudnorm` est forcé automatiquement (même si `enabled=false`) |
 | `timeout_s` | int | `300` | Timeout ffmpeg en secondes |
+
+##### `workflow.audio_normalization.weak_voice`
+
+Traitement des audios très faibles (flags `audio_faible`/`audio_tres_faible` du preflight).
+Applique un gain puis loudnorm pour remonter le volume sans écrêter. Ce traitement
+s'active automatiquement même si `workflow.audio_normalization.enabled=false`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer le traitement weak_voice pour les audios très faibles |
+| `target_rms` | float | `0.05` | RMS cible après gain |
+| `max_gain` | float | `8.0` | Gain maximum en dB |
+| `loudnorm_after_gain` | bool | `true` | Appliquer loudnorm après le gain |
+| `target_i` | float | `-23.0` | Integrated loudness cible (LUFS) |
+| `true_peak` | float | `-2.0` | True peak cible (dBTP) |
+| `lra` | float | `11.0` | Loudness Range cible (LU) |
+
+**Auto-loudnorm :** même si `enabled=false`, le pipeline force une normalisation `loudnorm`
+lorsque le RMS de l'audio est inférieur à `auto_loudnorm_rms_threshold` (défaut 0.02).
+Ce mécanisme évite que la VAD Silero rejette tout l'audio comme non-vocal sur un signal
+trop silencieux (voix chuchotée, micro lointain). L'artefact `metadata/audio_normalization.json`
+contient alors `"forced": true` avec `"reasons": ["audio_trop_silencieux_auto_loudnorm", "rms=0.00600"]`.
 
 **Impact :** si la normalisation s'applique, `input/normalized.wav` remplace l'audio transmis au STT et `metadata/audio_normalization.json` documente les filtres. En cas d'erreur ffmpeg, l'audio original est conservé.
 
@@ -321,8 +414,9 @@ c'est `SourceSeparationDecider` qui décide sur la base des signaux de
 | `stem` | string | `"vocals"` | Tige extraite (`vocals`, `drums`, `bass`, `other`) |
 | `decision.min_score` | int | `3` | Seuil de score pour activer la séparation |
 | `decision.min_duration_s` | int | `60` | Audio < seuil → séparation non déclenchée (surcoût injustifié) |
-| `decision.scene_music_min_ratio` | number/null | `0.05` | Ratio musique suffisant pour forcer la séparation |
-| `decision.scene_music_min_duration_s` | number/null | `10` | Durée musique suffisante pour forcer la séparation |
+| `decision.scene_music_min_ratio` | number/null | `0.80` | Ratio musique suffisant pour forcer la séparation (relevé de 0.05 après benchmarks : réunions = 0.47–0.76 en faux positif) |
+| `decision.scene_music_min_duration_s` | number/null | `60` | Durée musique suffisante pour forcer la séparation |
+| `decision.scene_music_min_speech_ratio_for_force` | number/null | `0.08` | Si `music_ratio` dépasse le seuil mais `speech_ratio` est en dessous, la musique est ignorée (CSE complet : speech=0.015, music=0.98) |
 | `decision.scene_noise_score_ratio` | number/null | `0.35` | Ratio bruit à partir duquel un score est ajouté |
 | `decision.scene_noise_score` | int | `1` | Score ajouté si le bruit de scène dépasse le seuil |
 | `decision.scene_problem_segments_score_threshold` | number/null | `3` | Nombre de zones problématiques au-delà duquel un score est ajouté |
@@ -332,6 +426,25 @@ c'est `SourceSeparationDecider` qui décide sur la base des signaux de
 
 **Impact :** si `should_separate()` retourne `True`, la piste vocale extraite (`vocals.wav`) remplace l'audio d'entrée pour le reste du pipeline STT. En cas d'erreur Demucs, l'audio original est conservé sans interruption (dégradation gracieuse).
 
+#### `workflow.transcription_cleanup`
+
+Nettoyage déterministe post-STT appliqué après la transcription finale et le réalignement locuteurs.
+Supprime les artefacts de sous-titrage récurrents et fusionne les micro-segments courts d'un même locuteur.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active le nettoyage post-STT |
+| `merge_short_segments` | bool | `true` | Fusionne les segments courts (< seuils) avec le segment précédent si même locuteur |
+| `remove_subtitle_artifacts` | bool | `true` | Supprime les artefacts de sous-titrage récurrents |
+| `subtitle_artifact_patterns` | list[regex] | `[]` | Liste de patterns regex pour détecter les artefacts de sous-titrage. Liste vide = utiliser les patterns intégrés |
+| `subtitle_artifact_words` | list[string] | `[]` | Liste de phrases courtes normalisées à filtrer. Liste vide = utiliser les mots-clés intégrés |
+| `short_segment_max_s` | float | `0.45` | Durée maximale (s) pour qu'un segment soit considéré court |
+| `short_segment_max_words` | int | `2` | Nombre maximal de mots pour qu'un segment soit considéré court |
+| `merge_gap_s` | float | `0.5` | Durée maximale du gap (s) entre deux segments fusionnables |
+| `merge_max_chars` | int | `220` | Nombre maximal de caractères du segment fusionné résultant |
+
+Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, variantes tronquées) sont configurables via `subtitle_artifact_patterns` et `subtitle_artifact_words`. Si ces listes sont vides (défaut), les patterns et mots-clés intégrés au code sont utilisés. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, merged_short_segments=M`).
+
 #### `workflow.speaker_realignment`
 
 Réaligne les locuteurs au niveau mot quand les timestamps `words` Whisper/CTC
@@ -340,8 +453,43 @@ sont disponibles et qu'un segment ASR traverse plusieurs tours pyannote.
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active le réalignement locuteur mot-à-mot |
-| `min_word_overlap_s` | float | `0.01` | Chevauchement minimal mot/tour pour attribuer un locuteur |
-| `punctuation_chars` | string | `".,;:!?)]}»"` | Ponctuations attachées au mot précédent |
+| `min_word_overlap_s` | float | `0.01` | Chevauchement minimal en secondes pour le réalignement |
+| `punctuation_chars` | string | `".!?"` | Caractères de ponctuation déclenchant un réalignement |
+
+#### `workflow.segment_reliability`
+
+Scoring de fiabilité post-STT. Chaque segment reçoit un statut (`ok`, `suspect`, `degrade`)
+basé sur les probabilités `no_speech_prob` et la confiance mot-à-mot. Les segments
+`degrade` alimentent le score composite d'hallucination de `QualityReporter`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer le scoring de fiabilité segmentaire post-STT |
+| `no_speech_prob_threshold` | float | `0.5` | Seuil no_speech_prob pour marquer un segment suspect |
+| `low_word_confidence_ratio` | float | `0.5` | Proportion minimale de mots peu confiants pour signaler |
+| `low_word_confidence_min` | float | `0.4` | Seuil de probabilité mot pour le flag « peu confiant » |
+| `micro_segment_s` | float | `0.35` | Durée en secondes en dessous de laquelle un segment est « micro » |
+| `short_segment_s` | float | `0.8` | Durée en secondes en dessous de laquelle un segment est « court » |
+
+**Redémarrage requis :** non — lu à chaque pipeline.
+
+#### `workflow.pyannote_chunking`
+
+Paramètres de chunking par tours pyannote pour la transcription finale.
+Contrôlent la fusion des micro-segments pyannote adjacents et le padding
+autour des chunks transmis au backend STT.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `merge_micro_chunks` | bool | `true` | Fusionner les micro-segments pyannote adjacents |
+| `micro_chunk_s` | float | `0.35` | Seuil de durée pour un micro-segment (secondes) |
+| `micro_chunk_neighbor_gap_s` | float | `0.4` | Gap maximum entre deux micro-segments pour fusion (secondes) |
+| `isolated_min_chunk_s` | float | `0.3` | Durée minimale pour un segment isolé non fusionné |
+| `padding_s` | float | `0.15` | Padding autour des chunks pyannote (secondes) |
+| `max_chunk_s` | int | `30` | Durée maximale d'un chunk (secondes) |
+| `min_chunk_s` | float | `1.5` | Durée minimale d'un chunk (secondes) |
+
+**Redémarrage requis :** non — lu à chaque transcription.
 
 ### `diarization`
 
@@ -417,13 +565,15 @@ Configuration du LLM d'arbitrage/correction SRT.
 |---|---|---|---|
 | `retention_days` | int | `365` | Durée de rétention des jobs terminaux (`completed`, `failed`, `cancelled`) |
 | `allow_job_delete` | bool | `true` | Autorise la suppression de jobs (vérifié dans la route `delete_job`) |
+| `max_upload_size_mb` | int | `1024` | Taille maximale d'upload Flask (`MAX_CONTENT_LENGTH`) en Mio |
 | `allowed_upload_extensions` | list[str] | `[".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]` | Extensions autorisées pour l'upload |
 
-**Redémarrage requis :** non — `retention_days`, `allow_job_delete` et `allowed_upload_extensions` sont vérifiés à l'exécution.
+**Redémarrage requis :** oui pour `max_upload_size_mb` (chargé dans `create_app()`), non pour `retention_days`, `allow_job_delete` et `allowed_upload_extensions` qui sont vérifiés à l'exécution.
 
 **Impact si modifié :**
 - `retention_days` : appliqué par `JobStore.purge_expired_jobs()` lors de l'accès à la page d'accueil. Seuls les jobs anciens en état terminal sont supprimés avec leurs fichiers.
 - `allow_job_delete=false` : la route `delete_job` retourne 403. La suppression est bloquée même pour l'admin.
+- `max_upload_size_mb` : limite les uploads HTTP côté Flask. Une valeur trop basse bloque les fichiers audio longs avec une erreur 413.
 - `allowed_upload_extensions` : extensions vérifiées dans `api_upload`. Les extensions doivent inclure le point (`.mp3`, pas `mp3`).
 
 ---
@@ -496,6 +646,16 @@ Note d'exploitation :
 
 Ces marqueurs ne corrigent pas le SRT automatiquement. Ils alimentent seulement le rapport qualité pour orienter la relecture humaine vers les segments courts suspects.
 
+#### `quality.thresholds`
+
+Seuils de détection des segments suspects dans `QualityReporter`. Ces checks alimentent le rapport qualité et le score composite d'hallucination sans modifier le SRT.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `no_speech_prob_threshold` | float | `0.5` | Seuil au-dessus duquel un segment est signalé comme suspect (no_speech_prob trop élevé) |
+| `low_word_confidence_ratio` | float | `0.5` | Proportion minimale de mots peu confiants pour signaler un segment |
+| `low_word_confidence_min` | float | `0.4` | Seuil de probabilité mot en-dessous duquel un mot est considéré peu confiant |
+
 ---
 
 ## 10. Fichiers de prompts opencode (configs/prompts/)
@@ -528,13 +688,22 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `models.fallback_stt_model` | Non | Oui |
 | `workflow.enable_*` | Non | Oui |
 | `workflow.vad.*` | Non | Oui |
+| `workflow.audio_normalization.*` | Non | Oui (PipelineService) |
+| `workflow.audio_normalization.weak_voice.*` | Non | Oui (PipelineService) |
+| `workflow.audio_preflight.*` | Non | Oui (PipelineService) |
+| `workflow.audio_denoise.*` | Non | Oui (PipelineService) |
 | `workflow.audio_scene.*` | Non | Oui (PipelineService) |
+| `workflow.audio_scene_filter.*` | Non | Oui (PipelineService) |
 | `workflow.source_separation.*` | Non | Oui (PipelineService) |
+| `workflow.transcription_cleanup.*` | Non | Oui (Transcriber) |
+| `workflow.segment_reliability.*` | Non | Oui |
+| `workflow.pyannote_chunking.*` | Non | Oui |
 | `workflow.summary_llm.*` | Non | Oui (SummaryGenerator, OpenCodeRunner) |
 | `workflow.arbitration_llm.*` | Non | Oui |
 | `quality.asr_noise_markers` | Non | Oui |
 | `security.retention_days` | Non | Oui (purge à l'accueil) |
 | `security.allow_job_delete` | Non | Oui (route) |
+| `security.max_upload_size_mb` | Oui | Non (Flask `MAX_CONTENT_LENGTH`) |
 | `security.allowed_upload_extensions` | Non | Oui (route) |
 
 **Problème architecturel :** `get_config()` retourne un singleton. Si `set_config()` est appelé pour mettre à jour une valeur, les routes qui rappellent `get_config()` voient le changement, mais les objets déjà construits avec une ancienne config ne sont pas mis à jour automatiquement.

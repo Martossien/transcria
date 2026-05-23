@@ -30,6 +30,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result)
+    _check_cohere(cfg.get("cohere", {}), result)
     _check_whisper(cfg.get("whisper", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
     _check_diarization(cfg.get("diarization", {}), result)
@@ -130,9 +131,16 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
     _check_audio_quality(wf.get("audio_quality", {}), r)
     _check_quality_transcription(wf.get("quality_transcription", {}), r)
+    _check_audio_preflight(wf.get("audio_preflight", {}), r)
+    _check_segment_reliability(wf.get("segment_reliability", {}), r)
+    _check_pyannote_chunking(wf.get("pyannote_chunking", {}), r)
     _check_vad_section(wf.get("vad", {}), r)
+    _check_transcription_cleanup(wf.get("transcription_cleanup", {}), r)
+    _check_audio_scene(wf.get("audio_scene", {}), r)
     _check_audio_scene_filter(wf.get("audio_scene_filter", {}), r)
     _check_audio_normalization(wf.get("audio_normalization", {}), r)
+    _check_audio_denoise(wf.get("audio_denoise", {}), r)
+    _check_source_separation(wf.get("source_separation", {}), r)
     _check_speaker_realignment(wf.get("speaker_realignment", {}), r)
 
     _check_llm_section(wf.get("summary_llm", {}), "workflow.summary_llm", r, is_summary=True)
@@ -185,6 +193,22 @@ def _check_whisper(whisper: dict, r: ValidationResult) -> None:
             _check_optional_number(forced, "max_segment_s", "whisper.forced_alignment.max_segment_s", r)
 
 
+def _check_cohere(cohere: dict, r: ValidationResult) -> None:
+    if not cohere:
+        return
+    if not isinstance(cohere, dict):
+        r.add_error("cohere: doit être un objet YAML")
+        return
+    _check_optional_number(cohere, "chunk_length_s", "cohere.chunk_length_s", r)
+    _check_int_range(cohere, "max_new_tokens", "cohere.max_new_tokens", 1, 4096, r)
+    _check_optional_number(cohere, "repetition_penalty", "cohere.repetition_penalty", r)
+    _check_int_range(cohere, "no_repeat_ngram_size", "cohere.no_repeat_ngram_size", 0, 20, r)
+    _check_bool(cohere, "collapse_repetition_loops", "cohere.collapse_repetition_loops", r)
+    _check_int_range(cohere, "repetition_loop_min_repeats", "cohere.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(cohere, "repetition_loop_max_phrase_words", "cohere.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(cohere, "repetition_loop_keep_repeats", "cohere.repetition_loop_keep_repeats", 1, 20, r)
+
+
 def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:
     if cfg is None:
         return
@@ -233,21 +257,118 @@ def _check_audio_quality(cfg: dict, r: ValidationResult) -> None:
         _check_optional_number(cfg, key, f"workflow.audio_quality.{key}", r)
 
 
+def _check_audio_preflight(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.audio_preflight: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.audio_preflight.enabled", r)
+    for key in (
+        "frame_ms", "low_rms_threshold", "very_low_rms_threshold",
+        "silence_rms_threshold", "low_snr_db_threshold",
+        "narrowband_hz_threshold", "clipping_threshold",
+        "clipping_ratio_threshold",
+    ):
+        _check_optional_number(cfg, key, f"workflow.audio_preflight.{key}", r)
+
+
+def _check_segment_reliability(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.segment_reliability: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.segment_reliability.enabled", r)
+    for key in (
+        "no_speech_prob_threshold", "low_word_confidence_ratio",
+        "low_word_confidence_min", "micro_segment_s", "short_segment_s",
+    ):
+        _check_optional_number(cfg, key, f"workflow.segment_reliability.{key}", r)
+
+
+def _check_pyannote_chunking(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.pyannote_chunking: doit être un objet YAML")
+        return
+    _check_bool(cfg, "merge_micro_chunks", "workflow.pyannote_chunking.merge_micro_chunks", r)
+    for key in (
+        "micro_chunk_s", "micro_chunk_neighbor_gap_s", "isolated_min_chunk_s",
+        "padding_s", "max_chunk_s", "min_chunk_s",
+    ):
+        _check_optional_number(cfg, key, f"workflow.pyannote_chunking.{key}", r)
+
+
 def _check_vad_section(cfg: dict, r: ValidationResult) -> None:
     if not cfg:
         return
     if not isinstance(cfg, dict):
         r.add_error("workflow.vad: doit être un objet YAML")
         return
-    for key in ("enabled_summary", "enabled_final", "adaptive"):
+    for key in (
+        "enabled_summary", "enabled_final", "adaptive", "hysteresis_enabled",
+        "auto_enable_final_on_degraded",
+    ):
         _check_bool(cfg, key, f"workflow.vad.{key}", r)
+    levels = cfg.get("auto_enable_final_levels", [])
+    if not isinstance(levels, list):
+        r.add_error("workflow.vad.auto_enable_final_levels: doit être une liste")
+    else:
+        for i, level in enumerate(levels):
+            if not isinstance(level, str) or not level.strip():
+                r.add_error(f"workflow.vad.auto_enable_final_levels[{i}]: doit être une chaîne non vide")
     for key in (
         "threshold", "threshold_low_quality", "threshold_high_noise",
+        "threshold_final_degraded", "onset", "offset",
         "min_speech_duration_ms", "min_silence_duration_ms",
         "min_silence_duration_ms_low_quality", "speech_pad_ms",
         "speech_pad_ms_low_quality",
     ):
         _check_optional_number(cfg, key, f"workflow.vad.{key}", r)
+
+
+def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.transcription_cleanup: doit être un objet YAML")
+        return
+    for key in ("enabled", "remove_subtitle_artifacts", "merge_short_segments"):
+        _check_bool(cfg, key, f"workflow.transcription_cleanup.{key}", r)
+    for key in ("short_segment_max_s", "short_segment_max_words", "merge_gap_s", "merge_max_chars"):
+        _check_optional_number(cfg, key, f"workflow.transcription_cleanup.{key}", r)
+    for key in ("subtitle_artifact_patterns", "subtitle_artifact_words"):
+        values = cfg.get(key, [])
+        if not isinstance(values, list):
+            r.add_error(f"workflow.transcription_cleanup.{key}: doit être une liste")
+        else:
+            for i, value in enumerate(values):
+                if not isinstance(value, str):
+                    r.add_error(f"workflow.transcription_cleanup.{key}[{i}]: doit être une chaîne")
+
+
+def _check_audio_scene(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.audio_scene: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.audio_scene.enabled", r)
+    _check_bool(cfg, "detect_gender", "workflow.audio_scene.detect_gender", r)
+    _check_optional_number(cfg, "timeout_s", "workflow.audio_scene.timeout_s", r)
+    thresholds = cfg.get("thresholds", {})
+    if thresholds:
+        if not isinstance(thresholds, dict):
+            r.add_error("workflow.audio_scene.thresholds: doit être un objet YAML")
+        else:
+            for key in (
+                "energy_ratio", "min_segment_s", "noise_flatness_min",
+                "music_flatness_max", "music_zcr_max", "female_pitch_hz",
+                "problem_segment_min_s",
+            ):
+                _check_optional_number(thresholds, key, f"workflow.audio_scene.thresholds.{key}", r)
 
 
 def _check_audio_scene_filter(cfg: dict, r: ValidationResult) -> None:
@@ -290,8 +411,70 @@ def _check_audio_normalization(cfg: dict, r: ValidationResult) -> None:
         for mode in modes:
             if mode not in {"fast", "quality"}:
                 r.add_error("workflow.audio_normalization.enabled_for_modes: valeurs acceptées fast, quality")
-    for key in ("target_i", "true_peak", "lra", "highpass_hz", "timeout_s"):
+    for key in ("target_i", "true_peak", "lra", "highpass_hz", "timeout_s", "auto_loudnorm_rms_threshold"):
         _check_optional_number(cfg, key, f"workflow.audio_normalization.{key}", r)
+    weak = cfg.get("weak_voice", {})
+    if weak:
+        if not isinstance(weak, dict):
+            r.add_error("workflow.audio_normalization.weak_voice: doit être un objet YAML")
+        else:
+            _check_bool(weak, "enabled", "workflow.audio_normalization.weak_voice.enabled", r)
+            _check_bool(weak, "loudnorm_after_gain", "workflow.audio_normalization.weak_voice.loudnorm_after_gain", r)
+            for key in ("target_rms", "max_gain", "target_i", "true_peak", "lra"):
+                _check_optional_number(weak, key, f"workflow.audio_normalization.weak_voice.{key}", r)
+
+
+def _check_audio_denoise(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.audio_denoise: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.audio_denoise.enabled", r)
+    _check_bool(cfg, "force", "workflow.audio_denoise.force", r)
+    modes = cfg.get("enabled_for_modes", [])
+    if not isinstance(modes, list):
+        r.add_error("workflow.audio_denoise.enabled_for_modes: doit être une liste")
+    else:
+        for mode in modes:
+            if mode not in {"fast", "quality"}:
+                r.add_error("workflow.audio_denoise.enabled_for_modes: valeurs acceptées fast, quality")
+    if "trigger_flags" in cfg and not isinstance(cfg.get("trigger_flags"), list):
+        r.add_error("workflow.audio_denoise.trigger_flags: doit être une liste")
+    _check_str(cfg, "backend", "workflow.audio_denoise.backend", r)
+    for key in ("noise_reduction_db", "noise_floor_db", "timeout_s"):
+        _check_optional_number(cfg, key, f"workflow.audio_denoise.{key}", r)
+
+
+def _check_source_separation(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.source_separation: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.source_separation.enabled", r)
+    _check_str(cfg, "backend", "workflow.source_separation.backend", r)
+    backend = cfg.get("backend")
+    if isinstance(backend, str) and backend != "demucs":
+        r.add_error("workflow.source_separation.backend: doit valoir demucs")
+    for key in ("model", "device", "stem"):
+        _check_str(cfg, key, f"workflow.source_separation.{key}", r)
+    stem = cfg.get("stem")
+    if isinstance(stem, str) and stem not in {"vocals", "drums", "bass", "other"}:
+        r.add_error("workflow.source_separation.stem: valeurs acceptées vocals, drums, bass, other")
+    _check_optional_number(cfg, "segment_s", "workflow.source_separation.segment_s", r)
+    decision = cfg.get("decision", {})
+    if decision:
+        if not isinstance(decision, dict):
+            r.add_error("workflow.source_separation.decision: doit être un objet YAML")
+        else:
+            for key in (
+                "min_score", "min_duration_s", "scene_music_min_ratio",
+                "scene_music_min_duration_s", "scene_music_min_speech_ratio_for_force",
+                "scene_noise_score_ratio", "scene_noise_score",
+                "scene_problem_segments_score_threshold", "scene_problem_segments_score",
+            ):
+                _check_optional_number(decision, key, f"workflow.source_separation.decision.{key}", r)
 
 
 def _check_speaker_realignment(cfg: dict, r: ValidationResult) -> None:
@@ -357,20 +540,34 @@ def _check_execution_section(exec_cfg: dict, prefix: str, r: ValidationResult) -
 
 
 def _check_quality(quality: dict, r: ValidationResult) -> None:
+    if not quality:
+        return
+    if not isinstance(quality, dict):
+        r.add_error("quality: doit être un objet YAML")
+        return
     markers = quality.get("asr_noise_markers", [])
-    if markers is None:
-        return
-    if not isinstance(markers, list):
+    if markers is not None and not isinstance(markers, list):
         r.add_error("quality.asr_noise_markers: doit être une liste")
-        return
-    for i, marker in enumerate(markers):
-        if not isinstance(marker, str) or not marker.strip():
-            r.add_error(f"quality.asr_noise_markers[{i}]: doit être une chaîne non vide")
+    elif isinstance(markers, list):
+        for i, marker in enumerate(markers):
+            if not isinstance(marker, str) or not marker.strip():
+                r.add_error(f"quality.asr_noise_markers[{i}]: doit être une chaîne non vide")
+    thresholds = quality.get("thresholds", {})
+    if thresholds:
+        if not isinstance(thresholds, dict):
+            r.add_error("quality.thresholds: doit être un objet YAML")
+        else:
+            for key in (
+                "no_speech_prob_threshold", "low_word_confidence_ratio",
+                "low_word_confidence_min",
+            ):
+                _check_optional_number(thresholds, key, f"quality.thresholds.{key}", r)
 
 
 def _check_security(sec: dict, r: ValidationResult) -> None:
     _check_int_range(sec, "retention_days", "security.retention_days", 0, 3650, r)
     _check_bool(sec, "allow_job_delete", "security.allow_job_delete", r)
+    _check_int_range(sec, "max_upload_size_mb", "security.max_upload_size_mb", 1, 102400, r)
 
     extensions = sec.get("allowed_upload_extensions", [])
     if not isinstance(extensions, list) or len(extensions) == 0:
