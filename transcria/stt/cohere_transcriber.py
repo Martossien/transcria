@@ -32,6 +32,10 @@ class CohereTranscriber(BaseTranscriber):
         max_new_tokens: int = 448,
         repetition_penalty: float = 1.2,
         no_repeat_ngram_size: int = 3,
+        collapse_repetition_loops: bool = True,
+        repetition_loop_min_repeats: int = 4,
+        repetition_loop_max_phrase_words: int = 10,
+        repetition_loop_keep_repeats: int = 2,
     ):
         self.model_path = model_path
         self.device = device or self._detect_device()
@@ -39,6 +43,10 @@ class CohereTranscriber(BaseTranscriber):
         self.max_new_tokens = max_new_tokens
         self.repetition_penalty = repetition_penalty
         self.no_repeat_ngram_size = no_repeat_ngram_size
+        self.collapse_repetition_loops = collapse_repetition_loops
+        self.repetition_loop_min_repeats = repetition_loop_min_repeats
+        self.repetition_loop_max_phrase_words = repetition_loop_max_phrase_words
+        self.repetition_loop_keep_repeats = repetition_loop_keep_repeats
         self._model = None
         self._processor = None
 
@@ -187,11 +195,19 @@ class CohereTranscriber(BaseTranscriber):
             start_seconds = start_sample / sr
             end_seconds = end_sample / sr
 
-            segments.append({
+            text_raw = text.strip()
+            item: dict = {
                 "start": round(start_seconds, 3),
                 "end": round(end_seconds, 3),
-                "text": text.strip(),
-            })
+                "text": text_raw,
+            }
+            if text_raw:
+                text_clean, loops = self._apply_loop_collapse(text_raw)
+                if loops:
+                    item["text"] = text_clean
+                    item["hallucination_loops"] = loops
+                    item["text_before_loop_collapse"] = text_raw
+            segments.append(item)
 
             chunk_count += 1
             if chunk_count % 10 == 0:
@@ -212,6 +228,18 @@ class CohereTranscriber(BaseTranscriber):
             elapsed / 60,
         )
         return segments
+
+    def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
+        """Collapse repetition loops in text. Returns (cleaned_text, loops_metadata)."""
+        if not self.collapse_repetition_loops:
+            return text, []
+        from transcria.stt.anti_hallucination import collapse_repetition_loops
+        return collapse_repetition_loops(
+            text,
+            min_repeats=self.repetition_loop_min_repeats,
+            max_phrase_words=self.repetition_loop_max_phrase_words,
+            keep_repeats=self.repetition_loop_keep_repeats,
+        )
 
     def offload(self) -> None:
         import gc

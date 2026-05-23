@@ -85,7 +85,14 @@ class WhisperTranscriber(BaseTranscriber):
         repetition_loop_keep_repeats: int = 2,
     ):
         self.model_size = model_size
-        self.device = device or self._detect_device()
+        raw_device = device or self._detect_device()
+        if raw_device and ":" in raw_device:
+            base, idx = raw_device.rsplit(":", 1)
+            self.device = base
+            self.device_index = int(idx)
+        else:
+            self.device = raw_device
+            self.device_index = 0
         self.compute_type = compute_type
         self.cpu_threads = cpu_threads
         self.chunk_length_s = chunk_length_s
@@ -151,6 +158,7 @@ class WhisperTranscriber(BaseTranscriber):
             self._model = WhisperModel(
                 self.model_size,
                 device=self.device,
+                device_index=self.device_index,
                 compute_type=self.compute_type,
                 cpu_threads=self.cpu_threads,
                 num_workers=1,

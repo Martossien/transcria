@@ -1,4 +1,5 @@
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,47 @@ from transcria.logging_setup import get_structured_logger
 logger = logging.getLogger(__name__)
 
 _SR = 16000
+_DEFAULT_SUBTITLE_ARTIFACT_PATTERNS = [
+    # --- Marqueurs diffusion Radio-Canada ---
+    re.compile(r"\bsous\s*-?\s*titrage\b", re.IGNORECASE),
+    re.compile(r"\bst['\s]*501\b", re.IGNORECASE),
+    re.compile(r"\bfr\s*2021\b", re.IGNORECASE),
+    re.compile(r"\bsoci[eé]t[eé]\s+radio(?:-canada)?\b", re.IGNORECASE),
+    # --- Outros YouTube / contenus viraux (anglais) ---
+    # Ces phrases n'apparaissent jamais dans un contexte de réunion professionnelle.
+    re.compile(r"\bthanks?\s+for\s+watching\b", re.IGNORECASE),
+    re.compile(r"\bthank\s+you\s+for\s+watching\b", re.IGNORECASE),
+    re.compile(r"\bdon'?t\s+forget\s+to\s+subscribe\b", re.IGNORECASE),
+    # --- Crédits sous-titrage et services tiers ---
+    re.compile(r"\bsubtitles\s+by\s+the\s+amara\b", re.IGNORECASE),
+    re.compile(r"\btranscription\s+by\s+castingwords\b", re.IGNORECASE),
+]
+_DEFAULT_SHORT_SUBTITLE_ARTIFACTS = {
+    # Marqueurs courts Radio-Canada
+    "sous",
+    "titrage",
+    "-titrage",
+    "fr",
+    "fr?",
+    "st",
+    "st501",
+    "st 501",
+    "st'501",
+    "st' 501",
+    "titrage fr",
+    "titrage st",
+    "titrage st'",
+    "titrage st 501",
+    "titrage st' 501",
+    # Appels à l'abonnement YouTube (exact match normalisé)
+    "thanks for watching",
+    "thank you for watching",
+    "thank you for watching please subscribe",
+    "please subscribe to my channel",
+    "like and subscribe",
+    "please like and subscribe",
+    "don't forget to subscribe",
+}
 
 
 class Transcriber:
@@ -43,9 +85,11 @@ class Transcriber:
         vad_cfg = self.config.get("workflow", {}).get("vad", {})
         audio_quality = fs.load_json("metadata/audio_quality_decision.json") or {}
         vad_cfg = AdaptiveVADConfig.resolve(vad_cfg, audio_quality)
-        vad_enabled = vad_cfg.get(
-            "enabled_final",
-            self.config.get("workflow", {}).get("enable_vad", False),
+        vad_enabled = self._resolve_final_vad_enabled(
+            vad_cfg,
+            audio_quality,
+            self.config.get("workflow", {}),
+            sl,
         )
 
         # Choisir le mode de chunking selon la disponibilité des exclusive_turns
@@ -54,7 +98,10 @@ class Transcriber:
             # passer des numpy arrays à chaque chunk → pas de fichiers WAV temporaires.
             audio, sr = librosa.load(str(audio_path), sr=_SR, mono=True)
             total_duration = len(audio) / sr
-            chunks = self._build_chunks_from_turns(audio, total_duration, speaker_turns)
+            chunk_cfg = self.config.get("workflow", {}).get("pyannote_chunking", {}) or {}
+            chunks = self._build_chunks_from_turns(
+                audio, total_duration, speaker_turns, chunk_cfg=chunk_cfg
+            )
             if chunks:
                 if vad_enabled:
                     chunks = self._apply_vad_filter(chunks, audio, sl, vad_cfg)
@@ -82,14 +129,25 @@ class Transcriber:
         segments = self._apply_speaker_realignment(
             segments, speaker_turns, speaker_mapping, sl
         )
+        segments = self._cleanup_transcription_segments(segments, sl)
+        segments = self._score_segment_reliability(segments, fs, sl)
 
         speaker_map = speaker_mapping or {}
         srt_content = self.transcriber.segments_to_srt(segments, speaker_map.get("mapping"))
+        speaker_count = len(set(s.get("speaker", "") for s in segments if s.get("speaker")))
         fs.save_text("metadata/transcription.srt", srt_content)
         fs.save_json("metadata/transcription_segments.json", segments)
+        fs.save_json("metadata/transcription_metadata.json", {
+            "backend": backend,
+            "chunking_mode": chunking_mode,
+            "gpu_index": self.gpu_index,
+            "language": lang,
+            "segments": len(segments),
+            "speaker_count": speaker_count,
+            "vad_final_enabled": vad_enabled,
+        })
         fs.save_json("metadata/speakers_map.json", speaker_map)
 
-        speaker_count = len(set(s.get("speaker", "") for s in segments if s.get("speaker")))
         sl.info(
             "FIN transcription",
             segments=len(segments),
@@ -105,6 +163,151 @@ class Transcriber:
             "speaker_count": speaker_count,
         }
 
+    # ── Réglages qualité post-STT ────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_final_vad_enabled(vad_cfg: dict, audio_quality: dict, workflow_cfg: dict, sl=None) -> bool:
+        """Active le VAD final explicite, ou automatiquement sur audio dégradé."""
+        fallback = workflow_cfg.get("enable_vad", False)
+        if vad_cfg.get("enabled_final", fallback):
+            return True
+
+        if not vad_cfg.get("auto_enable_final_on_degraded", True):
+            return False
+
+        level = str((audio_quality or {}).get("level") or "").strip()
+        levels = set(vad_cfg.get("auto_enable_final_levels") or ["degrade"])
+        if level not in levels:
+            return False
+
+        auto_threshold = vad_cfg.get("threshold_final_degraded", 0.6)
+        if auto_threshold is not None:
+            vad_cfg["threshold"] = auto_threshold
+        if sl:
+            sl.info(
+                "VAD final activé automatiquement pour audio dégradé",
+                level=level,
+                threshold=vad_cfg.get("threshold"),
+            )
+        return True
+
+    def _cleanup_transcription_segments(self, segments: list[dict], sl=None) -> list[dict]:
+        """Nettoie les artefacts ASR mesurés et fusionne les micro-segments sûrs."""
+        cfg = self.config.get("workflow", {}).get("transcription_cleanup", {}) or {}
+        if not cfg.get("enabled", True):
+            return segments
+
+        remove_artifacts = cfg.get("remove_subtitle_artifacts", True)
+        merge_short = cfg.get("merge_short_segments", True)
+
+        artifact_patterns = self._build_artifact_patterns(cfg)
+        artifact_words = self._build_artifact_words(cfg)
+
+        cleaned: list[dict] = []
+        removed_artifacts = 0
+        merged_short = 0
+
+        for segment in segments:
+            text = str(segment.get("text") or "").strip()
+            if not text:
+                continue
+            if remove_artifacts and self._is_subtitle_artifact(text, artifact_patterns, artifact_words):
+                removed_artifacts += 1
+                continue
+
+            current = dict(segment)
+            current["text"] = text
+            if merge_short and cleaned and self._can_merge_short_segment(
+                cleaned[-1],
+                current,
+                cfg,
+            ):
+                self._merge_segment_into_previous(cleaned[-1], current)
+                merged_short += 1
+            else:
+                cleaned.append(current)
+
+        if sl and (removed_artifacts or merged_short):
+            sl.info(
+                "Nettoyage transcription appliqué",
+                removed_artifacts=removed_artifacts,
+                merged_short_segments=merged_short,
+                segments_before=len(segments),
+                segments_after=len(cleaned),
+            )
+        return cleaned
+
+    @staticmethod
+    def _build_artifact_patterns(cfg: dict) -> list:
+        """Returns compiled patterns from config if non-empty, else built-in defaults."""
+        raw = cfg.get("subtitle_artifact_patterns")
+        if raw:
+            return [re.compile(p, re.IGNORECASE) for p in raw]
+        return _DEFAULT_SUBTITLE_ARTIFACT_PATTERNS
+
+    @staticmethod
+    def _build_artifact_words(cfg: dict) -> set:
+        """Returns word set from config if non-empty, else built-in defaults."""
+        raw = cfg.get("subtitle_artifact_words")
+        if raw:
+            return set(raw)
+        return _DEFAULT_SHORT_SUBTITLE_ARTIFACTS
+
+    @staticmethod
+    def _is_subtitle_artifact(text: str, patterns: list | None = None, words: set | None = None) -> bool:
+        if patterns is None:
+            patterns = _DEFAULT_SUBTITLE_ARTIFACT_PATTERNS
+        if words is None:
+            words = _DEFAULT_SHORT_SUBTITLE_ARTIFACTS
+        normalized = Transcriber._normalize_artifact_text(text)
+        if normalized in words:
+            return True
+        if Transcriber._word_count(text) > 6:
+            return False
+        return any(pattern.search(text) for pattern in patterns)
+
+    @staticmethod
+    def _normalize_artifact_text(text: str) -> str:
+        lowered = text.lower().strip()
+        lowered = lowered.replace("’", "'").replace("`", "'")
+        lowered = re.sub(r"[\s\u00a0]+", " ", lowered)
+        lowered = re.sub(r"^[\W_]+|[\W_]+$", "", lowered)
+        return lowered
+
+    @staticmethod
+    def _can_merge_short_segment(previous: dict, current: dict, cfg: dict) -> bool:
+        if previous.get("speaker") != current.get("speaker"):
+            return False
+
+        prev_end = float(previous.get("end") or 0)
+        cur_start = float(current.get("start") or 0)
+        gap_s = cur_start - prev_end
+        if gap_s < -0.05 or gap_s > float(cfg.get("merge_gap_s", 0.5)):
+            return False
+
+        duration_s = float(current.get("end") or 0) - cur_start
+        if duration_s > float(cfg.get("short_segment_max_s", 0.45)):
+            return False
+
+        words = Transcriber._word_count(current.get("text") or "")
+        if words > int(cfg.get("short_segment_max_words", 2)):
+            return False
+
+        combined_chars = len(previous.get("text") or "") + len(current.get("text") or "") + 1
+        return combined_chars <= int(cfg.get("merge_max_chars", 220))
+
+    @staticmethod
+    def _merge_segment_into_previous(previous: dict, current: dict) -> None:
+        previous["text"] = f"{str(previous.get('text') or '').rstrip()} {str(current.get('text') or '').lstrip()}".strip()
+        previous["end"] = current.get("end", previous.get("end"))
+        if current.get("words"):
+            previous.setdefault("words", [])
+            previous["words"].extend(current["words"])
+
+    @staticmethod
+    def _word_count(text: str) -> int:
+        return len(re.findall(r"\w+", text, flags=re.UNICODE))
+
     # ── Chunking par tours pyannote ───────────────────────────────────────────
 
     def _build_chunks_from_turns(
@@ -115,6 +318,7 @@ class Transcriber:
         padding_s: float = 0.15,
         max_chunk_s: int = 30,
         min_chunk_s: float = 1.5,
+        chunk_cfg: dict | None = None,
     ) -> list[dict] | None:
         """Construit des chunks audio alignés sur les tours de parole pyannote.
 
@@ -126,9 +330,15 @@ class Transcriber:
         Returns:
             Liste de chunks {start, end, speaker, audio} ou None si exclusive_turns vide.
         """
+        chunk_cfg = chunk_cfg or {}
+        padding_s = float(chunk_cfg.get("padding_s", padding_s))
+        max_chunk_s = int(chunk_cfg.get("max_chunk_s", max_chunk_s))
+        min_chunk_s = float(chunk_cfg.get("min_chunk_s", min_chunk_s))
+
         turns = speaker_turns.get("exclusive_turns") or []
         if not turns:
             return None
+        turns = self._smooth_micro_turns(turns, chunk_cfg)
 
         chunks: list[dict] = []
 
@@ -169,6 +379,37 @@ class Transcriber:
         return chunks or None
 
     @staticmethod
+    def _smooth_micro_turns(turns: list[dict], cfg: dict) -> list[dict]:
+        """Fusionne uniquement les micro-tours sûrs avec un voisin du même locuteur."""
+        if not cfg.get("merge_micro_chunks", True):
+            return turns
+
+        micro_s = float(cfg.get("micro_chunk_s", 0.35))
+        neighbor_gap_s = float(cfg.get("micro_chunk_neighbor_gap_s", 0.4))
+        smoothed: list[dict] = []
+
+        for turn in turns:
+            current = dict(turn)
+            duration = float(current.get("end", 0)) - float(current.get("start", 0))
+            gap = (
+                float(current.get("start", 0)) - float(smoothed[-1].get("end", 0))
+                if smoothed else None
+            )
+            if (
+                duration < micro_s
+                and smoothed
+                and smoothed[-1].get("speaker") == current.get("speaker")
+                and gap is not None
+                and gap <= neighbor_gap_s
+            ):
+                smoothed[-1]["end"] = max(float(smoothed[-1].get("end", 0)), float(current.get("end", 0)))
+                smoothed[-1]["micro_turns_merged"] = int(smoothed[-1].get("micro_turns_merged", 0)) + 1
+                continue
+            smoothed.append(current)
+
+        return smoothed
+
+    @staticmethod
     def _make_chunk(audio: np.ndarray, start: float, end: float, speaker: str) -> dict:
         return {
             "start": start,
@@ -193,6 +434,7 @@ class Transcriber:
             min_speech_duration_ms=vad_cfg.get("min_speech_duration_ms", 250),
             min_silence_duration_ms=vad_cfg.get("min_silence_duration_ms", 400),
             speech_pad_ms=vad_cfg.get("speech_pad_ms", 200),
+            max_gap_s=vad_cfg.get("max_gap_s", 0.5),
         )
         speech_zones = vad.get_speech_timestamps(audio, _SR)
         if not speech_zones:
@@ -315,6 +557,24 @@ class Transcriber:
             return realigned
         except Exception as exc:
             logger.warning("Réalignement locuteur mot-à-mot ignoré: %s", exc)
+            return segments
+
+    def _score_segment_reliability(self, segments: list[dict], fs: JobFilesystem, sl) -> list[dict]:
+        """Ajoute un score de fiabilité par segment sans modifier le texte."""
+        try:
+            from transcria.stt.reliability import SegmentReliabilityScorer
+
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
+            scored = SegmentReliabilityScorer(self.config).score_segments(segments, preflight)
+            counts: dict[str, int] = {}
+            for segment in scored:
+                level = str(segment.get("reliability") or "unknown")
+                counts[level] = counts.get(level, 0) + 1
+            if counts:
+                sl.info("Fiabilité segments ASR calculée", reliability_counts=counts)
+            return scored
+        except Exception as exc:
+            logger.warning("Scorage fiabilité segments ignoré: %s", exc)
             return segments
 
     # ── Fallback overlap matching (conservé pour le mode 30s) ─────────────────

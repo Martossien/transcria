@@ -8,6 +8,7 @@ from transcria.context.meeting_context import MeetingContextManager, MEETING_TYP
 from transcria.context.participants import ParticipantsManager
 from transcria.context.lexicon import LexiconManager, LEXICON_CATEGORIES, LEXICON_PRIORITIES
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 
 
@@ -49,6 +50,29 @@ class TestMeetingContext:
         suggestions = MeetingContextManager.auto_suggest(job, tmp_dir)
         assert "title_suggere" in suggestions
         assert "type_suggere" in suggestions
+
+    def test_save_preserves_llm_roles_and_suspect_terms(self, tmp_dir):
+        job = _fake_job()
+        fs = JobFilesystem(tmp_dir, job.id)
+        fs.save_json("context/meeting_context.json", {
+            "summary_llm": "Résumé",
+            "speaker_roles_llm": {
+                "SPEAKER_00": {"label": "Alice", "role": "Rôle A"},
+            },
+            "termes_suspects": [
+                {"term": "API Gateway", "category": "technique", "priority": "critique"},
+            ],
+            "termes_suspects_parse_status": "extracted",
+            "termes_suspects_parse_warning": "",
+        })
+
+        saved = MeetingContextManager.save(job, tmp_dir, {"title": "Titre utilisateur"})
+
+        assert saved["title"] == "Titre utilisateur"
+        assert saved["speaker_roles_llm"]["SPEAKER_00"]["role"] == "Rôle A"
+        assert saved["termes_suspects"][0]["term"] == "API Gateway"
+        assert saved["termes_suspects_parse_status"] == "extracted"
+        assert saved["termes_suspects_parse_warning"] == ""
 
     def test_meeting_types_list(self):
         assert "Réunion interne" in MEETING_TYPES
@@ -219,3 +243,47 @@ class TestJobContextBuilder:
         JobContextBuilder.build(job, tmp_dir)
         assert os.path.isfile(f"{tmp_dir}/j-ctx-2/context/job_context.yaml")
         assert os.path.isfile(f"{tmp_dir}/j-ctx-2/context/job_context.json")
+
+    def test_build_adds_quality_hints_without_authority(self, tmp_dir):
+        job = _fake_job("j-ctx-quality")
+        fs = JobFilesystem(tmp_dir, job.id)
+        fs.save_json("metadata/audio_preflight.json", {
+            "risk_level": "degrade",
+            "rms": 0.006,
+            "estimated_snr_db": 3.2,
+            "silence_ratio": 0.42,
+            "bandwidth_95_hz": 2600.0,
+            "flags": ["audio_tres_faible", "snr_faible", "risque_transcription_non_fiable"],
+        })
+        fs.save_json("metadata/audio_scene.json", {
+            "has_music": True,
+            "has_noise": False,
+            "speech_ratio": 0.72,
+            "music_ratio": 0.18,
+            "problem_segments": [
+                {"label": "music", "start": 12.0, "end": 20.0, "duration_s": 8.0},
+            ],
+        })
+        fs.save_json("metadata/transcription_segments.json", [
+            {
+                "start": 1.0,
+                "end": 2.0,
+                "speaker": "SPEAKER_00",
+                "text": "passage peu clair",
+                "reliability": "degrade",
+                "reliability_reasons": ["audio_preflight_degrade", "no_speech_prob_eleve"],
+                "no_speech_prob": 0.82,
+            },
+            {"start": 2.1, "end": 4.0, "text": "segment fiable", "reliability": "ok"},
+        ])
+
+        result = JobContextBuilder.build(job, tmp_dir)
+
+        hints = result["quality_hints"]
+        assert "Indices de prudence uniquement" in hints["usage"]
+        assert hints["audio"]["level"] == "degrade"
+        assert "volume très faible" in hints["audio"]["reasons"]
+        assert hints["audio"]["scene"]["has_music"] is True
+        assert len(hints["segments"]) == 1
+        assert hints["segments"][0]["segment_index"] == 1
+        assert hints["segments"][0]["level"] == "degrade"

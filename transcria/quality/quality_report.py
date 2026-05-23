@@ -14,12 +14,25 @@ _FOREIGN_MARKER_RE = re.compile(r"\[ÉTRANGER(?::[^\]]+)?\]", re.IGNORECASE)
 _SPEAKER_PREFIX_RE = re.compile(r"^(SPEAKER_\d+)\(([^)]*)\):")
 
 
+def _normalize_noise_text(text: str) -> str:
+    """Normalise un texte pour comparaison avec les marqueurs ASR.
+
+    Équivalent à _normalize_artifact_text de transcription.py, maintenu ici
+    pour garder quality_report indépendant du module STT.
+    """
+    s = text.strip().lower()
+    s = s.replace("’", "'").replace("`", "'")
+    s = re.sub(r"[\s ]+", " ", s)
+    s = re.sub(r"^[\W_]+|[\W_]+$", "", s)
+    return s
+
+
 class QualityReporter:
     def __init__(self, config: dict):
         self.config = config
         markers = config.get("quality", {}).get("asr_noise_markers", [])
         self.asr_noise_markers = {
-            str(marker).strip().lower()
+            _normalize_noise_text(str(marker))
             for marker in markers
             if str(marker).strip()
         }
@@ -35,6 +48,10 @@ class QualityReporter:
             "high_word_rate": t.get("high_word_rate", 10),
             "significant_overlap_s": t.get("significant_overlap_s", 1.0),
             "suspicious_short_segment_s": t.get("suspicious_short_segment_s", 1.0),
+            # Seuils de confiance STT (Whisper word-level probability)
+            "no_speech_prob_threshold": t.get("no_speech_prob_threshold", 0.5),
+            "low_word_confidence_ratio": t.get("low_word_confidence_ratio", 0.5),
+            "low_word_confidence_min": t.get("low_word_confidence_min", 0.4),
         }
 
     def run_all_checks(self, job: Job) -> dict:
@@ -58,6 +75,8 @@ class QualityReporter:
             "suspicious_short_segments": 0,
             "speaker_name_violations": 0,
             "audio_problem_segments": 0,
+            "audio_preflight_flags": 0,
+            "degraded_reliability_segments": 0,
         }
 
         # 1. Segments vides
@@ -292,7 +311,132 @@ class QualityReporter:
             )
             warnings += min(len(problem_segments), 10)
 
-        # 9. Couverture audio
+        # 8bis. Risques acoustiques pré-STT
+        audio_preflight = fs.load_json("metadata/audio_preflight.json") or {}
+        preflight_flags = audio_preflight.get("flags") or []
+        total_checks += 1
+        if isinstance(preflight_flags, list) and preflight_flags:
+            review_load["audio_preflight_flags"] = len(preflight_flags)
+            checks.append({
+                "type": "audio_preflight_flags",
+                "count": len(preflight_flags),
+                "flags": preflight_flags,
+                "risk_level": audio_preflight.get("risk_level"),
+                "metrics": {
+                    "rms": audio_preflight.get("rms"),
+                    "estimated_snr_db": audio_preflight.get("estimated_snr_db"),
+                    "bandwidth_95_hz": audio_preflight.get("bandwidth_95_hz"),
+                    "silence_ratio": audio_preflight.get("silence_ratio"),
+                },
+                "severity": "warning" if audio_preflight.get("risk_level") == "degrade" else "info",
+            })
+            review_points.append(
+                "Pré-diagnostic audio : "
+                + ", ".join(str(flag) for flag in preflight_flags)
+                + " — transcription potentiellement partielle ou incertaine."
+            )
+            if audio_preflight.get("risk_level") == "degrade":
+                warnings += 2
+            else:
+                warnings += 1
+
+        # 9. Segments suspects : no_speech_prob élevé (Whisper)
+        nsp_threshold = thresholds["no_speech_prob_threshold"]
+        suspect_nsp = [
+            s for s in segments
+            if s.get("no_speech_prob") is not None and s["no_speech_prob"] > nsp_threshold
+        ]
+        total_checks += 1
+        if suspect_nsp:
+            checks.append({
+                "type": "suspect_no_speech_prob",
+                "count": len(suspect_nsp),
+                "threshold": nsp_threshold,
+                "examples": [
+                    {
+                        "start": s.get("start"),
+                        "end": s.get("end"),
+                        "text": s.get("text", "")[:80],
+                        "no_speech_prob": round(s["no_speech_prob"], 3),
+                    }
+                    for s in suspect_nsp[:10]
+                ],
+                "severity": "warning",
+            })
+            review_points.append(
+                f"Segments à haute probabilité de non-parole (np>{nsp_threshold}) : "
+                f"{len(suspect_nsp)} — probable hallucination sur silence ou audio dégradé."
+            )
+            warnings += min(len(suspect_nsp), 5)
+
+        # 10. Segments suspects : faible confiance globale sur les mots (Whisper)
+        conf_ratio_threshold = thresholds["low_word_confidence_ratio"]
+        conf_min = thresholds["low_word_confidence_min"]
+        suspect_lwc = []
+        for s in segments:
+            words = s.get("words") or []
+            if not words:
+                continue
+            low_count = sum(1 for w in words if w.get("probability", 1.0) < conf_min)
+            ratio = low_count / len(words)
+            if ratio > conf_ratio_threshold:
+                suspect_lwc.append({
+                    "start": s.get("start"),
+                    "end": s.get("end"),
+                    "text": s.get("text", "")[:80],
+                    "low_conf_ratio": round(ratio, 3),
+                    "low_conf_words": low_count,
+                    "total_words": len(words),
+                })
+        total_checks += 1
+        if suspect_lwc:
+            checks.append({
+                "type": "suspect_low_word_confidence",
+                "count": len(suspect_lwc),
+                "threshold_ratio": conf_ratio_threshold,
+                "threshold_min_prob": conf_min,
+                "examples": suspect_lwc[:10],
+                "severity": "warning",
+            })
+            review_points.append(
+                f"Segments à faible confiance de mots (>{int(conf_ratio_threshold*100)}% mots < {conf_min}) : "
+                f"{len(suspect_lwc)} — transcription incertaine, vérifier le contenu audio."
+            )
+            warnings += min(len(suspect_lwc), 5)
+
+        # 11. Fiabilité segmentaire calculée après STT
+        reliability_counts: dict[str, int] = {}
+        degraded_examples = []
+        for segment in segments:
+            level = segment.get("reliability")
+            if not level:
+                continue
+            reliability_counts[level] = reliability_counts.get(level, 0) + 1
+            if level == "degrade" and len(degraded_examples) < 10:
+                degraded_examples.append({
+                    "start": segment.get("start"),
+                    "end": segment.get("end"),
+                    "text": segment.get("text", "")[:80],
+                    "reasons": segment.get("reliability_reasons") or [],
+                })
+        total_checks += 1
+        if reliability_counts.get("degrade") or reliability_counts.get("suspect"):
+            degraded_count = reliability_counts.get("degrade", 0)
+            review_load["degraded_reliability_segments"] = degraded_count
+            checks.append({
+                "type": "segment_reliability",
+                "counts": reliability_counts,
+                "examples": degraded_examples,
+                "severity": "warning" if degraded_count else "info",
+            })
+            review_points.append(
+                "Fiabilité ASR segmentaire : "
+                + ", ".join(f"{k}={v}" for k, v in sorted(reliability_counts.items()))
+                + " — prioriser les segments degrade/suspect en relecture."
+            )
+            warnings += min(degraded_count, 5)
+
+        # 12. Couverture audio
         duration_covered = sum(s.get("end", 0) - s.get("start", 0) for s in segments)
         audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
         audio_duration = audio_analysis.get("duration_seconds", 0)
@@ -304,7 +448,7 @@ class QualityReporter:
                 review_points.append(f"Couverture faible : {coverage_ratio:.0%} — possible perte de transcription.")
                 warnings += 1
 
-        # 10. Ratio mots/durée suspect
+        # 13. Ratio mots/durée suspect
         total_checks += 1
         if duration_covered > 0 and srt_content.strip():
             word_count = len(srt_content.split())
@@ -351,6 +495,20 @@ class QualityReporter:
                 lines.append(f"- {point}")
         else:
             lines.append("- Aucun point d'attention détecté.")
+        preflight = self._find_check(report, "audio_preflight_flags")
+        if preflight:
+            metrics = preflight.get("metrics") or {}
+            lines.extend([
+                "",
+                "## Diagnostic audio avant transcription",
+                "",
+                f"- Risque: {preflight.get('risk_level') or 'inconnu'}",
+                f"- Flags: {', '.join(preflight.get('flags') or [])}",
+                f"- RMS: {metrics.get('rms')}",
+                f"- SNR estimé: {metrics.get('estimated_snr_db')}",
+                f"- Bande passante 95%: {metrics.get('bandwidth_95_hz')} Hz",
+                f"- Silence: {metrics.get('silence_ratio')}",
+            ])
         lines.append("")
         lines.append("## Détails des contrôles")
         lines.append("")
@@ -365,6 +523,13 @@ class QualityReporter:
             for key, value in report["review_load"].items():
                 lines.append(f"- {key}: {value}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _find_check(report: dict, check_type: str) -> dict | None:
+        for check in report.get("checks", []):
+            if check.get("type") == check_type:
+                return check
+        return None
 
     @classmethod
     def _format_audio_problem_segment(cls, segment: dict) -> dict:
@@ -450,5 +615,4 @@ class QualityReporter:
         alpha = [c for c in stripped if c.isalpha()]
         if len(alpha) <= 2:
             return True
-        lower = stripped.lower()
-        return lower in self.asr_noise_markers
+        return _normalize_noise_text(stripped) in self.asr_noise_markers

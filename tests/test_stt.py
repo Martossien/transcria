@@ -387,6 +387,142 @@ class TestAntiHallucination:
 
 
 class TestTranscriber:
+    def _transcriber_for_cleanup(self, cleanup_cfg=None):
+        transcriber = Transcriber.__new__(Transcriber)
+        transcriber.config = {
+            "workflow": {
+                "transcription_cleanup": cleanup_cfg or {
+                    "enabled": True,
+                    "remove_subtitle_artifacts": True,
+                    "merge_short_segments": True,
+                    "short_segment_max_s": 0.45,
+                    "short_segment_max_words": 2,
+                    "merge_gap_s": 0.5,
+                    "merge_max_chars": 220,
+                }
+            }
+        }
+        return transcriber
+
+    def test_cleanup_removes_known_subtitle_artifacts(self):
+        transcriber = self._transcriber_for_cleanup()
+        segments = [
+            {"start": 0.0, "end": 0.2, "speaker": "Alice", "text": "Sous"},
+            {"start": 0.3, "end": 0.8, "speaker": "Alice", "text": "-titrage ST' 501"},
+            {"start": 1.0, "end": 1.8, "speaker": "Alice", "text": "Bonjour à tous."},
+            {"start": 2.0, "end": 2.5, "speaker": "Alice", "text": "Société Radio-Canada"},
+        ]
+
+        cleaned = transcriber._cleanup_transcription_segments(segments)
+
+        assert [s["text"] for s in cleaned] == ["Bonjour à tous."]
+
+    def test_cleanup_removes_truncated_subtitle_artifacts(self):
+        transcriber = self._transcriber_for_cleanup()
+        segments = [
+            {"start": 0.0, "end": 0.4, "speaker": "Alice", "text": "-titrage FR?"},
+            {"start": 0.5, "end": 0.9, "speaker": "Alice", "text": "-titrage ST'"},
+            {"start": 1.0, "end": 2.0, "speaker": "Alice", "text": "Point suivant."},
+        ]
+
+        cleaned = transcriber._cleanup_transcription_segments(segments)
+
+        assert [s["text"] for s in cleaned] == ["Point suivant."]
+
+    def test_cleanup_merges_short_same_speaker_segments(self):
+        transcriber = self._transcriber_for_cleanup()
+        segments = [
+            {"start": 0.0, "end": 1.0, "speaker": "Alice", "text": "Nous ouvrons la séance."},
+            {"start": 1.2, "end": 1.4, "speaker": "Alice", "text": "Oui"},
+            {"start": 2.0, "end": 2.2, "speaker": "Bob", "text": "Non"},
+        ]
+
+        cleaned = transcriber._cleanup_transcription_segments(segments)
+
+        assert cleaned[0]["text"] == "Nous ouvrons la séance. Oui"
+        assert cleaned[0]["end"] == 1.4
+        assert cleaned[1]["text"] == "Non"
+
+    def test_cleanup_keeps_long_sentences_with_artifact_words(self):
+        transcriber = self._transcriber_for_cleanup()
+        segments = [
+            {
+                "start": 0.0,
+                "end": 3.0,
+                "speaker": "Alice",
+                "text": "La convention avec Société Radio-Canada doit être relue.",
+            },
+        ]
+
+        cleaned = transcriber._cleanup_transcription_segments(segments)
+
+        assert cleaned == segments
+
+    def test_cleanup_can_be_disabled(self):
+        transcriber = self._transcriber_for_cleanup({"enabled": False})
+        segments = [{"start": 0.0, "end": 0.2, "speaker": "Alice", "text": "Sous"}]
+
+        assert transcriber._cleanup_transcription_segments(segments) == segments
+
+    def test_segment_reliability_marks_degraded_when_audio_and_confidence_are_bad(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        segments = [{
+            "start": 0.0,
+            "end": 0.3,
+            "text": "La médecine",
+            "no_speech_prob": 0.62,
+            "words": [
+                {"word": "La", "probability": 0.03},
+                {"word": "médecine", "probability": 0.5},
+            ],
+        }]
+
+        scored = SegmentReliabilityScorer({}).score_segments(
+            segments,
+            {"flags": ["audio_tres_faible", "risque_transcription_non_fiable"]},
+        )
+
+        assert scored[0]["text"] == "La médecine"
+        assert scored[0]["reliability"] == "degrade"
+        assert "audio_preflight_degrade" in scored[0]["reliability_reasons"]
+        assert "no_speech_prob_eleve" in scored[0]["reliability_reasons"]
+
+    def test_smooth_micro_turns_merges_same_speaker_only(self):
+        turns = [
+            {"speaker": "SPEAKER_00", "start": 0.0, "end": 1.0},
+            {"speaker": "SPEAKER_00", "start": 1.1, "end": 1.2},
+            {"speaker": "SPEAKER_01", "start": 1.25, "end": 1.32},
+        ]
+
+        smoothed = Transcriber._smooth_micro_turns(turns, {
+            "merge_micro_chunks": True,
+            "micro_chunk_s": 0.35,
+            "micro_chunk_neighbor_gap_s": 0.4,
+        })
+
+        assert len(smoothed) == 2
+        assert smoothed[0]["end"] == pytest.approx(1.2)
+        assert smoothed[1]["speaker"] == "SPEAKER_01"
+
+    def test_final_vad_auto_enables_on_degraded_audio(self):
+        vad_cfg = {
+            "enabled_final": False,
+            "auto_enable_final_on_degraded": True,
+            "auto_enable_final_levels": ["degrade"],
+            "threshold": 0.35,
+            "threshold_final_degraded": 0.6,
+        }
+
+        enabled = Transcriber._resolve_final_vad_enabled(
+            vad_cfg,
+            {"level": "degrade"},
+            {"enable_vad": True},
+        )
+
+        assert enabled is True
+        assert vad_cfg["threshold"] == 0.6
+
     def test_transcribe_saves_speaker_map_without_name_error(self, app, owner_id):
         with app.app_context():
             from pathlib import Path
@@ -418,6 +554,252 @@ class TestTranscriber:
             assert result["speaker_count"] == 1
             assert fs.load_json("metadata/speakers_map.json")["mapping"]["SPEAKER_00"] == "Alice"
             assert "Alice: Bonjour" in fs.load_text("metadata/transcription.srt")
+
+
+class TestTranscriberConfigurableArtifacts:
+    """Point 1 — marqueurs d'artefacts configurables depuis config.yaml."""
+
+    def _transcriber(self, cleanup_cfg: dict):
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": cleanup_cfg}}
+        return t
+
+    def _base_cleanup(self, extra: dict | None = None) -> dict:
+        cfg = {
+            "enabled": True,
+            "remove_subtitle_artifacts": True,
+            "merge_short_segments": False,
+        }
+        if extra:
+            cfg.update(extra)
+        return cfg
+
+    def test_custom_pattern_from_config_filters_matching_segment(self):
+        """Un pattern regex personnalisé dans config filtre le segment correspondant."""
+        t = self._transcriber(self._base_cleanup({
+            "subtitle_artifact_patterns": [r"\bcustom_watermark\b"],
+            "subtitle_artifact_words": [],
+        }))
+        segments = [
+            {"start": 0.0, "end": 0.3, "text": "custom_watermark"},
+            {"start": 1.0, "end": 2.0, "text": "Bonjour à tous."},
+        ]
+
+        cleaned = t._cleanup_transcription_segments(segments)
+
+        assert [s["text"] for s in cleaned] == ["Bonjour à tous."]
+
+    def test_custom_word_from_config_filters_matching_segment(self):
+        """Un mot court personnalisé dans config filtre le segment correspondant."""
+        t = self._transcriber(self._base_cleanup({
+            "subtitle_artifact_patterns": [],
+            "subtitle_artifact_words": ["custom_noise"],
+        }))
+        segments = [
+            {"start": 0.0, "end": 0.3, "text": "custom_noise"},
+            {"start": 1.0, "end": 2.0, "text": "Point suivant."},
+        ]
+
+        cleaned = t._cleanup_transcription_segments(segments)
+
+        assert [s["text"] for s in cleaned] == ["Point suivant."]
+
+    def test_custom_patterns_replace_defaults_builtin_no_longer_filtered(self):
+        """Quand des patterns custom sont fournis, les défauts intégrés ne s'appliquent plus."""
+        t = self._transcriber(self._base_cleanup({
+            "subtitle_artifact_patterns": [r"\bcustom_watermark\b"],
+            "subtitle_artifact_words": ["custom_noise"],
+        }))
+        segments = [
+            # Artefacts intégrés — ne doivent PAS être filtrés (défauts remplacés)
+            {"start": 0.0, "end": 0.3, "text": "Sous-titrage ST' 501"},
+            {"start": 0.4, "end": 0.6, "text": "titrage"},
+            # Artefact custom — doit être filtré
+            {"start": 0.7, "end": 0.9, "text": "custom_watermark"},
+            {"start": 1.0, "end": 2.0, "text": "Conclusion."},
+        ]
+
+        cleaned = t._cleanup_transcription_segments(segments)
+
+        texts = [s["text"] for s in cleaned]
+        assert "Sous-titrage ST' 501" in texts
+        assert "titrage" in texts
+        assert "custom_watermark" not in texts
+        assert "Conclusion." in texts
+
+    def test_empty_lists_in_config_use_builtin_defaults(self):
+        """Des listes vides dans config activent les défauts intégrés."""
+        t = self._transcriber(self._base_cleanup({
+            "subtitle_artifact_patterns": [],
+            "subtitle_artifact_words": [],
+        }))
+        segments = [
+            {"start": 0.0, "end": 0.3, "text": "Sous-titrage ST' 501"},
+            {"start": 0.4, "end": 0.6, "text": "titrage"},
+            {"start": 1.0, "end": 2.0, "text": "Bonjour."},
+        ]
+
+        cleaned = t._cleanup_transcription_segments(segments)
+
+        texts = [s["text"] for s in cleaned]
+        assert "Sous-titrage ST' 501" not in texts
+        assert "titrage" not in texts
+        assert "Bonjour." in texts
+
+    def test_absent_keys_in_config_also_use_builtin_defaults(self):
+        """Clés absentes de config (pas de subtitle_artifact_*) → défauts intégrés."""
+        t = self._transcriber(self._base_cleanup())  # pas de subtitle_artifact_*
+        segments = [
+            {"start": 0.0, "end": 0.5, "text": "Société Radio-Canada"},
+            {"start": 1.0, "end": 2.0, "text": "Ordre du jour."},
+        ]
+
+        cleaned = t._cleanup_transcription_segments(segments)
+
+        texts = [s["text"] for s in cleaned]
+        assert "Société Radio-Canada" not in texts
+        assert "Ordre du jour." in texts
+
+
+class TestCohereAntiHallucination:
+    """Point 2 — anti-hallucination post-inférence pour CohereTranscriber."""
+
+    def test_apply_loop_collapse_reduces_repetition(self):
+        """_apply_loop_collapse réduit une boucle répétitive à keep_repeats occurrences."""
+        ct = CohereTranscriber(
+            collapse_repetition_loops=True,
+            repetition_loop_min_repeats=4,
+            repetition_loop_keep_repeats=2,
+        )
+        text = "voici voici voici voici voici la fin"
+
+        result, loops = ct._apply_loop_collapse(text)
+
+        assert loops
+        assert "voici voici voici voici voici" not in result
+        assert result == "voici voici la fin"
+
+    def test_apply_loop_collapse_returns_loop_metadata(self):
+        """La liste loops contient phrase, count pour chaque boucle détectée."""
+        ct = CohereTranscriber(
+            collapse_repetition_loops=True,
+            repetition_loop_min_repeats=4,
+        )
+        _, loops = ct._apply_loop_collapse("merci merci merci merci merci beaucoup")
+
+        assert loops
+        assert loops[0]["phrase"] == "merci"
+        assert loops[0]["count"] == 5
+
+    def test_apply_loop_collapse_disabled_returns_text_unchanged(self):
+        """Quand collapse_repetition_loops=False, texte et liste loops sont inchangés."""
+        ct = CohereTranscriber(collapse_repetition_loops=False)
+        text = "merci merci merci merci merci"
+
+        result, loops = ct._apply_loop_collapse(text)
+
+        assert result == text
+        assert loops == []
+
+    def test_apply_loop_collapse_normal_text_unaffected(self):
+        """Un texte sans répétition ressort identique, loops vide."""
+        ct = CohereTranscriber(collapse_repetition_loops=True)
+        text = "Bonjour à tous, je vous remercie de votre présence."
+
+        result, loops = ct._apply_loop_collapse(text)
+
+        assert result == text
+        assert loops == []
+
+    def test_transcribe_with_fake_model_collapses_loops_in_output(self):
+        """Le pipeline transcribe() intègre la détection de boucles sur chaque segment."""
+        import numpy as np
+
+        class FakeProcessor:
+            def __call__(self, audio, sampling_rate, return_tensors, language):
+                import types
+                ns = types.SimpleNamespace(
+                    dtype=type("DT", (), {"__eq__": lambda s, o: False})(),
+                    __getitem__=lambda s, k: s,
+                )
+                ns.to = lambda dtype: ns
+                return {"input_features": ns}
+            def decode(self, ids, skip_special_tokens):
+                return "bonjour bonjour bonjour bonjour bonjour fin"
+
+        class FakeModel:
+            def generate(self, *args, **kwargs):
+                return [[1, 2, 3]]
+            def to(self, *a, **k):
+                return self
+
+        ct = CohereTranscriber(
+            collapse_repetition_loops=True,
+            repetition_loop_min_repeats=4,
+            repetition_loop_keep_repeats=1,
+        )
+        ct._model = FakeModel()
+        ct._processor = FakeProcessor()
+
+        audio = np.zeros(16000, dtype=np.float32)
+        segments = ct.transcribe(audio_path=None, audio_array=audio, sample_rate=16000)
+
+        assert segments
+        seg = segments[0]
+        assert "bonjour bonjour bonjour bonjour bonjour" not in seg["text"]
+        assert "hallucination_loops" in seg
+        assert seg["hallucination_loops"][0]["phrase"] == "bonjour"
+
+
+class TestDefaultSubtitleArtifactPatterns:
+    """Patterns outro YouTube et crédits tiers présents dans les défauts intégrés."""
+
+    def _run(self, *texts):
+        """Lance le nettoyage sur une liste de segments avec la config par défaut (pas de clés custom)."""
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": {
+            "enabled": True,
+            "remove_subtitle_artifacts": True,
+            "merge_short_segments": False,
+        }}}
+        segs = [{"start": i * 1.0, "end": i * 1.0 + 0.3, "text": txt} for i, txt in enumerate(texts)]
+        return [s["text"] for s in t._cleanup_transcription_segments(segs)]
+
+    def test_thanks_for_watching_removed(self):
+        """Phrase outro YouTube anglaise classique → supprimée par les défauts."""
+        result = self._run("Thanks for watching", "Bonjour.")
+        assert "Thanks for watching" not in result
+        assert "Bonjour." in result
+
+    def test_thank_you_for_watching_removed(self):
+        """Variante longue 'thank you for watching' → supprimée."""
+        result = self._run("Thank you for watching.", "Bonjour.")
+        assert "Thank you for watching." not in result
+
+    def test_please_subscribe_to_my_channel_removed(self):
+        """Appel à l'abonnement YouTube → supprimé."""
+        result = self._run("Please subscribe to my channel", "Bonjour.")
+        assert "Please subscribe to my channel" not in result
+
+    def test_like_and_subscribe_removed(self):
+        """Phrase d'appel à l'engagement YouTube → supprimée."""
+        result = self._run("like and subscribe", "Bonjour.")
+        assert "like and subscribe" not in result
+
+    def test_amara_subtitles_credit_removed(self):
+        """Crédit sous-titrage Amara.org → supprimé."""
+        result = self._run("Subtitles by the Amara.org community", "Bonjour.")
+        assert "Subtitles by the Amara.org community" not in result
+
+    def test_thank_you_alone_not_removed(self):
+        """'thank you' seul n'est PAS supprimé — phrase légitime en réunion."""
+        result = self._run("thank you", "Bonjour.")
+        assert "thank you" in result
+
+    def test_short_legitimate_french_word_not_removed(self):
+        """Mot français courant court n'est PAS supprimé."""
+        result = self._run("Merci.", "Bonjour.")
+        assert "Merci." in result
 
 
 class TestSpeakerDetector:

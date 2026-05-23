@@ -47,6 +47,10 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
         max_new_tokens=cohere_cfg.get("max_new_tokens", 448),
         repetition_penalty=cohere_cfg.get("repetition_penalty", 1.2),
         no_repeat_ngram_size=cohere_cfg.get("no_repeat_ngram_size", 3),
+        collapse_repetition_loops=cohere_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=cohere_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=cohere_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=cohere_cfg.get("repetition_loop_keep_repeats", 2),
     )
 
 
@@ -54,9 +58,6 @@ def _create_whisper(config: dict, device: str | None) -> BaseTranscriber:
     from transcria.stt.whisper_transcriber import WhisperTranscriber
 
     whisper_cfg = _effective_whisper_config(config)
-
-    if device and device.startswith("cuda"):
-        device = "cuda"
 
     return WhisperTranscriber(
         model_size=whisper_cfg["model_size"],
