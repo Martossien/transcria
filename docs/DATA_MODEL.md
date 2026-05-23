@@ -36,7 +36,7 @@
 | `id` | String(36) | PK, default=uuid4 | Identifiant unique |
 | `group_id` | String(36) | FK → groups.id, NOT NULL, INDEX | Groupe |
 | `user_id` | String(36) | FK → users.id, NOT NULL, INDEX | Utilisateur membre |
-| `role` | String(20) | NOT NULL, default="member" | Rôle dans le groupe (`member` ou `group_admin`) |
+| `role` | String(30) | NOT NULL, default="member" | Rôle dans le groupe (`member` ou `group_admin`) |
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date d'ajout |
 
 **Contraintes :** unicité `(group_id, user_id)`.
@@ -120,8 +120,8 @@ Les admins globaux (`Role.ADMIN`) peuvent créer, renommer et supprimer les grou
 | `TRANSCRIBING` | `"transcribing"` | Traitement | Cohere ASR transcription finale en cours |
 | `DIARIZING` | `"diarizing"` | Traitement | Pyannote diarization finale en cours |
 | `ARBITRATING` | `"arbitrating"` | Traitement | Correction opencode + LLM d'arbitrage en cours |
-| `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 10 contrôles en cours |
-| `QUALITY_CHECKED` | `"quality_checked"` | Qualité | Contrôles terminés |
+| `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 16 contrôles en cours |
+| `QUALITY_CHECKED` | `"quality_checked"` | Qualité | 16 contrôles terminés |
 | `EXPORT_READY` | `"export_ready"` | Export | Package ZIP prêt |
 | `COMPLETED` | `"completed"` | Export | Workflow terminé |
 | `FAILED` | `"failed"` | (erreur) | Erreur fatale |
@@ -216,17 +216,24 @@ Chaque job a un répertoire `jobs/<job_id>/` créé par `JobFilesystem`. Les sou
 ```
 jobs/<job_id>/
 ├── input/
-│   └── original.<ext>              # Fichier audio/vidéo uploadé (mp3, wav, m4a, mp4, flac, ogg)
+│   ├── original.<ext>              # Fichier audio/vidéo uploadé (mp3, wav, m4a, mp4, flac, ogg)
+│   ├── vocals.wav                  # Piste vocale extraite par séparation de sources (si activée)
+│   ├── scene_filtered.wav          # Audio avec zones non vocales mises en silence (si filtre activé)
+│   ├── denoised.wav                # Audio débruité par ffmpeg afftdn (si débruitage activé)
+│   └── normalized.wav              # Audio normalisé loudnorm/highpass (si normalisation activée ou auto)
 │
 ├── metadata/
 │   ├── audio_analysis.json         # Résultat ffprobe (durée, codec, canaux, bitrate)
+│   ├── audio_preflight.json        # Pré-diagnostic acoustique (RMS, SNR, bande passante, clipping, flags)
 │   ├── audio_quality_decision.json # Décision qualité déterministe + signaux de scène si disponibles
 │   ├── audio_scene.json            # Analyse de scène (ratios, segments, genre vocal)
 │   ├── audio_scene_filter.json     # Filtrage pré-STT optionnel, timeline préservée
-│   ├── audio_normalization.json    # Normalisation pré-STT optionnelle, timeline préservée
-│   ├── transcription.srt          # SRT final (Cohere + speakers appliqués)
+│   ├── audio_normalization.json    # Normalisation pré-STT optionnelle, timeline préservée (forced=true si auto-loudnorm)
+│   ├── audio_denoise.json          # Débruitage pré-STT optionnel via ffmpeg afftdn (preserve_timeline=true)
+│   ├── transcription.srt          # SRT final (Cohere/Whisper + speakers + nettoyage post-STT)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
+│   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, gpu_index, language, segments count, speaker_count, vad_final_enabled)
 │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
 │   └── correction_report.md       # Rapport de correction opencode si disponible
 │
@@ -268,8 +275,10 @@ jobs/<job_id>/
 │   ├── quality_report.md          # Rapport markdown
 │   └── review_points.json         # Points à vérifier (liste de strings)
 │
-└── exports/
-    └── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio)
+├── exports/
+│   └── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio)
+│
+└── .opencode.pid                    # PID du processus opencode (écrit par OpenCodeRunner.run(), lu par _kill_orphaned_opencode())
 ```
 
 ### Production des fichiers par étape
@@ -286,8 +295,15 @@ jobs/<job_id>/
 | Locuteurs (detect) | `speakers/speaker_stats.json` (écrasé) | `SpeakerDetector.detect()` |
 | Locuteurs (map) | `speakers/speaker_mapping.json`, `context/job_context.yaml`, `context/job_context.json` | `SpeakerDetector.save_mapping()` + `JobContextBuilder.build()` |
 | Lexique | `context/session_lexicon.json`, `context/session_lexicon.txt`, `context/job_context.yaml`, `context/job_context.json` | `LexiconManager.save()` + `JobContextBuilder.build()` |
+| Pré-traitement | `metadata/audio_preflight.json` | `PipelineService._run_audio_preflight()` / `AudioPreflightAnalyzer` |
 | Pré-traitement | `metadata/audio_scene.json` (si `workflow.audio_scene.enabled=true`) | `PipelineService._run_audio_scene_analysis()` + `AudioSceneAnalyzer` |
-| Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
+| Pré-traitement | `metadata/audio_quality_decision.json` (réévalué avec signaux de scène si disponibles) | `AudioQualityEvaluator` + `PipelineService` |
+| Pré-traitement | `input/vocals.wav` (si séparation de sources décidée ou forcée) | `SourceSeparationService.separate()` |
+| Pré-traitement | `input/scene_filtered.wav` + `metadata/audio_scene_filter.json` (si filtre activé) | `AudioSceneFilterService.apply()` |
+| Pré-traitement | `input/denoised.wav` + `metadata/audio_denoise.json` (si débruitage activé) | `PipelineService._run_audio_denoise()` + `AudioDenoiseService` |
+| Pré-traitement | `input/normalized.wav` + `metadata/audio_normalization.json` (si normalisation activée ou auto-loudnorm) | `AudioNormalizationService.apply()` |
+| Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/transcription_metadata.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
+| Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `metadata/transcription_corrigee.srt` | `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` |
@@ -315,6 +331,22 @@ jobs/<job_id>/
   "objectif_suggere": "Valider les résultats Q1",
   "notes_suggeres": "3 points à l'ordre du jour",
   "participants_detectes": "3 participants",
+  "speaker_roles_llm": {
+    "SPEAKER_00": {"label": "Marie", "role": "Présidente"},
+    "SPEAKER_01": {"label": "Jean", "role": "Directeur"}
+  },
+  "termes_suspects": [
+    {
+      "terme": "EBITDA",
+      "categorie": "sigle",
+      "priorite": "importante",
+      "variantes_suspectes": ["ebitda", "Ebitda"],
+      "commentaire": "Résultat opérationnel courant",
+      "contextes": ["L'ebitda est à 12M||budget Q1"]
+    }
+  ],
+  "termes_suspects_parse_status": "ok",
+  "termes_suspects_parse_warning": null,
   "speaker_count_llm": 3,
   "speaker_count_pyannote": 4,
   "mots_cles": "budget, EBITDA, CA, pipeline",
@@ -323,6 +355,8 @@ jobs/<job_id>/
 ```
 
 Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après le résumé (Phase 2). Ils sont préservés par `MeetingContextManager.save()` via la liste `llm_fields`.
+
+> Les champs `speaker_roles_llm`, `termes_suspects`, `termes_suspects_parse_status` et `termes_suspects_parse_warning` sont ajoutés par le résumé LLM et figurent dans la liste `llm_fields` de `MeetingContextManager`. Ils sont donc préservés lors de la sauvegarde du formulaire de contexte.
 
 ### speaker_mapping.json
 
@@ -465,7 +499,10 @@ Produit uniquement si `workflow.audio_scene_filter.enabled=true` et si un filtra
 
 ### audio_normalization.json
 
-Produit uniquement si `workflow.audio_normalization.enabled=true` et si la normalisation a réellement été appliquée avant STT.
+Produit si la normalisation a été appliquée avant STT. Deux cas possibles :
+
+1. **Normalisation activée par config** (`workflow.audio_normalization.enabled=true`) : appliquée si le mode le permet.
+2. **Auto-loudnorm forcé** : si le RMS audio est inférieur à `auto_loudnorm_rms_threshold` (défaut 0.02) et que la normalisation n'est pas déjà active, le pipeline force `loudnorm` automatiquement. Dans ce cas, le champ `"forced": true` est présent.
 
 ```json
 {
@@ -474,10 +511,13 @@ Produit uniquement si `workflow.audio_normalization.enabled=true` et si la norma
   "mode": "quality",
   "reasons": ["filters=2"],
   "filters": ["highpass=f=80", "loudnorm=I=-23:TP=-2:LRA=11"],
-  "preserve_timeline": true
+  "preserve_timeline": true,
+  "forced": true
 }
 ```
 
+- `"forced": true` indique une normalisation déclenchée automatiquement par un RMS trop faible, pas par la config utilisateur.
+- `"forced": true` implique `"reasons"` contient `"audio_trop_silencieux_auto_loudnorm"` et une entrée `"rms=0.00600"`.
 - La normalisation ne doit pas changer la durée audio. Si ffmpeg échoue ou ne produit pas de fichier exploitable, le pipeline conserve l'audio d'entrée.
 
 ### audio_quality_decision.json
@@ -533,7 +573,7 @@ Produit par `QualityReporter` à l'étape qualité. Si `metadata/audio_scene.jso
 
 ```json
 {
-  "total_checks": 10,
+  "total_checks": 16,
   "warnings": 3,
   "checks": [
     {"type": "empty_segments", "count": 2, "severity": "warning"},
@@ -544,7 +584,26 @@ Produit par `QualityReporter` à l'étape qualité. Si `metadata/audio_scene.jso
 }
 ```
 
-Score = `max(0, 100 - warnings * 5)`. Les 10 contrôles : segments vides, très courts, très longs, trous temporels, chevauchements, locuteurs non mappés, variantes lexique non résolues (variantes exactes + formes proches trouvées après correction), termes lexique absents, couverture audio, ratio mots/durée.
+Score = `max(0, 100 - warnings * 5)`. Les 16 contrôles :
+
+1. empty_segments
+2. very_short_segments
+3. very_long_segments
+4. temporal_gaps
+5. overlapping_segments
+6. unmapped_speakers
+7. lexicon_variants_unresolved
+8. lexicon_terms_missing
+9. audio_coverage
+10. words_per_duration
+11. modified_speaker_names
+12. foreign_marked_segments
+13. non_latin_segments
+14. audio_preflight_flags — Risques acoustiques pré-STT depuis `metadata/audio_preflight.json`
+15. suspect_no_speech_prob — Segments suspects no_speech_prob
+16. suspect_low_word_confidence — Segments suspects faible confiance mots
+
+Un 17e check optionnel `segment_reliability` est ajouté si `whisper.forced_alignment.enabled=true` ou si les métadonnées de fiabilité sont disponibles dans `metadata/transcription_metadata.json`.
 
 ---
 

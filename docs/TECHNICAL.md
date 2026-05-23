@@ -21,7 +21,7 @@ python app.py
 
 **Scripts :** `./start.sh` (log `/var/log/transcrIA.log`, PID `/run/transcrIA.pid`), `./stop.sh`, `./status.sh`
 
-**Tests :** 557 tests pytest collectés — `python -m pytest tests/ -q`
+**Tests :** suite pytest — `python -m pytest tests/ -q`
 
 **Supervision locale :**
 - `GET /health` retourne un statut JSON simple du service et de la base SQLite
@@ -68,11 +68,14 @@ transcria/
 │   │   ├── __init__.py
 │   │   ├── analyzer.py            # AudioAnalyzer (ffprobe → JSON)
 │   │   ├── converter.py           # AudioConverter (ffmpeg → WAV 16kHz mono)
+│   │   ├── preflight.py           # AudioPreflightAnalyzer — pré-diagnostic acoustique (RMS, SNR, bande passante, clipping, flags)
 │   │   ├── vad.py                 # SileroVAD (détection de parole via faster_whisper)
 │   │   ├── vad_adaptive.py        # Adaptation VAD selon audio_quality_decision
+│   │   ├── vad_hysteresis.py      # HysteresisBinarizer — post-traitement hystérésis des scores VAD
 │   │   ├── scene_analyzer.py      # AudioSceneAnalyzer — subprocess isolé librosa (RMS → flatness/ZCR → pitch YIN)
 │   │   ├── _scene_analysis_worker.py # Worker subprocess pur pour l'analyse de scène
 │   │   ├── scene_filter.py        # AudioSceneFilterService — mise en silence optionnelle pré-STT (timeline préservée)
+│   │   ├── denoise.py             # AudioDenoiseService — débruitage ffmpeg optionnel (afftdn, désactivé par défaut)
 │   │   ├── normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle (timeline préservée)
 │   │   └── source_separation.py   # SourceSeparationDecider + SourceSeparationService (Demucs, optionnel)
 │   │
@@ -84,6 +87,7 @@ transcria/
 │   │   ├── anti_hallucination.py  # Réduction boucles ASR répétitives
 │   │   ├── forced_alignment.py    # Alignement CTC natif torchaudio optionnel
 │   │   ├── speaker_realignment.py # Réalignement locuteur/ponctuation au niveau mot
+│   │   ├── reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
 │   │   ├── transcriber_factory.py # TranscriberFactory
 │   │   ├── transcription.py       # Transcriber (pyannote_turns, fallback 30s, alignement, realignment)
 │   │   ├── diarization.py         # DiarizerService (pyannote GPU + exclusive_turns + checkpoints)
@@ -151,7 +155,7 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0 (394 lignes)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.9 (612 lignes)
 │
-├── tests/                         # 557 tests pytest collectés
+├── tests/                         # suite pytest + E2E
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 14 tests — CRUD utilisateurs, groupes
@@ -232,10 +236,14 @@ workflow:
     force_stt_backend: "whisper"
     enabled_for_modes: ["quality"]
     force_on_degraded_summary: true
-  vad:
-    enabled_summary: true
-    enabled_final: false
-    adaptive: true
+   vad:
+     enabled_summary: true
+     enabled_final: false
+     auto_enable_final_on_degraded: true
+     auto_enable_final_levels:
+       - degrade
+     threshold_final_degraded: 0.6
+     adaptive: true
   speaker_realignment:
     enabled: true
   summary_llm:
@@ -269,7 +277,18 @@ Le backend normal reste `models.stt_backend` (`cohere` par défaut). `PipelineSe
 
 Whisper large-v3 apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
 
+**Anti-hallucination pour les deux backends :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé à la fois par `WhisperTranscriber` (config `whisper.collapse_repetition_loops`) et par `CohereTranscriber` (config `cohere.collapse_repetition_loops`). Les paramètres sont les mêmes pour les deux backends : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
+
+**Nettoyage post-STT (`transcription_cleanup`)** : après la transcription, `Transcriber._cleanup_transcription_segments()` applique un nettoyage déterministe configurable via `workflow.transcription_cleanup` :
+
+- **Suppression d'artefacts** : les patterns de sous-titrage récurrents (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, etc.) sont retirés des segments SRT. Les patterns sont configurables via `workflow.transcription_cleanup.subtitle_artifact_patterns` (liste de regex, défaut `[]` = utilisation des patterns intégrés) et `subtitle_artifact_words` (liste de phrases, défaut `[]` = utilisation des mots-clés intégrés). Les variantes tronquées (`-titrage`, `titrage fr`, `titrage st`) sont aussi filtrées.
+- **Fusion de micro-segments** : les segments courts (< seuil configurable, même locuteur, gap court) sont fusionnés avec le segment précédent pour réduire les artefacts de fragmentation. Configurable via `merge_short_segments` (défaut `true`), `short_segment_max_s` (défaut 0.45), `short_segment_max_words` (défaut 2), `merge_gap_s` (défaut 0.5), `merge_max_chars` (défaut 220).
+
+Les deux opérations sont tracées dans les logs du pipeline (`removed_artifacts=N, merged_short_segments=M`).
+
 Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale.
+
+**VAD final automatique sur audio dégradé** : si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que la décision qualité est dans `auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `threshold_final_degraded` (défaut 0.6). Ce mécanisme s'applique même si `enabled_final=false` dans la config.
 
 Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutiliser les tours si l'audio et le modèle n'ont pas changé, et `speakers/speaker_embeddings.json` comme checkpoint acoustique par locuteur.
 
@@ -468,13 +487,24 @@ Contient `WORKFLOW_STEPS` (9 entrées, sans étape `speakers` séparée) et des 
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession | GPUSession auto |
 | `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers+lexique+orthographe | LLM arbitrage |
-| `run_quality_checks(job, config)` | 10 contrôles qualité | — |
+| `run_quality_checks(job, config)` | 16 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |
 
 Pipeline de traitement complet (`api_process`) :
 ```
-run_transcription → run_diarization (si quality) → run_correction → run_quality_checks → build_export
+run_transcription → cleanup_transcription → run_diarization (si quality) → run_correction → run_quality_checks → build_export
 ```
+
+Avec les 7 pré-traitements audio exécutés dans `_run_pipeline_steps()` avant `run_transcription()` :
+```
+_run_audio_preflight → _run_audio_scene_analysis → _run_source_separation → _run_audio_scene_filter → _run_audio_denoise → _run_audio_normalization → _run_transcription → cleanup → diarization → correction → quality → export
+```
+
+Étape 0 — `_run_audio_preflight()` : pré-diagnostic acoustique rapide (RMS, SNR estimé, bande passante, clipping, flags `audio_faible`/`audio_tres_faible`/`snr_faible`), sauvegarde `metadata/audio_preflight.json`. Les flags alimentent les étapes suivantes (normalisation auto, VAD dégradé, etc.).
+
+`_run_audio_denoise()` — débruitage ffmpeg optionnel (filtre `afftdn`), désactivé par défaut (`workflow.audio_denoise.enabled=false`). Produit `denoised.wav` et écrit `metadata/audio_denoise.json` avec `preserve_timeline=true`.
+
+Chaque étape de prétraitement est optionnelle et désactivée par défaut sauf `_run_audio_preflight()` (toujours actif) et `_run_audio_scene_analysis` (si `workflow.audio_scene.enabled=true`). `_run_audio_normalization()` inclut la détection auto-loudnorm (RMS < 0.02 → forçage loudnorm). `_cleanup_transcription_segments()` est activé par défaut (`workflow.transcription_cleanup.enabled=true`).
 
 Cycle de vie GPU dans `run_summary` :
 ```
@@ -540,10 +570,12 @@ Fonctions principales : `_compute_stats`, `_compute_gender_stats`, `_compute_sig
 | `should_normalize(mode, config)` | Vérifie si la normalisation doit s'appliquer selon `enabled_for_modes` |
 | `normalize(audio_path, output_path, mode, config)` | Applique `loudnorm` et high-pass optionnel via ffmpeg ; retourne le chemin de sortie ou `audio_path` si erreur |
 
+**Auto-loudnorm** : `PipelineService._run_audio_normalization()` détecte si le RMS audio est inférieur à `auto_loudnorm_rms_threshold` (défaut 0.02). Si oui, `loudnorm` est forcé automatiquement même si `audio_normalization.enabled=false`. Le résultat est tracé dans `audio_normalization.json` avec `"forced": true, "reasons": ["audio_trop_silencieux_auto_loudnorm", "rms=..."]`.
+
 **`source_separation.py`** — Séparation de sources vocales (Demucs, optionnel)
 | Classe | Description |
 |---|---|
-| `SourceSeparationDecider` | `should_separate(analysis, quality, audio_scene)` — scoring pondéré sur signaux VAD/hallucinations/scène ; si `audio_scene.has_music=True` → séparation forcée sans calcul de score |
+| `SourceSeparationDecider` | `should_separate(analysis, quality, audio_scene)` — scoring pondéré sur signaux VAD/hallucinations/scène ; si `audio_scene.has_music=True` → séparation forcée **sauf si** `speech_ratio < scene_music_min_speech_ratio_for_force` (défaut 0.08), auquel cas la musique est ignorée comme faux positif sur parole quasi absente |
 | `SourceSeparationService` | `separate(audio_path, output_path)` — extraction piste vocale Demucs (`htdemucs`) ; dégradation gracieuse si demucs absent |
 
 ---
@@ -664,7 +696,7 @@ Deux modes de chunking :
 | `import_from_file(job, jobs_dir, content)` | Import CSV ou liste simple (# = commentaire) |
 | `load_global_lexicon(config)` | Charge configs/lexique_metier.txt |
 
-`LEXICON_CATEGORIES` : personne, application, sigle, projet, service, métier, médical, technique, lieu, autre
+`LEXICON_CATEGORIES` : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect
 `LEXICON_PRIORITIES` : critique, importante, normale
 
 **`job_context_builder.py` — `JobContextBuilder`**
@@ -690,7 +722,7 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 | `check(text, lexicon)` | Retourne {found, missing, variants_found} — comparaison insensible à la casse |
 
 **`quality_report.py` — `QualityReporter`**
-10 contrôles systématiques :
+16 contrôles systématiques :
 1. Segments vides (texte vide)
 2. Segments très courts (< 0.5s)
 3. Segments très longs (> 60s)
@@ -699,8 +731,13 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 6. Locuteurs non mappés (SPEAKER_XX)
 7. Termes normalisés du lexique absents (`replace_by`) dans le SRT corrigé
 7bis. Variantes de lexique non résolues (formes exactes et proches après correction)
-8. Couverture audio (< 80%)
-9. Ratio mots/seconde suspect (< 0.5 ou > 10)
+7ter. Garde-fous déterministes : noms de locuteurs modifiés (`speaker_name_violations`), segments marqués étrangers (`foreign_segments`), segments non latins (`non_latin_segments`), segments courts suspects de bruit ASR (`suspicious_short_segments`) — ces quatre sous-checks alimentent le `review_load`
+8bis. Flags du pré-diagnostic acoustique (`audio_preflight_flags`) — `audio_faible`, `audio_tres_faible`, `snr_faible`, etc.
+9. Segments suspects : `no_speech_prob` élevé (hallucination Whisper sur silence/audio dégradé)
+10. Segments suspects : faible confiance mots (`suspect_low_word_confidence`) — ratio de mots à faible probabilité > seuil
+11. Fiabilité segmentaire post-STT (`segment_reliability`) — classification ok/suspect/degrade par segment via `SegmentReliabilityScorer`
+12. Couverture audio (< 80%)
+13. Ratio mots/seconde suspect (< 0.5 ou > 10)
 
 Score = max(0, 100 - warnings × 5). Sauvegarde quality_report.json, quality_report.md, review_points.json.
 
@@ -820,6 +857,9 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 
 | Route | Méthode | Auth | Description |
 |---|---|---|---|
+| `/health` | GET | Publique | Statut service + base SQLite |
+| `/ready` | GET | Publique | Préparation du worker interne |
+| `/metrics` | GET | Publique | Métriques Prometheus (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`) |
 | `/` | GET | login_required | Accueil (liste des traitements) |
 | `/jobs/new` | POST | login_required + CREATE_JOBS | Création traitement |
 | `/jobs/<id>` | GET | login_required + owner check | Assistant wizard 9 étapes |
@@ -844,6 +884,10 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/download/package` | GET | login_required + owner check | Téléchargement ZIP |
 | `/api/jobs/<id>/download/audio` | GET | login_required + owner check | Téléchargement audio |
 | `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY |
+| `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON (polling) |
+| `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
+| `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON |
+| `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 
 **Templates** (`web/templates/`)
@@ -887,7 +931,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | Méthode | Description |
 |---|---|
 | `run_process(job, audio_path, mode)` | Lance le pipeline complet de traitement pour un job déjà chargé |
-| `_run_pipeline_steps(job, audio_path, mode, sl)` | Analyse de scène, séparation optionnelle, transcription, puis étapes séquentielles |
+| `_run_pipeline_steps(job, audio_path, mode, sl)` | 7 pré-traitements audio puis transcription : preflight → scène → séparation → filtrage → débruitage → normalisation → transcription, puis étapes séquentielles |
 | `_define_pipeline_steps(job, audio_path, mode)` | Définit les étapes actives selon le mode (`quality` ajoute la diarisation) |
 | `_release_arbitrage_llm()` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_arbitrage_llm()`) |
 
@@ -967,7 +1011,7 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
   GPUSession(cohere-transcription, 6 Go) → GPU auto → Cohere ASR 29 chunks pyannote → offload → SRT
   → GPUSession(pyannote, 2 Go) → GPU auto → diarization supplémentaire → offload
   → ensure_arbitrage_llm_ready(api_model_id) → CAS A (LLM déjà chargée si résumé vient de tourner) → opencode correction SRT
-  → qualité (10 checks, score /100) → export ZIP
+  → qualité (16 checks, score /100) → export ZIP
   → _release_arbitrage_llm() : is_arbitrage_llm_running() → stop_arbitrage_llm() [fin pipeline]
 
 Étape 9 - Traitement (mode fast) :
@@ -1094,7 +1138,7 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 
 ## 11. Tests
 
-**557 tests collectés** couvrant tous les modules. Lancer avec :
+La suite pytest couvre tous les modules. Lancer avec :
 ```bash
 cd transcria && python -m pytest tests/ -v
 ```
@@ -1139,16 +1183,20 @@ jobs/{uuid}/
     original.{ext}               # Fichier audio original
     vocals.wav                   # Piste vocale extraite (Demucs, si séparation appliquée)
     scene_filtered.wav           # Audio filtré pré-STT (si audio_scene_filter activé)
+    denoised.wav                 # Audio débruité pré-STT (si audio_denoise activé)
     normalized.wav               # Audio normalisé pré-STT (si audio_normalization activé)
   metadata/
     audio_analysis.json          # Résultat ffprobe
+    audio_preflight.json         # Pré-diagnostic acoustique (RMS, SNR, bande passante, clipping, flags)
     audio_quality_decision.json  # Décision qualité (level, score, scene_findings, scene_metrics)
     audio_scene.json             # Analyse de scène (ratios, segments, genre vocal) si activé
     audio_scene_filter.json      # Filtrage pré-STT appliqué (preserve_timeline=true) si activé
+    audio_denoise.json           # Débruitage pré-STT appliqué (preserve_timeline=true) si activé
     audio_normalization.json     # Normalisation pré-STT appliquée (preserve_timeline=true) si activé
     transcription.srt            # SRT brut (Cohere ou Whisper + speakers appliqués)
     transcription_corrigee.srt   # SRT corrigé (opencode)
     transcription_segments.json  # Segments détaillés
+    transcription_metadata.json  # Métadonnées post-transcription (nettoyage artefacts, fusion segments)
     speakers_map.json            # Mapping speakers
     correction_report.md         # Rapport de correction
   summary/
