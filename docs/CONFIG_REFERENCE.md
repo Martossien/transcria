@@ -578,6 +578,56 @@ Configuration du LLM d'arbitrage/correction SRT.
 
 ---
 
+### `voice_enrollment`
+
+Référentiel local de voix connues avec consentement explicite. Désactivé par défaut.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active la gestion des voix enregistrées |
+| `storage_dir` | string | `"./voices"` | Répertoire runtime sensible pour preuves et audios temporaires |
+| `require_active_consent` | bool | `true` | Bloque la vectorisation sans consentement actif |
+| `delete_source_audio_after_embedding` | bool | `true` | Supprime l'audio source après génération d'empreinte |
+| `allow_global_profiles` | bool | `false` | Autorise des voix sans groupe, admins globaux uniquement |
+| `require_explicit_job_group_for_multi_group_users` | bool | `true` | Empêche un périmètre implicite multi-groupe |
+
+#### `voice_enrollment.embedding`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `backend` | string | `"pyannote"` | Backend d'embedding vocal |
+| `model_id` | string | `"pyannote/speaker-diarization-community-1"` | Modèle utilisé pour l'empreinte |
+| `model_revision` | string | `""` | Révision modèle si disponible |
+| `expected_dim` | int/null | `null` | Dimension attendue, utilisée pour détecter les changements |
+| `normalization` | string | `"l2"` | Normalisation appliquée avant stockage |
+| `min_speech_duration_s` | float | `8.0` | Durée minimale recommandée |
+| `min_segment_duration_s` | float | `1.5` | Segment trop court ignoré par le futur matching |
+| `max_segments_per_speaker` | int | `5` | Nombre maximal de segments utilisés |
+| `exclude_overlap` | bool | `true` | Évite les zones chevauchées si disponibles |
+
+#### `voice_enrollment.matching`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled_after_summary` | bool | `false` | Réservé à un déclenchement automatique futur ; la V1 expose un bouton manuel |
+| `suggestion_threshold` | float | `0.72` | Score cosinus minimal pour proposer une voix |
+| `high_confidence_threshold` | float | `0.86` | Score à partir duquel la suggestion est marquée haute confiance |
+| `min_top2_margin` | float | `0.05` | Écart minimal entre le premier et le deuxième candidat |
+| `max_candidates_per_speaker` | int | `2` | Nombre maximal de candidats conservés pour audit et diagnostic |
+| `stale_profiles_are_matchable` | bool | `false` | Autorise exceptionnellement les profils périmés ; désactivé par défaut |
+
+#### `voice_enrollment.consent`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `current_form_version` | string | `"voice-consent-v1"` | Version du formulaire de consentement |
+| `allow_expiration` | bool | `false` | Réservé à une future expiration automatique |
+| `validity_days` | int/null | `null` | Durée de validité si expiration activée |
+| `proof_allowed_extensions` | list[str] | `["pdf", "png", "jpg", "jpeg"]` | Extensions des preuves signées |
+| `max_proof_size_mb` | int | `25` | Taille maximale d'une preuve |
+
+---
+
 ## 6. Variables d'environnement
 
 | Variable | Description | Défaut si absente |

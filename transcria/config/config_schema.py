@@ -26,6 +26,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_required_keys(cfg, result)
     _check_server(cfg.get("server", {}), result)
     _check_storage(cfg.get("storage", {}), result)
+    _check_voice_enrollment(cfg.get("voice_enrollment", {}), result)
     _check_auth(cfg.get("auth", {}), result)
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
@@ -54,6 +55,86 @@ def _check_server(srv: dict, r: ValidationResult) -> None:
 def _check_storage(sto: dict, r: ValidationResult) -> None:
     _check_str(sto, "jobs_dir", "storage.jobs_dir", r)
     _check_str(sto, "database_url", "storage.database_url", r)
+
+
+def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("voice_enrollment: doit être un objet YAML")
+        return
+
+    for key in (
+        "enabled",
+        "require_active_consent",
+        "delete_source_audio_after_embedding",
+        "allow_global_profiles",
+        "require_explicit_job_group_for_multi_group_users",
+    ):
+        _check_bool(cfg, key, f"voice_enrollment.{key}", r)
+    _check_str(cfg, "storage_dir", "voice_enrollment.storage_dir", r)
+
+    embedding = cfg.get("embedding", {})
+    if not isinstance(embedding, dict):
+        r.add_error("voice_enrollment.embedding: doit être un objet YAML")
+    else:
+        _check_str(embedding, "backend", "voice_enrollment.embedding.backend", r)
+        backend = embedding.get("backend")
+        if isinstance(backend, str) and backend not in {"pyannote"}:
+            r.add_error("voice_enrollment.embedding.backend: doit valoir pyannote")
+        _check_str(embedding, "model_id", "voice_enrollment.embedding.model_id", r)
+        revision = embedding.get("model_revision")
+        if revision is not None and not isinstance(revision, str):
+            r.add_error("voice_enrollment.embedding.model_revision: doit être une chaîne ou null")
+        expected_dim = embedding.get("expected_dim")
+        if expected_dim is not None:
+            _check_int_range(embedding, "expected_dim", "voice_enrollment.embedding.expected_dim", 1, 100000, r)
+        normalization = embedding.get("normalization")
+        if normalization != "l2":
+            r.add_error("voice_enrollment.embedding.normalization: doit valoir l2")
+        _check_bool(embedding, "exclude_overlap", "voice_enrollment.embedding.exclude_overlap", r)
+        _check_optional_number(embedding, "min_speech_duration_s", "voice_enrollment.embedding.min_speech_duration_s", r)
+        _check_optional_number(embedding, "min_segment_duration_s", "voice_enrollment.embedding.min_segment_duration_s", r)
+        _check_int_range(embedding, "max_segments_per_speaker", "voice_enrollment.embedding.max_segments_per_speaker", 1, 1000, r)
+
+    matching = cfg.get("matching", {})
+    if not isinstance(matching, dict):
+        r.add_error("voice_enrollment.matching: doit être un objet YAML")
+    else:
+        _check_bool(matching, "enabled_after_summary", "voice_enrollment.matching.enabled_after_summary", r)
+        _check_bool(matching, "stale_profiles_are_matchable", "voice_enrollment.matching.stale_profiles_are_matchable", r)
+        for key in ("suggestion_threshold", "high_confidence_threshold", "min_top2_margin"):
+            _check_optional_number(matching, key, f"voice_enrollment.matching.{key}", r)
+        _check_int_range(matching, "max_candidates_per_speaker", "voice_enrollment.matching.max_candidates_per_speaker", 1, 20, r)
+        low = matching.get("suggestion_threshold")
+        high = matching.get("high_confidence_threshold")
+        if isinstance(low, (int, float)) and isinstance(high, (int, float)) and low > high:
+            r.add_error("voice_enrollment.matching.suggestion_threshold doit être <= high_confidence_threshold")
+
+    consent = cfg.get("consent", {})
+    if not isinstance(consent, dict):
+        r.add_error("voice_enrollment.consent: doit être un objet YAML")
+    else:
+        _check_str(consent, "current_form_version", "voice_enrollment.consent.current_form_version", r)
+        _check_bool(consent, "allow_expiration", "voice_enrollment.consent.allow_expiration", r)
+        if consent.get("validity_days") is not None:
+            _check_int_range(consent, "validity_days", "voice_enrollment.consent.validity_days", 1, 36500, r)
+        _check_int_range(consent, "max_proof_size_mb", "voice_enrollment.consent.max_proof_size_mb", 1, 1024, r)
+        values = consent.get("proof_allowed_extensions", [])
+        if not isinstance(values, list) or not values:
+            r.add_error("voice_enrollment.consent.proof_allowed_extensions: doit être une liste non vide")
+        else:
+            for i, value in enumerate(values):
+                if not isinstance(value, str) or not value.strip():
+                    r.add_error(f"voice_enrollment.consent.proof_allowed_extensions[{i}]: doit être une chaîne non vide")
+
+    audit = cfg.get("audit", {})
+    if audit:
+        if not isinstance(audit, dict):
+            r.add_error("voice_enrollment.audit: doit être un objet YAML")
+        else:
+            _check_bool(audit, "log_match_suggestions", "voice_enrollment.audit.log_match_suggestions", r)
+            _check_bool(audit, "log_match_scores", "voice_enrollment.audit.log_match_scores", r)
 
 
 def _check_auth(auth: dict, r: ValidationResult) -> None:

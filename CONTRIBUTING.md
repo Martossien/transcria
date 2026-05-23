@@ -21,6 +21,7 @@ transcria/
   integrations/    # Dashboard LLM, SRT Editor
   gpu/             # VRAM, session GPU, opencode runner, LLM backends
   services/        # Service layer (Job, Pipeline, Config)
+  voice/           # Voix enregistrées, consentements, empreintes, matching
   web/             # Routes Flask + templates Jinja2 + JS
 ```
 
@@ -76,4 +77,6 @@ Copiez `.env.example` en `.env` et remplissez les valeurs.
 
 ## Documentation obligatoire
 
-Toute modification qui ajoute un fichier dans `jobs/<id>/` doit mettre à jour `docs/DATA_MODEL.md`. Toute nouvelle clé YAML doit être ajoutée à `config.example.yaml`, validée dans `config_schema.py` et documentée dans `docs/CONFIG_REFERENCE.md`.
+Toute modification qui ajoute un fichier dans `jobs/<id>/` ou dans le stockage sensible `voices/` doit mettre à jour `docs/DATA_MODEL.md`. Toute nouvelle clé YAML doit être ajoutée à `config.example.yaml`, validée dans `config_schema.py` et documentée dans `docs/CONFIG_REFERENCE.md`.
+
+Les évolutions liées aux voix enregistrées doivent aussi préserver la chaîne consentement → empreinte → matching : preuve signée obligatoire, audit, suppression de l'audio source par défaut, absence d'embeddings dans les exports et tests couvrant le parcours applicatif.

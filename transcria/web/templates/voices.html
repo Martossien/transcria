@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Voix enregistrées — TranscIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">Voix enregistrées</h1>
+    <p class="text-muted mb-0">Profils vocaux consentis, utilisés uniquement comme aide à la validation.</p>
+  </div>
+  <a href="/admin/voices/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Ajouter une voix</a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Personne</th>
+          <th>Groupe</th>
+          <th>Consentement</th>
+          <th>Profil</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for subject in subjects %}
+        {% set consent = store.active_consent(subject) %}
+        {% set profile = store.latest_profile(subject) %}
+        <tr>
+          <td>
+            <strong>{{ subject.display_name }}</strong>
+            {% if subject.email %}<div class="small text-muted">{{ subject.email }}</div>{% endif %}
+          </td>
+          <td>{{ subject.group.name if subject.group else "Global" }}</td>
+          <td>
+            {% if consent %}<span class="badge bg-success">actif</span>{% else %}<span class="badge bg-secondary">absent</span>{% endif %}
+          </td>
+          <td>
+            {% if profile %}<span class="badge bg-info text-dark">{{ profile.status }}</span>{% else %}<span class="badge bg-secondary">aucun</span>{% endif %}
+          </td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/admin/voices/{{ subject.id }}">Ouvrir</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-muted text-center py-4">Aucune voix enregistrée.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

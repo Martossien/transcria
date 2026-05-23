@@ -17,6 +17,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
+- **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
 - **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper et les options audio.
 
@@ -84,6 +85,7 @@ Points à vérifier après installation :
 - `services.arbitrage_*` : script, port et alias réel du backend LLM.
 - `workflow.summary_llm.model_id` et `workflow.arbitration_llm.model_id` si les phases LLM sont activées.
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
+- `voice_enrollment.enabled` si le référentiel de voix connues doit être activé, avec `voice_enrollment.storage_dir` placé sur un stockage local protégé.
 
 Variables d'environnement principales :
 
@@ -138,6 +140,22 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 9. **Export** : package ZIP final.
 
 Le choix Cohere/Whisper n'est pas réduit à "fast vs quality". Le pipeline conserve le backend configuré, mais peut forcer Whisper sur mode qualité ou audio dégradé selon `metadata/audio_quality_decision.json`. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
+
+## Voix enregistrées
+
+Le menu **Voix enregistrées** est réservé aux admins globaux et aux admins de groupe. Il permet de gérer des personnes connues avec une preuve de consentement avant toute vectorisation.
+
+Flux prévu :
+
+1. Télécharger le formulaire vierge depuis `/admin/voices/consent-form.pdf`.
+2. Faire signer la personne concernée.
+3. Créer la voix dans le groupe concerné.
+4. Uploader la preuve signée, conservée dans `voices/subjects/<id>/consents/` avec hash SHA-256.
+5. Uploader un audio de référence et générer l'empreinte vocale locale.
+6. Dans l'étape **Participants & Locuteurs**, lancer “Rechercher les voix connues” pour obtenir une suggestion par locuteur.
+7. Valider manuellement la suggestion avant d'enregistrer le mapping.
+
+Les empreintes ne sont jamais incluses dans les exports de jobs. Les résultats de matching écrits dans `speakers/voice_matches.json` contiennent uniquement des noms candidats, scores et marges, sans vecteur vocal.
 
 ## Pipeline audio et STT
 
@@ -198,6 +216,7 @@ Suite standard, sans GPU obligatoire pour la plupart des tests :
 ```bash
 source venv/bin/activate
 python -m pytest tests/ -q
+python -m pytest tests/test_voice_e2e.py -q
 ```
 
 E2E réel, à lancer avec le Python du venv :
@@ -236,12 +255,15 @@ transcria/
     quality/                     # checks qualité, rapport, points de relecture
     services/                    # JobService, PipelineService, worker, ConfigService
     stt/                         # Cohere, Whisper, diarisation, alignement, fiabilité
+    voice/                       # voix enregistrées, consentements, empreintes, matching
     web/                         # routes Flask, templates, JS
     workflow/                    # étapes, transitions, runner
   configs/prompts/               # prompts summary/correction
   scripts/                       # bootstrap, LLM, bench audio
   tests/                         # pytest + E2E GPU réel
-  docs/                          # documentation projet
+  docs/
+    forms/                       # sources éditables des formulaires PDF
+    ...                          # documentation projet
 ```
 
 ## Documentation

@@ -64,6 +64,19 @@
 - `set_extra_data(value: dict)` : serialize en JSON
 - `to_dict() → dict` : sérialisation complète
 
+### Tables voix enregistrées
+
+| Table | Rôle | Données sensibles |
+|---|---|---|
+| `voice_subjects` | Personne/voix connue, liée à un groupe ou profil global admin | Nom, email optionnel, référence interne |
+| `voice_consents` | Preuve de consentement signée, version du formulaire, statut actif/révoqué/expiré/rejeté | Chemin preuve, hash SHA-256 |
+| `voice_profiles` | Empreinte vocale exploitable ou archivée | `embedding_blob`, modèle, dimension, statut |
+| `voice_reference_files` | Trace des audios de référence uploadés | Chemin et hash, statut `deleted` par défaut après vectorisation |
+| `voice_matches` | Suggestions job→voix connues | Nom candidat, score, décision, sans embedding |
+| `voice_audit_events` | Audit des actions sensibles | Type événement, acteur, détails JSON |
+
+`voice_profiles.status` suit le cycle `processing → active → stale|disabled|archived|deleted`. Un profil `active` nécessite un consentement `active`. Les profils `archived` ne conservent pas `embedding_blob`.
+
 ---
 
 ## 2. Énumérations
@@ -181,6 +194,7 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 | `POST /api/jobs/<id>/lexicon` | `CONTEXT_DONE` | `LEXICON_DONE` | Lexique validé avant participants |
 | `POST /api/jobs/<id>/lexicon` | `SPEAKER_DETECTION_DONE` | `READY_TO_PROCESS` | Lexique validé après détection locuteurs |
 | `POST /api/jobs/<id>/speakers/detect` | — | `SPEAKER_DETECTION_DONE` | Pyannote OK |
+| `POST /api/jobs/<id>/speakers/voice-match` | — | inchangé | Suggestions voix enregistrées, aucune validation automatique |
 | `POST /api/jobs/<id>/speakers/map` | `SPEAKER_DETECTION_DONE` | `READY_TO_PROCESS` | Mapping validé |
 | `POST /api/jobs/<id>/speakers/map` | `PARTICIPANTS_DONE` | `READY_TO_PROCESS` | Mapping validé après participants |
 | `POST /api/jobs/<id>/speakers/map` | `LEXICON_DONE` | `READY_TO_PROCESS` | Mapping validé après lexique |
@@ -210,6 +224,8 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 ## 4. Stockage disque par job
 
 Chaque job a un répertoire `jobs/<job_id>/` créé par `JobFilesystem`. Les sous-répertoires sont créés automatiquement à l'instanciation.
+
+Les voix enregistrées utilisent un stockage runtime séparé (`voice_enrollment.storage_dir`, défaut `voices/`). Ce répertoire est sensible et ignoré par git : il peut contenir preuves de consentement, audio de référence temporaire et métadonnées liées aux empreintes vocales.
 
 ### Arborescence
 
@@ -265,6 +281,7 @@ jobs/<job_id>/
 │   ├── diarization_checkpoint.json # Empreinte audio + modèle pyannote pour réutiliser speaker_turns.json
 │   ├── speaker_embeddings.json    # Checkpoint acoustique par locuteur pour comparaison/reprise
 │   ├── speaker_mapping.json       # Mapping locuteur→participant [{mapping, speakers}]
+│   ├── voice_matches.json         # Suggestions voix enregistrées, scores et marges, sans embedding
 │   ├── speaker_clips.json         # Index des extraits audio (BUG-011 : souvent absent)
 │   └── samples/
 │       ├── SPEAKER_00_clip1.wav   # Extraits audio pour identification
@@ -282,6 +299,19 @@ jobs/<job_id>/
 └── .opencode.pid                    # PID du processus opencode (écrit par OpenCodeRunner.run(), lu par _kill_orphaned_opencode())
 ```
 
+### Arborescence voix enregistrées
+
+```
+voices/
+└── subjects/<voice_subject_id>/
+    ├── consents/                    # Preuves signées du consentement vocal
+    └── references/                  # Audio de référence temporaire, supprimé après vectorisation par défaut
+```
+
+Les empreintes vocales sont stockées en base SQL (`voice_profiles.embedding_blob`) et ne doivent jamais être incluses dans les exports de jobs. `speakers/voice_matches.json` ne contient que les suggestions calculées pour le job (`speaker_id`, candidat, score cosinus normalisé, marge top1/top2, statut) et jamais de vecteur. Les suggestions retenues par le moteur sont aussi historisées en base dans `voice_matches`.
+
+Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent-form.pdf` et sa source éditable est `docs/forms/consentement_empreinte_vocale_v1.md`. Le PDF n'est pas une preuve : seule la preuve signée uploadée dans `voices/subjects/<id>/consents/` est conservée et hashée.
+
 ### Production des fichiers par étape
 
 | Étape workflow | Fichiers produits | Producteur |
@@ -294,6 +324,7 @@ jobs/<job_id>/
 | Contexte | `context/meeting_context.json` | `MeetingContextManager.save()` |
 | Participants | `context/participants.json` | `ParticipantsManager.save()` |
 | Locuteurs (detect) | `speakers/speaker_stats.json` (écrasé) | `SpeakerDetector.detect()` |
+| Locuteurs (voix connues) | `speakers/voice_matches.json`, table `voice_matches` | `VoiceMatchingService.match_job_speakers()` |
 | Locuteurs (map) | `speakers/speaker_mapping.json`, `context/job_context.yaml`, `context/job_context.json` | `SpeakerDetector.save_mapping()` + `JobContextBuilder.build()` |
 | Lexique | `context/session_lexicon.json`, `context/session_lexicon.txt`, `context/job_context.yaml`, `context/job_context.json` | `LexiconManager.save()` + `JobContextBuilder.build()` |
 | Pré-traitement | `metadata/audio_preflight.json` | `PipelineService._run_audio_preflight()` / `AudioPreflightAnalyzer` |

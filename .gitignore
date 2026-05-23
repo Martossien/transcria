@@ -4,6 +4,7 @@ config.yaml
 # Runtime data
 instance/
 /jobs/
+voices/
 *.db
 
 # Python

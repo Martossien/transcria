@@ -132,10 +132,19 @@ transcria/
 │   │   ├── pipeline_service.py   # PipelineService
 │   │   └── config_service.py     # ConfigService
 │   │
+│   ├── voice/                     # Voix enregistrées
+│   │   ├── models.py              # SQLAlchemy sujets, consentements, profils, matches, audit
+│   │   ├── store.py               # Périmètre groupe, stockage, audit
+│   │   ├── embedding.py           # Empreintes vocales pyannote + cosine
+│   │   ├── enrollment.py          # Génération empreinte depuis audio de référence
+│   │   ├── matching.py            # Matching job→voix connues
+│   │   ├── consent_form.py        # PDF vierge de consentement
+│   │   └── routes.py              # /admin/voices
+│   │
 │   └── web/                       # Interface utilisateur
 │       ├── __init__.py
 │       ├── routes.py              # Routes Flask (pages + API REST)
-│       └── templates/             # 12 templates Jinja2 (Bootstrap 5)
+│       └── templates/             # Templates Jinja2 (Bootstrap 5)
 │           ├── base.html
 │           ├── login.html
 │           ├── change_password.html
@@ -147,7 +156,10 @@ transcria/
 │           ├── users.html
 │           ├── user_form.html
 │           ├── groups.html
-│           └── group_form.html
+│           ├── group_form.html
+│           ├── voices.html
+│           ├── voice_form.html
+│           └── voice_detail.html
 │
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
@@ -868,6 +880,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/jobs/<id>/delete` | POST | login_required + DELETE_JOBS | Suppression traitement |
 | `/system` | GET | login_required + ACCESS_SYSTEM | État technique (GPU dashboard) |
 | `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition YAML de la configuration |
+| `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
 | `/api/jobs/<id>/upload` | POST | login_required + owner/admin check | Upload fichier audio |
 | `/api/jobs/<id>/analyze` | POST | login_required + owner/admin check | Analyse ffprobe |
 | `/api/jobs/<id>/summary` | POST | login_required + owner/admin check | Résumé rapide |
@@ -876,6 +889,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
 | `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique |
 | `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
+| `/api/jobs/<id>/speakers/voice-match` | POST | login_required + owner/admin check | Suggestions depuis les voix enregistrées accessibles au job |
 | `/api/jobs/<id>/speakers/map` | POST | login_required + owner/admin check | Mapping SPEAKER_XX |
 | `/api/jobs/<id>/speakers/clips` | GET | login_required + owner check | Liste extraits audio |
 | `/api/jobs/<id>/speakers/clip/<name>` | GET | login_required + owner check | Fichier WAV d'un extrait |
@@ -1180,6 +1194,10 @@ Organisation :
 instance/
   transcrIA.db                    # Base SQLite
 
+voices/
+  subjects/{uuid}/consents/       # Preuves de consentement vocal
+  subjects/{uuid}/references/     # Audios de référence temporaires
+
 jobs/{uuid}/
   input/
     original.{ext}               # Fichier audio original
@@ -1220,6 +1238,7 @@ jobs/{uuid}/
     diarization_checkpoint.json   # Empreinte audio+modèle pour réutilisation pyannote
     speaker_embeddings.json       # Checkpoint acoustique par locuteur
     speaker_mapping.json          # Mapping SPEAKER_XX → participant
+    voice_matches.json            # Suggestions voix enregistrées, sans embeddings
     speaker_clips.json            # Liste des extraits audio
     samples/                      # Fichiers WAV extraits
   quality/

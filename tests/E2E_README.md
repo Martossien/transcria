@@ -9,6 +9,8 @@ applicatif. Il est conçu pour deux usages :
 - **Benchmark automatisé** : appelé par `scripts/bench_audio.py` pour mesurer toutes les
   combinaisons d'options (voir `docs/BENCHMARK_PLAN.md`)
 
+`tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
+
 ### Enchaînement
 
 1. `JobService.create/upload/analyze`
@@ -36,6 +38,17 @@ applicatif. Il est conçu pour deux usages :
    - Contrôle qualité → `quality/quality_report.json`
    - Export ZIP
 
+### Enchaînement voix enregistrées
+
+1. Admin ou admin de groupe ouvre `/admin/voices`.
+2. Téléchargement du formulaire vierge `/admin/voices/consent-form.pdf`.
+3. Création de la voix dans un groupe accessible.
+4. Upload de la preuve signée (`voice_consents`, fichier dans `voices/subjects/<id>/consents/`).
+5. Upload d'un audio de référence et génération d'un `voice_profiles.embedding_blob` mocké dans le test.
+6. Création d'un job avec `speakers/speaker_clips.json`.
+7. `POST /api/jobs/<id>/speakers/voice-match` écrit `speakers/voice_matches.json` et la table `voice_matches`.
+8. La page `/jobs/<id>` affiche la suggestion, sans appliquer automatiquement le nom.
+
 ---
 
 ## Prérequis
@@ -62,6 +75,12 @@ Arrêter le service avant d'exécuter (évite les conflits de port et d'état GP
 systemctl stop transcria
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3
 systemctl start transcria
+```
+
+Le parcours E2E applicatif des voix enregistrées ne charge pas de modèle GPU ; il vérifie le flux web et base de données avec une empreinte mockée :
+
+```bash
+python -m pytest tests/test_voice_e2e.py -q
 ```
 
 ---

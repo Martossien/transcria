@@ -316,6 +316,21 @@
         <span class="badge bg-secondary me-1">{{ s.speaker_id }}: {{ (s.speaking_time_seconds / 60)|round(1) }} min</span>
       {% endfor %}
     </div>
+    {% if voice_enrollment_enabled %}
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.matchKnownVoices()">
+        <span id="voice-match-spinner" class="spinner d-none"></span>
+        <i class="bi bi-person-bounding-box"></i> Rechercher les voix connues
+      </button>
+      <span id="voice-match-result" class="small text-muted">
+        {% if voice_matches.get('available') %}
+          {{ voice_matches.matches|length }} suggestion(s) disponible(s)
+        {% elif voice_matches.get('message') %}
+          {{ voice_matches.message }}
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
     {% endif %}
 
     {% if meeting.get('participants_detectes') and participants|length == 0 %}
@@ -347,6 +362,12 @@
         </div>
         {% endif %}
         {% for s in speakers.speakers %}
+        {% set voice_hint = namespace(item=None) %}
+        {% for m in voice_matches.get('matches', []) %}
+          {% if m.get('speaker_id') == s.speaker_id and m.get('status') == 'suggested' %}
+            {% set voice_hint.item = m %}
+          {% endif %}
+        {% endfor %}
         <div class="speaker-item" id="spk-{{ s.speaker_id }}">
           <strong>{{ s.speaker_id }}</strong>
           <span class="text-muted small">{{ s.speaking_time_seconds|round(0) }}s, {{ s.turn_count }} interventions</span>
@@ -359,6 +380,16 @@
             <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>Féminin ♀</option>
             <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>Masculin ♂</option>
           </select>
+          {% if voice_hint.item %}
+          <button type="button"
+                  class="btn btn-sm btn-outline-success voice-suggestion"
+                  title="Suggestion issue des voix enregistrées"
+                  data-speaker="{{ s.speaker_id }}"
+                  data-name="{{ voice_hint.item.get('suggested_name', '') }}"
+                  onclick="TranscrIA.applyVoiceSuggestion(this)">
+            {{ voice_hint.item.get('suggested_name') }} · {{ (voice_hint.item.get('top_score', 0) * 100)|round|int }}%
+          </button>
+          {% endif %}
         </div>
         {% endfor %}
       {% elif participants|length > 0 %}

@@ -7,6 +7,44 @@ storage:
   jobs_dir: "./jobs"
   database_url: "sqlite:///transcrIA.db"
 
+voice_enrollment:
+  enabled: false
+  storage_dir: "./voices"
+  require_active_consent: true
+  delete_source_audio_after_embedding: true
+  allow_global_profiles: false
+  require_explicit_job_group_for_multi_group_users: true
+  embedding:
+    backend: "pyannote"
+    model_id: "pyannote/speaker-diarization-community-1"
+    model_revision: ""
+    expected_dim:
+    normalization: "l2"
+    min_speech_duration_s: 8.0
+    min_segment_duration_s: 1.5
+    max_segments_per_speaker: 5
+    exclude_overlap: true
+  matching:
+    enabled_after_summary: true
+    suggestion_threshold: 0.75
+    high_confidence_threshold: 0.85
+    min_top2_margin: 0.08
+    max_candidates_per_speaker: 2
+    stale_profiles_are_matchable: false
+  consent:
+    current_form_version: "voice-consent-v1"
+    allow_expiration: false
+    validity_days:
+    proof_allowed_extensions:
+      - "pdf"
+      - "png"
+      - "jpg"
+      - "jpeg"
+    max_proof_size_mb: 25
+  audit:
+    log_match_suggestions: true
+    log_match_scores: true
+
 auth:
   enabled: true
   first_admin_username: "admin"

@@ -61,9 +61,12 @@ def create_app(config_path: str | None = None) -> Flask:
 
     from transcria.auth.routes import auth_bp, inject_user_context
     from transcria.services.job_executor import init_job_executor
+    import transcria.voice.models  # noqa: F401 — enregistre les tables SQLAlchemy
+    from transcria.voice.routes import voice_bp
     from transcria.web.routes import web_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(voice_bp)
     app.register_blueprint(web_bp)
 
     app.context_processor(inject_user_context)

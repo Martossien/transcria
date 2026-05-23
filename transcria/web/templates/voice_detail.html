@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Voix — {{ subject.display_name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ subject.display_name }}</h1>
+    <p class="text-muted mb-0">{{ subject.group.name if subject.group else "Profil global" }}</p>
+  </div>
+  <a href="/admin/voices" class="btn btn-outline-secondary">Retour</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card p-4 h-100">
+      <h2 class="h5">Consentement</h2>
+      <p class="small">
+        <a href="/admin/voices/consent-form.pdf">Télécharger le formulaire vierge</a>
+      </p>
+      {% if active_consent %}
+      <p><span class="badge bg-success">Actif</span> version {{ active_consent.form_version }}</p>
+      <p class="small text-muted mb-0">Hash preuve : {{ active_consent.proof_sha256[:16] }}…</p>
+      {% else %}
+      <p class="text-muted">Aucun consentement actif. La génération d'empreinte est bloquée.</p>
+      {% endif %}
+      <hr>
+      <form action="/admin/voices/{{ subject.id }}/consents" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label">Preuve signée</label>
+          <input class="form-control" type="file" name="proof" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Statut</label>
+          <select class="form-select" name="status">
+            <option value="active">Actif</option>
+            <option value="rejected">Rejeté</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit">Enregistrer le consentement</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card p-4 h-100">
+      <h2 class="h5">Empreinte vocale</h2>
+      {% if latest_profile %}
+      <p>
+        <span class="badge bg-info text-dark">{{ latest_profile.status }}</span>
+        {{ latest_profile.embedding_backend }} · dim {{ latest_profile.embedding_dim }}
+      </p>
+      <p class="small text-muted">Qualité : {{ latest_profile.quality_status or "n/a" }}</p>
+      {% else %}
+      <p class="text-muted">Aucune empreinte générée.</p>
+      {% endif %}
+      <hr>
+      <form action="/admin/voices/{{ subject.id }}/generate" method="post" enctype="multipart/form-data">
+        <div class="mb-3">
+          <label class="form-label">Audio de référence</label>
+          <input class="form-control" type="file" name="audio" required {% if not active_consent %}disabled{% endif %}>
+        </div>
+        <button class="btn btn-primary" type="submit" {% if not active_consent %}disabled{% endif %}>Générer l'empreinte</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<form action="/admin/voices/{{ subject.id }}/disable" method="post" class="mt-4">
+  <button class="btn btn-outline-danger" type="submit">Désactiver cette voix</button>
+</form>
+{% endblock %}

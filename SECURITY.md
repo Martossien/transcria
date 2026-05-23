@@ -18,6 +18,7 @@ Les zones suivantes doivent être considérées comme prioritaires :
 - authentification, permissions et contrôle d’accès propriétaire sur les jobs
 - endpoints d’administration et de supervision
 - upload de fichiers audio/vidéo
+- voix enregistrées : preuves de consentement, empreintes vocales, fichiers temporaires dans `voices/`
 - appels externes vers `opencode`, `ffmpeg`, `ffprobe` et services LLM
 - gestion des chemins disque et des exports ZIP
 - exposition de secrets dans `config.yaml`, `.env` ou les logs
@@ -30,6 +31,8 @@ Les zones suivantes doivent être considérées comme prioritaires :
 - limiter l’accès réseau au service web et aux composants auxiliaires
 - exécuter le service sous un utilisateur dédié avec des permissions minimales
 - superviser les endpoints `/health`, `/ready` et `/metrics`
+- protéger strictement `voices/` au niveau système de fichiers et ne jamais inclure les empreintes vocales dans les exports de jobs
+- conserver une preuve de consentement active avant toute vectorisation ou suggestion de voix connue
 
 ## Correctifs
 

@@ -229,6 +229,38 @@ var TranscrIA = window.TranscrIA || {};
         });
     };
 
+    W.matchKnownVoices = function () {
+        console.log('[TranscrIA] matchKnownVoices()');
+        W.showSpinner('voice-match-spinner');
+        W.api('/api/jobs/' + JOB_ID + '/speakers/voice-match').then(function (r) {
+            W.hideSpinner('voice-match-spinner');
+            var target = document.getElementById('voice-match-result');
+            if (r.status === 200) {
+                if (target) target.textContent = (r.data.matches || []).length + ' suggestion(s) disponible(s).';
+                W.reloadAfter(700);
+                return;
+            }
+            if (target) {
+                target.textContent = r.data.message || r.data.error || 'Aucune suggestion disponible.';
+                target.classList.remove('text-muted');
+                target.classList.add('text-warning');
+            }
+        });
+    };
+
+    W.applyVoiceSuggestion = function (button) {
+        var speakerId = button && button.dataset ? button.dataset.speaker : '';
+        var suggestedName = button && button.dataset ? button.dataset.name : '';
+        if (!speakerId || !suggestedName) return;
+        var row = document.getElementById('spk-' + speakerId);
+        if (!row) return;
+        var nameInput = row.querySelector('.speaker-name');
+        if (nameInput) nameInput.value = suggestedName;
+        button.classList.remove('btn-outline-success');
+        button.classList.add('btn-success');
+        button.textContent = 'Voix retenue';
+    };
+
     W.formatLexiconVariants = function (variants) {
         if (Array.isArray(variants)) return variants.join(', ');
         return variants || '';

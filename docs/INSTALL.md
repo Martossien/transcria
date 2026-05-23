@@ -627,6 +627,11 @@ workflow:
     timeout_seconds: 7200
     opencode_bin: "opencode"
 
+voice_enrollment:
+  enabled: false
+  storage_dir: "./voices"
+  delete_source_audio_after_embedding: true
+
 security:
   retention_days: 365
   allow_job_delete: true
@@ -661,6 +666,17 @@ Les variables d'environnement remplacent les valeurs de `config.yaml` pour les c
 ```bash
 mkdir -p jobs
 ```
+
+### Voix enregistrées
+
+La feature `voice_enrollment` est désactivée par défaut. Si elle est activée, prévoir un stockage local protégé pour `voices/` :
+
+```bash
+mkdir -p voices
+chmod 700 voices
+```
+
+Le menu **Voix enregistrées** est réservé aux admins globaux et admins de groupe. Le formulaire vierge est téléchargeable depuis `/admin/voices/consent-form.pdf`; seule la preuve signée uploadée est conservée. Les audios de référence sont supprimés par défaut après génération de l'empreinte.
 
 ---
 

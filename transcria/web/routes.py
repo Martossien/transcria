@@ -497,6 +497,7 @@ def job_wizard(job_id: str):
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     lexicon = _enrich_lexicon_context_audio(LexiconManager.get(job, cfg["storage"]["jobs_dir"]))
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
+    voice_matches = fs.load_json("speakers/voice_matches.json") or {}
     audio_scene = fs.load_json("metadata/audio_scene.json") or {}
     speaker_turns = fs.load_json("speakers/speaker_turns.json") or {}
     # Fusionner mapping + participants pour pré-remplir nom/fonction/rôle
@@ -551,6 +552,7 @@ def job_wizard(job_id: str):
         participants=participants,
         lexicon=lexicon,
         speakers=speakers_data,
+        voice_matches=voice_matches,
         audio_analysis=audio_analysis,
         audio_preflight=audio_preflight,
         audio_diagnostic=_audio_diagnostic_view(audio_preflight, audio_scene),
@@ -561,6 +563,7 @@ def job_wizard(job_id: str):
         meeting_types=MEETING_TYPES_LIST,
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
+        voice_enrollment_enabled=bool(cfg.get("voice_enrollment", {}).get("enabled", False)),
         srt_editor_url=SrtEditorLink.resolve_public_url(cfg, request.host),
         llm_timeout=int(
             cfg.get("workflow", {}).get("arbitration_llm", {}).get("timeout_seconds", 7200)
@@ -784,6 +787,25 @@ def api_speakers_map(job_id: str):
 
     advance_preprocessing_state(job.id, job.state)
     return jsonify({"status": "ok"})
+
+
+@web_bp.route("/api/jobs/<job_id>/speakers/voice-match", methods=["POST"])
+@login_required
+def api_speakers_voice_match(job_id: str):
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    if not cfg.get("voice_enrollment", {}).get("enabled", False):
+        return jsonify({"error": "Voix enregistrées désactivées dans la configuration."}), 400
+
+    from transcria.voice.matching import VoiceMatchingService
+
+    service = VoiceMatchingService(cfg, device="cpu")
+    result = service.match_job_speakers(job, current_user)
+    status = 200 if result.get("available") else 409
+    return jsonify(result), status
 
 
 @web_bp.route("/api/jobs/<job_id>/process", methods=["POST"])
