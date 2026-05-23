@@ -36,6 +36,7 @@ venv/
 AUDIT_INTERNE.md
 
 # Agent internal data
+.claude/
 .agents/
 .codex/
 
@@ -53,3 +54,16 @@ backup/
 # Documentation interne (plans de refactoring, archives historiques)
 docs/plan_refactoring_*.md
 docs/archive/
+
+# Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
+archives/
+
+# Fichiers audio volumineux (sauf sons de test unitaires)
+*.wav
+*.m4a
+*.flac
+*.ogg
+# mp3 ignorés sauf les fichiers de test E2E
+*.mp3
+!tests/test1.mp3
+!tests/test2.mp3
