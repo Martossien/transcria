@@ -508,6 +508,44 @@ class TestWorkflowRunnerRunSummary:
             assert ctx is not None
             assert ctx.get("speaker_count_pyannote") == 2
 
+    def test_audio_scene_runs_before_participants_when_enabled(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={
+                    "audio_scene": {"enabled": True, "detect_gender": True},
+                    "audio_quality": {},
+                },
+            )
+            job = JobStore.create_job(owner_id, "Summary Scene")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+
+            scene = {
+                "gender": {"has_gender_data": True, "dominant": "female"},
+                "gender_segments": [{"start": 0.0, "end": 2.0, "label": "female"}],
+                "speech_ratio": 0.8,
+            }
+            monkeypatch.setattr(AudioSceneAnalyzer, "analyze", lambda self, path: scene)
+
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 10})
+            audio_path = str(tmp_path / "test.wav")
+            with open(audio_path, "w") as f:
+                f.write("fake")
+
+            result = runner._run_audio_scene_before_participants(
+                job,
+                audio_path,
+                cfg,
+                type("Log", (), {"debug": lambda *a, **k: None, "info": lambda *a, **k: None, "warning": lambda *a, **k: None})(),
+            )
+
+            assert result["gender"]["has_gender_data"] is True
+            assert fs.load_json("metadata/audio_scene.json")["gender_segments"][0]["label"] == "female"
+            assert fs.load_json("metadata/audio_quality_decision.json")["level"] == "ok"
+
 
 class TestWorkflowRunnerRunSpeakerDetection:
     def test_run_speaker_detection_success(self, app, owner_id, monkeypatch, tmp_path):

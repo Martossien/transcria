@@ -141,6 +141,176 @@ class OpenCodeRunner:
                     })
         return contexts
 
+    @staticmethod
+    def _clean_summary_cell(value: str) -> str:
+        import re
+
+        text = str(value or "").strip()
+        text = re.sub(r"^\s*[-*•]\s*", "", text)
+        text = re.sub(r"^\s*\d+[\.)]\s*", "", text)
+        text = text.strip().strip("|").strip()
+        text = re.sub(r"\*\*\s+\*\*", " ", text)
+        text = re.sub(r"^`(.+)`$", r"\1", text)
+        text = re.sub(r"^\*\*(.+)\*\*$", r"\1", text)
+        return re.sub(r"\s+", " ", text).strip()
+
+    @staticmethod
+    def _split_markdown_table_row(line: str) -> list[str]:
+        if "|" not in line:
+            return []
+        cells = [OpenCodeRunner._clean_summary_cell(cell) for cell in line.strip().strip("|").split("|")]
+        return cells
+
+    @staticmethod
+    def _summary_section(text: str, heading_re: str) -> tuple[str, bool]:
+        import re
+
+        match = re.search(
+            rf"^\s*##+\s+{heading_re}[ \t]*\n(?P<body>.*?)(?=^\s*##+\s+|\Z)",
+            text,
+            re.DOTALL | re.IGNORECASE | re.MULTILINE,
+        )
+        if not match:
+            return "", False
+        return match.group("body").strip(), True
+
+    @staticmethod
+    def _normalize_summary_lines(section: str) -> list[str]:
+        lines: list[str] = []
+        current = ""
+        for raw in section.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            marker_text = line.replace("|", "").replace(":", "").replace("-", "").strip()
+            if not marker_text:
+                continue
+            starts_entry = bool(
+                line.startswith(("-", "*", "•", "|"))
+                or line[:2].isdigit()
+                or line.startswith("**")
+            )
+            if starts_entry:
+                if current:
+                    lines.append(current.strip())
+                current = line
+            elif current:
+                current += " " + line
+            else:
+                current = line
+        if current:
+            lines.append(current.strip())
+        return lines
+
+    @staticmethod
+    def _extract_summary_field(text: str, names: tuple[str, ...]) -> str:
+        import re
+
+        for name in names:
+            match = re.search(
+                rf"(?:^|\|)\s*{re.escape(name)}\s*:\s*(.+?)(?=\s*\|\s*[\wÀ-ÿ _/-]+\s*:|\s*$)",
+                text,
+                re.IGNORECASE,
+            )
+            if match:
+                return OpenCodeRunner._clean_summary_cell(match.group(1))
+        return ""
+
+    @staticmethod
+    def _parse_summary_term_line(line: str, table_headers: list[str] | None = None) -> dict | None:
+        import re
+
+        text = line.strip()
+        if not text:
+            return None
+        lowered = text.casefold()
+        if "non identifiable" in lowered or "aucun terme suspect" in lowered or lowered in {"(aucun)", "(aucune)"}:
+            return None
+        has_term_shape = (
+            text.startswith(("-", "*", "•", "|"))
+            or "**" in text
+            or "|" in text
+            or ("[" in text and "]" in text)
+            or re.match(r"^\s*\d+[\.)]\s+", text) is not None
+        )
+        if not has_term_shape:
+            return None
+
+        if table_headers and text.startswith("|"):
+            cells = OpenCodeRunner._split_markdown_table_row(text)
+            if len(cells) >= len(table_headers):
+                values = {table_headers[i]: cells[i] for i in range(min(len(table_headers), len(cells)))}
+                term = values.get("term") or values.get("terme") or values.get("forme") or values.get("forme validée") or ""
+                category = values.get("catégorie") or values.get("categorie") or values.get("category") or "mot suspect"
+                priority = values.get("priorité") or values.get("priorite") or values.get("priority") or "normale"
+                variants_raw = values.get("variantes") or values.get("variantes suspectes") or values.get("variants") or ""
+                comment = values.get("commentaire") or values.get("justification") or values.get("comment") or ""
+                contexts_raw = values.get("contextes") or values.get("contexte") or values.get("contexts") or ""
+                term = OpenCodeRunner._clean_summary_cell(term)
+                if term and "terme" not in term.casefold():
+                    return {
+                        "term": term,
+                        "category": OpenCodeRunner._clean_summary_cell(category) or "mot suspect",
+                        "priority": OpenCodeRunner._clean_summary_cell(priority) or "normale",
+                        "variants": OpenCodeRunner._normalize_summary_variants(variants_raw, term=term),
+                        "comment": OpenCodeRunner._clean_summary_cell(comment),
+                        "contexts": OpenCodeRunner._parse_summary_contexts(contexts_raw),
+                    }
+
+        text = re.sub(r"^\s*[-*•]\s*", "", text).strip()
+        text = re.sub(r"^\s*\d+[\.)]\s*", "", text).strip()
+
+        term_match = re.match(
+            r"(?:\*\*)?(?P<term>.+?)(?:\*\*)?\s*(?:\[(?P<category>[^\]]*)\])?\s*(?:\((?P<priority>[^)]*)\))?(?P<suffix>\s*(?:[:|].*)?)$",
+            text,
+        )
+        if not term_match:
+            return None
+
+        raw_term = OpenCodeRunner._clean_summary_cell(term_match.group("term"))
+        raw_term = re.sub(r"\s*\|\s*$", "", raw_term).strip()
+        suffix = (term_match.group("suffix") or "").strip()
+        category = OpenCodeRunner._clean_summary_cell(term_match.group("category") or "")
+        priority = OpenCodeRunner._clean_summary_cell(term_match.group("priority") or "")
+
+        if not raw_term:
+            return None
+
+        inline_category = OpenCodeRunner._extract_summary_field(suffix, ("catégorie", "categorie", "category"))
+        inline_priority = OpenCodeRunner._extract_summary_field(suffix, ("priorité", "priorite", "priority"))
+        variants_raw = OpenCodeRunner._extract_summary_field(
+            suffix,
+            ("variantes_suspectes", "variantes suspectes", "variantes", "variants"),
+        )
+        comment = OpenCodeRunner._extract_summary_field(suffix, ("commentaire", "justification", "comment"))
+        contexts_raw = OpenCodeRunner._extract_summary_field(suffix, ("contextes", "contexte", "contexts"))
+
+        if inline_category:
+            category = inline_category
+        if inline_priority:
+            priority = inline_priority
+        if not comment and suffix.startswith(":"):
+            comment = OpenCodeRunner._clean_summary_cell(suffix[1:])
+
+        term = raw_term
+        variants = OpenCodeRunner._normalize_summary_variants(variants_raw, term=term)
+        if not variants and "/" in raw_term:
+            parts = [OpenCodeRunner._clean_summary_cell(p) for p in raw_term.split("/") if p.strip()]
+            if parts:
+                term = parts[0]
+                variants = OpenCodeRunner._normalize_summary_variants(parts[1:], term=term)
+                if not comment:
+                    comment = f"Variantes suspectes détectées par la LLM : {raw_term}"
+
+        return {
+            "term": term,
+            "category": category or "mot suspect",
+            "priority": priority or "normale",
+            "variants": variants,
+            "comment": comment,
+            "contexts": OpenCodeRunner._parse_summary_contexts(contexts_raw),
+        }
+
     def _terminate_proc(self, proc: subprocess.Popen) -> None:
         """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire."""
         import signal as _sig
@@ -277,7 +447,10 @@ class OpenCodeRunner:
         if diarization_context_path and os.path.isfile(diarization_context_path):
             instruction += (
                 f"Le fichier de diarization acoustique est : {diarization_context_path}. "
-                "Lis-le impérativement avec la transcription. "
+                "Lis-le impérativement avec la transcription : il contient les locuteurs "
+                "SPEAKER_XX, leurs segments certains et, quand disponible, le genre vocal "
+                "par locuteur à utiliser seulement comme indice faible pour les prénoms "
+                "masculins/féminins déjà présents ou suggérés par le dialogue. "
             )
         if context_path and os.path.isfile(context_path):
             instruction += f"Le fichier de contexte est : {context_path}. "
@@ -410,83 +583,41 @@ class OpenCodeRunner:
         # Parse lexicon pre-fill sections. Keep old headings for compatibility with
         # summaries produced before the prompt was narrowed to "termes douteux".
         termes_suspects = []
-        ts_match = re.search(r'## Termes (?:suspects|douteux).*?\n(.+?)(?:\n##|\Z)', text, re.DOTALL | re.IGNORECASE)
-        if not ts_match:
+        terms_section, has_terms_section = OpenCodeRunner._summary_section(
+            text,
+            r"Termes\s+(?:suspects|douteux)[^\n]*",
+        )
+        parse_status = "missing"
+        parse_warning = ""
+        if not has_terms_section:
             logger.warning("_parse_structured_summary: section '## Termes suspects/douteux' introuvable")
-        if ts_match:
-            for line in ts_match.group(1).strip().split('\n'):
-                line = line.strip('- ').strip()
-                if not line or 'non identifiable' in line.lower() or "aucun terme suspect" in line.lower():
-                    continue
-                term_match = re.match(r'\*\*(.+?)\*\*\s*\[(.+?)\]\s*\((.+?)\)', line)
-                if term_match:
-                    raw_term = term_match.group(1).strip()
-                    category = term_match.group(2).strip()
-                    priority = term_match.group(3).strip()
-                    suffix = line[term_match.end():].strip()
-                    variants: list[str] = []
-                    comment = ""
-
-                    variants_match = re.search(
-                        r'(?:^|\|)\s*variantes?(?:_suspectes)?\s*:\s*(.+?)(?=\s*\|\s*(?:commentaire|justification|contextes?)\s*:|\s*$)',
-                        suffix,
-                        re.IGNORECASE,
-                    )
-                    if variants_match:
-                        variants = OpenCodeRunner._normalize_summary_variants(variants_match.group(1).strip(), term=raw_term)
-
-                    comment_match = re.search(
-                        r'(?:^|\|)\s*(?:commentaire|justification)\s*:\s*(.+?)(?=\s*\|\s*contextes?\s*:|\s*$)',
-                        suffix,
-                        re.IGNORECASE,
-                    )
-                    if comment_match:
-                        comment = comment_match.group(1).strip()
-                    elif suffix.startswith(":"):
-                        comment = suffix[1:].strip()
-
-                    contexts = []
-                    contexts_match = re.search(
-                        r'(?:^|\|)\s*contextes?\s*:\s*(.+)$',
-                        suffix,
-                        re.IGNORECASE,
-                    )
-                    if contexts_match:
-                        contexts = OpenCodeRunner._parse_summary_contexts(contexts_match.group(1).strip())
-
-                    term = raw_term
-                    if not variants and "/" in raw_term:
-                        parts = [p.strip() for p in raw_term.split("/") if p.strip()]
-                        if parts:
-                            term = parts[0]
-                            variants = OpenCodeRunner._normalize_summary_variants(parts[1:], term=term)
-                            if not comment:
-                                comment = f"Variantes suspectes détectées par la LLM : {raw_term}"
-
-                    termes_suspects.append({
-                        "term": term,
-                        "category": category,
-                        "priority": priority,
-                        "variants": variants,
-                        "comment": comment,
-                        "contexts": contexts,
-                    })
-                else:
-                    word = re.match(r'[\*]*(.+?)[\*]*(?:\s*\[|\s*\()', line)
-                    if word:
-                        termes_suspects.append({
-                            "term": word.group(1).strip(),
-                            "category": "mot suspect",
-                            "priority": "normale",
-                            "variants": [],
-                            "comment": "",
-                            "contexts": [],
-                        })
-        if ts_match and not termes_suspects:
-            logger.warning("_parse_structured_summary: section termes présente mais aucun terme extrait (format inattendu ?)")
         else:
+            table_headers: list[str] | None = None
+            for line in OpenCodeRunner._normalize_summary_lines(terms_section):
+                if line.startswith("|"):
+                    cells = OpenCodeRunner._split_markdown_table_row(line)
+                    normalized_cells = [c.casefold() for c in cells]
+                    if any(c in {"terme", "term", "forme", "forme validée"} for c in normalized_cells):
+                        table_headers = normalized_cells
+                        continue
+                    if all(not c.replace("-", "").replace(":", "").strip() for c in cells):
+                        continue
+
+                parsed_term = OpenCodeRunner._parse_summary_term_line(line, table_headers)
+                if parsed_term is None:
+                    continue
+                termes_suspects.append(parsed_term)
+        if has_terms_section and not termes_suspects:
+            parse_status = "empty" if "aucun terme suspect" in terms_section.casefold() else "section_unparsed"
+            if parse_status == "section_unparsed":
+                parse_warning = "section termes présente mais aucun terme extrait"
+                logger.warning("_parse_structured_summary: section termes présente mais aucun terme extrait (format inattendu ?)")
+        else:
+            parse_status = "extracted" if termes_suspects else parse_status
             logger.debug("_parse_structured_summary: %d termes suspects extraits", len(termes_suspects))
         fields["termes_suspects"] = termes_suspects
+        fields["termes_suspects_parse_status"] = parse_status
+        fields["termes_suspects_parse_warning"] = parse_warning
 
         return fields
 
@@ -501,9 +632,11 @@ class OpenCodeRunner:
 
         instruction = (
             f"Tu travailles dans le répertoire {self.work_dir}. "
-            f"Lis transcription.srt (tous les segments, du 1 au dernier), "
-            f"lis ../context/job_context.yaml, lis ../context/session_lexicon.json. "
-            f"Compte les entrées du lexique, applique les corrections, "
+            f"Lis le SRT source {srt_path} (tous les segments, du 1 au dernier), "
+            f"lis le contexte {context_path}, puis lis intégralement le lexique validé "
+            f"par l'utilisateur {lexicon_path}. "
+            f"Compte les entrées du lexique validé, applique les corrections validées "
+            f"avec prudence et documente chaque correction ou préservation lexicale, "
             f"puis écris exactement 2 fichiers dans ce répertoire : "
             f"(1) transcription_corrigee.srt — la TOTALITE des segments de 1 a N, "
             f"contenu SRT uniquement, jamais tronque, jamais reparti sur un autre fichier ; "

@@ -404,6 +404,61 @@ validation, synthèse
             "reason": "",
         }]
 
+    def test_parse_termes_suspects_markdown_table(self):
+        text = """## Termes douteux à valider
+
+| Terme | Catégorie | Priorité | Variantes suspectes | Commentaire | Contextes |
+|---|---|---|---|---|---|
+| Émental | métier | critique | émenteal ; émental | orthographe à valider | [00:00:05] SPEAKER_00: "De l'émenteal" |
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        term = result["termes_suspects"][0]
+        assert result["termes_suspects_parse_status"] == "extracted"
+        assert term["term"] == "Émental"
+        assert term["category"] == "métier"
+        assert term["priority"] == "critique"
+        assert term["variants"] == ["émenteal"]
+        assert term["comment"] == "orthographe à valider"
+        assert term["contexts"][0]["timecode"] == "00:00:05"
+        assert term["contexts"][0]["speaker"] == "SPEAKER_00"
+
+    def test_parse_termes_suspects_loose_pipe_fields(self):
+        text = """## Termes douteux à valider
+
+- Terme validé | catégorie: métier | priorité: importante | variantes: Variante A, variante B | justification: forme sensible à confirmer
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        term = result["termes_suspects"][0]
+        assert term["term"] == "Terme validé"
+        assert term["category"] == "métier"
+        assert term["priority"] == "importante"
+        assert term["variants"] == ["Variante A", "variante B"]
+        assert term["comment"] == "forme sensible à confirmer"
+
+    def test_parse_termes_suspects_empty_section_status(self):
+        text = """## Termes douteux à valider
+
+(aucun terme suspect détecté)
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        assert result["termes_suspects"] == []
+        assert result["termes_suspects_parse_status"] == "empty"
+        assert result["termes_suspects_parse_warning"] == ""
+
+    def test_parse_termes_suspects_unparsed_section_status(self):
+        text = """## Termes douteux à valider
+
+La transcription contient peut-être des termes métier, mais je ne peux pas les isoler.
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        assert result["termes_suspects"] == []
+        assert result["termes_suspects_parse_status"] == "section_unparsed"
+        assert "aucun terme extrait" in result["termes_suspects_parse_warning"]
+
     def test_parse_termes_suspects_with_multiple_contexts(self):
         text = """## Termes douteux à valider
 
@@ -567,6 +622,31 @@ class TestOpenCodeRunnerRunSummary:
 
 
 class TestOpenCodeRunnerRunCorrection:
+    def test_run_correction_instruction_uses_explicit_input_paths(self, tmp_path, monkeypatch):
+        (tmp_path / "metadata").mkdir()
+        (tmp_path / "context").mkdir()
+        srt_path = tmp_path / "metadata" / "transcription.srt"
+        context_path = tmp_path / "context" / "job_context.yaml"
+        lexicon_path = tmp_path / "context" / "session_lexicon.json"
+        srt_path.write_text("1\n00:00:00,000 --> 00:00:05,000\nBonjour\n", encoding="utf-8")
+        context_path.write_text("meeting: {}\n", encoding="utf-8")
+        lexicon_path.write_text("[]\n", encoding="utf-8")
+        captured = {}
+
+        def fake_run(self, instruction, prompt_file_arg, timeout=600):
+            captured["instruction"] = instruction
+            return {"success": True, "output": "OK", "files": [], "events_count": 1, "tool_calls": 0}
+
+        monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
+
+        runner = _make_runner(tmp_path / "metadata")
+        runner.run_correction(str(srt_path), str(context_path), str(lexicon_path))
+
+        assert str(srt_path) in captured["instruction"]
+        assert str(context_path) in captured["instruction"]
+        assert str(lexicon_path) in captured["instruction"]
+        assert "lexique validé par l'utilisateur" in captured["instruction"]
+
     def test_run_correction_reads_corrected_srt(self, tmp_path, monkeypatch):
         (tmp_path / "metadata").mkdir()
         (tmp_path / "metadata" / "transcription.srt").write_text("1\n00:00:00,000 --> 00:00:05,000\nBonjour\n", encoding="utf-8")

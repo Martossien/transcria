@@ -90,6 +90,30 @@
   <div class="step-section {% if analyze_status == 'todo' or analyze_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-2-circle-fill step-icon"></i> Analyse audio</h3>
     {% if audio_analysis and audio_analysis.get('duration_seconds') %}
+      {% if audio_diagnostic %}
+      <div class="alert alert-{{ audio_diagnostic.class }} mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <strong><i class="bi bi-soundwave"></i> {{ audio_diagnostic.label }}</strong>
+          <span>{{ audio_diagnostic.message }}</span>
+        </div>
+        {% if audio_diagnostic.reasons %}
+        <div class="small mt-2">
+          {% for reason in audio_diagnostic.reasons %}
+          <span class="badge text-bg-light me-1">{{ reason }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <details class="small mt-2">
+          <summary>Voir les détails techniques</summary>
+          <div class="row mt-2">
+            <div class="col-md-3">RMS : {{ audio_diagnostic.metrics.rms if audio_diagnostic.metrics.rms is not none else '—' }}</div>
+            <div class="col-md-3">SNR estimé : {{ audio_diagnostic.metrics.estimated_snr_db if audio_diagnostic.metrics.estimated_snr_db is not none else '—' }} dB</div>
+            <div class="col-md-3">Silence : {{ ((audio_diagnostic.metrics.silence_ratio or 0) * 100)|round(0)|int }}%</div>
+            <div class="col-md-3">Bande 95% : {{ audio_diagnostic.metrics.bandwidth_95_hz if audio_diagnostic.metrics.bandwidth_95_hz is not none else '—' }} Hz</div>
+          </div>
+        </details>
+      </div>
+      {% endif %}
       <div class="row">
         <div class="col-md-3"><strong>Durée</strong><br>{{ (audio_analysis.duration_seconds / 60)|round(1) }} minutes</div>
         <div class="col-md-2"><strong>Format</strong><br>{{ audio_analysis.get('format', '?') }}</div>
@@ -381,6 +405,17 @@
   <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-6-circle-fill step-icon"></i> Lexique de session</h3>
     <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
+    {% if meeting.get('termes_suspects_parse_status') %}
+      {% if meeting.termes_suspects_parse_status == 'section_unparsed' %}
+      <div class="alert alert-warning small">
+        La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement.
+      </div>
+      {% elif meeting.termes_suspects_parse_status == 'empty' %}
+      <div class="alert alert-light border small">
+        Aucun terme douteux détecté automatiquement.
+      </div>
+      {% endif %}
+    {% endif %}
     <div id="lexicon-list">
       {% for t in lexicon %}
       <div class="lexicon-row lexicon-card">
@@ -434,26 +469,49 @@
   {% if lex_status == 'done' or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
   <div class="step-section {% if proc_status == 'todo' or proc_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-7-circle-fill step-icon"></i> Choix du traitement</h3>
-    <div class="row">
-      <div class="col-md-6">
-        <div class="card border-primary h-100">
-          <div class="card-body text-center">
-            <h5 class="card-title"><i class="bi bi-lightning-fill text-warning"></i> Traitement rapide</h5>
-            <p class="card-text small">Produit rapidement un SRT exploitable. Utilise Cohere ASR. Recommandé pour une première version.</p>
-            <button class="btn btn-primary" onclick="TranscrIA.startProcessing('fast')">Choisir rapide</button>
+    <div class="alert alert-light border">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div>
+          <strong>Réglages recommandés</strong>
+          <div class="small text-muted">
+            {% if audio_diagnostic and audio_diagnostic.level in ['suspect', 'degrade'] %}
+            Le diagnostic audio demande une vérification renforcée. Le workflow choisira le backend adapté automatiquement.
+            {% else %}
+            Adapté à ce fichier et au contexte saisi. Le workflow garde la décision backend automatique.
+            {% endif %}
           </div>
         </div>
-      </div>
-      <div class="col-md-6">
-        <div class="card h-100">
-          <div class="card-body text-center">
-            <h5 class="card-title"><i class="bi bi-star-fill text-success"></i> Traitement qualité</h5>
-            <p class="card-text small">Utilise Cohere ASR comme base, contexte, locuteurs et lexique. Contrôle qualité renforcé.</p>
-            <button class="btn btn-success" onclick="TranscrIA.startProcessing('quality')">Choisir qualité</button>
-          </div>
-        </div>
+        <button class="btn btn-success" onclick="TranscrIA.startProcessing('{{ audio_diagnostic.recommended_mode if audio_diagnostic else 'quality' }}')">
+          Continuer avec les réglages recommandés
+        </button>
       </div>
     </div>
+    <details class="mb-3">
+      <summary class="text-muted">Options de traitement</summary>
+      <div class="row mt-3">
+        <div class="col-md-6">
+          <div class="card border-primary h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title"><i class="bi bi-lightning-fill text-warning"></i> Traitement rapide</h5>
+              <p class="card-text small">Produit rapidement un SRT exploitable. Le backend peut rester automatique selon le diagnostic.</p>
+              <button class="btn btn-primary" onclick="TranscrIA.startProcessing('fast')">Choisir rapide</button>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card h-100">
+            <div class="card-body text-center">
+              <h5 class="card-title"><i class="bi bi-star-fill text-success"></i> Traitement qualité</h5>
+              <p class="card-text small">Active le workflow complet avec contexte, locuteurs, lexique et contrôles qualité renforcés.</p>
+              <button class="btn btn-success" onclick="TranscrIA.startProcessing('quality')">Choisir qualité</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="small text-muted mt-3 mb-0">
+        Les options avancées comme le débruitage restent désactivées par défaut et se règlent côté configuration.
+      </p>
+    </details>
     <div id="processing-result" class="mt-3"></div>
   </div>
   {% endif %}
@@ -463,6 +521,23 @@
   {% if proc_status == 'done' %}
   <div class="step-section {% if qual_status == 'todo' %}current-step{% endif %}">
     <h3><i class="bi bi-8-circle-fill step-icon"></i> Contrôle qualité</h3>
+    {% if processing_diagnostic and processing_diagnostic.backend %}
+    <div class="alert alert-light border small">
+      <strong>Traitement réalisé :</strong>
+      backend {{ processing_diagnostic.backend }}
+      {% if processing_diagnostic.chunking_mode %}— {{ processing_diagnostic.chunking_mode }}{% endif %}
+      {% if processing_diagnostic.segments %}— {{ processing_diagnostic.segments }} segments{% endif %}
+      {% if processing_diagnostic.vad_final_enabled %}— VAD final activé{% endif %}
+      {% if processing_diagnostic.reliability_counts %}
+      <div class="mt-2">
+        Fiabilité :
+        {% for level, count in processing_diagnostic.reliability_counts.items() %}
+        <span class="badge text-bg-{{ 'danger' if level == 'degrade' else 'warning' if level == 'suspect' else 'success' }} me-1">{{ level }}={{ count }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if quality_report and quality_report.get('checks') %}
       <div class="mb-3">
         <strong>Score qualité :</strong>
@@ -481,6 +556,22 @@
         {% if check.terms %}{{ check.terms[:3]|join(', ') }}{% endif %}
       </div>
       {% endfor %}
+      {% if processing_diagnostic and processing_diagnostic.suspect_segments %}
+      <details class="mt-3">
+        <summary class="text-muted">Segments à vérifier en priorité ({{ processing_diagnostic.suspect_segments|length }})</summary>
+        <div class="mt-2">
+          {% for segment in processing_diagnostic.suspect_segments %}
+          <div class="small border-start ps-2 mb-2">
+            <strong>#{{ segment.index }}</strong>
+            <span class="badge text-bg-{{ 'danger' if segment.level == 'degrade' else 'warning' }}">{{ segment.level }}</span>
+            {% if segment.speaker %}<span class="text-muted">{{ segment.speaker }}</span>{% endif %}
+            <div>{{ segment.text }}</div>
+            {% if segment.reasons %}<div class="text-muted">{{ segment.reasons|join(', ') }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
     {% else %}
       <p class="text-muted">Le contrôle qualité sera effectué après le traitement.</p>
     {% endif %}

@@ -40,6 +40,12 @@ Ton objectif est de produire un SRT corrigé, fidèle au SRT source, sans résum
 
 8. Le fichier SRT corrigé et le rapport Markdown doivent rester strictement séparés.
 
+9. Les éventuels `quality_hints` du fichier `job_context.yaml` sont des indices de prudence uniquement.
+   - Ils peuvent signaler qu'un segment est moins fiable ou qu'un passage mérite une correction plus conservatrice.
+   - Ils ne sont jamais une preuve qu'un mot, un nom, un rôle ou une correction existe.
+   - Sur un segment signalé comme `suspect` ou `degrade`, corriger seulement ce qui est quasi certain depuis le SRT, le contexte et le lexique validé.
+   - Si une correction reste incertaine, conserver la forme source ou ajouter `[INCERTAIN: raison]`; ne jamais combler un blanc par hypothèse.
+
 ---
 
 ## 2. Fichiers disponibles
@@ -50,7 +56,8 @@ Trois fichiers doivent être présents et lisibles :
 2. Le fichier `job_context.yaml`, contenant notamment :
    - `meeting` ;
    - `participants` ;
-   - `speakers` avec `speaker_id` et `mapped_name`.
+   - `speakers` avec `speaker_id` et `mapped_name` ;
+   - éventuellement `quality_hints`, indices non autoritaires sur la fiabilité audio ou certains segments.
 3. Le fichier `session_lexicon.json`, contenant les entrées terminologiques validées.
 
 Chaque entrée du lexique peut contenir :
@@ -609,4 +616,3 @@ Procédure obligatoire :
 Ne crée aucun fichier intermédiaire.
 Ne rends jamais une correction partielle.
 Ne répartis jamais le SRT sur plusieurs fichiers.
-

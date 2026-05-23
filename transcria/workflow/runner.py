@@ -48,13 +48,16 @@ class WorkflowRunner:
             sl.error("[1/3] Cohere ASR ÉCHEC — abandon résumé", error=result["error"])
             return result
 
-        sl.info("[2/3] Pyannote diarization — début")
-        self._run_pyannote_after_transcription(job, audio_path, config)
-        sl.info("[2/3] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
+        sl.info("[2/4] Analyse de scène audio — début")
+        self._run_audio_scene_before_participants(job, audio_path, config, sl)
 
-        sl.info("[3/3] LLM résumé via arbitrage — début")
+        sl.info("[3/4] Pyannote diarization — début")
+        self._run_pyannote_after_transcription(job, audio_path, config)
+        sl.info("[3/4] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
+
+        sl.info("[4/4] LLM résumé via arbitrage — début")
         self._run_llm_summary(job, result, config, sl)
-        sl.info("[3/3] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
+        sl.info("[4/4] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
         self.store.update_state(job.id, JobState.SUMMARY_DONE)
         sl.info("━━━ FIN résumé ━━━ (%.1fs total)", time.monotonic() - t0,
@@ -67,6 +70,53 @@ class WorkflowRunner:
         return JobFilesystem(
             config.get("storage", {}).get("jobs_dir", "./jobs"), job_id
         )
+
+    def _run_audio_scene_before_participants(
+        self, job: Job, audio_path: str, config: dict, sl
+    ) -> dict:
+        """Produit audio_scene.json avant l'étape participants si la scène est activée."""
+        from pathlib import Path
+
+        scene_cfg = config.get("workflow", {}).get("audio_scene", {}) or {}
+        if not scene_cfg.get("enabled", False):
+            sl.debug("[summary] Analyse de scène désactivée")
+            return {}
+
+        fs = self._get_fs(config, job.id)
+        existing = fs.load_json("metadata/audio_scene.json") or {}
+        if existing:
+            sl.info("[summary] Analyse de scène déjà disponible")
+            return existing
+
+        try:
+            from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+            from transcria.quality.audio_quality import AudioQualityEvaluator
+
+            analyzer = AudioSceneAnalyzer(config)
+            scene = analyzer.analyze(Path(audio_path))
+            if not scene:
+                sl.warning("[summary] Analyse de scène indisponible")
+                return {}
+
+            fs.save_json("metadata/audio_scene.json", scene)
+            summary = fs.load_json("summary/summary.json") or {}
+            audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
+            evaluation = AudioQualityEvaluator(config).evaluate(
+                audio_analysis,
+                summary,
+                audio_scene=scene,
+            )
+            fs.save_json("metadata/audio_quality_decision.json", evaluation)
+            sl.info(
+                "[summary] Analyse de scène terminée",
+                has_gender_data=(scene.get("gender") or {}).get("has_gender_data"),
+                gender_segments=len(scene.get("gender_segments") or []),
+                quality_level=evaluation.get("level"),
+            )
+            return scene
+        except Exception as exc:
+            sl.warning("[summary] Analyse de scène ignorée", error=str(exc))
+            return {}
 
     def _run_cohere_transcription(
         self, job: Job, audio_path: str, config: dict, sl
@@ -206,8 +256,13 @@ class WorkflowRunner:
         if parsed.get("speaker_count", 0) > 0:
             meeting_ctx["speaker_count_llm"] = parsed["speaker_count"]
         termes_suspects = parsed.get("termes_suspects") or []
-        if termes_suspects:
-            meeting_ctx["termes_suspects"] = termes_suspects
+        meeting_ctx["termes_suspects"] = termes_suspects
+        meeting_ctx["termes_suspects_parse_status"] = parsed.get("termes_suspects_parse_status", "missing")
+        parse_warning = parsed.get("termes_suspects_parse_warning", "")
+        if parse_warning:
+            meeting_ctx["termes_suspects_parse_warning"] = parse_warning
+        else:
+            meeting_ctx.pop("termes_suspects_parse_warning", None)
 
         meeting_ctx["summary_llm"] = summary_text
         # Stocker les rôles LLM dans meeting_context pour que l'UI puisse les afficher
@@ -544,7 +599,27 @@ class WorkflowRunner:
 
         # Mettre à jour speaker_stats.json uniquement si le champ gender est vide
         speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
-        spk_stats = speakers_data.get("speakers") or []
+        _raw_stats = speakers_data.get("speakers") or []
+        # DiarizerService écrit aussi un champ "stats" avec speaking_time/turn_count.
+        # On l'utilise pour reconstruire le format complet quand les speakers sont des strings
+        # (cas sep=1 : run_diarization tourne sur vocals.wav → cache miss → réécrit le format string).
+        _diar_stats = speakers_data.get("stats") or {}
+        spk_stats = []
+        for s in _raw_stats:
+            if isinstance(s, str):
+                extra = _diar_stats.get(s, {})
+                spk_stats.append({
+                    "speaker_id": s,
+                    "label": s,
+                    "speaking_time_seconds": extra.get("speaking_time_seconds", 0),
+                    "turn_count": extra.get("turn_count", 0),
+                    "mapped_to": None,
+                    "mapped_name": None,
+                    "validation": "pending",
+                    "gender": "",
+                })
+            else:
+                spk_stats.append(s)
         updated = 0
         for spk in spk_stats:
             spk_id = spk.get("speaker_id", "")
@@ -878,6 +953,11 @@ class WorkflowRunner:
         """Phase 3: correction du SRT via opencode + LLM d'arbitrage."""
         from transcria.gpu.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
+
+        llm_cfg = config.get("workflow", {}).get("arbitration_llm", {})
+        if llm_cfg.get("enabled") is False:
+            logger.info("Correction SRT ignorée (workflow.arbitration_llm.enabled=false)")
+            return {"success": True, "skipped": True, "reason": "arbitration_llm.enabled=false"}
 
         fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         srt_path = fs.job_dir / "metadata" / "transcription.srt"

@@ -30,7 +30,9 @@ class MeetingContextManager:
         # Préserver les champs LLM qui ne viennent pas du formulaire
         llm_fields = ["summary_llm", "title_suggere", "type_suggere", "sujet_suggere",
                        "objectif_suggere", "notes_suggeres", "participants_detectes",
-                       "speaker_count_llm", "speaker_count_pyannote", "mots_cles"]
+                       "speaker_count_llm", "speaker_count_pyannote", "mots_cles",
+                       "speaker_roles_llm", "termes_suspects",
+                       "termes_suspects_parse_status", "termes_suspects_parse_warning"]
         for field in llm_fields:
             if field in existing and field not in context_data:
                 context_data[field] = existing[field]

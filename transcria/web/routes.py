@@ -66,6 +66,146 @@ def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str
     return (cleaned or default)[:255]
 
 
+def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> dict:
+    if not preflight:
+        return {}
+
+    level = str(preflight.get("risk_level") or "ok")
+    level_labels = {
+        "ok": "Son exploitable",
+        "suspect": "À surveiller",
+        "degrade": "Son difficile",
+    }
+    level_classes = {
+        "ok": "success",
+        "suspect": "warning",
+        "degrade": "danger",
+    }
+    flag_labels = {
+        "audio_tres_faible": "volume très faible",
+        "audio_faible": "volume faible",
+        "snr_faible": "bruit de fond présent",
+        "bande_etroite": "voix peu détaillée",
+        "clipping_detecte": "saturation détectée",
+        "risque_transcription_non_fiable": "vérification renforcée utile",
+    }
+    flags = [str(flag) for flag in preflight.get("flags", []) if flag]
+    reasons = [flag_labels.get(flag, flag.replace("_", " ")) for flag in flags]
+    message = {
+        "ok": "Les caractéristiques audio ne montrent pas de risque majeur.",
+        "suspect": "La transcription reste possible, mais certains passages pourront demander une vérification.",
+        "degrade": "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages.",
+    }.get(level, "Diagnostic audio disponible.")
+
+    return {
+        "level": level,
+        "label": level_labels.get(level, level),
+        "class": level_classes.get(level, "secondary"),
+        "message": message,
+        "reasons": reasons[:4],
+        "recommended_mode": "quality" if level in {"suspect", "degrade"} else "fast",
+        "metrics": {
+            "rms": preflight.get("rms"),
+            "estimated_snr_db": preflight.get("estimated_snr_db"),
+            "silence_ratio": preflight.get("silence_ratio"),
+            "bandwidth_95_hz": preflight.get("bandwidth_95_hz"),
+        },
+        "scene": {
+            "has_music": bool((audio_scene or {}).get("has_music", False)),
+            "has_noise": bool((audio_scene or {}).get("has_noise", False)),
+        },
+    }
+
+
+def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
+    reliability_counts: dict[str, int] = {}
+    suspect_segments = []
+    if isinstance(segments, list):
+        for index, segment in enumerate(segments, start=1):
+            if not isinstance(segment, dict):
+                continue
+            level = str(segment.get("reliability") or "")
+            if level:
+                reliability_counts[level] = reliability_counts.get(level, 0) + 1
+            if level in {"suspect", "degrade"} and len(suspect_segments) < 8:
+                suspect_segments.append({
+                    "index": index,
+                    "start": segment.get("start"),
+                    "end": segment.get("end"),
+                    "speaker": segment.get("speaker", ""),
+                    "level": level,
+                    "reasons": segment.get("reliability_reasons") or [],
+                    "text": str(segment.get("text", "") or "").strip()[:180],
+                })
+
+    return {
+        "backend": metadata.get("backend", ""),
+        "chunking_mode": metadata.get("chunking_mode", ""),
+        "segments": metadata.get("segments") or len(segments or []),
+        "speaker_count": metadata.get("speaker_count"),
+        "vad_final_enabled": bool(metadata.get("vad_final_enabled", False)),
+        "reliability_counts": reliability_counts,
+        "suspect_segments": suspect_segments,
+    }
+
+
+def _fill_missing_speaker_genders(
+    speakers_data: dict,
+    mapping_data: dict,
+    audio_scene: dict,
+    speaker_turns: dict,
+) -> bool:
+    """Complète les genres manquants depuis mapping puis analyse acoustique."""
+    speakers = speakers_data.get("speakers") if isinstance(speakers_data, dict) else None
+    if not isinstance(speakers, list):
+        return False
+
+    changed = False
+    mapping = mapping_data.get("mapping", {}) if isinstance(mapping_data, dict) else {}
+    mapped_speakers = {
+        item.get("speaker_id"): item
+        for item in mapping_data.get("speakers", [])
+        if isinstance(item, dict) and item.get("speaker_id")
+    } if isinstance(mapping_data, dict) else {}
+
+    for speaker in speakers:
+        if not isinstance(speaker, dict) or speaker.get("gender"):
+            continue
+        speaker_id = speaker.get("speaker_id")
+        mapped_gender = ""
+        if isinstance(mapping.get(speaker_id), dict):
+            mapped_gender = mapping[speaker_id].get("gender", "")
+        if not mapped_gender and isinstance(mapped_speakers.get(speaker_id), dict):
+            mapped_gender = mapped_speakers[speaker_id].get("gender", "")
+        if mapped_gender in {"female", "male"}:
+            speaker["gender"] = mapped_gender
+            changed = True
+
+    if all((not isinstance(s, dict)) or s.get("gender") for s in speakers):
+        return changed
+
+    gender_segments = (audio_scene or {}).get("gender_segments") or []
+    turns = (speaker_turns or {}).get("exclusive_turns") or (speaker_turns or {}).get("turns") or []
+    if not gender_segments or not turns:
+        return changed
+
+    try:
+        from transcria.workflow.runner import WorkflowRunner
+
+        speaker_genders = WorkflowRunner._assign_speaker_genders(gender_segments, turns)
+    except Exception:
+        return changed
+
+    for speaker in speakers:
+        if not isinstance(speaker, dict) or speaker.get("gender"):
+            continue
+        gender = (speaker_genders.get(speaker.get("speaker_id")) or {}).get("gender")
+        if gender in {"female", "male"}:
+            speaker["gender"] = gender
+            changed = True
+    return changed
+
+
 def _can_access_job(job, user) -> bool:
     return (
         job is not None
@@ -234,6 +374,8 @@ def job_wizard(job_id: str):
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
+    audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+    speaker_turns = fs.load_json("speakers/speaker_turns.json") or {}
     # Fusionner mapping + participants pour pré-remplir nom/fonction/rôle
     mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
     mapped_speakers = mapping_data.get("speakers", [])
@@ -266,8 +408,12 @@ def job_wizard(job_id: str):
                 s["mapped_name"] = normalized["label"]
             if normalized["role"]:
                 s["mapped_role"] = normalized["role"]
+    if _fill_missing_speaker_genders(speakers_data, mapping_data, audio_scene, speaker_turns):
+        fs.save_json("speakers/speaker_stats.json", speakers_data)
     audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
-    audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+    audio_preflight = fs.load_json("metadata/audio_preflight.json") or {}
+    transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
+    transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     quality_report = fs.load_json("quality/quality_report.json") or {}
     srt_content = fs.load_text("metadata/transcription.srt") or ""
 
@@ -283,7 +429,10 @@ def job_wizard(job_id: str):
         lexicon=lexicon,
         speakers=speakers_data,
         audio_analysis=audio_analysis,
+        audio_preflight=audio_preflight,
+        audio_diagnostic=_audio_diagnostic_view(audio_preflight, audio_scene),
         audio_scene=audio_scene,
+        processing_diagnostic=_processing_diagnostic_view(transcription_metadata, transcription_segments),
         quality_report=quality_report,
         srt_content=srt_content,
         meeting_types=MEETING_TYPES_LIST,
