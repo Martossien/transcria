@@ -24,6 +24,12 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .clips-audio { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; background: #fafafa; border-radius: 6px; border-left: 3px solid #2563eb; }
   .clips-audio audio { display: block; width: 100%; height: 32px; margin: 3px 0; }
+  .lex-context-item { padding: 8px 0; border-top: 1px solid #e5e7eb; }
+  .lex-context-item:first-child { border-top: 0; }
+  .lex-context-actions { display: flex; align-items: center; gap: 10px; margin-top: 5px; flex-wrap: wrap; }
+  .lex-context-play { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .lex-context-listened { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
+  .lex-context-counter { margin-left: 6px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -438,13 +444,40 @@
         <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>
         {% if t.contexts %}
         <details class="lex-contexts mt-2">
-          <summary class="small text-muted">Contexte proposé ({{ t.contexts|length }})</summary>
+          <summary class="small text-muted">
+            Contexte proposé ({{ t.contexts|length }})
+            <span class="lex-context-counter" data-listened="{{ t.contexts_listened_count or 0 }}" data-total="{{ t.contexts|length }}">
+              · {{ t.contexts_listened_count or 0 }}/{{ t.contexts|length }} écoutés
+            </span>
+          </summary>
           <div class="small mt-2">
             {% for c in t.contexts %}
-            <div class="lex-context-item">
+            <div class="lex-context-item" data-context-index="{{ loop.index0 }}">
               <span class="text-muted">{{ c.timecode or 'sans timecode' }}{% if c.speaker %} — {{ c.speaker }}{% endif %}</span>
               <div>« {{ c.quote }} »</div>
               {% if c.reason %}<div class="text-muted">{{ c.reason }}</div>{% endif %}
+              <div class="lex-context-actions">
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary lex-context-play"
+                        title="Écouter 5 secondes avant et après"
+                        data-timecode="{{ c.timecode or '' }}"
+                        data-quote="{{ c.quote or '' }}"
+                        {% if not c.audio_available %}disabled{% endif %}
+                        onclick="TranscrIA.toggleLexiconContextAudio(this)">
+                  <i class="bi bi-play-fill"></i>
+                </button>
+                <label class="lex-context-listened">
+                  <input type="checkbox"
+                         class="form-check-input lex-context-listened-input"
+                         data-context-index="{{ loop.index0 }}"
+                         {% if c.listened %}checked{% endif %}
+                         onchange="TranscrIA.setLexiconContextListened(this)">
+                  Écouté
+                </label>
+                {% if not c.audio_available %}
+                <span class="text-muted">Audio indisponible pour ce timecode</span>
+                {% endif %}
+              </div>
             </div>
             {% endfor %}
           </div>

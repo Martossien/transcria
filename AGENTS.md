@@ -392,7 +392,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 2. **Jamais** committer `config.yaml` (contient des chemins absolus de production) ni `.env` (secrets).
 3. **Toujours** passer `config: dict` en paramètre aux fonctions du moteur, jamais `get_config()` direct (sauf dans les routes).
 4. **Ne pas** modifier `JobState` ou `WORKFLOW_STEPS` sans mettre à jour `WorkflowState.compute_statuses()`.
-5. **Ne pas** ajouter de nouveaux fichiers JSON dans l'arborescence job sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `metadata/audio_normalization.json`, `metadata/audio_scene_filter.json`, `metadata/audio_preflight.json`, `metadata/audio_denoise.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`.
+5. **Ne pas** ajouter de nouveaux fichiers runtime dans l'arborescence job sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `metadata/audio_normalization.json`, `metadata/audio_scene_filter.json`, `metadata/audio_preflight.json`, `metadata/audio_denoise.json`, `metadata/audio_excerpts/*.wav`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`.
 6. **Toujours** préserver les champs LLM dans `MeetingContextManager.save()` (la liste `llm_fields`).
 7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.

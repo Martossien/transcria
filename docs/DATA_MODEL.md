@@ -230,6 +230,7 @@ jobs/<job_id>/
 │   ├── audio_scene_filter.json     # Filtrage pré-STT optionnel, timeline préservée
 │   ├── audio_normalization.json    # Normalisation pré-STT optionnelle, timeline préservée (forced=true si auto-loudnorm)
 │   ├── audio_denoise.json          # Débruitage pré-STT optionnel via ffmpeg afftdn (preserve_timeline=true)
+│   ├── audio_excerpts/             # Cache WAV des extraits de validation du lexique (5s avant/après contexte)
 │   ├── transcription.srt          # SRT final (Cohere/Whisper + speakers + nettoyage post-STT)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
@@ -302,6 +303,7 @@ jobs/<job_id>/
 | Pré-traitement | `input/scene_filtered.wav` + `metadata/audio_scene_filter.json` (si filtre activé) | `AudioSceneFilterService.apply()` |
 | Pré-traitement | `input/denoised.wav` + `metadata/audio_denoise.json` (si débruitage activé) | `PipelineService._run_audio_denoise()` + `AudioDenoiseService` |
 | Pré-traitement | `input/normalized.wav` + `metadata/audio_normalization.json` (si normalisation activée ou auto-loudnorm) | `AudioNormalizationService.apply()` |
+| Lexique | `metadata/audio_excerpts/*.wav` (cache à la demande pour écouter les contextes proposés) | `AudioExcerptService.build_excerpt()` via `GET /api/jobs/<id>/audio/excerpt` |
 | Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/transcription_metadata.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `metadata/transcription_corrigee.srt` | `OpenCodeRunner.run_correction()` |
@@ -417,12 +419,15 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
         "timecode": "00:05",
         "speaker": "SPEAKER_00",
         "quote": "L'ebitda est à 12M",
-        "reason": ""
+        "reason": "",
+        "listened": true
       }
     ]
   }
 ]
 ```
+
+`contexts[].listened` est le flag de validation d'écoute saisi dans l'UI. Il est conservé dans `session_lexicon.json` mais reste une aide humaine : la correction LLM ne doit pas le traiter comme une preuve de correction automatique.
 
 **Catégories LexiconManager** (`LEXICON_CATEGORIES`) : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect (20 catégories).
 

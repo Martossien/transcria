@@ -2,8 +2,10 @@
 
 from transcria.web.routes import (
     _audio_diagnostic_view,
+    _enrich_lexicon_context_audio,
     _fill_missing_speaker_genders,
     _processing_diagnostic_view,
+    _resolve_context_audio_range,
 )
 
 
@@ -46,6 +48,89 @@ def test_processing_diagnostic_view_counts_reliability_and_limits_segments():
     assert view["reliability_counts"] == {"degrade": 1, "ok": 1}
     assert len(view["suspect_segments"]) == 1
     assert view["suspect_segments"][0]["text"] == "segment à vérifier"
+
+
+def test_enrich_lexicon_context_audio_marks_playable_and_counts_listened():
+    lexicon = [
+        {
+            "term": "Emmental",
+            "contexts": [
+                {"timecode": "5.4s→26.4s", "quote": "extrait", "listened": True},
+                {"timecode": "sans timecode", "quote": "extrait"},
+            ],
+        }
+    ]
+
+    enriched = _enrich_lexicon_context_audio(lexicon)
+
+    assert enriched[0]["contexts_playable_count"] == 1
+    assert enriched[0]["contexts_listened_count"] == 1
+    assert enriched[0]["contexts"][0]["audio_start"] == 5.4
+    assert enriched[0]["contexts"][0]["audio_end"] == 26.4
+    assert enriched[0]["contexts"][1]["audio_available"] is False
+    assert "audio_start" not in lexicon[0]["contexts"][0]
+
+
+def test_enrich_lexicon_context_audio_repairs_timecode_inside_quote():
+    lexicon = [
+        {
+            "term": "Emmental",
+            "contexts": [
+                {"timecode": "", "quote": "00:05] SPEAKER_XX: « De l'émenteal, ça ira comme ça ? »"},
+            ],
+        }
+    ]
+
+    enriched = _enrich_lexicon_context_audio(lexicon)
+    context = enriched[0]["contexts"][0]
+
+    assert context["timecode"] == "00:05"
+    assert context["speaker"] == "SPEAKER_XX"
+    assert context["quote"] == "De l'émenteal, ça ira comme ça ?"
+    assert context["audio_available"] is True
+
+
+def test_resolve_context_audio_range_reanchors_mismatched_llm_timecode():
+    segments = [
+        {
+            "start": 5.4,
+            "end": 26.4,
+            "text": "Fait pas chaud ce matin. Mettez-moi un peu d'émental. De l'émenteal, ça ira comme ça ? Oui.",
+        },
+        {"start": 27.0, "end": 30.6, "text": "Le mieux, c'est d'y goûter."},
+    ]
+
+    resolved = _resolve_context_audio_range("27.0s→30.6s", "De l'émenteal, ça ira comme ça ?", segments)
+
+    assert resolved[0] > 5.4
+    assert resolved[1] < 26.4
+    assert resolved[2] is True
+
+
+def test_resolve_context_audio_range_keeps_matching_timecode():
+    segments = [
+        {"start": 27.0, "end": 30.6, "text": "Le mieux, c'est d'y goûter."},
+    ]
+
+    resolved = _resolve_context_audio_range("27.0s→30.6s", "Le mieux, c'est d'y goûter.", segments)
+
+    assert resolved == (27.0, 30.6, False)
+
+
+def test_resolve_context_audio_range_estimates_quote_position_for_single_bad_timestamp():
+    segments = [
+        {
+            "start": 5.4,
+            "end": 26.4,
+            "text": "Fait pas chaud ce matin. Qu'est-ce qu'il vous faudra ? Mettez-moi un peu d'émental, s'il-vous-plaît. De l'émenteal, ça ira comme ça ? Oui.",
+        },
+    ]
+
+    resolved = _resolve_context_audio_range("00:00:05", "Mettez-moi un peu d'émental", segments)
+
+    assert resolved[0] > 10.0
+    assert resolved[1] < 22.0
+    assert resolved[2] is True
 
 
 def test_fill_missing_speaker_genders_uses_mapping_without_overwriting_existing():

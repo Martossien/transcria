@@ -182,6 +182,28 @@ class TestLexicon:
         job = _fake_job()
         assert LexiconManager.get(job, tmp_dir) == []
 
+    def test_save_preserves_context_listened_flag(self, tmp_dir):
+        job = _fake_job()
+        saved = LexiconManager.save(
+            job,
+            tmp_dir,
+            [
+                {
+                    "term": "Emmental",
+                    "contexts": [
+                        {
+                            "timecode": "5.4s→26.4s",
+                            "speaker": "SPEAKER_00",
+                            "quote": "Mettez-moi un peu d'émental",
+                            "listened": True,
+                        }
+                    ],
+                }
+            ],
+        )
+
+        assert saved[0]["contexts"][0]["listened"] is True
+
     def test_import_from_csv(self, tmp_dir):
         job = _fake_job()
         content = "TERM1, technique, critique\nTERM2, personne, normale"

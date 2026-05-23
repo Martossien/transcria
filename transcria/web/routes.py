@@ -23,6 +23,7 @@ from sqlalchemy import func
 import yaml
 
 from transcria.audio.analyzer import AudioAnalyzer
+from transcria.audio.excerpts import AudioExcerptService, parse_time_range
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
 from transcria.auth.permissions import Permission, requires
@@ -147,6 +148,128 @@ def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
         "reliability_counts": reliability_counts,
         "suspect_segments": suspect_segments,
     }
+
+
+def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
+    """Ajoute des bornes audio parsées aux contextes de lexique pour l'UI."""
+    enriched = copy.deepcopy(lexicon)
+    for term in enriched:
+        contexts = term.get("contexts")
+        if not isinstance(contexts, list):
+            continue
+        listened = 0
+        playable = 0
+        for context in contexts:
+            if not isinstance(context, dict):
+                continue
+            _repair_lexicon_context_timecode(context)
+            parsed = parse_time_range(str(context.get("timecode", "")))
+            if parsed is not None:
+                context["audio_start"] = round(parsed[0], 3)
+                context["audio_end"] = round(parsed[1], 3)
+                context["audio_available"] = True
+                playable += 1
+            else:
+                context["audio_available"] = False
+            if bool(context.get("listened", False)):
+                listened += 1
+        term["contexts_listened_count"] = listened
+        term["contexts_playable_count"] = playable
+    return enriched
+
+
+def _repair_lexicon_context_timecode(context: dict) -> None:
+    """Répare les anciens contextes où le timecode est resté dans la citation."""
+    if context.get("timecode"):
+        return
+    quote = str(context.get("quote", "") or "").strip()
+    if not quote:
+        return
+    timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?)"
+    time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
+    match = re.match(
+        rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?[«"](?P<quote>.+?)[»"]\s*$',
+        quote,
+    )
+    if not match:
+        return
+    context["timecode"] = match.group("timecode").strip()
+    if match.group("speaker") and not context.get("speaker"):
+        context["speaker"] = match.group("speaker").strip()
+    context["quote"] = match.group("quote").strip()
+
+
+def _normalize_context_quote(value: str) -> str:
+    text = str(value or "").casefold()
+    text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+    return " ".join(text.split())
+
+
+def _find_quote_span(quote: str, text: str) -> tuple[int, int] | None:
+    """Retrouve approximativement la position d'une citation dans un texte."""
+    normalized_quote = _normalize_context_quote(quote)
+    normalized_text = _normalize_context_quote(text)
+    if not normalized_quote or not normalized_text:
+        return None
+    index = normalized_text.find(normalized_quote)
+    if index < 0:
+        return None
+    return index, index + len(normalized_quote)
+
+
+def _find_segment_for_quote(quote: str, segments: list) -> dict | None:
+    normalized_quote = _normalize_context_quote(quote)
+    if not normalized_quote:
+        return None
+    for segment in segments if isinstance(segments, list) else []:
+        if not isinstance(segment, dict):
+            continue
+        normalized_text = _normalize_context_quote(str(segment.get("text", "")))
+        if normalized_quote and normalized_quote in normalized_text:
+            return segment
+    return None
+
+
+def _estimate_quote_range_in_segment(quote: str, segment: dict) -> tuple[float, float] | None:
+    """Estime le timecode d'une citation à l'intérieur d'un segment STT long."""
+    try:
+        seg_start = float(segment.get("start"))
+        seg_end = float(segment.get("end"))
+    except (TypeError, ValueError):
+        return None
+    if seg_end <= seg_start:
+        return None
+
+    span = _find_quote_span(quote, str(segment.get("text", "")))
+    if span is None:
+        return None
+
+    normalized_text = _normalize_context_quote(str(segment.get("text", "")))
+    text_len = max(1, len(normalized_text))
+    duration = seg_end - seg_start
+    quote_start = seg_start + duration * (span[0] / text_len)
+    quote_end = seg_start + duration * (span[1] / text_len)
+    return quote_start, max(quote_start + 0.5, quote_end)
+
+
+def _resolve_context_audio_range(timecode: str, quote: str, segments: list) -> tuple[float, float, bool] | None:
+    parsed = parse_time_range(timecode)
+    matched_segment = _find_segment_for_quote(quote, segments)
+    if not matched_segment:
+        return (*parsed, False) if parsed is not None else None
+
+    estimated = _estimate_quote_range_in_segment(quote, matched_segment)
+    if estimated is None:
+        return (*parsed, False) if parsed is not None else None
+    quote_start, quote_end = estimated
+
+    if parsed is None:
+        return quote_start, quote_end, True
+
+    start, end = parsed
+    if abs(start - quote_start) > 2.0 or abs(end - quote_end) > 2.0:
+        return quote_start, quote_end, True
+    return start, end, False
 
 
 def _fill_missing_speaker_genders(
@@ -372,7 +495,7 @@ def job_wizard(job_id: str):
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     summary_data = fs.load_json("summary/summary.json") or {}
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
-    lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
+    lexicon = _enrich_lexicon_context_audio(LexiconManager.get(job, cfg["storage"]["jobs_dir"]))
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     audio_scene = fs.load_json("metadata/audio_scene.json") or {}
     speaker_turns = fs.load_json("speakers/speaker_turns.json") or {}
@@ -870,6 +993,57 @@ def api_download_audio(job_id: str):
         abort(404)
 
     return send_file(audio_path, as_attachment=True, download_name=audio_path.name)
+
+
+@web_bp.route("/api/jobs/<job_id>/audio/excerpt", methods=["GET"])
+@login_required
+def api_audio_excerpt(job_id: str):
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    audio_path = fs.get_original_audio_path()
+    if audio_path is None:
+        return jsonify({"error": "Fichier audio introuvable"}), 404
+
+    timecode = request.args.get("timecode", "")
+    quote = request.args.get("quote", "")
+    summary_data = fs.load_json("summary/summary.json") or {}
+    segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
+    resolved = _resolve_context_audio_range(timecode, quote, segments)
+    if resolved is None:
+        return jsonify({"error": "Timecode audio invalide"}), 400
+    start_s, end_s, corrected = resolved
+    if corrected:
+        logger.info(
+            "Timecode contexte lexique ajusté depuis la citation: job=%s original=%r start=%.3f end=%.3f",
+            job.id,
+            timecode,
+            start_s,
+            end_s,
+        )
+
+    try:
+        pad = float(request.args.get("pad", "5"))
+        max_duration = float(request.args.get("max_duration", "90"))
+        excerpt_path = AudioExcerptService.build_excerpt(
+            audio_path,
+            fs.job_dir / "metadata" / "audio_excerpts",
+            start_s,
+            end_s,
+            pad_s=min(max(pad, 0.0), 15.0),
+            max_duration_s=min(max(max_duration, 5.0), 120.0),
+        )
+    except ValueError as exc:
+        logger.warning("Demande extrait audio invalide: job=%s timecode=%r erreur=%s", job.id, timecode, exc)
+        return jsonify({"error": "Paramètres audio invalides"}), 400
+    except (FileNotFoundError, RuntimeError) as exc:
+        logger.warning("Extrait audio indisponible: job=%s timecode=%r erreur=%s", job.id, timecode, exc)
+        return jsonify({"error": "Extrait audio indisponible"}), 500
+
+    return send_file(excerpt_path, mimetype="audio/wav", conditional=True)
 
 
 @web_bp.route("/api/jobs/<job_id>/speakers/clips", methods=["GET"])

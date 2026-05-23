@@ -58,6 +58,7 @@ class LexiconManager:
                     "speaker": str(item.get("speaker", "")).strip(),
                     "quote": quote[:500],
                     "reason": str(item.get("reason", "")).strip()[:300],
+                    "listened": bool(item.get("listened", False)),
                 })
             elif isinstance(item, str) and item.strip():
                 contexts.append({

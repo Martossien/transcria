@@ -471,6 +471,19 @@ La transcription contient peut-être des termes métier, mais je ne peux pas les
         assert contexts[0]["quote"] == "extrait Variante A"
         assert contexts[1]["reason"] == "contexte clair"
 
+    def test_parse_termes_suspects_context_without_opening_bracket_and_placeholder_speaker(self):
+        text = """## Termes douteux à valider
+
+- **Emmental** [produit] (critique) | variantes_suspectes: émenteal | commentaire: à vérifier. | contextes: 00:05] SPEAKER_XX: « De l'émenteal, ça ira comme ça ? »
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        context = result["termes_suspects"][0]["contexts"][0]
+        assert context["timecode"] == "00:05"
+        assert context["speaker"] == "SPEAKER_XX"
+        assert context["quote"] == "De l'émenteal, ça ira comme ça ?"
+
     def test_parse_termes_suspects_normalizes_empty_and_duplicate_variants(self):
         text = """## Termes douteux à valider
 

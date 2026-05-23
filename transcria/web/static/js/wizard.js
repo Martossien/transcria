@@ -245,10 +245,101 @@ var TranscrIA = window.TranscrIA || {};
         }
     };
 
+    W.writeLexiconContexts = function (row, contexts) {
+        var node = row && row.querySelector('.lex-contexts-json');
+        if (!node) return;
+        node.textContent = JSON.stringify(Array.isArray(contexts) ? contexts : []);
+    };
+
+    W.updateLexiconContextCounter = function (row) {
+        if (!row) return;
+        var inputs = row.querySelectorAll('.lex-context-listened-input');
+        var listened = Array.from(inputs).filter(function (input) { return input.checked; }).length;
+        var counter = row.querySelector('.lex-context-counter');
+        if (counter) {
+            counter.dataset.listened = String(listened);
+            counter.dataset.total = String(inputs.length);
+            counter.textContent = ' · ' + listened + '/' + inputs.length + ' écoutés';
+        }
+    };
+
+    W.setLexiconContextListened = function (input) {
+        var row = input && input.closest('.lexicon-row');
+        if (!row) return;
+        var index = Number(input.dataset.contextIndex || -1);
+        var contexts = W.parseLexiconContexts(row);
+        if (index >= 0 && contexts[index]) {
+            contexts[index].listened = !!input.checked;
+            W.writeLexiconContexts(row, contexts);
+        }
+        W.updateLexiconContextCounter(row);
+    };
+
+    W.stopLexiconContextAudio = function () {
+        var current = W._currentLexiconAudio;
+        if (current && current.audio) {
+            current.audio.pause();
+        }
+        if (current && current.button) {
+            current.button.classList.remove('active');
+            current.button.innerHTML = '<i class="bi bi-play-fill"></i>';
+        }
+        W._currentLexiconAudio = null;
+    };
+
+    W.toggleLexiconContextAudio = function (button) {
+        if (!button || button.disabled) return;
+        var item = button.closest('.lex-context-item');
+        if (!item) return;
+        var timecode = button.dataset.timecode || '';
+        if (!timecode.trim()) return;
+        var quote = button.dataset.quote || '';
+
+        if (W._currentLexiconAudio && W._currentLexiconAudio.button === button) {
+            if (W._currentLexiconAudio.audio.paused) {
+                W._currentLexiconAudio.audio.play();
+                button.innerHTML = '<i class="bi bi-pause-fill"></i>';
+            } else {
+                W.stopLexiconContextAudio();
+            }
+            return;
+        }
+
+        W.stopLexiconContextAudio();
+        var audio = new Audio(
+            '/api/jobs/' + JOB_ID + '/audio/excerpt?pad=5&timecode=' +
+            encodeURIComponent(timecode) + '&quote=' + encodeURIComponent(quote)
+        );
+        W._currentLexiconAudio = { audio: audio, button: button };
+        button.classList.add('active');
+        button.innerHTML = '<span class="spinner"></span>';
+
+        audio.addEventListener('playing', function () {
+            button.innerHTML = '<i class="bi bi-pause-fill"></i>';
+        });
+        audio.addEventListener('ended', function () {
+            W.stopLexiconContextAudio();
+        });
+        audio.addEventListener('error', function () {
+            W.stopLexiconContextAudio();
+            var error = item.querySelector('.lex-context-audio-error');
+            if (!error) {
+                error = document.createElement('span');
+                error.className = 'text-danger lex-context-audio-error';
+                item.querySelector('.lex-context-actions').appendChild(error);
+            }
+            error.textContent = 'Extrait indisponible';
+        });
+        audio.play().catch(function () {
+            W.stopLexiconContextAudio();
+        });
+    };
+
     W.renderLexiconContexts = function (contexts) {
         if (!Array.isArray(contexts) || contexts.length === 0) return '';
         var html = '<details class="lex-contexts mt-2">' +
-            '<summary class="small text-muted">Contexte proposé (' + contexts.length + ')</summary>' +
+            '<summary class="small text-muted">Contexte proposé (' + contexts.length + ')' +
+            '<span class="lex-context-counter"> · 0/' + contexts.length + ' écoutés</span></summary>' +
             '<div class="small mt-2">';
         contexts.forEach(function (c) {
             var meta = (c.timecode || 'sans timecode') + (c.speaker ? ' — ' + c.speaker : '');
@@ -256,6 +347,10 @@ var TranscrIA = window.TranscrIA || {};
                 '<span class="text-muted"></span>' +
                 '<div class="lex-context-quote"></div>' +
                 (c.reason ? '<div class="text-muted lex-context-reason"></div>' : '') +
+                '<div class="lex-context-actions">' +
+                '<button type="button" class="btn btn-sm btn-outline-primary lex-context-play" title="Écouter 5 secondes avant et après" onclick="TranscrIA.toggleLexiconContextAudio(this)"><i class="bi bi-play-fill"></i></button>' +
+                '<label class="lex-context-listened"><input type="checkbox" class="form-check-input lex-context-listened-input" onchange="TranscrIA.setLexiconContextListened(this)"> Écouté</label>' +
+                '</div>' +
                 '</div>';
         });
         html += '</div></details>';
@@ -271,10 +366,23 @@ var TranscrIA = window.TranscrIA || {};
             var metaEl = item.querySelector('span');
             var quoteEl = item.querySelector('.lex-context-quote');
             var reasonEl = item.querySelector('.lex-context-reason');
+            var playBtn = item.querySelector('.lex-context-play');
+            var listenedInput = item.querySelector('.lex-context-listened-input');
             if (metaEl) metaEl.textContent = meta;
             if (quoteEl) quoteEl.textContent = '« ' + (c.quote || '') + ' »';
             if (reasonEl) reasonEl.textContent = c.reason || '';
+            item.dataset.contextIndex = String(index);
+            if (playBtn) {
+                playBtn.dataset.timecode = c.timecode || '';
+                playBtn.dataset.quote = c.quote || '';
+                playBtn.disabled = !(c.timecode || '').trim();
+            }
+            if (listenedInput) {
+                listenedInput.dataset.contextIndex = String(index);
+                listenedInput.checked = !!c.listened;
+            }
         });
+        W.updateLexiconContextCounter(row);
     };
 
     W.renderLexiconRow = function (term) {

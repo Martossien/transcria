@@ -164,6 +164,7 @@ L'utilisateur peut définir les termes à surveiller ou à corriger :
 - termes techniques ou métier ;
 - variantes mal reconnues ;
 - forme corrigée attendue.
+- contextes proposés par l'IA, avec écoute audio courte pour valider les cas douteux.
 
 Cette étape est essentielle pour les environnements métiers où un nom ou un acronyme mal transcrit peut changer le sens du compte rendu.
 

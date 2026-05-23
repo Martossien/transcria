@@ -1,8 +1,12 @@
 """Tests pour les modules audio : séparation de sources, VAD adaptatif."""
 
 import os
+from pathlib import Path
 
 import pytest
+
+from transcria.audio.excerpts import AudioExcerptService, parse_time_range, parse_timestamp
+from transcria.audio.preflight import AudioPreflightAnalyzer
 
 
 # ---------------------------------------------------------------------------
@@ -18,8 +22,6 @@ class TestAudioPreflightAnalyzer:
         sf.write(path, signal, sample_rate)
 
     def test_disabled_preflight_returns_empty_dict(self, tmp_path):
-        from transcria.audio.preflight import AudioPreflightAnalyzer
-
         audio = tmp_path / "audio.wav"
         self._write_wav(audio, [0.0] * 1600)
 
@@ -92,6 +94,56 @@ class TestAudioPreflightAnalyzer:
         result = AudioPreflightAnalyzer({}).analyze(audio)
 
         assert result["bandwidth_99_hz"] > 3800
+
+
+# ---------------------------------------------------------------------------
+# AudioExcerptService
+# ---------------------------------------------------------------------------
+
+
+class TestAudioExcerptService:
+    def test_parse_timestamp_accepts_seconds_and_clock_formats(self):
+        assert parse_timestamp("5.4s") == pytest.approx(5.4)
+        assert parse_timestamp("01:02") == pytest.approx(62.0)
+        assert parse_timestamp("01:02:03.5") == pytest.approx(3723.5)
+        assert parse_timestamp("bad") is None
+
+    def test_parse_time_range_accepts_llm_context_format(self):
+        assert parse_time_range("5.4s→26.4s — SPEAKER_00") == pytest.approx((5.4, 26.4))
+        assert parse_time_range("[00:01:02] SPEAKER_01: extrait") == pytest.approx((62.0, 62.0))
+        assert parse_time_range("sans timecode") is None
+
+    def test_build_excerpt_uses_cache_and_ffmpeg_bounds(self, tmp_path, monkeypatch):
+        import subprocess
+
+        audio = tmp_path / "original.mp3"
+        audio.write_bytes(b"source")
+        cache = tmp_path / "cache"
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            Path(cmd[-1]).write_bytes(b"wav")
+            return subprocess.CompletedProcess(cmd, 0)
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+
+        first = AudioExcerptService.build_excerpt(audio, cache, 5.4, 26.4, pad_s=5.0)
+        second = AudioExcerptService.build_excerpt(audio, cache, 5.4, 26.4, pad_s=5.0)
+
+        assert first == second
+        assert first.read_bytes() == b"wav"
+        assert len(calls) == 1
+        cmd = calls[0][0]
+        assert cmd[cmd.index("-ss") + 1] == "0.400"
+        assert cmd[cmd.index("-t") + 1] == "31.000"
+
+    def test_build_excerpt_rejects_invalid_times(self, tmp_path):
+        audio = tmp_path / "original.mp3"
+        audio.write_bytes(b"source")
+
+        with pytest.raises(ValueError):
+            AudioExcerptService.build_excerpt(audio, tmp_path / "cache", -1, 2)
 
 
 # ---------------------------------------------------------------------------

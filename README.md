@@ -132,7 +132,7 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 3. **Résumé** : transcription rapide, VAD, diarisation, analyse de scène, résumé LLM si activé.
 4. **Contexte** : titre, type, sujet, objectifs et suggestions LLM.
 5. **Participants & Locuteurs** : validation des locuteurs, extraits audio, genre vocal estimé si disponible.
-6. **Lexique** : termes métier, variantes, priorités, import TXT/CSV.
+6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV.
 7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper, correction LLM.
 8. **Qualité** : rapport, score, diagnostics, segments suspects.
 9. **Export** : package ZIP final.
@@ -163,6 +163,7 @@ Artefacts importants par job :
 | `metadata/audio_quality_decision.json` | Décision qualité/backend |
 | `metadata/audio_denoise.json` | Trace denoise si appliqué |
 | `metadata/audio_normalization.json` | Trace normalisation ou auto-loudnorm |
+| `metadata/audio_excerpts/*.wav` | Cache des extraits écoutés pour valider le lexique |
 | `metadata/transcription_metadata.json` | Backend réel, chunking, VAD final, stats |
 | `quality/quality_report.json` | Checks qualité et score |
 

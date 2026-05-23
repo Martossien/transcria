@@ -115,10 +115,12 @@ class OpenCodeRunner:
         chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=\[[^\]]+\])', value) if chunk.strip()]
         if len(chunks) == 1 and " ; " in value:
             chunks = [chunk.strip() for chunk in value.split(" ; ") if chunk.strip()]
+        timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?)"
+        time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
         for chunk in chunks[:3]:
             text = chunk.strip()
             match = re.match(
-                r'\[(?P<timecode>[^\]]+)\]\s*(?:(?P<speaker>SPEAKER_\d+)\s*:\s*)?[«"](?P<quote>.+?)[»"](?:\s*\((?P<reason>.+)\))?$',
+                rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?[«"](?P<quote>.+?)[»"](?:\s*\((?P<reason>.+)\))?$',
                 text,
             )
             if match:

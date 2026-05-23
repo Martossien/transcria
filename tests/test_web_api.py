@@ -2,6 +2,7 @@ import io
 import json
 import os
 import tempfile
+from pathlib import Path
 
 
 class TestAuthentication:
@@ -371,6 +372,59 @@ class TestApiDownloads:
         if job_id:
             r = admin_client.get(f"/api/jobs/{job_id}/download/audio")
             assert r.status_code == 404
+
+    def test_audio_excerpt_returns_generated_clip(self, admin_client, monkeypatch):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        fs.save_upload(b"source", "audio.mp3")
+
+        fs.save_json("summary/summary.json", {
+            "segments": [
+                {"start": 5.4, "end": 26.4, "text": "Mettez-moi un peu d'émental. De l'émenteal, ça ira comme ça ?"},
+                {"start": 27.0, "end": 30.6, "text": "Le mieux, c'est d'y goûter."},
+            ]
+        })
+
+        def fake_build(audio_path, cache_dir, start_s, end_s, **kwargs):
+            assert audio_path.name == "original.mp3"
+            assert start_s > 5.4
+            assert end_s <= 26.4
+            out = Path(cache_dir) / "excerpt.wav"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"wav")
+            return out
+
+        monkeypatch.setattr("transcria.web.routes.AudioExcerptService.build_excerpt", fake_build)
+
+        r = admin_client.get(
+            f"/api/jobs/{job_id}/audio/excerpt"
+            "?timecode=27.0s%E2%86%9230.6s"
+            "&quote=De%20l%27%C3%A9menteal%2C%20%C3%A7a%20ira%20comme%20%C3%A7a%20%3F"
+        )
+
+        assert r.status_code == 200
+        assert r.mimetype == "audio/wav"
+        assert r.data == b"wav"
+
+    def test_audio_excerpt_rejects_invalid_timecode(self, admin_client):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        fs.save_upload(b"source", "audio.mp3")
+
+        r = admin_client.get(f"/api/jobs/{job_id}/audio/excerpt?timecode=sans-timecode")
+
+        assert r.status_code == 400
+        assert json.loads(r.data)["error"] == "Timecode audio invalide"
 
 
 class TestApiContextEndpoints:

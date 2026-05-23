@@ -414,6 +414,7 @@ jobs/{uuid}/
 ├── input/original.{ext}
 ├── metadata/
 │   ├── audio_analysis.json
+│   ├── audio_excerpts/                 # Cache WAV des écoutes de contextes lexique
 │   ├── transcription.srt
 │   ├── transcription_corrigee.srt      # SRT corrigé par opencode
 │   ├── transcription_segments.json
@@ -873,6 +874,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/context` | POST | login_required + owner/admin check | Sauvegarde contexte |
 | `/api/jobs/<id>/participants` | POST | login_required + owner/admin check | Sauvegarde participants |
 | `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
+| `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique |
 | `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
 | `/api/jobs/<id>/speakers/map` | POST | login_required + owner/admin check | Mapping SPEAKER_XX |
 | `/api/jobs/<id>/speakers/clips` | GET | login_required + owner check | Liste extraits audio |
@@ -1193,6 +1195,7 @@ jobs/{uuid}/
     audio_scene_filter.json      # Filtrage pré-STT appliqué (preserve_timeline=true) si activé
     audio_denoise.json           # Débruitage pré-STT appliqué (preserve_timeline=true) si activé
     audio_normalization.json     # Normalisation pré-STT appliquée (preserve_timeline=true) si activé
+    audio_excerpts/*.wav         # Extraits temporisés pour validation audio du lexique
     transcription.srt            # SRT brut (Cohere ou Whisper + speakers appliqués)
     transcription_corrigee.srt   # SRT corrigé (opencode)
     transcription_segments.json  # Segments détaillés
