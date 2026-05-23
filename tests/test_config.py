@@ -31,6 +31,11 @@ class TestConfigLoading:
         assert cfg["security"]["max_upload_size_mb"] == 1024
         assert ".mp3" in cfg["security"]["allowed_upload_extensions"]
 
+    def test_builtin_defaults_validate_without_llm_model(self):
+        cfg = load_config("/tmp/transcria-nonexistent-default-test.yaml")
+        assert cfg["workflow"]["summary_llm"]["enabled"] is False
+        assert validate_config(cfg).is_valid
+
     def test_load_from_yaml_file(self):
         content = """server:
   port: 9999

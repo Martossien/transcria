@@ -521,7 +521,7 @@ Configuration de la LLM de résumé.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `enabled` | bool | `true` | Active la Phase 2 LLM du résumé |
+| `enabled` | bool | `false` | Active la Phase 2 LLM du résumé ; à activer seulement quand `model_id` est renseigné |
 | `model_id` | string | `""` (obligatoire) | Identifiant du modèle utilisé par `OpenCodeRunner.run_summary()` — doit être défini dans `config.yaml` |
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API OpenAI-compatible |
 | `timeout_seconds` | int | `120` | Timeout du résumé via opencode |

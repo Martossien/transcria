@@ -234,7 +234,7 @@ _DEFAULT_CONFIG = {
             "punctuation_chars": ".,;:!?)]}»",
         },
         "summary_llm": {
-            "enabled": True,
+            "enabled": False,
             "model_id": "",
             "api_base": "http://127.0.0.1:8080/v1",
             "timeout_seconds": 120,

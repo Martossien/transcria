@@ -245,7 +245,7 @@ class TestAdminConfig:
                 data={"config_yaml": "server:\n  port: 8899\nworkflow:\n  enable_quality_mode: false\n"},
                 follow_redirects=True,
             )
-            assert r.status_code == 200
+            assert r.status_code == 200, r.get_data(as_text=True)
             with open(path, "r", encoding="utf-8") as fh:
                 saved = fh.read()
             assert "port: 8899" in saved
@@ -283,7 +283,7 @@ class TestAdminConfig:
                 data={"config_yaml": "auth:\n  first_admin_password: '********'\n  enabled: false\n"},
                 follow_redirects=True,
             )
-            assert r.status_code == 200
+            assert r.status_code == 200, r.get_data(as_text=True)
             assert get_config()["auth"]["first_admin_password"] == "kept-secret"
             assert get_config()["auth"]["enabled"] is True
         finally:
