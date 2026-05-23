@@ -28,6 +28,8 @@ class VRAMManager:
         self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
         self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
+        _env_gpu = os.environ.get("TRANSCRIA_PREFERRED_GPU")
+        self.preferred_gpu: int = int(_env_gpu) if _env_gpu else 0
         self.arbitrage_script: str = os.environ.get(
             "TRANSCRIA_ARBITRAGE_SCRIPT",
             services.get("arbitrage_script", "./scripts/launch_arbitrage.sh"),
@@ -94,7 +96,9 @@ class VRAMManager:
                 g.get("name", "inconnu"),
             )
 
-    def ensure_free(self, required_mb: int, preferred_gpu: int = 0) -> int | None:
+    def ensure_free(self, required_mb: int, preferred_gpu: int | None = None) -> int | None:
+        if preferred_gpu is None:
+            preferred_gpu = self.preferred_gpu
         free = self.get_free_vram_mb(preferred_gpu)
         logger.info(
             "VRAM GPU %d: %d Mo libre, besoin %d Mo",

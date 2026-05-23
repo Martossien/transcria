@@ -25,4 +25,13 @@ class AdaptiveVADConfig:
         if "vad_peu_selectif" in reasons and effective.get("threshold_high_noise") is not None:
             effective["threshold"] = effective["threshold_high_noise"]
 
+        if effective.get("hysteresis_enabled"):
+            if effective.get("onset") is not None:
+                effective["threshold"] = effective["onset"]
+            if effective.get("offset") is not None:
+                effective["max_gap_s"] = max(
+                    0.0,
+                    float(effective.get("min_silence_duration_ms", 400)) / 1000.0,
+                )
+
         return effective

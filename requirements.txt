@@ -3,6 +3,7 @@ flask-login>=0.6,<1.0
 flask-sqlalchemy>=3.1,<4.0
 werkzeug>=3.0,<4.0
 pyyaml>=6.0,<7.0
+python-dotenv>=1.0,<2.0
 requests>=2.31,<3.0
 sqlalchemy>=2.0,<3.0
 

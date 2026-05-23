@@ -141,18 +141,33 @@ class SourceSeparationDecider:
 
         music_ratio = self._float_or_none(audio_scene.get("music_ratio"))
         music_duration_s = self._duration_from_ratio(total_duration_s, music_ratio)
+        ignored_music_for_low_speech = False
         if audio_scene.get("has_music") and self._meets_ratio_or_duration_threshold(
             music_ratio,
             music_duration_s,
-            self.cfg.get("scene_music_min_ratio", 0.05),
-            self.cfg.get("scene_music_min_duration_s", 10),
+            self.cfg.get("scene_music_min_ratio", 0.80),
+            self.cfg.get("scene_music_min_duration_s", 60),
         ):
-            reasons.append(self._format_scene_reason(
-                "scene_musique",
-                music_ratio,
-                music_duration_s,
-            ))
-            return True, score, reasons
+            speech_ratio = self._float_or_none(audio_scene.get("speech_ratio"))
+            min_speech_ratio = self.cfg.get("scene_music_min_speech_ratio_for_force", 0.08)
+            if (
+                speech_ratio is not None
+                and min_speech_ratio is not None
+                and not self._above_or_equal(speech_ratio, min_speech_ratio)
+            ):
+                ignored_music_for_low_speech = True
+                reasons.append(self._format_scene_reason(
+                    "scene_musique_ignoree_parole_faible",
+                    speech_ratio,
+                    None,
+                ))
+            else:
+                reasons.append(self._format_scene_reason(
+                    "scene_musique",
+                    music_ratio,
+                    music_duration_s,
+                ))
+                return True, score, reasons
 
         noise_ratio = self._float_or_none(audio_scene.get("noise_ratio"))
         if audio_scene.get("has_noise") and self._above(
@@ -163,7 +178,10 @@ class SourceSeparationDecider:
             reasons.append(self._format_scene_reason("scene_bruit", noise_ratio, None))
 
         problem_count = self._problem_segment_count(audio_scene)
-        if self._above(problem_count, self.cfg.get("scene_problem_segments_score_threshold", 3)):
+        if (
+            not ignored_music_for_low_speech
+            and self._above(problem_count, self.cfg.get("scene_problem_segments_score_threshold", 3))
+        ):
             score += int(self.cfg.get("scene_problem_segments_score", 1))
             reasons.append(f"scene_zones_problematiques:count={problem_count}")
 
@@ -361,7 +379,6 @@ class SourceSeparationService:
                 device=device,
                 progress=False,
                 num_workers=0,
-                segment=segment_s,
             )
         # sources : (batch=1, stems, channels, samples)
 

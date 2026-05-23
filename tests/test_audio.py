@@ -6,6 +6,95 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
+# AudioPreflightAnalyzer
+# ---------------------------------------------------------------------------
+
+
+class TestAudioPreflightAnalyzer:
+    """Pré-diagnostic audio déterministe avant STT."""
+
+    def _write_wav(self, path, signal, sample_rate=16000):
+        sf = pytest.importorskip("soundfile")
+        sf.write(path, signal, sample_rate)
+
+    def test_disabled_preflight_returns_empty_dict(self, tmp_path):
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        audio = tmp_path / "audio.wav"
+        self._write_wav(audio, [0.0] * 1600)
+
+        result = AudioPreflightAnalyzer({"workflow": {"audio_preflight": {"enabled": False}}}).analyze(audio)
+
+        assert result == {}
+
+    def test_very_low_rms_sets_unreliable_transcription_risk(self, tmp_path):
+        np = pytest.importorskip("numpy")
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        sr = 16000
+        t = np.arange(sr, dtype="float32") / sr
+        audio = tmp_path / "quiet.wav"
+        self._write_wav(audio, 0.002 * np.sin(2 * np.pi * 1000 * t), sr)
+
+        result = AudioPreflightAnalyzer({}).analyze(audio)
+
+        assert result["rms"] < 0.008
+        assert "audio_tres_faible" in result["flags"]
+        assert "risque_transcription_non_fiable" in result["flags"]
+        assert result["risk_level"] == "degrade"
+
+    def test_wide_clean_signal_has_bandwidth_metrics_without_low_volume_flag(self, tmp_path):
+        np = pytest.importorskip("numpy")
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        sr = 16000
+        t = np.arange(sr, dtype="float32") / sr
+        signal = (
+            0.12 * np.sin(2 * np.pi * 1000 * t)
+            + 0.08 * np.sin(2 * np.pi * 6000 * t)
+        )
+        audio = tmp_path / "wide.wav"
+        self._write_wav(audio, signal, sr)
+
+        result = AudioPreflightAnalyzer({}).analyze(audio)
+
+        assert result["rms"] > 0.02
+        assert result["bandwidth_99_hz"] > 3800
+        assert "audio_faible" not in result["flags"]
+        assert "audio_tres_faible" not in result["flags"]
+        assert result["risk_level"] == "ok"
+
+    def test_clipping_is_flagged(self, tmp_path):
+        np = pytest.importorskip("numpy")
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        signal = np.ones(16000, dtype="float32")
+        audio = tmp_path / "clipped.wav"
+        self._write_wav(audio, signal)
+
+        result = AudioPreflightAnalyzer({}).analyze(audio)
+
+        assert result["clipping_ratio"] > 0.001
+        assert "clipping_detecte" in result["flags"]
+        assert result["risk_level"] == "degrade"
+
+    def test_bandwidth_uses_active_frames_not_leading_silence(self, tmp_path):
+        np = pytest.importorskip("numpy")
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        sr = 16000
+        t = np.arange(sr, dtype="float32") / sr
+        silence = np.zeros(sr, dtype="float32")
+        active = 0.12 * np.sin(2 * np.pi * 5000 * t)
+        audio = tmp_path / "silence_then_wide.wav"
+        self._write_wav(audio, np.concatenate([silence, active]), sr)
+
+        result = AudioPreflightAnalyzer({}).analyze(audio)
+
+        assert result["bandwidth_99_hz"] > 3800
+
+
+# ---------------------------------------------------------------------------
 # SourceSeparationDecider
 # ---------------------------------------------------------------------------
 
@@ -108,6 +197,59 @@ class TestSourceSeparationDecider:
         )
         assert should is True
         assert any("musique" in r for r in reasons)
+
+    def test_scene_music_with_too_little_speech_is_not_forced(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=3))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 600},
+            {"level": "ok", "reasons": []},
+            audio_scene={
+                "has_music": True,
+                "speech_ratio": 0.015,
+                "music_ratio": 0.98,
+                "stats": {"total_duration_s": 600},
+            },
+        )
+        assert should is False
+        assert any("parole_faible" in r for r in reasons)
+
+    def test_low_speech_music_false_positive_does_not_score_problem_segments(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=3))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 600},
+            {"level": "degrade", "reasons": ["segments_courts_nombreux"]},
+            audio_scene={
+                "has_music": True,
+                "speech_ratio": 0.015,
+                "music_ratio": 0.98,
+                "problem_segments": [{"label": "music"} for _ in range(124)],
+                "stats": {"total_duration_s": 600},
+            },
+        )
+        assert should is False
+        assert any("parole_faible" in r for r in reasons)
+        assert not any("scene_zones_problematiques" in r for r in reasons)
+
+    def test_scene_music_with_enough_speech_can_still_force(self):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        decider = SourceSeparationDecider(self._cfg(min_score=3))
+        should, reasons = decider.should_separate(
+            {"duration_seconds": 600},
+            {"level": "ok", "reasons": []},
+            audio_scene={
+                "has_music": True,
+                "speech_ratio": 0.20,
+                "music_ratio": 0.98,
+                "stats": {"total_duration_s": 600},
+            },
+        )
+        assert should is True
+        assert any(r.startswith("scene_musique:") for r in reasons)
 
     def test_scene_music_below_threshold_does_not_override_score(self):
         from transcria.audio.source_separation import SourceSeparationDecider
@@ -240,7 +382,10 @@ class TestSourceSeparationService:
         else:
             pytest.importorskip("demucs")
         torch = pytest.importorskip("torch")
-        import torchaudio
+        try:
+            import torchaudio
+        except (ImportError, OSError) as exc:
+            pytest.skip(f"torchaudio indisponible ou incompatible: {exc}")
 
         from transcria.audio.source_separation import SourceSeparationService
 
@@ -418,6 +563,31 @@ class TestAudioNormalizationService:
         assert reasons == ["filters=2"]
         assert filters == ["highpass=f=80", "loudnorm=I=-23:TP=-2:LRA=11"]
 
+    def test_weak_voice_filters_use_preflight_rms_and_bounded_gain(self):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        service = AudioNormalizationService({
+            "workflow": {
+                "audio_normalization": {
+                    "weak_voice": {
+                        "enabled": True,
+                        "target_rms": 0.05,
+                        "max_gain": 8.0,
+                        "loudnorm_after_gain": True,
+                    }
+                }
+            }
+        })
+        should, reasons, filters = service.weak_voice_filters({
+            "rms": 0.005,
+            "flags": ["audio_tres_faible"],
+        })
+
+        assert should is True
+        assert "gain=8.000" in reasons
+        assert filters[0] == "volume=8.000"
+        assert filters[1].startswith("loudnorm=")
+
     def test_no_configured_filters_returns_false(self):
         from transcria.audio.normalization import AudioNormalizationService
 
@@ -454,6 +624,88 @@ class TestAudioNormalizationService:
         result = service.apply(input_path, output_path, ["loudnorm=I=-23:TP=-2:LRA=11"])
 
         assert result == input_path
+
+
+# ---------------------------------------------------------------------------
+# AudioDenoiseService
+# ---------------------------------------------------------------------------
+
+
+class TestAudioDenoiseService:
+    """Débruitage expérimental désactivé par défaut."""
+
+    def _cfg(self, enabled=True):
+        return {
+            "workflow": {
+                "audio_denoise": {
+                    "enabled": enabled,
+                    "enabled_for_modes": ["quality"],
+                    "backend": "ffmpeg_afftdn",
+                    "force": False,
+                    "trigger_flags": ["snr_faible"],
+                    "noise_reduction_db": 12.0,
+                    "noise_floor_db": -25.0,
+                    "timeout_s": 30,
+                }
+            }
+        }
+
+    def test_disabled_denoise_returns_false(self):
+        from transcria.audio.denoise import AudioDenoiseService
+
+        should, reasons, filters = AudioDenoiseService(self._cfg(enabled=False)).should_denoise(
+            "quality", {"flags": ["snr_faible"]}
+        )
+
+        assert should is False
+        assert reasons == ["denoise_desactive"]
+        assert filters == []
+
+    def test_denoise_requires_trigger_flag(self):
+        from transcria.audio.denoise import AudioDenoiseService
+
+        should, reasons, filters = AudioDenoiseService(self._cfg()).should_denoise(
+            "quality", {"flags": ["audio_faible"]}
+        )
+
+        assert should is False
+        assert reasons == ["preflight_sans_bruit_declencheur"]
+        assert filters == []
+
+    def test_denoise_builds_afftdn_filter_for_low_snr(self):
+        from transcria.audio.denoise import AudioDenoiseService
+
+        should, reasons, filters = AudioDenoiseService(self._cfg()).should_denoise(
+            "quality", {"flags": ["snr_faible"]}
+        )
+
+        assert should is True
+        assert reasons == ["preflight:snr_faible"]
+        assert filters == ["afftdn=nr=12:nf=-25"]
+
+
+# ---------------------------------------------------------------------------
+# HysteresisBinarizer
+# ---------------------------------------------------------------------------
+
+
+class TestHysteresisBinarizer:
+    """Seuillage VAD onset/offset avec fusion des gaps courts."""
+
+    def test_binarize_uses_distinct_onset_offset(self):
+        from transcria.audio.vad_hysteresis import HysteresisBinarizer
+
+        binarizer = HysteresisBinarizer(
+            onset=0.6,
+            offset=0.4,
+            frame_s=0.1,
+            min_duration_on=0.1,
+            min_duration_off=0.15,
+        )
+
+        segments = binarizer.binarize([0.1, 0.7, 0.5, 0.45, 0.3])
+
+        assert segments == [{"start": 0.1, "end": 0.4}]
 
 
 # ---------------------------------------------------------------------------
@@ -676,6 +928,29 @@ class TestAudioSceneAnalyzer:
         )
         monkeypatch.setattr("subprocess.run", lambda *a, **kw: fake)
         assert analyzer.analyze(audio) == expected
+
+    def test_analyze_sets_stable_worker_environment(self, tmp_path, monkeypatch):
+        import json
+        import subprocess
+        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
+
+        audio = tmp_path / "audio.wav"
+        audio.touch()
+        analyzer = AudioSceneAnalyzer(self._cfg())
+        captured_env = {}
+
+        def fake_run(*args, **kwargs):
+            captured_env.update(kwargs.get("env") or {})
+            return subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout=json.dumps({"gender_segments": []}).encode(),
+                stderr=b"",
+            )
+
+        monkeypatch.setattr("subprocess.run", fake_run)
+        assert analyzer.analyze(audio) == {"gender_segments": []}
+        assert captured_env.get("NUMBA_CACHE_DIR")
 
 
 # ---------------------------------------------------------------------------

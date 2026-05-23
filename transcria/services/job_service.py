@@ -45,6 +45,8 @@ class JobService:
     @staticmethod
     def analyze(job_id: str, jobs_dir: str, config: dict) -> dict:
         from transcria.audio.analyzer import AudioAnalyzer
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+        from transcria.quality.audio_quality import AudioQualityEvaluator
 
         job = JobStore.get_by_id(job_id)
         if job is None:
@@ -57,12 +59,31 @@ class JobService:
 
         result: dict = AudioAnalyzer.analyze(audio_path)
         fs.save_json("metadata/audio_analysis.json", result)
+        preflight = {}
+        try:
+            analyzer = AudioPreflightAnalyzer(config)
+            if analyzer.enabled:
+                preflight = analyzer.analyze(audio_path)
+                if preflight:
+                    fs.save_json("metadata/audio_preflight.json", preflight)
+        except Exception as exc:
+            logger.warning("Pré-diagnostic audio indisponible pour %s: %s", job.id, exc)
+        try:
+            quality_decision = AudioQualityEvaluator(config).evaluate(
+                result,
+                _quality_summary_from_preflight(preflight),
+            )
+            fs.save_json("metadata/audio_quality_decision.json", quality_decision)
+        except Exception as exc:
+            logger.warning("Décision qualité audio indisponible pour %s: %s", job.id, exc)
         JobStore.update_state(job.id, JobState.ANALYZED)
 
         sl = get_structured_logger(__name__)
         sl.info("Audio analysé", job_id=job.id,
                 duree=result.get("duration_seconds", 0),
-                codec=result.get("codec", "?"))
+                codec=result.get("codec", "?"),
+                audio_risk=preflight.get("risk_level"),
+                audio_flags=preflight.get("flags"))
 
         return result
 
@@ -124,3 +145,13 @@ def _merge_speakers_with_participants(
                     break
         result.append(entry)
     return result
+
+
+def _quality_summary_from_preflight(preflight: dict) -> dict:
+    """Expose le pré-diagnostic sous le format attendu par AudioQualityEvaluator."""
+    if not preflight:
+        return {}
+    level = str(preflight.get("risk_level") or "").strip()
+    if not level:
+        return {}
+    return {"diagnostics": {"level": level}}

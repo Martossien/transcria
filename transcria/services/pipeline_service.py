@@ -57,11 +57,13 @@ class PipelineService:
         effective_config = self._config_for_mode(mode, job)
 
         # Étapes pré-transcription : analyse de scène puis séparation optionnelle
+        audio_preflight = self._run_audio_preflight(job, audio_path, sl)
         audio_scene = self._run_audio_scene_analysis(job, audio_path, sl)
         self._refresh_audio_quality_with_scene(job, audio_scene, sl)
         audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
         audio_path = self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl)
-        audio_path = self._run_audio_normalization(job, audio_path, mode, sl)
+        audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
+        audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
 
         sl.info("Transcription en cours", step="transcribe")
         t0 = time.monotonic()
@@ -168,6 +170,51 @@ class PipelineService:
             logger.warning("[pipeline] Diagnostic résumé indisponible: %s", exc)
         return False
 
+    def _run_audio_preflight(self, job: Job, audio_path: str, sl) -> dict:
+        """Calcule et sauvegarde les signaux acoustiques pré-STT non bloquants."""
+        from pathlib import Path
+
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        analyzer = AudioPreflightAnalyzer(self.config)
+        if not analyzer.enabled:
+            sl.debug("[pipeline] Pré-diagnostic audio désactivé", step="audio_preflight")
+            return {}
+
+        t0 = time.monotonic()
+        sl.info("[pipeline] Pré-diagnostic audio en cours", step="audio_preflight")
+        preflight = analyzer.analyze(Path(audio_path))
+        if not preflight:
+            sl.warning("[pipeline] Pré-diagnostic audio indisponible", step="audio_preflight")
+            return {}
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+
+            fs = JobFilesystem(
+                self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
+            )
+            fs.save_json("metadata/audio_preflight.json", preflight)
+        except Exception as exc:
+            sl.warning(
+                "[pipeline] Sauvegarde audio_preflight.json échouée",
+                step="audio_preflight",
+                error=str(exc),
+            )
+
+        sl.info(
+            "[pipeline] Pré-diagnostic audio terminé",
+            step="audio_preflight",
+            duree=round(time.monotonic() - t0, 1),
+            rms=preflight.get("rms"),
+            peak=preflight.get("peak"),
+            snr_db=preflight.get("estimated_snr_db"),
+            bandwidth_95_hz=preflight.get("bandwidth_95_hz"),
+            risk_level=preflight.get("risk_level"),
+            flags=preflight.get("flags"),
+        )
+        return preflight
+
     def _run_audio_scene_analysis(self, job: Job, audio_path: str, sl) -> dict:
         """Lance l'analyse de scène audio en subprocess isolé (pré-transcription).
 
@@ -243,7 +290,7 @@ class PipelineService:
             sl.info(
                 "[pipeline] Décision qualité enrichie par l'analyse de scène",
                 step="audio_quality",
-                level=evaluation.get("level"),
+                quality_level=evaluation.get("level"),
                 score=evaluation.get("score"),
                 reasons=evaluation.get("reasons"),
                 scene_findings=evaluation.get("scene_findings"),
@@ -279,12 +326,33 @@ class PipelineService:
             sl.debug("[pipeline] Fichiers qualité indisponibles : %s", exc,
                      step="source_sep")
 
-        decider = SourceSeparationDecider(self.config)
-        should, reasons = decider.should_separate(
-            audio_analysis,
-            audio_quality,
-            audio_scene=audio_scene or None,
+        force = bool(
+            self.config.get("workflow", {})
+            .get("source_separation", {})
+            .get("force", False)
         )
+        enabled = bool(
+            self.config.get("workflow", {})
+            .get("source_separation", {})
+            .get("enabled", False)
+        )
+        if not enabled and not force:
+            sl.debug("[pipeline] Séparation désactivée", step="source_sep")
+            return audio_path
+
+        if force:
+            sl.info(
+                "[pipeline] Séparation forcée (workflow.source_separation.force=true)",
+                step="source_sep",
+            )
+            should, reasons = True, ["forced"]
+        else:
+            decider = SourceSeparationDecider(self.config)
+            should, reasons = decider.should_separate(
+                audio_analysis,
+                audio_quality,
+                audio_scene=audio_scene or None,
+            )
 
         if not should:
             sl.debug("[pipeline] Séparation non requise", step="source_sep",
@@ -357,12 +425,64 @@ class PipelineService:
                 step="audio_scene_filter", output=result_path.name)
         return str(result_path)
 
+    def _run_audio_denoise(
+        self,
+        job: Job,
+        audio_path: str,
+        mode: str,
+        audio_preflight: dict,
+        sl,
+    ) -> str:
+        """Applique un débruitage expérimental sans changer la durée audio."""
+        from pathlib import Path
+        from transcria.audio.denoise import AudioDenoiseService
+
+        service = AudioDenoiseService(self.config)
+        should, reasons, filters = service.should_denoise(mode, audio_preflight)
+        if not should:
+            sl.debug("[pipeline] Débruitage audio non appliqué", step="audio_denoise",
+                     reasons=reasons)
+            return audio_path
+
+        output_path = Path(audio_path).parent / "denoised.wav"
+        sl.info("[pipeline] Débruitage audio requis", step="audio_denoise",
+                reasons=reasons, filters=filters)
+        result_path = service.apply(Path(audio_path), output_path, filters)
+
+        if result_path == Path(audio_path):
+            sl.warning("[pipeline] Débruitage audio ignoré, audio original conservé",
+                       step="audio_denoise")
+            return audio_path
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(
+                self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
+            )
+            fs.save_json("metadata/audio_denoise.json", {
+                "input_path": str(audio_path),
+                "output_path": str(result_path),
+                "mode": mode,
+                "reasons": reasons,
+                "filters": filters,
+                "preserve_timeline": True,
+                "experimental": True,
+            })
+        except Exception as exc:
+            sl.warning("[pipeline] Sauvegarde audio_denoise.json échouée",
+                       step="audio_denoise", error=str(exc))
+
+        sl.info("[pipeline] Audio débruité",
+                step="audio_denoise", output=result_path.name)
+        return str(result_path)
+
     def _run_audio_normalization(
         self,
         job: Job,
         audio_path: str,
         mode: str,
         sl,
+        audio_preflight: dict | None = None,
     ) -> str:
         """Applique une normalisation légère sans changer la durée audio."""
         from pathlib import Path
@@ -370,7 +490,60 @@ class PipelineService:
 
         service = AudioNormalizationService(self.config)
         should, reasons, filters = service.should_normalize(mode)
+
         if not should:
+            weak_should, weak_reasons, weak_filters = service.weak_voice_filters(
+                audio_preflight or self._load_audio_preflight(job)
+            )
+            if weak_should:
+                sl.warning(
+                    "[pipeline] Audio faible — profil voix faible forcé",
+                    step="audio_normalization",
+                    reasons=weak_reasons,
+                    filters=weak_filters,
+                )
+                output_path = Path(audio_path).parent / "normalized.wav"
+                result_path = service.apply(Path(audio_path), output_path, weak_filters)
+                if result_path != Path(audio_path):
+                    self._save_audio_normalization_metadata(
+                        job,
+                        audio_path,
+                        result_path,
+                        mode,
+                        weak_reasons,
+                        weak_filters,
+                        forced=True,
+                    )
+                    sl.info("[pipeline] Audio normalisé (forcé — voix faible)",
+                            step="audio_normalization", output=Path(result_path).name)
+                    return str(result_path)
+
+            # Audio trop silencieux (chuchotement, micro lointain) : forcer loudnorm
+            rms = self._rms_from_preflight(audio_preflight) or self._compute_rms(audio_path)
+            rms_threshold = float(
+                self.config.get("workflow", {})
+                .get("audio_normalization", {})
+                .get("auto_loudnorm_rms_threshold", 0.02)
+            )
+            if rms is not None and rms < rms_threshold:
+                sl.warning(
+                    "[pipeline] Audio très silencieux — loudnorm forcé",
+                    step="audio_normalization",
+                    rms=round(rms, 5),
+                    threshold=rms_threshold,
+                )
+                forced_filters = [f"loudnorm=I=-23:TP=-2:LRA=11"]
+                output_path = Path(audio_path).parent / "normalized.wav"
+                result_path = service.apply(Path(audio_path), output_path, forced_filters)
+                if result_path != Path(audio_path):
+                    reasons = ["audio_trop_silencieux_auto_loudnorm", f"rms={rms:.5f}"]
+                    filters = forced_filters
+                    self._save_audio_normalization_metadata(
+                        job, audio_path, result_path, mode, reasons, filters, forced=True
+                    )
+                    sl.info("[pipeline] Audio normalisé (forcé — silence)",
+                            step="audio_normalization", output=Path(result_path).name)
+                    return str(result_path)
             sl.debug("[pipeline] Normalisation audio non appliquée", step="audio_normalization",
                      reasons=reasons)
             return audio_path
@@ -385,26 +558,72 @@ class PipelineService:
                        step="audio_normalization")
             return audio_path
 
+        self._save_audio_normalization_metadata(job, audio_path, result_path, mode, reasons, filters)
+
+        sl.info("[pipeline] Audio normalisé",
+                step="audio_normalization", output=result_path.name)
+        return str(result_path)
+
+    def _save_audio_normalization_metadata(
+        self,
+        job: Job,
+        input_path: str,
+        result_path,
+        mode: str,
+        reasons: list[str],
+        filters: list[str],
+        forced: bool = False,
+    ) -> None:
         try:
             from transcria.jobs.filesystem import JobFilesystem
             fs = JobFilesystem(
                 self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
             )
-            fs.save_json("metadata/audio_normalization.json", {
-                "input_path": str(audio_path),
+            payload = {
+                "input_path": str(input_path),
                 "output_path": str(result_path),
                 "mode": mode,
                 "reasons": reasons,
                 "filters": filters,
                 "preserve_timeline": True,
-            })
+            }
+            if forced:
+                payload["forced"] = True
+            fs.save_json("metadata/audio_normalization.json", payload)
         except Exception as exc:
-            sl.warning("[pipeline] Sauvegarde audio_normalization.json échouée",
-                       step="audio_normalization", error=str(exc))
+            logger.warning("[pipeline] Sauvegarde audio_normalization.json échouée: %s", exc)
 
-        sl.info("[pipeline] Audio normalisé",
-                step="audio_normalization", output=result_path.name)
-        return str(result_path)
+    def _load_audio_preflight(self, job: Job) -> dict:
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(
+                self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id
+            )
+            return fs.load_json("metadata/audio_preflight.json") or {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _rms_from_preflight(audio_preflight: dict | None) -> float | None:
+        if not audio_preflight:
+            return None
+        try:
+            return float(audio_preflight.get("rms"))
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _compute_rms(audio_path: str) -> float | None:
+        """Calcule le RMS du fichier audio. Retourne None en cas d'erreur."""
+        try:
+            import numpy as np
+            import soundfile as sf
+            data, _ = sf.read(audio_path, dtype="float32", always_2d=False)
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            return float(np.sqrt(np.mean(data ** 2)))
+        except Exception:
+            return None
 
     def _define_pipeline_steps(
         self, job: Job, audio_path: str, mode: str
@@ -419,10 +638,12 @@ class PipelineService:
                 "method": partial(self.runner.run_diarization, job, audio_path, self.config),
             })
 
-        steps.append({
-            "name": "correction",
-            "method": partial(self.runner.run_correction, job, self.config),
-        })
+        llm_cfg = self.config.get("workflow", {}).get("arbitration_llm", {})
+        if llm_cfg.get("enabled") is not False:
+            steps.append({
+                "name": "correction",
+                "method": partial(self.runner.run_correction, job, self.config),
+            })
         steps.append({
             "name": "quality",
             "method": partial(self.runner.run_quality_checks, job, self.config),

@@ -24,6 +24,56 @@ def _job(job_id="test-job-001"):
 
 
 # ---------------------------------------------------------------------------
+# _run_audio_preflight
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineAudioPreflight:
+    """Pré-diagnostic audio : désactivé, succès et sauvegarde JSON."""
+
+    def test_disabled_returns_empty_dict(self, tmp_path):
+        svc = _make_svc({
+            "workflow": {"audio_preflight": {"enabled": False}},
+            "storage": {"jobs_dir": str(tmp_path)},
+        })
+
+        result = svc._run_audio_preflight(_job(), str(tmp_path / "audio.wav"), MagicMock())
+
+        assert result == {}
+
+    def test_success_saves_preflight_json(self, tmp_path, monkeypatch):
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+        from transcria.jobs.filesystem import JobFilesystem
+
+        preflight = {
+            "rms": 0.006,
+            "peak": 0.1,
+            "estimated_snr_db": 4.0,
+            "bandwidth_95_hz": 3200.0,
+            "risk_level": "degrade",
+            "flags": ["audio_tres_faible", "risque_transcription_non_fiable"],
+        }
+        monkeypatch.setattr(AudioPreflightAnalyzer, "analyze", lambda self, p: preflight)
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem,
+            "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc({
+            "workflow": {"audio_preflight": {"enabled": True}},
+            "storage": {"jobs_dir": str(tmp_path)},
+        })
+        result = svc._run_audio_preflight(_job(), str(tmp_path / "audio.wav"), MagicMock())
+
+        assert result == preflight
+        assert saved["path"] == "metadata/audio_preflight.json"
+        assert saved["data"] == preflight
+
+
+# ---------------------------------------------------------------------------
 # _run_audio_scene_analysis
 # ---------------------------------------------------------------------------
 
@@ -148,6 +198,28 @@ class TestPipelineSourceSeparation:
             },
             "storage": {"jobs_dir": str(tmp_path)},
         }
+
+    def test_disabled_returns_original_without_decider(self, tmp_path, monkeypatch):
+        from transcria.audio.source_separation import SourceSeparationDecider
+
+        called = False
+
+        def fake_should_separate(self, *args, **kwargs):
+            nonlocal called
+            called = True
+            return True, ["should_not_run"]
+
+        monkeypatch.setattr(SourceSeparationDecider, "should_separate", fake_should_separate)
+
+        cfg = self._cfg(tmp_path)
+        cfg["workflow"]["source_separation"]["enabled"] = False
+        svc = _make_svc(cfg)
+        audio = str(tmp_path / "audio.wav")
+
+        result = svc._run_source_separation(_job(), audio, {}, MagicMock())
+
+        assert result == audio
+        assert called is False
 
     def test_decider_says_no_returns_original_path(self, tmp_path, monkeypatch):
         from transcria.audio.source_separation import SourceSeparationDecider
@@ -327,6 +399,99 @@ class TestPipelineAudioNormalization:
         assert saved["data"]["preserve_timeline"] is True
         assert saved["data"]["filters"] == filters
 
+    def test_weak_voice_profile_uses_preflight_and_saves_metadata(self, tmp_path, monkeypatch):
+        from transcria.audio.normalization import AudioNormalizationService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"audio")
+        monkeypatch.setattr(
+            AudioNormalizationService,
+            "apply",
+            lambda self, input_path, output_path, filters: output_path,
+        )
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem,
+            "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        cfg = {
+            "workflow": {
+                "audio_normalization": {
+                    "enabled": False,
+                    "weak_voice": {"enabled": True, "target_rms": 0.05, "max_gain": 8.0},
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        }
+        svc = _make_svc(cfg)
+        result = svc._run_audio_normalization(
+            _job(), str(audio), "quality", MagicMock(),
+            {"rms": 0.006, "flags": ["audio_tres_faible"]},
+        )
+
+        assert result.endswith("normalized.wav")
+        assert saved["path"] == "metadata/audio_normalization.json"
+        assert saved["data"]["forced"] is True
+        assert "audio_faible_preflight" in saved["data"]["reasons"]
+
+
+# ---------------------------------------------------------------------------
+# _run_audio_denoise
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineAudioDenoise:
+    """Débruitage expérimental : refus et métadonnées d'audit."""
+
+    def test_disabled_denoise_returns_original_path(self, tmp_path):
+        svc = _make_svc({"workflow": {"audio_denoise": {"enabled": False}}})
+        audio = str(tmp_path / "audio.wav")
+
+        result = svc._run_audio_denoise(_job(), audio, "quality", {}, MagicMock())
+
+        assert result == audio
+
+    def test_success_saves_denoise_metadata_and_returns_denoised_path(self, tmp_path, monkeypatch):
+        from transcria.audio.denoise import AudioDenoiseService
+        from transcria.jobs.filesystem import JobFilesystem
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"audio")
+        monkeypatch.setattr(
+            AudioDenoiseService,
+            "apply",
+            lambda self, input_path, output_path, filters: output_path,
+        )
+
+        saved: dict = {}
+        monkeypatch.setattr(
+            JobFilesystem,
+            "save_json",
+            lambda self, path, data: saved.update({"path": path, "data": data}),
+        )
+
+        svc = _make_svc({
+            "workflow": {
+                "audio_denoise": {
+                    "enabled": True,
+                    "enabled_for_modes": ["quality"],
+                    "backend": "ffmpeg_afftdn",
+                    "trigger_flags": ["snr_faible"],
+                }
+            },
+            "storage": {"jobs_dir": str(tmp_path)},
+        })
+        result = svc._run_audio_denoise(_job(), str(audio), "quality", {"flags": ["snr_faible"]}, MagicMock())
+
+        assert result.endswith("denoised.wav")
+        assert saved["path"] == "metadata/audio_denoise.json"
+        assert saved["data"]["preserve_timeline"] is True
+        assert saved["data"]["experimental"] is True
+
 
 # ---------------------------------------------------------------------------
 # Ordre d'exécution dans _run_pipeline_steps
@@ -347,6 +512,11 @@ class TestPipelineStepsOrder:
         monkeypatch.setattr(svc, "_is_cancel_requested", lambda *a: False)
         monkeypatch.setattr(svc, "_config_for_mode", lambda *a: {})
         monkeypatch.setattr(
+            svc,
+            "_run_audio_preflight",
+            lambda *a: call_order.append("preflight") or {},
+        )
+        monkeypatch.setattr(
             svc, "_run_audio_scene_analysis",
             lambda *a: call_order.append("scene") or {},
         )
@@ -357,6 +527,10 @@ class TestPipelineStepsOrder:
         monkeypatch.setattr(
             svc, "_run_audio_scene_filter",
             lambda *a: call_order.append("filter") or str(a[1]),
+        )
+        monkeypatch.setattr(
+            svc, "_run_audio_denoise",
+            lambda *a: call_order.append("denoise") or str(a[1]),
         )
         monkeypatch.setattr(
             svc, "_run_audio_normalization",
@@ -372,7 +546,9 @@ class TestPipelineStepsOrder:
 
         svc._run_pipeline_steps(_job(), "/fake/audio.wav", "fast", MagicMock())
 
+        assert call_order.index("preflight") < call_order.index("transcription")
         assert call_order.index("scene") < call_order.index("transcription")
         assert call_order.index("sep") < call_order.index("transcription")
         assert call_order.index("filter") < call_order.index("transcription")
+        assert call_order.index("denoise") < call_order.index("transcription")
         assert call_order.index("normalization") < call_order.index("transcription")

@@ -21,6 +21,7 @@ Usage ::
 
 import json
 import logging
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _WORKER_MODULE = "transcria.audio._scene_analysis_worker"
+_NUMBA_CACHE_DIR = Path("/tmp/transcria_numba_cache")
 
 
 class AudioSceneAnalyzer:
@@ -73,10 +75,26 @@ class AudioSceneAnalyzer:
                 [sys.executable, "-c", "import librosa, soundfile, numpy"],
                 capture_output=True,
                 timeout=10,
+                env=self._worker_env(),
             )
             return result.returncode == 0
         except Exception:
             return False
+
+    @staticmethod
+    def _worker_env() -> dict:
+        """Construit un environnement stable pour les imports librosa/numba."""
+        env = os.environ.copy()
+        try:
+            _NUMBA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            env.setdefault("NUMBA_CACHE_DIR", str(_NUMBA_CACHE_DIR))
+        except OSError:
+            logger.debug("[scene_analyzer] Cache numba non configurable", exc_info=True)
+
+        if sys.prefix != sys.base_prefix:
+            env.setdefault("PYTHONNOUSERSITE", "1")
+
+        return env
 
     def analyze(self, audio_path: Path) -> dict:
         """Analyse la scène audio en subprocess et retourne les signaux.
@@ -106,6 +124,7 @@ class AudioSceneAnalyzer:
                 cmd,
                 capture_output=True,
                 timeout=self._timeout_s,
+                env=self._worker_env(),
             )
         except subprocess.TimeoutExpired:
             logger.warning(

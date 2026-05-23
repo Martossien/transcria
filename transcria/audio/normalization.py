@@ -36,6 +36,34 @@ class AudioNormalizationService:
 
         return True, [f"filters={len(filters)}"], filters
 
+    def weak_voice_filters(self, preflight: dict | None) -> tuple[bool, list[str], list[str]]:
+        """Construit un profil borné pour voix faible/chuchotée."""
+        cfg = self.cfg.get("weak_voice", {}) or {}
+        if not bool(cfg.get("enabled", True)):
+            return False, ["profil_voix_faible_desactive"], []
+
+        preflight = preflight or {}
+        flags = set(preflight.get("flags") or [])
+        if not ({"audio_tres_faible", "audio_faible"} & flags):
+            return False, ["preflight_volume_ok"], []
+
+        rms = self._float_or_none(preflight.get("rms"))
+        if rms is None or rms <= 0:
+            return False, ["rms_preflight_indisponible"], []
+
+        target_rms = float(cfg.get("target_rms", 0.05))
+        max_gain = float(cfg.get("max_gain", 8.0))
+        gain = min(max_gain, max(1.0, target_rms / rms))
+        filters = [f"volume={gain:.3f}"]
+
+        if bool(cfg.get("loudnorm_after_gain", True)):
+            target_i = float(cfg.get("target_i", -23.0))
+            true_peak = float(cfg.get("true_peak", -2.0))
+            lra = float(cfg.get("lra", 11.0))
+            filters.append(f"loudnorm=I={target_i:g}:TP={true_peak:g}:LRA={lra:g}")
+
+        return True, ["audio_faible_preflight", f"rms={rms:.5f}", f"gain={gain:.3f}"], filters
+
     def apply(self, input_path: Path, output_path: Path, filters: list[str]) -> Path:
         """Applique les filtres et retourne la sortie ou l'entrée en fallback."""
         if not filters:
