@@ -8,7 +8,10 @@ conditionnelles.
 
 import logging
 import math
+import shutil
+import subprocess
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +39,14 @@ class AudioPreflightAnalyzer:
 
         path = Path(audio_path)
         try:
-            import numpy as np
-            import soundfile as sf
-
-            data, sample_rate = sf.read(path, dtype="float32", always_2d=False)
+            data, sample_rate, loader = _read_audio(path)
         except Exception as exc:
             logger.warning("[audio_preflight] Analyse impossible pour %s: %s", path, exc)
             return {}
 
         try:
+            import numpy as np
+
             if getattr(data, "ndim", 1) > 1:
                 channels = int(data.shape[1])
                 data = data.mean(axis=1)
@@ -72,6 +74,7 @@ class AudioPreflightAnalyzer:
             return {
                 "enabled": True,
                 "path": str(path),
+                "loader": loader,
                 "sample_rate_hz": int(sample_rate),
                 "channels": channels,
                 "duration_seconds": round(duration_s, 3),
@@ -119,6 +122,50 @@ class AudioPreflightAnalyzer:
             flags.append("risque_transcription_non_fiable")
 
         return flags
+
+
+def _read_audio(path: Path) -> tuple[Any, int, str]:
+    """Charge l'audio pour le pré-diagnostic avec fallback conteneurs compressés."""
+    try:
+        import soundfile as sf
+
+        data, sample_rate = sf.read(path, dtype="float32", always_2d=False)
+        return data, int(sample_rate), "soundfile"
+    except Exception as sf_exc:
+        logger.info(
+            "[audio_preflight] Lecture soundfile impossible pour %s, fallback ffmpeg PCM: %s",
+            path,
+            sf_exc,
+        )
+
+    ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+    cmd = [
+        ffmpeg_bin,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(path),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-f",
+        "f32le",
+        "pipe:1",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, check=False, timeout=180)
+    if proc.returncode != 0:
+        err = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"ffmpeg preflight decode failed ({proc.returncode}): {err}") from None
+    if not proc.stdout:
+        raise RuntimeError("ffmpeg preflight decode produced no audio")
+
+    import numpy as np
+
+    data = np.frombuffer(proc.stdout, dtype="<f4").copy()
+    return data, 16000, "ffmpeg"
 
 
 def _frame_rms(signal, sample_rate: int, frame_ms: int):

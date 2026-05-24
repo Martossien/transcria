@@ -95,6 +95,34 @@ class TestAudioPreflightAnalyzer:
 
         assert result["bandwidth_99_hz"] > 3800
 
+    def test_preflight_falls_back_to_ffmpeg_when_soundfile_cannot_decode_container(self, tmp_path, monkeypatch):
+        np = pytest.importorskip("numpy")
+        pytest.importorskip("soundfile")
+        import subprocess
+        import soundfile as sf
+
+        audio = tmp_path / "compressed.m4a"
+        audio.write_bytes(b"not-a-real-container")
+        sr = 16000
+        signal = np.full(sr, 0.05, dtype="float32")
+
+        def fail_soundfile(*args, **kwargs):
+            raise RuntimeError("Format not recognised")
+
+        monkeypatch.setattr(sf, "read", fail_soundfile)
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *args, **kwargs: subprocess.CompletedProcess(args[0], 0, stdout=signal.astype("<f4").tobytes(), stderr=b""),
+        )
+
+        result = AudioPreflightAnalyzer({}).analyze(audio)
+
+        assert result["loader"] == "ffmpeg"
+        assert result["sample_rate_hz"] == sr
+        assert result["duration_seconds"] == pytest.approx(1.0)
+        assert result["risk_level"] in {"ok", "suspect"}
+
 
 # ---------------------------------------------------------------------------
 # AudioExcerptService
