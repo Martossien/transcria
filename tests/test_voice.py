@@ -18,7 +18,7 @@ from transcria.voice.models import VoiceSubject
 
 class TestVoiceConfig:
     def test_default_voice_enrollment_config_is_valid(self):
-        cfg = load_config()
+        cfg = load_config("/tmp/transcria-test-missing-config.yaml")
 
         result = validate_config(cfg)
 
@@ -131,7 +131,7 @@ class TestVoiceStore:
             VoiceStore.complete_profile(
                 profile,
                 VoiceEmbedding(
-                    vector=np.array([1.0, 0.0], dtype=np.float32),
+                    vector=np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32),
                     backend="pyannote",
                     model_id=get_config()["voice_enrollment"]["embedding"]["model_id"],
                     model_revision="",
@@ -147,6 +147,52 @@ class TestVoiceStore:
 
             assert scope["group_ids"] == [group.id]
             assert [p.subject_id for p in profiles] == [subject.id]
+
+    def test_matchable_profiles_for_admin_job_include_all_groups(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            from transcria.jobs.store import JobStore
+            from transcria.voice.embedding import VoiceEmbedding
+            from transcria.voice.store import VoiceStore
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(f"voice-admin-scope-{uuid.uuid4().hex[:8]}")
+            subject = VoiceStore.create_subject(
+                actor=admin,
+                display_name="Admin Scope Voice",
+                group_id=group.id,
+                allow_global_profiles=False,
+            )
+            consent = VoiceStore.create_consent(
+                subject=subject,
+                actor=admin,
+                form_version="voice-consent-v1",
+                status=VoiceConsentStatus.ACTIVE,
+                proof_path="/tmp/proof.pdf",
+                proof_sha256="e" * 64,
+            )
+            profile = VoiceStore.create_processing_profile(subject, consent, admin, get_config()["voice_enrollment"]["embedding"])
+            VoiceStore.complete_profile(
+                profile,
+                VoiceEmbedding(
+                    vector=np.array([0.0, 1.0], dtype=np.float32),
+                    backend="pyannote",
+                    model_id=get_config()["voice_enrollment"]["embedding"]["model_id"],
+                    model_revision="",
+                    normalization="l2",
+                    sample_count=1,
+                    speech_duration_s=8.0,
+                ),
+                admin,
+            )
+            job = JobStore.create_job(owner_id=admin.id, title="admin voice scope")
+
+            profiles, scope = VoiceStore.matchable_profiles_for_job(job, get_config())
+
+            assert scope["scope"] == "admin_all"
+            assert subject.id in {p.subject_id for p in profiles}
 
 
 class TestVoiceWeb:
@@ -251,6 +297,7 @@ class TestVoiceWeb:
     def test_voice_match_route_suggests_known_voice(self, app, admin_client, monkeypatch):
         with app.app_context():
             from transcria.auth.groups import GroupStore
+            from transcria.auth.models import Role
             from transcria.auth.store import UserStore
             from transcria.config import get_config
             from transcria.jobs.filesystem import JobFilesystem
@@ -262,8 +309,13 @@ class TestVoiceWeb:
             cfg["voice_enrollment"]["enabled"] = True
             cfg["voice_enrollment"]["require_explicit_job_group_for_multi_group_users"] = False
             admin = UserStore.get_by_username("admin")
+            owner = UserStore.create_user(
+                username=f"voice_match_owner_{uuid.uuid4().hex[:8]}",
+                password="test12345",
+                role=Role.OPERATOR,
+            )
             group = GroupStore.create_group(f"voice-match-{uuid.uuid4().hex[:8]}")
-            GroupStore.add_member(group.id, admin.id)
+            GroupStore.add_member(group.id, owner.id)
             subject = VoiceStore.create_subject(
                 actor=admin,
                 display_name="Diane Voice",
@@ -282,7 +334,7 @@ class TestVoiceWeb:
             VoiceStore.complete_profile(
                 profile,
                 VoiceEmbedding(
-                    vector=np.array([1.0, 0.0], dtype=np.float32),
+                    vector=np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32),
                     backend="pyannote",
                     model_id=cfg["voice_enrollment"]["embedding"]["model_id"],
                     model_revision="",
@@ -292,7 +344,7 @@ class TestVoiceWeb:
                 ),
                 admin,
             )
-            job = JobStore.create_job(owner_id=admin.id, title="voice match")
+            job = JobStore.create_job(owner_id=owner.id, title="voice match")
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             clip_path = fs.job_dir / "speakers" / "samples" / "SPEAKER_00_clip1.wav"
             clip_path.write_bytes(b"fake wav")
@@ -302,7 +354,7 @@ class TestVoiceWeb:
             from transcria.voice.embedding import VoiceEmbedding
 
             return VoiceEmbedding(
-                vector=np.array([1.0, 0.0], dtype=np.float32),
+                vector=np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32),
                 backend="pyannote",
                 model_id=self.model_id,
                 model_revision=self.model_revision,

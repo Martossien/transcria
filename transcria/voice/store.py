@@ -158,13 +158,15 @@ class VoiceStore:
     @staticmethod
     def matchable_profiles_for_job(job, config: dict) -> tuple[list[VoiceProfile], dict]:
         enrollment_cfg = config.get("voice_enrollment", {})
+        owner = db.session.get(User, job.owner_id)
+        owner_is_admin = bool(owner and owner.has_role(Role.ADMIN))
         owner_group_ids = GroupStore.user_group_ids(job.owner_id)
         metadata = {
-            "scope": "owner_groups",
+            "scope": "admin_all" if owner_is_admin else "owner_groups",
             "group_ids": sorted(owner_group_ids),
             "requires_explicit_group": False,
         }
-        if len(owner_group_ids) > 1 and enrollment_cfg.get("require_explicit_job_group_for_multi_group_users", True):
+        if not owner_is_admin and len(owner_group_ids) > 1 and enrollment_cfg.get("require_explicit_job_group_for_multi_group_users", True):
             metadata["requires_explicit_group"] = True
             return [], metadata
 
@@ -183,7 +185,9 @@ class VoiceStore:
                 VoiceConsent.status == VoiceConsentStatus.ACTIVE.value,
             )
         )
-        if owner_group_ids:
+        if owner_is_admin:
+            pass
+        elif owner_group_ids:
             query = query.filter(VoiceProfile.group_id.in_(owner_group_ids))
         elif enrollment_cfg.get("allow_global_profiles", False):
             query = query.filter(VoiceProfile.group_id.is_(None))
