@@ -329,11 +329,15 @@ Règles de périmètre :
 
 Flux étape 6 :
 1. `web.routes._central_lexicon_context()` charge les lexiques accessibles au job.
-2. `merge_lexicon_entries()` fusionne central + termes suspects LLM ; une session existante garde la priorité.
-3. `LexiconManager.save()` conserve les métadonnées `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name`.
-4. `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` et transmet ce fichier filtré à la LLM : termes présents par forme/variante + priorités `critique`/`importante` conservées en préservation.
+2. `context/selected_lexicons.json` limite les lexiques cochés pour ce job. Si le fichier est absent, tous les lexiques accessibles sont sélectionnés.
+3. `prefilter_lexicon_entries_for_display()` réduit les entrées centrales affichées : terme/variante détecté dans le transcript ou résumé, priorité `critique`/`importante`, limite douce d'affichage. Chaque entrée gardée reçoit `_display_reason` pour l'explication UI.
+4. `merge_lexicon_entries()` fusionne central filtré + termes suspects LLM ; une session existante garde la priorité.
+5. `LexiconManager.save()` conserve les métadonnées `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name`, `_display_reason`.
+6. `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` et transmet ce fichier filtré à la LLM : termes présents par forme/variante + priorités `critique`/`importante` conservées en préservation.
 
 Ne pas envoyer un lexique central complet et volumineux à la LLM sans filtrage par SRT : cela augmente le bruit et le risque de correction hors contexte.
+Ne pas écraser `session_lexicon.json` quand l'utilisateur change seulement les cases de lexiques : `/api/jobs/<id>/selected-lexicons` ne sauvegarde que la sélection et recharge le préremplissage.
+Les fiches `/admin/lexicons/<id>` affichent les statistiques d'usage et les contrôles qualité calculés par `CentralLexiconStore.usage_stats()` et `quality_issues()` ; ces signaux restent informatifs et ne bloquent pas la sauvegarde.
 
 ### Récupération des opencode orphelins au démarrage
 `job_executor._kill_orphaned_opencode(job_id, jobs_dir, sl)` tue les processus opencode de TranscrIA laissés vivants après un redémarrage brutal. Il lit les fichiers `.opencode.pid` dans `jobs/<id>/` (écrits par `OpenCodeRunner.run()`). La réconciliation est appelée automatiquement par `init_job_executor()` au démarrage du service.

@@ -716,11 +716,11 @@ Deux modes de chunking :
 | Module | Description |
 |---|---|
 | `central_lexicon_models.py` | Tables `group_lexicons` et `group_lexicon_entries` |
-| `central_lexicon_store.py` | CRUD, import CSV/TXT, permissions admin/admin groupe, périmètre job→groupes |
-| `central_lexicon_service.py` | Fusion central + LLM + session et filtrage par présence dans le SRT |
-| `central_lexicon_routes.py` | Interface `/admin/lexicons` |
+| `central_lexicon_store.py` | CRUD, import CSV/TXT, permissions admin/admin groupe, périmètre job→groupes, stats d'usage et contrôles qualité |
+| `central_lexicon_service.py` | Préfiltrage affichage avec raison de proposition, fusion central + LLM + session et filtrage par présence dans le SRT |
+| `central_lexicon_routes.py` | Interface `/admin/lexicons`, stats et alertes qualité |
 
-Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
+Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. `context/selected_lexicons.json` mémorise les lexiques cochés pour le job ; absent, tous les lexiques accessibles sont sélectionnés. `prefilter_lexicon_entries_for_display()` masque avant affichage les entrées centrales normales sans occurrence dans le transcript/résumé, tout en conservant les priorités `critique`/`importante`. Il ajoute `_display_reason` (`term_presence`, `variant_presence`, `priority`) pour expliquer dans l'UI pourquoi un terme est proposé. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
 
 **`job_context_builder.py` — `JobContextBuilder`**
 | Méthode | Description |
@@ -903,6 +903,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/participants` | POST | login_required + owner/admin check | Sauvegarde participants |
 | `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
 | `/api/jobs/<id>/available-lexicons` | GET | login_required + owner/admin check | Lexiques centralisés accessibles au job |
+| `/api/jobs/<id>/selected-lexicons` | POST | login_required + owner/admin check | Sauvegarde les lexiques cochés pour le préremplissage du job |
 | `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique |
 | `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
 | `/api/jobs/<id>/speakers/voice-match` | POST | login_required + owner/admin check | Suggestions depuis les voix enregistrées accessibles au job |

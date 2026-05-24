@@ -173,6 +173,10 @@ Règles principales :
 
 Pendant l'étape **Lexique de session**, TranscrIA fusionne les entrées centrales avec les termes douteux proposés par la LLM. Avant la correction SRT, le lexique transmis à la LLM est filtré : les entrées présentes dans le SRT par terme ou variante sont conservées, les priorités `critique` et `importante` restent en préservation, et les entrées normales absentes sont retirées du prompt pour réduire le bruit.
 
+Pour rester lisible quand un groupe possède beaucoup d'entrées, l'étape 6 propose aussi une sélection simple des lexiques utilisés pour le job. Les lexiques sont cochés par défaut, l'utilisateur peut en retirer un hors sujet, puis appliquer la sélection. TranscrIA pré-remplit alors seulement les termes les plus utiles : occurrences détectées, variantes détectées et priorités fortes. Les termes normaux peu probables sont masqués de l'affichage, sans être supprimés du référentiel central.
+
+Chaque terme central affiché dans le workflow indique simplement pourquoi il est proposé : trouvé dans le texte, variante détectée ou priorité forte. Côté administration, les fiches lexique affichent les usages réels, les entrées les plus utilisées et des contrôles qualité simples pour repérer les termes trop courts, doublons proches ou variantes inutiles.
+
 ## Pipeline audio et STT
 
 Avant la transcription finale, `PipelineService` peut exécuter :

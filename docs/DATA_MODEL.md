@@ -84,7 +84,7 @@
 | `group_lexicons` | Lexique réutilisable global ou rattaché à un groupe | Non sensible par défaut, peut contenir vocabulaire métier interne |
 | `group_lexicon_entries` | Entrées du lexique : terme validé, variantes, catégorie, priorité, commentaire | Vocabulaire métier interne |
 
-`group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant.
+`group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant. `group_lexicon_entries.usage_count` et `last_used_at` alimentent les statistiques admin ; ils sont incrémentés uniquement quand une entrée centrale est sauvegardée dans un lexique de session.
 
 ---
 
@@ -279,6 +279,7 @@ jobs/<job_id>/
 ├── context/
 │   ├── meeting_context.json       # Contexte de réunion (titre, type, langue, suggestions LLM)
 │   ├── participants.json          # Liste des participants [{id, name, function, role, ...}]
+│   ├── selected_lexicons.json     # Lexiques centralisés cochés pour le préremplissage du job
 │   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, source, central_entry_id, ...}]
 │   ├── session_lexicon_filtered.json # Lexique réduit transmis à la correction LLM
 │   ├── session_lexicon.txt        # Lexique en texte (pour correction LLM)
@@ -336,6 +337,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Locuteurs (detect) | `speakers/speaker_stats.json` (écrasé) | `SpeakerDetector.detect()` |
 | Locuteurs (voix connues) | `speakers/voice_matches.json`, table `voice_matches` | `VoiceMatchingService.match_job_speakers()` |
 | Locuteurs (map) | `speakers/speaker_mapping.json`, `context/job_context.yaml`, `context/job_context.json` | `SpeakerDetector.save_mapping()` + `JobContextBuilder.build()` |
+| Lexique | `context/selected_lexicons.json` | `/api/jobs/<id>/selected-lexicons` |
 | Lexique | `context/session_lexicon.json`, `context/session_lexicon.txt`, `context/job_context.yaml`, `context/job_context.json` | `LexiconManager.save()` + `JobContextBuilder.build()` |
 | Pré-traitement | `metadata/audio_preflight.json` | `PipelineService._run_audio_preflight()` / `AudioPreflightAnalyzer` |
 | Pré-traitement | `metadata/audio_scene.json` (si `workflow.audio_scene.enabled=true`) | `PipelineService._run_audio_scene_analysis()` + `AudioSceneAnalyzer` |
@@ -442,6 +444,17 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
 ]
 ```
 
+### selected_lexicons.json
+
+```json
+{
+  "selected_lexicon_ids": ["uuid-lexique-1", "uuid-lexique-2"],
+  "updated_at": "2026-05-24T12:00:00+00:00"
+}
+```
+
+Ce fichier mémorise uniquement les lexiques centralisés cochés pour le préremplissage de l'étape 6. S'il est absent, tous les lexiques accessibles au propriétaire du job sont sélectionnés par défaut. Modifier cette sélection ne sauvegarde pas le lexique de session et ne remplace jamais `session_lexicon.json`.
+
 ### session_lexicon.json
 
 ```json
@@ -458,6 +471,7 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
     "central_entry_id": "entry-uuid",
     "central_lexicon_id": "lexicon-uuid",
     "central_lexicon_name": "Lexique finance",
+    "_display_reason": "variant_presence",
     "contexts": [
       {
         "variant": "",
@@ -474,7 +488,7 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
 
 `contexts[].listened` est le flag de validation d'écoute saisi dans l'UI. Il est conservé dans `session_lexicon.json` mais reste une aide humaine : la correction LLM ne doit pas le traiter comme une preuve de correction automatique.
 
-Les champs `source`, `central_entry_id`, `central_lexicon_id` et `central_lexicon_name` sont optionnels. Ils tracent l'origine d'une entrée pré-remplie depuis un lexique centralisé, sans rendre le référentiel central autoritaire sur une correction humaine de session.
+Les champs `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name` et `_display_reason` sont optionnels. Ils tracent l'origine d'une entrée pré-remplie depuis un lexique centralisé et la raison d'affichage (`term_presence`, `variant_presence`, `priority`), sans rendre le référentiel central autoritaire sur une correction humaine de session.
 
 ### session_lexicon_filtered.json
 

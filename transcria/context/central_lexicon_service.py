@@ -59,6 +59,7 @@ def _clean_entry(entry: dict, source: str) -> dict:
         "central_entry_id": entry.get("central_entry_id") or (entry.get("id", "") if is_central else ""),
         "central_lexicon_id": entry.get("central_lexicon_id") or entry.get("lexicon_id", ""),
         "central_lexicon_name": str(entry.get("central_lexicon_name", "") or "").strip(),
+        "_display_reason": str(entry.get("_display_reason", "") or "").strip(),
     }
 
 
@@ -111,6 +112,76 @@ def merge_lexicon_entries(
             item.get("term", "").casefold(),
         ),
     )
+
+
+def prefilter_lexicon_entries_for_display(
+    central_entries: list[dict],
+    reference_text: str,
+    *,
+    keep_priorities: set[str] | None = None,
+    max_entries: int = 80,
+) -> tuple[list[dict], dict]:
+    """Réduit les entrées centrales affichées sans toucher aux suggestions LLM."""
+    keep_priorities = keep_priorities or {"critique", "importante"}
+    max_entries = max(1, int(max_entries or 80))
+    metadata = {
+        "total": len(central_entries or []),
+        "kept": 0,
+        "hidden": 0,
+        "kept_by_priority": 0,
+        "kept_by_term_presence": 0,
+        "kept_by_variant_presence": 0,
+        "limited_out": 0,
+        "max_entries": max_entries,
+        "reference_available": bool(str(reference_text or "").strip()),
+    }
+    if not central_entries:
+        return [], metadata
+
+    normalized_reference = normalize_match_text(reference_text)
+    kept: list[dict] = []
+    hidden = 0
+    for raw in central_entries:
+        entry = dict(raw)
+        term = str(entry.get("term", "") or "").strip()
+        priority = normalize_priority(entry.get("priority", "normale"))
+        variants = [str(v).strip() for v in entry.get("variants", []) if str(v).strip()]
+
+        if normalized_reference and term and normalize_match_text(term) in normalized_reference:
+            entry["_display_reason"] = "term_presence"
+            kept.append(entry)
+            metadata["kept_by_term_presence"] += 1
+            continue
+
+        if normalized_reference and any(normalize_match_text(variant) in normalized_reference for variant in variants):
+            entry["_display_reason"] = "variant_presence"
+            kept.append(entry)
+            metadata["kept_by_variant_presence"] += 1
+            continue
+
+        if priority in keep_priorities:
+            entry["_display_reason"] = "priority"
+            kept.append(entry)
+            metadata["kept_by_priority"] += 1
+            continue
+
+        hidden += 1
+
+    kept = sorted(
+        kept,
+        key=lambda item: (
+            -_PRIORITY_RANK.get(normalize_priority(item.get("priority", "normale")), 1),
+            item.get("term", "").casefold(),
+        ),
+    )
+    limited_out = max(0, len(kept) - max_entries)
+    if limited_out:
+        kept = kept[:max_entries]
+
+    metadata["kept"] = len(kept)
+    metadata["limited_out"] = limited_out
+    metadata["hidden"] = hidden + limited_out
+    return kept, metadata
 
 
 def filter_lexicon_by_srt_presence(

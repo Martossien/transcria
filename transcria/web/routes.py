@@ -3,6 +3,7 @@ import copy
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import (
@@ -42,6 +43,7 @@ from transcria.config import _deep_merge, get_config, get_config_path, load_conf
 from transcria.config.config_schema import validate_config
 from transcria.config.system_detector import SystemDetector
 from transcria.context.central_lexicon_service import merge_lexicon_entries
+from transcria.context.central_lexicon_service import prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.services.job_service import JobService
 from transcria.services.job_executor import get_job_executor
@@ -62,6 +64,7 @@ MEETING_TYPES_LIST = MEETING_TYPES
 DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
 PROCESS_START_TIME = time.time()
+LEXICON_DISPLAY_MAX_ENTRIES = 80
 
 
 def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str:
@@ -150,31 +153,105 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
     return recovered
 
 
-def _central_lexicon_context(job: Job, session_lexicon: list[dict], meeting: dict) -> tuple[list[dict], list[dict]]:
+def _selected_lexicon_ids(fs: JobFilesystem, central_lexicons: list) -> set[str]:
+    stored = fs.load_json("context/selected_lexicons.json") or {}
+    available_ids = {lexicon.id for lexicon in central_lexicons}
+    if not isinstance(stored, dict) or "selected_lexicon_ids" not in stored:
+        return set(available_ids)
+    selected = {str(item) for item in stored.get("selected_lexicon_ids") or []}
+    return selected.intersection(available_ids)
+
+
+def _central_lexicon_reference_text(fs: JobFilesystem, meeting: dict) -> str:
+    chunks = [
+        fs.load_text("summary/quick_transcript.txt") or "",
+        fs.load_text("summary/summary.md") or "",
+    ]
+    if isinstance(meeting, dict):
+        for key in ("title", "title_suggere", "subject", "sujet_suggere", "objective", "objectif_suggere", "notes_suggeres"):
+            value = meeting.get(key)
+            if value:
+                chunks.append(str(value))
+    return "\n".join(chunks)
+
+
+def _central_lexicon_cards(central_lexicons: list, selected_ids: set[str]) -> list[dict]:
+    return [
+        {
+            "id": lexicon.id,
+            "name": lexicon.name,
+            "description": lexicon.description,
+            "group_id": lexicon.group_id,
+            "group_name": lexicon.group.name if lexicon.group else "",
+            "entry_count": len(lexicon.entries or []),
+            "selected": lexicon.id in selected_ids,
+        }
+        for lexicon in central_lexicons
+    ]
+
+
+def _central_lexicon_context(
+    job: Job,
+    fs: JobFilesystem,
+    session_lexicon: list[dict],
+    meeting: dict,
+) -> tuple[list[dict], list[dict], dict]:
     """Retourne les lexiques centraux du job et le lexique initial à afficher."""
     central_lexicons = CentralLexiconStore.list_accessible_lexicons_for_job(job)
-    central_entries = CentralLexiconStore.entries_for_lexicons(central_lexicons)
+    selected_ids = _selected_lexicon_ids(fs, central_lexicons)
+    selected_lexicons = [lexicon for lexicon in central_lexicons if lexicon.id in selected_ids]
+    central_entries = CentralLexiconStore.entries_for_lexicons(selected_lexicons)
     llm_suggestions = (meeting.get("termes_suspects") or []) if isinstance(meeting, dict) else []
+    metadata = {
+        "available_lexicons": len(central_lexicons),
+        "selected_lexicons": len(selected_lexicons),
+        "selected_entries": len(central_entries),
+        "llm_suggestions": len(llm_suggestions),
+        "displayed_central_entries": 0,
+        "hidden_central_entries": 0,
+        "limited_out": 0,
+        "session_existing": bool(session_lexicon),
+        "max_entries": LEXICON_DISPLAY_MAX_ENTRIES,
+    }
+    cards = _central_lexicon_cards(central_lexicons, selected_ids)
     if session_lexicon:
         logger.info(
-            "Lexique étape 6: session existante conservée | job=%s, session_entries=%d, central_lexicons=%d",
+            "Lexique étape 6: session existante conservée | job=%s, session_entries=%d, central_lexicons=%d, selected_lexicons=%d",
             job.id,
             len(session_lexicon),
             len(central_lexicons),
+            len(selected_lexicons),
         )
-        return central_lexicons, session_lexicon
+        return cards, session_lexicon, metadata
 
-    merged = merge_lexicon_entries(central_entries, llm_suggestions)
+    display_entries, display_stats = prefilter_lexicon_entries_for_display(
+        central_entries,
+        _central_lexicon_reference_text(fs, meeting),
+        max_entries=LEXICON_DISPLAY_MAX_ENTRIES,
+    )
+    metadata.update({
+        "displayed_central_entries": display_stats.get("kept", 0),
+        "hidden_central_entries": display_stats.get("hidden", 0),
+        "limited_out": display_stats.get("limited_out", 0),
+        "kept_by_term_presence": display_stats.get("kept_by_term_presence", 0),
+        "kept_by_variant_presence": display_stats.get("kept_by_variant_presence", 0),
+        "kept_by_priority": display_stats.get("kept_by_priority", 0),
+        "reference_available": display_stats.get("reference_available", False),
+    })
+    merged = merge_lexicon_entries(display_entries, llm_suggestions)
     if central_entries or llm_suggestions:
         logger.info(
-            "Lexique étape 6: préremplissage fusionné | job=%s, central_lexicons=%d, central_entries=%d, llm_suggestions=%d, merged=%d",
+            "Lexique étape 6: préremplissage fusionné | job=%s, central_lexicons=%d, selected_lexicons=%d, central_entries=%d, displayed_central=%d, hidden_central=%d, llm_suggestions=%d, merged=%d",
             job.id,
             len(central_lexicons),
+            len(selected_lexicons),
             len(central_entries),
+            metadata["displayed_central_entries"],
+            metadata["hidden_central_entries"],
             len(llm_suggestions),
             len(merged),
         )
-    return central_lexicons, merged
+    return cards, merged, metadata
 
 
 def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
@@ -556,7 +633,7 @@ def job_wizard(job_id: str):
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     meeting = _recover_summary_speaker_hints(fs, meeting)
     session_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
-    central_lexicons, initial_lexicon = _central_lexicon_context(job, session_lexicon, meeting)
+    central_lexicons, initial_lexicon, central_lexicon_display = _central_lexicon_context(job, fs, session_lexicon, meeting)
     lexicon = _enrich_lexicon_context_audio(initial_lexicon)
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     voice_matches = fs.load_json("speakers/voice_matches.json") or {}
@@ -614,7 +691,8 @@ def job_wizard(job_id: str):
         participants=participants,
         lexicon=lexicon,
         central_lexicons=central_lexicons,
-        central_lexicon_prefill_count=sum(len(item.entries) for item in central_lexicons),
+        central_lexicon_display=central_lexicon_display,
+        central_lexicon_prefill_count=central_lexicon_display.get("displayed_central_entries", 0),
         session_lexicon_exists=bool(session_lexicon),
         speakers=speakers_data,
         voice_matches=voice_matches,
@@ -827,6 +905,33 @@ def api_available_lexicons(job_id: str):
     return jsonify({
         "lexicons": [lexicon.to_dict(include_entries=True) for lexicon in lexicons],
     })
+
+
+@web_bp.route("/api/jobs/<job_id>/selected-lexicons", methods=["POST"])
+@login_required
+def api_selected_lexicons(job_id: str):
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+    payload = request.get_json(silent=True) or {}
+    requested_ids = {str(item) for item in payload.get("selected_lexicon_ids", []) if str(item).strip()}
+    lexicons = CentralLexiconStore.list_accessible_lexicons_for_job(job)
+    available_ids = {lexicon.id for lexicon in lexicons}
+    selected_ids = sorted(requested_ids.intersection(available_ids))
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    fs.save_json("context/selected_lexicons.json", {
+        "selected_lexicon_ids": selected_ids,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info(
+        "Sélection lexiques job sauvegardée | job=%s available=%d selected=%d ignored=%d",
+        job.id,
+        len(available_ids),
+        len(selected_ids),
+        len(requested_ids.difference(available_ids)),
+    )
+    return jsonify({"status": "ok", "selected_lexicon_ids": selected_ids})
 
 
 @web_bp.route("/api/jobs/<job_id>/speakers/detect", methods=["POST"])

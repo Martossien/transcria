@@ -8,6 +8,7 @@ from transcria.auth.models import Role
 from transcria.auth.models import User
 from transcria.context.central_lexicon_models import GroupLexicon
 from transcria.context.central_lexicon_models import GroupLexiconEntry
+from transcria.context.central_lexicon_service import normalize_match_text
 from transcria.context.lexicon import LEXICON_CATEGORIES
 from transcria.context.lexicon import LEXICON_PRIORITIES
 from transcria.context.lexicon import LexiconManager
@@ -15,6 +16,14 @@ from transcria.database import db
 from transcria.jobs.models import Job
 
 logger = logging.getLogger(__name__)
+
+
+def _datetime_sort_value(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.min
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+    return value
 
 
 class CentralLexiconAccessError(PermissionError):
@@ -265,6 +274,72 @@ class CentralLexiconStore:
         return entries
 
     @staticmethod
+    def usage_stats(lexicon: GroupLexicon) -> dict:
+        entries = list(lexicon.entries or [])
+        total_usage = sum(int(entry.usage_count or 0) for entry in entries)
+        used_entries = [entry for entry in entries if int(entry.usage_count or 0) > 0]
+        last_used_dates = [entry.last_used_at for entry in used_entries if entry.last_used_at]
+        top_entries = sorted(
+            used_entries,
+            key=lambda entry: (int(entry.usage_count or 0), _datetime_sort_value(entry.last_used_at), entry.term.casefold()),
+            reverse=True,
+        )[:5]
+        never_used = [entry for entry in entries if int(entry.usage_count or 0) == 0]
+        return {
+            "entry_count": len(entries),
+            "total_usage": total_usage,
+            "used_count": len(used_entries),
+            "never_used_count": len(never_used),
+            "last_used_at": max(last_used_dates, key=_datetime_sort_value) if last_used_dates else None,
+            "top_entries": top_entries,
+            "never_used_entries": never_used[:8],
+        }
+
+    @staticmethod
+    def quality_issues(lexicon: GroupLexicon) -> list[dict]:
+        issues: list[dict] = []
+        entries = list(lexicon.entries or [])
+        normalized_terms: dict[str, list[GroupLexiconEntry]] = {}
+        for entry in entries:
+            normalized = normalize_match_text(entry.term)
+            normalized_terms.setdefault(normalized, []).append(entry)
+
+            if len(normalized) <= 2:
+                issues.append({
+                    "severity": "warning",
+                    "entry": entry,
+                    "message": "Terme très court : risque de faux positifs.",
+                })
+
+            for variant in entry.variants:
+                if normalize_match_text(variant) == normalized:
+                    issues.append({
+                        "severity": "info",
+                        "entry": entry,
+                        "message": "Variante identique à la forme correcte.",
+                    })
+                    break
+
+            if not entry.variants and entry.priority == "normale" and int(entry.usage_count or 0) == 0:
+                issues.append({
+                    "severity": "info",
+                    "entry": entry,
+                    "message": "Entrée normale sans variante et jamais utilisée.",
+                })
+
+        for similar_entries in normalized_terms.values():
+            if len(similar_entries) <= 1:
+                continue
+            terms = ", ".join(entry.term for entry in similar_entries[:4])
+            issues.append({
+                "severity": "warning",
+                "entry": similar_entries[0],
+                "message": f"Doublons proches détectés : {terms}.",
+            })
+
+        return issues[:20]
+
+    @staticmethod
     def mark_entries_used(entry_ids: list[str]) -> None:
         if not entry_ids:
             return
@@ -276,3 +351,4 @@ class CentralLexiconStore:
             entry.usage_count += 1
             entry.last_used_at = now
         db.session.commit()
+        logger.info("Usage lexique central incrémenté: entries=%d", len(entries))

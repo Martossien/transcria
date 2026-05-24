@@ -445,17 +445,37 @@
     <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
     {% if central_lexicons %}
     <div class="alert alert-light border small">
-      <strong>Lexiques centralisés disponibles :</strong>
-      {% for central in central_lexicons[:5] %}
-      <span class="badge text-bg-secondary me-1">{{ central.name }} · {{ central.entries|length }}</span>
-      {% endfor %}
-      {% if central_lexicons|length > 5 %}
-      <span class="text-muted">+{{ central_lexicons|length - 5 }}</span>
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <strong>Lexiques utilisés pour ce job</strong>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.applySelectedLexicons()">Appliquer la sélection</button>
+      </div>
+      <details class="mt-2" {% if central_lexicons|length <= 8 %}open{% endif %}>
+        <summary class="text-muted">
+          {{ central_lexicon_display.selected_lexicons }} / {{ central_lexicon_display.available_lexicons }} sélectionné(s)
+        </summary>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+          {% for central in central_lexicons %}
+          <label class="border rounded px-2 py-1 bg-white">
+            <input type="checkbox"
+                   class="form-check-input me-1 central-lexicon-toggle"
+                   value="{{ central.id }}"
+                   {% if central.selected %}checked{% endif %}>
+            {{ central.name }} · {{ central.entry_count }}
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+      {% if central_lexicon_display.hidden_central_entries %}
+      <div class="mt-2 text-muted">
+        {{ central_lexicon_display.hidden_central_entries }} terme(s) peu probables sont masqués pour garder la liste lisible.
+      </div>
       {% endif %}
       {% if session_lexicon_exists %}
       <div class="mt-1 text-muted">Le lexique de session déjà sauvegardé est conservé.</div>
       {% else %}
-      <div class="mt-1 text-muted">{{ central_lexicon_prefill_count }} entrée(s) centrale(s) pré-remplissent la liste avec les suggestions du résumé.</div>
+      <div class="mt-1 text-muted">
+        TranscrIA prépare {{ central_lexicon_prefill_count }} terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation.
+      </div>
       {% endif %}
     </div>
     {% endif %}
@@ -492,10 +512,18 @@
         <input type="hidden" class="lex-central-entry-id" value="{{ t.central_entry_id or '' }}">
         <input type="hidden" class="lex-central-lexicon-id" value="{{ t.central_lexicon_id or '' }}">
         <input type="hidden" class="lex-central-lexicon-name" value="{{ t.central_lexicon_name or '' }}">
+        <input type="hidden" class="lex-display-reason" value="{{ t._display_reason or '' }}">
         <script type="application/json" class="lex-contexts-json">{{ (t.contexts or [])|tojson }}</script>
         {% if t.central_lexicon_name %}
         <div class="mt-2">
           <span class="badge text-bg-light border">Lexique central : {{ t.central_lexicon_name }}</span>
+          {% if t._display_reason == 'term_presence' %}
+          <span class="badge text-bg-light border">trouvé dans le texte</span>
+          {% elif t._display_reason == 'variant_presence' %}
+          <span class="badge text-bg-light border">variante détectée</span>
+          {% elif t._display_reason == 'priority' %}
+          <span class="badge text-bg-light border">priorité {{ t.priority }}</span>
+          {% endif %}
         </div>
         {% endif %}
         <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>

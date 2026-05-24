@@ -18,12 +18,14 @@
           <th>Nom</th>
           <th>Groupe</th>
           <th>Entrées</th>
+          <th>Utilisations</th>
           <th>Mise à jour</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for lexicon in lexicons %}
+        {% set stats = lexicon_stats.get(lexicon.id, {}) if lexicon_stats is defined else {} %}
         <tr>
           <td>
             <strong>{{ lexicon.name }}</strong>
@@ -39,6 +41,12 @@
             {% endif %}
           </td>
           <td>{{ lexicon.entries|length }}</td>
+          <td>
+            <div>{{ stats.get("total_usage", 0) }}</div>
+            {% if stats.get("last_used_at") %}
+            <div class="small text-muted">dernier {{ stats.get("last_used_at").strftime('%Y-%m-%d') }}</div>
+            {% endif %}
+          </td>
           <td class="small text-muted">{{ lexicon.updated_at.strftime('%Y-%m-%d %H:%M') if lexicon.updated_at else '' }}</td>
           <td class="text-end">
             <a class="btn btn-sm btn-outline-primary" href="/admin/lexicons/{{ lexicon.id }}">Ouvrir</a>

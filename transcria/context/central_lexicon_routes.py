@@ -35,7 +35,11 @@ def lexicon_list():
     if not _require_lexicon_admin():
         return ("Accès interdit", 403)
     lexicons = CentralLexiconStore.list_manageable_lexicons(current_user)
-    return render_template("central_lexicons.html", lexicons=lexicons)
+    lexicon_stats = {
+        lexicon.id: CentralLexiconStore.usage_stats(lexicon)
+        for lexicon in lexicons
+    }
+    return render_template("central_lexicons.html", lexicons=lexicons, lexicon_stats=lexicon_stats)
 
 
 @central_lexicon_bp.route("/admin/lexicons/new", methods=["GET", "POST"])
@@ -86,6 +90,8 @@ def lexicon_detail(lexicon_id: str):
         allow_global=current_user.has_role(Role.ADMIN),
         categories=LEXICON_CATEGORIES,
         priorities=LEXICON_PRIORITIES,
+        usage_stats=CentralLexiconStore.usage_stats(lexicon),
+        quality_issues=CentralLexiconStore.quality_issues(lexicon),
     )
 
 

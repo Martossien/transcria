@@ -47,6 +47,63 @@
   {% if lexicon %}
   <div class="col-lg-7">
     <div class="card p-4 mb-4">
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div>
+          <h2 class="h5 mb-1">Statistiques</h2>
+          <p class="text-muted small mb-0">Usage réel des entrées validées dans les jobs.</p>
+        </div>
+        <span class="badge text-bg-light border">{{ usage_stats.total_usage if usage_stats else 0 }} utilisation(s)</span>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-sm-4">
+          <div class="small text-muted">Entrées utilisées</div>
+          <div class="fw-semibold">{{ usage_stats.used_count if usage_stats else 0 }} / {{ usage_stats.entry_count if usage_stats else 0 }}</div>
+        </div>
+        <div class="col-sm-4">
+          <div class="small text-muted">Jamais utilisées</div>
+          <div class="fw-semibold">{{ usage_stats.never_used_count if usage_stats else 0 }}</div>
+        </div>
+        <div class="col-sm-4">
+          <div class="small text-muted">Dernière utilisation</div>
+          <div class="fw-semibold">
+            {% if usage_stats and usage_stats.last_used_at %}
+              {{ usage_stats.last_used_at.strftime('%Y-%m-%d') }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% if usage_stats and usage_stats.top_entries %}
+      <div class="mt-3">
+        <div class="small text-muted mb-1">Entrées les plus utilisées</div>
+        <div class="d-flex flex-wrap gap-2">
+          {% for entry in usage_stats.top_entries %}
+          <span class="badge text-bg-light border">{{ entry.term }} · {{ entry.usage_count }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if quality_issues %}
+    <div class="card p-4 mb-4">
+      <h2 class="h5 mb-2">Contrôles qualité</h2>
+      <div class="vstack gap-2">
+        {% for issue in quality_issues %}
+        <div class="d-flex align-items-start gap-2 small">
+          <span class="badge {{ 'text-bg-warning' if issue.severity == 'warning' else 'text-bg-light border' }}">{{ 'Attention' if issue.severity == 'warning' else 'Info' }}</span>
+          <div>
+            <strong>{{ issue.entry.term }}</strong>
+            <span class="text-muted">— {{ issue.message }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card p-4 mb-4">
       <h2 class="h5">Ajouter une entrée</h2>
       <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries">
         {% include "_central_lexicon_entry_fields.html" %}
@@ -70,7 +127,10 @@
     <div class="card p-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="h5 mb-0">Entrées</h2>
-        <span class="badge bg-secondary">{{ lexicon.entries|length }}</span>
+        <div class="d-flex gap-2">
+          <span class="badge bg-secondary">{{ lexicon.entries|length }} entrée(s)</span>
+          <span class="badge text-bg-light border">{{ usage_stats.total_usage if usage_stats else 0 }} utilisation(s)</span>
+        </div>
       </div>
       {% if lexicon.entries %}
       <div class="vstack gap-3">
@@ -105,6 +165,12 @@
             <div class="mt-2">
               <label class="form-label small">Commentaire</label>
               <input class="form-control form-control-sm" name="comment" value="{{ entry.comment }}">
+            </div>
+            <div class="mt-2 small text-muted">
+              Utilisé {{ entry.usage_count or 0 }} fois
+              {% if entry.last_used_at %}
+              · dernière utilisation {{ entry.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+              {% endif %}
             </div>
           </form>
           <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" onsubmit="return confirm('Supprimer cette entrée ?')">

@@ -3,9 +3,11 @@ import uuid
 from transcria.context.central_lexicon_models import GroupLexiconEntry
 from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.context.central_lexicon_service import merge_lexicon_entries
+from transcria.context.central_lexicon_service import prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconAccessError
 from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.central_lexicon_store import CentralLexiconValidationError
+from transcria.context.lexicon import LexiconManager
 
 
 def _name(prefix: str) -> str:
@@ -143,6 +145,46 @@ class TestCentralLexiconStore:
             assert global_lexicon.id in ids
             assert not any(item.name == "Viewer lexicon" for item in lexicons)
 
+    def test_usage_stats_reports_top_entries_and_unused_entries(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(_name("stats-group"))
+            lexicon = CentralLexiconStore.create_lexicon(admin, name="Lexique stats", group_id=group.id)
+            used_once = CentralLexiconStore.add_or_update_entry(lexicon, admin, term="Terme utilisé")
+            unused = CentralLexiconStore.add_or_update_entry(lexicon, admin, term="Terme jamais utilisé")
+
+            CentralLexiconStore.mark_entries_used([used_once.id])
+            stats = CentralLexiconStore.usage_stats(lexicon)
+
+            assert stats["entry_count"] == 2
+            assert stats["total_usage"] == 1
+            assert stats["used_count"] == 1
+            assert stats["never_used_count"] == 1
+            assert stats["last_used_at"] is not None
+            assert stats["top_entries"][0].id == used_once.id
+            assert stats["never_used_entries"][0].id == unused.id
+
+    def test_quality_issues_report_risky_entries(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(_name("quality-group"))
+            lexicon = CentralLexiconStore.create_lexicon(admin, name="Lexique qualité", group_id=group.id)
+            CentralLexiconStore.add_or_update_entry(lexicon, admin, term="SI", priority="normale")
+            CentralLexiconStore.add_or_update_entry(lexicon, admin, term="École", variants=["ecole"])
+            CentralLexiconStore.add_or_update_entry(lexicon, admin, term="ecole", priority="importante")
+
+            messages = [issue["message"] for issue in CentralLexiconStore.quality_issues(lexicon)]
+
+            assert any("Terme très court" in message for message in messages)
+            assert any("Variante identique" in message for message in messages)
+            assert any("Doublons proches" in message for message in messages)
+
 
 class TestCentralLexiconService:
     def test_merge_keeps_session_as_authority(self):
@@ -197,6 +239,72 @@ class TestCentralLexiconService:
 
         assert filtered == []
         assert meta["total"] == 0
+
+    def test_prefilter_display_keeps_present_terms_variants_and_priorities(self):
+        entries = [
+            {"term": "DNS", "variants": ["dénès"], "priority": "normale"},
+            {"term": "API", "variants": [], "priority": "normale"},
+            {"term": "Terme critique", "variants": [], "priority": "critique"},
+            {"term": "Absent normal", "variants": [], "priority": "normale"},
+        ]
+
+        filtered, meta = prefilter_lexicon_entries_for_display(entries, "Le denes et API sont cités.")
+
+        assert [entry["term"] for entry in filtered] == ["Terme critique", "API", "DNS"]
+        assert meta["kept_by_variant_presence"] == 1
+        assert meta["kept_by_term_presence"] == 1
+        assert meta["kept_by_priority"] == 1
+        assert meta["hidden"] == 1
+        by_term = {entry["term"]: entry for entry in filtered}
+        assert by_term["Terme critique"]["_display_reason"] == "priority"
+        assert by_term["API"]["_display_reason"] == "term_presence"
+        assert by_term["DNS"]["_display_reason"] == "variant_presence"
+
+    def test_prefilter_display_limits_central_entries(self):
+        entries = [
+            {"term": f"Critique {i:03d}", "variants": [], "priority": "critique"}
+            for i in range(6)
+        ]
+
+        filtered, meta = prefilter_lexicon_entries_for_display(entries, "", max_entries=3)
+
+        assert len(filtered) == 3
+        assert meta["limited_out"] == 3
+        assert meta["hidden"] == 3
+
+    def test_merge_preserves_display_reason_for_central_entries(self):
+        merged = merge_lexicon_entries(
+            central_entries=[{
+                "term": "DNS",
+                "source": "central",
+                "central_entry_id": "entry-1",
+                "central_lexicon_id": "lexicon-1",
+                "central_lexicon_name": "Lexique",
+                "_display_reason": "variant_presence",
+            }],
+            llm_suggestions=[],
+        )
+
+        assert merged[0]["_display_reason"] == "variant_presence"
+
+    def test_session_lexicon_save_preserves_display_reason(self, app):
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            job = JobStore.create_job(owner_id=admin.id, title="Job lexique raison")
+            saved = LexiconManager.save(job, get_config()["storage"]["jobs_dir"], [{
+                "term": "DNS",
+                "source": "central",
+                "central_entry_id": "entry-1",
+                "central_lexicon_id": "lexicon-1",
+                "central_lexicon_name": "Lexique",
+                "_display_reason": "variant_presence",
+            }])
+
+            assert saved[0]["_display_reason"] == "variant_presence"
 
 
 class TestCentralLexiconWeb:
@@ -335,3 +443,71 @@ class TestCentralLexiconWeb:
 
             updated = db.session.get(GroupLexiconEntry, entry_id)
             assert updated.usage_count == 1
+
+        list_response = admin_client.get("/admin/lexicons")
+        assert list_response.status_code == 200
+        assert b"Utilisations" in list_response.data
+        detail_response = admin_client.get(f"/admin/lexicons/{lexicon_id}")
+        assert detail_response.status_code == 200
+        assert b"1 utilisation" in detail_response.data
+        assert b"Utilis" in detail_response.data
+        assert b"Statistiques" in detail_response.data
+
+    def test_lexicon_detail_shows_quality_issues(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(_name("web-quality-group"))
+            lexicon = CentralLexiconStore.create_lexicon(admin, name="Lexique qualité web", group_id=group.id)
+            CentralLexiconStore.add_or_update_entry(lexicon, admin, term="SI")
+            lexicon_id = lexicon.id
+
+        response = admin_client.get(f"/admin/lexicons/{lexicon_id}")
+
+        assert response.status_code == 200
+        assert "Contrôles qualité".encode() in response.data
+        assert "Terme très court".encode() in response.data
+
+    def test_selected_lexicons_api_filters_step_prefill(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            first = CentralLexiconStore.create_lexicon(admin, name="Lexique sélectionné", group_id=None, allow_global=True)
+            second = CentralLexiconStore.create_lexicon(admin, name="Lexique ignoré", group_id=None, allow_global=True)
+            CentralLexiconStore.add_or_update_entry(first, admin, term="Terme visible", priority="critique")
+            CentralLexiconStore.add_or_update_entry(second, admin, term="Terme caché", priority="critique")
+            job = JobStore.create_job(owner_id=admin.id, title="Job sélection")
+            JobStore.update_state(job.id, JobState.PARTICIPANTS_DONE)
+            jobs_dir = get_config()["storage"]["jobs_dir"]
+            fs = JobFilesystem(jobs_dir, job.id)
+            fs.save_text("summary/quick_transcript.txt", "Terme visible")
+            job_id = job.id
+            first_id = first.id
+
+        response = admin_client.post(
+            f"/api/jobs/{job_id}/selected-lexicons",
+            json={"selected_lexicon_ids": [first_id, "inaccessible"]},
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["selected_lexicon_ids"] == [first_id]
+        page = admin_client.get(f"/jobs/{job_id}")
+        assert page.status_code == 200
+        assert "Lexique sélectionné".encode() in page.data
+        assert "Lexique ignoré".encode() in page.data
+        assert b"Terme visible" in page.data
+        assert b"Terme cach" not in page.data
+
+        with app.app_context():
+            from transcria.config import get_config
+
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+            stored = fs.load_json("context/selected_lexicons.json")
+            assert stored["selected_lexicon_ids"] == [first_id]

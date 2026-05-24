@@ -459,6 +459,7 @@ var TranscrIA = window.TranscrIA || {};
             '<input type="hidden" class="lex-central-entry-id" value="">' +
             '<input type="hidden" class="lex-central-lexicon-id" value="">' +
             '<input type="hidden" class="lex-central-lexicon-name" value="">' +
+            '<input type="hidden" class="lex-display-reason" value="">' +
             '<div class="mt-2 lex-central-badge d-none"></div>' +
             '<script type="application/json" class="lex-contexts-json">[]</script>' +
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
@@ -475,6 +476,7 @@ var TranscrIA = window.TranscrIA || {};
         row.querySelector('.lex-central-entry-id').value = t.central_entry_id || '';
         row.querySelector('.lex-central-lexicon-id').value = t.central_lexicon_id || '';
         row.querySelector('.lex-central-lexicon-name').value = t.central_lexicon_name || '';
+        row.querySelector('.lex-display-reason').value = t._display_reason || '';
         var centralBadge = row.querySelector('.lex-central-badge');
         if (centralBadge && t.central_lexicon_name) {
             centralBadge.classList.remove('d-none');
@@ -528,7 +530,8 @@ var TranscrIA = window.TranscrIA || {};
                 ['source', '.lex-source'],
                 ['central_entry_id', '.lex-central-entry-id'],
                 ['central_lexicon_id', '.lex-central-lexicon-id'],
-                ['central_lexicon_name', '.lex-central-lexicon-name']
+                ['central_lexicon_name', '.lex-central-lexicon-name'],
+                ['_display_reason', '.lex-display-reason']
             ].forEach(function (pair) {
                 var value = W.getRowValue(row, pair[1]).trim();
                 if (value) item[pair[0]] = value;
@@ -539,6 +542,20 @@ var TranscrIA = window.TranscrIA || {};
             if (r.status === 200) {
                 document.getElementById('lexicon-saved').classList.remove('d-none');
                 W.reloadAfter(500);
+            }
+        });
+    };
+
+    W.applySelectedLexicons = function () {
+        console.log('[TranscrIA] applySelectedLexicons()');
+        var selected = Array.from(document.querySelectorAll('.central-lexicon-toggle:checked'))
+            .map(function (input) { return input.value; })
+            .filter(Boolean);
+        W.api('/api/jobs/' + JOB_ID + '/selected-lexicons', 'POST', {
+            selected_lexicon_ids: selected
+        }).then(function (r) {
+            if (r.status === 200) {
+                W.reloadAfter(300);
             }
         });
     };

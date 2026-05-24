@@ -11,7 +11,7 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix avec genre validé, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
 
-`tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, périmètre job→groupes, pré-remplissage et filtrage du lexique avant correction.
+`tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, contrôles qualité et filtrage du lexique avant correction.
 
 ### Enchaînement
 
@@ -22,7 +22,7 @@ applicatif. Il est conçu pour deux usages :
    - `_write_diarization_context` : section "Genre vocal par locuteur" dans
      `summary/diarization_context.md`
 3. `MeetingContextManager` / `ParticipantsManager` / `LexiconManager`
-   - l'étape lexique peut être pré-remplie par les lexiques centralisés accessibles au propriétaire du job
+   - l'étape lexique peut être pré-remplie par les lexiques centralisés cochés pour le job, après préfiltrage d'affichage
 4. `SpeakerDetector.save_mapping()` + application des rôles LLM (`_apply_speaker_roles`)
 5. `PipelineService.run_process(..., mode=<fast|quality>)` :
    - Analyse de scène audio (subprocess librosa) → `metadata/audio_scene.json`

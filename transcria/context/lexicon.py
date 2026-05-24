@@ -92,7 +92,7 @@ class LexiconManager:
                 "comment": t.get("comment", "").strip(),
                 "contexts": LexiconManager._normalize_contexts(t.get("contexts", [])),
             }
-            for optional in ("source", "central_entry_id", "central_lexicon_id", "central_lexicon_name"):
+            for optional in ("source", "central_entry_id", "central_lexicon_id", "central_lexicon_name", "_display_reason"):
                 if t.get(optional):
                     entry[optional] = str(t.get(optional)).strip()
             validated.append(entry)
