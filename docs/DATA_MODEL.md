@@ -260,6 +260,8 @@ jobs/<job_id>/
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
 │   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, gpu_index, language, segments count, speaker_count, vad_final_enabled)
+│   ├── whisper_hotwords.json      # Audit hotwords Whisper issus du lexique si option expérimentale activée
+│   ├── cohere_lexicon_biasing.json # Audit biasing Trie Cohere issu du lexique si option expérimentale activée
 │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
 │   └── correction_report.md       # Rapport de correction opencode si disponible
 │
@@ -348,6 +350,8 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Pré-traitement | `input/normalized.wav` + `metadata/audio_normalization.json` (si normalisation activée ou auto-loudnorm) | `AudioNormalizationService.apply()` |
 | Lexique | `metadata/audio_excerpts/*.wav` (cache à la demande pour écouter les contextes proposés) | `AudioExcerptService.build_excerpt()` via `GET /api/jobs/<id>/audio/excerpt` |
 | Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/transcription_metadata.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
+| Traitement (Whisper expérimental) | `metadata/whisper_hotwords.json` | `PipelineService._inject_whisper_lexicon_hotwords()` |
+| Traitement (Cohere expérimental) | `metadata/cohere_lexicon_biasing.json` | `PipelineService._inject_cohere_lexicon_biasing()` |
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |

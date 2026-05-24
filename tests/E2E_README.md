@@ -13,6 +13,8 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, contrôles qualité et filtrage du lexique avant correction.
 
+`tests/test_stt.py` et `tests/test_workflow_runner.py` couvrent aussi le biasing STT expérimental depuis le lexique : hotwords Whisper bornés, activation uniquement quand le backend effectif est Whisper, audit dans `metadata/whisper_hotwords.json` ; sélection des formes cibles validées pour le Trie Cohere, sans booster les variantes fautives, et audit dans `metadata/cohere_lexicon_biasing.json`.
+
 ### Enchaînement
 
 1. `JobService.create/upload/analyze`
@@ -113,6 +115,10 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 |--------|--------|-------------|
 | `--stt-backend cohere\|whisper` | `cohere` | Backend de transcription finale |
 | `--whisper-model-size SIZE` | `large-v3` | Taille du modèle Whisper si `--stt-backend whisper` |
+| `--enable-whisper-lexicon-hotwords` | off | Active l'injection expérimentale des termes de lexique dans les hotwords Whisper |
+| `--enable-cohere-lexicon-biasing` | off | Active le biasing contextuel expérimental Cohere par Trie depuis le lexique |
+| `--lexicon-term "TERME[|priorité|catégorie|variante1;variante2]"` | aucun | Ajoute un terme au lexique de session du run. Répétable |
+| `--lexicon-json PATH` | aucun | Ajoute une liste JSON d'entrées de lexique au run |
 
 > **Backend demandé vs backend effectif** : `--stt-backend` définit le backend
 > de départ du run. Le pipeline peut ensuite le remplacer via
@@ -120,6 +126,16 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 > ou selon la décision qualité audio. Le backend réellement utilisé est écrit dans
 > `metadata/transcription_metadata.json["backend"]` et repris dans le JSON de sortie
 > E2E sous `effective_stt_backend`.
+
+Quand `--enable-whisper-lexicon-hotwords` est utilisé, l'audit est écrit dans
+`metadata/whisper_hotwords.json` et repris dans le JSON de sortie sous
+`whisper_hotwords_data`. Cette option n'a d'effet que si le backend effectif est
+Whisper.
+
+Quand `--enable-cohere-lexicon-biasing` est utilisé, l'audit est écrit dans
+`metadata/cohere_lexicon_biasing.json` et repris dans le JSON de sortie sous
+`cohere_lexicon_biasing_data`. Cette option n'a d'effet que si le backend
+effectif est Cohere.
 
 ### Mode pipeline
 

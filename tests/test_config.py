@@ -27,6 +27,10 @@ class TestConfigLoading:
         assert cfg["whisper"]["model_size"] == "large-v3"
         assert cfg["whisper"]["condition_on_previous_text"] is False
         assert cfg["whisper"]["forced_alignment"]["backend"] == "torchaudio_ctc"
+        assert cfg["whisper"]["lexicon_hotwords"]["enabled"] is False
+        assert cfg["whisper"]["lexicon_hotwords"]["priorities"] == ["critique", "importante"]
+        assert cfg["cohere"]["lexicon_biasing"]["enabled"] is False
+        assert cfg["cohere"]["lexicon_biasing"]["priorities"] == ["critique", "importante", "normale"]
         assert cfg["auth"]["enabled"] is True
         assert cfg["security"]["max_upload_size_mb"] == 1024
         assert ".mp3" in cfg["security"]["allowed_upload_extensions"]
@@ -362,12 +366,20 @@ class TestBootstrapConfig:
         cfg = load_config()
         cfg["cohere"]["collapse_repetition_loops"] = "yes"
         cfg["cohere"]["max_new_tokens"] = 0
+        cfg["cohere"]["lexicon_biasing"]["enabled"] = "true"
+        cfg["cohere"]["lexicon_biasing"]["priorities"] = ["critique", "urgente"]
+        cfg["cohere"]["lexicon_biasing"]["boost"] = 3
+        cfg["cohere"]["lexicon_biasing"]["start_boost"] = -0.1
 
         result = validate_config(cfg)
 
         assert not result.is_valid
         assert any("cohere.collapse_repetition_loops" in msg for msg in result.errors)
         assert any("cohere.max_new_tokens" in msg for msg in result.errors)
+        assert any("cohere.lexicon_biasing.enabled" in msg for msg in result.errors)
+        assert any("cohere.lexicon_biasing.priorities[1]" in msg for msg in result.errors)
+        assert any("cohere.lexicon_biasing.boost" in msg for msg in result.errors)
+        assert any("cohere.lexicon_biasing.start_boost" in msg for msg in result.errors)
 
     def test_validate_config_rejects_invalid_audio_scene_section(self):
         cfg = load_config()
@@ -409,6 +421,19 @@ class TestBootstrapConfig:
         assert any("workflow.vad.auto_enable_final_on_degraded" in msg for msg in result.errors)
         assert any("workflow.vad.auto_enable_final_levels[1]" in msg for msg in result.errors)
         assert any("quality.thresholds.no_speech_prob_threshold" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_whisper_lexicon_hotwords(self):
+        cfg = load_config()
+        cfg["whisper"]["lexicon_hotwords"]["enabled"] = "true"
+        cfg["whisper"]["lexicon_hotwords"]["priorities"] = ["critique", "urgente"]
+        cfg["whisper"]["lexicon_hotwords"]["max_terms"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("whisper.lexicon_hotwords.enabled" in msg for msg in result.errors)
+        assert any("whisper.lexicon_hotwords.priorities[1]" in msg for msg in result.errors)
+        assert any("whisper.lexicon_hotwords.max_terms" in msg for msg in result.errors)
 
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"

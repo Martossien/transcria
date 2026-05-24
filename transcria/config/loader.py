@@ -75,6 +75,14 @@ _DEFAULT_CONFIG = {
         "repetition_loop_min_repeats": 4,
         "repetition_loop_max_phrase_words": 10,
         "repetition_loop_keep_repeats": 2,
+        "lexicon_biasing": {
+            "enabled": False,
+            "priorities": ["critique", "importante", "normale"],
+            "max_terms": 300,
+            "boost": 0.2,
+            "start_boost": 0.05,
+            "max_prefix_tokens": 20,
+        },
     },
     "whisper": {
         "model_size": "large-v3",
@@ -95,6 +103,13 @@ _DEFAULT_CONFIG = {
         "suppress_numerals": False,
         "hotwords": None,
         "initial_prompt": None,
+        "lexicon_hotwords": {
+            "enabled": False,
+            "priorities": ["critique", "importante"],
+            "max_terms": 50,
+            "max_chars": 900,
+            "prefix": "Termes importants :",
+        },
         "collapse_repetition_loops": True,
         "repetition_loop_min_repeats": 4,
         "repetition_loop_max_phrase_words": 10,

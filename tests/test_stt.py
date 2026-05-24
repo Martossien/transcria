@@ -5,10 +5,14 @@ import pytest
 from transcria.stt.cohere_transcriber import CohereTranscriber
 from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.anti_hallucination import detect_repetition_loops
+from transcria.stt.contextual_biasing import TrieContextualBiasProcessor
+from transcria.stt.contextual_biasing import build_token_trie
+from transcria.stt.contextual_biasing import select_lexicon_bias_terms
 from transcria.stt.forced_alignment import ForcedAlignmentService
 from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.stt.transcription import Transcriber
+from transcria.stt.lexicon_hotwords import build_whisper_hotwords
 from transcria.stt.transcriber_factory import _effective_whisper_config
 from transcria.stt.whisper_transcriber import WhisperTranscriber
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
@@ -106,6 +110,36 @@ class TestWhisperQualityConfig:
         assert effective["condition_on_previous_text"] is False
         assert effective["collapse_repetition_loops"] is True
         assert effective["repetition_loop_min_repeats"] == 4
+        assert effective["lexicon_hotwords"]["enabled"] is False
+
+    def test_build_whisper_hotwords_keeps_priority_terms_with_budget(self):
+        hotwords, stats = build_whisper_hotwords(
+            [
+                {"term": "EBITDA", "priority": "critique", "source": "central"},
+                {"term": "système de supervision", "priority": "importante", "source": "session"},
+                {"term": "terme normal", "priority": "normale", "source": "central"},
+                {"term": "ebitda", "priority": "critique", "source": "session"},
+            ],
+            enabled=True,
+            max_terms=2,
+            max_chars=80,
+        )
+
+        assert hotwords == "Termes importants : EBITDA, système de supervision"
+        assert stats["candidate_terms"] == 4
+        assert stats["injected_terms"] == 2
+        assert stats["excluded_by_priority"] == 1
+        assert stats["excluded_by_duplicate"] == 1
+
+    def test_build_whisper_hotwords_disabled_preserves_static_hotwords(self):
+        hotwords, stats = build_whisper_hotwords(
+            [{"term": "EBITDA", "priority": "critique"}],
+            enabled=False,
+            existing_hotwords="Statique",
+        )
+
+        assert hotwords == "Statique"
+        assert stats["reason"] == "disabled"
 
     def test_whisper_transcriber_uses_configured_chunk_length_and_loop_policy(self):
         calls = {}
@@ -139,6 +173,46 @@ class TestWhisperQualityConfig:
         assert calls["condition_on_previous_text"] is False
         assert segments[0]["text"] == "merci fin"
         assert segments[0]["hallucination_loops"][0]["count"] == 3
+
+
+class TestContextualBiasing:
+    def test_select_lexicon_bias_terms_keeps_validated_targets_only(self):
+        terms, stats = select_lexicon_bias_terms(
+            [
+                {"term": "indemnités", "priority": "critique", "variants": ["inimités"]},
+                {"term": "DIF", "priority": "importante"},
+                {"term": "terme normal", "priority": "normale"},
+                {"term": "dif", "priority": "critique"},
+            ],
+            enabled=True,
+            priorities=["critique", "importante"],
+            max_terms=10,
+        )
+
+        assert terms == ["indemnités", "DIF"]
+        assert "inimités" not in terms
+        assert stats["candidate_terms"] == 4
+        assert stats["excluded_by_priority"] == 1
+        assert stats["excluded_by_duplicate"] == 1
+
+    def test_trie_contextual_bias_processor_boosts_only_continuation(self):
+        torch = pytest.importorskip("torch")
+
+        class Tokenizer:
+            def encode(self, text, add_special_tokens=False):
+                mapping = {" alpha": [10], "alpha": [10], " beta": [11], "beta": [11], " alpha beta": [10, 11], "alpha beta": [10, 11]}
+                return mapping[text]
+
+        root, stats = build_token_trie(["alpha beta"], Tokenizer())
+        processor = TrieContextualBiasProcessor(root, boost=0.2, max_prefix_tokens=5)
+        input_ids = torch.tensor([[10], [99]])
+        scores = torch.zeros((2, 20), dtype=torch.float32)
+
+        output = processor(input_ids, scores)
+
+        assert stats["token_sequences"] == 1
+        assert output[0, 11].item() > 0
+        assert output[1, 11].item() == 0
 
 
 class TestForcedAlignment:

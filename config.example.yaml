@@ -81,6 +81,15 @@ cohere:
   repetition_loop_min_repeats: 4
   repetition_loop_max_phrase_words: 10
   repetition_loop_keep_repeats: 2
+  lexicon_biasing:
+    # Expérimental : biasing contextuel par Trie sur les termes validés du lexique de session.
+    # Désactivé par défaut ; à benchmarker par domaine avant activation production.
+    enabled: false
+    priorities: ["critique", "importante", "normale"]
+    max_terms: 300
+    boost: 0.2
+    start_boost: 0.05
+    max_prefix_tokens: 20
 
 whisper:
   # Backend qualité/fallback. Cohere reste le backend normal du workflow.
@@ -102,6 +111,14 @@ whisper:
   suppress_numerals: false
   hotwords:
   initial_prompt:
+  lexicon_hotwords:
+    # Expérimental : injecte les termes critiques/importants du lexique de session dans les hotwords Whisper.
+    # Désactivé par défaut car Whisper n'est pas systématiquement meilleur et le biasing doit rester mesuré.
+    enabled: false
+    priorities: ["critique", "importante"]
+    max_terms: 50
+    max_chars: 900
+    prefix: "Termes importants :"
   collapse_repetition_loops: true
   repetition_loop_min_repeats: 4
   repetition_loop_max_phrase_words: 10

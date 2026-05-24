@@ -130,7 +130,93 @@ class PipelineService:
             or self._should_force_quality_backend_for_degraded_summary(job, cfg)
         ):
             cfg.setdefault("models", {})["stt_backend"] = forced_backend
+        self._inject_whisper_lexicon_hotwords(cfg, job)
+        self._inject_cohere_lexicon_biasing(cfg, job)
         return cfg
+
+    def _inject_whisper_lexicon_hotwords(self, cfg: dict, job: Job | None) -> None:
+        backend = cfg.get("models", {}).get("stt_backend", "cohere")
+        if backend != "whisper" or job is None:
+            return
+
+        whisper_cfg = cfg.setdefault("whisper", {})
+        hotwords_cfg = whisper_cfg.get("lexicon_hotwords", {})
+        if not isinstance(hotwords_cfg, dict) or not hotwords_cfg.get("enabled", False):
+            return
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.stt.lexicon_hotwords import build_whisper_hotwords
+
+            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+            lexicon = fs.load_json("context/session_lexicon.json") or []
+            if not isinstance(lexicon, list):
+                logger.warning("Hotwords Whisper lexique ignorés: format lexique inattendu job=%s", job.id)
+                return
+
+            hotwords, stats = build_whisper_hotwords(
+                lexicon,
+                enabled=True,
+                priorities=hotwords_cfg.get("priorities"),
+                max_terms=hotwords_cfg.get("max_terms", 50),
+                max_chars=hotwords_cfg.get("max_chars", 900),
+                prefix=hotwords_cfg.get("prefix", "Termes importants :"),
+                existing_hotwords=whisper_cfg.get("hotwords"),
+            )
+            whisper_cfg["hotwords"] = hotwords
+            fs.save_json("metadata/whisper_hotwords.json", stats)
+            logger.info(
+                "Hotwords Whisper depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
+                job.id,
+                stats.get("candidate_terms", 0),
+                stats.get("injected_terms", 0),
+                stats.get("excluded_terms", 0),
+                ",".join(stats.get("priorities", [])),
+            )
+        except Exception as exc:
+            logger.warning("Hotwords Whisper depuis lexique indisponibles: job=%s error=%s", job.id, exc)
+
+    def _inject_cohere_lexicon_biasing(self, cfg: dict, job: Job | None) -> None:
+        backend = cfg.get("models", {}).get("stt_backend", "cohere")
+        if backend != "cohere" or job is None:
+            return
+
+        cohere_cfg = cfg.setdefault("cohere", {})
+        biasing_cfg = cohere_cfg.get("lexicon_biasing", {})
+        if not isinstance(biasing_cfg, dict) or not biasing_cfg.get("enabled", False):
+            return
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.stt.contextual_biasing import select_lexicon_bias_terms
+
+            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+            lexicon = fs.load_json("context/session_lexicon.json") or []
+            if not isinstance(lexicon, list):
+                logger.warning("Biasing Cohere lexique ignoré: format lexique inattendu job=%s", job.id)
+                return
+
+            terms, stats = select_lexicon_bias_terms(
+                lexicon,
+                enabled=True,
+                priorities=biasing_cfg.get("priorities"),
+                max_terms=biasing_cfg.get("max_terms", 300),
+            )
+            stats["boost"] = biasing_cfg.get("boost", 0.2)
+            stats["start_boost"] = biasing_cfg.get("start_boost", 0.05)
+            stats["max_prefix_tokens"] = biasing_cfg.get("max_prefix_tokens", 20)
+            cohere_cfg["_lexicon_bias_terms"] = terms
+            fs.save_json("metadata/cohere_lexicon_biasing.json", stats)
+            logger.info(
+                "Biasing Cohere depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
+                job.id,
+                stats.get("candidate_terms", 0),
+                stats.get("injected_terms", 0),
+                stats.get("excluded_terms", 0),
+                ",".join(stats.get("priorities", [])),
+            )
+        except Exception as exc:
+            logger.warning("Biasing Cohere depuis lexique indisponible: job=%s error=%s", job.id, exc)
 
     @staticmethod
     def _should_force_quality_backend_for_degraded_summary(job: Job | None, cfg: dict) -> bool:

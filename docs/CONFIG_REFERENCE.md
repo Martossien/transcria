@@ -132,6 +132,12 @@ Paramètres optionnels du backend Cohere ASR. Ces paramètres ne sont lus que si
 | `repetition_loop_min_repeats` | int | `4` | Nombre minimal de répétitions pour détecter une boucle |
 | `repetition_loop_max_phrase_words` | int | `10` | Nombre maximal de mots dans une phrase répétée |
 | `repetition_loop_keep_repeats` | int | `2` | Nombre de répétitions à conserver après réduction |
+| `lexicon_biasing.enabled` | bool | `false` | Active le biasing contextuel expérimental Cohere depuis les termes validés du lexique de session |
+| `lexicon_biasing.priorities` | list[str] | `["critique", "importante", "normale"]` | Priorités injectables dans le Trie Cohere |
+| `lexicon_biasing.max_terms` | int | `300` | Nombre maximum de termes cibles retenus |
+| `lexicon_biasing.boost` | float | `0.2` | Bonus de logit appliqué aux tokens qui prolongent un terme déjà amorcé |
+| `lexicon_biasing.start_boost` | float | `0.05` | Bonus léger appliqué aux premiers tokens possibles des termes validés |
+| `lexicon_biasing.max_prefix_tokens` | int | `20` | Profondeur maximale de recherche du préfixe dans chaque beam |
 
 **Redémarrage requis :** oui — le modèle est chargé en mémoire GPU.
 
@@ -161,6 +167,11 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `suppress_numerals` | bool | `false` | Supprime chiffres/symboles pendant l'ASR pour faciliter l'alignement CTC ; désactivé par défaut pour préserver les nombres |
 | `hotwords` | string/null | `null` | Mots-clés/hints pour termes rares |
 | `initial_prompt` | string/null | `null` | Prompt initial Whisper |
+| `lexicon_hotwords.enabled` | bool | `false` | Injecte les termes du lexique de session dans les hotwords Whisper quand le backend effectif est Whisper |
+| `lexicon_hotwords.priorities` | list[str] | `["critique", "importante"]` | Priorités de lexique injectables |
+| `lexicon_hotwords.max_terms` | int | `50` | Nombre maximum de termes injectés |
+| `lexicon_hotwords.max_chars` | int | `900` | Longueur maximale de la chaîne hotwords construite |
+| `lexicon_hotwords.prefix` | string | `"Termes importants :"` | Préfixe utilisé si aucun hotword statique n'est configuré |
 | `collapse_repetition_loops` | bool | `true` | Réduit les boucles textuelles répétées après ASR |
 | `repetition_loop_min_repeats` | int | `4` | Nombre minimum de répétitions consécutives suspectes |
 | `repetition_loop_max_phrase_words` | int | `10` | Taille maximale d'une phrase répétée détectée |

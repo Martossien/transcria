@@ -39,6 +39,9 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
 
     models_cfg = config.get("models", {})
     cohere_cfg = config.get("cohere", {})
+    lexicon_biasing_cfg = cohere_cfg.get("lexicon_biasing", {})
+    if not isinstance(lexicon_biasing_cfg, dict):
+        lexicon_biasing_cfg = {}
 
     return CohereTranscriber(
         model_path=models_cfg.get("cohere_model_path"),
@@ -51,6 +54,11 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
         repetition_loop_min_repeats=cohere_cfg.get("repetition_loop_min_repeats", 4),
         repetition_loop_max_phrase_words=cohere_cfg.get("repetition_loop_max_phrase_words", 10),
         repetition_loop_keep_repeats=cohere_cfg.get("repetition_loop_keep_repeats", 2),
+        lexicon_biasing_enabled=lexicon_biasing_cfg.get("enabled", False),
+        lexicon_biasing_terms=cohere_cfg.get("_lexicon_bias_terms", []),
+        lexicon_biasing_boost=lexicon_biasing_cfg.get("boost", 0.2),
+        lexicon_biasing_start_boost=lexicon_biasing_cfg.get("start_boost", 0.05),
+        lexicon_biasing_max_prefix_tokens=lexicon_biasing_cfg.get("max_prefix_tokens", 20),
     )
 
 

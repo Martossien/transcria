@@ -36,6 +36,11 @@ class CohereTranscriber(BaseTranscriber):
         repetition_loop_min_repeats: int = 4,
         repetition_loop_max_phrase_words: int = 10,
         repetition_loop_keep_repeats: int = 2,
+        lexicon_biasing_enabled: bool = False,
+        lexicon_biasing_terms: list[str] | None = None,
+        lexicon_biasing_boost: float = 0.2,
+        lexicon_biasing_start_boost: float = 0.05,
+        lexicon_biasing_max_prefix_tokens: int = 20,
     ):
         self.model_path = model_path
         self.device = device or self._detect_device()
@@ -47,8 +52,15 @@ class CohereTranscriber(BaseTranscriber):
         self.repetition_loop_min_repeats = repetition_loop_min_repeats
         self.repetition_loop_max_phrase_words = repetition_loop_max_phrase_words
         self.repetition_loop_keep_repeats = repetition_loop_keep_repeats
+        self.lexicon_biasing_enabled = bool(lexicon_biasing_enabled)
+        self.lexicon_biasing_terms = list(lexicon_biasing_terms or [])
+        self.lexicon_biasing_boost = lexicon_biasing_boost
+        self.lexicon_biasing_start_boost = lexicon_biasing_start_boost
+        self.lexicon_biasing_max_prefix_tokens = lexicon_biasing_max_prefix_tokens
         self._model = None
         self._processor = None
+        self._lexicon_logits_processor = None
+        self._lexicon_biasing_stats: dict = {}
 
     @staticmethod
     def _detect_device() -> str:
@@ -155,6 +167,7 @@ class CohereTranscriber(BaseTranscriber):
         valid_codes = set(self.supported_languages.values())
         if lang_code not in valid_codes:
             lang_code = "fr"
+        logits_processor = self._build_lexicon_logits_processor()
 
         chunk_count = 0
         total_chunks = int(total_samples / chunk_samples) + 1
@@ -187,6 +200,7 @@ class CohereTranscriber(BaseTranscriber):
                     no_repeat_ngram_size=self.no_repeat_ngram_size,
                     do_sample=False,
                     decoder_attention_mask=decoder_attention_mask,
+                    logits_processor=logits_processor,
                 )
 
             text = self._processor.decode(
@@ -229,6 +243,44 @@ class CohereTranscriber(BaseTranscriber):
         )
         return segments
 
+    def _build_lexicon_logits_processor(self):
+        """Construit une seule fois le processeur de biasing lexique Cohere."""
+        if not self.lexicon_biasing_enabled or not self.lexicon_biasing_terms:
+            self._lexicon_biasing_stats = {
+                "enabled": bool(self.lexicon_biasing_enabled),
+                "processor_created": False,
+                "terms": list(self.lexicon_biasing_terms),
+                "reason": "disabled" if not self.lexicon_biasing_enabled else "no_terms",
+            }
+            return None
+        if self._lexicon_logits_processor is not None:
+            return self._lexicon_logits_processor
+
+        from transcria.stt.contextual_biasing import build_cohere_lexicon_processor
+
+        processor, stats = build_cohere_lexicon_processor(
+            self.lexicon_biasing_terms,
+            self._processor.tokenizer,
+            enabled=True,
+            boost=self.lexicon_biasing_boost,
+            start_boost=self.lexicon_biasing_start_boost,
+            max_prefix_tokens=self.lexicon_biasing_max_prefix_tokens,
+        )
+        self._lexicon_logits_processor = processor
+        self._lexicon_biasing_stats = stats
+        if processor is not None:
+            logger.info(
+                "Biasing lexique Cohere activé: termes=%d séquences_tokens=%d boost=%.3f start_boost=%.3f max_prefix=%d",
+                len(stats.get("terms", [])),
+                stats.get("token_sequences", 0),
+                self.lexicon_biasing_boost,
+                self.lexicon_biasing_start_boost,
+                self.lexicon_biasing_max_prefix_tokens,
+            )
+        else:
+            logger.warning("Biasing lexique Cohere non créé: %s", stats.get("reason", "raison inconnue"))
+        return processor
+
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
         """Collapse repetition loops in text. Returns (cleaned_text, loops_metadata)."""
         if not self.collapse_repetition_loops:
@@ -247,6 +299,7 @@ class CohereTranscriber(BaseTranscriber):
 
         self._model = None
         self._processor = None
+        self._lexicon_logits_processor = None
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

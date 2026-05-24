@@ -242,6 +242,23 @@ Exemples :
         help="Override YAML ponctuel, ex: workflow.vad.enabled_final=true "
              "ou whisper.no_speech_threshold=0.4. Répétable.",
     )
+    parser.add_argument(
+        "--enable-whisper-lexicon-hotwords", action="store_true",
+        help="Activer whisper.lexicon_hotwords.enabled pour ce run.",
+    )
+    parser.add_argument(
+        "--enable-cohere-lexicon-biasing", action="store_true",
+        help="Activer cohere.lexicon_biasing.enabled pour ce run expérimental.",
+    )
+    parser.add_argument(
+        "--lexicon-term", action="append", default=[],
+        metavar="TERME[|priorité|catégorie|variante1;variante2]",
+        help="Ajoute un terme au lexique de session E2E. Répétable.",
+    )
+    parser.add_argument(
+        "--lexicon-json", type=Path, default=None,
+        help="Fichier JSON contenant une liste d'entrées de lexique à ajouter au run.",
+    )
 
     # ── GPU et LLM ──────────────────────────────────────────────────────────
     parser.add_argument(
@@ -592,6 +609,14 @@ def apply_e2e_config(cfg: dict, args: argparse.Namespace) -> None:
         cfg.setdefault("workflow", {}).setdefault("vad", {})["hysteresis_enabled"] = True
         info("VAD hysteresis activée")
 
+    if args.enable_whisper_lexicon_hotwords:
+        cfg.setdefault("whisper", {}).setdefault("lexicon_hotwords", {})["enabled"] = True
+        info("Hotwords Whisper depuis lexique activés")
+
+    if args.enable_cohere_lexicon_biasing:
+        cfg.setdefault("cohere", {}).setdefault("lexicon_biasing", {})["enabled"] = True
+        info("Biasing Cohere depuis lexique activé")
+
 
 def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
     """Affiche la configuration effective de ce run."""
@@ -604,6 +629,15 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
     print(f"  STT backend          : {models.get('stt_backend', 'cohere')}")
     if models.get("stt_backend") == "whisper":
         print(f"  Whisper model_size   : {whisper.get('model_size', 'large-v3')}")
+        print(
+            "  Whisper lex hotwords : "
+            f"{'OUI' if whisper.get('lexicon_hotwords', {}).get('enabled', False) else 'non'}"
+        )
+    if models.get("stt_backend") == "cohere":
+        print(
+            "  Cohere lex biasing   : "
+            f"{'OUI' if cfg.get('cohere', {}).get('lexicon_biasing', {}).get('enabled', False) else 'non'}"
+        )
     print(f"  Mode pipeline        : {args.mode}")
     print(f"  LLM résumé           : {'non' if args.skip_llm else 'oui'}")
     print(f"  LLM correction       : {'non' if args.skip_llm else 'oui'}")
@@ -715,6 +749,56 @@ def build_lexicon_from_summary(fs) -> list[dict]:
     return lexicon
 
 
+def _parse_cli_lexicon_term(raw: str) -> dict | None:
+    parts = [part.strip() for part in str(raw or "").split("|")]
+    term = parts[0] if parts else ""
+    if not term:
+        return None
+    variants = []
+    if len(parts) > 3 and parts[3]:
+        variants = [variant.strip() for variant in parts[3].split(";") if variant.strip()]
+    return {
+        "term": term,
+        "category": parts[2] if len(parts) > 2 and parts[2] else "terme_metier",
+        "priority": parts[1] if len(parts) > 1 and parts[1] else "critique",
+        "variants": variants,
+        "replace_by": "",
+        "comment": "Terme ajouté par option E2E --lexicon-term",
+        "contexts": [],
+        "source": "e2e_cli",
+    }
+
+
+def build_extra_lexicon_from_args(args: argparse.Namespace) -> list[dict]:
+    extra = []
+    for raw in args.lexicon_term or []:
+        item = _parse_cli_lexicon_term(raw)
+        if item:
+            extra.append(item)
+
+    if args.lexicon_json:
+        data = json.loads(args.lexicon_json.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise ValueError("--lexicon-json doit contenir une liste JSON")
+        for raw in data:
+            if not isinstance(raw, dict):
+                raise ValueError("--lexicon-json contient une entrée non objet")
+            term = str(raw.get("term", "")).strip()
+            if not term:
+                continue
+            extra.append({
+                "term": term,
+                "category": raw.get("category", "terme_metier"),
+                "priority": raw.get("priority", "critique"),
+                "variants": raw.get("variants", []),
+                "replace_by": raw.get("replace_by", ""),
+                "comment": raw.get("comment", "Terme ajouté par --lexicon-json"),
+                "contexts": raw.get("contexts", []),
+                "source": raw.get("source", "e2e_json"),
+            })
+    return extra
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Assertions
 # ─────────────────────────────────────────────────────────────────────────────
@@ -781,6 +865,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     preflight_data = fs.load_json("metadata/audio_preflight.json") or {}
     scene_data = fs.load_json("metadata/audio_scene.json") or {}
     quality_data = fs.load_json("metadata/audio_quality_decision.json") or {}
+    whisper_hotwords_data = fs.load_json("metadata/whisper_hotwords.json") or {}
+    cohere_biasing_data = fs.load_json("metadata/cohere_lexicon_biasing.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     reliability_counts = {}
@@ -826,6 +912,10 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "micro_chunk_merge": workflow.get("pyannote_chunking", {}).get("merge_micro_chunks", True),
         "vad_hysteresis": workflow.get("vad", {}).get("hysteresis_enabled", False),
         "scene_filter": workflow.get("audio_scene_filter", {}).get("enabled", False),
+        "whisper_lexicon_hotwords": cfg.get("whisper", {}).get("lexicon_hotwords", {}).get("enabled", False),
+        "cohere_lexicon_biasing": cfg.get("cohere", {}).get("lexicon_biasing", {}).get("enabled", False),
+        "lexicon_terms_cli": len(args.lexicon_term or []),
+        "lexicon_json": str(args.lexicon_json) if args.lexicon_json else None,
         "gpu": args.gpu,
         "arbitrage_port": args.arbitrage_port,
         "config_overrides": {
@@ -870,6 +960,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "audio_scene": (fs.job_dir / "metadata" / "audio_scene.json").exists(),
             "audio_denoise": (fs.job_dir / "metadata" / "audio_denoise.json").exists(),
             "transcription_metadata": (fs.job_dir / "metadata" / "transcription_metadata.json").exists(),
+            "whisper_hotwords": (fs.job_dir / "metadata" / "whisper_hotwords.json").exists(),
+            "cohere_lexicon_biasing": (fs.job_dir / "metadata" / "cohere_lexicon_biasing.json").exists(),
             "source_separation": (fs.job_dir / "input" / "vocals.wav").exists(),
             "scene_filter": (fs.job_dir / "input" / "scene_filtered.wav").exists(),
             "normalization": (fs.job_dir / "input" / "normalized.wav").exists(),
@@ -917,6 +1009,30 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         } if transcription_metadata else None,
 
         "segment_reliability_counts": reliability_counts,
+        "whisper_hotwords_data": {
+            "enabled": whisper_hotwords_data.get("enabled"),
+            "candidate_terms": whisper_hotwords_data.get("candidate_terms"),
+            "injected_terms": whisper_hotwords_data.get("injected_terms"),
+            "excluded_terms": whisper_hotwords_data.get("excluded_terms"),
+            "excluded_by_priority": whisper_hotwords_data.get("excluded_by_priority"),
+            "excluded_by_duplicate": whisper_hotwords_data.get("excluded_by_duplicate"),
+            "excluded_by_budget": whisper_hotwords_data.get("excluded_by_budget"),
+            "terms": whisper_hotwords_data.get("terms") or [],
+            "has_existing_hotwords": whisper_hotwords_data.get("has_existing_hotwords"),
+        } if whisper_hotwords_data else None,
+        "cohere_lexicon_biasing_data": {
+            "enabled": cohere_biasing_data.get("enabled"),
+            "candidate_terms": cohere_biasing_data.get("candidate_terms"),
+            "injected_terms": cohere_biasing_data.get("injected_terms"),
+            "excluded_terms": cohere_biasing_data.get("excluded_terms"),
+            "excluded_by_priority": cohere_biasing_data.get("excluded_by_priority"),
+            "excluded_by_duplicate": cohere_biasing_data.get("excluded_by_duplicate"),
+            "excluded_by_budget": cohere_biasing_data.get("excluded_by_budget"),
+            "boost": cohere_biasing_data.get("boost"),
+            "start_boost": cohere_biasing_data.get("start_boost"),
+            "max_prefix_tokens": cohere_biasing_data.get("max_prefix_tokens"),
+            "terms": cohere_biasing_data.get("terms") or [],
+        } if cohere_biasing_data else None,
 
         # Locuteurs
         "speakers": {
@@ -952,6 +1068,27 @@ def print_summary(args: argparse.Namespace) -> None:
           + (f" ({args.whisper_model_size})" if args.stt_backend == "whisper" else ""))
     if effective_backend and effective_backend != args.stt_backend:
         print(f"  STT effectif : {effective_backend}")
+    if job_dir:
+        hotwords_path = Path(job_dir) / "metadata" / "whisper_hotwords.json"
+        if hotwords_path.exists():
+            try:
+                hotwords = json.loads(hotwords_path.read_text(encoding="utf-8"))
+                print(
+                    "  Hotwords     : "
+                    f"{hotwords.get('injected_terms', 0)}/{hotwords.get('candidate_terms', 0)} injectés"
+                )
+            except Exception:
+                pass
+        cohere_biasing_path = Path(job_dir) / "metadata" / "cohere_lexicon_biasing.json"
+        if cohere_biasing_path.exists():
+            try:
+                biasing = json.loads(cohere_biasing_path.read_text(encoding="utf-8"))
+                print(
+                    "  Biasing Cohere: "
+                    f"{biasing.get('injected_terms', 0)}/{biasing.get('candidate_terms', 0)} injectés"
+                )
+            except Exception:
+                pass
     print(f"  Mode         : {args.mode}")
     print(f"  Combo ID     : {args.combo_id or '—'}")
     print(f"  Étapes       : {STEP}")
@@ -1164,6 +1301,10 @@ def main() -> int:
             timer_start("lexicon")
 
             lexicon = build_lexicon_from_summary(fs)
+            extra_lexicon = build_extra_lexicon_from_args(args)
+            if extra_lexicon:
+                lexicon.extend(extra_lexicon)
+                ok(f"Lexique E2E ajouté par options : {len(extra_lexicon)} terme(s)")
             LexiconManager.save(job, cfg["storage"]["jobs_dir"], lexicon)
             advance_preprocessing_state(job.id, job.state)
             JobContextBuilder.build(job, cfg["storage"]["jobs_dir"], cfg)

@@ -722,6 +722,10 @@ Deux modes de chunking :
 
 Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. `context/selected_lexicons.json` mémorise les lexiques cochés pour le job ; absent, tous les lexiques accessibles sont sélectionnés. `prefilter_lexicon_entries_for_display()` masque avant affichage les entrées centrales normales sans occurrence dans le transcript/résumé, tout en conservant les priorités `critique`/`importante`. Il ajoute `_display_reason` (`term_presence`, `variant_presence`, `priority`) pour expliquer dans l'UI pourquoi un terme est proposé. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
 
+Si `whisper.lexicon_hotwords.enabled=true` et que le backend STT effectif est Whisper, `PipelineService._inject_whisper_lexicon_hotwords()` lit `context/session_lexicon.json`, construit une liste bornée de hotwords avec `stt.lexicon_hotwords.build_whisper_hotwords()`, enrichit `effective_config["whisper"]["hotwords"]`, sauvegarde `metadata/whisper_hotwords.json` et logue candidats/injectés/exclus.
+
+Si `cohere.lexicon_biasing.enabled=true` et que le backend STT effectif est Cohere, `PipelineService._inject_cohere_lexicon_biasing()` sélectionne uniquement les formes cibles validées du lexique de session, sauvegarde `metadata/cohere_lexicon_biasing.json`, puis `CohereTranscriber` construit un `TrieContextualBiasProcessor` depuis le tokenizer Cohere. Le processeur ajoute un bonus léger aux premiers tokens possibles (`start_boost`), puis un bonus plus fort aux tokens qui prolongent un terme déjà amorcé dans un beam (`boost`) ; il ne booste pas les variantes fautives. L'option reste expérimentale et désactivée par défaut.
+
 **`job_context_builder.py` — `JobContextBuilder`**
 | Méthode | Description |
 |---|---|

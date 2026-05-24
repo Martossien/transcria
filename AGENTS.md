@@ -111,6 +111,8 @@ transcria/
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
       whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3 qualité
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
+      lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
+      contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session
       forced_alignment.py   # Alignement CTC natif torchaudio optionnel
       speaker_realignment.py# Réalignement locuteur/ponctuation au niveau mot
       reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
@@ -259,6 +261,8 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 
 
 **Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` force `whisper` quand le mode est dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job dégradé. La décision est écrite dans `metadata/audio_quality_decision.json`. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
+
+**Biasing lexique STT expérimental :** si `whisper.lexicon_hotwords.enabled=true` et que le backend effectif est `whisper`, `PipelineService._inject_whisper_lexicon_hotwords()` lit `context/session_lexicon.json`, injecte seulement les priorités configurées (défaut `critique`/`importante`) dans `whisper.hotwords`, sauvegarde `metadata/whisper_hotwords.json` et logue candidats/injectés/exclus. Si `cohere.lexicon_biasing.enabled=true` et que le backend effectif est `cohere`, `PipelineService._inject_cohere_lexicon_biasing()` sélectionne les formes cibles validées, sauvegarde `metadata/cohere_lexicon_biasing.json`, puis `CohereTranscriber` construit un `TrieContextualBiasProcessor` au chargement du tokenizer (`start_boost` faible pour amorcer un terme, `boost` pour le compléter). Les deux options sont désactivées par défaut.
 
 **Anti-hallucination Cohere :** `CohereTranscriber` applique aussi `collapse_repetition_loops` depuis `anti_hallucination.py` (paramètres `cohere.collapse_repetition_loops=true`, `cohere.repetition_loop_min_repeats=4`, `cohere.repetition_loop_max_phrase_words=10`, `cohere.repetition_loop_keep_repeats=2` dans `config.yaml`). Whisper utilise les mêmes paramètres sous `whisper.collapse_repetition_loops` etc. Les deux backends partagent la même logique de détection/réduction des boucles répétitives.
 

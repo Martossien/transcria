@@ -258,6 +258,25 @@ def _check_whisper(whisper: dict, r: ValidationResult) -> None:
         val = whisper.get(key)
         if val is not None and not isinstance(val, str):
             r.add_error(f"whisper.{key}: doit être une chaîne ou null")
+    lexicon_hotwords = whisper.get("lexicon_hotwords", {})
+    if lexicon_hotwords is not None:
+        if not isinstance(lexicon_hotwords, dict):
+            r.add_error("whisper.lexicon_hotwords: doit être un objet YAML")
+        else:
+            _check_bool(lexicon_hotwords, "enabled", "whisper.lexicon_hotwords.enabled", r)
+            _check_int_range(lexicon_hotwords, "max_terms", "whisper.lexicon_hotwords.max_terms", 1, 500, r)
+            _check_int_range(lexicon_hotwords, "max_chars", "whisper.lexicon_hotwords.max_chars", 40, 10000, r)
+            _check_str(lexicon_hotwords, "prefix", "whisper.lexicon_hotwords.prefix", r)
+            priorities = lexicon_hotwords.get("priorities", [])
+            if not isinstance(priorities, list) or not priorities:
+                r.add_error("whisper.lexicon_hotwords.priorities: doit être une liste non vide")
+            else:
+                allowed = {"critique", "importante", "normale"}
+                for index, priority in enumerate(priorities):
+                    if priority not in allowed:
+                        r.add_error(
+                            f"whisper.lexicon_hotwords.priorities[{index}]: priorité invalide '{priority}'"
+                        )
     forced = whisper.get("forced_alignment", {})
     if forced is not None:
         if not isinstance(forced, dict):
@@ -288,6 +307,36 @@ def _check_cohere(cohere: dict, r: ValidationResult) -> None:
     _check_int_range(cohere, "repetition_loop_min_repeats", "cohere.repetition_loop_min_repeats", 2, 100, r)
     _check_int_range(cohere, "repetition_loop_max_phrase_words", "cohere.repetition_loop_max_phrase_words", 1, 100, r)
     _check_int_range(cohere, "repetition_loop_keep_repeats", "cohere.repetition_loop_keep_repeats", 1, 20, r)
+    lexicon_biasing = cohere.get("lexicon_biasing", {})
+    if lexicon_biasing is not None:
+        if not isinstance(lexicon_biasing, dict):
+            r.add_error("cohere.lexicon_biasing: doit être un objet YAML")
+        else:
+            _check_bool(lexicon_biasing, "enabled", "cohere.lexicon_biasing.enabled", r)
+            _check_int_range(lexicon_biasing, "max_terms", "cohere.lexicon_biasing.max_terms", 1, 2000, r)
+            _check_optional_number(lexicon_biasing, "boost", "cohere.lexicon_biasing.boost", r)
+            boost = lexicon_biasing.get("boost")
+            if isinstance(boost, (int, float)) and not isinstance(boost, bool) and (boost < 0 or boost > 2):
+                r.add_error("cohere.lexicon_biasing.boost: doit être entre 0 et 2")
+            _check_optional_number(lexicon_biasing, "start_boost", "cohere.lexicon_biasing.start_boost", r)
+            start_boost = lexicon_biasing.get("start_boost")
+            if (
+                isinstance(start_boost, (int, float))
+                and not isinstance(start_boost, bool)
+                and (start_boost < 0 or start_boost > 1)
+            ):
+                r.add_error("cohere.lexicon_biasing.start_boost: doit être entre 0 et 1")
+            _check_int_range(lexicon_biasing, "max_prefix_tokens", "cohere.lexicon_biasing.max_prefix_tokens", 1, 100, r)
+            priorities = lexicon_biasing.get("priorities", [])
+            if not isinstance(priorities, list) or not priorities:
+                r.add_error("cohere.lexicon_biasing.priorities: doit être une liste non vide")
+            else:
+                allowed = {"critique", "importante", "normale"}
+                for index, priority in enumerate(priorities):
+                    if priority not in allowed:
+                        r.add_error(
+                            f"cohere.lexicon_biasing.priorities[{index}]: priorité invalide '{priority}'"
+                        )
 
 
 def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:

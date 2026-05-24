@@ -177,6 +177,8 @@ Pour rester lisible quand un groupe possède beaucoup d'entrées, l'étape 6 pro
 
 Chaque terme central affiché dans le workflow indique simplement pourquoi il est proposé : trouvé dans le texte, variante détectée ou priorité forte. Côté administration, les fiches lexique affichent les usages réels, les entrées les plus utilisées et des contrôles qualité simples pour repérer les termes trop courts, doublons proches ou variantes inutiles.
 
+Innovations expérimentales : quand le backend effectif est Whisper, TranscrIA peut injecter les termes `critique` et `importante` du lexique de session dans les hotwords Whisper (`whisper.lexicon_hotwords.enabled`). Pour Cohere, une option séparée (`cohere.lexicon_biasing.enabled`) construit un Trie de termes validés et applique un léger biasing contextuel pendant le décodage. Ces deux options sont désactivées par défaut et loguées, car un biasing trop large peut introduire des faux positifs et doit être benchmarké par domaine.
+
 ## Pipeline audio et STT
 
 Avant la transcription finale, `PipelineService` peut exécuter :

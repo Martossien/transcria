@@ -378,6 +378,103 @@ class TestPipelineServiceStateRecovery:
 
             assert captured["backend"] == "whisper"
 
+    def test_whisper_backend_injects_session_lexicon_hotwords_when_enabled(self, app, owner_id, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "whisper", "cohere_model_path": "/tmp/fake_model"},
+                whisper={
+                    "hotwords": "Terme statique",
+                    "lexicon_hotwords": {
+                        "enabled": True,
+                        "priorities": ["critique", "importante"],
+                        "max_terms": 3,
+                        "max_chars": 120,
+                        "prefix": "Termes importants :",
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Whisper Hotwords")
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json("context/session_lexicon.json", [
+                {"term": "EBITDA", "priority": "critique", "source": "central"},
+                {"term": "Comité stratégique", "priority": "importante", "source": "session"},
+                {"term": "Mot normal", "priority": "normale", "source": "central"},
+            ])
+
+            effective = PipelineService(cfg)._config_for_mode("fast", job)
+            stats = fs.load_json("metadata/whisper_hotwords.json")
+
+            assert effective["whisper"]["hotwords"] == "Terme statique, EBITDA, Comité stratégique"
+            assert stats["candidate_terms"] == 3
+            assert stats["injected_terms"] == 2
+            assert stats["excluded_by_priority"] == 1
+
+    def test_cohere_backend_does_not_inject_whisper_hotwords(self, app, owner_id, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "cohere", "cohere_model_path": "/tmp/fake_model"},
+                whisper={
+                    "lexicon_hotwords": {
+                        "enabled": True,
+                        "priorities": ["critique"],
+                        "max_terms": 10,
+                        "max_chars": 200,
+                        "prefix": "Termes importants :",
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Cohere No Hotwords")
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json("context/session_lexicon.json", [{"term": "EBITDA", "priority": "critique"}])
+
+            effective = PipelineService(cfg)._config_for_mode("fast", job)
+
+            assert "hotwords" not in effective.get("whisper", {})
+            assert fs.load_json("metadata/whisper_hotwords.json") is None
+
+    def test_cohere_backend_injects_contextual_bias_terms_when_enabled(self, app, owner_id, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "cohere", "cohere_model_path": "/tmp/fake_model"},
+                cohere={
+                    "lexicon_biasing": {
+                        "enabled": True,
+                        "priorities": ["critique", "importante"],
+                        "max_terms": 3,
+                        "boost": 0.2,
+                        "max_prefix_tokens": 20,
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Cohere Biasing")
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_json("context/session_lexicon.json", [
+                {"term": "indemnités", "priority": "critique", "variants": ["inimités"]},
+                {"term": "DIF", "priority": "importante"},
+                {"term": "mot normal", "priority": "normale"},
+            ])
+
+            effective = PipelineService(cfg)._config_for_mode("fast", job)
+            stats = fs.load_json("metadata/cohere_lexicon_biasing.json")
+
+            assert effective["cohere"]["_lexicon_bias_terms"] == ["indemnités", "DIF"]
+            assert "inimités" not in effective["cohere"]["_lexicon_bias_terms"]
+            assert stats["candidate_terms"] == 3
+            assert stats["injected_terms"] == 2
+            assert stats["excluded_by_priority"] == 1
+            assert stats["boost"] == 0.2
+            assert stats["start_boost"] == 0.05
+            assert stats["max_prefix_tokens"] == 20
+
     def test_pipeline_marks_job_failed_when_step_returns_error(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
