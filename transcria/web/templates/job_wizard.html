@@ -443,6 +443,22 @@
   <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-6-circle-fill step-icon"></i> Lexique de session</h3>
     <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
+    {% if central_lexicons %}
+    <div class="alert alert-light border small">
+      <strong>Lexiques centralisés disponibles :</strong>
+      {% for central in central_lexicons[:5] %}
+      <span class="badge text-bg-secondary me-1">{{ central.name }} · {{ central.entries|length }}</span>
+      {% endfor %}
+      {% if central_lexicons|length > 5 %}
+      <span class="text-muted">+{{ central_lexicons|length - 5 }}</span>
+      {% endif %}
+      {% if session_lexicon_exists %}
+      <div class="mt-1 text-muted">Le lexique de session déjà sauvegardé est conservé.</div>
+      {% else %}
+      <div class="mt-1 text-muted">{{ central_lexicon_prefill_count }} entrée(s) centrale(s) pré-remplissent la liste avec les suggestions du résumé.</div>
+      {% endif %}
+    </div>
+    {% endif %}
     {% if meeting.get('termes_suspects_parse_status') %}
       {% if meeting.termes_suspects_parse_status == 'section_unparsed' %}
       <div class="alert alert-warning small">
@@ -472,7 +488,16 @@
           </select>
         </div>
         <input type="hidden" class="lex-replace" value="{{ t.replace_by or '' }}">
+        <input type="hidden" class="lex-source" value="{{ t.source or '' }}">
+        <input type="hidden" class="lex-central-entry-id" value="{{ t.central_entry_id or '' }}">
+        <input type="hidden" class="lex-central-lexicon-id" value="{{ t.central_lexicon_id or '' }}">
+        <input type="hidden" class="lex-central-lexicon-name" value="{{ t.central_lexicon_name or '' }}">
         <script type="application/json" class="lex-contexts-json">{{ (t.contexts or [])|tojson }}</script>
+        {% if t.central_lexicon_name %}
+        <div class="mt-2">
+          <span class="badge text-bg-light border">Lexique central : {{ t.central_lexicon_name }}</span>
+        </div>
+        {% endif %}
         <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>
         {% if t.contexts %}
         <details class="lex-contexts mt-2">

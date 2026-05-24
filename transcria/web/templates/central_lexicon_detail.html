@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ lexicon.name if lexicon else "Nouveau lexique" }} — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">{{ lexicon.name if lexicon else "Nouveau lexique" }}</h1>
+    <p class="text-muted mb-0">Les entrées pré-remplissent le lexique de session, puis restent modifiables par l'utilisateur.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="/admin/lexicons">Retour</a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card p-4">
+      <h2 class="h5">Informations</h2>
+      <form method="post" action="{{ '/admin/lexicons/' ~ lexicon.id ~ '/metadata' if lexicon else '/admin/lexicons/new' }}">
+        <div class="mb-3">
+          <label class="form-label">Nom</label>
+          <input class="form-control" name="name" value="{{ lexicon.name if lexicon else '' }}" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Description</label>
+          <textarea class="form-control" name="description" rows="3">{{ lexicon.description if lexicon else '' }}</textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Groupe</label>
+          <select class="form-select" name="group_id" {% if not allow_global %}required{% endif %}>
+            {% if allow_global %}
+            <option value="" {% if lexicon and not lexicon.group_id %}selected{% endif %}>Global</option>
+            {% endif %}
+            {% for group in groups %}
+            <option value="{{ group.id }}" {% if lexicon and lexicon.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit">{{ "Enregistrer" if lexicon else "Créer" }}</button>
+      </form>
+      {% if lexicon %}
+      <hr>
+      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" onsubmit="return confirm('Supprimer ce lexique et toutes ses entrées ?')">
+        <button class="btn btn-outline-danger" type="submit">Supprimer ce lexique</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if lexicon %}
+  <div class="col-lg-7">
+    <div class="card p-4 mb-4">
+      <h2 class="h5">Ajouter une entrée</h2>
+      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries">
+        {% include "_central_lexicon_entry_fields.html" %}
+        <button class="btn btn-primary mt-2" type="submit">Ajouter</button>
+      </form>
+    </div>
+
+    <div class="card p-4 mb-4">
+      <h2 class="h5">Importer</h2>
+      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/import" enctype="multipart/form-data">
+        <div class="mb-2">
+          <input class="form-control" type="file" name="file" accept=".txt,.csv" required>
+        </div>
+        <p class="small text-muted mb-2">Format : forme correcte, catégorie, priorité, commentaire optionnel.</p>
+        <button class="btn btn-outline-primary" type="submit">Importer</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card p-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="h5 mb-0">Entrées</h2>
+        <span class="badge bg-secondary">{{ lexicon.entries|length }}</span>
+      </div>
+      {% if lexicon.entries %}
+      <div class="vstack gap-3">
+        {% for entry in lexicon.entries %}
+        <div class="border rounded p-3">
+          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-3">
+                <label class="form-label small">Forme correcte</label>
+                <input class="form-control form-control-sm" name="term" value="{{ entry.term }}" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small">Variantes</label>
+                <input class="form-control form-control-sm" name="variants" value="{{ entry.variants|join(', ') }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Catégorie</label>
+                <input class="form-control form-control-sm" name="category" list="central-lexicon-categories" value="{{ entry.category }}">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small">Priorité</label>
+                <select class="form-select form-select-sm" name="priority">
+                  {% for priority in priorities %}
+                  <option value="{{ priority }}" {% if entry.priority == priority %}selected{% endif %}>{{ priority }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-2 text-md-end">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Enregistrer</button>
+              </div>
+            </div>
+            <div class="mt-2">
+              <label class="form-label small">Commentaire</label>
+              <input class="form-control form-control-sm" name="comment" value="{{ entry.comment }}">
+            </div>
+          </form>
+          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" onsubmit="return confirm('Supprimer cette entrée ?')">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="alert alert-light border mb-0">Aucune entrée pour ce lexique.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<datalist id="central-lexicon-categories">
+  {% for category in categories %}
+  <option value="{{ category }}"></option>
+  {% endfor %}
+</datalist>
+{% endblock %}

@@ -964,6 +964,7 @@ class WorkflowRunner:
 
     def run_correction(self, job: Job, config: dict) -> dict:
         """Phase 3: correction du SRT via opencode + LLM d'arbitrage."""
+        from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
         from transcria.gpu.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
 
@@ -976,9 +977,37 @@ class WorkflowRunner:
         srt_path = fs.job_dir / "metadata" / "transcription.srt"
         context_path = fs.job_dir / "context" / "job_context.yaml"
         lexicon_path = fs.job_dir / "context" / "session_lexicon.json"
+        filtered_lexicon_path = fs.job_dir / "context" / "session_lexicon_filtered.json"
 
         if not srt_path.is_file():
             return {"success": False, "error": "SRT source introuvable"}
+
+        lexicon_path_for_correction = lexicon_path
+        if lexicon_path.is_file():
+            lexicon = fs.load_json("context/session_lexicon.json") or []
+            srt_text = fs.load_text("metadata/transcription.srt") or ""
+            if isinstance(lexicon, list):
+                filtered_lexicon, filter_stats = filter_lexicon_by_srt_presence(lexicon, srt_text)
+                fs.save_json("context/session_lexicon_filtered.json", filtered_lexicon)
+                lexicon_path_for_correction = filtered_lexicon_path
+                logger.info(
+                    "Préfiltrage lexique avant correction: job=%s total=%d conservés=%d retirés=%d terme=%d variante=%d priorité=%d",
+                    job.id,
+                    filter_stats.get("total", 0),
+                    filter_stats.get("kept", 0),
+                    filter_stats.get("filtered_out", 0),
+                    filter_stats.get("kept_by_term_presence", 0),
+                    filter_stats.get("kept_by_variant_presence", 0),
+                    filter_stats.get("kept_by_priority", 0),
+                )
+                if filter_stats.get("kept", 0) > 80:
+                    logger.warning(
+                        "Lexique volumineux transmis à la correction: job=%s entrées=%d",
+                        job.id,
+                        filter_stats.get("kept", 0),
+                    )
+            else:
+                logger.warning("Lexique de session ignoré avant correction: format inattendu job=%s", job.id)
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
         arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
@@ -998,7 +1027,7 @@ class WorkflowRunner:
                 opencode_bin=opencode_bin,
                 config=config,
             )
-            result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path))
+            result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path_for_correction))
             if result["success"] and result["corrected_srt"]:
                 fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
                 if result["report"]:

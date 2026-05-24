@@ -15,6 +15,18 @@ var TranscrIA = window.TranscrIA || {};
     }
     console.log('[TranscrIA] wizard.js initialisé, job=' + JOB_ID);
 
+    W.escapeHtml = W.escapeHtml || function (value) {
+        return String(value || '').replace(/[&<>"']/g, function (char) {
+            return {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            }[char];
+        });
+    };
+
     W.uploadFile = function () {
         console.log('[TranscrIA] uploadFile() appelé');
         var fi = document.getElementById('file-upload');
@@ -286,6 +298,11 @@ var TranscrIA = window.TranscrIA || {};
         node.textContent = JSON.stringify(Array.isArray(contexts) ? contexts : []);
     };
 
+    W.getRowValue = function (row, selector) {
+        var node = row && row.querySelector(selector);
+        return node ? (node.value || '') : '';
+    };
+
     W.updateLexiconContextCounter = function (row) {
         if (!row) return;
         var inputs = row.querySelectorAll('.lex-context-listened-input');
@@ -438,6 +455,11 @@ var TranscrIA = window.TranscrIA || {};
             '</select>' +
             '</div>' +
             '<input type="hidden" class="lex-replace" value="">' +
+            '<input type="hidden" class="lex-source" value="">' +
+            '<input type="hidden" class="lex-central-entry-id" value="">' +
+            '<input type="hidden" class="lex-central-lexicon-id" value="">' +
+            '<input type="hidden" class="lex-central-lexicon-name" value="">' +
+            '<div class="mt-2 lex-central-badge d-none"></div>' +
             '<script type="application/json" class="lex-contexts-json">[]</script>' +
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
             W.renderLexiconContexts(t.contexts || []) +
@@ -449,6 +471,15 @@ var TranscrIA = window.TranscrIA || {};
         row.querySelector('.lex-cat').value = t.category || '';
         row.querySelector('.lex-prio').value = t.priority || 'normale';
         row.querySelector('.lex-replace').value = t.replace_by || '';
+        row.querySelector('.lex-source').value = t.source || '';
+        row.querySelector('.lex-central-entry-id').value = t.central_entry_id || '';
+        row.querySelector('.lex-central-lexicon-id').value = t.central_lexicon_id || '';
+        row.querySelector('.lex-central-lexicon-name').value = t.central_lexicon_name || '';
+        var centralBadge = row.querySelector('.lex-central-badge');
+        if (centralBadge && t.central_lexicon_name) {
+            centralBadge.classList.remove('d-none');
+            centralBadge.innerHTML = '<span class="badge text-bg-light border">Lexique central : ' + W.escapeHtml(t.central_lexicon_name) + '</span>';
+        }
         row.querySelector('.lex-comment').value = t.comment || '';
         row.querySelector('.lex-contexts-json').textContent = JSON.stringify(t.contexts || []);
         W.fillLexiconContexts(row, t.contexts || []);
@@ -484,21 +515,25 @@ var TranscrIA = window.TranscrIA || {};
         var rows = document.querySelectorAll('#lexicon-list .lexicon-row');
         var data = [];
         rows.forEach(function (row) {
-            var termEl = row.querySelector('.lex-term');
-            var catEl = row.querySelector('.lex-cat');
-            var prioEl = row.querySelector('.lex-prio');
-            var replEl = row.querySelector('.lex-replace');
-            var variantsEl = row.querySelector('.lex-variants');
-            var commentEl = row.querySelector('.lex-comment');
-            data.push({
-                term: (termEl && termEl.value || ''),
-                category: (catEl && catEl.value || 'mot suspect'),
-                priority: (prioEl && prioEl.value || 'normale'),
-                replace_by: (replEl && replEl.value || ''),
-                variants: (variantsEl && variantsEl.value || '').split(',').map(function (v) { return v.trim(); }).filter(Boolean),
-                comment: (commentEl && commentEl.value || ''),
+            var item = {
+                term: W.getRowValue(row, '.lex-term'),
+                category: W.getRowValue(row, '.lex-cat') || 'mot suspect',
+                priority: W.getRowValue(row, '.lex-prio') || 'normale',
+                replace_by: W.getRowValue(row, '.lex-replace'),
+                variants: W.getRowValue(row, '.lex-variants').split(/[;,]/).map(function (v) { return v.trim(); }).filter(Boolean),
+                comment: W.getRowValue(row, '.lex-comment'),
                 contexts: W.parseLexiconContexts(row)
+            };
+            [
+                ['source', '.lex-source'],
+                ['central_entry_id', '.lex-central-entry-id'],
+                ['central_lexicon_id', '.lex-central-lexicon-id'],
+                ['central_lexicon_name', '.lex-central-lexicon-name']
+            ].forEach(function (pair) {
+                var value = W.getRowValue(row, pair[1]).trim();
+                if (value) item[pair[0]] = value;
             });
+            data.push(item);
         });
         W.api('/api/jobs/' + JOB_ID + '/lexicon', 'POST', data).then(function (r) {
             if (r.status === 200) {

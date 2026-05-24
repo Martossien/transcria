@@ -14,6 +14,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Fiabilité segmentaire** : score `ok|suspect|degrade` par segment, signaux `no_speech_prob`, confiance mot-à-mot, micro-segments et artefacts de sous-titrage.
 - **Anti-hallucination ASR** : réduction de boucles répétitives pour Cohere et Whisper, nettoyage post-STT configurable.
 - **LLM d'arbitrage locale/OpenAI-compatible** : résumé structuré, rôles probables des locuteurs, termes douteux à valider, correction SRT avec lexique et contexte.
+- **Lexiques centralisés par groupe** : référentiel admin/admin groupe, pré-remplissage du lexique de session, fusion avec les suggestions LLM et filtrage avant correction.
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
@@ -86,6 +87,7 @@ Points à vérifier après installation :
 - `workflow.summary_llm.model_id` et `workflow.arbitration_llm.model_id` si les phases LLM sont activées.
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
 - `voice_enrollment.enabled` si le référentiel de voix connues doit être activé, avec `voice_enrollment.storage_dir` placé sur un stockage local protégé.
+- Les lexiques centralisés sont stockés en base SQLite et ne nécessitent pas de section config dédiée en V1.
 
 Variables d'environnement principales :
 
@@ -134,7 +136,7 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 3. **Résumé** : transcription rapide, VAD, diarisation, analyse de scène, résumé LLM si activé.
 4. **Contexte** : titre, type, sujet, objectifs et suggestions LLM.
 5. **Participants & Locuteurs** : validation des locuteurs, extraits audio, genre vocal estimé si disponible.
-6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV.
+6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV. Les lexiques centralisés accessibles au job pré-remplissent la session tant qu'un lexique utilisateur n'a pas déjà été sauvegardé.
 7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper, correction LLM.
 8. **Qualité** : rapport, score, diagnostics, segments suspects.
 9. **Export** : package ZIP final.
@@ -156,6 +158,20 @@ Flux prévu :
 7. Valider manuellement la suggestion avant d'enregistrer le mapping.
 
 Le genre issu d'une voix enregistrée est traité comme une donnée validée par l'utilisateur : quand la suggestion est acceptée dans l'étape 5, il remplace l'estimation acoustique. La fiche voix permet aussi de rouvrir la preuve signée pour audit. Les empreintes ne sont jamais incluses dans les exports de jobs. Les résultats de matching écrits dans `speakers/voice_matches.json` contiennent uniquement des noms candidats, scores, marges et genre validé, sans vecteur vocal.
+
+## Lexiques centralisés
+
+Le menu **Lexiques** est réservé aux admins globaux et aux admins de groupe. Il permet de maintenir des termes sensibles réutilisables par groupe : forme validée, variantes fréquentes, catégorie, priorité et commentaire.
+
+Règles principales :
+
+- un admin global peut créer un lexique global ou de groupe ;
+- un admin de groupe ne peut créer et modifier que les lexiques de ses groupes ;
+- un membre simple ne peut pas administrer le référentiel ;
+- un job reçoit les lexiques du propriétaire du job et les lexiques globaux, même si un admin consulte le job ;
+- le lexique de session sauvegardé par l'utilisateur reste prioritaire et n'est pas écrasé au rechargement.
+
+Pendant l'étape **Lexique de session**, TranscrIA fusionne les entrées centrales avec les termes douteux proposés par la LLM. Avant la correction SRT, le lexique transmis à la LLM est filtré : les entrées présentes dans le SRT par terme ou variante sont conservées, les priorités `critique` et `importante` restent en préservation, et les entrées normales absentes sont retirées du prompt pour réduire le bruit.
 
 ## Pipeline audio et STT
 
@@ -194,7 +210,7 @@ Les phases LLM passent par `opencode`. Le résumé peut enrichir `meeting_contex
 - termes douteux ou suspects à valider ;
 - résumé structuré utilisé ensuite comme contexte de correction.
 
-La correction SRT reçoit le contexte de réunion, les participants validés, le lexique utilisateur, les indices de qualité et les segments litigieux. Ces données sont des aides, pas des autorités absolues : les prompts demandent de respecter les noms mappés et le lexique validé, tout en évitant d'inventer des corrections.
+La correction SRT reçoit le contexte de réunion, les participants validés, le lexique utilisateur filtré, les indices de qualité et les segments litigieux. Ces données sont des aides, pas des autorités absolues : les prompts demandent de respecter les noms mappés et le lexique validé, tout en évitant d'inventer des corrections.
 
 Le parsing LLM est volontairement tolérant : il accepte les sorties avec Markdown et plusieurs formats de listes, puis conserve les avertissements de parsing pour diagnostic au lieu de faire échouer le workflow dans les cas récupérables.
 
@@ -248,7 +264,7 @@ transcria/
     auth/                        # utilisateurs, groupes, permissions
     audio/                       # ffprobe, preflight, scene, denoise, normalisation, Demucs, VAD
     config/                      # loader, schema, détection système
-    context/                     # réunion, participants, lexique, job_context
+    context/                     # réunion, participants, lexique session/centralisé, job_context
     exports/                     # package ZIP
     gpu/                         # VRAMManager, GPUSession, opencode, backends LLM
     jobs/                        # Job, JobStore, filesystem

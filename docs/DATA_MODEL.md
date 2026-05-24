@@ -77,6 +77,15 @@
 
 `voice_profiles.status` suit le cycle `processing → active → stale|disabled|archived|deleted`. Un profil `active` nécessite un consentement `active`. Les profils `archived` ne conservent pas `embedding_blob`.
 
+### Tables lexiques centralisés
+
+| Table | Rôle | Données sensibles |
+|---|---|---|
+| `group_lexicons` | Lexique réutilisable global ou rattaché à un groupe | Non sensible par défaut, peut contenir vocabulaire métier interne |
+| `group_lexicon_entries` | Entrées du lexique : terme validé, variantes, catégorie, priorité, commentaire | Vocabulaire métier interne |
+
+`group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant.
+
 ---
 
 ## 2. Énumérations
@@ -270,7 +279,8 @@ jobs/<job_id>/
 ├── context/
 │   ├── meeting_context.json       # Contexte de réunion (titre, type, langue, suggestions LLM)
 │   ├── participants.json          # Liste des participants [{id, name, function, role, ...}]
-│   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, ...}]
+│   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, source, central_entry_id, ...}]
+│   ├── session_lexicon_filtered.json # Lexique réduit transmis à la correction LLM
 │   ├── session_lexicon.txt        # Lexique en texte (pour correction LLM)
 │   ├── job_context.yaml           # Contexte complet assemblé par JobContextBuilder
 │   └── job_context.json           # Même contexte en JSON
@@ -337,7 +347,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Lexique | `metadata/audio_excerpts/*.wav` (cache à la demande pour écouter les contextes proposés) | `AudioExcerptService.build_excerpt()` via `GET /api/jobs/<id>/audio/excerpt` |
 | Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/transcription_metadata.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
-| Traitement (quality) | `metadata/transcription_corrigee.srt` | `OpenCodeRunner.run_correction()` |
+| Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` |
 
@@ -444,6 +454,10 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
     "priority": "importante",
     "replace_by": "",
     "comment": "Résultat opérationnel courant",
+    "source": "central",
+    "central_entry_id": "entry-uuid",
+    "central_lexicon_id": "lexicon-uuid",
+    "central_lexicon_name": "Lexique finance",
     "contexts": [
       {
         "variant": "",
@@ -459,6 +473,19 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
 ```
 
 `contexts[].listened` est le flag de validation d'écoute saisi dans l'UI. Il est conservé dans `session_lexicon.json` mais reste une aide humaine : la correction LLM ne doit pas le traiter comme une preuve de correction automatique.
+
+Les champs `source`, `central_entry_id`, `central_lexicon_id` et `central_lexicon_name` sont optionnels. Ils tracent l'origine d'une entrée pré-remplie depuis un lexique centralisé, sans rendre le référentiel central autoritaire sur une correction humaine de session.
+
+### session_lexicon_filtered.json
+
+Produit au moment de `WorkflowRunner.run_correction()`. Il est dérivé de `session_lexicon.json` et sert uniquement de payload à la LLM de correction :
+
+- entrée conservée si le terme validé est présent dans le SRT source ;
+- entrée conservée si une variante est présente dans le SRT source ;
+- entrée `critique` ou `importante` conservée même absente, avec `_preservation_only=true` ;
+- entrée `normale` absente retirée du prompt.
+
+Le fichier ne remplace pas `session_lexicon.json` et ne doit pas être utilisé comme source d'édition UI.
 
 **Catégories LexiconManager** (`LEXICON_CATEGORIES`) : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect (20 catégories).
 

@@ -173,6 +173,7 @@ class TestWorkflowRunnerRunCorrection:
             fs.save_text("context/job_context.yaml", "meeting: {}\n")
             fs.save_text("context/session_lexicon.json", "[]\n")
 
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
@@ -196,6 +197,58 @@ class TestWorkflowRunnerRunCorrection:
             assert result["success"] is True
             assert captured["config_timeout"] == 1234
             assert "corrigé" in fs.load_text("metadata/transcription_corrigee.srt")
+
+    def test_run_correction_filters_session_lexicon_before_llm(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {"enabled": False},
+                    "arbitration_llm": {"model_id": "local/test-llm-arbitrage"},
+                },
+            )
+            job = JobStore.create_job(owner_id, "Correction Lexicon Filter")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nLe denes répond à l'API.\n")
+            fs.save_text("context/job_context.yaml", "meeting: {}\n")
+            fs.save_json("context/session_lexicon.json", [
+                {"term": "DNS", "variants": ["dénès"], "priority": "normale"},
+                {"term": "API", "variants": [], "priority": "normale"},
+                {"term": "SI critique", "variants": [], "priority": "critique"},
+                {"term": "Absent normal", "variants": [], "priority": "normale"},
+            ])
+
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
+            captured = {}
+
+            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+                captured["lexicon_path"] = lexicon_path
+                with open(lexicon_path, "r", encoding="utf-8") as fh:
+                    captured["lexicon"] = json.load(fh)
+                return {
+                    "success": True,
+                    "corrected_srt": "corrigé",
+                    "report": "",
+                    "warning": "",
+                    "error": "",
+                }
+
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+
+            result = runner.run_correction(job, cfg)
+
+            assert result["success"] is True
+            assert captured["lexicon_path"].endswith("session_lexicon_filtered.json")
+            assert [entry["term"] for entry in captured["lexicon"]] == ["DNS", "API", "SI critique"]
+            assert captured["lexicon"][2]["_preservation_only"] is True
+            assert fs.load_json("context/session_lexicon.json")[3]["term"] == "Absent normal"
 
 
 class TestWorkflowRunnerRunSummaryOpencodeConfig:

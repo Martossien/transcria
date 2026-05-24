@@ -123,6 +123,10 @@ transcria/
       meeting_context.py    # MeetingContextManager
       participants.py       # ParticipantsManager
       lexicon.py            # LexiconManager (20 catégories, variants, contexts)
+      central_lexicon_models.py # Modèles SQLAlchemy lexiques centralisés par groupe
+      central_lexicon_store.py  # Permissions, CRUD, import et périmètre job→groupe
+      central_lexicon_service.py# Fusion session/LLM/central + filtrage avant correction
+      central_lexicon_routes.py # Routes admin /admin/lexicons
       job_context_builder.py# JobContextBuilder — assemble job_context.yaml/json
     quality/
       audio_quality.py      # AudioQualityEvaluator — décision Cohere/Whisper selon diagnostics
@@ -313,6 +317,23 @@ Le parser accepte deux formats pour les participants probables :
 - `SPEAKER_XX : Fonction A — rôle détaillé`
 
 Le format avec crochets est le format cible du prompt. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
+
+### Lexiques centralisés (admin / admin groupe → section 6)
+Les lexiques centralisés sont gérés depuis `/admin/lexicons` par les admins globaux et les admins de groupe. Ils sont stockés en base SQLite (`group_lexicons`, `group_lexicon_entries`) et ne remplacent jamais le fichier de session validé par l'utilisateur.
+
+Règles de périmètre :
+- Un admin global peut créer un lexique global ou de groupe.
+- Un admin de groupe ne peut créer/modifier que les lexiques des groupes qu'il administre.
+- Le pré-remplissage d'un job utilise les lexiques du propriétaire du job et les lexiques globaux, même si le job est consulté par un admin ou par un membre d'un autre groupe.
+- Si `context/session_lexicon.json` existe déjà et contient des entrées, il reste l'autorité UI ; les lexiques centraux disponibles sont seulement affichés comme contexte.
+
+Flux étape 6 :
+1. `web.routes._central_lexicon_context()` charge les lexiques accessibles au job.
+2. `merge_lexicon_entries()` fusionne central + termes suspects LLM ; une session existante garde la priorité.
+3. `LexiconManager.save()` conserve les métadonnées `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name`.
+4. `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` et transmet ce fichier filtré à la LLM : termes présents par forme/variante + priorités `critique`/`importante` conservées en préservation.
+
+Ne pas envoyer un lexique central complet et volumineux à la LLM sans filtrage par SRT : cela augmente le bruit et le risque de correction hors contexte.
 
 ### Récupération des opencode orphelins au démarrage
 `job_executor._kill_orphaned_opencode(job_id, jobs_dir, sl)` tue les processus opencode de TranscrIA laissés vivants après un redémarrage brutal. Il lit les fichiers `.opencode.pid` dans `jobs/<id>/` (écrits par `OpenCodeRunner.run()`). La réconciliation est appelée automatiquement par `init_job_executor()` au démarrage du service.

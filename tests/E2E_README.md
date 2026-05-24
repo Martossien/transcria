@@ -11,6 +11,8 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix avec genre validé, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
 
+`tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, périmètre job→groupes, pré-remplissage et filtrage du lexique avant correction.
+
 ### Enchaînement
 
 1. `JobService.create/upload/analyze`
@@ -20,6 +22,7 @@ applicatif. Il est conçu pour deux usages :
    - `_write_diarization_context` : section "Genre vocal par locuteur" dans
      `summary/diarization_context.md`
 3. `MeetingContextManager` / `ParticipantsManager` / `LexiconManager`
+   - l'étape lexique peut être pré-remplie par les lexiques centralisés accessibles au propriétaire du job
 4. `SpeakerDetector.save_mapping()` + application des rôles LLM (`_apply_speaker_roles`)
 5. `PipelineService.run_process(..., mode=<fast|quality>)` :
    - Analyse de scène audio (subprocess librosa) → `metadata/audio_scene.json`
@@ -34,7 +37,7 @@ applicatif. Il est conçu pour deux usages :
      `workflow.vad.auto_enable_final_on_degraded=true`)
    - Nettoyage post-STT (suppression d'artefacts de sous-titrage, fusion de
      micro-segments courts) si `workflow.transcription_cleanup` est actif
-   - Correction LLM d'arbitrage (sauf `--skip-llm`)
+   - Correction LLM d'arbitrage (sauf `--skip-llm`) avec `context/session_lexicon_filtered.json`
    - Contrôle qualité → `quality/quality_report.json`
    - Export ZIP
 
@@ -81,6 +84,13 @@ Le parcours E2E applicatif des voix enregistrées ne charge pas de modèle GPU ;
 
 ```bash
 python -m pytest tests/test_voice_e2e.py -q
+```
+
+Le parcours applicatif des lexiques centralisés ne charge pas de modèle GPU :
+
+```bash
+python -m pytest tests/test_central_lexicon.py -q
+python -m pytest tests/test_workflow_runner.py::TestWorkflowRunnerRunCorrection -q
 ```
 
 ---

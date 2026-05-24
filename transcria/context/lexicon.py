@@ -85,13 +85,16 @@ class LexiconManager:
             entry = {
                 "id": t.get("id", f"t{i + 1}"),
                 "term": term,
-                "category": t.get("category", "mot suspect").strip(),
+                "category": t.get("category", "mot suspect").strip() or "mot suspect",
                 "variants": LexiconManager._normalize_variants(t.get("variants", []), term=term),
                 "priority": t.get("priority", "normale"),
                 "replace_by": t.get("replace_by", "").strip(),
                 "comment": t.get("comment", "").strip(),
                 "contexts": LexiconManager._normalize_contexts(t.get("contexts", [])),
             }
+            for optional in ("source", "central_entry_id", "central_lexicon_id", "central_lexicon_name"):
+                if t.get(optional):
+                    entry[optional] = str(t.get(optional)).strip()
             validated.append(entry)
         fs.save_json("context/session_lexicon.json", validated)
 
@@ -114,11 +117,11 @@ class LexiconManager:
             if "," in line:
                 parts = [p.strip() for p in line.split(",")]
                 term = parts[0]
-                category = parts[1] if len(parts) > 1 else "autre"
+                category = parts[1] if len(parts) > 1 else "mot suspect"
                 priority = parts[2] if len(parts) > 2 else "normale"
             else:
                 term = line
-                category = "autre"
+                category = "mot suspect"
                 priority = "normale"
             terms.append({"term": term, "category": category, "priority": priority, "variants": []})
 

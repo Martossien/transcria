@@ -204,6 +204,27 @@ class TestLexicon:
 
         assert saved[0]["contexts"][0]["listened"] is True
 
+    def test_save_preserves_central_lexicon_metadata(self, tmp_dir):
+        job = _fake_job()
+        saved = LexiconManager.save(
+            job,
+            tmp_dir,
+            [
+                {
+                    "term": "DNS",
+                    "source": "central",
+                    "central_entry_id": "entry-1",
+                    "central_lexicon_id": "lex-1",
+                    "central_lexicon_name": "Lexique groupe",
+                }
+            ],
+        )
+
+        assert saved[0]["source"] == "central"
+        assert saved[0]["central_entry_id"] == "entry-1"
+        assert saved[0]["central_lexicon_id"] == "lex-1"
+        assert saved[0]["central_lexicon_name"] == "Lexique groupe"
+
     def test_import_from_csv(self, tmp_dir):
         job = _fake_job()
         content = "TERM1, technique, critique\nTERM2, personne, normale"

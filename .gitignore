@@ -56,6 +56,9 @@ backup/
 docs/plan_refactoring_*.md
 docs/archive/
 
+# Documents de conception internes (ne pas publier)
+docs/lexique_centralise_conception.md
+
 # Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
 archives/
 

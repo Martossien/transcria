@@ -41,6 +41,8 @@ from transcria.workflow.states import WorkflowState
 from transcria.config import _deep_merge, get_config, get_config_path, load_config, save_config, set_config
 from transcria.config.config_schema import validate_config
 from transcria.config.system_detector import SystemDetector
+from transcria.context.central_lexicon_service import merge_lexicon_entries
+from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.services.job_service import JobService
 from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
@@ -146,6 +148,33 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
         len(speaker_roles),
     )
     return recovered
+
+
+def _central_lexicon_context(job: Job, session_lexicon: list[dict], meeting: dict) -> tuple[list[dict], list[dict]]:
+    """Retourne les lexiques centraux du job et le lexique initial à afficher."""
+    central_lexicons = CentralLexiconStore.list_accessible_lexicons_for_job(job)
+    central_entries = CentralLexiconStore.entries_for_lexicons(central_lexicons)
+    llm_suggestions = (meeting.get("termes_suspects") or []) if isinstance(meeting, dict) else []
+    if session_lexicon:
+        logger.info(
+            "Lexique étape 6: session existante conservée | job=%s, session_entries=%d, central_lexicons=%d",
+            job.id,
+            len(session_lexicon),
+            len(central_lexicons),
+        )
+        return central_lexicons, session_lexicon
+
+    merged = merge_lexicon_entries(central_entries, llm_suggestions)
+    if central_entries or llm_suggestions:
+        logger.info(
+            "Lexique étape 6: préremplissage fusionné | job=%s, central_lexicons=%d, central_entries=%d, llm_suggestions=%d, merged=%d",
+            job.id,
+            len(central_lexicons),
+            len(central_entries),
+            len(llm_suggestions),
+            len(merged),
+        )
+    return central_lexicons, merged
 
 
 def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
@@ -526,7 +555,9 @@ def job_wizard(job_id: str):
     summary_data = fs.load_json("summary/summary.json") or {}
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     meeting = _recover_summary_speaker_hints(fs, meeting)
-    lexicon = _enrich_lexicon_context_audio(LexiconManager.get(job, cfg["storage"]["jobs_dir"]))
+    session_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
+    central_lexicons, initial_lexicon = _central_lexicon_context(job, session_lexicon, meeting)
+    lexicon = _enrich_lexicon_context_audio(initial_lexicon)
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     voice_matches = fs.load_json("speakers/voice_matches.json") or {}
     audio_scene = fs.load_json("metadata/audio_scene.json") or {}
@@ -582,6 +613,9 @@ def job_wizard(job_id: str):
         meeting=meeting,
         participants=participants,
         lexicon=lexicon,
+        central_lexicons=central_lexicons,
+        central_lexicon_prefill_count=sum(len(item.entries) for item in central_lexicons),
+        session_lexicon_exists=bool(session_lexicon),
         speakers=speakers_data,
         voice_matches=voice_matches,
         audio_analysis=audio_analysis,
@@ -764,14 +798,35 @@ def api_lexicon(job_id: str):
     content_type = request.content_type or ""
     if "text/plain" in content_type or "text/csv" in content_type:
         text = request.data.decode("utf-8", errors="replace")
-        LexiconManager.import_from_file(job, cfg["storage"]["jobs_dir"], text)
+        saved_terms = LexiconManager.import_from_file(job, cfg["storage"]["jobs_dir"], text)
     else:
         data = request.get_json() or []
-        LexiconManager.save(job, cfg["storage"]["jobs_dir"], data)
+        saved_terms = LexiconManager.save(job, cfg["storage"]["jobs_dir"], data)
+
+    central_entry_ids = [str(item.get("central_entry_id")) for item in saved_terms if item.get("central_entry_id")]
+    if central_entry_ids:
+        CentralLexiconStore.mark_entries_used(central_entry_ids)
+        logger.info(
+            "Lexique de session sauvegardé avec entrées centrales | job=%s central_entries=%d",
+            job.id,
+            len(set(central_entry_ids)),
+        )
 
     advance_preprocessing_state(job.id, job.state)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
     return jsonify({"status": "ok"})
+
+
+@web_bp.route("/api/jobs/<job_id>/available-lexicons", methods=["GET"])
+@login_required
+def api_available_lexicons(job_id: str):
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+    lexicons = CentralLexiconStore.list_accessible_lexicons_for_job(job)
+    return jsonify({
+        "lexicons": [lexicon.to_dict(include_entries=True) for lexicon in lexicons],
+    })
 
 
 @web_bp.route("/api/jobs/<job_id>/speakers/detect", methods=["POST"])

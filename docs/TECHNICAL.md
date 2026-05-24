@@ -705,12 +705,22 @@ Deux modes de chunking :
 | Méthode | Description |
 |---|---|
 | `get(job, jobs_dir)` | Charge le lexique ou retourne [] |
-| `save(job, jobs_dir, terms)` | Valide (strip, id auto, defaults) et sauvegarde JSON + .txt |
+| `save(job, jobs_dir, terms)` | Valide (strip, id auto, defaults), conserve les métadonnées centralisées et sauvegarde JSON + .txt |
 | `import_from_file(job, jobs_dir, content)` | Import CSV ou liste simple (# = commentaire) |
 | `load_global_lexicon(config)` | Charge configs/lexique_metier.txt |
 
 `LEXICON_CATEGORIES` : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect
 `LEXICON_PRIORITIES` : critique, importante, normale
+
+**Lexiques centralisés**
+| Module | Description |
+|---|---|
+| `central_lexicon_models.py` | Tables `group_lexicons` et `group_lexicon_entries` |
+| `central_lexicon_store.py` | CRUD, import CSV/TXT, permissions admin/admin groupe, périmètre job→groupes |
+| `central_lexicon_service.py` | Fusion central + LLM + session et filtrage par présence dans le SRT |
+| `central_lexicon_routes.py` | Interface `/admin/lexicons` |
+
+Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
 
 **`job_context_builder.py` — `JobContextBuilder`**
 | Méthode | Description |
@@ -853,7 +863,7 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 | `__init__(work_dir, model, provider, opencode_bin, config)` | Initialise avec répertoire de travail, modèle et binaire opencode configurables |
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
 | `run_summary(transcript_path, context_path, diarization_context_path)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible, lit le fichier summary.md produit et le parse |
-| `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + session_lexicon.json, écrit transcription_corrigee.srt + correction_report.md |
+| `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + lexique filtré, écrit transcription_corrigee.srt + correction_report.md |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects) |
 
 **Fichiers prompts** dans `configs/prompts/` :
@@ -883,12 +893,16 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
 | `/admin/voices/<subject_id>/metadata` | POST | admin ou admin groupe autorisé | Mise à jour nom, genre validé, email et référence interne |
 | `/admin/voices/<subject_id>/consent-proof/<consent_id>` | GET | admin ou admin groupe autorisé | Consultation de la preuve signée stockée sous `voices/` |
+| `/admin/lexicons` | GET | admin ou admin groupe | Liste des lexiques centralisés administrables |
+| `/admin/lexicons/new` | GET, POST | admin ou admin groupe | Création d'un lexique global ou de groupe selon droits |
+| `/admin/lexicons/<id>` | GET | admin ou admin groupe autorisé | Détail, ajout, import et édition des entrées |
 | `/api/jobs/<id>/upload` | POST | login_required + owner/admin check | Upload fichier audio |
 | `/api/jobs/<id>/analyze` | POST | login_required + owner/admin check | Analyse ffprobe |
 | `/api/jobs/<id>/summary` | POST | login_required + owner/admin check | Résumé rapide |
 | `/api/jobs/<id>/context` | POST | login_required + owner/admin check | Sauvegarde contexte |
 | `/api/jobs/<id>/participants` | POST | login_required + owner/admin check | Sauvegarde participants |
 | `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
+| `/api/jobs/<id>/available-lexicons` | GET | login_required + owner/admin check | Lexiques centralisés accessibles au job |
 | `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique |
 | `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
 | `/api/jobs/<id>/speakers/voice-match` | POST | login_required + owner/admin check | Suggestions depuis les voix enregistrées accessibles au job |

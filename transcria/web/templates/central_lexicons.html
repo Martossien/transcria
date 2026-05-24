@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Lexiques — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1">Lexiques centralisés</h1>
+    <p class="text-muted mb-0">Termes réutilisables dans les jobs du groupe.</p>
+  </div>
+  <a class="btn btn-primary" href="/admin/lexicons/new">Nouveau lexique</a>
+</div>
+
+{% if lexicons %}
+<div class="card">
+  <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Nom</th>
+          <th>Groupe</th>
+          <th>Entrées</th>
+          <th>Mise à jour</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lexicon in lexicons %}
+        <tr>
+          <td>
+            <strong>{{ lexicon.name }}</strong>
+            {% if lexicon.description %}
+            <div class="small text-muted">{{ lexicon.description }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if lexicon.group_id %}
+              {{ lexicon.group.name if lexicon.group else "[Groupe supprimé]" }}
+            {% else %}
+              Global
+            {% endif %}
+          </td>
+          <td>{{ lexicon.entries|length }}</td>
+          <td class="small text-muted">{{ lexicon.updated_at.strftime('%Y-%m-%d %H:%M') if lexicon.updated_at else '' }}</td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-outline-primary" href="/admin/lexicons/{{ lexicon.id }}">Ouvrir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-light border">Aucun lexique centralisé disponible.</div>
+{% endif %}
+{% endblock %}
