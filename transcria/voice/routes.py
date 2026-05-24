@@ -9,6 +9,7 @@ from flask import flash
 from flask import redirect
 from flask import render_template
 from flask import request
+from flask import send_file
 from flask import url_for
 from flask_login import current_user
 from flask_login import login_required
@@ -76,6 +77,7 @@ def voice_create():
             subject = VoiceStore.create_subject(
                 actor=current_user,
                 display_name=request.form.get("display_name", ""),
+                gender=request.form.get("gender", ""),
                 email=request.form.get("email", ""),
                 external_ref=request.form.get("external_ref", ""),
                 group_id=request.form.get("group_id") or None,
@@ -105,6 +107,55 @@ def voice_detail(subject_id: str):
         active_consent=VoiceStore.active_consent(subject),
         latest_profile=VoiceStore.latest_profile(subject),
     )
+
+
+@voice_bp.route("/admin/voices/<subject_id>/metadata", methods=["POST"])
+@login_required
+def voice_update_metadata(subject_id: str):
+    if not _require_voice_admin():
+        return ("Accès interdit", 403)
+    try:
+        subject = VoiceStore.get_subject_for_user(subject_id, current_user)
+    except VoiceAccessError:
+        return ("Accès interdit", 403)
+    if subject is None:
+        return ("Voix introuvable", 404)
+    try:
+        VoiceStore.update_subject_metadata(
+            subject,
+            current_user,
+            display_name=request.form.get("display_name", ""),
+            gender=request.form.get("gender", ""),
+            email=request.form.get("email", ""),
+            external_ref=request.form.get("external_ref", ""),
+        )
+        flash("Informations de la voix mises à jour.", "success")
+    except (VoiceValidationError, VoiceAccessError) as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("voice.voice_detail", subject_id=subject.id))
+
+
+@voice_bp.route("/admin/voices/<subject_id>/consent-proof/<consent_id>")
+@login_required
+def voice_consent_proof(subject_id: str, consent_id: str):
+    if not _require_voice_admin():
+        return ("Accès interdit", 403)
+    cfg = get_config()
+    try:
+        subject = VoiceStore.get_subject_for_user(subject_id, current_user)
+    except VoiceAccessError:
+        return ("Accès interdit", 403)
+    if subject is None:
+        return ("Voix introuvable", 404)
+    consent = VoiceStore.get_consent_for_subject(subject, consent_id)
+    if consent is None:
+        return ("Consentement introuvable", 404)
+    proof_path = Path(consent.proof_path).resolve()
+    storage_root = _storage_root(cfg).resolve()
+    if not proof_path.is_file() or not proof_path.is_relative_to(storage_root):
+        logger.warning("Preuve consentement inaccessible: subject=%s consent=%s path=%s", subject.id, consent.id, proof_path)
+        return ("Preuve inaccessible", 404)
+    return send_file(proof_path, as_attachment=False)
 
 
 @voice_bp.route("/admin/voices/<subject_id>/consents", methods=["POST"])

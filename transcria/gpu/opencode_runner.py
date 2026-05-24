@@ -520,6 +520,26 @@ class OpenCodeRunner:
         return None, "", ""
 
     @staticmethod
+    def _is_non_identifiable_participant_line(line: str) -> bool:
+        """Détecte une vraie ligne placeholder, sans rejeter un rôle contenant ces mots."""
+        text = OpenCodeRunner._clean_summary_cell(line.strip("- ").strip())
+        if not text:
+            return True
+        lowered = text.casefold()
+        if lowered in {"non identifiable", "(non identifiable)", "aucun", "(aucun)", "aucune", "(aucune)"}:
+            return True
+
+        speaker_id, label, role = OpenCodeRunner._parse_participant_line(text)
+        if speaker_id:
+            label_key = label.casefold().strip()
+            role_key = role.casefold().strip()
+            return label_key in {"non identifiable", "(non identifiable)"} or (
+                not label_key and role_key in {"non identifiable", "(non identifiable)"}
+            )
+
+        return lowered.startswith("non identifiable")
+
+    @staticmethod
     def _parse_structured_summary(text: str) -> dict:
         """Parse le markdown structuré en dictionnaire de champs."""
         import re
@@ -567,7 +587,7 @@ class OpenCodeRunner:
             speaker_roles: dict[str, dict] = {}
             for line in part_match.group(1).strip().split("\n"):
                 line = line.strip("- ").strip()
-                if not line or "non identifiable" in line.lower():
+                if OpenCodeRunner._is_non_identifiable_participant_line(line):
                     continue
                 participants.append(line)
                 # Extraire SPEAKER_XX + label + rôle.

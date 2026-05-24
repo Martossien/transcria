@@ -118,6 +118,36 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
     }
 
 
+def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
+    """Récupère les champs participants LLM si un ancien parsing les a manqués."""
+    if meeting.get("speaker_roles_llm") or meeting.get("participants_detectes"):
+        return meeting
+
+    summary_text = meeting.get("summary_llm") or fs.load_text("summary/summary.md") or ""
+    if not summary_text.strip():
+        return meeting
+
+    from transcria.gpu.opencode_runner import OpenCodeRunner
+
+    parsed = OpenCodeRunner._parse_structured_summary(summary_text)
+    speaker_roles = parsed.get("speaker_roles") or {}
+    participants_detectes = parsed.get("participants_detectes") or ""
+    if not speaker_roles and not participants_detectes:
+        return meeting
+
+    recovered = dict(meeting)
+    if participants_detectes:
+        recovered["participants_detectes"] = participants_detectes
+    if speaker_roles:
+        recovered["speaker_roles_llm"] = speaker_roles
+    fs.save_json("context/meeting_context.json", recovered)
+    logger.info(
+        "Champs participants LLM récupérés depuis summary.md | speaker_roles=%d",
+        len(speaker_roles),
+    )
+    return recovered
+
+
 def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
     reliability_counts: dict[str, int] = {}
     suspect_segments = []
@@ -495,6 +525,7 @@ def job_wizard(job_id: str):
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     summary_data = fs.load_json("summary/summary.json") or {}
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
+    meeting = _recover_summary_speaker_hints(fs, meeting)
     lexicon = _enrich_lexicon_context_audio(LexiconManager.get(job, cfg["storage"]["jobs_dir"]))
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     voice_matches = fs.load_json("speakers/voice_matches.json") or {}

@@ -74,6 +74,7 @@ class VoiceStore:
         actor: User,
         display_name: str,
         group_id: str | None,
+        gender: str = "",
         email: str = "",
         external_ref: str = "",
         allow_global_profiles: bool = False,
@@ -88,9 +89,13 @@ class VoiceStore:
             raise VoiceValidationError("Seul un admin global peut créer une voix globale.")
         if group_id is not None and not GroupStore.can_manage_group(actor, group_id):
             raise VoiceAccessError("Accès groupe interdit")
+        gender = (gender or "").strip().lower()
+        if gender not in {"", "female", "male", "other"}:
+            raise VoiceValidationError("Genre invalide.")
 
         subject = VoiceSubject(
             display_name=name,
+            gender=gender,
             email=email.strip(),
             external_ref=external_ref.strip(),
             group_id=group_id,
@@ -101,6 +106,54 @@ class VoiceStore:
         VoiceStore.audit("subject_created", actor_id=actor.id, subject_id=subject.id, details={"group_id": group_id})
         db.session.commit()
         logger.info("Voix enregistrée: sujet créé id=%s group=%s actor=%s", subject.id, group_id, actor.id)
+        return subject
+
+    @staticmethod
+    def update_subject_metadata(
+        subject: VoiceSubject,
+        actor: User,
+        *,
+        display_name: str | None = None,
+        gender: str | None = None,
+        email: str | None = None,
+        external_ref: str | None = None,
+    ) -> VoiceSubject:
+        if not VoiceStore.can_manage_subject(actor, subject):
+            raise VoiceAccessError("Accès voix interdit")
+
+        changes: dict[str, dict[str, str]] = {}
+        if display_name is not None:
+            name = display_name.strip()
+            if not name:
+                raise VoiceValidationError("Le nom est obligatoire.")
+            if name != subject.display_name:
+                changes["display_name"] = {"old": subject.display_name, "new": name}
+                subject.display_name = name
+
+        if gender is not None:
+            normalized_gender = gender.strip().lower()
+            if normalized_gender not in {"female", "male", "other"}:
+                raise VoiceValidationError("Genre invalide.")
+            if normalized_gender != subject.gender:
+                changes["gender"] = {"old": subject.gender, "new": normalized_gender}
+                subject.gender = normalized_gender
+
+        if email is not None:
+            normalized_email = email.strip()
+            if normalized_email != subject.email:
+                changes["email"] = {"old": subject.email, "new": normalized_email}
+                subject.email = normalized_email
+
+        if external_ref is not None:
+            normalized_ref = external_ref.strip()
+            if normalized_ref != subject.external_ref:
+                changes["external_ref"] = {"old": subject.external_ref, "new": normalized_ref}
+                subject.external_ref = normalized_ref
+
+        if changes:
+            VoiceStore.audit("subject_metadata_updated", actor_id=actor.id, subject_id=subject.id, details={"changes": changes})
+            db.session.commit()
+            logger.info("Voix mise à jour: subject=%s actor=%s fields=%s", subject.id, actor.id, sorted(changes))
         return subject
 
     @staticmethod
@@ -138,6 +191,12 @@ class VoiceStore:
             .filter_by(subject_id=subject.id, status=VoiceConsentStatus.ACTIVE.value)
             .order_by(VoiceConsent.created_at.desc())
         ).scalars().first()
+
+    @staticmethod
+    def get_consent_for_subject(subject: VoiceSubject, consent_id: str) -> VoiceConsent | None:
+        return db.session.execute(
+            db.select(VoiceConsent).filter_by(subject_id=subject.id, id=consent_id)
+        ).scalar_one_or_none()
 
     @staticmethod
     def latest_profile(subject: VoiceSubject) -> VoiceProfile | None:

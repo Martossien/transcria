@@ -251,11 +251,14 @@ var TranscrIA = window.TranscrIA || {};
     W.applyVoiceSuggestion = function (button) {
         var speakerId = button && button.dataset ? button.dataset.speaker : '';
         var suggestedName = button && button.dataset ? button.dataset.name : '';
+        var suggestedGender = button && button.dataset ? button.dataset.gender : '';
         if (!speakerId || !suggestedName) return;
         var row = document.getElementById('spk-' + speakerId);
         if (!row) return;
         var nameInput = row.querySelector('.speaker-name');
         if (nameInput) nameInput.value = suggestedName;
+        var genderInput = row.querySelector('.speaker-gender');
+        if (genderInput && suggestedGender) genderInput.value = suggestedGender;
         button.classList.remove('btn-outline-success');
         button.classList.add('btn-success');
         button.textContent = 'Voix retenue';

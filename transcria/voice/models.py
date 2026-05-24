@@ -39,6 +39,7 @@ class VoiceSubject(db.Model):
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     display_name = db.Column(db.String(160), nullable=False, index=True)
+    gender = db.Column(db.String(20), nullable=False, default="")
     email = db.Column(db.String(255), nullable=False, default="")
     external_ref = db.Column(db.String(255), nullable=False, default="")
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=True, index=True)
@@ -56,6 +57,7 @@ class VoiceSubject(db.Model):
         return {
             "id": self.id,
             "display_name": self.display_name,
+            "gender": self.gender,
             "email": self.email,
             "external_ref": self.external_ref,
             "group_id": self.group_id,

@@ -69,7 +69,12 @@ class TestVoiceEnrollmentE2E:
 
         response = admin_client.post(
             "/admin/voices/new",
-            data={"display_name": "Alice Martin", "group_id": group_id, "email": "alice@example.test"},
+            data={
+                "display_name": "Alice Martin",
+                "group_id": group_id,
+                "email": "alice@example.test",
+                "gender": "female",
+            },
             follow_redirects=True,
         )
         assert response.status_code == 200
@@ -77,6 +82,7 @@ class TestVoiceEnrollmentE2E:
         with app.app_context():
             subject = VoiceSubject.query.filter_by(display_name="Alice Martin").one()
             subject_id = subject.id
+            assert subject.gender == "female"
 
         response = admin_client.post(
             f"/admin/voices/{subject_id}/consents",
@@ -100,6 +106,7 @@ class TestVoiceEnrollmentE2E:
         assert data["available"] is True
         assert data["matches"][0]["speaker_id"] == "SPEAKER_00"
         assert data["matches"][0]["suggested_name"] == "Alice Martin"
+        assert data["matches"][0]["suggested_gender"] == "female"
 
         page = admin_client.get(f"/jobs/{job_id}")
         assert page.status_code == 200

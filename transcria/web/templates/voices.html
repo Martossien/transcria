@@ -29,6 +29,11 @@
           <td>
             <strong>{{ subject.display_name }}</strong>
             {% if subject.email %}<div class="small text-muted">{{ subject.email }}</div>{% endif %}
+            {% if subject.gender %}
+            <div class="small text-muted">
+              {% if subject.gender == 'female' %}Féminin{% elif subject.gender == 'male' %}Masculin{% else %}Autre / non binaire{% endif %}
+            </div>
+            {% endif %}
           </td>
           <td>{{ subject.group.name if subject.group else "Global" }}</td>
           <td>

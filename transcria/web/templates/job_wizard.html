@@ -386,6 +386,7 @@
                   title="Suggestion issue des voix enregistrées"
                   data-speaker="{{ s.speaker_id }}"
                   data-name="{{ voice_hint.item.get('suggested_name', '') }}"
+                  data-gender="{{ voice_hint.item.get('suggested_gender', '') }}"
                   onclick="TranscrIA.applyVoiceSuggestion(this)">
             {{ voice_hint.item.get('suggested_name') }} · {{ (voice_hint.item.get('top_score', 0) * 100)|round|int }}%
           </button>

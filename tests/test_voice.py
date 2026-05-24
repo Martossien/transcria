@@ -80,6 +80,7 @@ class TestVoiceStore:
                 actor=admin,
                 display_name="Alice Voice",
                 group_id=group.id,
+                gender="female",
                 allow_global_profiles=False,
             )
             consent = VoiceStore.create_consent(
@@ -92,6 +93,7 @@ class TestVoiceStore:
             )
 
             assert subject.id
+            assert subject.gender == "female"
             assert consent.status == VoiceConsentStatus.ACTIVE.value
             assert VoiceStore.active_consent(subject).id == consent.id
 
@@ -217,16 +219,18 @@ class TestVoiceWeb:
 
         r = admin_client.post(
             "/admin/voices/new",
-            data={"display_name": "Bob Voice", "group_id": group_id},
+            data={"display_name": "Bob Voice", "group_id": group_id, "gender": "male"},
             follow_redirects=True,
         )
 
         assert r.status_code == 200
         with app.app_context():
             subject = VoiceSubject.query.filter_by(display_name="Bob Voice").one()
+            subject_id = subject.id
+            assert subject.gender == "male"
 
         r = admin_client.post(
-            f"/admin/voices/{subject.id}/consents",
+            f"/admin/voices/{subject_id}/consents",
             data={
                 "status": "active",
                 "proof": (io.BytesIO(b"preuve signee"), "consent.pdf"),
@@ -237,9 +241,52 @@ class TestVoiceWeb:
 
         assert r.status_code == 200
         with app.app_context():
-            consent = VoiceConsent.query.filter_by(subject_id=subject.id).one()
+            consent = VoiceConsent.query.filter_by(subject_id=subject_id).one()
+            consent_id = consent.id
             assert consent.status == VoiceConsentStatus.ACTIVE.value
             assert consent.proof_sha256
+
+        proof = admin_client.get(f"/admin/voices/{subject_id}/consent-proof/{consent_id}")
+        assert proof.status_code == 200
+        assert proof.data == b"preuve signee"
+
+    def test_admin_can_update_voice_metadata(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+            from transcria.voice.store import VoiceStore
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(f"voice-edit-{uuid.uuid4().hex[:8]}")
+            subject = VoiceStore.create_subject(
+                actor=admin,
+                display_name="Nom initial",
+                gender="female",
+                group_id=group.id,
+                allow_global_profiles=False,
+            )
+            subject_id = subject.id
+
+        response = admin_client.post(
+            f"/admin/voices/{subject_id}/metadata",
+            data={
+                "display_name": "martossien",
+                "gender": "male",
+                "email": "martossien@example.test",
+                "external_ref": "informatique",
+            },
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        with app.app_context():
+            from transcria.database import db
+
+            subject = db.session.get(VoiceSubject, subject_id)
+            assert subject.display_name == "martossien"
+            assert subject.gender == "male"
+            assert subject.email == "martossien@example.test"
+            assert subject.external_ref == "informatique"
 
     def test_generate_profile_route_uses_embedding_service(self, app, admin_client, monkeypatch):
         with app.app_context():
@@ -320,6 +367,7 @@ class TestVoiceWeb:
                 actor=admin,
                 display_name="Diane Voice",
                 group_id=group.id,
+                gender="female",
                 allow_global_profiles=False,
             )
             consent = VoiceStore.create_consent(
@@ -370,5 +418,6 @@ class TestVoiceWeb:
         assert response.status_code == 200
         data = response.get_json()
         assert data["matches"][0]["suggested_name"] == "Diane Voice"
+        assert data["matches"][0]["suggested_gender"] == "female"
         with app.app_context():
             assert VoiceMatch.query.filter_by(job_id=job.id, speaker_id="SPEAKER_00").count() == 1

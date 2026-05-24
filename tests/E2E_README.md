@@ -7,9 +7,9 @@ applicatif. Il est conçu pour deux usages :
 
 - **Validation manuelle** : tester une configuration spécifique et inspecter les artefacts
 - **Benchmark automatisé** : appelé par `scripts/bench_audio.py` pour mesurer toutes les
-  combinaisons d'options (voir `docs/BENCHMARK_PLAN.md`)
+  combinaisons d'options. Les plans de campagne passés sont archivés hors documentation active.
 
-`tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
+`tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix avec genre validé, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
 
 ### Enchaînement
 
@@ -42,12 +42,12 @@ applicatif. Il est conçu pour deux usages :
 
 1. Admin ou admin de groupe ouvre `/admin/voices`.
 2. Téléchargement du formulaire vierge `/admin/voices/consent-form.pdf`.
-3. Création de la voix dans un groupe accessible.
+3. Création de la voix dans un groupe accessible, avec genre validé.
 4. Upload de la preuve signée (`voice_consents`, fichier dans `voices/subjects/<id>/consents/`).
 5. Upload d'un audio de référence et génération d'un `voice_profiles.embedding_blob` mocké dans le test.
 6. Création d'un job avec `speakers/speaker_clips.json`.
 7. `POST /api/jobs/<id>/speakers/voice-match` écrit `speakers/voice_matches.json` et la table `voice_matches`.
-8. La page `/jobs/<id>` affiche la suggestion, sans appliquer automatiquement le nom.
+8. La page `/jobs/<id>` affiche la suggestion et son genre validé, sans appliquer automatiquement le nom.
 
 ---
 

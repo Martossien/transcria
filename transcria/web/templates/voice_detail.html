@@ -4,12 +4,46 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
     <h1 class="h3 mb-1">{{ subject.display_name }}</h1>
-    <p class="text-muted mb-0">{{ subject.group.name if subject.group else "Profil global" }}</p>
+    <p class="text-muted mb-0">
+      {{ subject.group.name if subject.group else "Profil global" }}
+      {% if subject.gender %}
+        · {% if subject.gender == 'female' %}Féminin{% elif subject.gender == 'male' %}Masculin{% else %}Autre / non binaire{% endif %}
+      {% endif %}
+    </p>
   </div>
   <a href="/admin/voices" class="btn btn-outline-secondary">Retour</a>
 </div>
 
 <div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card p-4 h-100">
+      <h2 class="h5">Personne</h2>
+      <form action="/admin/voices/{{ subject.id }}/metadata" method="post">
+        <div class="mb-3">
+          <label class="form-label">Nom de la personne</label>
+          <input class="form-control" name="display_name" value="{{ subject.display_name }}" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Genre validé</label>
+          <select class="form-select" name="gender" required>
+            <option value="female" {% if subject.gender == 'female' %}selected{% endif %}>Féminin</option>
+            <option value="male" {% if subject.gender == 'male' %}selected{% endif %}>Masculin</option>
+            <option value="other" {% if subject.gender == 'other' %}selected{% endif %}>Autre / non binaire</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Email</label>
+          <input class="form-control" name="email" type="email" value="{{ subject.email or '' }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Référence interne</label>
+          <input class="form-control" name="external_ref" value="{{ subject.external_ref or '' }}">
+        </div>
+        <button class="btn btn-primary" type="submit">Enregistrer</button>
+      </form>
+    </div>
+  </div>
+
   <div class="col-lg-6">
     <div class="card p-4 h-100">
       <h2 class="h5">Consentement</h2>
@@ -18,7 +52,13 @@
       </p>
       {% if active_consent %}
       <p><span class="badge bg-success">Actif</span> version {{ active_consent.form_version }}</p>
-      <p class="small text-muted mb-0">Hash preuve : {{ active_consent.proof_sha256[:16] }}…</p>
+      <p class="small text-muted">Hash preuve : {{ active_consent.proof_sha256[:16] }}…</p>
+      <a class="btn btn-sm btn-outline-secondary"
+         href="/admin/voices/{{ subject.id }}/consent-proof/{{ active_consent.id }}"
+         target="_blank"
+         rel="noopener">
+        Vérifier la preuve signée
+      </a>
       {% else %}
       <p class="text-muted">Aucun consentement actif. La génération d'empreinte est bloquée.</p>
       {% endif %}

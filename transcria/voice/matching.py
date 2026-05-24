@@ -76,6 +76,7 @@ class VoiceMatchingService:
             if suggestion_allowed:
                 speaker_result["suggested_subject_id"] = top["subject_id"]
                 speaker_result["suggested_name"] = top["display_name"]
+                speaker_result["suggested_gender"] = top.get("gender", "")
                 speaker_result["confidence"] = "high" if top["score"] >= high_threshold else "medium"
                 db_matches.append({**top, "rank": 1, "decision": VoiceMatchDecision.SUGGESTED.value})
             matches.append(speaker_result)
@@ -168,6 +169,7 @@ class VoiceMatchingService:
                 "subject_id": profile.subject_id,
                 "profile_id": profile.id,
                 "display_name": profile.subject.display_name,
+                "gender": profile.subject.gender,
                 "group_id": profile.group_id,
                 "score": float(score),
                 "score_kind": "cosine_normalized",

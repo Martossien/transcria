@@ -151,11 +151,11 @@ Flux prévu :
 2. Faire signer la personne concernée.
 3. Créer la voix dans le groupe concerné.
 4. Uploader la preuve signée, conservée dans `voices/subjects/<id>/consents/` avec hash SHA-256.
-5. Uploader un audio de référence et générer l'empreinte vocale locale.
+5. Vérifier ou corriger le genre validé sur la fiche voix, uploader un audio de référence et générer l'empreinte vocale locale.
 6. Dans l'étape **Participants & Locuteurs**, lancer “Rechercher les voix connues” pour obtenir une suggestion par locuteur.
 7. Valider manuellement la suggestion avant d'enregistrer le mapping.
 
-Les empreintes ne sont jamais incluses dans les exports de jobs. Les résultats de matching écrits dans `speakers/voice_matches.json` contiennent uniquement des noms candidats, scores et marges, sans vecteur vocal.
+Le genre issu d'une voix enregistrée est traité comme une donnée validée par l'utilisateur : quand la suggestion est acceptée dans l'étape 5, il remplace l'estimation acoustique. La fiche voix permet aussi de rouvrir la preuve signée pour audit. Les empreintes ne sont jamais incluses dans les exports de jobs. Les résultats de matching écrits dans `speakers/voice_matches.json` contiennent uniquement des noms candidats, scores, marges et genre validé, sans vecteur vocal.
 
 ## Pipeline audio et STT
 

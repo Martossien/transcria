@@ -109,6 +109,45 @@ class TestWorkflowRunnerSpeakerRoles:
         assert participants[0]["name"] == "Fonction A"
         assert participants[0]["role"] == "décrit une action observée"
 
+    def test_apply_speaker_roles_does_not_overwrite_user_validated_name(self, tmp_path):
+        fs = JobFilesystem(str(tmp_path), "job-speaker-roles-user-name")
+        fs.save_json("speakers/speaker_mapping.json", {
+            "mapping": {
+                "SPEAKER_00": {"name": "martossien", "participant_id": "p1"},
+            },
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "mapped_name": "martossien", "validation": "user_validated"},
+            ],
+        })
+        fs.save_json("speakers/speaker_stats.json", {
+            "speakers": [
+                {"speaker_id": "SPEAKER_00", "mapped_name": "martossien", "validation": "user_validated"},
+            ],
+        })
+        fs.save_json("context/participants.json", [
+            {"id": "p1", "name": "martossien", "function": "", "service": "", "role": ""},
+        ])
+
+        class Log:
+            @staticmethod
+            def info(*args, **kwargs):
+                pass
+
+        WorkflowRunner._apply_speaker_roles(
+            fs,
+            {"SPEAKER_00": {"label": "Sylvain Martin", "role": "déclarant"}},
+            Log(),
+        )
+
+        participants = fs.load_json("context/participants.json")
+        stats = fs.load_json("speakers/speaker_stats.json")
+        mapping = fs.load_json("speakers/speaker_mapping.json")
+        assert participants[0]["name"] == "martossien"
+        assert participants[0]["role"] == "déclarant"
+        assert stats["speakers"][0]["mapped_name"] == "martossien"
+        assert mapping["mapping"]["SPEAKER_00"]["name"] == "martossien"
+        assert mapping["speakers"][0]["mapped_name"] == "martossien"
+
 
 class TestWorkflowRunnerRunCorrection:
     def test_run_correction_passes_config_and_keeps_partial_timeout_output(self, app, owner_id, monkeypatch, tmp_path):

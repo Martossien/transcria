@@ -360,6 +360,31 @@ Quelques paragraphes de texte sans autres champs structurés.
             "role": "décrit une action observée",
         }
 
+    def test_parse_speaker_roles_keeps_non_identifiable_inside_role(self):
+        text = """## Participants probables
+
+- SPEAKER_00 [Sylvain Martin] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        assert "Sylvain Martin" in result["participants_detectes"]
+        assert result["speaker_roles"]["SPEAKER_00"] == {
+            "label": "Sylvain Martin",
+            "role": "personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)",
+        }
+
+    def test_parse_speaker_roles_excludes_non_identifiable_speaker_placeholder(self):
+        text = """## Participants probables
+
+- SPEAKER_00 [Non identifiable] : non identifiable
+- SPEAKER_01 [Fonction A] : décrit une action observée
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        assert "SPEAKER_00" not in result["participants_detectes"]
+        assert "SPEAKER_00" not in result["speaker_roles"]
+        assert result["speaker_roles"]["SPEAKER_01"]["label"] == "Fonction A"
+
     def test_parse_mots_cles_multiline(self):
         text = """**Mots-clés**
 

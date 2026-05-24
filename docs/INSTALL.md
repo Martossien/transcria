@@ -676,7 +676,7 @@ mkdir -p voices
 chmod 700 voices
 ```
 
-Le menu **Voix enregistrées** est réservé aux admins globaux et admins de groupe. Le formulaire vierge est téléchargeable depuis `/admin/voices/consent-form.pdf`; seule la preuve signée uploadée est conservée. Les audios de référence sont supprimés par défaut après génération de l'empreinte.
+Le menu **Voix enregistrées** est réservé aux admins globaux et admins de groupe. Le formulaire vierge est téléchargeable depuis `/admin/voices/consent-form.pdf`; seule la preuve signée uploadée est conservée et consultable par les admins autorisés. Le genre renseigné dans la fiche voix est considéré comme validé par l'utilisateur et peut remplacer l'estimation acoustique lors du matching. Les audios de référence sont supprimés par défaut après génération de l'empreinte.
 
 ---
 

@@ -881,6 +881,8 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/system` | GET | login_required + ACCESS_SYSTEM | État technique (GPU dashboard) |
 | `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition YAML de la configuration |
 | `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
+| `/admin/voices/<subject_id>/metadata` | POST | admin ou admin groupe autorisé | Mise à jour nom, genre validé, email et référence interne |
+| `/admin/voices/<subject_id>/consent-proof/<consent_id>` | GET | admin ou admin groupe autorisé | Consultation de la preuve signée stockée sous `voices/` |
 | `/api/jobs/<id>/upload` | POST | login_required + owner/admin check | Upload fichier audio |
 | `/api/jobs/<id>/analyze` | POST | login_required + owner/admin check | Analyse ffprobe |
 | `/api/jobs/<id>/summary` | POST | login_required + owner/admin check | Résumé rapide |

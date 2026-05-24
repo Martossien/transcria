@@ -81,6 +81,8 @@ def create_app(config_path: str | None = None) -> Flask:
 
     with app.app_context():
         db.create_all()
+        from transcria.database_migrations import ensure_runtime_schema
+        ensure_runtime_schema()
         UserStore.ensure_admin(cfg)
         init_job_executor(app, cfg)
 

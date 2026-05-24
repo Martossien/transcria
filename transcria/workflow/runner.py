@@ -373,12 +373,15 @@ class WorkflowRunner:
 
         # Propager les noms LLM dans speaker_stats.json et speaker_mapping.json
         # même si participants.json était déjà à jour (appel idempotent).
+        # Ne jamais remplacer un nom déjà validé par l'utilisateur : la LLM ne
+        # sert ici qu'à préremplir les champs encore vides ou restés SPEAKER_XX.
         speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
         spk_stats = speakers_data.get("speakers", [])
         mapping_data = fs.load_json("speakers/speaker_mapping.json") or {}
         spk_map = mapping_data.get("mapping", {})
         spk_map_speakers = mapping_data.get("speakers", [])
         propagated = 0
+        mapping_changed = False
         for speaker_id, info in speaker_roles.items():
             norm = WorkflowRunner._normalize_speaker_role_info(info)
             label = norm["label"]
@@ -386,20 +389,30 @@ class WorkflowRunner:
                 continue
             for spk in spk_stats:
                 if spk.get("speaker_id") == speaker_id:
-                    spk["mapped_name"] = label
-                    propagated += 1
+                    current = str(spk.get("mapped_name", "") or "").strip()
+                    if current in {"", speaker_id}:
+                        spk["mapped_name"] = label
+                        propagated += 1
             if speaker_id in spk_map:
-                spk_map[speaker_id]["name"] = label
+                current = str(spk_map[speaker_id].get("name", "") or "").strip()
+                if current in {"", speaker_id}:
+                    spk_map[speaker_id]["name"] = label
+                    mapping_changed = True
             for ms in spk_map_speakers:
                 if ms.get("speaker_id") == speaker_id:
-                    ms["mapped_name"] = label
+                    current = str(ms.get("mapped_name", "") or "").strip()
+                    if current in {"", speaker_id}:
+                        ms["mapped_name"] = label
+                        mapping_changed = True
         if propagated:
             fs.save_json("speakers/speaker_stats.json", {"speakers": spk_stats})
+        if mapping_changed:
             if spk_map or spk_map_speakers:
                 fs.save_json(
                     "speakers/speaker_mapping.json",
                     {"mapping": spk_map, "speakers": spk_map_speakers},
                 )
+        if propagated:
             sl.info("Rôles LLM → speaker_stats.json propagés : %d locuteur(s)", propagated)
 
     @staticmethod

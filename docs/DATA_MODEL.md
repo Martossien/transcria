@@ -68,7 +68,7 @@
 
 | Table | Rôle | Données sensibles |
 |---|---|---|
-| `voice_subjects` | Personne/voix connue, liée à un groupe ou profil global admin | Nom, email optionnel, référence interne |
+| `voice_subjects` | Personne/voix connue, liée à un groupe ou profil global admin | Nom, genre validé, email optionnel, référence interne |
 | `voice_consents` | Preuve de consentement signée, version du formulaire, statut actif/révoqué/expiré/rejeté | Chemin preuve, hash SHA-256 |
 | `voice_profiles` | Empreinte vocale exploitable ou archivée | `embedding_blob`, modèle, dimension, statut |
 | `voice_reference_files` | Trace des audios de référence uploadés | Chemin et hash, statut `deleted` par défaut après vectorisation |
@@ -308,9 +308,9 @@ voices/
     └── references/                  # Audio de référence temporaire, supprimé après vectorisation par défaut
 ```
 
-Les empreintes vocales sont stockées en base SQL (`voice_profiles.embedding_blob`) et ne doivent jamais être incluses dans les exports de jobs. `speakers/voice_matches.json` ne contient que les suggestions calculées pour le job (`speaker_id`, candidat, score cosinus normalisé, marge top1/top2, statut) et jamais de vecteur. Les suggestions retenues par le moteur sont aussi historisées en base dans `voice_matches`.
+Les empreintes vocales sont stockées en base SQL (`voice_profiles.embedding_blob`) et ne doivent jamais être incluses dans les exports de jobs. `speakers/voice_matches.json` ne contient que les suggestions calculées pour le job (`speaker_id`, candidat, score cosinus normalisé, marge top1/top2, statut, genre validé si renseigné) et jamais de vecteur. Les suggestions retenues par le moteur sont aussi historisées en base dans `voice_matches`.
 
-Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent-form.pdf` et sa source éditable est `docs/forms/consentement_empreinte_vocale_v1.md`. Le PDF n'est pas une preuve : seule la preuve signée uploadée dans `voices/subjects/<id>/consents/` est conservée et hashée.
+Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent-form.pdf` et sa source éditable est `docs/forms/consentement_empreinte_vocale_v1.md`. Le PDF n'est pas une preuve : seule la preuve signée uploadée dans `voices/subjects/<id>/consents/` est conservée et hashée. La fiche voix permet de mettre à jour le nom, le genre validé, l'email et la référence interne via `/admin/voices/<subject_id>/metadata`. La preuve signée peut être consultée par un admin autorisé via `/admin/voices/<subject_id>/consent-proof/<consent_id>`.
 
 ### Production des fichiers par étape
 

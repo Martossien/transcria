@@ -5,6 +5,7 @@ from transcria.web.routes import (
     _enrich_lexicon_context_audio,
     _fill_missing_speaker_genders,
     _processing_diagnostic_view,
+    _recover_summary_speaker_hints,
     _resolve_context_audio_range,
 )
 
@@ -23,6 +24,31 @@ def test_audio_diagnostic_view_keeps_user_message_simple():
     assert view["class"] == "danger"
     assert view["recommended_mode"] == "quality"
     assert "volume très faible" in view["reasons"]
+
+
+def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
+    class FakeFilesystem:
+        def __init__(self):
+            self.saved = None
+
+        @staticmethod
+        def load_text(path):
+            assert path == "summary/summary.md"
+            return """## Participants probables
+
+- SPEAKER_00 [Sylvain Martin] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
+"""
+
+        def save_json(self, path, data):
+            assert path == "context/meeting_context.json"
+            self.saved = data
+
+    fs = FakeFilesystem()
+    recovered = _recover_summary_speaker_hints(fs, {})
+
+    assert recovered["speaker_roles_llm"]["SPEAKER_00"]["label"] == "Sylvain Martin"
+    assert "Sylvain Martin" in recovered["participants_detectes"]
+    assert fs.saved == recovered
 
 
 def test_processing_diagnostic_view_counts_reliability_and_limits_segments():
