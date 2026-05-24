@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 
@@ -266,7 +267,9 @@ def _check_whisper(whisper: dict, r: ValidationResult) -> None:
             _check_bool(lexicon_hotwords, "enabled", "whisper.lexicon_hotwords.enabled", r)
             _check_int_range(lexicon_hotwords, "max_terms", "whisper.lexicon_hotwords.max_terms", 1, 500, r)
             _check_int_range(lexicon_hotwords, "max_chars", "whisper.lexicon_hotwords.max_chars", 40, 10000, r)
+            _check_int_range(lexicon_hotwords, "max_tokens", "whisper.lexicon_hotwords.max_tokens", 1, 224, r)
             _check_str(lexicon_hotwords, "prefix", "whisper.lexicon_hotwords.prefix", r)
+            _check_str(lexicon_hotwords, "tokenizer_model", "whisper.lexicon_hotwords.tokenizer_model", r)
             priorities = lexicon_hotwords.get("priorities", [])
             if not isinstance(priorities, list) or not priorities:
                 r.add_error("whisper.lexicon_hotwords.priorities: doit être une liste non vide")
@@ -411,10 +414,23 @@ def _check_segment_reliability(cfg: dict, r: ValidationResult) -> None:
         return
     _check_bool(cfg, "enabled", "workflow.segment_reliability.enabled", r)
     for key in (
+        "detect_non_latin", "detect_generic_hallucinations", "degrade_on_text_flags",
+    ):
+        _check_bool(cfg, key, f"workflow.segment_reliability.{key}", r)
+    for key in (
         "no_speech_prob_threshold", "low_word_confidence_ratio",
         "low_word_confidence_min", "micro_segment_s", "short_segment_s",
     ):
         _check_optional_number(cfg, key, f"workflow.segment_reliability.{key}", r)
+    if "non_latin_min_chars" in cfg:
+        _check_int_range(cfg, "non_latin_min_chars", "workflow.segment_reliability.non_latin_min_chars", 1, 100, r)
+    _check_regex_string(cfg, "non_latin_char_pattern", "workflow.segment_reliability.non_latin_char_pattern", r)
+    _check_regex_list(
+        cfg,
+        "generic_hallucination_patterns",
+        "workflow.segment_reliability.generic_hallucination_patterns",
+        r,
+    )
 
 
 def _check_pyannote_chunking(cfg: dict, r: ValidationResult) -> None:
@@ -754,6 +770,39 @@ def _check_optional_number(obj: dict, key: str, path: str, r: ValidationResult) 
         return
     if isinstance(val, bool) or not isinstance(val, (int, float)):
         r.add_error(f"{path}: doit être un nombre ou null")
+
+
+def _check_regex_string(obj: dict, key: str, path: str, r: ValidationResult) -> None:
+    val = obj.get(key)
+    if val is None:
+        return
+    if not isinstance(val, str):
+        r.add_error(f"{path}: doit être une chaîne ou null")
+        return
+    if not val.strip():
+        return
+    try:
+        re.compile(val)
+    except re.error as exc:
+        r.add_error(f"{path}: regex invalide ({exc})")
+
+
+def _check_regex_list(obj: dict, key: str, path: str, r: ValidationResult) -> None:
+    values = obj.get(key, [])
+    if values is None:
+        return
+    if not isinstance(values, list):
+        r.add_error(f"{path}: doit être une liste")
+        return
+    for index, value in enumerate(values):
+        item_path = f"{path}[{index}]"
+        if not isinstance(value, str) or not value.strip():
+            r.add_error(f"{item_path}: doit être une chaîne non vide")
+            continue
+        try:
+            re.compile(value)
+        except re.error as exc:
+            r.add_error(f"{item_path}: regex invalide ({exc})")
 
 
 def _check_port_value(val: Any, path: str, r: ValidationResult) -> None:

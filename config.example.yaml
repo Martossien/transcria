@@ -118,6 +118,8 @@ whisper:
     priorities: ["critique", "importante"]
     max_terms: 50
     max_chars: 900
+    max_tokens: 200
+    tokenizer_model: "openai/whisper-large-v3"
     prefix: "Termes importants :"
   collapse_repetition_loops: true
   repetition_loop_min_repeats: 4
@@ -161,11 +163,12 @@ workflow:
     min_scene_speech_ratio: 0.55
     max_scene_problem_segments: 3
   quality_transcription:
-    # Le mode qualité utilise Whisper large-v3 optimisé ; le mode rapide garde models.stt_backend sauf diagnostic dégradé.
-    force_stt_backend: "whisper"
-    enabled_for_modes:
-      - "quality"
-    force_on_degraded_summary: true
+    # Le mode "quality" active le workflow complet, mais ne force plus Whisper par défaut.
+    # Cohere reste le backend principal ; définir force_stt_backend: "whisper" + enabled_for_modes
+    # seulement pour des campagnes ciblées ou des environnements qui le justifient.
+    force_stt_backend:
+    enabled_for_modes: []
+    force_on_degraded_summary: false
     degraded_summary_levels:
       - "degrade"
   audio_preflight:
@@ -189,6 +192,24 @@ workflow:
     low_word_confidence_min: 0.4
     micro_segment_s: 0.35
     short_segment_s: 0.8
+    # Flags textuels configurables. Aucun terme métier n'est codé en dur :
+    # ajoutez ici vos regex si des hallucinations génériques récurrentes sont observées.
+    detect_non_latin: true
+    non_latin_char_pattern: "[\\u0400-\\u04FF\\u0600-\\u06FF\\u0750-\\u077F\\u4E00-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF]"
+    non_latin_min_chars: 2
+    detect_generic_hallucinations: true
+    generic_hallucination_patterns:
+      # Signatures génériques connues d'hallucinations ASR/Whisper sur silence, bruit,
+      # artefacts vidéo ou corpus sous-titrés. Liste configurable : retirer/ajouter selon vos audios.
+      - "\\bpour plus d['’]informations\\b"
+      - "\\babonnez[- ]?vous\\b"
+      - "\\bcontactez[- ]?nous\\b"
+      - "\\bsite web\\b"
+      - "\\bregard[ée] cette vid[ée]o\\b"
+      - "\\bsous[- ]?titrage\\b"
+      - "\\bradio[- ]?canada\\b"
+      - "\\buniversit[eé] d['’]ottawa\\b"
+    degrade_on_text_flags: true
   pyannote_chunking:
     # Post-traitement conservateur des tours pyannote avant STT.
     # Objectif : réduire les micro-chunks sans perdre les interjections utiles.

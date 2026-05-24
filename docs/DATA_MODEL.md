@@ -624,7 +624,7 @@ Produit par `AudioQualityEvaluator`. Quand `metadata/audio_scene.json` est dispo
 ```
 
 - `scene_findings` reste informatif par défaut : `workflow.audio_quality.scene_affects_quality_score=false`.
-- Si `scene_affects_quality_score=true`, ces signaux contribuent au score et peuvent donc forcer le backend qualité selon `force_quality_backend`.
+- Si `scene_affects_quality_score=true`, ces signaux contribuent au score. Un forçage backend n'est appliqué que si `workflow.quality_transcription` définit explicitement un backend cible et la règle de forçage associée.
 
 ### quality_report.json
 

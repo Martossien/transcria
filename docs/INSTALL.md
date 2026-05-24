@@ -606,9 +606,9 @@ workflow:
     force_quality_backend: true
     degraded_levels: ["degrade"]
   quality_transcription:
-    force_stt_backend: "whisper"
-    enabled_for_modes: ["quality"]
-    force_on_degraded_summary: true
+    force_stt_backend:
+    enabled_for_modes: []
+    force_on_degraded_summary: false
   vad:
     enabled_summary: true
     enabled_final: false

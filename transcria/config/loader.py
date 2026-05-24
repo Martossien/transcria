@@ -108,6 +108,8 @@ _DEFAULT_CONFIG = {
             "priorities": ["critique", "importante"],
             "max_terms": 50,
             "max_chars": 900,
+            "max_tokens": 200,
+            "tokenizer_model": "openai/whisper-large-v3",
             "prefix": "Termes importants :",
         },
         "collapse_repetition_loops": True,
@@ -145,9 +147,9 @@ _DEFAULT_CONFIG = {
             "max_scene_problem_segments": 3,
         },
         "quality_transcription": {
-            "force_stt_backend": "whisper",
-            "enabled_for_modes": ["quality"],
-            "force_on_degraded_summary": True,
+            "force_stt_backend": None,
+            "enabled_for_modes": [],
+            "force_on_degraded_summary": False,
             "degraded_summary_levels": ["degrade"],
         },
         "audio_preflight": {
@@ -168,6 +170,15 @@ _DEFAULT_CONFIG = {
             "low_word_confidence_min": 0.4,
             "micro_segment_s": 0.35,
             "short_segment_s": 0.8,
+            "detect_non_latin": True,
+            "non_latin_char_pattern": (
+                r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
+                r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
+            ),
+            "non_latin_min_chars": 2,
+            "detect_generic_hallucinations": True,
+            "degrade_on_text_flags": True,
+            "generic_hallucination_patterns": [],
         },
         "pyannote_chunking": {
             "merge_micro_chunks": True,

@@ -106,7 +106,7 @@ transcria/
 │   │   ├── srt_checks.py          # SRTChecker (check_segment, check_segments)
 │   │   ├── lexicon_checks.py      # LexiconChecker (check → found/missing/variants_found)
 │   │   ├── review_points.py       # ReviewPoints (generate → phrases utilisateur)
-│   │   ├── audio_quality.py       # Décision qualité audio pour forcer Whisper
+│   │   ├── audio_quality.py       # Diagnostic qualité audio et signal éventuel de forçage backend
 │   │   └── quality_report.py      # QualityReporter (contrôles, score /100, markdown)
 │   │
 │   ├── exports/                   # Package ZIP final
@@ -245,9 +245,9 @@ workflow:
     force_quality_backend: true
     degraded_levels: ["degrade"]
   quality_transcription:
-    force_stt_backend: "whisper"
-    enabled_for_modes: ["quality"]
-    force_on_degraded_summary: true
+    force_stt_backend:
+    enabled_for_modes: []
+    force_on_degraded_summary: false
    vad:
      enabled_summary: true
      enabled_final: false
@@ -285,9 +285,9 @@ security:
 
 ## 3.1 Pipeline STT qualité
 
-Le backend normal reste `models.stt_backend` (`cohere` par défaut). `PipelineService._config_for_mode()` force `whisper` quand le mode demandé est listé dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job en qualité dégradée. La décision est écrite dans `metadata/audio_quality_decision.json`.
+Le backend normal reste `models.stt_backend` (`cohere` par défaut). Le mode `quality` active le workflow complet (diarisation, correction LLM, contrôles qualité), mais ne force plus Whisper par défaut. `PipelineService._config_for_mode()` ne change de backend que si `workflow.quality_transcription.force_stt_backend` est explicitement défini et que le mode demandé ou le diagnostic dégradé correspond aux règles configurées. La décision qualité est écrite dans `metadata/audio_quality_decision.json` et le backend réellement utilisé dans `metadata/transcription_metadata.json`.
 
-Whisper large-v3 apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
+Whisper large-v3 reste disponible pour les tests, fallbacks et campagnes ciblées. Il apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
 
 **Anti-hallucination pour les deux backends :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé à la fois par `WhisperTranscriber` (config `whisper.collapse_repetition_loops`) et par `CohereTranscriber` (config `cohere.collapse_repetition_loops`). Les paramètres sont les mêmes pour les deux backends : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
 

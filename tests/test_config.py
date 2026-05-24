@@ -324,6 +324,12 @@ class TestBootstrapConfig:
             "low_word_confidence_min": 0.4,
             "micro_segment_s": 0.35,
             "short_segment_s": 0.8,
+            "detect_non_latin": True,
+            "non_latin_char_pattern": "[\\u4E00-\\u9FFF]",
+            "non_latin_min_chars": 2,
+            "detect_generic_hallucinations": True,
+            "generic_hallucination_patterns": [r"\bsite web\b"],
+            "degrade_on_text_flags": True,
         }
         cfg["workflow"]["pyannote_chunking"] = {
             "merge_micro_chunks": True,
@@ -349,9 +355,27 @@ class TestBootstrapConfig:
 
         assert result.is_valid
 
+    def test_validate_config_rejects_invalid_segment_reliability_regex(self):
+        cfg = load_config()
+        cfg["workflow"]["segment_reliability"]["generic_hallucination_patterns"] = ["["]
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("generic_hallucination_patterns" in msg for msg in result.errors)
+
     def test_default_config_declares_auto_loudnorm_threshold(self):
         cfg = load_config()
         assert cfg["workflow"]["audio_normalization"]["auto_loudnorm_rms_threshold"] == 0.02
+
+    def test_default_quality_transcription_keeps_cohere_backend(self):
+        cfg = load_config()
+        quality_transcription = cfg["workflow"]["quality_transcription"]
+
+        assert cfg["models"]["stt_backend"] == "cohere"
+        assert quality_transcription["force_stt_backend"] is None
+        assert quality_transcription["enabled_for_modes"] == []
+        assert quality_transcription["force_on_degraded_summary"] is False
 
     def test_validate_config_rejects_invalid_max_upload_size(self):
         cfg = load_config()
@@ -427,6 +451,7 @@ class TestBootstrapConfig:
         cfg["whisper"]["lexicon_hotwords"]["enabled"] = "true"
         cfg["whisper"]["lexicon_hotwords"]["priorities"] = ["critique", "urgente"]
         cfg["whisper"]["lexicon_hotwords"]["max_terms"] = 0
+        cfg["whisper"]["lexicon_hotwords"]["max_tokens"] = 225
 
         result = validate_config(cfg)
 
@@ -434,6 +459,7 @@ class TestBootstrapConfig:
         assert any("whisper.lexicon_hotwords.enabled" in msg for msg in result.errors)
         assert any("whisper.lexicon_hotwords.priorities[1]" in msg for msg in result.errors)
         assert any("whisper.lexicon_hotwords.max_terms" in msg for msg in result.errors)
+        assert any("whisper.lexicon_hotwords.max_tokens" in msg for msg in result.errors)
 
     def test_bootstrap_config_generates_output(self, tmp_path):
         module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"

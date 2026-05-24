@@ -160,17 +160,22 @@ class PipelineService:
                 priorities=hotwords_cfg.get("priorities"),
                 max_terms=hotwords_cfg.get("max_terms", 50),
                 max_chars=hotwords_cfg.get("max_chars", 900),
+                max_tokens=hotwords_cfg.get("max_tokens", 200),
                 prefix=hotwords_cfg.get("prefix", "Termes importants :"),
                 existing_hotwords=whisper_cfg.get("hotwords"),
+                tokenizer_model=hotwords_cfg.get("tokenizer_model") or "openai/whisper-large-v3",
             )
             whisper_cfg["hotwords"] = hotwords
             fs.save_json("metadata/whisper_hotwords.json", stats)
             logger.info(
-                "Hotwords Whisper depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
+                "Hotwords Whisper depuis lexique: job=%s candidats=%d injectés=%d exclus=%d tokens=%s/%s méthode=%s priorités=%s",
                 job.id,
                 stats.get("candidate_terms", 0),
                 stats.get("injected_terms", 0),
                 stats.get("excluded_terms", 0),
+                stats.get("token_count", 0),
+                stats.get("max_tokens", 0),
+                stats.get("token_count_method", "none"),
                 ",".join(stats.get("priorities", [])),
             )
         except Exception as exc:
@@ -247,7 +252,7 @@ class PipelineService:
             level = str((summary.get("diagnostics") or {}).get("level", "")).strip()
             if level in degraded_levels or evaluation.get("force_quality_backend"):
                 logger.info(
-                    "[pipeline] Qualité audio '%s' (%s): backend STT qualité forcé",
+                    "[pipeline] Qualité audio '%s' (%s): backend STT forcé par configuration",
                     evaluation.get("level"),
                     ", ".join(evaluation.get("reasons", [])),
                 )

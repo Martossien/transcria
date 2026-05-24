@@ -123,6 +123,7 @@ class TestWhisperQualityConfig:
             enabled=True,
             max_terms=2,
             max_chars=80,
+            token_counter=lambda text: len(text.split()),
         )
 
         assert hotwords == "Termes importants : EBITDA, système de supervision"
@@ -130,6 +131,26 @@ class TestWhisperQualityConfig:
         assert stats["injected_terms"] == 2
         assert stats["excluded_by_priority"] == 1
         assert stats["excluded_by_duplicate"] == 1
+        assert stats["token_count"] == 7
+        assert stats["token_count_method"] == "custom"
+
+    def test_build_whisper_hotwords_respects_token_budget(self):
+        hotwords, stats = build_whisper_hotwords(
+            [
+                {"term": "alpha beta", "priority": "critique"},
+                {"term": "gamma delta", "priority": "critique"},
+            ],
+            enabled=True,
+            max_terms=10,
+            max_chars=200,
+            max_tokens=5,
+            token_counter=lambda text: len(text.split()),
+        )
+
+        assert hotwords == "Termes importants : alpha beta"
+        assert stats["injected_terms"] == 1
+        assert stats["excluded_by_budget"] == 1
+        assert stats["token_count"] == 5
 
     def test_build_whisper_hotwords_disabled_preserves_static_hotwords(self):
         hotwords, stats = build_whisper_hotwords(
@@ -561,6 +582,55 @@ class TestTranscriber:
         assert scored[0]["reliability"] == "degrade"
         assert "audio_preflight_degrade" in scored[0]["reliability_reasons"]
         assert "no_speech_prob_eleve" in scored[0]["reliability_reasons"]
+
+    def test_segment_reliability_flags_configured_generic_hallucination(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        config = {
+            "workflow": {
+                "segment_reliability": {
+                    "detect_generic_hallucinations": True,
+                    "generic_hallucination_patterns": [r"\bsite web\b"],
+                    "degrade_on_text_flags": True,
+                }
+            }
+        }
+        segments = [{"start": 12.0, "end": 16.0, "text": "Retrouvez les détails sur notre site web."}]
+
+        scored = SegmentReliabilityScorer(config).score_segments(segments)
+
+        assert scored[0]["reliability"] == "degrade"
+        assert scored[0]["reliability_reasons"] == ["hallucination_generique"]
+
+    def test_segment_reliability_flags_configured_non_latin_pattern(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        config = {
+            "workflow": {
+                "segment_reliability": {
+                    "detect_non_latin": True,
+                    "non_latin_char_pattern": "[\\u4E00-\\u9FFF]",
+                    "non_latin_min_chars": 2,
+                    "degrade_on_text_flags": True,
+                }
+            }
+        }
+        segments = [{"start": 12.0, "end": 16.0, "text": "Phrase normale 不明白"}]
+
+        scored = SegmentReliabilityScorer(config).score_segments(segments)
+
+        assert scored[0]["reliability"] == "degrade"
+        assert scored[0]["reliability_reasons"] == ["texte_non_latin"]
+
+    def test_segment_reliability_ignores_generic_hallucinations_without_configured_patterns(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        segments = [{"start": 12.0, "end": 16.0, "text": "Retrouvez les détails sur notre site web."}]
+
+        scored = SegmentReliabilityScorer({}).score_segments(segments)
+
+        assert scored[0]["reliability"] == "ok"
+        assert scored[0]["reliability_reasons"] == []
 
     def test_smooth_micro_turns_merges_same_speaker_only(self):
         turns = [

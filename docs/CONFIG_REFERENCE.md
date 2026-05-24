@@ -171,6 +171,8 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `lexicon_hotwords.priorities` | list[str] | `["critique", "importante"]` | Priorités de lexique injectables |
 | `lexicon_hotwords.max_terms` | int | `50` | Nombre maximum de termes injectés |
 | `lexicon_hotwords.max_chars` | int | `900` | Longueur maximale de la chaîne hotwords construite |
+| `lexicon_hotwords.max_tokens` | int | `200` | Budget de tokens Whisper pour les hotwords construits depuis le lexique |
+| `lexicon_hotwords.tokenizer_model` | string | `"openai/whisper-large-v3"` | Tokenizer local utilisé pour compter les tokens hotwords ; fallback approximatif si indisponible |
 | `lexicon_hotwords.prefix` | string | `"Termes importants :"` | Préfixe utilisé si aucun hotword statique n'est configuré |
 | `collapse_repetition_loops` | bool | `true` | Réduit les boucles textuelles répétées après ASR |
 | `repetition_loop_min_repeats` | int | `4` | Nombre minimum de répétitions consécutives suspectes |
@@ -206,27 +208,28 @@ Paramètres contrôlant les fonctionnalités du workflow.
 
 #### `workflow.quality_transcription`
 
-Contrôle le basculement vers le backend STT de qualité. Par défaut, Cohere reste
-le backend principal, mais Whisper large-v3 est utilisé en mode qualité ou si le
-résumé rapide a diagnostiqué un son dégradé.
+Contrôle un éventuel forçage du backend STT. Par défaut, Cohere reste le backend
+principal en mode `fast` comme en mode `quality`. Whisper large-v3 peut être forcé
+explicitement pour des tests, des fallbacks ou des campagnes ciblées.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `force_stt_backend` | string/null | `whisper` | Backend forcé quand une règle qualité s'applique |
-| `enabled_for_modes` | list[string] | `["quality"]` | Modes de traitement qui forcent le backend qualité |
-| `force_on_degraded_summary` | bool | `true` | Force le backend qualité si `summary/summary.json` signale un niveau dégradé |
+| `force_stt_backend` | string/null | `null` | Backend forcé quand une règle explicite s'applique |
+| `enabled_for_modes` | list[string] | `[]` | Modes de traitement qui forcent le backend configuré |
+| `force_on_degraded_summary` | bool | `false` | Force le backend configuré si `summary/summary.json` signale un niveau dégradé |
 | `degraded_summary_levels` | list[string] | `["degrade"]` | Niveaux de diagnostic considérés comme dégradés |
 
 #### `workflow.audio_quality`
 
 Agrège les signaux ffprobe, les diagnostics du résumé rapide et, si disponible,
-l'analyse de scène audio pour décider si le backend qualité doit être forcé,
-même hors mode qualité. Par défaut, les signaux de scène sont enregistrés pour
-audit mais ne modifient pas le score.
+l'analyse de scène audio pour produire un diagnostic qualité. Le forçage backend
+n'est appliqué que si `workflow.quality_transcription.force_on_degraded_summary`
+est activé et qu'un backend cible est configuré. Par défaut, les signaux de scène
+sont enregistrés pour audit mais ne modifient pas le score.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `force_quality_backend` | bool | `true` | Autorise le forçage Whisper sur qualité dégradée |
+| `force_quality_backend` | bool | `true` | Signal de forçage qualité exploité seulement si `quality_transcription` l'autorise |
 | `degraded_levels` | list[string] | `["degrade"]` | Niveaux de résumé considérés dégradés |
 | `suspect_levels` | list[string] | `["suspect"]` | Niveaux de résumé suspects, pondérés plus faiblement |
 | `min_bit_rate` | number/null | `64000` | Bitrate minimal avant signal qualité faible |
@@ -470,8 +473,10 @@ sont disponibles et qu'un segment ASR traverse plusieurs tours pyannote.
 #### `workflow.segment_reliability`
 
 Scoring de fiabilité post-STT. Chaque segment reçoit un statut (`ok`, `suspect`, `degrade`)
-basé sur les probabilités `no_speech_prob` et la confiance mot-à-mot. Les segments
-`degrade` alimentent le score composite d'hallucination de `QualityReporter`.
+basé sur les probabilités `no_speech_prob`, la confiance mot-à-mot et des flags textuels
+configurables. Les segments `degrade` alimentent le score composite d'hallucination de
+`QualityReporter`. Le moteur ne contient pas de termes métier codés en dur : les signatures
+textuelles doivent être déclarées dans la configuration.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -481,6 +486,12 @@ basé sur les probabilités `no_speech_prob` et la confiance mot-à-mot. Les seg
 | `low_word_confidence_min` | float | `0.4` | Seuil de probabilité mot pour le flag « peu confiant » |
 | `micro_segment_s` | float | `0.35` | Durée en secondes en dessous de laquelle un segment est « micro » |
 | `short_segment_s` | float | `0.8` | Durée en secondes en dessous de laquelle un segment est « court » |
+| `detect_non_latin` | bool | `true` | Active le flag `texte_non_latin` via une regex configurable |
+| `non_latin_char_pattern` | string | regex Unicode | Regex des familles de caractères considérées hors alphabet latin attendu |
+| `non_latin_min_chars` | int | `2` | Nombre minimal de caractères détectés avant de signaler le segment |
+| `detect_generic_hallucinations` | bool | `true` | Active les regex configurées dans `generic_hallucination_patterns` |
+| `generic_hallucination_patterns` | list[string] | `[]` interne, liste de départ dans `config.example.yaml` | Regex configurables pour signatures d'hallucination récurrentes connues ou observées localement |
+| `degrade_on_text_flags` | bool | `true` | Classe directement en `degrade` un segment portant `texte_non_latin` ou `hallucination_generique` |
 
 **Redémarrage requis :** non — lu à chaque pipeline.
 

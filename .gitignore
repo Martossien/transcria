@@ -58,6 +58,7 @@ docs/archive/
 
 # Documents de conception internes (ne pas publier)
 docs/lexique_centralise_conception.md
+docs/srt_review_hotwords_bench.md
 
 # Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
 archives/

@@ -398,7 +398,9 @@ class TestQualityReportIntegration:
         checks = [c for c in report["checks"] if c["type"] == "segment_reliability"]
         assert checks
         assert checks[0]["counts"]["degrade"] == 1
+        assert checks[0]["reason_counts"]["segment_micro"] == 1
         assert report["review_load"]["degraded_reliability_segments"] == 1
+        assert report["review_load"]["segment_reliability_reason_counts"]["audio_preflight_degrade"] == 1
 
 
 class TestASRNoiseLooksLike:

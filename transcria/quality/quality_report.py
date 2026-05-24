@@ -406,12 +406,15 @@ class QualityReporter:
 
         # 11. Fiabilité segmentaire calculée après STT
         reliability_counts: dict[str, int] = {}
+        reliability_reason_counts: dict[str, int] = {}
         degraded_examples = []
         for segment in segments:
             level = segment.get("reliability")
             if not level:
                 continue
             reliability_counts[level] = reliability_counts.get(level, 0) + 1
+            for reason in segment.get("reliability_reasons") or []:
+                reliability_reason_counts[reason] = reliability_reason_counts.get(reason, 0) + 1
             if level == "degrade" and len(degraded_examples) < 10:
                 degraded_examples.append({
                     "start": segment.get("start"),
@@ -423,9 +426,11 @@ class QualityReporter:
         if reliability_counts.get("degrade") or reliability_counts.get("suspect"):
             degraded_count = reliability_counts.get("degrade", 0)
             review_load["degraded_reliability_segments"] = degraded_count
+            review_load["segment_reliability_reason_counts"] = reliability_reason_counts
             checks.append({
                 "type": "segment_reliability",
                 "counts": reliability_counts,
+                "reason_counts": reliability_reason_counts,
                 "examples": degraded_examples,
                 "severity": "warning" if degraded_count else "info",
             })

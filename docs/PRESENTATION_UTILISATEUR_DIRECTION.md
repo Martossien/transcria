@@ -114,7 +114,7 @@ Cette étape donne à l'utilisateur une première vision de la complexité du fi
 
 ### 5. Résumé de contrôle
 
-Le système lance une transcription rapide avec Cohere ASR, applique un VAD adaptatif, puis peut exécuter pyannote pour détecter les locuteurs. Les diagnostics produits peuvent forcer Whisper large-v3 si le son est dégradé. Ces informations alimentent ensuite un résumé structuré généré via opencode et la LLM d'arbitrage configurée.
+Le système lance une transcription rapide avec Cohere ASR, applique un VAD adaptatif, puis peut exécuter pyannote pour détecter les locuteurs. Les diagnostics produits orientent les contrôles qualité et peuvent déclencher un forçage backend uniquement si cette règle est explicitement configurée. Ces informations alimentent ensuite un résumé structuré généré via opencode et la LLM d'arbitrage configurée.
 
 Le résumé aide l'utilisateur à comprendre rapidement le contenu avant de compléter les champs métier :
 
@@ -374,4 +374,4 @@ Pour une direction, la valeur se situe dans la standardisation, la réduction du
 
 ### Qualité audio et transcription renforcée
 
-Le workflow garde Cohere comme backend rapide par défaut, mais bascule sur Whisper large-v3 en mode qualité ou quand les diagnostics signalent un son dégradé. Les traitements ajoutent des timestamps mot-à-mot, des garde-fous anti-hallucination, un réalignement locuteur/ponctuation et des checkpoints pyannote pour éviter de relancer inutilement la diarisation.
+Le workflow garde Cohere comme backend principal par défaut. Le mode qualité active surtout le traitement complet : diarisation, correction, contrôles renforcés et package final. Whisper large-v3 reste disponible pour des tests, fallbacks ou campagnes ciblées, mais n'est plus assimilé automatiquement à la meilleure qualité.

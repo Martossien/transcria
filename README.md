@@ -7,7 +7,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 ## Fonctionnalités
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
-- **Transcription multi-backend** : Cohere Transcribe par défaut, Whisper large-v3/faster-whisper pour le mode qualité ou les audios diagnostiqués comme dégradés.
+- **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper reste disponible pour les tests, fallbacks et usages ciblés.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
 - **Diarisation pyannote** : tours exclusifs, checkpoints, extraits audio par locuteur, injection du genre vocal par locuteur sans écraser les choix utilisateur.
@@ -141,7 +141,7 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 8. **Qualité** : rapport, score, diagnostics, segments suspects.
 9. **Export** : package ZIP final.
 
-Le choix Cohere/Whisper n'est pas réduit à "fast vs quality". Le pipeline conserve le backend configuré, mais peut forcer Whisper sur mode qualité ou audio dégradé selon `metadata/audio_quality_decision.json`. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
+Le choix Cohere/Whisper n'est pas réduit à "fast vs quality". Le mode qualité active le workflow complet, mais conserve le backend STT configuré par défaut (`cohere`). Un forçage Whisper reste possible par configuration pour des campagnes ciblées. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
 
 ## Voix enregistrées
 

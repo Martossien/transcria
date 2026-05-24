@@ -122,15 +122,19 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 
 > **Backend demandé vs backend effectif** : `--stt-backend` définit le backend
 > de départ du run. Le pipeline peut ensuite le remplacer via
-> `workflow.quality_transcription.force_stt_backend`, notamment en `--mode quality`
-> ou selon la décision qualité audio. Le backend réellement utilisé est écrit dans
+> `workflow.quality_transcription.force_stt_backend` si cette règle est explicitement
+> activée pour le mode ou selon la décision qualité audio. Par défaut, `--mode quality`
+> conserve le backend demandé. Le backend réellement utilisé est écrit dans
 > `metadata/transcription_metadata.json["backend"]` et repris dans le JSON de sortie
 > E2E sous `effective_stt_backend`.
 
 Quand `--enable-whisper-lexicon-hotwords` est utilisé, l'audit est écrit dans
 `metadata/whisper_hotwords.json` et repris dans le JSON de sortie sous
 `whisper_hotwords_data`. Cette option n'a d'effet que si le backend effectif est
-Whisper.
+Whisper. L'audit expose aussi `max_tokens`, `token_count` et
+`token_count_method` : TranscrIA compte les tokens avec le tokenizer Whisper
+local si disponible, puis bascule sur un fallback approximatif explicitement
+tracé si ce tokenizer est absent.
 
 Quand `--enable-cohere-lexicon-biasing` est utilisé, l'audit est écrit dans
 `metadata/cohere_lexicon_biasing.json` et repris dans le JSON de sortie sous
@@ -183,7 +187,9 @@ effectif est Cohere.
 
 > **Fiabilité segmentaire** : `segment_reliability` est actif par défaut et ajoute
 > `reliability=ok|suspect|degrade` aux segments bruts. Le JSON de sortie E2E
-> expose `segment_reliability_counts`.
+> expose `segment_reliability_counts`. Les flags textuels configurables
+> (`texte_non_latin`, `hallucination_generique`) ne suppriment pas de segment ;
+> ils servent à prioriser la relecture.
 
 > **Métadonnées transcription** : `metadata/transcription_metadata.json` est
 > l'artefact de référence pour vérifier ce qui s'est réellement passé côté STT :

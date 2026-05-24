@@ -2,7 +2,7 @@
 
 
 class AudioQualityEvaluator:
-    """Agrège les signaux disponibles pour décider si Whisper qualité est requis."""
+    """Agrège les signaux disponibles pour décider si une vigilance qualité est requise."""
 
     def __init__(self, config: dict):
         self.config = config

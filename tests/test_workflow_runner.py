@@ -302,6 +302,31 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
 
 
 class TestPipelineServiceStateRecovery:
+    def test_quality_mode_keeps_configured_backend_by_default(self, app, owner_id, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "cohere", "cohere_model_path": "/tmp/fake_model"},
+                workflow={
+                    "enable_quick_summary": True,
+                    "enable_speaker_detection": True,
+                    "enable_quality_mode": True,
+                    "summary_llm": {"enabled": False},
+                    "quality_transcription": {
+                        "force_stt_backend": None,
+                        "enabled_for_modes": [],
+                        "force_on_degraded_summary": False,
+                    },
+                },
+            )
+            job = JobStore.create_job(owner_id, "Pipeline Quality Cohere")
+
+            effective = PipelineService(cfg)._config_for_mode("quality", job)
+
+            assert effective["models"]["stt_backend"] == "cohere"
+
     def test_quality_mode_forces_configured_whisper_backend(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             from transcria.services.pipeline_service import PipelineService
