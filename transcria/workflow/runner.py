@@ -40,12 +40,17 @@ class WorkflowRunner:
         t0 = time.monotonic()
         sl.info("━━━ DÉBUT résumé ━━━")
 
-        sl.info("[1/3] Cohere ASR quick transcription — chargement GPU")
-        result = self._run_cohere_transcription(job, audio_path, config, sl)
-        sl.info("[1/3] Cohere ASR terminé — %d segments, %.1fs",
-                result.get("segment_count", 0), time.monotonic() - t0)
+        backend = config.get("models", {}).get("stt_backend", "cohere")
+        sl.info("[1/3] STT rapide — chargement GPU", backend=backend)
+        result = self._run_quick_transcription(job, audio_path, config, sl)
+        sl.info(
+            "[1/3] STT rapide terminé — %d segments, %.1fs",
+            result.get("segment_count", 0),
+            time.monotonic() - t0,
+            backend=backend,
+        )
         if result.get("error") and not result.get("transcript_text"):
-            sl.error("[1/3] Cohere ASR ÉCHEC — abandon résumé", error=result["error"])
+            sl.error("[1/3] STT rapide ÉCHEC — abandon résumé", error=result["error"], backend=backend)
             return result
 
         sl.info("[2/4] Analyse de scène audio — début")
@@ -118,24 +123,31 @@ class WorkflowRunner:
             sl.warning("[summary] Analyse de scène ignorée", error=str(exc))
             return {}
 
-    def _run_cohere_transcription(
+    def _run_quick_transcription(
         self, job: Job, audio_path: str, config: dict, sl
     ) -> dict:
         from pathlib import Path
         from transcria.stt.summary import SummaryGenerator
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
 
+        backend = config.get("models", {}).get("stt_backend", "cohere")
+        vram_mb = get_backend_vram_mb(backend, config)
         try:
             with GPUSession(
-                self.vram, "cohere-summary", self.vram.cohere_vram_mb
+                self.vram, f"{backend}-summary", vram_mb
             ) as gs:
                 generator = SummaryGenerator(config)
                 result = generator.generate_quick_summary(
                     job, Path(audio_path), gpu_index=gs.gpu_index
                 )
-                sl.info("Cohere quick transcription OK",
-                        segments=len(result.get("transcript_short", "")))
+                sl.info(
+                    "STT rapide OK",
+                    backend=backend,
+                    segments=result.get("segment_count", 0),
+                    transcript_chars=len(result.get("transcript_text", "")),
+                )
         except GPUSessionError as exc:
-            sl.warning("VRAM insuffisante pour Cohere", error=str(exc))
+            sl.warning("VRAM insuffisante pour le STT rapide", backend=backend, required_vram_mb=vram_mb, error=str(exc))
             self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {
                 "error": str(exc),
@@ -143,7 +155,7 @@ class WorkflowRunner:
                 "summary_text": "Résumé indisponible.",
             }
         except Exception as exc:
-            sl.exception("Échec transcription Cohere")
+            sl.exception("Échec STT rapide", backend=backend)
             self.vram.offload_all()
             self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {

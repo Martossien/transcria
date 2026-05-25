@@ -524,7 +524,7 @@ Chaque étape de prétraitement est optionnelle et désactivée par défaut sauf
 
 Cycle de vie GPU dans `run_summary` :
 ```
-Phase 1: GPUSession(cohere-summary, 6 Go) → GPU auto → Cohere ASR → offload
+Phase 1: GPUSession(<backend>-summary, VRAM backend) → GPU auto → STT rapide → offload
 Phase 1b: GPUSession(pyannote, 2 Go) → GPU auto → diarization → offload → diarization_context.md
            (extraits ≤200 chars/segment + section "Indices prénoms" : apostrophes directes & noms propres mid-phrase)
 Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run
@@ -1050,7 +1050,7 @@ curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 
 ```
 Étape 5 - Résumé :
-  Phase 1 : GPUSession(cohere-summary, 6 Go) → GPU auto → Cohere ASR (8 chunks VAD) → offload
+  Phase 1 : GPUSession(<backend>-summary, VRAM backend) → GPU auto → STT rapide (chunks VAD) → offload
   Phase 1b: GPUSession(pyannote, 2 Go) → GPU auto → diarization → offload → diarization_context.md
   Phase 2 : ensure_arbitrage_llm_ready(api_model_id) → CAS A/B/C → opencode run_summary
   → meeting_context enrichi (title_suggere, type_suggere, sujet_suggere, participants_detectes, termes_suspects, summary_llm)

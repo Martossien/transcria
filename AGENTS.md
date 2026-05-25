@@ -121,7 +121,7 @@ transcria/
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization + checkpoints
       speaker_detection.py  # SpeakerDetector
-      summary.py            # SummaryGenerator — VAD pré-transcription + Cohere
+      summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
     context/
       meeting_context.py    # MeetingContextManager
       participants.py       # ParticipantsManager
@@ -257,7 +257,7 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 
-**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre à Cohere que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
+**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre au backend STT configuré que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
 **VAD final auto sur audio dégradé :** si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que le niveau qualité du job est dans `workflow.vad.auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `workflow.vad.threshold_final_degraded` (défaut `0.6`). Ce mécanisme permet de filtrer les silences longs dans les fichiers CSE dégradés sans activer le VAD final par défaut sur les audios propres.
 

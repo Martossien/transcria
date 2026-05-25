@@ -12,7 +12,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
 - **Diarisation pyannote** : tours exclusifs, checkpoints, extraits audio par locuteur, injection du genre vocal par locuteur sans écraser les choix utilisateur.
 - **Fiabilité segmentaire** : score `ok|suspect|degrade` par segment, signaux `no_speech_prob`, confiance mot-à-mot, micro-segments et artefacts de sous-titrage.
-- **Anti-hallucination ASR** : réduction de boucles répétitives pour Cohere et Whisper, nettoyage post-STT configurable.
+- **Anti-hallucination ASR** : réduction de boucles répétitives pour Cohere, Whisper et Granite, nettoyage post-STT configurable.
 - **LLM d'arbitrage locale/OpenAI-compatible** : résumé structuré, rôles probables des locuteurs, termes douteux à valider, correction SRT avec lexique et contexte.
 - **Lexiques centralisés par groupe** : référentiel admin/admin groupe, pré-remplissage du lexique de session, fusion avec les suggestions LLM et filtrage avant correction.
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
@@ -20,7 +20,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
-- **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper et les options audio.
+- **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 

@@ -580,6 +580,51 @@ class TestWorkflowRunnerRunSummary:
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.SUMMARY_DONE.value
 
+    def test_run_summary_uses_effective_backend_for_gpu_session(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                models={"stt_backend": "granite", "cohere_model_path": "/tmp/fake_model"},
+                gpu={"cohere_vram_mb": 6000, "granite_vram_mb": 7200},
+                granite={"model_id": "./models/granite-speech-4.1-2b"},
+                workflow={"enable_quick_summary": True, "enable_speaker_detection": False, "enable_quality_mode": True, "summary_llm": {"enabled": False}},
+            )
+            job = JobStore.create_job(owner_id, "Summary Granite")
+            runner = WorkflowRunner(JobStore, cfg)
+            captured = {}
+
+            class FakeSession:
+                def __init__(self, vram, model_name, required_mb):
+                    captured["model_name"] = model_name
+                    captured["required_mb"] = required_mb
+                    self.gpu_index = 4
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return False
+
+            from transcria.workflow import runner as runner_module
+            from transcria.stt.summary import SummaryGenerator
+
+            monkeypatch.setattr(runner_module, "GPUSession", FakeSession)
+            monkeypatch.setattr(
+                SummaryGenerator,
+                "generate_quick_summary",
+                lambda *a, **kw: {
+                    "transcript_text": "[0s->1s] Bonjour",
+                    "transcript_short": "Bonjour",
+                    "summary_text": "Résumé de contrôle indisponible (LLM non configurée).",
+                    "segment_count": 1,
+                },
+            )
+
+            result = runner.run_summary(job, str(tmp_path / "test.wav"), cfg)
+
+            assert result["segment_count"] == 1
+            assert captured == {"model_name": "granite-summary", "required_mb": 7200}
+
     def test_run_summary_success_with_llm(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(

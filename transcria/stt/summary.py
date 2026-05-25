@@ -62,7 +62,7 @@ class SummaryGenerator:
                 len(vad_chunks),
                 100 * sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001))
 
-        sl.info("[summary] Chargement du transcripteur Cohere sur %s", device)
+        sl.info("[summary] Chargement du transcripteur %s sur %s", backend, device)
         transcriber = create_transcriber(self.config, device=device)
         segments = []
 
@@ -82,7 +82,7 @@ class SummaryGenerator:
 
         sl.info("[summary] Transcription terminée: %d segments produits", len(segments))
         transcriber.offload()
-        sl.info("[summary] Cohere offloadé du GPU")
+        sl.info("[summary] Transcripteur %s offloadé du GPU", backend)
 
         transcript_text = "\n".join(
             f"[{seg.get('start', 0):.1f}s → {seg.get('end', 0):.1f}s] "
