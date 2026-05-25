@@ -324,15 +324,17 @@ def _repair_lexicon_context_timecode(context: dict) -> None:
     timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?)"
     time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
     match = re.match(
-        rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?[«"](?P<quote>.+?)[»"]\s*$',
+        rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?(?:[«"](?P<quote_quoted>.+?)[»"]|(?P<quote_bare>.+?))\s*$',
         quote,
     )
     if not match:
         return
     context["timecode"] = match.group("timecode").strip()
+    parsed_quote = (match.group("quote_quoted") or match.group("quote_bare") or "").strip()
+    if parsed_quote:
+        context["quote"] = parsed_quote
     if match.group("speaker") and not context.get("speaker"):
         context["speaker"] = match.group("speaker").strip()
-    context["quote"] = match.group("quote").strip()
 
 
 def _normalize_context_quote(value: str) -> str:

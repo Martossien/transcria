@@ -120,15 +120,16 @@ class OpenCodeRunner:
         for chunk in chunks[:3]:
             text = chunk.strip()
             match = re.match(
-                rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?[«"](?P<quote>.+?)[»"](?:\s*\((?P<reason>.+)\))?$',
+                rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?(?:[«"](?P<quote_quoted>.+?)[»"]|(?P<quote_bare>.+?))(?:\s*\((?P<reason>.+)\))?$',
                 text,
             )
             if match:
+                quote = (match.group("quote_quoted") or match.group("quote_bare") or "").strip()
                 contexts.append({
                     "variant": "",
                     "timecode": match.group("timecode").strip(),
                     "speaker": (match.group("speaker") or "").strip(),
-                    "quote": match.group("quote").strip(),
+                    "quote": quote,
                     "reason": (match.group("reason") or "").strip(),
                 })
             else:
