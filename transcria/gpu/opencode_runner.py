@@ -115,7 +115,7 @@ class OpenCodeRunner:
         chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=\[[^\]]+\])', value) if chunk.strip()]
         if len(chunks) == 1 and " ; " in value:
             chunks = [chunk.strip() for chunk in value.split(" ; ") if chunk.strip()]
-        timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?)"
+        timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?s?)"
         time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
         for chunk in chunks[:3]:
             text = chunk.strip()
