@@ -383,6 +383,8 @@ class TestBootstrapConfig:
         assert cfg["granite"]["enabled"] is False
         assert cfg["granite"]["model_id"] == "./models/granite-speech-4.1-2b"
         assert cfg["granite"]["fix_mistral_regex"] is True
+        assert cfg["granite"]["max_new_tokens_per_second"] == 8.0
+        assert cfg["granite"]["min_new_tokens"] == 64
         assert cfg["gpu"]["granite_vram_mb"] == 6000
 
     def test_validate_config_accepts_granite_backend(self):
@@ -402,6 +404,18 @@ class TestBootstrapConfig:
 
         assert not result.is_valid
         assert any("granite.prompt_mode" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_granite_generation_budget(self):
+        cfg = load_config()
+        cfg["granite"]["max_new_tokens"] = 32
+        cfg["granite"]["min_new_tokens"] = 64
+        cfg["granite"]["max_new_tokens_per_second"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("granite.max_new_tokens_per_second" in msg for msg in result.errors)
+        assert any("granite.min_new_tokens" in msg for msg in result.errors)
 
     def test_validate_config_rejects_invalid_max_upload_size(self):
         cfg = load_config()

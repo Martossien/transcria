@@ -236,6 +236,26 @@ class TestGraniteTranscriber:
 
         assert transcriber._build_prompt() == transcriber.prompts["asr_punctuated"]
 
+    def test_granite_generation_budget_scales_with_chunk_duration(self):
+        transcriber = GraniteTranscriber(
+            max_new_tokens=2000,
+            max_new_tokens_per_second=8.0,
+            min_new_tokens=64,
+        )
+
+        assert transcriber._max_new_tokens_for_chunk(5.0) == 64
+        assert transcriber._max_new_tokens_for_chunk(30.0) == 240
+        assert transcriber._max_new_tokens_for_chunk(300.0) == 2000
+
+    def test_granite_generation_budget_can_disable_scaling(self):
+        transcriber = GraniteTranscriber(
+            max_new_tokens=2000,
+            max_new_tokens_per_second=None,
+            min_new_tokens=64,
+        )
+
+        assert transcriber._max_new_tokens_for_chunk(5.0) == 2000
+
     def test_granite_version_tuple_handles_suffixes(self):
         assert GraniteTranscriber._version_tuple("4.57.6") == (4, 57, 6)
         assert GraniteTranscriber._version_tuple("4.52.1.dev0") == (4, 52, 1)
@@ -695,6 +715,48 @@ class TestTranscriber:
 
         assert scored[0]["reliability"] == "degrade"
         assert scored[0]["reliability_reasons"] == ["hallucination_generique"]
+
+    def test_segment_reliability_flags_short_english_generic_hallucination(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        config = {
+            "workflow": {
+                "segment_reliability": {
+                    "detect_generic_hallucinations": True,
+                    "generic_hallucination_patterns": [
+                        r"^\s*thank\s+you\s+very\s+much\s*[.!?…]*\s*$",
+                    ],
+                    "degrade_on_text_flags": True,
+                }
+            }
+        }
+        segments = [{"start": 0.0, "end": 30.0, "text": "Thank you very much."}]
+
+        scored = SegmentReliabilityScorer(config).score_segments(segments)
+
+        assert scored[0]["reliability"] == "degrade"
+        assert scored[0]["reliability_reasons"] == ["hallucination_generique"]
+
+    def test_segment_reliability_does_not_flag_thank_you_inside_real_sentence(self):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        config = {
+            "workflow": {
+                "segment_reliability": {
+                    "detect_generic_hallucinations": True,
+                    "generic_hallucination_patterns": [
+                        r"^\s*thank\s+you\s*[.!?…]*\s*$",
+                    ],
+                    "degrade_on_text_flags": True,
+                }
+            }
+        }
+        segments = [{"start": 0.0, "end": 4.0, "text": "I said thank you before leaving."}]
+
+        scored = SegmentReliabilityScorer(config).score_segments(segments)
+
+        assert scored[0]["reliability"] == "ok"
+        assert scored[0]["reliability_reasons"] == []
 
     def test_segment_reliability_flags_configured_non_latin_pattern(self):
         from transcria.stt.reliability import SegmentReliabilityScorer

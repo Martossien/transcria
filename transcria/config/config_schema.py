@@ -312,6 +312,22 @@ def _check_granite(granite: dict, r: ValidationResult) -> None:
         r.add_error("granite.torch_dtype: valeurs acceptées bfloat16, float16, float32")
     _check_int_range(granite, "chunk_length_s", "granite.chunk_length_s", 1, 600, r)
     _check_int_range(granite, "max_new_tokens", "granite.max_new_tokens", 1, 20000, r)
+    _check_optional_number(granite, "max_new_tokens_per_second", "granite.max_new_tokens_per_second", r)
+    _check_int_range(granite, "min_new_tokens", "granite.min_new_tokens", 1, 20000, r)
+    max_new_tokens_per_second = granite.get("max_new_tokens_per_second")
+    if (
+        max_new_tokens_per_second is not None
+        and not isinstance(max_new_tokens_per_second, bool)
+        and isinstance(max_new_tokens_per_second, (int, float))
+        and max_new_tokens_per_second <= 0
+    ):
+        r.add_error("granite.max_new_tokens_per_second: doit être strictement positif ou null")
+    if (
+        isinstance(granite.get("min_new_tokens"), int)
+        and isinstance(granite.get("max_new_tokens"), int)
+        and granite["min_new_tokens"] > granite["max_new_tokens"]
+    ):
+        r.add_error("granite.min_new_tokens: doit être inférieur ou égal à granite.max_new_tokens")
     _check_str(granite, "prompt_mode", "granite.prompt_mode", r)
     prompt_mode = granite.get("prompt_mode")
     if isinstance(prompt_mode, str) and prompt_mode not in {"asr_raw", "asr_punctuated", "keywords"}:

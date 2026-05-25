@@ -105,6 +105,8 @@ def _create_granite(config: dict, device: str | None) -> BaseTranscriber:
         device=device,
         chunk_length_s=granite_cfg.get("chunk_length_s", 300),
         max_new_tokens=granite_cfg.get("max_new_tokens", 2000),
+        max_new_tokens_per_second=granite_cfg.get("max_new_tokens_per_second", 8.0),
+        min_new_tokens=granite_cfg.get("min_new_tokens", 64),
         torch_dtype=granite_cfg.get("torch_dtype", "bfloat16"),
         prompt_mode=granite_cfg.get("prompt_mode", "asr_punctuated"),
         prompt_asr_raw=granite_cfg.get("prompt_asr_raw"),

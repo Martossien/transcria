@@ -191,7 +191,9 @@ tests ou campagnes ciblées avec `models.stt_backend=granite`.
 | `model_id` | string | `"./models/granite-speech-4.1-2b"` | Chemin local ou identifiant HuggingFace du modèle Granite normal |
 | `torch_dtype` | string | `"bfloat16"` | Type torch (`bfloat16`, `float16`, `float32`) |
 | `chunk_length_s` | int | `300` | Durée maximale d'un chunk Granite |
-| `max_new_tokens` | int | `2000` | Budget de génération par chunk |
+| `max_new_tokens` | int | `2000` | Plafond absolu de génération par chunk |
+| `max_new_tokens_per_second` | float/null | `8.0` | Borne dynamique du budget selon la durée du chunk ; `null` désactive le scaling |
+| `min_new_tokens` | int | `64` | Budget minimal conservé quand le chunk est court |
 | `prompt_mode` | string | `"asr_punctuated"` | Prompt utilisé (`asr_raw`, `asr_punctuated`, `keywords`) |
 | `prompt_asr_raw` | string | prompt IBM | Prompt brut sans ponctuation forcée |
 | `prompt_asr_punctuated` | string | prompt IBM | Prompt de transcription avec ponctuation/capitalisation |
@@ -524,7 +526,7 @@ textuelles doivent être déclarées dans la configuration.
 | `non_latin_char_pattern` | string | regex Unicode | Regex des familles de caractères considérées hors alphabet latin attendu |
 | `non_latin_min_chars` | int | `2` | Nombre minimal de caractères détectés avant de signaler le segment |
 | `detect_generic_hallucinations` | bool | `true` | Active les regex configurées dans `generic_hallucination_patterns` |
-| `generic_hallucination_patterns` | list[string] | `[]` interne, liste de départ dans `config.example.yaml` | Regex configurables pour signatures d'hallucination récurrentes connues ou observées localement |
+| `generic_hallucination_patterns` | list[string] | liste configurable | Regex configurables pour signatures d'hallucination récurrentes connues ou observées localement ; inclut notamment les artefacts courts `thank you`/`thanks` observés sur audio français faible ou étroit |
 | `degrade_on_text_flags` | bool | `true` | Classe directement en `degrade` un segment portant `texte_non_latin` ou `hallucination_generique` |
 
 **Redémarrage requis :** non — lu à chaque pipeline.

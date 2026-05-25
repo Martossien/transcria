@@ -140,6 +140,8 @@ granite:
   torch_dtype: "bfloat16"
   chunk_length_s: 300
   max_new_tokens: 2000
+  max_new_tokens_per_second: 8.0
+  min_new_tokens: 64
   prompt_mode: "asr_punctuated"
   prompt_asr_raw: "<|audio|>can you transcribe the speech into a written format?"
   prompt_asr_punctuated: "<|audio|>transcribe the speech with proper punctuation and capitalization."
@@ -229,6 +231,11 @@ workflow:
       - "\\bsous[- ]?titrage\\b"
       - "\\bradio[- ]?canada\\b"
       - "\\buniversit[eé] d['’]ottawa\\b"
+      # Artefacts anglais courts observés sur audio français faible ou étroit
+      # avec certains backends STT génératifs.
+      - "^\\s*thank\\s+you\\s*[.!?…]*\\s*$"
+      - "^\\s*thank\\s+you\\s+very\\s+much\\s*[.!?…]*\\s*$"
+      - "^\\s*thanks\\s*[.!?…]*\\s*$"
     degrade_on_text_flags: true
   pyannote_chunking:
     # Post-traitement conservateur des tours pyannote avant STT.

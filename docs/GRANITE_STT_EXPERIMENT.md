@@ -27,6 +27,19 @@ Speech 4.1 dans TranscrIA, sans modifier le choix de production actuel
   - chargement modèle : `0.86s` ;
   - inférence CPU : `156.96s` ;
   - sortie : transcription française ponctuée cohérente.
+- Vérification environnement du 2026-05-25 :
+  - `transformers 4.57.6`, `accelerate 1.13.0`, `tokenizers 0.22.2`,
+    `safetensors 0.7.0`, `huggingface-hub 0.36.2` ;
+  - compatible avec l'exigence officielle `transformers>=4.52.1` du modèle
+    `granite-speech-4.1-2b`.
+- Le prompt `asr_punctuated` configuré dans TranscrIA correspond au prompt
+  officiel recommandé par IBM pour l'ASR non anglais ponctué :
+  `transcribe the speech with proper punctuation and capitalization.`
+- Point de vigilance observé : `chunk_length_s=300` est trop risqué pour les
+  réunions longues dans TranscrIA. Sur `test7.mp3`, ce réglage a produit trois
+  blocs de 5 minutes et des hallucinations majeures. Le test diagnostique avec
+  `granite.chunk_length_s=30` découpe correctement en 30 segments, mais reste
+  inférieur à Cohere sur ce fichier.
 
 Modèles concernés :
 
@@ -162,8 +175,10 @@ granite:
   plus_model_id: "ibm-granite/granite-speech-4.1-2b-plus"
   torch_dtype: "bfloat16"
   device_map: "auto"
-  chunk_length_s: 300
+  chunk_length_s: 300  # valeur officielle large ; à challenger localement avec 20/30/45/60s
   max_new_tokens: 2000
+  max_new_tokens_per_second: 8.0
+  min_new_tokens: 64
   plus_max_new_tokens: 10000
   mode: "asr_punctuated"
   prompt_asr_raw: "<|audio|> can you transcribe the speech into a written format?"
@@ -192,6 +207,73 @@ gpu:
 Les valeurs VRAM devront être mesurées localement. Le modèle BF16 2B devrait
 rester raisonnable, mais les dépendances et le mode de chargement peuvent
 modifier l'empreinte réelle.
+
+## 3.1 Résultats locaux initiaux
+
+Tests exécutés avec `venv/bin/python tests/test_e2e_workflow.py`, backend
+forcé, mode `fast`, sans LLM, sans diarisation, sans summary, jobs conservés.
+
+### `test5.wav` - chuchotement très difficile
+
+| Backend | Job | Temps total | Segments | Mots | Observation |
+|---|---|---:|---:|---:|---|
+| Cohere | `9bacc849-0a59-4f29-9ef1-108d24c4f464` | 56s | 1 | 81 | Transcrit beaucoup, mais contenu très incertain avec mots plausibles et hallucinations. |
+| Granite `300s` | `1039999b-caa8-42f6-9b39-521e56472301` | 14s | 1 | 2 | Produit seulement `Thank you.` ; sortie courte mais clairement non fiable sur audio français. |
+
+Conclusion : aucun backend ne réussit réellement `test5.wav`. Le résultat
+Granite doit être considéré comme hallucination générique sur audio très faible.
+Les patterns `thank you`/`thanks` ont été ajoutés aux filtres configurables de
+`workflow.segment_reliability.generic_hallucination_patterns`.
+
+### `test7.mp3` - réunion de mairie, audio étroit
+
+| Backend | Job | Temps total | Segments | Mots | Score qualité | Observation |
+|---|---|---:|---:|---:|---:|---|
+| Cohere | `6e902233-c520-4481-b8ea-08c893a6ce09` | 49s | 30 | 2136 | 45/100 | Meilleur résultat lu manuellement : transcription continue et cohérente. |
+| Granite `300s` | `9672e8a9-1e26-4fda-91c4-a84f54ffe58b` | 96s | 3 | 819 | 30/100 | Mauvais : deux blocs `Thank you very much`, puis boucle forte sur la partie déontologue. |
+| Granite `30s` | `e629132d-74af-41f6-90b0-de7d10d03772` | 97s | 30 | 1486 | 45/100 | Découpage corrigé, mais mélanges anglais/français et hallucinations courtes récurrentes. |
+| Granite `30s` + budget dynamique | `e125f58d-e635-4c59-8db9-6a2964c2b472` | 98s | 30 | 1486 | 20/100 | Même texte que `30s`, mais les 10 segments `Thank you...` sont maintenant détectés `degrade`. |
+
+Conclusion provisoire : sur `test7.mp3`, Cohere reste meilleur. Cette conclusion
+ne disqualifie pas Granite : elle indique que l'inférence TranscrIA doit être
+tunée avant toute comparaison définitive.
+
+Le budget dynamique (`max_new_tokens_per_second=8.0`, soit 240 tokens pour un
+chunk de 30s) n'améliore pas la qualité brute sur ce fichier, mais rend le
+paramétrage plus sûr pour les prochains essais et trace
+`last_chunk_max_new_tokens` dans `metadata/granite.json`.
+
+Micro-test prompts sur `test7.mp3` :
+
+| Chunk | Prompt | Sortie observée |
+|---|---|---|
+| 0-30s | `asr_punctuated` | `Thank you very much.` |
+| 0-30s | `asr_raw` | `thank you very much.` |
+| 0-30s | prompt français manuel | `thank you very much.` |
+| 30-60s | `asr_punctuated` | transcription utile mais largement en anglais |
+| 30-60s | `asr_raw` | `thank you very much.` |
+| 30-60s | prompt français manuel | `thank you very much.` |
+
+Conclusion prompt : le prompt officiel `asr_punctuated` reste le moins mauvais
+sur cet audio. Le prompt brut ou un prompt français ne doivent pas être promus
+par défaut sans tests supplémentaires.
+
+Matrice de tests suivante recommandée :
+
+| Axe | Valeurs |
+|---|---|
+| `granite.chunk_length_s` | `20`, `30`, `45`, `60` |
+| `granite.prompt_mode` | `asr_raw`, `asr_punctuated` |
+| `granite.max_new_tokens` | borné selon la durée du chunk pour limiter les boucles |
+| Audio | `test7.mp3`, une réunion réelle propre, une réunion réelle dégradée |
+
+Critères de décision :
+
+- taux de segments `hallucination_generique` ;
+- mots français utiles conservés ;
+- mélanges de langue anglais/français ;
+- boucles répétitives après `collapse_repetition_loops` ;
+- lecture manuelle de segments clés, pas seulement score automatique.
 
 ## 4. Comportement attendu par variante
 

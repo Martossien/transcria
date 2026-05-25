@@ -42,6 +42,8 @@ class GraniteTranscriber(BaseTranscriber):
         device: str | None = None,
         chunk_length_s: int = 300,
         max_new_tokens: int = 2000,
+        max_new_tokens_per_second: float | None = 8.0,
+        min_new_tokens: int = 64,
         torch_dtype: str = "bfloat16",
         prompt_mode: str = "asr_punctuated",
         prompt_asr_raw: str | None = None,
@@ -58,6 +60,12 @@ class GraniteTranscriber(BaseTranscriber):
         self.device = device or self._detect_device()
         self.chunk_length_s = int(chunk_length_s or 300)
         self.max_new_tokens = int(max_new_tokens or 2000)
+        self.max_new_tokens_per_second = (
+            float(max_new_tokens_per_second)
+            if max_new_tokens_per_second is not None and float(max_new_tokens_per_second) > 0
+            else None
+        )
+        self.min_new_tokens = int(min_new_tokens or 64)
         self.torch_dtype = str(torch_dtype or "bfloat16")
         self.prompt_mode = str(prompt_mode or "asr_punctuated")
         self.prompts = {
@@ -79,6 +87,9 @@ class GraniteTranscriber(BaseTranscriber):
             "model_path": self.model_path,
             "prompt_mode": self.prompt_mode,
             "fix_mistral_regex": self.fix_mistral_regex,
+            "max_new_tokens": self.max_new_tokens,
+            "max_new_tokens_per_second": self.max_new_tokens_per_second,
+            "min_new_tokens": self.min_new_tokens,
             "calls": 0,
             "segments": 0,
             "elapsed_s": 0.0,
@@ -233,6 +244,8 @@ class GraniteTranscriber(BaseTranscriber):
             chunk = torch.tensor(audio[start_sample:end_sample], dtype=torch.float32).unsqueeze(0)
             start_seconds = start_sample / sr
             end_seconds = end_sample / sr
+            chunk_duration_s = end_seconds - start_seconds
+            chunk_max_new_tokens = self._max_new_tokens_for_chunk(chunk_duration_s)
 
             model_inputs = self._processor(
                 prompt_text,
@@ -243,7 +256,7 @@ class GraniteTranscriber(BaseTranscriber):
             with torch.no_grad():
                 model_outputs = self._model.generate(
                     **model_inputs,
-                    max_new_tokens=self.max_new_tokens,
+                    max_new_tokens=chunk_max_new_tokens,
                     do_sample=False,
                     num_beams=1,
                 )
@@ -279,6 +292,7 @@ class GraniteTranscriber(BaseTranscriber):
         self._metadata["elapsed_s"] = round(float(self._metadata.get("elapsed_s", 0.0)) + elapsed, 3)
         self._metadata["last_audio_duration_s"] = round(total_duration, 3)
         self._metadata["last_chunks"] = total_chunks
+        self._metadata["last_chunk_max_new_tokens"] = self._max_new_tokens_for_chunk(min(ch_len, total_duration))
         logger.info("Transcription Granite terminée: %d segments en %.1fs", len(segments), elapsed)
         return segments
 
@@ -314,6 +328,13 @@ class GraniteTranscriber(BaseTranscriber):
         if isinstance(self.keywords, (list, tuple)):
             return ", ".join(str(item).strip() for item in self.keywords if str(item).strip())
         return ""
+
+    def _max_new_tokens_for_chunk(self, chunk_duration_s: float) -> int:
+        """Borne le budget de génération pour limiter les boucles sur chunks courts."""
+        if self.max_new_tokens_per_second is None:
+            return self.max_new_tokens
+        scaled = int(max(self.min_new_tokens, round(float(chunk_duration_s) * self.max_new_tokens_per_second)))
+        return max(1, min(self.max_new_tokens, scaled))
 
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
         from transcria.stt.anti_hallucination import collapse_repetition_loops
