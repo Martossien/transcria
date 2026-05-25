@@ -509,6 +509,33 @@ La transcription contient peut-être des termes métier, mais je ne peux pas les
         assert context["speaker"] == "SPEAKER_XX"
         assert context["quote"] == "De l'émenteal, ça ira comme ça ?"
 
+    def test_parse_termes_suspects_context_long_meeting_mmss_over_99(self):
+        text = """## Termes douteux à valider
+
+- **C2S** [sigle] (critique) | variantes_suspectes: C25 | commentaire: sigle. | contextes: [89:05] SPEAKER_06: "actualités C2S" || [118:00] SPEAKER_01: "partie C2S" || [185:30] SPEAKER_06: "reprise C2S"
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        contexts = result["termes_suspects"][0]["contexts"]
+        assert len(contexts) == 3
+        assert contexts[0]["timecode"] == "89:05"
+        assert contexts[0]["quote"] == "actualités C2S"
+        assert contexts[1]["timecode"] == "118:00"
+        assert contexts[1]["quote"] == "partie C2S"
+        assert contexts[2]["timecode"] == "185:30"
+        assert contexts[2]["quote"] == "reprise C2S"
+
+    def test_parse_termes_suspects_context_hhmmss_three_digit_hours(self):
+        text = """## Termes douteux à valider
+
+- **SIGLE_A** [sigle] (critique) | variantes_suspectes: SIGLE_B | commentaire: test. | contextes: [03:05:30] SPEAKER_01: "mention SIGLE_A"
+
+"""
+        result = OpenCodeRunner._parse_structured_summary(text)
+        context = result["termes_suspects"][0]["contexts"][0]
+        assert context["timecode"] == "03:05:30"
+        assert context["quote"] == "mention SIGLE_A"
+
     def test_parse_termes_suspects_normalizes_empty_and_duplicate_variants(self):
         text = """## Termes douteux à valider
 
