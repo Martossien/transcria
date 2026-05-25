@@ -47,6 +47,8 @@ class StructuredLogger:
         for k, v in kwargs.items():
             if k == "exc_info":
                 exc_info = v
+            elif k == "level":
+                structured["log_level_override"] = v
             else:
                 structured[k] = v
         self._logger.log(level, msg, *args, extra={"structured": structured}, exc_info=exc_info)

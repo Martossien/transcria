@@ -190,7 +190,7 @@ class Transcriber:
         if sl:
             sl.info(
                 "VAD final activé automatiquement pour audio dégradé",
-                level=level,
+                quality_level=level,
                 threshold=vad_cfg.get("threshold"),
             )
         return True
