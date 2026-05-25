@@ -105,7 +105,7 @@ python app.py --no-debug
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `stt_backend` | string | `"cohere"` | Backend STT (`cohere` ou `whisper`) |
+| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `whisper` ou `granite`) |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
@@ -178,6 +178,40 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `repetition_loop_min_repeats` | int | `4` | Nombre minimum de répétitions consécutives suspectes |
 | `repetition_loop_max_phrase_words` | int | `10` | Taille maximale d'une phrase répétée détectée |
 | `repetition_loop_keep_repeats` | int | `2` | Occurrences conservées après réduction d'une boucle |
+
+### `granite`
+
+Backend STT expérimental IBM Granite Speech 4.1 2B. Il reste désactivé par défaut
+car `models.stt_backend` vaut `cohere`; il peut être activé explicitement pour des
+tests ou campagnes ciblées avec `models.stt_backend=granite`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Marque documentaire/expérimentale ; le choix effectif reste `models.stt_backend` |
+| `model_id` | string | `"./models/granite-speech-4.1-2b"` | Chemin local ou identifiant HuggingFace du modèle Granite normal |
+| `torch_dtype` | string | `"bfloat16"` | Type torch (`bfloat16`, `float16`, `float32`) |
+| `chunk_length_s` | int | `300` | Durée maximale d'un chunk Granite |
+| `max_new_tokens` | int | `2000` | Budget de génération par chunk |
+| `prompt_mode` | string | `"asr_punctuated"` | Prompt utilisé (`asr_raw`, `asr_punctuated`, `keywords`) |
+| `prompt_asr_raw` | string | prompt IBM | Prompt brut sans ponctuation forcée |
+| `prompt_asr_punctuated` | string | prompt IBM | Prompt de transcription avec ponctuation/capitalisation |
+| `prompt_keywords` | string | prompt IBM | Prompt avec `{keywords}` pour tests de biasing Granite |
+| `keywords` | list/string | `[]` | Mots-clés passés si `prompt_mode=keywords` |
+| `fix_mistral_regex` | bool | `true` | Passe le correctif tokenizer Granite/Mistral à `AutoProcessor` quand supporté |
+| `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives après génération |
+| `repetition_loop_min_repeats` | int | `4` | Répétitions minimales pour détecter une boucle |
+| `repetition_loop_max_phrase_words` | int | `10` | Longueur maximale d'une phrase répétée |
+| `repetition_loop_keep_repeats` | int | `2` | Répétitions conservées après réduction |
+
+**Redémarrage requis :** oui — le modèle est chargé en VRAM.
+
+**Impact si modifié :**
+- `model_id` local évite tout accès réseau au runtime. Le modèle téléchargé dans
+  `models/granite-speech-4.1-2b/` est ignoré par git.
+- Si la version de `transformers` ne supporte pas `fix_mistral_regex`, le backend
+  réessaie sans ce paramètre et logue un warning explicite.
+- `metadata/granite.json` trace le modèle, le device, le prompt, le fix appliqué,
+  les durées et le nombre de chunks.
 
 #### `whisper.forced_alignment`
 

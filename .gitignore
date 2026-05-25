@@ -48,6 +48,7 @@ Thumbs.db
 # Models (trop volumineux pour git, mais garder l'arborescence)
 models/cohere-asr/*
 !models/cohere-asr/.gitkeep
+models/granite-speech-4.1-2b/
 
 # Backups de développement (historique de refactoring)
 backup/
@@ -59,6 +60,7 @@ docs/archive/
 # Documents de conception internes (ne pas publier)
 docs/lexique_centralise_conception.md
 docs/srt_review_hotwords_bench.md
+docs/hybrid_bench_notes.md
 
 # Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
 archives/

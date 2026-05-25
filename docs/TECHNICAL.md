@@ -4,7 +4,7 @@
 
 TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
 
-**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
+**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
@@ -84,6 +84,7 @@ transcria/
 │   │   ├── base_transcriber.py    # BaseTranscriber (ABC)
 │   │   ├── cohere_transcriber.py  # CohereTranscriber (load, transcribe, segments_to_srt, offload)
 │   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper large-v3 qualité)
+│   │   ├── granite_transcriber.py # GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
 │   │   ├── anti_hallucination.py  # Réduction boucles ASR répétitives
 │   │   ├── forced_alignment.py    # Alignement CTC natif torchaudio optionnel
 │   │   ├── speaker_realignment.py # Réalignement locuteur/ponctuation au niveau mot
@@ -289,7 +290,9 @@ Le backend normal reste `models.stt_backend` (`cohere` par défaut). Le mode `qu
 
 Whisper large-v3 reste disponible pour les tests, fallbacks et campagnes ciblées. Il apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
 
-**Anti-hallucination pour les deux backends :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé à la fois par `WhisperTranscriber` (config `whisper.collapse_repetition_loops`) et par `CohereTranscriber` (config `cohere.collapse_repetition_loops`). Les paramètres sont les mêmes pour les deux backends : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
+Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désactivé par défaut. Il utilise `AutoProcessor` + `AutoModelForSpeechSeq2Seq`, le modèle local `models/granite-speech-4.1-2b/` si présent, des prompts IBM configurables et le flag `fix_mistral_regex=true` quand la version de `transformers` le supporte. La diarisation reste portée par pyannote : Granite normal produit seulement du texte par chunk, ensuite attribué aux tours pyannote comme Cohere.
+
+**Anti-hallucination STT :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé par `WhisperTranscriber`, `CohereTranscriber` et `GraniteTranscriber`. Les paramètres sont les mêmes : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
 
 **Nettoyage post-STT (`transcription_cleanup`)** : après la transcription, `Transcriber._cleanup_transcription_segments()` applique un nettoyage déterministe configurable via `workflow.transcription_cleanup` :
 
@@ -629,10 +632,19 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 | `available_sizes()` | Retourne les tailles de modèle disponibles |
 | `vram_for_size(size)` | VRAM estimée par taille de modèle |
 
+**`granite_transcriber.py` — `GraniteTranscriber`** (étend BaseTranscriber)
+| Méthode/Propriété | Description |
+|---|---|
+| `available` | Vérifie `torch`, `transformers` et `transformers>=4.52.1` |
+| `load()` | Charge `AutoProcessor` + `AutoModelForSpeechSeq2Seq` avec `trust_remote_code=True`, modèle local si disponible, `fix_mistral_regex` avec fallback logué |
+| `transcribe(audio_path, audio_array, sample_rate, language)` | Charge l'audio ou utilise un `np.ndarray`, découpe selon `granite.chunk_length_s`, applique le prompt configuré et retourne des segments `[{start, end, text}]` |
+| `get_metadata()` | Retourne les métadonnées sauvegardées dans `metadata/granite.json` |
+| `offload()` | Libère modèle + processor + tokenizer + cache CUDA |
+
 **`transcriber_factory.py` — `TranscriberFactory`**
 | Méthode | Description |
 |---|---|
-| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere` ou `whisper`) |
+| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere`, `whisper` ou `granite`) |
 | `list_available_backends()` | Liste les backends disponibles |
 | `get_backend_vram_mb(backend)` | VRAM estimée pour un backend |
 
@@ -1235,7 +1247,7 @@ jobs/{uuid}/
     audio_denoise.json           # Débruitage pré-STT appliqué (preserve_timeline=true) si activé
     audio_normalization.json     # Normalisation pré-STT appliquée (preserve_timeline=true) si activé
     audio_excerpts/*.wav         # Extraits temporisés pour validation audio du lexique
-    transcription.srt            # SRT brut (Cohere ou Whisper + speakers appliqués)
+    transcription.srt            # SRT brut (Cohere, Whisper ou Granite + speakers appliqués)
     transcription_corrigee.srt   # SRT corrigé (opencode)
     transcription_segments.json  # Segments détaillés
     transcription_metadata.json  # Métadonnées post-transcription (nettoyage artefacts, fusion segments)

@@ -1,3 +1,4 @@
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -9,11 +10,15 @@ from transcria.stt.contextual_biasing import TrieContextualBiasProcessor
 from transcria.stt.contextual_biasing import build_token_trie
 from transcria.stt.contextual_biasing import select_lexicon_bias_terms
 from transcria.stt.forced_alignment import ForcedAlignmentService
+from transcria.stt.granite_transcriber import GraniteTranscriber
 from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
 from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.stt.transcription import Transcriber
 from transcria.stt.lexicon_hotwords import build_whisper_hotwords
+from transcria.stt.transcriber_factory import create_transcriber
+from transcria.stt.transcriber_factory import get_backend_vram_mb
 from transcria.stt.transcriber_factory import _effective_whisper_config
+from transcria.stt.transcriber_factory import list_available_backends
 from transcria.stt.whisper_transcriber import WhisperTranscriber
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
 from transcria.quality.audio_quality import AudioQualityEvaluator
@@ -194,6 +199,95 @@ class TestWhisperQualityConfig:
         assert calls["condition_on_previous_text"] is False
         assert segments[0]["text"] == "merci fin"
         assert segments[0]["hallucination_loops"][0]["count"] == 3
+
+
+class TestGraniteTranscriber:
+    def test_granite_backend_is_available_in_factory(self):
+        assert "granite" in list_available_backends()
+
+    def test_create_granite_transcriber_from_config(self):
+        cfg = {
+            "models": {"stt_backend": "granite"},
+            "granite": {
+                "model_id": "./models/granite-speech-4.1-2b",
+                "prompt_mode": "asr_punctuated",
+            },
+        }
+
+        transcriber = create_transcriber(cfg, device="cpu")
+
+        assert isinstance(transcriber, GraniteTranscriber)
+        assert transcriber.model_path == "./models/granite-speech-4.1-2b"
+        assert transcriber.prompt_mode == "asr_punctuated"
+
+    def test_granite_prompt_uses_fixable_keywords_mode(self):
+        transcriber = GraniteTranscriber(
+            prompt_mode="keywords",
+            keywords=["Terme A", "Acronyme B"],
+        )
+
+        prompt = transcriber._build_prompt()
+
+        assert "Keywords: Terme A, Acronyme B" in prompt
+        assert prompt.startswith("<|audio|>")
+
+    def test_granite_keywords_mode_falls_back_without_keywords(self):
+        transcriber = GraniteTranscriber(prompt_mode="keywords", keywords=[])
+
+        assert transcriber._build_prompt() == transcriber.prompts["asr_punctuated"]
+
+    def test_granite_version_tuple_handles_suffixes(self):
+        assert GraniteTranscriber._version_tuple("4.57.6") == (4, 57, 6)
+        assert GraniteTranscriber._version_tuple("4.52.1.dev0") == (4, 52, 1)
+
+    def test_granite_vram_configurable(self):
+        cfg = {"gpu": {"granite_vram_mb": 7200}}
+
+        assert get_backend_vram_mb("granite", cfg) == 7200
+
+    def test_granite_load_retries_without_fix_mistral_regex_when_unsupported(self, monkeypatch):
+        calls = []
+
+        class FakeProcessor:
+            tokenizer = SimpleNamespace()
+
+            @classmethod
+            def from_pretrained(cls, model_path, **kwargs):
+                calls.append(kwargs)
+                if kwargs.get("fix_mistral_regex"):
+                    raise TypeError("unexpected keyword argument 'fix_mistral_regex'")
+                return cls()
+
+        class FakeModel:
+            @classmethod
+            def from_pretrained(cls, *args, **kwargs):
+                return cls()
+
+        monkeypatch.setitem(
+            sys.modules,
+            "transformers",
+            SimpleNamespace(
+                AutoProcessor=FakeProcessor,
+                AutoModelForSpeechSeq2Seq=FakeModel,
+            ),
+        )
+        monkeypatch.setitem(
+            sys.modules,
+            "torch",
+            SimpleNamespace(
+                bfloat16="bfloat16",
+                float16="float16",
+                float32="float32",
+            ),
+        )
+        monkeypatch.setattr(GraniteTranscriber, "available", property(lambda self: True))
+
+        transcriber = GraniteTranscriber(model_path="/tmp/model", device="cpu", fix_mistral_regex=True)
+
+        assert transcriber.load()
+        assert calls[0]["fix_mistral_regex"] is True
+        assert "fix_mistral_regex" not in calls[1]
+        assert transcriber.get_metadata()["fix_mistral_regex"] is False
 
 
 class TestContextualBiasing:
@@ -692,12 +786,15 @@ class TestTranscriber:
                 {"start": 0, "end": 2, "text": "Bonjour"}
             ]
             transcriber.transcriber.segments_to_srt = lambda segments, mapping=None: "1\n00:00:00,000 --> 00:00:02,000\nAlice: Bonjour\n"
+            transcriber.transcriber.get_metadata = lambda: {"backend": "cohere", "calls": 1}
 
             result = transcriber.transcribe(job, Path("/tmp/fake.wav"))
 
             assert result["speaker_count"] == 1
             assert fs.load_json("metadata/speakers_map.json")["mapping"]["SPEAKER_00"] == "Alice"
             assert "Alice: Bonjour" in fs.load_text("metadata/transcription.srt")
+            assert fs.load_json("metadata/cohere.json")["calls"] == 1
+            assert fs.load_json("metadata/transcription_metadata.json")["backend_metadata_path"] == "metadata/cohere.json"
 
 
 class TestTranscriberConfigurableArtifacts:

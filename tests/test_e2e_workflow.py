@@ -151,7 +151,7 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "whisper"], default="cohere",
+        "--stt-backend", choices=["cohere", "whisper", "granite"], default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."
@@ -638,6 +638,10 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
             "  Cohere lex biasing   : "
             f"{'OUI' if cfg.get('cohere', {}).get('lexicon_biasing', {}).get('enabled', False) else 'non'}"
         )
+    if models.get("stt_backend") == "granite":
+        granite = cfg.get("granite", {})
+        print(f"  Granite model        : {granite.get('model_id', './models/granite-speech-4.1-2b')}")
+        print(f"  Granite prompt       : {granite.get('prompt_mode', 'asr_punctuated')}")
     print(f"  Mode pipeline        : {args.mode}")
     print(f"  LLM résumé           : {'non' if args.skip_llm else 'oui'}")
     print(f"  LLM correction       : {'non' if args.skip_llm else 'oui'}")
@@ -867,6 +871,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     quality_data = fs.load_json("metadata/audio_quality_decision.json") or {}
     whisper_hotwords_data = fs.load_json("metadata/whisper_hotwords.json") or {}
     cohere_biasing_data = fs.load_json("metadata/cohere_lexicon_biasing.json") or {}
+    granite_data = fs.load_json("metadata/granite.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     reliability_counts = {}
@@ -897,6 +902,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "stt_backend": args.stt_backend,
         "effective_stt_backend": transcription_metadata.get("backend"),
         "whisper_model_size": args.whisper_model_size if args.stt_backend == "whisper" else None,
+        "granite_data": granite_data or None,
         "mode": args.mode,
         "skip_llm": args.skip_llm,
         "skip_diarization": args.skip_diarization,

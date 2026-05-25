@@ -33,7 +33,7 @@ applicatif. Il est conçu pour deux usages :
    - Filtrage scène optionnel → `input/scene_filtered.wav` + `metadata/audio_scene_filter.json`
    - Normalisation audio optionnelle (y compris auto-loudnorm si RMS < seuil)
      → `input/normalized.wav` + `metadata/audio_normalization.json`
-   - Transcription finale (Cohere ou Whisper large-v3)
+   - Transcription finale (Cohere, Whisper large-v3 ou Granite expérimental)
    - Diarisation pyannote (mode quality uniquement)
    - VAD final optionnel (activé automatiquement sur audio dégradé si
      `workflow.vad.auto_enable_final_on_degraded=true`)
@@ -66,7 +66,7 @@ venv/bin/python tests/test_e2e_workflow.py --help
 
 Le test complet nécessite :
 - `config.yaml` valide (généré par `scripts/bootstrap_config.py`)
-- Cohere ASR disponible dans le venv (ou `--stt-backend whisper`)
+- Cohere ASR disponible dans le venv (ou `--stt-backend whisper` / `--stt-backend granite`)
 - faster-whisper si `--stt-backend whisper`
 - pyannote + token HF si diarisation active (mode quality)
 - opencode + LLM d'arbitrage OpenAI-compatible si LLM non désactivée
@@ -113,7 +113,7 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 
 | Option | Défaut | Description |
 |--------|--------|-------------|
-| `--stt-backend cohere\|whisper` | `cohere` | Backend de transcription finale |
+| `--stt-backend cohere\|whisper\|granite` | `cohere` | Backend de transcription finale |
 | `--whisper-model-size SIZE` | `large-v3` | Taille du modèle Whisper si `--stt-backend whisper` |
 | `--enable-whisper-lexicon-hotwords` | off | Active l'injection expérimentale des termes de lexique dans les hotwords Whisper |
 | `--enable-cohere-lexicon-biasing` | off | Active le biasing contextuel expérimental Cohere par Trie depuis le lexique |
@@ -127,6 +127,11 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 > conserve le backend demandé. Le backend réellement utilisé est écrit dans
 > `metadata/transcription_metadata.json["backend"]` et repris dans le JSON de sortie
 > E2E sous `effective_stt_backend`.
+
+`--stt-backend granite` active le backend expérimental Granite Speech 4.1 2B. Le
+modèle local attendu est `models/granite-speech-4.1-2b/`; les métadonnées de
+chargement, prompt et chunks sont sauvegardées dans `metadata/granite.json` puis
+reprises dans le JSON de sortie sous `granite_data`.
 
 Quand `--enable-whisper-lexicon-hotwords` est utilisé, l'audit est écrit dans
 `metadata/whisper_hotwords.json` et repris dans le JSON de sortie sous

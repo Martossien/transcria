@@ -7,7 +7,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 ## Fonctionnalités
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
-- **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper reste disponible pour les tests, fallbacks et usages ciblés.
+- **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
 - **Diarisation pyannote** : tours exclusifs, checkpoints, extraits audio par locuteur, injection du genre vocal par locuteur sans écraser les choix utilisateur.
@@ -28,7 +28,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 |---|---|
 | Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
-| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3 |
+| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental |
 | Diarisation | pyannote.audio community-1, exclusive turns, checkpoints |
 | Audio | ffmpeg/ffprobe, librosa en subprocess, Silero VAD, Demucs optionnel |
 | LLM | opencode CLI + backend OpenAI-compatible local ou distant |
@@ -49,6 +49,7 @@ Ordres de grandeur GPU :
 
 - Cohere ASR : environ 6 Go VRAM
 - Whisper large-v3 : environ 10 Go VRAM selon `compute_type`
+- Granite Speech 4.1 2B : environ 6 Go VRAM, expérimental et désactivé par défaut
 - pyannote : environ 2 Go VRAM
 - LLM locale 30B/35B quantifiée : typiquement 48 à 60 Go VRAM selon backend/modèle
 
@@ -137,11 +138,11 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 4. **Contexte** : titre, type, sujet, objectifs et suggestions LLM.
 5. **Participants & Locuteurs** : validation des locuteurs, extraits audio, genre vocal estimé si disponible.
 6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV. Les lexiques centralisés accessibles au job pré-remplissent la session tant qu'un lexique utilisateur n'a pas déjà été sauvegardé.
-7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper, correction LLM.
+7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper/Granite, correction LLM.
 8. **Qualité** : rapport, score, diagnostics, segments suspects.
 9. **Export** : package ZIP final.
 
-Le choix Cohere/Whisper n'est pas réduit à "fast vs quality". Le mode qualité active le workflow complet, mais conserve le backend STT configuré par défaut (`cohere`). Un forçage Whisper reste possible par configuration pour des campagnes ciblées. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
+Le choix du backend STT n'est pas réduit à "fast vs quality". Le mode qualité active le workflow complet, mais conserve le backend configuré par défaut (`cohere`). Un forçage Whisper ou Granite reste possible par configuration pour des campagnes ciblées. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
 
 ## Voix enregistrées
 
@@ -190,7 +191,7 @@ Avant la transcription finale, `PipelineService` peut exécuter :
 5. filtrage scène : mise en silence de zones non vocales sans décaler les timestamps.
 6. denoise : expérimental, désactivé par défaut, activé seulement sur demande ou flags configurés.
 7. normalisation : optionnelle, avec auto-loudnorm pour voix très faible.
-8. transcription : Cohere ou Whisper, chunking par tours pyannote si possible.
+8. transcription : Cohere, Whisper ou Granite, chunking par tours pyannote si possible.
 9. post-traitement : nettoyage artefacts, fusion micro-segments, fiabilité par segment.
 
 Artefacts importants par job :

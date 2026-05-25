@@ -6,7 +6,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "whisper")
+_STT_BACKENDS = ("cohere", "whisper", "granite")
 
 
 def create_transcriber(
@@ -30,6 +30,8 @@ def create_transcriber(
         return _create_cohere(config, device)
     elif backend == "whisper":
         return _create_whisper(config, device)
+    elif backend == "granite":
+        return _create_granite(config, device)
 
     return _create_cohere(config, device)
 
@@ -94,11 +96,40 @@ def _create_whisper(config: dict, device: str | None) -> BaseTranscriber:
     )
 
 
+def _create_granite(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.granite_transcriber import GraniteTranscriber
+
+    granite_cfg = _effective_granite_config(config)
+    return GraniteTranscriber(
+        model_path=granite_cfg.get("model_id"),
+        device=device,
+        chunk_length_s=granite_cfg.get("chunk_length_s", 300),
+        max_new_tokens=granite_cfg.get("max_new_tokens", 2000),
+        torch_dtype=granite_cfg.get("torch_dtype", "bfloat16"),
+        prompt_mode=granite_cfg.get("prompt_mode", "asr_punctuated"),
+        prompt_asr_raw=granite_cfg.get("prompt_asr_raw"),
+        prompt_asr_punctuated=granite_cfg.get("prompt_asr_punctuated"),
+        prompt_keywords=granite_cfg.get("prompt_keywords"),
+        keywords=granite_cfg.get("keywords"),
+        fix_mistral_regex=granite_cfg.get("fix_mistral_regex", True),
+        collapse_repetition_loops=granite_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=granite_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=granite_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=granite_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
 def _effective_whisper_config(config: dict) -> dict:
     legacy = config.get("models", {}).get("whisper", {})
     current = config.get("whisper", {})
     defaults = get_default_config()["whisper"]
     return _deep_merge(_deep_merge(defaults, legacy), current)
+
+
+def _effective_granite_config(config: dict) -> dict:
+    current = config.get("granite", {})
+    defaults = get_default_config()["granite"]
+    return _deep_merge(defaults, current)
 
 
 def list_available_backends() -> list[str]:
@@ -114,4 +145,6 @@ def get_backend_vram_mb(backend: str, config: dict) -> int:
         whisper_cfg = _effective_whisper_config(config)
         size = whisper_cfg["model_size"]
         return WhisperTranscriber.vram_for_size(size)
+    elif backend == "granite":
+        return int(config.get("gpu", {}).get("granite_vram_mb", get_default_config()["gpu"]["granite_vram_mb"]))
     return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))

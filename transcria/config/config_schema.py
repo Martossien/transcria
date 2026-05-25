@@ -34,6 +34,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_models(cfg.get("models", {}), result)
     _check_cohere(cfg.get("cohere", {}), result)
     _check_whisper(cfg.get("whisper", {}), result)
+    _check_granite(cfg.get("granite", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
@@ -154,6 +155,7 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
     _check_int_range(gpu, "cohere_vram_mb", "gpu.cohere_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "pyannote_vram_mb", "gpu.pyannote_vram_mb", 500, 100000, r)
     _check_int_range(gpu, "llm_vram_mb", "gpu.llm_vram_mb", 1000, 500000, r)
+    _check_int_range(gpu, "granite_vram_mb", "gpu.granite_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "min_free_vram_mb", "gpu.min_free_vram_mb", 100, 50000, r)
 
 
@@ -196,7 +198,7 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
 
 
 def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
-    valid = {"cohere", "whisper"}
+    valid = {"cohere", "whisper", "granite"}
     backend = mod.get("stt_backend", "cohere")
     if not isinstance(backend, str) or backend not in valid:
         r.add_error(
@@ -296,6 +298,42 @@ def _check_whisper(whisper: dict, r: ValidationResult) -> None:
             _check_optional_number(forced, "max_segment_s", "whisper.forced_alignment.max_segment_s", r)
 
 
+def _check_granite(granite: dict, r: ValidationResult) -> None:
+    if not granite:
+        return
+    if not isinstance(granite, dict):
+        r.add_error("granite: doit être un objet YAML")
+        return
+    _check_bool(granite, "enabled", "granite.enabled", r)
+    _check_str(granite, "model_id", "granite.model_id", r)
+    _check_str(granite, "torch_dtype", "granite.torch_dtype", r)
+    dtype = granite.get("torch_dtype")
+    if isinstance(dtype, str) and dtype not in {"bfloat16", "bf16", "float16", "fp16", "float32", "fp32"}:
+        r.add_error("granite.torch_dtype: valeurs acceptées bfloat16, float16, float32")
+    _check_int_range(granite, "chunk_length_s", "granite.chunk_length_s", 1, 600, r)
+    _check_int_range(granite, "max_new_tokens", "granite.max_new_tokens", 1, 20000, r)
+    _check_str(granite, "prompt_mode", "granite.prompt_mode", r)
+    prompt_mode = granite.get("prompt_mode")
+    if isinstance(prompt_mode, str) and prompt_mode not in {"asr_raw", "asr_punctuated", "keywords"}:
+        r.add_error("granite.prompt_mode: valeurs acceptées asr_raw, asr_punctuated, keywords")
+    for key in ("prompt_asr_raw", "prompt_asr_punctuated", "prompt_keywords"):
+        _check_str(granite, key, f"granite.{key}", r)
+    keywords = granite.get("keywords", [])
+    if isinstance(keywords, str):
+        pass
+    elif isinstance(keywords, list):
+        for index, keyword in enumerate(keywords):
+            if not isinstance(keyword, str) or not keyword.strip():
+                r.add_error(f"granite.keywords[{index}]: doit être une chaîne non vide")
+    else:
+        r.add_error("granite.keywords: doit être une chaîne ou une liste de chaînes")
+    for key in ("fix_mistral_regex", "collapse_repetition_loops"):
+        _check_bool(granite, key, f"granite.{key}", r)
+    _check_int_range(granite, "repetition_loop_min_repeats", "granite.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(granite, "repetition_loop_max_phrase_words", "granite.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(granite, "repetition_loop_keep_repeats", "granite.repetition_loop_keep_repeats", 1, 20, r)
+
+
 def _check_cohere(cohere: dict, r: ValidationResult) -> None:
     if not cohere:
         return
@@ -349,8 +387,8 @@ def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:
         r.add_error("workflow.quality_transcription: doit être un objet YAML")
         return
     backend = cfg.get("force_stt_backend")
-    if backend is not None and backend not in {"cohere", "whisper"}:
-        r.add_error("workflow.quality_transcription.force_stt_backend: doit valoir cohere ou whisper")
+    if backend is not None and backend not in {"cohere", "whisper", "granite"}:
+        r.add_error("workflow.quality_transcription.force_stt_backend: doit valoir cohere, whisper ou granite")
     _check_bool(cfg, "force_on_degraded_summary", "workflow.quality_transcription.force_on_degraded_summary", r)
     modes = cfg.get("enabled_for_modes", [])
     if not isinstance(modes, list):

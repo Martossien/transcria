@@ -377,6 +377,32 @@ class TestBootstrapConfig:
         assert quality_transcription["enabled_for_modes"] == []
         assert quality_transcription["force_on_degraded_summary"] is False
 
+    def test_default_config_declares_granite_experimental_backend(self):
+        cfg = load_config()
+
+        assert cfg["granite"]["enabled"] is False
+        assert cfg["granite"]["model_id"] == "./models/granite-speech-4.1-2b"
+        assert cfg["granite"]["fix_mistral_regex"] is True
+        assert cfg["gpu"]["granite_vram_mb"] == 6000
+
+    def test_validate_config_accepts_granite_backend(self):
+        cfg = load_config()
+        cfg["models"]["stt_backend"] = "granite"
+        cfg["workflow"]["quality_transcription"]["force_stt_backend"] = "granite"
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_validate_config_rejects_invalid_granite_prompt_mode(self):
+        cfg = load_config()
+        cfg["granite"]["prompt_mode"] = "speaker_attributed"
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("granite.prompt_mode" in msg for msg in result.errors)
+
     def test_validate_config_rejects_invalid_max_upload_size(self):
         cfg = load_config()
         cfg["security"]["max_upload_size_mb"] = 0

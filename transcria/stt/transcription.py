@@ -131,6 +131,9 @@ class Transcriber:
         )
         segments = self._cleanup_transcription_segments(segments, sl)
         segments = self._score_segment_reliability(segments, fs, sl)
+        backend_metadata = self._backend_metadata()
+        if backend_metadata:
+            fs.save_json(f"metadata/{backend}.json", backend_metadata)
 
         speaker_map = speaker_mapping or {}
         srt_content = self.transcriber.segments_to_srt(segments, speaker_map.get("mapping"))
@@ -145,6 +148,7 @@ class Transcriber:
             "segments": len(segments),
             "speaker_count": speaker_count,
             "vad_final_enabled": vad_enabled,
+            "backend_metadata_path": f"metadata/{backend}.json" if backend_metadata else None,
         })
         fs.save_json("metadata/speakers_map.json", speaker_map)
 
@@ -576,6 +580,17 @@ class Transcriber:
         except Exception as exc:
             logger.warning("Scorage fiabilité segments ignoré: %s", exc)
             return segments
+
+    def _backend_metadata(self) -> dict:
+        getter = getattr(self.transcriber, "get_metadata", None)
+        if not callable(getter):
+            return {}
+        try:
+            metadata = getter()
+        except Exception as exc:
+            logger.warning("Métadonnées backend STT indisponibles: %s", exc)
+            return {}
+        return metadata if isinstance(metadata, dict) else {}
 
     # ── Fallback overlap matching (conservé pour le mode 30s) ─────────────────
 

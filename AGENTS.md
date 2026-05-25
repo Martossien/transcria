@@ -54,7 +54,7 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 - **SQLAlchemy** avec SQLite (`transcrIA.db` dans le cwd)
 - **PyYAML** pour la configuration
 - **python-dotenv** pour charger `.env` au démarrage (`app.py`)
-- **torch + transformers + accelerate** pour Cohere ASR (device_map GPU)
+- **torch + transformers + accelerate** pour Cohere ASR et Granite Speech expérimental (device_map GPU)
 - **faster-whisper** pour Whisper large-v3 qualité, VAD Silero et timestamps mot-à-mot
 - **pyannote.audio** pour la diarisation (dans `requirements.txt`, modèle téléchargé séparément)
 - **opencode** (CLI externe) pour orchestrer la LLM locale d'arbitrage (résumé + correction)
@@ -110,6 +110,7 @@ transcria/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
       whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3 qualité
+      granite_transcriber.py# GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
       contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session
@@ -222,8 +223,9 @@ transcria/
 L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne tiennent pas tous en mémoire simultanément :
 1. **Cohere ASR** : ~6 Go VRAM
 2. **Whisper large-v3 qualité** : ~10 Go VRAM selon compute_type
-3. **pyannote** : ~2 Go VRAM
-4. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
+3. **Granite Speech 4.1 2B** : ~6 Go VRAM, expérimental et désactivé par défaut
+4. **pyannote** : ~2 Go VRAM
+5. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
 
 **`GPUSession`** est le context manager utilisé pour Cohere et pyannote. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
@@ -240,7 +242,7 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 ### Pipeline STT — deux modes de chunking
 
-**Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement au backend STT actif (Cohere ou Whisper). Chaque chunk a un speaker connu ; si des timestamps mots existent, `SpeakerPunctuationRealigner` peut corriger un segment qui traverse plusieurs tours.
+**Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement au backend STT actif (Cohere, Whisper ou Granite). Chaque chunk a un speaker connu ; si des timestamps mots existent, `SpeakerPunctuationRealigner` peut corriger un segment qui traverse plusieurs tours.
 
 **Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
 
@@ -260,11 +262,13 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 **VAD final auto sur audio dégradé :** si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que le niveau qualité du job est dans `workflow.vad.auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `workflow.vad.threshold_final_degraded` (défaut `0.6`). Ce mécanisme permet de filtrer les silences longs dans les fichiers CSE dégradés sans activer le VAD final par défaut sur les audios propres.
 
 
-**Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` force `whisper` quand le mode est dans `workflow.quality_transcription.enabled_for_modes` ou quand `AudioQualityEvaluator` classe le job dégradé. La décision est écrite dans `metadata/audio_quality_decision.json`. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
+**Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` ne force un backend alternatif que si `workflow.quality_transcription.force_stt_backend` est explicitement configuré et que le mode ou le diagnostic audio correspond aux règles. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
 
 **Biasing lexique STT expérimental :** si `whisper.lexicon_hotwords.enabled=true` et que le backend effectif est `whisper`, `PipelineService._inject_whisper_lexicon_hotwords()` lit `context/session_lexicon.json`, injecte seulement les priorités configurées (défaut `critique`/`importante`) dans `whisper.hotwords`, sauvegarde `metadata/whisper_hotwords.json` et logue candidats/injectés/exclus. Si `cohere.lexicon_biasing.enabled=true` et que le backend effectif est `cohere`, `PipelineService._inject_cohere_lexicon_biasing()` sélectionne les formes cibles validées, sauvegarde `metadata/cohere_lexicon_biasing.json`, puis `CohereTranscriber` construit un `TrieContextualBiasProcessor` au chargement du tokenizer (`start_boost` faible pour amorcer un terme, `boost` pour le compléter). Les deux options sont désactivées par défaut.
 
-**Anti-hallucination Cohere :** `CohereTranscriber` applique aussi `collapse_repetition_loops` depuis `anti_hallucination.py` (paramètres `cohere.collapse_repetition_loops=true`, `cohere.repetition_loop_min_repeats=4`, `cohere.repetition_loop_max_phrase_words=10`, `cohere.repetition_loop_keep_repeats=2` dans `config.yaml`). Whisper utilise les mêmes paramètres sous `whisper.collapse_repetition_loops` etc. Les deux backends partagent la même logique de détection/réduction des boucles répétitives.
+**Anti-hallucination STT :** `CohereTranscriber`, `WhisperTranscriber` et `GraniteTranscriber` appliquent `collapse_repetition_loops` depuis `anti_hallucination.py` avec leurs sections de config respectives (`cohere`, `whisper`, `granite`). Les backends partagent la même logique de détection/réduction des boucles répétitives.
+
+**Granite expérimental :** `models.stt_backend=granite` active IBM Granite Speech 4.1 2B normal. La diarisation reste pyannote ; Granite normal est utilisé comme ASR texte pur. `granite.fix_mistral_regex=true` est passé à `AutoProcessor` quand supporté, avec fallback logué si la version `transformers` locale ne connaît pas encore ce paramètre. Les métadonnées sont écrites dans `metadata/granite.json`.
 
 **Nettoyage post-STT (`transcription_cleanup`) :** si `workflow.transcription_cleanup.enabled=true` (défaut), `Transcriber._cleanup_transcription_segments()` supprime les artefacts de sous-titrage (watermarks de diffusion : `"Sous-titrage ST' 501"`, `"FR 2021"`, `"Société Radio-Canada"`, etc.) et fusionne les micro-segments courts adjacents (même locuteur, gap court, texte bref). Les patterns d'artefacts sont configurables via `workflow.transcription_cleanup.subtitle_artifact_patterns` (liste de regex, défaut `[]` = utiliser les patterns intégrés) et `subtitle_artifact_words` (liste de phrases, défaut `[]` = utiliser les mots-clés intégrés). Les paramètres de fusion sont `merge_short_segments`, `short_segment_max_s` (défaut 0.45), `short_segment_max_words` (défaut 2), `merge_gap_s` (défaut 0.5), `merge_max_chars` (défaut 220), `remove_subtitle_artifacts` (défaut true).
 
