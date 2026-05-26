@@ -217,6 +217,41 @@ Raisons :
 | Fichier avec longs silences (>30s) | ✅ ON | ⚠️ Optionnel | ❌ OFF |
 | Musique + parole (podcast) | ✅ ON | ❌ OFF | ❌ OFF |
 
+### 4.5 Nuance — VAD final bénéfique sur audio très bruité (type CSE)
+
+Les benchmarks antérieurs (mai 2026, archives `bench_results_cse_excerpt_*`)
+montrent un **cas où le VAD final est bénéfique** : l'audio type CSE
+(conseil d'entreprise), très bruité, avec beaucoup de fond sonore.
+
+| Variation | Mots | Segs | Pipeline | Écart SRT |
+|---|---|---|---|---|
+| Référence (VAD OFF) | 2207 | 226 | 90.3s | — |
+| VAD final 0.6 | 2207 | 226 | 74.4s | **0 mot de différence** |
+| Whisper vad_filter OFF | 2246 | 234 | 87.2s | +39 mots, +8 artefacts |
+
+Sur ce type d'audio, le VAD final au seuil 0.6 :
+- Produit le **même SRT** que sans VAD (0 mot de différence)
+- Réduit le temps pipeline de **19%** (90s → 74s)
+- Évite que Whisper transcrive le bruit de fond en texte parasite
+
+En revanche, désactiver le VAD interne Whisper (`vad_filter: false`) sur
+ce même audio CSE **ajoute** des artefacts et micro-segments — l'inverse
+de ce qu'on observe sur test5/test6 (où `vad_filter: false` est bénéfique).
+
+**Cause racine** : le quality evaluator classe les deux types d'audio comme
+`degrade` — mais les causes sont opposées :
+- **Audio bruité** (CSE) : beaucoup de bruit parasite → VAD utile
+- **Audio faible** (chuchotement, test5) : signal utile sous le seuil VAD → VAD destructeur
+
+Le flag `audio_faible` existe déjà dans `metadata/audio_preflight.json`
+(produit par `AudioPreflightAnalyzer`). Piste future : utiliser ce flag pour
+distinguer les deux cas et n'activer le VAD final automatique que sur l'audio
+bruité (pas sur l'audio faible).
+
+**Recommandation actuelle** : désactivation complète par défaut (sécurité).
+L'activation conditionnelle basée sur `audio_faible` est une amélioration
+future, nécessitant une campagne de validation.
+
 ---
 
 ## 5. Paramètres de config cibles
