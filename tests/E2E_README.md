@@ -66,7 +66,7 @@ venv/bin/python tests/test_e2e_workflow.py --help
 
 Le test complet nécessite :
 - `config.yaml` valide (généré par `scripts/bootstrap_config.py`)
-- Cohere ASR disponible dans le venv (ou `--stt-backend whisper` / `--stt-backend granite`)
+- Cohere ASR disponible dans le venv (ou `--stt-backend whisper` / `--stt-backend granite` / `--stt-backend parakeet`)
 - faster-whisper si `--stt-backend whisper`
 - pyannote + token HF si diarisation active (mode quality)
 - opencode + LLM d'arbitrage OpenAI-compatible si LLM non désactivée
@@ -113,7 +113,7 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 
 | Option | Défaut | Description |
 |--------|--------|-------------|
-| `--stt-backend cohere\|whisper\|granite` | `cohere` | Backend de transcription finale |
+| `--stt-backend cohere\|whisper\|granite\|parakeet` | `cohere` | Backend de transcription finale |
 | `--whisper-model-size SIZE` | `large-v3` | Taille du modèle Whisper si `--stt-backend whisper` |
 | `--enable-whisper-lexicon-hotwords` | off | Active l'injection expérimentale des termes de lexique dans les hotwords Whisper |
 | `--enable-cohere-lexicon-biasing` | off | Active le biasing contextuel expérimental Cohere par Trie depuis le lexique |
@@ -132,6 +132,12 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 modèle local attendu est `models/granite-speech-4.1-2b/`; les métadonnées de
 chargement, prompt et chunks sont sauvegardées dans `metadata/granite.json` puis
 reprises dans le JSON de sortie sous `granite_data`.
+
+`--stt-backend parakeet` active le backend expérimental Parakeet TDT 0.6B v3
+via NeMo. Nécessite `nemo_toolkit[asr]`. Les métadonnées de chargement et
+décodage sont sauvegardées dans `metadata/parakeet.json` puis reprises dans
+le JSON de sortie sous `parakeet_data`. Documenté dans
+`docs/PARAKEET_STT_INTEGRATION.md`.
 
 Quand `--enable-whisper-lexicon-hotwords` est utilisé, l'audit est écrit dans
 `metadata/whisper_hotwords.json` et repris dans le JSON de sortie sous

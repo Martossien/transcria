@@ -151,7 +151,7 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "whisper", "granite"], default="cohere",
+        "--stt-backend", choices=["cohere", "whisper", "granite", "parakeet"], default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."
@@ -642,6 +642,11 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
         granite = cfg.get("granite", {})
         print(f"  Granite model        : {granite.get('model_id', './models/granite-speech-4.1-2b')}")
         print(f"  Granite prompt       : {granite.get('prompt_mode', 'asr_punctuated')}")
+    if models.get("stt_backend") == "parakeet":
+        parakeet = cfg.get("parakeet", {})
+        print(f"  Parakeet model       : {parakeet.get('model_id', 'nvidia/parakeet-tdt-0.6b-v3')}")
+        print(f"  Parakeet attention   : {'local' if parakeet.get('use_local_attention', True) else 'full'}")
+        print(f"  Parakeet decoding    : {parakeet.get('decoding_strategy', 'greedy_batch')}")
     print(f"  Mode pipeline        : {args.mode}")
     print(f"  LLM résumé           : {'non' if args.skip_llm else 'oui'}")
     print(f"  LLM correction       : {'non' if args.skip_llm else 'oui'}")
@@ -872,6 +877,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     whisper_hotwords_data = fs.load_json("metadata/whisper_hotwords.json") or {}
     cohere_biasing_data = fs.load_json("metadata/cohere_lexicon_biasing.json") or {}
     granite_data = fs.load_json("metadata/granite.json") or {}
+    parakeet_data = fs.load_json("metadata/parakeet.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     reliability_counts = {}
@@ -903,6 +909,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "effective_stt_backend": transcription_metadata.get("backend"),
         "whisper_model_size": args.whisper_model_size if args.stt_backend == "whisper" else None,
         "granite_data": granite_data or None,
+        "parakeet_data": parakeet_data or None,
         "mode": args.mode,
         "skip_llm": args.skip_llm,
         "skip_diarization": args.skip_diarization,
@@ -972,6 +979,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "scene_filter": (fs.job_dir / "input" / "scene_filtered.wav").exists(),
             "normalization": (fs.job_dir / "input" / "normalized.wav").exists(),
             "diarization_checkpoint": (fs.job_dir / "speakers" / "diarization_checkpoint.json").exists(),
+            "granite": (fs.job_dir / "metadata" / "granite.json").exists(),
+            "parakeet": (fs.job_dir / "metadata" / "parakeet.json").exists(),
             "zip_export": bool(list((fs.job_dir / "exports").glob("*.zip"))) if (fs.job_dir / "exports").exists() else False,
         },
 
