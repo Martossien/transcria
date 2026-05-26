@@ -262,8 +262,9 @@ jobs/<job_id>/
 │   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, gpu_index, language, segments count, speaker_count, vad_final_enabled)
 │   ├── whisper_hotwords.json      # Audit hotwords Whisper issus du lexique si option expérimentale activée
 │   ├── cohere_lexicon_biasing.json # Audit biasing Trie Cohere issu du lexique si option expérimentale activée
-│   ├── granite.json               # Métadonnées backend Granite si utilisé
-│   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
+  │   ├── granite.json               # Métadonnées backend Granite si utilisé
+  │   ├── parakeet.json              # Métadonnées backend Parakeet si utilisé
+  │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
 │   └── correction_report.md       # Rapport de correction opencode si disponible
 │
 ├── summary/
@@ -354,6 +355,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Traitement (Whisper expérimental) | `metadata/whisper_hotwords.json` | `PipelineService._inject_whisper_lexicon_hotwords()` |
 | Traitement (Cohere expérimental) | `metadata/cohere_lexicon_biasing.json` | `PipelineService._inject_cohere_lexicon_biasing()` |
 | Traitement (Granite expérimental) | `metadata/granite.json` | `GraniteTranscriber.get_metadata()` |
+| Traitement (Parakeet expérimental) | `metadata/parakeet.json` | `ParakeetTranscriber.get_metadata()` |
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |

@@ -56,6 +56,7 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 - **python-dotenv** pour charger `.env` au démarrage (`app.py`)
 - **torch + transformers + accelerate** pour Cohere ASR et Granite Speech expérimental (device_map GPU)
 - **faster-whisper** pour Whisper large-v3 qualité, VAD Silero et timestamps mot-à-mot
+- **NeMo** (`nemo_toolkit[asr]`) pour Parakeet TDT 0.6B v3 expérimental (ASRModel.from_pretrained, pas de device_map)
 - **pyannote.audio** pour la diarisation (dans `requirements.txt`, modèle téléchargé séparément)
 - **opencode** (CLI externe) pour orchestrer la LLM locale d'arbitrage (résumé + correction)
 
@@ -111,6 +112,7 @@ transcria/
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
       whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3 qualité
       granite_transcriber.py# GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
+      parakeet_transcriber.py# ParakeetTranscriber — NVIDIA Parakeet TDT 0.6B v3 expérimental (NeMo, auto-détection langue, timestamps natifs)
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
       contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session
@@ -225,9 +227,12 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 2. **Whisper large-v3 qualité** : ~10 Go VRAM selon compute_type
 3. **Granite Speech 4.1 2B** : ~6 Go VRAM, expérimental et désactivé par défaut
 4. **pyannote** : ~2 Go VRAM
-5. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
+5. **Parakeet TDT 0.6B v3** : ~8 Go VRAM, expérimental et désactivé par défaut
+6. **LLM d'arbitrage locale** : VRAM variable selon modèle/backend/script (ex: 48–60 Go pour un 35B quantifié)
 
-**`GPUSession`** est le context manager utilisé pour Cohere et pyannote. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
+**`GPUSession`** est le context manager utilisé pour Cohere, Whisper, pyannote et Parakeet. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
+
+**Note NeMo (Parakeet) :** `ASRModel.from_pretrained()` ignore `device_map` et charge sur `cuda:0` par défaut. `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant le chargement pour forcer le GPU cible.
 
 **`ensure_arbitrage_llm_ready(expected_model_id)`** est le point d'entrée unique avant tout usage de la LLM d'arbitrage. Elle vérifie l'état réel du serveur (`/v1/models` + inférence test) et choisit parmi trois chemins logués explicitement :
 - **CAS A** : LLM active et bon modèle → réutilisation directe, zéro redémarrage
@@ -257,9 +262,11 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 
-**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre au backend STT configuré que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale garde le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
+**VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre au backend STT configuré que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale a le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite et le VAD final dégrade la qualité sur parole faible/chuchotée. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
-**VAD final auto sur audio dégradé :** si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que le niveau qualité du job est dans `workflow.vad.auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `workflow.vad.threshold_final_degraded` (défaut `0.6`). Ce mécanisme permet de filtrer les silences longs dans les fichiers CSE dégradés sans activer le VAD final par défaut sur les audios propres.
+**VAD final auto sur audio dégradé :** désactivé par défaut (`workflow.vad.auto_enable_final_on_degraded=false`) car le VAD supprime trop de parole réelle. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète.
+
+**VAD interne Whisper :** `whisper.vad_filter=false` par défaut. Le VAD interne de faster-whisper est trop agressif pour la parole française en condition réelle (pertes d'audio observées). Whisper a déjà `no_speech_threshold`, `compression_ratio_threshold` et `log_prob_threshold` pour filtrer les segments non-parole en aval.
 
 
 **Whisper qualité / audio dégradé :** le backend normal reste `models.stt_backend` (`cohere`). `PipelineService._config_for_mode()` ne force un backend alternatif que si `workflow.quality_transcription.force_stt_backend` est explicitement configuré et que le mode ou le diagnostic audio correspond aux règles. Whisper active les timestamps mot-à-mot, les seuils anti-hallucination faster-whisper, `anti_hallucination.py`, l'alignement CTC optionnel (`whisper.forced_alignment.enabled=false` par défaut) et le réalignement locuteur/ponctuation.
@@ -412,7 +419,7 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
 ### VAD Silero — fallback transparent et activation séparée
-`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`, et peut être utilisé en post-filtrage par `Transcriber._apply_vad_filter()` si `workflow.vad.enabled_final=true`. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur. Ne pas supposer que VAD est toujours actif. Les paramètres `threshold`, `threshold_low_quality`, `threshold_high_noise`, `min_speech_duration_ms`, `min_silence_duration_ms`, `speech_pad_ms` et variantes low-quality sont configurables dans `workflow.vad`.
+`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé aussi (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est également désactivé par défaut. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur.
 
 ### Qualité SRT — garde-fous déterministes
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
@@ -449,3 +456,5 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
+| `docs/VAD_OR_NOT.md` | Analyse des systèmes VAD, tests comparatifs, recommandations par type de fichier |
+| `docs/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |

@@ -105,7 +105,7 @@ python app.py --no-debug
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `whisper` ou `granite`) |
+| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `whisper`, `granite` ou `parakeet`) |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
@@ -155,7 +155,7 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `chunk_length_s` | int | `30` | Taille de chunk Whisper |
 | `beam_size` | int | `5` | Beam search |
 | `best_of` | int | `5` | Nombre de candidats |
-| `vad_filter` | bool | `true` | VAD interne faster-whisper |
+| `vad_filter` | bool | `false` | VAD interne faster-whisper, désactivé par défaut (trop agressif pour le français, voir `docs/VAD_OR_NOT.md`) |
 | `word_timestamps` | bool | `true` | Timestamps mot-à-mot natifs faster-whisper |
 | `condition_on_previous_text` | bool | `false` | Désactivé pour limiter les boucles/hallucinations |
 | `no_speech_threshold` | float/null | `0.2` | Seuil non-parole |
@@ -214,6 +214,30 @@ tests ou campagnes ciblées avec `models.stt_backend=granite`.
   réessaie sans ce paramètre et logue un warning explicite.
 - `metadata/granite.json` trace le modèle, le device, le prompt, le fix appliqué,
   les durées et le nombre de chunks.
+
+### `parakeet`
+
+Backend STT expérimental NVIDIA Parakeet TDT 0.6B v3 via NeMo. Désactivé par
+défaut : Cohere reste le backend production normal. Activé via
+`models.stt_backend=parakeet`.
+
+Limites connues : pas de word boosting ; l'ITN NeMo peut écrire les nombres
+en lettres ; la détection automatique de langue peut basculer sur l'anglais
+avec des accents ou hésitations. Documenté dans `docs/PARAKEET_STT_INTEGRATION.md`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Activation du backend |
+| `model_id` | string | `"nvidia/parakeet-tdt-0.6b-v3"` | Identifiant HuggingFace |
+| `use_local_attention` | bool | `true` | Attention locale pour support audio long (3h au lieu de 24 min) |
+| `att_context_size` | list | `[256, 256]` | Taille du contexte d'attention (gauche, droite) |
+| `decoding_strategy` | string | `"greedy_batch"` | Stratégie de décodage (`beam` cassé pour timestamps dans NeMo 2.7.3) |
+| `decoding_beam_size` | int | `2` | Taille du beam (si `decoding_strategy=beam`) |
+| `max_chunk_duration_s` | int | `1200` | Durée max d'un chunk avant pré-découpage (20 min) |
+| `collapse_repetition_loops` | bool | `true` | Anti-hallucination (même mécanisme que Cohere/Granite) |
+
+VRAM : `gpu.parakeet_vram_mb` (défaut 8000 Mo). Dépendance : `nemo_toolkit[asr]`.
+Fichier : `metadata/parakeet.json`.
 
 #### `whisper.forced_alignment`
 
@@ -298,7 +322,7 @@ global alors que le résumé et la transcription finale n'ont pas les mêmes ris
 |---|---|---|---|
 | `enabled_summary` | bool | `true` | Active le VAD avant la transcription rapide Cohere du résumé |
 | `enabled_final` | bool | `false` | Active un filtrage VAD supplémentaire sur les chunks pyannote de la transcription finale |
-| `auto_enable_final_on_degraded` | bool | `true` | Active automatiquement le VAD final si la décision qualité est dans `auto_enable_final_levels` |
+| `auto_enable_final_on_degraded` | bool | `false` | Active automatiquement le VAD final si la décision qualité est dans `auto_enable_final_levels` (désactivé par défaut, voir `docs/VAD_OR_NOT.md`) |
 | `auto_enable_final_levels` | list | `["degrade"]` | Niveaux de qualité qui déclenchent le VAD final automatique |
 | `threshold_final_degraded` | float | `0.6` | Seuil VAD utilisé quand le VAD final est activé automatiquement sur audio dégradé |
 | `adaptive` | bool | `true` | Ajuste les seuils VAD selon `metadata/audio_quality_decision.json` |
@@ -731,6 +755,8 @@ Limites :
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
 | `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
 | `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
+| `gpu.granite_vram_mb` | `6000` | VRAM estimée Granite |
+| `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
 | `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |
 | `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre |
 

@@ -7,7 +7,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 ## Fonctionnalités
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
-- **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés.
+- **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés. Parakeet TDT 0.6B v3 (NVIDIA NeMo) en backend expérimental.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
 - **Diarisation pyannote** : tours exclusifs, checkpoints, extraits audio par locuteur, injection du genre vocal par locuteur sans écraser les choix utilisateur.
@@ -28,13 +28,14 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 |---|---|
 | Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
-| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental |
+| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental, Parakeet TDT 0.6B v3 expérimental |
 | Diarisation | pyannote.audio community-1, exclusive turns, checkpoints |
 | Audio | ffmpeg/ffprobe, librosa en subprocess, Silero VAD, Demucs optionnel |
 | LLM | opencode CLI + backend OpenAI-compatible local ou distant |
 | GPU | NVIDIA CUDA, VRAMManager, GPUSession |
 | Supervision | `/health`, `/ready`, `/metrics`, dashboard LLM optionnel |
 | Édition SRT | SRT Editor EASY optionnel |
+| Analyse VAD | `docs/VAD_OR_NOT.md` — recommandations par type de fichier |
 
 ## Prérequis
 
@@ -297,6 +298,8 @@ transcria/
 | [docs/TECHNICAL.md](docs/TECHNICAL.md) | Architecture, pipeline, API, GPU |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | États, transitions, fichiers par job |
 | [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) | Référence complète `config.yaml` |
+| [docs/VAD_OR_NOT.md](docs/VAD_OR_NOT.md) | Analyse VAD, tests, recommandations |
+| [docs/PARAKEET_STT_INTEGRATION.md](docs/PARAKEET_STT_INTEGRATION.md) | Intégration Parakeet TDT 0.6B v3 |
 | [tests/E2E_README.md](tests/E2E_README.md) | Utilisation du test E2E et options benchmark |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide de contribution |
 | [SECURITY.md](SECURITY.md) | Politique de sécurité |

@@ -4,7 +4,7 @@
 
 TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
 
-**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
+**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / Parakeet TDT 0.6B v3 expérimental (NeMo) / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
@@ -292,6 +292,8 @@ Whisper large-v3 reste disponible pour les tests, fallbacks et campagnes ciblée
 
 Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désactivé par défaut. Il utilise `AutoProcessor` + `AutoModelForSpeechSeq2Seq`, le modèle local `models/granite-speech-4.1-2b/` si présent, des prompts IBM configurables et le flag `fix_mistral_regex=true` quand la version de `transformers` le supporte. La diarisation reste portée par pyannote : Granite normal produit seulement du texte par chunk, ensuite attribué aux tours pyannote comme Cohere.
 
+**Parakeet TDT 0.6B v3** (`parakeet_transcriber.py`) est intégré comme backend expérimental `parakeet`, utilisant NeMo (`nemo_toolkit[asr]`). Il utilise `ASRModel.from_pretrained()` au lieu du pipeline Transformers `generate()`. Particularités vs les autres backends : auto-détection de langue (25 langues), ponctuation et timestamps natifs, `rel_pos_local_attn` pour l'audio long (jusqu'à 3h). NeMo ignore `device_map` → `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant chargement. Pas de word boosting possible (pas d'équivalent hotwords/biasing). Documenté dans `docs/PARAKEET_STT_INTEGRATION.md`.
+
 **Anti-hallucination STT :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé par `WhisperTranscriber`, `CohereTranscriber` et `GraniteTranscriber`. Les paramètres sont les mêmes : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
 
 **Nettoyage post-STT (`transcription_cleanup`)** : après la transcription, `Transcriber._cleanup_transcription_segments()` applique un nettoyage déterministe configurable via `workflow.transcription_cleanup` :
@@ -301,9 +303,7 @@ Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désa
 
 Les deux opérations sont tracées dans les logs du pipeline (`removed_artifacts=N, merged_short_segments=M`).
 
-Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale.
-
-**VAD final automatique sur audio dégradé** : si `workflow.vad.auto_enable_final_on_degraded=true` (défaut) et que la décision qualité est dans `auto_enable_final_levels` (défaut `["degrade"]`), le VAD final est activé automatiquement avec le seuil `threshold_final_degraded` (défaut 0.6). Ce mécanisme s'applique même si `enabled_final=false` dans la config.
+Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé également (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est désactivé par défaut. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète et les recommandations par type de fichier.
 
 Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutiliser les tours si l'audio et le modèle n'ont pas changé, et `speakers/speaker_embeddings.json` comme checkpoint acoustique par locuteur.
 
