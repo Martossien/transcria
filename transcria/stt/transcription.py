@@ -107,7 +107,14 @@ class Transcriber:
                     chunks = self._apply_vad_filter(chunks, audio, sl, vad_cfg)
                 sl.info("Mode transcription: tours pyannote (%d chunks)", len(chunks), backend=backend)
                 segments = self._transcribe_by_chunks(chunks, lang, speaker_mapping, sl)
-                chunking_mode = "pyannote_turns"
+                if not segments:
+                    sl.info("Aucun segment produit par tours pyannote → fallback 30s fixes", backend=backend)
+                    segments = self.transcriber.transcribe(audio_path, language=lang)
+                    if speaker_turns and speaker_turns.get("turns"):
+                        segments = self._apply_speakers(segments, speaker_turns, speaker_mapping)
+                    chunking_mode = "30s_fallback"
+                else:
+                    chunking_mode = "pyannote_turns"
             else:
                 # _build_chunks_from_turns a retourné None (turns vides après filtrage)
                 sl.info("Mode transcription: 30s fixes (aucun chunk pyannote valide)", backend=backend)
