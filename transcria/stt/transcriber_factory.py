@@ -6,7 +6,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "whisper", "granite")
+_STT_BACKENDS = ("cohere", "whisper", "granite", "parakeet")
 
 
 def create_transcriber(
@@ -32,6 +32,8 @@ def create_transcriber(
         return _create_whisper(config, device)
     elif backend == "granite":
         return _create_granite(config, device)
+    elif backend == "parakeet":
+        return _create_parakeet(config, device)
 
     return _create_cohere(config, device)
 
@@ -134,6 +136,32 @@ def _effective_granite_config(config: dict) -> dict:
     return _deep_merge(defaults, current)
 
 
+def _create_parakeet(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.parakeet_transcriber import ParakeetTranscriber
+
+    parakeet_cfg = _effective_parakeet_config(config)
+    att_ctx = parakeet_cfg.get("att_context_size", [256, 256])
+    return ParakeetTranscriber(
+        model_path=parakeet_cfg.get("model_id"),
+        device=device,
+        use_local_attention=parakeet_cfg.get("use_local_attention", True),
+        att_context_size=(int(att_ctx[0]), int(att_ctx[1])),
+        decoding_strategy=parakeet_cfg.get("decoding_strategy", "greedy_batch"),
+        decoding_beam_size=parakeet_cfg.get("decoding_beam_size", 2),
+        max_chunk_duration_s=parakeet_cfg.get("max_chunk_duration_s", 1200),
+        collapse_repetition_loops=parakeet_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=parakeet_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=parakeet_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=parakeet_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def _effective_parakeet_config(config: dict) -> dict:
+    current = config.get("parakeet", {})
+    defaults = get_default_config()["parakeet"]
+    return _deep_merge(defaults, current)
+
+
 def list_available_backends() -> list[str]:
     return list(_STT_BACKENDS)
 
@@ -149,4 +177,6 @@ def get_backend_vram_mb(backend: str, config: dict) -> int:
         return WhisperTranscriber.vram_for_size(size)
     elif backend == "granite":
         return int(config.get("gpu", {}).get("granite_vram_mb", get_default_config()["gpu"]["granite_vram_mb"]))
+    elif backend == "parakeet":
+        return int(config.get("gpu", {}).get("parakeet_vram_mb", get_default_config()["gpu"]["parakeet_vram_mb"]))
     return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))
