@@ -74,3 +74,5 @@ archives/
 *.mp3
 !tests/test1.mp3
 !tests/test2.mp3
+docs/BENCHMARK_MASTER_PLAN.md
+docs/DEPENDENCIES_VENV.md
