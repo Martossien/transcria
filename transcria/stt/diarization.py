@@ -57,16 +57,25 @@ class DiarizerService(BaseDiarizer):
             import torch
             from pyannote.audio import Pipeline
 
-            logger.info("Chargement pyannote sur %s...", self.device)
-            pipeline = Pipeline.from_pretrained(self.model_name)
+            hf_token = os.environ.get("HF_TOKEN") or None
+            logger.info("Chargement pyannote sur %s (token=%s)...", self.device, "oui" if hf_token else "non")
+            pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s", self.device)
 
             audio_tensor = self._load_audio_gpu(audio_path, self.device)
             logger.info("Audio chargé: %.1f min, device=%s", len(audio_tensor) / 16000 / 60, self.device)
 
-            diarization = pipeline({"waveform": audio_tensor, "sample_rate": 16000})
+            diarization = pipeline({"waveform": audio_tensor.cpu(), "sample_rate": 16000})
             annotation = diarization.speaker_diarization
+            track_count = sum(1 for _ in annotation.itertracks())
+            logger.info("Pyannote: %d tracks bruts dans l'annotation", track_count)
+            if track_count == 0:
+                logger.warning(
+                    "Pyannote: annotation vide — aucune parole détectée dans %s "
+                    "(audio trop court, trop silencieux, ou modèle de segmentation en échec)",
+                    audio_path.name,
+                )
             turns = []
             speakers_set: set[str] = set()
 
@@ -120,8 +129,11 @@ class DiarizerService(BaseDiarizer):
             logger.info("Diarization: %d locuteurs, %d segments", len(speakers_list), len(turns))
             return result
 
+        except torch.cuda.OutOfMemoryError as exc:
+            logger.error("Diarization pyannote: VRAM insuffisante — %s", exc)
+            result = {"available": False, "turns": [], "speakers": [], "error": f"OOM GPU: {exc}"}
         except Exception as exc:
-            logger.exception("Échec diarization pyannote")
+            logger.exception("Échec diarization pyannote: %s", exc)
             result = {"available": False, "turns": [], "speakers": [], "error": str(exc)}
             fs.save_json("speakers/speaker_turns.json", result)
             return result
