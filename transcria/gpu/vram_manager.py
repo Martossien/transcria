@@ -74,12 +74,26 @@ class VRAMManager:
                 return int(g.get("memory", {}).get("free", 0) * 1024)
         return 0
 
+    @staticmethod
+    def _visible_cuda_device_count() -> int | None:
+        """Retourne le nombre de GPUs CUDA visibles via CUDA_VISIBLE_DEVICES, ou None si non contraint."""
+        env = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+        if not env or env.lower() in ("", "nodevfile", "-1"):
+            return None
+        return len([x for x in env.split(",") if x.strip()])
+
     def get_best_gpu(self, required_mb: int) -> int | None:
+        visible_count = self._visible_cuda_device_count()
         best_idx, best_free = None, 0
         for g in self.get_gpu_info():
+            gpu_id = g.get("id", 0)
+            # Quand CUDA_VISIBLE_DEVICES restreint les GPUs visibles, les GPUs physiques
+            # sont remappés à cuda:0..N-1. Ne pas dépasser l'indice max valide.
+            if visible_count is not None and gpu_id >= visible_count:
+                continue
             free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
             if free_mb >= required_mb + self.min_free_mb and free_mb > best_free:
-                best_free, best_idx = free_mb, g["id"]
+                best_free, best_idx = free_mb, gpu_id
         return best_idx
 
     def _log_all_gpus(self, label: str = "") -> None:

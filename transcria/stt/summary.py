@@ -89,6 +89,8 @@ class SummaryGenerator:
             f"{seg.get('speaker', '')} {seg.get('text', seg.get('error', ''))}"
             for seg in segments
         )
+        if not transcript_text:
+            transcript_text = "(Transcription rapide indisponible — aucun segment produit)"
         speech_ratio = sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001)
         diagnostics = self._build_diagnostics(segments, speech_ratio)
         fs.save_text("summary/quick_transcript.txt", transcript_text)
