@@ -53,6 +53,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -486,13 +487,53 @@ def gpu_checkpoint(label: str) -> dict:
     return snapshot
 
 
-def _peak_vram_mb(snapshots: list[dict]) -> int | None:
-    """VRAM max consommée sur l'ensemble des snapshots (premier GPU visible)."""
+class _VRAMMonitor:
+    """Thread de surveillance VRAM en arrière-plan.
+
+    Échantillonne nvidia-smi toutes les interval_s secondes et stocke
+    les snapshots dans GPU_SNAPSHOTS pour un calcul de peak VRAM fiable.
+    """
+
+    def __init__(self, interval_s: float = 3.0):
+        self._interval = interval_s
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._counter = 0
+
+    def start(self):
+        self._thread = threading.Thread(target=self._run, daemon=True, name="vram-monitor")
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+        if self._thread:
+            self._thread.join(timeout=10)
+
+    def _run(self):
+        while not self._stop.is_set():
+            self._stop.wait(self._interval)
+            if self._stop.is_set():
+                break
+            self._counter += 1
+            get_gpu_snapshot(f"vram-monitor-{self._counter:03d}")
+
+
+def _peak_vram_mb(snapshots: list[dict], gpu_id: str | None = None) -> int | None:
+    """VRAM max consommée sur l'ensemble des snapshots.
+
+    Si gpu_id est fourni, retourne le peak sur ce GPU uniquement.
+    Sinon, retourne le peak global (tous GPUs confondus).
+    """
+    target_ids = None
+    if gpu_id is not None:
+        target_ids = {str(gpu_id), str(int(gpu_id))} if gpu_id.isdigit() else {str(gpu_id)}
     peak = None
     for snap in snapshots:
         gpus = snap.get("gpus") or []
-        if gpus:
-            used = gpus[0]["mem_used_mb"]
+        for g in gpus:
+            if target_ids is not None and str(g["id"]) not in target_ids:
+                continue
+            used = g["mem_used_mb"]
             if peak is None or used > peak:
                 peak = used
     return peak
@@ -945,7 +986,13 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "timings": clean_timings,
 
         # VRAM
-        "vram_peak_mb": _peak_vram_mb(GPU_SNAPSHOTS),
+        "vram_peak_mb": _peak_vram_mb(
+            GPU_SNAPSHOTS,
+            gpu_id=os.environ.get("CUDA_VISIBLE_DEVICES", "")
+            if os.environ.get("CUDA_VISIBLE_DEVICES", "")
+            and "," not in os.environ.get("CUDA_VISIBLE_DEVICES", "")
+            else None,
+        ),
         "vram_snapshots": [
             {
                 "label": s["label"],
@@ -1170,6 +1217,9 @@ def main() -> int:
 
     section("État initial GPU")
     gpu_checkpoint("initial")
+
+    vram_monitor = _VRAMMonitor(interval_s=3.0)
+    vram_monitor.start()
 
     # ── Initialisation ───────────────────────────────────────────────────────
     step("Initialisation Flask / DB / Config")
@@ -1609,6 +1659,8 @@ def main() -> int:
             traceback.print_exc()
 
         finally:
+            vram_monitor.stop()
+
             # ── JSON de sortie ───────────────────────────────────────────────
             if args.output_json and fs:
                 try:

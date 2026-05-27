@@ -6,17 +6,24 @@ Lance les combinaisons d'options de prétraitement sur un ou plusieurs
 fichiers audio, en parallèle sur plusieurs GPUs.  Chaque combinaison appelle
 test_e2e_workflow.py en sous-processus isolé.
 
-Voir docs/BENCHMARK_PLAN.md pour la description complète.
+Voir docs/BENCHMARK.md pour la description complète des résultats et recommandations.
 
 Matrices disponibles (--matrix) :
   base     : 24 combos standard (5 dimensions : scene/sep/norm/filter/stt)
   extended : 12 combos exploration (diarization, décodage Whisper, Cohere rp)
-  all      : base + extended (36 combos)
+  stt      : 24 combos Profil A (4 backends STT × 3 diarizations × 2 VAD)
+  all      : base + extended + stt (72 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
     python scripts/bench_audio.py \\
         --audio tests/test1.mp3 \\
         --gpu-pool 3,4,5,6
+
+Benchmark Profil A (4 backends × 3 diarizations) sur test2.mp3 :
+    python scripts/bench_audio.py \\
+        --audio tests/test2.mp3 \\
+        --matrix stt \\
+        --gpu-pool 0,1,2,3,4,5,6,7
 
 Matrice étendue pour fichier extrême (ex : test5.wav) :
     python scripts/bench_audio.py \\
@@ -27,7 +34,7 @@ Matrice étendue pour fichier extrême (ex : test5.wav) :
 Sous-ensemble de combos :
     python scripts/bench_audio.py \\
         --audio tests/test2.mp3 \\
-        --combos 001,005,E01,E04
+        --combos 001,005,S01,S07
 
 Reprendre un bench interrompu :
     python scripts/bench_audio.py \\
@@ -240,6 +247,62 @@ assert len(EXTENDED_COMBO_MATRIX) == 12, (
     f"La matrice étendue devrait contenir 12 combos, pas {len(EXTENDED_COMBO_MATRIX)}"
 )
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Matrice STT — Profil A : 4 backends × 3 diarisations × 2 VAD (24 combos)
+#
+# Objectif : comparer tous les backends STT avec chaque backend de diarisation
+# et avec/sans VAD résumé sur un audio propre (≤ 4 locuteurs pour inclure Sortformer).
+#
+# Dimensions :
+#   stt              : cohere, whisper, granite, parakeet (4)
+#   diarization      : pyannote, sortformer, OFF (3)
+#   vad_summary      : ON (défaut), OFF (2)
+#
+# IDs au format S01..S24. Le champ "diarization_backend" est passé à l'E2E via
+# --config-override models.diarization_backend=<value> quand ce n'est pas pyannote
+# (pyannote étant le défaut). Quand "off", --skip-diarization est utilisé.
+# Quand VAD OFF, --config-override workflow.vad.enabled_summary=false est ajouté.
+# ─────────────────────────────────────────────────────────────────────────────
+_STT_BACKENDS = ["cohere", "whisper", "granite", "parakeet"]
+_DIARIZATION_OPTIONS = [
+    {"key": "pyannote", "skip": False, "override": None},
+    {"key": "sortformer", "skip": False, "override": "models.diarization_backend=sortformer"},
+    {"key": "off", "skip": True, "override": None},
+]
+_VAD_OPTIONS = [
+    {"key": "vad-on", "override": None},
+    {"key": "vad-off", "override": "workflow.vad.enabled_summary=false"},
+]
+
+STT_COMBO_MATRIX: list[dict] = []
+_s_idx = 0
+for _stt in _STT_BACKENDS:
+    for _dia in _DIARIZATION_OPTIONS:
+        for _vad in _VAD_OPTIONS:
+            _s_idx += 1
+            _overrides = []
+            if _dia["override"] is not None:
+                _overrides.append(_dia["override"])
+            if _vad["override"] is not None:
+                _overrides.append(_vad["override"])
+            STT_COMBO_MATRIX.append({
+                "id": f"S{_s_idx:02d}",
+                "stt": _stt,
+                "scene": False,
+                "sep": False,
+                "norm": False,
+                "filter": False,
+                "skip_diarization": _dia["skip"],
+                "diarization_backend": _dia["key"],
+                "vad_summary": _vad["key"],
+                "overrides": _overrides,
+                "label_extra": f"{_stt}+{_dia['key']}+{_vad['key']}",
+            })
+
+assert len(STT_COMBO_MATRIX) == 24, (
+    f"La matrice STT devrait contenir 24 combos, pas {len(STT_COMBO_MATRIX)}"
+)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Arguments
@@ -259,9 +322,11 @@ def parse_args() -> argparse.Namespace:
 
     # ── Sélection des combos ─────────────────────────────────────────────────
     parser.add_argument(
-        "--matrix", choices=["base", "extended", "all"], default="base",
+        "--matrix", choices=["base", "extended", "stt", "all"], default="base",
         help="Matrice de combos : base (24 combos standard), "
-             "extended (12 combos exploration), all (36 combos) — défaut: base",
+             "extended (12 combos exploration), "
+              "stt (24 combos Profil A : 4 backends × 3 diarizations × 2 VAD), "
+             "all (48 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,
@@ -360,20 +425,24 @@ _GROUP_RANGES = {"A": range(1, 9), "B": range(9, 17), "C": range(17, 25)}
 
 
 def _normalize_combo_id(cid: str) -> str:
-    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'E1' → 'E01'."""
+    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01'."""
     s = cid.strip()
     if s.upper().startswith("E"):
         num = s[1:].lstrip("0") or "0"
         return f"E{int(num):02d}"
+    if s.upper().startswith("S"):
+        num = s[1:].lstrip("0") or "0"
+        return f"S{int(num):02d}"
     return s.zfill(3)
 
 
 def select_combos(args: argparse.Namespace) -> list[dict]:
-    # Sélection de la matrice source
     if args.matrix == "extended":
         pool = list(EXTENDED_COMBO_MATRIX)
+    elif args.matrix == "stt":
+        pool = list(STT_COMBO_MATRIX)
     elif args.matrix == "all":
-        pool = list(COMBO_MATRIX) + list(EXTENDED_COMBO_MATRIX)
+        pool = list(COMBO_MATRIX) + list(EXTENDED_COMBO_MATRIX) + list(STT_COMBO_MATRIX)
     else:
         pool = list(COMBO_MATRIX)
 
@@ -428,7 +497,7 @@ def build_e2e_cmd(
     ]
 
     if gpu_id is not None:
-        cmd.extend(["--gpu", str(gpu_id)])
+        cmd.extend(["--gpu", "0"])
 
     if arbitrage_port is not None:
         cmd.extend(["--arbitrage-port", str(arbitrage_port)])
@@ -470,6 +539,9 @@ def combo_label(combo: dict) -> str:
         return f"{combo['id']}+{label_extra}"
 
     parts = [combo["id"], combo["stt"]]
+    dia = combo.get("diarization_backend")
+    if dia and dia != "pyannote":
+        parts.append(f"dia={dia}")
     if combo.get("skip_diarization"):
         parts.append("no-dia")
     if combo["scene"]:
@@ -547,6 +619,8 @@ def run_one_combo(
     t0 = time.monotonic()
 
     env = os.environ.copy()
+    if gpu_id is not None:
+        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
 
     with open(log_file, "w", encoding="utf-8") as lf:
         lf.write(f"# Combo {combo['id']} — {label}\n")
@@ -652,7 +726,7 @@ def run_parallel(
 # Résumé CSV + Markdown
 # ─────────────────────────────────────────────────────────────────────────────
 _CSV_FIELDS = [
-    "combo_id", "stt_backend", "scene", "sep", "norm", "filter",
+    "combo_id", "stt_backend", "diarization_backend", "vad_summary", "scene", "sep", "norm", "filter",
     "skip_diarization", "overrides",
     "status",
     "init_s", "summary_s", "pipeline_s", "total_s",
@@ -675,9 +749,23 @@ def _extract_row(r: dict) -> dict:
     )
 
     overrides_list = r.get("overrides", [])
+    cfg_overrides = r.get("config_overrides") or {}
+    dia_be = r.get("diarization_backend", "")
+    if not dia_be:
+        dia_be = cfg_overrides.get("models.diarization_backend", "")
+    if r.get("skip_diarization", False):
+        dia_be = "off"
+    if not dia_be:
+        dia_be = "pyannote"
+    vad_summary = r.get("vad_summary", "")
+    if not vad_summary:
+        vad_off = "workflow.vad.enabled_summary" in cfg_overrides and cfg_overrides["workflow.vad.enabled_summary"] is False
+        vad_summary = "vad-off" if vad_off else "vad-on"
     return {
         "combo_id":             r.get("combo_id", "?"),
         "stt_backend":          r.get("stt_backend", r.get("stt", "?")),
+        "diarization_backend":  dia_be,
+        "vad_summary":          vad_summary,
         "scene":                int(bool(r.get("audio_scene", r.get("scene", False)))),
         "sep":                  int(bool(r.get("source_separation", r.get("sep", False)))),
         "norm":                 int(bool(r.get("audio_normalization", r.get("norm", False)))),
@@ -740,8 +828,8 @@ def write_summary_md(
         "",
         "## Résultats",
         "",
-        "| ID  | STT     | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | VRAM | segs | mots | corr | zip | overrides |",
-        "|-----|---------|----|----|-----|-----|--------|--------|------|------|------|-------|------|------|------|------|-----|-----------|",
+        "| ID  | STT     | dia      | VAD    | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | VRAM  | segs | mots | corr | zip | overrides |",
+        "|-----|---------|----------|--------|----|----|-----|-----|--------|--------|------|------|------|-------|-------|------|------|------|-----|-----------|",
     ]
 
     for row in rows:
@@ -754,9 +842,12 @@ def write_summary_md(
             return str(v)
 
         ovr = row.get("overrides", "") or "—"
+        dia = row.get("diarization_backend", "") or "—"
         lines.append(
             f"| {row['combo_id']} "
             f"| {row['stt_backend']:<7} "
+            f"| {dia:<8} "
+            f"| {row.get('vad_summary', '—'):<7} "
             f"| {row['scene']} "
             f"| {row['sep']} "
             f"| {row['norm']} "
@@ -767,7 +858,7 @@ def write_summary_md(
             f"| {_s('summary_s', 's')} "
             f"| {_s('pipeline_s', 's')} "
             f"| {_s('total_s', 's')} "
-            f"| {_s('vram_peak_mb', 'M')} "
+            f"| {_s('vram_peak_mb', 'M'):>5} "
             f"| {_s('raw_segments')} "
             f"| {_s('raw_words')} "
             f"| {row['corrected_exists']} "
@@ -784,6 +875,7 @@ def write_summary_md(
         "## Légende",
         "",
         "sc=audio_scene · sep=source_separation(demucs) · nrm=normalisation · flt=filtre_scène",
+        "dia=backend diarisation (pyannote par défaut, sortformer, off)",
         "no-dia=diarization désactivée pour ce combo · overrides=config-overrides spécifiques",
         "corr=SRT corrigé présent · zip=export ZIP présent",
         "",
@@ -804,19 +896,21 @@ def print_console_summary(results: list[dict]) -> None:
     print(f"\n{'=' * 80}")
     print(f"  BENCH TERMINÉ — {ok_count} OK / {fail_count} échec(s) / {len(rows)} combos")
     print(f"{'=' * 80}")
-    print(f"  {'ID':>3}  {'STT':<8} sc sep nrm flt dia  {'status':<8}  {'total':>7}  {'mots':>5}  overrides")
-    print(f"  {'-' * 72}")
+    print(f"  {'ID':>3}  {'STT':<8} {'dia':<9} {'VAD':<7} sc sep nrm flt  {'status':<8}  {'total':>7}  {'VRAM':>6}  {'mots':>5}  overrides")
+    print(f"  {'-' * 100}")
     for row in rows:
         total = f"{row['total_s']}s" if row["total_s"] else "—"
+        vram = f"{row['vram_peak_mb']}M" if row.get("vram_peak_mb") else "—"
         mots = str(row["raw_words"]) if row["raw_words"] else "—"
         mark = "OK  " if row["status"] == "ok" else "FAIL"
-        dia_flag = "0" if row["skip_diarization"] else "1"
+        dia = row.get("diarization_backend", "") or "pyannote"
+        vad = row.get("vad_summary", "—")
         ovr = row.get("overrides") or ""
         ovr_display = ovr[:30] + "…" if len(ovr) > 30 else ovr
         print(
-            f"  {row['combo_id']:>3}  {row['stt_backend']:<8} "
-            f" {row['scene']}   {row['sep']}   {row['norm']}   {row['filter']}  {dia_flag}  "
-            f"{mark}      {total:>7}  {mots:>5}  {ovr_display}"
+            f"  {row['combo_id']:>3}  {row['stt_backend']:<8} {dia:<9} {vad:<7}"
+            f" {row['scene']}   {row['sep']}   {row['norm']}   {row['filter']}  "
+            f"{mark}      {total:>7}  {vram:>6}  {mots:>5}  {ovr_display}"
         )
 
 

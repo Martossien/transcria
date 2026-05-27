@@ -61,6 +61,14 @@ docs/archive/
 docs/lexique_centralise_conception.md
 docs/private/
 
+# Scripts expérimentaux (bench hybride/hotwords — travaux en cours, non publiés)
+scripts/compare_stt_segments.py
+scripts/prepare_hotwords_bench.py
+scripts/analyze_hotwords_bench.py
+scripts/arbitrate_hybrid_llm.py
+scripts/build_hybrid_transcript.py
+scripts/prepare_hybrid_llm_bench.py
+
 # Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
 archives/
 
