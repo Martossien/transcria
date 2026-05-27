@@ -90,11 +90,14 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
     }
     flags = [str(flag) for flag in preflight.get("flags", []) if flag]
     reasons = [flag_labels.get(flag, flag.replace("_", " ")) for flag in flags]
-    message = {
-        "ok": "Les caractéristiques audio ne montrent pas de risque majeur.",
-        "suspect": "La transcription reste possible, mais certains passages pourront demander une vérification.",
-        "degrade": "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages.",
-    }.get(level, "Diagnostic audio disponible.")
+    if "audio_tres_faible" in flags and "risque_transcription_non_fiable" in flags:
+        message = "Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable."
+    else:
+        message = {
+            "ok": "Les caractéristiques audio ne montrent pas de risque majeur.",
+            "suspect": "La transcription reste possible, mais certains passages pourront demander une vérification.",
+            "degrade": "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages.",
+        }.get(level, "Diagnostic audio disponible.")
 
     return {
         "level": level,
