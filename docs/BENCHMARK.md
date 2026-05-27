@@ -382,27 +382,88 @@ l'utilisateur confirme ≤ 4 locuteurs et que le backend STT n'est pas Cohere.
 
 ### 9.1 bench_audio.py — orchestrateur
 
-Lance des matrices de combos en parallèle sur un pool de GPUs (1 GPU dédié par combo
-via `CUDA_VISIBLE_DEVICES`).
+Lance des matrices de combos en parallèle sur un pool de GPUs. Chaque combo reçoit
+**1 GPU dédié** via `CUDA_VISIBLE_DEVICES` — les modèles s'y chargent sans interférence.
+
+#### Fonctionnement du parallélisme
+
+```
+GPU pool : [0, 1, 2, 3, 4, 5, 6, 7]   ← déclaré via --gpu-pool
+Workers  : 8 (= nb GPUs par défaut)    ← ou --workers N
+
+Affectation round-robin :
+  Worker 0 → GPU 0   Worker 1 → GPU 1   ...   Worker 7 → GPU 7
+  (chaque worker prend les combos de la file d'attente l'un après l'autre)
+
+Si --workers > nb GPUs (ex: 16 workers, 8 GPUs) :
+  Worker 0 → GPU 0   Worker 8 → GPU 0   (2 combos en simultané sur GPU 0)
+  → Risque d'OOM si 2 combos dépassent 24 Go ensemble. À éviter.
+```
+
+**Règle pratique** : `--workers` = nb GPUs. Ne pas dépasser sauf si les combos sont
+légers (ex: bench VAD seul, pas de diarisation).
+
+#### Combien de temps ?
+
+Sur 8× RTX 3090 (24 Go), avec `--skip-llm` (recommandé pour bench pur) :
+
+| Matrice | Combos | Durée estimée (8 GPUs) | Durée estimée (1 GPU) |
+|---|---|---|---|
+| `stt` | 24 | ~8-12 min | ~60-90 min |
+| `base` | 24 | ~8-12 min | ~60-90 min |
+| `extended` | 12 | ~4-6 min | ~30-45 min |
+| `all` | 72 | ~25-40 min | ~3-5 h |
+
+Ces durées varient selon la longueur de l'audio et les backends (Parakeet est ~63% plus
+lent que Cohere).
+
+#### Commandes
 
 ```bash
-# Pré-requis : libérer les GPUs
+# ── Préparation ───────────────────────────────────────────────────────────────
+# Arrêter le service pour libérer les GPUs
 sudo systemctl stop transcria.service
-sudo systemctl stop transcria-arbitrage-llm   # optionnel
+sudo systemctl stop transcria-arbitrage-llm   # libère GPU 0-2 si LLM active
 
-# Matrice Profil A — 4 STT × 3 diarizations × 2 VAD = 24 combos
+# Vérifier quels GPUs sont libres
+nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits
+
+# ── Matrice STT — 24 combos sur 4 GPUs ───────────────────────────────────────
+# 4 STT × 3 diarizations × 2 VAD = 24 combos, 4 parallèles
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix stt \
-  --gpu-pool 0,1,2,3
+  --gpu-pool 3,4,5,6 \
+  --skip-llm
 
-# Sur 1 GPU seulement
+# ── Matrice complète — 72 combos sur 8 GPUs ──────────────────────────────────
+# base + extended + stt = 72 combos, 8 parallèles
+venv/bin/python scripts/bench_audio.py \
+  --audio tests/test2.mp3 \
+  --matrix all \
+  --gpu-pool 0,1,2,3,4,5,6,7 \
+  --skip-llm
+
+# ── Campagne multi-fichiers ───────────────────────────────────────────────────
+# Passer plusieurs fichiers : les combos de chaque fichier tournent en parallèle,
+# les fichiers sont traités les uns après les autres.
+venv/bin/python scripts/bench_audio.py \
+  --audio tests/test2.mp3 tests/test5.wav audio_bruit.wav \
+  --matrix stt \
+  --gpu-pool 0,1,2,3,4,5,6,7 \
+  --skip-llm
+
+# ── Sur 1 seul GPU (pas de serveur multi-GPU) ─────────────────────────────────
+# Les 24 combos s'exécutent séquentiellement sur GPU 3
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix stt \
-  --gpu-pool 3
+  --gpu-pool 3 \
+  --workers 1 \
+  --skip-llm
 
-# Reprendre un bench interrompu
+# ── Reprendre un bench interrompu ─────────────────────────────────────────────
+# Saute automatiquement les combos dont le JSON existe déjà
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix stt \
@@ -410,30 +471,45 @@ venv/bin/python scripts/bench_audio.py \
   --resume \
   --gpu-pool 0,1,2,3
 
-# Sous-ensemble de combos
+# ── Relancer uniquement certains combos ───────────────────────────────────────
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix stt \
-  --combos S01,S04,S10 \
+  --combos S01,S04,S10,S22 \
   --gpu-pool 0,1
 
-# Vérifier les commandes sans les lancer
+# ── Vérifier les commandes sans les lancer ────────────────────────────────────
 venv/bin/python scripts/bench_audio.py \
-  --audio tests/test2.mp3 --matrix stt --dry-run
+  --audio tests/test2.mp3 --matrix all --dry-run
 
-# Relancer le service
+# ── Relancer le service ───────────────────────────────────────────────────────
 sudo systemctl start transcria-arbitrage-llm
 sudo systemctl start transcria.service
+```
+
+#### Détection automatique des GPUs
+
+Sans `--gpu-pool`, le script interroge `nvidia-smi` et retient les GPUs ayant
+au moins `--min-free-vram-mb` de VRAM libre (défaut : 10 000 Mo).
+
+```bash
+# Inclure les GPUs partiellement chargés (ex: LLM légère en cours)
+venv/bin/python scripts/bench_audio.py \
+  --audio tests/test2.mp3 \
+  --matrix stt \
+  --min-free-vram-mb 6000   # inclut tout GPU avec > 6 Go libres
 ```
 
 **Options principales** :
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD), `extended` (12 paramètres décodage), `all` (72) |
+| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD), `extended` (12 décodage), `all` (72) |
 | `--gpu-pool` | auto-détection | GPUs à utiliser, ex : `0,1,2,3` |
-| `--workers` | nb GPUs | Pipelines parallèles (peut dépasser nb GPUs) |
-| `--with-llm` | OFF | Active résumé + correction LLM |
+| `--workers` | nb GPUs | Pipelines parallèles — ne pas dépasser nb GPUs sauf cas particulier |
+| `--min-free-vram-mb` | 10 000 | Seuil VRAM libre pour l'auto-détection GPU |
+| `--with-llm` | OFF | Active résumé + correction LLM (ralentit ×2-3) |
+| `--skip-llm` via E2E | — | Désactive LLM côté worker (recommandé pour bench pur) |
 | `--resume` | OFF | Saute les combos dont le JSON existe déjà |
 | `--keep` | OFF | Conserve les jobs après le run |
 | `--combos` | tous | Sous-ensemble, ex : `S01,S04,E03` |
