@@ -259,7 +259,7 @@ jobs/<job_id>/
 │   ├── transcription.srt          # SRT final (Cohere/Whisper/Granite + speakers + nettoyage post-STT)
 │   ├── transcription_corrigee.srt # SRT après correction opencode (si mode qualité)
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
-│   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, gpu_index, language, segments count, speaker_count, vad_final_enabled)
+│   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, chunking_forced_30s_reason, gpu_index, language, segments, speaker_count, vad_final_enabled)
 │   ├── whisper_hotwords.json      # Audit hotwords Whisper issus du lexique si option expérimentale activée
 │   ├── cohere_lexicon_biasing.json # Audit biasing Trie Cohere issu du lexique si option expérimentale activée
   │   ├── granite.json               # Métadonnées backend Granite si utilisé

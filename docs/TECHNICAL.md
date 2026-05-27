@@ -295,6 +295,8 @@ Whisper large-v3 reste disponible pour les tests, fallbacks et campagnes ciblée
 
 Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désactivé par défaut. Il utilise `AutoProcessor` + `AutoModelForSpeechSeq2Seq`, le modèle local `models/granite-speech-4.1-2b/` si présent, des prompts IBM configurables et le flag `fix_mistral_regex=true` quand la version de `transformers` le supporte. La diarisation reste portée par pyannote : Granite normal produit seulement du texte par chunk, ensuite attribué aux tours pyannote comme Cohere.
 
+**Fallback automatique Granite sur audio dégradé :** `PipelineService._config_for_mode()` bascule de `granite` vers le backend de production configuré dans `self.config` (ou `cohere` si celui-ci est aussi `granite`) quand `audio_quality_decision.json` indique `level=degrade` ou que `audio_preflight.json` contient le flag `audio_tres_faible`. Le backend de fallback effectivement utilisé est logué et tracé dans `metadata/transcription_metadata.json`.
+
 **Parakeet TDT 0.6B v3** (`parakeet_transcriber.py`) est intégré comme backend expérimental `parakeet`, utilisant NeMo (`nemo_toolkit[asr]`). Il utilise `ASRModel.from_pretrained()` au lieu du pipeline Transformers `generate()`. Particularités vs les autres backends : auto-détection de langue (25 langues), ponctuation et timestamps natifs, `rel_pos_local_attn` pour l'audio long (jusqu'à 3h). NeMo ignore `device_map` → `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant chargement. Pas de word boosting possible (pas d'équivalent hotwords/biasing). Documenté dans `docs/PARAKEET_STT_INTEGRATION.md`.
 
 **Anti-hallucination STT :** `anti_hallucination.py` fournit `collapse_repetition_loops()` utilisé par `WhisperTranscriber`, `CohereTranscriber` et `GraniteTranscriber`. Les paramètres sont les mêmes : `repetition_loop_min_repeats` (défaut 4) et `repetition_loop_max_phrase_words` (défaut 10), avec `collapse_repetition_loops` activé par défaut et `repetition_loop_keep_repeats` (défaut 2) contrôlant le nombre de répétitions conservées.
@@ -658,7 +660,8 @@ Deux modes de chunking :
   - `_build_chunks_from_turns()` : découpe l'audio par tours exclusifs
   - `_apply_vad_filter()` : filtre les chunks VAD Silero
   - `_transcribe_by_chunks()` : transcrit chaque chunk avec le backend choisi
-- **Mode 30s_fallback** : chunking 30s fixe + `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
+  - **Exception `audio_tres_faible`** : si le preflight détecte ce flag, le mode pyannote_turns est bypassé même si `exclusive_turns` est présent (pyannote ne détecte souvent qu'un tour ~5 s, limitant la transcription à ~17 % du signal). La cause est tracée dans `transcription_metadata.json` sous `chunking_forced_30s_reason`.
+- **Mode 30s_fallback** : chunking 30s fixe + `_apply_speakers()` (overlap matching). Utilisé si `exclusive_turns` est absent, si pyannote est indisponible, ou si le flag `audio_tres_faible` force ce mode.
 
 | Méthode | Description |
 |---|---|
@@ -692,11 +695,16 @@ Deux modes de chunking :
 | `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
 
 **`sortformer_diarizer.py` — `SortformerDiarizer(BaseDiarizer)`**
+
+Constantes de module : `_DEFAULT_MODEL_ID` (repo HF), `_DEFAULT_NEMO_FILE` (nom du fichier `.nemo` attendu), `_DEFAULT_LOCAL_DIR = "models/sortformer-4spk-v2.1"` (répertoire local par convention).
+
 | Méthode | Description |
 |---|---|
-| `__init__(config, device)` | Appelle `super().__init__()` ; lit `sortformer.model_id` |
+| `__init__(config, device)` | Appelle `super().__init__()` ; lit `sortformer.model_id` (défaut `_DEFAULT_MODEL_ID`) |
 | `available` | Vérifie `nemo.collections.asr.models.SortformerEncLabelModel` importable |
-| `diarize(job, audio_path)` | `torch.cuda.set_device()` → `SortformerEncLabelModel.from_pretrained()` → `model.diarize(str(audio_path), verbose=False)` → `_parse_sortformer_output()` → sauvegarde |
+| `diarize(job, audio_path)` | `torch.cuda.set_device()` → `_load_model()` → `model.diarize(str(audio_path), verbose=False)` → `_parse_sortformer_output()` → sauvegarde |
+| `_load_model()` | Stratégie de chargement : si `model_id` contient `/` → `from_pretrained()` HF avec fallback sur `_find_nemo_file()` si HF échoue ; sinon → `_find_nemo_file()` + `restore_from()`. Retourne `None` si aucun fichier trouvé. |
+| `_find_nemo_file(model_id)` | Cherche `*.nemo` dans l'ordre : (1) `model_id` lui-même si fichier `.nemo`, (2) dossier `model_id/*.nemo`, (3) cache HF `~/.cache/huggingface/hub/models--{namespace}--{repo}/snapshots/*/` (ne scanne que les sous-dossiers), (4) `_DEFAULT_LOCAL_DIR/*.nemo` avec vérification exacte de `_DEFAULT_NEMO_FILE` en priorité |
 | `_parse_sortformer_output(lines)` | Convertit `["start end speaker_N"]` en `[{start, end, speaker, duration}]`, ignore les lignes vides/malformées/durée zéro, trie par timestamp |
 | `_normalize_speaker_id(nemo_id)` | `"speaker_0"` → `"SPEAKER_00"` |
 | `_parse_gpu_index(device)` | `"cuda:1"` → `1`, `"cpu"` → `None` |
@@ -1008,6 +1016,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `run_process(job, audio_path, mode)` | Lance le pipeline complet de traitement pour un job déjà chargé |
 | `_run_pipeline_steps(job, audio_path, mode, sl)` | 7 pré-traitements audio puis transcription : preflight → scène → séparation → filtrage → débruitage → normalisation → transcription, puis étapes séquentielles |
 | `_define_pipeline_steps(job, audio_path, mode)` | Définit les étapes actives selon le mode (`quality` ajoute la diarisation) |
+| `_config_for_mode(mode, job)` | Calcule la config effective pour le mode demandé. Si le backend est `granite` et que l'audio est `degrade` ou `audio_tres_faible`, bascule automatiquement sur le backend de production `self.config` (fallback `cohere` si nécessaire). Injecte aussi les hotwords Whisper et le biasing Cohere si activés. |
 | `_release_arbitrage_llm()` | Arrête la LLM d'arbitrage en fin de pipeline (`is_arbitrage_llm_running()` → `stop_arbitrage_llm()`) |
 
 **`config_service.py` — `ConfigService`** (toutes méthodes statiques)
@@ -1276,7 +1285,7 @@ jobs/{uuid}/
     transcription.srt            # SRT brut (Cohere, Whisper ou Granite + speakers appliqués)
     transcription_corrigee.srt   # SRT corrigé (opencode)
     transcription_segments.json  # Segments détaillés
-    transcription_metadata.json  # Métadonnées post-transcription (nettoyage artefacts, fusion segments)
+    transcription_metadata.json  # Métadonnées post-transcription (backend, chunking_mode, chunking_forced_30s_reason si audio_tres_faible, vad_final_enabled)
     speakers_map.json            # Mapping speakers
     correction_report.md         # Rapport de correction
   summary/

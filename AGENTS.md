@@ -123,7 +123,7 @@ transcria/
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
       diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + checkpoints
-      sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs)
+      sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
@@ -252,7 +252,9 @@ Les références `qwen_*` encore présentes sont des aliases de compatibilité a
 
 **Mode pyannote_turns (prioritaire) :** si `speaker_turns.json` contient `exclusive_turns` (produit par la phase summary), `Transcriber.transcribe()` charge l'audio en mémoire une seule fois, découpe par tours pyannote, et passe des `np.ndarray` directement au backend STT actif (Cohere, Whisper ou Granite). Chaque chunk a un speaker connu ; si des timestamps mots existent, `SpeakerPunctuationRealigner` peut corriger un segment qui traverse plusieurs tours.
 
-**Mode 30s_fallback :** si `exclusive_turns` est absent (premier run ou pyannote indisponible), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
+**Exception `audio_tres_faible` :** si le preflight détecte le flag `audio_tres_faible`, `Transcriber` force le mode 30s_fallback même si `exclusive_turns` est disponible. Sur ce type d'audio, pyannote ne détecte souvent qu'un seul tour court (~5 s), ce qui limiterait la transcription à ~17 % du signal. La cause est tracée dans `metadata/transcription_metadata.json` sous le champ `chunking_forced_30s_reason`.
+
+**Mode 30s_fallback :** si `exclusive_turns` est absent (premier run, pyannote indisponible, ou flag `audio_tres_faible`), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
 
 **Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute les étapes suivantes avant la transcription finale :
 0. `_run_audio_preflight()` — analyse pré-STT rapide (RMS, SNR estimé, bande passante, clipping, flags `audio_faible`/`audio_tres_faible`/`snr_faible`), sauvegarde `metadata/audio_preflight.json`. Retourne les flags utilisés par les étapes suivantes.
@@ -279,6 +281,8 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 **Anti-hallucination STT :** `CohereTranscriber`, `WhisperTranscriber` et `GraniteTranscriber` appliquent `collapse_repetition_loops` depuis `anti_hallucination.py` avec leurs sections de config respectives (`cohere`, `whisper`, `granite`). Les backends partagent la même logique de détection/réduction des boucles répétitives.
 
 **Granite expérimental :** `models.stt_backend=granite` active IBM Granite Speech 4.1 2B normal. La diarisation reste pyannote ; Granite normal est utilisé comme ASR texte pur. `granite.fix_mistral_regex=true` est passé à `AutoProcessor` quand supporté, avec fallback logué si la version `transformers` locale ne connaît pas encore ce paramètre. Les métadonnées sont écrites dans `metadata/granite.json`.
+
+**Limitation Granite sur audio dégradé :** `PipelineService._config_for_mode()` bascule automatiquement de Granite vers le backend de production configuré dans `self.config` (ou `cohere` si celui-ci est aussi `granite`) quand `audio_quality_decision.json` indique `level=degrade` ou que `audio_preflight.json` contient le flag `audio_tres_faible`. Granite est expérimental et peu fiable sur ces types d'audio. Le backend de fallback effectivement utilisé est tracé dans le log (`Granite exclu pour audio dégradé (job=...), fallback → ...`).
 
 **Nettoyage post-STT (`transcription_cleanup`) :** si `workflow.transcription_cleanup.enabled=true` (défaut), `Transcriber._cleanup_transcription_segments()` supprime les artefacts de sous-titrage (watermarks de diffusion : `"Sous-titrage ST' 501"`, `"FR 2021"`, `"Société Radio-Canada"`, etc.) et fusionne les micro-segments courts adjacents (même locuteur, gap court, texte bref). Les patterns d'artefacts sont configurables via `workflow.transcription_cleanup.subtitle_artifact_patterns` (liste de regex, défaut `[]` = utiliser les patterns intégrés) et `subtitle_artifact_words` (liste de phrases, défaut `[]` = utiliser les mots-clés intégrés). Les paramètres de fusion sont `merge_short_segments`, `short_segment_max_s` (défaut 0.45), `short_segment_max_words` (défaut 2), `merge_gap_s` (défaut 0.5), `merge_max_chars` (défaut 220), `remove_subtitle_artifacts` (défaut true).
 
