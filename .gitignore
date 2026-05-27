@@ -59,8 +59,7 @@ docs/archive/
 
 # Documents de conception internes (ne pas publier)
 docs/lexique_centralise_conception.md
-docs/srt_review_hotwords_bench.md
-docs/hybrid_bench_notes.md
+docs/private/
 
 # Archives (benchmarks, audio tests, docs historiques, scripts obsolètes)
 archives/
@@ -74,5 +73,4 @@ archives/
 *.mp3
 !tests/test1.mp3
 !tests/test2.mp3
-docs/BENCHMARK_MASTER_PLAN.md
 docs/DEPENDENCIES_VENV.md
