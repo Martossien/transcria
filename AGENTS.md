@@ -121,7 +121,10 @@ transcria/
       reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
-      diarization.py        # DiarizerService — pyannote + exclusive_speaker_diarization + checkpoints
+      base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
+      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + checkpoints
+      sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs)
+      diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
     context/

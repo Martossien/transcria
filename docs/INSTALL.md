@@ -188,7 +188,8 @@ Le venv contient **tous les composants nécessaires** au pipeline complet :
 | Composant | Package | Rôle |
 |---|---|---|
 | ASR | `torch`, `transformers`, `accelerate`, `faster-whisper` | Cohere Transcribe + Whisper large-v3 qualité/fallback |
-| Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs (~2 Go VRAM) |
+| Diarisation | `pyannote.audio`, `speechbrain` | Détection de locuteurs pyannote (~2 Go VRAM) — backend par défaut |
+| Diarisation alt. | `nemo_toolkit[asr]` | Diarisation Sortformer NVIDIA (~3.5 Go VRAM) — optionnel |
 | Audio | `librosa`, `soundfile`, `torchaudio`, `demucs` | Chargement/conversion audio, séparation de sources + alignement CTC optionnel |
 | LLM | `opencode` (CLI externe) | LLM d'arbitrage résumé/correction via backend OpenAI-compatible |
 | Web | `flask`, `flask-login`, `flask-sqlalchemy` | Serveur web + auth |
@@ -207,7 +208,7 @@ python -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.versio
 # Vérifier tous les composants du pipeline
 python -c "
 from transcria.stt.cohere_transcriber import CohereTranscriber
-from transcria.stt.diarization import DiarizerService
+from transcria.stt.diarizer_factory import create_diarizer, list_available_backends
 from transcria.stt.whisper_transcriber import WhisperTranscriber
 
 t = CohereTranscriber()
@@ -217,8 +218,9 @@ print(f'Cohere device          : {t.device}')
 w = WhisperTranscriber(model_size='large-v3')
 print(f'Whisper disponible    : {w.available}')
 
-ds = DiarizerService({})
+ds = create_diarizer({}, device='cpu')
 print(f'Pyannote disponible    : {ds.available}')
+print(f'Backends diarisation  : {list_available_backends()}')
 
 import flask, transformers, pyannote.audio
 print(f'Flask {flask.__version__}')
@@ -230,6 +232,7 @@ print(f'pyannote.audio {pyannote.audio.__version__}')
 # Cohere device          : cuda:0
 # Whisper disponible     : True
 # Pyannote disponible    : True
+# Backends diarisation  : ['pyannote', 'sortformer']
 # Flask 3.x
 # Transformers 4.x ou 5.x
 # pyannote.audio 4.x
@@ -731,7 +734,7 @@ import accelerate; print(f'accelerate {accelerate.__version__}')
 # Vérification complète du pipeline
 python -c "
 from transcria.stt.cohere_transcriber import CohereTranscriber
-from transcria.stt.diarization import DiarizerService
+from transcria.stt.diarizer_factory import create_diarizer, list_available_backends
 
 print('=== Vérification du pipeline TranscrIA ===')
 print()
@@ -741,8 +744,9 @@ print(f'Cohere ASR disponible : {t.available}')
 print(f'Cohere device          : {t.device}')
 print()
 
-ds = DiarizerService({})
+ds = create_diarizer({}, device='cpu')
 print(f'Pyannote disponible    : {ds.available}')
+print(f'Backends diarisation  : {list_available_backends()}')
 print()
 
 import torch
@@ -1010,7 +1014,7 @@ Vérifier l'acceptation des conditions sur HuggingFace :
 
 Puis vérifier :
 ```bash
-python -c "from transcria.stt.diarization import DiarizerService; print(DiarizerService({}).available)"
+python -c "from transcria.stt.diarizer_factory import create_diarizer; print(create_diarizer({}, device='cpu').available)"
 # Attendu : True
 ```
 
@@ -1134,9 +1138,9 @@ pip install accelerate
 # 4. Vérifier l'installation
 python -c "
 from transcria.stt.cohere_transcriber import CohereTranscriber
-from transcria.stt.diarization import DiarizerService
+from transcria.stt.diarizer_factory import create_diarizer
 print('Cohere:', CohereTranscriber().available)
-print('Pyannote:', DiarizerService({}).available)
+print('Pyannote:', create_diarizer({}, device='cpu').available)
 import torch; print('CUDA:', torch.cuda.is_available(), torch.cuda.device_count(), 'GPUs')
 "
 

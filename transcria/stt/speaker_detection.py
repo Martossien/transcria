@@ -17,14 +17,14 @@ class SpeakerDetector:
 
         diar_result = fs.load_json("speakers/speaker_turns.json")
         if diar_result is None:
-            from transcria.stt.diarization import DiarizerService
+            from transcria.stt.diarizer_factory import create_diarizer
 
-            ds = DiarizerService(self.config, device=device)
+            ds = create_diarizer(self.config, device=device)
             diar_result = ds.diarize(job, audio_path)
         elif diar_result.get("available") and fs.load_json("speakers/speaker_clips.json") is None:
-            from transcria.stt.diarization import DiarizerService
+            from transcria.stt.diarizer_factory import create_diarizer
 
-            ds = DiarizerService(self.config, device=device)
+            ds = create_diarizer(self.config, device=device)
             ds._extract_clips(
                 audio_path,
                 diar_result.get("turns", []),

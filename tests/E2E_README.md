@@ -34,7 +34,7 @@ applicatif. Il est conçu pour deux usages :
    - Normalisation audio optionnelle (y compris auto-loudnorm si RMS < seuil)
      → `input/normalized.wav` + `metadata/audio_normalization.json`
    - Transcription finale (Cohere, Whisper large-v3 ou Granite expérimental)
-   - Diarisation pyannote (mode quality uniquement)
+   - Diarisation finale (mode quality uniquement) — pyannote ou Sortformer selon `models.diarization_backend` dans `config.yaml`
    - VAD final optionnel (activé automatiquement sur audio dégradé si
      `workflow.vad.auto_enable_final_on_degraded=true`)
    - Nettoyage post-STT (suppression d'artefacts de sous-titrage, fusion de
@@ -80,6 +80,13 @@ Arrêter le service avant d'exécuter (évite les conflits de port et d'état GP
 systemctl stop transcria
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3
 systemctl start transcria
+```
+
+Pour tester le backend Sortformer, utiliser `--config-override models.diarization_backend=sortformer` (nécessite `nemo_toolkit[asr]` et le modèle mis en cache) :
+
+```bash
+venv/bin/python tests/test_e2e_workflow.py --mode quality --skip-llm \
+  --config-override models.diarization_backend=sortformer --keep
 ```
 
 Le parcours E2E applicatif des voix enregistrées ne charge pas de modèle GPU ; il vérifie le flux web et base de données avec une empreinte mockée :

@@ -14,7 +14,7 @@ transcria/
   jobs/            # Modèle Job (20 états), CRUD, filesystem
   workflow/        # Étapes (9), calcul d'état, runner
   audio/           # Analyse (ffprobe), conversion (ffmpeg), VAD adaptatif, analyse de scène, filtrage, normalisation, séparation de sources
-  stt/             # Transcribers, diarization, résumé, anti-hallucination, alignement, réalignement
+  stt/             # Transcribers (BaseTranscriber + backends), BaseDiarizer (ABC), DiarizerService (pyannote), SortformerDiarizer (NeMo), diarizer_factory, résumé, anti-hallucination, alignement, réalignement
   context/         # Contexte réunion, participants, lexique
   quality/         # Checks qualité, score /100, décision qualité audio
   exports/         # Package ZIP
@@ -44,6 +44,15 @@ transcria/
    models:
      stt_backend: "mon-nouveau-moteur"
    ```
+
+## Ajouter un backend de diarisation
+
+1. Créer une classe héritant de `BaseDiarizer` dans `transcria/stt/`
+2. Implémenter `model_name` (property), `available` (property), `diarize(job, audio_path) -> dict`
+3. Le dict de retour doit contenir `available`, `turns`, `exclusive_turns`, `speakers`, `stats`
+4. Enregistrer le backend dans `transcria/stt/diarizer_factory.py` (`_DIARIZATION_BACKENDS`, `create_diarizer`, `get_diarizer_vram_mb`)
+5. Ajouter la clé VRAM dans `config.yaml` sous `gpu.<backend>_vram_mb` et dans `_DEFAULT_CONFIG`
+6. Documenter dans `docs/CONFIG_REFERENCE.md` (section `models.diarization_backend`, nouvelle section de backend)
 
 ## Ajouter un backend LLM
 
@@ -77,6 +86,6 @@ Copiez `.env.example` en `.env` et remplissez les valeurs.
 
 ## Documentation obligatoire
 
-Toute modification qui ajoute un fichier dans `jobs/<id>/` ou dans le stockage sensible `voices/` doit mettre à jour `docs/DATA_MODEL.md`. Toute nouvelle clé YAML doit être ajoutée à `config.example.yaml`, validée dans `config_schema.py` et documentée dans `docs/CONFIG_REFERENCE.md`.
+Toute modification qui ajoute un fichier dans `jobs/<id>/` ou dans le stockage sensible `voices/` doit mettre à jour `docs/DATA_MODEL.md`. Toute nouvelle clé YAML doit être ajoutée à `config.example.yaml`, validée dans `config_schema.py` et documentée dans `docs/CONFIG_REFERENCE.md`. Tout nouveau backend de diarisation doit hériter de `BaseDiarizer` et être enregistré dans `diarizer_factory.py`.
 
 Les évolutions liées aux voix enregistrées doivent aussi préserver la chaîne consentement → empreinte → matching : preuve signée obligatoire, audit, suppression de l'audio source par défaut, absence d'embeddings dans les exports et tests couvrant le parcours applicatif.

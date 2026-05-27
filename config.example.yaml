@@ -67,6 +67,7 @@ services:
 
 models:
   stt_backend: "cohere"
+  diarization_backend: "pyannote"   # "pyannote" (défaut) ou "sortformer"
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
@@ -153,6 +154,14 @@ granite:
   repetition_loop_max_phrase_words: 10
   repetition_loop_keep_repeats: 2
 
+sortformer:
+  # Backend de diarisation experimental NVIDIA Sortformer 4spk v2.1 via NeMo.
+  # Language-agnostic (embeddings acoustiques), max 4 locuteurs, CC-BY-4.0.
+  # Activer via models.diarization_backend: "sortformer".
+  # Pyannote reste le backend de diarisation par defaut (pas de limite locuteurs).
+  model_id: "nvidia/diar_streaming_sortformer_4spk-v2.1"
+  vram_mb: 3500
+
 parakeet:
   # Backend STT experimental NVIDIA Parakeet TDT 0.6B v3 via NeMo.
   # 25 langues europeennes, auto-detection, ponctuation native, timestamps.
@@ -176,6 +185,7 @@ gpu:
   llm_vram_mb: 60000
   granite_vram_mb: 6000
   parakeet_vram_mb: 8000
+  sortformer_vram_mb: 3500
   min_free_vram_mb: 4000
 
 workflow:

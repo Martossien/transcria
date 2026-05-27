@@ -91,8 +91,11 @@ transcria/
 │   │   ├── reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
 │   │   ├── transcriber_factory.py # TranscriberFactory
 │   │   ├── transcription.py       # Transcriber (pyannote_turns, fallback 30s, alignement, realignment)
-│   │   ├── diarization.py         # DiarizerService (pyannote GPU + exclusive_turns + checkpoints)
-│   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping)
+│   │   ├── base_diarizer.py       # BaseDiarizer (ABC) — logique partagée cache/clips/embeddings/fingerprint
+│   │   ├── diarization.py         # DiarizerService(BaseDiarizer) — pyannote GPU + exclusive_turns + checkpoints
+│   │   ├── sortformer_diarizer.py # SortformerDiarizer(BaseDiarizer) — NVIDIA NeMo 4spk, fallback NeMo absent
+│   │   ├── diarizer_factory.py    # create_diarizer(), get_diarizer_vram_mb(), list_available_backends()
+│   │   ├── speaker_detection.py   # SpeakerDetector (detect + save_mapping) — utilise diarizer_factory
 │   │   └── summary.py             # SummaryGenerator (VAD Silero + quick transcript)
 │   │
 │   ├── context/                   # Contexte de réunion
@@ -665,15 +668,38 @@ Deux modes de chunking :
 
 > **Note :** `Transcriber.transcribe()` sauvegarde `metadata/speakers_map.json` avec `speaker_map = speaker_mapping or {}`.
 
-**`diarization.py` — `DiarizerService`**
+**`base_diarizer.py` — `BaseDiarizer` (ABC)**
 | Méthode | Description |
 |---|---|
-| `__init__(config, device)` | Initialise avec config et device (fourni par GPUSession, jamais hardcodé) |
+| `__init__(config, device)` | Stocke config et device ; crée un logger |
+| `model_name` (abstractproperty) | Identifiant du modèle (string) |
+| `available` (abstractproperty) | True si la dépendance du backend est importable |
+| `diarize(job, audio_path)` (abstractmethod) | Retourne `{available, turns, exclusive_turns, speakers, stats}` |
+| `offload()` | gc.collect() + cuda.empty_cache() — hérité par tous les backends |
+| `_load_cached_result(fs, audio_path)` | Vérifie cache disque via fingerprint audio+modèle |
+| `_save_cache_metadata(fs, audio_path, result)` | Écrit `diarization_checkpoint.json` |
+| `_extract_clips(audio_path, turns, speakers, fs)` | Extrait des extraits WAV par locuteur (3 clips, 3-12s) |
+| `_cache_speaker_embeddings(turns, audio_path, fs)` | Calcule et stocke les empreintes acoustiques par locuteur |
+| `_acoustic_embedding(audio, sr)` | Empreinte acoustique légère (durée, RMS) sans modèle ML |
+| `_audio_fingerprint(audio_path)` | Hash SHA-256 de l'audio pour le cache |
+| `_load_audio_gpu(audio_path, device)` | torchaudio → resample 16kHz → tensor GPU |
+
+**`diarization.py` — `DiarizerService(BaseDiarizer)`**
+| Méthode | Description |
+|---|---|
+| `__init__(config, device)` | Appelle `super().__init__()` ; lit `models.pyannote_model` |
 | `available` | Vérifie `pyannote.audio` importable |
 | `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
-| `offload()` | gc.collect() + cuda.empty_cache() — libère VRAM avant sortie du GPUSession |
-| `_extract_clips(audio_path, turns, speakers, fs)` | Extrait des extraits WAV par locuteur (3 clips, 3-12s) |
-| `_load_audio_gpu(audio_path, device)` | torchaudio → resample 16kHz → tensor GPU |
+
+**`sortformer_diarizer.py` — `SortformerDiarizer(BaseDiarizer)`**
+| Méthode | Description |
+|---|---|
+| `__init__(config, device)` | Appelle `super().__init__()` ; lit `sortformer.model_id` |
+| `available` | Vérifie `nemo.collections.asr.models.SortformerEncLabelModel` importable |
+| `diarize(job, audio_path)` | `torch.cuda.set_device()` → `SortformerEncLabelModel.from_pretrained()` → `model.diarize(str(audio_path), verbose=False)` → `_parse_sortformer_output()` → sauvegarde |
+| `_parse_sortformer_output(lines)` | Convertit `["start end speaker_N"]` en `[{start, end, speaker, duration}]`, ignore les lignes vides/malformées/durée zéro, trie par timestamp |
+| `_normalize_speaker_id(nemo_id)` | `"speaker_0"` → `"SPEAKER_00"` |
+| `_parse_gpu_index(device)` | `"cuda:1"` → `1`, `"cpu"` → `None` |
 
 **`speaker_detection.py` — `SpeakerDetector`**
 | Méthode | Description |
@@ -1200,7 +1226,7 @@ Organisation :
 | `test_auth_store.py` | 14 | CRUD utilisateurs, groupes |
 | `test_config.py` | 24 | Chargement YAML, sauvegarde config, env var, debug |
 | `test_context.py` | 19 | Meeting, participants, lexique, builder |
-| `test_diarization.py` | 12 | Diarisation, checkpoints, clips |
+| `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory (checkpoints, clips, parsing, normalisation, factory pattern) |
 | `test_edge_cases.py` | 17 | Cas limites, transitions workflow |
 | `test_exports.py` | 3 | PackageBuilder |
 | `test_gpu.py` | 59 | VRAMManager |

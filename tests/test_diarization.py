@@ -1,9 +1,11 @@
-"""Tests for DiarizerService — config, fallback, and _extract_clips with mocked dependencies."""
-import json
+"""Tests for diarization backends — DiarizerService, SortformerDiarizer, factory."""
 import pytest
 import numpy as np
 
 from transcria.stt.diarization import DiarizerService
+from transcria.stt.sortformer_diarizer import SortformerDiarizer
+from transcria.stt.base_diarizer import BaseDiarizer
+from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb, list_available_backends
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 
@@ -165,3 +167,174 @@ class TestDiarizerServiceConfigInit:
         cfg = _default_cfg(tmp_path)
         ds = DiarizerService(cfg, device="cpu")
         assert ds.config is cfg
+
+    def test_is_base_diarizer_subclass(self, tmp_path):
+        cfg = _default_cfg(tmp_path)
+        ds = DiarizerService(cfg, device="cpu")
+        assert isinstance(ds, BaseDiarizer)
+
+
+# ---------------------------------------------------------------------------
+# SortformerDiarizer — tests unitaires purs (sans GPU ni NeMo)
+# ---------------------------------------------------------------------------
+
+class TestSortformerDiarizerParseOutput:
+    """Tests de _parse_sortformer_output et _normalize_speaker_id — fonctions pures."""
+
+    def test_parse_empty(self):
+        assert SortformerDiarizer._parse_sortformer_output([]) == []
+
+    def test_parse_single_segment(self):
+        lines = ["0.500 3.120 speaker_0"]
+        turns = SortformerDiarizer._parse_sortformer_output(lines)
+        assert len(turns) == 1
+        assert turns[0]["start"] == 0.5
+        assert turns[0]["end"] == 3.12
+        assert turns[0]["duration"] == pytest.approx(2.62)
+        assert turns[0]["speaker"] == "SPEAKER_00"
+
+    def test_parse_multiple_speakers_sorted(self):
+        # NeMo retourne les segments par locuteur ; _parse_sortformer_output doit
+        # les retrier par timestamp de début.
+        lines = [
+            "3.510 7.260 speaker_1",
+            "0.500 3.120 speaker_0",
+            "8.000 10.000 speaker_0",
+        ]
+        turns = SortformerDiarizer._parse_sortformer_output(lines)
+        assert [t["start"] for t in turns] == [0.5, 3.51, 8.0]
+        assert turns[0]["speaker"] == "SPEAKER_00"
+        assert turns[1]["speaker"] == "SPEAKER_01"
+
+    def test_parse_skips_zero_duration(self):
+        lines = ["1.000 1.000 speaker_0", "2.000 3.000 speaker_1"]
+        turns = SortformerDiarizer._parse_sortformer_output(lines)
+        assert len(turns) == 1
+        assert turns[0]["speaker"] == "SPEAKER_01"
+
+    def test_parse_skips_blank_lines(self):
+        lines = ["", "  ", "0.100 0.500 speaker_2"]
+        turns = SortformerDiarizer._parse_sortformer_output(lines)
+        assert len(turns) == 1
+        assert turns[0]["speaker"] == "SPEAKER_02"
+
+    def test_parse_ignores_malformed_lines(self):
+        lines = ["not a valid line", "0.100 0.500 speaker_0"]
+        turns = SortformerDiarizer._parse_sortformer_output(lines)
+        assert len(turns) == 1
+
+    def test_normalize_speaker_id_standard(self):
+        assert SortformerDiarizer._normalize_speaker_id("speaker_0") == "SPEAKER_00"
+        assert SortformerDiarizer._normalize_speaker_id("speaker_3") == "SPEAKER_03"
+        assert SortformerDiarizer._normalize_speaker_id("speaker_12") == "SPEAKER_12"
+
+    def test_normalize_speaker_id_unknown_format(self):
+        # Format non reconnu : conservé tel quel (robustesse)
+        result = SortformerDiarizer._normalize_speaker_id("unknown_spk")
+        assert result == "unknown_spk"
+
+    def test_parse_gpu_index(self):
+        assert SortformerDiarizer._parse_gpu_index("cuda:0") == 0
+        assert SortformerDiarizer._parse_gpu_index("cuda:1") == 1
+        assert SortformerDiarizer._parse_gpu_index("cpu") is None
+
+
+class TestSortformerDiarizerConfig:
+    def test_default_model_name(self):
+        sd = SortformerDiarizer({"sortformer": {}}, device="cpu")
+        assert sd.model_name == "nvidia/diar_streaming_sortformer_4spk-v2.1"
+
+    def test_custom_model_name(self):
+        cfg = {"sortformer": {"model_id": "custom/sortformer-model"}}
+        sd = SortformerDiarizer(cfg, device="cpu")
+        assert sd.model_name == "custom/sortformer-model"
+
+    def test_is_base_diarizer_subclass(self):
+        sd = SortformerDiarizer({}, device="cpu")
+        assert isinstance(sd, BaseDiarizer)
+
+    def test_available_returns_bool(self):
+        sd = SortformerDiarizer({}, device="cpu")
+        assert isinstance(sd.available, bool)
+
+    def test_available_false_when_nemo_missing(self, monkeypatch):
+        import sys
+        monkeypatch.setitem(sys.modules, "nemo.collections.asr.models", None)
+        sd = SortformerDiarizer({}, device="cpu")
+        assert sd.available is False
+
+    def test_diarize_returns_unavailable_when_nemo_missing(self, tmp_path, monkeypatch):
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path / "jobs")},
+            "sortformer": {},
+        }
+        job = Job(id="sf-fallback-1", owner_id="u1", title="SF Fallback", state=JobState.ANALYZED.value)
+        audio_path = tmp_path / "test.wav"
+        audio_path.write_text("fake")
+
+        sd = SortformerDiarizer(cfg, device="cpu")
+        monkeypatch.setattr(type(sd), "available", property(lambda self: False))
+
+        result = sd.diarize(job, audio_path)
+        assert result["available"] is False
+        assert result["turns"] == []
+        assert result["speakers"] == []
+
+
+# ---------------------------------------------------------------------------
+# Factory
+# ---------------------------------------------------------------------------
+
+class TestDiarizerFactory:
+    def test_create_pyannote_by_default(self, tmp_path):
+        cfg = {"storage": {"jobs_dir": str(tmp_path)}, "models": {}}
+        diarizer = create_diarizer(cfg, device="cpu")
+        assert isinstance(diarizer, DiarizerService)
+
+    def test_create_pyannote_explicit(self, tmp_path):
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path)},
+            "models": {"diarization_backend": "pyannote"},
+        }
+        diarizer = create_diarizer(cfg, device="cpu")
+        assert isinstance(diarizer, DiarizerService)
+
+    def test_create_sortformer(self, tmp_path):
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path)},
+            "models": {"diarization_backend": "sortformer"},
+            "sortformer": {},
+        }
+        diarizer = create_diarizer(cfg, device="cpu")
+        assert isinstance(diarizer, SortformerDiarizer)
+
+    def test_create_unknown_backend_falls_back_to_pyannote(self, tmp_path):
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path)},
+            "models": {"diarization_backend": "unknown_backend"},
+        }
+        diarizer = create_diarizer(cfg, device="cpu")
+        assert isinstance(diarizer, DiarizerService)
+
+    def test_device_propagated(self, tmp_path):
+        cfg = {"storage": {"jobs_dir": str(tmp_path)}, "models": {}}
+        diarizer = create_diarizer(cfg, device="cpu")
+        assert diarizer.device == "cpu"
+
+    def test_list_available_backends(self):
+        backends = list_available_backends()
+        assert "pyannote" in backends
+        assert "sortformer" in backends
+
+    def test_get_vram_pyannote_default(self):
+        vram = get_diarizer_vram_mb("pyannote", {})
+        assert vram == 2000
+
+    def test_get_vram_sortformer_default(self):
+        vram = get_diarizer_vram_mb("sortformer", {})
+        assert vram == 3500
+
+    def test_get_vram_from_config(self):
+        cfg = {"gpu": {"sortformer_vram_mb": 4000, "pyannote_vram_mb": 2500}}
+        assert get_diarizer_vram_mb("sortformer", cfg) == 4000
+        assert get_diarizer_vram_mb("pyannote", cfg) == 2500

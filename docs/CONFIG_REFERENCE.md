@@ -106,6 +106,7 @@ python app.py --no-debug
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `whisper`, `granite` ou `parakeet`) |
+| `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
@@ -117,6 +118,7 @@ python app.py --no-debug
 - `cohere_model_path` : si le chemin est invalide, `CohereTranscriber.load()` échoue avec un avertissement. Le chemin est résolu en absolu si c'est un répertoire local (`os.path.abspath`). Si le chemin commence par `CohereLabs/` ou `cohere/`, HuggingFace download est utilisé.
 - `pyannote_model` : doit être un modèle HuggingFace valide. Nécessite d'accepter les conditions sur huggingface.co et configurer `HF_TOKEN` pour les modèles gated.
 - `stt_backend` pilote la sélection du backend via `TranscriberFactory`.
+- `diarization_backend` pilote la sélection via `create_diarizer()`. Un backend inconnu déclenche un warning et bascule sur `pyannote`. La VRAM réservée est lue via `get_diarizer_vram_mb(backend, config)`.
 
 ### `cohere`
 
@@ -238,6 +240,28 @@ avec des accents ou hésitations. Documenté dans `docs/PARAKEET_STT_INTEGRATION
 
 VRAM : `gpu.parakeet_vram_mb` (défaut 8000 Mo). Dépendance : `nemo_toolkit[asr]`.
 Fichier : `metadata/parakeet.json`.
+
+### `sortformer`
+
+Backend de diarisation NVIDIA Sortformer 4 locuteurs via NeMo. Activé via
+`models.diarization_backend=sortformer`. Désactivé par défaut (pyannote reste
+le backend de production). Nécessite `nemo_toolkit[asr]`.
+
+Contrairement à pyannote, Sortformer retourne des segments exclusifs par
+construction (pas de chevauchements), avec un maximum de 4 locuteurs simultanés.
+Les IDs `speaker_0…speaker_N` produits par NeMo sont normalisés en `SPEAKER_00…SPEAKER_NN`
+pour rester compatibles avec le pipeline TranscrIA.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `model_id` | string | `"nvidia/diar_streaming_sortformer_4spk-v2.1"` | Identifiant HuggingFace du modèle NeMo |
+| `vram_mb` | int | `3500` | VRAM réservée (aussi lisible via `gpu.sortformer_vram_mb`) |
+
+**Redémarrage requis :** oui — le modèle est chargé en VRAM à l'exécution.
+
+**Impact si modifié :**
+- `model_id` : doit être un modèle NeMo `SortformerEncLabelModel` valide. Le modèle est mis en cache dans `~/.cache/huggingface/hub/`. HF_HUB_OFFLINE=1 est actif au runtime — pré-télécharger le modèle avant le premier usage.
+- Fallback gracieux : si `nemo_toolkit` n'est pas installé, `SortformerDiarizer.available` retourne `False` et `diarize()` retourne `{"available": False, ...}` sans exception.
 
 #### `whisper.forced_alignment`
 
@@ -755,6 +779,7 @@ Limites :
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
 | `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
 | `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
+| `gpu.sortformer_vram_mb` | `3500` | VRAM estimée Sortformer (NeMo) — lue par `get_diarizer_vram_mb("sortformer", config)` |
 | `gpu.granite_vram_mb` | `6000` | VRAM estimée Granite |
 | `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
 | `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |

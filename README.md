@@ -10,7 +10,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés. Parakeet TDT 0.6B v3 (NVIDIA NeMo) en backend expérimental.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
-- **Diarisation pyannote** : tours exclusifs, checkpoints, extraits audio par locuteur, injection du genre vocal par locuteur sans écraser les choix utilisateur.
+- **Diarisation multi-backend** : pyannote.audio (défaut, tours exclusifs, checkpoints, extraits audio) ou NVIDIA Sortformer 4spk via NeMo (jusqu'à 4 locuteurs, segments exclusifs natifs). Backend sélectionné par `models.diarization_backend`. Injection du genre vocal par locuteur sans écraser les choix utilisateur.
 - **Fiabilité segmentaire** : score `ok|suspect|degrade` par segment, signaux `no_speech_prob`, confiance mot-à-mot, micro-segments et artefacts de sous-titrage.
 - **Anti-hallucination ASR** : réduction de boucles répétitives pour Cohere, Whisper et Granite, nettoyage post-STT configurable.
 - **LLM d'arbitrage locale/OpenAI-compatible** : résumé structuré, rôles probables des locuteurs, termes douteux à valider, correction SRT avec lexique et contexte.
@@ -28,8 +28,8 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 |---|---|
 | Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
-| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental, Parakeet TDT 0.6B v3 expérimental |
-| Diarisation | pyannote.audio community-1, exclusive turns, checkpoints |
+| ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental, Parakeet TDT 0.6B v3 expérimental (NeMo) |
+| Diarisation | pyannote.audio community-1 (défaut), NVIDIA Sortformer 4spk v2.1 (NeMo) — factory pattern, BaseDiarizer ABC |
 | Audio | ffmpeg/ffprobe, librosa en subprocess, Silero VAD, Demucs optionnel |
 | LLM | opencode CLI + backend OpenAI-compatible local ou distant |
 | GPU | NVIDIA CUDA, VRAMManager, GPUSession |
@@ -51,7 +51,9 @@ Ordres de grandeur GPU :
 - Cohere ASR : environ 6 Go VRAM
 - Whisper large-v3 : environ 10 Go VRAM selon `compute_type`
 - Granite Speech 4.1 2B : environ 6 Go VRAM, expérimental et désactivé par défaut
-- pyannote : environ 2 Go VRAM
+- Parakeet TDT 0.6B v3 : environ 8 Go VRAM, expérimental (NeMo)
+- pyannote community-1 : environ 2 Go VRAM (backend diarisation par défaut)
+- Sortformer 4spk v2.1 : environ 3.5 Go VRAM (backend diarisation alternatif, NeMo)
 - LLM locale 30B/35B quantifiée : typiquement 48 à 60 Go VRAM selon backend/modèle
 
 ## Installation rapide
@@ -278,7 +280,7 @@ transcria/
     jobs/                        # Job, JobStore, filesystem
     quality/                     # checks qualité, rapport, points de relecture
     services/                    # JobService, PipelineService, worker, ConfigService
-    stt/                         # Cohere, Whisper, diarisation, alignement, fiabilité
+    stt/                         # Cohere, Whisper, Granite, Parakeet, BaseDiarizer, DiarizerService (pyannote), SortformerDiarizer (NeMo), diarizer_factory, alignement, fiabilité
     voice/                       # voix enregistrées, consentements, empreintes, matching
     web/                         # routes Flask, templates, JS
     workflow/                    # étapes, transitions, runner

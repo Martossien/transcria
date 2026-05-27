@@ -140,7 +140,7 @@ Les admins globaux (`Role.ADMIN`) peuvent créer, renommer et supprimer les grou
 | `SPEAKER_DETECTION_DONE` | `"speaker_detection_done"` | Participants | Locuteurs détectés |
 | `READY_TO_PROCESS` | `"ready_to_process"` | Traitement | Toutes les étapes préparatoires terminées |
 | `TRANSCRIBING` | `"transcribing"` | Traitement | Cohere ASR transcription finale en cours |
-| `DIARIZING` | `"diarizing"` | Traitement | Pyannote diarization finale en cours |
+| `DIARIZING` | `"diarizing"` | Traitement | Diarisation finale en cours (pyannote ou Sortformer selon `models.diarization_backend`) |
 | `ARBITRATING` | `"arbitrating"` | Traitement | Correction opencode + LLM d'arbitrage en cours |
 | `QUALITY_CHECKING` | `"quality_checking"` | Qualité | 16 contrôles en cours |
 | `QUALITY_CHECKED` | `"quality_checked"` | Qualité | 16 contrôles terminés |
@@ -334,7 +334,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Upload | `input/original.<ext>` | `JobFilesystem.save_upload()` |
 | Analyse | `metadata/audio_analysis.json` | `AudioAnalyzer.analyze()` |
 | Résumé (Phase 1) | `summary/quick_transcript.txt`, `summary/summary.json`, `summary/summary.md` | `SummaryGenerator.generate_quick_summary()` |
-| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `DiarizerService.diarize()` + `WorkflowRunner._write_diarization_context()` |
+| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `create_diarizer().diarize()` (pyannote ou Sortformer selon `models.diarization_backend`) + `WorkflowRunner._write_diarization_context()` |
 | Résumé (Phase 2) | `summary/summary.md` (écrasé) | `OpenCodeRunner.run_summary()` |
 | Contexte | `context/meeting_context.json` | `MeetingContextManager.save()` |
 | Participants | `context/participants.json` | `ParticipantsManager.save()` |

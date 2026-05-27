@@ -51,6 +51,7 @@ _DEFAULT_CONFIG = {
         "llm_vram_mb": 60000,
         "granite_vram_mb": 6000,
         "parakeet_vram_mb": 8000,
+        "sortformer_vram_mb": 3500,
         "min_free_vram_mb": 4000,
     },
     "services": {
@@ -63,6 +64,7 @@ _DEFAULT_CONFIG = {
     },
     "models": {
         "stt_backend": "cohere",
+        "diarization_backend": "pyannote",
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",
         "cohere_model_path": "./models/cohere-asr/cohere-transcribe-03-2026",
@@ -143,6 +145,10 @@ _DEFAULT_CONFIG = {
         "repetition_loop_min_repeats": 4,
         "repetition_loop_max_phrase_words": 10,
         "repetition_loop_keep_repeats": 2,
+    },
+    "sortformer": {
+        "model_id": "nvidia/diar_streaming_sortformer_4spk-v2.1",
+        "vram_mb": 3500,
     },
     "parakeet": {
         "enabled": False,

@@ -927,21 +927,24 @@ class WorkflowRunner:
 
         self.store.update_state(job.id, JobState.DIARIZING)
         try:
-            from transcria.stt.diarization import DiarizerService
+            from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb
+
+            diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
+            diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
 
             if self._cuda_available():
-                with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                with GPUSession(self.vram, diar_backend, diar_vram_mb) as gpu:
                     device = f"cuda:{gpu.gpu_index}"
                     logger.info(
-                        "[diarization] GPU sélectionné: %s (%d Mo réservés)",
-                        device, self.vram.pyannote_vram_mb,
+                        "[diarization] backend=%s, GPU sélectionné: %s (%d Mo réservés)",
+                        diar_backend, device, diar_vram_mb,
                     )
-                    diarizer = DiarizerService(config, device=device)
+                    diarizer = create_diarizer(config, device=device)
                     result = diarizer.diarize(job, Path(audio_path))
                     diarizer.offload()
             else:
-                logger.info("[diarization] CUDA indisponible — pyannote sur CPU")
-                diarizer = DiarizerService(config, device="cpu")
+                logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
+                diarizer = create_diarizer(config, device="cpu")
                 result = diarizer.diarize(job, Path(audio_path))
                 diarizer.offload()
 
