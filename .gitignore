@@ -49,6 +49,10 @@ Thumbs.db
 models/cohere-asr/*
 !models/cohere-asr/.gitkeep
 models/granite-speech-4.1-2b/
+models/sortformer-4spk-v2.1/
+
+# Résultats de benchmark (données de run, non versionnées)
+bench_results/
 
 # Backups de développement (historique de refactoring)
 backup/
