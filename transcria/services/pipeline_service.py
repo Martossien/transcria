@@ -130,6 +130,22 @@ class PipelineService:
             or self._should_force_quality_backend_for_degraded_summary(job, cfg)
         ):
             cfg.setdefault("models", {})["stt_backend"] = forced_backend
+        backend = cfg.get("models", {}).get("stt_backend", "cohere")
+        if backend == "granite" and job is not None:
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+            quality = fs.load_json("metadata/audio_quality_decision.json") or {}
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
+            if quality.get("level") == "degrade" or "audio_tres_faible" in (preflight.get("flags") or []):
+                # Granite est expérimental et peu fiable sur audio dégradé ;
+                # on revient au backend de production configuré dans la config source.
+                fallback = self.config.get("models", {}).get("stt_backend", "cohere")
+                if fallback == "granite":
+                    fallback = "cohere"
+                logger.info(
+                    "Granite exclu pour audio dégradé (job=%s), fallback → %s", job.id, fallback
+                )
+                cfg["models"]["stt_backend"] = fallback
         self._inject_whisper_lexicon_hotwords(cfg, job)
         self._inject_cohere_lexicon_biasing(cfg, job)
         return cfg
