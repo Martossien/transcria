@@ -947,8 +947,10 @@ class WorkflowRunner:
             else:
                 logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
                 diarizer = create_diarizer(config, device="cpu")
-                result = diarizer.diarize(job, Path(audio_path))
-                diarizer.offload()
+                try:
+                    result = diarizer.diarize(job, Path(audio_path))
+                finally:
+                    diarizer.offload()
 
             # Attribution genre par locuteur — audio_scene.json disponible à ce stade
             # (PipelineService le produit avant d'appeler run_diarization)
@@ -963,6 +965,7 @@ class WorkflowRunner:
             return {"error": str(exc)}
         except Exception as exc:
             logger.exception("Échec diarisation")
+            self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc)}
 
     def run_quality_checks(self, job: Job, config: dict) -> dict:

@@ -1277,8 +1277,9 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
         return error_response
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-    clip_path = fs.job_dir / "speakers" / "samples" / clip_name
-    if not clip_path.is_file():
+    samples_dir = (fs.job_dir / "speakers" / "samples").resolve()
+    clip_path = (samples_dir / clip_name).resolve()
+    if not clip_path.is_relative_to(samples_dir) or not clip_path.is_file():
         abort(404)
     return send_file(clip_path, mimetype="audio/wav")
 

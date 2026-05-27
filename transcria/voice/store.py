@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -133,7 +134,7 @@ class VoiceStore:
 
         if gender is not None:
             normalized_gender = gender.strip().lower()
-            if normalized_gender not in {"female", "male", "other"}:
+            if normalized_gender not in {"", "female", "male", "other"}:
                 raise VoiceValidationError("Genre invalide.")
             if normalized_gender != subject.gender:
                 changes["gender"] = {"old": subject.gender, "new": normalized_gender}
@@ -426,7 +427,7 @@ def save_upload(file: FileStorage, target_dir: Path, allowed_extensions: set[str
 
     target_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
-    temp_path = target_dir / f".upload-{datetime.now(timezone.utc).timestamp():.6f}.tmp"
+    temp_path = target_dir / f".upload-{os.urandom(8).hex()}.tmp"
     size = 0
     with temp_path.open("wb") as fh:
         while True:
