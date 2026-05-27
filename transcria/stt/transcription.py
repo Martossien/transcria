@@ -91,8 +91,15 @@ class Transcriber:
             sl,
         )
 
+        # Sur audio très faible, pyannote ne détecte souvent qu'un tour court (~5s)
+        # ce qui limite la transcription à ~17% de l'audio. Forcer le 30s_fallback
+        # pour que les backends traitent l'intégralité du signal.
+        preflight = fs.load_json("metadata/audio_preflight.json") or {}
+        preflight_flags = preflight.get("flags") or []
+        force_30s_on_weak = "audio_tres_faible" in preflight_flags
+
         # Choisir le mode de chunking selon la disponibilité des exclusive_turns
-        if speaker_turns and speaker_turns.get("exclusive_turns"):
+        if speaker_turns and speaker_turns.get("exclusive_turns") and not force_30s_on_weak:
             # Chunking par tours pyannote : charger l'audio une seule fois en mémoire,
             # passer des numpy arrays à chaque chunk → pas de fichiers WAV temporaires.
             audio, sr = librosa.load(str(audio_path), sr=_SR, mono=True)
@@ -123,7 +130,12 @@ class Transcriber:
                 chunking_mode = "30s_fallback"
         else:
             # Fallback : chunking 30s fixe + overlap matching (pas de chargement librosa ici)
-            sl.info("Mode transcription: 30s fixes (exclusive_turns absent)", backend=backend)
+            reason = (
+                "audio_tres_faible détecté (tours pyannote peu fiables)"
+                if force_30s_on_weak
+                else "exclusive_turns absent"
+            )
+            sl.info("Mode transcription: 30s fixes (%s)", reason, backend=backend)
             segments = self.transcriber.transcribe(audio_path, language=lang)
             if speaker_turns and speaker_turns.get("turns"):
                 segments = self._apply_speakers(segments, speaker_turns, speaker_mapping)
@@ -149,6 +161,7 @@ class Transcriber:
         fs.save_json("metadata/transcription_metadata.json", {
             "backend": backend,
             "chunking_mode": chunking_mode,
+            "chunking_forced_30s_reason": "audio_tres_faible" if force_30s_on_weak else None,
             "gpu_index": self.gpu_index,
             "language": lang,
             "segments": len(segments),
