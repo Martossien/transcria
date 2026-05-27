@@ -38,7 +38,10 @@ class Job(db.Model):
     state = db.Column(db.String(40), nullable=False, default=JobState.CREATED.value)
     processing_mode = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+    )
     extra_data_json = db.Column(db.Text, nullable=True)
     error_message = db.Column(db.Text, nullable=True)
 

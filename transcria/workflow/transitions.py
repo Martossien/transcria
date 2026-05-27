@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 
-
 PROCESSING_RETRY_STATES = {
     JobState.READY_TO_PROCESS.value,
     JobState.LEXICON_DONE.value,

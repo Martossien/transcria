@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -34,7 +33,7 @@ class ConfigService:
 
     @staticmethod
     def validate(config: dict):
-        from transcria.config.config_schema import validate_config, ValidationResult
+        from transcria.config.config_schema import validate_config
         return validate_config(config)
 
     @staticmethod

@@ -353,7 +353,6 @@ class SourceSeparationService:
 
         t0 = time.monotonic()
         model_name = self.sep_cfg.get("model", "htdemucs")
-        segment_s = float(self.sep_cfg.get("segment_s", 10))
         stem_name = str(self.sep_cfg.get("stem", "vocals"))
         device = self._device
 

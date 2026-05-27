@@ -170,7 +170,8 @@ def setup_logging(
 
 def inject_correlation_id() -> str:
     try:
-        from flask import g as _flask_g, request as _flask_request
+        from flask import g as _flask_g
+        from flask import request as _flask_request
 
         existing = getattr(_flask_g, "correlation_id", None)
         if existing:

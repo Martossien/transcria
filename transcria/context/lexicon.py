@@ -3,7 +3,6 @@ from pathlib import Path
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 
-
 LEXICON_CATEGORIES = [
     "personne", "organisation", "service", "application", "projet",
     "sigle", "métier", "technique", "produit", "statut",

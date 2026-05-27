@@ -2,12 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.voice.embedding import PyannoteVoiceEmbeddingBackend
-from transcria.voice.embedding import VoiceEmbeddingError
-from transcria.voice.models import VoiceReferenceStatus
-from transcria.voice.models import VoiceSubject
-from transcria.voice.store import VoiceStore
-from transcria.voice.store import VoiceValidationError
+from transcria.voice.embedding import PyannoteVoiceEmbeddingBackend, VoiceEmbeddingError
+from transcria.voice.models import VoiceReferenceStatus, VoiceSubject
+from transcria.voice.store import VoiceStore, VoiceValidationError
 
 
 class VoiceEnrollmentService:

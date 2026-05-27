@@ -1,7 +1,5 @@
-import json
 import logging
 import re
-from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -139,7 +137,8 @@ class QualityReporter:
                     "severity": severity,
                 })
                 review_points.append(
-                    f"Chevauchements : {len(overlaps)} dont {len(significant_overlaps)} ≥ {thresholds['significant_overlap_s']}s — vérifier les timestamps."
+                    f"Chevauchements : {len(overlaps)} dont {len(significant_overlaps)}"
+                    f" ≥ {thresholds['significant_overlap_s']}s — vérifier les timestamps."
                 )
                 warnings += len(significant_overlaps)
 

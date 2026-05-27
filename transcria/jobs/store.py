@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupMembership, Role

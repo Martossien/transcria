@@ -2,22 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from flask import Blueprint
-from flask import flash
-from flask import redirect
-from flask import render_template
-from flask import request
-from flask import url_for
-from flask_login import current_user
-from flask_login import login_required
+from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
 
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
-from transcria.context.central_lexicon_store import CentralLexiconAccessError
-from transcria.context.central_lexicon_store import CentralLexiconStore
-from transcria.context.central_lexicon_store import CentralLexiconValidationError
-from transcria.context.lexicon import LEXICON_CATEGORIES
-from transcria.context.lexicon import LEXICON_PRIORITIES
+from transcria.context.central_lexicon_store import CentralLexiconAccessError, CentralLexiconStore, CentralLexiconValidationError
+from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES
 
 central_lexicon_bp = Blueprint("central_lexicon", __name__)
 logger = logging.getLogger(__name__)

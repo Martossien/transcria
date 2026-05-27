@@ -2,7 +2,7 @@ import logging
 
 from sqlalchemy import func
 
-from transcria.auth.models import User, Role
+from transcria.auth.models import Role, User
 from transcria.database import db
 
 logger = logging.getLogger(__name__)

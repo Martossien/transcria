@@ -1,8 +1,7 @@
 import logging
 import unicodedata
 
-from transcria.context.lexicon import LEXICON_PRIORITIES
-from transcria.context.lexicon import LexiconManager
+from transcria.context.lexicon import LEXICON_PRIORITIES, LexiconManager
 
 logger = logging.getLogger(__name__)
 

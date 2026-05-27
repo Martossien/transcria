@@ -3,28 +3,16 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from flask import Blueprint
-from flask import Response
-from flask import flash
-from flask import redirect
-from flask import render_template
-from flask import request
-from flask import send_file
-from flask import url_for
-from flask_login import current_user
-from flask_login import login_required
+from flask import Blueprint, Response, flash, redirect, render_template, request, send_file, url_for
+from flask_login import current_user, login_required
 
 from transcria.auth.groups import GroupStore
 from transcria.config import get_config
-from transcria.voice.consent_form import CONSENT_FORM_FILENAME
-from transcria.voice.consent_form import build_voice_consent_pdf
+from transcria.voice.consent_form import CONSENT_FORM_FILENAME, build_voice_consent_pdf
 from transcria.voice.embedding import VoiceEmbeddingError
 from transcria.voice.enrollment import VoiceEnrollmentService
 from transcria.voice.models import VoiceConsentStatus
-from transcria.voice.store import VoiceAccessError
-from transcria.voice.store import VoiceStore
-from transcria.voice.store import VoiceValidationError
-from transcria.voice.store import save_upload
+from transcria.voice.store import VoiceAccessError, VoiceStore, VoiceValidationError, save_upload
 
 voice_bp = Blueprint("voice", __name__)
 logger = logging.getLogger(__name__)

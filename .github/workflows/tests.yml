@@ -30,5 +30,17 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run test suite
-        run: python -m pytest tests/ -q
+      - name: Lint (ruff)
+        run: ruff check transcria/ --line-length 140 --select E,W,F,I
+
+      - name: Type check (mypy)
+        run: mypy transcria/ --ignore-missing-imports
+
+      - name: Run test suite with coverage
+        run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml

@@ -1,7 +1,6 @@
 import logging
 import time as _time
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from transcria.stt.base_transcriber import BaseTranscriber
@@ -129,8 +128,7 @@ class GraniteTranscriber(BaseTranscriber):
 
         try:
             import torch
-            from transformers import AutoModelForSpeechSeq2Seq
-            from transformers import AutoProcessor
+            from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
             dtype = self._resolve_torch_dtype(torch)
             load_t0 = _time.time()
@@ -305,6 +303,7 @@ class GraniteTranscriber(BaseTranscriber):
         self._tokenizer = None
         try:
             import gc
+
             import torch
 
             gc.collect()

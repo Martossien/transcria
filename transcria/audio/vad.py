@@ -9,7 +9,6 @@ Le model card Cohere recommande explicitement un VAD ou noise gate en amont :
 """
 
 import logging
-from pathlib import Path
 
 import numpy as np
 
@@ -57,7 +56,7 @@ class SileroVAD:
     def available(self) -> bool:
         if self._available is None:
             try:
-                from faster_whisper.vad import get_speech_timestamps, VadOptions  # noqa: F401
+                from faster_whisper.vad import VadOptions, get_speech_timestamps  # noqa: F401
                 self._available = True
             except (ImportError, Exception) as exc:
                 logger.debug("SileroVAD non disponible: %s", exc)
@@ -67,7 +66,7 @@ class SileroVAD:
     def _load(self) -> None:
         if self._model is not None:
             return
-        from faster_whisper.vad import get_speech_timestamps, VadOptions
+        from faster_whisper.vad import VadOptions, get_speech_timestamps
         # get_speech_timestamps est une fonction module-level, pas une méthode du modèle
         self._model = get_speech_timestamps
         self._VadOptions = VadOptions

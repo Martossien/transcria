@@ -2,8 +2,12 @@ import logging
 import os
 import time as _time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from transcria.stt.base_transcriber import BaseTranscriber
+
+if TYPE_CHECKING:
+    import numpy
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +94,8 @@ class ParakeetTranscriber(BaseTranscriber):
     @property
     def available(self) -> bool:
         try:
-            import torch  # noqa: F401
             import nemo.collections.asr  # noqa: F401
+            import torch  # noqa: F401
         except ImportError:
             return False
         return True
@@ -225,7 +229,7 @@ class ParakeetTranscriber(BaseTranscriber):
 
     def _transcribe_chunked(
         self,
-        audio: "np.ndarray",
+        audio: "numpy.ndarray",
         sr: int,
         total_duration: float,
         total_samples: int,
@@ -260,7 +264,7 @@ class ParakeetTranscriber(BaseTranscriber):
 
     def _transcribe_single(
         self,
-        audio: "np.ndarray",
+        audio: "numpy.ndarray",
         chunk_duration: float,
         offset: float,
     ) -> list[dict]:
@@ -346,6 +350,7 @@ class ParakeetTranscriber(BaseTranscriber):
         self._model = None
         try:
             import gc
+
             import torch
 
             gc.collect()

@@ -1,10 +1,10 @@
 import logging
 import time
 
+from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
-from transcria.gpu.vram_manager import VRAMManager
-from transcria.gpu.gpu_session import GPUSession, GPUSessionError
 from transcria.logging_setup import get_structured_logger
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class WorkflowRunner:
 
     def run_analyze(self, job: Job, audio_path: str) -> dict:
         from pathlib import Path
+
         from transcria.audio.analyzer import AudioAnalyzer
 
         result = AudioAnalyzer.analyze(Path(audio_path))
@@ -127,6 +128,7 @@ class WorkflowRunner:
         self, job: Job, audio_path: str, config: dict, sl
     ) -> dict:
         from pathlib import Path
+
         from transcria.stt.summary import SummaryGenerator
         from transcria.stt.transcriber_factory import get_backend_vram_mb
 
@@ -492,7 +494,7 @@ class WorkflowRunner:
           en appelant B par son prénom (apostrophe directe)
         """
         import re
-        from collections import defaultdict, Counter
+        from collections import Counter, defaultdict
 
         _SKIP = frozenset({
             "Le", "La", "Les", "Un", "Une", "Des", "Du", "De", "Ce", "Ça", "Ca",

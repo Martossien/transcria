@@ -1,8 +1,5 @@
 import logging
-import shutil
-import tempfile
 import zipfile
-from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job

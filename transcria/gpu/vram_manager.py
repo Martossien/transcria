@@ -131,7 +131,8 @@ class VRAMManager:
         self._free_memory(preferred_gpu)
         gc.collect()
         try:
-            import torch; torch.cuda.empty_cache()
+            import torch
+            torch.cuda.empty_cache()
         except ImportError:
             pass
         time.sleep(1)
@@ -209,7 +210,8 @@ class VRAMManager:
         self._loaded_models.clear()
         gc.collect()
         try:
-            import torch; torch.cuda.empty_cache()
+            import torch
+            torch.cuda.empty_cache()
         except ImportError:
             pass
         logger.info("Cache CUDA vidé")
@@ -278,8 +280,11 @@ class VRAMManager:
             logger.info("Arrêt backend LLM concurrent port %d...", port)
             ok = self._kill_port(port) and ok
         gc.collect()
-        try: import torch; torch.cuda.empty_cache()
-        except ImportError: pass
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except ImportError:
+            pass
         return ok
 
     def stop_vllm_port_8000(self) -> bool:
@@ -416,8 +421,11 @@ class VRAMManager:
         port_ok = self._kill_port(self.arbitrage_llm_port)
         self._arbitrage_llm_pid = None
         gc.collect()
-        try: import torch; torch.cuda.empty_cache()
-        except ImportError: pass
+        try:
+            import torch
+            torch.cuda.empty_cache()
+        except ImportError:
+            pass
         return port_ok
 
     def free_all_gpus(self) -> bool:

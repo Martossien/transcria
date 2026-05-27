@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date
 
-
 CONSENT_FORM_VERSION = "voice-consent-v1"
 CONSENT_FORM_FILENAME = "consentement_empreinte_vocale_v1.pdf"
 

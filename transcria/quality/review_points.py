@@ -5,7 +5,6 @@ class ReviewPoints:
         for check in quality_report.get("checks", []):
             ctype = check.get("type", "")
             count = check.get("count", 0)
-            severity = check.get("severity", "info")
 
             if ctype == "empty_segments":
                 points.append(f"Segments vides : {count} — vérifier et supprimer manuellement.")

@@ -1,0 +1,7 @@
+[tool.ruff]
+line-length = 140
+select = ["E", "W", "F", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

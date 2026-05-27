@@ -1,6 +1,6 @@
+from transcria.config.config_schema import validate_config
 from transcria.config.loader import (
     _deep_merge,
-    _normalize_config,
     get_config,
     get_config_path,
     load_config,
@@ -8,7 +8,6 @@ from transcria.config.loader import (
     set_config,
 )
 from transcria.config.system_detector import SystemDetector, SystemInfo
-from transcria.config.config_schema import validate_config
 
 __all__ = [
     "_deep_merge",

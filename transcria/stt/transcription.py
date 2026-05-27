@@ -6,9 +6,8 @@ import numpy as np
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
-from transcria.jobs.store import JobStore
-from transcria.stt.transcriber_factory import create_transcriber
 from transcria.logging_setup import get_structured_logger
+from transcria.stt.transcriber_factory import create_transcriber
 
 logger = logging.getLogger(__name__)
 

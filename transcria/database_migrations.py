@@ -1,7 +1,6 @@
 import logging
 
-from sqlalchemy import inspect
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from transcria.database import db
 

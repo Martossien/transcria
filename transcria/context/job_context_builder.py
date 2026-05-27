@@ -1,6 +1,7 @@
 import json
-import yaml
 from datetime import datetime, timezone
+
+import yaml
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job

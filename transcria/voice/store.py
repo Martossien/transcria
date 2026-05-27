@@ -13,18 +13,19 @@ from werkzeug.utils import secure_filename
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role, User
 from transcria.database import db
-from transcria.voice.embedding import VoiceEmbedding
-from transcria.voice.embedding import serialize_embedding
-from transcria.voice.models import VoiceAuditEvent
-from transcria.voice.models import VoiceConsent
-from transcria.voice.models import VoiceConsentStatus
-from transcria.voice.models import VoiceMatch
-from transcria.voice.models import VoiceMatchDecision
-from transcria.voice.models import VoiceProfile
-from transcria.voice.models import VoiceProfileStatus
-from transcria.voice.models import VoiceReferenceFile
-from transcria.voice.models import VoiceReferenceStatus
-from transcria.voice.models import VoiceSubject
+from transcria.voice.embedding import VoiceEmbedding, serialize_embedding
+from transcria.voice.models import (
+    VoiceAuditEvent,
+    VoiceConsent,
+    VoiceConsentStatus,
+    VoiceMatch,
+    VoiceMatchDecision,
+    VoiceProfile,
+    VoiceProfileStatus,
+    VoiceReferenceFile,
+    VoiceReferenceStatus,
+    VoiceSubject,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +381,11 @@ class VoiceStore:
         profile.status = VoiceProfileStatus.DELETED.value
         profile.embedding_blob = None
         profile.deleted_at = datetime.now(timezone.utc)
-        VoiceStore.audit("profile_generation_failed", actor_id=actor.id, subject_id=profile.subject_id, profile_id=profile.id, details={"reason": reason})
+        VoiceStore.audit(
+            "profile_generation_failed",
+            actor_id=actor.id, subject_id=profile.subject_id, profile_id=profile.id,
+            details={"reason": reason},
+        )
         db.session.commit()
 
     @staticmethod
@@ -397,7 +402,11 @@ class VoiceStore:
         logger.info("Voix désactivée: subject=%s actor=%s", subject.id, actor.id)
 
     @staticmethod
-    def audit(event_type: str, *, actor_id: str | None = None, subject_id: str | None = None, profile_id: str | None = None, details: dict | None = None) -> None:
+    def audit(
+        event_type: str, *, actor_id: str | None = None,
+        subject_id: str | None = None, profile_id: str | None = None,
+        details: dict | None = None,
+    ) -> None:
         db.session.add(VoiceAuditEvent(
             subject_id=subject_id,
             profile_id=profile_id,

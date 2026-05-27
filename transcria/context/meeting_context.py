@@ -1,7 +1,6 @@
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 
-
 MEETING_TYPES = [
     "Réunion interne",
     "Réunion projet",
@@ -45,7 +44,6 @@ class MeetingContextManager:
     @staticmethod
     def auto_suggest(job: Job, jobs_dir: str) -> dict:
         fs = JobFilesystem(jobs_dir, job.id)
-        summary_data = fs.load_json("summary/summary.json") or {}
         summary_text = ""
         md_text = fs.load_text("summary/summary.md")
         if md_text:
@@ -59,7 +57,6 @@ class MeetingContextManager:
         }
 
         if summary_text:
-            import re
             lines = summary_text.split("\n")
             if lines:
                 suggestions["title_suggere"] = lines[0].replace("#", "").strip()[:120]

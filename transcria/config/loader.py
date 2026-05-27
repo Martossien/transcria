@@ -1,7 +1,7 @@
 import copy
 import os
-import yaml
 
+import yaml
 
 _DEFAULT_CONFIG = {
     "server": {"host": "0.0.0.0", "port": 7870, "debug": True},

@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber

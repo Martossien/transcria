@@ -46,7 +46,10 @@ class VoiceSubject(db.Model):
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(
+        db.DateTime, nullable=False,
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+    )
 
     group = db.relationship("Group")
     creator = db.relationship("User", foreign_keys=[created_by])

@@ -230,7 +230,6 @@ class BaseDiarizer(ABC):
 
     @staticmethod
     def _load_audio_gpu(audio_path: Path, device: str = "cuda:0"):
-        import torch
         import torchaudio
 
         wave, sr = torchaudio.load(str(audio_path))

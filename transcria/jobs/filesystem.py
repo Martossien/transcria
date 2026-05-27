@@ -1,6 +1,5 @@
 import json
 import mimetypes
-import os
 import shutil
 from pathlib import Path
 

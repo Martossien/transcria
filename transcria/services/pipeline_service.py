@@ -314,6 +314,7 @@ class PipelineService:
         indisponible ou en échec.
         """
         from pathlib import Path
+
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         analyzer = AudioSceneAnalyzer(self.config)
@@ -402,6 +403,7 @@ class PipelineService:
         d'origine (séparation refusée ou échouée), soit le chemin de la piste vocale.
         """
         from pathlib import Path
+
         from transcria.audio.source_separation import SourceSeparationDecider, SourceSeparationService
 
         audio_analysis: dict = {}
@@ -476,6 +478,7 @@ class PipelineService:
     ) -> str:
         """Met en silence certaines zones de scène sans changer la durée audio."""
         from pathlib import Path
+
         from transcria.audio.scene_filter import AudioSceneFilterService
 
         service = AudioSceneFilterService(self.config)
@@ -526,6 +529,7 @@ class PipelineService:
     ) -> str:
         """Applique un débruitage expérimental sans changer la durée audio."""
         from pathlib import Path
+
         from transcria.audio.denoise import AudioDenoiseService
 
         service = AudioDenoiseService(self.config)
@@ -577,6 +581,7 @@ class PipelineService:
     ) -> str:
         """Applique une normalisation légère sans changer la durée audio."""
         from pathlib import Path
+
         from transcria.audio.normalization import AudioNormalizationService
 
         service = AudioNormalizationService(self.config)
@@ -623,7 +628,7 @@ class PipelineService:
                     rms=round(rms, 5),
                     threshold=rms_threshold,
                 )
-                forced_filters = [f"loudnorm=I=-23:TP=-2:LRA=11"]
+                forced_filters = ["loudnorm=I=-23:TP=-2:LRA=11"]
                 output_path = Path(audio_path).parent / "normalized.wav"
                 result_path = service.apply(Path(audio_path), output_path, forced_filters)
                 if result_path != Path(audio_path):

@@ -1,8 +1,12 @@
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from transcria.stt.base_transcriber import BaseTranscriber
+
+if TYPE_CHECKING:
+    import numpy
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -75,8 +79,8 @@ class CohereTranscriber(BaseTranscriber):
     @property
     def available(self) -> bool:
         try:
-            import torch
-            import transformers
+            import torch  # noqa: F401
+            import transformers  # noqa: F401
             return True
         except ImportError:
             return False
@@ -121,7 +125,7 @@ class CohereTranscriber(BaseTranscriber):
         language: str = "fr",
         chunk_length_s: int = 30,
         progress_callback=None,
-        audio_array: "np.ndarray | None" = None,
+        audio_array: "numpy.ndarray | None" = None,
         sample_rate: int = 16000,
     ) -> list[dict]:
         """Transcrit un fichier audio ou un numpy array en segments {start, end, text}.
@@ -132,8 +136,9 @@ class CohereTranscriber(BaseTranscriber):
                 lors du chunking par tours pyannote.
             sample_rate: fréquence d'échantillonnage de audio_array (défaut 16000).
         """
-        import torch
         import time as _time
+
+        import torch
 
         if not self.load():
             return [{"error": "Cohere ASR non disponible"}]
@@ -295,6 +300,7 @@ class CohereTranscriber(BaseTranscriber):
 
     def offload(self) -> None:
         import gc
+
         import torch
 
         self._model = None

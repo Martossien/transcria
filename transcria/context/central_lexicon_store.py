@@ -4,14 +4,10 @@ from datetime import datetime, timezone
 from sqlalchemy import func
 
 from transcria.auth.groups import GroupStore
-from transcria.auth.models import Role
-from transcria.auth.models import User
-from transcria.context.central_lexicon_models import GroupLexicon
-from transcria.context.central_lexicon_models import GroupLexiconEntry
+from transcria.auth.models import Role, User
+from transcria.context.central_lexicon_models import GroupLexicon, GroupLexiconEntry
 from transcria.context.central_lexicon_service import normalize_match_text
-from transcria.context.lexicon import LEXICON_CATEGORIES
-from transcria.context.lexicon import LEXICON_PRIORITIES
-from transcria.context.lexicon import LexiconManager
+from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.database import db
 from transcria.jobs.models import Job
 
@@ -143,7 +139,10 @@ class CentralLexiconStore:
         return lexicon
 
     @staticmethod
-    def update_lexicon(lexicon: GroupLexicon, actor: User, *, name: str, description: str, group_id: str | None, allow_global: bool = False) -> GroupLexicon:
+    def update_lexicon(
+        lexicon: GroupLexicon, actor: User, *, name: str, description: str,
+        group_id: str | None, allow_global: bool = False,
+    ) -> GroupLexicon:
         if not CentralLexiconStore.can_manage_lexicon(actor, lexicon):
             raise CentralLexiconAccessError("Accès lexique interdit")
         clean_name = name.strip()

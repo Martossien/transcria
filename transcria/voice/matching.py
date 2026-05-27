@@ -6,12 +6,14 @@ from pathlib import Path
 import numpy as np
 
 from transcria.jobs.filesystem import JobFilesystem
-from transcria.voice.embedding import PyannoteVoiceEmbeddingBackend
-from transcria.voice.embedding import VoiceEmbedding
-from transcria.voice.embedding import VoiceEmbeddingError
-from transcria.voice.embedding import cosine_raw
-from transcria.voice.embedding import deserialize_embedding
-from transcria.voice.embedding import normalize_l2
+from transcria.voice.embedding import (
+    PyannoteVoiceEmbeddingBackend,
+    VoiceEmbedding,
+    VoiceEmbeddingError,
+    cosine_raw,
+    deserialize_embedding,
+    normalize_l2,
+)
 from transcria.voice.models import VoiceMatchDecision
 from transcria.voice.store import VoiceStore
 

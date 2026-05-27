@@ -1,9 +1,9 @@
 import logging
 from pathlib import Path
 
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
-from transcria.jobs.filesystem import JobFilesystem
 from transcria.logging_setup import get_structured_logger
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,6 @@ class JobService:
 
     @staticmethod
     def upload(job_id: str, file_data: bytes, filename: str, jobs_dir: str) -> dict:
-        from pathlib import Path
 
         job = JobStore.get_by_id(job_id)
         if job is None:

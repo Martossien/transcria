@@ -1,11 +1,11 @@
-import logging
 import copy
-import os
+import logging
 import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
 from flask import (
     Blueprint,
     Response,
@@ -16,18 +16,18 @@ from flask import (
     render_template,
     request,
     send_file,
-    session,
     url_for,
 )
 from flask_login import current_user, login_required
 from sqlalchemy import func
-import yaml
 
-from transcria.audio.analyzer import AudioAnalyzer
 from transcria.audio.excerpts import AudioExcerptService, parse_time_range
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
 from transcria.auth.permissions import Permission, requires
+from transcria.config import _deep_merge, get_config
+from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
+from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
@@ -38,17 +38,10 @@ from transcria.integrations.srt_editor_link import SrtEditorLink
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
-from transcria.workflow.states import WorkflowState
-from transcria.config import _deep_merge, get_config, get_config_path, load_config, save_config, set_config
-from transcria.config.config_schema import validate_config
-from transcria.config.system_detector import SystemDetector
-from transcria.context.central_lexicon_service import merge_lexicon_entries
-from transcria.context.central_lexicon_service import prefilter_lexicon_entries_for_display
-from transcria.context.central_lexicon_store import CentralLexiconStore
-from transcria.services.job_service import JobService
-from transcria.services.job_executor import get_job_executor
-from transcria.services.pipeline_service import PipelineService
 from transcria.services.config_service import ConfigService
+from transcria.services.job_executor import get_job_executor
+from transcria.services.job_service import JobService
+from transcria.workflow.states import WorkflowState
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
     can_start_processing,
@@ -241,7 +234,8 @@ def _central_lexicon_context(
     merged = merge_lexicon_entries(display_entries, llm_suggestions)
     if central_entries or llm_suggestions:
         logger.info(
-            "Lexique étape 6: préremplissage fusionné | job=%s, central_lexicons=%d, selected_lexicons=%d, central_entries=%d, displayed_central=%d, hidden_central=%d, llm_suggestions=%d, merged=%d",
+            "Lexique étape 6: préremplissage fusionné | job=%s, central_lexicons=%d, selected_lexicons=%d,"
+            " central_entries=%d, displayed_central=%d, hidden_central=%d, llm_suggestions=%d, merged=%d",
             job.id,
             len(central_lexicons),
             len(selected_lexicons),
