@@ -12,14 +12,17 @@ from transcria.stt.base_diarizer import BaseDiarizer
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MODEL_ID = "nvidia/diar_streaming_sortformer_4spk-v2.1"
+_DEFAULT_NEMO_FILE = "diar_streaming_sortformer_4spk-v2.1.nemo"
+_DEFAULT_LOCAL_DIR = "models/sortformer-4spk-v2.1"
 _SPEAKER_ID_PREFIX = "SPEAKER_"
 
 
 class SortformerDiarizer(BaseDiarizer):
     """Backend de diarisation NVIDIA Sortformer (NeMo) — expérimental.
 
-    Utilise SortformerEncLabelModel.diarize() dont la sortie est une liste de
-    chaînes RTTM « start end speaker_N » (format natif NeMo 2.7.x).
+    Utilise SortformerEncLabelModel.restore_from() avec le fichier .nemo local
+    si un chemin absolu est fourni, ou from_pretrained() avec un repo_id HF
+    si le model_id est au format namespace/repo_name.
 
     Caractéristiques :
     - Language-agnostic (embeddings acoustiques bruts, aucune dépendance à la
@@ -80,7 +83,9 @@ class SortformerDiarizer(BaseDiarizer):
                 logger.info("Sortformer: GPU forcé cuda:%d avant chargement", gpu_index)
 
             logger.info("Chargement Sortformer sur %s...", self.device)
-            model = SortformerEncLabelModel.from_pretrained(self._model_name)
+            model = self._load_model()
+            if model is None:
+                raise RuntimeError("Échec chargement Sortformer")
             if self.device != "cpu":
                 model = model.to(self.device)
             model.eval()
@@ -144,6 +149,77 @@ class SortformerDiarizer(BaseDiarizer):
             result = {"available": False, "turns": [], "speakers": [], "error": str(exc)}
             fs.save_json("speakers/speaker_turns.json", result)
             return result
+
+    # ------------------------------------------------------------------
+    # Chargement du modèle (local .nemo ou repo_id HF)
+    # ------------------------------------------------------------------
+
+    def _load_model(self):
+        """Charge le modèle Sortformer depuis un fichier .nemo local ou un repo_id HF.
+
+        Si model_id contient '/' (ex: nvidia/xxx), c'est un repo_id HF → from_pretrained.
+        Sinon, c'est un chemin local ou un fichier .nemo → restore_from.
+        Fallback : chercher le .nemo dans le cache HF et dans ./models/.
+        """
+        from nemo.collections.asr.models import SortformerEncLabelModel
+
+        model_id = self._model_name
+
+        if "/" in model_id:
+            logger.info("Sortformer: chargement via repo_id HF '%s'", model_id)
+            try:
+                return SortformerEncLabelModel.from_pretrained(model_id)
+            except Exception as exc:
+                logger.warning("Sortformer: from_pretrained('%s') échoué (%s), fallback local", model_id, exc)
+
+        nemo_file = self._find_nemo_file(model_id)
+        if nemo_file:
+            logger.info("Sortformer: restore_from('%s')", nemo_file)
+            return SortformerEncLabelModel.restore_from(nemo_file)
+
+        logger.error("Sortformer: aucun fichier .nemo trouvé pour '%s'", model_id)
+        return None
+
+    def _find_nemo_file(self, model_id: str) -> str | None:
+        """Cherche un fichier .nemo pour le model_id donné.
+
+        Cherche dans l'ordre :
+        1. model_id lui-même si c'est un fichier .nemo existant
+        2. Répertoire model_id si c'est un dossier (model_id/*.nemo)
+        3. Cache HF (~/.cache/huggingface/hub/models--nvidia--*/snapshots/*/*.nemo)
+        4. _DEFAULT_LOCAL_DIR/*.nemo (convention locale)
+        """
+        p = Path(model_id)
+        if p.is_file() and p.suffix == ".nemo":
+            return str(p)
+
+        if p.is_dir():
+            nemo_files = list(p.glob("*.nemo"))
+            if nemo_files:
+                return str(nemo_files[0])
+
+        if "/" in model_id:
+            namespace, repo = model_id.split("/", 1)
+            hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+            cache_dir = hf_cache / f"models--{namespace}--{repo}"
+            if cache_dir.is_dir():
+                for snap in (cache_dir / "snapshots").glob("*"):
+                    if not snap.is_dir():
+                        continue
+                    nemo_files = list(snap.glob("*.nemo"))
+                    if nemo_files:
+                        return str(nemo_files[0])
+
+        local_dir = Path(_DEFAULT_LOCAL_DIR)
+        if local_dir.is_dir():
+            specific = local_dir / _DEFAULT_NEMO_FILE
+            if specific.is_file():
+                return str(specific)
+            nemo_files = list(local_dir.glob("*.nemo"))
+            if nemo_files:
+                return str(nemo_files[0])
+
+        return None
 
     # ------------------------------------------------------------------
     # Parsing de la sortie NeMo
