@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -85,8 +86,10 @@ class PyannoteVoiceEmbeddingBackend:
         except ImportError as exc:
             raise VoiceEmbeddingError("pyannote_indisponible") from exc
 
-        logger.info("Chargement pyannote pour empreinte vocale: model=%s device=%s", self.model_id, self.device)
-        pipeline = Pipeline.from_pretrained(self.model_id)
+        hf_token = os.environ.get("HF_TOKEN") or None
+        logger.info("Chargement pyannote pour empreinte vocale: model=%s device=%s token=%s",
+                    self.model_id, self.device, "oui" if hf_token else "non")
+        pipeline = Pipeline.from_pretrained(self.model_id, token=hf_token)
         try:
             pipeline.to(torch.device(self.device))
         except Exception as exc:

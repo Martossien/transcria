@@ -134,8 +134,13 @@ class SortformerDiarizer(BaseDiarizer):
             logger.info("Sortformer: %d locuteurs, %d segments", len(speakers_list), len(turns))
             return result
 
+        except torch.cuda.OutOfMemoryError as exc:
+            logger.error("Diarisation Sortformer: VRAM insuffisante — %s", exc)
+            result = {"available": False, "turns": [], "speakers": [], "error": f"OOM GPU: {exc}"}
+            fs.save_json("speakers/speaker_turns.json", result)
+            return result
         except Exception as exc:
-            logger.exception("Échec diarisation Sortformer")
+            logger.exception("Échec diarisation Sortformer: %s", exc)
             result = {"available": False, "turns": [], "speakers": [], "error": str(exc)}
             fs.save_json("speakers/speaker_turns.json", result)
             return result
