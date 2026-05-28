@@ -11,6 +11,12 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from transcria.gpu.cuda_visible import (
+    parse_cuda_visible_devices,
+    to_nvidia_smi_gpu_index,
+    to_visible_device_index,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +133,7 @@ class GPUAllocator:
                         {
                             "id": idx,
                             "name": torch.cuda.get_device_name(idx),
+                            "cuda_visible_remapped": True,
                             "memory": {
                                 "used": (total - free) / (1024**3),
                                 "free": free / (1024**3),
@@ -140,10 +147,10 @@ class GPUAllocator:
 
     @staticmethod
     def _visible_cuda_device_count() -> int | None:
-        env = os.environ.get("CUDA_VISIBLE_DEVICES", "")
-        if not env or env.lower() in ("nodevfile", "-1"):
+        visible = parse_cuda_visible_devices()
+        if visible is None:
             return None
-        return len([part for part in env.split(",") if part.strip()])
+        return len(visible)
 
     def _reserved_vram_mb_locked(self, gpu_index: int, exclude_job_phase: tuple[str, str] | None = None) -> int:
         total = 0
@@ -162,8 +169,13 @@ class GPUAllocator:
 
     def _get_available_vram_mb_locked(self, gpu_index: int) -> int:
         real_free = 0
+        visible_devices = parse_cuda_visible_devices()
         for gpu in self.get_gpu_info():
-            if gpu.get("id") == gpu_index:
+            if to_visible_device_index(
+                gpu.get("id", 0),
+                visible_devices,
+                allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
+            ) == gpu_index:
                 real_free = int(float(gpu.get("memory", {}).get("free", 0)) * 1024)
                 break
         return max(0, real_free - self._reserved_vram_mb_locked(gpu_index))
@@ -224,14 +236,19 @@ class GPUAllocator:
         return None
 
     def _select_gpu_locked(self, required_mb: int, preferred_gpu: int | None) -> int | None:
-        visible_count = self._visible_cuda_device_count()
+        visible_devices = parse_cuda_visible_devices()
         candidates = self.get_gpu_info()
         if preferred_gpu is None:
             preferred_gpu = self.preferred_gpu
 
         ordered: list[dict] = []
         for gpu in candidates:
-            if gpu.get("id") == preferred_gpu:
+            visible_gpu = to_visible_device_index(
+                gpu.get("id", 0),
+                visible_devices,
+                allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
+            )
+            if visible_gpu == preferred_gpu:
                 ordered.insert(0, gpu)
             else:
                 ordered.append(gpu)
@@ -239,8 +256,12 @@ class GPUAllocator:
         best_idx: int | None = None
         best_free = -1
         for gpu in ordered:
-            gpu_id = int(gpu.get("id", 0))
-            if visible_count is not None and gpu_id >= visible_count:
+            gpu_id = to_visible_device_index(
+                gpu.get("id", 0),
+                visible_devices,
+                allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
+            )
+            if gpu_id is None:
                 continue
             available = self._get_available_vram_mb_locked(gpu_id)
             if available >= required_mb + self.min_free_mb and available > best_free:
@@ -426,11 +447,12 @@ class GPUAllocator:
         return freed
 
     def _gpu_uuid(self, gpu_index: int) -> str | None:
+        nvidia_gpu_index = to_nvidia_smi_gpu_index(gpu_index)
         try:
             result = subprocess.run(
                 [
                     "nvidia-smi",
-                    f"--id={gpu_index}",
+                    f"--id={nvidia_gpu_index}",
                     "--query-gpu=uuid",
                     "--format=csv,noheader",
                 ],
@@ -454,17 +476,24 @@ class GPUAllocator:
                 for gpu, reservations in self._gpu_reservations.items()
             }
             gpus = []
+            visible_devices = parse_cuda_visible_devices()
             for gpu in self.get_gpu_info():
-                gpu_id = int(gpu.get("id", 0))
-                reserved = self._reserved_vram_mb_locked(gpu_id)
-                free = self._get_available_vram_mb_locked(gpu_id)
+                visible_gpu = to_visible_device_index(
+                    gpu.get("id", 0),
+                    visible_devices,
+                    allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
+                )
+                if visible_gpu is None:
+                    continue
+                reserved = self._reserved_vram_mb_locked(visible_gpu)
+                free = self._get_available_vram_mb_locked(visible_gpu)
                 gpus.append(
                     {
-                        "id": gpu_id,
+                        "id": visible_gpu,
                         "name": gpu.get("name", "inconnu"),
                         "reserved_vram_mb": reserved,
                         "free_vram_mb": free,
-                        "reservations": reservations_by_gpu.get(gpu_id, []),
+                        "reservations": reservations_by_gpu.get(visible_gpu, []),
                     }
                 )
             with self._llm_owner_lock:

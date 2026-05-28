@@ -5,6 +5,11 @@ import subprocess
 import time
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
+from transcria.gpu.cuda_visible import (
+    parse_cuda_visible_devices,
+    to_nvidia_smi_gpu_index,
+    to_visible_device_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +21,7 @@ class VRAMManager:
         self.config = config
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
+        scheduling_cfg = config.get("workflow", {}).get("scheduling", {}) or {}
         self.arbitrage_llm_port: int = services.get(
             "arbitrage_llm_port",
             services.get("qwen_port", 8080),
@@ -28,6 +34,22 @@ class VRAMManager:
         self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
         self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
+        self._kill_patterns = [
+            str(item).lower()
+            for item in scheduling_cfg.get(
+                "kill_patterns",
+                [
+                    "vllm",
+                    "llama-server",
+                    "text-generation-server",
+                    "aphrodite",
+                    "sglang",
+                    "lmdeploy",
+                    "exllamav2",
+                ],
+            )
+            if str(item).strip()
+        ]
         _env_gpu = os.environ.get("TRANSCRIA_PREFERRED_GPU")
         self.preferred_gpu: int = int(_env_gpu) if _env_gpu else 0
         self.arbitrage_script: str = os.environ.get(
@@ -62,6 +84,7 @@ class VRAMManager:
                     free, total = torch.cuda.mem_get_info(i)
                     gpus.append({
                         "id": i, "name": torch.cuda.get_device_name(i),
+                        "cuda_visible_remapped": True,
                         "memory": {"used": (total-free)/(1024**3), "free": free/(1024**3), "total": total/(1024**3)},
                     })
         except ImportError:
@@ -69,31 +92,38 @@ class VRAMManager:
         return gpus
 
     def get_free_vram_mb(self, gpu_index: int = 0) -> int:
+        visible_devices = parse_cuda_visible_devices()
         for g in self.get_gpu_info():
-            if g.get("id") == gpu_index:
+            if to_visible_device_index(
+                g.get("id", 0),
+                visible_devices,
+                allow_remapped_ordinal=bool(g.get("cuda_visible_remapped")),
+            ) == gpu_index:
                 return int(g.get("memory", {}).get("free", 0) * 1024)
         return 0
 
     @staticmethod
     def _visible_cuda_device_count() -> int | None:
         """Retourne le nombre de GPUs CUDA visibles via CUDA_VISIBLE_DEVICES, ou None si non contraint."""
-        env = os.environ.get("CUDA_VISIBLE_DEVICES", "")
-        if not env or env.lower() in ("", "nodevfile", "-1"):
+        visible = parse_cuda_visible_devices()
+        if visible is None:
             return None
-        return len([x for x in env.split(",") if x.strip()])
+        return len(visible)
 
     def get_best_gpu(self, required_mb: int) -> int | None:
-        visible_count = self._visible_cuda_device_count()
+        visible_devices = parse_cuda_visible_devices()
         best_idx, best_free = None, 0
         for g in self.get_gpu_info():
-            gpu_id = g.get("id", 0)
-            # Quand CUDA_VISIBLE_DEVICES restreint les GPUs visibles, les GPUs physiques
-            # sont remappés à cuda:0..N-1. Ne pas dépasser l'indice max valide.
-            if visible_count is not None and gpu_id >= visible_count:
+            visible_gpu = to_visible_device_index(
+                g.get("id", 0),
+                visible_devices,
+                allow_remapped_ordinal=bool(g.get("cuda_visible_remapped")),
+            )
+            if visible_gpu is None:
                 continue
             free_mb = int(g.get("memory", {}).get("free", 0) * 1024)
             if free_mb >= required_mb + self.min_free_mb and free_mb > best_free:
-                best_free, best_idx = free_mb, gpu_id
+                best_free, best_idx = free_mb, visible_gpu
         return best_idx
 
     def _log_all_gpus(self, label: str = "") -> None:
@@ -174,9 +204,11 @@ class VRAMManager:
     def _free_memory(self, gpu_index: int) -> None:
         """Tente de libérer la VRAM en tuant les processus GPU > 4 Go."""
         import signal as _sig
+        nvidia_gpu_index = to_nvidia_smi_gpu_index(gpu_index)
         try:
             result = subprocess.run(
-                ["nvidia-smi", "--query-compute-apps=pid,process_name,used_gpu_memory",
+                ["nvidia-smi", "-i", str(nvidia_gpu_index),
+                 "--query-compute-apps=pid,process_name,used_gpu_memory",
                  "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, timeout=10,
             )
@@ -186,30 +218,45 @@ class VRAMManager:
                     try:
                         vram_mb = float(parts[2])
                         pid = int(parts[0])
-                        if vram_mb > 4000 and pid > 1:
+                        process_name = parts[1]
+                        if (
+                            vram_mb > 4000
+                            and pid > 1
+                            and self._matches_kill_pattern(process_name)
+                        ):
                             logger.warning("Libération VRAM: kill PID %s (%s, %d Mo)", parts[0], parts[1], int(vram_mb))
                             os.kill(pid, _sig.SIGTERM)
                     except (ValueError, ProcessLookupError, PermissionError):
                         pass
             time.sleep(2)
             result2 = subprocess.run(
-                ["nvidia-smi", "--query-compute-apps=pid,used_gpu_memory",
+                ["nvidia-smi", "-i", str(nvidia_gpu_index),
+                 "--query-compute-apps=pid,process_name,used_gpu_memory",
                  "--format=csv,noheader,nounits"],
                 capture_output=True, text=True, timeout=10,
             )
             for line in result2.stdout.strip().split("\n"):
                 parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 2:
+                if len(parts) >= 3:
                     try:
-                        vram_mb = float(parts[1])
+                        vram_mb = float(parts[2])
                         pid = int(parts[0])
-                        if vram_mb > 4000 and pid > 1:
+                        process_name = parts[1]
+                        if (
+                            vram_mb > 4000
+                            and pid > 1
+                            and self._matches_kill_pattern(process_name)
+                        ):
                             logger.warning("SIGKILL PID %s (%d Mo)", parts[0], int(vram_mb))
                             os.kill(pid, _sig.SIGKILL)
                     except (ValueError, ProcessLookupError, PermissionError):
                         pass
         except Exception:
             pass
+
+    def _matches_kill_pattern(self, process_name: str) -> bool:
+        lower = process_name.lower()
+        return any(pattern in lower for pattern in self._kill_patterns)
 
     # ── Model tracking ────────────────────────────────────
 
