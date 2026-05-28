@@ -138,8 +138,12 @@ transcria/
 │   │   ├── _port_utils.py         # is_port_open() partagé entre vram_manager et llm_backend
 │   │   └── cuda_visible.py        # parse_cuda_visible_devices, to_visible_device_index, to_nvidia_smi_gpu_index
 │   │
+│   ├── notifications/             # Notifications applicatives
+│   │   ├── __init__.py
+│   │   └── mailer.py              # EmailConfig, build_email_config(), send_job_notification_async(), _send_smtp()
+│   │
 │   ├── services/                  # Services métier
-│   │   ├── job_executor.py       # JobExecutorService (worker thread)
+│   │   ├── job_executor.py       # JobExecutorService (worker thread) + _notify() hook email
 │   │   ├── job_service.py        # JobService
 │   │   ├── pipeline_service.py   # PipelineService
 │   │   └── config_service.py     # ConfigService
@@ -179,30 +183,42 @@ transcria/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.0 (394 lignes)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + lexique + orthographe) — v1.9 (612 lignes)
 │
-├── tests/                         # suite pytest + E2E
+├── tests/                         # suite pytest + E2E (870+ tests)
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
+│   ├── test_audio.py              # 64 tests — Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre
+│   ├── test_audit.py              # 12 tests — AuditStore, rétention par famille
 │   ├── test_auth.py               # 17 tests — Rôles, modèles, permissions
 │   ├── test_auth_store.py         # 14 tests — CRUD utilisateurs, groupes
-│   ├── test_config.py             # 24 tests — Chargement YAML, sauvegarde config, debug
-│   ├── test_context.py            # 19 tests — Meeting, participants, lexique, builder
-│   ├── test_diarization.py        # 12 tests — Diarisation, checkpoints, clips
+│   ├── test_bench_tools.py        # 13 tests — Outils benchmark audio
+│   ├── test_central_lexicon.py    # 28 tests — LexiconStore, LexiconService, routes admin
+│   ├── test_config.py             # 40 tests — Chargement YAML, sauvegarde config, debug
+│   ├── test_context.py            # 27 tests — Meeting, participants, lexique, builder
+│   ├── test_diarization.py        # 37 tests — DiarizerService, SortformerDiarizer, BaseDiarizer, factory
 │   ├── test_edge_cases.py         # 17 tests — Cas limites contexte/exports/transitions
 │   ├── test_exports.py            # 3 tests — PackageBuilder
-│   ├── test_gpu.py                # 59 tests — VRAMManager
+│   ├── test_gpu.py                # 68 tests — VRAMManager, CUDA_VISIBLE_DEVICES, libération VRAM ciblée
+│   ├── test_gpu_allocator.py      # 7 tests — Réservations GPU, remapping CUDA visible, verrou LLM
 │   ├── test_integrations.py       # 12 tests — DashboardClient, SrtEditorLink, OpenCodeRunner
-│   ├── test_jobs.py               # 19 tests — Job model, filesystem
+│   ├── test_job_service.py        # 2 tests — JobService
 │   ├── test_job_store.py          # 15 tests — JobStore CRUD, purge rétention
-│   ├── test_opencode_runner.py    # 44 tests — opencode, parsing résumé, correction
-│   ├── test_audio.py              # 45 tests — Analyse de scène worker, AudioSceneAnalyzer, séparation sources
-│   ├── test_pipeline_service.py   # 13 tests — Analyse de scène, séparation, filtrage, normalisation, ordre pipeline
+│   ├── test_jobs.py               # 19 tests — Job model, filesystem
+│   ├── test_mailer.py             # 20 tests — EmailConfig, templates, async dispatch, modes SMTP
+│   ├── test_opencode_runner.py    # 54 tests — opencode, parsing résumé, correction
+│   ├── test_pipeline_service.py   # 19 tests — Analyse de scène, séparation, filtrage, normalisation, ordre pipeline
 │   ├── test_quality.py            # 19 tests — SRTChecker, LexiconChecker
-│   ├── test_quality_deep.py       # 19 tests — Tests approfondis qualité avec SRT réel
-│   ├── test_stt.py                # 32 tests — STT, timestamps, alignement, speaker clips
+│   ├── test_quality_deep.py       # 37 tests — Tests approfondis qualité avec SRT réel
+│   ├── test_queue_calendar.py     # 10 tests — SchedulingCalendar, règles calendrier
+│   ├── test_queue_scheduler.py    # 6 tests — QueueScheduler dispatch
+│   ├── test_queue_store.py        # 6 tests — QueueStore CRUD, aging
+│   ├── test_stt.py                # 76 tests — STT, timestamps, alignement, speaker clips
 │   ├── test_summary_generator.py  # 1 test — Résumé rapide
-│   ├── test_web_api.py            # 38 tests — Routes web (login, jobs, upload, admin config)
-│   ├── test_web_edge_cases.py     # 50 tests — Erreurs API, rôles, accès jobs, pipeline
+│   ├── test_voice.py              # 13 tests — VoiceStore, empreintes, matching
+│   ├── test_voice_e2e.py          # 1 test — Flux E2E voix enregistrées
+│   ├── test_web_api.py            # 54 tests — Routes web (login, jobs, upload, admin config, lexique debug)
+│   ├── test_web_edge_cases.py     # 53 tests — Erreurs API, rôles, accès jobs, pipeline
+│   ├── test_web_helpers.py        # 13 tests — Helpers web (audio diagnostic, enrichissement lexique, locuteurs)
 │   ├── test_workflow.py           # 30 tests — États, transitions, runner
-│   └── test_workflow_runner.py    # 55 tests — Runner, correction, résumé, genre locuteur
+│   └── test_workflow_runner.py    # 64 tests — Runner, correction, résumé, genre locuteur
 │
 ├── jobs/                          # Données des traitements (runtime)
 └── docs/                          # Documentation
@@ -287,6 +303,19 @@ security:
   retention_days: 365
   allow_job_delete: true
   allowed_upload_extensions: [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]
+
+notifications:
+  email:
+    enabled: false
+    smtp_host: "smtp.example.com"
+    smtp_port: 587            # 587=STARTTLS, 465=SMTPS/SSL, 25=nu
+    smtp_username: ""
+    smtp_password: ""
+    use_starttls: true        # true pour port 587
+    use_ssl: false            # true pour port 465
+    from_address: "transcria@example.com"
+    from_name: "TranscrIA"
+    base_url: "http://localhost:7870"  # URL publique pour les liens dans les emails
 ```
 
 **Notes :**
@@ -982,9 +1011,8 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/download/package` | GET | login_required + owner check | Téléchargement ZIP |
 | `/api/jobs/<id>/download/audio` | GET | login_required + owner check | Téléchargement audio |
 | `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY, audité comme `job_external_push` |
+| `/api/jobs/<id>/lexicon/debug` | GET | login_required + owner check | Diagnostic détaillé du lexique : `audio_available`, timecodes bruts/normalisés, notes de réparation par contexte |
 | `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON (polling) |
-| `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
-| `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON |
 | `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 | `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
@@ -1062,7 +1090,8 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 | `submit_process(job_id, audio_path, mode, priority, scheduled_at, vram_profile)` | Soumet un job au scheduler persistant ou au worker direct |
 | `get_runtime_snapshot()` | Retourne l'état queue/worker pour `/ready`, `/metrics`, `/api/queue/status` |
 | `stop()` | Arrête le scheduler et l'executor interne (utilisé au teardown de tests et arrêt contrôlé) |
-| `_run_process(job_id, audio_path, mode)` | Exécute `PipelineService.run_process(..., finalize_job_state=False)`, puis finalise `job_queue`, `execution` et `jobs.state` dans un ordre cohérent |
+| `_run_process(job_id, audio_path, mode)` | Exécute `PipelineService.run_process(..., finalize_job_state=False)`, puis finalise `job_queue`, `execution` et `jobs.state` dans un ordre cohérent, puis appelle `_notify()` |
+| `_notify(config, job, event, error)` | Helper module-level fire-and-forget : extrait email/nom de `job.owner`, appelle `send_job_notification_async()`. Absorbe toute exception — ne bloque jamais le pipeline |
 | `_kill_orphaned_opencode(job_id, jobs_dir, sl)` | Tue les processus opencode orphelins via fichiers `.opencode.pid` |
 | `_reconcile_interrupted_jobs(jobs_dir, sl)` | Réconcilie les jobs interrompus après redémarrage brutal |
 | `init_job_executor(config, app)` | Point d'entrée d'initialisation du worker au démarrage du service |
@@ -1135,6 +1164,45 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 | `/admin/audit/export.csv` | GET | `ACCESS_SYSTEM` — export CSV horodaté pour le DPO/référent PSSI, journalisé par `audit_export` |
 
 Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route DELETE, pas d'accès d'écriture hors `db.session` interne).
+
+---
+
+### 4.14 Notifications (`transcria/notifications/`)
+
+**`mailer.py`** — envoi d'emails de notification à la fin du traitement d'un job.
+
+**`EmailConfig`** — dataclass de configuration SMTP :
+
+| Champ | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `False` | Active/désactive les notifications |
+| `smtp_host` | str | `""` | Serveur SMTP |
+| `smtp_port` | int | `587` | Port SMTP |
+| `smtp_username` | str | `""` | Identifiant SMTP (vide = pas d'auth) |
+| `smtp_password` | str | `""` | Mot de passe SMTP |
+| `use_starttls` | bool | `True` | STARTTLS (recommandé pour port 587) |
+| `use_ssl` | bool | `False` | SMTPS/SSL direct (port 465) |
+| `from_address` | str | `""` | Adresse expéditeur |
+| `from_name` | str | `"TranscrIA"` | Nom affiché dans « De : » |
+| `base_url` | str | `"http://localhost:7870"` | URL publique pour les liens emails |
+
+| Fonction | Description |
+|---|---|
+| `build_email_config(cfg)` | Construit un `EmailConfig` depuis la config applicative (section `notifications.email`) |
+| `send_job_notification_async(cfg, to_email, display_name, job_title, job_id, event, error)` | Point d'entrée public : vérifie la config, construit l'email HTML + texte, lance un daemon thread pour l'envoi SMTP. `event` vaut `"completed"` ou `"failed"`. Ne lève jamais. |
+| `_send_smtp(ecfg, to, subject, html, text)` | Envoi SMTP effectif : STARTTLS (`use_starttls=True`), SMTPS/SSL (`use_ssl=True`) ou SMTP nu. Authentification optionnelle. |
+
+**Modes SMTP supportés :**
+
+| Mode | `smtp_port` | `use_starttls` | `use_ssl` |
+|---|---|---|---|
+| STARTTLS (recommandé) | `587` | `True` | `False` |
+| SMTPS/SSL | `465` | `False` | `True` |
+| SMTP nu (intranet) | `25` | `False` | `False` |
+
+**Intégration pipeline :** `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED/FAILED)`. Le module extrait `job.owner.email` et `job.owner.display_name` dans le thread pipeline (app context actif), puis l'envoi SMTP se fait dans un thread daemon séparé. Aucun accès DB dans le thread SMTP.
+
+**Prérequis :** le champ `email` du profil utilisateur doit être renseigné (interface `/admin/users/<id>/edit`). Si vide, aucune notification n'est envoyée.
 
 ---
 
@@ -1352,32 +1420,44 @@ La suite pytest couvre tous les modules. Lancer avec :
 cd transcria && python -m pytest tests/ -v
 ```
 
-Organisation :
+870+ tests au total (sans les E2E GPU). Organisation :
+
 | Fichier | Tests | Couverture |
 |---|---|---|
-| `test_audio.py` | 45 | Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre |
+| `test_audio.py` | 64 | Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre |
+| `test_audit.py` | 12 | AuditStore, rétention par famille, export CSV |
 | `test_auth.py` | 17 | Rôles, modèles, permissions, décorateur |
 | `test_auth_store.py` | 14 | CRUD utilisateurs, groupes |
-| `test_config.py` | 24 | Chargement YAML, sauvegarde config, env var, debug |
-| `test_context.py` | 19 | Meeting, participants, lexique, builder |
-| `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory (checkpoints, clips, parsing, normalisation, factory pattern) |
-| `test_edge_cases.py` | 17 | Cas limites, transitions workflow |
+| `test_bench_tools.py` | 13 | Outils benchmark audio |
+| `test_central_lexicon.py` | 28 | CentralLexiconStore, CentralLexiconService, routes admin |
+| `test_config.py` | 40 | Chargement YAML, sauvegarde config, env var, debug |
+| `test_context.py` | 27 | Meeting, participants, lexique, builder |
+| `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
+| `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |
 | `test_gpu.py` | 68 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée |
 | `test_gpu_allocator.py` | 7 | Réservations GPU, remapping CUDA visible, verrou LLM |
 | `test_integrations.py` | 12 | Dashboard, SRT Editor, OpenCodeRunner |
-| `test_jobs.py` | 19 | Job model, filesystem |
+| `test_job_service.py` | 2 | JobService |
 | `test_job_store.py` | 15 | JobStore CRUD, purge rétention |
-| `test_opencode_runner.py` | 44 | opencode, parsing résumé, correction |
-| `test_pipeline_service.py` | 13 | Analyse de scène, filtrage, normalisation, séparation, ordre pipeline |
+| `test_jobs.py` | 19 | Job model, filesystem |
+| `test_mailer.py` | 20 | EmailConfig, templates HTML/texte, dispatch async, modes SMTP, XSS |
+| `test_opencode_runner.py` | 54 | opencode, parsing résumé, correction |
+| `test_pipeline_service.py` | 19 | Analyse de scène, filtrage, normalisation, séparation, ordre pipeline |
 | `test_quality.py` | 19 | SRT checks, lexique |
-| `test_quality_deep.py` | 19 | SRT réel, rapport intégré |
-| `test_stt.py` | 32 | Timestamps, segments SRT, speaker clips |
+| `test_quality_deep.py` | 37 | SRT réel, rapport intégré, checks approfondis |
+| `test_queue_calendar.py` | 10 | SchedulingCalendar, règles calendrier, overnight windows |
+| `test_queue_scheduler.py` | 6 | QueueScheduler dispatch, aging |
+| `test_queue_store.py` | 6 | QueueStore CRUD, priorités, pause/reprise |
+| `test_stt.py` | 76 | STT, timestamps, alignement, speaker clips, fiabilité |
 | `test_summary_generator.py` | 1 | Génération résumé rapide |
-| `test_web_api.py` | 38 | Routes web, login, jobs, admin config |
-| `test_web_edge_cases.py` | 50 | Erreurs API, rôles, accès jobs, pipeline |
+| `test_voice.py` | 13 | VoiceStore, empreintes, matching, consentements |
+| `test_voice_e2e.py` | 1 | Flux E2E voix enregistrées |
+| `test_web_api.py` | 54 | Routes web, login, jobs, upload, admin config, lexique debug |
+| `test_web_edge_cases.py` | 53 | Erreurs API, rôles, accès jobs, pipeline |
+| `test_web_helpers.py` | 13 | Helpers web (audio diagnostic, enrichissement lexique, locuteurs) |
 | `test_workflow.py` | 30 | États, transitions, runner |
-| `test_workflow_runner.py` | 55 | Runner, correction, résumé, genre locuteur |
+| `test_workflow_runner.py` | 64 | Runner, correction, résumé, genre locuteur |
 | `conftest.py` | — | Fixtures pytest (app, client, admin/operator/viewer) |
 
 ---

@@ -20,6 +20,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
+- **Notifications email** : email de fin de traitement envoyé au propriétaire du job (succès ou échec), configurable via SMTP/STARTTLS/SMTPS, fire-and-forget en tâche de fond.
 - **File GPU persistante et planification** : mise en file activée par défaut, priorités, pause/reprise/annulation, limites de concurrence par calendrier et dispatch scheduler auditable.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
@@ -95,6 +96,7 @@ Points à vérifier après installation :
 - `workflow.queue.*`, `workflow.execution.max_concurrent_jobs` et `workflow.scheduling.*` pour la file persistante, le parallélisme et les créneaux calendrier.
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
 - `voice_enrollment.enabled` si le référentiel de voix connues doit être activé, avec `voice_enrollment.storage_dir` placé sur un stockage local protégé.
+- `notifications.email.enabled` + `smtp_host` / `smtp_port` / `from_address` / `base_url` pour activer les emails de fin de traitement (succès/échec) vers le propriétaire du job. L'adresse email doit être renseignée dans le profil de chaque utilisateur.
 - Les lexiques centralisés sont stockés en base SQLite et ne nécessitent pas de section config dédiée en V1.
 
 Variables d'environnement principales :

@@ -42,8 +42,10 @@ venv/bin/python tests/test_e2e_workflow.py                          # E2E comple
 venv/bin/python tests/test_e2e_workflow.py --keep                   # Conserve le job pour inspection
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fichier audio
 
-# Lint / format — AUCUN linter configuré dans le projet.
-# Le projet ne suit pas black/ruff/flake8. Respecte le style existant.
+# Lint / format
+python -m ruff check transcria/ tests/   # ruff configuré dans pyproject.toml (E,W,F,I — line-length=140)
+python -m mypy transcria/                 # mypy configuré dans pyproject.toml (ignore_missing_imports=true)
+# black n'est PAS utilisé. Respecte le style du fichier que tu modifies.
 ```
 
 ## Stack technique
@@ -160,8 +162,11 @@ transcria/
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
+    notifications/
+      __init__.py
+      mailer.py             # EmailConfig, build_email_config(), send_job_notification_async() — SMTP fire-and-forget daemon thread
     services/
-      job_executor.py       # JobExecutorService — worker interne (thread)
+      job_executor.py       # JobExecutorService — worker interne (thread) + _notify() hook email après COMPLETED/FAILED
       job_service.py        # JobService
       pipeline_service.py   # PipelineService — preflight, scene, quality refresh, source sep, filter, denoise, norm avant STT
       config_service.py     # ConfigService
@@ -196,9 +201,11 @@ transcria/
     bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices 24/36 combos
     bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
     bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
-  tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires)
+  tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires) — 870+ tests
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
+    test_mailer.py          # 20 tests — EmailConfig, templates, async dispatch, modes SMTP
+    test_web_helpers.py     # 13 tests — helpers web (audio diagnostic, lexique, locuteurs)
     E2E_README.md
   docs/
     INSTALL.md              # Guide d'installation (install.sh, venv, modèles, systemd)
@@ -327,6 +334,8 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.
+
+**Notifications email** : `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED)` ou `JobStore.update_state(FAILED)`. `_notify` délègue à `send_job_notification_async()` (module `transcria/notifications/mailer.py`) qui envoie l'email en daemon thread — jamais bloquant, absorbe toute exception. La configuration SMTP est dans `notifications.email` (`enabled`, `smtp_host`, `smtp_port`, `use_starttls`, `use_ssl`, `from_address`, `base_url`). Si `enabled=false` ou si l'adresse email de l'utilisateur est vide, aucune notification n'est envoyée.
 
 Les états de file restent dans `job_queue.status` (`waiting`, `paused`, `running`, `done`, `failed`, `cancelled`) et dans `extra_data.execution.status`; ne pas ajouter d'états `QUEUED` ou `WAITING_RESOURCES` à `JobState` sans revoir `WorkflowState`, `WORKFLOW_STEPS` et la documentation. En mode queue, `PipelineService.run_process(..., finalize_job_state=False)` laisse `JobExecutorService` publier les états terminaux dans l'ordre `job_queue` → `extra_data.execution` → `jobs.state`; ne pas remettre un `JobState.COMPLETED` direct dans le pipeline queue, cela recrée une course visible par l'API. Les routes sensibles de file/calendrier doivent être auditées via `audit_log()`.
 
