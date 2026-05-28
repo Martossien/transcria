@@ -18,8 +18,33 @@ class PipelineService:
         from transcria.workflow.runner import WorkflowRunner
         self.runner = WorkflowRunner(JobStore, config)
 
+    @staticmethod
+    def estimate_job_vram(config: dict, mode: str) -> dict:
+        from transcria.stt.diarizer_factory import get_diarizer_vram_mb
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        backend = config.get("models", {}).get("stt_backend", "cohere")
+        phases = {
+            "stt": get_backend_vram_mb(backend, config),
+        }
+        if mode == "quality" and config.get("workflow", {}).get("enable_quality_mode", True):
+            diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
+            phases["diarization"] = get_diarizer_vram_mb(diar_backend, config)
+        if config.get("workflow", {}).get("arbitration_llm", {}).get("enabled") is not False:
+            phases["llm_arbitration"] = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+        return {
+            "mode": mode,
+            "peak_vram_mb": max(phases.values()) if phases else 0,
+            "phases": phases,
+            "llm_shared": "llm_arbitration" in phases,
+        }
+
     def run_process(
-        self, job: Job, audio_path: str, mode: str = "fast"
+        self,
+        job: Job,
+        audio_path: str,
+        mode: str = "fast",
+        finalize_job_state: bool = True,
     ) -> dict:
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="process")
@@ -28,7 +53,7 @@ class PipelineService:
         sl.info("DÉBUT pipeline %s", mode, job_id=job.id, mode=mode)
 
         try:
-            result = self._execute_pipeline(job, audio_path, mode, sl)
+            result = self._execute_pipeline(job, audio_path, mode, sl, finalize_job_state)
             elapsed = time.monotonic() - t0
             status = "OK" if not result.get("error") else "ERROR"
             sl.info("FIN pipeline %s", mode, job_id=job.id,
@@ -36,22 +61,34 @@ class PipelineService:
             return result
         except Exception as exc:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
-            JobStore.update_state(job.id, JobState.FAILED, str(exc))
+            if finalize_job_state:
+                JobStore.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "step": "pipeline"}
 
     def _execute_pipeline(
-        self, job: Job, audio_path: str, mode: str, sl
+        self,
+        job: Job,
+        audio_path: str,
+        mode: str,
+        sl,
+        finalize_job_state: bool = True,
     ) -> dict:
         try:
-            return self._run_pipeline_steps(job, audio_path, mode, sl)
+            return self._run_pipeline_steps(job, audio_path, mode, sl, finalize_job_state)
         finally:
             self._release_arbitrage_llm()
 
     def _run_pipeline_steps(
-        self, job: Job, audio_path: str, mode: str, sl
+        self,
+        job: Job,
+        audio_path: str,
+        mode: str,
+        sl,
+        finalize_job_state: bool = True,
     ) -> dict:
         if self._is_cancel_requested(job.id):
-            JobStore.update_state(job.id, JobState.CANCELLED)
+            if finalize_job_state:
+                JobStore.update_state(job.id, JobState.CANCELLED)
             return {"error": "Traitement annulé", "step": "transcription", "cancelled": True}
 
         effective_config = self._config_for_mode(mode, job)
@@ -79,7 +116,8 @@ class PipelineService:
 
         for step_cfg in steps:
             if self._is_cancel_requested(job.id):
-                JobStore.update_state(job.id, JobState.CANCELLED)
+                if finalize_job_state:
+                    JobStore.update_state(job.id, JobState.CANCELLED)
                 return {"error": "Traitement annulé", "step": step_cfg["name"], "cancelled": True}
             t0 = time.monotonic()
             method = step_cfg["method"]
@@ -100,12 +138,14 @@ class PipelineService:
                 sl.error("Étape échouée", step=step_cfg["name"],
                          error=result.get("error"),
                          duree=round(elapsed, 1))
-                JobStore.update_state(job.id, JobState.FAILED, result["error"])
+                if finalize_job_state:
+                    JobStore.update_state(job.id, JobState.FAILED, result["error"])
                 return {"error": result["error"], "step": step_cfg["name"]}
             sl.info("Étape terminée", step=step_cfg["name"],
                     duree=round(elapsed, 1))
 
-        JobStore.update_state(job.id, JobState.COMPLETED)
+        if finalize_job_state:
+            JobStore.update_state(job.id, JobState.COMPLETED)
         return {"status": "completed", "transcription": transcribe_result}
 
     def _release_arbitrage_llm(self) -> None:

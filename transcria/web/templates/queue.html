@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}File d'attente - TranscrIA{% endblock %}
+{% block content %}
+{% set waiting_count = counts.get('waiting', runtime.queued_jobs or 0) %}
+{% set running_count = counts.get('running', runtime.running_jobs or 0) %}
+{% set paused_count = counts.get('paused', runtime.paused_jobs or 0) %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-1">File d'attente</h1>
+    <div class="text-muted small">
+      {% if schedule_enabled %}
+        Agenda {{ timezone }}
+        {% if active_window %}
+          · créneau actif : {{ active_window.name }} ({{ schedule_action_labels.get(active_window.action, active_window.action) }})
+        {% else %}
+          · aucun créneau actif
+        {% endif %}
+      {% else %}
+        Agenda désactivé
+      {% endif %}
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {% if can_purge_e2e_jobs %}
+    <button class="btn btn-outline-danger btn-sm" type="button" data-purge-e2e title="Supprimer les jobs de test E2E">
+      <i class="bi bi-trash3" aria-hidden="true"></i> Nettoyer E2E
+    </button>
+    {% endif %}
+    <a href="/admin/schedule" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-calendar-week" aria-hidden="true"></i> Planification
+    </a>
+  </div>
+</div>
+
+<div id="queue-feedback" class="alert d-none" role="status"></div>
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">En attente</div>
+        <div class="h4 mb-0">{{ waiting_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">En cours</div>
+        <div class="h4 mb-0">{{ running_count }}/{{ runtime.max_workers or 0 }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">En pause manuelle</div>
+        <div class="h4 mb-0">{{ paused_count }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="text-muted small">Scheduler</div>
+        <div class="h5 mb-0">
+          <span class="badge {{ 'text-bg-success' if runtime.healthy else 'text-bg-danger' }}">
+            {{ 'actif' if runtime.healthy else 'indisponible' }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <span class="fw-semibold">Jobs planifiés</span>
+      <span class="text-muted small ms-2">{{ entries|length }} élément{{ 's' if entries|length > 1 else '' }}</span>
+    </div>
+    <button class="btn btn-outline-secondary btn-sm" type="button" data-reload>
+      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Actualiser
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th class="text-nowrap">Rang</th>
+          <th>Job</th>
+          <th class="text-nowrap">Priorité</th>
+          <th class="text-nowrap">Mode</th>
+          <th class="text-nowrap">Ressources</th>
+          <th class="text-nowrap">État</th>
+          <th class="text-nowrap">Départ</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for entry in entries %}
+        {% set vram = entry.get_vram_profile().get('peak_vram_mb', 0) %}
+        {% set status_class = 'text-bg-success' if entry.status == 'running' else 'text-bg-secondary' if entry.status == 'paused' else 'text-bg-warning' %}
+        <tr>
+          <td class="text-nowrap">
+            <span class="fw-semibold">{{ loop.index }}</span>
+            {% if entry.status == 'waiting' %}
+              <div class="text-muted small">position {{ entry.position }}</div>
+            {% endif %}
+          </td>
+          <td style="min-width: 16rem;">
+            <a href="/jobs/{{ entry.job_id }}" class="fw-semibold text-decoration-none">
+              {{ entry.job.title if entry.job else entry.job_id }}
+            </a>
+            <div class="text-muted small text-break">{{ entry.job_id }}</div>
+          </td>
+          <td class="text-nowrap">
+            <form class="queue-priority-form d-flex align-items-center gap-2" data-job="{{ entry.job_id }}">
+              <input class="form-control form-control-sm queue-priority-input" style="width: 5rem;" type="number" min="1" max="100" name="priority" value="{{ entry.base_priority }}" title="Priorité de base">
+              <button class="btn btn-sm btn-outline-primary" type="submit" title="Appliquer la priorité">
+                <i class="bi bi-check2" aria-hidden="true"></i>
+              </button>
+            </form>
+            <div class="text-muted small">effective {{ entry.effective_priority }}{% if entry.aging_bonus %} · bonus {{ entry.aging_bonus }}{% endif %}</div>
+          </td>
+          <td class="text-nowrap">{{ entry.mode }}</td>
+          <td class="text-nowrap">
+            {{ (vram / 1000) | round(1) }} Go
+            {% if entry.gpu_index is not none %}
+              <div class="text-muted small">GPU {{ entry.gpu_index }}</div>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            <span class="badge {{ status_class }}">{{ status_labels.get(entry.status, entry.status) }}</span>
+            {% if entry.current_phase %}
+              <div class="text-muted small">{{ entry.current_phase }}</div>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            {% if entry.scheduled_at %}
+              {{ entry.scheduled_at.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              Immédiat
+            {% endif %}
+            {% if entry.started_at %}
+              <div class="text-muted small">démarré {{ entry.started_at.strftime('%H:%M') }}</div>
+            {% elif entry.submitted_at %}
+              <div class="text-muted small">créé {{ entry.submitted_at.strftime('%d/%m %H:%M') }}</div>
+            {% endif %}
+          </td>
+          <td class="text-end text-nowrap">
+            <button class="btn btn-sm btn-outline-secondary" data-action="move-up" data-job="{{ entry.job_id }}" title="Monter">
+              <i class="bi bi-arrow-up" aria-hidden="true"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" data-action="move-down" data-job="{{ entry.job_id }}" title="Descendre">
+              <i class="bi bi-arrow-down" aria-hidden="true"></i>
+            </button>
+            {% if entry.status == 'paused' %}
+            <button class="btn btn-sm btn-outline-success" data-action="resume" data-job="{{ entry.job_id }}" title="Reprendre">
+              <i class="bi bi-play" aria-hidden="true"></i>
+            </button>
+            {% elif entry.status == 'waiting' %}
+            <button class="btn btn-sm btn-outline-warning" data-action="pause" data-job="{{ entry.job_id }}" title="Mettre en pause">
+              <i class="bi bi-pause" aria-hidden="true"></i>
+            </button>
+            {% endif %}
+            <button class="btn btn-sm btn-outline-danger" data-action="cancel" data-job="{{ entry.job_id }}" title="Annuler">
+              <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="8" class="text-center text-muted py-5">Aucun job en file</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const queueFeedback = document.getElementById('queue-feedback');
+
+function showQueueFeedback(message, level = 'danger') {
+  queueFeedback.className = `alert alert-${level}`;
+  queueFeedback.textContent = message;
+}
+
+async function postQueueAction(jobId, action, payload = null) {
+  const options = {method: 'POST'};
+  if (payload) {
+    options.headers = {'Content-Type': 'application/json'};
+    options.body = JSON.stringify(payload);
+  }
+  const response = await fetch(`/api/queue/${jobId}/${action}`, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.ok === false) {
+    throw new Error(data.error || 'Action impossible sur ce job.');
+  }
+  return data;
+}
+
+document.querySelectorAll('[data-action]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    if (button.dataset.action === 'cancel' && !window.confirm('Annuler ce job ?')) {
+      return;
+    }
+    button.disabled = true;
+    try {
+      await postQueueAction(button.dataset.job, button.dataset.action);
+      window.location.reload();
+    } catch (error) {
+      button.disabled = false;
+      showQueueFeedback(error.message);
+    }
+  });
+});
+
+document.querySelectorAll('.queue-priority-form').forEach((form) => {
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    const priority = Number.parseInt(form.priority.value, 10);
+    if (!Number.isInteger(priority) || priority < 1 || priority > 100) {
+      showQueueFeedback('La priorité doit être comprise entre 1 et 100.');
+      return;
+    }
+    button.disabled = true;
+    try {
+      await postQueueAction(form.dataset.job, 'priority', {priority});
+      window.location.reload();
+    } catch (error) {
+      button.disabled = false;
+      showQueueFeedback(error.message);
+    }
+  });
+});
+
+document.querySelector('[data-reload]')?.addEventListener('click', () => window.location.reload());
+
+document.querySelector('[data-purge-e2e]')?.addEventListener('click', async (event) => {
+  const prefix = {{ e2e_test_job_prefix|tojson }};
+  const confirmation = `Supprimer tous les jobs dont le titre commence par "${prefix}" ?\n\nLes jobs en cours seront ignorés.`;
+  if (!window.confirm(confirmation)) {
+    return;
+  }
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/queue/e2e-test-jobs/purge', {method: 'POST'});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || 'Nettoyage impossible.');
+    }
+    const skipped = data.skipped_count ? `, ${data.skipped_count} ignoré(s) car en cours` : '';
+    showQueueFeedback(`${data.deleted_count} job(s) de test supprimé(s)${skipped}.`, 'success');
+    window.setTimeout(() => window.location.reload(), 900);
+  } catch (error) {
+    button.disabled = false;
+    showQueueFeedback(error.message);
+  }
+});
+</script>
+{% endblock %}

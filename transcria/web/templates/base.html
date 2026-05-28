@@ -48,6 +48,7 @@
         {% endif %}
         {% if can_manage_groups %}
         <a href="/admin/groups" class="btn btn-sm btn-outline-secondary">Groupes</a>
+        <a href="/admin/queue" class="btn btn-sm btn-outline-secondary">File</a>
         <a href="/admin/lexicons" class="btn btn-sm btn-outline-secondary">Lexiques</a>
         <a href="/admin/voices" class="btn btn-sm btn-outline-secondary">Voix enregistrées</a>
         {% endif %}
@@ -56,6 +57,9 @@
         {% endif %}
         {% if Permission.ACCESS_SYSTEM in user_permissions %}
         <a href="/admin/audit" class="btn btn-sm btn-outline-secondary">Audit</a>
+        {% if Permission.MANAGE_SCHEDULE in user_permissions %}
+        <a href="/admin/schedule" class="btn btn-sm btn-outline-secondary">Planification</a>
+        {% endif %}
         <a href="/system" class="btn btn-sm btn-outline-secondary">Système</a>
         {% endif %}
         <a href="/account/password" class="btn btn-sm btn-outline-secondary">Mot de passe</a>

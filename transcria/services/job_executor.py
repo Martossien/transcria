@@ -14,6 +14,8 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger, inject_correlation_id
+from transcria.queue.scheduler import QueueScheduler
+from transcria.queue.store import QueueStore
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow.transitions import (
     is_cancel_requested,
@@ -35,6 +37,9 @@ class JobExecutorService:
             .get("max_concurrent_jobs", 1)
         )
         self.max_workers = max(1, max_workers)
+        self.queue_enabled = bool(
+            config.get("workflow", {}).get("queue", {}).get("enabled", True)
+        )
         self._executor = ThreadPoolExecutor(
             max_workers=self.max_workers,
             thread_name_prefix="transcria-worker",
@@ -42,8 +47,32 @@ class JobExecutorService:
         self._lock = threading.Lock()
         self._queued_job_ids: set[str] = set()
         self._running_job_ids: set[str] = set()
+        self._scheduler: QueueScheduler | None = None
+        if self.queue_enabled:
+            self._scheduler = QueueScheduler(app, config, self._run_process)
+            self._scheduler.start()
 
-    def submit_process(self, job_id: str, audio_path: str, mode: str) -> dict:
+    def submit_process(
+        self,
+        job_id: str,
+        audio_path: str,
+        mode: str,
+        priority: int | None = None,
+        scheduled_at=None,
+        vram_profile: dict | None = None,
+    ) -> dict:
+        if self.queue_enabled and self._scheduler is not None:
+            existing_entry = QueueStore.get_entry(job_id)
+            if existing_entry is not None and existing_entry.status in {"waiting", "paused", "running"}:
+                return {"accepted": False, "reason": "already_active"}
+            return self._scheduler.submit_to_queue(
+                job_id,
+                mode,
+                priority=priority,
+                scheduled_at=scheduled_at,
+                vram_profile=vram_profile,
+            )
+
         with self._lock:
             if job_id in self._queued_job_ids or job_id in self._running_job_ids:
                 return {"accepted": False, "reason": "already_active"}
@@ -55,13 +84,21 @@ class JobExecutorService:
         return {"accepted": True, "status": "queued", "mode": mode}
 
     def get_runtime_snapshot(self) -> dict:
+        if self.queue_enabled and self._scheduler is not None:
+            return self._scheduler.get_runtime_snapshot()
         with self._lock:
             return {
                 "healthy": True,
                 "max_workers": self.max_workers,
                 "queued_jobs": len(self._queued_job_ids),
                 "running_jobs": len(self._running_job_ids),
+                "queue_enabled": False,
             }
+
+    def stop(self) -> None:
+        if self._scheduler is not None:
+            self._scheduler.stop(timeout_s=10)
+        self._executor.shutdown(wait=False, cancel_futures=False)
 
     def _run_process(self, job_id: str, audio_path: str, mode: str) -> None:
         sl = get_structured_logger(__name__)
@@ -70,6 +107,7 @@ class JobExecutorService:
         try:
             with self.app.app_context():
                 mark_execution_started(job_id)
+                QueueStore.mark_running(job_id)
                 with self._lock:
                     self._queued_job_ids.discard(job_id)
                     self._running_job_ids.add(job_id)
@@ -83,17 +121,27 @@ class JobExecutorService:
                     return
 
                 pipeline = PipelineService(self.config)
-                result = pipeline.run_process(job, audio_path, mode)
+                result = pipeline.run_process(job, audio_path, mode, finalize_job_state=False)
                 if result.get("cancelled"):
+                    QueueStore.dequeue(job_id, status="cancelled")
                     mark_execution_cancelled(job_id)
+                    JobStore.update_state(job_id, JobState.CANCELLED)
                 elif result.get("error"):
+                    QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, result["error"])
+                    JobStore.update_state(job_id, JobState.FAILED, result["error"])
                 else:
+                    QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
+                    JobStore.update_state(job_id, JobState.COMPLETED)
         except Exception as exc:
             with self.app.app_context():
+                QueueStore.dequeue(job_id, status="failed")
                 mark_execution_failed(job_id, str(exc))
+                JobStore.update_state(job_id, JobState.FAILED, str(exc))
             raise
+        finally:
+            self._finalize_tracking(job_id)
 
     def _finalize_tracking(self, job_id: str) -> None:
         with self._lock:
@@ -164,6 +212,11 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
             recovered, failed_count = 0, 0
             for job in all_jobs:
                 exec_status = job.get_extra_data().get("execution", {}).get("status")
+                if exec_status == "queued" and QueueStore.get_entry(job.id) is None:
+                    mode = job.get_extra_data().get("execution", {}).get("mode", "fast")
+                    QueueStore.enqueue(job.id, mode=mode)
+                    sl.info("Réconciliation: job queued réinséré dans job_queue", job_id=job.id)
+                    continue
                 if exec_status != "running":
                     continue
 
@@ -220,3 +273,11 @@ def init_job_executor(app: Flask, config: dict) -> JobExecutorService:
 
 def get_job_executor() -> JobExecutorService | None:
     return _executor_service
+
+
+def shutdown_job_executor() -> None:
+    global _executor_service
+    with _executor_lock:
+        if _executor_service is not None:
+            _executor_service.stop()
+            _executor_service = None

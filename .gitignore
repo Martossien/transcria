@@ -6,6 +6,7 @@ instance/
 /jobs/
 voices/
 *.db
+.transcria_pids
 
 # Python
 __pycache__/

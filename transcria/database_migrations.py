@@ -13,6 +13,18 @@ def ensure_runtime_schema() -> None:
     tables = set(inspector.get_table_names())
     if "voice_subjects" in tables:
         _ensure_column("voice_subjects", "gender", "VARCHAR(20) NOT NULL DEFAULT ''")
+    if "job_queue" not in tables:
+        from transcria.queue.models import JobQueueEntry
+
+        JobQueueEntry.__table__.create(db.engine, checkfirst=True)
+        logger.info("Migration base appliquée: table job_queue créée")
+    else:
+        _ensure_column("job_queue", "mode", "VARCHAR(20) NOT NULL DEFAULT 'fast'")
+    if "scheduling_windows" not in tables:
+        from transcria.queue.models import SchedulingWindow
+
+        SchedulingWindow.__table__.create(db.engine, checkfirst=True)
+        logger.info("Migration base appliquée: table scheduling_windows créée")
 
 
 def _ensure_column(table: str, column: str, definition: str) -> None:

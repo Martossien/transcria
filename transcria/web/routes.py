@@ -26,7 +26,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
-from transcria.auth.permissions import Permission, requires
+from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.config import _deep_merge, get_config
 from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore
@@ -507,6 +507,16 @@ def _get_job_for_api(job_id: str):
     return job, None
 
 
+def _can_manage_queue_job(job) -> bool:
+    if job is None or not current_user.is_authenticated:
+        return False
+    if current_user.has_role(Role.ADMIN):
+        return True
+    if not GroupStore.is_group_admin(current_user):
+        return False
+    return GroupStore.users_share_group(current_user.id, job.owner_id)
+
+
 def _config_for_display(cfg: dict) -> dict:
     display_cfg = copy.deepcopy(cfg)
     auth_cfg = display_cfg.get("auth")
@@ -565,6 +575,12 @@ def _render_prometheus_metrics() -> str:
         "running_jobs": 0,
         "max_workers": 0,
     }
+    try:
+        from transcria.queue.store import QueueStore
+
+        queue_counts = QueueStore.count_by_status() if db_ok else {}
+    except Exception:
+        queue_counts = {}
     lines = [
         "# HELP transcria_up Indique si le service TranscrIA est disponible.",
         "# TYPE transcria_up gauge",
@@ -585,6 +601,11 @@ def _render_prometheus_metrics() -> str:
         "# HELP transcria_worker_capacity Nombre maximal de jobs simultanés pour le worker interne.",
         "# TYPE transcria_worker_capacity gauge",
         f"transcria_worker_capacity {runtime['max_workers']}",
+        "# HELP transcria_queue_entries Nombre d'entrées dans la file persistante.",
+        "# TYPE transcria_queue_entries gauge",
+        f'transcria_queue_entries{{status="waiting"}} {queue_counts.get("waiting", 0)}',
+        f'transcria_queue_entries{{status="paused"}} {queue_counts.get("paused", 0)}',
+        f'transcria_queue_entries{{status="running"}} {queue_counts.get("running", 0)}',
         "# HELP transcria_jobs_state Nombre de jobs par état.",
         "# TYPE transcria_jobs_state gauge",
     ]
@@ -1021,7 +1042,8 @@ def api_process(job_id: str):
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
 
-    mode = (request.get_json(silent=True) or {}).get("mode", "fast") if request.is_json else "fast"
+    payload = request.get_json(silent=True) or {} if request.is_json else {}
+    mode = payload.get("mode") or request.args.get("mode", "fast")
     if mode == "cancel":
         request_execution_cancel(job.id)
         if not is_execution_active(job) or get_execution_status(job) == "queued":
@@ -1052,12 +1074,50 @@ def api_process(job_id: str):
     executor = get_job_executor()
     if executor is None:
         return jsonify({"error": "Worker de traitement indisponible"}), 503
-    result = executor.submit_process(job.id, str(audio_path), mode)
+
+    priority = payload.get("priority", request.args.get("priority"))
+    scheduled_at = None
+    scheduled_at_raw = payload.get("scheduled_at") or request.args.get("scheduled_at")
+    if scheduled_at_raw:
+        from datetime import datetime
+
+        try:
+            scheduled_at = datetime.fromisoformat(str(scheduled_at_raw).replace("Z", "+00:00"))
+        except ValueError:
+            return jsonify({"error": "scheduled_at: format ISO 8601 invalide"}), 400
+
+    if priority is not None and not _can_manage_queue_job(job):
+        priority = None
+
+    from transcria.services.pipeline_service import PipelineService
+
+    vram_profile = PipelineService.estimate_job_vram(cfg, mode)
+    try:
+        result = executor.submit_process(
+            job.id,
+            str(audio_path),
+            mode,
+            priority=priority,
+            scheduled_at=scheduled_at,
+            vram_profile=vram_profile,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": "active"}), 409
     audit_log(
-        action="job_process", target_type="job", target_id=job.id,
-        target_label=job.title, details={"mode": mode},
+        action=AuditAction.JOB_ENQUEUE,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "mode": mode,
+            "priority": result.get("priority"),
+            "position": result.get("position"),
+            "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+        },
     )
     return jsonify({
         "status": "queued",
@@ -1065,6 +1125,7 @@ def api_process(job_id: str):
         "mode": mode,
         "state": JobState.READY_TO_PROCESS.value,
         "execution_status": "queued",
+        "queue_position": result.get("position"),
     }), 202
 
 

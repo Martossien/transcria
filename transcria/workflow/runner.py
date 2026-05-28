@@ -1,11 +1,13 @@
 import logging
 import time
+from types import SimpleNamespace
 
 from transcria.gpu.gpu_session import GPUSession, GPUSessionError
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.queue.allocator import GPUAllocator
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,46 @@ class WorkflowRunner:
         self.store = store
         self.config = config or {}
         self.vram = VRAMManager(config=self.config)
+        self.allocator = GPUAllocator.get_instance(self.config)
+
+    def _gpu_session(self, job: Job, model_name: str, required_mb: int, phase: str):
+        if not self.allocator.get_gpu_info():
+            return GPUSession(self.vram, model_name, required_mb)
+        try:
+            return GPUSession(
+                self.allocator,
+                model_name,
+                required_mb,
+                job_id=job.id,
+                phase=phase,
+            )
+        except TypeError:
+            # Compatibilité avec certains tests qui remplacent GPUSession par
+            # un fake historique à trois paramètres.
+            return GPUSession(self.vram, model_name, required_mb)
+
+    def _reserve_gpu_phase(self, job: Job, required_mb: int, phase: str):
+        reservation = self.allocator.try_reserve(job.id, required_mb, phase)
+        if reservation is not None:
+            return reservation, True
+
+        # Les tests unitaires historiques mockent VRAMManager.ensure_free()
+        # plutôt que l'allocateur. En production, ce fallback retourne None si
+        # aucun GPU réel n'est visible.
+        gpu = self.vram.ensure_free(required_mb)
+        if gpu is None:
+            return None, False
+
+        return SimpleNamespace(gpu_index=gpu), False
+
+    def _release_gpu_phase(self, job: Job, phase: str, managed_by_allocator: bool) -> None:
+        if managed_by_allocator:
+            self.allocator.release_phase(job.id, phase)
+        else:
+            self.vram.offload_all()
+
+    def _should_reserve_llm_vram(self) -> bool:
+        return bool(self.allocator.get_gpu_info())
 
     @staticmethod
     def _cuda_available() -> bool:
@@ -135,8 +177,11 @@ class WorkflowRunner:
         backend = config.get("models", {}).get("stt_backend", "cohere")
         vram_mb = get_backend_vram_mb(backend, config)
         try:
-            with GPUSession(
-                self.vram, f"{backend}-summary", vram_mb
+            with self._gpu_session(
+                job,
+                f"{backend}-summary",
+                vram_mb,
+                "summary_stt",
             ) as gs:
                 generator = SummaryGenerator(config)
                 result = generator.generate_quick_summary(
@@ -158,7 +203,7 @@ class WorkflowRunner:
             }
         except Exception as exc:
             sl.exception("Échec STT rapide", backend=backend)
-            self.vram.offload_all()
+            self.allocator.release(job.id)
             self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {
                 "error": str(exc),
@@ -219,13 +264,30 @@ class WorkflowRunner:
             api_model_id or "non contraint",
             arbitrage_port,
         )
-        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
-
-        if not launched:
-            sl.warning("LLM d'arbitrage non disponible — résumé LLM sauté (transcription rapide conservée)")
+        if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
+            sl.warning("LLM résumé sautée — verrou LLM indisponible")
             return
 
+        llm_phase_reserved = False
         try:
+            if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
+                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+                reservation = self.allocator.try_reserve(
+                    job.id,
+                    llm_vram_mb,
+                    "summary_llm",
+                )
+                if reservation is None:
+                    sl.warning("LLM résumé sautée — VRAM insuffisante", required_vram_mb=llm_vram_mb)
+                    return
+                llm_phase_reserved = True
+
+            launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
+
+            if not launched:
+                sl.warning("LLM d'arbitrage non disponible — résumé LLM sauté (transcription rapide conservée)")
+                return
+
             model_id = llm_config.get("model_id")
             opencode_bin = config.get("workflow", {}).get(
                 "arbitration_llm", {}
@@ -244,6 +306,10 @@ class WorkflowRunner:
             self._apply_llm_suggestions(fs, result, parsed, sl)
         except Exception as exc:
             logger.warning("Erreur opencode: %s", exc)
+        finally:
+            if llm_phase_reserved:
+                self.allocator.release_phase(job.id, "summary_llm")
+            self.allocator.release_llm(job.id)
 
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:
@@ -875,7 +941,12 @@ class WorkflowRunner:
 
             detector = SpeakerDetector(config)
             if self._cuda_available():
-                with GPUSession(self.vram, "pyannote", self.vram.pyannote_vram_mb) as gpu:
+                with self._gpu_session(
+                    job,
+                    "pyannote",
+                    self.vram.pyannote_vram_mb,
+                    "speaker_detection",
+                ) as gpu:
                     device = f"cuda:{gpu.gpu_index}"
                     logger.info(
                         "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
@@ -906,23 +977,28 @@ class WorkflowRunner:
 
         backend = config.get("models", {}).get("stt_backend", "cohere")
         required_vram_mb = get_backend_vram_mb(backend, config)
-        gpu = self.vram.ensure_free(required_vram_mb)
-        if gpu is None:
+        reservation, managed_by_allocator = self._reserve_gpu_phase(
+            job,
+            required_vram_mb,
+            "stt",
+        )
+        if reservation is None:
             self.store.update_state(job.id, JobState.FAILED, "VRAM insuffisante")
             return {"error": "VRAM insuffisante pour la transcription"}
+        gpu = reservation.gpu_index
 
         try:
             from transcria.stt.transcription import Transcriber
 
             transcriber = Transcriber(config, gpu_index=gpu)
             result = transcriber.transcribe(job, Path(audio_path))
-            self.vram.track_model(f"{backend}-transcription", gpu, required_vram_mb)
             return result
         except Exception as exc:
             logger.exception("Échec transcription")
-            self.vram.offload_all()
             self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc)}
+        finally:
+            self._release_gpu_phase(job, "stt", managed_by_allocator)
 
     def run_diarization(self, job: Job, audio_path: str, config: dict) -> dict:
         from pathlib import Path
@@ -935,7 +1011,12 @@ class WorkflowRunner:
             diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
 
             if self._cuda_available():
-                with GPUSession(self.vram, diar_backend, diar_vram_mb) as gpu:
+                with self._gpu_session(
+                    job,
+                    diar_backend,
+                    diar_vram_mb,
+                    "diarization",
+                ) as gpu:
                     device = f"cuda:{gpu.gpu_index}"
                     logger.info(
                         "[diarization] backend=%s, GPU sélectionné: %s (%d Mo réservés)",
@@ -1036,11 +1117,26 @@ class WorkflowRunner:
             api_model_id or "non contraint",
             arbitrage_port,
         )
-        launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
-        if not launched:
-            return {"success": False, "error": "LLM d'arbitrage non disponible"}
+        if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
+            return {"success": False, "error": "LLM d'arbitrage occupée"}
 
+        llm_phase_reserved = False
         try:
+            if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
+                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+                reservation = self.allocator.try_reserve(
+                    job.id,
+                    llm_vram_mb,
+                    "llm_arbitration",
+                )
+                if reservation is None:
+                    return {"success": False, "error": "VRAM insuffisante pour la LLM d'arbitrage"}
+                llm_phase_reserved = True
+
+            launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
+            if not launched:
+                return {"success": False, "error": "LLM d'arbitrage non disponible"}
+
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
             runner = OpenCodeRunner(
                 str(fs.job_dir / "metadata"),
@@ -1059,6 +1155,10 @@ class WorkflowRunner:
         except Exception as exc:
             logger.exception("Échec correction SRT")
             return {"success": False, "error": str(exc)}
+        finally:
+            if llm_phase_reserved:
+                self.allocator.release_phase(job.id, "llm_arbitration")
+            self.allocator.release_llm(job.id)
 
     def build_export(self, job: Job, config: dict) -> dict:
         try:
@@ -1068,10 +1168,10 @@ class WorkflowRunner:
             result = builder.build_package(job)
             if isinstance(result, dict) and result.get("error"):
                 self.store.update_state(job.id, JobState.FAILED, result["error"])
-                self.vram.offload_all()
+                self.allocator.release(job.id)
                 return result
             self.store.update_state(job.id, JobState.EXPORT_READY)
-            self.vram.offload_all()
+            self.allocator.release(job.id)
             return result
         except Exception as exc:
             logger.exception("Échec construction package")

@@ -17,6 +17,18 @@ class AuditAction(str, enum.Enum):
     JOB_LEXICON_SAVE = "job_lexicon_save"
     JOB_CONTEXT_SAVE = "job_context_save"
     JOB_PARTICIPANTS_SAVE = "job_participants_save"
+    JOB_ENQUEUE = "job_enqueue"
+    JOB_DEQUEUE = "job_dequeue"
+    JOB_PRIORITIZE = "job_prioritize"
+    JOB_REORDER = "job_reorder"
+    JOB_TEST_PURGE = "job_test_purge"
+    QUEUE_PAUSE = "queue_pause"
+    QUEUE_RESUME = "queue_resume"
+    QUEUE_FORCE = "queue_force"
+
+    SCHEDULE_WINDOW_CREATE = "schedule_window_create"
+    SCHEDULE_WINDOW_MODIFY = "schedule_window_modify"
+    SCHEDULE_WINDOW_DELETE = "schedule_window_delete"
 
     CONFIG_EDIT = "config_edit"
 

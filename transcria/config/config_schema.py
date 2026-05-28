@@ -213,6 +213,8 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
     _check_bool(wf, "enable_external_srt_editor_link", "workflow.enable_external_srt_editor_link", r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
+    _check_queue_section(wf.get("queue", {}), r)
+    _check_scheduling_section(wf.get("scheduling", {}), r)
     _check_audio_quality(wf.get("audio_quality", {}), r)
     _check_quality_transcription(wf.get("quality_transcription", {}), r)
     _check_audio_preflight(wf.get("audio_preflight", {}), r)
@@ -739,6 +741,72 @@ def _check_execution_section(exec_cfg: dict, prefix: str, r: ValidationResult) -
         _check_int_range(exec_cfg, "max_concurrent_jobs", f"{prefix}.max_concurrent_jobs", 1, 8, r)
 
 
+def _check_queue_section(queue_cfg: dict, r: ValidationResult) -> None:
+    if not queue_cfg:
+        return
+    if not isinstance(queue_cfg, dict):
+        r.add_error("workflow.queue: doit être un objet YAML")
+        return
+    _check_bool(queue_cfg, "enabled", "workflow.queue.enabled", r)
+    _check_int_range(queue_cfg, "default_priority", "workflow.queue.default_priority", 1, 100, r)
+    _check_bool(queue_cfg, "aging_enabled", "workflow.queue.aging_enabled", r)
+    _check_int_range(queue_cfg, "aging_interval_minutes", "workflow.queue.aging_interval_minutes", 1, 1440, r)
+    _check_int_range(queue_cfg, "aging_max_bonus", "workflow.queue.aging_max_bonus", 0, 99, r)
+    _check_int_range(queue_cfg, "poll_interval_s", "workflow.queue.poll_interval_s", 1, 300, r)
+    _check_int_range(queue_cfg, "starvation_timeout_hours", "workflow.queue.starvation_timeout_hours", 1, 720, r)
+
+
+def _check_scheduling_section(sched_cfg: dict, r: ValidationResult) -> None:
+    if not sched_cfg:
+        return
+    if not isinstance(sched_cfg, dict):
+        r.add_error("workflow.scheduling: doit être un objet YAML")
+        return
+    _check_bool(sched_cfg, "enabled", "workflow.scheduling.enabled", r)
+    timezone = sched_cfg.get("timezone", "Europe/Paris")
+    if not isinstance(timezone, str) or not timezone.strip():
+        r.add_error("workflow.scheduling.timezone: doit être une chaîne non vide")
+    else:
+        try:
+            import zoneinfo
+
+            zoneinfo.ZoneInfo(timezone)
+        except Exception:
+            r.add_error(f"workflow.scheduling.timezone: fuseau horaire invalide '{timezone}'")
+    _check_int_range(sched_cfg, "poll_interval_s", "workflow.scheduling.poll_interval_s", 10, 86400, r)
+    patterns = sched_cfg.get("kill_patterns", [])
+    if not isinstance(patterns, list):
+        r.add_error("workflow.scheduling.kill_patterns: doit être une liste")
+    else:
+        for i, pattern in enumerate(patterns):
+            if not isinstance(pattern, str) or not pattern.strip():
+                r.add_error(f"workflow.scheduling.kill_patterns[{i}]: chaîne vide")
+    windows = sched_cfg.get("windows", [])
+    if not isinstance(windows, list):
+        r.add_error("workflow.scheduling.windows: doit être une liste")
+        return
+    valid_days = {"lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"}
+    valid_actions = {"force_gpu", "pause_queue", "limit_concurrency", "none"}
+    for i, window in enumerate(windows):
+        if not isinstance(window, dict):
+            r.add_error(f"workflow.scheduling.windows[{i}]: doit être un objet YAML")
+            continue
+        _check_str(window, "name", f"workflow.scheduling.windows[{i}].name", r)
+        _check_time_string(window, "start", f"workflow.scheduling.windows[{i}].start", r)
+        _check_time_string(window, "end", f"workflow.scheduling.windows[{i}].end", r)
+        action = window.get("action")
+        if action not in valid_actions:
+            r.add_error(f"workflow.scheduling.windows[{i}].action: valeur invalide '{action}'")
+        days = window.get("days", [])
+        if not isinstance(days, list) or not days:
+            r.add_error(f"workflow.scheduling.windows[{i}].days: doit être une liste non vide")
+        else:
+            for day in days:
+                if day not in valid_days:
+                    r.add_error(f"workflow.scheduling.windows[{i}].days: jour invalide '{day}'")
+        _check_bool(window, "enabled", f"workflow.scheduling.windows[{i}].enabled", r)
+
+
 def _check_quality(quality: dict, r: ValidationResult) -> None:
     if not quality:
         return
@@ -798,6 +866,19 @@ def _check_bool(obj: dict, key: str, path: str, r: ValidationResult) -> None:
     val = obj.get(key)
     if val is not None and not isinstance(val, bool):
         r.add_error(f"{path}: doit être true/false (reçu {type(val).__name__})")
+
+
+def _check_time_string(obj: dict, key: str, path: str, r: ValidationResult) -> None:
+    val = obj.get(key)
+    if not isinstance(val, str):
+        r.add_error(f"{path}: doit être une chaîne HH:MM")
+        return
+    if not re.match(r"^\d{2}:\d{2}$", val):
+        r.add_error(f"{path}: doit être au format HH:MM")
+        return
+    hour, minute = [int(part) for part in val.split(":")]
+    if hour > 23 or minute > 59:
+        r.add_error(f"{path}: heure invalide")
 
 
 def _check_int_range(

@@ -233,7 +233,13 @@ class VRAMManager:
     # ── Service lifecycle ─────────────────────────────────
 
     def is_arbitrage_llm_running(self) -> bool:
-        """Retourne True si un processus écoute sur le port de la LLM d'arbitrage."""
+        """Retourne True si la LLM d'arbitrage répond à l'API attendue.
+
+        `lsof` peut être indisponible ou incomplet selon le contexte systemd/sandbox.
+        L'autorité fonctionnelle est donc l'API OpenAI-compatible elle-même.
+        """
+        if VRAMManager.is_port_open(self.arbitrage_llm_port):
+            return True
         try:
             result = subprocess.run(
                 ["lsof", "-ti", f"tcp:{self.arbitrage_llm_port}", "-sTCP:LISTEN"],
@@ -338,6 +344,14 @@ class VRAMManager:
                 start_new_session=True,
             )
             self._arbitrage_llm_pid = proc.pid
+            try:
+                from transcria.queue.allocator import GPUAllocator
+
+                GPUAllocator.get_instance(self.config).register_pid(
+                    proc.pid, "arbitrage_llm"
+                )
+            except Exception:
+                logger.debug("Tracking PID LLM indisponible", exc_info=True)
             logger.info(
                 "LLM d'arbitrage lancée — PID %d, attente du port %d...",
                 proc.pid,
@@ -433,6 +447,15 @@ class VRAMManager:
             except Exception as exc:
                 logger.warning("Échec script d'arrêt: %s", exc)
         port_ok = self._kill_port(self.arbitrage_llm_port)
+        if self._arbitrage_llm_pid is not None:
+            try:
+                from transcria.queue.allocator import GPUAllocator
+
+                GPUAllocator.get_instance(self.config).unregister_pid(
+                    self._arbitrage_llm_pid
+                )
+            except Exception:
+                logger.debug("Nettoyage tracking PID LLM indisponible", exc_info=True)
         self._arbitrage_llm_pid = None
         gc.collect()
         try:

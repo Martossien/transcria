@@ -18,6 +18,8 @@ class Permission(str, enum.Enum):
     DOWNLOAD_EXPORTS = "download_exports"
     VIEW_QUALITY_REPORTS = "view_quality_reports"
     RETRY_PROCESSING = "retry_processing"
+    MANAGE_QUEUE = "manage_queue"
+    MANAGE_SCHEDULE = "manage_schedule"
 
 
 _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
@@ -31,6 +33,8 @@ _ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         Permission.DOWNLOAD_EXPORTS,
         Permission.VIEW_QUALITY_REPORTS,
         Permission.RETRY_PROCESSING,
+        Permission.MANAGE_QUEUE,
+        Permission.MANAGE_SCHEDULE,
     },
     Role.MANAGER: {
         Permission.CREATE_JOBS,

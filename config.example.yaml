@@ -396,6 +396,27 @@ workflow:
     punctuation_chars: ".,;:!?)]}»"
   execution:
     max_concurrent_jobs: 1
+  queue:
+    enabled: true
+    default_priority: 50
+    aging_enabled: true
+    aging_interval_minutes: 30
+    aging_max_bonus: 49
+    poll_interval_s: 5
+    starvation_timeout_hours: 24
+  scheduling:
+    enabled: false
+    timezone: "Europe/Paris"
+    poll_interval_s: 300
+    kill_patterns:
+      - "vllm"
+      - "llama-server"
+      - "text-generation-server"
+      - "aphrodite"
+      - "sglang"
+      - "lmdeploy"
+      - "exllamav2"
+    windows: []
   summary_llm:
     enabled: true
     model_id: "local/votre-modele-llm-ici"
