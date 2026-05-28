@@ -16,7 +16,7 @@ from transcria.queue.calendar import SchedulingCalendar, SchedulingWindowStore
 from transcria.queue.store import QueueStore
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
-from transcria.workflow.transitions import get_execution_status, request_execution_cancel
+from transcria.workflow.transitions import get_execution_status, mark_execution_cancelled, request_execution_cancel
 
 queue_pages_bp = Blueprint("queue_pages", __name__)
 queue_api_bp = Blueprint("queue_api", __name__)
@@ -180,6 +180,7 @@ def api_queue_cancel(job_id: str):
         return jsonify({"error": "Job introuvable"}), 404
     if get_execution_status(job) != "running":
         QueueStore.dequeue(job_id, status="cancelled")
+        mark_execution_cancelled(job_id)
         JobStore.update_state(job_id, JobState.CANCELLED)
     _audit_queue_action(AuditAction.JOB_DEQUEUE, job_id, {"status": "cancelled"})
     return jsonify({"ok": True})

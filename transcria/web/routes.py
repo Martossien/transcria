@@ -51,6 +51,7 @@ from transcria.workflow.transitions import (
     can_start_processing,
     get_execution_status,
     is_execution_active,
+    mark_execution_cancelled,
     request_execution_cancel,
 )
 
@@ -1097,6 +1098,10 @@ def api_process(job_id: str):
     if mode == "cancel":
         request_execution_cancel(job.id)
         if not is_execution_active(job) or get_execution_status(job) == "queued":
+            from transcria.queue.store import QueueStore
+
+            QueueStore.dequeue(job.id, status="cancelled")
+            mark_execution_cancelled(job.id)
             JobStore.update_state(job.id, JobState.CANCELLED)
             return jsonify({"status": "cancelled"})
         return jsonify({"status": "cancel_requested"})
@@ -1118,9 +1123,6 @@ def api_process(job_id: str):
     if is_execution_active(job):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": get_execution_status(job)}), 409
 
-    JobStore.update(job.id, processing_mode=mode)
-    if job.state != JobState.READY_TO_PROCESS.value:
-        JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
     executor = get_job_executor()
     if executor is None:
         return jsonify({"error": "Worker de traitement indisponible"}), 503
@@ -1157,6 +1159,9 @@ def api_process(job_id: str):
         result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": "active"}), 409
+    JobStore.update(job.id, processing_mode=mode)
+    if job.state != JobState.READY_TO_PROCESS.value:
+        JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
     audit_log(
         action=AuditAction.JOB_ENQUEUE,
         target_type="job",
@@ -1228,9 +1233,6 @@ def api_reprocess(job_id: str):
     if mode not in ("fast", "quality"):
         return jsonify({"error": f"Mode invalide: {mode}"}), 400
 
-    JobStore.update(job.id, processing_mode=mode)
-    JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
-
     executor = get_job_executor()
     if executor is None:
         return jsonify({"error": "Worker de traitement indisponible"}), 503
@@ -1238,6 +1240,8 @@ def api_reprocess(job_id: str):
     result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours"}), 409
+    JobStore.update(job.id, processing_mode=mode)
+    JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
 
     return jsonify({
         "status": "queued",

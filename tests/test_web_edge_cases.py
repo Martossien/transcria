@@ -511,6 +511,29 @@ class TestPipelineErrors:
         with app.app_context():
             assert JobStore.get_by_id(jid).state == JobState.CANCELLED.value
 
+    def test_process_cancel_dequeues_queued_job(self, admin_client, app):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.queue.store import QueueStore
+        from transcria.workflow.transitions import get_execution_status
+        from transcria.workflow.transitions import mark_execution_queued
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+            QueueStore.enqueue(jid)
+            mark_execution_queued(jid, "fast")
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "cancel"})
+
+        assert r.status_code == 200
+        assert json.loads(r.data)["status"] == "cancelled"
+        with app.app_context():
+            job = JobStore.get_by_id(jid)
+            assert job.state == JobState.CANCELLED.value
+            assert get_execution_status(job) == "cancelled"
+            assert QueueStore.get_entry(jid).status == "cancelled"
+
     def test_process_rejects_when_execution_already_active(self, admin_client, app):
         from transcria.jobs.models import JobState
         from transcria.jobs.store import JobStore
@@ -525,6 +548,48 @@ class TestPipelineErrors:
 
         assert r.status_code == 409
         assert json.loads(r.data)["execution_status"] == "queued"
+
+    def test_process_submit_rejection_preserves_preprocessing_state(self, admin_client, app, monkeypatch):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.services.job_executor import get_job_executor
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.LEXICON_DONE)
+        executor = get_job_executor()
+        monkeypatch.setattr(
+            executor,
+            "submit_process",
+            lambda job_id, audio_path, mode, **kwargs: {"accepted": False, "reason": "already_active"},
+        )
+
+        r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
+
+        assert r.status_code == 409
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.LEXICON_DONE.value
+
+    def test_reprocess_submit_rejection_preserves_terminal_state(self, admin_client, app, monkeypatch):
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+        from transcria.services.job_executor import get_job_executor
+
+        jid = self._create_uploaded_job(admin_client)
+        with app.app_context():
+            JobStore.update_state(jid, JobState.COMPLETED)
+        executor = get_job_executor()
+        monkeypatch.setattr(
+            executor,
+            "submit_process",
+            lambda job_id, audio_path, mode: {"accepted": False, "reason": "already_active"},
+        )
+
+        r = admin_client.post(f"/api/jobs/{jid}/reprocess", json={"mode": "fast"})
+
+        assert r.status_code == 409
+        with app.app_context():
+            assert JobStore.get_by_id(jid).state == JobState.COMPLETED.value
 
 
 class TestApiErrorResponses:

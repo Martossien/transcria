@@ -208,6 +208,9 @@ def test_queue_action_api_pause_resume_cancel(admin_client, app, owner_id):
         job = JobStore.create_job(owner_id, "Action")
         job_id = job.id
         QueueStore.enqueue(job.id)
+        from transcria.workflow.transitions import mark_execution_queued
+
+        mark_execution_queued(job.id, "fast")
 
     response = admin_client.post(f"/api/queue/{job_id}/pause")
     assert response.status_code == 200
@@ -223,6 +226,7 @@ def test_queue_action_api_pause_resume_cancel(admin_client, app, owner_id):
     assert response.status_code == 200
     with app.app_context():
         assert QueueStore.get_entry(job_id).status == "cancelled"
+        assert JobStore.get_by_id(job_id).get_extra_data()["execution"]["status"] == "cancelled"
 
         assert AuditStore.count(action=AuditAction.QUEUE_PAUSE.value, target_type="job", target_id=job_id) == 1
         assert AuditStore.count(action=AuditAction.QUEUE_RESUME.value, target_type="job", target_id=job_id) == 1

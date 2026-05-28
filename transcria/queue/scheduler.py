@@ -15,7 +15,7 @@ from transcria.logging_setup import get_structured_logger
 from transcria.queue.calendar import SchedulingCalendar
 from transcria.queue.allocator import GPUAllocator
 from transcria.queue.store import QueueStore
-from transcria.workflow.transitions import mark_execution_queued
+from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
 
 
 ProcessFn = Callable[[str, str, str], None]
@@ -146,6 +146,9 @@ class QueueScheduler:
             job = JobStore.get_by_id(entry.job_id)
             if job is None:
                 QueueStore.dequeue(entry.job_id, status="failed")
+                continue
+            if job.state == "cancelled" or get_execution_status(job) == "cancelled" or is_cancel_requested(job):
+                QueueStore.dequeue(entry.job_id, status="cancelled")
                 continue
             audio_path = JobFilesystem(self.jobs_dir, entry.job_id).get_original_audio_path()
             if audio_path is None:

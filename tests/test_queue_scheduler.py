@@ -7,7 +7,8 @@ from transcria.queue.models import JobQueueEntry
 from transcria.queue.calendar import SchedulingWindowStore
 from transcria.queue.models import SchedulingWindow
 from transcria.queue.scheduler import QueueScheduler
-from transcria.queue.store import QUEUE_RUNNING, QUEUE_WAITING, QueueStore
+from transcria.jobs.models import JobState
+from transcria.queue.store import QUEUE_CANCELLED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
 
 
@@ -76,6 +77,24 @@ def test_scheduler_skips_future_scheduled_candidate(app, owner_id, tmp_path):
         assert dispatched == 0
         assert launched == []
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_scheduler_dequeues_cancelled_candidate(app, owner_id, tmp_path):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        JobStore.update_state(job.id, JobState.CANCELLED)
+        QueueStore.enqueue(job.id, mode="fast")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0
+        assert launched == []
+        assert QueueStore.get_entry(job.id).status == QUEUE_CANCELLED
 
 
 def test_job_executor_uses_queue_when_enabled(app, owner_id, tmp_path):
