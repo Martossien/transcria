@@ -425,7 +425,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Pré-traitement | `input/scene_filtered.wav` + `metadata/audio_scene_filter.json` (si filtre activé) | `AudioSceneFilterService.apply()` |
 | Pré-traitement | `input/denoised.wav` + `metadata/audio_denoise.json` (si débruitage activé) | `PipelineService._run_audio_denoise()` + `AudioDenoiseService` |
 | Pré-traitement | `input/normalized.wav` + `metadata/audio_normalization.json` (si normalisation activée ou auto-loudnorm) | `AudioNormalizationService.apply()` |
-| Lexique | `metadata/audio_excerpts/*.wav` (cache à la demande pour écouter les contextes proposés) | `AudioExcerptService.build_excerpt()` via `GET /api/jobs/<id>/audio/excerpt` |
+| Lexique | `metadata/audio_excerpts/*.wav` (cache à la demande pour écouter les contextes proposés) | `AudioExcerptService.build_excerpt()` via `GET /api/jobs/<id>/audio/excerpt`, audité en `job_download` sans citation brute |
 | Traitement | `metadata/audio_quality_decision.json`, `metadata/transcription.srt`, `metadata/transcription_segments.json`, `metadata/transcription_metadata.json`, `metadata/speakers_map.json` | `PipelineService._config_for_mode()` + `Transcriber.transcribe()` |
 | Traitement (Whisper expérimental) | `metadata/whisper_hotwords.json` | `PipelineService._inject_whisper_lexicon_hotwords()` |
 | Traitement (Cohere expérimental) | `metadata/cohere_lexicon_biasing.json` | `PipelineService._inject_cohere_lexicon_biasing()` |

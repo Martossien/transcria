@@ -17,6 +17,7 @@ class AuditAction(str, enum.Enum):
     JOB_LEXICON_SAVE = "job_lexicon_save"
     JOB_CONTEXT_SAVE = "job_context_save"
     JOB_PARTICIPANTS_SAVE = "job_participants_save"
+    JOB_EXTERNAL_PUSH = "job_external_push"
     JOB_ENQUEUE = "job_enqueue"
     JOB_DEQUEUE = "job_dequeue"
     JOB_PRIORITIZE = "job_prioritize"

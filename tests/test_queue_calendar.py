@@ -175,6 +175,10 @@ def test_admin_can_purge_e2e_test_jobs(admin_client, app, owner_id):
         assert not e2e_dir.exists()
         assert normal_dir.exists()
         assert AuditStore.count(action=AuditAction.JOB_TEST_PURGE.value, target_type="job") == 1
+        audit_row = AuditStore.query(action=AuditAction.JOB_TEST_PURGE.value, target_type="job", limit=1)[0]
+        assert "E2E workflow production" not in (audit_row.details_json or "")
+        assert e2e_job_id in (audit_row.details_json or "")
+        assert '"raw_titles_logged": false' in (audit_row.details_json or "")
 
 
 def test_e2e_test_purge_skips_running_jobs(admin_client, app, owner_id):

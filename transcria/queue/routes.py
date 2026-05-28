@@ -220,8 +220,10 @@ def api_purge_e2e_test_jobs():
             "prefix": E2E_TEST_JOB_TITLE_PREFIX,
             "deleted_count": len(deleted),
             "skipped_count": len(skipped),
-            "deleted": deleted,
-            "skipped": skipped,
+            "deleted_job_ids": [item["id"] for item in deleted],
+            "skipped_job_ids": [item["id"] for item in skipped],
+            "skipped_reasons": sorted({item["reason"] for item in skipped}),
+            "raw_titles_logged": False,
         },
     )
     return jsonify({

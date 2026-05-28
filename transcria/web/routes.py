@@ -4,6 +4,7 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 from flask import (
@@ -61,6 +62,15 @@ DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
 PROCESS_START_TIME = time.time()
 LEXICON_DISPLAY_MAX_ENTRIES = 80
+
+
+def _audit_origin_from_url(value: str | None) -> str:
+    parsed = urlparse(value or "")
+    if not parsed.hostname:
+        return ""
+    if parsed.port:
+        return f"{parsed.hostname}:{parsed.port}"
+    return parsed.hostname
 
 
 def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str:
@@ -1373,6 +1383,19 @@ def api_audio_excerpt(job_id: str):
         logger.warning("Extrait audio indisponible: job=%s timecode=%r erreur=%s", job.id, timecode, exc)
         return jsonify({"error": "Extrait audio indisponible"}), 500
 
+    audit_log(
+        AuditAction.JOB_DOWNLOAD,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "format": "audio_excerpt",
+            "start_s": round(start_s, 3),
+            "end_s": round(end_s, 3),
+            "duration_s": round(max(0.0, end_s - start_s), 3),
+            "timecode_corrected": bool(corrected),
+        },
+    )
     return send_file(excerpt_path, mimetype="audio/wav", conditional=True)
 
 
@@ -1402,6 +1425,16 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
     clip_path = (samples_dir / clip_name).resolve()
     if not clip_path.is_relative_to(samples_dir) or not clip_path.is_file():
         abort(404)
+    audit_log(
+        AuditAction.JOB_DOWNLOAD,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "format": "speaker_clip",
+            "clip_name": clip_path.name,
+        },
+    )
     return send_file(clip_path, mimetype="audio/wav")
 
 
@@ -1420,13 +1453,27 @@ def api_push_to_editor(job_id: str):
     if audio_path is None or srt_content is None:
         return jsonify({"error": "Audio ou SRT manquant"}), 400
 
-    editor = SrtEditorLink(SrtEditorLink.get_server_url(cfg))
+    editor_url = SrtEditorLink.get_server_url(cfg)
+    editor = SrtEditorLink(editor_url)
     audio_result = editor.push_audio(str(audio_path))
     if "error" in audio_result:
         return jsonify({"error": "Échec envoi audio", "detail": audio_result}), 500
 
     project_id = audio_result.get("project_id", "")
     srt_result = editor.push_srt(project_id, srt_content) if project_id else {"error": "pas de project_id"}
+    audit_log(
+        AuditAction.JOB_EXTERNAL_PUSH,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "destination": "srt_editor",
+            "destination_origin": _audit_origin_from_url(editor_url),
+            "audio_sent": "error" not in audio_result,
+            "srt_sent": "error" not in srt_result,
+            "project_id_present": bool(project_id),
+        },
+    )
     return jsonify({"audio": audio_result, "srt": srt_result, "editor_url": SrtEditorLink.resolve_public_url(cfg, request.host)})
 
 

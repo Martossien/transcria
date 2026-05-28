@@ -966,19 +966,19 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
 | `/api/jobs/<id>/available-lexicons` | GET | login_required + owner/admin check | Lexiques centralisés accessibles au job |
 | `/api/jobs/<id>/selected-lexicons` | POST | login_required + owner/admin check | Sauvegarde les lexiques cochés pour le préremplissage du job |
-| `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique |
+| `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique, audité comme `job_download` |
 | `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
 | `/api/jobs/<id>/speakers/voice-match` | POST | login_required + owner/admin check | Suggestions depuis les voix enregistrées accessibles au job |
 | `/api/jobs/<id>/speakers/map` | POST | login_required + owner/admin check | Mapping SPEAKER_XX |
 | `/api/jobs/<id>/speakers/clips` | GET | login_required + owner check | Liste extraits audio |
-| `/api/jobs/<id>/speakers/clip/<name>` | GET | login_required + owner check | Fichier WAV d'un extrait |
+| `/api/jobs/<id>/speakers/clip/<name>` | GET | login_required + owner check | Fichier WAV d'un extrait, audité comme `job_download` |
 | `/api/jobs/<id>/process` | POST | login_required + owner/admin check | Traitement complet |
 | `/api/jobs/<id>/quality` | POST | login_required + owner/admin check | Rapport qualité |
 | `/api/jobs/<id>/export` | POST | login_required + owner/admin check | Construction package |
 | `/api/jobs/<id>/download/srt` | GET | login_required + owner check | Téléchargement SRT |
 | `/api/jobs/<id>/download/package` | GET | login_required + owner check | Téléchargement ZIP |
 | `/api/jobs/<id>/download/audio` | GET | login_required + owner check | Téléchargement audio |
-| `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY |
+| `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY, audité comme `job_external_push` |
 | `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON (polling) |
 | `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
 | `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON |
@@ -1101,7 +1101,7 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 
 | Énumération | Valeurs |
 |---|---|
-| `AuditAction` | auth (`login`, `login_failed`, `logout`), jobs/file/calendrier (`job_*`, `queue_*`, `schedule_*`), config/users/groupes/audit (`config_edit`, `user_*`, `group_*`, `audit_export`), lexiques (`lexicon_create`, `lexicon_modify`, `lexicon_delete`, `lexicon_term_add`, `lexicon_term_modify`, `lexicon_term_delete`, `lexicon_import`, `lexicon_export`, `lexicon_scope_change`, `lexicon_job_assign`) et voix (`voice_*`) |
+| `AuditAction` | auth (`login`, `login_failed`, `logout`), jobs/file/calendrier (`job_*`, dont `job_download`, `job_external_push`, `job_test_purge`, `queue_*`, `schedule_*`), config/users/groupes/audit (`config_edit`, `user_*`, `group_*`, `audit_export`), lexiques (`lexicon_create`, `lexicon_modify`, `lexicon_delete`, `lexicon_term_add`, `lexicon_term_modify`, `lexicon_term_delete`, `lexicon_import`, `lexicon_export`, `lexicon_scope_change`, `lexicon_job_assign`) et voix (`voice_*`) |
 
 | Classe | Colonnes |
 |---|---|

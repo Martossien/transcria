@@ -410,6 +410,14 @@ class TestApiDownloads:
         assert r.status_code == 200
         assert r.mimetype == "audio/wav"
         assert r.data == b"wav"
+        with admin_client.application.app_context():
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+
+            row = AuditLog.query.filter_by(action=AuditAction.JOB_DOWNLOAD.value, target_id=job_id).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            assert '"format": "audio_excerpt"' in row.details_json
+            assert "émenteal" not in row.details_json
 
     def test_audio_excerpt_rejects_invalid_timecode(self, admin_client):
         job_id = self._create_and_get_id(admin_client)
@@ -425,6 +433,67 @@ class TestApiDownloads:
 
         assert r.status_code == 400
         assert json.loads(r.data)["error"] == "Timecode audio invalide"
+
+    def test_speaker_clip_download_is_audited(self, admin_client):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        sample_dir = fs.job_dir / "speakers" / "samples"
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        (sample_dir / "SPEAKER_00_001.wav").write_bytes(b"wav")
+
+        r = admin_client.get(f"/api/jobs/{job_id}/speakers/clip/SPEAKER_00_001.wav")
+
+        assert r.status_code == 200
+        assert r.mimetype == "audio/wav"
+        with admin_client.application.app_context():
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+
+            row = AuditLog.query.filter_by(action=AuditAction.JOB_DOWNLOAD.value, target_id=job_id).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            assert '"format": "speaker_clip"' in row.details_json
+
+    def test_push_to_editor_is_audited(self, admin_client, monkeypatch):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        fs.save_upload(b"audio", "audio.mp3")
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:01,000\nBonjour")
+
+        monkeypatch.setattr(
+            "transcria.web.routes.SrtEditorLink.push_audio",
+            lambda self, audio_path: {"project_id": "project-1"},
+        )
+        monkeypatch.setattr(
+            "transcria.web.routes.SrtEditorLink.push_srt",
+            lambda self, project_id, srt_content: {"ok": True},
+        )
+
+        r = admin_client.post(f"/api/jobs/{job_id}/push-to-editor")
+
+        assert r.status_code == 200
+        with admin_client.application.app_context():
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+
+            row = AuditLog.query.filter_by(action=AuditAction.JOB_EXTERNAL_PUSH.value, target_id=job_id).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            assert '"destination": "srt_editor"' in row.details_json
+            assert "Bonjour" not in row.details_json
+
+    def test_audit_origin_strips_url_credentials(self):
+        from transcria.web.routes import _audit_origin_from_url
+
+        assert _audit_origin_from_url("https://user:secret@example.org:9443/path") == "example.org:9443"
 
 
 class TestApiContextEndpoints:
