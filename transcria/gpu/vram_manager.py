@@ -513,8 +513,9 @@ class VRAMManager:
         return port_ok
 
     def free_all_gpus(self) -> bool:
-        """Libère les 2 GPUs : arrête tout modèle chargé."""
-        logger.info("Libération des 2 GPUs...")
+        """Libère tous les GPUs visibles : arrête tout modèle chargé."""
+        n = len(self.get_gpu_info())
+        logger.info("Libération de %d GPU(s) visible(s)...", n)
         ok1 = self.stop_cleanup_llm_ports()
         ok2 = self.stop_arbitrage_llm()
         self.offload_all()
