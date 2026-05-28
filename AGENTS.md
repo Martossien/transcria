@@ -159,6 +159,7 @@ transcria/
       llm_backend.py        # LLMBackend (script/ollama/http)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
+      cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
     services/
       job_executor.py       # JobExecutorService — worker interne (thread)
       job_service.py        # JobService
@@ -246,6 +247,8 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 
 **`GPUSession`** est le context manager utilisé pour Cohere, Whisper, pyannote et Parakeet. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
+`CUDA_VISIBLE_DEVICES` est supporté : les ids physiques remontés par le dashboard/nvidia-smi sont remappés vers les ordinaux CUDA visibles avant de construire `cuda:N`. Si `CUDA_VISIBLE_DEVICES=-1`, aucun GPU ne doit être sélectionné. La libération VRAM ciblée doit respecter le GPU visible demandé et les patterns `workflow.scheduling.kill_patterns`; ne pas tuer des processus GPU génériques hors liste.
+
 **Note NeMo (Parakeet) :** `ASRModel.from_pretrained()` ignore `device_map` et charge sur `cuda:0` par défaut. `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant le chargement pour forcer le GPU cible.
 
 **`ensure_arbitrage_llm_ready(expected_model_id)`** est le point d'entrée unique avant tout usage de la LLM d'arbitrage. Elle vérifie l'état réel du serveur (`/v1/models` + inférence test) et choisit parmi trois chemins logués explicitement :
@@ -329,7 +332,7 @@ Les états de file restent dans `job_queue.status` (`waiting`, `paused`, `runnin
 
 `transcria/queue/allocator.py` est le point de coordination GPU multi-job. Le scheduler ne réserve pas la VRAM à la place du pipeline : il fait seulement un pré-check de première phase. Les réservations effectives se font au moment des phases dans `WorkflowRunner`/`PipelineService` via `GPUAllocator` et `GPUSession`.
 
-Calendrier : `/admin/schedule` et `/api/schedule/windows` gèrent la table `scheduling_windows`. Règles supportées : `pause_queue`, `limit_concurrency`, `force_gpu`, `none`. `pause_queue` et `force_gpu` sont on/off ; `limit_concurrency` utilise `action_params.max_concurrent_jobs`. Ne pas ajouter de saisie "nombre de GPUs" au calendrier : avec la LLM d'arbitrage multi-GPU, seule la mesure runtime de `GPUAllocator` est fiable. `force_gpu` ne peut tuer que des processus correspondant aux `workflow.queue.kill_patterns` configurés, dans une fenêtre active.
+Calendrier : `/admin/schedule` et `/api/schedule/windows` gèrent la table `scheduling_windows`. Règles supportées : `pause_queue`, `limit_concurrency`, `force_gpu`, `none`. `pause_queue` et `force_gpu` sont on/off ; `limit_concurrency` utilise `action_params.max_concurrent_jobs`. Ne pas ajouter de saisie "nombre de GPUs" au calendrier : avec la LLM d'arbitrage multi-GPU, seule la mesure runtime de `GPUAllocator` est fiable. `force_gpu` ne peut tuer que des processus correspondant aux `workflow.scheduling.kill_patterns` configurés, dans une fenêtre active.
 
 Nettoyage E2E : `/admin/queue` expose aux admins globaux un bouton `Nettoyer E2E` qui supprime uniquement les jobs dont le titre commence par `E2E workflow`, leur entrée de file et leur dossier disque. Les jobs en cours sont ignorés et l'action doit rester auditée (`job_test_purge`).
 

@@ -257,12 +257,11 @@ venv/bin/python tests/test_e2e_workflow.py \
 | `--gpu N` | — | GPU préféré pour le pipeline — positionne `TRANSCRIA_PREFERRED_GPU=N` **avant tout import CUDA/torch** |
 | `--arbitrage-port PORT` | config.yaml | Port de la LLM d'arbitrage (utile pour runs parallèles avec plusieurs instances LLM) |
 
-> ⚠️ **`--gpu` utilise `TRANSCRIA_PREFERRED_GPU`, pas `CUDA_VISIBLE_DEVICES`.**
-> Le VRAMManager scanne nvidia-smi (qui ignore `CUDA_VISIBLE_DEVICES`) et passe
-> des indices physiques à PyTorch. Combiner les deux cause des erreurs
-> « invalid device ordinal ». Le script lit `--gpu` depuis `sys.argv` avant tout
-> import CUDA et positionne `TRANSCRIA_PREFERRED_GPU`, que `VRAMManager` utilise
-> comme GPU de départ préféré avant le fallback sur le meilleur GPU libre.
+> **`--gpu` utilise `TRANSCRIA_PREFERRED_GPU`.**
+> Le script lit `--gpu` depuis `sys.argv` avant tout import CUDA et positionne
+> `TRANSCRIA_PREFERRED_GPU`, que `VRAMManager` utilise comme GPU de départ préféré
+> avant le fallback sur le meilleur GPU libre. `CUDA_VISIBLE_DEVICES` est supporté
+> pour isoler un run : dans ce cas, `--gpu` désigne l'ordinal CUDA visible.
 
 ### Overrides de config
 
@@ -700,10 +699,9 @@ traitements ; les options absentes gardent leur valeur dans `config.yaml`.
 
 ## GPU et parallélisme
 
-Le script positionne `TRANSCRIA_PREFERRED_GPU` (et non `CUDA_VISIBLE_DEVICES`) pour
-éviter les conflits avec nvidia-smi utilisé par `VRAMManager`. Pour lancer plusieurs
-pipelines en parallèle avec `bench_audio.py`, spécifier `--gpu-pool` avec des GPUs
-distincts : chaque worker reçoit son propre `--gpu` qui devient
+Le script positionne `TRANSCRIA_PREFERRED_GPU`. Pour lancer plusieurs pipelines en
+parallèle avec `bench_audio.py`, spécifier `--gpu-pool` avec des GPUs distincts :
+chaque worker reçoit son propre `--gpu` qui devient
 `TRANSCRIA_PREFERRED_GPU` dans le sous-processus.
 
 En mode `--skip-llm`, le service TranscrIA n'a pas besoin d'être arrêté si les

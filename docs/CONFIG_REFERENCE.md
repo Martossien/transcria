@@ -98,7 +98,7 @@ python app.py --no-debug
 **Redémarrage requis :** non — ces URLs sont lues dynamiquement par `VRAMManager.__init__()` et les templates.
 
 **Impact si modifié :**
-- `dashboard_llm_url` : utilisé par `VRAMManager` pour interroger l'API GPU (`/api/v1/gpus`). Si le dashboard est indisponible, `VRAMManager` bascule sur `nvidia-smi`.
+- `dashboard_llm_url` : utilisé par `VRAMManager` pour interroger l'API GPU (`/api/v1/gpus`). Si le dashboard est indisponible, `VRAMManager` bascule sur `torch.cuda.mem_get_info()`.
 - `srt_editor_easy_url` : utilisé pour le bouton "Ouvrir dans SRT Editor" et l'API `push-to-editor`. Si l'URL est incorrecte, le bouton apparaît mais la redirection échoue.
 
 ---
@@ -635,7 +635,6 @@ Configuration de la file persistante et du scheduler applicatif. Quand elle est 
 | `aging_interval_minutes` | int | `30` | Intervalle d'attente donnant un point de bonus |
 | `aging_max_bonus` | int | `49` | Bonus maximal soustrait à la priorité effective |
 | `poll_interval_s` | int | `5` | Délai entre deux itérations de dispatch |
-| `kill_patterns` | list[str] | `[]` | Patterns de processus externes que `force_gpu` peut tuer dans une fenêtre validée |
 
 **Redémarrage requis :** oui pour `enabled`, `poll_interval_s` et les paramètres de worker/scheduler, car `JobExecutorService` et `QueueScheduler` sont instanciés au démarrage. Les priorités passées à l'API sont persistées avec chaque entrée de file.
 
@@ -649,6 +648,7 @@ Configuration générale du calendrier. Les créneaux eux-mêmes sont stockés e
 |---|---|---|---|
 | `enabled` | bool | `true` | Active la prise en compte des créneaux |
 | `timezone` | string | `"Europe/Paris"` | Fuseau horaire utilisé pour évaluer les jours et heures |
+| `kill_patterns` | list[str] | `["vllm", "llama-server", ...]` | Patterns de processus externes que `force_gpu` et la libération VRAM ciblée peuvent tuer ; les autres processus GPU sont ignorés |
 | `windows` | list[dict] | `[]` | Valeurs initiales/documentaires ; le runtime utilise la table `scheduling_windows` |
 
 Format d'un créneau :
@@ -672,6 +672,7 @@ Règles supportées :
 | `none` | on/off | Aucun effet, utile comme note de calendrier |
 
 Si plusieurs créneaux sont actifs, la priorité est `pause_queue` > `limit_concurrency` > `force_gpu` > `none`. Les créneaux traversant minuit sont supportés.
+`force_gpu` cible le GPU visible choisi par l'allocateur et résout l'index physique pour `nvidia-smi` si `CUDA_VISIBLE_DEVICES` est défini. Aucun processus hors `workflow.scheduling.kill_patterns` ne doit être tué.
 
 Le calendrier ne configure pas un nombre de GPUs. La LLM d'arbitrage peut occuper plusieurs GPUs et la disponibilité réelle dépend des phases pipeline ; l'arbitrage fiable reste donc dans `GPUAllocator`.
 
@@ -844,6 +845,8 @@ Limites :
 | `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
 | `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |
 | `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre |
+
+`CUDA_VISIBLE_DEVICES` est supporté pour les runs isolés : les ids physiques remontés par le dashboard sont remappés vers les ordinaux CUDA visibles avant chargement modèle. `CUDA_VISIBLE_DEVICES=-1` désactive la sélection GPU. `TRANSCRIA_PREFERRED_GPU` désigne alors un ordinal visible, pas forcément l'id physique.
 
 Overrides environnement :
 - `TRANSCRIA_ARBITRAGE_SCRIPT`

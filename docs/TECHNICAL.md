@@ -135,7 +135,8 @@ transcria/
 │   │   ├── gpu_session.py         # GPUSession context manager
 │   │   ├── llm_backend.py         # LLMBackend + 3 implémentations + factory
 │   │   ├── opencode_runner.py     # OpenCodeRunner
-│   │   └── _port_utils.py         # is_port_open() partagé entre vram_manager et llm_backend
+│   │   ├── _port_utils.py         # is_port_open() partagé entre vram_manager et llm_backend
+│   │   └── cuda_visible.py        # parse_cuda_visible_devices, to_visible_device_index, to_nvidia_smi_gpu_index
 │   │
 │   ├── services/                  # Services métier
 │   │   ├── job_executor.py       # JobExecutorService (worker thread)
@@ -888,10 +889,10 @@ Les valeurs clés sont lues depuis `config.yaml` :
 
 | Méthode | Description |
 |---|---|
-| `get_gpu_info()` | Dashboard API ou fallback PyTorch |
-| `get_free_vram_mb(gpu_index)` | VRAM libre en Mo |
-| `get_best_gpu(required_mb)` | Meilleur GPU disponible (≥ required + MIN_FREE) |
-| `ensure_free(required_mb, preferred_gpu)` | Scanne tous les GPUs si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
+| `get_gpu_info()` | Dashboard API ou fallback PyTorch, avec remapping `CUDA_VISIBLE_DEVICES` avant usage modèle |
+| `get_free_vram_mb(gpu_index)` | VRAM libre en Mo pour l'ordinal CUDA visible |
+| `get_best_gpu(required_mb)` | Meilleur GPU visible disponible (≥ required + MIN_FREE) |
+| `ensure_free(required_mb, preferred_gpu)` | Scanne les GPUs visibles si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
 | `is_arbitrage_llm_running()` | Retourne True si l'API OpenAI-compatible répond (`/v1/models` + inférence test), avec fallback port/PID uniquement si nécessaire |
 | `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
 | `launch_arbitrage_llm()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
@@ -903,6 +904,8 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `_wait_for_port(port, timeout)` | Boucle d'attente avec `is_port_open` toutes les 5s |
 | `track_model / untrack_model` | Enregistre/désenregistre un modèle chargé |
 | `offload_all()` | Vide `_loaded_models` + gc + cuda.empty_cache |
+
+`VRAMManager` et `GPUAllocator` partagent la même logique `CUDA_VISIBLE_DEVICES` : un dashboard qui remonte des ids physiques (`0,2`) est converti vers les ordinaux visibles (`cuda:0`, `cuda:1`), tandis que le fallback PyTorch est marqué comme déjà remappé. `CUDA_VISIBLE_DEVICES=-1` masque tous les GPUs. La libération VRAM ciblée utilise `nvidia-smi -i <gpu physique>` et ne signale que les processus dont le nom correspond à `workflow.scheduling.kill_patterns`.
 
 **`opencode_runner.py` — `OpenCodeRunner`**
 
@@ -1234,7 +1237,7 @@ Observation machine (17 mai 2026) avec la LLM d'arbitrage active :
 ```
 Cohere ASR (résumé ou transcription) :
   GPUSession(cohere-*, 6 Go)
-    → ensure_free() → scan tous GPUs → GPU avec le plus de VRAM libre
+    → ensure_free() → scan des GPUs visibles → GPU avec le plus de VRAM libre
     → charge modèle → transcrit → offload auto à la sortie du context manager
 
 pyannote (diarization ou speaker_detection) :
@@ -1256,7 +1259,7 @@ Fin de pipeline :
 
 ### 7.3 Monitoring
 
-Le dashboard-llm (port 5001) fournit l'état GPU en temps réel via `/api/v1/gpus` et `/api/v1/gpus/processes`. Le `VRAMManager` utilise ce dashboard en priorité, avec fallback sur PyTorch `torch.cuda.mem_get_info()`.
+Le dashboard-llm (port 5001) fournit l'état GPU en temps réel via `/api/v1/gpus` et `/api/v1/gpus/processes`. Le `VRAMManager` utilise ce dashboard en priorité, avec fallback sur PyTorch `torch.cuda.mem_get_info()`. Si `CUDA_VISIBLE_DEVICES` est défini, les ids du dashboard sont traités comme physiques puis remappés avant construction du device `cuda:N`.
 
 `is_port_open()` effectue un test d'inférence réel (`/v1/models` puis `/v1/completions`) pour vérifier que le modèle répond réellement, pas uniquement que le port est ouvert.
 
@@ -1360,7 +1363,8 @@ Organisation :
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory (checkpoints, clips, parsing, normalisation, factory pattern) |
 | `test_edge_cases.py` | 17 | Cas limites, transitions workflow |
 | `test_exports.py` | 3 | PackageBuilder |
-| `test_gpu.py` | 59 | VRAMManager |
+| `test_gpu.py` | 68 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée |
+| `test_gpu_allocator.py` | 7 | Réservations GPU, remapping CUDA visible, verrou LLM |
 | `test_integrations.py` | 12 | Dashboard, SRT Editor, OpenCodeRunner |
 | `test_jobs.py` | 19 | Job model, filesystem |
 | `test_job_store.py` | 15 | JobStore CRUD, purge rétention |

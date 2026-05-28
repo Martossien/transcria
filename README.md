@@ -107,7 +107,8 @@ Variables d'environnement principales :
 | `TRANSCRIA_DEBUG` | Force le mode debug |
 | `HF_TOKEN` | Token Hugging Face |
 | `TRANSCRIA_OPENCODE_BIN` | Chemin du binaire opencode |
-| `TRANSCRIA_PREFERRED_GPU` | GPU physique préféré par le VRAMManager |
+| `TRANSCRIA_PREFERRED_GPU` | GPU préféré par le VRAMManager/GPUAllocator (ordinal CUDA visible si `CUDA_VISIBLE_DEVICES` est défini) |
+| `CUDA_VISIBLE_DEVICES` | Masque CUDA optionnel ; les ids physiques sont remappés vers `cuda:0..N` avant chargement modèle |
 
 Les anciennes références `qwen_*` restent des aliases de compatibilité ou des exemples historiques. Le contrat actuel est générique : une LLM d'arbitrage OpenAI-compatible configurée par `services.*` et `workflow.*.model_id`.
 
@@ -177,6 +178,7 @@ Les règles calendrier supportées sont :
 - `none` : aucune règle.
 
 Le calendrier ne demande pas un nombre de GPU. Sur une machine où la LLM d'arbitrage peut occuper plusieurs GPUs, la décision fiable reste dans `GPUAllocator`, qui vérifie la VRAM réelle au moment du dispatch et des phases pipeline.
+La libération forcée ne tue que les processus externes correspondant à `workflow.scheduling.kill_patterns`; les processus hors liste sont laissés intacts même s'ils consomment beaucoup de VRAM.
 
 ## Voix enregistrées
 
