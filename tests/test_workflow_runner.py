@@ -525,6 +525,29 @@ class TestPipelineServiceStateRecovery:
             assert result["error"] == "qwen down"
             assert updated.state == JobState.FAILED.value
 
+    def test_pipeline_can_defer_terminal_state_to_worker(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            from transcria.services.pipeline_service import PipelineService
+
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Pipeline Deferred Terminal State")
+            service = PipelineService(cfg)
+
+            monkeypatch.setattr(
+                service.runner,
+                "run_transcription",
+                lambda job_obj, audio_path, config: {"segments": []},
+            )
+            monkeypatch.setattr(service.runner, "run_correction", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "run_quality_checks", lambda *args, **kwargs: {})
+            monkeypatch.setattr(service.runner, "build_export", lambda *args, **kwargs: {})
+
+            result = service.run_process(job, "/tmp/fake.wav", "fast", finalize_job_state=False)
+            updated = JobStore.get_by_id(job.id)
+
+            assert result["status"] == "completed"
+            assert updated.state != JobState.COMPLETED.value
+
 
 class TestWorkflowRunnerRunSummary:
     def test_run_summary_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):

@@ -53,6 +53,9 @@ def app():
 
     yield app
 
+    from transcria.services.job_executor import shutdown_job_executor
+    shutdown_job_executor()
+
     with app.app_context():
         from transcria.database import db
         db.drop_all()

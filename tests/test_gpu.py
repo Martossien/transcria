@@ -543,6 +543,30 @@ class TestVRAMManagerIsPortOpen:
         assert result is False
 
 
+class TestVRAMManagerArbitrageRunning:
+    def test_arbitrage_running_uses_api_health_before_lsof(self, monkeypatch):
+        mgr = VRAMManager(config=_default_config(arbitrage_llm_port=8080))
+        calls = []
+
+        monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: True))
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: calls.append(a) or None)
+
+        assert mgr.is_arbitrage_llm_running() is True
+        assert calls == []
+
+    def test_arbitrage_running_falls_back_to_lsof(self, monkeypatch):
+        mgr = VRAMManager(config=_default_config(arbitrage_llm_port=8080))
+
+        monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *a, **kw: type("R", (), {"stdout": "123\n"})(),
+        )
+
+        assert mgr.is_arbitrage_llm_running() is True
+
+
 class TestVRAMManagerWaitForPort:
     def test_wait_for_port_immediate_success(self, monkeypatch):
         monkeypatch.setattr(VRAMManager, "is_port_open", lambda port: True)

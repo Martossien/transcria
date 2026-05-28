@@ -56,7 +56,7 @@ import sys
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -271,6 +271,36 @@ Exemples :
         "--arbitrage-port", type=int, default=None,
         help="Port de la LLM d'arbitrage (défaut: valeur config.yaml, souvent 8080) — "
              "utile pour les runs parallèles avec plusieurs instances LLM",
+    )
+    parser.add_argument(
+        "--schedule-case",
+        choices=["none", "pause_queue", "pause_then_release", "limit_concurrency", "force_gpu"],
+        default="none",
+        help=(
+            "Injecte une fenêtre de planification active et vérifie son effet avant le pipeline. "
+            "pause_queue, pause_then_release et limit_concurrency utilisent une entrée job_queue de test ; "
+            "force_gpu vérifie seulement l'autorisation de fenêtre, sans tuer de processus GPU."
+        ),
+    )
+    parser.add_argument(
+        "--schedule-limit-workers",
+        type=int,
+        default=1,
+        help="Limite max_concurrent_jobs appliquée au cas --schedule-case limit_concurrency.",
+    )
+    parser.add_argument(
+        "--process-via-api",
+        action="store_true",
+        help=(
+            "Lance le traitement final via POST /api/jobs/<id>/process avec la file activée, "
+            "puis attend la fin du scheduler au lieu d'appeler PipelineService directement."
+        ),
+    )
+    parser.add_argument(
+        "--queue-api-timeout-s",
+        type=int,
+        default=900,
+        help="Timeout du polling quand --process-via-api est actif.",
     )
 
     # ── Bench ────────────────────────────────────────────────────────────────
@@ -658,6 +688,24 @@ def apply_e2e_config(cfg: dict, args: argparse.Namespace) -> None:
         cfg.setdefault("cohere", {}).setdefault("lexicon_biasing", {})["enabled"] = True
         info("Biasing Cohere depuis lexique activé")
 
+    if args.schedule_case != "none":
+        workflow = cfg.setdefault("workflow", {})
+        workflow.setdefault("scheduling", {})["enabled"] = True
+        workflow.setdefault("scheduling", {})["timezone"] = workflow["scheduling"].get("timezone", "Europe/Paris")
+        # Le pipeline E2E s'exécute directement via PipelineService. On désactive
+        # le scheduler global Flask pour éviter qu'il consomme la sonde queue avant
+        # le contrôle manuel du cas d'agenda.
+        workflow.setdefault("queue", {})["enabled"] = False
+        info(f"Cas agenda E2E activé : {args.schedule_case}")
+
+    if args.process_via_api:
+        workflow = cfg.setdefault("workflow", {})
+        workflow.setdefault("queue", {})["enabled"] = True
+        workflow["queue"]["poll_interval_s"] = 1
+        workflow.setdefault("execution", {})["max_concurrent_jobs"] = 1
+        workflow.setdefault("scheduling", {})["enabled"] = False
+        info("Traitement final via API + file persistante activé")
+
 
 def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
     """Affiche la configuration effective de ce run."""
@@ -694,6 +742,8 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
     print(f"  Diarisation          : {'non' if args.skip_diarization else 'oui'}")
     print(f"  Phase résumé         : {'non (--skip-summary)' if args.skip_summary else 'oui'}")
     print(f"  Port LLM arbitrage   : {services.get('arbitrage_llm_port', 8080)}")
+    print(f"  Cas agenda           : {args.schedule_case}")
+    print(f"  Traitement via API   : {'oui' if args.process_via_api else 'non'}")
     print()
 
     opts = [
@@ -898,6 +948,208 @@ def _count_srt(path: Path) -> tuple[int, int]:
     return segments, words
 
 
+_DAY_NAMES = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
+def _active_schedule_payload(case: str, cfg: dict, args: argparse.Namespace) -> dict:
+    from zoneinfo import ZoneInfo
+
+    scheduling_cfg = cfg.get("workflow", {}).get("scheduling", {}) or {}
+    timezone_name = str(scheduling_cfg.get("timezone", "Europe/Paris"))
+    now = datetime.now(ZoneInfo(timezone_name))
+    start = now - timedelta(minutes=5)
+    end = now + timedelta(minutes=55)
+    params = {}
+    if case == "limit_concurrency":
+        params["max_concurrent_jobs"] = max(1, int(args.schedule_limit_workers))
+    action = "pause_queue" if case == "pause_then_release" else case
+    return {
+        "name": f"e2e-{case}-{int(time.time())}",
+        "days": [_DAY_NAMES[now.weekday()]],
+        "start": start.strftime("%H:%M"),
+        "end": end.strftime("%H:%M"),
+        "action": action,
+        "action_params": params,
+        "enabled": True,
+    }
+
+
+def run_schedule_case_probe(app, cfg: dict, args: argparse.Namespace, audio_file: Path, admin) -> None:
+    if args.schedule_case == "none":
+        return
+
+    from transcria.jobs.filesystem import JobFilesystem
+    from transcria.jobs.store import JobStore
+    from transcria.queue.calendar import SchedulingCalendar, SchedulingWindowStore
+    from transcria.queue.scheduler import QueueScheduler
+    from transcria.queue.store import QueueStore
+    from transcria.services.job_service import JobService
+
+    step(f"Sonde agenda ({args.schedule_case})")
+    timer_start("schedule_probe")
+
+    window = SchedulingWindowStore.create(_active_schedule_payload(args.schedule_case, cfg, args))
+    calendar = SchedulingCalendar(cfg.get("workflow", {}).get("scheduling", {}) or {})
+    active = calendar.get_active_window()
+    if active is None or active.id != window.id:
+        RESULTS["schedule_probe"] = False
+        raise RuntimeError(f"Fenêtre agenda non active pour le cas {args.schedule_case}")
+    ok(f"Fenêtre active : {active.name} ({active.action})")
+
+    probe_job_ids: list[str] = []
+    stop_event = threading.Event()
+
+    def create_probe_job(title: str) -> str:
+        created = JobService.create(admin.id, title)
+        probe_job_id = created["job_id"]
+        probe_job_ids.append(probe_job_id)
+        JobService.upload(
+            probe_job_id,
+            audio_file.read_bytes(),
+            audio_file.name,
+            cfg["storage"]["jobs_dir"],
+        )
+        analysis = JobService.analyze(probe_job_id, cfg["storage"]["jobs_dir"], cfg)
+        if analysis.get("error"):
+            raise RuntimeError(f"Analyse audio sonde agenda : {analysis['error']}")
+        return probe_job_id
+
+    def fake_process(job_id: str, audio_path: str, mode: str) -> None:
+        stop_event.wait(timeout=10)
+
+    scheduler = QueueScheduler(app, cfg, fake_process)
+    try:
+        if args.schedule_case == "pause_queue":
+            probe_job_id = create_probe_job("E2E agenda pause_queue")
+            QueueStore.enqueue(probe_job_id, mode=args.mode, vram_profile={"phases": {"stt": 0}})
+            dispatched = scheduler._dispatch_iteration()
+            entry = QueueStore.get_entry(probe_job_id)
+            if dispatched != 0 or entry is None or entry.status != "waiting":
+                RESULTS["schedule_probe"] = False
+                raise RuntimeError("pause_queue aurait dû conserver le job en attente")
+            ok("pause_queue vérifié : aucun dispatch, job conservé en attente")
+
+        elif args.schedule_case == "pause_then_release":
+            probe_job_id = create_probe_job("E2E agenda pause_then_release")
+            QueueStore.enqueue(probe_job_id, mode=args.mode, vram_profile={"phases": {"stt": 0}})
+            dispatched = scheduler._dispatch_iteration()
+            entry = QueueStore.get_entry(probe_job_id)
+            if dispatched != 0 or entry is None or entry.status != "waiting":
+                RESULTS["schedule_probe"] = False
+                raise RuntimeError("pause_then_release: le job aurait dû rester en attente pendant pause_queue")
+            ok("pause_then_release : blocage initial vérifié")
+
+            SchedulingWindowStore.delete(window.id)
+            window = None
+            dispatched = scheduler._dispatch_iteration()
+            entry = QueueStore.get_entry(probe_job_id)
+            if dispatched != 1 or entry is None or entry.status != "running":
+                RESULTS["schedule_probe"] = False
+                raise RuntimeError(
+                    f"pause_then_release: attendu dispatch=1/running, obtenu dispatch={dispatched}, "
+                    f"status={entry.status if entry else None}"
+                )
+            ok("pause_then_release vérifié : dispatch après suppression du créneau indisponible")
+
+        elif args.schedule_case == "limit_concurrency":
+            cfg.setdefault("workflow", {}).setdefault("execution", {})["max_concurrent_jobs"] = max(
+                2,
+                int(args.schedule_limit_workers) + 1,
+            )
+            scheduler.max_workers = int(cfg["workflow"]["execution"]["max_concurrent_jobs"])
+            first_job_id = create_probe_job("E2E agenda limit_concurrency 1")
+            second_job_id = create_probe_job("E2E agenda limit_concurrency 2")
+            QueueStore.enqueue(first_job_id, mode=args.mode, vram_profile={"phases": {"stt": 0}})
+            QueueStore.enqueue(second_job_id, mode=args.mode, vram_profile={"phases": {"stt": 0}})
+            dispatched = scheduler._dispatch_iteration()
+            expected = max(1, int(args.schedule_limit_workers))
+            if dispatched != expected or scheduler.running_count != expected:
+                RESULTS["schedule_probe"] = False
+                raise RuntimeError(
+                    f"limit_concurrency attendu={expected}, dispatched={dispatched}, running={scheduler.running_count}"
+                )
+            ok(f"limit_concurrency vérifié : {dispatched} dispatch pour {scheduler.max_workers} workers de base")
+
+        elif args.schedule_case == "force_gpu":
+            if not calendar.is_force_gpu_allowed():
+                RESULTS["schedule_probe"] = False
+                raise RuntimeError("force_gpu devrait être autorisé dans la fenêtre active")
+            ok("force_gpu vérifié : fenêtre active et autorisation détectée")
+            warn("Aucun kill GPU réel n'est déclenché par l'E2E standard")
+
+        RESULTS["schedule_probe"] = True
+        timer_end("schedule_probe")
+    finally:
+        stop_event.set()
+        scheduler._executor.shutdown(wait=True, cancel_futures=True)
+        for probe_job_id in probe_job_ids:
+            entry = QueueStore.get_entry(probe_job_id)
+            if entry is not None:
+                db.session.delete(entry)
+                db.session.flush()
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], probe_job_id)
+            shutil.rmtree(fs.job_dir, ignore_errors=True)
+            job = JobStore.get_by_id(probe_job_id)
+            if job is not None:
+                db.session.delete(job)
+        if window is not None:
+            SchedulingWindowStore.delete(window.id)
+        db.session.commit()
+
+
+def run_pipeline_via_queue_api(app, cfg: dict, args: argparse.Namespace, job_id: str) -> None:
+    from transcria.auth.store import UserStore
+    from transcria.jobs.models import JobState
+    from transcria.jobs.store import JobStore
+    from transcria.queue.store import QueueStore
+    from transcria.workflow.transitions import get_execution_status
+
+    client = app.test_client()
+    admin = UserStore.get_by_username(cfg.get("auth", {}).get("first_admin_username", "admin"))
+    if admin is None:
+        raise RuntimeError("Utilisateur admin introuvable pour le client API E2E")
+    with client.session_transaction() as session:
+        session["_user_id"] = admin.id
+        session["_fresh"] = True
+
+    response = client.post(
+        f"/api/jobs/{job_id}/process",
+        json={"mode": args.mode, "priority": 10},
+    )
+    if response.status_code != 202:
+        raise RuntimeError(f"POST /api/jobs/{job_id}/process: HTTP {response.status_code} {response.get_data(as_text=True)}")
+    payload = response.get_json(silent=True) or {}
+    ok(
+        "API process acceptée : "
+        f"execution_status={payload.get('execution_status')}, position={payload.get('queue_position')}"
+    )
+
+    deadline = time.time() + max(30, int(args.queue_api_timeout_s))
+    last_status = None
+    while time.time() < deadline:
+        db.session.expire_all()
+        job = JobStore.get_by_id(job_id)
+        entry = QueueStore.get_entry(job_id)
+        execution_status = get_execution_status(job) if job else "missing"
+        status = (
+            job.state if job else "missing",
+            execution_status,
+            entry.status if entry else "no_queue_entry",
+        )
+        if status != last_status:
+            info(f"Queue API polling : state={status[0]}, execution={status[1]}, queue={status[2]}")
+            last_status = status
+        if job and job.state == JobState.COMPLETED.value:
+            if entry is not None and entry.status not in {"done", "cancelled", "failed"}:
+                raise RuntimeError(f"Entrée queue inattendue après COMPLETED: {entry.status}")
+            ok("Queue API terminée : job completed, entrée queue finalisée")
+            return
+        if job and job.state in {JobState.FAILED.value, JobState.CANCELLED.value}:
+            raise RuntimeError(f"Queue API terminée en échec: state={job.state}, error={job.error_message}")
+        time.sleep(1)
+    raise TimeoutError(f"Timeout queue API après {args.queue_api_timeout_s}s")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Résumé et JSON de sortie
 # ─────────────────────────────────────────────────────────────────────────────
@@ -972,6 +1224,9 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "lexicon_json": str(args.lexicon_json) if args.lexicon_json else None,
         "gpu": args.gpu,
         "arbitrage_port": args.arbitrage_port,
+        "schedule_case": args.schedule_case,
+        "schedule_limit_workers": args.schedule_limit_workers,
+        "process_via_api": args.process_via_api,
         "config_overrides": {
             item.split("=", 1)[0].strip(): _parse_override_value(item.split("=", 1)[1].strip())
             for item in args.config_override
@@ -1195,6 +1450,9 @@ def print_summary(args: argparse.Namespace) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 def main() -> int:
     args = parse_args()
+    if args.process_via_api and args.schedule_case != "none":
+        fail("--process-via-api ne peut pas être combiné avec --schedule-case dans ce script")
+        return 1
 
     # Validation du fichier audio
     audio_file = args.audio
@@ -1270,6 +1528,8 @@ def main() -> int:
         admin = UserStore.get_by_username("admin")
 
         try:
+            run_schedule_case_probe(app, cfg, args, audio_file, admin)
+
             # ── Création / upload / analyse ──────────────────────────────────
             step("Création / upload / analyse (JobService)")
             timer_start("prepare")
@@ -1414,8 +1674,12 @@ def main() -> int:
             timer_start("pipeline")
             gpu_checkpoint("avant-pipeline")
 
-            pipeline = PipelineService(cfg)
-            result = pipeline.run_process(job, str(audio_path), args.mode)
+            if args.process_via_api:
+                run_pipeline_via_queue_api(app, cfg, args, job.id)
+                result = {}
+            else:
+                pipeline = PipelineService(cfg)
+                result = pipeline.run_process(job, str(audio_path), args.mode)
 
             gpu_checkpoint("apres-pipeline")
 
