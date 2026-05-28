@@ -22,6 +22,8 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from transcria.audio.excerpts import AudioExcerptService, parse_time_range
+from transcria.audit.decorator import audit_log
+from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
 from transcria.auth.permissions import Permission, requires
@@ -599,6 +601,10 @@ def index():
     purged = JobStore.purge_expired_jobs(retention_days, cfg["storage"]["jobs_dir"])
     if purged:
         logger.info("Purge rétention: %d jobs supprimés", purged)
+    audit_retention = cfg.get("security", {}).get("audit_retention_days", 1095)
+    if isinstance(audit_retention, (int, float)) and audit_retention > 0:
+        from transcria.audit.store import AuditStore
+        AuditStore.purge_expired(int(audit_retention))
     jobs = JobStore.list_for_user(current_user, include_all=current_user.has_role(Role.ADMIN))
     return render_template("index.html", jobs=jobs, roles=Role)
 
@@ -844,6 +850,7 @@ def api_context(job_id: str):
 
     data = request.get_json() or {}
     MeetingContextManager.save(job, cfg["storage"]["jobs_dir"], data)
+    audit_log(AuditAction.JOB_CONTEXT_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     if job.state == JobState.SUMMARY_DONE.value:
         JobStore.update_state(job.id, JobState.CONTEXT_DONE)
     return jsonify({"status": "ok"})
@@ -859,6 +866,7 @@ def api_participants(job_id: str):
 
     data = request.get_json() or []
     ParticipantsManager.save(job, cfg["storage"]["jobs_dir"], data)
+    audit_log(AuditAction.JOB_PARTICIPANTS_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     if job.state in (JobState.CONTEXT_DONE.value, JobState.SUMMARY_DONE.value):
         JobStore.update_state(job.id, JobState.PARTICIPANTS_DONE)
     return jsonify({"status": "ok"})
@@ -891,6 +899,7 @@ def api_lexicon(job_id: str):
 
     advance_preprocessing_state(job.id, job.state)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
+    audit_log(AuditAction.JOB_LEXICON_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     return jsonify({"status": "ok"})
 
 
@@ -976,6 +985,7 @@ def api_speakers_map(job_id: str):
         WorkflowRunner._apply_speaker_roles(fs, speaker_roles_llm, logger)
 
     advance_preprocessing_state(job.id, job.state)
+    audit_log(AuditAction.JOB_SPEAKER_MAP, target_type="job", target_id=job.id, target_label=job.title)
     return jsonify({"status": "ok"})
 
 
@@ -1045,6 +1055,10 @@ def api_process(job_id: str):
     result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours", "execution_status": "active"}), 409
+    audit_log(
+        action="job_process", target_type="job", target_id=job.id,
+        target_label=job.title, details={"mode": mode},
+    )
     return jsonify({
         "status": "queued",
         "job_id": job.id,
@@ -1168,6 +1182,7 @@ def api_download_srt(job_id: str):
         abort(404)
 
     safe_title = job.title.replace(" ", "_")[:50]
+    audit_log(AuditAction.JOB_DOWNLOAD, target_type="job", target_id=job.id, target_label=job.title, details={"format": "srt"})
     return send_file(
         srt_path,
         as_attachment=True,
@@ -1188,6 +1203,7 @@ def api_download_package(job_id: str):
     if not zip_path.is_file():
         abort(404)
 
+    audit_log(AuditAction.JOB_DOWNLOAD, target_type="job", target_id=job.id, target_label=job.title, details={"format": "zip"})
     return send_file(zip_path, as_attachment=True, download_name=zip_path.name, mimetype="application/zip")
 
 
@@ -1204,6 +1220,7 @@ def api_download_audio(job_id: str):
     if audio_path is None:
         abort(404)
 
+    audit_log(AuditAction.JOB_DOWNLOAD, target_type="job", target_id=job.id, target_label=job.title, details={"format": "audio"})
     return send_file(audio_path, as_attachment=True, download_name=audio_path.name)
 
 
@@ -1366,6 +1383,7 @@ def admin_config():
             return _render_config_form(raw_yaml, config_path, errors, 400)
 
         flash(f"Configuration sauvegardée dans {config_path}.", "success")
+        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=config_path)
         cfg = ConfigService.get_singleton()
 
     config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)
@@ -1393,6 +1411,7 @@ def delete_job(job_id: str):
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
 
+    audit_log(AuditAction.JOB_DELETE, target_type="job", target_id=job.id, target_label=job.title)
     JobService.delete(job.id, cfg["storage"]["jobs_dir"])
     flash("Traitement supprimé.", "info")
     return redirect(url_for("web.index"))

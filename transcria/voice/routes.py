@@ -6,6 +6,8 @@ from pathlib import Path
 from flask import Blueprint, Response, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 
+from transcria.audit.decorator import audit_log
+from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.config import get_config
 from transcria.voice.consent_form import CONSENT_FORM_FILENAME, build_voice_consent_pdf
@@ -72,6 +74,10 @@ def voice_create():
                 allow_global_profiles=bool(voice_cfg.get("allow_global_profiles", False)),
             )
             flash("Voix créée. Ajoutez maintenant le consentement signé.", "success")
+            audit_log(
+                AuditAction.VOICE_CREATE, target_type="voice", target_id=subject.id,
+                target_label=subject.display_name,
+            )
             return redirect(url_for("voice.voice_detail", subject_id=subject.id))
         except (VoiceValidationError, VoiceAccessError) as exc:
             flash(str(exc), "error")
@@ -118,6 +124,10 @@ def voice_update_metadata(subject_id: str):
             external_ref=request.form.get("external_ref", ""),
         )
         flash("Informations de la voix mises à jour.", "success")
+        audit_log(
+            AuditAction.VOICE_MODIFY, target_type="voice", target_id=subject_id,
+            target_label=subject.display_name,
+        )
     except (VoiceValidationError, VoiceAccessError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("voice.voice_detail", subject_id=subject.id))
@@ -143,6 +153,10 @@ def voice_consent_proof(subject_id: str, consent_id: str):
     if not proof_path.is_file() or not proof_path.is_relative_to(storage_root):
         logger.warning("Preuve consentement inaccessible: subject=%s consent=%s path=%s", subject.id, consent.id, proof_path)
         return ("Preuve inaccessible", 404)
+    audit_log(
+        AuditAction.VOICE_CONSENT_VIEW, target_type="voice", target_id=subject_id,
+        target_label=subject.display_name,
+    )
     return send_file(proof_path, as_attachment=False)
 
 

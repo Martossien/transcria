@@ -1,6 +1,8 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
+from transcria.audit.decorator import audit_log
+from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
@@ -29,10 +31,12 @@ def login():
         if user and user.is_active and user.check_password(password):
             UserStore.record_login(user)
             login_user(user)
+            audit_log(AuditAction.LOGIN)
             next_url = request.args.get("next")
             if next_url and next_url.startswith("/"):
                 return redirect(next_url)
             return redirect(url_for("web.index"))
+        audit_log(AuditAction.LOGIN_FAILED, target_label=username)
         flash("Identifiant ou mot de passe incorrect.", "error")
         return render_template("login.html"), 401
     return render_template("login.html")
@@ -41,6 +45,7 @@ def login():
 @auth_bp.route("/logout")
 @login_required
 def logout():
+    audit_log(AuditAction.LOGOUT)
     logout_user()
     flash("Vous avez été déconnecté.", "info")
     return redirect(url_for("auth.login"))
@@ -109,6 +114,10 @@ def user_create():
             role = Role.OPERATOR
 
         UserStore.create_user(username=username, password=password, display_name=display_name, email=email, role=role)
+        audit_log(
+            AuditAction.USER_CREATE, target_type="user", target_label=username,
+            details={"role": role.value},
+        )
         flash(f"Utilisateur {username} créé.", "success")
         return redirect(url_for("auth.user_list"))
 
@@ -151,6 +160,15 @@ def user_edit(user_id: str):
         if new_active != user.is_active:
             UserStore.update_user(user_id, is_active=new_active)
 
+        audit_log(
+            AuditAction.USER_MODIFY, target_type="user", target_id=user_id,
+            target_label=user.username,
+            details={
+                "role": role.value,
+                "password_changed": bool(new_password),
+                "is_active": new_active,
+            },
+        )
         flash("Utilisateur mis à jour.", "success")
         return redirect(url_for("auth.user_list"))
 
@@ -181,6 +199,10 @@ def group_create():
             flash("Ce groupe existe déjà.", "error")
             return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
         group = GroupStore.create_group(name, description)
+        audit_log(
+            AuditAction.GROUP_CREATE, target_type="group", target_id=group.id,
+            target_label=group.name,
+        )
         flash(f"Groupe {group.name} créé.", "success")
         return redirect(url_for("auth.group_edit", group_id=group.id))
     return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
@@ -208,6 +230,10 @@ def group_edit(group_id: str):
                 flash("Ce groupe existe déjà.", "error")
             else:
                 GroupStore.update_group(group.id, name, description)
+                audit_log(
+                    AuditAction.GROUP_MODIFY, target_type="group", target_id=group.id,
+                    target_label=name, details={"name": name, "description": description},
+                )
                 flash("Groupe mis à jour.", "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
@@ -252,6 +278,10 @@ def group_edit(group_id: str):
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
         if action == "delete_group" and current_user.has_role(Role.ADMIN):
+            audit_log(
+                AuditAction.GROUP_DELETE, target_type="group", target_id=group.id,
+                target_label=group.name,
+            )
             GroupStore.delete_group(group.id)
             flash("Groupe supprimé.", "success")
             return redirect(url_for("auth.group_list"))
@@ -269,10 +299,13 @@ def group_edit(group_id: str):
 
 
 def inject_user_context():
+    from transcria.config import get_config
+    cfg = get_config()
     if current_user.is_authenticated:
         return {
             "current_user": current_user,
             "user_permissions": get_user_permissions(current_user),
             "can_manage_groups": GroupStore.is_group_admin(current_user),
+            "config": cfg,
         }
-    return {"current_user": None, "user_permissions": set()}
+    return {"current_user": None, "user_permissions": set(), "config": cfg}

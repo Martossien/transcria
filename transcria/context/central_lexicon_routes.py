@@ -5,6 +5,8 @@ import logging
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
+from transcria.audit.decorator import audit_log
+from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
 from transcria.context.central_lexicon_store import CentralLexiconAccessError, CentralLexiconStore, CentralLexiconValidationError
@@ -50,6 +52,10 @@ def lexicon_create():
                 allow_global=allow_global,
             )
             flash("Lexique créé.", "success")
+            audit_log(
+                AuditAction.LEXICON_CREATE, target_type="lexicon", target_id=lexicon.id,
+                target_label=lexicon.name,
+            )
             return redirect(url_for("central_lexicon.lexicon_detail", lexicon_id=lexicon.id))
         except (CentralLexiconValidationError, CentralLexiconAccessError) as exc:
             flash(str(exc), "error")
@@ -104,6 +110,10 @@ def lexicon_update_metadata(lexicon_id: str):
             allow_global=current_user.has_role(Role.ADMIN),
         )
         flash("Lexique mis à jour.", "success")
+        audit_log(
+            AuditAction.LEXICON_MODIFY, target_type="lexicon", target_id=lexicon_id,
+            target_label=lexicon.name,
+        )
     except (CentralLexiconValidationError, CentralLexiconAccessError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("central_lexicon.lexicon_detail", lexicon_id=lexicon_id))
@@ -119,6 +129,10 @@ def lexicon_delete(lexicon_id: str):
         if lexicon is None:
             return ("Lexique introuvable", 404)
         CentralLexiconStore.delete_lexicon(lexicon, current_user)
+        audit_log(
+            AuditAction.LEXICON_DELETE, target_type="lexicon", target_id=lexicon_id,
+            target_label=lexicon.name,
+        )
         flash("Lexique supprimé.", "success")
     except CentralLexiconAccessError as exc:
         flash(str(exc), "error")
