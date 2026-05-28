@@ -205,7 +205,12 @@ var TranscrIA = window.TranscrIA || {};
         container.parentElement.appendChild(audioDiv);
 
         fetch('/api/jobs/' + JOB_ID + '/speakers/clips')
-            .then(function (r) { return r.json(); })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    if (!r.ok) throw new Error(data.error || 'Chargement impossible');
+                    return data;
+                });
+            })
             .then(function (data) {
                 var clips = (data.clips || {})[speakerId] || [];
                 if (clips.length === 0) {
@@ -213,17 +218,17 @@ var TranscrIA = window.TranscrIA || {};
                     return;
                 }
                 var html = '';
-                clips.forEach(function (path, i) {
-                    var fname = path.split('/').pop();
+                clips.forEach(function (clipName, i) {
+                    var safeName = String(clipName || '').split('/').map(encodeURIComponent).join('/');
                     html += '<small class="text-muted">Extrait ' + (i+1) + ' :</small>' +
                         '<audio controls preload="none">' +
-                        '<source src="/api/jobs/' + JOB_ID + '/speakers/clip/' + fname +
+                        '<source src="/api/jobs/' + JOB_ID + '/speakers/clip/' + safeName +
                         '" type="audio/wav"></audio>';
                 });
                 audioDiv.innerHTML = html;
             })
-            .catch(function () {
-                audioDiv.innerHTML = '<small class="text-danger">Erreur chargement</small>';
+            .catch(function (error) {
+                audioDiv.innerHTML = '<small class="text-danger">' + W.escapeHtml(error.message || 'Erreur chargement') + '</small>';
             });
     };
 

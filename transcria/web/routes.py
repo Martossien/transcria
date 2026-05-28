@@ -421,6 +421,20 @@ def _resolve_context_audio_range(timecode: str, quote: str, segments: list) -> t
     return start, end, False
 
 
+def _resolve_speaker_clip(samples_dir: Path, raw_clip: str) -> tuple[str, Path] | None:
+    """Résout une référence d'extrait locuteur sans exposer les chemins disque."""
+    raw_clip = (raw_clip or "").strip()
+    if not raw_clip:
+        return None
+
+    raw_path = Path(raw_clip)
+    clip_path = raw_path.resolve() if raw_path.is_absolute() else (samples_dir / raw_path).resolve()
+    if not clip_path.is_relative_to(samples_dir) or not clip_path.is_file():
+        return None
+
+    return clip_path.relative_to(samples_dir).as_posix(), clip_path
+
+
 def _fill_missing_speaker_genders(
     speakers_data: dict,
     mapping_data: dict,
@@ -1413,7 +1427,19 @@ def api_speaker_clips(job_id: str):
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     clips = fs.load_json("speakers/speaker_clips.json") or {}
-    return jsonify({"clips": clips})
+    samples_dir = (fs.job_dir / "speakers" / "samples").resolve()
+    safe_clips: dict[str, list[str]] = {}
+    if isinstance(clips, dict):
+        for speaker_id, raw_paths in clips.items():
+            if not isinstance(raw_paths, list):
+                continue
+            clip_names = []
+            for raw_path in raw_paths:
+                resolved = _resolve_speaker_clip(samples_dir, str(raw_path))
+                if resolved is not None:
+                    clip_names.append(resolved[0])
+            safe_clips[str(speaker_id)] = clip_names
+    return jsonify({"clips": safe_clips})
 
 
 @web_bp.route("/api/jobs/<job_id>/speakers/clip/<path:clip_name>", methods=["GET"])
@@ -1426,9 +1452,10 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     samples_dir = (fs.job_dir / "speakers" / "samples").resolve()
-    clip_path = (samples_dir / clip_name).resolve()
-    if not clip_path.is_relative_to(samples_dir) or not clip_path.is_file():
+    resolved = _resolve_speaker_clip(samples_dir, clip_name)
+    if resolved is None:
         abort(404)
+    public_name, clip_path = resolved
     audit_log(
         AuditAction.JOB_DOWNLOAD,
         target_type="job",
@@ -1436,7 +1463,7 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
         target_label=job.title,
         details={
             "format": "speaker_clip",
-            "clip_name": clip_path.name,
+            "clip_name": public_name,
         },
     )
     return send_file(clip_path, mimetype="audio/wav")

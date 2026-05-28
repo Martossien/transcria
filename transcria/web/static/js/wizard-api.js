@@ -1,16 +1,33 @@
 var TranscrIA = window.TranscrIA || {};
 
 TranscrIA.api = function (endpoint, method, body) {
-    var opts = { method: method || 'POST', headers: {} };
+    var resolvedMethod = method || 'POST';
+    var opts = { method: resolvedMethod, headers: {} };
     if (body instanceof FormData) {
         opts.body = body;
     } else if (body !== null && body !== undefined) {
         opts.headers['Content-Type'] = 'application/json';
         opts.body = JSON.stringify(body);
     }
-    console.log('[TranscrIA] api ' + method + ' ' + endpoint);
+    console.log('[TranscrIA] api ' + resolvedMethod + ' ' + endpoint);
     return fetch(endpoint, opts).then(function (r) {
-        return r.json().then(function (d) { return { status: r.status, data: d }; });
+        return r.text().then(function (text) {
+            var data = {};
+            if (text) {
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    data = { error: r.ok ? 'Réponse serveur invalide.' : 'Erreur serveur non JSON.' };
+                }
+            }
+            if (!r.ok && !data.error) {
+                data.error = 'Erreur serveur (' + r.status + ').';
+            }
+            return { status: r.status, data: data };
+        });
+    }).catch(function (err) {
+        console.error('[TranscrIA] api error:', err);
+        return { status: 0, data: { error: 'Erreur réseau: ' + (err && err.message ? err.message : 'requête impossible') } };
     });
 };
 

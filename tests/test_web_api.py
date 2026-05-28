@@ -458,6 +458,62 @@ class TestApiDownloads:
             assert row is not None
             assert '"format": "speaker_clip"' in row.details_json
 
+    def test_speaker_clips_api_returns_safe_public_names(self, admin_client):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        sample_dir = fs.job_dir / "speakers" / "samples"
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        nested_dir = sample_dir / "selection"
+        nested_dir.mkdir()
+        absolute_clip = sample_dir / "SPEAKER_00 clip 1.wav"
+        relative_clip = nested_dir / "SPEAKER_00_clip_2.wav"
+        outside_clip = fs.job_dir / "metadata" / "outside.wav"
+        absolute_clip.write_bytes(b"wav1")
+        relative_clip.write_bytes(b"wav2")
+        outside_clip.write_bytes(b"wav3")
+        fs.save_json(
+            "speakers/speaker_clips.json",
+            {
+                "SPEAKER_00": [
+                    str(absolute_clip),
+                    "selection/SPEAKER_00_clip_2.wav",
+                    str(outside_clip),
+                    "../metadata/outside.wav",
+                    "missing.wav",
+                ],
+                "SPEAKER_01": "invalid",
+            },
+        )
+
+        r = admin_client.get(f"/api/jobs/{job_id}/speakers/clips")
+
+        assert r.status_code == 200
+        data = json.loads(r.data)
+        assert data["clips"] == {
+            "SPEAKER_00": ["SPEAKER_00 clip 1.wav", "selection/SPEAKER_00_clip_2.wav"]
+        }
+        assert str(fs.job_dir) not in r.get_data(as_text=True)
+
+    def test_speaker_clip_download_rejects_path_traversal(self, admin_client):
+        job_id = self._create_and_get_id(admin_client)
+        assert job_id
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        outside_clip = fs.job_dir / "metadata" / "outside.wav"
+        outside_clip.write_bytes(b"wav")
+
+        r = admin_client.get(f"/api/jobs/{job_id}/speakers/clip/../metadata/outside.wav")
+
+        assert r.status_code == 404
+
     def test_push_to_editor_is_audited(self, admin_client, monkeypatch):
         job_id = self._create_and_get_id(admin_client)
         assert job_id
