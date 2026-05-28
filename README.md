@@ -21,9 +21,11 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
 - **Notifications email** : email de fin de traitement envoyé au propriétaire du job (succès ou échec), configurable via SMTP/STARTTLS/SMTPS, fire-and-forget en tâche de fond.
-- **File GPU persistante et planification** : mise en file activée par défaut, priorités, pause/reprise/annulation, limites de concurrence par calendrier et dispatch scheduler auditable.
+- **File GPU persistante** : mise en file activée par défaut, priorités, pause/reprise/annulation, démarrage différé (`scheduled_at`), profil VRAM par job, priority aging (bonus croissant contre la famine), limites de concurrence dynamiques.
+- **Planification des ressources par calendrier** : plages horaires par jour de semaine (timezone configurable, fenêtres à cheval sur minuit), 4 actions — `pause_queue`, `limit_concurrency`, `force_gpu`, `none` — avec résolution par priorité. CRUD auditable via l'interface admin.
+- **Piste d'audit RGPD** : enregistrement de chaque action sensible (login/logout, accès/téléchargement/suppression de job, modifications lexique, gestion des voix, édition config, gestion users/groupes, opérations de planification) avec acteur, IP, user-agent et timestamp. Filtrable par acteur, action, période et cible. Exportable.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
-- **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
+- **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, CUDA_VISIBLE_DEVICES remapping, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
 - **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
