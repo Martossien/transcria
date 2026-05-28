@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, Response, render_template, request
 from flask_login import login_required
 
+from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.audit.store import AuditStore
 from transcria.auth.permissions import Permission, requires
@@ -113,6 +114,18 @@ def audit_export_csv():
 
     rows = AuditStore.query(
         since=since_dt, until=until_dt, limit=100_000, offset=0,
+    )
+    audit_log(
+        AuditAction.AUDIT_EXPORT,
+        target_type="audit",
+        details={
+            "format": "csv",
+            "since": since or "",
+            "until": until or "",
+            "row_count": len(rows),
+            "limit": 100_000,
+            "raw_terms_logged": False,
+        },
     )
 
     output = io.StringIO()

@@ -520,3 +520,11 @@ security:
     - ".flac"
     - ".ogg"
   audit_retention_days: 1095    # 3 ans — rétention des logs d'audit (RGPD Art. 30/32)
+  lexicon_export_admin_only: false # true = export CSV des lexiques réservé aux admins globaux
+  audit_retention_by_family:
+    auth: 1095                  # Connexions et échecs de connexion
+    job: 1095                   # Actions jobs, file GPU et calendrier
+    lexicon: 1095               # Gestion, import/export et rattachement des lexiques
+    voice: 1095                 # Voix enregistrées, consentements et accès associés
+    config: 1095                # Configuration, utilisateurs et groupes
+    other: 1095

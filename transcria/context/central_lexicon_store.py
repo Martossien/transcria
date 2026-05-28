@@ -7,6 +7,7 @@ from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role, User
 from transcria.context.central_lexicon_models import GroupLexicon, GroupLexiconEntry
 from transcria.context.central_lexicon_service import normalize_match_text
+from transcria.context.lexicon_audit import lexicon_entries_audit_summary
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.database import db
 from transcria.jobs.models import Job
@@ -216,16 +217,27 @@ class CentralLexiconStore:
         entry.comment = comment.strip()
         entry.source = source.strip() or "manual"
         db.session.commit()
-        logger.info("Entrée lexique central enregistrée: lexicon=%s entry=%s term=%s actor=%s", lexicon.id, entry.id, entry.term, actor.id)
+        logger.info(
+            "Entrée lexique central enregistrée: lexicon=%s entry=%s term_len=%d actor=%s",
+            lexicon.id,
+            entry.id,
+            len(entry.term or ""),
+            actor.id,
+        )
+        return entry
+
+    @staticmethod
+    def get_entry(lexicon: GroupLexicon, entry_id: str) -> GroupLexiconEntry:
+        entry = db.session.get(GroupLexiconEntry, entry_id)
+        if entry is None or entry.lexicon_id != lexicon.id:
+            raise CentralLexiconValidationError("Entrée introuvable.")
         return entry
 
     @staticmethod
     def delete_entry(lexicon: GroupLexicon, entry_id: str, actor: User) -> None:
         if not CentralLexiconStore.can_manage_lexicon(actor, lexicon):
             raise CentralLexiconAccessError("Accès lexique interdit")
-        entry = db.session.get(GroupLexiconEntry, entry_id)
-        if entry is None or entry.lexicon_id != lexicon.id:
-            raise CentralLexiconValidationError("Entrée introuvable.")
+        entry = CentralLexiconStore.get_entry(lexicon, entry_id)
         db.session.delete(entry)
         db.session.commit()
         logger.info("Entrée lexique central supprimée: lexicon=%s entry=%s actor=%s", lexicon.id, entry_id, actor.id)
@@ -293,6 +305,10 @@ class CentralLexiconStore:
             "top_entries": top_entries,
             "never_used_entries": never_used[:8],
         }
+
+    @staticmethod
+    def sensitivity_summary(lexicon: GroupLexicon) -> dict:
+        return lexicon_entries_audit_summary(lexicon.entries or [])
 
     @staticmethod
     def quality_issues(lexicon: GroupLexicon) -> list[dict]:

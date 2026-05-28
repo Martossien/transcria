@@ -769,11 +769,14 @@ Constantes de module : `_DEFAULT_MODEL_ID` (repo HF), `_DEFAULT_NEMO_FILE` (nom 
 | Module | Description |
 |---|---|
 | `central_lexicon_models.py` | Tables `group_lexicons` et `group_lexicon_entries` |
-| `central_lexicon_store.py` | CRUD, import CSV/TXT, permissions admin/admin groupe, périmètre job→groupes, stats d'usage et contrôles qualité |
+| `central_lexicon_store.py` | CRUD, import CSV/TXT, permissions admin/admin groupe, périmètre job→groupes, stats d'usage, synthèse de sensibilité et contrôles qualité |
 | `central_lexicon_service.py` | Préfiltrage affichage avec raison de proposition, fusion central + LLM + session et filtrage par présence dans le SRT |
-| `central_lexicon_routes.py` | Interface `/admin/lexicons`, stats et alertes qualité |
+| `central_lexicon_routes.py` | Interface `/admin/lexicons`, stats, signaux RGPD/PSSI, import/export CSV et alertes qualité |
+| `lexicon_audit.py` | Résumés d'audit sans contenu brut : compteurs, catégories, priorités, sources et noms propres probables |
 
 Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. `context/selected_lexicons.json` mémorise les lexiques cochés pour le job ; absent, tous les lexiques accessibles sont sélectionnés. `prefilter_lexicon_entries_for_display()` masque avant affichage les entrées centrales normales sans occurrence dans le transcript/résumé, tout en conservant les priorités `critique`/`importante`. Il ajoute `_display_reason` (`term_presence`, `variant_presence`, `priority`) pour expliquer dans l'UI pourquoi un terme est proposé. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
+
+Traçabilité RGPD/PSSI : les routes lexiques journalisent création, modification, suppression, ajout/modification/suppression d'entrée, import, export CSV, changement de périmètre et rattachement au job. L'export CSV est volontairement déclenché en `POST` et peut être réservé aux admins globaux avec `security.lexicon_export_admin_only=true`. `details_json` ne contient jamais les termes, variantes ou commentaires en clair ; il contient uniquement volumes, catégories, priorités, sources, groupe/job et signaux `contains_probable_person_names`.
 
 Si `whisper.lexicon_hotwords.enabled=true` et que le backend STT effectif est Whisper, `PipelineService._inject_whisper_lexicon_hotwords()` lit `context/session_lexicon.json`, construit une liste bornée de hotwords avec `stt.lexicon_hotwords.build_whisper_hotwords()`, enrichit `effective_config["whisper"]["hotwords"]`, sauvegarde `metadata/whisper_hotwords.json` et logue candidats/injectés/exclus.
 
@@ -1096,9 +1099,9 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 
 **`models.py`**
 
-| Énumération | Valeurs (24 actions) |
+| Énumération | Valeurs |
 |---|---|
-| `AuditAction` | `login`, `login_failed`, `logout`, `job_view`, `job_download`, `job_delete`, `job_speaker_map`, `job_lexicon_save`, `job_context_save`, `job_participants_save`, `config_edit`, `user_create`, `user_modify`, `user_delete`, `group_create`, `group_modify`, `group_delete`, `lexicon_create`, `lexicon_modify`, `lexicon_delete`, `voice_create`, `voice_modify`, `voice_delete`, `voice_consent_view` |
+| `AuditAction` | auth (`login`, `login_failed`, `logout`), jobs/file/calendrier (`job_*`, `queue_*`, `schedule_*`), config/users/groupes/audit (`config_edit`, `user_*`, `group_*`, `audit_export`), lexiques (`lexicon_create`, `lexicon_modify`, `lexicon_delete`, `lexicon_term_add`, `lexicon_term_modify`, `lexicon_term_delete`, `lexicon_import`, `lexicon_export`, `lexicon_scope_change`, `lexicon_job_assign`) et voix (`voice_*`) |
 
 | Classe | Colonnes |
 |---|---|
@@ -1112,6 +1115,7 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 | `query(actor_id, action, target_type, target_id, since, until, limit, offset)` | Recherche paginée avec filtres combinables. Tri chronologique inverse. |
 | `count(…)` | Compte filtré, mêmes paramètres que `query()` sans pagination. |
 | `purge_expired(retention_days)` | Supprime les entrées antérieures à `now - retention_days`. Appelé automatiquement à chaque accès à la page d'accueil. |
+| `purge_expired_by_policy(default_retention_days, retention_by_family)` | Applique une rétention différenciée par famille (`auth`, `job`, `lexicon`, `voice`, `config`, `other`) avec fallback global. |
 
 **`decorator.py`**
 
@@ -1125,7 +1129,7 @@ Les mutations sensibles de file et de calendrier appellent `audit_log()` avec le
 | Route | Méthode | Accès |
 |---|---|---|
 | `/admin/audit` | GET | `ACCESS_SYSTEM` — page avec filtres (acteur, action, type cible, dates) et pagination 50/page |
-| `/admin/audit/export.csv` | GET | `ACCESS_SYSTEM` — export CSV horodaté pour le DPO/référent PSSI |
+| `/admin/audit/export.csv` | GET | `ACCESS_SYSTEM` — export CSV horodaté pour le DPO/référent PSSI, journalisé par `audit_export` |
 
 Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route DELETE, pas d'accès d'écriture hors `db.session` interne).
 
@@ -1332,7 +1336,7 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 - Taille max d'upload : 1 Go (`MAX_CONTENT_LENGTH`)
 - Clé secrète Flask : `TRANSCRIA_SECRET` env var ou `os.urandom(32).hex()`
 
-**Audit de sécurité** : toutes les actions sensibles sont journalisées dans la table `audit_logs` (cf. §4.13). Les entrées sont conservées `security.audit_retention_days` jours (défaut 1095), ne sont pas supprimables par l'interface, et sont exportables en CSV depuis `/admin/audit`.
+**Audit de sécurité** : toutes les actions sensibles sont journalisées dans la table `audit_logs` (cf. §4.13). Les entrées sont conservées `security.audit_retention_days` jours (défaut 1095) avec surcharge possible par `security.audit_retention_by_family`, ne sont pas supprimables par l'interface, et sont exportables en CSV depuis `/admin/audit`. Les actions lexiques journalisent uniquement des métadonnées et des signaux de sensibilité, jamais les termes en clair.
 
 **Vulnérabilités connues** : les sujets actifs sont suivis dans la documentation courante et les tests de non-régression du dépôt.
 

@@ -18,6 +18,7 @@
           <th>Nom</th>
           <th>Groupe</th>
           <th>Entrées</th>
+          <th>Signal</th>
           <th>Utilisations</th>
           <th>Mise à jour</th>
           <th></th>
@@ -41,6 +42,14 @@
             {% endif %}
           </td>
           <td>{{ lexicon.entries|length }}</td>
+          <td>
+            {% set probable = stats.get("probable_person_name_count", 0) %}
+            {% if probable %}
+            <span class="badge text-bg-warning">{{ probable }} nom(s) possible(s)</span>
+            {% else %}
+            <span class="badge text-bg-light border">Aucun signal sensible</span>
+            {% endif %}
+          </td>
           <td>
             <div>{{ stats.get("total_usage", 0) }}</div>
             {% if stats.get("last_used_at") %}

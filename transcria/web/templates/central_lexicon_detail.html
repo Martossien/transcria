@@ -37,6 +37,16 @@
       </form>
       {% if lexicon %}
       <hr>
+      <div class="mb-3">
+        <div class="small text-muted mb-1">Périmètre</div>
+        <span class="badge text-bg-light border">
+          {% if lexicon.group_id %}
+            Groupe : {{ lexicon.group.name if lexicon.group else "[Groupe supprimé]" }}
+          {% else %}
+            Global
+          {% endif %}
+        </span>
+      </div>
       <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" onsubmit="return confirm('Supprimer ce lexique et toutes ses entrées ?')">
         <button class="btn btn-outline-danger" type="submit">Supprimer ce lexique</button>
       </form>
@@ -49,8 +59,8 @@
     <div class="card p-4 mb-4">
       <div class="d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h2 class="h5 mb-1">Statistiques</h2>
-          <p class="text-muted small mb-0">Usage réel des entrées validées dans les jobs.</p>
+          <h2 class="h5 mb-1">Traçabilité</h2>
+          <p class="text-muted small mb-0">Usage, périmètre et signaux de sensibilité sans journaliser les termes.</p>
         </div>
         <span class="badge text-bg-light border">{{ usage_stats.total_usage if usage_stats else 0 }} utilisation(s)</span>
       </div>
@@ -72,6 +82,26 @@
               —
             {% endif %}
           </div>
+        </div>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-sm-4">
+          <div class="small text-muted">Signal noms propres</div>
+          <div class="fw-semibold">
+            {% if sensitivity_summary and sensitivity_summary.contains_probable_person_names %}
+              {{ sensitivity_summary.probable_person_name_count }} possible(s)
+            {% else %}
+              Aucun signal
+            {% endif %}
+          </div>
+        </div>
+        <div class="col-sm-4">
+          <div class="small text-muted">Variantes</div>
+          <div class="fw-semibold">{{ sensitivity_summary.variant_count if sensitivity_summary else 0 }}</div>
+        </div>
+        <div class="col-sm-4">
+          <div class="small text-muted">Audit</div>
+          <div class="fw-semibold">Contenu non journalisé</div>
         </div>
       </div>
       {% if usage_stats and usage_stats.top_entries %}
@@ -112,7 +142,20 @@
     </div>
 
     <div class="card p-4 mb-4">
-      <h2 class="h5">Importer</h2>
+      <div class="d-flex justify-content-between align-items-start gap-3">
+        <div>
+          <h2 class="h5">Importer / exporter</h2>
+          <p class="small text-muted mb-0">Les imports et exports sont enregistrés dans l'audit de sécurité.</p>
+        </div>
+        {% if lexicon_export_allowed %}
+        <form method="post" action="/admin/lexicons/{{ lexicon.id }}/export.csv"
+              onsubmit="return confirm('Exporter ce lexique complet ? Cette action sera enregistrée dans l’audit de sécurité.')">
+          <button class="btn btn-sm btn-outline-secondary" type="submit">Exporter CSV</button>
+        </form>
+        {% else %}
+        <span class="badge text-bg-light border">Export réservé aux admins globaux</span>
+        {% endif %}
+      </div>
       <form method="post" action="/admin/lexicons/{{ lexicon.id }}/import" enctype="multipart/form-data">
         <div class="mb-2">
           <input class="form-control" type="file" name="file" accept=".txt,.csv" required>

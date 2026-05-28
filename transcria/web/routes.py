@@ -32,6 +32,7 @@ from transcria.context.central_lexicon_service import merge_lexicon_entries, pre
 from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
+from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
 from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
@@ -625,7 +626,10 @@ def index():
     audit_retention = cfg.get("security", {}).get("audit_retention_days", 1095)
     if isinstance(audit_retention, (int, float)) and audit_retention > 0:
         from transcria.audit.store import AuditStore
-        AuditStore.purge_expired(int(audit_retention))
+        AuditStore.purge_expired_by_policy(
+            int(audit_retention),
+            cfg.get("security", {}).get("audit_retention_by_family") or {},
+        )
     jobs = JobStore.list_for_user(current_user, include_all=current_user.has_role(Role.ADMIN))
     return render_template("index.html", jobs=jobs, roles=Role)
 
@@ -904,10 +908,14 @@ def api_lexicon(job_id: str):
     content_type = request.content_type or ""
     if "text/plain" in content_type or "text/csv" in content_type:
         text = request.data.decode("utf-8", errors="replace")
+        input_summary = lexicon_text_audit_summary(text, source="session_import")
         saved_terms = LexiconManager.import_from_file(job, cfg["storage"]["jobs_dir"], text)
+        audit_source = "text_import"
     else:
         data = request.get_json() or []
         saved_terms = LexiconManager.save(job, cfg["storage"]["jobs_dir"], data)
+        input_summary = {}
+        audit_source = "json"
 
     central_entry_ids = [str(item.get("central_entry_id")) for item in saved_terms if item.get("central_entry_id")]
     if central_entry_ids:
@@ -920,7 +928,26 @@ def api_lexicon(job_id: str):
 
     advance_preprocessing_state(job.id, job.state)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
-    audit_log(AuditAction.JOB_LEXICON_SAVE, target_type="job", target_id=job.id, target_label=job.title)
+    session_summary = lexicon_entries_audit_summary(saved_terms, source="session")
+    central_lexicon_ids = sorted({
+        str(item.get("central_lexicon_id"))
+        for item in saved_terms
+        if isinstance(item, dict) and item.get("central_lexicon_id")
+    })
+    audit_log(
+        AuditAction.JOB_LEXICON_SAVE,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "source": audit_source,
+            "central_entry_count": len(set(central_entry_ids)),
+            "central_lexicon_count": len(central_lexicon_ids),
+            "central_lexicon_ids": central_lexicon_ids[:20],
+            **input_summary,
+            **session_summary,
+        },
+    )
     return jsonify({"status": "ok"})
 
 
@@ -959,6 +986,19 @@ def api_selected_lexicons(job_id: str):
         len(available_ids),
         len(selected_ids),
         len(requested_ids.difference(available_ids)),
+    )
+    audit_log(
+        AuditAction.LEXICON_JOB_ASSIGN,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={
+            "selected_lexicon_ids": selected_ids,
+            "requested_count": len(requested_ids),
+            "selected_count": len(selected_ids),
+            "ignored_count": len(requested_ids.difference(available_ids)),
+            "raw_terms_logged": False,
+        },
     )
     return jsonify({"status": "ok", "selected_lexicon_ids": selected_ids})
 

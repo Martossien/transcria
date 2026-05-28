@@ -125,9 +125,9 @@ Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'or
 | Table | Rôle | Données sensibles |
 |---|---|---|
 | `group_lexicons` | Lexique réutilisable global ou rattaché à un groupe | Non sensible par défaut, peut contenir vocabulaire métier interne |
-| `group_lexicon_entries` | Entrées du lexique : terme validé, variantes, catégorie, priorité, commentaire | Vocabulaire métier interne |
+| `group_lexicon_entries` | Entrées du lexique : terme validé, variantes, catégorie, priorité, commentaire | Vocabulaire métier interne ; peut contenir des noms propres |
 
-`group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant. `group_lexicon_entries.usage_count` et `last_used_at` alimentent les statistiques admin ; ils sont incrémentés uniquement quand une entrée centrale est sauvegardée dans un lexique de session.
+`group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant. `group_lexicon_entries.usage_count` et `last_used_at` alimentent les statistiques admin ; ils sont incrémentés uniquement quand une entrée centrale est sauvegardée dans un lexique de session. Les exports CSV de lexiques centralisés sont des requêtes `POST`, réservables aux admins globaux via `security.lexicon_export_admin_only`, et génèrent une action `lexicon_export`.
 
 ### Table `audit_logs`
 
@@ -145,7 +145,7 @@ Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'or
 | `ip_address` | String(45) | nullable | IP du poste client |
 | `user_agent` | String(512) | nullable | Navigateur/client HTTP |
 
-**Règles RGPD :** la table est en écriture seule via l'application (pas de route DELETE). La rétention est configurée via `security.audit_retention_days` (défaut 1095 jours). La purge est automatique à chaque accès à la page d'accueil. `actor_username` et `target_label` sont dénormalisés pour survivre à la suppression du compte ou du job. `details_json` ne contient jamais de données personnelles en clair (seulement des métadonnées : rôle modifié, mot de passe changé, etc.).
+**Règles RGPD :** la table est en écriture seule via l'application (pas de route DELETE). La rétention est configurée via `security.audit_retention_days` (défaut 1095 jours) et peut être différenciée par `security.audit_retention_by_family`. La purge est automatique à chaque accès à la page d'accueil. `actor_username` et `target_label` sont dénormalisés pour survivre à la suppression du compte ou du job. `details_json` ne contient jamais de données personnelles en clair. L'export CSV du journal d'audit génère `audit_export`. Pour les lexiques, `details_json` contient uniquement des compteurs, catégories, priorités, sources, groupe/job et signaux de noms propres probables (`contains_probable_person_names`, `probable_person_name_count`), sans terme ni variante.
 
 ---
 
@@ -536,7 +536,7 @@ Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après
 }
 ```
 
-Ce fichier mémorise uniquement les lexiques centralisés cochés pour le préremplissage de l'étape 6. S'il est absent, tous les lexiques accessibles au propriétaire du job sont sélectionnés par défaut. Modifier cette sélection ne sauvegarde pas le lexique de session et ne remplace jamais `session_lexicon.json`.
+Ce fichier mémorise uniquement les lexiques centralisés cochés pour le préremplissage de l'étape 6. S'il est absent, tous les lexiques accessibles au propriétaire du job sont sélectionnés par défaut. Modifier cette sélection ne sauvegarde pas le lexique de session et ne remplace jamais `session_lexicon.json`. La sauvegarde de la sélection journalise `lexicon_job_assign` avec les identifiants des lexiques sélectionnés et le nombre de demandes ignorées hors périmètre, sans contenu lexical.
 
 ### session_lexicon.json
 
@@ -571,7 +571,7 @@ Ce fichier mémorise uniquement les lexiques centralisés cochés pour le prére
 
 `contexts[].listened` est le flag de validation d'écoute saisi dans l'UI. Il est conservé dans `session_lexicon.json` mais reste une aide humaine : la correction LLM ne doit pas le traiter comme une preuve de correction automatique.
 
-Les champs `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name` et `_display_reason` sont optionnels. Ils tracent l'origine d'une entrée pré-remplie depuis un lexique centralisé et la raison d'affichage (`term_presence`, `variant_presence`, `priority`), sans rendre le référentiel central autoritaire sur une correction humaine de session.
+Les champs `source`, `central_entry_id`, `central_lexicon_id`, `central_lexicon_name` et `_display_reason` sont optionnels. Ils tracent l'origine d'une entrée pré-remplie depuis un lexique centralisé et la raison d'affichage (`term_presence`, `variant_presence`, `priority`), sans rendre le référentiel central autoritaire sur une correction humaine de session. La sauvegarde du lexique de session journalise `job_lexicon_save` avec les volumes, priorités, catégories, sources et signaux de noms propres probables, jamais les termes en clair.
 
 ### session_lexicon_filtered.json
 

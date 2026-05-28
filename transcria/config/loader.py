@@ -470,6 +470,15 @@ _DEFAULT_CONFIG = {
         "max_upload_size_mb": 1024,
         "allowed_upload_extensions": [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"],
         "audit_retention_days": 1095,
+        "lexicon_export_admin_only": False,
+        "audit_retention_by_family": {
+            "auth": 1095,
+            "job": 1095,
+            "lexicon": 1095,
+            "voice": 1095,
+            "config": 1095,
+            "other": 1095,
+        },
     },
 }
 

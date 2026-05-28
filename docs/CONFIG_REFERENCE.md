@@ -728,15 +728,19 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `max_upload_size_mb` | int | `1024` | Taille maximale d'upload Flask (`MAX_CONTENT_LENGTH`) en Mio |
 | `allowed_upload_extensions` | list[str] | `[".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]` | Extensions autorisées pour l'upload |
 | `audit_retention_days` | int | `1095` | Durée de rétention des logs d'audit (3 ans). Distinct de `retention_days` qui concerne les jobs. |
+| `lexicon_export_admin_only` | bool | `false` | Réserve l'export CSV des lexiques centralisés aux admins globaux. Les admins de groupe peuvent toujours gérer les entrées de leur périmètre. |
+| `audit_retention_by_family` | dict | toutes familles à `1095` | Surcharge optionnelle de rétention par famille d'audit : `auth`, `job`, `lexicon`, `voice`, `config`, `other`. |
 
-**Redémarrage requis :** oui pour `max_upload_size_mb` (chargé dans `create_app()`), non pour `retention_days`, `allow_job_delete`, `allowed_upload_extensions` et `audit_retention_days` qui sont vérifiés à l'exécution.
+**Redémarrage requis :** oui pour `max_upload_size_mb` (chargé dans `create_app()`), non pour `retention_days`, `allow_job_delete`, `allowed_upload_extensions`, `audit_retention_days`, `lexicon_export_admin_only` et `audit_retention_by_family` qui sont vérifiés à l'exécution.
 
 **Impact si modifié :**
 - `retention_days` : appliqué par `JobStore.purge_expired_jobs()` lors de l'accès à la page d'accueil. Seuls les jobs anciens en état terminal sont supprimés avec leurs fichiers.
 - `allow_job_delete=false` : la route `delete_job` retourne 403. La suppression est bloquée même pour l'admin.
 - `max_upload_size_mb` : limite les uploads HTTP côté Flask. Une valeur trop basse bloque les fichiers audio longs avec une erreur 413.
 - `allowed_upload_extensions` : extensions vérifiées dans `api_upload`. Les extensions doivent inclure le point (`.mp3`, pas `mp3`).
-- `audit_retention_days` : appliqué par `AuditStore.purge_expired()` à chaque accès à la page d'accueil. Valeurs typiques : 365 (1 an), 1095 (3 ans, défaut), 1825 (5 ans) selon la politique de conservation.
+- `audit_retention_days` : rétention par défaut appliquée par `AuditStore.purge_expired_by_policy()` à chaque accès à la page d'accueil. Valeurs typiques : 365 (1 an), 1095 (3 ans, défaut), 1825 (5 ans) selon la politique de conservation.
+- `lexicon_export_admin_only=true` : la route `POST /admin/lexicons/<id>/export.csv` retourne 403 aux admins de groupe ; l'UI affiche un badge explicite à la place du bouton d'export.
+- `audit_retention_by_family` : permet de raccourcir ou prolonger une famille précise sans changer le défaut global. Exemple : `lexicon: 365` si la politique DPO/PSSI impose une durée spécifique aux événements de référentiels lexiques.
 
 ---
 
@@ -921,5 +925,7 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `security.max_upload_size_mb` | Oui | Non (Flask `MAX_CONTENT_LENGTH`) |
 | `security.allowed_upload_extensions` | Non | Oui (route) |
 | `security.audit_retention_days` | Non | Oui (purge à l'accueil) |
+| `security.lexicon_export_admin_only` | Non | Oui (route/UI lexiques) |
+| `security.audit_retention_by_family` | Non | Oui (purge à l'accueil) |
 
 **Problème architecturel :** `get_config()` retourne un singleton. Si `set_config()` est appelé pour mettre à jour une valeur, les routes qui rappellent `get_config()` voient le changement, mais les objets déjà construits avec une ancienne config ne sont pas mis à jour automatiquement.

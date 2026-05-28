@@ -9,7 +9,10 @@
       <i class="bi bi-download"></i> Exporter CSV
     </a>
   </div>
-  <p class="text-muted small">Journal des actions utilisateur — conservé {{ config.security.get('audit_retention_days', 1095) }} jours.</p>
+  <p class="text-muted small">
+    Journal des actions utilisateur — conservation par défaut {{ config.security.get('audit_retention_days', 1095) }} jours.
+    Les familles d'audit peuvent avoir une rétention dédiée selon la configuration.
+  </p>
 
   <form method="get" class="row g-2 mb-3">
     <div class="col-md-2">
@@ -30,6 +33,7 @@
         <option value="user" {% if filters.target_type == 'user' %}selected{% endif %}>Utilisateur</option>
         <option value="group" {% if filters.target_type == 'group' %}selected{% endif %}>Groupe</option>
         <option value="config" {% if filters.target_type == 'config' %}selected{% endif %}>Configuration</option>
+        <option value="audit" {% if filters.target_type == 'audit' %}selected{% endif %}>Audit</option>
         <option value="lexicon" {% if filters.target_type == 'lexicon' %}selected{% endif %}>Lexique</option>
         <option value="voice" {% if filters.target_type == 'voice' %}selected{% endif %}>Voix</option>
         <option value="system" {% if filters.target_type == 'system' %}selected{% endif %}>Système</option>

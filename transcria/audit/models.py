@@ -31,6 +31,7 @@ class AuditAction(str, enum.Enum):
     SCHEDULE_WINDOW_DELETE = "schedule_window_delete"
 
     CONFIG_EDIT = "config_edit"
+    AUDIT_EXPORT = "audit_export"
 
     USER_CREATE = "user_create"
     USER_MODIFY = "user_modify"
@@ -43,6 +44,13 @@ class AuditAction(str, enum.Enum):
     LEXICON_CREATE = "lexicon_create"
     LEXICON_MODIFY = "lexicon_modify"
     LEXICON_DELETE = "lexicon_delete"
+    LEXICON_TERM_ADD = "lexicon_term_add"
+    LEXICON_TERM_MODIFY = "lexicon_term_modify"
+    LEXICON_TERM_DELETE = "lexicon_term_delete"
+    LEXICON_IMPORT = "lexicon_import"
+    LEXICON_EXPORT = "lexicon_export"
+    LEXICON_SCOPE_CHANGE = "lexicon_scope_change"
+    LEXICON_JOB_ASSIGN = "lexicon_job_assign"
 
     VOICE_CREATE = "voice_create"
     VOICE_MODIFY = "voice_modify"

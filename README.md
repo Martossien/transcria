@@ -266,7 +266,9 @@ Les groupes permettent la visibilité croisée des jobs entre membres. Les admin
 
 ### Audit de sécurité
 
-Toutes les actions sensibles (connexion, modification de job, suppression, accès aux consentements vocaux, édition de configuration, gestion des utilisateurs et des lexiques centralisés) sont journalisées dans une table `audit_logs` horodatée avec identité de l'acteur, adresse IP et détail de l'opération. Les entrées sont conservées 3 ans par défaut (`security.audit_retention_days`), consultables et exportables en CSV depuis `/admin/audit` par le responsable sécurité/DPO. Aucune route ne permet de supprimer les entrées d'audit.
+Toutes les actions sensibles (connexion, modification de job, suppression, accès aux consentements vocaux, édition de configuration, gestion des utilisateurs et des lexiques centralisés) sont journalisées dans une table `audit_logs` horodatée avec identité de l'acteur, adresse IP et détail de l'opération. Les entrées sont conservées 3 ans par défaut (`security.audit_retention_days`) avec surcharge possible par famille (`security.audit_retention_by_family`), consultables et exportables en CSV depuis `/admin/audit` par le responsable sécurité/DPO. L'export du journal d'audit est lui-même journalisé. Aucune route ne permet de supprimer les entrées d'audit.
+
+Les lexiques centralisés ont une traçabilité dédiée RGPD/PSSI : ajout/modification/suppression d'entrée, import, export CSV, changement de périmètre et rattachement à un job. L'audit journalise les volumes, catégories, priorités, groupe/job concerné et signaux de noms propres possibles, mais jamais les termes ou variantes en clair. L'export CSV est une action volontaire côté serveur (`POST`) et peut être réservé aux admins globaux avec `security.lexicon_export_admin_only`.
 
 ## Tests
 

@@ -11,7 +11,7 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_voice_e2e.py` couvre le parcours applicatif de la feature **Voix enregistrées** sans GPU réel : téléchargement du PDF vierge, création d'une voix avec genre validé, upload du consentement signé, génération d'une empreinte mockée, matching d'un locuteur de job et affichage de la suggestion dans l'étape Participants & Locuteurs.
 
-`tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, contrôles qualité et filtrage du lexique avant correction.
+`tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, export CSV `POST` audité, restriction optionnelle aux admins globaux, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, signaux RGPD/PSSI, contrôles qualité et filtrage du lexique avant correction. Les tests vérifient que les audits lexiques ne stockent pas les termes en clair.
 
 `tests/test_stt.py` et `tests/test_workflow_runner.py` couvrent aussi le biasing STT expérimental depuis le lexique : hotwords Whisper bornés, activation uniquement quand le backend effectif est Whisper, audit dans `metadata/whisper_hotwords.json` ; sélection des formes cibles validées pour le Trie Cohere, sans booster les variantes fautives, et audit dans `metadata/cohere_lexicon_biasing.json`.
 
@@ -99,6 +99,7 @@ Le parcours applicatif des lexiques centralisés ne charge pas de modèle GPU :
 
 ```bash
 python -m pytest tests/test_central_lexicon.py -q
+python -m pytest tests/test_audit.py -q
 python -m pytest tests/test_workflow_runner.py::TestWorkflowRunnerRunCorrection -q
 ```
 

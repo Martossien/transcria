@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from transcria.context.central_lexicon_models import GroupLexiconEntry
@@ -8,6 +9,8 @@ from transcria.context.central_lexicon_store import CentralLexiconAccessError
 from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.central_lexicon_store import CentralLexiconValidationError
 from transcria.context.lexicon import LexiconManager
+from transcria.context.lexicon_audit import lexicon_entries_audit_summary
+from transcria.context.lexicon_audit import looks_like_person_name
 
 
 def _name(prefix: str) -> str:
@@ -187,6 +190,24 @@ class TestCentralLexiconStore:
 
 
 class TestCentralLexiconService:
+    def test_lexicon_audit_summary_flags_person_names_without_raw_terms(self):
+        entries = [{
+            "term": "Dr Dupont",
+            "variants": ["Docteur Dupont"],
+            "category": "personne",
+            "priority": "critique",
+            "source": "manual",
+        }]
+
+        summary = lexicon_entries_audit_summary(entries)
+        encoded = json.dumps(summary, ensure_ascii=False)
+
+        assert looks_like_person_name("Dr Dupont")
+        assert summary["contains_probable_person_names"] is True
+        assert summary["probable_person_name_count"] == 1
+        assert summary["raw_terms_logged"] is False
+        assert "Dupont" not in encoded
+
     def test_merge_keeps_session_as_authority(self):
         merged = merge_lexicon_entries(
             central_entries=[{"term": "API", "variants": ["à pieds"], "priority": "normale", "comment": "central"}],
@@ -355,6 +376,102 @@ class TestCentralLexiconWeb:
             assert entry.variants == ["dénès", "D.N.S."]
             assert entry.priority == "critique"
 
+    def test_lexicon_term_audit_does_not_store_raw_term(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+
+            group = GroupStore.create_group(_name("audit-lexicon-group"))
+            group_id = group.id
+
+        admin_client.post(
+            "/admin/lexicons/new",
+            data={"name": "Lexique audit", "group_id": group_id},
+            follow_redirects=True,
+        )
+        with app.app_context():
+            from transcria.context.central_lexicon_models import GroupLexicon
+
+            lexicon = GroupLexicon.query.filter_by(name="Lexique audit").one()
+            lexicon_id = lexicon.id
+
+        response = admin_client.post(
+            f"/admin/lexicons/{lexicon_id}/entries",
+            data={"term": "Dr Dupont", "category": "personne", "priority": "critique"},
+            follow_redirects=True,
+        )
+
+        assert response.status_code == 200
+        with app.app_context():
+            row = AuditLog.query.filter_by(action=AuditAction.LEXICON_TERM_ADD.value).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            details = json.loads(row.details_json)
+            assert details["contains_probable_person_names"] is True
+            assert details["raw_terms_logged"] is False
+            assert "Dupont" not in row.details_json
+
+    def test_lexicon_export_is_audited_without_raw_terms(self, app, admin_client):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+
+            admin = UserStore.get_by_username("admin")
+            group = GroupStore.create_group(_name("export-lexicon-group"))
+            lexicon = CentralLexiconStore.create_lexicon(admin, name="Lexique export", group_id=group.id)
+            CentralLexiconStore.add_or_update_entry(lexicon, admin, term="Mme Martin", category="personne")
+            lexicon_id = lexicon.id
+
+        response = admin_client.post(f"/admin/lexicons/{lexicon_id}/export.csv")
+
+        assert response.status_code == 200
+        assert b"Mme Martin" in response.data
+        with app.app_context():
+            row = AuditLog.query.filter_by(action=AuditAction.LEXICON_EXPORT.value).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            assert "Martin" not in row.details_json
+            details = json.loads(row.details_json)
+            assert details["format"] == "csv"
+            assert details["contains_probable_person_names"] is True
+
+    def test_lexicon_export_can_be_restricted_to_global_admins(self, app):
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.models import GroupRole
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            from transcria.config import set_config
+
+            cfg = get_config()
+            original_security = dict(cfg.get("security", {}))
+            cfg["security"]["lexicon_export_admin_only"] = True
+            set_config(cfg)
+
+            user = UserStore.create_user(username=_name("export-group-admin"), password="test12345", role=Role.OPERATOR)
+            group = GroupStore.create_group(_name("export-restricted-group"))
+            GroupStore.add_member(group.id, user.id, GroupRole.GROUP_ADMIN)
+            lexicon = CentralLexiconStore.create_lexicon(user, name="Lexique export restreint", group_id=group.id)
+            lexicon_id = lexicon.id
+            username = user.username
+
+        try:
+            client = app.test_client()
+            client.post("/login", data={"username": username, "password": "test12345"}, follow_redirects=True)
+            response = client.post(f"/admin/lexicons/{lexicon_id}/export.csv")
+
+            assert response.status_code == 403
+        finally:
+            with app.app_context():
+                from transcria.config import get_config
+                from transcria.config import set_config
+
+                cfg = get_config()
+                cfg["security"] = original_security
+                set_config(cfg)
+
     def test_group_admin_can_manage_own_group_lexicon(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
@@ -444,6 +561,16 @@ class TestCentralLexiconWeb:
             updated = db.session.get(GroupLexiconEntry, entry_id)
             assert updated.usage_count == 1
 
+            from transcria.audit.models import AuditAction
+            from transcria.audit.models import AuditLog
+            row = AuditLog.query.filter_by(action=AuditAction.JOB_LEXICON_SAVE.value).order_by(AuditLog.timestamp.desc()).first()
+            assert row is not None
+            details = json.loads(row.details_json)
+            assert details["term_count"] == 1
+            assert details["central_entry_count"] == 1
+            assert details["raw_terms_logged"] is False
+            assert "DNS" not in row.details_json
+
         list_response = admin_client.get("/admin/lexicons")
         assert list_response.status_code == 200
         assert b"Utilisations" in list_response.data
@@ -451,7 +578,7 @@ class TestCentralLexiconWeb:
         assert detail_response.status_code == 200
         assert b"1 utilisation" in detail_response.data
         assert b"Utilis" in detail_response.data
-        assert b"Statistiques" in detail_response.data
+        assert "Traçabilité".encode() in detail_response.data
 
     def test_lexicon_detail_shows_quality_issues(self, app, admin_client):
         with app.app_context():
