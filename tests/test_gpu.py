@@ -7,6 +7,11 @@ import time
 import pytest
 
 from transcria.gpu.vram_manager import VRAMManager
+from transcria.gpu.cuda_visible import (
+    parse_cuda_visible_devices,
+    to_nvidia_smi_gpu_index,
+    to_visible_device_index,
+)
 
 
 def _default_config(**overrides):
@@ -29,6 +34,27 @@ def _fake_gpu_info(gpus):
     def getter(self):
         return gpus
     return getter
+
+
+class TestCudaVisibleDevices:
+    def test_unset_cuda_visible_devices_is_unconstrained(self, monkeypatch):
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+        assert parse_cuda_visible_devices() is None
+        assert to_visible_device_index(3) == 3
+        assert to_nvidia_smi_gpu_index(3) == 3
+
+    def test_disabled_cuda_visible_devices_masks_all_gpus(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+        assert parse_cuda_visible_devices() == []
+        assert to_visible_device_index(0) is None
+
+    def test_physical_ids_are_remapped_to_visible_ordinals(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,5")
+        assert to_visible_device_index(2) == 0
+        assert to_visible_device_index(5) == 1
+        assert to_visible_device_index(1) is None
+        assert to_visible_device_index(1, allow_remapped_ordinal=True) == 1
+        assert to_nvidia_smi_gpu_index(1) == 5
 
 
 class TestVRAMManagerInstantiation:
@@ -202,6 +228,25 @@ class TestVRAMManagerGetBestGpu:
         best = mgr.get_best_gpu(10000)
         assert best == 1
 
+    def test_get_best_gpu_respects_cuda_visible_devices_physical_ids(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
+        mgr = VRAMManager(config=_default_config())
+        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
+            {"id": 0, "memory": {"free": 10.0, "total": 24.0, "used": 14.0}},
+            {"id": 1, "memory": {"free": 23.0, "total": 24.0, "used": 1.0}},
+            {"id": 2, "memory": {"free": 22.0, "total": 24.0, "used": 2.0}},
+            {"id": 3, "memory": {"free": 24.0, "total": 24.0, "used": 0.0}},
+        ])
+        assert mgr.get_best_gpu(10000) == 1
+
+    def test_get_best_gpu_returns_none_when_cuda_hidden(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+        mgr = VRAMManager(config=_default_config())
+        monkeypatch.setattr(VRAMManager, "get_gpu_info", lambda self: [
+            {"id": 0, "memory": {"free": 24.0, "total": 24.0, "used": 0.0}},
+        ])
+        assert mgr.get_best_gpu(10000) is None
+
 
 class TestVRAMManagerEnsureFree:
     def test_ensure_free_gpu_already_available(self, monkeypatch):
@@ -269,8 +314,8 @@ class TestVRAMManagerEnsureFree:
 class TestVRAMManagerFreeMemory:
     def test_free_memory_kills_large_processes(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        nvidia_output = "12345, python, 8000\n67890, tiny_app, 500\n"
-        second_output = "12345, python, 8000\n"
+        nvidia_output = "12345, llama-server, 8000\n67890, tiny_app, 500\n"
+        second_output = "12345, llama-server, 8000\n"
 
         call_n = {"n": 0}
 
@@ -287,6 +332,23 @@ class TestVRAMManagerFreeMemory:
 
         mgr._free_memory(0)
         assert (12345, signal.SIGTERM) in killed_pids
+
+    def test_free_memory_targets_requested_visible_gpu(self, monkeypatch):
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
+        mgr = VRAMManager(config=_default_config())
+        commands = []
+
+        def fake_run(cmd, **kw):
+            commands.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+
+        mgr._free_memory(1)
+
+        assert commands
+        assert all(cmd[1:3] == ["-i", "2"] for cmd in commands)
 
     def test_free_memory_skips_small_processes(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
@@ -316,7 +378,7 @@ class TestVRAMManagerFreeMemory:
 
     def test_free_memory_malformed_lines_skipped(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        nvidia_output = "badline\n,,,,\n33333, python, 7000\n"
+        nvidia_output = "badline\n,,,,\n33333, llama-server, 7000\n"
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout=nvidia_output, stderr="")
@@ -333,8 +395,8 @@ class TestVRAMManagerFreeMemory:
 
     def test_free_memory_sigkill_after_sigterm_failure(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        first_output = "44444, stubborn, 9000\n"
-        second_output = "44444, 9000\n"
+        first_output = "44444, llama-server, 9000\n"
+        second_output = "44444, llama-server, 9000\n"
 
         call_n = {"n": 0}
 
@@ -360,7 +422,7 @@ class TestVRAMManagerFreeMemory:
 
     def test_free_memory_pid_1_not_killed(self, monkeypatch):
         mgr = VRAMManager(config=_default_config())
-        nvidia_output = "1, init, 50000\n99999, big_ai, 8000\n"
+        nvidia_output = "1, llama-server, 50000\n99999, llama-server, 8000\n"
 
         def fake_run(cmd, **kw):
             return subprocess.CompletedProcess(cmd, 0, stdout=nvidia_output, stderr="")
@@ -373,6 +435,22 @@ class TestVRAMManagerFreeMemory:
         mgr._free_memory(0)
         assert 1 not in [pid for pid, _ in killed_pids]
         assert (99999, signal.SIGTERM) in killed_pids
+
+    def test_free_memory_does_not_kill_unmatched_processes(self, monkeypatch):
+        mgr = VRAMManager(config=_default_config())
+        nvidia_output = "22222, python, 12000\n"
+
+        def fake_run(cmd, **kw):
+            return subprocess.CompletedProcess(cmd, 0, stdout=nvidia_output, stderr="")
+
+        killed_pids = []
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(os, "kill", lambda pid, sig: killed_pids.append((pid, sig)))
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+
+        mgr._free_memory(0)
+
+        assert killed_pids == []
 
 
 class TestVRAMManagerKillPort:

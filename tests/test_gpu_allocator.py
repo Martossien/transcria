@@ -51,6 +51,61 @@ def test_try_reserve_is_atomic_under_contention(tmp_path):
     assert snapshot["gpus"][0]["reserved_vram_mb"] == 5000
 
 
+def test_allocator_maps_physical_cuda_visible_devices(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
+    alloc = _allocator(tmp_path)
+    alloc.get_gpu_info = lambda: [
+        {
+            "id": 0,
+            "name": "GPU 0",
+            "memory": {"free": 10, "used": 14, "total": 24},
+        },
+        {
+            "id": 1,
+            "name": "GPU hidden",
+            "memory": {"free": 23, "used": 1, "total": 24},
+        },
+        {
+            "id": 2,
+            "name": "GPU 2",
+            "memory": {"free": 22, "used": 2, "total": 24},
+        },
+    ]
+
+    reservation = alloc.try_reserve("job-a", 10000, "stt")
+
+    assert reservation is not None
+    assert reservation.gpu_index == 1
+    snapshot = alloc.get_snapshot()
+    assert [gpu["id"] for gpu in snapshot["gpus"]] == [0, 1]
+    assert snapshot["gpus"][1]["name"] == "GPU 2"
+    assert snapshot["gpus"][1]["reserved_vram_mb"] == 10000
+
+
+def test_allocator_uses_remapped_torch_gpu_ids(tmp_path, monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0,2")
+    alloc = _allocator(tmp_path)
+    alloc.get_gpu_info = lambda: [
+        {
+            "id": 0,
+            "name": "visible cuda:0",
+            "cuda_visible_remapped": True,
+            "memory": {"free": 10, "used": 14, "total": 24},
+        },
+        {
+            "id": 1,
+            "name": "visible cuda:1",
+            "cuda_visible_remapped": True,
+            "memory": {"free": 22, "used": 2, "total": 24},
+        },
+    ]
+
+    reservation = alloc.try_reserve("job-a", 10000, "stt")
+
+    assert reservation is not None
+    assert reservation.gpu_index == 1
+
+
 def test_release_phase_only_releases_matching_job_phase(tmp_path):
     alloc = _allocator(tmp_path, free_mb=24000)
     assert alloc.try_reserve("job-a", 4000, "stt") is not None
@@ -103,4 +158,3 @@ def test_pid_tracking_persists_and_reloads_alive_process(tmp_path):
 
     assert snapshot["tracked_pids"] == 1
     reloaded.unregister_pid(os.getpid())
-
