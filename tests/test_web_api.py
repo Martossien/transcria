@@ -726,3 +726,98 @@ class TestApiContextEndpoints:
                 loaded = LexiconManager.get(job, jobs_dir)
                 assert len(loaded[0].get("contexts", [])) == 3, \
                     "L'API doit limiter les contextes à 3"
+
+
+class TestApiLexiconDebug:
+    def _make_job(self, admin_client):
+        r = admin_client.post("/jobs/new", data={"title": "DebugTest"}, follow_redirects=True)
+        path = r.request.path
+        return path.split("/")[2] if "/jobs/" in path else None
+
+    def test_debug_endpoint_returns_summary(self, admin_client):
+        """L'endpoint /lexicon/debug retourne un résumé et la liste des termes."""
+        job_id = self._make_job(admin_client)
+        if not job_id:
+            return
+
+        # Sauvegarde un terme avec des contextes de nature différente
+        admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{
+                "term": "Emmental",
+                "contexts": [
+                    {"timecode": "5.4s→26.4s", "quote": "Mettez de l'emental.", "listened": True},
+                    {"timecode": "sans timecode",  "quote": "De l'ementeal."},
+                ],
+            }],
+        )
+
+        r = admin_client.get(f"/api/jobs/{job_id}/lexicon/debug")
+        assert r.status_code == 200
+        data = json.loads(r.data)
+
+        assert data["job_id"] == job_id
+        summary = data["summary"]
+        assert summary["total_terms"] == 1
+        assert summary["terms_with_contexts"] == 1
+        assert summary["total_contexts"] == 2
+        assert summary["total_playable"] == 1   # seulement le timecode valide
+        assert summary["total_listened"] == 1
+
+    def test_debug_endpoint_context_detail(self, admin_client):
+        """Chaque contexte expose audio_available, timecode_used et repair_notes."""
+        job_id = self._make_job(admin_client)
+        if not job_id:
+            return
+
+        admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{
+                "term": "DNS",
+                "contexts": [
+                    {"timecode": "00:01:30", "quote": "La résolution DNS.", "speaker": "SPEAKER_00"},
+                    {"timecode": "",          "quote": "Requête DNS échouée."},
+                ],
+            }],
+        )
+
+        r = admin_client.get(f"/api/jobs/{job_id}/lexicon/debug")
+        assert r.status_code == 200
+        data = json.loads(r.data)
+
+        term = data["terms"][0]
+        assert term["term"] == "DNS"
+        assert term["contexts_count"] == 2
+
+        ctx0 = term["contexts"][0]
+        assert ctx0["audio_available"] is True
+        assert ctx0["audio_start"] is not None
+        assert ctx0["timecode_used"] == "00:01:30"
+        assert ctx0["speaker"] == "SPEAKER_00"
+        assert ctx0["repair_notes"] == []
+
+        ctx1 = term["contexts"][1]
+        assert ctx1["audio_available"] is False
+        assert ctx1["audio_start"] is None
+
+    def test_debug_endpoint_empty_lexicon(self, admin_client):
+        """Un job sans lexique retourne un résumé vide sans erreur."""
+        job_id = self._make_job(admin_client)
+        if not job_id:
+            return
+
+        r = admin_client.get(f"/api/jobs/{job_id}/lexicon/debug")
+        assert r.status_code == 200
+        data = json.loads(r.data)
+        assert data["summary"]["total_terms"] == 0
+        assert data["terms"] == []
+
+    def test_debug_endpoint_nonexistent_job(self, admin_client):
+        """Un job inexistant retourne 404."""
+        r = admin_client.get("/api/jobs/nonexistent-uuid/lexicon/debug")
+        assert r.status_code == 404
+
+    def test_debug_endpoint_requires_auth(self, client):
+        """L'endpoint est protégé par login_required."""
+        r = client.get("/api/jobs/any-id/lexicon/debug")
+        assert r.status_code in (302, 401, 403)

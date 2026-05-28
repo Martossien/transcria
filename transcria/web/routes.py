@@ -1039,6 +1039,95 @@ def api_selected_lexicons(job_id: str):
     return jsonify({"status": "ok", "selected_lexicon_ids": selected_ids})
 
 
+@web_bp.route("/api/jobs/<job_id>/lexicon/debug", methods=["GET"])
+@login_required
+def api_lexicon_debug(job_id: str):
+    """Diagnostic lexique pour faciliter le débogage des affichages contextes.
+
+    Retourne pour chaque terme :
+    - les contextes bruts tels que sauvegardés dans session_lexicon.json
+    - les contextes enrichis (audio_available, audio_start/end, réparation timecode)
+    - les compteurs listened/playable
+    - les éventuelles réparations de timecode détectées
+
+    Réservé aux admin/operator. Ne modifie aucune donnée.
+    """
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    raw_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
+    enriched_lexicon = _enrich_lexicon_context_audio(raw_lexicon)
+
+    terms_debug = []
+    for raw_term, enriched_term in zip(raw_lexicon, enriched_lexicon):
+        raw_ctxs = raw_term.get("contexts") or []
+        enr_ctxs = enriched_term.get("contexts") or []
+
+        contexts_detail = []
+        for i, (raw_ctx, enr_ctx) in enumerate(zip(raw_ctxs, enr_ctxs)):
+            repair_notes = []
+            if enr_ctx.get("timecode") and not raw_ctx.get("timecode"):
+                repair_notes.append(
+                    f"timecode réparé depuis la citation: {enr_ctx['timecode']!r}"
+                )
+            if enr_ctx.get("speaker") and not raw_ctx.get("speaker"):
+                repair_notes.append(
+                    f"speaker extrait depuis la citation: {enr_ctx['speaker']!r}"
+                )
+            if enr_ctx.get("quote") != raw_ctx.get("quote") and raw_ctx.get("quote"):
+                repair_notes.append("citation nettoyée (timecode/speaker retirés)")
+
+            contexts_detail.append({
+                "index": i,
+                "quote": enr_ctx.get("quote", ""),
+                "timecode_raw": raw_ctx.get("timecode", ""),
+                "timecode_used": enr_ctx.get("timecode", ""),
+                "speaker": enr_ctx.get("speaker", ""),
+                "audio_available": enr_ctx.get("audio_available", False),
+                "audio_start": enr_ctx.get("audio_start"),
+                "audio_end": enr_ctx.get("audio_end"),
+                "listened": enr_ctx.get("listened", False),
+                "repair_notes": repair_notes,
+            })
+
+        terms_debug.append({
+            "id": raw_term.get("id"),
+            "term": raw_term.get("term", ""),
+            "source": raw_term.get("source", ""),
+            "contexts_count": len(raw_ctxs),
+            "contexts_playable": enriched_term.get("contexts_playable_count", 0),
+            "contexts_listened": enriched_term.get("contexts_listened_count", 0),
+            "contexts": contexts_detail,
+        })
+
+    filtered_path = fs.job_dir / "context" / "session_lexicon_filtered.json"
+    filtered_lexicon = None
+    if filtered_path.is_file():
+        filtered_lexicon = fs.load_json("context/session_lexicon_filtered.json")
+
+    summary = {
+        "total_terms": len(raw_lexicon),
+        "terms_with_contexts": sum(1 for t in raw_lexicon if t.get("contexts")),
+        "total_contexts": sum(len(t.get("contexts") or []) for t in raw_lexicon),
+        "total_playable": sum(t.get("contexts_playable_count", 0) for t in enriched_lexicon),
+        "total_listened": sum(t.get("contexts_listened_count", 0) for t in enriched_lexicon),
+        "filtered_lexicon_exists": filtered_path.is_file(),
+        "filtered_terms": len(filtered_lexicon) if filtered_lexicon is not None else None,
+    }
+
+    logger.info(
+        "Debug lexique consulté: job=%s terms=%d contexts=%d playable=%d",
+        job.id,
+        summary["total_terms"],
+        summary["total_contexts"],
+        summary["total_playable"],
+    )
+    return jsonify({"job_id": job_id, "summary": summary, "terms": terms_debug})
+
+
 @web_bp.route("/api/jobs/<job_id>/speakers/detect", methods=["POST"])
 @login_required
 def api_speakers_detect(job_id: str):
