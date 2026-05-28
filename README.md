@@ -235,6 +235,10 @@ Le parsing LLM est volontairement tolérant : il accepte les sorties avec Markdo
 
 Les groupes permettent la visibilité croisée des jobs entre membres. Les admins de groupe peuvent gérer les membres existants de leurs groupes sans disposer des droits admin globaux.
 
+### Audit de sécurité
+
+Toutes les actions sensibles (connexion, modification de job, suppression, accès aux consentements vocaux, édition de configuration, gestion des utilisateurs et des lexiques centralisés) sont journalisées dans une table `audit_logs` horodatée avec identité de l'acteur, adresse IP et détail de l'opération. Les entrées sont conservées 3 ans par défaut (`security.audit_retention_days`), consultables et exportables en CSV depuis `/admin/audit` par le responsable sécurité/DPO. Aucune route ne permet de supprimer les entrées d'audit.
+
 ## Tests
 
 Suite standard, sans GPU obligatoire pour la plupart des tests :

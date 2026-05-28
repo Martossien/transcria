@@ -86,6 +86,24 @@
 
 `group_lexicons.group_id = NULL` représente un lexique global réservé aux admins globaux. Les admins de groupe ne peuvent créer ou modifier que les lexiques associés à leurs groupes. Le pré-remplissage d'un job utilise le périmètre du propriétaire du job, pas celui du lecteur courant. `group_lexicon_entries.usage_count` et `last_used_at` alimentent les statistiques admin ; ils sont incrémentés uniquement quand une entrée centrale est sauvegardée dans un lexique de session.
 
+### Table `audit_logs`
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK, default=uuid4 | Identifiant unique |
+| `timestamp` | DateTime | NOT NULL, default=utcnow, INDEX | Horodatage précis de l'action |
+| `actor_id` | String(36) | FK → users.id, nullable, INDEX | Qui (null = système) |
+| `actor_username` | String(80) | NOT NULL, default="system" | Login dénormalisé |
+| `action` | String(40) | NOT NULL, INDEX | Type d'action (enum AuditAction, 24 valeurs) |
+| `target_type` | String(20) | NOT NULL | Catégorie cible : job, user, group, config, lexicon, voice, system |
+| `target_id` | String(36) | nullable, INDEX | UUID de la ressource |
+| `target_label` | String(255) | NOT NULL, default="" | Libellé lisible |
+| `details_json` | Text | nullable | Détails structurés JSON, sans PII en clair |
+| `ip_address` | String(45) | nullable | IP du poste client |
+| `user_agent` | String(512) | nullable | Navigateur/client HTTP |
+
+**Règles RGPD :** la table est en écriture seule via l'application (pas de route DELETE). La rétention est configurée via `security.audit_retention_days` (défaut 1095 jours). La purge est automatique à chaque accès à la page d'accueil. `actor_username` et `target_label` sont dénormalisés pour survivre à la suppression du compte ou du job. `details_json` ne contient jamais de données personnelles en clair (seulement des métadonnées : rôle modifié, mot de passe changé, etc.).
+
 ---
 
 ## 2. Énumérations

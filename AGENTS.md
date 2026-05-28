@@ -158,6 +158,11 @@ transcria/
       job_service.py        # JobService
       pipeline_service.py   # PipelineService — preflight, scene, quality refresh, source sep, filter, denoise, norm avant STT
       config_service.py     # ConfigService
+    audit/
+      models.py             # AuditAction (enum 24 actions) + AuditLog (SQLAlchemy)
+      store.py              # AuditStore — log(), query(), count(), purge_expired()
+      decorator.py          # audit_log() + @audit_action — capture auto current_user + IP
+      routes.py             # audit_bp : /admin/audit (filtres + export CSV)
     voice/
       models.py             # SQLAlchemy voix enregistrées, consentements, profils, matches, audit
       store.py              # VoiceStore — périmètre groupe, consentements, profils, audit
@@ -313,6 +318,9 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan (worker sérialisé, `workflow.execution.max_concurrent_jobs=1`). Supervision : `/health`, `/ready`, `/metrics`.
+
+### Audit de sécurité (PSSI/RGPD)
+Toutes les actions sensibles des utilisateurs sont journalisées dans la table `audit_logs` via `AuditStore.log()`. Le décorateur `audit_log()` dans `audit/decorator.py` capture automatiquement `current_user`, l'adresse IP (`X-Forwarded-For` ou `request.remote_addr`) et le User-Agent. La rétention est configurable via `security.audit_retention_days` (défaut 1095 jours). La purge est exécutée automatiquement à chaque accès à la page d'accueil. Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route DELETE). L'export CSV est disponible dans `/admin/audit` pour le DPO/responsable PSSI. Toute nouvelle route sensible doit appeler `audit_log()` ou `@audit_action`.
 
 ### Groupes utilisateurs et visibilité des jobs
 Les jobs restent propriétaires d'un utilisateur (`Job.owner_id`). Les groupes (`Group`, `GroupMembership`) ajoutent une visibilité croisée : un membre voit les jobs des autres membres des groupes auxquels il appartient. Cette règle est centralisée dans `JobStore.list_for_user()` pour la liste et `_can_access_job()` / `_require_job_access()` pour les pages et API job.

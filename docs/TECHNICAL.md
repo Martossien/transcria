@@ -1031,6 +1031,45 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 
 ---
 
+### 4.13 Audit (`transcria/audit/`)
+
+**`models.py`**
+
+| Énumération | Valeurs (24 actions) |
+|---|---|
+| `AuditAction` | `login`, `login_failed`, `logout`, `job_view`, `job_download`, `job_delete`, `job_speaker_map`, `job_lexicon_save`, `job_context_save`, `job_participants_save`, `config_edit`, `user_create`, `user_modify`, `user_delete`, `group_create`, `group_modify`, `group_delete`, `lexicon_create`, `lexicon_modify`, `lexicon_delete`, `voice_create`, `voice_modify`, `voice_delete`, `voice_consent_view` |
+
+| Classe | Colonnes |
+|---|---|
+| `AuditLog` | `id` (UUID PK), `timestamp` (DateTime UTC, index), `actor_id` (FK→users, nullable, index), `actor_username` (String, dénormalisé), `action` (String, index), `target_type` (String), `target_id` (String, nullable, index), `target_label` (String), `details_json` (Text, nullable), `ip_address` (String, nullable), `user_agent` (String, nullable) |
+
+**`store.py` — `AuditStore`** (toutes méthodes statiques)
+
+| Méthode | Description |
+|---|---|
+| `log(action, actor_id, actor_username, target_type, target_id, target_label, details, ip, ua)` | Écriture d'une entrée d'audit. N'interrompt jamais la requête principale (try/except). |
+| `query(actor_id, action, target_type, target_id, since, until, limit, offset)` | Recherche paginée avec filtres combinables. Tri chronologique inverse. |
+| `count(…)` | Compte filtré, mêmes paramètres que `query()` sans pagination. |
+| `purge_expired(retention_days)` | Supprime les entrées antérieures à `now - retention_days`. Appelé automatiquement à chaque accès à la page d'accueil. |
+
+**`decorator.py`**
+
+| Fonction | Description |
+|---|---|
+| `audit_log(action, target_type, target_id, target_label, details)` | Capture automatiquement `current_user`, IP (`X-Forwarded-For` ou `request.remote_addr`) et User-Agent, puis appelle `AuditStore.log()`. |
+| `@audit_action(action, target_type)` | Décorateur Flask : logue l'action avant/après exécution de la route. |
+
+**`routes.py`**
+
+| Route | Méthode | Accès |
+|---|---|---|
+| `/admin/audit` | GET | `ACCESS_SYSTEM` — page avec filtres (acteur, action, type cible, dates) et pagination 50/page |
+| `/admin/audit/export.csv` | GET | `ACCESS_SYSTEM` — export CSV horodaté pour le DPO/référent PSSI |
+
+Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route DELETE, pas d'accès d'écriture hors `db.session` interne).
+
+---
+
 ## 5. API REST
 
 ### 5.1 Format des réponses
@@ -1203,6 +1242,22 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 | created_at | DATETIME | Date création |
 | updated_at | DATETIME | Dernière modification |
 
+**audit_logs**
+
+| Colonne | Type | Description |
+|---|---|---|
+| id | VARCHAR(36) PK | UUID |
+| timestamp | DATETIME INDEX | Horodatage UTC |
+| actor_id | VARCHAR(36) FK→users | Auteur de l'action (nullable = système) |
+| actor_username | VARCHAR(80) | Login dénormalisé (survit à la suppression du compte) |
+| action | VARCHAR(40) INDEX | Type d'action (enum AuditAction) |
+| target_type | VARCHAR(20) | Catégorie cible (job, user, group, config, lexicon, voice, system) |
+| target_id | VARCHAR(36) INDEX | UUID de la ressource cible |
+| target_label | VARCHAR(255) | Libellé lisible de la cible |
+| details_json | TEXT | Détails structurés (JSON, sans PII en clair) |
+| ip_address | VARCHAR(45) | IP du poste client |
+| user_agent | VARCHAR(512) | Navigateur/client HTTP |
+
 ---
 
 ## 10. Sécurité
@@ -1215,6 +1270,8 @@ TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par dé
 - Rétention configurable (`security.retention_days`)
 - Taille max d'upload : 1 Go (`MAX_CONTENT_LENGTH`)
 - Clé secrète Flask : `TRANSCRIA_SECRET` env var ou `os.urandom(32).hex()`
+
+**Audit de sécurité** : toutes les actions sensibles sont journalisées dans la table `audit_logs` (cf. §4.13). Les entrées sont conservées `security.audit_retention_days` jours (défaut 1095), ne sont pas supprimables par l'interface, et sont exportables en CSV depuis `/admin/audit`.
 
 **Vulnérabilités connues** : les sujets actifs sont suivis dans la documentation courante et les tests de non-régression du dépôt.
 
