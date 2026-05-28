@@ -795,6 +795,39 @@ Référentiel local de voix connues avec consentement explicite. Désactivé par
 
 ---
 
+## Section `notifications`
+
+### `notifications.email` — Notifications par email
+
+Envoie un email à l'utilisateur propriétaire du job à la fin du traitement (succès ou échec). Les emails contiennent un lien direct vers la transcription.
+
+> Les emails sont envoyés de façon asynchrone (fil de fond daemon) : ils ne bloquent jamais le pipeline.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active/désactive les notifications email |
+| `smtp_host` | string | `""` | Serveur SMTP (ex : `smtp.gmail.com`) |
+| `smtp_port` | int | `587` | Port SMTP : `587` (STARTTLS), `465` (SSL), `25` (nu) |
+| `smtp_username` | string | `""` | Identifiant SMTP (laisser vide si pas d'auth) |
+| `smtp_password` | string | `""` | Mot de passe SMTP |
+| `use_starttls` | bool | `true` | Chiffrement STARTTLS — recommandé pour le port 587 |
+| `use_ssl` | bool | `false` | SMTPS (SSL dès la connexion) — pour le port 465 |
+| `from_address` | string | `""` | Adresse expéditeur (ex : `transcria@example.com`) |
+| `from_name` | string | `"TranscrIA"` | Nom affiché dans le champ « De : » |
+| `base_url` | string | `"http://localhost:7870"` | URL publique du serveur, utilisée pour les liens dans les emails |
+
+**Modes de chiffrement :**
+
+| Mode | `smtp_port` | `use_starttls` | `use_ssl` |
+|---|---|---|---|
+| STARTTLS (recommandé) | `587` | `true` | `false` |
+| SMTPS / SSL | `465` | `false` | `true` |
+| SMTP nu (intranet) | `25` | `false` | `false` |
+
+**Prérequis utilisateurs :** l'adresse email doit être renseignée dans le profil de chaque utilisateur (section *Gestion des utilisateurs* de l'interface d'administration).
+
+---
+
 ## 6. Variables d'environnement
 
 | Variable | Description | Défaut si absente |

@@ -464,6 +464,20 @@ _DEFAULT_CONFIG = {
         "max_speakers": 20,
         "num_speakers": None,
     },
+    "notifications": {
+        "email": {
+            "enabled": False,
+            "smtp_host": "",
+            "smtp_port": 587,
+            "smtp_username": "",
+            "smtp_password": "",
+            "use_starttls": True,
+            "use_ssl": False,
+            "from_address": "",
+            "from_name": "TranscrIA",
+            "base_url": "http://localhost:7870",
+        }
+    },
     "security": {
         "retention_days": 365,
         "allow_job_delete": True,

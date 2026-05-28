@@ -528,3 +528,16 @@ security:
     voice: 1095                 # Voix enregistrées, consentements et accès associés
     config: 1095                # Configuration, utilisateurs et groupes
     other: 1095
+
+notifications:
+  email:
+    enabled: false              # true = activer les notifications email
+    smtp_host: ""               # Ex : "smtp.gmail.com", "mail.example.com"
+    smtp_port: 587              # 587 (STARTTLS), 465 (SSL/TLS), 25 (SMTP nu)
+    smtp_username: ""           # Laisser vide si pas d'authentification
+    smtp_password: ""
+    use_starttls: true          # Recommandé pour le port 587
+    use_ssl: false              # true pour le port 465 (SMTPS)
+    from_address: ""            # Ex : "transcria@example.com"
+    from_name: "TranscrIA"      # Nom affiché dans le champ "De :"
+    base_url: "http://localhost:7870"  # URL publique pour les liens dans les emails

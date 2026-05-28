@@ -17,6 +17,7 @@ from transcria.logging_setup import get_structured_logger, inject_correlation_id
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QueueStore
 from transcria.services.pipeline_service import PipelineService
+from transcria.notifications.mailer import send_job_notification_async
 from transcria.workflow.transitions import (
     is_cancel_requested,
     mark_execution_cancelled,
@@ -25,6 +26,25 @@ from transcria.workflow.transitions import (
     mark_execution_queued,
     mark_execution_started,
 )
+
+
+def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
+    """Envoie une notification email en tâche de fond. Ne lève jamais d'exception."""
+    try:
+        owner = job.owner if job else None
+        to_email = owner.email if owner else ""
+        display_name = (owner.display_name or owner.username) if owner else ""
+        send_job_notification_async(
+            cfg,
+            to_email=to_email,
+            display_name=display_name,
+            job_title=job.title if job else "",
+            job_id=job.id if job else "",
+            event=event,
+            error=error,
+        )
+    except Exception:
+        pass  # Les notifications ne doivent jamais bloquer le pipeline
 
 
 class JobExecutorService:
@@ -104,6 +124,7 @@ class JobExecutorService:
         sl = get_structured_logger(__name__)
         inject_correlation_id()
         sl.set_context(job_id=job_id, step="background")
+        job = None
         try:
             with self.app.app_context():
                 mark_execution_started(job_id)
@@ -130,15 +151,18 @@ class JobExecutorService:
                     QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, result["error"])
                     JobStore.update_state(job_id, JobState.FAILED, result["error"])
+                    _notify(self.config, job, "failed", result["error"])
                 else:
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
                     JobStore.update_state(job_id, JobState.COMPLETED)
+                    _notify(self.config, job, "completed")
         except Exception as exc:
             with self.app.app_context():
                 QueueStore.dequeue(job_id, status="failed")
                 mark_execution_failed(job_id, str(exc))
                 JobStore.update_state(job_id, JobState.FAILED, str(exc))
+                _notify(self.config, job, "failed", str(exc))
             raise
         finally:
             self._finalize_tracking(job_id)
