@@ -228,4 +228,19 @@ class BaseDiarizer(ABC):
         h.update(str(int(stat.st_mtime)).encode("ascii"))
         return h.hexdigest()
 
+    def _effective_speaker_params(self) -> dict | None:
+        diar_cfg = self.config.get("diarization", {})
+        params = {}
+        for key in ("num_speakers", "min_speakers", "max_speakers"):
+            val = diar_cfg.get(key)
+            if val is None:
+                continue
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                continue
+            ival = int(val)
+            if ival < 1:
+                continue
+            params[key] = ival
+        return params or None
+
 

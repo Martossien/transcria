@@ -435,6 +435,9 @@ _DEFAULT_CONFIG = {
         "cache_audio_fingerprint": True,
         "embedding_cache_enabled": True,
         "embedding_clip_seconds": 12.0,
+        "min_speakers": 2,
+        "max_speakers": 20,
+        "num_speakers": None,
     },
     "security": {
         "retention_days": 365,

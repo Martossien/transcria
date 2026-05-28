@@ -483,6 +483,10 @@ diarization:
   embedding_cache_enabled: true
   embedding_clip_seconds: 12.0
 
+  min_speakers: 2            # Empêche VBx de fusionner sous 2 locuteurs
+  max_speakers: 20           # Plafond large, évite les explosions sur très long audio
+  # num_speakers: null       # Nombre exact (prioritaire sur min/max) — réservé usage futur
+
 security:
   retention_days: 365
   allow_job_delete: true

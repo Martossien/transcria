@@ -63,7 +63,26 @@ class DiarizerService(BaseDiarizer):
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s", self.device)
 
-            diarization = pipeline(str(audio_path))
+            diar_config = self.config.get("diarization", {})
+            diar_kwargs: dict[str, int] = {}
+            for key in ("num_speakers", "min_speakers", "max_speakers"):
+                val = diar_config.get(key)
+                if val is None:
+                    continue
+                if isinstance(val, bool) or not isinstance(val, (int, float)):
+                    logger.warning(
+                        "Diarization.%s ignoré: type invalide %s (attendu entier)", key, type(val).__name__
+                    )
+                    continue
+                ival = int(val)
+                if ival < 1:
+                    logger.warning("Diarization.%s ignoré: %d < 1", key, ival)
+                    continue
+                diar_kwargs[key] = ival
+            if diar_kwargs:
+                logger.info("Diarization: paramètres speakers = %s", diar_kwargs)
+
+            diarization = pipeline(str(audio_path), **diar_kwargs)
             annotation = diarization.speaker_diarization
             track_count = sum(1 for _ in annotation.itertracks())
             logger.info("Pyannote: %d tracks bruts dans l'annotation", track_count)
