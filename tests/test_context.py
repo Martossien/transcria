@@ -240,6 +240,44 @@ class TestLexicon:
         terms = LexiconManager.import_from_file(job, tmp_dir, content)
         assert len(terms) == 3
 
+    def test_normalize_contexts_truncates_at_three(self, tmp_dir):
+        """_normalize_contexts limite à 3 extraits pour éviter les prompts trop longs."""
+        job = _fake_job()
+        contexts = [
+            {"timecode": f"0{i}:00", "quote": f"Extrait {i}."} for i in range(5)
+        ]
+        saved = LexiconManager.save(job, tmp_dir, [{"term": "Terme", "contexts": contexts}])
+        assert len(saved[0]["contexts"]) == 3, "LexiconManager doit limiter les contextes à 3"
+
+    def test_normalize_contexts_skips_entries_without_quote(self, tmp_dir):
+        """Les contextes sans citation valide sont ignorés."""
+        job = _fake_job()
+        contexts = [
+            {"timecode": "00:01", "quote": ""},        # vide → ignoré
+            {"timecode": "00:02", "quote": "  "},      # whitespace → ignoré
+            {"timecode": "00:03", "quote": "Valide."},
+        ]
+        saved = LexiconManager.save(job, tmp_dir, [{"term": "Terme", "contexts": contexts}])
+        assert len(saved[0]["contexts"]) == 1
+        assert saved[0]["contexts"][0]["quote"] == "Valide."
+
+    def test_normalize_contexts_accepts_string_items(self, tmp_dir):
+        """Une liste de chaînes brutes est acceptée (mode import ancien format)."""
+        job = _fake_job()
+        saved = LexiconManager.save(job, tmp_dir, [{
+            "term": "Terme",
+            "contexts": ["Extrait brut A.", "Extrait brut B."],
+        }])
+        assert len(saved[0]["contexts"]) == 2
+        assert saved[0]["contexts"][0]["quote"] == "Extrait brut A."
+        assert saved[0]["contexts"][0]["timecode"] == ""
+
+    def test_normalize_contexts_rejects_non_list(self, tmp_dir):
+        """Si contexts n'est pas une liste, retourne une liste vide."""
+        job = _fake_job()
+        saved = LexiconManager.save(job, tmp_dir, [{"term": "Terme", "contexts": "pas une liste"}])
+        assert saved[0]["contexts"] == []
+
     def test_categories_and_priorities(self):
         assert "personne" in LEXICON_CATEGORIES
         assert "organisation" in LEXICON_CATEGORIES

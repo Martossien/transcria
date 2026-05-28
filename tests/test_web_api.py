@@ -307,6 +307,11 @@ class TestJobCreation:
 
 
 class TestJobWizard:
+    def _make_job_id(self, admin_client):
+        r = admin_client.post("/jobs/new", data={"title": "Wizard Test"}, follow_redirects=True)
+        path = r.request.path
+        return path.split("/")[2] if "/jobs/" in path else None
+
     def test_wizard_page_loads(self, admin_client):
         r = admin_client.post("/jobs/new", data={"title": "Wizard Test"}, follow_redirects=True)
         assert r.status_code == 200
@@ -314,6 +319,73 @@ class TestJobWizard:
     def test_wizard_404_for_nonexistent(self, admin_client):
         r = admin_client.get("/jobs/nonexistent-uuid-1234567890")
         assert r.status_code == 404
+
+    def _advance_to_participants_done(self, app, job_id):
+        """Force l'état du job à PARTICIPANTS_DONE pour débloquer la section lexique."""
+        with app.app_context():
+            from transcria.jobs.store import JobStore
+            from transcria.jobs.models import JobState
+            JobStore.update_state(job_id, JobState.PARTICIPANTS_DONE)
+
+    def test_wizard_renders_lexicon_contexts(self, admin_client, app):
+        """La page wizard doit afficher les citations de contexte du lexique de session."""
+        job_id = self._make_job_id(admin_client)
+        if not job_id:
+            return
+
+        # La section lexique n'est affichée qu'après participants_done.
+        self._advance_to_participants_done(app, job_id)
+
+        # Sauvegarde un terme avec deux extraits de contexte
+        r = admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{
+                "term": "Emmental",
+                "category": "mot suspect",
+                "contexts": [
+                    {"timecode": "5.4s→26.4s", "speaker": "SPEAKER_00", "quote": "Mettez-moi de l'emental"},
+                    {"timecode": "30.0s→45.0s", "speaker": "SPEAKER_01", "quote": "De l'ementeal"},
+                ],
+            }],
+        )
+        assert r.status_code == 200
+
+        # Recharge la page wizard et vérifie la présence des citations
+        r = admin_client.get(f"/jobs/{job_id}")
+        assert r.status_code == 200
+        html = r.data.decode("utf-8")
+        assert "Mettez-moi de l" in html, "La première citation doit apparaître dans la page"
+        assert "ementeal" in html, "La deuxième citation doit apparaître dans la page"
+        assert "lex-context-item" in html, "Les items de contexte doivent être rendus"
+        assert "lex-context-play" in html, "Le bouton play doit être présent"
+
+    def test_wizard_lexicon_contexts_audio_available_flag(self, admin_client, app):
+        """audio_available doit être True pour les timecodes valides, False pour les invalides."""
+        job_id = self._make_job_id(admin_client)
+        if not job_id:
+            return
+
+        self._advance_to_participants_done(app, job_id)
+
+        r = admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{
+                "term": "Test",
+                "contexts": [
+                    {"timecode": "5.4s→26.4s", "quote": "Extrait avec timecode valide"},
+                    {"timecode": "sans timecode", "quote": "Extrait sans timecode valide"},
+                ],
+            }],
+        )
+        assert r.status_code == 200
+
+        r = admin_client.get(f"/jobs/{job_id}")
+        assert r.status_code == 200
+        html = r.data.decode("utf-8")
+        # Le contexte avec timecode valide doit avoir un bouton play actif
+        # Le contexte sans timecode valide doit avoir un bouton play désactivé
+        assert 'lex-context-play' in html
+        assert 'disabled' in html, "Au moins un bouton play doit être désactivé (timecode invalide)"
 
 
 class TestApiUpload:
@@ -586,3 +658,71 @@ class TestApiContextEndpoints:
                 json=[{"term": "API", "category": "technique"}],
             )
             assert r.status_code == 200
+
+    def test_save_lexicon_with_contexts_roundtrip(self, admin_client, app):
+        """Les contextes sont sauvegardés et rechargés correctement via le wizard."""
+        from transcria.context.lexicon import LexiconManager
+        from transcria.jobs.store import JobStore
+
+        job_id = self._make_job(admin_client)
+        if not job_id:
+            return
+
+        r = admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{
+                "term": "DNS",
+                "category": "technique",
+                "contexts": [
+                    {
+                        "timecode": "00:01:30",
+                        "speaker": "SPEAKER_00",
+                        "quote": "La résolution DNS a échoué.",
+                        "reason": "Forme STT douteuse.",
+                    }
+                ],
+            }],
+        )
+        assert r.status_code == 200
+
+        with app.app_context():
+            from transcria.config import get_config
+            cfg = get_config()
+            jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
+            job = JobStore.get_by_id(job_id)
+            if job:
+                loaded = LexiconManager.get(job, jobs_dir)
+                assert len(loaded) == 1, "Le terme doit être sauvegardé"
+                ctx = loaded[0].get("contexts", [])
+                assert len(ctx) == 1, "Le contexte doit être sauvegardé"
+                assert ctx[0]["quote"] == "La résolution DNS a échoué."
+                assert ctx[0]["timecode"] == "00:01:30"
+                assert ctx[0]["speaker"] == "SPEAKER_00"
+
+    def test_save_lexicon_contexts_truncated_to_three(self, admin_client, app):
+        """L'API ne conserve que les 3 premiers contextes pour éviter les prompts trop longs."""
+        from transcria.context.lexicon import LexiconManager
+        from transcria.jobs.store import JobStore
+
+        job_id = self._make_job(admin_client)
+        if not job_id:
+            return
+
+        contexts = [
+            {"timecode": f"0{i}:00", "quote": f"Extrait numéro {i}."} for i in range(5)
+        ]
+        r = admin_client.post(
+            f"/api/jobs/{job_id}/lexicon",
+            json=[{"term": "Terme", "contexts": contexts}],
+        )
+        assert r.status_code == 200
+
+        with app.app_context():
+            from transcria.config import get_config
+            cfg = get_config()
+            jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
+            job = JobStore.get_by_id(job_id)
+            if job:
+                loaded = LexiconManager.get(job, jobs_dir)
+                assert len(loaded[0].get("contexts", [])) == 3, \
+                    "L'API doit limiter les contextes à 3"

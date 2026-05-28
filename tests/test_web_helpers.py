@@ -159,6 +159,31 @@ def test_resolve_context_audio_range_estimates_quote_position_for_single_bad_tim
     assert resolved[2] is True
 
 
+def test_enrich_lexicon_context_audio_handles_empty_contexts_list():
+    """Un terme avec contexts=[] ne doit pas planter et doit avoir les compteurs à 0."""
+    lexicon = [{"term": "Terme", "contexts": []}]
+    enriched = _enrich_lexicon_context_audio(lexicon)
+    assert enriched[0]["contexts_listened_count"] == 0
+    assert enriched[0]["contexts_playable_count"] == 0
+
+
+def test_enrich_lexicon_context_audio_handles_missing_contexts_key():
+    """Un terme sans clé 'contexts' ne doit pas planter."""
+    lexicon = [{"term": "Terme"}]
+    enriched = _enrich_lexicon_context_audio(lexicon)
+    assert enriched[0].get("contexts") is None
+    assert "contexts_listened_count" not in enriched[0]
+
+
+def test_enrich_lexicon_context_audio_does_not_mutate_input():
+    """La liste originale ne doit pas être modifiée (deepcopy attendu)."""
+    lexicon = [
+        {"term": "Terme", "contexts": [{"timecode": "5.4s→26.4s", "quote": "extrait"}]}
+    ]
+    _enrich_lexicon_context_audio(lexicon)
+    assert "audio_available" not in lexicon[0]["contexts"][0]
+
+
 def test_fill_missing_speaker_genders_uses_mapping_without_overwriting_existing():
     speakers_data = {
         "speakers": [

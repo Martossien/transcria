@@ -300,6 +300,8 @@ def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
 def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
     """Ajoute des bornes audio parsées aux contextes de lexique pour l'UI."""
     enriched = copy.deepcopy(lexicon)
+    total_playable = 0
+    total_contexts = 0
     for term in enriched:
         contexts = term.get("contexts")
         if not isinstance(contexts, list):
@@ -322,6 +324,15 @@ def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
                 listened += 1
         term["contexts_listened_count"] = listened
         term["contexts_playable_count"] = playable
+        total_playable += playable
+        total_contexts += len(contexts)
+    if total_contexts:
+        logger.debug(
+            "Lexique enrichi pour l'UI: %d terme(s) avec contexte(s), %d/%d jouables",
+            sum(1 for t in enriched if t.get("contexts")),
+            total_playable,
+            total_contexts,
+        )
     return enriched
 
 

@@ -432,7 +432,11 @@ var TranscrIA = window.TranscrIA || {};
             if (playBtn) {
                 playBtn.dataset.timecode = c.timecode || '';
                 playBtn.dataset.quote = c.quote || '';
-                playBtn.disabled = !(c.timecode || '').trim();
+                // Préférer audio_available (calculé côté serveur, fiable) quand présent ;
+                // fallback sur la présence du timecode pour les lignes ajoutées manuellement.
+                playBtn.disabled = Object.prototype.hasOwnProperty.call(c, 'audio_available')
+                    ? !c.audio_available
+                    : !(c.timecode || '').trim();
             }
             if (listenedInput) {
                 listenedInput.dataset.contextIndex = String(index);
