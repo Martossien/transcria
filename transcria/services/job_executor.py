@@ -14,10 +14,10 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger, inject_correlation_id
+from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QueueStore
 from transcria.services.pipeline_service import PipelineService
-from transcria.notifications.mailer import send_job_notification_async
 from transcria.workflow.transitions import (
     is_cancel_requested,
     mark_execution_cancelled,

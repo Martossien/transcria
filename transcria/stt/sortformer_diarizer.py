@@ -74,7 +74,6 @@ class SortformerDiarizer(BaseDiarizer):
 
         try:
             import torch
-            from nemo.collections.asr.models import SortformerEncLabelModel
 
             # NeMo charge sur cuda:0 par défaut ; on force le GPU cible.
             gpu_index = self._parse_gpu_index(self.device)

@@ -7,7 +7,6 @@ from zoneinfo import ZoneInfo
 from transcria.database import db
 from transcria.queue.models import SchedulingWindow
 
-
 DAY_TO_INDEX = {
     "lundi": 0,
     "mardi": 1,

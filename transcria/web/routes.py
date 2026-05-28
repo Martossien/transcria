@@ -27,7 +27,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role
-from transcria.auth.permissions import Permission, get_user_permissions, requires
+from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge, get_config
 from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore

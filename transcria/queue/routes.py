@@ -40,7 +40,10 @@ SCHEDULE_ACTION_LABELS = {
 SCHEDULE_ACTION_DESCRIPTIONS = {
     "pause_queue": "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau.",
     "limit_concurrency": "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle.",
-    "force_gpu": "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration.",
+    "force_gpu": (
+        "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU"
+        " en tuant uniquement les processus externes autorisés par la configuration."
+    ),
     "none": "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file.",
 }
 

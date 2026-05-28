@@ -10,7 +10,6 @@ from transcria.database import db
 from transcria.jobs.models import Job
 from transcria.queue.models import JobQueueEntry
 
-
 QUEUE_WAITING = "waiting"
 QUEUE_PAUSED = "paused"
 QUEUE_RUNNING = "running"

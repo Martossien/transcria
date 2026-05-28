@@ -6,7 +6,7 @@ import logging
 import smtplib
 import ssl
 import threading
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 

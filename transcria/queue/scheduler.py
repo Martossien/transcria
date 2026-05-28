@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -12,11 +12,10 @@ from flask import Flask
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
-from transcria.queue.calendar import SchedulingCalendar
 from transcria.queue.allocator import GPUAllocator
+from transcria.queue.calendar import SchedulingCalendar
 from transcria.queue.store import QueueStore
 from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
-
 
 ProcessFn = Callable[[str, str, str], None]
 

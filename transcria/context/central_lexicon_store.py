@@ -7,8 +7,8 @@ from transcria.auth.groups import GroupStore
 from transcria.auth.models import Role, User
 from transcria.context.central_lexicon_models import GroupLexicon, GroupLexiconEntry
 from transcria.context.central_lexicon_service import normalize_match_text
-from transcria.context.lexicon_audit import lexicon_entries_audit_summary
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
+from transcria.context.lexicon_audit import lexicon_entries_audit_summary
 from transcria.database import db
 from transcria.jobs.models import Job
 
