@@ -1121,8 +1121,12 @@ class WorkflowRunner:
             return {"success": False, "error": "LLM d'arbitrage occupée"}
 
         llm_phase_reserved = False
+        # Snapshot de l'état LLM *avant* toute action : si elle n'était pas
+        # déjà active (CAS C), c'est ce call qui l'a lancée et il doit la
+        # stopper en cas d'exception pour éviter un processus zombie.
+        llm_was_already_running = self.vram.is_arbitrage_llm_running()
         try:
-            if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
+            if self._should_reserve_llm_vram() and not llm_was_already_running:
                 llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
                 reservation = self.allocator.try_reserve(
                     job.id,
@@ -1153,7 +1157,15 @@ class WorkflowRunner:
                     logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
             return result
         except Exception as exc:
-            logger.exception("Échec correction SRT")
+            logger.exception("Échec correction SRT: job=%s", job.id)
+            # Si la LLM a été démarrée par ce call (CAS C), on la stoppe pour
+            # éviter qu'elle reste en mémoire sans consommateur actif.
+            if not llm_was_already_running:
+                logger.info(
+                    "Arrêt LLM d'arbitrage après échec correction (lancée par ce call): job=%s",
+                    job.id,
+                )
+                self.vram.stop_arbitrage_llm()
             return {"success": False, "error": str(exc)}
         finally:
             if llm_phase_reserved:
