@@ -7,7 +7,6 @@ select = ["E", "W", "F", "I"]
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
-ignore_untyped_imports = true
 
 [[tool.mypy.overrides]]
 module = [

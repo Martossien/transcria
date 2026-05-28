@@ -115,7 +115,7 @@ class AuditStore:
         count = db.session.execute(
             db.delete(AuditLog).filter(AuditLog.timestamp < cutoff)
             .execution_options(synchronize_session=False)
-        ).rowcount
+        ).rowcount  # type: ignore[attr-defined]
         db.session.commit()
         if count:
             logger.info("Audit: %d entrées purgées (rétention %d jours)", count, retention_days)
@@ -146,7 +146,7 @@ class AuditStore:
             count = db.session.execute(
                 db.delete(AuditLog).filter(family_filter, AuditLog.timestamp < cutoff)
                 .execution_options(synchronize_session=False)
-            ).rowcount
+            ).rowcount  # type: ignore[attr-defined]
             total += int(count or 0)
 
         other_retention = policy.get("other", default_retention_days)
@@ -160,7 +160,7 @@ class AuditStore:
             count = db.session.execute(
                 db.delete(AuditLog).filter(~known_filter, AuditLog.timestamp < cutoff)
                 .execution_options(synchronize_session=False)
-            ).rowcount
+            ).rowcount  # type: ignore[attr-defined]
             total += int(count or 0)
 
         db.session.commit()

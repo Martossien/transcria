@@ -2,3 +2,5 @@ pytest>=7.0
 pytest-cov>=4.0
 ruff>=0.4
 mypy>=1.10
+types-PyYAML
+types-requests
