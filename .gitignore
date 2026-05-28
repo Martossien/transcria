@@ -87,3 +87,5 @@ archives/
 !tests/test1.mp3
 !tests/test2.mp3
 docs/DEPENDENCIES_VENV.md
+.coverage
+coverage.xml
