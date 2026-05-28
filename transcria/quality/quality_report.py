@@ -1,5 +1,6 @@
 import logging
 import re
+from typing import Any
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -67,7 +68,7 @@ class QualityReporter:
         review_points = []
         total_checks = 0
         warnings = 0
-        review_load = {
+        review_load: dict[str, Any] = {
             "foreign_segments": 0,
             "non_latin_segments": 0,
             "suspicious_short_segments": 0,
@@ -183,7 +184,7 @@ class QualityReporter:
                 "count": unresolved_count,
                 "severity": "warning",
             })
-            details = []
+            details: list[str] = []
             if unresolved["exact_variants"]:
                 details.extend(
                     f"{item['variant']} → {item['term']}"
@@ -406,7 +407,7 @@ class QualityReporter:
         # 11. Fiabilité segmentaire calculée après STT
         reliability_counts: dict[str, int] = {}
         reliability_reason_counts: dict[str, int] = {}
-        degraded_examples = []
+        degraded_examples: list[dict] = []
         for segment in segments:
             level = segment.get("reliability")
             if not level:

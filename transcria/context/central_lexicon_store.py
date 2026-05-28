@@ -275,7 +275,7 @@ class CentralLexiconStore:
     def entries_for_lexicons(lexicons: list[GroupLexicon]) -> list[dict]:
         entries: list[dict] = []
         for lexicon in lexicons:
-            for entry in lexicon.entries:
+            for entry in lexicon.entries:  # type: ignore[attr-defined]
                 data = entry.to_dict()
                 data["source"] = "central"
                 data["central_entry_id"] = entry.id

@@ -352,7 +352,7 @@ def _estimate_gender_for_speech(
             continue
 
         try:
-            f0 = librosa.yin(seg, fmin=fmin, fmax=fmax, sr=sr)
+            f0 = librosa.yin(seg, fmin=float(fmin), fmax=float(fmax), sr=sr)
             voiced = f0[(f0 > min_voiced_hz) & (f0 < max_voiced_hz)]
 
             if voiced.size == 0:
@@ -402,7 +402,7 @@ def _analyze_audio(audio_path: str, config: dict) -> list:
         "[scene_worker] Chargement OK : %.1fs @ %d Hz", len(signal) / sr, sr
     )
 
-    frame_labels, frame_duration = _classify_scene_frames(signal, sr, thresholds)
+    frame_labels, frame_duration = _classify_scene_frames(signal, int(sr), thresholds)
     segments = _frames_to_segments(frame_labels, frame_duration, min_segment_s)
     active_segments = [(lab, s, e) for lab, s, e in segments if lab != "noEnergy"]
 
@@ -413,7 +413,7 @@ def _analyze_audio(audio_path: str, config: dict) -> list:
     )
 
     if detect_gender:
-        segments = _estimate_gender_for_speech(signal, sr, segments, female_pitch_hz)
+        segments = _estimate_gender_for_speech(signal, int(sr), segments, female_pitch_hz)
 
     return segments
 

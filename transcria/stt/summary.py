@@ -53,11 +53,11 @@ class SummaryGenerator:
                 min_silence_duration_ms=vad_cfg.get("min_silence_duration_ms", 400),
                 speech_pad_ms=vad_cfg.get("speech_pad_ms", 200),
             )
-            vad_chunks = vad.build_speech_chunks(audio, sample_rate=sr)
+            vad_chunks = vad.build_speech_chunks(audio, sample_rate=int(sr))
         else:
             sl.info("[summary] VAD désactivé — chunking 30s fixe")
             vad = SileroVAD()
-            vad_chunks = vad._fallback_chunks(audio, sr, 30, total_duration)
+            vad_chunks = vad._fallback_chunks(audio, int(sr), 30, total_duration)
         sl.info("[summary] VAD: %d chunks à transcrire (%.1f%% de l'audio)",
                 len(vad_chunks),
                 100 * sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001))
@@ -71,7 +71,7 @@ class SummaryGenerator:
                 audio_path=None,
                 language="fr",
                 audio_array=chunk["audio"],
-                sample_rate=sr,
+                sample_rate=int(sr),
             )
             for seg in chunk_segs:
                 if seg.get("error"):

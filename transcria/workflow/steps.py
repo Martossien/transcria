@@ -74,7 +74,7 @@ WORKFLOW_STEPS = [
 class WorkflowSteps:
 
     STEPS_BY_ID = {s["id"]: s for s in WORKFLOW_STEPS}
-    STEP_IDS = [s["id"] for s in WORKFLOW_STEPS]
+    STEP_IDS: list[str] = [str(s["id"]) for s in WORKFLOW_STEPS]
 
     @staticmethod
     def step_requires_upload(step_id: str) -> bool:

@@ -267,7 +267,7 @@ def _central_lexicon_context(
 
 def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
     reliability_counts: dict[str, int] = {}
-    suspect_segments = []
+    suspect_segments: list[dict] = []
     if isinstance(segments, list):
         for index, segment in enumerate(segments, start=1):
             if not isinstance(segment, dict):
@@ -393,8 +393,8 @@ def _find_segment_for_quote(quote: str, segments: list) -> dict | None:
 def _estimate_quote_range_in_segment(quote: str, segment: dict) -> tuple[float, float] | None:
     """Estime le timecode d'une citation à l'intérieur d'un segment STT long."""
     try:
-        seg_start = float(segment.get("start"))
-        seg_end = float(segment.get("end"))
+        seg_start = float(segment.get("start"))  # type: ignore[arg-type]
+        seg_end = float(segment.get("end"))  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return None
     if seg_end <= seg_start:
@@ -686,6 +686,7 @@ def job_wizard(job_id: str):
     cfg = get_config()
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
+    assert job is not None
 
     statuses = WorkflowState.compute_statuses(
         job.state,
@@ -786,6 +787,7 @@ def job_result(job_id: str):
     cfg = get_config()
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
+    assert job is not None
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     quality_report = fs.load_json("quality/quality_report.json") or {}
@@ -896,8 +898,8 @@ def api_summary(job_id: str):
 
     from transcria.workflow.runner import WorkflowRunner
 
-    runner = WorkflowRunner(JobStore, cfg)
-    result = runner.run_summary(job, audio_path, cfg)
+    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    result = runner.run_summary(job, str(audio_path), cfg)
     return jsonify(result)
 
 
@@ -1143,8 +1145,8 @@ def api_speakers_detect(job_id: str):
 
     from transcria.workflow.runner import WorkflowRunner
 
-    runner = WorkflowRunner(JobStore, cfg)
-    result = runner.run_speaker_detection(job, audio_path, cfg)
+    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
+    result = runner.run_speaker_detection(job, str(audio_path), cfg)
     return jsonify(result)
 
 
@@ -1375,7 +1377,7 @@ def api_quality(job_id: str):
 
     from transcria.workflow.runner import WorkflowRunner
 
-    runner = WorkflowRunner(JobStore, cfg)
+    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.run_quality_checks(job, cfg)
     return jsonify(result)
 
@@ -1390,7 +1392,7 @@ def api_export(job_id: str):
 
     from transcria.workflow.runner import WorkflowRunner
 
-    runner = WorkflowRunner(JobStore, cfg)
+    runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.build_export(job, cfg)
     return jsonify(result)
 
@@ -1470,7 +1472,7 @@ def api_audio_excerpt(job_id: str):
     quote = request.args.get("quote", "")
     summary_data = fs.load_json("summary/summary.json") or {}
     segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
-    resolved = _resolve_context_audio_range(timecode, quote, segments)
+    resolved = _resolve_context_audio_range(timecode, quote, segments)  # type: ignore[arg-type]
     if resolved is None:
         return jsonify({"error": "Timecode audio invalide"}), 400
     start_s, end_s, corrected = resolved
@@ -1690,6 +1692,7 @@ def delete_job(job_id: str):
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
 
+    assert job is not None
     audit_log(AuditAction.JOB_DELETE, target_type="job", target_id=job.id, target_label=job.title)
     JobService.delete(job.id, cfg["storage"]["jobs_dir"])
     flash("Traitement supprimé.", "info")

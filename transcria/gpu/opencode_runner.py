@@ -56,10 +56,9 @@ class OpenCodeRunner:
                 "Définissez workflow.arbitration_llm.model_id dans config.yaml."
             )
 
+        self.provider: str = provider or "local"
         if "/" in self.model:
             self.provider, self.model = self.model.split("/", 1)
-        else:
-            self.provider = provider or "local"
 
         self.model_ref = f"{self.provider}/{self.model}"
 
@@ -109,7 +108,7 @@ class OpenCodeRunner:
     def _parse_summary_contexts(value: str) -> list[dict]:
         import re
 
-        contexts = []
+        contexts: list[dict] = []
         if not value:
             return contexts
         chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=\[[^\]]+\])', value) if chunk.strip()]
@@ -432,7 +431,7 @@ class OpenCodeRunner:
             "tool_calls": total_tools,
         }
 
-    def run_summary(self, transcript_path: str, context_path: str = None, diarization_context_path: str = None) -> dict:
+    def run_summary(self, transcript_path: str, context_path: str | None = None, diarization_context_path: str | None = None) -> dict:
         """Génère un résumé structuré via opencode.
 
         Returns:

@@ -83,14 +83,14 @@ class SileroVAD:
             return []
         try:
             self._load()
-            opts = self._VadOptions(
+            opts = self._VadOptions(  # type: ignore[misc]
                 threshold=self.threshold,
                 min_speech_duration_ms=self.min_speech_duration_ms,
                 min_silence_duration_ms=self.min_silence_duration_ms,
                 speech_pad_ms=self.speech_pad_ms,
             )
             audio_f32 = audio.astype(np.float32)
-            raw = self._model(audio_f32, opts, sampling_rate=sample_rate)
+            raw = self._model(audio_f32, opts, sampling_rate=sample_rate)  # type: ignore[misc]
             timestamps = [
                 {"start": chunk["start"] / sample_rate, "end": chunk["end"] / sample_rate}
                 for chunk in raw

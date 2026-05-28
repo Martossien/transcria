@@ -58,7 +58,7 @@ class LexiconChecker:
 
     @staticmethod
     def check(text: str, lexicon: list[dict]) -> dict:
-        result = {"found": [], "missing": [], "variants_found": []}
+        result: dict[str, list] = {"found": [], "missing": [], "variants_found": []}
         for entry in lexicon:
             term = entry.get("term", "")
             if term and LexiconChecker._contains_phrase(text, term):

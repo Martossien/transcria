@@ -2,6 +2,7 @@ import json
 import mimetypes
 import shutil
 from pathlib import Path
+from typing import Any
 
 
 class JobFilesystem:
@@ -24,7 +25,7 @@ class JobFilesystem:
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(data, fh, ensure_ascii=False, indent=2, default=str)
 
-    def load_json(self, relative: str) -> dict | list | None:
+    def load_json(self, relative: str) -> Any:
         path = self._json_path(relative)
         if not path.is_file():
             return None

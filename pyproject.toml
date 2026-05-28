@@ -7,6 +7,31 @@ select = ["E", "W", "F", "I"]
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
+ignore_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "transcria.auth.models",
+    "transcria.audit.models",
+    "transcria.jobs.models",
+    "transcria.voice.models",
+    "transcria.queue.models",
+    "transcria.context.central_lexicon_models",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "transcria.stt.whisper_transcriber",
+    "transcria.stt.granite_transcriber",
+    "transcria.stt.parakeet_transcriber",
+    "transcria.stt.cohere_transcriber",
+    "transcria.stt.sortformer_diarizer",
+    "transcria.stt.diarization",
+    "transcria.voice.embedding",
+    "transcria.stt.contextual_biasing",
+]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -18,7 +18,7 @@ def _entry_value(entry, name: str, default: str = ""):
 
 
 def _variants(entry) -> list[str]:
-    value = _entry_value(entry, "variants", [])
+    value = _entry_value(entry, "variants", [])  # type: ignore[arg-type]
     if isinstance(value, list):
         return [str(item) for item in value if str(item).strip()]
     if isinstance(value, str):

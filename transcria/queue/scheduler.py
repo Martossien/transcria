@@ -178,7 +178,7 @@ class QueueScheduler:
         with self._running_lock:
             self._running[job_id] = future
             self._total_dispatched += 1
-        future.add_done_callback(lambda fut, jid=job_id: self._on_done(jid, fut))
+        future.add_done_callback(lambda fut, jid=job_id: self._on_done(jid, fut))  # type: ignore[misc]
 
     def _on_done(self, job_id: str, future: Future) -> None:
         with self._running_lock:

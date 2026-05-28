@@ -16,7 +16,7 @@ class PipelineService:
     def __init__(self, config: dict):
         self.config = config
         from transcria.workflow.runner import WorkflowRunner
-        self.runner = WorkflowRunner(JobStore, config)
+        self.runner = WorkflowRunner(JobStore, config)  # type: ignore[arg-type]
 
     @staticmethod
     def estimate_job_vram(config: dict, mode: str) -> dict:
@@ -760,7 +760,7 @@ class PipelineService:
         if not audio_preflight:
             return None
         try:
-            return float(audio_preflight.get("rms"))
+            return float(audio_preflight.get("rms"))  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return None
 

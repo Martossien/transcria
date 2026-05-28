@@ -26,7 +26,7 @@ class WorkflowState:
         from transcria.jobs.models import JobState
 
         statuses: dict[str, StepStatus] = {
-            s["id"]: StepStatus.TODO for s in cls.STEPS
+            str(s["id"]): StepStatus.TODO for s in cls.STEPS
         }
         raw = job_state
 
@@ -125,7 +125,7 @@ class WorkflowState:
     @classmethod
     def get_next_step(cls, statuses: dict[str, StepStatus]) -> dict | None:
         for step in cls.STEPS:
-            sid = step["id"]
+            sid = str(step["id"])
             if statuses.get(sid) in (StepStatus.TODO, StepStatus.IN_PROGRESS, StepStatus.ERROR):
                 return step
         return None

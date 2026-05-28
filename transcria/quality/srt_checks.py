@@ -1,3 +1,6 @@
+from typing import Any
+
+
 class SRTChecker:
     @staticmethod
     def check_segment(segment: dict) -> list[str]:
@@ -15,7 +18,7 @@ class SRTChecker:
 
     @staticmethod
     def check_segments(segments: list[dict]) -> dict:
-        result = {"total": len(segments), "issues": [], "clean_count": 0}
+        result: dict[str, Any] = {"total": len(segments), "issues": [], "clean_count": 0}
         for i, seg in enumerate(segments):
             issues = SRTChecker.check_segment(seg)
             if issues:

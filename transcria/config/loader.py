@@ -571,7 +571,7 @@ def load_config(config_path: str | None = None) -> dict:
 
 
 def get_config_path(config_path: str | None = None) -> str:
-    return config_path or os.environ.get(_CONFIG_PATH_ENV, _DEFAULT_CONFIG_PATH)
+    return config_path or os.environ.get(_CONFIG_PATH_ENV, _DEFAULT_CONFIG_PATH) or _DEFAULT_CONFIG_PATH
 
 
 def save_config(cfg: dict, config_path: str | None = None) -> str:

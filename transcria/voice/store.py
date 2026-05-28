@@ -394,7 +394,7 @@ class VoiceStore:
         if not VoiceStore.can_manage_subject(actor, subject):
             raise VoiceAccessError("Accès voix interdit")
         subject.is_active = False
-        for profile in subject.profiles:
+        for profile in subject.profiles:  # type: ignore[attr-defined]
             if profile.status in {VoiceProfileStatus.ACTIVE.value, VoiceProfileStatus.PROCESSING.value}:
                 profile.status = VoiceProfileStatus.DISABLED.value
                 profile.disabled_at = datetime.now(timezone.utc)

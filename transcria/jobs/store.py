@@ -94,7 +94,7 @@ class JobStore:
     @staticmethod
     def purge_expired_jobs(retention_days: int | str | None, jobs_dir: str) -> int:
         try:
-            days = int(retention_days)
+            days = int(retention_days)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return 0
         if days <= 0:

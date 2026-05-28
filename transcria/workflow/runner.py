@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class WorkflowRunner:
-    def __init__(self, store: JobStore, config: dict | None = None):
+    def __init__(self, store: type[JobStore] | JobStore, config: dict | None = None):
         self.store = store
         self.config = config or {}
         self.vram = VRAMManager(config=self.config)

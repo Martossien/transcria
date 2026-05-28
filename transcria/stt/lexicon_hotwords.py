@@ -2,6 +2,7 @@ import logging
 import math
 import unicodedata
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def build_whisper_hotwords(
     si la feature est désactivée.
     """
     existing_hotwords = str(existing_hotwords or "").strip()
-    stats = {
+    stats: dict[str, Any] = {
         "enabled": bool(enabled),
         "candidate_terms": 0,
         "injected_terms": 0,

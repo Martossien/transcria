@@ -62,7 +62,7 @@ class AudioPreflightAnalyzer:
             rms = _rms(signal)
             peak = float(np.max(np.abs(signal))) if signal.size else 0.0
             crest_factor = _safe_ratio(peak, rms)
-            silence_ratio = 1.0 - _safe_ratio(float(active_frames.size), float(frames.size))
+            silence_ratio = 1.0 - (_safe_ratio(float(active_frames.size), float(frames.size)) or 0.0)
             clipping_ratio = float(np.mean(np.abs(signal) >= self.clipping_threshold)) if signal.size else 0.0
 
             active_rms = float(np.median(active_frames)) if active_frames.size else 0.0
