@@ -1026,6 +1026,7 @@ class TestWorkflowRunnerRunCorrection:
             assert "corrigé" in saved_srt
 
     def test_run_correction_llm_not_available(self, app, owner_id, monkeypatch, tmp_path):
+        """ensure_arbitrage_llm_ready retourne False → erreur claire, sans dépendance au port 8080."""
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Correction No LLM")
@@ -1035,8 +1036,16 @@ class TestWorkflowRunnerRunCorrection:
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nTest\n")
 
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: False)
+            # Patcher directement ensure_arbitrage_llm_ready évite la dépendance
+            # au port 8080 réel (CAS A contourne launch_arbitrage_llm).
+            # _should_reserve_llm_vram est désactivé : pas de GPU réel dans ce test.
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: False)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: False)
+            monkeypatch.setattr(
+                runner.vram,
+                "ensure_arbitrage_llm_ready",
+                lambda expected_model_id=None: False,
+            )
 
             result = runner.run_correction(job, cfg)
             assert result["success"] is False
@@ -1053,13 +1062,21 @@ class TestWorkflowRunnerRunCorrection:
             assert "SRT" in result["error"]
 
     def test_run_correction_exception_stops_arbitrage_llm(self, app, owner_id, monkeypatch, tmp_path):
+        """Si la LLM a été lancée par ce call (CAS C) et que opencode plante, elle doit être stoppée."""
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Correction Crash")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
-            monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+            # Simule CAS C : LLM absente avant l'appel, lancée avec succès par ensure_…
+            # _should_reserve_llm_vram est désactivé : pas de GPU réel dans ce test.
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: False)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: False)
+            monkeypatch.setattr(
+                runner.vram,
+                "ensure_arbitrage_llm_ready",
+                lambda expected_model_id=None: True,
+            )
 
             stop_called = {"v": False}
             def fake_stop():
@@ -1067,7 +1084,11 @@ class TestWorkflowRunnerRunCorrection:
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", fake_stop)
 
             from transcria.gpu.opencode_runner import OpenCodeRunner
-            monkeypatch.setattr(OpenCodeRunner, "run_correction", lambda self, s, c, l: (_ for _ in ()).throw(RuntimeError("LLM crash")))
+            monkeypatch.setattr(
+                OpenCodeRunner,
+                "run_correction",
+                lambda self, s, c, l: (_ for _ in ()).throw(RuntimeError("LLM crash")),
+            )
 
             from transcria.jobs.filesystem import JobFilesystem
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
@@ -1075,7 +1096,42 @@ class TestWorkflowRunnerRunCorrection:
 
             result = runner.run_correction(job, cfg)
             assert result["success"] is False
-            assert stop_called["v"] is True
+            assert stop_called["v"] is True, "stop_arbitrage_llm doit être appelé quand la LLM a été lancée par ce call"
+
+    def test_run_correction_exception_does_not_stop_preexisting_llm(self, app, owner_id, monkeypatch, tmp_path):
+        """CAS A : si la LLM tournait déjà avant l'appel, une exception ne doit PAS la stopper."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Correction Crash CAS-A")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            # Simule CAS A : LLM déjà active avant l'appel.
+            # _should_reserve_llm_vram est désactivé : pas de GPU réel dans ce test.
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: False)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(
+                runner.vram,
+                "ensure_arbitrage_llm_ready",
+                lambda expected_model_id=None: True,
+            )
+
+            stop_called = {"v": False}
+            monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: stop_called.__setitem__("v", True))
+
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+            monkeypatch.setattr(
+                OpenCodeRunner,
+                "run_correction",
+                lambda self, s, c, l: (_ for _ in ()).throw(RuntimeError("LLM crash")),
+            )
+
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nTest\n")
+
+            result = runner.run_correction(job, cfg)
+            assert result["success"] is False
+            assert stop_called["v"] is False, "stop_arbitrage_llm ne doit PAS être appelé si la LLM était déjà active"
 
 
 class TestWorkflowRunnerRunQualityChecks:
