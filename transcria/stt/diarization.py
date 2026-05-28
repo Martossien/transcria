@@ -63,10 +63,7 @@ class DiarizerService(BaseDiarizer):
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s", self.device)
 
-            audio_tensor = self._load_audio_gpu(audio_path, self.device)
-            logger.info("Audio chargé: %.1f min, device=%s", len(audio_tensor) / 16000 / 60, self.device)
-
-            diarization = pipeline({"waveform": audio_tensor.cpu(), "sample_rate": 16000})
+            diarization = pipeline(str(audio_path))
             annotation = diarization.speaker_diarization
             track_count = sum(1 for _ in annotation.itertracks())
             logger.info("Pyannote: %d tracks bruts dans l'annotation", track_count)

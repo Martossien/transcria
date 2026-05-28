@@ -228,14 +228,4 @@ class BaseDiarizer(ABC):
         h.update(str(int(stat.st_mtime)).encode("ascii"))
         return h.hexdigest()
 
-    @staticmethod
-    def _load_audio_gpu(audio_path: Path, device: str = "cuda:0"):
-        import torchaudio
 
-        wave, sr = torchaudio.load(str(audio_path))
-        if wave.shape[0] > 1:
-            wave = wave.mean(dim=0, keepdim=True)
-        if sr != 16000:
-            resampler = torchaudio.transforms.Resample(sr, 16000)
-            wave = resampler(wave)
-        return wave.to(device)
