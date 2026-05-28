@@ -18,6 +18,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
+- **File GPU persistante et planification** : mise en file activée par défaut, priorités, pause/reprise/annulation, limites de concurrence par calendrier et dispatch scheduler auditable.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
 - **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
@@ -89,6 +90,7 @@ Points à vérifier après installation :
 - `models.*` : chemins ou noms des modèles Cohere, Whisper et pyannote.
 - `services.arbitrage_*` : script, port et alias réel du backend LLM.
 - `workflow.summary_llm.model_id` et `workflow.arbitration_llm.model_id` si les phases LLM sont activées.
+- `workflow.queue.*`, `workflow.execution.max_concurrent_jobs` et `workflow.scheduling.*` pour la file persistante, le parallélisme et les créneaux calendrier.
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
 - `voice_enrollment.enabled` si le référentiel de voix connues doit être activé, avec `voice_enrollment.storage_dir` placé sur un stockage local protégé.
 - Les lexiques centralisés sont stockés en base SQLite et ne nécessitent pas de section config dédiée en V1.
@@ -146,6 +148,33 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 9. **Export** : package ZIP final.
 
 Le choix du backend STT n'est pas réduit à "fast vs quality". Le mode qualité active le workflow complet, mais conserve le backend configuré par défaut (`cohere`). Un forçage Whisper ou Granite reste possible par configuration pour des campagnes ciblées. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
+
+## File GPU et planification
+
+`POST /api/jobs/<id>/process` ne lance plus directement le traitement dans la requête HTTP : le job est mis en file dans `job_queue`, puis `QueueScheduler` le dispatch en arrière-plan selon la priorité, l'heure planifiée, la capacité worker et l'état GPU. La file est activée par défaut (`workflow.queue.enabled=true`) avec une concurrence par défaut de 1 pour préserver le comportement historique.
+
+En fin de traitement via file, le worker publie les états terminaux dans un ordre cohérent pour les APIs de polling : `job_queue.status` devient `done`/`failed`/`cancelled`, puis `extra_data.execution.status`, puis `jobs.state`. Cela évite qu'un client voie un job `completed` alors que la file le signale encore `running`.
+
+Les admins globaux et les admins de groupe peuvent gérer la file : les admins globaux voient tous les jobs, les admins de groupe uniquement les jobs des membres de leurs groupes. Les actions sensibles sont auditées (`job_enqueue`, `job_dequeue`, `job_prioritize`, `job_reorder`, `queue_pause`, `queue_resume`). Les admins globaux disposent aussi d'un bouton de nettoyage des jobs de test dont le titre commence par `E2E workflow`; les jobs en cours sont ignorés et l'action est auditée (`job_test_purge`).
+
+Pages et API principales :
+
+| Chemin | Rôle |
+|---|---|
+| `/admin/queue` | Vue de la file, runtime scheduler, actions pause/reprise/annulation/réordonnancement |
+| `/admin/schedule` | Gestion des créneaux de planification |
+| `/api/queue/status` | Snapshot runtime de la file |
+| `/api/queue/<job_id>/move-up`, `move-down`, `pause`, `resume`, `priority`, `cancel` | Mutations de file auditées |
+| `/api/schedule/windows` | CRUD JSON des créneaux |
+
+Les règles calendrier supportées sont :
+
+- `pause_queue` : règle on/off ; aucun nouveau job n'est dispatché, les jobs en cours continuent ;
+- `limit_concurrency` : règle paramétrée ; réduit temporairement le nombre de jobs simultanés via `action_params.max_concurrent_jobs` ;
+- `force_gpu` : règle on/off ; autorise la libération forcée de GPU via les patterns explicitement configurés, uniquement dans la fenêtre active ;
+- `none` : aucune règle.
+
+Le calendrier ne demande pas un nombre de GPU. Sur une machine où la LLM d'arbitrage peut occuper plusieurs GPUs, la décision fiable reste dans `GPUAllocator`, qui vérifie la VRAM réelle au moment du dispatch et des phases pipeline.
 
 ## Voix enregistrées
 
@@ -255,6 +284,8 @@ E2E réel, à lancer avec le Python du venv :
 venv/bin/python tests/test_e2e_workflow.py --skip-llm
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --keep
 venv/bin/python tests/test_e2e_workflow.py --stt-backend whisper --mode quality
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --skip-summary --skip-llm --skip-diarization --schedule-case pause_then_release
+venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --skip-summary --skip-llm --skip-diarization --process-via-api
 ```
 
 Benchmarks audio multi-combinaisons :
@@ -283,6 +314,7 @@ transcria/
     gpu/                         # VRAMManager, GPUSession, opencode, backends LLM
     jobs/                        # Job, JobStore, filesystem
     quality/                     # checks qualité, rapport, points de relecture
+    queue/                       # file persistante, scheduler, calendrier, allocation GPU
     services/                    # JobService, PipelineService, worker, ConfigService
     stt/                         # Cohere, Whisper, Granite, Parakeet, BaseDiarizer, DiarizerService (pyannote), SortformerDiarizer (NeMo), diarizer_factory, alignement, fiabilité
     voice/                       # voix enregistrées, consentements, empreintes, matching

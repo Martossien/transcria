@@ -31,6 +31,8 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 
 La clé `qwen_port` reste lue pour compatibilité avec les anciennes installations (alias de `arbitrage_llm_port`). Les nouvelles configurations doivent utiliser `arbitrage_llm_port`, `stop_arbitrage_llm.sh` et `llm_cleanup_ports`. Les méthodes Python `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
 
+La détection d'une LLM d'arbitrage déjà active repose sur l'API OpenAI-compatible (`/v1/models` puis `/v1/completions`) et non sur `lsof` seul. Un serveur sain avec le bon `arbitrage_api_model_id` est réutilisé directement (CAS A), même si le PID n'est pas détectable par les outils système locaux.
+
 ---
 
 ## Sections et paramètres
@@ -620,6 +622,58 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 **Redémarrage requis :** oui — le worker est instancié au démarrage de l’application.
 
 **Note :** la valeur par défaut `1` est volontaire sur un service GPU partagé. Monter plus haut sans revoir la stratégie VRAM augmentera fortement le risque de contention et d’échec.
+
+#### `workflow.queue`
+
+Configuration de la file persistante et du scheduler applicatif. Quand elle est activée, `/api/jobs/<id>/process` écrit dans `job_queue`, puis `QueueScheduler` lance le pipeline dès que les conditions sont réunies.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active la file persistante. `false` garde le chemin direct historique du worker |
+| `default_priority` | int | `50` | Priorité appliquée si aucune priorité n'est fournie. Plus petit = plus prioritaire |
+| `aging_enabled` | bool | `true` | Active le bonus progressif des jobs en attente |
+| `aging_interval_minutes` | int | `30` | Intervalle d'attente donnant un point de bonus |
+| `aging_max_bonus` | int | `49` | Bonus maximal soustrait à la priorité effective |
+| `poll_interval_s` | int | `5` | Délai entre deux itérations de dispatch |
+| `kill_patterns` | list[str] | `[]` | Patterns de processus externes que `force_gpu` peut tuer dans une fenêtre validée |
+
+**Redémarrage requis :** oui pour `enabled`, `poll_interval_s` et les paramètres de worker/scheduler, car `JobExecutorService` et `QueueScheduler` sont instanciés au démarrage. Les priorités passées à l'API sont persistées avec chaque entrée de file.
+
+**Permissions :** les admins globaux peuvent gérer toute la file. Les admins de groupe peuvent gérer uniquement les jobs appartenant aux membres de leurs groupes. Les mutations sont auditées.
+
+#### `workflow.scheduling`
+
+Configuration générale du calendrier. Les créneaux eux-mêmes sont stockés en base dans `scheduling_windows` et modifiables depuis `/admin/schedule`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active la prise en compte des créneaux |
+| `timezone` | string | `"Europe/Paris"` | Fuseau horaire utilisé pour évaluer les jours et heures |
+| `windows` | list[dict] | `[]` | Valeurs initiales/documentaires ; le runtime utilise la table `scheduling_windows` |
+
+Format d'un créneau :
+
+```yaml
+workflow:
+  scheduling:
+    enabled: true
+    timezone: Europe/Paris
+```
+
+Chaque ligne `scheduling_windows` contient `name`, `days`, `start`, `end`, `action`, `action_params` et `enabled`. Les jours sont en français (`lundi` à `dimanche`) et les horaires au format `HH:MM`. Dans l'interface, `action` est présenté comme une **règle appliquée** au créneau.
+
+Règles supportées :
+
+| Action | Type | Effet |
+|---|---|
+| `pause_queue` | on/off | Suspend le dispatch des nouveaux jobs ; les jobs en cours continuent |
+| `limit_concurrency` | paramétrée | Réduit la concurrence effective via `action_params.max_concurrent_jobs` |
+| `force_gpu` | on/off | Autorise `GPUAllocator.force_free_gpu(..., allow_kill=True)` sur les patterns explicitement configurés |
+| `none` | on/off | Aucun effet, utile comme note de calendrier |
+
+Si plusieurs créneaux sont actifs, la priorité est `pause_queue` > `limit_concurrency` > `force_gpu` > `none`. Les créneaux traversant minuit sont supportés.
+
+Le calendrier ne configure pas un nombre de GPUs. La LLM d'arbitrage peut occuper plusieurs GPUs et la disponibilité réelle dépend des phases pipeline ; l'arbitrage fiable reste donc dans `GPUAllocator`.
 
 #### `workflow.summary_llm`
 

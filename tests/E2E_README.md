@@ -273,6 +273,23 @@ Les valeurs sont parsées automatiquement : `true/false` → booléen, `0.6` →
 `7` → int, le reste → chaîne. La notation pointée est utilisée pour les clés
 imbriquées (`workflow.vad.threshold`).
 
+### Planification / file GPU
+
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `--schedule-case none\|pause_queue\|pause_then_release\|limit_concurrency\|force_gpu` | `none` | Injecte un créneau actif avant le pipeline et vérifie son effet |
+| `--schedule-limit-workers N` | `1` | Limite utilisée par le cas `limit_concurrency` |
+| `--process-via-api` | off | Lance le traitement final via `/api/jobs/<id>/process`, file persistante et scheduler réel |
+| `--queue-api-timeout-s N` | `900` | Timeout du polling quand `--process-via-api` est actif |
+
+Les cas `pause_queue`, `pause_then_release` et `limit_concurrency` créent une entrée `job_queue` de sonde et exécutent une itération de scheduler en dry-run, sans charger les modèles GPU. `pause_then_release` vérifie qu'un job bloqué par l'agenda repart après suppression du créneau d'indisponibilité. Le cas `force_gpu` valide que la fenêtre active autorise le mode, mais ne tue aucun processus GPU réel dans l'E2E standard.
+
+`--process-via-api` couvre le chemin utilisateur réel : enqueue via API, dispatch par le scheduler Flask, exécution du pipeline en arrière-plan, finalisation de l'entrée `job_queue`. Il vérifie que l'état terminal est publié de façon cohérente (`jobs.state=completed`, `extra_data.execution.status=completed`, `job_queue.status=done`) avant de considérer le run terminé. Il n'est pas combinable avec `--schedule-case` dans ce script.
+
+Quand la LLM d'arbitrage est déjà active sur le port configuré, l'E2E doit observer le chemin CAS A (`/v1/models` + inférence saine, modèle attendu) : résumé et correction réutilisent le serveur existant au lieu d'exiger une nouvelle réservation de `gpu.llm_vram_mb`.
+
+Les jobs E2E créés avec le préfixe de titre par défaut `E2E workflow` peuvent être nettoyés depuis `/admin/queue` par un admin global via le bouton `Nettoyer E2E`. La suppression retire la ligne base, l'entrée de file et le dossier `jobs/<job_id>` ; les jobs encore en cours d'exécution sont ignorés.
+
 ### Bench runner
 
 | Option | Description |
@@ -308,6 +325,30 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --keep
 venv/bin/python tests/test_e2e_workflow.py \
   --audio tests/test2.mp3 \
   --skip-llm --keep
+```
+
+### Run avec sonde agenda
+
+```bash
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --skip-llm --skip-diarization \
+  --schedule-case pause_queue
+
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --skip-llm --skip-diarization \
+  --schedule-case pause_then_release
+
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --skip-llm --skip-diarization \
+  --schedule-case limit_concurrency --schedule-limit-workers 1
+
+venv/bin/python tests/test_e2e_workflow.py \
+  --audio tests/test2.mp3 \
+  --skip-summary --skip-llm --skip-diarization \
+  --process-via-api
 ```
 
 ### Whisper large-v3 avec tout le prétraitement audio

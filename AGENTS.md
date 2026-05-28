@@ -89,6 +89,12 @@ transcria/
       models.py             # Job, JobState (20 états)
       store.py              # JobStore — méthodes statiques
       filesystem.py         # JobFilesystem — arborescence disque par job
+    queue/
+      allocator.py          # GPUAllocator — réservations GPU atomiques par job/phase + verrou LLM + PID tracking
+      store.py              # QueueStore — file persistante, priorités, pause/reprise, aging
+      scheduler.py          # QueueScheduler — dispatch en arrière-plan selon capacité/calendrier
+      calendar.py           # SchedulingCalendar — pause_queue, limit_concurrency, force_gpu
+      routes.py             # /admin/queue, /admin/schedule, /api/queue/*, /api/schedule/*
     workflow/
       states.py             # WorkflowState.compute_statuses()
       steps.py              # WORKFLOW_STEPS (9 étapes)
@@ -159,7 +165,7 @@ transcria/
       pipeline_service.py   # PipelineService — preflight, scene, quality refresh, source sep, filter, denoise, norm avant STT
       config_service.py     # ConfigService
     audit/
-      models.py             # AuditAction (enum 24 actions) + AuditLog (SQLAlchemy)
+      models.py             # AuditAction + AuditLog (SQLAlchemy)
       store.py              # AuditStore — log(), query(), count(), purge_expired()
       decorator.py          # audit_log() + @audit_action — capture auto current_user + IP
       routes.py             # audit_bp : /admin/audit (filtres + export CSV)
@@ -247,7 +253,7 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 - **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
 - **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
 
-**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
+**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. `is_arbitrage_llm_running()` doit tester l'API OpenAI-compatible (`/v1/models` + inférence) avant tout fallback port/PID : `lsof` seul peut produire de faux négatifs sous systemd/sandbox. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
 
 `services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `services.arbitrage_llm_port` remplace `qwen_port` pour les nouvelles configs. `services.llm_cleanup_ports` remplace `vllm_port` et liste les ports de backends LLM concurrents à libérer avant lancement. Les anciens noms restent lus par compatibilité. `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
@@ -317,7 +323,15 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspond à un `JobState`. Les transitions passent obligatoirement par `workflow/transitions.py`. Voir `docs/DATA_MODEL.md` pour le détail des états.
 
 ### Modèle service/worker
-`/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan (worker sérialisé, `workflow.execution.max_concurrent_jobs=1`). Supervision : `/health`, `/ready`, `/metrics`.
+`/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.
+
+Les états de file restent dans `job_queue.status` (`waiting`, `paused`, `running`, `done`, `failed`, `cancelled`) et dans `extra_data.execution.status`; ne pas ajouter d'états `QUEUED` ou `WAITING_RESOURCES` à `JobState` sans revoir `WorkflowState`, `WORKFLOW_STEPS` et la documentation. En mode queue, `PipelineService.run_process(..., finalize_job_state=False)` laisse `JobExecutorService` publier les états terminaux dans l'ordre `job_queue` → `extra_data.execution` → `jobs.state`; ne pas remettre un `JobState.COMPLETED` direct dans le pipeline queue, cela recrée une course visible par l'API. Les routes sensibles de file/calendrier doivent être auditées via `audit_log()`.
+
+`transcria/queue/allocator.py` est le point de coordination GPU multi-job. Le scheduler ne réserve pas la VRAM à la place du pipeline : il fait seulement un pré-check de première phase. Les réservations effectives se font au moment des phases dans `WorkflowRunner`/`PipelineService` via `GPUAllocator` et `GPUSession`.
+
+Calendrier : `/admin/schedule` et `/api/schedule/windows` gèrent la table `scheduling_windows`. Règles supportées : `pause_queue`, `limit_concurrency`, `force_gpu`, `none`. `pause_queue` et `force_gpu` sont on/off ; `limit_concurrency` utilise `action_params.max_concurrent_jobs`. Ne pas ajouter de saisie "nombre de GPUs" au calendrier : avec la LLM d'arbitrage multi-GPU, seule la mesure runtime de `GPUAllocator` est fiable. `force_gpu` ne peut tuer que des processus correspondant aux `workflow.queue.kill_patterns` configurés, dans une fenêtre active.
+
+Nettoyage E2E : `/admin/queue` expose aux admins globaux un bouton `Nettoyer E2E` qui supprime uniquement les jobs dont le titre commence par `E2E workflow`, leur entrée de file et leur dossier disque. Les jobs en cours sont ignorés et l'action doit rester auditée (`job_test_purge`).
 
 ### Audit de sécurité (PSSI/RGPD)
 Toutes les actions sensibles des utilisateurs sont journalisées dans la table `audit_logs` via `AuditStore.log()`. Le décorateur `audit_log()` dans `audit/decorator.py` capture automatiquement `current_user`, l'adresse IP (`X-Forwarded-For` ou `request.remote_addr`) et le User-Agent. La rétention est configurable via `security.audit_retention_days` (défaut 1095 jours). La purge est exécutée automatiquement à chaque accès à la page d'accueil. Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route DELETE). L'export CSV est disponible dans `/admin/audit` pour le DPO/responsable PSSI. Toute nouvelle route sensible doit appeler `audit_log()` ou `@audit_action`.

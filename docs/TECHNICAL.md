@@ -58,6 +58,13 @@ transcria/
 │   │   ├── store.py               # JobStore (CRUD jobs, count_jobs)
 │   │   └── filesystem.py          # JobFilesystem (I/O disque, save_json/load_json/save_text/load_text/save_upload)
 │   │
+│   ├── queue/                     # File persistante, scheduler et calendrier GPU
+│   │   ├── allocator.py           # GPUAllocator (réservations atomiques, verrou LLM, PID tracking)
+│   │   ├── store.py               # QueueStore (priorités, pause/reprise, aging)
+│   │   ├── scheduler.py           # QueueScheduler (dispatch en arrière-plan)
+│   │   ├── calendar.py            # SchedulingCalendar (pause_queue, limit_concurrency, force_gpu)
+│   │   └── routes.py              # Pages/admin API de file et planification
+│   │
 │   ├── workflow/                  # Moteur de workflow 9 étapes affichées
 │   │   ├── __init__.py
 │   │   ├── states.py              # WorkflowState (compute_statuses, get_next_step), StepStatus
@@ -540,7 +547,7 @@ Phase 2: ensure_arbitrage_llm_ready(api_model_id) → opencode run
 Cycle de vie GPU dans `run_correction` :
 ```
 ensure_arbitrage_llm_ready(api_model_id) → opencode run
-  (CAS A garanti si run_summary vient de tourner — LLM déjà chargée, même PID)
+  (CAS A garanti si run_summary vient de tourner — LLM déjà chargée et saine)
 ```
 
 L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` via `finally` en fin de pipeline.
@@ -882,7 +889,7 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `get_free_vram_mb(gpu_index)` | VRAM libre en Mo |
 | `get_best_gpu(required_mb)` | Meilleur GPU disponible (≥ required + MIN_FREE) |
 | `ensure_free(required_mb, preferred_gpu)` | Scanne tous les GPUs si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
-| `is_arbitrage_llm_running()` | Retourne True si un processus écoute sur `arbitrage_llm_port` (lsof) — utilisé par `_release_arbitrage_llm` avant d'appeler stop |
+| `is_arbitrage_llm_running()` | Retourne True si l'API OpenAI-compatible répond (`/v1/models` + inférence test), avec fallback port/PID uniquement si nécessaire |
 | `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
 | `launch_arbitrage_llm()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
 | `stop_arbitrage_llm()` | Arrête la LLM d'arbitrage via `services.stop_script`, puis libère `arbitrage_llm_port` en fallback |
@@ -932,7 +939,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 |---|---|---|---|
 | `/health` | GET | Publique | Statut service + base SQLite |
 | `/ready` | GET | Publique | Préparation du worker interne |
-| `/metrics` | GET | Publique | Métriques Prometheus (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`) |
+| `/metrics` | GET | Publique | Métriques Prometheus (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`, `transcria_queue_entries`) |
 | `/` | GET | login_required | Accueil (liste des traitements) |
 | `/jobs/new` | POST | login_required + CREATE_JOBS | Création traitement |
 | `/jobs/<id>` | GET | login_required + owner check | Assistant wizard 9 étapes |
@@ -940,6 +947,8 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/jobs/<id>/delete` | POST | login_required + DELETE_JOBS | Suppression traitement |
 | `/system` | GET | login_required + ACCESS_SYSTEM | État technique (GPU dashboard) |
 | `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition YAML de la configuration |
+| `/admin/queue` | GET | admin global ou admin de groupe | Vue de la file persistante et actions par job |
+| `/admin/schedule` | GET | MANAGE_SCHEDULE | Gestion des créneaux de planification |
 | `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
 | `/admin/voices/<subject_id>/metadata` | POST | admin ou admin groupe autorisé | Mise à jour nom, genre validé, email et référence interne |
 | `/admin/voices/<subject_id>/consent-proof/<consent_id>` | GET | admin ou admin groupe autorisé | Consultation de la preuve signée stockée sous `voices/` |
@@ -972,6 +981,16 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON |
 | `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
+| `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
+| `/api/queue/<id>/move-up` | POST | admin global ou admin de groupe sur périmètre | Remonte un job dans la file |
+| `/api/queue/<id>/move-down` | POST | admin global ou admin de groupe sur périmètre | Descend un job dans la file |
+| `/api/queue/<id>/pause` | POST | admin global ou admin de groupe sur périmètre | Met en pause une entrée de file |
+| `/api/queue/<id>/resume` | POST | admin global ou admin de groupe sur périmètre | Reprend une entrée de file |
+| `/api/queue/<id>/priority` | POST | admin global ou admin de groupe sur périmètre | Modifie la priorité |
+| `/api/queue/<id>/cancel` | POST | admin global ou admin de groupe sur périmètre | Annule un job en file ou demande l'annulation |
+| `/api/queue/e2e-test-jobs/purge` | POST | admin global | Supprime les jobs de test dont le titre commence par `E2E workflow`, hors jobs en cours |
+| `/api/schedule/windows` | GET, POST | MANAGE_SCHEDULE | Liste ou crée des créneaux |
+| `/api/schedule/windows/<id>` | PUT, DELETE | MANAGE_SCHEDULE | Modifie ou supprime un créneau |
 
 **Templates** (`web/templates/`)
 | Template | Description |
@@ -988,18 +1007,60 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `groups.html` | Liste des groupes (admin global + admins de groupe) |
 | `group_form.html` | Formulaire création/édition groupe + membres |
 | `dashboard_status.html` | État technique (GPU, CPU, RAM, services) |
+| `queue.html` | File persistante, runtime scheduler et actions admin |
+| `schedule.html` | Administration des créneaux calendrier |
 
 ---
 
-### 4.12 Services (`transcria/services/`)
+### 4.12 Queue et scheduling (`transcria/queue/`)
+
+Le package `transcria.queue` sépare la persistance de file, le calendrier et l'allocation GPU :
+
+| Module | Rôle |
+|---|---|
+| `models.py` | Modèles SQLAlchemy `JobQueueEntry` et `SchedulingWindow` |
+| `store.py` | CRUD file : enqueue/dequeue, ordre, priorité, pause/reprise, aging, positions |
+| `scheduler.py` | Boucle de dispatch : aging, calendrier, capacité, pré-check VRAM première phase, lancement worker |
+| `calendar.py` | Évaluation des créneaux, overnight windows, priorité des actions |
+| `allocator.py` | Réservations GPU thread-safe par job/phase, verrou LLM, tracking PID et `force_gpu` |
+| `routes.py` | Pages `/admin/queue`, `/admin/schedule` et APIs `/api/queue/*`, `/api/schedule/*` |
+
+Flux normal :
+
+1. `/api/jobs/<id>/process` appelle `JobExecutorService.submit_process()`.
+2. Si `workflow.queue.enabled=true`, `QueueScheduler.submit_to_queue()` crée/actualise `job_queue` et marque `extra_data.execution.status="queued"`.
+3. La boucle `_dispatch_iteration()` applique l'aging, vérifie le calendrier (`pause_queue`, `limit_concurrency`, `force_gpu`), choisit les candidats éligibles et lance `_run_process()` dans un `ThreadPoolExecutor`.
+4. Le pipeline réserve la VRAM au moment exact de chaque phase via `GPUAllocator`/`GPUSession`; le scheduler ne double-réserve pas.
+5. En mode queue, `JobExecutorService` appelle `PipelineService.run_process(..., finalize_job_state=False)`, puis publie l'état terminal dans l'ordre `job_queue.status` → `extra_data.execution.status` → `jobs.state`.
+6. En fin de pipeline, l'entrée de file passe en `done`, `failed` ou `cancelled`.
+
+Règles calendrier :
+
+| Action | Type | Effet runtime |
+|---|---|
+| `pause_queue` | on/off | `_dispatch_iteration()` retourne 0 ; les jobs déjà `running` continuent |
+| `limit_concurrency` | paramétrée | `get_effective_max_workers()` réduit la capacité de dispatch via `action_params.max_concurrent_jobs` |
+| `force_gpu` | on/off | Autorise `GPUAllocator.force_free_gpu()` si la première phase n'a pas assez de VRAM |
+| `none` | on/off | Aucun effet |
+
+Le calendrier ne porte pas une quantité de GPUs : avec la LLM d'arbitrage multi-GPU et les phases STT/diarisation, seule la mesure runtime de `GPUAllocator` est fiable.
+
+Les mutations sensibles de file et de calendrier appellent `audit_log()` avec les actions `job_enqueue`, `job_dequeue`, `job_prioritize`, `job_reorder`, `job_test_purge`, `queue_pause`, `queue_resume`, `schedule_window_create`, `schedule_window_modify`, `schedule_window_delete`.
+
+### 4.13 Services (`transcria/services/`)
 
 **`job_executor.py` — `JobExecutorService`**
 | Méthode | Description |
 |---|---|
-| `__init__()` | Initialise le `ThreadPoolExecutor` (max_concurrent_jobs depuis config) |
+| `__init__()` | Initialise le worker direct ou `QueueScheduler` selon `workflow.queue.enabled` |
+| `submit_process(job_id, audio_path, mode, priority, scheduled_at, vram_profile)` | Soumet un job au scheduler persistant ou au worker direct |
+| `get_runtime_snapshot()` | Retourne l'état queue/worker pour `/ready`, `/metrics`, `/api/queue/status` |
+| `stop()` | Arrête le scheduler et l'executor interne (utilisé au teardown de tests et arrêt contrôlé) |
+| `_run_process(job_id, audio_path, mode)` | Exécute `PipelineService.run_process(..., finalize_job_state=False)`, puis finalise `job_queue`, `execution` et `jobs.state` dans un ordre cohérent |
 | `_kill_orphaned_opencode(job_id, jobs_dir, sl)` | Tue les processus opencode orphelins via fichiers `.opencode.pid` |
 | `_reconcile_interrupted_jobs(jobs_dir, sl)` | Réconcilie les jobs interrompus après redémarrage brutal |
 | `init_job_executor(config, app)` | Point d'entrée d'initialisation du worker au démarrage du service |
+| `shutdown_job_executor()` | Arrête proprement le worker global |
 
 **`job_service.py` — `JobService`** (toutes méthodes statiques)
 | Méthode | Description |
@@ -1013,7 +1074,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 **`pipeline_service.py` — `PipelineService`**
 | Méthode | Description |
 |---|---|
-| `run_process(job, audio_path, mode)` | Lance le pipeline complet de traitement pour un job déjà chargé |
+| `run_process(job, audio_path, mode, finalize_job_state=True)` | Lance le pipeline complet de traitement pour un job déjà chargé ; en mode queue, le worker passe `False` pour publier lui-même l'état terminal |
 | `_run_pipeline_steps(job, audio_path, mode, sl)` | 7 pré-traitements audio puis transcription : preflight → scène → séparation → filtrage → débruitage → normalisation → transcription, puis étapes séquentielles |
 | `_define_pipeline_steps(job, audio_path, mode)` | Définit les étapes actives selon le mode (`quality` ajoute la diarisation) |
 | `_config_for_mode(mode, job)` | Calcule la config effective pour le mode demandé. Si le backend est `granite` et que l'audio est `degrade` ou `audio_tres_faible`, bascule automatiquement sur le backend de production `self.config` (fallback `cohere` si nécessaire). Injecte aussi les hotwords Whisper et le biasing Cohere si activés. |
@@ -1181,7 +1242,7 @@ LLM arbitrage (résumé puis correction) :
   ensure_arbitrage_llm_ready(api_model_id)
     → CAS A : LLM déjà saine → opencode démarre immédiatement
     → CAS C : lancement llama-server → attente port → opencode
-  [LLM reste vivante entre résumé et correction — même PID, CAS A garanti]
+  [LLM reste vivante entre résumé et correction — CAS A garanti si le serveur reste sain]
 
 Fin de pipeline :
   PipelineService._release_arbitrage_llm()

@@ -64,6 +64,49 @@
 - `set_extra_data(value: dict)` : serialize en JSON
 - `to_dict() → dict` : sérialisation complète
 
+### Table `job_queue`
+
+File persistante utilisée par `QueueScheduler` quand `workflow.queue.enabled=true`.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | Integer | PK autoincrement | Identifiant interne |
+| `job_id` | String(36) | FK → jobs.id, UNIQUE, NOT NULL, INDEX | Job mis en file |
+| `base_priority` | Integer | NOT NULL, default=50 | Priorité demandée. Plus petit = plus prioritaire |
+| `aging_bonus` | Integer | NOT NULL, default=0 | Bonus anti-attente soustrait à `base_priority` |
+| `position` | Integer | NOT NULL, default=0 | Ordre manuel dans un même niveau de priorité |
+| `status` | String(20) | NOT NULL, INDEX | `waiting`, `paused`, `running`, `done`, `failed`, `cancelled` |
+| `submitted_at` | DateTime | NOT NULL, INDEX | Date de mise en file |
+| `started_at` | DateTime | nullable | Date de démarrage effectif |
+| `scheduled_at` | DateTime | nullable, INDEX | Date minimale de dispatch |
+| `current_phase` | String(30) | nullable | Phase GPU courante (`stt`, `diarization`, `llm`, etc.) |
+| `vram_profile_json` | Text | nullable | Profil VRAM estimé par phase |
+| `gpu_index` | Integer | nullable | GPU affecté à la phase courante |
+| `last_aging_at` | DateTime | nullable | Dernière application du bonus d'attente |
+| `paused_by` | String(36) | FK → users.id, nullable | Utilisateur ayant mis en pause |
+| `mode` | String(20) | NOT NULL, default="fast" | Mode `fast` ou `quality` |
+
+`job_queue.status` est distinct de `jobs.state`. Le workflow utilisateur reste porté par `JobState`; l'état de file est un état d'exécution runtime. `extra_data.execution.status` garde aussi la trace `queued → running → completed|failed|cancelled` pour la reprise et les APIs de polling.
+
+### Table `scheduling_windows`
+
+Créneaux calendaires évalués par `SchedulingCalendar`.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | Integer | PK autoincrement | Identifiant interne |
+| `name` | String(100) | NOT NULL | Libellé |
+| `days_json` | Text | NOT NULL | Liste JSON de jours français (`lundi` ... `dimanche`) |
+| `start_time` | String(5) | NOT NULL | Heure locale `HH:MM` |
+| `end_time` | String(5) | NOT NULL | Heure locale `HH:MM` |
+| `action` | String(30) | NOT NULL, default="none" | `pause_queue`, `limit_concurrency`, `force_gpu` ou `none` |
+| `action_params_json` | Text | nullable | Paramètres d'action, ex. `{"max_concurrent_jobs": 1}` |
+| `enabled` | Boolean | NOT NULL, default=True | Créneau actif |
+| `created_at` | DateTime | NOT NULL | Création |
+| `updated_at` | DateTime | NOT NULL | Dernière modification |
+
+Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'ordre de priorité métier est `pause_queue`, puis `limit_concurrency`, puis `force_gpu`, puis `none`. `pause_queue` et `force_gpu` sont des règles on/off ; `limit_concurrency` utilise `action_params_json.max_concurrent_jobs`. Le nombre de GPUs n'est pas stocké dans le calendrier : l'allocation réelle reste calculée par `GPUAllocator`.
+
 ### Tables voix enregistrées
 
 | Table | Rôle | Données sensibles |
@@ -94,7 +137,7 @@
 | `timestamp` | DateTime | NOT NULL, default=utcnow, INDEX | Horodatage précis de l'action |
 | `actor_id` | String(36) | FK → users.id, nullable, INDEX | Qui (null = système) |
 | `actor_username` | String(80) | NOT NULL, default="system" | Login dénormalisé |
-| `action` | String(40) | NOT NULL, INDEX | Type d'action (enum AuditAction, 24 valeurs) |
+| `action` | String(40) | NOT NULL, INDEX | Type d'action (enum AuditAction : auth, jobs, queue, schedule, config, users, groupes, lexiques, voix) |
 | `target_type` | String(20) | NOT NULL | Catégorie cible : job, user, group, config, lexicon, voice, system |
 | `target_id` | String(36) | nullable, INDEX | UUID de la ressource |
 | `target_label` | String(255) | NOT NULL, default="" | Libellé lisible |
@@ -130,8 +173,12 @@
 | `DOWNLOAD_EXPORTS` | x | x | x | x |
 | `VIEW_QUALITY_REPORTS` | x | x | x | |
 | `RETRY_PROCESSING` | x | x | | |
+| `MANAGE_QUEUE` | x | | | |
+| `MANAGE_SCHEDULE` | x | | | |
 
 Décorateur : `@requires(Permission.VIEW_ALL_JOBS)` → 401 si non authentifié, 403 si pas la permission.
+
+`MANAGE_QUEUE` et `MANAGE_SCHEDULE` sont attribuées au rôle `admin`. En complément, les admins de groupe accèdent aux pages et APIs de file sur leur périmètre via des contrôles explicites (`GroupStore.is_group_admin()` et appartenance au groupe du propriétaire du job), sans recevoir ces permissions globales.
 
 ### GroupRole (auth/models.py)
 
@@ -229,6 +276,16 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 | `POST /api/jobs/<id>/process` | — | `CANCELLED` | Si `mode="cancel"` |
 
 **Attention :** `api_process` ne bloque plus la requête jusqu’à `COMPLETED`. Le traitement est planifié puis exécuté en arrière-plan, avec progression visible via l’état du job et les endpoints de supervision.
+
+### États d'exécution et file
+
+`POST /api/jobs/<id>/process` écrit :
+
+- `jobs.processing_mode` (`fast` ou `quality`) ;
+- `jobs.extra_data_json["execution"]` avec `status="queued"`, `mode`, timestamps et éventuel `cancel_requested` ;
+- une entrée `job_queue` si `workflow.queue.enabled=true`.
+
+Le scheduler marque ensuite `execution.status="running"` au démarrage. En fin de pipeline via file persistante, `JobExecutorService` publie d'abord `job_queue.status` (`done`, `failed` ou `cancelled`), puis `extra_data.execution.status` (`completed`, `failed` ou `cancelled`), puis `jobs.state`. Cet ordre évite une fenêtre où l'API verrait `jobs.state="completed"` alors que la file serait encore `running`.
 
 ### WORKFLOW_STEPS — 9 étapes affichées
 
