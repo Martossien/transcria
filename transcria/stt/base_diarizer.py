@@ -80,6 +80,8 @@ class BaseDiarizer(ABC):
         if diar_cfg.get("cache_audio_fingerprint", True):
             if metadata.get("audio_fingerprint") != self._audio_fingerprint(audio_path):
                 return None
+        if metadata.get("diarization_speaker_params") != self._effective_speaker_params():
+            return None
         return result
 
     def _save_cache_metadata(self, fs: JobFilesystem, audio_path: Path, result: dict) -> None:
@@ -90,6 +92,7 @@ class BaseDiarizer(ABC):
             "audio_fingerprint": self._audio_fingerprint(audio_path),
             "speaker_count": len(result.get("speakers", [])),
             "turn_count": len(result.get("turns", [])),
+            "diarization_speaker_params": self._effective_speaker_params(),
         })
 
     # ------------------------------------------------------------------
