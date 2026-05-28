@@ -444,6 +444,7 @@ _DEFAULT_CONFIG = {
         "allow_job_delete": True,
         "max_upload_size_mb": 1024,
         "allowed_upload_extensions": [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"],
+        "audit_retention_days": 1095,
     },
 }
 

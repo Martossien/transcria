@@ -498,3 +498,4 @@ security:
     - ".mp4"
     - ".flac"
     - ".ogg"
+  audit_retention_days: 1095    # 3 ans — rétention des logs d'audit (RGPD Art. 30/32)

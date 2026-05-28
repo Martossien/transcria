@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Audit de sécurité — TranscrIA{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0"><i class="bi bi-shield-check"></i> Audit de sécurité</h2>
+    <a href="{{ url_for('audit.audit_export_csv', since=filters.since, until=filters.until) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-download"></i> Exporter CSV
+    </a>
+  </div>
+  <p class="text-muted small">Journal des actions utilisateur — conservé {{ config.security.get('audit_retention_days', 1095) }} jours.</p>
+
+  <form method="get" class="row g-2 mb-3">
+    <div class="col-md-2">
+      <input type="text" name="actor" class="form-control form-control-sm" placeholder="Utilisateur" value="{{ filters.actor }}">
+    </div>
+    <div class="col-md-2">
+      <select name="action" class="form-select form-select-sm">
+        <option value="">Toutes actions</option>
+        {% for a in AuditAction %}
+        <option value="{{ a.value }}" {% if filters.action == a.value %}selected{% endif %}>{{ a.value }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <select name="target_type" class="form-select form-select-sm">
+        <option value="">Toutes cibles</option>
+        <option value="job" {% if filters.target_type == 'job' %}selected{% endif %}>Job</option>
+        <option value="user" {% if filters.target_type == 'user' %}selected{% endif %}>Utilisateur</option>
+        <option value="group" {% if filters.target_type == 'group' %}selected{% endif %}>Groupe</option>
+        <option value="config" {% if filters.target_type == 'config' %}selected{% endif %}>Configuration</option>
+        <option value="lexicon" {% if filters.target_type == 'lexicon' %}selected{% endif %}>Lexique</option>
+        <option value="voice" {% if filters.target_type == 'voice' %}selected{% endif %}>Voix</option>
+        <option value="system" {% if filters.target_type == 'system' %}selected{% endif %}>Système</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <input type="date" name="since" class="form-control form-control-sm" value="{{ filters.since }}">
+    </div>
+    <div class="col-md-2">
+      <input type="date" name="until" class="form-control form-control-sm" value="{{ filters.until }}">
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Filtrer</button>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width:160px">Horodatage (UTC)</th>
+            <th>Utilisateur</th>
+            <th>Action</th>
+            <th>Cible</th>
+            <th>Adresse IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td class="text-muted small">{{ row.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td>{{ row.actor_username }}</td>
+            <td><span class="badge bg-secondary">{{ row.action }}</span></td>
+            <td>
+              <span class="text-muted small">{{ row.target_type }}</span>
+              {% if row.target_label %}<br><strong>{{ row.target_label[:80] }}{% if row.target_label|length > 80 %}…{% endif %}</strong>{% endif %}
+              {% if row.target_id %}<br><code class="text-muted small">{{ row.target_id[:8] }}…</code>{% endif %}
+            </td>
+            <td class="text-muted small">{{ row.ip_address or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-center text-muted py-4">Aucune entrée d'audit trouvée.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <span class="text-muted small">{{ total }} entrée(s)</span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+          <a class="page-link" href="?page={{ page - 1 }}&actor={{ filters.actor }}&action={{ filters.action }}&target_type={{ filters.target_type }}&since={{ filters.since }}&until={{ filters.until }}">←</a>
+        </li>
+        {% for p in range(1, total_pages + 1) %}
+        <li class="page-item {% if p == page %}active{% endif %}">
+          <a class="page-link" href="?page={{ p }}&actor={{ filters.actor }}&action={{ filters.action }}&target_type={{ filters.target_type }}&since={{ filters.since }}&until={{ filters.until }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+          <a class="page-link" href="?page={{ page + 1 }}&actor={{ filters.actor }}&action={{ filters.action }}&target_type={{ filters.target_type }}&since={{ filters.since }}&until={{ filters.until }}">→</a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+</div>
+{% endblock %}
