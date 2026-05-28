@@ -37,7 +37,7 @@ jobs:
         run: mypy transcria/ --ignore-missing-imports
 
       - name: Run test suite with coverage
-        run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing
+        run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing --cov-fail-under=65
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4

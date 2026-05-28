@@ -1,5 +1,7 @@
 # TranscrIA
 
+[![CI](https://github.com/Martossien/transcria/actions/workflows/tests.yml/badge.svg)](https://github.com/Martossien/transcria/actions/workflows/tests.yml)
+
 TranscrIA est un portail web de transcription et de valorisation de réunions longues. Il transforme un fichier audio ou vidéo en livrables exploitables : SRT horodaté et corrigé, participants et locuteurs, lexique métier, résumé structuré, rapport qualité et package ZIP final.
 
 Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio lisible, choix de traitement adapté, contrôle humain des participants/termes, puis transcription finale avec garde-fous contre les hallucinations ASR et les erreurs LLM.

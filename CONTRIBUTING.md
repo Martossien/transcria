@@ -78,6 +78,27 @@ Les tests utilisent SQLite en mémoire et des fixtures Flask. Pas besoin de GPU.
 - Messages de log en français
 - Pas de commentaires sauf si le code est non évident
 
+### Commits
+
+Les commits suivent la convention **Conventional Commits** :
+
+```text
+<type>(<scope>): <résumé impératif court>
+```
+
+Types attendus : `feat`, `fix`, `docs`, `refactor`, `ci`, `chore`, `test`.
+
+Exemples :
+
+```text
+feat(queue): add persistent GPU scheduling
+fix(security): avoid logging lexicon terms
+docs(queue): archive scheduling analysis
+test(audit): cover lexicon export logging
+```
+
+Un commit doit rester cohérent et auditable : ne mélangez pas une feature, une correction, des tests et une réorganisation documentaire sans raison forte. Les changements sensibles RGPD/PSSI doivent mentionner explicitement le périmètre audité et les tests associés.
+
 ## Configuration secrète
 
 Les secrets (mots de passe, tokens) vont dans `.env`, pas dans `config.yaml`.
