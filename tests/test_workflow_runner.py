@@ -551,12 +551,27 @@ class TestPipelineServiceStateRecovery:
 
 class TestWorkflowRunnerRunSummary:
     def test_run_summary_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):
+        """_gpu_session lève GPUSessionError → erreur VRAM propagée, état FAILED.
+
+        run_summary utilise _gpu_session (GPUSession + allocateur) plutôt que
+        _reserve_gpu_phase. En présence d'un GPU réel, l'allocateur réussit et
+        contourne ensure_free. On mocke _gpu_session pour lever GPUSessionError
+        directement, ce qui est le comportement attendu en VRAM insuffisante.
+        """
+        from transcria.gpu.gpu_session import GPUSessionError
+        import contextlib
+
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "VRAM Fail")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: None)
+            @contextlib.contextmanager
+            def fake_gpu_session(job, model_name, required_mb, phase):
+                raise GPUSessionError("VRAM insuffisante (simulé)")
+                yield  # noqa: unreachable
+
+            monkeypatch.setattr(runner, "_gpu_session", fake_gpu_session)
 
             result = runner.run_summary(job, "/tmp/fake.wav", cfg)
             assert "error" in result
@@ -885,12 +900,17 @@ class TestWorkflowRunnerRunSpeakerDetection:
 
 class TestWorkflowRunnerRunTranscription:
     def test_run_transcription_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):
+        """_reserve_gpu_phase retourne None → erreur VRAM, état FAILED.
+
+        Mocke _reserve_gpu_phase directement : en présence d'un GPU réel,
+        l'allocateur réussit et contourne ensure_free, rendant le mock obsolète.
+        """
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Transcript VRAM Fail")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: None)
+            monkeypatch.setattr(runner, "_reserve_gpu_phase", lambda job, required_mb, phase: (None, False))
 
             result = runner.run_transcription(job, "/tmp/fake.wav", cfg)
             assert "error" in result
@@ -922,12 +942,24 @@ class TestWorkflowRunnerRunTranscription:
             assert result["transcript_text"] == "[0s->5s] Bonjour"
 
     def test_run_transcription_exception_offloads(self, app, owner_id, monkeypatch, tmp_path):
+        """Sur exception STT, _release_gpu_phase appelle offload_all (chemin VRAMManager).
+
+        managed_by_allocator=False force le chemin offload_all dans _release_gpu_phase,
+        car en présence d'un GPU réel l'allocateur réussit et prendrait le chemin
+        release_phase (qui n'appelle pas offload_all).
+        """
+        from types import SimpleNamespace
+
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "Transcript Crash")
             runner = WorkflowRunner(JobStore, cfg)
 
-            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
+            # managed_by_allocator=False → _release_gpu_phase appellera offload_all
+            monkeypatch.setattr(
+                runner, "_reserve_gpu_phase",
+                lambda job, required_mb, phase: (SimpleNamespace(gpu_index=0), False),
+            )
 
             offload_called = {"v": False}
             def fake_offload():
@@ -940,7 +972,7 @@ class TestWorkflowRunnerRunTranscription:
 
             result = runner.run_transcription(job, "/tmp/fake.wav", cfg)
             assert "error" in result
-            assert offload_called["v"] is True
+            assert offload_called["v"] is True, "offload_all doit être appelé sur exception (chemin VRAMManager)"
 
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.FAILED.value
