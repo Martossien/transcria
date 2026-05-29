@@ -2,7 +2,7 @@
 
 ## 1. Vue d'ensemble
 
-TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction et les points à vérifier.
+TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction, les points à vérifier, et un rapport Word professionnel (.docx) prêt à distribuer.
 
 **Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / Parakeet TDT 0.6B v3 expérimental (NeMo) / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
 
@@ -120,9 +120,10 @@ transcria/
 │   │   ├── audio_quality.py       # Diagnostic qualité audio et signal éventuel de forçage backend
 │   │   └── quality_report.py      # QualityReporter (contrôles, score /100, markdown)
 │   │
-│   ├── exports/                   # Package ZIP final
+│   ├── exports/                   # Exports finaux (ZIP + rapport DOCX)
 │   │   ├── __init__.py
-│   │   └── package_builder.py    # PackageBuilder (ZIP avec tous les fichiers)
+│   │   ├── package_builder.py    # PackageBuilder (ZIP avec tous les fichiers + rapport DOCX)
+│   │   └── docx_report.py        # DocxReport — rapport Word professionnel (python-docx)
 │   │
 │   ├── integrations/              # Services externes
 │   │   ├── __init__.py
@@ -866,7 +867,7 @@ Score = max(0, 100 - warnings × 5). Sauvegarde quality_report.json, quality_rep
 **`package_builder.py` — `PackageBuilder`**
 | Méthode | Description |
 |---|---|
-| `build_package(job)` | Crée `transcrIA_job_{uuid}.zip` avec tous les fichiers |
+| `build_package(job)` | Crée `transcrIA_job_{uuid}.zip` avec tous les fichiers + rapport DOCX |
 
 Contenu du ZIP :
 ```
@@ -877,7 +878,22 @@ context/job_context.yaml, meeting_context.json, participants.json, session_lexic
 context/speaker_mapping.json, speaker_stats.json
 quality/quality_report.md, quality_report.json, review_points.json
 quality/correction_report.md             # si disponible
+rapport_<titre>.docx                     # rapport Word généré automatiquement
 ```
+
+**`docx_report.py` — `DocxReport` / `generate_docx_report()`**
+
+Génère un rapport Word professionnel à partir des artefacts JSON d'un job terminé. Endpoint : `GET /api/jobs/<id>/download/docx`. Mis en cache dans `exports/rapport_<titre>.docx` et inclus automatiquement dans le ZIP.
+
+| Section | Source |
+|---|---|
+| Page de garde (titre, type, date, service, score) | `meeting_context.json` + `quality_report.json` |
+| Contexte (sujet, objectif, synthèse validée) | `meeting_context.json` → champ `summary` |
+| Participants (nom, fonction, temps de parole %) | `participants.json` + `speaker_stats.json` |
+| Transcription (timestamp, locuteur, texte) | `metadata/transcription_corrigee.srt` |
+| Points à vérifier (conditionnel) | `quality_report.json` — coverage faible, zones audio, termes |
+
+Spec détaillée : [docs/FEATURE_DOCX_REPORT.md](FEATURE_DOCX_REPORT.md).
 
 **Logique de priorité SRT** : `transcription_corrigee.srt` est servi en priorité. Si absent, `transcription.srt` est servi.
 

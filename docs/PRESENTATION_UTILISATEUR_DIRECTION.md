@@ -65,7 +65,8 @@ Pour une direction, TranscrIA apporte un cadre :
 | Mapping locuteurs | Association entre `SPEAKER_XX` et les participants réels |
 | Lexique de session | Termes métier, acronymes, noms propres et corrections attendues |
 | Rapport qualité | Points à vérifier : segments vides, trous temporels, locuteurs non mappés, couverture audio, diagnostic ASR/VAD |
-| Package ZIP | Ensemble des fichiers utiles pour archivage, relecture ou transmission |
+| **Rapport Word (.docx)** | **Document professionnel prêt à distribuer : page de garde, contexte validé, tableau participants avec temps de parole, transcription formatée, points à vérifier. Téléchargeable directement ou inclus dans le ZIP.** |
+| Package ZIP | Ensemble des fichiers utiles pour archivage, relecture ou transmission (inclut le rapport Word) |
 
 ---
 

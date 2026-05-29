@@ -384,7 +384,8 @@ jobs/<job_id>/
 │   └── review_points.json         # Points à vérifier (liste de strings)
 │
 ├── exports/
-│   └── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio)
+│   ├── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio, rapport DOCX)
+│   └── rapport_<titre>.docx         # Rapport Word professionnel généré à la demande
 │
 └── .opencode.pid                    # PID du processus opencode (écrit par OpenCodeRunner.run(), lu par _kill_orphaned_opencode())
 ```
@@ -434,7 +435,8 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
-| Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` |
+| Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
+| Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
 
 ---
 
@@ -785,9 +787,10 @@ transcrIA_job_<id>.zip
 │   ├── session_lexicon.json
 │   ├── speaker_mapping.json
 │   └── speaker_stats.json
-└── quality/
-    ├── quality_report.md
-    ├── quality_report.json
-    ├── review_points.json
-    └── correction_report.md
+├── quality/
+│   ├── quality_report.md
+│   ├── quality_report.json
+│   ├── review_points.json
+│   └── correction_report.md
+└── rapport_<titre>.docx            # Rapport Word professionnel (généré automatiquement)
 ```

@@ -151,7 +151,8 @@ transcria/
       lexicon_checks.py     # Checks sur le lexique
       review_points.py      # Points de relecture
     exports/
-      package_builder.py    # PackageBuilder — ZIP final
+      package_builder.py    # PackageBuilder — ZIP final (inclut le rapport DOCX)
+      docx_report.py        # DocxReport — rapport Word professionnel (page de garde, participants, transcription, qualité)
     integrations/
       dashboard_client.py   # DashboardClient (port 5001)
       srt_editor_link.py    # SrtEditorLink (port 7861)

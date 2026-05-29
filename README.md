@@ -26,13 +26,14 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Piste d'audit RGPD** : enregistrement de chaque action sensible (login/logout, accès/téléchargement/suppression de job, modifications lexique, gestion des voix, édition config, gestion users/groupes, opérations de planification) avec acteur, IP, user-agent et timestamp. Filtrable par acteur, action, période et cible. Exportable.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, CUDA_VISIBLE_DEVICES remapping, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
+- **Rapport Word (.docx)** : document professionnel généré automatiquement en fin de workflow — page de garde avec score qualité, contexte validé par l'utilisateur, tableau participants avec temps de parole, transcription formatée locuteur par locuteur, section "points à vérifier" conditionnelle. Téléchargeable directement ou inclus dans le package ZIP.
 - **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 
 | Domaine | Technologie |
 |---|---|
-| Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite |
+| Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite, python-docx |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
 | ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental, Parakeet TDT 0.6B v3 expérimental (NeMo) |
 | Diarisation | pyannote.audio community-1 (défaut), NVIDIA Sortformer 4spk v2.1 (NeMo) — factory pattern, BaseDiarizer ABC |
@@ -152,7 +153,7 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV. Les lexiques centralisés accessibles au job pré-remplissent la session tant qu'un lexique utilisateur n'a pas déjà été sauvegardé.
 7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper/Granite, correction LLM.
 8. **Qualité** : rapport, score, diagnostics, segments suspects.
-9. **Export** : package ZIP final.
+9. **Export** : rapport Word (.docx) téléchargeable directement + package ZIP final (rapport inclus).
 
 Le choix du backend STT n'est pas réduit à "fast vs quality". Le mode qualité active le workflow complet, mais conserve le backend configuré par défaut (`cohere`). Un forçage Whisper ou Granite reste possible par configuration pour des campagnes ciblées. Le backend réel est tracé dans `metadata/transcription_metadata.json`.
 
@@ -320,7 +321,7 @@ transcria/
     audio/                       # ffprobe, preflight, scene, denoise, normalisation, Demucs, VAD
     config/                      # loader, schema, détection système
     context/                     # réunion, participants, lexique session/centralisé, job_context
-    exports/                     # package ZIP
+    exports/                     # rapport DOCX + package ZIP
     gpu/                         # VRAMManager, GPUSession, opencode, backends LLM
     jobs/                        # Job, JobStore, filesystem
     quality/                     # checks qualité, rapport, points de relecture
@@ -348,6 +349,7 @@ transcria/
 | [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) | Référence complète `config.yaml` |
 | [docs/VAD_OR_NOT.md](docs/VAD_OR_NOT.md) | Analyse VAD, tests, recommandations |
 | [docs/PARAKEET_STT_INTEGRATION.md](docs/PARAKEET_STT_INTEGRATION.md) | Intégration Parakeet TDT 0.6B v3 |
+| [docs/FEATURE_DOCX_REPORT.md](docs/FEATURE_DOCX_REPORT.md) | Spec technique du rapport Word : sources de données, structure, template, roadmap |
 | [tests/E2E_README.md](tests/E2E_README.md) | Utilisation du test E2E et options benchmark |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide de contribution |
 | [SECURITY.md](SECURITY.md) | Politique de sécurité |

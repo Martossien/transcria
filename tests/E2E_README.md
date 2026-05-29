@@ -579,6 +579,7 @@ résultats, car elles reflètent le backend réellement utilisé par le pipeline
 | `metadata/transcription_corrigee.srt` | Si LLM active (absent si `--skip-llm`) |
 | `metadata/correction_report.md` | Si LLM active (absent si `--skip-llm`) |
 | `exports/*.zip` | Toujours |
+| `exports/rapport_*.docx` | Toujours (généré et inclus dans le ZIP par `PackageBuilder`) |
 
 ### Artefacts optionnels (selon config et pipeline)
 
