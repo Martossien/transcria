@@ -223,9 +223,15 @@ class TestParserToContext:
         parsed["summary_text"] = summary_text
 
         result: dict = {}
-        import logging
-        sl = logging.getLogger("test_sl")
-        WorkflowRunner._apply_llm_suggestions(fs, result, parsed, sl)
+
+        # Le logger structuré accepte des kwargs arbitraires — on utilise un mock léger
+        class _StubLogger:
+            def info(self, *a, **kw): pass
+            def warning(self, *a, **kw): pass
+            def debug(self, *a, **kw): pass
+            def error(self, *a, **kw): pass
+
+        WorkflowRunner._apply_llm_suggestions(fs, result, parsed, _StubLogger())
 
         ctx = fs.load_json("context/meeting_context.json") or {}
         assert "structured_data" in ctx
