@@ -264,7 +264,8 @@
       <div class="row">
         <div class="col-md-6 mb-2">
           <label class="form-label small">Type de réunion</label>
-          <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select">
+          <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select"
+                  onchange="TranscrIA.updateTypeSpecificFields(this.value)">
             {% for mt in meeting_types %}
             <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
             {% endfor %}
@@ -287,7 +288,19 @@
         <label class="form-label small">Notes / Ordre du jour</label>
         <textarea name="notes" class="form-control form-control-sm" id="notes_input" rows="2">{{ meeting.notes or meeting.notes_suggeres }}</textarea>
       </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="TranscrIA.saveContext()">Enregistrer le contexte</button>
+
+      <!-- Champs spécifiques au type de réunion — générés dynamiquement par JS -->
+      <div id="type-specific-fields" class="mt-3" style="display:none;">
+        <div class="card border-primary-subtle bg-primary-subtle bg-opacity-10">
+          <div class="card-header py-1 px-3 d-flex align-items-center gap-2 border-primary-subtle">
+            <i class="bi bi-sliders text-primary"></i>
+            <span class="small fw-semibold text-primary" id="type-specific-title">Informations complémentaires</span>
+          </div>
+          <div class="card-body py-2 px-3" id="type-specific-body"></div>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveContext()">Enregistrer le contexte</button>
       <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
     </form>
 
@@ -794,7 +807,11 @@
 {% endblock %}
 
 {% block scripts %}
-<script>window.__JOB_ID__ = "{{ job.id }}";</script>
+<script>
+window.__JOB_ID__ = "{{ job.id }}";
+window.__TYPE_SPECIFIC_FIELDS__ = {{ type_specific_fields_json | safe }};
+window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meeting.type_specific_data else '{}' }};
+</script>
 <script src="{{ url_for('static', filename='js/wizard-api.js') }}"></script>
 <script src="{{ url_for('static', filename='js/wizard.js') }}"></script>
 <datalist id="lexicon-cat-list">{% for cat in lexicon_categories %}<option value="{{ cat }}"></option>{% endfor %}</datalist>
@@ -862,6 +879,12 @@
     });
   }
   {% endif %}
+
+  // Initialiser les champs spécifiques au type au chargement
+  (function() {
+    var sel = document.getElementById('meeting_type_select');
+    if (sel && sel.value) { TranscrIA.updateTypeSpecificFields(sel.value); }
+  })();
 })();
 </script>
 

@@ -123,12 +123,107 @@ var TranscrIA = window.TranscrIA || {};
         var fd = new FormData(form);
         var data = {};
         fd.forEach(function (v, k) { data[k] = v; });
+
+        // Collecter les champs spécifiques au type
+        var tsData = {};
+        var tsFields = window.__TYPE_SPECIFIC_FIELDS__ || {};
+        var currentType = (document.getElementById('meeting_type_select') || {}).value || '';
+        var fieldsForType = tsFields[currentType] || [];
+        fieldsForType.forEach(function (field) {
+            var el = document.getElementById('ts_' + field.key);
+            if (el) { tsData[field.key] = el.value; }
+        });
+        if (Object.keys(tsData).length > 0) {
+            data['type_specific_data'] = tsData;
+        }
+
         W.api('/api/jobs/' + JOB_ID + '/context', 'POST', data).then(function (r) {
             if (r.status === 200) {
                 document.getElementById('context-saved').classList.remove('d-none');
                 W.reloadAfter(500);
             }
         });
+    };
+
+    W.updateTypeSpecificFields = function (meetingType) {
+        var tsFields = window.__TYPE_SPECIFIC_FIELDS__ || {};
+        var tsData   = window.__TYPE_SPECIFIC_DATA__   || {};
+        var fields   = tsFields[meetingType] || [];
+        var container = document.getElementById('type-specific-fields');
+        var body      = document.getElementById('type-specific-body');
+        var title     = document.getElementById('type-specific-title');
+
+        if (!container || !body) { return; }
+
+        if (fields.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        // Titre contextuel
+        var titles = {
+            'CSE': 'Informations légales PV',
+            'CSE extraordinaire': 'Informations légales PV — Séance extraordinaire',
+            'Point projet': 'Contexte projet',
+            'CODIR / COMEX': 'Ordre du jour & indicateurs',
+            'Réunion client': 'Informations client',
+            'Entretien individuel': 'Informations entretien',
+            'Formation': 'Informations formation',
+            'Réunion de crise': 'Informations incident',
+            'Séminaire / atelier': 'Informations séminaire',
+            'Négociation': 'Informations négociation'
+        };
+        if (title) { title.textContent = titles[meetingType] || 'Informations complémentaires'; }
+
+        // Générer les champs
+        var html = '<div class="row g-2">';
+        fields.forEach(function (field) {
+            var val = tsData[field.key] || '';
+            var colClass = field.type === 'textarea' ? 'col-12' : 'col-md-6';
+            html += '<div class="' + colClass + '">';
+            html += '<label class="form-label small mb-1">' + field.label + '</label>';
+            if (field.type === 'textarea') {
+                html += '<textarea id="ts_' + field.key + '" class="form-control form-control-sm" rows="3">' + W._escHtml(val) + '</textarea>';
+            } else {
+                html += '<input type="' + field.type + '" id="ts_' + field.key + '" class="form-control form-control-sm" value="' + W._escHtml(val) + '">';
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+
+        // CSE : indicateur quorum calculé en temps réel
+        if (meetingType === 'CSE' || meetingType === 'CSE extraordinaire') {
+            html += '<div class="mt-2 small" id="ts-quorum-indicator"></div>';
+        }
+
+        body.innerHTML = html;
+        container.style.display = 'block';
+
+        // Listener quorum dynamique pour CSE
+        if (meetingType === 'CSE' || meetingType === 'CSE extraordinaire') {
+            ['ts_membres_presents', 'ts_membres_total'].forEach(function (id) {
+                var el = document.getElementById(id);
+                if (el) { el.addEventListener('input', W._updateQuorum); }
+            });
+            W._updateQuorum();
+        }
+    };
+
+    W._escHtml = function (str) {
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    };
+
+    W._updateQuorum = function () {
+        var ind = document.getElementById('ts-quorum-indicator');
+        if (!ind) { return; }
+        var presents = parseInt((document.getElementById('ts_membres_presents') || {}).value || '0', 10);
+        var total    = parseInt((document.getElementById('ts_membres_total')    || {}).value || '0', 10);
+        if (!presents || !total) { ind.innerHTML = ''; return; }
+        var pct = Math.round(100 * presents / total);
+        var ok  = presents > total / 2;
+        ind.innerHTML = '<span class="badge ' + (ok ? 'bg-success' : 'bg-danger') + '">'
+            + (ok ? '✓ Quorum atteint' : '✗ Quorum non atteint')
+            + ' (' + presents + '/' + total + ' — ' + pct + '%)</span>';
     };
 
     W.addParticipantRow = function () {

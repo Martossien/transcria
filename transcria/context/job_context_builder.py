@@ -29,6 +29,8 @@ class JobContextBuilder:
                 "language": meeting.get("language", "fr"),
                 "summary_control": meeting.get("summary") or meeting.get("summary_llm", ""),
                 "notes": meeting.get("notes", ""),
+                **({"type_specific": meeting["type_specific_data"]}
+                   if meeting.get("type_specific_data") else {}),
             },
             "participants": [
                 {

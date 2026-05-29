@@ -34,7 +34,7 @@ from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
-from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
+from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager, TYPE_SPECIFIC_FIELDS
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
@@ -59,6 +59,7 @@ web_bp = Blueprint("web", __name__)
 logger = logging.getLogger(__name__)
 
 MEETING_TYPES_LIST = MEETING_TYPES
+TYPE_SPECIFIC_FIELDS_JSON = __import__("json").dumps(TYPE_SPECIFIC_FIELDS, ensure_ascii=False)
 DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
 PROCESS_START_TIME = time.time()
@@ -771,6 +772,7 @@ def job_wizard(job_id: str):
         quality_report=quality_report,
         srt_content=srt_content,
         meeting_types=MEETING_TYPES_LIST,
+        type_specific_fields_json=TYPE_SPECIFIC_FIELDS_JSON,
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
         voice_enrollment_enabled=bool(cfg.get("voice_enrollment", {}).get("enabled", False)),

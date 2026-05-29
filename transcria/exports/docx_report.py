@@ -233,6 +233,7 @@ class DocxReport:
         self.merged = self._merge_participants()
         self.structured_data: dict = structured_data or {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
+        self.type_specific_data: dict = ctx.get("type_specific_data") or {}
         # Auto-confidentialité pour certains types
         if self.meeting_type in _AUTO_CONFIDENTIEL and not ctx.get("sensitivity"):
             self.ctx = dict(ctx)
@@ -484,7 +485,109 @@ class DocxReport:
                     run.font.size = Pt(10)
                     run.font.name = "Calibri"
 
-    # ── Section 1b : Données enrichies (décisions, actions, votes…) ───────────
+        # Champs utilisateur spécifiques au type (président CSE, nom projet, etc.)
+        self._section_type_specific(doc)
+
+    # ── Section 1b : Données type-spécifiques (champs utilisateur) ──────────────
+
+    def _section_type_specific(self, doc: Document) -> None:
+        """Affiche les champs saisis par l'utilisateur pour ce type de réunion.
+
+        Absent si aucun champ n'a été rempli.
+        Pour CSE : indicateur de quorum calculé automatiquement.
+        """
+        ts = self.type_specific_data
+        mt = self.meeting_type
+        if not ts:
+            return
+
+        # Filtrer les champs non vides
+        non_empty = {k: v for k, v in ts.items() if v is not None and str(v).strip()}
+        if not non_empty:
+            return
+
+        # Labels par clé
+        LABELS: dict[str, str] = {
+            "president_seance": "Président de séance",
+            "secretaire_seance": "Secrétaire de séance",
+            "membres_presents": "Membres présents",
+            "membres_total": "Membres total",
+            "ref_pv_precedent": "Réf. PV précédent",
+            "objet_seance": "Objet de la séance",
+            "nom_projet": "Projet",
+            "phase_jalon": "Phase / Jalon",
+            "chef_de_projet": "Chef de projet",
+            "sprint": "Sprint",
+            "ordre_du_jour_items": "Ordre du jour",
+            "kpis": "KPIs présentés",
+            "nom_client": "Client",
+            "ref_contrat": "Référence contrat",
+            "periode_evaluee": "Période évaluée",
+            "poste_evalue": "Poste évalué",
+            "evaluateur": "Évaluateur",
+            "formateur": "Formateur",
+            "nb_participants_formation": "Nb participants",
+            "lieu_formation": "Lieu",
+            "nature_incident": "Nature incident",
+            "responsable_crise": "Responsable crise",
+            "thematique": "Thématique",
+            "nb_groupes": "Groupes de travail",
+            "objet_negociation": "Objet",
+            "parties": "Parties prenantes",
+        }
+
+        doc.add_paragraph()
+        # Tableau compact sans bordures extérieures
+        rows_data: list[tuple[str, str]] = []
+
+        for key, val in non_empty.items():
+            label = LABELS.get(key, key.replace("_", " ").capitalize())
+            # Ordre du jour : chaque ligne → item
+            if key == "ordre_du_jour_items":
+                for i, line in enumerate(str(val).splitlines()):
+                    line = line.strip()
+                    if line:
+                        rows_data.append((f"ODJ {i+1}" if i == 0 else "", line))
+                continue
+            rows_data.append((label, str(val).strip()))
+
+        # Quorum CSE calculé
+        if mt in ("CSE", "CSE extraordinaire"):
+            try:
+                presents = int(non_empty.get("membres_presents", 0))
+                total    = int(non_empty.get("membres_total", 0))
+                if presents and total:
+                    pct    = round(100 * presents / total)
+                    quorum = "✓ Quorum atteint" if presents > total / 2 else "✗ Quorum non atteint"
+                    rows_data.append(("Quorum", f"{quorum} ({presents}/{total} — {pct}%)"))
+            except (ValueError, TypeError):
+                pass
+
+        if not rows_data:
+            return
+
+        table = doc.add_table(rows=len(rows_data), cols=2)
+        _table_full_width(table)
+        _table_no_borders(table)
+
+        for i, (label, val) in enumerate(rows_data):
+            cells = table.rows[i].cells
+            _cell_margins(cells[0], top=30, bottom=30, left=0, right=60)
+            _cell_margins(cells[1], top=30, bottom=30, left=60, right=0)
+
+            r_lbl = cells[0].paragraphs[0].add_run(label)
+            r_lbl.font.size = Pt(9.5)
+            r_lbl.font.bold = True
+            r_lbl.font.color.rgb = _GREY_DARK
+            r_lbl.font.name = "Calibri"
+
+            color = _GREEN if "Quorum atteint" in val else _RED if "non atteint" in val else _BLUE_DARK
+            r_val = cells[1].paragraphs[0].add_run(val)
+            r_val.font.size = Pt(9.5)
+            r_val.font.color.rgb = color
+            r_val.font.name = "Calibri"
+
+    # ── Section 1c : Données enrichies LLM (décisions, actions, votes…) ─────────
 
     def _section_enriched(self, doc: Document) -> None:
         """Sections conditionnelles issues de l'extraction LLM structurée.
