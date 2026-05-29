@@ -707,9 +707,10 @@
         <pre class="srt-preview mt-2">{{ srt_content[:3000] }}</pre>
       </details>
       <div class="d-flex flex-wrap gap-2">
+        <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-word"></i> Rapport Word (.docx)</a>
         <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> Télécharger le SRT</a>
+        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> Package complet</a>
         <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Télécharger l'audio</a>
-        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-primary btn-sm"><i class="bi bi-archive"></i> Package complet</a>
         <a href="{{ srt_editor_url }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> Ouvrir SRT Editor EASY</a>
         <button class="btn btn-outline-info btn-sm" onclick="TranscrIA.pushToEditor()">
           <span id="push-spinner" class="spinner d-none"></span> Envoyer vers SRT Editor
