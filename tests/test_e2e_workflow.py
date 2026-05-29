@@ -1153,6 +1153,34 @@ def run_pipeline_via_queue_api(app, cfg: dict, args: argparse.Namespace, job_id:
 # ─────────────────────────────────────────────────────────────────────────────
 # Résumé et JSON de sortie
 # ─────────────────────────────────────────────────────────────────────────────
+def _docx_theme_info(meeting_ctx: dict) -> dict:
+    """Résout le thème DOCX appliqué et les champs type-spécifiques remplis.
+
+    Permet au bench/E2E de vérifier que le bon thème et les bons champs
+    sont sélectionnés selon le type de réunion, sans ouvrir le .docx.
+    """
+    meeting_type = meeting_ctx.get("meeting_type", "")
+    try:
+        from transcria.exports.docx_report import _get_theme
+        theme = _get_theme(meeting_type)
+        banner = theme.banner_text
+        badge = theme.cover_badge
+        is_default = banner == "COMPTE-RENDU DE TRANSCRIPTION" and not badge
+    except Exception:
+        banner, badge, is_default = "", "", True
+
+    ts = meeting_ctx.get("type_specific_data") or {}
+    ts_filled = {k: v for k, v in ts.items() if v is not None and str(v).strip()}
+    return {
+        "meeting_type": meeting_type,
+        "banner_text": banner,
+        "cover_badge": badge,
+        "is_default_theme": is_default,
+        "type_specific_fields_filled": sorted(ts_filled.keys()),
+        "type_specific_count": len(ts_filled),
+    }
+
+
 def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> None:
     """Écrit le JSON de résultats structurés pour bench_audio.py."""
     workflow = cfg.get("workflow", {})
@@ -1371,6 +1399,9 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "resolutions_count": len((meeting_ctx.get("structured_data") or {}).get("resolutions") or []),
             "has_prochaine_date": bool((meeting_ctx.get("structured_data") or {}).get("prochaine_date")),
         },
+
+        # Rendu DOCX par type : thème appliqué + champs type-spécifiques
+        "docx_theme": _docx_theme_info(meeting_ctx),
 
         # Références
         "job_id": RESULTS.get("job_id"),

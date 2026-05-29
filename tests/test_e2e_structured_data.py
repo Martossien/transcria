@@ -13,13 +13,16 @@ Scénarios testés :
   5. Panneau wizard HTML (données enrichies collapsible)
   6. Téléchargement DOCX via HTTP avec données enrichies
   7. Intégrité du fichier prompt (section 8b présente)
+  8. Nouveaux types de réunion (liste + dropdown)
+  9. Thèmes visuels par type (bannières, badges, quorum CSE) via HTTP/DOCX réel
+ 10. Champs type-spécifiques (panneau wizard + persistance + DOCX)
+ 11. Helper de tracking thème du runner E2E (_docx_theme_info)
 """
 import io
 import json
 from pathlib import Path
 
 import pytest
-
 
 # ── Fixtures partagées ────────────────────────────────────────────────────────
 
@@ -76,13 +79,15 @@ _SD_CSE = {
 
 
 def _seed_enriched_job(jobs_dir: str, job_id: str, structured_data: dict,
-                       meeting_type: str = "Réunion interne") -> None:
+                       meeting_type: str = "Réunion interne",
+                       type_specific_data: dict | None = None,
+                       title: str = "Réunion E2E test") -> None:
     """Crée un job avec données enrichies pré-remplies (simule le LLM ayant tourné)."""
     from transcria.jobs.filesystem import JobFilesystem
 
     fs = JobFilesystem(jobs_dir, job_id)
-    fs.save_json("context/meeting_context.json", {
-        "title": "Réunion E2E test",
+    ctx = {
+        "title": title,
         "meeting_type": meeting_type,
         "date": "2026-05-29",
         "service": "IT",
@@ -94,7 +99,10 @@ def _seed_enriched_job(jobs_dir: str, job_id: str, structured_data: dict,
         "sensitivity": "normal",
         "structured_data": structured_data,
         "structured_data_parse_status": "ok",
-    })
+    }
+    if type_specific_data:
+        ctx["type_specific_data"] = type_specific_data
+    fs.save_json("context/meeting_context.json", ctx)
     fs.save_json("context/participants.json", [
         {"id": "p1", "name": "Alice", "function": "Chef de projet", "service": "IT",
          "role": "Animatrice", "is_animator": True, "expected": True, "comment": ""},
@@ -122,8 +130,8 @@ def _seed_enriched_job(jobs_dir: str, job_id: str, structured_data: dict,
 def _advance_to_summary_done(app, job_id: str) -> None:
     """Avance l'état du job à SUMMARY_DONE pour débloquer l'affichage du contexte."""
     with app.app_context():
-        from transcria.jobs.store import JobStore
         from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
         JobStore.update_state(job_id, JobState.SUMMARY_DONE)
 
 
@@ -209,9 +217,9 @@ class TestParserToContext:
 
     def test_apply_llm_suggestions_stocke_structured_data(self, tmp_path):
         """Vérifie que runner._apply_llm_suggestions écrit structured_data dans meeting_context."""
+        from transcria.gpu.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.workflow.runner import WorkflowRunner
-        from transcria.gpu.opencode_runner import OpenCodeRunner
 
         jobs_dir = str(tmp_path)
         job_id = "test-apply-e2e"
@@ -246,6 +254,7 @@ class TestDocxTypeRouting:
     def _build_doc(self, meeting_type: str, sd: dict) -> str:
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import DocxReport
 
         report = DocxReport(
@@ -286,6 +295,7 @@ class TestDocxTypeRouting:
     def test_entretien_individuel_auto_confidentiel(self):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import DocxReport
 
         report = DocxReport({"title": "Test", "meeting_type": "Entretien individuel"}, [], {}, {}, "")
@@ -325,6 +335,7 @@ class TestSectionNumbering:
     def _sections(self, meeting_type: str, sd: dict) -> list[str]:
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import DocxReport
         report = DocxReport({"title": "T", "meeting_type": meeting_type}, [], {}, {}, "", sd)
         doc = report.build()
@@ -365,6 +376,7 @@ class TestGracefulDegradation:
     def test_structured_data_vide_docx_valide(self, tmp_path):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import generate_docx_report
         from transcria.jobs.filesystem import JobFilesystem
 
@@ -395,6 +407,7 @@ class TestGracefulDegradation:
     def test_structured_data_parse_failed_docx_valide(self, tmp_path):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import generate_docx_report
         from transcria.jobs.filesystem import JobFilesystem
 
@@ -527,12 +540,8 @@ class TestDocxHTTPEnriched:
             fs.save_json("quality/quality_report.json", {"quality_score": 90, "checks": []})
 
         r_docx_vide = admin_client.get(f"/api/jobs/{job_vide}/download/docx")
-        r_docx_enrichi = admin_client.get(f"/api/jobs/{job_enriched_id}/download/docx") \
-            if False else None  # skip comparison, just check sizes
-
-        r_enrichi = admin_client.get(f"/api/jobs/{job_vide}/download/docx")
-        assert r_enrichi.status_code == 200
-        assert len(r_enrichi.data) > 5000
+        assert r_docx_vide.status_code == 200
+        assert len(r_docx_vide.data) > 5000
 
 
 # ── 7. Intégrité du prompt (section 8b) ──────────────────────────────────────
@@ -591,3 +600,232 @@ class TestMeetingTypes:
         assert "CSE" in html
         assert "CODIR / COMEX" in html
         assert "Point projet" in html
+
+
+# ── 9. Thèmes visuels par type (E2E HTTP, DOCX réel) ──────────────────────────
+
+def _seed_themed_job(admin_client, app, meeting_type: str, structured_data: dict,
+                     type_specific_data: dict | None = None, title: str = "Thème E2E") -> str:
+    """Crée un job complet, le mène jusqu'à EXPORT_READY, retourne le job_id."""
+    from transcria.config import get_config
+    from transcria.jobs.models import JobState
+    from transcria.jobs.store import JobStore
+
+    r = admin_client.post("/jobs/new", data={"title": title}, follow_redirects=True)
+    job_id = r.request.path.split("/")[2] if "/jobs/" in r.request.path else None
+    assert job_id, "Création du job échouée"
+    with app.app_context():
+        cfg = get_config()
+        _seed_enriched_job(cfg["storage"]["jobs_dir"], job_id, structured_data,
+                           meeting_type, type_specific_data, title)
+        JobStore.update_state(job_id, JobState.EXPORT_READY)
+    return job_id
+
+
+def _download_docx_text(admin_client, job_id: str) -> str:
+    """Télécharge le DOCX et retourne tout son texte (paragraphes + tableaux)."""
+    from docx import Document
+    r = admin_client.get(f"/api/jobs/{job_id}/download/docx")
+    assert r.status_code == 200, f"Téléchargement DOCX échoué ({r.status_code})"
+    assert r.data[:4] == b"PK\x03\x04", "Réponse non DOCX (magic bytes)"
+    doc = Document(io.BytesIO(r.data))
+    paragraphs = "\n".join(p.text for p in doc.paragraphs)
+    tables = " ".join(c.text for t in doc.tables for row in t.rows for c in row.cells)
+    return paragraphs + "\n" + tables
+
+
+class TestDocxThemesE2E:
+    """Vérifie de bout en bout (HTTP → DOCX réel) que chaque type applique
+    sa bannière, ses champs type-spécifiques et ses éléments visuels."""
+
+    def test_cse_banniere_institutionnelle(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"president_seance": "Marie Dupont",
+                                "secretaire_seance": "Pierre Martin",
+                                "membres_presents": "8", "membres_total": "11",
+                                "ref_pv_precedent": "PV-2026-01"},
+                               title="CSE Q2 2026")
+        full = _download_docx_text(admin_client, job).upper()
+        assert "PROCÈS-VERBAL DU COMITÉ SOCIAL" in full
+
+    def test_cse_champs_specifiques_sur_couverture(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"president_seance": "Marie Dupont",
+                                "secretaire_seance": "Pierre Martin",
+                                "membres_presents": "8", "membres_total": "11"})
+        full = _download_docx_text(admin_client, job)
+        assert "Marie Dupont" in full
+        assert "Pierre Martin" in full
+
+    def test_cse_quorum_calcule_automatiquement(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"membres_presents": "8", "membres_total": "11"})
+        full = _download_docx_text(admin_client, job)
+        assert "Quorum atteint" in full
+        assert "73%" in full
+
+    def test_cse_quorum_non_atteint(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"membres_presents": "3", "membres_total": "11"})
+        full = _download_docx_text(admin_client, job)
+        assert "non atteint" in full.lower()
+
+    def test_point_projet_banniere_et_sous_titre(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "Point projet", _SD_COMPLET,
+                               {"nom_projet": "Projet Phoenix",
+                                "phase_jalon": "Phase 2", "chef_de_projet": "Alice",
+                                "sprint": "6"},
+                               title="Sprint 6")
+        full = _download_docx_text(admin_client, job)
+        assert "RÉUNION PROJET" in full.upper()
+        assert "Projet Phoenix" in full  # sous-titre contextuel
+        assert "Alice" in full           # chef de projet en métadonnée
+
+    def test_codir_banniere_direction(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "CODIR / COMEX", _SD_COMPLET)
+        full = _download_docx_text(admin_client, job).upper()
+        assert "COMITÉ DE DIRECTION" in full
+
+    def test_crise_badge_situation_de_crise(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "Réunion de crise", _SD_COMPLET,
+                               {"nature_incident": "Panne datacenter",
+                                "responsable_crise": "DSI"})
+        full = _download_docx_text(admin_client, job).upper()
+        assert "CRISE" in full
+        assert "PANNE DATACENTER" in full  # sous-titre contextuel
+
+    def test_entretien_individuel_confidentiel(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "Entretien individuel", _SD_COMPLET,
+                               {"poste_evalue": "Développeur senior",
+                                "periode_evaluee": "2025", "evaluateur": "Manager"})
+        full = _download_docx_text(admin_client, job)
+        assert "CONFIDENTIEL" in full.upper()
+        assert "ENTRETIEN INDIVIDUEL" in full.upper()
+
+    def test_reunion_client_banniere_et_ref_contrat(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "Réunion client", _SD_COMPLET,
+                               {"nom_client": "Acme Corp", "ref_contrat": "CTR-2026-001"})
+        full = _download_docx_text(admin_client, job)
+        assert "RÉUNION CLIENT" in full.upper()
+        assert "Acme Corp" in full
+        assert "CTR-2026-001" in full
+
+    def test_type_inconnu_garde_banniere_par_defaut(self, admin_client, app):
+        pytest.importorskip("docx")
+        job = _seed_themed_job(admin_client, app, "Réunion interne", _SD_COMPLET)
+        full = _download_docx_text(admin_client, job).upper()
+        assert "COMPTE-RENDU DE TRANSCRIPTION" in full
+
+    def test_themes_produisent_des_documents_distincts(self, admin_client, app):
+        """Deux types différents → bannières différentes dans le DOCX."""
+        pytest.importorskip("docx")
+        job_cse = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                                   {"membres_presents": "8", "membres_total": "11"})
+        job_proj = _seed_themed_job(admin_client, app, "Point projet", _SD_COMPLET,
+                                    {"nom_projet": "X"})
+        txt_cse = _download_docx_text(admin_client, job_cse).upper()
+        txt_proj = _download_docx_text(admin_client, job_proj).upper()
+        assert "PROCÈS-VERBAL" in txt_cse
+        assert "PROCÈS-VERBAL" not in txt_proj
+        assert "RÉUNION PROJET" in txt_proj
+
+
+class TestTypeSpecificE2EWizard:
+    """Le panneau de champs type-spécifiques et sa config JSON dans le wizard."""
+
+    def test_config_type_specific_fields_dans_page(self, admin_client, app):
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"president_seance": "Marie"})
+        # Repasser en SUMMARY_DONE pour afficher le formulaire contexte
+        with app.app_context():
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+            JobStore.update_state(job, JobState.SUMMARY_DONE)
+        r = admin_client.get(f"/jobs/{job}")
+        html = r.data.decode("utf-8")
+        # La config des champs est injectée pour le JS
+        assert "__TYPE_SPECIFIC_FIELDS__" in html
+        assert "president_seance" in html
+        # La valeur déjà saisie est ré-injectée
+        assert "Marie" in html
+
+    def test_type_specific_data_persiste_apres_save_contexte(self, admin_client, app):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        job = _seed_themed_job(admin_client, app, "Point projet", _SD_COMPLET,
+                               {"nom_projet": "Phoenix"})
+        with app.app_context():
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+            JobStore.update_state(job, JobState.SUMMARY_DONE)
+
+        # L'utilisateur ré-enregistre le contexte sans renvoyer type_specific_data
+        r = admin_client.post(f"/api/jobs/{job}/context",
+                              json={"title": "Sprint 6 màj", "meeting_type": "Point projet"},
+                              content_type="application/json")
+        assert r.status_code == 200
+
+        with app.app_context():
+            cfg = get_config()
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job)
+            ctx = fs.load_json("context/meeting_context.json") or {}
+            # type_specific_data doit être préservé
+            assert ctx.get("type_specific_data", {}).get("nom_projet") == "Phoenix"
+
+
+# ── 11. Helper de tracking thème du runner E2E réel ───────────────────────────
+
+class TestRunnerThemeTracking:
+    """Le helper _docx_theme_info de tests/test_e2e_workflow.py, qui alimente
+    le JSON de sortie --output-json pour les campagnes bench."""
+
+    def _helper(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_e2e_runner", str(Path(__file__).parent / "test_e2e_workflow.py"))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod._docx_theme_info
+
+    def test_cse_resolu(self):
+        info = self._helper()({
+            "meeting_type": "CSE",
+            "type_specific_data": {"president_seance": "Marie", "membres_presents": "8",
+                                   "membres_total": "11", "secretaire_seance": ""},
+        })
+        assert "PROCÈS-VERBAL" in info["banner_text"].upper()
+        assert info["cover_badge"] == "CSE"
+        assert info["is_default_theme"] is False
+        # secretaire_seance vide n'est pas compté
+        assert "president_seance" in info["type_specific_fields_filled"]
+        assert "secretaire_seance" not in info["type_specific_fields_filled"]
+        assert info["type_specific_count"] == 3
+
+    def test_type_inconnu_est_default(self):
+        info = self._helper()({"meeting_type": "Réunion interne"})
+        assert info["is_default_theme"] is True
+        assert info["type_specific_count"] == 0
+
+    def test_point_projet_champs_listes(self):
+        info = self._helper()({
+            "meeting_type": "Point projet",
+            "type_specific_data": {"nom_projet": "Phoenix", "sprint": "6"},
+        })
+        assert info["banner_text"]
+        assert info["is_default_theme"] is False
+        assert info["type_specific_fields_filled"] == ["nom_projet", "sprint"]
+
+    def test_meeting_type_absent_ne_casse_pas(self):
+        info = self._helper()({})
+        assert info["meeting_type"] == ""
+        assert info["type_specific_count"] == 0

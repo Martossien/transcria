@@ -13,7 +13,7 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, export CSV `POST` audité, restriction optionnelle aux admins globaux, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, signaux RGPD/PSSI, contrôles qualité et filtrage du lexique avant correction. Les tests vérifient que les audits lexiques ne stockent pas les termes en clair.
 
-`tests/test_e2e_structured_data.py` couvre le pipeline complet d'extraction de données structurées **sans GPU réel** : 36 tests pytest automatisés répartis en 8 classes —
+`tests/test_e2e_structured_data.py` couvre le pipeline complet d'extraction de données structurées, des champs type-spécifiques et des thèmes visuels DOCX **sans GPU réel** : 53 tests pytest automatisés répartis en 11 classes —
 - **TestParserToContext** : parsing LLM (`_parse_structured_summary`) → stockage dans `meeting_context.json` via `_apply_llm_suggestions`, 3 niveaux de fallback (ok / partial / failed / missing) ;
 - **TestDocxTypeRouting** : routing des sections DOCX par type de réunion (CSE, CODIR, Point projet, Réunion de crise, Podcast, Entretien individuel) ;
 - **TestSectionNumbering** : numérotation dynamique des sections selon le nombre de blocs enrichis ;
@@ -21,10 +21,13 @@ applicatif. Il est conçu pour deux usages :
 - **TestWizardEnrichedPanel** : panneau HTML collapsible dans l'étape Contexte du wizard, badges ok/partial/failed, affichage par type ;
 - **TestDocxHTTPEnriched** : téléchargement via `GET /api/jobs/<id>/download/docx` avec vérification du contenu DOCX ;
 - **TestPromptIntegrity** : présence de la section 8b, de tous les champs JSON, de l'étape 4b et de la vérification n°16 dans `summary_prompt.txt` ;
-- **TestMeetingTypes** : présence des 10 nouveaux types dans `MEETING_TYPES`, préservation des types existants, affichage dans le dropdown du wizard.
+- **TestMeetingTypes** : présence des 10 nouveaux types dans `MEETING_TYPES`, préservation des types existants, affichage dans le dropdown du wizard ;
+- **TestDocxThemesE2E** : thèmes visuels par type via HTTP/DOCX réel — bannière institutionnelle CSE, sous-titre projet, badge crise, confidentialité auto entretien individuel, quorum CSE calculé (atteint/non atteint), bannière par défaut pour types non thématisés, documents distincts selon le type ;
+- **TestTypeSpecificE2EWizard** : injection de `__TYPE_SPECIFIC_FIELDS__` dans la page wizard, ré-affichage des valeurs saisies, persistance de `type_specific_data` après un re-save du contexte ;
+- **TestRunnerThemeTracking** : helper `_docx_theme_info` du runner E2E (cf. `--output-json`) — résolution du thème, badge, champs type-spécifiques remplis, robustesse si `meeting_type` absent.
 
 ```bash
-python -m pytest tests/test_e2e_structured_data.py -v   # 36 tests, ~3s, sans GPU
+python -m pytest tests/test_e2e_structured_data.py -v   # 53 tests, ~5s, sans GPU
 ```
 
 `tests/test_stt.py` et `tests/test_workflow_runner.py` couvrent aussi le biasing STT expérimental depuis le lexique : hotwords Whisper bornés, activation uniquement quand le backend effectif est Whisper, audit dans `metadata/whisper_hotwords.json` ; sélection des formes cibles validées pour le Trie Cohere, sans booster les variantes fautives, et audit dans `metadata/cohere_lexicon_biasing.json`.
@@ -563,6 +566,14 @@ venv/bin/python tests/test_e2e_workflow.py \
     "resolutions_count": 0,
     "has_prochaine_date": true
   },
+  "docx_theme": {
+    "meeting_type": "CSE",
+    "banner_text": "PROCÈS-VERBAL DU COMITÉ SOCIAL ET ÉCONOMIQUE",
+    "cover_badge": "CSE",
+    "is_default_theme": false,
+    "type_specific_fields_filled": ["membres_presents", "membres_total", "president_seance"],
+    "type_specific_count": 3
+  },
   "job_id": "abc123",
   "job_dir": "/home/admin_ia/transcria/jobs/abc123"
 }
@@ -577,6 +588,12 @@ avant-pipeline, après-pipeline).
 `stt_backend` est la valeur demandée au lancement. `effective_stt_backend` et
 `transcription_metadata.backend` sont les valeurs à utiliser pour analyser les
 résultats, car elles reflètent le backend réellement utilisé par le pipeline.
+
+Le champ `docx_theme` reflète le rendu DOCX par type de réunion :
+- `banner_text` / `cover_badge` : thème visuel résolu pour `meeting_type` (cf. `_DocxTheme` dans `transcria/exports/docx_report.py`) ;
+- `is_default_theme` : `true` si le type n'a pas de thème dédié (rendu TranscrIA historique) ;
+- `type_specific_fields_filled` : clés des champs type-spécifiques effectivement remplis (président CSE, nom projet, etc.) ;
+- `type_specific_count` : nombre de ces champs. Permet de vérifier en bench que le bon thème et les bons champs sont sélectionnés sans ouvrir le `.docx`.
 
 ---
 
@@ -606,6 +623,7 @@ résultats, car elles reflètent le backend réellement utilisé par le pipeline
 | `exports/rapport_*.docx` | Toujours (généré et inclus dans le ZIP par `PackageBuilder`) |
 | `context/meeting_context.json` → `structured_data` | Si phase résumé LLM active (absent si `--skip-llm`) |
 | `context/meeting_context.json` → `structured_data_parse_status` | Toujours après résumé LLM (`ok` / `partial` / `failed` / `missing`) |
+| `context/meeting_context.json` → `type_specific_data` | Si l'utilisateur a rempli des champs propres au type (président CSE, nom projet…) ; le DOCX applique alors le thème du type et affiche ces champs |
 
 ### Artefacts optionnels (selon config et pipeline)
 
