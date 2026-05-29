@@ -33,10 +33,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check transcria/ --line-length 140 --select E,W,F,I
+        run: ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
 
       - name: Type check (mypy)
-        run: mypy transcria/ --ignore-missing-imports
+        run: mypy transcria/ inference_service/ --ignore-missing-imports
 
       - name: Run test suite with coverage
         run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing --cov-fail-under=65
