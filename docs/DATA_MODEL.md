@@ -480,13 +480,34 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
   "speaker_count_llm": 3,
   "speaker_count_pyannote": 4,
   "mots_cles": "budget, EBITDA, CA, pipeline",
-  "summary_llm": "# Résumé de contrôle\n..."
+  "summary_llm": "# Résumé de contrôle\n...",
+  "structured_data": {
+    "decisions": ["Budget Q1 validé"],
+    "actions": ["Marie : diffuser le CR avant vendredi"],
+    "blocages": [],
+    "reports": ["Point RH reporté"],
+    "votes": [],
+    "resolutions": [],
+    "points_odj": [],
+    "prochaine_date": "12/06/2026"
+  },
+  "structured_data_parse_status": "ok",
+  "structured_data_parse_warning": null,
+  "type_specific_data": {
+    "president_seance": "Marie Dupont",
+    "membres_presents": "8",
+    "membres_total": "11"
+  }
 }
 ```
 
 Les champs `title_suggere`, `type_suggere`, etc. sont ajoutés par la LLM après le résumé (Phase 2). Ils sont préservés par `MeetingContextManager.save()` via la liste `llm_fields`.
 
 > Les champs `speaker_roles_llm`, `termes_suspects`, `termes_suspects_parse_status` et `termes_suspects_parse_warning` sont ajoutés par le résumé LLM et figurent dans la liste `llm_fields` de `MeetingContextManager`. Ils sont donc préservés lors de la sauvegarde du formulaire de contexte.
+
+> **`structured_data`** (+ `structured_data_parse_status` / `_warning`) : données structurées extraites par le résumé LLM (section 8b du prompt) — `decisions`, `actions`, `blocages`, `reports`, `votes`, `resolutions`, `points_odj` (listes de chaînes) et `prochaine_date` (chaîne). Parseur tolérant à 3 niveaux : `ok` (JSON valide), `partial` (extraction regex de secours), `failed` (illisible → listes vides, rapport standard), `missing` (section absente). Consommé par le DOCX selon le type de réunion. Préservé dans `llm_fields`.
+
+> **`type_specific_data`** : champs saisis par l'utilisateur selon le type de réunion (clés définies par `TYPE_SPECIFIC_FIELDS`, ex. CSE → `president_seance`/`secretaire_seance`/`membres_presents`/`membres_total`/`ref_pv_precedent`). Repris sur la page de garde et dans le corps du DOCX, et injecté dans `job_context.yaml` (`meeting.type_specific`) pour la correction LLM. Préservé dans `llm_fields` (l'utilisateur peut re-sauvegarder le contexte sans le perdre).
 
 ### speaker_mapping.json
 

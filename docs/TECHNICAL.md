@@ -772,11 +772,13 @@ Constantes de module : `_DEFAULT_MODEL_ID` (repo HF), `_DEFAULT_NEMO_FILE` (nom 
 | Méthode | Description |
 |---|---|
 | `get(job, jobs_dir)` | Charge le contexte ou retourne default_context() |
-| `save(job, jobs_dir, context_data)` | Merge avec existing en préservant les champs LLM (summary_llm, title_suggere, etc.) |
+| `save(job, jobs_dir, context_data)` | Merge avec existing en préservant les champs LLM (summary_llm, title_suggere, structured_data, type_specific_data, etc.) |
 | `auto_suggest(job, jobs_dir)` | Suggestions basées sur le résumé |
 | `default_context()` | Valeurs par défaut (language="fr", meeting_type="Réunion interne", sensitivity="normal") |
 
-`MEETING_TYPES` : Réunion interne, Réunion projet, Réunion technique, Formation, Réunion médicale / santé, RH, Entretien, Autre
+`MEETING_TYPES` (18) : Réunion interne, Réunion projet, Réunion technique, Formation, Réunion médicale / santé, RH, Entretien, CSE, CSE extraordinaire, CODIR / COMEX, Réunion client, Point projet, Réunion de crise, Séminaire / atelier, Négociation, Entretien individuel, Podcast / média, Autre
+
+`TYPE_SPECIFIC_FIELDS` : dict `{type → [{key, label, type}]}` définissant les champs supplémentaires affichés dans le wizard selon le type choisi (ex. CSE → président/secrétaire/quorum, Point projet → nom_projet/sprint). Source unique de vérité partagée par le JS du wizard, l'API de sauvegarde et le rendu DOCX. Les valeurs saisies sont stockées dans `meeting_context.json` → `type_specific_data` et injectées dans `job_context.yaml` (`meeting.type_specific`) pour la correction LLM.
 
 **`participants.py` — `ParticipantsManager`**
 | Méthode | Description |
@@ -883,15 +885,22 @@ rapport_<titre>.docx                     # rapport Word généré automatiquemen
 
 **`docx_report.py` — `DocxReport` / `generate_docx_report()`**
 
-Génère un rapport Word professionnel à partir des artefacts JSON d'un job terminé. Endpoint : `GET /api/jobs/<id>/download/docx`. Mis en cache dans `exports/rapport_<titre>.docx` et inclus automatiquement dans le ZIP.
+Génère un rapport Word professionnel **adapté au type de réunion** à partir des artefacts JSON d'un job terminé. Endpoint : `GET /api/jobs/<id>/download/docx`. Mis en cache dans `exports/rapport_<titre>.docx` et inclus automatiquement dans le ZIP. Module exclu de mypy (python-docx n'a pas de stubs).
 
-| Section | Source |
-|---|---|
-| Page de garde (titre, type, date, service, score) | `meeting_context.json` + `quality_report.json` |
-| Contexte (sujet, objectif, synthèse validée) | `meeting_context.json` → champ `summary` |
-| Participants (nom, fonction, temps de parole %) | `participants.json` + `speaker_stats.json` |
-| Transcription (timestamp, locuteur, texte) | `metadata/transcription_corrigee.srt` |
-| Points à vérifier (conditionnel) | `quality_report.json` — coverage faible, zones audio, termes |
+| Section | Source | Condition |
+|---|---|---|
+| Page de garde (bannière+badge selon thème, titre, métadonnées, quorum CSE) | `meeting_context.json` + `quality_report.json` | Toujours |
+| Contexte (sujet, objectif, synthèse validée) | `meeting_context.json` → champ `summary` | Toujours |
+| Champs type-spécifiques (président CSE, nom projet…) | `meeting_context.json` → `type_specific_data` | Si champs remplis |
+| Sections enrichies (décisions, actions, votes, résolutions, ODJ…) | `meeting_context.json` → `structured_data` | Selon type + données non vides |
+| Participants (nom, fonction, temps de parole %) | `participants.json` + `speaker_stats.json` | Toujours |
+| Transcription (timestamp, locuteur, texte) | `metadata/transcription_corrigee.srt` | Toujours |
+| Points à vérifier (conditionnel) | `quality_report.json` — coverage faible, zones audio, termes | Si flags qualité |
+
+**Adaptation au type — trois couches** :
+1. **Extraction structurée** : le résumé LLM (prompt section 8b) produit un bloc JSON `structured_data` parsé par `OpenCodeRunner._parse_structured_data()` avec 3 niveaux de repli (`ok`/`partial`/`failed`/`missing`) ; échec → rapport standard sans crash.
+2. **Routing des sections** : `_ACTION_TYPES`, `_BLOCAGE_TYPES`, `_CSE_TYPES` déterminent quelles sections enrichies apparaissent. Numérotation dynamique des sections.
+3. **Thèmes visuels** : `_DocxTheme` (dataclass) + `_THEMES` dict associent une palette (primary/accent/light), une bannière et un badge à chaque type. `_get_theme(meeting_type)` retourne le thème ou `_THEME_DEFAULT`. Quorum CSE calculé automatiquement, confidentialité auto pour Entretien individuel/RH/Médical.
 
 Spec détaillée : [docs/FEATURE_DOCX_REPORT.md](FEATURE_DOCX_REPORT.md).
 

@@ -136,7 +136,7 @@ transcria/
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
     context/
-      meeting_context.py    # MeetingContextManager
+      meeting_context.py    # MeetingContextManager + MEETING_TYPES (18 types) + TYPE_SPECIFIC_FIELDS (champs par type)
       participants.py       # ParticipantsManager
       lexicon.py            # LexiconManager (20 catégories, variants, contexts)
       central_lexicon_models.py # Modèles SQLAlchemy lexiques centralisés par groupe
@@ -152,7 +152,9 @@ transcria/
       review_points.py      # Points de relecture
     exports/
       package_builder.py    # PackageBuilder — ZIP final (inclut le rapport DOCX)
-      docx_report.py        # DocxReport — rapport Word professionnel (page de garde, participants, transcription, qualité)
+      docx_report.py        # DocxReport — rapport Word pro adapté au type : extraction structurée (décisions/actions/votes…),
+                            #   champs type-spécifiques, thèmes visuels par type (_DocxTheme), quorum CSE auto.
+                            #   generate_docx_report(job_id, jobs_dir, output_path). Exclu de mypy (python-docx sans stubs).
     integrations/
       dashboard_client.py   # DashboardClient (port 5001)
       srt_editor_link.py    # SrtEditorLink (port 7861)

@@ -13,7 +13,7 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, export CSV `POST` audité, restriction optionnelle aux admins globaux, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, signaux RGPD/PSSI, contrôles qualité et filtrage du lexique avant correction. Les tests vérifient que les audits lexiques ne stockent pas les termes en clair.
 
-`tests/test_e2e_structured_data.py` couvre le pipeline complet d'extraction de données structurées, des champs type-spécifiques et des thèmes visuels DOCX **sans GPU réel** : 53 tests pytest automatisés répartis en 11 classes —
+`tests/test_e2e_structured_data.py` couvre le pipeline complet d'extraction de données structurées, des champs type-spécifiques et des thèmes visuels DOCX **sans GPU réel** : 54 tests pytest automatisés répartis en 11 classes —
 - **TestParserToContext** : parsing LLM (`_parse_structured_summary`) → stockage dans `meeting_context.json` via `_apply_llm_suggestions`, 3 niveaux de fallback (ok / partial / failed / missing) ;
 - **TestDocxTypeRouting** : routing des sections DOCX par type de réunion (CSE, CODIR, Point projet, Réunion de crise, Podcast, Entretien individuel) ;
 - **TestSectionNumbering** : numérotation dynamique des sections selon le nombre de blocs enrichis ;
@@ -27,7 +27,7 @@ applicatif. Il est conçu pour deux usages :
 - **TestRunnerThemeTracking** : helper `_docx_theme_info` du runner E2E (cf. `--output-json`) — résolution du thème, badge, champs type-spécifiques remplis, robustesse si `meeting_type` absent.
 
 ```bash
-python -m pytest tests/test_e2e_structured_data.py -v   # 53 tests, ~5s, sans GPU
+python -m pytest tests/test_e2e_structured_data.py -v   # 54 tests, ~5s, sans GPU
 ```
 
 `tests/test_stt.py` et `tests/test_workflow_runner.py` couvrent aussi le biasing STT expérimental depuis le lexique : hotwords Whisper bornés, activation uniquement quand le backend effectif est Whisper, audit dans `metadata/whisper_hotwords.json` ; sélection des formes cibles validées pour le Trie Cohere, sans booster les variantes fautives, et audit dans `metadata/cohere_lexicon_biasing.json`.

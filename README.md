@@ -26,8 +26,11 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 - **Piste d'audit RGPD** : enregistrement de chaque action sensible (login/logout, accès/téléchargement/suppression de job, modifications lexique, gestion des voix, édition config, gestion users/groupes, opérations de planification) avec acteur, IP, user-agent et timestamp. Filtrable par acteur, action, période et cible. Exportable.
 - **Voix enregistrées avec consentement** : référentiel admin/admin groupe, formulaire PDF vierge, preuve signée hashée, empreinte vocale locale, suppression de l'audio source par défaut et suggestions de matching validées humainement.
 - **Orchestration GPU** : VRAMManager, GPUSession, choix du meilleur GPU libre, CUDA_VISIBLE_DEVICES remapping, cycle STT/pyannote/LLM et nettoyage des backends concurrents.
-- **Rapport Word (.docx)** : document professionnel généré automatiquement en fin de workflow — page de garde avec score qualité, contexte validé par l'utilisateur, tableau participants avec temps de parole, transcription formatée locuteur par locuteur, section "points à vérifier" conditionnelle. Téléchargeable directement ou inclus dans le package ZIP.
-- **Tests et benchmarks** : suite pytest mockée, E2E GPU réel, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
+- **Rapport Word (.docx) adapté au type de réunion** : document professionnel généré automatiquement en fin de workflow, téléchargeable directement ou inclus dans le package ZIP. Trois niveaux d'adaptation au type de réunion :
+  - **Extraction structurée par la LLM** : décisions prises, actions à réaliser, points bloquants, points reportés, votes, résolutions, ordre du jour et prochaine date sont extraits du résumé via un prompt universel et un parseur tolérant (3 niveaux de repli `ok`/`partiel`/`échec`, dégradation gracieuse vers le rapport standard si l'extraction échoue). Affichés dans le document selon le type.
+  - **Champs spécifiques au type** : 18 types de réunion (CSE, CSE extraordinaire, CODIR/COMEX, Point projet, Réunion client, Réunion de crise, Entretien individuel, Formation, Séminaire, Négociation…). Chaque type affiche dans l'interface des champs dédiés (président/secrétaire/quorum CSE, nom de projet/sprint, client/contrat…) repris dans le document et injectés dans le contexte LLM de correction.
+  - **Thèmes visuels par type** : page de garde, titres de section, tableaux et pied de page adoptent une identité de couleur cohérente selon le type (bleu marine institutionnel CSE, teal projet, rouge crise, violet confidentiel…), avec bannière dédiée, badge confidentiel/crise et calcul automatique du quorum CSE.
+- **Tests et benchmarks** : suite pytest mockée (1031+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 
@@ -148,7 +151,7 @@ L'interface est disponible par défaut sur `http://localhost:7870`. Au premier d
 1. **Fichier** : upload audio/video.
 2. **Analyse** : ffprobe, contrôle format, diagnostic audio visible.
 3. **Résumé** : transcription rapide, VAD, diarisation, analyse de scène, résumé LLM si activé.
-4. **Contexte** : titre, type, sujet, objectifs et suggestions LLM.
+4. **Contexte** : titre, type de réunion (18 types), sujet, objectifs et suggestions LLM. Le choix du type fait apparaître des champs spécifiques (président/secrétaire/quorum pour un CSE, nom de projet/sprint pour un point projet, etc.) et conditionne le thème visuel et les sections du rapport Word final.
 5. **Participants & Locuteurs** : validation des locuteurs, extraits audio, genre vocal estimé si disponible.
 6. **Lexique** : termes métier, variantes, priorités, contextes proposés avec écoute audio, import TXT/CSV. Les lexiques centralisés accessibles au job pré-remplissent la session tant qu'un lexique utilisateur n'a pas déjà été sauvegardé.
 7. **Traitement** : prétraitements audio, transcription finale Cohere/Whisper/Granite, correction LLM.
