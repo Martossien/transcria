@@ -34,7 +34,7 @@ from transcria.context.central_lexicon_store import CentralLexiconStore
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
-from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager, TYPE_SPECIFIC_FIELDS
+from transcria.context.meeting_context import MEETING_TYPES, TYPE_SPECIFIC_FIELDS, MeetingContextManager
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
