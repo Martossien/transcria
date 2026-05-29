@@ -297,19 +297,11 @@ def _get_theme(meeting_type: str) -> _DocxTheme:
 
 # ── Routing par type de réunion ──────────────────────────────────────────────
 
-# Types où la section "Actions" est affichée (si données présentes)
-_ACTION_TYPES: frozenset[str] = frozenset({
-    "Réunion interne", "Réunion projet", "Réunion technique",
-    "Formation", "RH", "Point projet", "CODIR / COMEX",
-    "Réunion client", "Réunion de crise", "Séminaire / atelier",
-    "Négociation", "CSE", "CSE extraordinaire",
-})
-# Types où la section "Blocages" est affichée
-_BLOCAGE_TYPES: frozenset[str] = frozenset({
-    "Point projet", "CODIR / COMEX", "Réunion de crise",
-    "Réunion projet", "Réunion technique",
-})
-# Types CSE — votes, résolutions, points ODJ
+# Les sections enrichies (décisions, votes, ODJ…) ne sont PAS filtrées par type :
+# toute donnée extraite par le LLM s'affiche si elle est non vide (cf. _section_enriched).
+# Le type ne pilote que le thème visuel, les champs de saisie et la page de garde.
+
+# Types CSE — quorum + sous-titre objet de séance sur la page de garde
 _CSE_TYPES: frozenset[str] = frozenset({"CSE", "CSE extraordinaire"})
 # Types auto-confidentiels
 _AUTO_CONFIDENTIEL: frozenset[str] = frozenset({"Entretien individuel", "RH", "Réunion médicale / santé"})
@@ -829,47 +821,33 @@ class DocxReport:
     # ── Section 1c : Données enrichies LLM (décisions, actions, votes…) ─────────
 
     def _section_enriched(self, doc: Document) -> None:
-        """Sections conditionnelles issues de l'extraction LLM structurée.
+        """Sections issues de l'extraction LLM structurée.
 
-        Chaque bloc n'apparaît que si :
-          - les données sont non vides
-          - le type de réunion est compatible
-        L'absence totale est silencieuse — aucun placeholder n'est affiché.
+        Principe : **une donnée extraite n'est jamais cachée**. Toute section
+        s'affiche dès qu'elle contient des éléments, quel que soit le type de
+        réunion. Le type pilote uniquement le thème visuel et les champs de
+        saisie (`type_specific_data`), pas la rétention du contenu extrait.
+
+        Ordre fixe inspiré d'un procès-verbal : agenda → décisions → votes →
+        résolutions → actions → blocages → reports. L'absence totale est
+        silencieuse (aucun placeholder).
         """
         sd = self.structured_data
-        mt = self.meeting_type
         section_num = 2  # numéro de section courant avant Participants
 
-        # Ajustement du numéro : les sections enrichies poussent les suivantes
-        # On garde un compteur local pour nommer proprement
-        shown: list[tuple[str, list[str]]] = []
-
-        # Ordre du jour — CSE en tête (structure d'un PV : agenda d'abord)
-        if mt in _CSE_TYPES and sd.get("points_odj"):
-            shown.append(("Ordre du jour", sd["points_odj"]))
-
-        # Décisions — universelles si présentes
-        if sd.get("decisions"):
-            shown.append(("Décisions prises", sd["decisions"]))
-
-        # Actions — types où un suivi d'actions a du sens (cf. _ACTION_TYPES)
-        if sd.get("actions") and mt in _ACTION_TYPES:
-            shown.append(("Actions à réaliser", sd["actions"]))
-
-        # Blocages — types projet/crise
-        if sd.get("blocages") and mt in _BLOCAGE_TYPES:
-            shown.append(("Points bloquants", sd["blocages"]))
-
-        # Points reportés
-        if sd.get("reports"):
-            shown.append(("Points reportés", sd["reports"]))
-
-        # Votes et résolutions — CSE uniquement (après l'ODJ et les décisions)
-        if mt in _CSE_TYPES:
-            if sd.get("votes"):
-                shown.append(("Votes", sd["votes"]))
-            if sd.get("resolutions"):
-                shown.append(("Résolutions adoptées", sd["resolutions"]))
+        # (label, items) dans l'ordre PV — chaque section affichée si non vide
+        ordered = [
+            ("Ordre du jour",        sd.get("points_odj")),
+            ("Décisions prises",     sd.get("decisions")),
+            ("Votes",                sd.get("votes")),
+            ("Résolutions adoptées", sd.get("resolutions")),
+            ("Actions à réaliser",   sd.get("actions")),
+            ("Points bloquants",     sd.get("blocages")),
+            ("Points reportés",      sd.get("reports")),
+        ]
+        shown: list[tuple[str, list[str]]] = [
+            (label, items) for label, items in ordered if items
+        ]
 
         if not shown:
             return 0

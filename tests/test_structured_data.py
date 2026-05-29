@@ -196,7 +196,8 @@ def test_docx_avec_decisions_affiche_section():
     assert "Budget approuvé" in full
 
 
-def test_docx_actions_absent_pour_podcast():
+def test_docx_actions_affichees_si_presentes():
+    """Toute donnée extraite non vide s'affiche, quel que soit le type."""
     pytest.importorskip("docx")
     from docx import Document
     from transcria.exports.docx_report import DocxReport
@@ -211,8 +212,8 @@ def test_docx_actions_absent_pour_podcast():
     doc.save(buf)
     buf.seek(0)
     loaded = Document(buf)
-    full = "\n".join(p.text for p in loaded.paragraphs)
-    assert "Actions" not in full
+    full = "\n".join(p.text for p in loaded.paragraphs).upper()
+    assert "ACTIONS À RÉALISER" in full
 
 
 def test_docx_votes_present_pour_cse():
@@ -236,7 +237,9 @@ def test_docx_votes_present_pour_cse():
     assert "RÉSOLUTIONS" in full.upper()
 
 
-def test_docx_votes_absent_pour_reunion_interne():
+def test_docx_votes_affiches_hors_cse():
+    """Régression mairie : des votes extraits doivent s'afficher même si le type
+    n'est pas CSE (conseil municipal, AG, copropriété…)."""
     pytest.importorskip("docx")
     from docx import Document
     from transcria.exports.docx_report import DocxReport
@@ -252,8 +255,8 @@ def test_docx_votes_absent_pour_reunion_interne():
     doc.save(buf)
     buf.seek(0)
     loaded = Document(buf)
-    full = "\n".join(p.text for p in loaded.paragraphs)
-    assert "Votes" not in full
+    full = "\n".join(p.text for p in loaded.paragraphs).upper()
+    assert "VOTES" in full
 
 
 def test_docx_numerotation_sections_avec_enrichissement():

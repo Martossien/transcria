@@ -899,8 +899,8 @@ Génère un rapport Word professionnel **adapté au type de réunion** à partir
 
 **Adaptation au type — trois couches** :
 1. **Extraction structurée** : le résumé LLM (prompt section 8b) produit un bloc JSON `structured_data` parsé par `OpenCodeRunner._parse_structured_data()` avec 3 niveaux de repli (`ok`/`partial`/`failed`/`missing`) ; échec → rapport standard sans crash.
-2. **Routing des sections** : `_ACTION_TYPES`, `_BLOCAGE_TYPES`, `_CSE_TYPES` déterminent quelles sections enrichies apparaissent. Numérotation dynamique des sections.
-3. **Thèmes visuels** : `_DocxTheme` (dataclass) + `_THEMES` dict associent une palette (primary/accent/light), une bannière et un badge à chaque type. `_get_theme(meeting_type)` retourne le thème ou `_THEME_DEFAULT`. Quorum CSE calculé automatiquement, confidentialité auto pour Entretien individuel/RH/Médical.
+2. **Affichage des sections enrichies** : règle « une donnée extraite n'est jamais cachée ». Toute section (`points_odj`, `decisions`, `votes`, `resolutions`, `actions`, `blocages`, `reports`) s'affiche dès qu'elle est non vide, **quel que soit le type** — le type ne filtre pas la rétention du contenu. Ordre fixe type-PV (agenda → décisions → votes → résolutions → actions → blocages → reports). Numérotation dynamique des sections. *(Décision validée par un run réel sur conseil municipal : des votes extraits ne doivent pas être jetés faute de type CSE.)*
+3. **Thèmes visuels** : `_DocxTheme` (dataclass) + `_THEMES` dict associent une palette (primary/accent/light), une bannière et un badge à chaque type. `_get_theme(meeting_type)` retourne le thème ou `_THEME_DEFAULT`. `_CSE_TYPES` pilote le quorum + sous-titre objet de séance sur la page de garde ; `_AUTO_CONFIDENTIEL` (Entretien individuel/RH/Médical) force la confidentialité.
 
 Spec détaillée : [docs/FEATURE_DOCX_REPORT.md](FEATURE_DOCX_REPORT.md).
 

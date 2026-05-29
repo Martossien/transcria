@@ -267,15 +267,16 @@ class TestDocxTypeRouting:
         loaded = Document(buf)
         return "\n".join(p.text for p in loaded.paragraphs).upper()
 
-    def test_reunion_interne_affiche_decisions_et_actions(self):
+    def test_reunion_interne_affiche_decisions_actions_blocages(self):
+        """Règle : toute donnée extraite non vide s'affiche, quel que soit le type."""
         full = self._build_doc("Réunion interne", _SD_COMPLET)
         assert "DÉCISIONS" in full
-        assert "ACTIONS" in full
-        assert "BLOCAGES" not in full  # blocages non dans _BLOCAGE_TYPES pour Réunion interne
+        assert "ACTIONS À RÉALISER" in full
+        assert "POINTS BLOQUANTS" in full  # blocages non vides → affichés même hors projet
 
     def test_point_projet_affiche_blocages(self):
         full = self._build_doc("Point projet", _SD_COMPLET)
-        assert "POINTS BLOQUANTS" in full  # libellé affiché dans le DOCX
+        assert "POINTS BLOQUANTS" in full
 
     def test_cse_affiche_votes_resolutions_odj(self):
         full = self._build_doc("CSE", _SD_CSE)
@@ -283,29 +284,32 @@ class TestDocxTypeRouting:
         assert "RÉSOLUTIONS" in full
         assert "ORDRE DU JOUR" in full
 
-    def test_reunion_interne_masque_votes_meme_si_presents(self):
+    def test_reunion_interne_affiche_votes_si_presents(self):
+        """Régression mairie : des votes extraits ne doivent jamais être cachés
+        sous prétexte que le type n'est pas CSE (conseil municipal, AG, copro…)."""
         full = self._build_doc("Réunion interne", _SD_CSE)
-        assert "VOTES" not in full
-        assert "RÉSOLUTIONS" not in full
+        assert "VOTES" in full
+        assert "RÉSOLUTIONS" in full
+        assert "ORDRE DU JOUR" in full
 
-    def test_podcast_masque_actions(self):
+    def test_podcast_affiche_actions_si_presentes(self):
+        """Plus de filtrage par type : si le LLM a extrait des actions, on les montre."""
         full = self._build_doc("Podcast / média", _SD_COMPLET)
-        assert "ACTIONS" not in full
-
-    def test_entretien_individuel_masque_actions(self):
-        """Régression : actions routées par _ACTION_TYPES, pas par 'tous sauf podcast'.
-        Un entretien individuel ne doit pas afficher 'Actions à réaliser'."""
-        full = self._build_doc("Entretien individuel", _SD_COMPLET)
-        assert "ACTIONS À RÉALISER" not in full
-
-    def test_reunion_medicale_masque_actions(self):
-        full = self._build_doc("Réunion médicale / santé", _SD_COMPLET)
-        assert "ACTIONS À RÉALISER" not in full
+        assert "ACTIONS À RÉALISER" in full
 
     def test_point_projet_affiche_actions(self):
-        """Point projet est dans _ACTION_TYPES → actions visibles."""
         full = self._build_doc("Point projet", _SD_COMPLET)
         assert "ACTIONS À RÉALISER" in full
+
+    def test_sections_vides_jamais_affichees(self):
+        """Une section dont la liste est vide ne doit pas apparaître."""
+        sd_vide = {k: [] if k != "prochaine_date" else "" for k in _SD_COMPLET}
+        sd_vide["decisions"] = ["Une seule décision"]
+        full = self._build_doc("Réunion interne", sd_vide)
+        assert "DÉCISIONS" in full
+        assert "VOTES" not in full
+        assert "ACTIONS À RÉALISER" not in full
+        assert "POINTS BLOQUANTS" not in full
 
     def test_cse_ordre_du_jour_avant_votes(self):
         """L'ordre du jour doit précéder les votes dans le PV CSE."""

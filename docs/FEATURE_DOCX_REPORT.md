@@ -599,27 +599,34 @@ Réponds UNIQUEMENT en JSON valide. Si un élément est absent ou incertain, ret
 
 #### Sélection des sections dans le DOCX
 
-Le DOCX affiche une section uniquement si **deux conditions** sont remplies :
-1. Les données correspondantes sont **non vides** dans `structured_data`
-2. Le **type de réunion** rend cette section pertinente
+> **Décision révisée (2026-05-29, après un run réel sur conseil municipal) :**
+> on ne filtre **plus** les sections par type. Une donnée extraite n'est jamais
+> cachée. La conception initiale (votes réservés au CSE, actions à certains types)
+> jetait des votes légitimes extraits d'une réunion de mairie classée « Réunion
+> interne ». Beaucoup de réunions délibératives (conseil municipal, AG,
+> copropriété, CA) ont des votes sans être des CSE.
+
+Règle effective : une section s'affiche **dès que sa liste est non vide**, quel
+que soit le type de réunion. Ordre fixe type-PV.
 
 ```python
-# Exemple de logique dans DocxReport
-if structured_data.get("actions") and meeting_type in ACTION_TYPES:
-    self._section_actions(doc, structured_data["actions"])
-
-if structured_data.get("votes") and meeting_type in ("cse", "cse_extraordinaire"):
-    self._section_votes(doc, structured_data["votes"])
-
-# Certaines sections s'affichent pour tous les types si non vides
-if structured_data.get("decisions"):
-    self._section_decisions(doc, structured_data["decisions"])
+# Logique réelle dans DocxReport._section_enriched
+ordered = [
+    ("Ordre du jour",        sd.get("points_odj")),
+    ("Décisions prises",     sd.get("decisions")),
+    ("Votes",                sd.get("votes")),
+    ("Résolutions adoptées", sd.get("resolutions")),
+    ("Actions à réaliser",   sd.get("actions")),
+    ("Points bloquants",     sd.get("blocages")),
+    ("Points reportés",      sd.get("reports")),
+]
+shown = [(label, items) for label, items in ordered if items]
 ```
 
-Constantes dans le code :
-```python
-ACTION_TYPES = {"point_projet", "codir", "reunion_client", "crise", "seminaire"}
-```
+Le type de réunion ne pilote que **le thème visuel** (`_THEMES`), **les champs de
+saisie** (`TYPE_SPECIFIC_FIELDS`) et **la page de garde** (`_CSE_TYPES` pour le
+quorum, `_AUTO_CONFIDENTIEL` pour la confidentialité). Il ne contrôle jamais la
+rétention du contenu extrait.
 
 ---
 
