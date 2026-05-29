@@ -416,8 +416,9 @@ Aucune modification des modèles de données existants requise.
 ## 11. Évolutions — Système de templates (v2, en discussion)
 
 > **Statut :** Discussion en cours — 2026-05-29  
-> Ce chapitre capture les réflexions et décisions de conception avant implémentation.  
-> Il sera mis à jour au fil des échanges et des décisions arrêtées.
+> Ce chapitre capture les réflexions et les décisions de conception avant implémentation.  
+> Les décisions arrêtées sont marquées ✅. Les points encore ouverts sont marqués ❓.  
+> Il sera mis à jour au fil des échanges.
 
 ---
 
@@ -429,84 +430,177 @@ Cohérent avec le modèle d'accès existant (lexiques centralisés, voix enregis
 
 ---
 
-### 11.2 Architecture en 3 couches — à aligner par type de réunion
+### 11.2 Architecture en 3 couches — contrainte de timing ✅
 
-Le système de templates est en réalité **3 couches interconnectées** qui doivent être cohérentes :
+Le système de templates est en réalité **3 couches interconnectées** qui doivent être cohérentes. Mais elles ne s'activent **pas au même moment du workflow** :
+
+```
+Étape 3 — Résumé LLM   ← type de réunion INCONNU à ce stade
+Étape 4 — Contexte     ← l'utilisateur valide ou choisit le type
+...
+Étape 9 — Export DOCX  ← type de réunion CONNU, on peut router
+```
 
 ```
 Type de réunion
     │
-    ├── Couche 1 : Prompt template
-    │     Ce qu'on demande à la LLM d'extraire pendant le résumé
-    │     (décisions prises, actions à faire, votes, ODJ...)
-    │     → enrichit meeting_context.json avec des champs structurés
+    ├── Couche 1 : Extraction LLM  ← Étape 3, AVANT que le type soit connu
+    │     Prompt UNIVERSEL — extrait TOUT ce qui pourrait être utile
+    │     (décisions, actions, votes, blocages, ODJ...)
+    │     → stocké dans meeting_context.json → structured_data
+    │     → le type de réunion N'influence PAS ce prompt
     │
-    ├── Couche 2 : Structure DOCX
-    │     Les sections qui apparaissent dans le document final
-    │     (tableau votes pour CSE, bloc actions SMART pour CODIR...)
-    │     → définit quelles sections existent et dans quel ordre
+    ├── Couche 2 : Structure DOCX  ← Étape 9, APRÈS validation du type
+    │     Sections affichées selon le type validé ET les données présentes
+    │     (votes CSE → section votes si votes détectés ET type=cse)
+    │     → double condition : données non vides + type compatible
     │
-    └── Couche 3 : Visual template
-          Styles, couleurs, logo de l'organisation
+    └── Couche 3 : Visual template ← Étape 9, même moment
+          Styles, couleurs, logo selon le template associé au type
           → le .docx de base avec la mise en forme
 ```
 
-**Règle clé :** changer le type de réunion doit changer les 3 couches ensemble. Elles sont liées par le `meeting_type`.
+**Règle clé :** la couche 1 est invariante (un seul prompt pour tous). Les couches 2 et 3 sont routées par `meeting_type` au moment de la génération DOCX.
+
+**Conséquence heureuse :** si l'utilisateur change le type de réunion en étape 4, les données extraites restent valides — seul le rendu DOCX change. Il n'y a pas besoin de relancer le LLM.
 
 ---
 
-### 11.3 Types de réunion — liste élargie (en discussion)
+### 11.3 Types de réunion — liste élargie ✅ (liste fixe dans le code)
 
-La liste actuelle dans le code : `Réunion interne | Réunion projet | Réunion technique | Formation | Réunion médicale / santé | RH | Entretien | Autre`
+**Décision :** liste fixe dans le code. Les types sont des constantes versionnées dans git, avec leur prompt et leur structure DOCX associés. L'extensibilité par l'admin est reportée en v3 si le besoin se confirme.
 
-Proposition d'extension :
+Liste actuelle : `Réunion interne | Réunion projet | Réunion technique | Formation | Réunion médicale / santé | RH | Entretien | Autre`
 
-| Type | Spécificités documentaires | Sections additionnelles |
-|---|---|---|
-| **CSE** | Document légal — PV, délais légaux, mentions obligatoires | ODJ numéroté, votes (pour/contre/abstention), résolutions adoptées, questions élus / réponses direction |
-| **CSE extraordinaire** | Même structure que CSE, objet unique | Section "Objet de la réunion extraordinaire" en tête |
-| **CODIR / COMEX** | Décisions stratégiques, KPIs, arbitrages | Décisions, indicateurs clés, responsables nommés, points escalade |
-| **Réunion client** | Engagements et suivi | Engagements pris, prochaines étapes, contacts référents |
-| **Point projet** | Actions SMART | Avancement, blocages, actions (qui/quoi/quand/priorité) |
-| **Réunion de crise** | Urgence et responsabilité | Timeline, causes identifiées, actions correctives, responsable par action |
-| **Séminaire / atelier** | Livrables et groupes de travail | Livrables attendus, groupes, restitutions |
-| **Négociation** | Positions et accord | Positions initiales, concessions, accord final ou point de rupture |
-| **1-to-1 / entretien individuel** | RH — confidentiel automatique | Objectifs, retours, plan de développement personnel |
-| **Podcast / média** | Pas de participants institutionnels | Transcription prioritaire, pas de tableau participants |
+**Extension v2 proposée :**
 
-**Questions ouvertes :**
-- La liste de types est-elle fixe dans le code ou extensible par l'admin (clé + libellé) ?
-- Un admin de groupe peut-il créer un type spécifique à son groupe ?
+| Clé code | Libellé UI | Sections DOCX spécifiques activées | Sensibilité auto |
+|---|---|---|---|
+| `cse` | CSE | ODJ numéroté, votes, résolutions, questions élus | Non |
+| `cse_extra` | CSE extraordinaire | Objet de la séance, votes, résolutions | Non |
+| `codir` | CODIR / COMEX | Décisions stratégiques, actions, points escalade | Non |
+| `reunion_client` | Réunion client | Engagements pris, prochaines étapes | Non |
+| `point_projet` | Point projet | Actions (qui/quoi/quand), blocages, reportés | Non |
+| `crise` | Réunion de crise | Timeline, causes, actions correctives | Non |
+| `seminaire` | Séminaire / atelier | Livrables, groupes de travail, restitutions | Non |
+| `negociation` | Négociation | Positions, concessions, accord/rupture | Non |
+| `entretien_individuel` | Entretien individuel | Objectifs, retours, plan de développement | `high` auto |
+| `podcast` | Podcast / média | Transcription prioritaire, pas de tableau participants | Non |
+
+**Sections universelles** (affichées pour tous les types si données présentes) : `decisions`, `actions`, `prochaine_date`.
+
+**Types existants conservés :** `reunion_interne`, `reunion_projet`, `reunion_technique`, `formation`, `medical`, `rh`, `entretien`, `autre` — comportement inchangé (= template par défaut v1).
 
 ---
 
-### 11.4 Prompt template enrichi par type de réunion
+### 11.4 Prompt d'extraction universel — décisions d'architecture ✅
 
-Chaque type de réunion ajoute des instructions au prompt de résumé LLM (`run_summary`).
+#### Principe : un seul prompt, format volontairement simple
 
-Exemples :
+Le LLM est intrinsèquement variable dans ses réponses. La codebase en a fait l'expérience avec `termes_suspects` : plus le format attendu est complexe (objets imbriqués, clés multiples), plus le parseur casse. La règle arrêtée est donc :
 
-**Point projet :**
+> **Des listes de chaînes simples, pas des objets imbriqués.**
+
 ```
-Extrais les éléments suivants et structure-les en JSON :
-- decisions: liste des décisions prises (texte libre)
-- actions: liste [{responsable, action, delai, priorite: haute|normale|basse}]
-- blocages: liste des points bloquants
-- reports: liste des points reportés à la prochaine réunion
-- prochaine_date: date proposée si mentionnée
-```
+❌ Complexe et fragile
+"actions": [
+  {"responsable": "Alice", "action": "Préparer le budget",
+   "délai": "15 juin", "priorité": "haute"}
+]
 
-**CSE :**
-```
-Extrais les éléments suivants et structure-les en JSON :
-- odj_points: liste [{numero, titre, resume_discussion}]
-- votes: liste [{sujet, pour, contre, abstentions, resultat: adopte|rejete|reporte}]
-- resolutions: liste des résolutions adoptées
-- questions_elus: liste [{question, reponse_direction}]
-- prochaine_seance: date si mentionnée
+✅ Simple et robuste
+"actions": [
+  "Alice : Préparer le budget pour le 15 juin",
+  "Bob : Valider le planning avant vendredi"
+]
 ```
 
-Ces données extraites viendraient enrichir `meeting_context.json` avec un champ `structured_data` et seraient injectées dans le DOCX comme nouvelles sections selon le template du type.
+Le LLM est beaucoup plus stable sur des listes de phrases que sur des objets avec des clés précises. Dans le DOCX, les listes se rendent très bien en bullet points — pas besoin de tableau pour commencer.
+
+#### Prompt universel (ajout au prompt de résumé existant)
+
+```
+En plus du résumé, extrais les éléments suivants SI présents dans la transcription.
+Réponds UNIQUEMENT en JSON valide. Si un élément est absent ou incertain, retourne [].
+
+{
+  "decisions":      ["texte de la décision 1", "texte de la décision 2"],
+  "actions":        ["Responsable : action à faire (délai si mentionné)", ...],
+  "blocages":       ["description du point bloquant", ...],
+  "reports":        ["sujet reporté à une prochaine réunion", ...],
+  "votes":          ["Sujet : X pour, Y contre, Z abstentions — résultat", ...],
+  "resolutions":    ["texte de la résolution adoptée", ...],
+  "points_odj":     ["N. Titre du point — résumé en une phrase", ...],
+  "prochaine_date": "JJ/MM/AAAA ou '' si non mentionnée"
+}
+```
+
+**Champs toujours présents dans le JSON (liste vide si rien détecté) :** assure que le parseur n'a jamais de `KeyError`.
+
+**Stockage :** `meeting_context.json` → champ `structured_data` (dict) + `structured_data_parse_status` (`ok` | `partial` | `failed`) + `structured_data_parse_warning` (string ou null).
+
+#### Sélection des sections dans le DOCX
+
+Le DOCX affiche une section uniquement si **deux conditions** sont remplies :
+1. Les données correspondantes sont **non vides** dans `structured_data`
+2. Le **type de réunion** rend cette section pertinente
+
+```python
+# Exemple de logique dans DocxReport
+if structured_data.get("actions") and meeting_type in ACTION_TYPES:
+    self._section_actions(doc, structured_data["actions"])
+
+if structured_data.get("votes") and meeting_type in ("cse", "cse_extraordinaire"):
+    self._section_votes(doc, structured_data["votes"])
+
+# Certaines sections s'affichent pour tous les types si non vides
+if structured_data.get("decisions"):
+    self._section_decisions(doc, structured_data["decisions"])
+```
+
+Constantes dans le code :
+```python
+ACTION_TYPES = {"point_projet", "codir", "reunion_client", "crise", "seminaire"}
+```
+
+---
+
+### 11.4b Stratégie de robustesse du parseur ✅
+
+Pattern identique à `termes_suspects_parse_status` déjà en production.
+
+#### Pipeline de parsing (3 niveaux de fallback)
+
+```
+Réponse LLM
+      │
+      ▼
+[1] json.loads() strict
+      │ succès → structured_data complet, status = "ok"
+      │ échec ↓
+      ▼
+[2] Extraction regex champ par champ
+      │ (cherche "decisions": [...], "actions": [...] etc. individuellement)
+      │ résultat partiel → status = "partial", warning = "champs manquants: votes, resolutions"
+      │ échec total ↓
+      ▼
+[3] Fallback gracieux
+      structured_data = {} (tous les champs vides)
+      status = "failed"
+      warning = "Extraction impossible — réponse LLM non parseable"
+```
+
+#### Garantie de non-régression
+
+Le workflow **ne plante jamais** à cause de l'extraction. Dans le pire cas (`status = "failed"`), toutes les nouvelles sections sont simplement absentes du DOCX — le document reste identique au comportement actuel de la v1.
+
+```
+status = "ok"      → toutes les sections enrichies disponibles
+status = "partial" → seules les sections parsées sont affichées
+status = "failed"  → document v1 standard sans enrichissement
+```
+
+L'UI (page résultat / page job) peut afficher un badge discret si `status != "ok"` pour informer l'utilisateur sans l'alarmer.
 
 ---
 
@@ -616,24 +710,31 @@ Disponible pour tous les jobs du groupe
 
 ---
 
-### 11.8 Questions de design transverses (à trancher)
+### 11.8 Tableau des décisions — état courant
 
-| Question | Options | Status |
+| Question | Décision | Status |
 |---|---|---|
-| Accès gestion templates | Admin global + admins de groupe uniquement | **✅ Décidé** |
-| Types de réunion | Liste fixe vs extensible par admin | ❓ En discussion |
-| Prompt templates | Dans le code vs en base de données | ❓ En discussion |
-| Portée d'un template | Global / groupe / utilisateur | ❓ En discussion — probablement Global + Groupe |
-| Versionnement DOCX en mode chat | En place vs versions numérotées | ❓ En discussion |
+| Accès gestion templates | Admin global + admins de groupe uniquement | ✅ Arrêté |
+| Types de réunion | Liste fixe dans le code, élargie à 10 nouveaux types | ✅ Arrêté |
+| Prompt templates | Fichiers dans `configs/prompts/` — un seul prompt universel | ✅ Arrêté |
+| Format réponse LLM | Listes de strings simples, pas d'objets imbriqués | ✅ Arrêté |
+| Timing prompt / type | Prompt universel en étape 3, routage DOCX en étape 9 | ✅ Arrêté |
+| Robustesse parseur | 3 niveaux de fallback + parse_status + dégradation gracieuse | ✅ Arrêté |
+| Portée d'un template | Global ou groupe (pas utilisateur individuel) | ✅ Arrêté |
+| Versionnement DOCX mode chat | En place vs versions numérotées | ❓ En discussion |
 | Format entrée "apprendre depuis CR" | DOCX seul vs DOCX + PDF | ❓ En discussion |
-| Nombre de types de réunion à couvrir en v2 | Tous ou prioriser CSE + CODIR d'abord | ❓ En discussion |
+| Sections universelles vs par type | `decisions` + `actions` + `prochaine_date` pour tous | ✅ Arrêté |
+| Comportement si parse échoue | Document v1 standard sans enrichissement — pas d'erreur | ✅ Arrêté |
 
 ---
 
 ### 11.9 Priorité de livraison suggérée (v2)
 
-1. **Menu gestion templates** (admin) — structure de base, import DOCX custom, association type de réunion
-2. **Types de réunion étendus** dans le dropdown + **prompts enrichis** pour extraire décisions/actions
-3. **Templates CSE et CODIR** — les deux types les plus différenciants
-4. **Mode chat LLM** — nécessite que les templates de base soient stables
-5. **Apprentissage depuis anciens CR** — feature avancée, en dernier
+Les étapes sont ordonnées par dépendance technique — chaque étape s'appuie sur la précédente.
+
+1. **Extraction universelle** — enrichir le prompt résumé existant, parser `structured_data`, stocker dans `meeting_context.json`, tests unitaires du parseur avec les 3 niveaux de fallback
+2. **Types de réunion étendus** dans le dropdown + routing des sections DOCX (couche 2)
+3. **Templates CSE et CODIR** — les deux types les plus différenciants et les plus demandés en milieu professionnel
+4. **Menu gestion templates** (admin) — import .docx custom, association type/groupe, stockage `instance/report_templates/`
+5. **Mode chat LLM** — nécessite que les templates et l'extraction soient stables
+6. **Apprentissage depuis anciens CR** — feature avancée, après validation du reste
