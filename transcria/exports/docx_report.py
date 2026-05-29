@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -161,6 +162,139 @@ def _fmt_time(seconds: float) -> str:
     return f"{m}min {sec:02d}s" if m else f"{sec}s"
 
 
+# ── Système de thèmes visuels ─────────────────────────────────────────────────
+
+@dataclass
+class _DocxTheme:
+    primary:     RGBColor   # bannière, titres de section, en-têtes tableaux
+    accent:      RGBColor   # bordures, bullets, éléments secondaires
+    light:       RGBColor   # lignes alternées tableaux
+    banner_text: str        # texte du bandeau de couverture
+    cover_badge: str        # badge type affiché sous le titre (ex: "RÉUNION PROJET")
+
+
+def _rgb(r: int, g: int, b: int) -> RGBColor:
+    return RGBColor(r, g, b)
+
+
+_THEMES: dict[str, _DocxTheme] = {
+    # ── Institutionnel / légal ──────────────────────────────────────────────
+    "CSE": _DocxTheme(
+        primary=_rgb(0x1A, 0x23, 0x7E), accent=_rgb(0x30, 0x3F, 0x9F),
+        light=_rgb(0xE8, 0xEA, 0xF6),
+        banner_text="PROCÈS-VERBAL DU COMITÉ SOCIAL ET ÉCONOMIQUE",
+        cover_badge="CSE",
+    ),
+    "CSE extraordinaire": _DocxTheme(
+        primary=_rgb(0x1A, 0x23, 0x7E), accent=_rgb(0x30, 0x3F, 0x9F),
+        light=_rgb(0xE8, 0xEA, 0xF6),
+        banner_text="PROCÈS-VERBAL DU CSE — SÉANCE EXTRAORDINAIRE",
+        cover_badge="CSE EXTRA",
+    ),
+    # ── Direction / stratégie ───────────────────────────────────────────────
+    "CODIR / COMEX": _DocxTheme(
+        primary=_rgb(0x1C, 0x1C, 0x1C), accent=_rgb(0x42, 0x42, 0x42),
+        light=_rgb(0xF5, 0xF5, 0xF5),
+        banner_text="COMPTE-RENDU — COMITÉ DE DIRECTION",
+        cover_badge="CODIR",
+    ),
+    # ── Projet ─────────────────────────────────────────────────────────────
+    "Point projet": _DocxTheme(
+        primary=_rgb(0x00, 0x4D, 0x40), accent=_rgb(0x00, 0x79, 0x5F),
+        light=_rgb(0xE0, 0xF2, 0xF1),
+        banner_text="COMPTE-RENDU DE RÉUNION PROJET",
+        cover_badge="PROJET",
+    ),
+    "Réunion projet": _DocxTheme(
+        primary=_rgb(0x00, 0x4D, 0x40), accent=_rgb(0x00, 0x79, 0x5F),
+        light=_rgb(0xE0, 0xF2, 0xF1),
+        banner_text="COMPTE-RENDU DE RÉUNION PROJET",
+        cover_badge="PROJET",
+    ),
+    # ── Client / commercial ─────────────────────────────────────────────────
+    "Réunion client": _DocxTheme(
+        primary=_rgb(0x01, 0x4B, 0x7E), accent=_rgb(0x02, 0x77, 0xBD),
+        light=_rgb(0xE1, 0xF5, 0xFE),
+        banner_text="COMPTE-RENDU DE RÉUNION CLIENT",
+        cover_badge="CLIENT",
+    ),
+    "Négociation": _DocxTheme(
+        primary=_rgb(0x3E, 0x27, 0x23), accent=_rgb(0x6D, 0x4C, 0x41),
+        light=_rgb(0xEF, 0xEB, 0xE9),
+        banner_text="COMPTE-RENDU DE NÉGOCIATION",
+        cover_badge="NÉGOCIATION",
+    ),
+    # ── RH / personnes ─────────────────────────────────────────────────────
+    "RH": _DocxTheme(
+        primary=_rgb(0x1B, 0x5E, 0x20), accent=_rgb(0x43, 0x8B, 0x29),
+        light=_rgb(0xF1, 0xF8, 0xE9),
+        banner_text="COMPTE-RENDU — RESSOURCES HUMAINES",
+        cover_badge="RH",
+    ),
+    "Entretien individuel": _DocxTheme(
+        primary=_rgb(0x4A, 0x14, 0x8C), accent=_rgb(0x6A, 0x1B, 0x9A),
+        light=_rgb(0xF3, 0xE5, 0xF5),
+        banner_text="ENTRETIEN INDIVIDUEL",
+        cover_badge="CONFIDENTIEL",
+    ),
+    "Entretien": _DocxTheme(
+        primary=_rgb(0x1F, 0x38, 0x64), accent=_rgb(0x2E, 0x74, 0xB5),
+        light=_rgb(0xD6, 0xE4, 0xF0),
+        banner_text="COMPTE-RENDU D'ENTRETIEN",
+        cover_badge="ENTRETIEN",
+    ),
+    # ── Formation / pédagogie ───────────────────────────────────────────────
+    "Formation": _DocxTheme(
+        primary=_rgb(0xBF, 0x36, 0x00), accent=_rgb(0xF5, 0x7C, 0x00),
+        light=_rgb(0xFF, 0xF3, 0xE0),
+        banner_text="COMPTE-RENDU DE FORMATION",
+        cover_badge="FORMATION",
+    ),
+    "Séminaire / atelier": _DocxTheme(
+        primary=_rgb(0x00, 0x57, 0x47), accent=_rgb(0x00, 0x79, 0x5F),
+        light=_rgb(0xE0, 0xF7, 0xF2),
+        banner_text="COMPTE-RENDU DE SÉMINAIRE / ATELIER",
+        cover_badge="SÉMINAIRE",
+    ),
+    # ── Urgence / médical ───────────────────────────────────────────────────
+    "Réunion de crise": _DocxTheme(
+        primary=_rgb(0xB7, 0x1C, 0x1C), accent=_rgb(0xE5, 0x39, 0x35),
+        light=_rgb(0xFF, 0xEB, 0xEE),
+        banner_text="COMPTE-RENDU — RÉUNION DE CRISE",
+        cover_badge="CRISE",
+    ),
+    "Réunion médicale / santé": _DocxTheme(
+        primary=_rgb(0x00, 0x60, 0x64), accent=_rgb(0x00, 0x83, 0x8A),
+        light=_rgb(0xE0, 0xF7, 0xFA),
+        banner_text="COMPTE-RENDU MÉDICAL",
+        cover_badge="CONFIDENTIEL",
+    ),
+    # ── Technique ───────────────────────────────────────────────────────────
+    "Réunion technique": _DocxTheme(
+        primary=_rgb(0x1F, 0x38, 0x64), accent=_rgb(0x29, 0x63, 0x9A),
+        light=_rgb(0xE3, 0xEE, 0xF8),
+        banner_text="COMPTE-RENDU DE RÉUNION TECHNIQUE",
+        cover_badge="TECHNIQUE",
+    ),
+    "Podcast / média": _DocxTheme(
+        primary=_rgb(0x22, 0x00, 0x57), accent=_rgb(0x5E, 0x35, 0xB1),
+        light=_rgb(0xED, 0xE7, 0xF6),
+        banner_text="TRANSCRIPTION",
+        cover_badge="MÉDIA",
+    ),
+}
+
+_THEME_DEFAULT = _DocxTheme(
+    primary=_BLUE_DARK, accent=_BLUE_MID, light=_BLUE_LIGHT,
+    banner_text="COMPTE-RENDU DE TRANSCRIPTION",
+    cover_badge="",
+)
+
+
+def _get_theme(meeting_type: str) -> _DocxTheme:
+    return _THEMES.get(meeting_type, _THEME_DEFAULT)
+
+
 # ── Routing par type de réunion ──────────────────────────────────────────────
 
 # Types où la section "Actions" est affichée (si données présentes)
@@ -234,6 +368,7 @@ class DocxReport:
         self.structured_data: dict = structured_data or {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
         self.type_specific_data: dict = ctx.get("type_specific_data") or {}
+        self.theme: _DocxTheme = _get_theme(self.meeting_type)
         # Auto-confidentialité pour certains types
         if self.meeting_type in _AUTO_CONFIDENTIEL and not ctx.get("sensitivity"):
             self.ctx = dict(ctx)
@@ -304,126 +439,230 @@ class DocxReport:
 
     # ── Page de garde ─────────────────────────────────────────────────────────
 
-    def _cover_page(self, doc: Document) -> None:
-        ctx = self.ctx
+    def _cover_page(self, doc: Document) -> None:  # noqa: C901
+        ctx    = self.ctx
+        theme  = self.theme
         title  = ctx.get("title") or "Sans titre"
         mtype  = ctx.get("meeting_type", "")
         date   = _fmt_date(ctx.get("date", ""))
-        svc    = ctx.get("service", "") or "—"
+        svc    = ctx.get("service", "") or ""
         lang   = _LANG_LABELS.get(ctx.get("language", "fr"), ctx.get("language", ""))
         sensitivity = ctx.get("sensitivity", "normal")
         score  = self.quality.get("quality_score")
+        ts     = self.type_specific_data
 
-        # ── Bandeau bleu pleine largeur ──────────────────────────────────────
-        hdr_table = doc.add_table(rows=1, cols=1)
-        _table_full_width(hdr_table)
-        _table_no_borders(hdr_table)
-        cell = hdr_table.cell(0, 0)
-        _cell_bg(cell, _BLUE_DARK)
-        _cell_margins(cell, top=200, bottom=200, left=300, right=300)
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = p.add_run("COMPTE-RENDU DE TRANSCRIPTION")
-        run.font.color.rgb = _WHITE
-        run.font.bold = True
-        run.font.size = Pt(13)
-        run.font.name = "Calibri"
+        # ── 1. Bandeau principal (couleur signature du type) ─────────────────
+        hdr = doc.add_table(rows=1, cols=1)
+        _table_full_width(hdr)
+        _table_no_borders(hdr)
+        hdr_cell = hdr.cell(0, 0)
+        _cell_bg(hdr_cell, theme.primary)
+        _cell_margins(hdr_cell, top=260, bottom=260, left=360, right=360)
+        p_hdr = hdr_cell.paragraphs[0]
+        p_hdr.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_hdr = p_hdr.add_run(theme.banner_text)
+        r_hdr.font.color.rgb = _WHITE
+        r_hdr.font.bold = True
+        r_hdr.font.size = Pt(12)
+        r_hdr.font.name = "Calibri"
 
-        # ── Badge CONFIDENTIEL ───────────────────────────────────────────────
-        if sensitivity == "high":
-            conf_table = doc.add_table(rows=1, cols=1)
-            _table_full_width(conf_table)
-            _table_no_borders(conf_table)
-            conf_cell = conf_table.cell(0, 0)
-            _cell_bg(conf_cell, _RED)
-            _cell_margins(conf_cell, top=100, bottom=100, left=200, right=200)
-            p2 = conf_cell.paragraphs[0]
-            p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run2 = p2.add_run("⚠  DOCUMENT CONFIDENTIEL  ⚠")
-            run2.font.color.rgb = _WHITE
-            run2.font.bold = True
-            run2.font.size = Pt(10)
-            run2.font.name = "Calibri"
-        else:
-            doc.add_paragraph()
+        # ── 2. Trait d'accent mince sous le bandeau ──────────────────────────
+        acc = doc.add_table(rows=1, cols=1)
+        _table_full_width(acc)
+        _table_no_borders(acc)
+        acc_cell = acc.cell(0, 0)
+        _cell_bg(acc_cell, theme.accent)
+        _cell_margins(acc_cell, top=24, bottom=24, left=0, right=0)
+        acc_cell.paragraphs[0].add_run("")
 
-        # ── Titre ────────────────────────────────────────────────────────────
+        # ── 3. Badge CONFIDENTIEL / CRISE (si applicable) ────────────────────
+        is_confidentiel = (sensitivity == "high") or (mtype in _AUTO_CONFIDENTIEL)
+        is_crise = mtype == "Réunion de crise"
+        if is_confidentiel or is_crise:
+            badge_color = _RED if is_crise else RGBColor(0x6A, 0x1B, 0x9A)
+            badge_text  = ("⚠  SITUATION DE CRISE  ⚠" if is_crise
+                           else "▪  DOCUMENT CONFIDENTIEL  ▪")
+            conf_t = doc.add_table(rows=1, cols=1)
+            _table_full_width(conf_t)
+            _table_no_borders(conf_t)
+            conf_cell = conf_t.cell(0, 0)
+            _cell_bg(conf_cell, badge_color)
+            _cell_margins(conf_cell, top=80, bottom=80, left=200, right=200)
+            p_conf = conf_cell.paragraphs[0]
+            p_conf.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_conf = p_conf.add_run(badge_text)
+            r_conf.font.color.rgb = _WHITE
+            r_conf.font.bold = True
+            r_conf.font.size = Pt(9)
+            r_conf.font.name = "Calibri"
+
+        # ── 4. Titre principal ───────────────────────────────────────────────
+        doc.add_paragraph()
         doc.add_paragraph()
         p_title = doc.add_paragraph()
         p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
         run_title = p_title.add_run(title.upper())
-        run_title.font.size = Pt(20)
+        run_title.font.size = Pt(22)
         run_title.font.bold = True
-        run_title.font.color.rgb = _BLUE_DARK
+        run_title.font.color.rgb = theme.primary
         run_title.font.name = "Calibri"
-        _para_bottom_border(p_title, _BLUE_MID, sz=8)
+        _para_bottom_border(p_title, theme.accent, sz=10)
+
+        # ── 5. Sous-titre contextuel (nom projet, objet CSE extra…) ──────────
+        subtitle_parts: list[str] = []
+        if mtype in ("Point projet", "Réunion projet") and ts.get("nom_projet"):
+            subtitle_parts.append(ts["nom_projet"])
+            if ts.get("phase_jalon"):
+                subtitle_parts.append(ts["phase_jalon"])
+        elif mtype in _CSE_TYPES and ts.get("objet_seance"):
+            subtitle_parts.append(ts["objet_seance"])
+        elif mtype == "Réunion client" and ts.get("nom_client"):
+            subtitle_parts.append(ts["nom_client"])
+        elif mtype == "Réunion de crise" and ts.get("nature_incident"):
+            subtitle_parts.append(ts["nature_incident"])
+        elif mtype == "Entretien individuel" and ts.get("poste_evalue"):
+            subtitle_parts.append(f"Entretien — {ts['poste_evalue']}")
+
+        if subtitle_parts:
+            p_sub = doc.add_paragraph()
+            r_sub = p_sub.add_run("  ".join(subtitle_parts))
+            r_sub.font.size = Pt(12)
+            r_sub.font.color.rgb = theme.accent
+            r_sub.font.italic = True
+            r_sub.font.name = "Calibri"
+            p_sub.paragraph_format.space_before = Pt(4)
+            p_sub.paragraph_format.space_after = Pt(0)
 
         doc.add_paragraph()
 
-        # ── Métadonnées (table 2 colonnes) ───────────────────────────────────
-        meta_rows = [
-            ("Type de réunion", mtype or "—"),
-            ("Date",            date),
-            ("Service",         svc),
-            ("Langue",          lang or "—"),
-        ]
-        meta_table = doc.add_table(rows=len(meta_rows), cols=2)
-        _table_full_width(meta_table)
-        _table_no_borders(meta_table)
+        # ── 6. Métadonnées en 2 colonnes soignées ────────────────────────────
+        meta_rows: list[tuple[str, str]] = []
+        if date and date != "—":
+            meta_rows.append(("Date", date))
+        if mtype:
+            meta_rows.append(("Type", mtype))
+        if svc:
+            meta_rows.append(("Service", svc))
+        if lang:
+            meta_rows.append(("Langue", lang))
+        # Champs type-spécifiques clés sur la couverture
+        if mtype in _CSE_TYPES:
+            if ts.get("president_seance"):
+                meta_rows.append(("Président de séance", ts["president_seance"]))
+            if ts.get("secretaire_seance"):
+                meta_rows.append(("Secrétaire de séance", ts["secretaire_seance"]))
+            if ts.get("ref_pv_precedent"):
+                meta_rows.append(("Réf. PV précédent", ts["ref_pv_precedent"]))
+        elif mtype in ("Point projet", "Réunion projet"):
+            if ts.get("chef_de_projet"):
+                meta_rows.append(("Chef de projet", ts["chef_de_projet"]))
+            if ts.get("sprint"):
+                meta_rows.append(("Sprint", ts["sprint"]))
+        elif mtype == "CODIR / COMEX":
+            pass  # ordre du jour dans le document
+        elif mtype == "Réunion client":
+            if ts.get("ref_contrat"):
+                meta_rows.append(("Réf. contrat", ts["ref_contrat"]))
+        elif mtype == "Entretien individuel":
+            if ts.get("periode_evaluee"):
+                meta_rows.append(("Période", ts["periode_evaluee"]))
+            if ts.get("evaluateur"):
+                meta_rows.append(("Évaluateur", ts["evaluateur"]))
 
-        for i, (label, value) in enumerate(meta_rows):
-            cells = meta_table.rows[i].cells
-            _cell_margins(cells[0], top=40, bottom=40, left=0, right=80)
-            _cell_margins(cells[1], top=40, bottom=40, left=80, right=0)
+        if meta_rows:
+            meta_t = doc.add_table(rows=len(meta_rows), cols=2)
+            _table_full_width(meta_t)
+            _table_no_borders(meta_t)
+            for i, (lbl, val) in enumerate(meta_rows):
+                cells = meta_t.rows[i].cells
+                _cell_margins(cells[0], top=36, bottom=36, left=0, right=80)
+                _cell_margins(cells[1], top=36, bottom=36, left=80, right=0)
+                r_l = cells[0].paragraphs[0].add_run(lbl)
+                r_l.font.size = Pt(9.5)
+                r_l.font.bold = True
+                r_l.font.color.rgb = _GREY_DARK
+                r_l.font.name = "Calibri"
+                r_v = cells[1].paragraphs[0].add_run(val)
+                r_v.font.size = Pt(9.5)
+                r_v.font.color.rgb = theme.primary
+                r_v.font.name = "Calibri"
 
-            r_lbl = cells[0].paragraphs[0].add_run(label)
-            r_lbl.font.size = Pt(10)
-            r_lbl.font.bold = True
-            r_lbl.font.color.rgb = _GREY_DARK
-            r_lbl.font.name = "Calibri"
+        # ── 7. Quorum CSE (encadré visuel fort) ──────────────────────────────
+        if mtype in _CSE_TYPES:
+            try:
+                presents = int(ts.get("membres_presents") or 0)
+                total    = int(ts.get("membres_total") or 0)
+                if presents and total:
+                    quorum_ok  = presents > total / 2
+                    pct        = round(100 * presents / total)
+                    quorum_txt = (f"✓  Quorum atteint — {presents}/{total} membres présents ({pct}%)"
+                                  if quorum_ok
+                                  else f"✗  Quorum NON atteint — {presents}/{total} membres présents ({pct}%)")
+                    doc.add_paragraph()
+                    q_t = doc.add_table(rows=1, cols=1)
+                    _table_full_width(q_t)
+                    _table_no_borders(q_t)
+                    q_cell = q_t.cell(0, 0)
+                    _cell_bg(q_cell, _GREEN if quorum_ok else _rgb(0xFF, 0xEB, 0xEE))
+                    _cell_margins(q_cell, top=120, bottom=120, left=200, right=200)
+                    p_q = q_cell.paragraphs[0]
+                    p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    r_q = p_q.add_run(quorum_txt)
+                    r_q.font.size = Pt(10)
+                    r_q.font.bold = True
+                    r_q.font.color.rgb = _WHITE if quorum_ok else _RED
+                    r_q.font.name = "Calibri"
+            except (ValueError, TypeError):
+                pass
 
-            r_val = cells[1].paragraphs[0].add_run(value)
-            r_val.font.size = Pt(10)
-            r_val.font.color.rgb = _BLUE_DARK
-            r_val.font.name = "Calibri"
-
+        # ── 8. Pied de couverture ─────────────────────────────────────────────
         doc.add_paragraph()
         doc.add_paragraph()
-
-        # ── Pied de page de garde ────────────────────────────────────────────
         p_gen = doc.add_paragraph()
         p_gen.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        r1 = p_gen.add_run(f"Généré par TranscrIA  ▪  {datetime.today().strftime('%d/%m/%Y')}")
-        r1.font.size = Pt(9)
-        r1.font.color.rgb = _GREY_DARK
-        r1.font.name = "Calibri"
+        r_gen = p_gen.add_run(f"Généré par TranscrIA  ▪  {datetime.today().strftime('%d/%m/%Y')}")
+        r_gen.font.size = Pt(8.5)
+        r_gen.font.color.rgb = _GREY_DARK
+        r_gen.font.name = "Calibri"
 
         if score is not None:
             score_color = _GREEN if score >= 85 else _ORANGE if score >= 65 else _RED
-            r2 = p_gen.add_run(f"  ▪  Score qualité : {score}/100")
-            r2.font.size = Pt(9)
-            r2.font.color.rgb = score_color
-            r2.font.bold = True
-            r2.font.name = "Calibri"
+            r_score = p_gen.add_run(f"  ▪  Qualité : {score}/100")
+            r_score.font.size = Pt(8.5)
+            r_score.font.color.rgb = score_color
+            r_score.font.bold = True
+            r_score.font.name = "Calibri"
+
+        if theme.cover_badge:
+            p_badge = doc.add_paragraph()
+            p_badge.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_badge = p_badge.add_run(f"[ {theme.cover_badge} ]")
+            r_badge.font.size = Pt(8)
+            r_badge.font.color.rgb = theme.accent
+            r_badge.font.bold = True
+            r_badge.font.name = "Calibri"
+            p_badge.paragraph_format.space_before = Pt(2)
 
     # ── Helpers section ───────────────────────────────────────────────────────
 
-    @staticmethod
-    def _section_heading(doc: Document, number: str, label: str) -> None:
+    def _section_heading(self, doc: Document, number: str, label: str) -> None:
+        theme = self.theme
         doc.add_paragraph()
         p = doc.add_paragraph()
+        # Numéro en couleur accent
         r_num = p.add_run(f"{number}  ")
         r_num.font.size = Pt(13)
         r_num.font.bold = True
-        r_num.font.color.rgb = _BLUE_MID
+        r_num.font.color.rgb = theme.accent
         r_num.font.name = "Calibri"
+        # Libellé en couleur primaire
         r_lbl = p.add_run(label.upper())
         r_lbl.font.size = Pt(13)
         r_lbl.font.bold = True
-        r_lbl.font.color.rgb = _BLUE_DARK
+        r_lbl.font.color.rgb = theme.primary
         r_lbl.font.name = "Calibri"
-        _para_bottom_border(p, _BLUE_MID, sz=6)
+        # Trait bas coloré
+        _para_bottom_border(p, theme.accent, sz=6)
 
     @staticmethod
     def _meta_row(doc: Document, label: str, value: str) -> None:
@@ -468,7 +707,7 @@ class DocxReport:
             r = p_head.add_run("Synthèse")
             r.font.size = Pt(11)
             r.font.bold = True
-            r.font.color.rgb = _BLUE_DARK
+            r.font.color.rgb = self.theme.primary
             r.font.name = "Calibri"
             p_head.paragraph_format.space_after = Pt(4)
 
@@ -581,7 +820,7 @@ class DocxReport:
             r_lbl.font.color.rgb = _GREY_DARK
             r_lbl.font.name = "Calibri"
 
-            color = _GREEN if "Quorum atteint" in val else _RED if "non atteint" in val else _BLUE_DARK
+            color = _GREEN if "Quorum atteint" in val else _RED if "non atteint" in val else self.theme.primary
             r_val = cells[1].paragraphs[0].add_run(val)
             r_val.font.size = Pt(9.5)
             r_val.font.color.rgb = color
@@ -641,7 +880,7 @@ class DocxReport:
                 p.paragraph_format.left_indent = Cm(0.5)
                 p.paragraph_format.space_after = Pt(2)
                 run_bullet = p.add_run("▸  ")
-                run_bullet.font.color.rgb = _BLUE_MID
+                run_bullet.font.color.rgb = self.theme.accent
                 run_bullet.font.size = Pt(9)
                 run = p.add_run(item)
                 run.font.size = Pt(10)
@@ -658,7 +897,7 @@ class DocxReport:
             r_lbl.font.name = "Calibri"
             r_val = p.add_run(sd["prochaine_date"])
             r_val.font.size = Pt(9)
-            r_val.font.color.rgb = _BLUE_MID
+            r_val.font.color.rgb = self.theme.accent
             r_val.font.name = "Calibri"
 
         return len(shown)
@@ -693,7 +932,7 @@ class DocxReport:
         # ── En-tête ──────────────────────────────────────────────────────────
         hdr_cells = table.rows[0].cells
         for i, h in enumerate(headers):
-            _cell_bg(hdr_cells[i], _BLUE_DARK)
+            _cell_bg(hdr_cells[i], self.theme.primary)
             _cell_margins(hdr_cells[i], top=80, bottom=80, left=100, right=100)
             p = hdr_cells[i].paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -706,12 +945,12 @@ class DocxReport:
         # ── Lignes données ────────────────────────────────────────────────────
         for row_i, participant in enumerate(self.merged):
             row = table.rows[row_i + 1]
-            bg = _BLUE_LIGHT if row_i % 2 == 0 else _WHITE
+            bg = self.theme.light if row_i % 2 == 0 else _WHITE
 
             col = 0
             data: list[tuple[str, bool, RGBColor]] = []  # (text, bold, color)
 
-            data.append((participant["name"], True, _BLUE_DARK))
+            data.append((participant["name"], True, self.theme.primary))
             if has_function:
                 data.append((participant["function"] or "—", False, _GREY_DARK))
             if has_service:
@@ -725,7 +964,7 @@ class DocxReport:
             data.append((time_label, False, _GREY_DARK))
             data.append((str(participant["turns"]), False, _GREY_DARK))
             if has_animator:
-                data.append(("★ Animateur" if participant["is_animator"] else "", True, _BLUE_MID))
+                data.append(("★ Animateur" if participant["is_animator"] else "", True, self.theme.accent))
 
             for text, bold, color in data:
                 cell = row.cells[col]
@@ -775,7 +1014,7 @@ class DocxReport:
             r1 = p1.add_run(entry["speaker"])
             r1.font.size = Pt(9)
             r1.font.bold = True
-            r1.font.color.rgb = _BLUE_MID if entry["speaker"] else _GREY_DARK
+            r1.font.color.rgb = self.theme.accent if entry["speaker"] else _GREY_DARK
             r1.font.name = "Calibri"
 
             # Col 2 — texte
@@ -849,6 +1088,7 @@ class DocxReport:
     # ── Pied de page ──────────────────────────────────────────────────────────
 
     def _setup_footer(self, doc: Document) -> None:
+        theme  = self.theme
         title  = (self.ctx.get("title") or "TranscrIA")[:40]
         date   = _fmt_date(self.ctx.get("date", ""))
         score  = self.quality.get("quality_score")
@@ -860,6 +1100,7 @@ class DocxReport:
         p.clear()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+        # Pastille score qualité
         if score is not None:
             score_color = _GREEN if score >= 85 else _ORANGE if score >= 65 else _RED
             r_score = p.add_run(f"■ {score}/100   ")
@@ -867,7 +1108,13 @@ class DocxReport:
             r_score.font.color.rgb = score_color
             r_score.font.name = "Calibri"
 
-        r_info = p.add_run(f"TranscrIA — {title}  |  {date}  |  Page ")
+        # Trait couleur theme avant le titre
+        r_accent = p.add_run("▪ ")
+        r_accent.font.size = Pt(7.5)
+        r_accent.font.color.rgb = theme.accent
+        r_accent.font.name = "Calibri"
+
+        r_info = p.add_run(f"TranscrIA  ·  {title}  ·  {date}  ·  Page ")
         r_info.font.size = Pt(7.5)
         r_info.font.color.rgb = _GREY_DARK
         r_info.font.name = "Calibri"

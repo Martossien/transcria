@@ -2,7 +2,8 @@
 
 > **Statut v1 :** ✅ Implémentée et en production (2026-05-29)  
 > **Statut v2a :** ✅ Implémentée — Extraction structurée universelle + types de réunion étendus (2026-05-29)  
-> **Statut v2b :** 🔵 En discussion — Gestionnaire de templates + mode chat LLM (voir chapitre 11)  
+> **Statut v2b :** ✅ Implémentée — Champs type-spécifiques (UI dynamique + DOCX) + thèmes visuels par type (2026-05-29)  
+> **Statut v2c :** 🔵 En discussion — Gestionnaire de templates uploadables + mode chat LLM (voir chapitre 11)  
 > **Auteur :** Martossien  
 > **Date spec :** 2026-05-29 | **Dernière mise à jour :** 2026-05-29  
 > **Priorité :** Haute (vitrine utilisateur, valeur perçue immédiate)
@@ -283,6 +284,62 @@ Dans la page de fin de workflow (step "export") : bouton **"Télécharger le rap
 ### 5.3 Slot logo
 
 Emplacement réservé en haut à droite de la page de garde pour un logo organisation. Dans le template par défaut : placeholder "Votre logo" en gris clair. Un admin peut remplacer `default.docx` par son propre template.
+
+---
+
+## 5b. Thèmes visuels par type de réunion ✅ (implémenté 2026-05-29)
+
+Chaque type de réunion possède une **identité visuelle cohérente** appliquée du bandeau de couverture jusqu'au pied de page. Le système est piloté par la dataclass `_DocxTheme` dans `transcria/exports/docx_report.py`.
+
+### 5b.1 Structure d'un thème
+
+```python
+@dataclass
+class _DocxTheme:
+    primary:     RGBColor   # bannière, titres de section, en-têtes tableaux
+    accent:      RGBColor   # bordures, bullets, traits, numéros de section
+    light:       RGBColor   # lignes alternées des tableaux
+    banner_text: str        # texte du bandeau (ex: "PROCÈS-VERBAL DU CSE")
+    cover_badge: str        # badge sous le titre (ex: "CSE")
+```
+
+### 5b.2 Palette par type
+
+| Type | Couleur primaire | Identité | Bandeau |
+|---|---|---|---|
+| CSE / CSE extra | Bleu marine `#1A237E` | Institutionnel/légal | "PROCÈS-VERBAL DU COMITÉ SOCIAL ET ÉCONOMIQUE" |
+| CODIR / COMEX | Anthracite `#1C1C1C` | Sobriété direction | "COMPTE-RENDU — COMITÉ DE DIRECTION" |
+| Point / Réunion projet | Teal `#004D40` | Dynamisme projet | "COMPTE-RENDU DE RÉUNION PROJET" |
+| Réunion client | Bleu azur `#014B7E` | Commercial | "COMPTE-RENDU DE RÉUNION CLIENT" |
+| Négociation | Brun `#3E2723` | Gravité | "COMPTE-RENDU DE NÉGOCIATION" |
+| RH | Vert `#1B5E20` | Humain | "COMPTE-RENDU — RESSOURCES HUMAINES" |
+| Entretien individuel | Violet `#4A148C` | Confidentiel | "ENTRETIEN INDIVIDUEL" |
+| Formation | Orange `#BF3600` | Pédagogie | "COMPTE-RENDU DE FORMATION" |
+| Réunion de crise | Rouge `#B71C1C` | Urgence | "COMPTE-RENDU — RÉUNION DE CRISE" |
+| Réunion médicale | Cyan `#006064` | Santé | "COMPTE-RENDU MÉDICAL" |
+| Podcast / média | Indigo `#220057` | Créatif | "TRANSCRIPTION" |
+
+Un type sans thème dédié utilise `_THEME_DEFAULT` (bleu TranscrIA historique). Le rendu v1 est donc préservé pour les types non couverts.
+
+### 5b.3 Éléments visuels de la page de garde (refonte)
+
+1. **Bandeau principal** pleine largeur dans la couleur primaire, texte blanc centré spécifique au type
+2. **Trait d'accent** mince sous le bandeau (couleur accent)
+3. **Badge CONFIDENTIEL / CRISE** conditionnel (violet pour confidentiel, rouge pour crise)
+4. **Titre** en couleur primaire + trait bas accent
+5. **Sous-titre contextuel** issu des champs type-spécifiques (nom de projet, objet CSE extra, nom client, nature incident, poste évalué)
+6. **Métadonnées** enrichies avec les champs clés du type (président/secrétaire CSE, chef de projet, etc.)
+7. **Encadré quorum** (CSE) vert plein si atteint, rouge clair sinon — calcul automatique présents/total
+8. **Pied de couverture** : date génération + score qualité coloré + badge type
+
+### 5b.4 Cohérence dans le corps du document
+
+- Titres de section : numéro en accent, libellé en primaire, trait bas accent
+- En-têtes de tableaux : fond primaire, texte blanc
+- Lignes alternées : couleur `light` du thème
+- Locuteurs dans la transcription : nom en couleur accent
+- Bullets des sections enrichies : couleur accent
+- Pied de page : pastille score + trait accent + numérotation
 
 ---
 

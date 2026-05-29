@@ -260,3 +260,89 @@ def test_merge_participants_calcule_pourcentages():
     assert report.merged[0]["time_pct"] == 100
     assert report.merged[0]["turns"] == 10
     assert report.merged[0]["name"] == "Alice"
+
+
+# ── Tests système de thèmes visuels ──────────────────────────────────────────
+
+def test_theme_cse_est_institutionnel():
+    from transcria.exports.docx_report import _get_theme, _THEMES
+    theme = _get_theme("CSE")
+    assert theme is _THEMES["CSE"]
+    assert "PROCÈS-VERBAL" in theme.banner_text
+    assert theme.cover_badge == "CSE"
+
+
+def test_theme_point_projet_distinct_de_cse():
+    from transcria.exports.docx_report import _get_theme
+    cse = _get_theme("CSE")
+    projet = _get_theme("Point projet")
+    assert cse.primary != projet.primary
+    assert cse.banner_text != projet.banner_text
+
+
+def test_theme_inconnu_retourne_default():
+    from transcria.exports.docx_report import _get_theme, _THEME_DEFAULT
+    theme = _get_theme("Type qui n'existe pas")
+    assert theme is _THEME_DEFAULT
+    assert theme.banner_text == "COMPTE-RENDU DE TRANSCRIPTION"
+
+
+def test_tous_les_types_majeurs_ont_un_theme():
+    from transcria.exports.docx_report import _THEMES
+    for t in ("CSE", "CSE extraordinaire", "CODIR / COMEX", "Point projet",
+              "Réunion client", "Entretien individuel", "Formation",
+              "Réunion de crise", "Réunion médicale / santé", "Négociation"):
+        assert t in _THEMES, f"{t!r} n'a pas de thème dédié"
+
+
+def test_docx_applique_le_theme_du_type(tmp_path):
+    pytest.importorskip("docx")
+    from docx import Document
+    from transcria.exports.docx_report import DocxReport
+
+    out = tmp_path / "cse.docx"
+    DocxReport({"title": "Test CSE", "meeting_type": "CSE"}, [], {}, {}, "").build().save(str(out))
+    loaded = Document(str(out))
+    full = ("\n".join(p.text for p in loaded.paragraphs)
+            + " ".join(c.text for t in loaded.tables for r in t.rows for c in r.cells))
+    assert "PROCÈS-VERBAL" in full.upper()
+
+
+def test_docx_crise_affiche_badge_situation_de_crise(tmp_path):
+    pytest.importorskip("docx")
+    from docx import Document
+    from transcria.exports.docx_report import DocxReport
+
+    out = tmp_path / "crise.docx"
+    DocxReport({"title": "Incident majeur", "meeting_type": "Réunion de crise"}, [], {}, {}, "").build().save(str(out))
+    loaded = Document(str(out))
+    full = " ".join(c.text for t in loaded.tables for r in t.rows for c in r.cells)
+    assert "CRISE" in full.upper()
+
+
+def test_docx_cover_quorum_atteint(tmp_path):
+    pytest.importorskip("docx")
+    from docx import Document
+    from transcria.exports.docx_report import DocxReport
+
+    out = tmp_path / "cse_quorum.docx"
+    ctx = {"title": "CSE", "meeting_type": "CSE",
+           "type_specific_data": {"membres_presents": "8", "membres_total": "11"}}
+    DocxReport(ctx, [], {}, {}, "").build().save(str(out))
+    loaded = Document(str(out))
+    full = " ".join(c.text for t in loaded.tables for r in t.rows for c in r.cells)
+    assert "Quorum atteint" in full
+
+
+def test_docx_cover_sous_titre_projet(tmp_path):
+    pytest.importorskip("docx")
+    from docx import Document
+    from transcria.exports.docx_report import DocxReport
+
+    out = tmp_path / "projet.docx"
+    ctx = {"title": "Sprint 6", "meeting_type": "Point projet",
+           "type_specific_data": {"nom_projet": "Projet Phoenix", "phase_jalon": "Phase 2"}}
+    DocxReport(ctx, [], {}, {}, "").build().save(str(out))
+    loaded = Document(str(out))
+    full = "\n".join(p.text for p in loaded.paragraphs)
+    assert "Projet Phoenix" in full
