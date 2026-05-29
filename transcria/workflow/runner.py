@@ -345,6 +345,17 @@ class WorkflowRunner:
             meeting_ctx.pop("termes_suspects_parse_warning", None)
 
         meeting_ctx["summary_llm"] = summary_text
+
+        # Données structurées enrichies (décisions, actions, votes...)
+        sd = parsed.get("structured_data") or {}
+        meeting_ctx["structured_data"] = sd
+        meeting_ctx["structured_data_parse_status"] = parsed.get("structured_data_parse_status", "missing")
+        sd_warning = parsed.get("structured_data_parse_warning", "")
+        if sd_warning:
+            meeting_ctx["structured_data_parse_warning"] = sd_warning
+        else:
+            meeting_ctx.pop("structured_data_parse_warning", None)
+
         # Stocker les rôles LLM dans meeting_context pour que l'UI puisse les afficher
         # et qu'ils puissent être réappliqués après la création du mapping
         speaker_roles = parsed.get("speaker_roles", {})

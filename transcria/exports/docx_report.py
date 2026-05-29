@@ -161,6 +161,25 @@ def _fmt_time(seconds: float) -> str:
     return f"{m}min {sec:02d}s" if m else f"{sec}s"
 
 
+# ── Routing par type de réunion ──────────────────────────────────────────────
+
+# Types où la section "Actions" est affichée (si données présentes)
+_ACTION_TYPES: frozenset[str] = frozenset({
+    "Réunion interne", "Réunion projet", "Réunion technique",
+    "Formation", "RH", "Point projet", "CODIR / COMEX",
+    "Réunion client", "Réunion de crise", "Séminaire / atelier",
+    "Négociation", "CSE", "CSE extraordinaire",
+})
+# Types où la section "Blocages" est affichée
+_BLOCAGE_TYPES: frozenset[str] = frozenset({
+    "Point projet", "CODIR / COMEX", "Réunion de crise",
+    "Réunion projet", "Réunion technique",
+})
+# Types CSE — votes, résolutions, points ODJ
+_CSE_TYPES: frozenset[str] = frozenset({"CSE", "CSE extraordinaire"})
+# Types auto-confidentiels
+_AUTO_CONFIDENTIEL: frozenset[str] = frozenset({"Entretien individuel", "RH", "Réunion médicale / santé"})
+
 # ── Parsing SRT ───────────────────────────────────────────────────────────────
 
 _SRT_BLOCK = re.compile(
@@ -204,6 +223,7 @@ class DocxReport:
         speaker_stats: dict,
         quality: dict,
         srt_text: str,
+        structured_data: dict | None = None,
     ):
         self.ctx = ctx
         self.participants: list[dict] = participants if isinstance(participants, list) else []
@@ -211,6 +231,12 @@ class DocxReport:
         self.quality = quality or {}
         self.srt_entries = _parse_srt(srt_text)
         self.merged = self._merge_participants()
+        self.structured_data: dict = structured_data or {}
+        self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
+        # Auto-confidentialité pour certains types
+        if self.meeting_type in _AUTO_CONFIDENTIEL and not ctx.get("sensitivity"):
+            self.ctx = dict(ctx)
+            self.ctx["sensitivity"] = "high"
 
     # ── Fusion participants ───────────────────────────────────────────────────
 
@@ -259,9 +285,10 @@ class DocxReport:
         self._cover_page(doc)
         self._page_break(doc)
         self._section_context(doc)
-        self._section_participants(doc)
-        self._section_transcript(doc)
-        self._section_quality(doc)
+        offset = self._section_enriched(doc)
+        self._section_participants(doc, base=2 + offset)
+        self._section_transcript(doc, base=3 + offset)
+        self._section_quality(doc, base=4 + offset)
         self._setup_footer(doc)
         return doc
 
@@ -457,10 +484,86 @@ class DocxReport:
                     run.font.size = Pt(10)
                     run.font.name = "Calibri"
 
-    # ── Section 2 : Participants ──────────────────────────────────────────────
+    # ── Section 1b : Données enrichies (décisions, actions, votes…) ───────────
 
-    def _section_participants(self, doc: Document) -> None:
-        self._section_heading(doc, "2.", "Participants & Locuteurs")
+    def _section_enriched(self, doc: Document) -> None:
+        """Sections conditionnelles issues de l'extraction LLM structurée.
+
+        Chaque bloc n'apparaît que si :
+          - les données sont non vides
+          - le type de réunion est compatible
+        L'absence totale est silencieuse — aucun placeholder n'est affiché.
+        """
+        sd = self.structured_data
+        mt = self.meeting_type
+        section_num = 2  # numéro de section courant avant Participants
+
+        # Ajustement du numéro : les sections enrichies poussent les suivantes
+        # On garde un compteur local pour nommer proprement
+        shown: list[tuple[str, list[str]]] = []
+
+        # Décisions — universelles si présentes
+        if sd.get("decisions"):
+            shown.append(("Décisions prises", sd["decisions"]))
+
+        # Actions — tous types sauf Podcast
+        if sd.get("actions") and mt not in ("Podcast / média",):
+            shown.append(("Actions à réaliser", sd["actions"]))
+
+        # Blocages — types projet/crise
+        if sd.get("blocages") and mt in _BLOCAGE_TYPES:
+            shown.append(("Points bloquants", sd["blocages"]))
+
+        # Points reportés
+        if sd.get("reports"):
+            shown.append(("Points reportés", sd["reports"]))
+
+        # Votes et résolutions — CSE uniquement
+        if mt in _CSE_TYPES:
+            if sd.get("votes"):
+                shown.append(("Votes", sd["votes"]))
+            if sd.get("resolutions"):
+                shown.append(("Résolutions adoptées", sd["resolutions"]))
+            if sd.get("points_odj"):
+                shown.append(("Ordre du jour", sd["points_odj"]))
+
+        if not shown:
+            return 0
+
+        for label, items in shown:
+            self._section_heading(doc, f"{section_num}.", label)
+            section_num += 1
+            for item in items:
+                p = doc.add_paragraph()
+                p.paragraph_format.left_indent = Cm(0.5)
+                p.paragraph_format.space_after = Pt(2)
+                run_bullet = p.add_run("▸  ")
+                run_bullet.font.color.rgb = _BLUE_MID
+                run_bullet.font.size = Pt(9)
+                run = p.add_run(item)
+                run.font.size = Pt(10)
+                run.font.name = "Calibri"
+
+        # Prochaine date — footer discret si mentionnée
+        if sd.get("prochaine_date"):
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            r_lbl = p.add_run("Prochaine réunion : ")
+            r_lbl.font.size = Pt(9)
+            r_lbl.font.bold = True
+            r_lbl.font.color.rgb = _GREY_DARK
+            r_lbl.font.name = "Calibri"
+            r_val = p.add_run(sd["prochaine_date"])
+            r_val.font.size = Pt(9)
+            r_val.font.color.rgb = _BLUE_MID
+            r_val.font.name = "Calibri"
+
+        return len(shown)
+
+    # ── Section N : Participants ──────────────────────────────────────────────
+
+    def _section_participants(self, doc: Document, base: int = 2) -> None:
+        self._section_heading(doc, f"{base}.", "Participants & Locuteurs")
 
         if not self.merged:
             doc.add_paragraph("Aucun participant enregistré.")
@@ -535,8 +638,8 @@ class DocxReport:
 
     # ── Section 3 : Transcription ─────────────────────────────────────────────
 
-    def _section_transcript(self, doc: Document) -> None:
-        self._section_heading(doc, "3.", "Transcription")
+    def _section_transcript(self, doc: Document, base: int = 3) -> None:
+        self._section_heading(doc, f"{base}.", "Transcription")
 
         if not self.srt_entries:
             doc.add_paragraph("Aucune transcription disponible.")
@@ -583,7 +686,7 @@ class DocxReport:
 
     # ── Section 4 : Points à vérifier (conditionnelle) ────────────────────────
 
-    def _section_quality(self, doc: Document) -> None:
+    def _section_quality(self, doc: Document, base: int = 4) -> None:
         checks = self.quality.get("checks", [])
         points: list[tuple[str, str]] = []  # (emoji_label, description)
 
@@ -616,7 +719,7 @@ class DocxReport:
         if not points:
             return
 
-        self._section_heading(doc, "4.", "Points à vérifier")
+        self._section_heading(doc, f"{base}.", "Points à vérifier")
 
         table = doc.add_table(rows=len(points), cols=2)
         _table_full_width(table)
@@ -708,12 +811,13 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
     participants  = fs.load_json("context/participants.json") or []
     speaker_stats = fs.load_json("speakers/speaker_stats.json") or {}
     quality       = fs.load_json("quality/quality_report.json") or {}
+    structured_data = ctx.get("structured_data") or {}
 
     srt_text = fs.load_text("metadata/transcription_corrigee.srt") or ""
     if not srt_text:
         srt_text = fs.load_text("metadata/transcription.srt") or ""
 
-    report = DocxReport(ctx, participants, speaker_stats, quality, srt_text)
+    report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

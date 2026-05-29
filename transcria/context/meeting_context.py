@@ -2,6 +2,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 
 MEETING_TYPES = [
+    # Types existants — comportement inchangé (template DOCX v1)
     "Réunion interne",
     "Réunion projet",
     "Réunion technique",
@@ -9,6 +10,17 @@ MEETING_TYPES = [
     "Réunion médicale / santé",
     "RH",
     "Entretien",
+    # Types v2 — sections enrichies selon données extraites
+    "CSE",
+    "CSE extraordinaire",
+    "CODIR / COMEX",
+    "Réunion client",
+    "Point projet",
+    "Réunion de crise",
+    "Séminaire / atelier",
+    "Négociation",
+    "Entretien individuel",
+    "Podcast / média",
     "Autre",
 ]
 
@@ -31,7 +43,9 @@ class MeetingContextManager:
                        "objectif_suggere", "notes_suggeres", "participants_detectes",
                        "speaker_count_llm", "speaker_count_pyannote", "mots_cles",
                        "speaker_roles_llm", "termes_suspects",
-                       "termes_suspects_parse_status", "termes_suspects_parse_warning"]
+                       "termes_suspects_parse_status", "termes_suspects_parse_warning",
+                       "structured_data", "structured_data_parse_status",
+                       "structured_data_parse_warning"]
         for field in llm_fields:
             if field in existing and field not in context_data:
                 context_data[field] = existing[field]

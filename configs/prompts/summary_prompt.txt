@@ -409,6 +409,40 @@ Si aucun terme suspect n'est détecté, écrire sous `## Termes douteux à valid
 
 ---
 
+## 8b. Section données structurées
+
+Après `## Termes douteux à valider`, ajouter dans `summary.md` la section suivante :
+
+```
+## Données structurées
+```
+
+Contenant UNIQUEMENT un bloc JSON valide. Extraire les éléments ci-dessous
+**si et seulement s'ils sont explicitement présents** dans la transcription.
+Si un champ est absent ou incertain, retourner `[]` ou `""`. Ne jamais inventer.
+
+```json
+{
+  "decisions":     ["Texte exact de la décision 1", "Texte exact de la décision 2"],
+  "actions":       ["Responsable (si identifiable) : action à faire (délai si mentionné)", "..."],
+  "blocages":      ["Description du point bloquant mentionné", "..."],
+  "reports":       ["Sujet explicitement reporté à une prochaine réunion", "..."],
+  "votes":         ["Sujet du vote : X pour, Y contre, Z abstentions — résultat", "..."],
+  "resolutions":   ["Texte de la résolution formellement adoptée", "..."],
+  "points_odj":    ["N. Titre du point de l'ordre du jour — résumé en une phrase", "..."],
+  "prochaine_date": "JJ/MM/AAAA si explicitement mentionnée, sinon chaîne vide"
+}
+```
+
+Règles strictes :
+- Les chaînes doivent être courtes (< 200 caractères chacune).
+- Un vote sans résultat explicite doit quand même indiquer "résultat inconnu".
+- `points_odj` est réservé aux réunions avec un ordre du jour numéroté.
+- Si aucun élément d'un champ n'est détectable, utiliser `[]`.
+- Le JSON doit être valide : pas de virgule finale, pas de commentaire, guillemets doubles.
+
+---
+
 ## 9. Vérification finale obligatoire
 
 Avant de rendre `summary.md`, vérifier que :
@@ -430,7 +464,8 @@ Avant de rendre `summary.md`, vérifier que :
 13. le compteur cumulatif a été maintenu après chaque bloc sans interruption ;
 14. les grep fixes de re-ancrage ont été exécutés aux points prévus (tiers,
     moitié, deux tiers de la transcription) ;
-15. le fichier final s'appelle exactement `summary.md`.
+15. le fichier final s'appelle exactement `summary.md` ;
+16. la section `## Données structurées` est présente et contient un bloc JSON valide.
 
 Si un contrôle échoue, corriger `summary.md` avant de rendre.
 
@@ -454,7 +489,9 @@ Procédure obligatoire :
    exécuter un grep fixe de patterns d'erreurs STT courantes sur la zone
    du bloc courant — cf. section 5.1.
 4. Résumer : titres, participants, rôles, synthèse, termes suspects.
-5. Écrire le fichier final `summary.md` avec l'outil Write.
+4b. Rédiger le bloc JSON `## Données structurées` (section 8b) en se basant sur
+    les éléments détectés pendant la lecture des blocs.
+5. Écrire le fichier final `summary.md` avec l'outil Write (inclut la section données structurées).
 6. Effectuer la vérification finale (section 9).
 7. Corriger le fichier avant de rendre si une erreur est détectée.
 

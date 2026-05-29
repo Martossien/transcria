@@ -290,6 +290,70 @@
       <button type="button" class="btn btn-primary btn-sm" onclick="TranscrIA.saveContext()">Enregistrer le contexte</button>
       <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
     </form>
+
+    {% set sd = meeting.structured_data %}
+    {% set sd_status = meeting.structured_data_parse_status %}
+    {% if sd and (sd.decisions or sd.actions or sd.blocages or sd.reports or sd.votes or sd.resolutions or sd.points_odj or sd.prochaine_date) %}
+    <div class="mt-3">
+      <details>
+        <summary class="fw-semibold text-muted small" style="cursor:pointer;">
+          <i class="bi bi-magic"></i> Données enrichies extraites par l'IA
+          {% if sd_status == 'ok' %}
+          <span class="badge bg-success ms-1" style="font-size:.65rem;">OK</span>
+          {% elif sd_status == 'partial' %}
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">Partiel</span>
+          {% elif sd_status == 'failed' %}
+          <span class="badge bg-danger ms-1" style="font-size:.65rem;">Échec</span>
+          {% endif %}
+          <span class="text-muted ms-1" style="font-size:.75rem;">— apparaîtront dans le rapport Word selon le type de réunion</span>
+        </summary>
+        <div class="mt-2 ps-3 border-start border-2 border-primary-subtle">
+          {% if sd.decisions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-check2-circle"></i> Décisions prises</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.decisions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.actions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-arrow-right-circle"></i> Actions à réaliser</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.actions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.blocages %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-warning-emphasis mb-1"><i class="bi bi-exclamation-triangle"></i> Points bloquants</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.blocages %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.reports %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-secondary mb-1"><i class="bi bi-clock-history"></i> Points reportés</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.reports %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.votes %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-ballot"></i> Votes</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.votes %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.resolutions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-success-emphasis mb-1"><i class="bi bi-clipboard-check"></i> Résolutions adoptées</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.resolutions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.prochaine_date %}
+          <div class="small text-muted"><i class="bi bi-calendar-event"></i> Prochaine réunion : <strong>{{ sd.prochaine_date }}</strong></div>
+          {% endif %}
+          {% if meeting.structured_data_parse_warning %}
+          <div class="mt-1 small text-warning-emphasis"><i class="bi bi-info-circle"></i> {{ meeting.structured_data_parse_warning }}</div>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 

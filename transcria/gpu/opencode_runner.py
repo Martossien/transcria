@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_OPENCODE_BIN = os.environ.get("TRANSCRIA_OPENCODE_BIN", "opencode")
 
+_STRUCTURED_DATA_EMPTY: dict = {
+    "decisions": [], "actions": [], "blocages": [], "reports": [],
+    "votes": [], "resolutions": [], "points_odj": [], "prochaine_date": "",
+}
+
 def _get_prompts_dir(config: dict | None = None) -> str:
     if config:
         custom = config.get("workflow", {}).get("prompts_dir")
@@ -540,6 +545,90 @@ class OpenCodeRunner:
         return lowered.startswith("non identifiable")
 
     @staticmethod
+    @staticmethod
+    def _normalize_structured_data(raw: dict) -> dict:
+        """Normalise le dict brut extrait du JSON LLM en structure canonique."""
+        result = dict(_STRUCTURED_DATA_EMPTY)
+        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj"):
+            val = raw.get(field)
+            if isinstance(val, list):
+                result[field] = [str(item).strip() for item in val if str(item).strip()]
+            elif isinstance(val, str) and val.strip():
+                result[field] = [val.strip()]
+        date_val = raw.get("prochaine_date", "")
+        result["prochaine_date"] = str(date_val).strip() if date_val else ""
+        return result
+
+    @staticmethod
+    def _parse_structured_data(text: str) -> tuple[dict, str, str]:
+        """Extrait la section ## Données structurées du markdown LLM.
+
+        Trois niveaux de fallback :
+          1. json.loads() strict → status "ok"
+          2. Regex champ par champ → status "partial"
+          3. Échec total → status "failed"
+        Si la section est absente → status "missing"
+
+        Returns:
+            (data_dict, parse_status, parse_warning)
+        """
+        import re as _re
+
+        EMPTY = dict(_STRUCTURED_DATA_EMPTY)
+
+        section, has_section = OpenCodeRunner._summary_section(text, r"Données\s+structurées")
+        if not has_section:
+            logger.debug("_parse_structured_data: section absente")
+            return EMPTY, "missing", ""
+
+        # Extraire le contenu du bloc ```json ... ``` ou toute la section
+        code_match = _re.search(r"```(?:json)?\s*\n(.*?)\n```", section, _re.DOTALL)
+        json_text = code_match.group(1).strip() if code_match else section.strip()
+
+        # Niveau 1 : json.loads strict
+        try:
+            raw = json.loads(json_text)
+            if isinstance(raw, dict):
+                data = OpenCodeRunner._normalize_structured_data(raw)
+                non_empty = sum(1 for v in data.values() if v)
+                logger.debug("_parse_structured_data: ok — %d champs non vides", non_empty)
+                return data, "ok", ""
+        except (ValueError, TypeError):
+            pass
+
+        # Niveau 2 : regex champ par champ
+        data = EMPTY.copy()
+        failed_fields: list[str] = []
+        extracted_any = False
+
+        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj"):
+            m = _re.search(rf'"{field}"\s*:\s*\[([^\]]*)\]', json_text, _re.DOTALL)
+            if m:
+                items = _re.findall(r'"([^"]{2,})"', m.group(1))
+                data[field] = [i.strip() for i in items if i.strip()]
+                if data[field]:
+                    extracted_any = True
+            else:
+                failed_fields.append(field)
+
+        dm = _re.search(r'"prochaine_date"\s*:\s*"([^"]*)"', json_text)
+        if dm:
+            data["prochaine_date"] = dm.group(1)
+
+        if extracted_any:
+            warning = (
+                f"JSON malformé — extraction partielle, champs non extraits : {', '.join(failed_fields)}"
+                if failed_fields else "JSON malformé — extraction partielle"
+            )
+            logger.warning("_parse_structured_data: partial — %s", warning)
+            return data, "partial", warning
+
+        # Niveau 3 : échec total
+        warning = "Section ## Données structurées présente mais JSON non parseable"
+        logger.warning("_parse_structured_data: failed — réponse LLM inattendue dans section données structurées")
+        return EMPTY, "failed", warning
+
+    @staticmethod
     def _parse_structured_summary(text: str) -> dict:
         """Parse le markdown structuré en dictionnaire de champs."""
         import re
@@ -640,6 +729,11 @@ class OpenCodeRunner:
         fields["termes_suspects"] = termes_suspects
         fields["termes_suspects_parse_status"] = parse_status
         fields["termes_suspects_parse_warning"] = parse_warning
+
+        sd, sd_status, sd_warning = OpenCodeRunner._parse_structured_data(text)
+        fields["structured_data"] = sd
+        fields["structured_data_parse_status"] = sd_status
+        fields["structured_data_parse_warning"] = sd_warning
 
         return fields
 
