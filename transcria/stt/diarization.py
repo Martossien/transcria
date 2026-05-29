@@ -44,14 +44,33 @@ class DiarizerService(BaseDiarizer):
             logger.info("Diarization: checkpoint réutilisé (%d locuteurs)", len(cached.get("speakers", [])))
             return cached
 
+        # Calcul pur (sans effet de bord), puis persistance liée au job.
+        result = self.diarize_audio(audio_path)
+        fs.save_json("speakers/speaker_turns.json", result)
+        if result.get("available"):
+            fs.save_json(
+                "speakers/speaker_stats.json",
+                {"stats": result["stats"], "speakers": result["speakers"]},
+            )
+            self._save_cache_metadata(fs, audio_path, result)
+            self._extract_clips(audio_path, result["turns"], result["speakers"], fs)
+            self._cache_speaker_embeddings(audio_path, result["turns"], result["speakers"], fs)
+        return result
+
+    def diarize_audio(self, audio_path: Path) -> dict:
+        """Calcul de diarisation pur — aucun effet de bord job/fs/cache/clips.
+
+        Réutilisable hors pipeline (ex. service d'inférence distant). Retourne
+        toujours le dict canonique (`available`, `turns`, `exclusive_turns`,
+        `speakers`, `stats`), y compris en cas d'indisponibilité ou d'OOM
+        (`available=False` + `message`/`error`).
+        """
         if not self.available:
             logger.warning("pyannote non disponible")
-            result = {
+            return {
                 "available": False, "turns": [], "speakers": [],
                 "message": "Détection locuteurs indisponible (pyannote non installé).",
             }
-            fs.save_json("speakers/speaker_turns.json", result)
-            return result
 
         try:
             import torch
@@ -129,27 +148,18 @@ class DiarizerService(BaseDiarizer):
                 logger.warning("exclusive_speaker_diarization non disponible — fallback sur turns standard")
                 exclusive_turns = turns
 
-            result = {
+            logger.info("Diarization: %d locuteurs, %d segments", len(speakers_list), len(turns))
+            return {
                 "available": True,
                 "turns": turns,
                 "exclusive_turns": exclusive_turns,
                 "speakers": speakers_list,
                 "stats": stats,
             }
-            fs.save_json("speakers/speaker_turns.json", result)
-            fs.save_json("speakers/speaker_stats.json", {"stats": stats, "speakers": speakers_list})
-            self._save_cache_metadata(fs, audio_path, result)
-            self._extract_clips(audio_path, turns, speakers_list, fs)
-            self._cache_speaker_embeddings(audio_path, turns, speakers_list, fs)
-
-            logger.info("Diarization: %d locuteurs, %d segments", len(speakers_list), len(turns))
-            return result
 
         except torch.cuda.OutOfMemoryError as exc:
             logger.error("Diarization pyannote: VRAM insuffisante — %s", exc)
-            result = {"available": False, "turns": [], "speakers": [], "error": f"OOM GPU: {exc}"}
+            return {"available": False, "turns": [], "speakers": [], "error": f"OOM GPU: {exc}"}
         except Exception as exc:
             logger.exception("Échec diarization pyannote: %s", exc)
-            result = {"available": False, "turns": [], "speakers": [], "error": str(exc)}
-            fs.save_json("speakers/speaker_turns.json", result)
-            return result
+            return {"available": False, "turns": [], "speakers": [], "error": str(exc)}

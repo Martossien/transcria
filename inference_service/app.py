@@ -11,6 +11,7 @@ import os
 
 from flask import Flask, jsonify
 
+from inference_service.diarize_engine import DiarizeEngine
 from inference_service.engine import VoiceEmbedEngine
 from inference_service.errors import InferenceError
 
@@ -28,12 +29,17 @@ def _configure_logging() -> None:
     )
 
 
-def create_app(config: dict | None = None, engine: VoiceEmbedEngine | None = None) -> Flask:
+def create_app(
+    config: dict | None = None,
+    engine: VoiceEmbedEngine | None = None,
+    diarize_engine: DiarizeEngine | None = None,
+) -> Flask:
     """Crée l'app du service.
 
     Args:
         config: configuration TranscrIA. Si None, chargée via transcria.config.
-        engine: moteur injecté (tests). Si None, construit depuis la config.
+        engine: moteur embedding injecté (tests). Sinon construit depuis la config.
+        diarize_engine: moteur diarisation injecté (tests). Sinon depuis la config.
     """
     _configure_logging()
     app = Flask("transcria_inference")
@@ -43,17 +49,20 @@ def create_app(config: dict | None = None, engine: VoiceEmbedEngine | None = Non
         config = load_config()
     app.config["TRANSCRIA_CONFIG"] = config
 
-    # Moteur résident, partagé par toutes les requêtes (le verrou interne sérialise le GPU).
+    # Moteurs résidents, partagés par toutes les requêtes (verrou interne par moteur → GPU sérialisé).
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
+    app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
 
+    from inference_service.routes.diarize import diarize_bp
     from inference_service.routes.health import health_bp
     from inference_service.routes.voice_embed import voice_embed_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(voice_embed_bp)
+    app.register_blueprint(diarize_bp)
 
     _register_error_handlers(app)
-    logger.info("TranscrIA Inference Service initialisé (voice-embed)")
+    logger.info("TranscrIA Inference Service initialisé (voice-embed, diarize)")
     return app
 
 

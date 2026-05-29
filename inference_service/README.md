@@ -5,7 +5,7 @@ Service d'inférence dédié (Phase 0 du chantier API — voir
 
 Héberge derrière une API HTTP **ce qui n'a aucun standard OpenAI/vLLM** :
 - ✅ **embeddings voix** (`/infer/voice-embed`) — implémenté
-- 🔜 **diarisation** (`/infer/diarize`) — étape suivante
+- ✅ **diarisation** (`/infer/diarize`) — implémenté
 
 Les STT (Cohere/Whisper/Granite) ne passent **pas** ici : ils vont sur vLLM.
 
@@ -34,6 +34,7 @@ gunicorn "inference_service:create_app()" -b 127.0.0.1:8002 --workers 1
 | GET | `/ready` | Prêt à servir (+ tente le déchargement idle) |
 | GET | `/models` | Inventaire des modèles et leur état |
 | POST | `/infer/voice-embed` | Empreinte vocale depuis un audio |
+| POST | `/infer/diarize` | Diarisation (tours de parole) depuis un audio |
 
 ### `POST /infer/voice-embed`
 
@@ -67,6 +68,27 @@ Réponse (200) :
 ```
 `vector_b64` = blob float32 little-endian normalisé L2, reconstruisible côté
 client via `transcria.voice.embedding.deserialize_embedding(blob, dim)`.
+
+### `POST /infer/diarize`
+
+Mêmes deux transports (référence fichier / upload).
+
+```bash
+curl -X POST http://127.0.0.1:8002/infer/diarize \
+  -H 'Content-Type: application/json' -d '{"audio_path": "/chemin/reunion.wav"}'
+```
+
+Réponse (200) — format identique à `speakers/speaker_turns.json` du pipeline :
+```json
+{
+  "available": true,
+  "turns": [{"start": 0.0, "end": 3.0, "speaker": "SPEAKER_00", "duration": 3.0}],
+  "exclusive_turns": [{"start": 0.0, "end": 3.0, "speaker": "SPEAKER_00", "duration": 3.0}],
+  "speakers": ["SPEAKER_00", "SPEAKER_01"],
+  "stats": {"SPEAKER_00": {"speaking_time_seconds": 3.0, "turn_count": 1}}
+}
+```
+Directement consommable par un futur `RemoteDiarizer(BaseDiarizer)` côté frontend.
 
 ## Codes d'erreur
 

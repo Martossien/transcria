@@ -74,19 +74,18 @@ def test_health_ok(client):
     assert r.get_json()["status"] == "ok"
 
 
-def test_ready_modele_non_charge(client):
+def test_ready_modeles_non_charges(client):
     r = client.get("/ready")
     assert r.status_code == 200
-    assert r.get_json()["model"]["loaded"] is False  # CAS B : chargeable, pas encore chargé
+    models = {m["name"]: m for m in r.get_json()["models"]}
+    assert models["voice-embed"]["loaded"] is False  # CAS B : chargeable, pas encore chargé
 
 
 def test_models_inventaire(client):
     r = client.get("/models")
     assert r.status_code == 200
-    models = r.get_json()["models"]
-    assert len(models) == 1
-    assert models[0]["name"] == "voice-embed"
-    assert models[0]["backend"] == "pyannote"
+    names = {m["name"] for m in r.get_json()["models"]}
+    assert names == {"voice-embed", "diarize"}
 
 
 # ── Transport référence fichier ─────────────────────────────────────────────────
@@ -165,7 +164,8 @@ def test_cas_a_modele_reste_resident(client, wav_file):
     client.post("/infer/voice-embed", json={"audio_path": str(wav_file)})
     client.post("/infer/voice-embed", json={"audio_path": str(wav_file)})
     assert client._engine._backend.calls == 2  # même backend réutilisé
-    assert client.get("/ready").get_json()["model"]["loaded"] is True
+    voice = next(m for m in client.get("/ready").get_json()["models"] if m["name"] == "voice-embed")
+    assert voice["loaded"] is True
 
 
 def test_erreur_metier_renvoie_422(client, wav_file):
@@ -219,3 +219,131 @@ def test_endpoint_inconnu_404(client):
 
 def test_mauvaise_methode_405(client):
     assert client.get("/infer/voice-embed").status_code == 405
+
+
+# ── Diarisation ────────────────────────────────────────────────────────────────
+
+_DIAR_RESULT = {
+    "available": True,
+    "turns": [
+        {"start": 0.0, "end": 3.0, "speaker": "SPEAKER_00", "duration": 3.0},
+        {"start": 3.0, "end": 6.5, "speaker": "SPEAKER_01", "duration": 3.5},
+    ],
+    "exclusive_turns": [
+        {"start": 0.0, "end": 3.0, "speaker": "SPEAKER_00", "duration": 3.0},
+        {"start": 3.0, "end": 6.5, "speaker": "SPEAKER_01", "duration": 3.5},
+    ],
+    "speakers": ["SPEAKER_00", "SPEAKER_01"],
+    "stats": {
+        "SPEAKER_00": {"speaking_time_seconds": 3.0, "turn_count": 1},
+        "SPEAKER_01": {"speaking_time_seconds": 3.5, "turn_count": 1},
+    },
+}
+
+
+class _FakeDiarBackend:
+    """Diariseur déterministe — renvoie un résultat canonique fixe."""
+
+    model_name = "fake/diar"
+
+    def __init__(self, result=None):
+        self.result = result if result is not None else _DIAR_RESULT
+        self.calls = 0
+
+    def diarize_audio(self, audio_path):
+        self.calls += 1
+        return self.result
+
+
+def _make_diar_engine(factory=None, idle_timeout_s=300):
+    from inference_service.diarize_engine import DiarizeEngine
+    cfg = {"diarization": {"device": "cpu", "idle_timeout_s": idle_timeout_s}}
+    if factory is None:
+        backend = _FakeDiarBackend()
+        factory = lambda: backend  # noqa: E731
+    return DiarizeEngine(cfg, backend_factory=factory)
+
+
+@pytest.fixture
+def diar_client():
+    diar = _make_diar_engine()
+    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app.config["TESTING"] = True
+    c = app.test_client()
+    c._diar = diar
+    return c
+
+
+def test_diarize_file_ref(diar_client, wav_file):
+    r = diar_client.post("/infer/diarize", json={"audio_path": str(wav_file)})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["available"] is True
+    assert body["speakers"] == ["SPEAKER_00", "SPEAKER_01"]
+    assert len(body["turns"]) == 2
+    assert "exclusive_turns" in body and "stats" in body
+
+
+def test_diarize_upload(diar_client, wav_file):
+    data = {"file": (io.BytesIO(wav_file.read_bytes()), "meeting.wav")}
+    r = diar_client.post("/infer/diarize", data=data, content_type="multipart/form-data")
+    assert r.status_code == 200
+    assert r.get_json()["available"] is True
+
+
+def test_diarize_path_manquant(diar_client):
+    r = diar_client.post("/infer/diarize", json={})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "bad_request"
+
+
+def test_diarize_fichier_introuvable(diar_client):
+    r = diar_client.post("/infer/diarize", json={"audio_path": "/nope/x.wav"})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "audio_not_found"
+
+
+def test_diarize_extension_refusee(diar_client):
+    data = {"file": (io.BytesIO(b"x"), "x.txt")}
+    r = diar_client.post("/infer/diarize", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "unsupported_format"
+
+
+def test_diarize_cas_c_oom_503():
+    def oom_factory():
+        raise RuntimeError("CUDA out of memory")
+    diar = _make_diar_engine(factory=oom_factory)
+    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app.config["TESTING"] = True
+    r = app.test_client().post("/infer/diarize", json={"audio_path": __file__})
+    assert r.status_code == 503
+    assert r.get_json()["error"] == "gpu_busy"
+    assert "Retry-After" in r.headers
+
+
+def test_diarize_echec_metier_422(wav_file):
+    """available=False + error (hors OOM) → 422."""
+    failing = _FakeDiarBackend(result={"available": False, "turns": [], "speakers": [], "error": "annotation_vide"})
+    diar = _make_diar_engine(factory=lambda: failing)
+    app = create_app(config={}, engine=_make_engine(), diarize_engine=diar)
+    app.config["TESTING"] = True
+    r = app.test_client().post("/infer/diarize", json={"audio_path": str(wav_file)})
+    assert r.status_code == 422
+    assert r.get_json()["error"] == "diarisation_echec"
+
+
+def test_diarize_cas_a_resident(diar_client, wav_file):
+    diar_client.post("/infer/diarize", json={"audio_path": str(wav_file)})
+    diar_client.post("/infer/diarize", json={"audio_path": str(wav_file)})
+    assert diar_client._diar._backend.calls == 2  # même backend réutilisé
+
+
+def test_diarize_idle_unload(wav_file):
+    diar = _make_diar_engine(idle_timeout_s=0.01)
+    diar.diarize(wav_file)
+    assert diar.loaded is True
+    import time
+    time.sleep(0.05)
+    assert diar.maybe_unload_if_idle() is True
+    assert diar.loaded is False

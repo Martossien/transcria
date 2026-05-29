@@ -6,8 +6,9 @@ from flask import Blueprint, current_app, jsonify
 health_bp = Blueprint("health", __name__)
 
 
-def _engine():
-    return current_app.extensions["voice_engine"]
+def _engines():
+    ext = current_app.extensions
+    return [ext["voice_engine"], ext["diarize_engine"]]
 
 
 @health_bp.route("/health", methods=["GET"])
@@ -18,18 +19,18 @@ def health():
 
 @health_bp.route("/ready", methods=["GET"])
 def ready():
-    """Prêt à servir : le moteur existe et peut charger/sert déjà le modèle.
+    """Prêt à servir : les moteurs existent et peuvent charger/servent déjà.
 
-    Renvoie 200 même si le modèle n'est pas encore chargé (CAS B = chargeable
-    à la demande). Le déchargement idle est tenté ici, à coût nul si non requis.
+    Renvoie 200 même si les modèles ne sont pas encore chargés (CAS B =
+    chargeable à la demande). Le déchargement idle est tenté ici, coût nul sinon.
     """
-    engine = _engine()
-    engine.maybe_unload_if_idle()
-    return jsonify({"status": "ready", "model": engine.status()}), 200
+    engines = _engines()
+    for engine in engines:
+        engine.maybe_unload_if_idle()
+    return jsonify({"status": "ready", "models": [e.status() for e in engines]}), 200
 
 
 @health_bp.route("/models", methods=["GET"])
 def models():
     """Inventaire des modèles servis et leur état (loaded/unloaded, device…)."""
-    engine = _engine()
-    return jsonify({"models": [engine.status()]}), 200
+    return jsonify({"models": [e.status() for e in _engines()]}), 200
