@@ -4,7 +4,7 @@ from transcria.stt.base_diarizer import BaseDiarizer
 
 logger = logging.getLogger(__name__)
 
-_DIARIZATION_BACKENDS = ("pyannote", "sortformer")
+_DIARIZATION_BACKENDS = ("pyannote", "sortformer", "remote")
 
 
 def create_diarizer(config: dict, device: str | None = None) -> BaseDiarizer:
@@ -35,6 +35,10 @@ def create_diarizer(config: dict, device: str | None = None) -> BaseDiarizer:
     kwargs: dict = {"config": config}
     if device is not None:
         kwargs["device"] = device
+
+    if backend == "remote":
+        from transcria.stt.remote_diarizer import RemoteDiarizer
+        return RemoteDiarizer(**kwargs)
 
     if backend == "sortformer":
         from transcria.stt.sortformer_diarizer import SortformerDiarizer

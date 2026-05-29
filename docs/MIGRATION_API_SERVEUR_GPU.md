@@ -287,11 +287,12 @@ inference:
 | **0** | Valider le LLM distant (déjà API) avec `base_url` non-localhost + clé | Faible | — |
 | **1** | `RemoteTranscriber` **Cohere** via vLLM (`vllm serve CohereLabs/cohere-transcribe-03-2026`) — backend par défaut, gain immédiat. Décider du sort des champs perdus (§3.2) | Moyen | vLLM[audio] |
 | **2** | Ajouter **Whisper** (même endpoint ASR) puis **Granite** (chat multimodal) au `RemoteTranscriber` | Faible | étape 1 |
-| **3** | **TranscrIA Inference Service** (FastAPI) : squelette + `/health` `/ready` `/models` | Moyen | hôte GPU |
-| **4** | **Diarisation distante** (`RemoteDiarizer` + `/infer/diarize`) — **le point dur**, pas de standard | Élevé | étape 3 |
-| **5** | Embeddings voix distants ; Parakeet (service maison ou Riva/Triton) | Faible–Moyen | étape 3 |
+| **3** | ✅ **TranscrIA Inference Service** (Flask) : `/health` `/ready` `/models`, sécurité des flux | Fait | — |
+| **3b** | ✅ **Embeddings voix distants** (`/infer/voice-embed`) | Fait | étape 3 |
+| **4** | ✅ **Diarisation distante** (`RemoteDiarizer` + `/infer/diarize` + factory `backend=remote`) + **client frontend** `InferenceClient` (auth, transports, retry, fallback local) | Fait | étape 3 |
+| **5** | `RemoteVoiceEmbedder` côté frontend (réutilise `InferenceClient.voice_embed`) ; Parakeet (service maison ou Riva/Triton) | Faible | client OK |
 | **6** | Adapter `QueueScheduler` au scheduling « capacité serveur » (§3.4), neutraliser `VRAMManager` côté client | Élevé | étapes 1-5 |
-| **7** | Résilience transverse : retry/backoff, circuit breaker, fallback, sondes `/metrics` (§3.6, §3.10) | Moyen | toutes |
+| **7** | Résilience transverse : ✅ retry/backoff + fallback faits côté client ; reste circuit breaker, sondes `/metrics` distantes (§3.6, §3.10) | Partiel | toutes |
 | **8** | Profil d'install « client léger » dans `INSTALL.md` | Faible | toutes |
 
 **Réordonnancement clé vs version initiale :** les STT (Cohere/Whisper/Granite) passent en **tête** car vLLM les sert directement — c'est rapide et à fort gain. Le service maison se concentre désormais sur la **diarisation + embeddings** (étapes 3-5), périmètre réduit.
