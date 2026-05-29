@@ -1,4 +1,5 @@
 import logging
+import re
 import zipfile
 
 from transcria.jobs.filesystem import JobFilesystem
@@ -36,6 +37,7 @@ class PackageBuilder:
                 self._add_if_exists(zf, fs, "quality/quality_report.json", "quality/quality_report.json")
                 self._add_if_exists(zf, fs, "quality/review_points.json", "quality/review_points.json")
                 self._add_if_exists(zf, fs, "metadata/correction_report.md", "quality/correction_report.md")
+                self._add_docx_report(zf, fs, job)
         except Exception as exc:
             logger.exception("Échec création package ZIP")
             return {"error": str(exc), "zip_path": str(zip_path), "zip_name": zip_name, "size_mb": 0}
@@ -59,3 +61,14 @@ class PackageBuilder:
         src = fs.job_dir / rel_path
         if src.is_file():
             zf.write(src, zip_path)
+
+    def _add_docx_report(self, zf: zipfile.ZipFile, fs: JobFilesystem, job: Job) -> None:
+        jobs_dir = self.config.get("storage", {}).get("jobs_dir", "./jobs")
+        safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
+        docx_path = fs.job_dir / "exports" / f"rapport_{safe_title}.docx"
+        try:
+            from transcria.exports.docx_report import generate_docx_report
+            generate_docx_report(job.id, jobs_dir, docx_path)
+            zf.write(docx_path, f"rapport_{safe_title}.docx")
+        except Exception:
+            logger.warning("Impossible de générer le rapport DOCX pour le job %s — ignoré dans le ZIP", job.id)

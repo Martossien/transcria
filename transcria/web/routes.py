@@ -794,6 +794,8 @@ def job_result(job_id: str):
     review_points = fs.load_json("quality/review_points.json") or []
     srt_content = fs.load_text("metadata/transcription.srt") or ""
     has_package = (fs.job_dir / "exports" / f"transcrIA_job_{job.id}.zip").is_file()
+    safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
+    has_docx = (fs.job_dir / "exports" / f"rapport_{safe_title}.docx").is_file()
 
     return render_template(
         "job_result.html",
@@ -802,6 +804,7 @@ def job_result(job_id: str):
         review_points=review_points,
         srt_content=srt_content,
         has_package=has_package,
+        has_docx=has_docx,
         srt_editor_url=SrtEditorLink.resolve_public_url(cfg, request.host),
     )
 
@@ -1453,6 +1456,43 @@ def api_download_audio(job_id: str):
 
     audit_log(AuditAction.JOB_DOWNLOAD, target_type="job", target_id=job.id, target_label=job.title, details={"format": "audio"})
     return send_file(audio_path, as_attachment=True, download_name=audio_path.name)
+
+
+@web_bp.route("/api/jobs/<job_id>/download/docx", methods=["GET"])
+@login_required
+def api_download_docx(job_id: str):
+    import logging
+    _log = logging.getLogger(__name__)
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    from transcria.exports.docx_report import generate_docx_report
+
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
+    docx_path = fs.job_dir / "exports" / f"rapport_{safe_title}.docx"
+
+    try:
+        generate_docx_report(job.id, cfg["storage"]["jobs_dir"], docx_path)
+    except Exception:
+        _log.exception("Échec génération rapport DOCX pour le job %s", job.id)
+        abort(500)
+
+    audit_log(
+        AuditAction.JOB_DOWNLOAD,
+        target_type="job",
+        target_id=job.id,
+        target_label=job.title,
+        details={"format": "docx"},
+    )
+    return send_file(
+        docx_path,
+        as_attachment=True,
+        download_name=f"{safe_title}_rapport.docx",
+        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
 
 
 @web_bp.route("/api/jobs/<job_id>/audio/excerpt", methods=["GET"])
