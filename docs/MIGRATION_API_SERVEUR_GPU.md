@@ -290,7 +290,7 @@ inference:
 | **3** | ✅ **TranscrIA Inference Service** (Flask) : `/health` `/ready` `/models`, sécurité des flux | Fait | — |
 | **3b** | ✅ **Embeddings voix distants** (`/infer/voice-embed`) | Fait | étape 3 |
 | **4** | ✅ **Diarisation distante** (`RemoteDiarizer` + `/infer/diarize` + factory `backend=remote`) + **client frontend** `InferenceClient` (auth, transports, retry, fallback local) | Fait | étape 3 |
-| **5** | `RemoteVoiceEmbedder` côté frontend (réutilise `InferenceClient.voice_embed`) ; Parakeet (service maison ou Riva/Triton) | Faible | client OK |
+| **5** | ✅ **Empreinte vocale distante** (`RemoteVoiceEmbeddingBackend` + `create_voice_embedding_backend()`, contrôle d'intégrité sha256, fallback local) câblée dans `VoiceEnrollmentService` ; reste Parakeet (service maison ou Riva/Triton) | Fait (Parakeet à part) | client OK |
 | **6** | Adapter `QueueScheduler` au scheduling « capacité serveur » (§3.4), neutraliser `VRAMManager` côté client | Élevé | étapes 1-5 |
 | **7** | Résilience transverse : ✅ retry/backoff + fallback faits côté client ; reste circuit breaker, sondes `/metrics` distantes (§3.6, §3.10) | Partiel | toutes |
 | **8** | Profil d'install « client léger » dans `INSTALL.md` | Faible | toutes |

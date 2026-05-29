@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.voice.embedding import PyannoteVoiceEmbeddingBackend, VoiceEmbeddingError
+from transcria.voice.embedding import VoiceEmbeddingError, create_voice_embedding_backend
 from transcria.voice.models import VoiceReferenceStatus, VoiceSubject
 from transcria.voice.store import VoiceStore, VoiceValidationError
 
@@ -19,7 +19,7 @@ class VoiceEnrollmentService:
         embedding_cfg = self.config.get("voice_enrollment", {}).get("embedding", {})
         profile = VoiceStore.create_processing_profile(subject, consent, actor, embedding_cfg)
         try:
-            backend = PyannoteVoiceEmbeddingBackend(self.config, device=self.device)
+            backend = create_voice_embedding_backend(self.config, device=self.device)
             embedding = backend.extract_reference_embedding(audio_path)
             profile = VoiceStore.complete_profile(profile, embedding, actor)
             reference = VoiceStore.add_reference_file(

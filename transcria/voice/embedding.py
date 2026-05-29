@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import logging
 import os
@@ -141,3 +142,90 @@ def _duration_from_output(output) -> float:
         return float(sum(segment.duration for segment, _, _ in diarization.itertracks(yield_label=True)))
     except Exception:
         return 0.0
+
+
+class RemoteVoiceEmbeddingBackend:
+    """Empreinte vocale déléguée au service d'inférence distant.
+
+    Même interface que `PyannoteVoiceEmbeddingBackend` (`extract_reference_embedding`).
+    Reconstruit le `VoiceEmbedding` depuis le payload du service et vérifie son
+    intégrité (sha256). Bascule sur le backend local si le service est indisponible
+    et que `fallback_local` est activé.
+    """
+
+    backend_name = "remote"
+
+    def __init__(self, config: dict, device: str = "cpu", client=None) -> None:
+        self.config = config
+        self.device = device
+        inf = config.get("inference", {}) or {}
+        self.fallback_local: bool = bool(
+            (inf.get("voice_embed", {}) or {}).get("fallback_local", inf.get("fallback_local", True))
+        )
+        if client is None:
+            from transcria.inference.client import build_client_from_config
+            client = build_client_from_config(config)
+        self._client = client
+
+    def extract_reference_embedding(self, audio_path: Path) -> VoiceEmbedding:
+        from transcria.inference.client import InferenceRequestError, InferenceUnavailable
+
+        if self._client is None:
+            return self._fallback_or_raise(audio_path, "aucun client distant configuré")
+        try:
+            payload = self._client.voice_embed(audio_path)
+        except InferenceUnavailable as exc:
+            logger.warning("Empreinte vocale (remote): service indisponible — %s", exc)
+            return self._fallback_or_raise(audio_path, str(exc))
+        except InferenceRequestError as exc:
+            # 4xx métier : l'audio est en cause, le fallback échouerait pareil.
+            raise VoiceEmbeddingError(f"service_embedding: {exc.code or exc}") from exc
+        return self._payload_to_embedding(payload)
+
+    def _payload_to_embedding(self, payload: dict) -> VoiceEmbedding:
+        try:
+            dim = int(payload["dim"])
+            blob = base64.b64decode(payload["vector_b64"])
+            vector = deserialize_embedding(blob, dim)
+        except (KeyError, TypeError, ValueError, VoiceEmbeddingError) as exc:
+            raise VoiceEmbeddingError(f"reponse_embedding_invalide: {exc}") from exc
+
+        embedding = VoiceEmbedding(
+            vector=vector,
+            backend=str(payload.get("backend", "remote")),
+            model_id=str(payload.get("model_id", "")),
+            model_revision=str(payload.get("model_revision", "")),
+            normalization=str(payload.get("normalization", "l2")),
+            sample_count=int(payload.get("sample_count", 1)),
+            speech_duration_s=float(payload.get("speech_duration_s", 0.0)),
+            quality_status=str(payload.get("quality_status", "ok")),
+        )
+        expected = payload.get("sha256")
+        if expected and embedding.sha256 != expected:
+            raise VoiceEmbeddingError("embedding_corrompu (sha256 ne correspond pas au payload)")
+        logger.info(
+            "Empreinte vocale (remote) reçue: dim=%d samples=%d quality=%s",
+            embedding.dim, embedding.sample_count, embedding.quality_status,
+        )
+        return embedding
+
+    def _fallback_or_raise(self, audio_path: Path, reason: str) -> VoiceEmbedding:
+        if self.fallback_local:
+            logger.warning("Empreinte vocale (remote): bascule sur le backend local (%s)", reason)
+            return PyannoteVoiceEmbeddingBackend(self.config, device=self.device).extract_reference_embedding(audio_path)
+        raise VoiceEmbeddingError(f"service_embedding_indisponible: {reason}")
+
+
+def create_voice_embedding_backend(config: dict, device: str = "cpu"):
+    """Sélectionne le backend d'empreinte vocale selon la config `inference`.
+
+    Distant si une URL est configurée ET `inference.mode` ∈ {remote, hybrid}.
+    Sinon, backend pyannote local (comportement historique préservé).
+    """
+    inf = config.get("inference", {}) or {}
+    url = inf.get("url") or inf.get("base_url")
+    mode = inf.get("mode", "local")
+    if url and mode in ("remote", "hybrid"):
+        logger.info("Empreinte vocale : backend distant (%s, mode=%s)", url, mode)
+        return RemoteVoiceEmbeddingBackend(config, device=device)
+    return PyannoteVoiceEmbeddingBackend(config, device=device)
