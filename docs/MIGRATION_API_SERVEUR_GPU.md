@@ -225,6 +225,61 @@ inference:
 
 ---
 
+## 4bis. Phase 0 — Service maison en localhost (strangler pattern)
+
+> **Décision (2026-05-30) :** démarrer la migration en extrayant **un seul composant** (ce qui n'a aucun standard API) derrière un service FastAPI tournant d'abord en `127.0.0.1`, avant tout déménagement distant. On valide la mécanique client↔serveur sans la complexité réseau ; le passage distant ne sera qu'un changement d'URL.
+
+### 4bis.1 Périmètre — uniquement ce qui doit absolument y passer
+Le service ne porte **que** ce qui n'a pas de standard (les STT vont sur vLLM, §2.2) :
+1. **Embeddings voix** — petit, autonome → **premier** endpoint, valide tout le circuit avec un minimum de surface.
+2. **Diarisation** (pyannote + Sortformer) — le cœur, plus riche (tours + samples + genre) → **ensuite**, même patron.
+
+### 4bis.2 Double topologie supportée dès le départ
+Le même service, le même contrat, sert deux cas :
+- **Mono-machine** : frontend + service sur la même machine → `url: http://127.0.0.1:8002`, transport audio **par référence fichier** (même filesystem).
+- **Frontal séparé** : service sur l'hôte GPU → `url: http://gpu-host:8002`, transport **upload / stockage partagé**.
+
+→ **Contrat identique, seule l'URL et le mode de transport changent.** Le contrat audio supporte donc **les deux modes (référence + upload) dès la v1**.
+
+### 4bis.3 Gestion VRAM — pattern A/B/C (transposé du LLM)
+Quand une requête arrive, le service applique la même logique que le LLM d'arbitrage :
+
+| Cas | Situation | Action |
+|---|---|---|
+| **A** | Modèle déjà résident en VRAM | Sert directement |
+| **B** | Modèle non chargé, VRAM libre | Charge puis sert |
+| **C** | VRAM occupée (STT/LLM tient le GPU) | **`503` + `Retry-After`** → le **`QueueScheduler` existant** remet le job en file |
+
+> Le CAS C **réutilise la file existante** côté frontend — pas de nouvelle file à inventer côté service.
+
+### 4bis.4 Allocation GPU — assignation statique, pas de négociation
+**Pas de dialogue frontend↔service** (couplage fragile, race conditions). À la place, selon la topologie :
+
+- **Machine multi-GPU (ex. 8 cartes)** : **assignation statique par rôle** via `CUDA_VISIBLE_DEVICES`. Ex. GPU 0-2 → vLLM (LLM+STT), **GPU 3 → service diarisation**, etc. Aucun conflit, aucune négociation. Le service a son GPU → **modèle résident avec idle-timeout** (décharge après N min d'inactivité).
+- **Machine mono-GPU** : **un seul arbitre VRAM** (jamais deux). Le service charge/décharge à la demande en respectant l'arbitre → **modèle à la demande**, CAS C via la file.
+
+> Conséquence : « modèle résident vs à la demande » **découle de la topologie**, ce n'est pas un choix indépendant. Et l'assignation statique (multi-GPU) rend le CAS C quasi inutile en pratique — c'est un filet de sécurité.
+
+### 4bis.5 Squelette envisagé
+```
+inference_service/                 # FastAPI, hors package frontend
+  app.py                           # /health /ready /models
+  routes/voice_embed.py            # POST /infer/voice-embed   ← étape 1 (simple)
+  routes/diarize.py                # POST /infer/diarize        ← étape 2 (cœur)
+  engine/                          # réutilise transcria.voice.embedding / stt.diarization
+  vram.py                          # logique A/B/C + idle-timeout (multi-GPU) ou arbitre (mono)
+```
+Config côté frontend (`mode: hybrid` → fallback local si le service ne répond pas) :
+```yaml
+inference:
+  mode: hybrid
+  diarization:{ backend: remote, url: "http://127.0.0.1:8002/infer/diarize", fallback_local: true }
+  voice_embed:{ url: "http://127.0.0.1:8002/infer/voice-embed", fallback_local: true }
+  transport:  { audio: file_ref }   # file_ref en mono-machine, upload en distant
+```
+
+---
+
 ## 5. Plan de migration progressif
 
 | Étape | Contenu | Risque | Prérequis |
