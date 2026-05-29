@@ -829,3 +829,48 @@ class TestRunnerThemeTracking:
         info = self._helper()({})
         assert info["meeting_type"] == ""
         assert info["type_specific_count"] == 0
+
+    def test_write_output_json_ne_plante_pas(self, admin_client, app, tmp_path):
+        """Régression : write_output_json référençait meeting_ctx non chargé.
+
+        Bug attrapé par un run E2E réel — le bloc structured_data/docx_theh
+        plantait avec « name 'meeting_ctx' is not defined ». Ce test garantit
+        que la fonction écrit un JSON complet sur un job seedé.
+        """
+        import importlib.util
+        import json as _json
+        from transcria.config import get_config
+
+        spec = importlib.util.spec_from_file_location(
+            "_e2e_runner_full", str(Path(__file__).parent / "test_e2e_workflow.py"))
+        e2e = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(e2e)
+
+        job = _seed_themed_job(admin_client, app, "CSE", _SD_CSE,
+                               {"president_seance": "Marie", "membres_presents": "8",
+                                "membres_total": "11"})
+        with app.app_context():
+            cfg = get_config()
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job)
+
+        e2e.RESULTS["job_id"] = job
+        import sys as _sys
+        old_argv = _sys.argv
+        _sys.argv = ["test_e2e_workflow.py", "--audio", "tests/test2.mp3", "--skip-llm"]
+        try:
+            args = e2e.parse_args()
+        finally:
+            _sys.argv = old_argv
+
+        out = tmp_path / "result.json"
+        e2e.write_output_json(out, args, cfg, fs)  # ne doit pas lever
+
+        assert out.is_file()
+        payload = _json.loads(out.read_text(encoding="utf-8"))
+        assert "structured_data" in payload
+        assert "docx_theme" in payload
+        # Le job seedé est de type CSE → thème institutionnel
+        assert payload["docx_theme"]["meeting_type"] == "CSE"
+        assert "PROCÈS-VERBAL" in payload["docx_theme"]["banner_text"].upper()
+        assert payload["docx_theme"]["is_default_theme"] is False

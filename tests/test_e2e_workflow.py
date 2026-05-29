@@ -1201,6 +1201,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     parakeet_data = fs.load_json("metadata/parakeet.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
+    meeting_ctx = fs.load_json("context/meeting_context.json") or {}
     reliability_counts = {}
     if isinstance(transcription_segments, list):
         for segment in transcription_segments:
