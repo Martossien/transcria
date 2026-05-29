@@ -321,6 +321,12 @@
           <span class="text-muted ms-1" style="font-size:.75rem;">— apparaîtront dans le rapport Word selon le type de réunion</span>
         </summary>
         <div class="mt-2 ps-3 border-start border-2 border-primary-subtle">
+          {% if sd.points_odj %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-list-ol"></i> Ordre du jour</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.points_odj %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
           {% if sd.decisions %}
           <div class="mb-2">
             <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-check2-circle"></i> Décisions prises</div>

@@ -844,12 +844,16 @@ class DocxReport:
         # On garde un compteur local pour nommer proprement
         shown: list[tuple[str, list[str]]] = []
 
+        # Ordre du jour — CSE en tête (structure d'un PV : agenda d'abord)
+        if mt in _CSE_TYPES and sd.get("points_odj"):
+            shown.append(("Ordre du jour", sd["points_odj"]))
+
         # Décisions — universelles si présentes
         if sd.get("decisions"):
             shown.append(("Décisions prises", sd["decisions"]))
 
-        # Actions — tous types sauf Podcast
-        if sd.get("actions") and mt not in ("Podcast / média",):
+        # Actions — types où un suivi d'actions a du sens (cf. _ACTION_TYPES)
+        if sd.get("actions") and mt in _ACTION_TYPES:
             shown.append(("Actions à réaliser", sd["actions"]))
 
         # Blocages — types projet/crise
@@ -860,14 +864,12 @@ class DocxReport:
         if sd.get("reports"):
             shown.append(("Points reportés", sd["reports"]))
 
-        # Votes et résolutions — CSE uniquement
+        # Votes et résolutions — CSE uniquement (après l'ODJ et les décisions)
         if mt in _CSE_TYPES:
             if sd.get("votes"):
                 shown.append(("Votes", sd["votes"]))
             if sd.get("resolutions"):
                 shown.append(("Résolutions adoptées", sd["resolutions"]))
-            if sd.get("points_odj"):
-                shown.append(("Ordre du jour", sd["points_odj"]))
 
         if not shown:
             return 0

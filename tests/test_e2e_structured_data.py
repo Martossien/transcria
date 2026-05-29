@@ -292,6 +292,30 @@ class TestDocxTypeRouting:
         full = self._build_doc("Podcast / média", _SD_COMPLET)
         assert "ACTIONS" not in full
 
+    def test_entretien_individuel_masque_actions(self):
+        """Régression : actions routées par _ACTION_TYPES, pas par 'tous sauf podcast'.
+        Un entretien individuel ne doit pas afficher 'Actions à réaliser'."""
+        full = self._build_doc("Entretien individuel", _SD_COMPLET)
+        assert "ACTIONS À RÉALISER" not in full
+
+    def test_reunion_medicale_masque_actions(self):
+        full = self._build_doc("Réunion médicale / santé", _SD_COMPLET)
+        assert "ACTIONS À RÉALISER" not in full
+
+    def test_point_projet_affiche_actions(self):
+        """Point projet est dans _ACTION_TYPES → actions visibles."""
+        full = self._build_doc("Point projet", _SD_COMPLET)
+        assert "ACTIONS À RÉALISER" in full
+
+    def test_cse_ordre_du_jour_avant_votes(self):
+        """L'ordre du jour doit précéder les votes dans le PV CSE."""
+        full = self._build_doc("CSE", _SD_CSE)
+        assert "ORDRE DU JOUR" in full
+        idx_odj = full.find("ORDRE DU JOUR")
+        idx_votes = full.find("VOTES")
+        assert idx_odj != -1 and idx_votes != -1
+        assert idx_odj < idx_votes, "L'ordre du jour doit apparaître avant les votes"
+
     def test_entretien_individuel_auto_confidentiel(self):
         pytest.importorskip("docx")
         from docx import Document
