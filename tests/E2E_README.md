@@ -13,6 +13,20 @@ applicatif. Il est conçu pour deux usages :
 
 `tests/test_central_lexicon.py` couvre le parcours applicatif des **lexiques centralisés** sans GPU réel : droits admin/admin groupe, création de lexique, import/édition d'entrées, export CSV `POST` audité, restriction optionnelle aux admins globaux, périmètre job→groupes, sélection des lexiques cochés, pré-remplissage avec raison d'affichage, stats d'usage, signaux RGPD/PSSI, contrôles qualité et filtrage du lexique avant correction. Les tests vérifient que les audits lexiques ne stockent pas les termes en clair.
 
+`tests/test_e2e_structured_data.py` couvre le pipeline complet d'extraction de données structurées **sans GPU réel** : 36 tests pytest automatisés répartis en 8 classes —
+- **TestParserToContext** : parsing LLM (`_parse_structured_summary`) → stockage dans `meeting_context.json` via `_apply_llm_suggestions`, 3 niveaux de fallback (ok / partial / failed / missing) ;
+- **TestDocxTypeRouting** : routing des sections DOCX par type de réunion (CSE, CODIR, Point projet, Réunion de crise, Podcast, Entretien individuel) ;
+- **TestSectionNumbering** : numérotation dynamique des sections selon le nombre de blocs enrichis ;
+- **TestGracefulDegradation** : `structured_data` absent ou parse échoué → DOCX v1 standard sans erreur ;
+- **TestWizardEnrichedPanel** : panneau HTML collapsible dans l'étape Contexte du wizard, badges ok/partial/failed, affichage par type ;
+- **TestDocxHTTPEnriched** : téléchargement via `GET /api/jobs/<id>/download/docx` avec vérification du contenu DOCX ;
+- **TestPromptIntegrity** : présence de la section 8b, de tous les champs JSON, de l'étape 4b et de la vérification n°16 dans `summary_prompt.txt` ;
+- **TestMeetingTypes** : présence des 10 nouveaux types dans `MEETING_TYPES`, préservation des types existants, affichage dans le dropdown du wizard.
+
+```bash
+python -m pytest tests/test_e2e_structured_data.py -v   # 36 tests, ~3s, sans GPU
+```
+
 `tests/test_stt.py` et `tests/test_workflow_runner.py` couvrent aussi le biasing STT expérimental depuis le lexique : hotwords Whisper bornés, activation uniquement quand le backend effectif est Whisper, audit dans `metadata/whisper_hotwords.json` ; sélection des formes cibles validées pour le Trie Cohere, sans booster les variantes fautives, et audit dans `metadata/cohere_lexicon_biasing.json`.
 
 ### Enchaînement
@@ -497,7 +511,8 @@ venv/bin/python tests/test_e2e_workflow.py \
     "scene_filter": false,
     "normalization": true,
     "diarization_checkpoint": true,
-    "zip_export": true
+    "zip_export": true,
+    "docx_export": true
   },
   "audio_preflight_data": {
     "risk_level": "ok",
@@ -538,6 +553,15 @@ venv/bin/python tests/test_e2e_workflow.py \
   "speakers": {
     "count": 3,
     "gender_attributed": 2
+  },
+  "structured_data": {
+    "parse_status": "ok",
+    "parse_warning": "",
+    "decisions_count": 2,
+    "actions_count": 3,
+    "votes_count": 0,
+    "resolutions_count": 0,
+    "has_prochaine_date": true
   },
   "job_id": "abc123",
   "job_dir": "/home/admin_ia/transcria/jobs/abc123"
@@ -580,6 +604,8 @@ résultats, car elles reflètent le backend réellement utilisé par le pipeline
 | `metadata/correction_report.md` | Si LLM active (absent si `--skip-llm`) |
 | `exports/*.zip` | Toujours |
 | `exports/rapport_*.docx` | Toujours (généré et inclus dans le ZIP par `PackageBuilder`) |
+| `context/meeting_context.json` → `structured_data` | Si phase résumé LLM active (absent si `--skip-llm`) |
+| `context/meeting_context.json` → `structured_data_parse_status` | Toujours après résumé LLM (`ok` / `partial` / `failed` / `missing`) |
 
 ### Artefacts optionnels (selon config et pipeline)
 

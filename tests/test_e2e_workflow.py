@@ -1284,6 +1284,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "granite": (fs.job_dir / "metadata" / "granite.json").exists(),
             "parakeet": (fs.job_dir / "metadata" / "parakeet.json").exists(),
             "zip_export": bool(list((fs.job_dir / "exports").glob("*.zip"))) if (fs.job_dir / "exports").exists() else False,
+            "docx_export": bool(list((fs.job_dir / "exports").glob("*.docx"))) if (fs.job_dir / "exports").exists() else False,
         },
 
         # Pré-diagnostic audio
@@ -1358,6 +1359,17 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "speakers": {
             "count": len(spk_list),
             "gender_attributed": len([s for s in spk_list if s.get("gender")]),
+        },
+
+        # Données structurées enrichies (extraction LLM section 8b du prompt)
+        "structured_data": {
+            "parse_status": meeting_ctx.get("structured_data_parse_status", "missing"),
+            "parse_warning": meeting_ctx.get("structured_data_parse_warning", ""),
+            "decisions_count": len((meeting_ctx.get("structured_data") or {}).get("decisions") or []),
+            "actions_count": len((meeting_ctx.get("structured_data") or {}).get("actions") or []),
+            "votes_count": len((meeting_ctx.get("structured_data") or {}).get("votes") or []),
+            "resolutions_count": len((meeting_ctx.get("structured_data") or {}).get("resolutions") or []),
+            "has_prochaine_date": bool((meeting_ctx.get("structured_data") or {}).get("prochaine_date")),
         },
 
         # Références

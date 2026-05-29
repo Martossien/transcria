@@ -1,7 +1,8 @@
 # TranscrIA — Feature Spec : Rapport DOCX de transcription
 
 > **Statut v1 :** ✅ Implémentée et en production (2026-05-29)  
-> **Statut v2 :** 🔵 En discussion — Système de templates (voir chapitre 11)  
+> **Statut v2a :** ✅ Implémentée — Extraction structurée universelle + types de réunion étendus (2026-05-29)  
+> **Statut v2b :** 🔵 En discussion — Gestionnaire de templates + mode chat LLM (voir chapitre 11)  
 > **Auteur :** Martossien  
 > **Date spec :** 2026-05-29 | **Dernière mise à jour :** 2026-05-29  
 > **Priorité :** Haute (vitrine utilisateur, valeur perçue immédiate)
