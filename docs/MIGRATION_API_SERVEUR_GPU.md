@@ -169,9 +169,9 @@ Plusieurs jobs TranscrIA simultanés → N requêtes au serveur. vLLM gère le b
 Le `transcription_metadata.backend` doit refléter le **modèle réellement servi** côté serveur, pas le modèle demandé. Risque de dérive : le serveur met à jour un modèle, les résultats changent sans que le client le sache. → exposer la version du modèle via `/models` et la tracer dans les métadonnées job.
 
 ### 3.9 Sécurité et secrets
-- Clés API pour les endpoints, **TLS** si le réseau n'est pas de confiance.
+- ✅ **Implémenté (Phase 0, `inference_service/security.py`)** : clé API partagée sur `/infer/*` (Bearer / X-API-Key, comparaison à temps constant, sondes libres), allowlist de chemins `file_ref` anti-traversal (`403` hors racines), limite d'upload (`413`). Clé via variable d'env (`auth.api_key_env`), pas de secret en clair.
+- 🔜 **TLS** si le réseau n'est pas de confiance (terminaison côté reverse-proxy ou serveur WSGI).
 - L'audio quitte le frontend → vérifier la conformité **RGPD** (le serveur GPU est-il dans le même périmètre ?). Cohérent avec la philosophie « tout local » actuelle du projet : si le serveur est externe, c'est une décision à auditer.
-- Pas de secret en clair dans `config.yaml` (déjà un principe du projet) — variables d'environnement / secrets manager.
 
 ### 3.10 Observabilité
 `/metrics`, `/health`, `/ready` doivent remonter l'état des **serveurs distants** (joignables ? prêts ? latence ?). Le health check actuel ne teste que la base locale. → ajouter des sondes vers chaque endpoint distant, et un état « dégradé » si un backend est injoignable.

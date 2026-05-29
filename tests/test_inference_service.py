@@ -347,3 +347,120 @@ def test_diarize_idle_unload(wav_file):
     time.sleep(0.05)
     assert diar.maybe_unload_if_idle() is True
     assert diar.loaded is False
+
+
+# ── Sécurité des flux ────────────────────────────────────────────────────────
+
+def _secure_app(tmp_path, *, api_key=None, allowed_roots=None, max_upload_mb=None):
+    inference = {}
+    if api_key is not None:
+        inference["auth"] = {"api_key": api_key}
+    if allowed_roots is not None:
+        inference["allowed_audio_roots"] = [str(r) for r in allowed_roots]
+    if max_upload_mb is not None:
+        inference["max_upload_mb"] = max_upload_mb
+    cfg = {"inference": inference}
+    app = create_app(config=cfg, engine=_make_engine(), diarize_engine=_make_diar_engine())
+    app.config["TESTING"] = True
+    return app.test_client()
+
+
+def _wav(path):
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\x00\x00" * 16000)
+    return path
+
+
+# --- Clé API ---
+
+def test_auth_requise_si_cle_configuree(tmp_path):
+    c = _secure_app(tmp_path, api_key="secret-123")
+    wav = _wav(tmp_path / "a.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)})
+    assert r.status_code == 401
+    assert r.get_json()["error"] == "unauthorized"
+
+
+def test_auth_ok_avec_bearer(tmp_path):
+    c = _secure_app(tmp_path, api_key="secret-123")
+    wav = _wav(tmp_path / "a.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)},
+               headers={"Authorization": "Bearer secret-123"})
+    assert r.status_code == 200
+
+
+def test_auth_ok_avec_x_api_key(tmp_path):
+    c = _secure_app(tmp_path, api_key="secret-123")
+    wav = _wav(tmp_path / "a.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)},
+               headers={"X-API-Key": "secret-123"})
+    assert r.status_code == 200
+
+
+def test_auth_mauvaise_cle_401(tmp_path):
+    c = _secure_app(tmp_path, api_key="secret-123")
+    wav = _wav(tmp_path / "a.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)},
+               headers={"Authorization": "Bearer mauvaise"})
+    assert r.status_code == 401
+
+
+def test_health_libre_meme_avec_auth(tmp_path):
+    c = _secure_app(tmp_path, api_key="secret-123")
+    assert c.get("/health").status_code == 200
+    assert c.get("/ready").status_code == 200
+    assert c.get("/models").status_code == 200
+
+
+# --- Allowlist de chemins (anti-traversal) ---
+
+def test_file_ref_hors_racine_403(tmp_path):
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    c = _secure_app(tmp_path, allowed_roots=[allowed])
+    outside = _wav(tmp_path / "outside.wav")  # hors de allowed/
+    r = c.post("/infer/voice-embed", json={"audio_path": str(outside)})
+    assert r.status_code == 403
+    assert r.get_json()["error"] == "path_not_allowed"
+
+
+def test_file_ref_dans_racine_ok(tmp_path):
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    c = _secure_app(tmp_path, allowed_roots=[allowed])
+    inside = _wav(allowed / "ok.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(inside)})
+    assert r.status_code == 200
+
+
+def test_traversal_bloque(tmp_path):
+    """Un chemin avec .. qui sort de la racine doit être refusé (403)."""
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    secret = _wav(tmp_path / "secret.wav")  # noqa: F841 — cible hors racine
+    c = _secure_app(tmp_path, allowed_roots=[allowed])
+    traversal = str(allowed / ".." / "secret.wav")
+    r = c.post("/infer/diarize", json={"audio_path": traversal})
+    assert r.status_code == 403
+
+
+def test_sans_allowlist_autorise(tmp_path):
+    """Sans racine configurée : autorisé (dev), comportement historique."""
+    c = _secure_app(tmp_path)  # ni clé ni allowlist
+    wav = _wav(tmp_path / "a.wav")
+    r = c.post("/infer/voice-embed", json={"audio_path": str(wav)})
+    assert r.status_code == 200
+
+
+# --- Limite de taille upload ---
+
+def test_upload_trop_gros_413(tmp_path):
+    c = _secure_app(tmp_path, max_upload_mb=0.001)  # ~1 Ko
+    big = io.BytesIO(b"\x00" * 50_000)  # 50 Ko > limite
+    r = c.post("/infer/voice-embed", data={"file": (big, "big.wav")},
+               content_type="multipart/form-data")
+    assert r.status_code == 413
+    assert r.get_json()["error"] == "payload_too_large"

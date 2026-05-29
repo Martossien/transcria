@@ -90,11 +90,44 @@ Réponse (200) — format identique à `speakers/speaker_turns.json` du pipeline
 ```
 Directement consommable par un futur `RemoteDiarizer(BaseDiarizer)` côté frontend.
 
+## Sécurité des flux
+
+Trois protections, pilotées par la config `inference` (voir `security.py`) :
+
+```yaml
+inference:
+  auth:
+    api_key_env: TRANSCRIA_INFERENCE_KEY   # clé via variable d'env (recommandé)
+    # api_key: "…"                          # ou directe (déconseillé)
+  allowed_audio_roots:                       # racines lisibles via file_ref
+    - /mnt/transcria
+    - ./jobs
+  max_upload_mb: 200
+```
+
+1. **Clé API** — si configurée, `/infer/*` exige `Authorization: Bearer <clé>`
+   (ou `X-API-Key`), comparaison à temps constant. Non configurée → mode ouvert
+   (dev localhost), avertissement au démarrage. Les sondes `/health` `/ready`
+   `/models` restent **libres** (supervision).
+2. **Allowlist de chemins (anti-traversal)** — `file_ref` ne lit que sous
+   `allowed_audio_roots` (chemins résolus, `..` et symlinks neutralisés). Hors
+   racines → `403 path_not_allowed`. Sans allowlist → autorisé + warning.
+3. **Limite d'upload** — `max_upload_mb` (défaut 200) → `413` au-delà.
+
+```bash
+curl -X POST http://127.0.0.1:8002/infer/diarize \
+  -H 'Authorization: Bearer $TRANSCRIA_INFERENCE_KEY' \
+  -H 'Content-Type: application/json' -d '{"audio_path": "/mnt/transcria/jobs/x/input/a.wav"}'
+```
+
 ## Codes d'erreur
 
 | Statut | `error` | Sens |
 |---|---|---|
 | 400 | `bad_request` / `audio_not_found` / `unsupported_format` | Entrée invalide |
+| 401 | `unauthorized` | Clé API manquante ou invalide |
+| 403 | `path_not_allowed` | Chemin `file_ref` hors des racines autorisées |
+| 413 | `payload_too_large` | Upload au-delà de `max_upload_mb` |
 | 422 | (code métier) | Audio valide mais inférence impossible (ex. `speaker_embeddings_vides`) |
 | 503 | `gpu_busy` | **CAS C** — VRAM saturée, `Retry-After` fourni → le frontend re-planifie |
 | 500 | `internal_error` | Erreur inattendue |

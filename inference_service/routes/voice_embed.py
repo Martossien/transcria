@@ -20,6 +20,7 @@ from pathlib import Path
 from flask import Blueprint, current_app, jsonify, request
 
 from inference_service.errors import BadRequestError
+from inference_service.security import resolve_safe_audio_path
 from transcria.voice.embedding import VoiceEmbedding, serialize_embedding
 
 logger = logging.getLogger("inference_service.voice_embed")
@@ -69,7 +70,9 @@ def _handle_file_ref(engine) -> VoiceEmbedding:
     raw_path = data.get("audio_path")
     if not raw_path or not isinstance(raw_path, str):
         raise BadRequestError("champ 'audio_path' requis (ou utilisez un upload multipart)")
-    audio_path = Path(raw_path)
+    config = current_app.config["TRANSCRIA_CONFIG"]
+    # Anti-traversal : refuse tout chemin hors des racines autorisées (403).
+    audio_path = resolve_safe_audio_path(raw_path, config)
     if not audio_path.is_file():
         raise BadRequestError(f"fichier introuvable: {raw_path}", code="audio_not_found")
     logger.info("voice-embed (file_ref) | path=%s", audio_path)

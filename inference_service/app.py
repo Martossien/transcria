@@ -49,6 +49,22 @@ def create_app(
         config = load_config()
     app.config["TRANSCRIA_CONFIG"] = config
 
+    # Sécurité des flux (proportionnée Phase 0) — voir inference_service/security.py
+    from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
+
+    app.config["MAX_CONTENT_LENGTH"] = max_upload_bytes(config)
+    if expected_api_key(config):
+        logger.info("Auth activée : les endpoints /infer exigent une clé API")
+    else:
+        logger.warning("Auth désactivée (aucune clé 'inference.auth.api_key' configurée) — mode dev")
+
+    @app.before_request
+    def _guard_inference_endpoints():
+        # Seuls les endpoints d'inférence sont protégés ; sondes libres pour la supervision.
+        from flask import request
+        if request.path.startswith("/infer/"):
+            enforce_api_key(config)
+
     # Moteurs résidents, partagés par toutes les requêtes (verrou interne par moteur → GPU sérialisé).
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
     app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
@@ -74,6 +90,10 @@ def _register_error_handlers(app: Flask) -> None:
         if exc.retry_after is not None:
             response.headers["Retry-After"] = str(exc.retry_after)
         return response
+
+    @app.errorhandler(413)
+    def _handle_413(_exc):
+        return jsonify({"error": "payload_too_large", "message": "Fichier trop volumineux"}), 413
 
     @app.errorhandler(404)
     def _handle_404(_exc):

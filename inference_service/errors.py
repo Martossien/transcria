@@ -34,6 +34,20 @@ class BadRequestError(InferenceError):
     code = "bad_request"
 
 
+class UnauthorizedError(InferenceError):
+    """Clé API manquante ou invalide sur un endpoint d'inférence protégé."""
+
+    http_status = 401
+    code = "unauthorized"
+
+
+class ForbiddenError(InferenceError):
+    """Accès refusé — ex. chemin audio hors des racines autorisées (anti-traversal)."""
+
+    http_status = 403
+    code = "forbidden"
+
+
 class UnprocessableError(InferenceError):
     """L'audio est valide en transport mais l'inférence métier a échoué (ex. embedding vide)."""
 
