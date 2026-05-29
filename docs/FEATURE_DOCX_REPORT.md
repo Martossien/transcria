@@ -1,8 +1,9 @@
 # TranscrIA — Feature Spec : Rapport DOCX de transcription
 
-> **Statut :** Spécification validée — à implémenter  
+> **Statut v1 :** ✅ Implémentée et en production (2026-05-29)  
+> **Statut v2 :** 🔵 En discussion — Système de templates (voir chapitre 11)  
 > **Auteur :** Martossien  
-> **Date spec :** 2026-05-29  
+> **Date spec :** 2026-05-29 | **Dernière mise à jour :** 2026-05-29  
 > **Priorité :** Haute (vitrine utilisateur, valeur perçue immédiate)
 
 ---
@@ -409,3 +410,230 @@ tests/test_docx_report.py             ← nouveau
 ```
 
 Aucune modification des modèles de données existants requise.
+
+---
+
+## 11. Évolutions — Système de templates (v2, en discussion)
+
+> **Statut :** Discussion en cours — 2026-05-29  
+> Ce chapitre capture les réflexions et décisions de conception avant implémentation.  
+> Il sera mis à jour au fil des échanges et des décisions arrêtées.
+
+---
+
+### 11.1 Décision d'accès — arrêtée
+
+**Seuls les admins globaux et les admins de groupe peuvent gérer les templates.**
+
+Cohérent avec le modèle d'accès existant (lexiques centralisés, voix enregistrées). Un utilisateur ou opérateur utilise le template associé à son type de réunion, sans pouvoir le modifier.
+
+---
+
+### 11.2 Architecture en 3 couches — à aligner par type de réunion
+
+Le système de templates est en réalité **3 couches interconnectées** qui doivent être cohérentes :
+
+```
+Type de réunion
+    │
+    ├── Couche 1 : Prompt template
+    │     Ce qu'on demande à la LLM d'extraire pendant le résumé
+    │     (décisions prises, actions à faire, votes, ODJ...)
+    │     → enrichit meeting_context.json avec des champs structurés
+    │
+    ├── Couche 2 : Structure DOCX
+    │     Les sections qui apparaissent dans le document final
+    │     (tableau votes pour CSE, bloc actions SMART pour CODIR...)
+    │     → définit quelles sections existent et dans quel ordre
+    │
+    └── Couche 3 : Visual template
+          Styles, couleurs, logo de l'organisation
+          → le .docx de base avec la mise en forme
+```
+
+**Règle clé :** changer le type de réunion doit changer les 3 couches ensemble. Elles sont liées par le `meeting_type`.
+
+---
+
+### 11.3 Types de réunion — liste élargie (en discussion)
+
+La liste actuelle dans le code : `Réunion interne | Réunion projet | Réunion technique | Formation | Réunion médicale / santé | RH | Entretien | Autre`
+
+Proposition d'extension :
+
+| Type | Spécificités documentaires | Sections additionnelles |
+|---|---|---|
+| **CSE** | Document légal — PV, délais légaux, mentions obligatoires | ODJ numéroté, votes (pour/contre/abstention), résolutions adoptées, questions élus / réponses direction |
+| **CSE extraordinaire** | Même structure que CSE, objet unique | Section "Objet de la réunion extraordinaire" en tête |
+| **CODIR / COMEX** | Décisions stratégiques, KPIs, arbitrages | Décisions, indicateurs clés, responsables nommés, points escalade |
+| **Réunion client** | Engagements et suivi | Engagements pris, prochaines étapes, contacts référents |
+| **Point projet** | Actions SMART | Avancement, blocages, actions (qui/quoi/quand/priorité) |
+| **Réunion de crise** | Urgence et responsabilité | Timeline, causes identifiées, actions correctives, responsable par action |
+| **Séminaire / atelier** | Livrables et groupes de travail | Livrables attendus, groupes, restitutions |
+| **Négociation** | Positions et accord | Positions initiales, concessions, accord final ou point de rupture |
+| **1-to-1 / entretien individuel** | RH — confidentiel automatique | Objectifs, retours, plan de développement personnel |
+| **Podcast / média** | Pas de participants institutionnels | Transcription prioritaire, pas de tableau participants |
+
+**Questions ouvertes :**
+- La liste de types est-elle fixe dans le code ou extensible par l'admin (clé + libellé) ?
+- Un admin de groupe peut-il créer un type spécifique à son groupe ?
+
+---
+
+### 11.4 Prompt template enrichi par type de réunion
+
+Chaque type de réunion ajoute des instructions au prompt de résumé LLM (`run_summary`).
+
+Exemples :
+
+**Point projet :**
+```
+Extrais les éléments suivants et structure-les en JSON :
+- decisions: liste des décisions prises (texte libre)
+- actions: liste [{responsable, action, delai, priorite: haute|normale|basse}]
+- blocages: liste des points bloquants
+- reports: liste des points reportés à la prochaine réunion
+- prochaine_date: date proposée si mentionnée
+```
+
+**CSE :**
+```
+Extrais les éléments suivants et structure-les en JSON :
+- odj_points: liste [{numero, titre, resume_discussion}]
+- votes: liste [{sujet, pour, contre, abstentions, resultat: adopte|rejete|reporte}]
+- resolutions: liste des résolutions adoptées
+- questions_elus: liste [{question, reponse_direction}]
+- prochaine_seance: date si mentionnée
+```
+
+Ces données extraites viendraient enrichir `meeting_context.json` avec un champ `structured_data` et seraient injectées dans le DOCX comme nouvelles sections selon le template du type.
+
+---
+
+### 11.5 Interface de gestion des templates (admin)
+
+Accessible depuis `/admin/templates` (admins globaux) et `/admin/group-templates` (admins de groupe).
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Templates de rapport                                [+ Nouveau] │
+├──────────────────┬──────────────┬──────────────┬───────────────┤
+│ Nom              │ Type associé │ Portée        │ Actions       │
+├──────────────────┼──────────────┼──────────────┼───────────────┤
+│ ★ Défaut         │ (tous)       │ Global        │ [Prévisualiser]│
+│ CSE Standard     │ CSE          │ Global        │ [↓] [✎] [🗑] │
+│ CODIR Mon Org    │ CODIR        │ Groupe "DIR"  │ [↓] [✎] [🗑] │
+│ 1-to-1 RH        │ Entretien    │ Groupe "RH"   │ [↓] [✎] [🗑] │
+└──────────────────┴──────────────┴──────────────┴───────────────┘
+
+[+ Importer un template .docx]   [+ Créer depuis anciens CR...]
+```
+
+**Règles :**
+- Le template par défaut (`★`) ne peut pas être supprimé, seulement remplacé.
+- Un admin de groupe ne voit que les templates de ses groupes + les templates globaux.
+- La portée détermine quels jobs utilisent le template (groupe ou tous).
+- Un template peut être associé à plusieurs types de réunion.
+
+**Stockage :** `instance/report_templates/<id>.docx` + table `report_templates` en base (id, name, meeting_types, group_id, path, created_by, created_at).
+
+---
+
+### 11.6 Mode chat LLM — personnalisation du document (en discussion)
+
+Accessible depuis la page de fin de workflow, pour les utilisateurs ayant généré un rapport.
+
+**Maquette UX envisagée :**
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  ✏️  Personnaliser le rapport avec l'assistant                    │
+│                                                                  │
+│  [Rapport actuel : rapport_Reunion_Q1.docx]  [Télécharger]       │
+│  ──────────────────────────────────────────────────────────────  │
+│  💬 Utilisateur : "Ajoute un tableau récapitulatif des           │
+│     décisions en page 2, avant la transcription."                │
+│                                                                  │
+│  🤖 Assistant : "J'ai ajouté le tableau 'Décisions prises'       │
+│     après la section Contexte. Il liste 3 décisions extraites    │
+│     du résumé. Voulez-vous modifier le titre ou le contenu ?"    │
+│                                                                  │
+│  [📥 Télécharger cette version]  [Continuer à modifier]          │
+│  [💾 Enregistrer comme template]                                 │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Mécanique envisagée :**
+1. L'utilisateur décrit la modification en langage naturel
+2. TranscrIA prépare le contexte : données du job + instruction + DOCX actuel
+3. OpenCode (skill `docx`) lit le fichier, applique la modification, sauvegarde
+4. La nouvelle version est proposée au téléchargement
+
+**Questions de design ouvertes :**
+- Chat persistant (l'historique de la conversation compte) ou one-shot (chaque instruction est indépendante) ?
+- Versionnement du document : modifier en place, ou conserver `rapport_v1.docx`, `rapport_v2.docx`... ?
+- Bouton "Enregistrer comme template" : l'utilisateur peut-il promouvoir son document personnalisé en template réutilisable (avec validation admin) ?
+- Périmètre des modifications autorisées : contenu uniquement, ou aussi structure et mise en page ?
+
+**Dépendance :** OpenCode installé + skill `docx` actif dans la config OpenCode locale.
+
+---
+
+### 11.7 Mode "apprendre depuis mes anciens CR" (en discussion)
+
+Feature innovante : l'organisation a déjà ses propres formats de compte-rendu. Plutôt que de tout recréer, TranscrIA analyse les documents existants et génère un template adapté.
+
+**Flux envisagé :**
+```
+Admin upload 3 à 5 anciens Comptes-Rendus (DOCX ou PDF)
+      ↓
+OpenCode (skill docx) analyse les fichiers :
+  - Quelles sections apparaissent dans tous les documents ?
+  - Quel format pour les actions, participants, décisions ?
+  - Quelle mise en page, quels styles typographiques ?
+  - Quels champs sont systématiquement présents ?
+      ↓
+OpenCode génère :
+  - Un template .docx vide avec la structure détectée
+  - Une description JSON de la structure (noms des sections, ordre)
+  - Un rapport "J'ai trouvé X sections communes : ..."
+      ↓
+Admin prévisualise → nomme le template → l'associe à un type de réunion
+      ↓
+Template sauvegardé dans instance/report_templates/
+Disponible pour tous les jobs du groupe
+```
+
+**Ce qui est déjà en place :**
+- OpenCode + skill docx
+- Module `DocxReport` existant pour la génération
+- Modèle de groupes pour la portée
+
+**Questions ouvertes :**
+- Formats supportés en entrée : DOCX uniquement, ou aussi PDF (lecture seule) ?
+- Nombre de documents minimum pour une analyse fiable (3 ? 5 ?) ?
+- L'admin peut-il corriger / affiner la structure détectée avant de sauvegarder ?
+- Audit de l'opération (les documents uploadés sont-ils conservés ou supprimés après analyse) ?
+
+---
+
+### 11.8 Questions de design transverses (à trancher)
+
+| Question | Options | Status |
+|---|---|---|
+| Accès gestion templates | Admin global + admins de groupe uniquement | **✅ Décidé** |
+| Types de réunion | Liste fixe vs extensible par admin | ❓ En discussion |
+| Prompt templates | Dans le code vs en base de données | ❓ En discussion |
+| Portée d'un template | Global / groupe / utilisateur | ❓ En discussion — probablement Global + Groupe |
+| Versionnement DOCX en mode chat | En place vs versions numérotées | ❓ En discussion |
+| Format entrée "apprendre depuis CR" | DOCX seul vs DOCX + PDF | ❓ En discussion |
+| Nombre de types de réunion à couvrir en v2 | Tous ou prioriser CSE + CODIR d'abord | ❓ En discussion |
+
+---
+
+### 11.9 Priorité de livraison suggérée (v2)
+
+1. **Menu gestion templates** (admin) — structure de base, import DOCX custom, association type de réunion
+2. **Types de réunion étendus** dans le dropdown + **prompts enrichis** pour extraire décisions/actions
+3. **Templates CSE et CODIR** — les deux types les plus différenciants
+4. **Mode chat LLM** — nécessite que les templates de base soient stables
+5. **Apprentissage depuis anciens CR** — feature avancée, en dernier
