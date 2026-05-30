@@ -60,6 +60,34 @@ HealthProber = Callable[[str], bool]
 Launcher = Callable[[EngineSpec, int], bool]
 
 
+def engine_specs_from_config(config: dict) -> list[EngineSpec]:
+    """Construit les `EngineSpec` depuis le manifeste `resource_node.engines`.
+
+    Chaque entrée : name, script, gpu, port (requis) ; gpu_mem (défaut 0.85),
+    host (défaut 127.0.0.1). L'URL de santé est dérivée : http://host:port/v1/models.
+    Les entrées invalides sont ignorées avec un warning (non bloquant au démarrage).
+    """
+    rn = config.get("resource_node", {}) or {}
+    specs: list[EngineSpec] = []
+    for entry in rn.get("engines", []) or []:
+        try:
+            port = int(entry["port"])
+            host = entry.get("host", "127.0.0.1")
+            specs.append(
+                EngineSpec(
+                    name=str(entry["name"]),
+                    script=str(entry["script"]),
+                    gpu=int(entry["gpu"]),
+                    gpu_mem=float(entry.get("gpu_mem", 0.85)),
+                    port=port,
+                    health_url=f"http://{host}:{port}/v1/models",
+                )
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("[stt-sup] entrée resource_node.engines ignorée (%s) : %r", exc, entry)
+    return specs
+
+
 class SttEngineSupervisor:
     """Orchestre le cycle de vie A/B/C d'un moteur STT déclaré."""
 

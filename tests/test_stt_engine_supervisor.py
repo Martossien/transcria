@@ -14,6 +14,7 @@ import pytest
 from transcria.gpu.stt_engine_supervisor import (
     EngineSpec,
     SttEngineSupervisor,
+    engine_specs_from_config,
     http_health_prober,
     make_script_launcher,
 )
@@ -167,3 +168,30 @@ def test_launcher_returns_false_on_timeout():
     )
     assert launcher(_SPEC, 3) is False
     assert len(runs) == 1          # le lancement a bien été tenté
+
+
+# ── Manifeste resource_node.engines → EngineSpec ─────────────────────────────
+
+def test_engine_specs_from_config_parses_manifest():
+    config = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "gpu_mem": 0.85, "port": 8003},
+        {"name": "whisper", "script": "scripts/launch_stt_whisper.sh", "gpu": 5, "port": 8005},  # gpu_mem défaut
+    ]}}
+    specs = engine_specs_from_config(config)
+    assert [s.name for s in specs] == ["cohere", "whisper"]
+    assert specs[0].health_url == "http://127.0.0.1:8003/v1/models"
+    assert specs[0].gpu_mem == 0.85
+    assert specs[1].gpu_mem == 0.85   # défaut appliqué
+
+
+def test_engine_specs_skip_invalid_entries():
+    config = {"resource_node": {"engines": [
+        {"name": "ok", "script": "s.sh", "gpu": 3, "port": 8003},
+        {"name": "bad", "script": "s.sh"},          # port/gpu manquants → ignoré
+    ]}}
+    specs = engine_specs_from_config(config)
+    assert [s.name for s in specs] == ["ok"]
+
+
+def test_engine_specs_empty_when_no_manifest():
+    assert engine_specs_from_config({}) == []

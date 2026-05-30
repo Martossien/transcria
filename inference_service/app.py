@@ -69,11 +69,13 @@ def create_app(
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
     app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
 
+    from inference_service.routes.capabilities import capabilities_bp
     from inference_service.routes.diarize import diarize_bp
     from inference_service.routes.health import health_bp
     from inference_service.routes.voice_embed import voice_embed_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(capabilities_bp)
     app.register_blueprint(voice_embed_bp)
     app.register_blueprint(diarize_bp)
 
