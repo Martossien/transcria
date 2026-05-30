@@ -27,6 +27,8 @@ from pathlib import Path
 
 _DEFAULT_PORTS = {"cohere": 8003, "whisper": 8005}
 _DEFAULT_MODELS = {"cohere": "cohere-transcribe", "whisper": "whisper-large-v3"}
+# Cohere Transcribe (vLLM) ne supporte pas verbose_json → texte seul.
+_DEFAULT_RESPONSE_FORMAT = {"cohere": "json", "whisper": "verbose_json"}
 
 
 def _primary_lan_ip() -> str:
@@ -45,6 +47,8 @@ def main() -> int:
     ap.add_argument("--host", default=None, help="IP/host du serveur (défaut : IP LAN principale)")
     ap.add_argument("--port", type=int, default=None, help="port HTTP (défaut selon backend)")
     ap.add_argument("--model", default=None, help="served-model-name (défaut selon backend)")
+    ap.add_argument("--response-format", default=None, choices=["verbose_json", "json", "text"],
+                    help="format de réponse (défaut selon backend ; cohere=json)")
     ap.add_argument("--audio", default="tests/test2.mp3", help="fichier audio (MP3 converti en WAV)")
     ap.add_argument("--language", default="fr")
     ap.add_argument("--api-key", default=None, help="clé API si le serveur en exige une")
@@ -72,11 +76,13 @@ def main() -> int:
             "mode": "remote",
             "stt": {
                 "fallback_local": False,  # échec bruyant : on teste le distant, pas la bascule
-                "response_format": "verbose_json",
                 "retries": 1,
                 "timeout_s": 300,
                 "auth": {"api_key": args.api_key or ""},
-                "backends": {args.backend: {"url": url, "model": model}},
+                "backends": {args.backend: {
+                    "url": url, "model": model,
+                    "response_format": args.response_format or _DEFAULT_RESPONSE_FORMAT[args.backend],
+                }},
             },
         }
     }

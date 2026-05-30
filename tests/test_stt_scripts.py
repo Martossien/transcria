@@ -126,6 +126,25 @@ def test_stop_sans_lsof():
     assert "STT_STOP_PORTS" in content
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash absent")
+def test_stop_stt_executes_cleanly_on_idle_port():
+    """Exécute réellement stop_stt.sh sur un port inoccupé → fin propre (rc 0).
+
+    Garde-fou d'EXÉCUTION (au-delà de `bash -n`) : `set -u` faisait échouer une
+    variable non liée dans stop_one, invisible à la seule analyse syntaxique.
+    """
+    import socket
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        free = s.getsockname()[1]
+    r = subprocess.run(
+        ["bash", str(_SCRIPTS_DIR / "stop_stt.sh"), "--port", str(free)],
+        capture_output=True, text=True,
+    )
+    assert r.returncode == 0, f"stderr={r.stderr}"
+    assert "arrêté" in r.stdout.lower()
+
+
 def test_arbitrage_reste_sur_llama_cpp():
     """La LLM d'arbitrage ne doit PAS être migrée vers vLLM (reste sur llama.cpp)."""
     arb = _SCRIPTS_DIR / "launch_arbitrage.sh"

@@ -162,7 +162,17 @@ class RemoteTranscriber(BaseTranscriber):
         if not AudioConverter.convert_to_wav_mono_16k(src, tmp):
             tmp.unlink(missing_ok=True)
             raise RuntimeError(f"ffmpeg n'a pas pu convertir {src.name} en WAV 16k mono")
-        return tmp, True, 0.0
+        # Durée lue depuis le WAV produit : borne le segment unique en réponse `json`.
+        return tmp, True, self._wav_duration(tmp)
+
+    @staticmethod
+    def _wav_duration(wav_path: Path) -> float:
+        try:
+            with wave.open(str(wav_path), "rb") as wf:
+                rate = wf.getframerate() or _SR
+                return wf.getnframes() / float(rate)
+        except Exception:  # noqa: BLE001 — best effort, durée non critique
+            return 0.0
 
     @staticmethod
     def _write_wav(audio_array, sample_rate: int, out_path: Path) -> float:

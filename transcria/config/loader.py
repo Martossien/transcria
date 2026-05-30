@@ -512,6 +512,7 @@ _DEFAULT_CONFIG = {
         # convertit automatiquement avant l'envoi).
         "stt": {
             "fallback_local": True,
+            # Défaut global ; surchargeable par backend (voir ci-dessous).
             "response_format": "verbose_json",  # verbose_json (segments) | json (texte)
             "collapse_repetition_loops": True,
             "timeout_s": 600,
@@ -520,8 +521,10 @@ _DEFAULT_CONFIG = {
             "backends": {
                 # url vide = ce moteur reste local même en mode remote/hybrid.
                 # Exemple distant : "url": "http://127.0.0.1:8003/v1" (cohere).
-                "cohere": {"url": "", "model": "cohere-transcribe"},
-                "whisper": {"url": "", "model": "whisper-large-v3"},
+                # response_format par moteur : Cohere Transcribe (vLLM) ne supporte
+                # PAS verbose_json (400) → "json" (texte) ; Whisper gère les segments.
+                "cohere": {"url": "", "model": "cohere-transcribe", "response_format": "json"},
+                "whisper": {"url": "", "model": "whisper-large-v3", "response_format": "verbose_json"},
             },
         },
     },

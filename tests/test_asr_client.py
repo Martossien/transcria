@@ -139,3 +139,21 @@ def test_build_from_config_reads_backend(monkeypatch):
     assert client.model == "whisper-large-v3"
     assert client.api_key == "k123"
     assert client.response_format == "json"
+
+
+def test_response_format_per_backend_overrides_global():
+    """Cohere ne supporte pas verbose_json : l'override par backend prime sur le global."""
+    cfg = {
+        "inference": {
+            "stt": {
+                "response_format": "verbose_json",  # défaut global
+                "backends": {
+                    "cohere": {"url": "http://h:8003/v1", "model": "cohere-transcribe",
+                               "response_format": "json"},          # override
+                    "whisper": {"url": "http://h:8005/v1", "model": "whisper-large-v3"},
+                },
+            }
+        }
+    }
+    assert build_asr_client_from_config(cfg, "cohere").response_format == "json"
+    assert build_asr_client_from_config(cfg, "whisper").response_format == "verbose_json"

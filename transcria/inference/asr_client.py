@@ -185,11 +185,15 @@ def build_asr_client_from_config(config: dict, backend: str) -> AsrClient | None
         api_key = os.environ.get(auth["api_key_env"])
     api_key = api_key or auth.get("api_key") or None
 
+    # response_format par backend (certains moteurs ne supportent pas verbose_json :
+    # p.ex. Cohere Transcribe sur vLLM → 400). Repli sur la valeur globale.
+    response_format = spec.get("response_format") or stt.get("response_format", "verbose_json")
+
     return AsrClient(
         url,
         model=spec.get("model") or backend,
         api_key=api_key,
-        response_format=stt.get("response_format", "verbose_json"),
+        response_format=response_format,
         timeout_s=int(stt.get("timeout_s", _DEFAULT_TIMEOUT_S)),
         retries=int(stt.get("retries", _DEFAULT_RETRIES)),
     )

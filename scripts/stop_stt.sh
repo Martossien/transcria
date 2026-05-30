@@ -47,7 +47,8 @@ pids_on_port() {
 port_busy() { ss -tlnp 2>/dev/null | grep -q ":$1 "; }
 
 stop_one() {
-    local port="$1" label="${2:-STT port $port}"
+    local port="$1"
+    local label="${2:-STT port $port}"
     echo "=== Arrêt ${label} (port ${port}) ==="
 
     local main_pids; main_pids=$(pids_on_port "$port")
