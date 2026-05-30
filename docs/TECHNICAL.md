@@ -1265,6 +1265,19 @@ curl -X POST http://127.0.0.1:7870/api/jobs/{id}/process \
 curl http://127.0.0.1:7870/api/jobs/{id}/download/srt -o transcription.srt
 ```
 
+### 5.3 Inférence distante (frontale + nœud de ressources)
+
+Endpoints liés à la topologie distante (cf. [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md)).
+
+**Frontale :**
+- `GET /api/resources/status` — état des ressources distantes (mode de déploiement, GPU/VRAM, feu vert par moteur) pour le panneau de `dashboard_status.html` ; nœud injoignable → `reachable=false` (mode dégradé).
+
+**Nœud de ressources** (service Flask `inference_service`, défaut `:8002`) :
+- `GET /health`, `GET /ready`, `GET /models` — sondes de supervision (libres, sans clé API).
+- `GET /capabilities` — inventaire : mode, GPU (index physique, VRAM libre/totale), moteurs in-process + moteurs STT déclarés avec leur santé (libre).
+- `POST /engines/ensure` `{"engine": "cohere"}` — assure un moteur STT déclaré (cycle A/B/C) : `200` ready/launched, `503` busy + `Retry-After`, `404` moteur inconnu (clé API requise).
+- `POST /infer/diarize`, `POST /infer/voice-embed` — `file_ref` (JSON `{"audio_path": …}`) ou `upload` multipart (clé API requise).
+
 ---
 
 ## 6. Workflow utilisateur complet (9 étapes affichées)

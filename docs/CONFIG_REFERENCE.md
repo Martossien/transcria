@@ -795,6 +795,61 @@ Référentiel local de voix connues avec consentement explicite. Désactivé par
 
 ---
 
+### `inference`
+
+Inférence distante : permet à TranscrIA d'être une **frontale** dont les ressources GPU (STT,
+diarisation, empreinte vocale) tournent sur un nœud distant — ou sur la même machine via 127.0.0.1.
+`mode: "local"` (défaut) = tout local, aucun appel réseau, comportement historique préservé.
+Détail : [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `mode` | string | `"local"` | `local` \| `remote` \| `hybrid`. Active la sélection distante (diarize/voice-embed + STT par backend) |
+| `url` | string | `""` | URL du service Flask de ressources (diarize/voice-embed), ex. `http://HOST:8002`. Vide = local |
+| `fallback_local` | bool | `true` | Bascule locale si le service distant tombe (sauf 4xx définitif) |
+| `auth.api_key_env` | string | `"TRANSCRIA_INFERENCE_API_KEY"` | Variable d'env portant la clé API du service |
+| `auth.api_key` | string | `""` | Clé API en clair (priorité à la variable d'env) |
+| `transport.audio` | string | `"file_ref"` | `file_ref` (chemin, mono-machine/FS partagé) \| `upload` (octets, **obligatoire en vrai distant**) |
+| `resilience.timeout_s` | int | `1800` | Timeout par requête au service |
+| `resilience.retries` | int | `2` | Tentatives sur erreur transitoire (5xx/503/réseau) |
+| `resilience.max_unavailable_s` | int | `600` | Mode dégradé §7.2 : au-delà, un job dont les ressources distantes sont injoignables échoue explicitement (en deçà : mis en file) |
+
+#### `inference.stt`
+
+STT via un serveur compatible OpenAI (`/v1/audio/transcriptions`) — moteur **non hardcodé** (vLLM, SGLang…).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `fallback_local` | bool | `true` | Bascule sur le transcripteur local si le serveur STT tombe |
+| `response_format` | string | `"verbose_json"` | Défaut global ; `verbose_json` (segments) \| `json` (texte). Surchargeable par backend |
+| `collapse_repetition_loops` | bool | `true` | Anti-hallucination (parité avec les backends locaux) |
+| `concurrency` | int | `1` | Tours transcrits en parallèle (>1 = distant uniquement, exploite le batching vLLM). 1 = séquentiel |
+| `timeout_s` | int | `600` | Timeout par requête STT |
+| `retries` | int | `2` | Tentatives sur erreur transitoire |
+| `auth.api_key_env` / `auth.api_key` | string | `"TRANSCRIA_STT_API_KEY"` / `""` | Clé API du serveur STT (si lancé avec `--api-key`) |
+
+#### `inference.stt.backends.<moteur>`
+
+Un endpoint par moteur logique (`cohere`, `whisper`). **`url` vide = ce moteur reste local** même en mode remote/hybrid.
+
+| Paramètre | Type | Défaut (cohere / whisper) | Description |
+|---|---|---|---|
+| `url` | string | `""` / `""` | Racine OpenAI, ex. `http://127.0.0.1:8003/v1`. Vide = local |
+| `model` | string | `cohere-transcribe` / `whisper-large-v3` | `served-model-name` attendu par le serveur |
+| `response_format` | string | `json` / `verbose_json` | Cohere Transcribe (vLLM) refuse `verbose_json` (400) → `json` |
+
+#### `resource_node` (config du nœud de ressources uniquement)
+
+Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré). Voir `scripts/launch_stt_*.sh`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
+| `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
+| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port}` (placement = admin) |
+
+---
+
 ## Section `notifications`
 
 ### `notifications.email` — Notifications par email
