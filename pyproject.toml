@@ -36,3 +36,8 @@ ignore_errors = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["backup", ".git", "__pycache__", ".venv", "node_modules"]
+markers = [
+    # Tests réseau sur un vrai socket TCP (faux serveurs en thread, sans GPU).
+    # Cibler : pytest -m integration   |   exclure : pytest -m "not integration"
+    "integration: test réseau sur un vrai socket TCP",
+]

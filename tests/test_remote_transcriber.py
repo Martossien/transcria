@@ -164,3 +164,29 @@ def test_factory_routes_to_remote_when_configured():
     assert _should_use_remote_stt(cfg, "cohere") is True
     assert _should_use_remote_stt(cfg, "whisper") is False  # pas d'url
     assert _should_use_remote_stt({"inference": {"mode": "local"}}, "cohere") is False
+
+
+@pytest.mark.parametrize("mode", ["remote", "hybrid"])
+def test_create_transcriber_returns_remote_for_configured_backend(mode):
+    """Topologie : mode remote OU hybride → RemoteTranscriber pour un backend
+    dont l'URL est renseignée (construction sans réseau)."""
+    from transcria.stt.transcriber_factory import create_transcriber
+
+    cfg = {"inference": {"mode": mode, "stt": {
+        "backends": {"cohere": {"url": "http://h:8003/v1", "model": "cohere-transcribe"}}}}}
+    t = create_transcriber(cfg, backend="cohere")
+    assert isinstance(t, RemoteTranscriber)
+    assert t.model_name == "remote:cohere:cohere-transcribe"
+
+
+def test_hybrid_is_mix_by_capability():
+    """Hybride = mix par capacité : seul le backend avec URL part en distant ;
+    les autres restent locaux (URL vide), sans appel réseau au routage."""
+    from transcria.stt.transcriber_factory import _should_use_remote_stt
+
+    cfg = {"inference": {"mode": "hybrid", "stt": {"backends": {
+        "cohere": {"url": "http://h:8003/v1"},   # distant
+        "whisper": {"url": ""},                    # local
+    }}}}
+    assert _should_use_remote_stt(cfg, "cohere") is True
+    assert _should_use_remote_stt(cfg, "whisper") is False
