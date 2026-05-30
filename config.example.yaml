@@ -5,6 +5,12 @@ server:
 
 storage:
   jobs_dir: "./jobs"
+  # Base de données. SQLite convient au dev/poste isolé. En production, préférez
+  # PostgreSQL (meilleure tenue à la charge concurrente).
+  #   database_url: "postgresql+psycopg://transcria:MOT_DE_PASSE@127.0.0.1:5432/transcria"
+  # Le DSN peut (et devrait, pour ne pas versionner le mot de passe) être fourni via
+  # la variable d'environnement TRANSCRIA_DATABASE_URL, prioritaire sur cette valeur.
+  # Le schéma est géré par Alembic (`alembic upgrade head`, lancé par start.sh).
   database_url: "sqlite:///transcrIA.db"
 
 voice_enrollment:

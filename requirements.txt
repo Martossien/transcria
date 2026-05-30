@@ -7,6 +7,10 @@ python-dotenv>=1.0,<2.0
 requests>=2.31,<3.0
 sqlalchemy>=2.0,<3.0
 
+# Base de données
+psycopg[binary]>=3.2,<4.0   # driver PostgreSQL (prod)
+alembic>=1.13,<2.0          # migrations de schéma
+
 # Audio processing
 librosa>=0.10,<0.12
 soundfile>=0.12,<1.0

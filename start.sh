@@ -51,6 +51,15 @@ if [ -n "$VENV" ] && [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"
 fi
 
+# ── Migrations de schéma (Alembic) ─────────────────────────
+# Met la base au niveau attendu avant de démarrer. En cas d'échec on n'amorce
+# pas le serveur (un schéma périmé corromprait les données).
+echo "Application des migrations de base (alembic upgrade head)…"
+if ! alembic upgrade head; then
+    echo "Erreur : échec des migrations Alembic. Démarrage annulé."
+    exit 1
+fi
+
 # ── Démarrage ──────────────────────────────────────────────
 echo "================================================================"
 echo " TranscrIA"

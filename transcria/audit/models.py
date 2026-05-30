@@ -63,8 +63,10 @@ class AuditLog(db.Model):
     __tablename__ = "audit_logs"
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    timestamp = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
-    actor_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)
+    timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    # ON DELETE SET NULL : un journal d'audit doit survivre à la suppression d'un
+    # compte (l'acteur est anonymisé, l'événement conservé).
+    actor_id = db.Column(db.String(36), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     actor_username = db.Column(db.String(80), nullable=False, default="system")
     action = db.Column(db.String(40), nullable=False, index=True)
     target_type = db.Column(db.String(20), nullable=False)

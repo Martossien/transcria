@@ -1,5 +1,6 @@
 pytest>=7.0
 pytest-cov>=4.0
+pytest-postgresql>=6.0,<7.0   # instance PostgreSQL éphémère pour les tests
 ruff>=0.4
 mypy>=1.10
 types-PyYAML

@@ -691,6 +691,52 @@ Les variables d'environnement remplacent les valeurs de `config.yaml` pour les c
 | `TRANSCRIA_STOP_SCRIPT` | Script d'arrêt LLM (surcharge config) | Valeur de config |
 | `TRANSCRIA_OPENCODE_BIN` | Chemin vers opencode | `opencode` (dans le PATH) |
 
+### Base de données (PostgreSQL recommandé en production)
+
+SQLite (`sqlite:///transcrIA.db`, défaut) convient au dev ou à un poste isolé. En
+production multi-utilisateurs, utilisez **PostgreSQL** : il encaisse la charge
+concurrente (la queue et le service de ressources sollicitent la base en parallèle)
+là où SQLite sérialise les écritures.
+
+**1. Créer le rôle et la base** (PostgreSQL ≥ 13) :
+
+```bash
+sudo -u postgres psql <<'SQL'
+CREATE ROLE transcria LOGIN PASSWORD 'CHANGEZ_MOI';
+CREATE DATABASE transcria OWNER transcria;
+SQL
+sudo systemctl enable --now postgresql
+```
+
+**2. Renseigner le DSN** dans `.env` (le mot de passe reste hors de la config versionnée) :
+
+```bash
+# .env
+TRANSCRIA_DATABASE_URL=postgresql+psycopg://transcria:CHANGEZ_MOI@127.0.0.1:5432/transcria
+```
+
+`TRANSCRIA_DATABASE_URL` est prioritaire sur `storage.database_url` de `config.yaml`.
+
+**3. Créer le schéma** (Alembic) :
+
+```bash
+alembic upgrade head          # lancé aussi automatiquement par start.sh à chaque démarrage
+```
+
+**4. (Optionnel) Migrer des données SQLite existantes** vers la base PostgreSQL fraîchement créée :
+
+```bash
+TRANSCRIA_DATABASE_URL=postgresql+psycopg://transcria:CHANGEZ_MOI@127.0.0.1:5432/transcria \
+    python scripts/migrate_sqlite_to_postgres.py --source sqlite:///instance/transcrIA.db
+```
+
+Le script copie toutes les tables dans l'ordre des dépendances, préserve les instants
+(datetimes en UTC) et réaligne les séquences. La cible doit être vide (`--truncate` sinon).
+
+> **Évolutions de schéma.** Après modification d'un modèle : `alembic revision --autogenerate -m "…"`,
+> relire la migration générée, puis `alembic upgrade head`. Le test `tests/test_alembic_migrations.py`
+> garantit que migrations et modèles ne divergent pas.
+
 ### Créer le répertoire des jobs
 
 ```bash

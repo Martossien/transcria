@@ -1,7 +1,10 @@
 [Unit]
 Description=TranscrIA — Portail de transcription de réunion
-After=network-online.target
+After=network-online.target postgresql.service
 Wants=network-online.target
+# Si la base PostgreSQL est sur cette machine, décommentez pour garantir l'ordre
+# de démarrage (sans échouer si Postgres est distant) :
+# Wants=postgresql.service
 
 [Service]
 Type=forking

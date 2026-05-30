@@ -1,9 +1,37 @@
-import pytest
 
-from transcria.database import db
+from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupRole, Role, User
 from transcria.auth.store import UserStore
-from transcria.auth.groups import GroupStore
+from transcria.database import db
+
+
+def _empty_all_tables():
+    """Vide toutes les tables dans l'ordre FK-safe (enfants → parents).
+
+    Sous PostgreSQL les clés étrangères sont appliquées : on ne peut pas vider
+    ``users`` sans purger d'abord ses tables filles (jobs, audit, voix…). Ces
+    tests simulent une base vierge pour la création du premier admin.
+    """
+    for table in reversed(db.metadata.sorted_tables):
+        db.session.execute(table.delete())
+    db.session.commit()
+
+
+_USER_FIELDS = ("id", "username", "display_name", "email", "password_hash", "role",
+                "is_active", "created_at", "last_login")
+
+
+def _snapshot_users():
+    """Capture les users en valeurs simples (les objets ORM expirent après le wipe)."""
+    return [{f: getattr(u, f) for f in _USER_FIELDS} for u in db.session.query(User).all()]
+
+
+def _restore_users(snapshot):
+    """Remet la base à l'état d'avant le test : table vide puis users restaurés."""
+    _empty_all_tables()
+    for data in snapshot:
+        db.session.add(User(**data))
+    db.session.commit()
 
 
 class TestUserStore:
@@ -75,9 +103,8 @@ class TestUserStore:
 
     def test_ensure_admin_creates_first_admin(self, app):
         with app.app_context():
-            original_users = list(db.session.query(User).all())
-            db.session.query(User).delete()
-            db.session.commit()
+            snapshot = _snapshot_users()
+            _empty_all_tables()
 
             try:
                 assert UserStore.count_users() == 0
@@ -87,15 +114,7 @@ class TestUserStore:
                 assert admin.role_enum == Role.ADMIN
                 assert admin.check_password("rootpass")
             finally:
-                db.session.query(User).delete()
-                db.session.commit()
-                for u in original_users:
-                    db.session.add(User(
-                        id=u.id, username=u.username, display_name=u.display_name,
-                        email=u.email, password_hash=u.password_hash, role=u.role,
-                        is_active=u.is_active, created_at=u.created_at, last_login=u.last_login,
-                    ))
-                db.session.commit()
+                _restore_users(snapshot)
 
     def test_ensure_admin_noop_if_users_exist(self, app):
         with app.app_context():
@@ -106,9 +125,8 @@ class TestUserStore:
 
     def test_ensure_admin_warns_when_default_password_is_used(self, app, caplog):
         with app.app_context():
-            original_users = list(db.session.query(User).all())
-            db.session.query(User).delete()
-            db.session.commit()
+            snapshot = _snapshot_users()
+            _empty_all_tables()
 
             try:
                 caplog.set_level("WARNING", logger="transcria.auth.store")
@@ -118,15 +136,7 @@ class TestUserStore:
 
                 assert "mot de passe par défaut" in caplog.text
             finally:
-                db.session.query(User).delete()
-                db.session.commit()
-                for u in original_users:
-                    db.session.add(User(
-                        id=u.id, username=u.username, display_name=u.display_name,
-                        email=u.email, password_hash=u.password_hash, role=u.role,
-                        is_active=u.is_active, created_at=u.created_at, last_login=u.last_login,
-                    ))
-                db.session.commit()
+                _restore_users(snapshot)
 
 
 class TestGroupStore:

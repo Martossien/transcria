@@ -13,13 +13,13 @@ class JobQueueEntry(db.Model):
     aging_bonus = db.Column(db.Integer, nullable=False, default=0)
     position = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(20), nullable=False, default="waiting", index=True)
-    submitted_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
-    started_at = db.Column(db.DateTime, nullable=True)
-    scheduled_at = db.Column(db.DateTime, nullable=True, index=True)
+    submitted_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     current_phase = db.Column(db.String(30), nullable=True)
     vram_profile_json = db.Column(db.Text, nullable=True)
     gpu_index = db.Column(db.Integer, nullable=True)
-    last_aging_at = db.Column(db.DateTime, nullable=True)
+    last_aging_at = db.Column(db.DateTime(timezone=True), nullable=True)
     paused_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     mode = db.Column(db.String(20), nullable=False, default="fast")
 
@@ -82,9 +82,9 @@ class SchedulingWindow(db.Model):
     action = db.Column(db.String(30), nullable=False, default="none")
     action_params_json = db.Column(db.Text, nullable=True)
     enabled = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(
-        db.DateTime,
+        db.DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),

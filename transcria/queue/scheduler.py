@@ -113,7 +113,12 @@ class QueueScheduler:
                             iteration_s=round(self._last_iteration_s, 3),
                         )
             except Exception as exc:
-                sl.warning("Dispatch queue ignoré après erreur", error=str(exc))
+                # En cours d'arrêt, la base peut déjà être fermée : ne pas polluer
+                # les logs avec l'erreur de la dernière itération avortée.
+                if not self._stop_event.is_set():
+                    sl.warning("Dispatch queue ignoré après erreur", error=str(exc))
+            if self._stop_event.is_set():
+                break
             self._wake_event.wait(self.poll_interval_s)
             self._wake_event.clear()
 

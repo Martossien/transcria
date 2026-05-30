@@ -45,9 +45,9 @@ class VoiceSubject(db.Model):
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=True, index=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(
-        db.DateTime, nullable=False,
+        db.DateTime(timezone=True), nullable=False,
         default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
     )
 
@@ -76,15 +76,15 @@ class VoiceConsent(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     subject_id = db.Column(db.String(36), db.ForeignKey("voice_subjects.id"), nullable=False, index=True)
     form_version = db.Column(db.String(80), nullable=False)
-    signed_at = db.Column(db.DateTime, nullable=True)
+    signed_at = db.Column(db.DateTime(timezone=True), nullable=True)
     uploaded_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     proof_path = db.Column(db.String(500), nullable=False, default="")
     proof_sha256 = db.Column(db.String(64), nullable=False, default="")
     status = db.Column(db.String(30), nullable=False, default=VoiceConsentStatus.ACTIVE.value, index=True)
-    revoked_at = db.Column(db.DateTime, nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
     revoked_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     revocation_reason = db.Column(db.String(500), nullable=False, default="")
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     subject = db.relationship("VoiceSubject", back_populates="consents")
     uploader = db.relationship("User", foreign_keys=[uploaded_by])
@@ -112,9 +112,9 @@ class VoiceProfile(db.Model):
     speech_duration_s = db.Column(db.Float, nullable=False, default=0.0)
     quality_status = db.Column(db.String(80), nullable=False, default="")
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    disabled_at = db.Column(db.DateTime, nullable=True)
-    deleted_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    disabled_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     subject = db.relationship("VoiceSubject", back_populates="profiles")
     consent = db.relationship("VoiceConsent")
@@ -133,8 +133,8 @@ class VoiceReferenceFile(db.Model):
     duration_s = db.Column(db.Float, nullable=False, default=0.0)
     sample_rate = db.Column(db.Integer, nullable=False, default=0)
     status = db.Column(db.String(30), nullable=False, default=VoiceReferenceStatus.TEMPORARY.value)
-    deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     profile = db.relationship("VoiceProfile", back_populates="reference_files")
 
@@ -148,7 +148,7 @@ class VoiceAuditEvent(db.Model):
     actor_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)
     event_type = db.Column(db.String(80), nullable=False, index=True)
     details_json = db.Column(db.Text, nullable=False, default="{}")
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     subject = db.relationship("VoiceSubject")
     profile = db.relationship("VoiceProfile")
@@ -168,9 +168,9 @@ class VoiceMatch(db.Model):
     rank = db.Column(db.Integer, nullable=False, default=1)
     decision = db.Column(db.String(40), nullable=False, default=VoiceMatchDecision.SUGGESTED.value, index=True)
     created_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True, index=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     decided_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
-    decided_at = db.Column(db.DateTime, nullable=True)
+    decided_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     job = db.relationship("Job")
     subject = db.relationship("VoiceSubject")

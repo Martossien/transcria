@@ -1,22 +1,39 @@
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
 import pytest
+from pytest_postgresql import factories
+from pytest_postgresql.janitor import DatabaseJanitor
 
 from transcria.config import _deep_merge, load_config
+
+# Un éventuel TRANSCRIA_DATABASE_URL (dev/.env) ne doit pas fuiter dans les tests :
+# ceux-ci tournent sur une base PostgreSQL éphémère dédiée.
+os.environ.pop("TRANSCRIA_DATABASE_URL", None)
 
 _ORIG_CWD = os.getcwd()
 
 _TEMP_DIR = tempfile.mkdtemp(prefix="transcria_test_")
-_TEMP_DB = Path(_TEMP_DIR) / "test.db"
+
+# Instance PostgreSQL éphémère (initdb/pg_ctl locaux), partagée sur la session.
+# `pg_ctl` est résolu sur le PATH (les chemins par défaut de pytest-postgresql
+# visent Debian ; sur Fedora les binaires sont dans /usr/bin).
+_PG_CTL = shutil.which("pg_ctl")
+postgresql_proc = factories.postgresql_proc(host="127.0.0.1", executable=_PG_CTL)
 
 
-def _test_config():
+def _pg_url(proc, dbname: str) -> str:
+    auth = proc.user if not proc.password else f"{proc.user}:{proc.password}"
+    return f"postgresql+psycopg://{auth}@{proc.host}:{proc.port}/{dbname}"
+
+
+def _test_config(database_url: str):
     return {
         "storage": {
             "jobs_dir": str(Path(_TEMP_DIR) / "jobs"),
-            "database_url": f"sqlite:///{_TEMP_DB}",
+            "database_url": database_url,
         },
         "auth": {
             "first_admin_username": "admin",
@@ -33,9 +50,24 @@ def _test_config():
 
 
 @pytest.fixture(scope="session")
-def app():
+def _pg_database(postgresql_proc):
+    """Crée une base de test dédiée sur l'instance PG éphémère (le temps de la session)."""
+    dbname = "transcria_test"
+    with DatabaseJanitor(
+        user=postgresql_proc.user,
+        host=postgresql_proc.host,
+        port=postgresql_proc.port,
+        version=postgresql_proc.version,
+        dbname=dbname,
+        password=postgresql_proc.password,
+    ):
+        yield _pg_url(postgresql_proc, dbname)
+
+
+@pytest.fixture(scope="session")
+def app(_pg_database):
     cfg = load_config()
-    cfg = _deep_merge(cfg, _test_config())
+    cfg = _deep_merge(cfg, _test_config(_pg_database))
 
     from transcria.config import set_config
     set_config(cfg)
@@ -79,8 +111,8 @@ def admin_client(app):
 @pytest.fixture
 def operator_client(app):
     with app.app_context():
-        from transcria.auth.store import UserStore
         from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
         existing = UserStore.get_by_username("operator1")
         if not existing:
             UserStore.create_user(username="operator1", password="test123", display_name="Operator", role=Role.OPERATOR)
@@ -92,8 +124,8 @@ def operator_client(app):
 @pytest.fixture
 def viewer_client(app):
     with app.app_context():
-        from transcria.auth.store import UserStore
         from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
         existing = UserStore.get_by_username("viewer1")
         if not existing:
             UserStore.create_user(username="viewer1", password="test123", display_name="Viewer", role=Role.VIEWER)
@@ -106,8 +138,9 @@ def viewer_client(app):
 def owner_id(app):
     with app.app_context():
         import uuid
-        from transcria.auth.store import UserStore
+
         from transcria.auth.models import Role
+        from transcria.auth.store import UserStore
         uname = f"testowner_{uuid.uuid4().hex[:8]}"
         user = UserStore.create_user(username=uname, password="pw", role=Role.OPERATOR)
         return user.id

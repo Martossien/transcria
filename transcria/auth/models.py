@@ -33,8 +33,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default=Role.OPERATOR.value)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
-    last_login = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    last_login = db.Column(db.DateTime(timezone=True), nullable=True)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -76,7 +76,7 @@ class Group(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = db.Column(db.String(120), unique=True, nullable=False, index=True)
     description = db.Column(db.String(255), nullable=False, default="")
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     memberships = db.relationship(
         "GroupMembership",
@@ -103,7 +103,7 @@ class GroupMembership(db.Model):
     group_id = db.Column(db.String(36), db.ForeignKey("groups.id"), nullable=False, index=True)
     user_id = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=False, index=True)
     role = db.Column(db.String(30), nullable=False, default=GroupRole.MEMBER.value)
-    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     group = db.relationship("Group", back_populates="memberships")
     user = db.relationship("User", backref="group_memberships")
