@@ -12,40 +12,17 @@ pas le réseau physique — ce qui est exactement le but ici.
 """
 from __future__ import annotations
 
-import contextlib
-import socket
-import threading
-import time
-
 import numpy as np
 import pytest
-import requests
 from flask import Flask, jsonify, request
-from werkzeug.serving import make_server
 
+from tests.net_helpers import free_port as _free_port
+from tests.net_helpers import primary_lan_ip as _primary_lan_ip
+from tests.net_helpers import serve_flask
 from transcria.inference.asr_client import AsrClient
 from transcria.stt.remote_transcriber import RemoteTranscriber
 
 pytestmark = pytest.mark.integration
-
-
-# ── Outils socket ─────────────────────────────────────────────────────────────
-
-def _free_port(host: str = "127.0.0.1") -> int:
-    with socket.socket() as s:
-        s.bind((host, 0))
-        return s.getsockname()[1]
-
-
-def _primary_lan_ip() -> str | None:
-    """IPv4 LAN principale (sans émettre de paquet), ou None si seulement loopback."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-        return None if ip.startswith("127.") else ip
-    except OSError:
-        return None
 
 
 # ── Faux serveur ASR compatible OpenAI ──────────────────────────────────────--
@@ -79,25 +56,14 @@ def _make_fake_asr(recorder: list, *, status: int = 200, model: str = "cohere-tr
     return app
 
 
+import contextlib
+
+
 @contextlib.contextmanager
 def _serve(app, host: str, port: int):
-    """Sert `app` sur (host, port) dans un thread, attend la readiness, puis nettoie."""
-    srv = make_server(host, port, app, threaded=True)
-    thread = threading.Thread(target=srv.serve_forever, daemon=True)
-    thread.start()
-    base = f"http://{host}:{port}/v1"
-    try:
-        deadline = time.time() + 5
-        while time.time() < deadline:
-            try:
-                if requests.get(f"{base}/models", timeout=1).status_code == 200:
-                    break
-            except requests.RequestException:
-                time.sleep(0.05)
-        yield base
-    finally:
-        srv.shutdown()
-        thread.join(timeout=5)
+    """Sert le faux ASR et yield l'URL `…/v1` (readiness sur /v1/models)."""
+    with serve_flask(app, host, port, ready_path="/v1/models") as base:
+        yield f"{base}/v1"
 
 
 @pytest.fixture
