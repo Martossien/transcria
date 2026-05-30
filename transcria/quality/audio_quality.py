@@ -8,6 +8,7 @@ _PREFLIGHT_FLAG_WEIGHTS = {
     "clipping_detecte": 3,
     "squim_stoi_faible": 3,    # SQUIM : perte d'intelligibilité → WER élevé
     "squim_pesq_faible": 2,
+    "dnsmos_ovrl_faible": 2,   # DNSMOS : qualité perceptive globale dégradée
     "snr_faible": 1,
     "audio_faible": 1,
     "bande_etroite": 1,

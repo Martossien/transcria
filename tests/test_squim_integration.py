@@ -20,6 +20,16 @@ def _patch_scorer(monkeypatch, *, glob, segments=None):
     monkeypatch.setattr("transcria.audio.squim_scorer.score_segments", lambda *a, **k: segments or [])
 
 
+def _full_analyzer(**extra):
+    """Analyseur avec SQUIM + DNSMOS + acoustique activés."""
+    cfg = {"workflow": {"audio_preflight": {
+        "squim": {"enabled": True, **extra},
+        "dnsmos": {"enabled": True},
+        "acoustic": {"enabled": True},
+    }}}
+    return AudioPreflightAnalyzer(cfg)
+
+
 _SIG = np.ones(16000 * 6, dtype=np.float32) * 0.4
 
 
@@ -58,6 +68,65 @@ def test_squim_unavailable_is_noop(monkeypatch):
     result = {"flags": [], "risk_level": "ok"}
     _analyzer()._augment_with_squim(result, _SIG, 16000)
     assert "squim_global" not in result and "difficulty_map" not in result
+
+
+# ── Batch DNSMOS + acoustique : globaux + signaux par fenêtre dans la map ─────
+
+def test_dnsmos_global_added_and_can_trigger_map(monkeypatch):
+    # SQUIM dit « ok », mais DNSMOS global bas → risque relevé → map calculée.
+    _patch_scorer(
+        monkeypatch,
+        glob={"stoi": 0.95, "pesq": 4.0, "sisdr": 20.0},
+        segments=[{"start": 0.0, "end": 5.0, "stoi": 0.95, "pesq": 4.0, "sisdr": 20.0}],
+    )
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_global",
+                        lambda *a, **k: {"sig": 2.0, "bak": 3.0, "ovrl": 2.0})
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_segments",
+                        lambda *a, **k: [{"start": 0.0, "end": 5.0, "sig": 2.0, "bak": 3.0, "ovrl": 2.0}])
+    monkeypatch.setattr("transcria.audio.acoustic_metrics.score_segments", lambda *a, **k: [])
+
+    result = {"flags": [], "risk_level": "ok"}
+    _full_analyzer()._augment_with_squim(result, _SIG, 16000)
+
+    assert result["dnsmos_global"] == {"sig": 2.0, "bak": 3.0, "ovrl": 2.0}
+    assert "dnsmos_ovrl_faible" in result["flags"]
+    assert "difficulty_map" in result                              # déclenchée par DNSMOS
+    win = result["difficulty_map"][0]
+    assert "dnsmos_ovrl_faible" in win["signals"] and "sig_lt_bak" in win["signals"]
+
+
+def test_acoustic_signals_injected_into_map(monkeypatch):
+    _patch_scorer(
+        monkeypatch,
+        glob={"stoi": 0.6, "pesq": 2.0, "sisdr": 3.0},          # déjà « non ok »
+        segments=[{"start": 0.0, "end": 5.0, "stoi": 0.6, "pesq": 2.0, "sisdr": 3.0}],
+    )
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_global", lambda *a, **k: None)
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_segments", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "transcria.audio.acoustic_metrics.score_segments",
+        lambda *a, **k: [{"start": 0.0, "end": 5.0, "rt60": 0.9, "c50_db": -6.0,
+                          "snr_db": 3.0, "codec_suspect": True, "codec_cutoff_hz": 3400.0}],
+    )
+    result = {"flags": [], "risk_level": "ok"}
+    _full_analyzer()._augment_with_squim(result, _SIG, 16000)
+
+    win = result["difficulty_map"][0]
+    assert {"rt60_eleve", "snr_faible", "c50_faible", "codec_artefact"}.issubset(set(win["signals"]))
+
+
+def test_dnsmos_acoustic_disabled_by_default_in_bare_config(monkeypatch):
+    # _analyzer() n'active que SQUIM : DNSMOS/acoustique ne tournent pas.
+    called = {"dnsmos": False, "acoustic": False}
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_global",
+                        lambda *a, **k: called.__setitem__("dnsmos", True))
+    monkeypatch.setattr("transcria.audio.acoustic_metrics.score_segments",
+                        lambda *a, **k: called.__setitem__("acoustic", True) or [])
+    _patch_scorer(monkeypatch, glob={"stoi": 0.95, "pesq": 4.0, "sisdr": 20.0})
+    result = {"flags": [], "risk_level": "ok"}
+    _analyzer()._augment_with_squim(result, _SIG, 16000)
+    assert called == {"dnsmos": False, "acoustic": False}
+    assert "dnsmos_global" not in result
 
 
 # ── audio_quality : intègre les flags preflight (incohérence corrigée) ────────

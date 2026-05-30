@@ -42,6 +42,17 @@ class AudioPreflightAnalyzer:
         self.squim_pesq_threshold = float(squim_cfg.get("pesq_threshold", 2.5))
         self.squim_sisdr_threshold = float(squim_cfg.get("sisdr_threshold", 5.0))
         self.squim_map_always = bool(squim_cfg.get("difficulty_map_always", False))
+        # DNSMOS P.835 (SIG/BAK/OVRL) — perceptif, distingue bruit vs parole dégradée.
+        dnsmos_cfg = cfg.get("dnsmos", {}) or {}
+        self.dnsmos_enabled = bool(dnsmos_cfg.get("enabled", False))
+        self.dnsmos_ovrl_threshold = float(dnsmos_cfg.get("ovrl_threshold", 2.5))
+        self.dnsmos_sig_bak_margin = float(dnsmos_cfg.get("sig_bak_margin", 0.0))
+        # Métriques acoustiques par fenêtre (RT60 / C50 / SNR / codec) — numpy/scipy.
+        acoustic_cfg = cfg.get("acoustic", {}) or {}
+        self.acoustic_enabled = bool(acoustic_cfg.get("enabled", False))
+        self.acoustic_rt60_threshold = float(acoustic_cfg.get("rt60_threshold", 0.6))
+        self.acoustic_snr_threshold = float(acoustic_cfg.get("snr_threshold", 6.0))
+        self.acoustic_c50_threshold = float(acoustic_cfg.get("c50_threshold", -5.0))
 
     def analyze(self, audio_path: Path | str) -> dict:
         """Retourne un diagnostic audio ou ``{}`` si désactivé/échec."""
@@ -132,6 +143,11 @@ class AudioPreflightAnalyzer:
             flags.append("squim_sisdr_faible")
         result["risk_level"] = _risk_level(flags)
 
+        # DNSMOS global (perceptif) : ajoute SIG/BAK/OVRL et peut relever le risque
+        # (donc déclencher la difficulty_map ci-dessous) si la qualité globale est basse.
+        if self.dnsmos_enabled:
+            self._augment_dnsmos_global(result, signal, sample_rate)
+
         # difficulty_map par fenêtre : coûteuse → lazy (audio non « ok ») sauf bench.
         if not self.squim_map_always and result["risk_level"] == "ok":
             logger.info("[audio_preflight] SQUIM global ok — difficulty_map non calculée (lazy)")
@@ -143,11 +159,13 @@ class AudioPreflightAnalyzer:
         )
         if not segments:
             return
+        extra_signals = self._extra_window_signals(signal, sample_rate, segments)
         difficulty_map = build_difficulty_map(
             segments,
             stoi_threshold=self.squim_stoi_threshold,
             pesq_threshold=self.squim_pesq_threshold,
             sisdr_threshold=self.squim_sisdr_threshold,
+            extra_signals=extra_signals,
         )
         result["difficulty_map"] = difficulty_map
         result["difficulty_summary"] = summarize_difficulty(difficulty_map)
@@ -156,6 +174,59 @@ class AudioPreflightAnalyzer:
             result["difficulty_summary"]["windows"], result["difficulty_summary"]["degrade"],
             _time.monotonic() - t0,
         )
+
+    def _augment_dnsmos_global(self, result: dict, signal, sample_rate: int) -> None:
+        """Ajoute les scores DNSMOS globaux (SIG/BAK/OVRL) et le flag associé.
+        Best effort : indisponibilité = aucun ajout."""
+        from transcria.audio import dnsmos_scorer
+
+        glob = dnsmos_scorer.score_global(signal, sample_rate)
+        if glob is None:
+            return
+        result["dnsmos_global"] = glob
+        flags = result.setdefault("flags", [])
+        if glob["ovrl"] < self.dnsmos_ovrl_threshold and "dnsmos_ovrl_faible" not in flags:
+            flags.append("dnsmos_ovrl_faible")
+        result["risk_level"] = _risk_level(flags)
+
+    def _extra_window_signals(self, signal, sample_rate: int, segments: list[dict]) -> dict:
+        """Signaux acoustiques + DNSMOS par fenêtre, alignés sur la grille SQUIM,
+        à brancher dans `build_difficulty_map(extra_signals=...)`."""
+        windows = [(s["start"], s["end"]) for s in segments]
+        extra: dict[tuple[float, float], set[str]] = {}
+
+        if self.acoustic_enabled:
+            try:
+                from transcria.audio import acoustic_metrics
+
+                for m in acoustic_metrics.score_segments(signal, sample_rate, windows):
+                    sigs = acoustic_metrics.window_signals(
+                        m,
+                        rt60_threshold=self.acoustic_rt60_threshold,
+                        snr_threshold=self.acoustic_snr_threshold,
+                        c50_threshold=self.acoustic_c50_threshold,
+                    )
+                    if sigs:
+                        extra.setdefault((m["start"], m["end"]), set()).update(sigs)
+            except Exception as exc:  # noqa: BLE001 — best effort
+                logger.warning("[audio_preflight] métriques acoustiques échouées : %s", exc)
+
+        if self.dnsmos_enabled:
+            try:
+                from transcria.audio import dnsmos_scorer
+
+                for m in dnsmos_scorer.score_segments(signal, sample_rate, windows) or []:
+                    sigs = dnsmos_scorer.window_signals(
+                        m["sig"], m["bak"], m["ovrl"],
+                        ovrl_threshold=self.dnsmos_ovrl_threshold,
+                        sig_bak_margin=self.dnsmos_sig_bak_margin,
+                    )
+                    if sigs:
+                        extra.setdefault((m["start"], m["end"]), set()).update(sigs)
+            except Exception as exc:  # noqa: BLE001 — best effort
+                logger.warning("[audio_preflight] DNSMOS par fenêtre échoué : %s", exc)
+
+        return extra
 
     def _flags(
         self,

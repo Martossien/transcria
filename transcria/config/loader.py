@@ -215,6 +215,20 @@ _DEFAULT_CONFIG = {
                 # true = toujours la calculer (utile pour constituer le corpus de bench).
                 "difficulty_map_always": False,
             },
+            # DNSMOS P.835 (SIG/BAK/OVRL, MOS 1-5) : perceptif, distingue bruit vs
+            # parole dégradée. Modèle ONNX embarqué (CC-BY-4.0, cf. THIRD_PARTY_NOTICES.md).
+            "dnsmos": {
+                "enabled": True,
+                "ovrl_threshold": 2.5,    # OVRL < 2.5 → qualité globale dégradée
+                "sig_bak_margin": 0.0,    # SIG < BAK - marge → parole intrinsèquement dégradée
+            },
+            # Métriques acoustiques par fenêtre (numpy/scipy, sans dépendance lourde).
+            "acoustic": {
+                "enabled": True,
+                "rt60_threshold": 0.6,    # réverbération longue (s)
+                "snr_threshold": 6.0,     # SNR par fenêtre (dB)
+                "c50_threshold": -5.0,    # clarté faible (dB)
+            },
         },
         "segment_reliability": {
             "enabled": True,
