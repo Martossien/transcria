@@ -6,7 +6,7 @@
 #   STT_ENGINE=vllm (défaut) | sglang | custom
 #
 # USAGE
-#   source /home/admin_ia/vllm_venv/bin/activate          # (si engine=vllm)
+#   source vllm_venv/bin/activate          # (si engine=vllm)
 #   ./scripts/launch_stt_whisper.sh
 #   STT_GPU=5 STT_PORT=8005 ./scripts/launch_stt_whisper.sh
 #   scripts/stop_stt.sh --port 8005                        # pour arrêter

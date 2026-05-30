@@ -10,7 +10,7 @@
 #   STT_ENGINE=vllm (défaut) | sglang | custom
 #
 # USAGE
-#   source /home/admin_ia/vllm_venv/bin/activate          # (si engine=vllm)
+#   source vllm_venv/bin/activate          # (si engine=vllm)
 #   ./scripts/launch_stt_granite.sh
 #   STT_GPU=6 STT_PORT=8007 ./scripts/launch_stt_granite.sh
 #   scripts/stop_stt.sh --port 8007                        # pour arrêter

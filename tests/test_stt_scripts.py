@@ -82,7 +82,16 @@ def test_lib_moteur_non_hardcode():
     assert "STT_ENGINE" in content
     assert "sglang.launch_server" in content                  # autre moteur supporté
     assert "STT_SERVE_CMD" in content                          # échappatoire custom
-    assert "/home/admin_ia/vllm_venv/bin/vllm" in content      # défaut vllm de la machine
+    assert "command -v vllm" in content                       # défaut = vllm sur le PATH (découverte)
+
+
+def test_lib_has_no_machine_specific_paths():
+    """Garde-fou : aucun chemin spécifique à une machine (home utilisateur en dur)
+    dans la lib des lanceurs — tout doit passer par le PATH ou des variables."""
+    content = (_SCRIPTS_DIR / _LIB).read_text(encoding="utf-8")
+    assert "/home/admin_ia" not in content
+    import re
+    assert not re.search(r"/home/[a-z_][a-z0-9_-]*/", content), "chemin /home/<user>/ en dur dans la lib"
 
 
 @pytest.mark.parametrize("name,spec", _LAUNCHERS.items())

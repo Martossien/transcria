@@ -80,7 +80,9 @@ stt_serve() {
     case "$engine" in
         vllm)
             : "${STT_MODEL:?STT_MODEL manquant}" "${STT_SERVED_NAME:?STT_SERVED_NAME manquant}"
-            local bin; bin="$(_stt_default STT_BIN VLLM_BIN /home/admin_ia/vllm_venv/bin/vllm)"
+            # Défaut : `vllm` trouvé sur le PATH (venv activé ou install système).
+            # Surchargeable via STT_BIN. Aucun chemin spécifique à une machine.
+            local bin; bin="$(_stt_default STT_BIN VLLM_BIN "$(command -v vllm 2>/dev/null || echo vllm)")"
             _stt_check_bin "$bin" "$label" || exit 1
             cmd=("$bin" serve "$STT_MODEL" "${trust[@]}"
                  --host "$host" --port "$STT_PORT"

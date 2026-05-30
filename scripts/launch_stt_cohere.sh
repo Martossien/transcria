@@ -9,7 +9,7 @@
 #   STT_ENGINE=custom             commande libre via STT_SERVE_CMD
 #
 # USAGE
-#   source /home/admin_ia/vllm_venv/bin/activate          # (si engine=vllm)
+#   source vllm_venv/bin/activate          # (si engine=vllm)
 #   ./scripts/launch_stt_cohere.sh
 #   STT_GPU=3 STT_PORT=8003 ./scripts/launch_stt_cohere.sh
 #   STT_ENGINE=sglang STT_BIN=python ./scripts/launch_stt_cohere.sh
