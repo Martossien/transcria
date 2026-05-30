@@ -195,10 +195,12 @@ class WorkflowRunner:
             fs.save_json("metadata/audio_scene.json", scene)
             summary = fs.load_json("summary/summary.json") or {}
             audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
             evaluation = AudioQualityEvaluator(config).evaluate(
                 audio_analysis,
                 summary,
                 audio_scene=scene,
+                preflight=preflight,
             )
             fs.save_json("metadata/audio_quality_decision.json", evaluation)
             sl.info(

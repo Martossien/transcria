@@ -203,15 +203,17 @@ _DEFAULT_CONFIG = {
             "clipping_threshold": 0.98,
             "clipping_ratio_threshold": 0.001,
             # Qualification du son par fenêtre (SQUIM : STOI/PESQ/SI-SDR → difficulty_map).
-            # Désactivé par défaut : zéro impact sur le comportement historique.
             "squim": {
-                "enabled": False,
+                "enabled": True,          # SQUIM global toujours (cheap) quand le preflight tourne
                 "segment_s": 5.0,
                 "hop_s": 2.5,
                 "device": "cpu",          # "cuda:0" si GPU dispo (beaucoup plus rapide)
                 "stoi_threshold": 0.70,
                 "pesq_threshold": 2.5,
                 "sisdr_threshold": 5.0,
+                # difficulty_map par fenêtre : lazy (seulement si l'audio n'est pas « ok »).
+                # true = toujours la calculer (utile pour constituer le corpus de bench).
+                "difficulty_map_always": False,
             },
         },
         "segment_reliability": {

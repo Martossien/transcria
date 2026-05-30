@@ -355,7 +355,8 @@ class PipelineService:
             fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
             summary = fs.load_json("summary/summary.json") or {}
             audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
-            evaluation = AudioQualityEvaluator(cfg).evaluate(audio_analysis, summary)
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
+            evaluation = AudioQualityEvaluator(cfg).evaluate(audio_analysis, summary, preflight=preflight)
             fs.save_json("metadata/audio_quality_decision.json", evaluation)
             level = str((summary.get("diagnostics") or {}).get("level", "")).strip()
             if level in degraded_levels or evaluation.get("force_quality_backend"):
@@ -481,10 +482,12 @@ class PipelineService:
             )
             summary = fs.load_json("summary/summary.json") or {}
             audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
             evaluation = AudioQualityEvaluator(self.config).evaluate(
                 audio_analysis,
                 summary,
                 audio_scene=audio_scene,
+                preflight=preflight,
             )
             fs.save_json("metadata/audio_quality_decision.json", evaluation)
             sl.info(

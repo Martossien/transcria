@@ -1,5 +1,19 @@
 """Évaluation déterministe de la qualité audio/transcription rapide."""
 
+# Poids des flags du préflight acoustique (preflight.py) dans le score qualité.
+# Corrige l'incohérence historique : reliability.py utilisait ces flags, pas evaluate().
+_PREFLIGHT_FLAG_WEIGHTS = {
+    "risque_transcription_non_fiable": 3,
+    "audio_tres_faible": 3,
+    "clipping_detecte": 3,
+    "squim_stoi_faible": 3,    # SQUIM : perte d'intelligibilité → WER élevé
+    "squim_pesq_faible": 2,
+    "snr_faible": 1,
+    "audio_faible": 1,
+    "bande_etroite": 1,
+    "squim_sisdr_faible": 1,
+}
+
 
 class AudioQualityEvaluator:
     """Agrège les signaux disponibles pour décider si une vigilance qualité est requise."""
@@ -13,15 +27,25 @@ class AudioQualityEvaluator:
         audio_analysis: dict | None,
         summary: dict | None,
         audio_scene: dict | None = None,
+        preflight: dict | None = None,
     ) -> dict:
         audio_analysis = audio_analysis or {}
         summary = summary or {}
         audio_scene = audio_scene or {}
+        preflight = preflight or {}
         diagnostics = summary.get("diagnostics") or {}
 
         reasons: list[str] = []
         scene_findings: list[str] = []
         score = 0
+
+        # Flags du préflight acoustique (RMS/SNR/bande/clipping + SQUIM). Pondérés une fois.
+        weights = {**_PREFLIGHT_FLAG_WEIGHTS, **(self.cfg.get("preflight_flag_weights") or {})}
+        for flag in preflight.get("flags", []) or []:
+            w = weights.get(flag)
+            if w:
+                score += int(w)
+                reasons.append(f"preflight:{flag}")
 
         level = str(diagnostics.get("level", "") or "").strip()
         if level in set(self.cfg.get("degraded_levels", [])):

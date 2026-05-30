@@ -31,6 +31,17 @@ class AudioPreflightAnalyzer:
         self.narrowband_hz_threshold = float(cfg.get("narrowband_hz_threshold", 3800.0))
         self.clipping_threshold = float(cfg.get("clipping_threshold", 0.98))
         self.clipping_ratio_threshold = float(cfg.get("clipping_ratio_threshold", 0.001))
+        squim_cfg = cfg.get("squim", {}) or {}
+        # Défaut conservateur si la sous-config est absente (ex. construction en
+        # config nue dans les tests) ; la prod l'active via les défauts du loader.
+        self.squim_enabled = bool(squim_cfg.get("enabled", False))
+        self.squim_segment_s = float(squim_cfg.get("segment_s", 5.0))
+        self.squim_hop_s = float(squim_cfg.get("hop_s", 2.5))
+        self.squim_device = str(squim_cfg.get("device", "cpu"))
+        self.squim_stoi_threshold = float(squim_cfg.get("stoi_threshold", 0.70))
+        self.squim_pesq_threshold = float(squim_cfg.get("pesq_threshold", 2.5))
+        self.squim_sisdr_threshold = float(squim_cfg.get("sisdr_threshold", 5.0))
+        self.squim_map_always = bool(squim_cfg.get("difficulty_map_always", False))
 
     def analyze(self, audio_path: Path | str) -> dict:
         """Retourne un diagnostic audio ou ``{}`` si désactivé/échec."""
@@ -71,7 +82,7 @@ class AudioPreflightAnalyzer:
             bandwidth = _bandwidth_metrics(signal, int(sample_rate), frames, self.frame_ms, self.silence_rms_threshold)
 
             flags = self._flags(rms, snr_db, bandwidth, clipping_ratio)
-            return {
+            result = {
                 "enabled": True,
                 "path": str(path),
                 "loader": loader,
@@ -90,9 +101,61 @@ class AudioPreflightAnalyzer:
                 "flags": flags,
                 "risk_level": _risk_level(flags),
             }
+            if self.squim_enabled:
+                self._augment_with_squim(result, signal, int(sample_rate))
+            return result
         except Exception as exc:
             logger.warning("[audio_preflight] Calcul échoué pour %s: %s", path, exc)
             return {}
+
+    def _augment_with_squim(self, result: dict, signal, sample_rate: int) -> None:
+        """Ajoute la qualification SQUIM : scores globaux (toujours) + difficulty_map
+        (lazy — seulement si l'audio n'est pas déjà « ok », ou si forcée pour le bench).
+        Best effort : toute erreur est avalée (n'altère jamais le diagnostic de base)."""
+        import time as _time
+
+        from transcria.audio import squim_scorer
+        from transcria.audio.difficulty_map import build_difficulty_map, summarize_difficulty
+
+        t0 = _time.monotonic()
+        glob = squim_scorer.score_global(signal, sample_rate, device=self.squim_device)
+        if glob is None:
+            return  # SQUIM indisponible : on n'ajoute rien
+        result["squim_global"] = glob
+
+        flags = result.setdefault("flags", [])
+        if glob["stoi"] < self.squim_stoi_threshold and "squim_stoi_faible" not in flags:
+            flags.append("squim_stoi_faible")
+        if glob["pesq"] < self.squim_pesq_threshold and "squim_pesq_faible" not in flags:
+            flags.append("squim_pesq_faible")
+        if glob["sisdr"] < self.squim_sisdr_threshold and "squim_sisdr_faible" not in flags:
+            flags.append("squim_sisdr_faible")
+        result["risk_level"] = _risk_level(flags)
+
+        # difficulty_map par fenêtre : coûteuse → lazy (audio non « ok ») sauf bench.
+        if not self.squim_map_always and result["risk_level"] == "ok":
+            logger.info("[audio_preflight] SQUIM global ok — difficulty_map non calculée (lazy)")
+            return
+
+        segments = squim_scorer.score_segments(
+            signal, sample_rate,
+            segment_s=self.squim_segment_s, hop_s=self.squim_hop_s, device=self.squim_device,
+        )
+        if not segments:
+            return
+        difficulty_map = build_difficulty_map(
+            segments,
+            stoi_threshold=self.squim_stoi_threshold,
+            pesq_threshold=self.squim_pesq_threshold,
+            sisdr_threshold=self.squim_sisdr_threshold,
+        )
+        result["difficulty_map"] = difficulty_map
+        result["difficulty_summary"] = summarize_difficulty(difficulty_map)
+        logger.info(
+            "[audio_preflight] difficulty_map: %d fenêtres (degrade=%d) en %.1fs",
+            result["difficulty_summary"]["windows"], result["difficulty_summary"]["degrade"],
+            _time.monotonic() - t0,
+        )
 
     def _flags(
         self,
