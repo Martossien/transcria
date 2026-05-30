@@ -19,7 +19,8 @@ from flask import Flask, jsonify, request
 from tests.net_helpers import free_port as _free_port
 from tests.net_helpers import primary_lan_ip as _primary_lan_ip
 from tests.net_helpers import serve_flask
-from transcria.inference.asr_client import AsrClient
+from transcria.inference.asr_client import AsrClient, build_asr_client_from_config
+from transcria.inference.client import InferenceRequestError
 from transcria.stt.remote_transcriber import RemoteTranscriber
 
 pytestmark = pytest.mark.integration
@@ -28,7 +29,7 @@ pytestmark = pytest.mark.integration
 # ── Faux serveur ASR compatible OpenAI ──────────────────────────────────────--
 
 def _make_fake_asr(recorder: list, *, status: int = 200, model: str = "cohere-transcribe",
-                   segments=None, text: str = "bonjour le monde"):
+                   segments=None, text: str = "bonjour le monde", require_key: str | None = None):
     app = Flask(__name__)
 
     @app.get("/v1/models")
@@ -37,6 +38,12 @@ def _make_fake_asr(recorder: list, *, status: int = 200, model: str = "cohere-tr
 
     @app.post("/v1/audio/transcriptions")
     def transcribe():
+        # Auth optionnelle (façon vLLM --api-key) : 401 si absente/mauvaise.
+        if require_key is not None:
+            presented = (request.headers.get("Authorization", "") or "").removeprefix("Bearer ").strip()
+            if presented != require_key:
+                recorder.append({"rejected": 401})  # compté avant l'auth → prouve l'absence de retry
+                return jsonify({"error": {"message": "invalid api key", "code": "invalid_api_key"}}), 401
         f = request.files.get("file")
         data = f.read() if f else b""
         recorder.append({
@@ -196,3 +203,56 @@ def test_bind_on_lan_ip_non_loopback():
             wav.unlink(missing_ok=True)
     assert out["text"] == "bonjour le monde"
     assert rec[0]["is_wav"] is True
+
+
+# ── Auth STT sur le fil : 401 définitif, pas de retry ni de bascule ──────────--
+
+def test_missing_api_key_is_definitive_401():
+    """Serveur exigeant une clé (façon vLLM --api-key) ; client sans clé → 401
+    = InferenceRequestError (4xx), sans retry."""
+    rec: list = []
+    host = "127.0.0.1"
+    port = _free_port(host)
+    with _serve(_make_fake_asr(rec, require_key="the-key"), host, port) as base:
+        import tempfile
+        import wave
+        from pathlib import Path
+
+        wav = Path(tempfile.mkstemp(suffix=".wav")[1])
+        with wave.open(str(wav), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(b"\x00\x00" * 1600)
+        client = AsrClient(base, model="cohere-transcribe", retries=2)  # sans clé
+        try:
+            with pytest.raises(InferenceRequestError) as ei:
+                client.transcribe(wav)
+        finally:
+            wav.unlink(missing_ok=True)
+    assert ei.value.status == 401
+    assert len(rec) == 1  # une seule tentative : une 4xx ne se rejoue pas
+
+
+def test_remote_transcriber_401_no_fallback():
+    """Une auth invalide ne doit JAMAIS basculer en local (l'entrée n'est pas en
+    cause) — même avec fallback_local activé."""
+    rec: list = []
+    host = "127.0.0.1"
+    port = _free_port(host)
+    with _serve(_make_fake_asr(rec, require_key="the-key"), host, port) as base:
+        cfg = {"inference": {"mode": "remote", "stt": {"fallback_local": True, "backends": {
+            "cohere": {"url": base, "model": "cohere-transcribe"}}}}}  # pas de clé configurée
+        rt = RemoteTranscriber(cfg, backend="cohere", client=build_asr_client_from_config(cfg, "cohere"))
+
+        called = {"n": 0}
+
+        class _Local:
+            def transcribe(self, *a, **k):
+                called["n"] += 1
+                return [{"text": "should-not-run"}]
+
+        rt._local = _Local()
+        segs = rt.transcribe(audio_path=None, audio_array=np.zeros(16000, dtype=np.float32))
+    assert segs[0]["error"].startswith("asr_remote_4xx")
+    assert called["n"] == 0  # pas de bascule sur une 401
