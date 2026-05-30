@@ -541,3 +541,47 @@ notifications:
     from_address: ""            # Ex : "transcria@example.com"
     from_name: "TranscrIA"      # Nom affiché dans le champ "De :"
     base_url: "http://localhost:7870"  # URL publique pour les liens dans les emails
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Inférence distante (optionnel) — TranscrIA en frontale dont les ressources GPU
+# tournent sur un nœud distant (ou sur 127.0.0.1). mode: local = tout local (défaut,
+# comportement historique). Voir docs/SERVICE_RESSOURCES_GPU.md.
+# ──────────────────────────────────────────────────────────────────────────────
+inference:
+  mode: "local"                 # local | remote | hybrid
+  url: ""                       # service Flask de ressources (diarize/voice-embed), ex "http://192.168.1.59:8002"
+  fallback_local: true          # bascule locale si le service distant tombe
+  transport:
+    audio: "file_ref"           # file_ref (FS partagé) | upload (OBLIGATOIRE en vrai distant)
+  resilience:
+    timeout_s: 1800
+    retries: 2
+    max_unavailable_s: 600      # mode dégradé : au-delà, un job dont le nœud reste injoignable échoue
+  auth:
+    api_key_env: "TRANSCRIA_INFERENCE_API_KEY"   # clé API du service (variable d'env)
+    api_key: ""
+  stt:
+    fallback_local: true
+    response_format: "verbose_json"   # défaut global ; surchargé par backend ci-dessous
+    concurrency: 1              # >1 = transcription par tour en parallèle (distant uniquement)
+    timeout_s: 600
+    retries: 2
+    auth:
+      api_key_env: "TRANSCRIA_STT_API_KEY"
+      api_key: ""
+    backends:
+      # url vide = ce moteur reste local. Renseigner pour servir le STT à distance.
+      cohere:  { url: "", model: "cohere-transcribe",  response_format: "json" }          # Cohere refuse verbose_json
+      whisper: { url: "", model: "whisper-large-v3", response_format: "verbose_json" }
+
+# Config du NŒUD DE RESSOURCES uniquement (laisser absent côté frontale).
+# Décrit les moteurs STT que le service peut gérer (cycle A/B/C). Le placement
+# (gpu, port, fraction VRAM) est à la charge de l'admin.
+# resource_node:
+#   vram:
+#     preflight: true           # refuse proprement au lieu d'un OOM
+#     auto_relocate: false      # repli sur un autre GPU si l'assigné est plein
+#   engines:
+#     - { name: cohere,  script: scripts/launch_stt_cohere.sh,  gpu: 3, gpu_mem: 0.85, port: 8003, idle_timeout_s: 0 }
+#     - { name: whisper, script: scripts/launch_stt_whisper.sh, gpu: 5, gpu_mem: 0.85, port: 8005, idle_timeout_s: 0 }
+#   # idle_timeout_s > 0 : arrêt automatique du moteur après N secondes d'inactivité (idle-stop). 0 = résident.
