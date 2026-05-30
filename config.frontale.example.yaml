@@ -1,0 +1,59 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# TranscrIA — exemple de config FRONTALE (topologie distribuée)
+#
+# Cette machine porte le web, la base, le workflow, le calendrier, le lexique,
+# les exports — PAS de modèle GPU chargé. Le STT, la diarisation et l'empreinte
+# vocale sont servis par un NŒUD DE RESSOURCES distant (voir config.resource-node.example.yaml).
+#
+# ⚠ Ce fichier ne montre QUE ce qui diffère pour une frontale. Les autres sections
+#   (workflow, quality, security, notifications…) héritent des défauts ; copiez-les
+#   depuis config.example.yaml si vous voulez les personnaliser.
+#
+# Remplacez NODE_IP par l'adresse du nœud de ressources (ex. 192.168.1.59).
+# La clé API partagée se met dans .env : TRANSCRIA_INFERENCE_API_KEY / TRANSCRIA_STT_API_KEY.
+# Détail : docs/INSTALL.md (§ Déploiement distribué) et docs/SERVICE_RESSOURCES_GPU.md.
+# ──────────────────────────────────────────────────────────────────────────────
+
+server:
+  host: "0.0.0.0"
+  port: 7870
+
+storage:
+  jobs_dir: "./jobs"
+  database_url: "sqlite:///transcrIA.db"
+
+auth:
+  first_admin_username: "admin"
+  first_admin_password: "CHANGE-ME"      # à changer immédiatement
+
+# Inférence distante — le cœur de la config frontale.
+inference:
+  mode: "remote"
+  url: "http://NODE_IP:8002"             # service Flask du nœud (diarize/voice-embed)
+  fallback_local: false                  # frontale sans GPU → pas de repli local possible
+  transport:
+    audio: "upload"                      # OBLIGATOIRE en distant (filesystem non partagé)
+  resilience:
+    timeout_s: 1800
+    retries: 2
+    max_unavailable_s: 600               # au-delà, un job dont le nœud reste injoignable échoue
+  auth:
+    api_key_env: "TRANSCRIA_INFERENCE_API_KEY"
+  stt:
+    concurrency: 4                       # plusieurs tours en parallèle (le serveur vLLM batche)
+    fallback_local: false
+    auth:
+      api_key_env: "TRANSCRIA_STT_API_KEY"
+    backends:
+      cohere:  { url: "http://NODE_IP:8003/v1", model: "cohere-transcribe",  response_format: "json" }
+      whisper: { url: "http://NODE_IP:8005/v1", model: "whisper-large-v3", response_format: "verbose_json" }
+
+models:
+  stt_backend: "cohere"
+  diarization_backend: "remote"          # diarisation servie par le nœud
+
+# LLM d'arbitrage : elle tourne sur le nœud (GPU). La frontale l'appelle via opencode,
+# dont le provider `local` doit pointer sur http://NODE_IP:8080/v1
+# (cf. ~/.config/opencode/opencode.json — voir docs/INSTALL.md).
+services:
+  arbitrage_llm_port: 8080

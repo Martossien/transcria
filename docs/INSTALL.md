@@ -18,6 +18,14 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 10. [Lancement](#10-lancement)
 11. [Service systemd](#11-service-systemd)
 12. [Dépannage](#12-dépannage)
+13. [Déploiement distribué (frontale + nœud de ressources)](#13-déploiement-distribué-frontale--nœud-de-ressources)
+
+---
+
+> **Deux topologies de déploiement.** Les sections 1 à 12 décrivent l'installation
+> **tout-en-un** (web + GPU sur la même machine). Si vous voulez séparer la frontale
+> (web/CPU) d'un **nœud de ressources** GPU distant, lisez d'abord 1→12 puis la
+> **section 13** qui ne décrit que les différences. Conception : `docs/SERVICE_RESSOURCES_GPU.md`.
 
 ---
 
@@ -1116,6 +1124,116 @@ python app.py --debug   # crash avec speechbrain/k2_fsa
 ```
 
 > **Note** : `HF_HUB_OFFLINE=1` est forcé au démarrage dans `app.py`. Les modèles doivent être pré-téléchargés.
+
+---
+
+## 13. Déploiement distribué (frontale + nœud de ressources)
+
+Par défaut TranscrIA est **tout-en-un** (sections 1-12). En production on peut séparer :
+
+```
+┌───────────────────────────┐        HTTP         ┌──────────────────────────────────┐
+│ FRONTALE (web / CPU)       │ ──────────────────► │ NŒUD DE RESSOURCES (GPU)           │
+│ • web, base, calendrier    │ ◄────────────────── │ • inference_service (Flask, :8002) │
+│ • workflow, lexique, export│   /capabilities      │ • STT vLLM (:8003 cohere, :8005 …) │
+│ • PAS de modèle chargé     │   /infer/* /engines  │ • LLM arbitrage llama.cpp (:8080)  │
+│ • config.frontale.*        │                      │ • modèles téléchargés ICI          │
+└───────────────────────────┘                      │ • config.resource-node.*           │
+                                                    └──────────────────────────────────┘
+```
+
+> **Quand l'utiliser ?** Plusieurs utilisateurs/frontales partageant un parc GPU,
+> ou séparation réseau/sécurité. Sinon, restez en tout-en-un (plus simple).
+> Réseau testé : tout marche aussi sur **une seule machine via `127.0.0.1`**.
+
+### 13.1 Nœud de ressources (la machine GPU)
+
+Installer **comme une install tout-en-un** (sections 3→6 : système, venv, **modèles**,
+opencode, llama.cpp) — c'est ce nœud qui porte les modèles et les serveurs. Puis :
+
+```bash
+# 1. Config du nœud (manifeste des moteurs, clés API)
+cp config.resource-node.example.yaml config.yaml
+# adapter resource_node.engines (gpu/port/gpu_mem), models.cohere_model_path…
+
+# 2. Clé API partagée avec la frontale (dans .env)
+echo 'TRANSCRIA_INFERENCE_API_KEY=une-clé-longue-et-secrète' >> .env
+echo 'TRANSCRIA_STT_API_KEY=une-autre-clé' >> .env   # ou la même
+
+# 3. Lancer les serveurs (manuel, ou via systemd / nohup setsid)
+source venv/bin/activate
+INFERENCE_HOST=0.0.0.0 INFERENCE_PORT=8002 python -m inference_service &   # diarize + voice-embed
+STT_GPU=0 STT_PORT=8003 ./scripts/launch_stt_cohere.sh &                   # STT Cohere
+STT_GPU=1 STT_PORT=8005 ./scripts/launch_stt_whisper.sh &                  # STT Whisper
+./scripts/launch_arbitrage.sh &                                            # LLM d'arbitrage (:8080)
+
+# Arrêt des moteurs STT :  scripts/stop_stt.sh --all
+```
+
+**Service systemd du nœud** (recommandé en prod) — créer `/etc/systemd/system/transcria-inference.service` :
+
+```ini
+[Unit]
+Description=TranscrIA — service de ressources (inference_service)
+After=network.target
+
+[Service]
+Type=simple
+User=VOTRE_USER
+WorkingDirectory=/chemin/vers/transcria
+EnvironmentFile=/chemin/vers/transcria/.env
+Environment=INFERENCE_HOST=0.0.0.0
+Environment=INFERENCE_PORT=8002
+ExecStart=/chemin/vers/transcria/venv/bin/python -m inference_service
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Les moteurs vLLM (`launch_stt_*.sh`) et la LLM d'arbitrage gagnent aussi à être des units
+systemd avec `Restart=on-failure` (ce sont des serveurs persistants, cf. §10 du doc conception).
+
+**Vérifier le nœud :**
+```bash
+curl -s http://127.0.0.1:8002/health        # {"status":"ok"}
+curl -s http://127.0.0.1:8002/capabilities   # GPU, VRAM, moteurs déclarés + santé
+curl -s http://127.0.0.1:8003/v1/models      # vLLM Cohere prêt
+```
+
+### 13.2 Frontale (la machine web)
+
+Installer système + venv (sections 3-4) et le dépôt. **Pas besoin de télécharger les
+modèles STT/pyannote** (ils sont sur le nœud) — torch reste requis pour la frontale
+mais aucun modèle n'est chargé en mode `remote`.
+
+```bash
+# 1. Config frontale (pointe vers le nœud)
+cp config.frontale.example.yaml config.yaml
+# remplacer NODE_IP par l'IP du nœud (ex. 192.168.1.59)
+
+# 2. Mêmes clés API que le nœud (dans .env)
+echo 'TRANSCRIA_INFERENCE_API_KEY=une-clé-longue-et-secrète' >> .env
+echo 'TRANSCRIA_STT_API_KEY=une-autre-clé' >> .env
+
+# 3. opencode : provider local pointant sur la LLM du NŒUD
+#    ~/.config/opencode/opencode.json → "baseUrl": "http://NODE_IP:8080/v1"
+#    (cf. la configuration opencode décrite en section 5)
+
+# 4. Lancer la frontale (comme en tout-en-un)
+sudo systemctl start transcria        # ou ./start.sh
+```
+
+**Vérifier de bout en bout :** ouvrir l'UI → page « État du système » → panneau
+**« Ressources distantes »** : mode `remote`, feu vert par moteur. Puis lancer un job.
+
+### 13.3 Sécurité réseau
+
+- **Clé API partagée obligatoire en prod** (`.env` des deux côtés) : sans elle, `/infer/*`
+  et `/engines/*` sont ouverts (mode dev localhost uniquement).
+- **Pare-feu** : n'exposer les ports du nœud (8002/8003/8005/8080) qu'à la frontale.
+- `transport.audio: upload` est **obligatoire** (la frontale envoie les octets ; un chemin
+  `file_ref` ne serait pas résoluble côté nœud — filesystem non partagé).
 
 ---
 

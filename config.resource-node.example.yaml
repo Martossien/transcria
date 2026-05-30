@@ -1,0 +1,41 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# TranscrIA — exemple de config NŒUD DE RESSOURCES (topologie distribuée)
+#
+# Cette machine (GPU) sert l'inférence. Elle fait tourner :
+#   • le service Flask de ressources :  python -m inference_service   (port 8002)
+#   • les moteurs STT (vLLM/SGLang)  :  scripts/launch_stt_*.sh        (8003/8005…)
+#   • la LLM d'arbitrage (llama.cpp) :  scripts/launch_arbitrage.sh    (port 8080)
+# Pas de web, pas de base, pas de calendrier — c'est la frontale qui les porte.
+# Les MODÈLES sont téléchargés ICI (cf. docs/INSTALL.md §6).
+#
+# La clé API partagée (mêmes valeurs que la frontale) se met dans .env :
+#   TRANSCRIA_INFERENCE_API_KEY / TRANSCRIA_STT_API_KEY
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Auth des flux entrants (doit correspondre à la frontale). Sans clé = ouvert (dev).
+inference:
+  auth:
+    api_key_env: "TRANSCRIA_INFERENCE_API_KEY"
+  stt:
+    auth:
+      api_key_env: "TRANSCRIA_STT_API_KEY"
+
+# Moteurs STT gérés par le service (cycle de vie A/B/C). Placement = vous (admin) :
+# adaptez gpu / port / gpu_mem à votre machine. idle_timeout_s > 0 active l'idle-stop.
+resource_node:
+  vram:
+    preflight: true                      # refuse proprement au lieu d'un OOM
+    auto_relocate: false                 # repli sur un autre GPU si l'assigné est plein
+  engines:
+    - { name: cohere,  script: scripts/launch_stt_cohere.sh,  gpu: 0, gpu_mem: 0.85, port: 8003, idle_timeout_s: 0 }
+    - { name: whisper, script: scripts/launch_stt_whisper.sh, gpu: 1, gpu_mem: 0.85, port: 8005, idle_timeout_s: 0 }
+
+# Chemins des modèles présents sur CE nœud (cf. docs/INSTALL.md §6 pour le téléchargement).
+models:
+  cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
+  pyannote_model: "pyannote/speaker-diarization-community-1"
+
+# Empreinte/diarisation in-process (service Flask) : device GPU.
+voice_enrollment:
+  embedding:
+    device: "cuda:0"

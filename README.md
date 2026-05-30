@@ -347,7 +347,7 @@ transcria/
 
 | Document | Contenu |
 |---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | Installation, modèles, systemd, dépannage |
+| [docs/INSTALL.md](docs/INSTALL.md) | Installation, modèles, systemd, dépannage, **déploiement distribué** (frontale + nœud de ressources) |
 | [docs/TECHNICAL.md](docs/TECHNICAL.md) | Architecture, pipeline, API, GPU |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | États, transitions, fichiers par job |
 | [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) | Référence complète `config.yaml` |
