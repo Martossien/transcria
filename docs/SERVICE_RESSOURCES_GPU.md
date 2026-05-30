@@ -205,6 +205,11 @@ Scénario probable en split (réseau, redémarrage, crash GPU). Politique **expl
 > Principe : **jamais d'échec silencieux ni de spin infini**. Le job est soit en file (visible), soit
 > en échec explicite après une fenêtre bornée.
 
+**En tout-en-un**, le service ressources est local : une indisponibilité = **crash process**, restauré
+par **systemd** en quelques secondes. Seule la **1ʳᵉ ligne (transitoire)** s'applique alors — le job
+patiente via re-queue le temps du redémarrage. Les cas « prolongé » et « fenêtre dépassée » sont des
+préoccupations de la topologie **split** (réseau, nœud distant, crash GPU durable).
+
 ---
 
 ## 8. Configuration (esquisse)
