@@ -17,6 +17,12 @@ def create_transcriber(
     if backend is None:
         backend = config.get("models", {}).get("stt_backend", "cohere")
 
+    if _should_use_remote_stt(config, backend):
+        from transcria.stt.remote_transcriber import RemoteTranscriber
+
+        logger.info("Transcription : backend distant '%s' (inference.stt)", backend)
+        return RemoteTranscriber(config, backend=backend, device=device)
+
     if backend not in _STT_BACKENDS:
         logger.warning(
             "Backend STT inconnu '%s', fallback sur cohere. Backends disponibles: %s",
@@ -159,6 +165,20 @@ def _effective_parakeet_config(config: dict) -> dict:
     current = config.get("parakeet", {})
     defaults = get_default_config()["parakeet"]
     return _deep_merge(defaults, current)
+
+
+def _should_use_remote_stt(config: dict, backend: str) -> bool:
+    """True si le STT doit passer par un serveur vLLM distant pour ce backend.
+
+    Conditions : `inference.mode` ∈ {remote, hybrid} ET un endpoint est configuré
+    pour ce backend dans `inference.stt.backends`. Sinon, transcription locale
+    (comportement historique préservé, y compris pour granite/parakeet non mappés).
+    """
+    inf = config.get("inference", {}) or {}
+    if inf.get("mode", "local") not in ("remote", "hybrid"):
+        return False
+    backends = ((inf.get("stt", {}) or {}).get("backends", {}) or {})
+    return bool((backends.get(backend, {}) or {}).get("url"))
 
 
 def list_available_backends() -> list[str]:

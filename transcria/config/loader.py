@@ -494,6 +494,37 @@ _DEFAULT_CONFIG = {
             "other": 1095,
         },
     },
+    # Inférence distante : permet à TranscrIA d'être une frontale dont les
+    # ressources GPU (diarisation, empreinte vocale, STT) tournent ailleurs —
+    # ou sur la même machine via 127.0.0.1. mode="local" (défaut) = tout local,
+    # aucun appel réseau : le comportement historique est strictement préservé.
+    "inference": {
+        "mode": "local",                       # local | remote | hybrid
+        # Service Flask maison (diarisation + empreinte vocale), ex http://HOST:8002
+        "url": "",
+        "fallback_local": True,                # bascule locale si le service tombe
+        "auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY", "api_key": ""},
+        "transport": {"audio": "file_ref"},    # file_ref (mono-machine) | upload (distant)
+        "resilience": {"timeout_s": 1800, "retries": 2},
+        # STT via un serveur compatible OpenAI (vLLM, SGLang, … — non hardcodé),
+        # endpoint /v1/audio/transcriptions, un port par moteur. Voir
+        # scripts/launch_stt_*.sh. WAV/OGG acceptés, pas le MP3 (RemoteTranscriber
+        # convertit automatiquement avant l'envoi).
+        "stt": {
+            "fallback_local": True,
+            "response_format": "verbose_json",  # verbose_json (segments) | json (texte)
+            "collapse_repetition_loops": True,
+            "timeout_s": 600,
+            "retries": 2,
+            "auth": {"api_key_env": "TRANSCRIA_STT_API_KEY", "api_key": ""},
+            "backends": {
+                # url vide = ce moteur reste local même en mode remote/hybrid.
+                # Exemple distant : "url": "http://127.0.0.1:8003/v1" (cohere).
+                "cohere": {"url": "", "model": "cohere-transcribe"},
+                "whisper": {"url": "", "model": "whisper-large-v3"},
+            },
+        },
+    },
 }
 
 _CONFIG_PATH_ENV = "TRANSCRIA_CONFIG"
