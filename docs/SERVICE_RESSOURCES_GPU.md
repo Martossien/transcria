@@ -1,8 +1,8 @@
 # TranscrIA — Service de ressources GPU & autonomie VRAM du STT
 
-> **Statut :** 🟢 **v1 implémentée sur `main`** (commits `6423fa1`→`c905dc8`). Conception + cœur +
-> activation runtime livrés et testés (ruff/mypy/pytest, couverture 77 %). **Restent** (cf. §12) :
-> re-queue différé avec backoff (§7.2) et idle-stop des moteurs externes (v1.2).
+> **Statut :** 🟢 **v1 implémentée sur `main`** (commits `6423fa1`→`e5ad359`). Conception + cœur +
+> activation runtime + re-queue différé (§7.2) livrés et testés (ruff/mypy/pytest, couverture ~77 %).
+> **Reste** (cf. §12) : idle-stop des moteurs externes (v1.2).
 > **Auteur :** Martossien
 > **Date :** 2026-05-30
 > **Objectif :** lever l'asymétrie de gestion VRAM entre le service maison et le STT vLLM,
@@ -24,7 +24,7 @@
 | Admission §7.2 + pré-vol | `transcria/inference/resource_gate.py`, branché dans `PipelineService.run_process` | ✅ |
 | Panneau d'état frontale | `GET /api/resources/status` + `dashboard_status.html` | ✅ |
 | Concurrence STT par tour (v1.1) | `inference.stt.concurrency` (`transcria/stt/transcription.py`) | ✅ |
-| Re-queue différé avec backoff (§7.2) | scheduler | ⏳ à faire |
+| Re-queue différé avec backoff (§7.2) | `QueueStore.requeue_later` + `job_executor` (`scheduled_at`) | ✅ |
 | Idle-stop moteurs externes (v1.2) | superviseur | ⏳ à faire |
 
 ---
@@ -216,7 +216,7 @@ Scénario probable en split (réseau, redémarrage, crash GPU). Politique **expl
 
 | Situation | Comportement |
 |---|---|
-| Indispo **transitoire** (503 / timeout ponctuel) | re-queue via `Retry-After` (**déjà conçu**) — le job **attend**, il n'échoue pas |
+| Indispo **transitoire** (503 / timeout ponctuel) | re-queue différé (**implémenté** : `QueueStore.requeue_later` + `scheduled_at`) — le job **attend** puis re-tente, il n'échoue pas |
 | Indispo **prolongée** (nœud rouge) | nouvelles transcriptions **acceptées mais mises en file** (jamais perdues), statut clair « ressources indisponibles » + notification ; **on ne bloque pas** la soumission et **on ne boucle pas indéfiniment** en silence |
 | Fenêtre de retry **dépassée** (`max_unavailable_s`, configurable) | le job est marqué **échec** avec raison explicite (pas de crash, pas de blocage) |
 | `fallback_local` actif **et** GPU local présent | bascule locale possible ; **en frontale CPU-only, pas de fallback** → file + notification est la seule issue saine |
@@ -304,6 +304,9 @@ resource_node:
 
 ## 12. Plan d'implémentation (incrémental)
 
+> **État (commits `6423fa1`→`e5ad359`)** : items 1-6 ✅ + re-queue différé §7.2 ✅ (étape 5 complétée).
+> La relocalisation auto (7) est câblée en opt-in. **Reste : idle-stop (8).**
+
 **v1 (cœur)**
 1. **Pré-check VRAM (niveau 1)** au lancement des moteurs STT — transforme l'OOM en 503 clair.
 2. **Correctif allocator** (bug silencieux §9) : pas de réservation VRAM locale pour une phase
@@ -325,7 +328,7 @@ resource_node:
 
 - Sémantique fraction-de-total de vLLM (§4) : bien la coder dans le pré-check/relocalisation.
 - Courses au démarrage concurrent → verrou `VRAMManager` (déjà présent) à réutiliser strictement.
-- Cold start (25–105 s) sur CAS B / relocalisation : la frontale doit gérer l'attente
-  (`Retry-After` + re-queue, déjà conçu).
+- Cold start (25–105 s) sur CAS B / relocalisation : la frontale gère l'attente via re-queue
+  différé (`requeue_later` + `scheduled_at`, **implémenté** §7.2).
 - En split, redémarrage d'un moteur tombé : **décidé → systemd `Restart=on-failure` en v1** (§10) ;
   agent interne au service en option v2.
