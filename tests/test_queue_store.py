@@ -111,3 +111,44 @@ def test_future_scheduled_job_is_not_next_candidate(app, owner_id):
         QueueStore.enqueue(job.id, scheduled_at=datetime.now(timezone.utc) + timedelta(hours=1))
 
         assert job.id not in [entry.job_id for entry in QueueStore.get_next_candidates()]
+
+
+def test_requeue_later_defers_running_job(app, owner_id):
+    """§7.2 : un job running est replanifié en WAITING avec scheduled_at futur,
+    et exclu des candidats tant que le délai n'est pas écoulé."""
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Requeue later")
+        QueueStore.enqueue(job.id, mode="quality")
+        QueueStore.mark_running(job.id, gpu_index=3, phase="stt")
+
+        future = datetime.now(timezone.utc) + timedelta(seconds=300)
+        assert QueueStore.requeue_later(job.id, future) is True
+
+        entry = QueueStore.get_entry(job.id)
+        assert entry.status == QUEUE_WAITING
+        assert entry.started_at is None
+        assert entry.gpu_index is None
+        assert entry.current_phase is None
+        assert entry.mode == "quality"          # préservé
+        # Différé → absent des candidats éligibles.
+        assert all(e.job_id != job.id for e in QueueStore.get_next_candidates())
+
+
+def test_requeue_later_eligible_once_delay_elapsed(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Requeue elapsed")
+        QueueStore.enqueue(job.id)
+        QueueStore.mark_running(job.id)
+
+        past = datetime.now(timezone.utc) - timedelta(seconds=1)
+        QueueStore.requeue_later(job.id, past)
+
+        # Délai écoulé → de nouveau candidat.
+        assert any(e.job_id == job.id for e in QueueStore.get_next_candidates())
+
+
+def test_requeue_later_unknown_job_returns_false(app):
+    with app.app_context():
+        assert QueueStore.requeue_later("inexistant", datetime.now(timezone.utc)) is False

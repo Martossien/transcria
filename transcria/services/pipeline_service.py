@@ -107,12 +107,14 @@ class PipelineService:
         if verdict.action == "fail":
             sl.warning("Pré-vol ressources : ÉCHEC — %s", verdict.reason, job_id=job.id)
             return {"error": f"ressources_distantes_indisponibles: {verdict.reason}", "step": "preflight"}
-        # defer (transitoire) — pas de re-queue différé en v1 → échec explicite, retentable.
-        sl.warning("Pré-vol ressources : indisponibles (transitoire) — %s", verdict.reason, job_id=job.id)
+        # defer (transitoire) — re-queue différé (§7.2) : le job patiente puis re-tente.
+        sl.warning("Pré-vol ressources : indisponibles (transitoire) — mise en file différée (%s)",
+                   verdict.reason, job_id=job.id)
         return {
-            "error": f"ressources_distantes_indisponibles (transitoire — relancez le job): {verdict.reason}",
+            "deferred": True,
+            "retry_after_s": verdict.retry_after_s,
+            "reason": verdict.reason,
             "step": "preflight",
-            "retryable": True,
         }
 
     def _execute_pipeline(

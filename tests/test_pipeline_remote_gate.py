@@ -54,10 +54,11 @@ def test_fail_short_circuits_without_running(monkeypatch):
     assert "retryable" not in out          # fail définitif
 
 
-def test_defer_short_circuits_retryable(monkeypatch):
+def test_defer_short_circuits_deferred(monkeypatch):
     svc = _service(monkeypatch, GateVerdict("defer", "injoignable (transitoire)", retry_after_s=30))
     monkeypatch.setattr(svc, "_execute_pipeline",
                         lambda *a, **k: pytest.fail("le pipeline ne doit pas s'exécuter"))
     out = svc.run_process(_job, "/a.wav")
-    assert out["retryable"] is True
-    assert "transitoire" in out["error"]
+    assert out["deferred"] is True               # re-queue différé, pas un échec
+    assert out["retry_after_s"] == 30
+    assert "error" not in out

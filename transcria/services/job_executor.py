@@ -5,6 +5,7 @@ import signal as _sig
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from flask import Flask
@@ -147,6 +148,16 @@ class JobExecutorService:
                     QueueStore.dequeue(job_id, status="cancelled")
                     mark_execution_cancelled(job_id)
                     JobStore.update_state(job_id, JobState.CANCELLED)
+                elif result.get("deferred"):
+                    # Mode dégradé §7.2 : ressources distantes injoignables (transitoire).
+                    # On replanifie au lieu d'échouer (terminaison garantie par la fenêtre
+                    # max_unavailable_s côté pré-vol). Pas d'état terminal, pas de notif.
+                    retry_after = int(result.get("retry_after_s", 30))
+                    scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    QueueStore.requeue_later(job_id, scheduled_at)
+                    mark_execution_queued(job_id, mode)
+                    sl.info("Job différé (ressources distantes) — nouvelle tentative dans %ds",
+                            retry_after, job_id=job_id, reason=result.get("reason"))
                 elif result.get("error"):
                     QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, result["error"])

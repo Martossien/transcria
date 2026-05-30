@@ -70,6 +70,27 @@ class QueueStore:
         return True
 
     @staticmethod
+    def requeue_later(job_id: str, scheduled_at: datetime) -> bool:
+        """Replanifie un job en cours pour une nouvelle tentative différée.
+
+        Remet l'entrée en WAITING avec un `scheduled_at` futur : le scheduler ignore
+        les entrées dont `scheduled_at > now`, donc le job patiente puis est re-pris.
+        Utilisé par le mode dégradé §7.2 (ressources distantes injoignables → on diffère
+        au lieu d'échouer). La terminaison reste garantie côté pré-vol via
+        `inference.resilience.max_unavailable_s`.
+        """
+        entry = QueueStore.get_entry(job_id)
+        if entry is None:
+            return False
+        entry.status = QUEUE_WAITING
+        entry.started_at = None
+        entry.gpu_index = None
+        entry.current_phase = None
+        entry.scheduled_at = scheduled_at
+        db.session.commit()
+        return True
+
+    @staticmethod
     def delete_entry(job_id: str) -> bool:
         entry = QueueStore.get_entry(job_id)
         if entry is None:
