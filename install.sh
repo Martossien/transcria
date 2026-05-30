@@ -14,6 +14,14 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --postgres         Configurer PostgreSQL (crée rôle/base, écrit le DSN, migre le schéma)
+#   --no-postgres      Conserver SQLite (pas de prompt PostgreSQL)
+#   --pg-host HOST     Hôte PostgreSQL (défaut: 127.0.0.1)
+#   --pg-port PORT     Port PostgreSQL (défaut: 5432)
+#   --pg-db NAME       Nom de la base (défaut: transcria)
+#   --pg-user USER     Rôle/utilisateur PostgreSQL (défaut: transcria)
+#   --pg-password PWD  Mot de passe du rôle (défaut: généré aléatoirement)
+#   --pg-migrate       Migrer les données SQLite existantes vers PostgreSQL
 #
 # Le script doit être lancé depuis le répertoire du dépôt TranscrIA.
 # ============================================================================
@@ -44,6 +52,13 @@ HF_TOKEN=""
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
 PYTHON_BIN=""
+SETUP_PG=""            # "" = à décider (prompt) ; true/false = explicite
+PG_HOST="127.0.0.1"
+PG_PORT="5432"
+PG_DB="transcria"
+PG_USER="transcria"
+PG_PASSWORD=""         # généré si vide
+PG_MIGRATE=false
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -56,6 +71,14 @@ while [[ $# -gt 0 ]]; do
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
         --force-config)    FORCE_CONFIG=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
+        --postgres)        SETUP_PG=true; shift ;;
+        --no-postgres)     SETUP_PG=false; shift ;;
+        --pg-host)         PG_HOST="$2"; shift 2 ;;
+        --pg-port)         PG_PORT="$2"; shift 2 ;;
+        --pg-db)           PG_DB="$2"; shift 2 ;;
+        --pg-user)         PG_USER="$2"; shift 2 ;;
+        --pg-password)     PG_PASSWORD="$2"; shift 2 ;;
+        --pg-migrate)      PG_MIGRATE=true; shift ;;
         -h|--help)
             awk 'NR>1 && /^[^#]/{exit} NR>1 && /^#/{sub(/^# ?/,""); print}' "$0"
             exit 0 ;;
@@ -313,6 +336,106 @@ elif ! grep -qE '^TRANSCRIA_SECRET=.{8,}' "$ENV_FILE" 2>/dev/null; then
     log_ok "Clé secrète Flask générée dans .env"
 else
     log_ok "TRANSCRIA_SECRET présent dans .env"
+fi
+
+# ============================================================================
+# SECTION 6.5 — Base de données PostgreSQL (optionnel, recommandé en prod)
+# ============================================================================
+log_section "Base de données"
+
+DB_BACKEND="SQLite"
+
+if [[ -z "$SETUP_PG" ]]; then
+    if [[ "$NON_INTERACTIVE" = true ]]; then
+        SETUP_PG=false
+    elif ask_yn "Configurer PostgreSQL ? (recommandé en prod ; sinon SQLite)"; then
+        SETUP_PG=true
+    else
+        SETUP_PG=false
+    fi
+fi
+
+if [[ "$SETUP_PG" != true ]]; then
+    log_ok "Base SQLite conservée (storage.database_url de config.yaml)"
+elif ! command -v psql &>/dev/null; then
+    log_error "psql introuvable — PostgreSQL n'est pas installé."
+    log_warn  "  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql"
+    log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
+    log_warn  "Installation poursuivie en SQLite ; relancez avec --postgres une fois PostgreSQL installé."
+elif [[ $EUID -ne 0 ]] && ! command -v sudo &>/dev/null; then
+    log_error "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres). SQLite conservé."
+else
+    ask PG_HOST "Hôte PostgreSQL" "$PG_HOST"
+    ask PG_PORT "Port" "$PG_PORT"
+    ask PG_DB   "Base" "$PG_DB"
+    ask PG_USER "Rôle (utilisateur)" "$PG_USER"
+    if [[ -z "$PG_PASSWORD" ]]; then
+        PG_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
+        log_info "Mot de passe du rôle '$PG_USER' généré automatiquement."
+    fi
+
+    # Superutilisateur : sudo -u postgres (ou direct si déjà root postgres-capable)
+    if [[ $EUID -eq 0 ]]; then PG_SUPER=(psql); else PG_SUPER=(sudo -u postgres psql); fi
+
+    log_info "Création du rôle '$PG_USER' et de la base '$PG_DB'…"
+    # SQL transmis par stdin (le mot de passe n'apparaît pas dans la liste des process).
+    if "${PG_SUPER[@]}" -v ON_ERROR_STOP=1 -v role="$PG_USER" -v pwd="$PG_PASSWORD" -v dbname="$PG_DB" <<'SQL'
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbname') \gexec
+SQL
+    then
+        log_ok "Rôle et base PostgreSQL prêts"
+    else
+        log_error "Échec de la création rôle/base (accès au compte postgres ?). Installation interrompue."
+        exit 1
+    fi
+
+    # DSN dans .env (mot de passe hors config versionnée)
+    DSN="postgresql+psycopg://$PG_USER:$PG_PASSWORD@$PG_HOST:$PG_PORT/$PG_DB"
+    python - "$ENV_FILE" "$DSN" <<'PYEOF'
+import pathlib, sys
+env_file, dsn = pathlib.Path(sys.argv[1]), sys.argv[2]
+lines = env_file.read_text().splitlines() if env_file.exists() else []
+out, done = [], False
+for ln in lines:
+    if ln.lstrip("# ").startswith("TRANSCRIA_DATABASE_URL="):
+        out.append(f"TRANSCRIA_DATABASE_URL={dsn}"); done = True
+    else:
+        out.append(ln)
+if not done:
+    out.append(f"TRANSCRIA_DATABASE_URL={dsn}")
+env_file.write_text("\n".join(out) + "\n")
+PYEOF
+    chmod 600 "$ENV_FILE"
+    log_ok "DSN PostgreSQL écrit dans .env (chmod 600)"
+
+    # Schéma via Alembic
+    log_info "Création du schéma (alembic upgrade head)…"
+    if TRANSCRIA_DATABASE_URL="$DSN" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+        log_ok "Schéma PostgreSQL créé"
+    else
+        log_error "Échec d'alembic upgrade head"
+        exit 1
+    fi
+
+    # Migration éventuelle des données SQLite existantes
+    SQLITE_DB="$INSTALL_DIR/instance/transcrIA.db"
+    if [[ -s "$SQLITE_DB" ]]; then
+        if [[ "$PG_MIGRATE" = true ]] || ask_yn "Migrer les données SQLite existantes ($SQLITE_DB) ?"; then
+            log_info "Migration des données SQLite → PostgreSQL…"
+            if TRANSCRIA_DATABASE_URL="$DSN" python "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
+                    --source "sqlite:///$SQLITE_DB" 2>&1 | sed 's/^/  /'; then
+                log_ok "Données migrées"
+            else
+                log_warn "Échec de la migration des données (schéma en place, base utilisable à vide)"
+            fi
+        fi
+    fi
+
+    DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"
 fi
 
 # ============================================================================
@@ -737,6 +860,14 @@ $QWEN_OK    && echo -e "  ${GREEN}[OK]${NC} Qwen 35B GGUF" \
 
 # Vérifier s'il reste des CHANGE-ME dans config.yaml
 REMAINING_CHANGES=$(grep -c 'CHANGE-ME' "$CONFIG_PATH" 2>/dev/null || true)
+echo ""
+echo -e "${BOLD}Base de données :${NC}"
+if [[ "$DB_BACKEND" == PostgreSQL* ]]; then
+    echo -e "  ${GREEN}[OK]${NC} $DB_BACKEND — DSN dans .env (TRANSCRIA_DATABASE_URL)"
+else
+    echo -e "  ${BLUE}[INFO]${NC} $DB_BACKEND — passez à PostgreSQL en prod : ./install.sh --postgres"
+fi
+
 echo ""
 echo -e "${BOLD}Configuration :${NC}"
 if [[ "$REMAINING_CHANGES" -gt 0 ]]; then

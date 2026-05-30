@@ -698,6 +698,16 @@ production multi-utilisateurs, utilisez **PostgreSQL** : il encaisse la charge
 concurrente (la queue et le service de ressources sollicitent la base en parallèle)
 là où SQLite sérialise les écritures.
 
+> **Voie automatique (recommandée).** `install.sh` prend tout en charge :
+> ```bash
+> ./install.sh --postgres                 # crée le rôle/la base, écrit le DSN, applique alembic
+> ./install.sh --postgres --pg-migrate    # + migre les données SQLite existantes
+> ```
+> Options : `--pg-host/--pg-port/--pg-db/--pg-user/--pg-password` (mot de passe généré si
+> omis). Sans `--postgres` ni `--no-postgres`, l'installeur pose la question. PostgreSQL
+> doit être installé au préalable (le script l'indique sinon). Les étapes manuelles
+> ci-dessous décrivent ce que fait le script.
+
 **1. Créer le rôle et la base** (PostgreSQL ≥ 13) :
 
 ```bash
