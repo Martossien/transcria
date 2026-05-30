@@ -41,6 +41,17 @@ Utilisation bench (plusieurs combos en parallèle) :
         --combo-id 023 \\
         --output-json /tmp/bench/023.json \\
         --skip-llm --keep
+
+Topologie frontale + ressources distantes (serveurs lancés à part) :
+    # STT distant (scripts/launch_stt_cohere.sh sur le GPU 3) ; pipeline sur GPU 0
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 \\
+        --gpu 0 --stt-backend cohere \\
+        --remote-stt http://192.168.1.59:8003/v1 --skip-llm
+    # + diarisation/voice-embed distantes (inference_service sur :8002)
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 \\
+        --gpu 0 --mode quality \\
+        --remote-stt http://192.168.1.59:8005/v1 --stt-backend whisper \\
+        --remote-inference http://192.168.1.59:8002 --skip-llm
 """
 
 from __future__ import annotations
@@ -164,6 +175,32 @@ Exemples :
                  "large-v3", "distil-large-v2", "turbo"],
         default="large-v3",
         help="Taille du modèle Whisper si --stt-backend=whisper (défaut: large-v3)",
+    )
+    parser.add_argument(
+        "--remote-stt", metavar="URL", default=None,
+        help=(
+            "Servir le STT à distance via une API compatible OpenAI (vLLM/SGLang), "
+            "ex: http://192.168.1.59:8003/v1. Force inference.mode=remote pour le "
+            "backend --stt-backend, response_format auto (cohere=json, whisper="
+            "verbose_json) et fallback_local=False (échec bruyant si le serveur tombe)."
+        ),
+    )
+    parser.add_argument(
+        "--remote-stt-api-key", metavar="KEY", default=None,
+        help="Clé API du serveur STT distant (si lancé avec --api-key).",
+    )
+    parser.add_argument(
+        "--remote-inference", metavar="URL", default=None,
+        help=(
+            "Servir diarisation + empreinte vocale à distance via le service Flask "
+            "inference_service, ex: http://192.168.1.59:8002. Force diarization_backend"
+            "=remote, inference.mode=remote, transport.audio=upload (requis en distant) "
+            "et fallback_local=False. Effet sur la diarisation en mode quality."
+        ),
+    )
+    parser.add_argument(
+        "--remote-inference-api-key", metavar="KEY", default=None,
+        help="Clé API du service d'inférence distant (Authorization: Bearer).",
     )
 
     # ── Mode pipeline ────────────────────────────────────────────────────────
@@ -587,6 +624,43 @@ def apply_e2e_config(cfg: dict, args: argparse.Namespace) -> None:
         cfg.setdefault("whisper", {})["model_size"] = args.whisper_model_size
         info(f"Whisper model_size forcé à {args.whisper_model_size!r}")
 
+    # STT distant : le pipeline transcrit via un serveur compatible OpenAI.
+    if args.remote_stt:
+        # Cohere Transcribe (vLLM) refuse verbose_json → texte ; Whisper gère les segments.
+        rfmt = "json" if args.stt_backend == "cohere" else "verbose_json"
+        inference = cfg.setdefault("inference", {})
+        inference["mode"] = "remote"
+        stt = inference.setdefault("stt", {})
+        stt["fallback_local"] = False  # banc : échec bruyant, on teste vraiment le distant
+        if args.remote_stt_api_key:
+            stt.setdefault("auth", {})["api_key"] = args.remote_stt_api_key
+        backends = stt.setdefault("backends", {})
+        be = backends.setdefault(args.stt_backend, {})
+        be["url"] = args.remote_stt
+        be["response_format"] = rfmt
+        # served-model-name attendu par le serveur (cf. launch_stt_*.sh) ; ne pas
+        # écraser une valeur déjà fournie par la config.
+        be.setdefault("model", {"cohere": "cohere-transcribe",
+                                "whisper": "whisper-large-v3"}.get(args.stt_backend, args.stt_backend))
+        info(f"STT distant : {args.stt_backend} → {args.remote_stt} "
+             f"(model={be['model']}, response_format={rfmt}, fallback_local=off)")
+
+    # Diarisation + empreinte vocale distantes via le service Flask inference_service.
+    if args.remote_inference:
+        inference = cfg.setdefault("inference", {})
+        inference["mode"] = "remote"            # active la sélection voice-embed distante
+        inference["url"] = args.remote_inference
+        inference["fallback_local"] = False     # banc : échec bruyant
+        # upload OBLIGATOIRE en distant : file_ref enverrait un chemin que le
+        # service ne peut pas résoudre (filesystem non partagé).
+        inference.setdefault("transport", {})["audio"] = "upload"
+        if args.remote_inference_api_key:
+            inference.setdefault("auth", {})["api_key"] = args.remote_inference_api_key
+        # RemoteDiarizer est choisi par le NOM de backend (pas par inference.mode).
+        cfg.setdefault("models", {})["diarization_backend"] = "remote"
+        info(f"Inférence distante (diarize+voice-embed) : {args.remote_inference} "
+             f"(transport=upload, fallback_local=off, diarization_backend=remote)")
+
     # LLM arbitrage port
     if args.arbitrage_port is not None:
         cfg.setdefault("services", {})["arbitrage_llm_port"] = args.arbitrage_port
@@ -716,6 +790,17 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
     services = cfg.get("services", {})
 
     print(f"  STT backend          : {models.get('stt_backend', 'cohere')}")
+    inference = cfg.get("inference", {})
+    if inference.get("mode") in ("remote", "hybrid"):
+        be = (inference.get("stt", {}).get("backends", {}) or {}).get(models.get("stt_backend"), {})
+        if be.get("url"):
+            print(f"  STT distant          : {be['url']} "
+                  f"(format={be.get('response_format', '?')}, "
+                  f"fallback_local={inference.get('stt', {}).get('fallback_local')})")
+    if models.get("diarization_backend") == "remote" or inference.get("url"):
+        print(f"  Inférence distante   : {inference.get('url', '?')} "
+              f"(transport={inference.get('transport', {}).get('audio', 'file_ref')}, "
+              f"diarize_backend={models.get('diarization_backend', 'pyannote')})")
     if models.get("stt_backend") == "whisper":
         print(f"  Whisper model_size   : {whisper.get('model_size', 'large-v3')}")
         print(
