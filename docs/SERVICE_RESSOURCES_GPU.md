@@ -1,12 +1,31 @@
 # TranscrIA — Service de ressources GPU & autonomie VRAM du STT
 
-> **Statut :** 🔵 Document de conception — rien n'est implémenté ici
+> **Statut :** 🟢 **v1 implémentée sur `main`** (commits `6423fa1`→`c905dc8`). Conception + cœur +
+> activation runtime livrés et testés (ruff/mypy/pytest, couverture 77 %). **Restent** (cf. §12) :
+> re-queue différé avec backoff (§7.2) et idle-stop des moteurs externes (v1.2).
 > **Auteur :** Martossien
 > **Date :** 2026-05-30
 > **Objectif :** lever l'asymétrie de gestion VRAM entre le service maison et le STT vLLM,
 > et formaliser les deux topologies de déploiement (tout-en-un / frontale + ressources),
 > pour faire passer TranscrIA d'un « clone » à un produit auto-hébergeable professionnel.
 > **Prérequis de lecture :** [`MIGRATION_API_SERVEUR_GPU.md`](MIGRATION_API_SERVEUR_GPU.md) (plan de migration global).
+
+---
+
+## État d'implémentation (v1)
+
+| Brique | Module / route | État |
+|---|---|---|
+| Planificateur VRAM (fraction×total, place/relocate/busy) | `transcria/gpu/stt_vram_planner.py` | ✅ |
+| Correctif allocator (pas de VRAM locale pour phase distante) | `transcria/workflow/runner.py` | ✅ |
+| Superviseur cycle de vie A/B/C | `transcria/gpu/stt_engine_supervisor.py` | ✅ |
+| Détection ressources + inventaire | `GET /capabilities` (`inference_service`) | ✅ |
+| Auto-lancement STT à la demande | `POST /engines/ensure` | ✅ |
+| Admission §7.2 + pré-vol | `transcria/inference/resource_gate.py`, branché dans `PipelineService.run_process` | ✅ |
+| Panneau d'état frontale | `GET /api/resources/status` + `dashboard_status.html` | ✅ |
+| Concurrence STT par tour (v1.1) | `inference.stt.concurrency` (`transcria/stt/transcription.py`) | ✅ |
+| Re-queue différé avec backoff (§7.2) | scheduler | ⏳ à faire |
+| Idle-stop moteurs externes (v1.2) | superviseur | ⏳ à faire |
 
 ---
 

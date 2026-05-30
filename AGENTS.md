@@ -33,18 +33,22 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./stop.sh
 ./status.sh
 
-# Tests
-python -m pytest tests/ -q           # suite pytest mockée majoritaire, pas de GPU requis
-python -m pytest tests/test_auth.py -v
+# Tests — ⚠️ TOUJOURS via le venv (python système = pas de python-docx → 21 faux échecs)
+venv/bin/python -m pytest tests/ -q              # suite mockée majoritaire, pas de GPU requis
+venv/bin/python -m pytest tests/test_auth.py -v
+
+# CI (.github/workflows/tests.yml) — 3 gates, reproductibles en local :
+ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
+mypy transcria/ inference_service/ --ignore-missing-imports
+venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=65   # seuil 65 % (actuel ~77 %)
+# Tests réseau (faux serveurs sur vrai socket) : marqueur "integration" → -m integration / -m "not integration"
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
 venv/bin/python tests/test_e2e_workflow.py                          # E2E complet (GPUs + LLM requis)
 venv/bin/python tests/test_e2e_workflow.py --keep                   # Conserve le job pour inspection
 venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fichier audio
 
-# Lint / format
-python -m ruff check transcria/ tests/   # ruff configuré dans pyproject.toml (E,W,F,I — line-length=140)
-python -m mypy transcria/                 # mypy configuré dans pyproject.toml (ignore_missing_imports=true)
+# Lint / format (cf. CI ci-dessus pour les commandes exactes qui gatent)
 # black n'est PAS utilisé. Respecte le style du fichier que tu modifies.
 ```
 
@@ -133,6 +137,8 @@ transcria/
       diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + checkpoints
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend
+      remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)
+      remote_diarizer.py    # RemoteDiarizer(BaseDiarizer) — diarisation distante via inference_service
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
     context/
@@ -165,6 +171,13 @@ transcria/
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
+      stt_vram_planner.py   # SttVramPlanner — pré-check VRAM (fraction×total vLLM) + relocalisation GPU
+      stt_engine_supervisor.py # SttEngineSupervisor — cycle de vie A/B/C des moteurs STT distants (+ /engines/ensure)
+    inference/
+      client.py             # InferenceClient — service Flask distant (diarize/voice-embed, /capabilities, /engines/ensure)
+      asr_client.py         # AsrClient — endpoint OpenAI /v1/audio/transcriptions (vLLM/SGLang, non hardcodé)
+      resource_status.py    # remote_requirements(), assess_admission() (§7.2), summarize_capabilities()
+      resource_gate.py      # prepare_remote_resources() — pré-vol admission + auto-lancement STT
     notifications/
       __init__.py
       mailer.py             # EmailConfig, build_email_config(), send_job_notification_async() — SMTP fire-and-forget daemon thread
@@ -189,6 +202,11 @@ transcria/
       routes.py             # web_bp : 30 routes (pages + API JSON)
       templates/            # base.html + templates par étape
       static/js/            # wizard.js, wizard-api.js
+  inference_service/        # Service Flask « nœud de ressources » (diarize/voice-embed in-process A/B/C)
+    app.py                  # create_app() + garde clé API sur /infer/* et /engines/*
+    engine.py / diarize_engine.py # moteurs in-process (CAS A/B/C, idle-offload)
+    capabilities.py         # build_capabilities() (pur)
+    routes/                 # health, capabilities, engines (/engines/ensure), voice_embed, diarize
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
     prompts/                # Prompts LLM (summary_prompt.txt, correction_prompt.txt)
@@ -204,6 +222,11 @@ transcria/
     bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices 24/36 combos
     bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
     bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
+    _stt_serve_lib.sh       # Lib commune des lanceurs STT (moteur non hardcodé : STT_ENGINE vllm|sglang|custom)
+    launch_stt_cohere.sh / launch_stt_whisper.sh / launch_stt_granite.sh # Lanceurs moteurs STT (vLLM par défaut)
+    stop_stt.sh             # Arrêt par port via ss (groupe de process), liste STT_STOP_PORTS
+    test_stt.sh             # Smoke endpoint STT (auto-convertit MP3→WAV)
+    smoke_remote_stt.py     # Smoke E2E RemoteTranscriber contre un vrai serveur STT
   tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires) — 870+ tests
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
@@ -215,6 +238,7 @@ transcria/
     TECHNICAL.md            # Architecture, flux de données, API REST, pipeline GPU
     DATA_MODEL.md           # États, transitions, arborescence disque par job
     CONFIG_REFERENCE.md     # Référence complète des paramètres config.yaml
+    SERVICE_RESSOURCES_GPU.md # Inférence distante v1 : topologies, autonomie VRAM STT, /capabilities, mode dégradé
 ```
 
 ## Conventions de code
@@ -271,6 +295,17 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 `services.arbitrage_api_model_id` dans `config.yaml` doit correspondre à l'alias rapporté par le serveur (lancer `scripts/check_arbitrage_llm.sh` pour vérifier). `services.arbitrage_llm_port` remplace `qwen_port` pour les nouvelles configs. `services.llm_cleanup_ports` remplace `vllm_port` et liste les ports de backends LLM concurrents à libérer avant lancement. Les anciens noms restent lus par compatibilité. `free_all_gpus()` reste disponible pour les resets forcés uniquement.
 
 Les références `qwen_*` encore présentes sont des aliases de compatibilité ancienne version ou des exemples de modèle local. Ne pas introduire de nouvelle dépendance fonctionnelle au nom Qwen : le contrat applicatif est "LLM d'arbitrage OpenAI-compatible configurée".
+
+### Inférence distante (frontale + nœud de ressources)
+
+TranscrIA peut tourner **tout-en-un** (ressources GPU locales, mode historique) ou en **frontale** dont les ressources GPU sont sur un **nœud distant**. Activé par la section `inference` de la config (`mode: local | remote | hybrid`). Détail complet : `docs/SERVICE_RESSOURCES_GPU.md`.
+
+- **STT distant** : `RemoteTranscriber` (`transcria/stt/remote_transcriber.py`) parle le protocole **OpenAI** `/v1/audio/transcriptions` via `AsrClient` (`transcria/inference/asr_client.py`) — moteur de serving **non hardcodé** (vLLM, SGLang…). Sélection par `transcriber_factory._should_use_remote_stt` (mode remote/hybrid + `inference.stt.backends[<backend>].url`). `response_format` par backend (Cohere refuse `verbose_json` → `json`). Conversion WAV 16k mono systématique (l'endpoint rejette le MP3). Concurrence par tour via `inference.stt.concurrency` (>1, backends `concurrent_safe`).
+- **Diarisation / empreinte vocale distantes** : `RemoteDiarizer`, `RemoteVoiceEmbeddingBackend` + service Flask `inference_service/` (routes `/infer/diarize`, `/infer/voice-embed`). Transport `inference.transport.audio` : `upload` OBLIGATOIRE en vrai distant (`file_ref` n'est valable qu'en filesystem partagé).
+- **Autonomie VRAM du STT** (cycle A/B/C comme la LLM d'arbitrage, sans être intrusif) : `SttVramPlanner` (`transcria/gpu/stt_vram_planner.py`, sémantique vLLM = fraction × VRAM totale, pas la taille modèle) + `SttEngineSupervisor` (`transcria/gpu/stt_engine_supervisor.py`). L'admin décide du **placement** (manifeste `resource_node.engines`, scripts `launch_stt_*.sh`) ; le service décide du **quand** (réutilise / lance à la demande via `POST /engines/ensure` / 503 si saturé). `GET /capabilities` expose l'inventaire (GPU, VRAM, moteurs + santé).
+- **Mode dégradé (admission §7.2)** : `resource_gate.prepare_remote_resources()` branché en pré-vol de `PipelineService.run_process` — nœud joignable → poursuit (+ ensure STT) ; injoignable → file (transitoire) ou échec explicite (au-delà de `inference.resilience.max_unavailable_s`). **Jamais d'échec silencieux ni de spin.** Panneau d'état : `GET /api/resources/status` + `dashboard_status.html`.
+- **Allocator** : une phase servie à distance ne réserve **aucune** VRAM locale (`WorkflowRunner._phase_runs_remotely`).
+- **Banc E2E** : `tests/test_e2e_workflow.py --remote-stt URL [--remote-inference URL]` ; smoke réel `scripts/smoke_remote_stt.py`.
 
 ### Pipeline STT — deux modes de chunking
 
@@ -506,3 +541,5 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
 | `docs/VAD_OR_NOT.md` | Analyse des systèmes VAD, tests comparatifs, recommandations par type de fichier |
 | `docs/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |
+| `docs/SERVICE_RESSOURCES_GPU.md` | Inférence distante v1 : topologies frontale/ressources, autonomie VRAM du STT (A/B/C), `/capabilities`, mode dégradé |
+| `docs/MIGRATION_API_SERVEUR_GPU.md` | Plan de migration vers une architecture API / serveur GPU distant |
