@@ -95,6 +95,19 @@ class InferenceClient:
             logger.debug("Inference /health injoignable: %s", exc)
             return False
 
+    def capabilities(self) -> dict:
+        """Inventaire du nœud via /capabilities (mode, GPU, moteurs, santé).
+
+        Lève `InferenceUnavailable` si le service est injoignable (réseau/5xx) —
+        signal de mode dégradé pour la frontale.
+        """
+        url = f"{self.base_url}/capabilities"
+        try:
+            resp = self._session.get(url, headers=self._headers(), timeout=5)
+        except requests.exceptions.RequestException as exc:
+            raise InferenceUnavailable(f"{url} injoignable: {exc}") from exc
+        return self._parse(resp, url)
+
     def diarize(self, audio_path: Path) -> dict:
         """Diarise un audio via /infer/diarize. Retourne le dict canonique."""
         return self._post_audio("/infer/diarize", audio_path)
