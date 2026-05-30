@@ -137,7 +137,9 @@ Or vLLM (grâce à la VRAM réservée) sait servir **plusieurs requêtes en para
 future** (hors v1) : envoyer les requêtes par tour avec une **concurrence bornée** (ex. 4–8 en vol)
 pour exploiter le batching continu et réduire fortement la latence du chemin par tour.
 
-> À traiter comme un lot séparé : ça touche `transcription.py` (frontale), pas le service ressources.
+> **Priorité v1.1** (pas « hors scope ») : c'est probablement le gain de latence **le plus visible
+> pour l'utilisateur**. Workstream distinct (côté frontale, `transcription.py`, pas le service
+> ressources), à enchaîner juste après le cœur du service (§12, étapes 1-4).
 
 ---
 
@@ -167,7 +169,7 @@ inference_service (étendu)
 
 ---
 
-## 7. Visibilité côté frontale
+## 7. Visibilité & résilience côté frontale
 
 La frontale interroge périodiquement `/health` + `/capabilities` et **affiche** :
 - le **mode de déploiement** (tout-en-un / frontale+ressources) ;
@@ -184,6 +186,25 @@ La frontale interroge périodiquement `/health` + `/capabilities` et **affiche**
 └──────────────────────────────────────────────────┘
 ```
 
+### 7.1 Politique de polling
+- **Fréquence** : `/health` toutes les ~10 s (léger, sans auth) ; `/capabilities` à la connexion +
+  au changement d'état.
+- **Timeout** court (~3 s) ; au-delà, le moteur/nœud est marqué **rouge** dans le panneau.
+- Le polling est **best-effort** : il alimente l'affichage, il ne bloque jamais le rendu de l'UI.
+
+### 7.2 Indisponibilité des ressources (mode dégradé) — décidé
+Scénario probable en split (réseau, redémarrage, crash GPU). Politique **explicite** :
+
+| Situation | Comportement |
+|---|---|
+| Indispo **transitoire** (503 / timeout ponctuel) | re-queue via `Retry-After` (**déjà conçu**) — le job **attend**, il n'échoue pas |
+| Indispo **prolongée** (nœud rouge) | nouvelles transcriptions **acceptées mais mises en file** (jamais perdues), statut clair « ressources indisponibles » + notification ; **on ne bloque pas** la soumission et **on ne boucle pas indéfiniment** en silence |
+| Fenêtre de retry **dépassée** (`max_unavailable_s`, configurable) | le job est marqué **échec** avec raison explicite (pas de crash, pas de blocage) |
+| `fallback_local` actif **et** GPU local présent | bascule locale possible ; **en frontale CPU-only, pas de fallback** → file + notification est la seule issue saine |
+
+> Principe : **jamais d'échec silencieux ni de spin infini**. Le job est soit en file (visible), soit
+> en échec explicite après une fenêtre bornée.
+
 ---
 
 ## 8. Configuration (esquisse)
@@ -196,6 +217,7 @@ inference:
   mode: remote              # local | remote | hybrid (existant)
   url: "http://192.168.1.59:8002"     # service Flask ressources
   transport: { audio: upload }        # OBLIGATOIRE en distant (cf. §9)
+  resilience: { timeout_s: 1800, retries: 2, max_unavailable_s: 600 }  # cf. §7.2 (mode dégradé)
   stt:
     backends:
       cohere:  { url: "http://192.168.1.59:8003/v1", model: cohere-transcribe,  response_format: json }
@@ -220,10 +242,12 @@ resource_node:
 
 - **`transport.audio: upload` obligatoire en distant.** `file_ref` envoie un *chemin* que le nœud
   distant ne peut pas résoudre (filesystem non partagé). Démontré par les tests d'intégration.
-- **Correctif allocator (à faire) :** en mode distant, l'allocator local réserve quand même de la
-  VRAM pour les phases `stt`/`diarization` alors que rien ne se charge localement (observé :
-  `phase=stt gpu=5 vram=6000` pendant un run 100 % distant). Ne pas réserver de VRAM locale pour une
-  phase servie à distance.
+- **Correctif allocator (bug silencieux, à prioriser) :** en mode distant, `try_reserve(job_id,
+  phase, …)` réserve quand même de la VRAM pour les phases `stt`/`diarization` alors que **rien ne se
+  charge localement** (observé : `phase=stt gpu=5 vram=6000` pendant un run 100 % distant). Impact :
+  **fausse contention VRAM** → OOM possible ou **rejets à tort** de tâches locales ; et incohérence
+  sur une frontale **CPU-only** (réserver une VRAM qui n'existe pas). Correction : ne pas réserver de
+  VRAM locale pour une phase servie à distance. **Priorisé** dans le plan (§12, étape 2).
 - **Sécurité réseau** : clé API partagée déjà en place (Flask `enforce_api_key` ; vLLM `--api-key`).
   Un 401 est **définitif** (pas de retry ni de bascule locale) — testé.
 
@@ -231,13 +255,16 @@ resource_node:
 
 ## 10. Déploiement sur l'autre machine (questions ouvertes)
 
-- **Installation** : paquet / script unique ? Dépendances (`vllm_venv`, `librosa`/`soundfile`,
-  pyannote, ffmpeg, llama.cpp). Documenter (cf. [`DEPENDENCIES_VENV.md`](DEPENDENCIES_VENV.md),
-  [`INSTALL.md`](INSTALL.md)).
+- **Installation** : réutiliser l'`install.sh` existant (il détecte déjà les GPU via `nvidia-smi`).
+  **À vérifier/ajouter : un profil « nœud ressources seul »** (sans la frontale web/DB) — l'install
+  actuel suppose le poste complet. Dépendances : `vllm_venv`, `librosa`/`soundfile`, pyannote,
+  ffmpeg, llama.cpp (cf. [`DEPENDENCIES_VENV.md`](DEPENDENCIES_VENV.md), [`INSTALL.md`](INSTALL.md)).
 - **Paramètres** exposés côté nœud (manifeste §8, ports, fractions VRAM, clé API).
 - **Détection ressources** : GPU, VRAM, modèles présents — au démarrage + via `/capabilities`.
 - **Réseau** : bind `0.0.0.0`, ports (service 8002, STT 8003/8005/8007, arbitrage 8080), pare-feu.
-- **Supervision** : units systemd recommandées pour les serveurs persistants (redémarrage auto).
+- **Supervision / redémarrage : décidé → units systemd** pour tous les serveurs persistants (vLLM,
+  llama.cpp, service Flask), avec `Restart=on-failure`. C'est la réponse v1 au « qui redémarre un
+  moteur tombé ». Un agent de redémarrage interne au service reste une option v2 si besoin.
 
 ---
 
@@ -253,14 +280,20 @@ resource_node:
 
 ## 12. Plan d'implémentation (incrémental)
 
+**v1 (cœur)**
 1. **Pré-check VRAM (niveau 1)** au lancement des moteurs STT — transforme l'OOM en 503 clair.
-2. **Cycle de vie STT (CAS A/B/C)** via scripts + `VRAMManager`, calqué sur l'arbitrage LLM.
-3. **`/capabilities` + détection ressources** au démarrage du service.
-4. **Panneau d'état frontale** (mode + feu vert par moteur).
-5. **Relocalisation auto (niveau 2)** opt-in + log bruyant.
-6. **idle-stop** opt-in par moteur.
-7. Correctif allocator (pas de réservation VRAM locale pour phase distante).
-8. *(Lot séparé)* concurrence bornée du STT par tour (§5).
+2. **Correctif allocator** (bug silencieux §9) : pas de réservation VRAM locale pour une phase
+   distante — remonté car corruption de comptabilité VRAM, indépendant et peu risqué.
+3. **Cycle de vie STT (CAS A/B/C)** via scripts + `VRAMManager`, calqué sur l'arbitrage LLM.
+4. **`/capabilities` + détection ressources** au démarrage du service.
+5. **Panneau d'état frontale** (mode + feu vert) + **mode dégradé** (§7.2).
+
+**v1.1 (gain UX immédiat)**
+6. **Concurrence bornée du STT par tour** (§5) — latence la plus visible côté utilisateur.
+
+**v1.2 (confort)**
+7. **Relocalisation auto (niveau 2)** opt-in + log bruyant.
+8. **idle-stop** opt-in par moteur.
 
 ---
 
@@ -270,4 +303,5 @@ resource_node:
 - Courses au démarrage concurrent → verrou `VRAMManager` (déjà présent) à réutiliser strictement.
 - Cold start (25–105 s) sur CAS B / relocalisation : la frontale doit gérer l'attente
   (`Retry-After` + re-queue, déjà conçu).
-- En split, qui redémarre un moteur tombé : systemd (recommandé v1) vs le service lui-même (v2).
+- En split, redémarrage d'un moteur tombé : **décidé → systemd `Restart=on-failure` en v1** (§10) ;
+  agent interne au service en option v2.
