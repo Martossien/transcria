@@ -7,6 +7,9 @@ class BaseTranscriber(ABC):
     vram_mb: int = 6000
     supported_languages: dict[str, str] = {}
     model_name: str = "base"
+    # True si plusieurs transcribe() concurrents sont sûrs (backend distant servant
+    # plusieurs requêtes — batching continu). Faux pour un modèle local mono-GPU.
+    concurrent_safe: bool = False
 
     @property
     @abstractmethod

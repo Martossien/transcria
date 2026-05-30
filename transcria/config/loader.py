@@ -515,6 +515,9 @@ _DEFAULT_CONFIG = {
             # Défaut global ; surchargeable par backend (voir ci-dessous).
             "response_format": "verbose_json",  # verbose_json (segments) | json (texte)
             "collapse_repetition_loops": True,
+            # Transcription par tour en parallèle (distant uniquement). 1 = séquentiel
+            # (défaut, comportement historique). >1 exploite le batching continu de vLLM.
+            "concurrency": 1,
             "timeout_s": 600,
             "retries": 2,
             "auth": {"api_key_env": "TRANSCRIA_STT_API_KEY", "api_key": ""},

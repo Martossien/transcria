@@ -493,31 +493,75 @@ class Transcriber:
         speaker_mapping: dict | None,
         sl,
     ) -> list[dict]:
-        """Transcrit chaque chunk et reconstruit les timestamps globaux."""
+        """Transcrit chaque chunk et reconstruit les timestamps globaux.
+
+        Séquentiel par défaut. Si le backend est concurrent-safe (distant) et
+        `inference.stt.concurrency` > 1, les tours sont transcrits en parallèle
+        (concurrence bornée) pour exploiter le batching continu de vLLM. L'ORDRE
+        des segments (et donc des timestamps) est préservé dans les deux cas.
+        """
         mapping = self._build_name_mapping(speaker_mapping)
-        segments: list[dict] = []
         total = len(chunks)
+        workers = self._chunk_concurrency(total)
 
+        if workers > 1:
+            sl.info("Transcription par tour en concurrence : %d workers (%d tours)", workers, total)
+            return self._transcribe_chunks_concurrent(chunks, lang, mapping, workers, sl)
+
+        segments: list[dict] = []
         for i, chunk in enumerate(chunks):
-            chunk_segments = self.transcriber.transcribe(
-                audio_path=None,
-                language=lang,
-                audio_array=chunk["audio"],
-                sample_rate=_SR,
-            )
-            for seg in chunk_segments:
-                if seg.get("error"):
-                    continue
-                seg["start"] = round(chunk["start"] + seg["start"], 3)
-                seg["end"] = round(chunk["start"] + seg["end"], 3)
-                self._offset_words(seg, chunk["start"])
-                raw_speaker = chunk["speaker"]
-                seg["speaker"] = mapping.get(raw_speaker, raw_speaker)
-                segments.append(seg)
-
+            segments.extend(self._process_chunk(chunk, lang, mapping))
             if (i + 1) % 100 == 0 or (i + 1) == total:
                 sl.info("Progression transcription: %d/%d chunks", i + 1, total)
+        return segments
 
+    def _process_chunk(self, chunk: dict, lang: str, mapping: dict) -> list[dict]:
+        """Transcrit un tour et recale ses timestamps/locuteur (pur, thread-safe)."""
+        out: list[dict] = []
+        chunk_segments = self.transcriber.transcribe(
+            audio_path=None,
+            language=lang,
+            audio_array=chunk["audio"],
+            sample_rate=_SR,
+        )
+        for seg in chunk_segments:
+            if seg.get("error"):
+                continue
+            seg["start"] = round(chunk["start"] + seg["start"], 3)
+            seg["end"] = round(chunk["start"] + seg["end"], 3)
+            self._offset_words(seg, chunk["start"])
+            raw_speaker = chunk["speaker"]
+            seg["speaker"] = mapping.get(raw_speaker, raw_speaker)
+            out.append(seg)
+        return out
+
+    def _chunk_concurrency(self, total: int) -> int:
+        """Nombre de tours transcrits en parallèle (1 = séquentiel).
+
+        > 1 seulement si le backend est concurrent-safe (distant) ET
+        `inference.stt.concurrency` > 1. Borné par le nombre de tours.
+        """
+        if total <= 1 or not getattr(self.transcriber, "concurrent_safe", False):
+            return 1
+        stt_cfg = (self.config.get("inference", {}) or {}).get("stt", {}) or {}
+        workers = int(stt_cfg.get("concurrency", 1))
+        return max(1, min(workers, total))
+
+    def _transcribe_chunks_concurrent(
+        self, chunks: list[dict], lang: str, mapping: dict, workers: int, sl,
+    ) -> list[dict]:
+        """Transcrit les tours en parallèle ; `executor.map` préserve l'ordre d'entrée."""
+        from concurrent.futures import ThreadPoolExecutor
+
+        segments: list[dict] = []
+        total = len(chunks)
+        done = 0
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="stt-chunk") as ex:
+            for chunk_segments in ex.map(lambda c: self._process_chunk(c, lang, mapping), chunks):
+                segments.extend(chunk_segments)
+                done += 1
+                if done % 100 == 0 or done == total:
+                    sl.info("Progression transcription: %d/%d tours", done, total)
         return segments
 
     @staticmethod

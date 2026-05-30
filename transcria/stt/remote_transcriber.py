@@ -48,6 +48,7 @@ class RemoteTranscriber(BaseTranscriber):
     """
 
     vram_mb = 0  # rien chargé localement
+    concurrent_safe = True  # HTTP indépendants ; le serveur (vLLM) batche les requêtes
 
     def __init__(
         self,
