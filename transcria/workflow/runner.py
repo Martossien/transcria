@@ -12,6 +12,24 @@ from transcria.queue.allocator import GPUAllocator
 logger = logging.getLogger(__name__)
 
 
+class _NoReservationSession:
+    """Session GPU no-op pour une phase servie à distance (aucune VRAM locale).
+
+    Expose `gpu_index` (device de repli/fallback éventuel) sans rien réserver ni
+    décharger — la VRAM est sur le serveur distant.
+    """
+
+    def __init__(self, gpu_index: int) -> None:
+        self.gpu_index = gpu_index
+        self.acquired = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
 class WorkflowRunner:
     def __init__(self, store: type[JobStore] | JobStore, config: dict | None = None):
         self.store = store
@@ -20,6 +38,9 @@ class WorkflowRunner:
         self.allocator = GPUAllocator.get_instance(self.config)
 
     def _gpu_session(self, job: Job, model_name: str, required_mb: int, phase: str):
+        if self._phase_runs_remotely(phase):
+            logger.info("Phase %s servie à distance — session GPU sans réservation locale", phase)
+            return _NoReservationSession(self._default_remote_gpu_index())
         if not self.allocator.get_gpu_info():
             return GPUSession(self.vram, model_name, required_mb)
         try:
@@ -36,6 +57,9 @@ class WorkflowRunner:
             return GPUSession(self.vram, model_name, required_mb)
 
     def _reserve_gpu_phase(self, job: Job, required_mb: int, phase: str):
+        if self._phase_runs_remotely(phase):
+            logger.info("Phase %s servie à distance — aucune réservation VRAM locale", phase)
+            return SimpleNamespace(gpu_index=self._default_remote_gpu_index()), False
         reservation = self.allocator.try_reserve(job.id, required_mb, phase)
         if reservation is not None:
             return reservation, True
@@ -57,6 +81,28 @@ class WorkflowRunner:
 
     def _should_reserve_llm_vram(self) -> bool:
         return bool(self.allocator.get_gpu_info())
+
+    def _phase_runs_remotely(self, phase: str) -> bool:
+        """True si la capacité de cette phase est servie à distance → 0 VRAM locale.
+
+        Évite la réservation fantôme observée en mode distant (un run 100 % distant
+        réservait quand même `phase=stt vram=6000` localement, d'où fausse contention
+        VRAM / rejets à tort). Cf. docs/SERVICE_RESSOURCES_GPU.md §9.
+        """
+        if phase in ("stt", "summary_stt"):
+            from transcria.stt.transcriber_factory import _should_use_remote_stt
+
+            backend = self.config.get("models", {}).get("stt_backend", "cohere")
+            return _should_use_remote_stt(self.config, backend)
+        if phase == "diarization":
+            return self.config.get("models", {}).get("diarization_backend") == "remote"
+        return False
+
+    def _default_remote_gpu_index(self) -> int:
+        """Index GPU « device » fourni aux adaptateurs distants (utilisé seulement
+        pour un éventuel fallback local ; aucune VRAM n'est réservée)."""
+        pg = getattr(self.allocator, "preferred_gpu", None)
+        return int(pg) if pg is not None else 0
 
     @staticmethod
     def _cuda_available() -> bool:
