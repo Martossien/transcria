@@ -37,7 +37,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 
 | Domaine | Technologie |
 |---|---|
-| Backend | Python 3.11+, Flask 3.x, SQLAlchemy, SQLite, python-docx |
+| Backend | Python 3.11+, Flask 3.x, SQLAlchemy (SQLite ou PostgreSQL), Alembic, python-docx |
 | Frontend | Jinja2, Bootstrap 5, JavaScript vanilla |
 | ASR | Cohere Transcribe 03-2026, faster-whisper large-v3, Granite Speech 4.1 2B expérimental, Parakeet TDT 0.6B v3 expérimental (NeMo) |
 | Diarisation | pyannote.audio community-1 (défaut), NVIDIA Sortformer 4spk v2.1 (NeMo) — factory pattern, BaseDiarizer ABC |
@@ -104,7 +104,7 @@ Points à vérifier après installation :
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
 - `voice_enrollment.enabled` si le référentiel de voix connues doit être activé, avec `voice_enrollment.storage_dir` placé sur un stockage local protégé.
 - `notifications.email.enabled` + `smtp_host` / `smtp_port` / `from_address` / `base_url` pour activer les emails de fin de traitement (succès/échec) vers le propriétaire du job. L'adresse email doit être renseignée dans le profil de chaque utilisateur.
-- Les lexiques centralisés sont stockés en base SQLite et ne nécessitent pas de section config dédiée en V1.
+- Les lexiques centralisés sont stockés en base (SQLite ou PostgreSQL) et ne nécessitent pas de section config dédiée en V1.
 
 Variables d'environnement principales :
 

@@ -51,6 +51,11 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | NVIDIA Driver | 535+ | `apt install nvidia-driver-535` |
 | ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` |
 | lsof | — | `apt install lsof` |
+| PostgreSQL *(optionnel, recommandé en prod)* | 13+ | `apt install postgresql` — sinon SQLite par défaut (voir §7) |
+
+> Les pilotes Python de base de données (`psycopg`, `alembic`) sont installés par
+> `pip install -r requirements.txt`. Seul le **serveur** PostgreSQL est un paquet
+> système : à installer uniquement si vous optez pour PostgreSQL.
 
 ### Vérification GPU
 
@@ -126,6 +131,9 @@ nvidia-smi
 
 # Outils système
 sudo apt install -y ffmpeg lsof build-essential git
+
+# Optionnel — PostgreSQL (recommandé en prod ; sinon SQLite par défaut)
+sudo apt install -y postgresql && sudo systemctl enable --now postgresql
 ```
 
 ### Vérifier ffmpeg
