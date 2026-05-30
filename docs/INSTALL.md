@@ -358,7 +358,26 @@ chmod +x $HOME/.opencode/bin/opencode
 $HOME/.opencode/bin/opencode --version
 ```
 
-Configurer le provider local dans `$HOME/.config/opencode/opencode.json` :
+> opencode peut aussi être installé autrement (`npm i -g opencode-ai`, Homebrew, script
+> officiel). `install.sh` et `scripts/setup_opencode.py` cherchent le binaire dans PATH,
+> `~/.opencode/bin`, les emplacements npm-global et brew — quel que soit le mode d'install.
+> Si introuvable, renseignez `workflow.arbitration_llm.opencode_bin` dans `config.yaml`.
+
+Configurer le provider `local` dans `$HOME/.config/opencode/opencode.json`. **Méthode
+recommandée** (idempotente, ne casse pas une config existante, format correct garanti) :
+
+```bash
+# Lit l'URL/le modèle depuis config.yaml ; --base-url pour pointer ailleurs (ex. nœud distant)
+venv/bin/python scripts/setup_opencode.py
+# Topologie distribuée : la LLM est sur le nœud → pointer vers lui :
+venv/bin/python scripts/setup_opencode.py --base-url http://NODE_IP:8080/v1
+```
+
+> Sans le provider `local`, opencode ne résout pas `local/<model>` et le résumé/
+> correction échouent **silencieusement** (`summary.md` garde le placeholder).
+
+Pour référence, le fichier produit (équivalent à une écriture manuelle dans
+`$HOME/.config/opencode/opencode.json`) :
 
 ```bash
 mkdir -p $HOME/.config/opencode

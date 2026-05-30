@@ -169,6 +169,7 @@ transcria/
       gpu_session.py        # GPUSession — context manager
       llm_backend.py        # LLMBackend (script/ollama/http)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
+      opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
       stt_vram_planner.py   # SttVramPlanner — pré-check VRAM (fraction×total vLLM) + relocalisation GPU
@@ -219,6 +220,7 @@ transcria/
     stop_qwen.sh            # Wrapper legacy vers stop_arbitrage_llm.sh
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
+    setup_opencode.py       # Configure opencode.json (provider local) de façon idempotente — cf. opencode_setup.py
     bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices 24/36 combos
     bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
     bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
@@ -456,21 +458,23 @@ if not summary_text or summary_text.strip() == "Résumé indisponible.":
 Ne jamais le remplacer par `"indisponible" in summary_text.lower()` : un résumé valide peut contenir ce mot dans son corps (ex : "fallback quand X est indisponible"), ce qui causerait un faux positif silencieux — `meeting_context.json` resterait non mis à jour sans aucun log d'erreur. La sentinelle `"Résumé indisponible."` est la seule valeur retournée par `run_summary()` quand opencode ne produit rien.
 
 ### opencode — provider `local` requis dans `~/.config/opencode/opencode.json`
-`OpenCodeRunner` invoque opencode avec `--model <provider>/<model>` depuis `workflow.summary_llm.model_id` ou `workflow.arbitration_llm.model_id` (exemple historique : `local/qwen3-35b-arbitrage`). Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.config/opencode/opencode.json` avec un `baseUrl` pointant sur le serveur llama.cpp (port 8080 par défaut). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder. Exemple minimal :
+`OpenCodeRunner` invoque opencode avec `--model <provider>/<model>` depuis `workflow.summary_llm.model_id` ou `workflow.arbitration_llm.model_id` (exemple : `local/qwen3-35b-arbitrage`). Dans opencode, le préfixe `local/` désigne un provider nommé `local`. Ce provider **doit** être déclaré dans `~/.config/opencode/opencode.json` pointant sur le serveur llama.cpp (port 8080 par défaut, ou `NODE_IP:8080` en topologie distribuée). Sans cette entrée, opencode ne sait pas résoudre `local/` → les appels LLM échouent silencieusement et `summary.md` conserve le placeholder.
+
+**Ne pas écrire ce fichier à la main** : utiliser `venv/bin/python scripts/setup_opencode.py` (idempotent, format correct, ne casse pas une config existante). Helper sous-jacent : `transcria/gpu/opencode_setup.py` (`find_opencode_binary`, `ensure_local_provider`). Format **courant** produit (≠ ancien `providers`/`type:openai`/`validate`) :
 ```json
 {
-  "providers": {
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
     "local": {
-      "type": "openai",
-      "baseUrl": "http://127.0.0.1:8080/v1",
-      "apiKey": "sk-no-key-required",
-      "models": ["qwen3-35b-arbitrage"],
-      "validate": false
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LLM d'arbitrage (local)",
+      "options": { "baseURL": "http://127.0.0.1:8080/v1", "apiKey": "dummy-key", "timeout": 9999999 },
+      "models": { "qwen3-35b-arbitrage": { "name": "LLM d'arbitrage (local)" } }
     }
   }
 }
 ```
-`validate: false` est nécessaire car le nom court (`qwen3-35b-arbitrage`) diffère de l'alias complet rapporté par llama-server (`qwen3-35b-arbitrage-ud-q8_k_xl`). llama.cpp ignore le `model` dans la requête et utilise le modèle chargé.
+Le nom court (`qwen3-35b-arbitrage`, clé de `models`) peut différer de l'alias complet rapporté par llama-server (`qwen3-35b-arbitrage-ud-q8_k_xl`) : llama.cpp ignore le `model` de la requête et sert le modèle chargé.
 
 ### `correction_prompt.txt` — version courante : v1.9
 
