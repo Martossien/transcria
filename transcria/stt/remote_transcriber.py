@@ -65,13 +65,10 @@ class RemoteTranscriber(BaseTranscriber):
         self.fallback_local: bool = bool(stt.get("fallback_local", inf.get("fallback_local", True)))
         self.collapse_loops: bool = bool(stt.get("collapse_repetition_loops", True))
         self._client = client or build_asr_client_from_config(config, backend)
-        self._local = None  # transcripteur local construit à la demande (fallback)
-
-    @property
-    def model_name(self) -> str:
+        self._local: BaseTranscriber | None = None  # transcripteur local (fallback), à la demande
         # Distinct du local : évite toute confusion de cache/metadata entre modes.
         served = self._client.model if self._client else self.backend
-        return f"remote:{self.backend}:{served}"
+        self.model_name = f"remote:{self.backend}:{served}"
 
     @property
     def available(self) -> bool:
@@ -211,7 +208,8 @@ class RemoteTranscriber(BaseTranscriber):
                 }))
             return segments
 
-        text = (payload.get("text") if isinstance(payload, dict) else str(payload) or "").strip()
+        raw = payload.get("text") if isinstance(payload, dict) else str(payload)
+        text = (raw or "").strip()
         if not text:
             return []
         end = float(payload.get("duration", 0.0)) if isinstance(payload, dict) else 0.0
@@ -258,5 +256,6 @@ class RemoteTranscriber(BaseTranscriber):
             "granite": tf._create_granite,
             "parakeet": tf._create_parakeet,
         }.get(self.backend, tf._create_cohere)
-        self._local = builder(self.config, self.device)
-        return self._local
+        local = builder(self.config, self.device)
+        self._local = local
+        return local

@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from flask import Flask, jsonify, request
 
-from tests.net_helpers import free_port, serve_flask
+from net_helpers import free_port, serve_flask
 from transcria.inference import asr_client as _asr_mod
 from transcria.inference import client as _client_mod
 from transcria.inference.asr_client import AsrClient

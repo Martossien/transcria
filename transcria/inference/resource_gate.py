@@ -19,6 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from transcria.inference.client import (
+    InferenceClient,
     InferenceRequestError,
     InferenceUnavailable,
     build_client_from_config,
@@ -38,7 +39,7 @@ class GateVerdict:
     unavailable_since: float | None = None   # à persister (suivi inter-tentatives)
 
 
-def _probe_reachable(client) -> bool:
+def _probe_reachable(client: InferenceClient) -> bool:
     """Le nœud répond-il ? /capabilities OK ou 4xx = joignable ; réseau/5xx = non."""
     try:
         client.capabilities()
@@ -54,7 +55,7 @@ def prepare_remote_resources(
     *,
     unavailable_since: float | None = None,
     now: float | None = None,
-    client_factory: Callable[[dict], object] | None = None,
+    client_factory: Callable[[dict], "InferenceClient | None"] | None = None,
 ) -> GateVerdict:
     now = now if now is not None else time.time()
     reqs = remote_requirements(config)

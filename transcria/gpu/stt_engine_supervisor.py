@@ -137,6 +137,8 @@ class SttEngineSupervisor:
 
         # CAS B — lancer sur le GPU décidé (assigné ou relocalisé).
         gpu = decision.gpu_index
+        if gpu is None:  # défensif : un placement non-busy a toujours un GPU
+            return EnsureResult("error", None, "placement sans gpu")
         logger.info("[stt-sup] %s CAS B — lancement sur GPU %d (%s)", spec.name, gpu, decision.status)
         if not self._launch(spec, gpu):
             logger.error("[stt-sup] %s — échec du lancement sur GPU %d", spec.name, gpu)
