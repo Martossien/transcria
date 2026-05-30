@@ -64,5 +64,66 @@
   <br><small>Le dashboard doit être lancé pour afficher l'état technique.</small>
 </div>
 {% endif %}
+
+<div class="card mb-3" id="remote-resources-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Ressources distantes (inférence)</span>
+    <span id="rr-mode" class="badge bg-secondary">…</span>
+  </div>
+  <div class="card-body">
+    <div id="rr-body"><p class="text-muted">Chargement…</p></div>
+  </div>
+</div>
+<script>
+(function () {
+  const modeEl = document.getElementById('rr-mode');
+  const body = document.getElementById('rr-body');
+  function dot(up) {
+    return '<span class="badge bg-' + (up ? 'success' : 'danger') + '">' + (up ? 'UP' : 'DOWN') + '</span>';
+  }
+  async function refresh() {
+    try {
+      const resp = await fetch('/api/resources/status', { headers: { 'Accept': 'application/json' } });
+      if (!resp.ok) throw new Error('http ' + resp.status);
+      const d = await resp.json();
+      const reqs = d.requires_remote || [];
+      if (reqs.length === 0) {
+        modeEl.textContent = 'tout local';
+        modeEl.className = 'badge bg-secondary';
+        body.innerHTML = '<p class="text-muted">Aucune ressource distante configurée (tout intégré).</p>';
+        return;
+      }
+      if (!d.reachable) {
+        modeEl.textContent = 'injoignable';
+        modeEl.className = 'badge bg-danger';
+        body.innerHTML = '<div class="alert alert-danger mb-0">Nœud de ressources injoignable — '
+          + 'les transcriptions distantes sont mises en file. Requis : ' + reqs.join(', ') + '.</div>';
+        return;
+      }
+      modeEl.textContent = d.mode || 'distant';
+      modeEl.className = 'badge bg-success';
+      let html = '';
+      (d.engines || []).forEach(function (e) {
+        html += '<div class="d-flex justify-content-between mb-1"><span>' + e.name
+          + ' <small class="text-muted">(' + e.kind + ')</small></span>' + dot(e.up) + '</div>';
+      });
+      if ((d.gpus || []).length) {
+        html += '<hr><small class="text-muted">GPU :</small>';
+        d.gpus.forEach(function (g) {
+          html += '<div><small>GPU ' + g.index + ' — libre ' + g.free_mb + ' / ' + g.total_mb + ' Mo</small></div>';
+        });
+      }
+      body.innerHTML = html || '<p class="text-muted">Aucun moteur déclaré.</p>';
+    } catch (err) {
+      modeEl.textContent = 'erreur';
+      modeEl.className = 'badge bg-warning';
+      body.innerHTML = '<p class="text-muted">Statut indisponible (' + err + ').</p>';
+    }
+  }
+  refresh();
+  setInterval(refresh, 10000);  // §7.1 : ~10 s
+})();
+</script>
+
 <a href="/" class="btn btn-outline-secondary">Retour</a>
 {% endblock %}

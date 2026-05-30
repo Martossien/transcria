@@ -1006,6 +1006,32 @@ def api_available_lexicons(job_id: str):
     })
 
 
+@web_bp.route("/api/resources/status", methods=["GET"])
+@login_required
+def api_resources_status():
+    """État des ressources distantes pour le panneau frontale (mode dégradé inclus).
+
+    Interroge /capabilities du nœud ; injoignable → reachable=False (la frontale
+    affiche rouge, l'admission bascule en file/échec selon §7.2). Voir
+    docs/SERVICE_RESSOURCES_GPU.md §7.
+    """
+    cfg = get_config()
+    from transcria.inference.client import InferenceUnavailable, build_client_from_config
+    from transcria.inference.resource_status import remote_requirements, summarize_capabilities
+
+    client = build_client_from_config(cfg)
+    caps = None
+    if client is not None:
+        try:
+            caps = client.capabilities()
+        except InferenceUnavailable as exc:
+            logger.info("Panneau ressources : nœud injoignable — %s", exc)
+            caps = None
+    summary = summarize_capabilities(caps)
+    summary["requires_remote"] = sorted(remote_requirements(cfg))
+    return jsonify(summary)
+
+
 @web_bp.route("/api/jobs/<job_id>/selected-lexicons", methods=["POST"])
 @login_required
 def api_selected_lexicons(job_id: str):
