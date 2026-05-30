@@ -60,9 +60,9 @@ def create_app(
 
     @app.before_request
     def _guard_inference_endpoints():
-        # Seuls les endpoints d'inférence sont protégés ; sondes libres pour la supervision.
+        # Endpoints d'inférence ET de contrôle protégés ; sondes (/health, /capabilities) libres.
         from flask import request
-        if request.path.startswith("/infer/"):
+        if request.path.startswith("/infer/") or request.path.startswith("/engines/"):
             enforce_api_key(config)
 
     # Moteurs résidents, partagés par toutes les requêtes (verrou interne par moteur → GPU sérialisé).
@@ -71,11 +71,13 @@ def create_app(
 
     from inference_service.routes.capabilities import capabilities_bp
     from inference_service.routes.diarize import diarize_bp
+    from inference_service.routes.engines import engines_bp
     from inference_service.routes.health import health_bp
     from inference_service.routes.voice_embed import voice_embed_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(capabilities_bp)
+    app.register_blueprint(engines_bp)
     app.register_blueprint(voice_embed_bp)
     app.register_blueprint(diarize_bp)
 

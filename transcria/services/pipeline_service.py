@@ -52,6 +52,12 @@ class PipelineService:
         t0 = time.monotonic()
         sl.info("DÉBUT pipeline %s", mode, job_id=job.id, mode=mode)
 
+        gated = self._remote_resource_gate(job, sl)
+        if gated is not None:
+            sl.info("FIN pipeline %s (pré-vol ressources)", mode, job_id=job.id,
+                    duree=round(time.monotonic() - t0, 1), status="ERROR")
+            return gated
+
         try:
             result = self._execute_pipeline(job, audio_path, mode, sl, finalize_job_state)
             elapsed = time.monotonic() - t0
@@ -64,6 +70,50 @@ class PipelineService:
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "step": "pipeline"}
+
+    def _remote_resource_gate(self, job: Job, sl) -> dict | None:
+        """Pré-vol des ressources distantes (admission §7.2 + auto-lancement STT).
+
+        Retourne None si on peut poursuivre ; sinon un dict d'erreur (le job sera
+        marqué FAILED par l'appelant). Aucun coût en mode tout-local (sortie immédiate
+        du gate). Voir docs/SERVICE_RESSOURCES_GPU.md §7.
+        """
+        from transcria.inference.resource_gate import prepare_remote_resources
+        from transcria.inference.resource_status import remote_requirements
+
+        # Tout-local : aucun pré-vol, aucun effet de bord (cas le plus courant).
+        if not remote_requirements(self.config):
+            return None
+
+        try:
+            since = job.get_extra_data().get("_remote_unavailable_since")
+        except Exception:  # noqa: BLE001
+            since = None
+
+        verdict = prepare_remote_resources(self.config, unavailable_since=since)
+
+        # Suivi de la durée d'indisponibilité (best-effort : nécessite un contexte DB).
+        try:
+            from transcria.jobs.store import JobStore
+
+            JobStore.update_extra_data(
+                job.id, lambda d: {**d, "_remote_unavailable_since": verdict.unavailable_since}
+            )
+        except Exception:  # noqa: BLE001 — hors app context (tests) : non bloquant
+            pass
+
+        if verdict.action == "proceed":
+            return None
+        if verdict.action == "fail":
+            sl.warning("Pré-vol ressources : ÉCHEC — %s", verdict.reason, job_id=job.id)
+            return {"error": f"ressources_distantes_indisponibles: {verdict.reason}", "step": "preflight"}
+        # defer (transitoire) — pas de re-queue différé en v1 → échec explicite, retentable.
+        sl.warning("Pré-vol ressources : indisponibles (transitoire) — %s", verdict.reason, job_id=job.id)
+        return {
+            "error": f"ressources_distantes_indisponibles (transitoire — relancez le job): {verdict.reason}",
+            "step": "preflight",
+            "retryable": True,
+        }
 
     def _execute_pipeline(
         self,

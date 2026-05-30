@@ -108,6 +108,21 @@ class InferenceClient:
             raise InferenceUnavailable(f"{url} injoignable: {exc}") from exc
         return self._parse(resp, url)
 
+    def ensure_engine(self, name: str) -> dict:
+        """Demande au nœud d'assurer le moteur STT `name` (cycle de vie A/B/C).
+
+        Retourne {engine, status, gpu_index, reason}. `status` ∈ ready/launched/busy.
+        Lève `InferenceUnavailable` si le nœud est injoignable ou renvoie 503 (busy).
+        """
+        url = f"{self.base_url}/engines/ensure"
+        try:
+            resp = self._session.post(
+                url, json={"engine": name}, headers=self._headers(), timeout=self.timeout_s
+            )
+        except requests.exceptions.RequestException as exc:
+            raise InferenceUnavailable(f"{url} injoignable: {exc}") from exc
+        return self._parse(resp, url)  # 503 busy → InferenceUnavailable ; 404 → RequestError
+
     def diarize(self, audio_path: Path) -> dict:
         """Diarise un audio via /infer/diarize. Retourne le dict canonique."""
         return self._post_audio("/infer/diarize", audio_path)

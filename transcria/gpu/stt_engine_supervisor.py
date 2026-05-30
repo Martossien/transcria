@@ -60,6 +60,21 @@ HealthProber = Callable[[str], bool]
 Launcher = Callable[[EngineSpec, int], bool]
 
 
+def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> "SttEngineSupervisor":
+    """Superviseur câblé en production : planificateur (VRAMManager) + sonde HTTP +
+    lanceur de script. `auto_relocate` défaut = `resource_node.vram.auto_relocate`.
+    """
+    from transcria.gpu.stt_vram_planner import SttVramPlanner
+    from transcria.gpu.vram_manager import VRAMManager
+
+    rn = config.get("resource_node", {}) or {}
+    if auto_relocate is None:
+        auto_relocate = bool((rn.get("vram", {}) or {}).get("auto_relocate", False))
+    planner = SttVramPlanner.from_vram_manager(VRAMManager(config=config))
+    launcher = make_script_launcher(health_prober=http_health_prober)
+    return SttEngineSupervisor(planner, http_health_prober, launcher, auto_relocate=auto_relocate)
+
+
 def engine_specs_from_config(config: dict) -> list[EngineSpec]:
     """Construit les `EngineSpec` depuis le manifeste `resource_node.engines`.
 
