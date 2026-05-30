@@ -530,21 +530,21 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 | `scripts/stop_qwen.sh` | Wrapper de compatibilité ancienne version vers `stop_arbitrage_llm.sh` |
 | `scripts/stop_qwen_vllm.sh` | Wrapper legacy pour un ancien déploiement vLLM spécifique |
 
-**Variables configurables** dans `launch_arbitrage.sh` :
+> **`launch_arbitrage.sh` est un EXEMPLE, pas un script générique.** Le fichier livré
+> est celui du mainteneur : chemins (`llama-server`, modèle GGUF), `CUDA_HOME`, et
+> tuning matériel (`--threads 44`, `--tensor-split 1,1,1` pour 3 GPUs…) sont **figés
+> pour sa machine**. Il n'y a **pas** de variables d'env ni d'arguments CLI : on
+> n'a pas voulu en faire une usine à gaz, car chaque déploiement est différent
+> (binaires compilés vs paquets, 1 ou N GPUs, quantification, backend…).
+>
+> **Adaptez ce script directement, ou — mieux — écrivez le vôtre** et pointez
+> `services.arbitrage_script` dessus. **Seul compte le CONTRAT** : exposer une API
+> **OpenAI-compatible** sur `services.arbitrage_llm_port` (défaut 8080), servant un
+> modèle dont l'alias = `services.arbitrage_api_model_id`. Le backend peut être
+> llama.cpp, vLLM, SGLang, ik_llama.cpp… (voir « Backends LLM alternatifs » plus bas).
 
-| Variable | Défaut | Description |
-|---|---|---|
-| `LLM_PORT` | `8080` | Port d'écoute du serveur LLM |
-| `LLM_MODEL_PATH` | *(à définir)* | Chemin absolu vers le fichier GGUF ou répertoire SafeTensors |
-| `LLM_ALIAS` | *(à définir)* | Alias `model_id` retourné par `/v1/models` |
-| `LLAMA_SERVER_BIN` | `llama-server` | Chemin du binaire llama-server |
-| `CUDA_HOME` | `/usr/local/cuda` | Chemin du toolkit CUDA |
-
-**Arguments CLI** : `--port PORT`, `--model PATH`, `--llama-bin PATH`
-
-Le script lance llama-server avec les paramètres optimisés : contexte 263K, tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl.
-
-> **⚠️ Adaptation requise** : Les paramètres du script `launch_arbitrage.sh` sont configurés pour un serveur bi-GPU avec 44 cœurs CPU. Vous **devez adapter** les options suivantes à votre machine :
+Le script d'exemple lance llama-server avec des paramètres optimisés : contexte 263K,
+tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl. **Options à revoir pour votre machine :**
 > - `--threads` / `--threads-batch` : nombre de cœurs CPU (actuellement 44/88)
 > - `--tensor-split 1,1,1` : répartition entre GPUs (actuellement 33/33/33 pour 3 GPUs identiques ; mettre `1` pour 1 seul GPU)
 > - `--n-gpu-layers all` : conserver `all` pour charger tout le modèle sur GPU, ou un nombre entier si VRAM limitée

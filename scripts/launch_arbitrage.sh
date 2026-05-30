@@ -1,4 +1,14 @@
 #!/bin/bash
+# ⚠ EXEMPLE spécifique à la machine du mainteneur (chemin llama-server, modèle,
+#   CUDA_HOME, --threads, --tensor-split/--fit-target pour 3 GPUs…). Il NE marchera
+#   PAS tel quel ailleurs : ADAPTEZ-LE, ou écrivez le vôtre selon votre install
+#   (binaires compilés, paquets, 1 ou N GPUs, autre quantification, vLLM, …).
+#
+#   CONTRAT (seule chose qui compte pour TranscrIA) : exposer un serveur LLM
+#   **compatible OpenAI** sur le port `services.arbitrage_llm_port` (défaut 8080),
+#   servant un modèle dont l'alias correspond à `services.arbitrage_api_model_id`.
+#   Pointez `services.arbitrage_script` vers VOTRE script.
+#   (Idem pour le STT : voir scripts/launch_stt_*.sh, eux paramétrables par env.)
 export CUDA_HOME=/usr/local/cuda-12.8
 export PATH=$CUDA_HOME/bin:$PATH
 export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
