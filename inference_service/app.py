@@ -68,6 +68,9 @@ def create_app(
     # Moteurs résidents, partagés par toutes les requêtes (verrou interne par moteur → GPU sérialisé).
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
     app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
+    # Superviseur STT singleton : mémorise le « dernier usage » par moteur (idle-stop).
+    from transcria.gpu.stt_engine_supervisor import build_stt_supervisor
+    app.extensions["stt_supervisor"] = build_stt_supervisor(config)
 
     from inference_service.routes.capabilities import capabilities_bp
     from inference_service.routes.diarize import diarize_bp

@@ -37,6 +37,7 @@ class EngineSpec:
     gpu_mem: float       # gpu_memory_utilization (fraction du total)
     port: int            # port HTTP
     health_url: str      # ex. http://host:port/v1/models
+    idle_timeout_s: float = 0.0  # > 0 : arrêt après inactivité (idle-stop). 0 = jamais
 
 
 @dataclass(frozen=True)
@@ -56,8 +57,10 @@ class EnsureResult:
 
 
 # health_prober(health_url) -> bool ; launcher(spec, gpu_index) -> bool (lancé & prêt)
+# stopper(spec) -> bool (arrêté)
 HealthProber = Callable[[str], bool]
 Launcher = Callable[[EngineSpec, int], bool]
+Stopper = Callable[[EngineSpec], bool]
 
 
 def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> "SttEngineSupervisor":
@@ -96,6 +99,7 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
                     gpu_mem=float(entry.get("gpu_mem", 0.85)),
                     port=port,
                     health_url=f"http://{host}:{port}/v1/models",
+                    idle_timeout_s=float(entry.get("idle_timeout_s", 0) or 0),
                 )
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -112,16 +116,24 @@ class SttEngineSupervisor:
         health_prober: HealthProber,
         launcher: Launcher,
         *,
+        stopper: Stopper | None = None,
         auto_relocate: bool = False,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._planner = planner
         self._health = health_prober
         self._launch = launcher
+        self._stop = stopper or _default_engine_stop
         self.auto_relocate = bool(auto_relocate)
+        self._clock = clock or time.monotonic
+        # Dernier usage connu par moteur (mis à jour à chaque ensure_ready réussi).
+        # Sert à l'idle-stop ; on ne réclame QUE les moteurs qu'on a nous-mêmes servis.
+        self._last_used: dict[str, float] = {}
 
     def ensure_ready(self, spec: EngineSpec) -> EnsureResult:
         # CAS A — déjà résident et sain.
         if self._health(spec.health_url):
+            self._last_used[spec.name] = self._clock()
             logger.info("[stt-sup] %s CAS A — déjà actif (%s)", spec.name, spec.health_url)
             return EnsureResult("ready", spec.gpu, "cas_a_resident")
 
@@ -143,7 +155,42 @@ class SttEngineSupervisor:
         if not self._launch(spec, gpu):
             logger.error("[stt-sup] %s — échec du lancement sur GPU %d", spec.name, gpu)
             return EnsureResult("error", gpu, "launch_failed")
+        self._last_used[spec.name] = self._clock()
         return EnsureResult("launched", gpu, f"cas_b_{decision.status}")
+
+    # ── Idle-stop (minimal, opportuniste) ───────────────────────────────────--
+
+    def stop_engine(self, spec: EngineSpec) -> bool:
+        """Arrête un moteur (via le stopper injecté) et oublie son dernier usage."""
+        ok = bool(self._stop(spec))
+        if ok:
+            self._last_used.pop(spec.name, None)
+            logger.info("[stt-sup] %s arrêté (idle-stop)", spec.name)
+        else:
+            logger.warning("[stt-sup] %s — échec de l'arrêt (idle-stop)", spec.name)
+        return ok
+
+    def reap_idle(self, specs: list[EngineSpec], *, now: float | None = None) -> list[str]:
+        """Arrête les moteurs inactifs (déclarés avec idle_timeout_s > 0, up, et dont
+        le dernier usage connu dépasse le timeout). Non intrusif : on ne touche QUE
+        les moteurs qu'on a nous-mêmes servis (présents dans `_last_used`). Best-effort,
+        déclenché opportunément (poll /capabilities, ensure_ready). Retourne les noms arrêtés."""
+        now = now if now is not None else self._clock()
+        stopped: list[str] = []
+        for spec in specs:
+            if spec.idle_timeout_s <= 0:
+                continue
+            last = self._last_used.get(spec.name)
+            if last is None or (now - last) < spec.idle_timeout_s:
+                continue
+            if not self._health(spec.health_url):  # déjà éteint → rien à faire
+                self._last_used.pop(spec.name, None)
+                continue
+            logger.info("[stt-sup] %s inactif depuis %.0fs (> %.0fs) — arrêt",
+                        spec.name, now - last, spec.idle_timeout_s)
+            if self.stop_engine(spec):
+                stopped.append(spec.name)
+        return stopped
 
 
 # ── Adaptateurs de production (coutures injectables pour les tests) ──────────--
@@ -168,6 +215,22 @@ def _default_engine_run(script: str, env: dict, log_path: str) -> None:
             ["bash", script], env=full_env, stdout=log, stderr=log,
             stdin=subprocess.DEVNULL, start_new_session=True,
         )
+
+
+def _default_engine_stop(spec: EngineSpec) -> bool:
+    """Arrête un moteur via `scripts/stop_stt.sh --port` (arrêt par groupe de process)."""
+    from pathlib import Path
+
+    stop_script = Path(__file__).resolve().parents[2] / "scripts" / "stop_stt.sh"
+    try:
+        r = subprocess.run(  # noqa: S603 — script du dépôt
+            ["bash", str(stop_script), "--port", str(spec.port)],
+            capture_output=True, timeout=120,
+        )
+        return r.returncode == 0
+    except (subprocess.SubprocessError, OSError) as exc:
+        logger.warning("[stt-sup] stop_stt.sh a échoué pour %s (port %d) : %s", spec.name, spec.port, exc)
+        return False
 
 
 def make_script_launcher(

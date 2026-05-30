@@ -195,3 +195,89 @@ def test_engine_specs_skip_invalid_entries():
 
 def test_engine_specs_empty_when_no_manifest():
     assert engine_specs_from_config({}) == []
+
+
+def test_engine_specs_parses_idle_timeout():
+    config = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "s.sh", "gpu": 3, "port": 8003, "idle_timeout_s": 900},
+        {"name": "whisper", "script": "s.sh", "gpu": 5, "port": 8005},  # défaut 0
+    ]}}
+    specs = {s.name: s for s in engine_specs_from_config(config)}
+    assert specs["cohere"].idle_timeout_s == 900
+    assert specs["whisper"].idle_timeout_s == 0
+
+
+# ── Idle-stop (minimal, opportuniste) ────────────────────────────────────────
+
+def _idle_spec(idle_timeout_s):
+    return EngineSpec("cohere", "s.sh", gpu=3, gpu_mem=0.85, port=8003,
+                      health_url="http://127.0.0.1:8003/v1/models", idle_timeout_s=idle_timeout_s)
+
+
+def _idle_sup(*, health=True, stop_ok=True):
+    clock = {"t": 0.0}
+    stopped: list[str] = []
+
+    def stopper(spec):
+        stopped.append(spec.name)
+        return stop_ok
+
+    sup = SttEngineSupervisor(
+        planner=_planner([GpuState(3, 24000, 24000)]),
+        health_prober=lambda url: health,
+        launcher=_Launcher(),
+        stopper=stopper,
+        clock=lambda: clock["t"],
+    )
+    return sup, clock, stopped
+
+
+def test_ensure_ready_records_last_used():
+    sup, clock, _ = _idle_sup(health=True)
+    clock["t"] = 100.0
+    sup.ensure_ready(_idle_spec(900))
+    assert sup._last_used["cohere"] == 100.0
+
+
+def test_reap_stops_idle_engine():
+    sup, clock, stopped = _idle_sup(health=True)
+    spec = _idle_spec(idle_timeout_s=10)
+    clock["t"] = 0.0
+    sup.ensure_ready(spec)               # dernier usage = 0
+    reaped = sup.reap_idle([spec], now=20.0)   # 20s > 10s
+    assert reaped == ["cohere"]
+    assert stopped == ["cohere"]
+    assert "cohere" not in sup._last_used
+
+
+def test_reap_skips_when_not_idle_yet():
+    sup, clock, stopped = _idle_sup(health=True)
+    spec = _idle_spec(idle_timeout_s=60)
+    sup.ensure_ready(spec)
+    assert sup.reap_idle([spec], now=30.0) == []   # 30s < 60s
+    assert stopped == []
+
+
+def test_reap_skips_timeout_zero():
+    sup, _, stopped = _idle_sup(health=True)
+    spec = _idle_spec(idle_timeout_s=0)             # jamais
+    sup.ensure_ready(spec)
+    assert sup.reap_idle([spec], now=99999.0) == []
+    assert stopped == []
+
+
+def test_reap_skips_engine_never_ensured():
+    # Non intrusif : on ne réclame pas un moteur qu'on n'a pas servi (absent de _last_used).
+    sup, _, stopped = _idle_sup(health=True)
+    spec = _idle_spec(idle_timeout_s=10)
+    assert sup.reap_idle([spec], now=99999.0) == []
+    assert stopped == []
+
+
+def test_reap_skips_already_down_and_forgets():
+    sup, _, stopped = _idle_sup(health=False)       # moteur éteint
+    spec = _idle_spec(idle_timeout_s=10)
+    sup._last_used["cohere"] = 0.0                  # connu mais down
+    assert sup.reap_idle([spec], now=99999.0) == []
+    assert stopped == []
+    assert "cohere" not in sup._last_used           # oublié

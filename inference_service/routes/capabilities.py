@@ -26,6 +26,15 @@ def capabilities():
     inprocess = [ext["voice_engine"].status(), ext["diarize_engine"].status()]
     stt_specs = engine_specs_from_config(config)
 
+    # Idle-stop opportuniste : ce poll (panneau frontale ~10 s) sert de battement
+    # pour réclamer les moteurs inactifs (best-effort, sans tâche de fond).
+    supervisor = ext.get("stt_supervisor")
+    if supervisor is not None:
+        try:
+            supervisor.reap_idle(stt_specs)
+        except Exception:  # noqa: BLE001 — best-effort, ne bloque jamais l'inventaire
+            pass
+
     payload = build_capabilities(
         config,
         gpu_states=gpu_states,
