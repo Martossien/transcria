@@ -1,8 +1,9 @@
 # TranscrIA — Service de ressources GPU & autonomie VRAM du STT
 
-> **Statut :** 🟢 **v1 implémentée sur `main`** (commits `6423fa1`→`e5ad359`). Conception + cœur +
-> activation runtime + re-queue différé (§7.2) livrés et testés (ruff/mypy/pytest, couverture ~77 %).
-> **Reste** (cf. §12) : idle-stop des moteurs externes (v1.2).
+> **Statut :** 🟢 **Plan complet livré sur `main`** (commits `6423fa1`→`e379e0f`). Cœur + activation
+> runtime + re-queue différé (§7.2) + concurrence (v1.1) + idle-stop minimal (v1.2), testés
+> (ruff/mypy/pytest, couverture ~77 %). Évolutions possibles : idle-stop par tâche de fond, relocalisation
+> par défaut, profil d'install « nœud seul » (cf. §10/§13).
 > **Auteur :** Martossien
 > **Date :** 2026-05-30
 > **Objectif :** lever l'asymétrie de gestion VRAM entre le service maison et le STT vLLM,
@@ -25,7 +26,7 @@
 | Panneau d'état frontale | `GET /api/resources/status` + `dashboard_status.html` | ✅ |
 | Concurrence STT par tour (v1.1) | `inference.stt.concurrency` (`transcria/stt/transcription.py`) | ✅ |
 | Re-queue différé avec backoff (§7.2) | `QueueStore.requeue_later` + `job_executor` (`scheduled_at`) | ✅ |
-| Idle-stop moteurs externes (v1.2) | superviseur | ⏳ à faire |
+| Idle-stop moteurs externes (v1.2) | `SttEngineSupervisor.reap_idle` (opportuniste via `/capabilities`) | ✅ (minimal) |
 
 ---
 
@@ -110,6 +111,12 @@ coûte **25–105 s** (compile JIT FlashInfer). Donc :
 - défaut : moteurs STT **résidents** (réactivité maximale) ;
 - l'idle-stop ne se justifie **que sous contention VRAM** → c'est le rôle du CAS C, pas d'un timer
   systématique. Opt-in par moteur (`idle_timeout_s` > 0).
+
+> **Implémenté (v1.2, minimal)** : `SttEngineSupervisor.reap_idle()` arrête un moteur déclaré avec
+> `idle_timeout_s > 0`, **up**, et dont le dernier `ensure_ready` dépasse le timeout. Déclenché de façon
+> **opportuniste** (poll `/capabilities` ~10 s + chaque `ensure_ready`), **sans tâche de fond**.
+> Non intrusif : ne touche que les moteurs qu'on a nous-mêmes servis (`_last_used`). Évolution possible :
+> reaper en tâche de fond ou déclenchement sous contention CAS C.
 
 ---
 
@@ -304,8 +311,9 @@ resource_node:
 
 ## 12. Plan d'implémentation (incrémental)
 
-> **État (commits `6423fa1`→`e5ad359`)** : items 1-6 ✅ + re-queue différé §7.2 ✅ (étape 5 complétée).
-> La relocalisation auto (7) est câblée en opt-in. **Reste : idle-stop (8).**
+> **État (commits `6423fa1`→`e379e0f`)** : **tout le plan est livré.** items 1-6 ✅, re-queue différé
+> §7.2 ✅, relocalisation auto (7) câblée opt-in ✅, idle-stop (8) ✅ en version minimale (réclamation
+> opportuniste via `/capabilities`, sans tâche de fond).
 
 **v1 (cœur)**
 1. **Pré-check VRAM (niveau 1)** au lancement des moteurs STT — transforme l'OOM en 503 clair.

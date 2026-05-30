@@ -846,7 +846,7 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 |---|---|---|---|
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
-| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port}` (placement = admin) |
+| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `idle_timeout_s > 0` active l'idle-stop opportuniste de ce moteur (défaut `0` = résident) |
 
 ---
 
