@@ -202,6 +202,17 @@ _DEFAULT_CONFIG = {
             "narrowband_hz_threshold": 3800.0,
             "clipping_threshold": 0.98,
             "clipping_ratio_threshold": 0.001,
+            # Qualification du son par fenêtre (SQUIM : STOI/PESQ/SI-SDR → difficulty_map).
+            # Désactivé par défaut : zéro impact sur le comportement historique.
+            "squim": {
+                "enabled": False,
+                "segment_s": 5.0,
+                "hop_s": 2.5,
+                "device": "cpu",          # "cuda:0" si GPU dispo (beaucoup plus rapide)
+                "stoi_threshold": 0.70,
+                "pesq_threshold": 2.5,
+                "sisdr_threshold": 5.0,
+            },
         },
         "segment_reliability": {
             "enabled": True,
