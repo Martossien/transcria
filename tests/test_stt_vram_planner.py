@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import pytest
 
-from transcria.gpu.stt_vram_planner import GpuState, SttVramPlanner
+from transcria.gpu.stt_vram_planner import (
+    GpuState,
+    SttVramPlanner,
+    gpu_states_from_vram_manager,
+)
 
 
 def _planner(states, headroom_mb=512):
@@ -108,3 +112,28 @@ def test_invalid_fraction_rejected():
     with pytest.raises(ValueError):
         _planner([GpuState(3, 24000, 24000)]).plan(
             assigned_gpu=3, gpu_memory_utilization=1.5, auto_relocate=False)
+
+
+# ── Adaptateur VRAMManager (indices physiques, GiB → Mo) ─────────────────────
+
+class _FakeVram:
+    def get_gpu_info(self):
+        return [
+            {"id": 3, "memory": {"free": 24.0, "total": 24.0}},   # GiB
+            {"id": 5, "memory": {"free": 1.0, "total": 24.0}},
+        ]
+
+
+def test_adapter_converts_physical_index_and_gib_to_mb():
+    states = gpu_states_from_vram_manager(_FakeVram())
+    assert [(s.index, s.free_mb, s.total_mb) for s in states] == [
+        (3, 24576, 24576),   # 24 GiB × 1024
+        (5, 1024, 24576),
+    ]
+
+
+def test_from_vram_manager_plans_on_real_state():
+    planner = SttVramPlanner.from_vram_manager(_FakeVram())
+    d = planner.plan(assigned_gpu=5, gpu_memory_utilization=0.85, auto_relocate=True)
+    assert d.status == "relocate"   # GPU 5 plein (1 GiB) → repli sur GPU 3
+    assert d.gpu_index == 3

@@ -33,6 +33,26 @@ class GpuState:
     total_mb: int
 
 
+def gpu_states_from_vram_manager(vram_manager) -> list[GpuState]:
+    """Convertit `VRAMManager.get_gpu_info()` en `GpuState` (indices PHYSIQUES).
+
+    Les lanceurs placent un moteur via `STT_GPU=N` → `CUDA_VISIBLE_DEVICES=N`, donc
+    en index physique. On n'applique PAS le remapping `CUDA_VISIBLE_DEVICES` (réservé
+    à l'allocateur in-process). Mémoire `get_gpu_info` en GiB → convertie en Mo.
+    """
+    states: list[GpuState] = []
+    for g in vram_manager.get_gpu_info():
+        mem = g.get("memory", {}) or {}
+        states.append(
+            GpuState(
+                index=int(g.get("id", 0)),
+                free_mb=int(float(mem.get("free", 0)) * 1024),
+                total_mb=int(float(mem.get("total", 0)) * 1024),
+            )
+        )
+    return states
+
+
 @dataclass(frozen=True)
 class PlacementDecision:
     """Décision de placement d'un moteur STT.
@@ -66,6 +86,11 @@ class SttVramPlanner:
     ) -> None:
         self._provider = gpu_states_provider
         self.headroom_mb = int(headroom_mb)
+
+    @classmethod
+    def from_vram_manager(cls, vram_manager, *, headroom_mb: int = _DEFAULT_HEADROOM_MB) -> "SttVramPlanner":
+        """Planificateur câblé sur l'état GPU réel via `VRAMManager.get_gpu_info`."""
+        return cls(lambda: gpu_states_from_vram_manager(vram_manager), headroom_mb=headroom_mb)
 
     @staticmethod
     def required_mb_for(gpu_memory_utilization: float, total_mb: int) -> int:
