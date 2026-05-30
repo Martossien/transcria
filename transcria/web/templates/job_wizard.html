@@ -109,8 +109,41 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% if audio_diagnostic.advice %}
+        <div class="small mt-2 text-{{ audio_diagnostic.advice.class }}">
+          <i class="bi bi-lightbulb"></i> {{ audio_diagnostic.advice.text }}
+        </div>
+        {% endif %}
+        {% if audio_diagnostic.difficulty %}
+        <div class="small mt-2">
+          Passages :
+          <strong>{{ audio_diagnostic.difficulty.degrade }}</strong> difficile(s) ·
+          <strong>{{ audio_diagnostic.difficulty.suspect }}</strong> à surveiller
+          sur {{ audio_diagnostic.difficulty.windows }} fenêtre(s) de 5 s.
+        </div>
+        {% endif %}
         <details class="small mt-2">
           <summary>Voir les détails techniques</summary>
+          {% if audio_diagnostic.perceptual.squim or audio_diagnostic.perceptual.dnsmos %}
+          <div class="row mt-2">
+            {% if audio_diagnostic.perceptual.squim %}
+            <div class="col-md-6">
+              <span class="text-muted">SQUIM</span> —
+              STOI {{ audio_diagnostic.perceptual.squim.stoi if audio_diagnostic.perceptual.squim.stoi is not none else '—' }} ·
+              PESQ {{ audio_diagnostic.perceptual.squim.pesq if audio_diagnostic.perceptual.squim.pesq is not none else '—' }} ·
+              SI-SDR {{ audio_diagnostic.perceptual.squim.sisdr if audio_diagnostic.perceptual.squim.sisdr is not none else '—' }} dB
+            </div>
+            {% endif %}
+            {% if audio_diagnostic.perceptual.dnsmos %}
+            <div class="col-md-6">
+              <span class="text-muted">DNSMOS</span> —
+              SIG {{ audio_diagnostic.perceptual.dnsmos.sig if audio_diagnostic.perceptual.dnsmos.sig is not none else '—' }} ·
+              BAK {{ audio_diagnostic.perceptual.dnsmos.bak if audio_diagnostic.perceptual.dnsmos.bak is not none else '—' }} ·
+              OVRL {{ audio_diagnostic.perceptual.dnsmos.ovrl if audio_diagnostic.perceptual.dnsmos.ovrl is not none else '—' }} (MOS 1-5)
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
           <div class="row mt-2">
             <div class="col-md-3">RMS : {{ audio_diagnostic.metrics.rms if audio_diagnostic.metrics.rms is not none else '—' }}</div>
             <div class="col-md-3">SNR estimé : {{ audio_diagnostic.metrics.estimated_snr_db if audio_diagnostic.metrics.estimated_snr_db is not none else '—' }} dB</div>

@@ -26,6 +26,47 @@ def test_audio_diagnostic_view_keeps_user_message_simple():
     assert "volume très faible" in view["reasons"]
 
 
+def test_audio_diagnostic_view_surfaces_squim_dnsmos_and_difficulty():
+    view = _audio_diagnostic_view({
+        "risk_level": "degrade",
+        "flags": ["squim_stoi_faible", "dnsmos_ovrl_faible"],
+        "squim_global": {"stoi": 0.62, "pesq": 2.1, "sisdr": 3.4},
+        "dnsmos_global": {"sig": 3.0, "bak": 2.1, "ovrl": 2.3},
+        "difficulty_summary": {"windows": 40, "degrade": 3, "suspect": 5, "ok": 32},
+    })
+
+    assert view["perceptual"]["squim"] == {"stoi": 0.62, "pesq": 2.1, "sisdr": 3.4}
+    assert view["perceptual"]["dnsmos"] == {"sig": 3.0, "bak": 2.1, "ovrl": 2.3}
+    assert view["difficulty"] == {"windows": 40, "degrade": 3, "suspect": 5}
+    assert "intelligibilité réduite" in view["reasons"]
+    # BAK (2.1) < SIG (3.0) → bruit dominant.
+    assert view["advice"]["class"] == "info"
+    assert "Bruit de fond dominant" in view["advice"]["text"]
+
+
+def test_audio_diagnostic_view_degraded_speech_advice():
+    view = _audio_diagnostic_view({
+        "risk_level": "suspect",
+        "flags": ["squim_pesq_faible"],
+        "dnsmos_global": {"sig": 2.0, "bak": 3.5, "ovrl": 2.4},
+    })
+    # SIG (2.0) < BAK (3.5) → parole dégradée.
+    assert view["advice"]["class"] == "warning"
+    assert "Parole elle-même dégradée" in view["advice"]["text"]
+
+
+def test_audio_diagnostic_view_clean_audio_has_no_advice_or_difficulty():
+    view = _audio_diagnostic_view({
+        "risk_level": "ok",
+        "flags": [],
+        "squim_global": {"stoi": 0.95, "pesq": 4.0, "sisdr": 20.0},
+        "dnsmos_global": {"sig": 4.0, "bak": 4.2, "ovrl": 4.1},
+    })
+    assert view["advice"] is None              # pas de conseil sur audio « ok »
+    assert view["difficulty"] is None          # pas de difficulty_map (lazy)
+    assert view["perceptual"]["squim"]["stoi"] == 0.95   # scores quand même exposés
+
+
 def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
     class FakeFilesystem:
         def __init__(self):

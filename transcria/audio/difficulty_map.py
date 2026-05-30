@@ -17,12 +17,18 @@ DEFAULT_WEIGHTS: dict[str, int] = {
     "overlap": 99,                 # veto → degrade
     "squim_stoi_faible": 4,        # perte d'intelligibilité directe
     "squim_pesq_faible": 3,        # dégradation perceptive
-    "dnsmos_ovrl_faible": 3,
+    # OVRL est un prédicteur de WER *indirect* (qualité perçue), à la différence de
+    # SQUIM (direct) : poids 2 → suspect seul, degrade seulement s'il est corroboré.
+    # Évite qu'un creux perceptif local (OVRL<2.5) contredise un SQUIM intelligible.
+    "dnsmos_ovrl_faible": 2,
     "rt60_eleve": 3,               # réverbération longue
     "snr_faible": 2,
     "codec_artefact": 2,
     "squim_sisdr_faible": 2,
-    "sig_lt_bak": 1,               # parole elle-même dégradée
+    # sig_lt_bak : diagnostic seul (oriente le conseil bruit-vs-parole), poids 0 —
+    # SIG < BAK est normal sur audio propre (fond silencieux), il ne doit pas
+    # gonfler le verdict ; la « parole dégradée » est portée par SQUIM/OVRL.
+    "sig_lt_bak": 0,
     "c50_faible": 1,
 }
 

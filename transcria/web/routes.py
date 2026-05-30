@@ -102,6 +102,13 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
         "bande_etroite": "voix peu détaillée",
         "clipping_detecte": "saturation détectée",
         "risque_transcription_non_fiable": "vérification renforcée utile",
+        "squim_stoi_faible": "intelligibilité réduite",
+        "squim_pesq_faible": "qualité perceptive faible",
+        "squim_sisdr_faible": "distorsion présente",
+        "dnsmos_ovrl_faible": "qualité globale faible",
+        "rt60_eleve": "réverbération marquée",
+        "c50_faible": "clarté faible",
+        "codec_artefact": "bande téléphonique (codec)",
     }
     flags = [str(flag) for flag in preflight.get("flags", []) if flag]
     reasons = [flag_labels.get(flag, flag.replace("_", " ")) for flag in flags]
@@ -114,13 +121,28 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
             "degrade": "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages.",
         }.get(level, "Diagnostic audio disponible.")
 
+    squim = preflight.get("squim_global") or {}
+    dnsmos = preflight.get("dnsmos_global") or {}
+    summary = preflight.get("difficulty_summary") or {}
+    advice = _audio_advice(dnsmos, flags) if level in {"suspect", "degrade"} else None
+
     return {
         "level": level,
         "label": level_labels.get(level, level),
         "class": level_classes.get(level, "secondary"),
         "message": message,
-        "reasons": reasons[:4],
+        "reasons": reasons[:6],
+        "advice": advice,
         "recommended_mode": "quality" if level in {"suspect", "degrade"} else "fast",
+        "perceptual": {
+            "squim": {"stoi": squim.get("stoi"), "pesq": squim.get("pesq"), "sisdr": squim.get("sisdr")} if squim else None,
+            "dnsmos": {"sig": dnsmos.get("sig"), "bak": dnsmos.get("bak"), "ovrl": dnsmos.get("ovrl")} if dnsmos else None,
+        },
+        "difficulty": {
+            "windows": summary.get("windows"),
+            "degrade": summary.get("degrade"),
+            "suspect": summary.get("suspect"),
+        } if summary.get("windows") else None,
         "metrics": {
             "rms": preflight.get("rms"),
             "estimated_snr_db": preflight.get("estimated_snr_db"),
@@ -132,6 +154,27 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
             "has_noise": bool((audio_scene or {}).get("has_noise", False)),
         },
     }
+
+
+def _audio_advice(dnsmos: dict, flags: list[str]) -> dict | None:
+    """Conseil actionnable depuis DNSMOS : distingue bruit dominant (BAK bas →
+    débruitage utile) de parole intrinsèquement dégradée (SIG bas → WER difficile).
+    Convention MOS : BAK bas = bruit de fond important ; SIG bas = parole altérée."""
+    sig, bak = dnsmos.get("sig"), dnsmos.get("bak")
+    if sig is not None and bak is not None:
+        if bak < sig:
+            return {
+                "class": "info",
+                "text": f"Bruit de fond dominant — un débruitage peut aider (BAK {bak} < SIG {sig}).",
+            }
+        if sig < bak:
+            return {
+                "class": "warning",
+                "text": f"Parole elle-même dégradée — vérification renforcée conseillée (SIG {sig} < BAK {bak}).",
+            }
+    if "codec_artefact" in flags:
+        return {"class": "info", "text": "Bande passante de type téléphonique détectée (codec)."}
+    return None
 
 
 def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:

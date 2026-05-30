@@ -57,6 +57,14 @@ def test_classify_orders_by_weight():
     assert sig == ["squim_stoi_faible", "squim_sisdr_faible"]   # 4 avant 2
 
 
+def test_sig_lt_bak_is_diagnostic_only_not_difficulty():
+    # SIG < BAK est normal sur audio propre : présent dans signals, mais n'altère
+    # pas le verdict (poids 0).
+    difficulty, sig = classify_signals({"sig_lt_bak"})
+    assert difficulty == "ok"
+    assert sig == ["sig_lt_bak"]
+
+
 # ── build_difficulty_map ──────────────────────────────────────────────────────
 
 def test_build_empty_when_no_segments():
