@@ -1,9 +1,9 @@
 # TranscrIA — STT adaptatif & mode hybride au segment
 
-> **Statut :** 🔵 Document de conception — base de travail, rien n'est implémenté ici  
+> **Statut :** 🟡 Partiellement implémenté — **axe 1 livré** (caractérisation acoustique enrichie : SQUIM/DNSMOS/acoustique + `difficulty_map` + encart diagnostic), **axe 2 en conception** (hybride au segment, rien d'implémenté). Préalable acté à l'axe 2 : le **calibrage des seuils** sur corpus (régression scores↔WER).  
 > **Auteur :** Martossien  
-> **Date :** 2026-05-30  
-> **Portée :** deux axes liés — (1) améliorer la caractérisation du son pour choisir le backend STT, (2) concevoir le mode hybride où l'on choisit le STT au niveau du segment.
+> **Date :** cadrage 2026-05-30 — axe 1 livré le 2026-05-30  
+> **Portée :** deux axes liés — (1) améliorer la caractérisation du son pour choisir le backend STT ✅, (2) concevoir le mode hybride où l'on choisit le STT au niveau du segment 🔵.
 
 ---
 

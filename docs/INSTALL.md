@@ -575,6 +575,15 @@ services:
 
 TranscrIA attend une API OpenAI-compatible. Le backend peut être llama.cpp, SGLang, vLLM, ik_llama.cpp ou autre. Adaptez `arbitrage_script`, `stop_script`, `arbitrage_llm_port` et `llm_cleanup_ports` au backend réellement utilisé.
 
+### Qualification du son (SQUIM / DNSMOS)
+
+La caractérisation acoustique du préflight (`workflow.audio_preflight.{squim,dnsmos,acoustic}`, active par défaut) utilise deux modèles :
+
+- **SQUIM** (STOI/PESQ/SI-SDR) est téléchargé **automatiquement via `torch.hub`** au premier usage (poids torchaudio, CC-BY-4.0). Contrairement aux modèles ASR, ce téléchargement **n'est pas couvert par `HF_HUB_OFFLINE`** : sur une machine **hors-ligne**, lancer une fois le pipeline (ou un import torchaudio SQUIM) sur une machine connectée pour peupler le cache `~/.cache/torch/hub/`, puis recopier ce cache. Sinon, désactiver `workflow.audio_preflight.squim`.
+- **DNSMOS** (SIG/BAK/OVRL) est **embarqué dans le dépôt** (`transcria/audio/models/dnsmos_sig_bak_ovr.onnx`, ONNX, CC-BY-4.0) : aucun téléchargement, fonctionne hors-ligne. Nécessite `onnxruntime` (dans `requirements.txt`).
+
+Attribution des poids : voir `THIRD_PARTY_NOTICES.md`.
+
 ---
 
 ## 7. Configuration
