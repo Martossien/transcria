@@ -67,7 +67,8 @@ _DEFAULT_CONFIG = {
         "diarization_backend": "pyannote",
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",
-        "cohere_model_path": "./models/cohere-asr/cohere-transcribe-03-2026",
+        # Repo HF (auto-résolu/téléchargé) ou chemin local d'un modèle pré-téléchargé.
+        "cohere_model_path": "CohereLabs/cohere-transcribe-03-2026",
         "pyannote_model": "pyannote/speaker-diarization-community-1",
     },
     "cohere": {

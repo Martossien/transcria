@@ -1,7 +1,10 @@
 server:
   host: "0.0.0.0"
   port: 7870
-  debug: true
+  # debug: true active le débogueur Werkzeug (rechargement + console interactive).
+  # À NE JAMAIS laisser à true en production (exécution de code à distance).
+  # Laisser false par défaut ; surchargeable via TRANSCRIA_DEBUG pour le dev local.
+  debug: false
 
 storage:
   jobs_dir: "./jobs"
@@ -14,7 +17,10 @@ storage:
   database_url: "sqlite:///transcrIA.db"
 
 voice_enrollment:
-  enabled: false
+  # Reconnaissance vocale des locuteurs (donnée biométrique). N'expose que des
+  # endpoints/écrans gatés : rien ne s'exécute sans action opérateur. Le recueil du
+  # consentement (RGPD) reste obligatoire — voir consent.* ci-dessous.
+  enabled: true
   storage_dir: "./voices"
   require_active_consent: true
   delete_source_audio_after_embedding: true
@@ -76,7 +82,13 @@ models:
   diarization_backend: "pyannote"   # "pyannote" (défaut) ou "sortformer"
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"
-  cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
+  # Chemin du modèle Cohere ASR, passé tel quel à transformers `from_pretrained`.
+  # Deux formes acceptées :
+  #   - identifiant de dépôt HuggingFace (recommandé) : résolu via le cache HF et
+  #     téléchargé automatiquement au premier usage (`huggingface-cli download` possible) ;
+  #   - chemin local (ex. "./models/cohere-asr/cohere-transcribe-03-2026") si le modèle
+  #     a été pré-téléchargé sur disque — installé via install.sh.
+  cohere_model_path: "CohereLabs/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"
 
 cohere:
@@ -316,7 +328,8 @@ workflow:
     # Analyse acoustique de scène en subprocess isolé (librosa — aucune dépendance GPU).
     # Produit : ratios parole/non-parole, segments horodatés, distribution H/F.
     # Quand enabled: true, SourceSeparationDecider priorise ces signaux sur le score.
-    enabled: false
+    # CPU uniquement (librosa, dépendance déjà installée) ; alimente le diagnostic audio.
+    enabled: true
     timeout_s: 120            # durée maximale allouée au subprocess (secondes)
     detect_gender: true       # sous-classification speech → male / female via pitch (YIN)
     thresholds:
@@ -429,7 +442,13 @@ workflow:
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
   arbitration_llm:
-    enabled: false
+    # Correction du SRT (mode quality) via opencode + LLM d'arbitrage.
+    # PRÉREQUIS quand enabled: true — sinon le step "correction" attend puis échoue :
+    #   - opencode installé + provider `local` configuré (voir docs) ;
+    #   - un LLM OpenAI-compatible joignable sur api_base ;
+    #   - model_id renseigné avec la valeur RÉELLE (remplacer le placeholder ci-dessous).
+    # Mettre enabled: false pour désactiver complètement l'étape de correction.
+    enabled: true
     model_id: "local/votre-modele-llm-ici"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
