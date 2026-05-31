@@ -88,9 +88,21 @@ def summarize_capabilities(capabilities: dict | None) -> dict:
 
     engines: list[dict] = []
     for e in capabilities.get("stt_engines", []) or []:
-        engines.append({"name": e.get("name"), "kind": "stt", "up": bool(e.get("up"))})
+        item = {
+            "name": e.get("name"),
+            "kind": "stt",
+            "up": bool(e.get("up")),
+        }
+        for key in ("ensure_in_progress", "last_used_monotonic_s"):
+            if key in e:
+                item[key] = e.get(key)
+        engines.append(item)
     for s in capabilities.get("inprocess", []) or []:
-        engines.append({"name": s.get("name"), "kind": "inprocess", "up": True})
+        item = {"name": s.get("name"), "kind": "inprocess", "up": True}
+        for key in ("loaded", "capacity", "inflight", "queued", "busy", "last_wait_s"):
+            if key in s:
+                item[key] = s.get(key)
+        engines.append(item)
 
     return {
         "reachable": True,

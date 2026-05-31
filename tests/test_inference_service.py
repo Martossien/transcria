@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
+import threading
+import time
 import wave
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import pytest
@@ -166,6 +170,50 @@ def test_cas_a_modele_reste_resident(client, wav_file):
     assert client._engine._backend.calls == 2  # même backend réutilisé
     voice = next(m for m in client.get("/ready").get_json()["models"] if m["name"] == "voice-embed")
     assert voice["loaded"] is True
+
+
+def test_voice_engine_reports_inflight_and_queued_load(wav_file, caplog):
+    """Un calcul en cours et une requête en attente sont visibles dans status()."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    class _BlockingBackend(_FakeBackend):
+        def extract_reference_embedding(self, audio_path):
+            entered.set()
+            assert release.wait(timeout=2)
+            return super().extract_reference_embedding(audio_path)
+
+    engine = _make_engine(backend=_BlockingBackend())
+    caplog.set_level(logging.INFO, logger="inference_service.engine")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(engine.extract, wav_file)
+        assert entered.wait(timeout=2)
+        second = executor.submit(engine.extract, wav_file)
+
+        # Le second thread doit avoir le temps de tenter le verrou et de s'inscrire
+        # comme en attente ; on boucle court pour éviter une assertion flakie.
+        for _ in range(100):
+            status = engine.status()
+            if status["queued"] == 1:
+                break
+            time.sleep(0.001)
+        status = engine.status()
+        assert status["capacity"] == 1
+        assert status["busy"] is True
+        assert status["inflight"] == 1
+        assert status["queued"] == 1
+
+        release.set()
+        assert first.result(timeout=2).dim == 8
+        assert second.result(timeout=2).dim == 8
+
+    final_status = engine.status()
+    assert final_status["busy"] is False
+    assert final_status["inflight"] == 0
+    assert final_status["queued"] == 0
+    assert final_status["last_wait_s"] >= 0
+    assert "voice-embed occupé — attente du verrou moteur" in caplog.text
 
 
 def test_erreur_metier_renvoie_422(client, wav_file):

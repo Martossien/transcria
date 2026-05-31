@@ -20,6 +20,7 @@ def build_capabilities(
     inprocess_statuses: list[dict],
     stt_specs: list[EngineSpec],
     health_prober: Callable[[str], bool],
+    stt_statuses: dict[str, dict] | None = None,
 ) -> dict:
     """Assemble l'inventaire des capacités du nœud.
 
@@ -29,18 +30,22 @@ def build_capabilities(
         inprocess_statuses: statuts des moteurs in-process (voice-embed, diarize).
         stt_specs: moteurs STT déclarés (manifeste).
         health_prober: sonde de santé `(url) -> bool` pour les moteurs STT.
+        stt_statuses: état de charge optionnel par nom de moteur STT.
     """
+    stt_statuses = stt_statuses or {}
     stt_engines = []
     for spec in stt_specs:
         up = bool(health_prober(spec.health_url))
-        stt_engines.append({
+        engine = {
             "name": spec.name,
             "gpu": spec.gpu,
             "port": spec.port,
             "gpu_mem": spec.gpu_mem,
             "health_url": spec.health_url,
             "up": up,
-        })
+        }
+        engine.update(stt_statuses.get(spec.name, {}))
+        stt_engines.append(engine)
 
     return {
         "service": "transcria-inference",

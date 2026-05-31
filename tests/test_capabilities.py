@@ -11,7 +11,6 @@ from inference_service.capabilities import build_capabilities
 from transcria.gpu.stt_engine_supervisor import EngineSpec
 from transcria.gpu.stt_vram_planner import GpuState
 
-
 # ── Builder pur ───────────────────────────────────────────────────────────────
 
 def test_build_capabilities_structure_and_health():
@@ -31,6 +30,7 @@ def test_build_capabilities_structure_and_health():
         inprocess_statuses=[{"name": "voice-embed", "loaded": False}],
         stt_specs=specs,
         health_prober=lambda url: url in up_urls,
+        stt_statuses={"cohere": {"ensure_in_progress": True, "last_used_monotonic_s": 12.3}},
     )
 
     assert cap["deployment_mode"] == "resource_node"
@@ -43,6 +43,8 @@ def test_build_capabilities_structure_and_health():
     assert by_name["cohere"]["up"] is True
     assert by_name["whisper"]["up"] is False
     assert by_name["cohere"]["gpu"] == 3 and by_name["cohere"]["port"] == 8003
+    assert by_name["cohere"]["ensure_in_progress"] is True
+    assert by_name["cohere"]["last_used_monotonic_s"] == 12.3
 
 
 def test_build_capabilities_default_mode_all_in_one():
@@ -59,7 +61,15 @@ class _FakeEngine:
         self._name = name
 
     def status(self):
-        return {"name": self._name, "loaded": False}
+        return {
+            "name": self._name,
+            "loaded": False,
+            "capacity": 1,
+            "inflight": 0,
+            "queued": 0,
+            "busy": False,
+            "last_wait_s": 0.0,
+        }
 
 
 @pytest.fixture
@@ -88,8 +98,58 @@ def test_capabilities_route_is_free_and_complete(client):
     assert data["service"] == "transcria-inference"
     assert data["deployment_mode"] == "resource_node"
     assert data["gpus"] == [{"index": 0, "free_mb": 24576, "total_mb": 24576}]
-    assert {e["name"] for e in data["inprocess"]} == {"voice-embed", "diarize"}
+    inprocess = {e["name"]: e for e in data["inprocess"]}
+    assert set(inprocess) == {"voice-embed", "diarize"}
+    assert inprocess["voice-embed"]["capacity"] == 1
+    assert inprocess["voice-embed"]["busy"] is False
+    assert inprocess["voice-embed"]["inflight"] == 0
+    assert inprocess["voice-embed"]["queued"] == 0
     assert data["stt_engines"] == []     # manifeste vide → aucune sonde
+
+
+def test_capabilities_route_includes_stt_supervisor_load(monkeypatch):
+    monkeypatch.setattr(
+        "transcria.gpu.vram_manager.VRAMManager.get_gpu_info",
+        lambda self: [{"id": 0, "memory": {"free": 24.0, "total": 24.0}}],
+    )
+    monkeypatch.setattr(
+        "transcria.gpu.stt_engine_supervisor.http_health_prober",
+        lambda url, timeout=2.0: True,
+    )
+
+    class _FakeSupervisor:
+        def __init__(self):
+            self.reaped = False
+
+        def reap_idle(self, specs):
+            self.reaped = True
+            return []
+
+        def status_for(self, spec):
+            return {"ensure_in_progress": True, "last_used_monotonic_s": 42.0}
+
+    config = {
+        "deployment": {"mode": "resource_node"},
+        "resource_node": {"engines": [
+            {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "gpu_mem": 0.85, "port": 8003},
+        ]},
+        "voice_enrollment": {"embedding": {"device": "cpu"}},
+    }
+    app = create_app(config=config, engine=_FakeEngine("voice-embed"), diarize_engine=_FakeEngine("diarize"))
+    supervisor = _FakeSupervisor()
+    app.extensions["stt_supervisor"] = supervisor
+    app.config.update({"TESTING": True})
+
+    r = app.test_client().get("/capabilities")
+
+    assert r.status_code == 200
+    data = r.get_json()
+    assert supervisor.reaped is True
+    cohere = data["stt_engines"][0]
+    assert cohere["name"] == "cohere"
+    assert cohere["up"] is True
+    assert cohere["ensure_in_progress"] is True
+    assert cohere["last_used_monotonic_s"] == 42.0
 
 
 def test_infer_still_requires_auth(client):

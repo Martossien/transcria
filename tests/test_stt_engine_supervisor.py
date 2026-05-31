@@ -129,6 +129,7 @@ def test_concurrent_ensure_same_engine_launches_once(caplog):
     with ThreadPoolExecutor(max_workers=2) as executor:
         first = executor.submit(sup.ensure_ready, _SPEC)
         assert entered_launch.wait(timeout=2)
+        assert sup.status_for(_SPEC)["ensure_in_progress"] is True
         second = executor.submit(sup.ensure_ready, _SPEC)
         release_launch.set()
         results = [first.result(timeout=2), second.result(timeout=2)]
@@ -136,6 +137,8 @@ def test_concurrent_ensure_same_engine_launches_once(caplog):
     assert launcher.calls == [("cohere", 3)]
     assert [r.status for r in results] == ["launched", "ready"]
     assert results[1].reason == "cas_a_after_wait"
+    assert sup.status_for(_SPEC)["ensure_in_progress"] is False
+    assert sup.status_for(_SPEC)["last_used_monotonic_s"] is not None
     assert any(health_values)  # le second appel re-sonde après le lancement du premier
     assert "ensure déjà en cours, attente du verrou moteur" in caplog.text
 

@@ -34,6 +34,10 @@ def capabilities():
             supervisor.reap_idle(stt_specs)
         except Exception:  # noqa: BLE001 — best-effort, ne bloque jamais l'inventaire
             pass
+    stt_statuses = {
+        spec.name: supervisor.status_for(spec)
+        for spec in stt_specs
+    } if supervisor is not None else {}
 
     payload = build_capabilities(
         config,
@@ -41,5 +45,6 @@ def capabilities():
         inprocess_statuses=inprocess,
         stt_specs=stt_specs,
         health_prober=lambda url: http_health_prober(url, timeout=2.0),
+        stt_statuses=stt_statuses,
     )
     return jsonify(payload), 200

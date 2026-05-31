@@ -15,12 +15,12 @@ sans GPU.
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from pathlib import Path
 from typing import Callable
 
 from inference_service.errors import GpuBusyError, UnprocessableError
+from inference_service.load import SerializedLoadTracker
 from transcria.voice.embedding import (
     PyannoteVoiceEmbeddingBackend,
     VoiceEmbedding,
@@ -58,7 +58,7 @@ class VoiceEmbedEngine:
         self.idle_timeout_s: float = float(voice_cfg.get("idle_timeout_s", 300))
         self._backend_factory = backend_factory or self._default_backend_factory
         self._backend: object | None = None
-        self._lock = threading.Lock()
+        self._load = SerializedLoadTracker("voice-embed", logger)
         self._last_used: float = 0.0
         self.model_id: str = (
             voice_cfg.get("model_id")
@@ -78,7 +78,7 @@ class VoiceEmbedEngine:
 
     def status(self) -> dict:
         """État courant du moteur — alimente /ready et /models."""
-        return {
+        status = {
             "name": "voice-embed",
             "backend": "pyannote",
             "model_id": self.model_id,
@@ -87,6 +87,8 @@ class VoiceEmbedEngine:
             "idle_timeout_s": self.idle_timeout_s,
             "last_used_epoch": round(self._last_used, 3) if self._last_used else None,
         }
+        status.update(self._load.snapshot())
+        return status
 
     # ── Cycle de vie du modèle ────────────────────────────────────────────────
 
@@ -110,7 +112,7 @@ class VoiceEmbedEngine:
 
     def unload(self) -> bool:
         """Décharge le modèle (libère la VRAM). Retourne True si un déchargement a eu lieu."""
-        with self._lock:
+        with self._load.acquire("unload"):
             if self._backend is None:
                 return False
             logger.info("Déchargement du backend embedding (libération VRAM)")
@@ -144,7 +146,7 @@ class VoiceEmbedEngine:
             UnprocessableError: échec métier (audio sans voix exploitable…).
         """
         started = time.monotonic()
-        with self._lock:
+        with self._load.acquire("extract"):
             backend = self._ensure_loaded()
             try:
                 embedding = backend.extract_reference_embedding(audio_path)  # type: ignore[attr-defined]

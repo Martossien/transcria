@@ -6,12 +6,12 @@ job/fs) extrait du pipeline. Le backend est injectable pour tester sans GPU.
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from pathlib import Path
 from typing import Callable
 
 from inference_service.errors import GpuBusyError, UnprocessableError
+from inference_service.load import SerializedLoadTracker
 
 logger = logging.getLogger("inference_service.diarize")
 
@@ -44,7 +44,7 @@ class DiarizeEngine:
         self.idle_timeout_s: float = float(diar_cfg.get("idle_timeout_s", 300))
         self._backend_factory = backend_factory or self._default_backend_factory
         self._backend: object | None = None
-        self._lock = threading.Lock()
+        self._load = SerializedLoadTracker("diarize", logger)
         self._last_used: float = 0.0
         self.model_id: str = self.config.get("models", {}).get(
             "pyannote_model", "pyannote/speaker-diarization-community-1"
@@ -61,7 +61,7 @@ class DiarizeEngine:
         return self._backend is not None
 
     def status(self) -> dict:
-        return {
+        status = {
             "name": "diarize",
             "backend": "pyannote",
             "model_id": self.model_id,
@@ -70,6 +70,8 @@ class DiarizeEngine:
             "idle_timeout_s": self.idle_timeout_s,
             "last_used_epoch": round(self._last_used, 3) if self._last_used else None,
         }
+        status.update(self._load.snapshot())
+        return status
 
     # ── Cycle de vie ──────────────────────────────────────────────────────────
 
@@ -88,7 +90,7 @@ class DiarizeEngine:
         return self._backend
 
     def unload(self) -> bool:
-        with self._lock:
+        with self._load.acquire("unload"):
             if self._backend is None:
                 return False
             logger.info("Déchargement du diariseur (libération VRAM)")
@@ -118,7 +120,7 @@ class DiarizeEngine:
         `speakers`, `stats`). Lève GpuBusyError (CAS C) si VRAM saturée.
         """
         started = time.monotonic()
-        with self._lock:
+        with self._load.acquire("diarize"):
             backend = self._ensure_loaded()
             try:
                 result = backend.diarize_audio(audio_path)  # type: ignore[attr-defined]

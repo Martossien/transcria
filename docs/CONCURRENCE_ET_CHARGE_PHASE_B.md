@@ -3,7 +3,8 @@
 > **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11).
 > **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
-> systemd/nginx). Reste **B4→B9** (cf. §8). Fait suite à la **Phase A**
+> systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
+> état de charge `/capabilities`). Reste **B5→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -267,15 +268,21 @@ Le nœud est le composant le plus sollicité en parallèle. Quatre durcissements
    process** (`gunicorn -w 1 --threads K`, ou le serveur de dev actuel). Les threads
    partagent les engines résidents et le superviseur singleton → l'état (`_last_used`,
    verrou de lancement) est cohérent. *Ne jamais* lancer le nœud en `-w >1`.
-2. **`/engines/ensure` idempotent et sérialisé.** Encadrer `ensure_ready` d'un **verrou par
-   moteur** (`threading.Lock` par `spec.name`) : re-tester le CAS A **sous le verrou**, de
-   sorte que deux requêtes concurrentes pour le même moteur n'en lancent qu'une (la seconde
-   tombe en CAS A « déjà actif » ou attend le lancement en cours). Aujourd'hui `ensure_ready`
-   (`stt_engine_supervisor.py:133`) n'a pas ce verrou.
-3. **Backpressure explicite (CAS C).** Conserver 503 + `Retry-After` (déjà `routes/engines.py:52`)
-   ; côté santé in-process (diarize/voice-embed), exposer dans `/capabilities` un **état de
-   charge** (file d'attente interne, profondeur) pour que la frontale n'envoie pas plus que
-   ce que le nœud peut absorber (cf. C5).
+2. **`/engines/ensure` idempotent et sérialisé. ✅ FAIT (`9f760ee`).**
+   `SttEngineSupervisor.ensure_ready()` utilise désormais un **verrou local par moteur**
+   (`threading.Lock` par `spec.name`). Le flux conserve le fast path CAS A, puis, si le
+   moteur n'est pas sain, attend le verrou du moteur, logue explicitement cette attente,
+   refait une sonde santé **sous le verrou**, et ne lance CAS B que si le moteur est toujours
+   absent. Deux requêtes concurrentes pour le même moteur ne peuvent donc plus lancer deux
+   subprocess vLLM/SGLang sur le même port/GPU ; la seconde requête bascule en CAS A
+   `cas_a_after_wait` si la première a rendu le moteur sain.
+3. **Backpressure explicite (CAS C) + état de charge. ✅ FAIT.** Conserver 503 +
+   `Retry-After` (déjà `routes/engines.py:52`) ; côté moteurs in-process
+   (diarize/voice-embed), `/capabilities` expose maintenant `capacity`, `inflight`,
+   `queued`, `busy`, `last_wait_s`. Côté STT déclaré, `/capabilities` expose
+   `ensure_in_progress` et `last_used_monotonic_s` quand le superviseur connaît le moteur.
+   Ces champs permettent à la frontale et aux étapes C5/C7 de raisonner sur la charge réelle
+   du nœud sans inférer depuis de simples voyants `loaded`/`up`.
 4. **Exploiter le batching continu de vLLM (débit STT).** Le mécanisme existe déjà :
    **`inference.stt.concurrency`** (loader, défaut **1**) parallélise les tours d'un job via
    `STTService._transcribe_chunks_concurrent` (`transcria/stt/transcription.py:550`),
@@ -461,8 +468,13 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   HTTP) avec **arrêt franc `exit 1`** si le verrou est déjà tenu ; `gunicorn` en requirements ;
   unités systemd `deploy/transcria-{migrate,web,scheduler}.service` + `deploy/nginx-…example`
   + `docs/INSTALL.md` §11 (montée en charge). Le web devient scalable ; l'orchestrateur reste unique.
-- **B4 — Durcissement nœud (C4.1–C4.3).** Verrou `ensure` par moteur, single-process
-  garanti, état de charge dans `/capabilities`.
+- **B4 — Durcissement nœud (C4.1–C4.3). ✅ FAIT.** `ensure` par moteur ✅ (`9f760ee`) :
+  verrou local par `spec.name`, double-check santé sous verrou, logs d'attente/acquisition,
+  test concurrent deux threads garantissant un seul lancement. État de charge
+  `/capabilities` ✅ : moteurs in-process avec `capacity/inflight/queued/busy/last_wait_s`,
+  moteurs STT avec `ensure_in_progress/last_used_monotonic_s`. L'invariant single-process du
+  nœud est documenté dans `inference_service/README.md` et `inference_service/__main__.py`
+  (`gunicorn --workers 1` ou `python -m inference_service`).
 - **B5 — Débit STT (C4.4).** Monter `inference.stt.concurrency` sur backend distant, mesures de débit.
 - **B6 — Admission à l'échelle + VRAM-aware (C5, D4).** Aging ensembliste, capacité nœud dans
   l'ordonnancement, index partiel, cache `/capabilities` ; `max_concurrent_jobs` rétrogradé en
@@ -505,10 +517,21 @@ pilotage de capacité, **B9** au besoin.
   même de cas de test). La capacité étant désormais **lue en base** (`count_running()`),
   garder à l'esprit cette source partagée si une future flakiness apparaît (piste : isoler les
   tests scheduler avec une clé de verrou dédiée / `run_scheduler=False`).
-- **Pour B4.** Le superviseur STT (`stt_engine_supervisor.ensure_ready`) est déjà testable
-  avec sonde/lanceur injectés mais **n'a pas de verrou par moteur** : c'est le cœur de B4
-  (deux `ensure` concurrents ⇒ un seul lancement). Le `concurrent_safe`/`inference.stt.concurrency`
-  (B5) et l'état de charge dans `/capabilities` (B4.3, consommé par C5/C7) sont les briques suivantes.
+- **B4.2 — ensure STT sérialisé : FAIT (`9f760ee`).** Le superviseur STT
+  (`stt_engine_supervisor.ensure_ready`) reste testable par injection sonde/lanceur et ajoute
+  maintenant un verrou par moteur. Le test `test_concurrent_ensure_same_engine_launches_once`
+  bloque volontairement le premier lancement, fait entrer un second `ensure_ready` concurrent,
+  puis vérifie `launcher.calls == 1` et `reason == "cas_a_after_wait"` pour le second appel.
+  Validations locales avant push : `ruff`, `mypy`, paquet Phase B (`75 passed`) et suite
+  complète (`1350 passed`, couverture `77.85%`, seuil 65%).
+- **B4.3 — état de charge `/capabilities` : FAIT.** Les moteurs in-process remplacent leur
+  verrou brut par un `SerializedLoadTracker` qui publie `capacity`, `inflight`, `queued`,
+  `busy`, `last_wait_s` et logue les attentes de verrou. Le superviseur STT expose
+  `ensure_in_progress` sans créer de verrou passif et protège `_last_used` par un verrou
+  d'état. `summarize_capabilities()` propage ces champs au panneau frontale. Tests ajoutés :
+  charge in-process avec deux threads, payload pur `/capabilities`, route Flask avec
+  superviseur factice, résumé frontale. Le `concurrent_safe` / `inference.stt.concurrency`
+  (B5) est la brique suivante.
 
 ---
 
@@ -522,15 +545,15 @@ pilotage de capacité, **B9** au besoin.
   (la 1ʳᵉ tient) ; libération → ré-acquisition possible ; no-op hors PostgreSQL. Côté
   scheduler : un `start()` sans verrou disponible **ne démarre aucun thread**
   (`has_singleton_lock == False`). L'arrêt franc d'un process scheduler dédié relève de B3.
-- **`ensure` idempotent (C4)** : superviseur avec sonde/lanceur injectés (déjà testable,
+- **`ensure` idempotent (C4). ✅** Superviseur avec sonde/lanceur injectés,
   `stt_engine_supervisor.py`), deux `ensure_ready` concurrents du même moteur ⇒ **un seul
-  lancement** (compteur du launcher == 1).
+  lancement** (compteur du launcher == 1), second appel en CAS A après attente du verrou.
 - **Aging ensembliste (C5)** : équivalence fonctionnelle avec l'implémentation actuelle
   (mêmes bonus appliqués) + un seul `UPDATE`.
 - **Backpressure** : nœud renvoyant 503 → `resource_gate` `defer` + `requeue_later` (déjà
   couvert §7.2, à étendre au cas moteur STT saturé / concurrence atteinte).
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1347 tests** après B1+B2),
-  `ruff`/`mypy`/anti-dérive Alembic.
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1352 tests** après B4.3,
+  couverture `77.88%`, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
 
 ---
 

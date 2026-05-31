@@ -9,12 +9,10 @@ import pytest
 
 from transcria.inference.client import InferenceClient, InferenceUnavailable
 from transcria.inference.resource_status import (
-    AdmissionVerdict,
     assess_admission,
     remote_requirements,
     summarize_capabilities,
 )
-
 
 # ── remote_requirements ───────────────────────────────────────────────────────
 
@@ -93,17 +91,29 @@ def test_summarize_reachable():
     caps = {
         "deployment_mode": "resource_node",
         "gpus": [{"index": 3, "free_mb": 20000, "total_mb": 24000}],
-        "inprocess": [{"name": "voice-embed", "loaded": False}],
-        "stt_engines": [{"name": "cohere", "up": True}, {"name": "whisper", "up": False}],
+        "inprocess": [{"name": "voice-embed", "loaded": False, "capacity": 1, "inflight": 0, "queued": 2, "busy": False}],
+        "stt_engines": [
+            {"name": "cohere", "up": True, "ensure_in_progress": True},
+            {"name": "whisper", "up": False},
+        ],
     }
     s = summarize_capabilities(caps)
     assert s["reachable"] is True
     assert s["mode"] == "resource_node"
     assert s["gpus"][0]["index"] == 3
     by = {e["name"]: e for e in s["engines"]}
-    assert by["cohere"] == {"name": "cohere", "kind": "stt", "up": True}
+    assert by["cohere"] == {"name": "cohere", "kind": "stt", "up": True, "ensure_in_progress": True}
     assert by["whisper"]["up"] is False
-    assert by["voice-embed"] == {"name": "voice-embed", "kind": "inprocess", "up": True}
+    assert by["voice-embed"] == {
+        "name": "voice-embed",
+        "kind": "inprocess",
+        "up": True,
+        "loaded": False,
+        "capacity": 1,
+        "inflight": 0,
+        "queued": 2,
+        "busy": False,
+    }
 
 
 # ── InferenceClient.capabilities() ────────────────────────────────────────────

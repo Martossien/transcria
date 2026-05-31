@@ -130,6 +130,7 @@ class SttEngineSupervisor:
         # Dernier usage connu par moteur (mis à jour à chaque ensure_ready réussi).
         # Sert à l'idle-stop ; on ne réclame QUE les moteurs qu'on a nous-mêmes servis.
         self._last_used: dict[str, float] = {}
+        self._state_lock = threading.Lock()
         self._engine_locks: dict[str, threading.Lock] = {}
         self._engine_locks_guard = threading.Lock()
 
@@ -142,10 +143,36 @@ class SttEngineSupervisor:
                 self._engine_locks[engine_name] = lock
             return lock
 
+    def status_for(self, spec: EngineSpec) -> dict:
+        """État de charge observable pour `/capabilities`.
+
+        Le snapshot est local au process du nœud de ressources. Il ne crée pas de
+        verrou si le moteur n'a jamais été assuré, pour garder l'inventaire passif.
+        """
+        with self._engine_locks_guard:
+            lock = self._engine_locks.get(spec.name)
+        last_used = self._last_used_for(spec.name)
+        return {
+            "ensure_in_progress": bool(lock.locked()) if lock is not None else False,
+            "last_used_monotonic_s": round(last_used, 3) if last_used is not None else None,
+        }
+
+    def _record_used(self, engine_name: str) -> None:
+        with self._state_lock:
+            self._last_used[engine_name] = self._clock()
+
+    def _last_used_for(self, engine_name: str) -> float | None:
+        with self._state_lock:
+            return self._last_used.get(engine_name)
+
+    def _forget_used(self, engine_name: str) -> None:
+        with self._state_lock:
+            self._last_used.pop(engine_name, None)
+
     def ensure_ready(self, spec: EngineSpec) -> EnsureResult:
         # CAS A — déjà résident et sain.
         if self._health(spec.health_url):
-            self._last_used[spec.name] = self._clock()
+            self._record_used(spec.name)
             logger.info("[stt-sup] %s CAS A — déjà actif (%s)", spec.name, spec.health_url)
             return EnsureResult("ready", spec.gpu, "cas_a_resident")
 
@@ -158,7 +185,7 @@ class SttEngineSupervisor:
             # Double-check indispensable : un appel concurrent a pu lancer le moteur
             # pendant que celui-ci attendait le verrou.
             if self._health(spec.health_url):
-                self._last_used[spec.name] = self._clock()
+                self._record_used(spec.name)
                 logger.info("[stt-sup] %s CAS A — actif après attente du verrou (%s)", spec.name, spec.health_url)
                 return EnsureResult("ready", spec.gpu, "cas_a_after_wait")
 
@@ -183,7 +210,7 @@ class SttEngineSupervisor:
         if not self._launch(spec, gpu):
             logger.error("[stt-sup] %s — échec du lancement sur GPU %d", spec.name, gpu)
             return EnsureResult("error", gpu, "launch_failed")
-        self._last_used[spec.name] = self._clock()
+        self._record_used(spec.name)
         return EnsureResult("launched", gpu, f"cas_b_{decision.status}")
 
     # ── Idle-stop (minimal, opportuniste) ───────────────────────────────────--
@@ -192,7 +219,7 @@ class SttEngineSupervisor:
         """Arrête un moteur (via le stopper injecté) et oublie son dernier usage."""
         ok = bool(self._stop(spec))
         if ok:
-            self._last_used.pop(spec.name, None)
+            self._forget_used(spec.name)
             logger.info("[stt-sup] %s arrêté (idle-stop)", spec.name)
         else:
             logger.warning("[stt-sup] %s — échec de l'arrêt (idle-stop)", spec.name)
@@ -208,11 +235,11 @@ class SttEngineSupervisor:
         for spec in specs:
             if spec.idle_timeout_s <= 0:
                 continue
-            last = self._last_used.get(spec.name)
+            last = self._last_used_for(spec.name)
             if last is None or (now - last) < spec.idle_timeout_s:
                 continue
             if not self._health(spec.health_url):  # déjà éteint → rien à faire
-                self._last_used.pop(spec.name, None)
+                self._forget_used(spec.name)
                 continue
             logger.info("[stt-sup] %s inactif depuis %.0fs (> %.0fs) — arrêt",
                         spec.name, now - last, spec.idle_timeout_s)
