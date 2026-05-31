@@ -9,7 +9,9 @@ subprocess réel. On vérifie la décision :
 """
 from __future__ import annotations
 
-import pytest
+import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from transcria.gpu.stt_engine_supervisor import (
     EngineSpec,
@@ -89,6 +91,53 @@ def test_launch_failure_is_error():
     r = sup.ensure_ready(_SPEC)
     assert r.status == "error"
     assert launcher.calls == [("cohere", 3)]
+
+
+def test_concurrent_ensure_same_engine_launches_once(caplog):
+    """Deux ensure concurrents sur le même moteur ne lancent qu'un seul process."""
+    launched = threading.Event()
+    entered_launch = threading.Event()
+    release_launch = threading.Event()
+    health_lock = threading.Lock()
+    health_values: list[bool] = []
+
+    def health(_url):
+        value = launched.is_set()
+        with health_lock:
+            health_values.append(value)
+        return value
+
+    class _BlockingLauncher:
+        def __init__(self):
+            self.calls: list[tuple[str, int]] = []
+
+        def __call__(self, spec, gpu_index):
+            self.calls.append((spec.name, gpu_index))
+            entered_launch.set()
+            assert release_launch.wait(timeout=2)
+            launched.set()
+            return True
+
+    launcher = _BlockingLauncher()
+    sup = SttEngineSupervisor(
+        planner=_planner([GpuState(3, 24000, 24000)]),
+        health_prober=health,
+        launcher=launcher,
+    )
+
+    caplog.set_level(logging.INFO, logger="transcria.gpu.stt_engine_supervisor")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(sup.ensure_ready, _SPEC)
+        assert entered_launch.wait(timeout=2)
+        second = executor.submit(sup.ensure_ready, _SPEC)
+        release_launch.set()
+        results = [first.result(timeout=2), second.result(timeout=2)]
+
+    assert launcher.calls == [("cohere", 3)]
+    assert [r.status for r in results] == ["launched", "ready"]
+    assert results[1].reason == "cas_a_after_wait"
+    assert any(health_values)  # le second appel re-sonde après le lancement du premier
+    assert "ensure déjà en cours, attente du verrou moteur" in caplog.text
 
 
 # ── CAS C ─────────────────────────────────────────────────────────────────────

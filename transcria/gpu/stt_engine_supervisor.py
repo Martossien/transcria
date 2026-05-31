@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -129,6 +130,17 @@ class SttEngineSupervisor:
         # Dernier usage connu par moteur (mis à jour à chaque ensure_ready réussi).
         # Sert à l'idle-stop ; on ne réclame QUE les moteurs qu'on a nous-mêmes servis.
         self._last_used: dict[str, float] = {}
+        self._engine_locks: dict[str, threading.Lock] = {}
+        self._engine_locks_guard = threading.Lock()
+
+    def _lock_for(self, engine_name: str):
+        """Retourne le verrou local qui sérialise le cycle ensure d'un moteur."""
+        with self._engine_locks_guard:
+            lock = self._engine_locks.get(engine_name)
+            if lock is None:
+                lock = threading.Lock()
+                self._engine_locks[engine_name] = lock
+            return lock
 
     def ensure_ready(self, spec: EngineSpec) -> EnsureResult:
         # CAS A — déjà résident et sain.
@@ -137,6 +149,22 @@ class SttEngineSupervisor:
             logger.info("[stt-sup] %s CAS A — déjà actif (%s)", spec.name, spec.health_url)
             return EnsureResult("ready", spec.gpu, "cas_a_resident")
 
+        lock = self._lock_for(spec.name)
+        if lock.locked():
+            logger.info("[stt-sup] %s — ensure déjà en cours, attente du verrou moteur", spec.name)
+
+        with lock:
+            logger.debug("[stt-sup] %s — verrou moteur acquis pour ensure", spec.name)
+            # Double-check indispensable : un appel concurrent a pu lancer le moteur
+            # pendant que celui-ci attendait le verrou.
+            if self._health(spec.health_url):
+                self._last_used[spec.name] = self._clock()
+                logger.info("[stt-sup] %s CAS A — actif après attente du verrou (%s)", spec.name, spec.health_url)
+                return EnsureResult("ready", spec.gpu, "cas_a_after_wait")
+
+            return self._ensure_ready_locked(spec)
+
+    def _ensure_ready_locked(self, spec: EngineSpec) -> EnsureResult:
         # Décision de placement (pré-check VRAM + relocalisation éventuelle).
         decision = self._planner.plan(
             assigned_gpu=spec.gpu,
