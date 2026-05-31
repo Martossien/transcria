@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -184,14 +185,125 @@ class InferenceClient:
         raise InferenceRequestError(f"{url} → {status} {code}: {message}", status=status, code=code)
 
 
+class FailoverInferenceClient(InferenceClient):
+    """Client à bascule **actif/passif** sur une liste ordonnée de nœuds (C6 / B7).
+
+    Vise le premier nœud joignable par ordre de priorité ; sur `InferenceUnavailable`
+    (réseau/5xx/503), bascule **automatiquement** vers le suivant. Une
+    `InferenceRequestError` (4xx métier) ne déclenche **pas** de bascule : l'entrée est
+    en cause, rejouer sur un autre nœud échouerait pareil.
+
+    La sélection est **recalculée à chaque appel** (jamais persistée) : quand le nœud
+    principal revient, les appels suivants y repartent (préférence à la priorité) — pas
+    de split-brain, aucun état partagé. La résilience par job (§7.2 :
+    defer/requeue_later/max_unavailable_s) couvre la fenêtre de bascule.
+    """
+
+    def __init__(self, clients: list[InferenceClient]) -> None:
+        if not clients:
+            raise ValueError("FailoverInferenceClient exige au moins un nœud")
+        primary = clients[0]
+        super().__init__(
+            primary.base_url,
+            api_key=primary.api_key,
+            transport=primary.transport,
+            timeout_s=primary.timeout_s,
+            retries=primary.retries,
+            session=primary._session,
+        )
+        self._clients = list(clients)
+
+    @property
+    def nodes(self) -> list[str]:
+        """URLs des nœuds dans l'ordre de priorité."""
+        return [c.base_url for c in self._clients]
+
+    def _failover(self, op: Callable[[InferenceClient], dict], label: str) -> dict:
+        last_exc: InferenceUnavailable | None = None
+        for idx, client in enumerate(self._clients):
+            try:
+                return op(client)
+            except InferenceUnavailable as exc:
+                last_exc = exc
+                if idx + 1 < len(self._clients):
+                    logger.warning(
+                        "Nœud d'inférence %s indisponible (%s) — bascule vers %s",
+                        client.base_url, label, self._clients[idx + 1].base_url,
+                    )
+                else:
+                    logger.error(
+                        "Tous les nœuds d'inférence sont indisponibles (%s) : %s", label, exc
+                    )
+        raise last_exc or InferenceUnavailable(f"aucun nœud joignable ({label})")
+
+    def health(self) -> bool:
+        """True si **au moins un** nœud répond (le service est servi-able)."""
+        return any(c.health() for c in self._clients)
+
+    def capabilities(self) -> dict:
+        return self._failover(lambda c: c.capabilities(), "capabilities")
+
+    def ensure_engine(self, name: str) -> dict:
+        return self._failover(lambda c: c.ensure_engine(name), f"ensure:{name}")
+
+    def diarize(self, audio_path: Path) -> dict:
+        return self._failover(lambda c: c.diarize(audio_path), "diarize")
+
+    def voice_embed(self, audio_path: Path) -> dict:
+        return self._failover(lambda c: c.voice_embed(audio_path), "voice_embed")
+
+
+def _resolve_node_urls(inf: dict) -> list[str]:
+    """Liste ordonnée (priorité croissante) des URLs de nœuds depuis `inference`.
+
+    Accepte `inference.nodes` (liste ordonnée de `{url, priority}` ou de chaînes) et
+    retombe sur `inference.url`/`base_url` (un seul nœud) pour la compat ascendante.
+    Les doublons et les entrées vides sont ignorés ; l'ordre de la config départage les
+    priorités égales.
+    """
+    entries: list[tuple[int, int, str]] = []
+    nodes = inf.get("nodes")
+    if isinstance(nodes, list):
+        for index, node in enumerate(nodes):
+            if isinstance(node, dict):
+                url = str(node.get("url") or node.get("base_url") or "").strip()
+                priority = node.get("priority", index + 1)
+            elif isinstance(node, str):
+                url, priority = node.strip(), index + 1
+            else:
+                continue
+            try:
+                priority = int(priority)
+            except (TypeError, ValueError):
+                priority = index + 1
+            if url:
+                entries.append((priority, index, url))
+    entries.sort(key=lambda e: (e[0], e[1]))
+    urls = [url for _, _, url in entries]
+    if not urls:
+        single = str(inf.get("url") or inf.get("base_url") or "").strip()
+        if single:
+            urls = [single]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for url in urls:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    return deduped
+
+
 def build_client_from_config(config: dict) -> InferenceClient | None:
     """Construit un client depuis la section `inference` de la config.
 
-    Retourne None si aucune URL n'est configurée (mode local).
+    Retourne None si aucun nœud n'est configuré (mode local). Avec **un** nœud, retourne
+    un `InferenceClient` simple ; avec **plusieurs** (`inference.nodes`), un
+    `FailoverInferenceClient` actif/passif (C6 / B7). L'auth, le transport et la
+    résilience sont partagés par tous les nœuds.
     """
     inf = config.get("inference", {}) or {}
-    url = inf.get("url") or inf.get("base_url")
-    if not url:
+    urls = _resolve_node_urls(inf)
+    if not urls:
         return None
     auth = inf.get("auth", {}) or {}
     api_key = None
@@ -200,10 +312,11 @@ def build_client_from_config(config: dict) -> InferenceClient | None:
     api_key = api_key or auth.get("api_key")
     transport = (inf.get("transport", {}) or {}).get("audio", "file_ref")
     transport = "upload" if transport == "upload" else "file_ref"
-    return InferenceClient(
-        url,
-        api_key=api_key,
-        transport=transport,
-        timeout_s=int((inf.get("resilience", {}) or {}).get("timeout_s", _DEFAULT_TIMEOUT_S)),
-        retries=int((inf.get("resilience", {}) or {}).get("retries", _DEFAULT_RETRIES)),
-    )
+    resilience = inf.get("resilience", {}) or {}
+    timeout_s = int(resilience.get("timeout_s", _DEFAULT_TIMEOUT_S))
+    retries = int(resilience.get("retries", _DEFAULT_RETRIES))
+    clients = [
+        InferenceClient(url, api_key=api_key, transport=transport, timeout_s=timeout_s, retries=retries)
+        for url in urls
+    ]
+    return clients[0] if len(clients) == 1 else FailoverInferenceClient(clients)

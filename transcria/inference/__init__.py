@@ -5,6 +5,7 @@ voix) au lieu de charger les modèles en process. Voir
 docs/MIGRATION_API_SERVEUR_GPU.md.
 """
 from transcria.inference.client import (
+    FailoverInferenceClient,
     InferenceClient,
     InferenceRequestError,
     InferenceUnavailable,
@@ -13,6 +14,7 @@ from transcria.inference.client import (
 
 __all__ = [
     "InferenceClient",
+    "FailoverInferenceClient",
     "InferenceUnavailable",
     "InferenceRequestError",
     "build_client_from_config",

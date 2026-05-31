@@ -584,6 +584,12 @@ notifications:
 inference:
   mode: "local"                 # local | remote | hybrid
   url: ""                       # service Flask de ressources (diarize/voice-embed), ex "http://192.168.1.59:8002"
+  # Failover actif/passif (C6 / B7) : liste ORDONNÉE de nœuds (priorité = ordre). La frontale
+  # vise le premier joignable et bascule automatiquement vers le suivant si injoignable ;
+  # quand le principal revient, les jobs suivants y repartent. Laisser vide = un seul nœud (`url`).
+  # nodes:
+  #   - { url: "http://192.168.1.59:8002", priority: 1 }   # principal
+  #   - { url: "http://192.168.1.60:8002", priority: 2 }   # secours (tiède : idle_timeout_s: 0)
   fallback_local: true          # bascule locale si le service distant tombe
   transport:
     audio: "file_ref"           # file_ref (FS partagé) | upload (OBLIGATOIRE en vrai distant)

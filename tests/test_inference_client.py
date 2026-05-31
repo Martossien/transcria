@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from transcria.inference.client import (
+    FailoverInferenceClient,
     InferenceClient,
     InferenceRequestError,
     InferenceUnavailable,
@@ -175,6 +176,132 @@ def test_build_client_cle_depuis_env(monkeypatch):
     cfg = {"inference": {"url": "http://gpu:8002", "auth": {"api_key_env": "MY_INF_KEY"}}}
     client = build_client_from_config(cfg)
     assert client.api_key == "secret-xyz"
+
+
+# ── Failover actif/passif (C6 / B7) ─────────────────────────────────────────--
+
+def test_build_client_single_node_reste_simple():
+    """Un seul nœud (via `url`) → client simple, pas de bascule (compat)."""
+    client = build_client_from_config({"inference": {"url": "http://gpu:8002"}})
+    assert isinstance(client, InferenceClient)
+    assert not isinstance(client, FailoverInferenceClient)
+
+
+def test_build_client_nodes_ordonne_par_priorite():
+    cfg = {"inference": {"nodes": [
+        {"url": "http://secours:8002", "priority": 2},
+        {"url": "http://principal:8002", "priority": 1},
+    ]}}
+    client = build_client_from_config(cfg)
+    assert isinstance(client, FailoverInferenceClient)
+    assert client.nodes == ["http://principal:8002", "http://secours:8002"]
+    assert client.base_url == "http://principal:8002"   # primaire = priorité la plus basse
+
+
+def test_build_client_nodes_unique_reste_simple():
+    """`nodes` à un seul élément → pas de wrapper de bascule inutile."""
+    cfg = {"inference": {"nodes": [{"url": "http://gpu:8002", "priority": 1}]}}
+    client = build_client_from_config(cfg)
+    assert isinstance(client, InferenceClient)
+    assert not isinstance(client, FailoverInferenceClient)
+    assert client.base_url == "http://gpu:8002"
+
+
+def test_build_client_nodes_dedup_et_fallback_url():
+    # Doublons retirés en préservant l'ordre.
+    c1 = build_client_from_config({"inference": {"nodes": [
+        {"url": "http://a:8002", "priority": 1},
+        {"url": "http://a:8002", "priority": 2},
+        {"url": "http://b:8002", "priority": 3},
+    ]}})
+    assert isinstance(c1, FailoverInferenceClient)
+    assert c1.nodes == ["http://a:8002", "http://b:8002"]
+    # `nodes` vide → on retombe sur `url`.
+    c2 = build_client_from_config({"inference": {"nodes": [], "url": "http://solo:8002"}})
+    assert isinstance(c2, InferenceClient) and not isinstance(c2, FailoverInferenceClient)
+
+
+def test_build_client_nodes_partage_auth_et_transport(monkeypatch):
+    monkeypatch.setenv("INF_KEY", "k-9")
+    cfg = {"inference": {
+        "nodes": [{"url": "http://a:8002"}, {"url": "http://b:8002"}],
+        "auth": {"api_key_env": "INF_KEY"},
+        "transport": {"audio": "upload"},
+        "resilience": {"timeout_s": 42, "retries": 0},
+    }}
+    client = build_client_from_config(cfg)
+    assert isinstance(client, FailoverInferenceClient)
+    for node in client._clients:
+        assert node.api_key == "k-9"
+        assert node.transport == "upload"
+        assert node.timeout_s == 42
+
+
+def _node(base_url, responses):
+    """InferenceClient réel adossé à une session scriptée (retries=0, pas de sleep)."""
+    return InferenceClient(base_url, session=_FakeSession(responses), retries=0)
+
+
+def _conn_err():
+    import requests
+    return requests.exceptions.ConnectionError("refused")
+
+
+def test_failover_bascule_sur_indisponible():
+    """Principal injoignable → bascule transparente vers le secours."""
+    primary = _node("http://principal:8002", [_conn_err()])
+    backup = _node("http://secours:8002", [_FakeResponse(200, _DIAR_OK)])
+    client = FailoverInferenceClient([primary, backup])
+    assert client.diarize(Path("/x/a.wav")) == _DIAR_OK
+    assert len(primary._session.calls) == 1 and len(backup._session.calls) == 1
+
+
+def test_failover_prefere_le_primaire_quand_il_repond():
+    """Les deux nœuds sont up → on n'appelle QUE le primaire (préférence priorité)."""
+    primary = _node("http://principal:8002", [_FakeResponse(200, {"who": "primary"})])
+    backup = _node("http://secours:8002", [_FakeResponse(200, {"who": "backup"})])
+    client = FailoverInferenceClient([primary, backup])
+    assert client.diarize(Path("/x/a.wav")) == {"who": "primary"}
+    assert len(backup._session.calls) == 0
+
+
+def test_failover_4xx_ne_bascule_pas():
+    """Erreur métier 4xx → pas de bascule (l'entrée est en cause partout)."""
+    primary = _node("http://principal:8002", [_FakeResponse(422, {"error": "bad"})])
+    backup = _node("http://secours:8002", [_FakeResponse(200, _DIAR_OK)])
+    client = FailoverInferenceClient([primary, backup])
+    with pytest.raises(InferenceRequestError):
+        client.diarize(Path("/x/a.wav"))
+    assert len(backup._session.calls) == 0
+
+
+def test_failover_tous_indisponibles_leve_indisponible():
+    primary = _node("http://principal:8002", [_conn_err()])
+    backup = _node("http://secours:8002", [_conn_err()])
+    client = FailoverInferenceClient([primary, backup])
+    with pytest.raises(InferenceUnavailable):
+        client.diarize(Path("/x/a.wav"))
+    assert len(primary._session.calls) == 1 and len(backup._session.calls) == 1
+
+
+def test_failover_capabilities_bascule():
+    primary = _node("http://principal:8002", [_conn_err()])
+    backup = _node("http://secours:8002", [_FakeResponse(200, {"mode": "remote"})])
+    client = FailoverInferenceClient([primary, backup])
+    assert client.capabilities() == {"mode": "remote"}
+
+
+def test_failover_health_vrai_si_un_noeud_repond():
+    down = _node("http://principal:8002", [_conn_err()])
+    up = _node("http://secours:8002", [_FakeResponse(200)])
+    assert FailoverInferenceClient([down, up]).health() is True
+    only_down = _node("http://principal:8002", [_conn_err()])
+    assert FailoverInferenceClient([only_down]).health() is False
+
+
+def test_failover_exige_au_moins_un_noeud():
+    with pytest.raises(ValueError):
+        FailoverInferenceClient([])
 
 
 # ── RemoteDiarizer ──────────────────────────────────────────────────────────--

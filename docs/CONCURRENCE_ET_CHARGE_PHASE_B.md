@@ -6,8 +6,9 @@
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
 > débit STT distant) · **B6 ✅** (admission/backpressure : aging, capacité, VRAM, index,
-> cache `/capabilities`).
-> Reste **B5 benchmark + B7→B9** (cf. §8). Fait suite à la **Phase A**
+> cache `/capabilities`) · **B7 ✅** (failover actif/passif des nœuds : `inference.nodes`
+> liste ordonnée + client à bascule par priorité).
+> Reste **B5 benchmark + B8→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -492,7 +493,7 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   ces chiffres ne doivent pas être présentés comme mesures distantes. Reste : benchmark réel
   pour choisir une valeur recommandée (`4–8` selon nœud) et documenter la montée de
   `inference.stt.concurrency`.
-- **B6 — Admission à l'échelle + VRAM-aware (C5, D4). PARTIEL.** Aging ensembliste ✅ :
+- **B6 — Admission à l'échelle + VRAM-aware (C5, D4). ✅ FAIT (`c298b02`).** Aging ensembliste ✅ :
   `QueueStore.apply_aging()` exécute un `UPDATE` atomique portable au lieu de matérialiser
   toute la file, avec tests sur entrées récentes, plafonnement et statuts non waiting.
   Capacité nœud au dispatch ✅ : le scheduler lit `/capabilities` en best-effort et borne
@@ -504,9 +505,17 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   partiel ✅ : migration `8f2b6d0e4a1c` ajoute `ix_job_queue_waiting_order` pour l'ordre de
   queue waiting. Cache `/capabilities` ✅ : `GET /api/resources/status` mutualise les polls
   pendant ~5 s par process frontale, désactivable via `inference.resilience.capabilities_cache_ttl_s`.
-  Reste hors B6 : pré-remplissage matériel à l'install si l'on veut enrichir l'UX config.
-- **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
-  probe automatique. Aucune table ; transparent pour les jobs en file.
+  Les cinq sous-chantiers C5 sont livrés. Reste hors B6 : pré-remplissage matériel à l'install
+  si l'on veut enrichir l'UX config.
+- **B7 — Failover actif/passif (C6). ✅ FAIT.** `inference.nodes` (liste ordonnée, priorité =
+  ordre) résolue par `_resolve_node_urls()` ; `build_client_from_config` retourne un
+  `FailoverInferenceClient` quand >1 nœud (un seul nœud ⇒ `InferenceClient` simple, compat
+  intacte avec `inference.url`). La bascule est **par appel** : on tente le premier nœud
+  joignable par priorité et on passe au suivant sur `InferenceUnavailable` (réseau/5xx/503) ;
+  une `InferenceRequestError` (4xx) **ne bascule pas** (entrée en cause). `health()` = au moins
+  un nœud sain. Aucun état persisté ⇒ pas de split-brain (le principal reprend la main dès qu'il
+  répond). `resource_gate._probe_reachable` et le scheduler bénéficient transparemment de la
+  bascule (admission OK si **un** nœud répond). Aucune table.
 - **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
   mesure du % sériel depuis les `duree=`, étape goulot + attente estimée dans `/capabilities`
   et le diagnostic. Additif ; à faire après C5 (admission) dont il consomme la profondeur de file.
@@ -515,6 +524,9 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
 Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources, la priorité
 demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** pour le
 pilotage de capacité, **B9** au besoin.
+
+> **État au 2026-05-31** : B1, B2, B3, B4, B6, B7 livrés ; B5 partiel (reste le benchmark GPU
+> distant) ; B8/B9 non démarrés.
 
 ### Notes d'implémentation (écarts assumés vs conception, points pour la suite)
 
@@ -589,6 +601,21 @@ pilotage de capacité, **B9** au besoin.
   `gpu.min_free_vram_mb`. Si les données sont absentes, comportement compatible : le pré-vol
   existant garde l'autorité. Tests ajoutés : peak local, phase STT distante ignorée localement,
   VRAM distante admise/refusée.
+- **B7 — failover actif/passif : FAIT.** Bascule au niveau **client** (pas de nouvelle
+  couche d'orchestration) : `FailoverInferenceClient(InferenceClient)` enveloppe une liste
+  ordonnée de clients mono-nœud et délègue chaque opération (`capabilities`, `ensure_engine`,
+  `diarize`, `voice_embed`) via `_failover()` qui itère par priorité et bascule sur
+  `InferenceUnavailable`. Sous-classe d'`InferenceClient` → le type de retour de la factory
+  (`InferenceClient | None`) et tous les appelants (`scheduler`, `remote_diarizer`,
+  `voice/embedding`, `resource_gate`, `web/routes`) restent inchangés. Compat ascendante :
+  `inference.url` seul (ou `nodes` à un élément) ⇒ `InferenceClient` simple, aucun wrapper.
+  La résolution `_resolve_node_urls()` trie par `priority` (ordre config en départage),
+  ignore vides/doublons. Les nœuds partagent auth/transport/résilience (seule l'URL diffère).
+  Tests ajoutés (`test_inference_client.py`) : routage factory (simple vs failover, tri
+  priorité, dédup, fallback `url`, partage auth/transport), bascule sur indisponible,
+  préférence primaire quand il répond, 4xx sans bascule, tous indisponibles → `InferenceUnavailable`,
+  `capabilities` qui bascule, `health` = au moins un nœud, liste vide rejetée. Le pré-vol
+  `resource_gate` et le dispatch du scheduler héritent de la bascule sans modification.
 - **B6.4 — index + cache capabilities : FAIT.** `JobQueueEntry` déclare l'index
   `ix_job_queue_waiting_order` (`status, base_priority, aging_bonus, position, submitted_at`)
   avec filtre PostgreSQL `status='waiting'`, et la migration Alembic dédiée garde le schéma
@@ -616,8 +643,12 @@ pilotage de capacité, **B9** au besoin.
   (mêmes bonus appliqués) + un seul `UPDATE`.
 - **Backpressure** : nœud renvoyant 503 → `resource_gate` `defer` + `requeue_later` (déjà
   couvert §7.2, à étendre au cas moteur STT saturé / concurrence atteinte).
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1354 tests** après B5
-  instrumentation, couverture `77.90%`, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
+- **Failover (C6/B7). ✅** Factory : un nœud ⇒ `InferenceClient`, plusieurs ⇒
+  `FailoverInferenceClient` trié par priorité (dédup, fallback `url`). Bascule : principal
+  injoignable ⇒ secours servi ; principal up ⇒ secours jamais appelé ; 4xx ⇒ pas de bascule ;
+  tous KO ⇒ `InferenceUnavailable` ; `health` = au moins un nœud.
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1386 tests** après B7,
+  couverture ≥ 78 %, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
 
 ---
 

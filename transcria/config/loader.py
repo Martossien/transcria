@@ -533,6 +533,11 @@ _DEFAULT_CONFIG = {
         "mode": "local",                       # local | remote | hybrid
         # Service Flask maison (diarisation + empreinte vocale), ex http://HOST:8002
         "url": "",
+        # Failover actif/passif (C6 / B7) : liste ordonnée de nœuds (priorité = ordre).
+        # La frontale vise le premier joignable et bascule automatiquement. Vide → on
+        # retombe sur `url` ci-dessus (un seul nœud). Ex :
+        #   [{"url": "http://gpu-1:8002", "priority": 1}, {"url": "http://gpu-2:8002", "priority": 2}]
+        "nodes": [],
         "fallback_local": True,                # bascule locale si le service tombe
         "auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY", "api_key": ""},
         "transport": {"audio": "file_ref"},    # file_ref (mono-machine) | upload (distant)
