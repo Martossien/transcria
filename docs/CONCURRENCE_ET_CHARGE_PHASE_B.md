@@ -1,7 +1,7 @@
 # TranscrIA — Concurrence & montée en charge (Phase B)
 
 > **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11) ;
-> prête à implémenter (B1→B8). Fait suite à la **Phase A** (bascule PostgreSQL,
+> prête à implémenter (B1→B9). Fait suite à la **Phase A** (bascule PostgreSQL,
 > cf. migration commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -21,7 +21,7 @@ un singleton in-process, le superviseur STT mémorise son état en RAM. Conséqu
 de jobs et de la sur-réservation VRAM. PostgreSQL (Phase A) débloque la coordination
 inter-process ; il reste à l'exploiter.
 
-Six chantiers (C1–C5 concurrence, C6 haute disponibilité), du plus structurant au plus optionnel :
+Sept chantiers (C1–C5 concurrence, C6 haute disponibilité, C7 observabilité du goulot), du plus structurant au plus optionnel :
 
 | # | Chantier | Problème levé | Effort |
 |---|----------|---------------|--------|
@@ -31,6 +31,7 @@ Six chantiers (C1–C5 concurrence, C6 haute disponibilité), du plus structuran
 | **C4** | **Durcir le nœud de ressources** : `ensure` idempotent/verrouillé, single-process, batching vLLM | courses au lancement, débit STT sous-exploité | Moyen |
 | **C5** | **Admission & backpressure** à l'échelle (capacité du nœud, aging ensembliste, admission VRAM-aware) | scans/écritures redondants, pas de notion de capacité | Faible |
 | **C6** | **Failover actif/passif** automatique des nœuds de ressources | nœud unique = point de défaillance unique (SPOF) | Faible |
+| **C7** | **Profil de concurrence** : classer les étapes sérielles/déléguées, mesurer le % goulot, estimer l'attente | mono/multi-concurrence implicite, pas de visibilité du plafond de débit | Faible |
 
 Invariant directeur : **seul l'état stateless se scale horizontalement ; tout ce qui
 arbitre une ressource physique (GPU, ordre de queue) reste à propriétaire unique**,
@@ -344,6 +345,49 @@ politique de placement — non couvert ici.
 probe (~2 s) + un re-`ensure` du moteur sur le secours (démarrage à froid). Pour un secours
 « tiède », garder ses moteurs résidents (`idle_timeout_s: 0`).
 
+### C7 — Profil de concurrence du workflow & observabilité du goulot
+
+**But** : le workflow est un **mélange** d'étapes **sérielles** (GPU exclusif, une à la fois)
+et d'étapes **déléguées** (capacité fixée par le backend de l'utilisateur). Plutôt que
+d'orchestrer le multi-concurrence (très complexe, et propre à chaque déploiement), TranscrIA
+le **délègue à l'opérateur** (ses scripts de lancement) et se contente de **constater et
+avertir** : quelles étapes plafonnent, quelle part du temps elles représentent, et quelle
+attente en découle sous charge. Purement additif — **aucune orchestration nouvelle**.
+
+**Constat (déjà câblé)**
+- La frontière mono/multi existe : `BaseTranscriber.concurrent_safe` (`base_transcriber.py:12`),
+  `True` pour `RemoteTranscriber` (vLLM batche les requêtes HTTP), `False` en in-process. Et
+  `inference.stt.concurrency` n'est exploité **que si** `concurrent_safe` (`transcription.py:544`).
+- Les durées par étape sont **déjà mesurées** (`pipeline_service.py:66`, `runner.py:796`,
+  `duree=…`) → le « % par étape » se **mesure**, ne se devine pas.
+
+**Classes de concurrence (à expliciter)**
+- **Sérielles** (verrou par ressource, une à la fois) : diarisation pyannote, voice-embed
+  (verrou par moteur), STT in-process (Cohere/Whisper), LLM résumé/arbitrage (réservation VRAM
+  de l'allocateur).
+- **Déléguées** (capacité = backend de l'utilisateur, bornée par `inference.stt.concurrency`) :
+  STT sur backend `concurrent_safe` (vLLM/SGLang). Le dimensionnement réel (slots, réplicas,
+  GPU) vit dans **les scripts de l'opérateur** — cohérent avec « le nœud possède ses scripts ».
+
+**Mise en œuvre**
+1. **Carte déclarative** étape → `{class: serial|delegated, resource: gpu|cpu|llm|stt_backend}`,
+   dérivée de `concurrent_safe` + type de moteur, surchargeable en config (`workflow.concurrency_profile`).
+2. **Mesure du % sériel.** Moyenne glissante des `duree=` par étape ⇒ fraction du temps GPU
+   passée dans des étapes sérielles. Modèle : **loi d'Amdahl** pour la latence d'un job (les
+   slots STT n'accélèrent que la part déléguée) ; en multi-jobs, c'est l'**étape sérielle la
+   plus chargée** qui fixe le débit (réseau de files, pas Amdahl pur — deux jobs peuvent
+   chevaucher diarize@GPU0 + STT@GPU1, jamais deux diarize sur le même GPU).
+3. **Observabilité.** Exposer dans `/capabilities` + le panneau diagnostic : étapes sérielles,
+   leur % mesuré, l'**étape goulot**, la profondeur de file et une **attente estimée**
+   (`profondeur × durée_moyenne_du_goulot`). C'est le « vérifier/notifier » demandé.
+4. **Garde-fou de saturation.** Réactivité **UI** préservée par C1 (web sans GPU) même file
+   pleine ; la **latence** des jobs, elle, croît avec le goulot → l'admission (C5) + §7.2
+   (503/defer/requeue, aging) absorbent la file proprement et la rendent **visible** plutôt que
+   de laisser la latence diverger en silence.
+
+**Hors périmètre** : aucune auto-orchestration du batching vLLM ni du placement GPU — cela
+reste dans les scripts de l'opérateur. C7 ne fait que **mesurer, classer et avertir**.
+
 ---
 
 ## 6. Schéma de données (migrations Alembic)
@@ -417,10 +461,14 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   plafond, admission pilotée par la VRAM, pré-remplissage `SystemDetector` à l'install.
 - **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
   probe automatique. Aucune table ; transparent pour les jobs en file.
-- **B8 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
+- **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
+  mesure du % sériel depuis les `duree=`, étape goulot + attente estimée dans `/capabilities`
+  et le diagnostic. Additif ; à faire après C5 (admission) dont il consomme la profondeur de file.
+- **B9 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
 
 Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources, la priorité
-demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** au besoin.
+demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** pour le
+pilotage de capacité, **B9** au besoin.
 
 ---
 
@@ -458,6 +506,11 @@ demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute disp
   nœud. À vérifier qu'aucune route web n'importe torch/charge un modèle au runtime.
 - **Batching vLLM (C4.4)** : `inference.stt.concurrency` trop haut → contention VRAM/latence.
   Défaut prudent (1), montée mesurée.
+- **Profil de concurrence (C7)** : l'attente estimée n'est qu'**indicative** (durées variables
+  selon l'audio, démarrages à froid, file qui bouge) — la présenter comme un ordre de grandeur,
+  jamais comme une garantie. Le multi-concurrence reste **délégué** aux scripts de l'opérateur :
+  si `inference.stt.concurrency` dépasse la capacité réelle du backend, la contention se voit en
+  latence, pas en crash (à corréler avec la mesure du goulot).
 - **Failover (C6)** : risque de **split-brain** si deux nœuds servaient simultanément —
   écarté par l'actif/passif (bascule recalculée par probe, jamais deux nœuds sollicités pour
   le même job). Coût : machine de secours au repos. *Atténuation* : secours « tiède » (moteurs
