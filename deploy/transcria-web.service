@@ -1,0 +1,32 @@
+# Tier WEB de TranscrIA (Phase B / C1) — gunicorn, SANS état, N workers.
+# Ne touche ni au GPU ni à la file (rôle 'web') : il peut seulement enfiler.
+# Scalable horizontalement (ajuster --workers ; règle de départ ~ 2*cœurs+1).
+# À placer derrière un reverse-proxy nginx (voir nginx-transcria.conf.example).
+#
+# Installation : copier dans /etc/systemd/system/, ajuster chemins/User/workers, puis
+#   systemctl daemon-reload && systemctl enable --now transcria-web.service
+[Unit]
+Description=TranscrIA — tier web (gunicorn)
+After=network-online.target postgresql.service transcria-migrate.service
+Wants=network-online.target
+Requires=transcria-migrate.service
+
+[Service]
+Type=simple
+User=admin_ia
+WorkingDirectory=/home/admin_ia/transcria
+Environment=TRANSCRIA_ROLE=web
+EnvironmentFile=/home/admin_ia/transcria/.env
+# --workers : nombre de process web (sans état). --timeout élevé pour les gros uploads.
+ExecStart=/home/admin_ia/transcria/venv/bin/gunicorn \
+    --workers 4 \
+    --bind 127.0.0.1:7870 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile - \
+    wsgi:app
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

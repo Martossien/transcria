@@ -1045,6 +1045,46 @@ Si l'utilisateur du service n'a pas les droits d'écriture sur `/run/`, changer 
 Environment=PID_FILE=/tmp/transcrIA.pid
 ```
 
+### Montée en charge : web multi-worker + ordonnanceur unique (Phase B)
+
+Par défaut, `transcria.service` lance **un seul process** (`role=all`) : il sert le web
+*et* exécute la file. Cela suffit pour un poste isolé ou une charge modérée.
+
+Pour **encaisser plus de trafic web**, on sépare deux rôles (nécessite **PostgreSQL** —
+voir §7) :
+
+- **`web`** : tier HTTP **sans état**, servi par **gunicorn** avec N workers. Il ne touche
+  ni au GPU ni à la file ; il peut seulement *enfiler* des jobs. Scalable horizontalement.
+- **`scheduler`** : **un seul** process qui draine la file et exécute les jobs (GPU). Un
+  **verrou consultatif PostgreSQL** garantit l'unicité : un second `--role scheduler`
+  refuse de démarrer (`exit 1`).
+
+Le rôle est choisi par la variable d'environnement `TRANSCRIA_ROLE` (ou `runtime.role`
+dans `config.yaml`, ou `python app.py --role …`).
+
+Unités systemd fournies dans `deploy/` (migration oneshot + web + scheduler) :
+
+```bash
+# Adapter chemins / User / nombre de workers dans les 3 fichiers
+for unit in transcria-migrate transcria-web transcria-scheduler; do
+    sudo sed -i "s|/home/admin_ia/transcria|$(pwd)|g; s|User=admin_ia|User=$USER|g" deploy/$unit.service
+    sudo cp deploy/$unit.service /etc/systemd/system/
+done
+sudo systemctl daemon-reload
+sudo systemctl enable --now transcria-migrate.service     # alembic upgrade head (une fois)
+sudo systemctl enable --now transcria-scheduler.service   # orchestrateur unique
+sudo systemctl enable --now transcria-web.service         # gunicorn (N workers)
+```
+
+> ⚠️ Ne pas activer `transcria.service` (mode `all`) **en même temps** que la paire
+> web/scheduler : ce serait un orchestrateur de trop (le verrou consultatif le ferait
+> simplement renoncer à drainer, mais c'est inutile et trompeur). Choisir l'un **ou** l'autre.
+
+Placer le tier web derrière **nginx** (TLS, statique, gros uploads) :
+`deploy/nginx-transcria.conf.example`. Régler `--workers` (~`2×cœurs+1`) et
+`client_max_body_size` = `security.max_upload_size_mb`. `gunicorn` est dans
+`requirements.txt` (`pip install -r requirements.txt`).
+
 ---
 
 ## 12. Dépannage

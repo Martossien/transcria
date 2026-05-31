@@ -1,0 +1,49 @@
+# Reverse-proxy nginx devant le tier web TranscrIA (gunicorn sur 127.0.0.1:7870).
+# Termine le TLS, sert le statique, met en tampon les requêtes lentes/uploads.
+# Adapter server_name, chemins TLS et client_max_body_size (= security.max_upload_size_mb).
+#
+# Installation : copier dans /etc/nginx/sites-available/, lier dans sites-enabled/,
+#   nginx -t && systemctl reload nginx
+
+upstream transcria_web {
+    # Si plusieurs hôtes web, ajouter d'autres `server` ici (gunicorn par hôte).
+    server 127.0.0.1:7870;
+}
+
+server {
+    listen 80;
+    server_name transcria.example.com;
+
+    # Redirection HTTPS (décommenter une fois le certificat en place)
+    # return 301 https://$host$request_uri;
+
+    # Taille max d'upload : aligner sur security.max_upload_size_mb (1024 Mo par défaut).
+    client_max_body_size 1024m;
+
+    location /static/ {
+        alias /home/admin_ia/transcria/transcria/web/static/;
+        expires 7d;
+        access_log off;
+    }
+
+    location / {
+        proxy_pass http://transcria_web;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Gros uploads / transcriptions longues : laisser le temps au backend.
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+        proxy_request_buffering on;
+    }
+}
+
+# server {
+#     listen 443 ssl http2;
+#     server_name transcria.example.com;
+#     ssl_certificate     /etc/letsencrypt/live/transcria.example.com/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/transcria.example.com/privkey.pem;
+#     client_max_body_size 1024m;
+#     # … mêmes blocs location que ci-dessus …
+# }

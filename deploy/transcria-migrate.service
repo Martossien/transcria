@@ -1,0 +1,19 @@
+# Migration de schéma (Alembic) — exécutée UNE fois avant web/scheduler.
+# Évite que deux services lancent `alembic upgrade head` en concurrence.
+# Installation : copier dans /etc/systemd/system/, ajuster chemins/User, puis
+#   systemctl daemon-reload && systemctl enable --now transcria-migrate.service
+[Unit]
+Description=TranscrIA — migrations de schéma (Alembic, oneshot)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=admin_ia
+WorkingDirectory=/home/admin_ia/transcria
+EnvironmentFile=/home/admin_ia/transcria/.env
+ExecStart=/home/admin_ia/transcria/venv/bin/alembic upgrade head
+
+[Install]
+WantedBy=multi-user.target

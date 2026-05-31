@@ -1,11 +1,11 @@
+import importlib.util
 import os
 import tempfile
-import importlib.util
 from pathlib import Path
 
 import pytest
 
-from transcria.config import get_config_path, load_config, save_config, _deep_merge
+from transcria.config import _deep_merge, get_config_path, load_config, save_config
 from transcria.config.config_schema import validate_config
 
 
@@ -268,6 +268,34 @@ class TestAppDebugResolution:
 
         assert resolve_role(None, "  Scheduler  ", None) == "scheduler"  # trim + casse
         assert resolve_role(None, "bogus", None) == "all"                # inconnu → all
+
+    def test_should_run_scheduler_by_role(self):
+        from app import should_run_scheduler
+
+        assert should_run_scheduler("all") is True
+        assert should_run_scheduler("scheduler") is True
+        assert should_run_scheduler("web") is False        # tier web : pas d'orchestrateur
+
+    def test_serve_scheduler_exits_when_lock_unavailable(self, monkeypatch):
+        """Process 'scheduler' dédié : si le verrou d'ordonnanceur est déjà tenu
+        (un autre orchestrateur tourne), on sort en erreur (exit 1, unicité I1)."""
+        import app as app_module
+        import transcria.services.job_executor as je
+
+        class _StubScheduler:
+            has_singleton_lock = False
+
+        class _StubExecutor:
+            _scheduler = _StubScheduler()
+
+        stopped = {"called": False}
+        monkeypatch.setattr(je, "get_job_executor", lambda: _StubExecutor())
+        monkeypatch.setattr(je, "shutdown_job_executor", lambda: stopped.__setitem__("called", True))
+
+        with pytest.raises(SystemExit) as exc:
+            app_module._serve_scheduler()
+        assert exc.value.code == 1
+        assert stopped["called"] is True   # arrêt propre avant de sortir
 
 
 class TestBootstrapConfig:

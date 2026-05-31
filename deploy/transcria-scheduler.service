@@ -1,0 +1,30 @@
+# Orchestrateur UNIQUE de TranscrIA (Phase B / C1) — draine la file et exécute les
+# jobs (GPU). Un seul exemplaire doit tourner : un verrou consultatif PostgreSQL le
+# garantit (un second process `--role scheduler` sortirait en erreur, exit 1).
+# NE PAS lancer sous gunicorn (ce n'est pas un serveur HTTP).
+#
+# Installation : copier dans /etc/systemd/system/, ajuster chemins/User, puis
+#   systemctl daemon-reload && systemctl enable --now transcria-scheduler.service
+[Unit]
+Description=TranscrIA — ordonnanceur unique (exécution des jobs)
+After=network-online.target postgresql.service transcria-migrate.service
+Wants=network-online.target
+Requires=transcria-migrate.service
+# Anti-flap : si le verrou est déjà tenu (doublon), le process sort en erreur ;
+# on borne les redémarrages pour ne pas boucler indéfiniment.
+StartLimitIntervalSec=120
+StartLimitBurst=4
+
+[Service]
+Type=simple
+User=admin_ia
+WorkingDirectory=/home/admin_ia/transcria
+Environment=TRANSCRIA_ROLE=scheduler
+Environment=HF_HOME=/home/admin_ia/.cache/huggingface
+EnvironmentFile=/home/admin_ia/transcria/.env
+ExecStart=/home/admin_ia/transcria/venv/bin/python app.py --role scheduler
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

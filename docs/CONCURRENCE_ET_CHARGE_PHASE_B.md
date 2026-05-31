@@ -2,7 +2,8 @@
 
 > **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11).
 > **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
-> ordonnanceur unique, `914ea94`). Reste **B3→B9** (cf. §8). Fait suite à la **Phase A**
+> ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
+> systemd/nginx). Reste **B4→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -455,10 +456,11 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   gating du scheduler dans `create_app` (`init_job_executor(run_scheduler=…)`), verrou
   consultatif anti-double-scheduler (`scheduler_lock.py`), `QueueStore.count_running()` lu en
   base. Mode `all` inchangé par défaut.
-- **B3 — Web multi-worker.** `gunicorn` pour `--role web`, services systemd séparés, doc
-  d'install. Le web devient scalable ; l'orchestrateur reste unique. *Inclut le câblage
-  restant : flag CLI `--role` dans `main()` et **arrêt franc** (`sys.exit(1)`) d'un process
-  `--role scheduler` dédié si le verrou est déjà tenu (cf. note d'implémentation).*
+- **B3 — Web multi-worker. ✅ FAIT.** Entrypoint WSGI `wsgi:app` (gunicorn) ; `main()` gère
+  `--role` (CLI > env > config) ; process `--role scheduler` dédié (`_serve_scheduler`, pas de
+  HTTP) avec **arrêt franc `exit 1`** si le verrou est déjà tenu ; `gunicorn` en requirements ;
+  unités systemd `deploy/transcria-{migrate,web,scheduler}.service` + `deploy/nginx-…example`
+  + `docs/INSTALL.md` §11 (montée en charge). Le web devient scalable ; l'orchestrateur reste unique.
 - **B4 — Durcissement nœud (C4.1–C4.3).** Verrou `ensure` par moteur, single-process
   garanti, état de charge dans `/capabilities`.
 - **B5 — Débit STT (C4.4).** Monter `inference.stt.concurrency` sur backend distant, mesures de débit.
@@ -487,12 +489,12 @@ pilotage de capacité, **B9** au besoin.
   Sémantique identique (atomicité, SKIP LOCKED sur PG, fallback UPDATE conditionnel sur
   SQLite), transaction minuscule. Le comportement « ressources indisponibles → entrée laissée
   WAITING » est ainsi préservé (pas de claim-puis-release).
-- **B2 — arrêt franc du scheduler dédié reporté à B3.** Le verrou consultatif est posé dans
-  `QueueScheduler.start()` : si indisponible, **aucun thread n'est démarré** (dégradation
-  silencieuse, adaptée au mode `all`/tests). Le `sys.exit(1)` prévu §C1 pour un **process
-  `--role scheduler` dédié** n'a pas de sens tant que cet entrypoint n'existe pas → il est
-  **rattaché à B3** (avec le flag CLI `--role` dans `main()`, aujourd'hui lu seulement via
-  `TRANSCRIA_ROLE`/config).
+- **B2/B3 — arrêt franc du scheduler dédié : FAIT en B3.** Le verrou consultatif est posé
+  dans `QueueScheduler.start()` : si indisponible, **aucun thread n'est démarré** (dégradation
+  silencieuse, adaptée au mode `all`/tests). Pour un **process `--role scheduler` dédié**
+  (`python app.py --role scheduler`), `_serve_scheduler()` vérifie `has_singleton_lock` et
+  **sort en `exit 1`** si le verrou est tenu ailleurs (à systemd de borner les redémarrages :
+  `StartLimitBurst`). Le flag CLI `--role` (priorité sur env/config) est câblé dans `main()`.
 - **Verrou = connexion dédiée.** `SchedulerLock` garde une connexion ouverte du pool pour la
   vie du scheduler (le verrou est lié à la session ; libéré automatiquement à la mort du
   process). Prévoir, en multi-instance réelle, que chaque orchestrateur consomme **1 connexion

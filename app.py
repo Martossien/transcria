@@ -150,7 +150,7 @@ def create_app(config_path: str | None = None) -> Flask:
         UserStore.ensure_admin(cfg)
         # Rôle 'web' : tier HTTP sans état → n'exécute PAS la file (un orchestrateur
         # 'scheduler'/'all' s'en charge ailleurs). L'enfilement reste possible.
-        init_job_executor(app, cfg, run_scheduler=role in ("scheduler", "all"))
+        init_job_executor(app, cfg, run_scheduler=should_run_scheduler(role))
 
     logger.info("Process démarré (rôle=%s, scheduler=%s)", role, role in ("scheduler", "all"))
     return app
@@ -188,12 +188,54 @@ def resolve_role(
     return "all"
 
 
+def should_run_scheduler(role: str) -> bool:
+    """Ce rôle exécute-t-il la file ? Le tier ``web`` ne la draine pas (un process
+    ``scheduler``/``all`` s'en charge) — il peut seulement enfiler."""
+    return role in ("scheduler", "all")
+
+
 def resolve_debug_flag(cli_debug: bool | None, env_debug: str | None, config_debug: bool) -> bool:
     if cli_debug is not None:
         return bool(cli_debug)
     if env_debug is not None:
         return env_debug.lower() == "true"
     return bool(config_debug)
+
+
+def _serve_scheduler() -> None:
+    """Boucle d'un process **scheduler dédié** (Phase B / C1) : pas de serveur HTTP,
+    juste l'orchestrateur qui draine la file et exécute les jobs.
+
+    `create_app()` a déjà démarré le scheduler (et tenté le verrou consultatif). Si
+    le verrou est indisponible (un autre orchestrateur tourne déjà), on **sort en
+    erreur** (`exit 1`) pour préserver l'unicité (invariant I1) — c'est à systemd de
+    ne pas relancer en boucle. Sinon on bloque jusqu'à SIGTERM/SIGINT.
+    """
+    import signal
+    import sys
+    import threading
+
+    from transcria.services.job_executor import get_job_executor, shutdown_job_executor
+
+    executor = get_job_executor()
+    scheduler = getattr(executor, "_scheduler", None) if executor is not None else None
+    if scheduler is None or not scheduler.has_singleton_lock:
+        logger.error(
+            "Rôle 'scheduler' : verrou d'ordonnanceur indisponible (un autre process le "
+            "détient déjà). Arrêt pour préserver l'unicité de l'orchestrateur."
+        )
+        shutdown_job_executor()
+        sys.exit(1)
+
+    logger.info("Ordonnanceur dédié actif (PID %d) — SIGTERM/SIGINT pour arrêter.", os.getpid())
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
+    try:
+        stop.wait()
+    finally:
+        logger.info("Arrêt de l'ordonnanceur dédié.")
+        shutdown_job_executor()
 
 
 def main() -> None:
@@ -205,9 +247,24 @@ def main() -> None:
     parser.add_argument("--host", type=str, default=os.environ.get("TRANSCRIA_HOST", ""))
     parser.add_argument("--debug", action="store_true", default=None)
     parser.add_argument("--no-debug", action="store_false", dest="debug")
+    parser.add_argument(
+        "--role", choices=_VALID_ROLES, default=None,
+        help="Rôle du process (web|scheduler|all). Prioritaire sur TRANSCRIA_ROLE et runtime.role.",
+    )
     args = parser.parse_args()
+    # Le flag CLI prime : on l'expose via l'env pour que create_app() le résolve.
+    if args.role:
+        os.environ[_ROLE_ENV] = args.role
 
     app = create_app()
+    role = app.config.get("TRANSCRIA_ROLE", "all")
+
+    # Process scheduler dédié : pas de serveur HTTP. En production, le tier 'web' est
+    # servi par gunicorn (wsgi:app), pas par ce serveur de dev mono-process.
+    if role == "scheduler":
+        _serve_scheduler()
+        return
+
     cfg = get_config()
     host = args.host or cfg.get("server", {}).get("host", "0.0.0.0")
     port = args.port or cfg.get("server", {}).get("port", 7870)

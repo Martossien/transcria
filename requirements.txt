@@ -2,6 +2,7 @@ flask>=3.0,<4.0
 flask-login>=0.6,<1.0
 flask-sqlalchemy>=3.1,<4.0
 werkzeug>=3.0,<4.0
+gunicorn>=21.2,<24.0        # serveur WSGI du tier web (rôle web/all en prod)
 pyyaml>=6.0,<7.0
 python-dotenv>=1.0,<2.0
 requests>=2.31,<3.0
