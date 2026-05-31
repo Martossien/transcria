@@ -1,6 +1,7 @@
 # TranscrIA — Concurrence & montée en charge (Phase B)
 
-> **Statut** : conception (à valider). Fait suite à la **Phase A** (bascule PostgreSQL,
+> **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11) ;
+> prête à implémenter (B1→B8). Fait suite à la **Phase A** (bascule PostgreSQL,
 > cf. migration commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -20,7 +21,7 @@ un singleton in-process, le superviseur STT mémorise son état en RAM. Conséqu
 de jobs et de la sur-réservation VRAM. PostgreSQL (Phase A) débloque la coordination
 inter-process ; il reste à l'exploiter.
 
-Cinq chantiers, du plus structurant au plus optionnel :
+Six chantiers (C1–C5 concurrence, C6 haute disponibilité), du plus structurant au plus optionnel :
 
 | # | Chantier | Problème levé | Effort |
 |---|----------|---------------|--------|
@@ -28,7 +29,8 @@ Cinq chantiers, du plus structurant au plus optionnel :
 | **C2** | **Claim de job atomique** `FOR UPDATE SKIP LOCKED` | double-exécution si plusieurs dispatchers | Faible |
 | **C3** | **Coordination VRAM** propre : le nœud possède ses GPU | allocateur in-process ⇒ pas de coordination multi-process/hôte | Moyen |
 | **C4** | **Durcir le nœud de ressources** : `ensure` idempotent/verrouillé, single-process, batching vLLM | courses au lancement, débit STT sous-exploité | Moyen |
-| **C5** | **Admission & backpressure** à l'échelle (capacité du nœud, aging ensembliste) | scans/écritures redondants, pas de notion de capacité | Faible |
+| **C5** | **Admission & backpressure** à l'échelle (capacité du nœud, aging ensembliste, admission VRAM-aware) | scans/écritures redondants, pas de notion de capacité | Faible |
+| **C6** | **Failover actif/passif** automatique des nœuds de ressources | nœud unique = point de défaillance unique (SPOF) | Faible |
 
 Invariant directeur : **seul l'état stateless se scale horizontalement ; tout ce qui
 arbitre une ressource physique (GPU, ordre de queue) reste à propriétaire unique**,
@@ -116,6 +118,9 @@ workers et allocateur → **double-dispatch** et **sur-réservation VRAM**. C'es
    queue et multi-tick, écritures redondantes et contention.
 7. **Réveil du scheduler intra-process.** `submit_to_queue` fait `self.wake()` (`scheduler.py:90`,
    un `threading.Event`) : un worker web *séparé* ne pourrait pas réveiller le scheduler.
+8. **Nœud de ressources = SPOF.** En topologie distribuée, si l'unique nœud tombe, **tous**
+   les jobs GPU échouent ou s'empilent jusqu'à `max_unavailable_s` (§7.2). Aucun secours
+   automatique aujourd'hui.
 
 ---
 
@@ -133,6 +138,9 @@ workers et allocateur → **double-dispatch** et **sur-réservation VRAM**. C'es
 - **I5 — Reprise idempotente.** Au redémarrage, les jobs `running` orphelins sont
   réconciliés (`_reconcile_interrupted_jobs` existe déjà, `job_executor.py:305`) ; aucun
   job perdu ni rejoué deux fois.
+- **I6 — Continuité de service GPU.** En topologie distribuée, la panne d'un nœud de
+  ressources n'interrompt pas le service : un nœud de secours prend le relais
+  **automatiquement**, de façon transparente pour les jobs en file (C6).
 
 ---
 
@@ -240,10 +248,13 @@ VRAM in-process protégée par le verrou de lancement, cf. C4) : un `ensure` qui
 « place » réserve la fraction vLLM le temps que le moteur démarre et déclare sa santé, pour
 qu'un `ensure` concurrent voie la place déjà prise (→ `busy` plutôt que double-lancement).
 
-**Décision ouverte (D1)** : faut-il un jour une autorité VRAM **inter-hôtes** (plusieurs
-nœuds de ressources) ? Si oui, candidat = table `gpu_leases` en base partagée
-(`host, gpu_index, job_id, vram_mb, phase, expires_at`) avec acquisition transactionnelle.
-**Hors périmètre B** tant qu'il n'y a qu'un nœud ; noté pour ne pas se fermer la porte.
+**Multi-nœuds (lien D1)** : deux topologies à ne pas confondre.
+- **Actif/passif (failover)** — retenu, cf. **C6** : un seul nœud sert à la fois, donc
+  **aucune** autorité VRAM inter-hôtes n'est nécessaire (chaque nœud arbitre ses propres GPU).
+- **Actif/actif (load-balancing)** — **différé** : faire travailler plusieurs nœuds en
+  parallèle exigerait une autorité VRAM **inter-hôtes** (candidat = table `gpu_leases` en base
+  partagée : `host, gpu_index, job_id, vram_mb, phase, expires_at`, acquisition
+  transactionnelle) + une politique de placement. Noté pour ne pas se fermer la porte.
 
 ### C4 — Durcir le nœud de ressources pour la concurrence
 
@@ -288,13 +299,50 @@ Le nœud est le composant le plus sollicité en parallèle. Quatre durcissements
 2. **Capacité du nœud dans l'ordonnancement.** Le scheduler ne dispatche pas plus de jobs
    « STT distant » que `min(workers, capacité_nœud)` ; la capacité vient de `/capabilities`
    (déjà polled) — éviter d'empiler des jobs qui repartiront en `defer`.
-3. **Index & requêtes.** Vérifier l'index composite servant l'ordre de queue
+3. **Admission VRAM-aware (D4).** `max_concurrent_jobs` n'est plus le vrai limiteur mais un
+   **plafond de sécurité** ; un job n'est admis que si son **coût VRAM** (`gpu.*_vram_mb`,
+   déjà en config) tient dans la **VRAM libre** — lue **localement** (`VRAMManager`) en
+   tout-en-un, ou **à distance** via `/capabilities` (`gpus[].free_mb/total_mb`, déjà exposé).
+   Le matériel est **pré-rempli à l'install** par `SystemDetector` (`gpu_count`, `total_vram_mb`)
+   et `install.sh` (comptage `nvidia-smi`). Lever le plafond devient sûr : l'admission refuse
+   proprement (503 → `defer`) au lieu d'OOM.
+4. **Index & requêtes.** Vérifier l'index composite servant l'ordre de queue
    (`(status, base_priority, position, submitted_at)`), aujourd'hui couvert partiellement
    par les `index=True` unitaires. Ajouter un **index partiel** PostgreSQL sur
    `status='waiting'` si la profondeur de queue grossit (migration Alembic).
-4. **Bornage du fan-out de polling.** `/capabilities` est appelé par chaque client ~10 s ;
+5. **Bornage du fan-out de polling.** `/capabilities` est appelé par chaque client ~10 s ;
    mutualiser via un cache court côté frontale (TTL ~5 s) pour ne pas marteler le nœud
    proportionnellement au nombre d'utilisateurs connectés.
+
+### C6 — Failover actif/passif automatique des nœuds de ressources (haute disponibilité)
+
+**But** : supprimer le point de défaillance unique (limite #8) en topologie distribuée. Un
+nœud **principal** traite ; un (ou plusieurs) nœud(s) de **secours** prennent le relais
+**automatiquement** dès que le principal devient injoignable. Modèle **actif/passif** : un
+seul nœud sert à un instant donné → chaque nœud reste **l'autorité de ses propres GPU** (C3
+inchangé), **aucune** coordination VRAM inter-hôtes n'est requise.
+
+**Mise en œuvre**
+- `inference.url` (unique) devient une **liste ordonnée** `inference.nodes` (priorité =
+  ordre). Compat ascendante : un `url` seul reste accepté (= liste à un élément).
+- Côté frontale, `build_client_from_config` (`transcria/inference/client.py`) construit un
+  **client à bascule** : il vise le premier nœud `healthy` et passe au suivant si le probe
+  (`/capabilities`, déjà sans clé API) échoue. La santé est déjà sondée par
+  `resource_gate._probe_reachable` → on l'étend pour **itérer sur la liste** par priorité.
+- **Sélection automatique, sans état partagé** : le « quel nœud » est **recalculé à chaque
+  job** (probe → premier joignable), jamais persisté. Donc **pas de split-brain** : quand le
+  principal revient, les jobs suivants y repartent (préférence à la priorité). La résilience
+  par job (§7.2 : `defer` / `requeue_later` / `max_unavailable_s`) couvre la fenêtre de bascule.
+- **`/engines/ensure` sur le nœud retenu** : inchangé — le secours lance ses propres moteurs
+  à la demande (autonomie A/B/C déjà en place).
+
+**Hors périmètre (différé, cf. D1)** : le mode **actif/actif** (répartition de charge sur
+plusieurs nœuds simultanés) requiert l'autorité VRAM inter-hôtes (`gpu_leases`) + une
+politique de placement — non couvert ici.
+
+**Trade-off** : le secours est une machine GPU au repos (coût matériel) ; la bascule coûte un
+probe (~2 s) + un re-`ensure` du moteur sur le secours (démarrage à froid). Pour un secours
+« tiède », garder ses moteurs résidents (`idle_timeout_s: 0`).
 
 ---
 
@@ -303,8 +351,9 @@ Le nœud est le composant le plus sollicité en parallèle. Quatre durcissements
 Phase B est volontairement **légère côté schéma** (la coordination passe par des verrous,
 pas par de nouvelles tables) :
 
-- **Aucune table nouvelle obligatoire** pour C1–C5 sur un nœud unique.
-- **Optionnel / D1** : table `gpu_leases` *si* on va vers la coordination inter-hôtes.
+- **Aucune table nouvelle obligatoire** pour C1–C6 sur un nœud unique (ou en failover
+  actif/passif : la liste de nœuds est en config, la bascule est recalculée par probe).
+- **Optionnel / D1** : table `gpu_leases` *si* on va vers l'actif/actif inter-hôtes.
 - **Index** : migration ajoutant l'index partiel `ix_job_queue_waiting`
   (`status='waiting'`) pour les requêtes de claim/ordre sous forte profondeur.
 - Toute évolution passe par `alembic revision --autogenerate` + relecture + le test
@@ -321,12 +370,21 @@ runtime:
 
 workflow:
   execution:
-    max_concurrent_jobs: 1       # (existant) parallélisme intra-orchestrateur
+    # Plafond de SÉCURITÉ du parallélisme intra-orchestrateur (D4). Le vrai limiteur est
+    # l'admission VRAM (C5.3) : un job n'est lancé que si son coût (gpu.*_vram_mb) tient
+    # dans la VRAM libre. Pré-rempli à l'install par SystemDetector (gpu_count / VRAM).
+    max_concurrent_jobs: 1       # (existant)
   queue:
     poll_interval_s: 5           # (existant) latence d'enqueue en l'absence de NOTIFY
     use_listen_notify: false     # (C1, option) réveil instantané via PostgreSQL NOTIFY
 
 inference:
+  # Failover actif/passif (C6) : liste ordonnée de nœuds (priorité = ordre). La frontale
+  # vise le premier joignable et bascule automatiquement. Compat : un `url` seul reste
+  # accepté. Laisser vide en tout-local.
+  nodes:
+    - { url: "", priority: 1 }                              # principal
+    # - { url: "http://192.168.1.60:8002", priority: 2 }   # secours (tiède : idle_timeout_s: 0)
   stt:
     concurrency: 1               # (EXISTANT) tours STT en parallèle par job (backend concurrent-safe ; 4–8 = débit)
 
@@ -354,12 +412,15 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
 - **B4 — Durcissement nœud (C4.1–C4.3).** Verrou `ensure` par moteur, single-process
   garanti, état de charge dans `/capabilities`.
 - **B5 — Débit STT (C4.4).** Monter `inference.stt.concurrency` sur backend distant, mesures de débit.
-- **B6 — Admission à l'échelle (C5).** Aging ensembliste, capacité nœud dans l'ordonnancement,
-  index partiel, cache `/capabilities`.
-- **B7 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
+- **B6 — Admission à l'échelle + VRAM-aware (C5, D4).** Aging ensembliste, capacité nœud dans
+  l'ordonnancement, index partiel, cache `/capabilities` ; `max_concurrent_jobs` rétrogradé en
+  plafond, admission pilotée par la VRAM, pré-remplissage `SystemDetector` à l'install.
+- **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
+  probe automatique. Aucune table ; transparent pour les jobs en file.
+- **B8 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
 
 Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources, la priorité
-demandée), **B3/B5/B6** ensuite (débit), **B7** au besoin.
+demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** au besoin.
 
 ---
 
@@ -397,22 +458,33 @@ demandée), **B3/B5/B6** ensuite (débit), **B7** au besoin.
   nœud. À vérifier qu'aucune route web n'importe torch/charge un modèle au runtime.
 - **Batching vLLM (C4.4)** : `inference.stt.concurrency` trop haut → contention VRAM/latence.
   Défaut prudent (1), montée mesurée.
+- **Failover (C6)** : risque de **split-brain** si deux nœuds servaient simultanément —
+  écarté par l'actif/passif (bascule recalculée par probe, jamais deux nœuds sollicités pour
+  le même job). Coût : machine de secours au repos. *Atténuation* : secours « tiède » (moteurs
+  résidents) pour réduire la latence de bascule.
 - **Arbitrages repris de `SERVICE_RESSOURCES_GPU.md` §11** : pas de superviseur de process
   généraliste ; STT reste en vLLM (pas in-process). Phase B **n'y déroge pas**.
 
 ---
 
-## 11. Décisions ouvertes (à valider)
+## 11. Décisions (tranchées — revue du 2026-05-31)
 
-- **D1 — Coordination VRAM inter-hôtes** (plusieurs nœuds de ressources) : maintenant
-  (table `gpu_leases`) ou plus tard ? *Reco : plus tard ; aujourd'hui « le nœud possède ses
-  GPU » suffit.*
-- **D2 — Réveil du scheduler** : poll seul (simple, latence ≤ `poll_interval_s`) vs
-  `LISTEN/NOTIFY` (instantané, +complexité). *Reco : poll d'abord, NOTIFY si besoin (B7).*
-- **D3 — Serveur web** : `gunicorn` (sync workers, simple, adapté au I/O modéré) — confirmer
-  vs un autre WSGI. *Reco : gunicorn.*
-- **D4 — `max_concurrent_jobs`** : reste-t-il à 1 (sérialisation GPU stricte) ou augmente-t-il
-  une fois la coordination VRAM durcie (C3/C4) ? Dépend du nombre de GPU et de la VRAM.
+- **D1 — Multi-nœuds : TRANCHÉ, en deux paliers.** **Failover actif/passif automatique**
+  retenu (→ chantier **C6**, plan B7) : un principal, un secours qui prend le relais
+  automatiquement, **sans** coordination VRAM inter-hôtes. Le mode **actif/actif**
+  (load-balancing + table `gpu_leases`) reste **différé** — à rouvrir si le débit requis
+  dépasse ce qu'un seul nœud encaisse.
+- **D2 — Réveil du scheduler : TRANCHÉ.** **Polling** (`poll_interval_s` = 5 s) pour débuter ;
+  `LISTEN/NOTIFY` (plan B8) seulement si la latence d'enqueue gêne.
+- **D3 — Serveur web : TRANCHÉ.** **`gunicorn`** (sync workers) derrière nginx. Ce n'est pas
+  une dette technique parce que **C1** (web sans GPU, stateless) + **C2** (claim atomique en
+  base) suppriment l'état partagé en mémoire — gunicorn ne fait que tirer parti de ce socle.
+- **D4 — `max_concurrent_jobs` : TRANCHÉ — devient un plafond de sécurité.** Reste **1 par
+  défaut** comme garde-fou ; le vrai limiteur est l'**admission VRAM** (C5.3), alimentée par
+  la VRAM libre — **locale** (`VRAMManager`) en tout-en-un, **distante** via `/capabilities`
+  (`gpus[].free_mb/total_mb`, déjà exposé). Le matériel est **pré-rempli à l'install** par
+  `SystemDetector` (`gpu_count`, `total_vram_mb`). Lever le plafond devient sûr : l'admission
+  refuse proprement (503 → `defer`) au lieu d'OOM.
 
 ---
 
