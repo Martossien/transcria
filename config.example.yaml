@@ -424,6 +424,11 @@ workflow:
     punctuation_chars: ".,;:!?)]}»"
   execution:
     max_concurrent_jobs: 1
+  # Profil de concurrence (C7 / B8) : observabilité du goulot. La classe de chaque étape
+  # (sérielle / déléguée) est dérivée automatiquement (STT distant = délégué, sinon sériel) ;
+  # surcharger ici seulement si besoin. Exposé dans GET /api/resources/status (clé "concurrency").
+  # concurrency_profile:
+  #   transcribe: { class: "delegated", resource: "stt_backend" }
   queue:
     enabled: true
     default_priority: 50

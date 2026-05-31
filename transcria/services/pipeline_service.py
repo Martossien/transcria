@@ -6,6 +6,7 @@ from functools import partial
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.workflow.concurrency_profile import StageMetrics
 from transcria.workflow.transitions import is_cancel_requested
 
 logger = logging.getLogger(__name__)
@@ -157,12 +158,15 @@ class PipelineService:
         sl.info("Transcription en cours", step="transcribe")
         t0 = time.monotonic()
         transcribe_result = self.runner.run_transcription(job, audio_path, effective_config)
+        transcribe_elapsed = time.monotonic() - t0
         sl.info("Transcription terminée", step="transcribe",
-                duree=round(time.monotonic() - t0, 1),
+                duree=round(transcribe_elapsed, 1),
                 segments=len(transcribe_result.get("segments", [])))
 
         if transcribe_result.get("error"):
             return {"error": transcribe_result["error"], "step": "transcription"}
+        # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
+        StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
 
         steps = self._define_pipeline_steps(job, audio_path, mode)
 
@@ -195,6 +199,7 @@ class PipelineService:
                 return {"error": result["error"], "step": step_cfg["name"]}
             sl.info("Étape terminée", step=step_cfg["name"],
                     duree=round(elapsed, 1))
+            StageMetrics.get_instance().record(step_cfg["name"], elapsed)
 
         if finalize_job_state:
             JobStore.update_state(job.id, JobState.COMPLETED)

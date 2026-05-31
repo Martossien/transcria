@@ -7,8 +7,9 @@
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
 > débit STT distant) · **B6 ✅** (admission/backpressure : aging, capacité, VRAM, index,
 > cache `/capabilities`) · **B7 ✅** (failover actif/passif des nœuds : `inference.nodes`
-> liste ordonnée + client à bascule par priorité).
-> Reste **B5 benchmark + B8→B9** (cf. §8). Fait suite à la **Phase A**
+> liste ordonnée + client à bascule par priorité) · **B8 ✅** (profil de concurrence C7 :
+> classification sérielle/déléguée, mesure du % sériel + goulot, attente estimée).
+> Reste **B5 benchmark + B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -516,17 +517,26 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   un nœud sain. Aucun état persisté ⇒ pas de split-brain (le principal reprend la main dès qu'il
   répond). `resource_gate._probe_reachable` et le scheduler bénéficient transparemment de la
   bascule (admission OK si **un** nœud répond). Aucune table.
-- **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
-  mesure du % sériel depuis les `duree=`, étape goulot + attente estimée dans `/capabilities`
-  et le diagnostic. Additif ; à faire après C5 (admission) dont il consomme la profondeur de file.
+- **B8 — Profil de concurrence & observabilité (C7). ✅ FAIT.** Module
+  `transcria/workflow/concurrency_profile.py` : `build_profile(config)` classe chaque étape en
+  *serial*/*delegated* (le STT est *delegated* si servi à distance via `remote_requirements`,
+  surcharges par `workflow.concurrency_profile`) ; `StageMetrics` enregistre les durées par étape
+  (fenêtre glissante, thread-safe, **par process**, singleton) ; `summarize_concurrency()` calcule
+  la part sérielle, l'**étape goulot** (sérielle la plus longue) et l'**attente estimée**
+  (`profondeur_file × durée_moyenne_goulot`). Le pipeline (`pipeline_service._run_pipeline_steps`)
+  alimente l'enregistreur à chaque étape **terminée** (transcribe + boucle d'étapes). Exposition :
+  `GET /api/resources/status` ajoute la clé `concurrency` (profondeur de file lue via
+  `QueueStore.count_by_status`). **Refinement assumé** : l'observabilité vit côté **frontale**
+  (l'orchestrateur connaît les durées par étape), pas dans le `/capabilities` du nœud comme
+  esquissé en §C7.3. Additif, aucune orchestration nouvelle.
 - **B9 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
 
 Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources, la priorité
 demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** pour le
 pilotage de capacité, **B9** au besoin.
 
-> **État au 2026-05-31** : B1, B2, B3, B4, B6, B7 livrés ; B5 partiel (reste le benchmark GPU
-> distant) ; B8/B9 non démarrés.
+> **État au 2026-05-31** : B1, B2, B3, B4, B6, B7, B8 livrés ; B5 partiel (reste le benchmark GPU
+> distant) ; B9 (LISTEN/NOTIFY) non démarré, optionnel.
 
 ### Notes d'implémentation (écarts assumés vs conception, points pour la suite)
 
@@ -601,6 +611,17 @@ pilotage de capacité, **B9** au besoin.
   `gpu.min_free_vram_mb`. Si les données sont absentes, comportement compatible : le pré-vol
   existant garde l'autorité. Tests ajoutés : peak local, phase STT distante ignorée localement,
   VRAM distante admise/refusée.
+- **B8 — profil de concurrence & observabilité : FAIT.** `concurrency_profile.py` est **pur**
+  (classification + agrégation), sans dépendance réseau/DB. `StageMetrics` est volontairement
+  **in-process** (remis à zéro au redémarrage) : honnête vis-à-vis de la nature *indicative* du
+  signal (cf. §10). Enregistrement branché aux **deux points de mesure déjà existants** du
+  pipeline (élapsé de `transcribe` puis de chaque étape de la boucle) → aucun double calcul. La
+  route `/api/resources/status` étant cachée (~5 s, B6.4), le bloc `concurrency` est mutualisé
+  avec le reste du statut. Tests : classification (local/distant/surcharges), fenêtre glissante +
+  valeurs invalides (négatif/NaN/non-numérique ignorées), singleton, résumé (% sériel, goulot,
+  attente estimée, file vide), et la route exposant `concurrency`. Reste possible (non bloquant) :
+  rendu du bloc dans le **panneau diagnostic** JS et persistance cross-process si l'on veut des
+  moyennes globales (table/option) plutôt que par worker.
 - **B7 — failover actif/passif : FAIT.** Bascule au niveau **client** (pas de nouvelle
   couche d'orchestration) : `FailoverInferenceClient(InferenceClient)` enveloppe une liste
   ordonnée de clients mono-nœud et délègue chaque opération (`capabilities`, `ensure_engine`,
@@ -641,13 +662,19 @@ pilotage de capacité, **B9** au besoin.
   lancement** (compteur du launcher == 1), second appel en CAS A après attente du verrou.
 - **Aging ensembliste (C5)** : équivalence fonctionnelle avec l'implémentation actuelle
   (mêmes bonus appliqués) + un seul `UPDATE`.
+- **Profil de concurrence (C7/B8). ✅** Classification : STT *serial* en local, *delegated* si
+  distant ; surcharges config respectées ; classe invalide → repli base. `StageMetrics` :
+  moyenne, fenêtre glissante, rejet des valeurs invalides, reset, singleton partagé. Résumé :
+  `serial_fraction`/`bottleneck`/`estimated_wait_s` corrects, vide si aucune mesure, pas
+  d'attente si file vide. Route : `/api/resources/status` expose `concurrency` avec la
+  profondeur de file.
 - **Backpressure** : nœud renvoyant 503 → `resource_gate` `defer` + `requeue_later` (déjà
   couvert §7.2, à étendre au cas moteur STT saturé / concurrence atteinte).
 - **Failover (C6/B7). ✅** Factory : un nœud ⇒ `InferenceClient`, plusieurs ⇒
   `FailoverInferenceClient` trié par priorité (dédup, fallback `url`). Bascule : principal
   injoignable ⇒ secours servi ; principal up ⇒ secours jamais appelé ; 4xx ⇒ pas de bascule ;
   tous KO ⇒ `InferenceUnavailable` ; `health` = au moins un nœud.
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1386 tests** après B7,
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1397 tests** après B8,
   couverture ≥ 78 %, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
 
 ---

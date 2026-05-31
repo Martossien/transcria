@@ -1120,6 +1120,8 @@ def api_resources_status():
     cfg = get_config()
     from transcria.inference.client import InferenceUnavailable, build_client_from_config
     from transcria.inference.resource_status import remote_requirements, summarize_capabilities
+    from transcria.queue.store import QueueStore
+    from transcria.workflow.concurrency_profile import summarize_concurrency
 
     requirements = remote_requirements(cfg)
     cache_key = _resource_status_cache_key(cfg, requirements)
@@ -1139,6 +1141,14 @@ def api_resources_status():
             caps = None
     summary = summarize_capabilities(caps)
     summary["requires_remote"] = sorted(requirements)
+    # Profil de concurrence & goulot (C7/B8) : mesure best-effort côté frontale (c'est
+    # l'orchestrateur qui exécute le workflow et connaît les durées par étape).
+    try:
+        queue_depth = QueueStore.count_by_status().get("waiting", 0)
+    except Exception as exc:  # noqa: BLE001 — observabilité non bloquante
+        logger.debug("Profondeur de file indisponible pour le profil de concurrence: %s", exc)
+        queue_depth = 0
+    summary["concurrency"] = summarize_concurrency(cfg, queue_depth=queue_depth)
     summary["cached"] = False
     _set_cached_resource_status(cache_key, summary, ttl_s, now_s)
     return jsonify(summary)

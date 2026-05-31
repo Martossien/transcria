@@ -4,10 +4,6 @@ Via le test client authentifié. Le client d'inférence est mocké (pas de rése
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
-
-import pytest
-
 from transcria.inference.client import InferenceUnavailable
 from transcria.web import routes as web_routes
 
@@ -94,6 +90,24 @@ def test_resources_status_uses_short_cache(admin_client, monkeypatch):
     assert counter["calls"] == 1
     assert first["cached"] is False
     assert second["cached"] is True
+
+
+def test_resources_status_inclut_le_profil_de_concurrence(admin_client, monkeypatch):
+    web_routes._clear_resource_status_cache()
+    from transcria.workflow.concurrency_profile import StageMetrics
+
+    StageMetrics.get_instance().reset()
+    StageMetrics.get_instance().record("diarization", 40.0)
+    _patch_client(monkeypatch, caps={"deployment_mode": "resource_node"})
+
+    data = admin_client.get("/api/resources/status").get_json()
+
+    assert "concurrency" in data
+    conc = data["concurrency"]
+    assert conc["measured"] is True
+    assert conc["bottleneck"]["stage"] == "diarization"
+    assert conc["queue_depth"] == 0
+    StageMetrics.get_instance().reset()
 
 
 def test_resources_status_cache_can_be_disabled(admin_client, monkeypatch):

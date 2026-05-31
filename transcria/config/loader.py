@@ -381,6 +381,10 @@ _DEFAULT_CONFIG = {
             "punctuation_chars": ".,;:!?)]}»",
         },
         "execution": {"max_concurrent_jobs": 1},
+        # Profil de concurrence (C7/B8) : surcharges déclaratives de la classe d'une étape.
+        # Ex. {"transcribe": {"class": "delegated", "resource": "stt_backend"}}. Vide = la
+        # classe est dérivée automatiquement (STT distant = délégué, sinon sériel).
+        "concurrency_profile": {},
         "queue": {
             "enabled": True,
             "default_priority": 50,
