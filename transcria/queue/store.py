@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import cast
 
-from sqlalchemy import case, func, or_, update
+from sqlalchemy import case, func, or_, text, update
 from sqlalchemy.engine import CursorResult
 
 from transcria.auth.groups import GroupStore
@@ -11,6 +11,7 @@ from transcria.auth.models import GroupMembership, Role
 from transcria.database import db
 from transcria.jobs.models import Job
 from transcria.queue.models import JobQueueEntry
+from transcria.queue.notify_listener import QUEUE_NOTIFY_CHANNEL
 
 QUEUE_WAITING = "waiting"
 QUEUE_PAUSED = "paused"
@@ -58,6 +59,18 @@ class QueueStore:
         db.session.add(entry)
         db.session.commit()
         return entry
+
+    @staticmethod
+    def notify_queue() -> None:
+        """Émet ``NOTIFY transcria_queue`` pour réveiller l'ordonnanceur (B9, PostgreSQL).
+
+        No-op hors PostgreSQL. Petite transaction dédiée : la notification est délivrée
+        au commit. Best-effort — un échec ne doit pas faire échouer l'enqueue (le polling
+        de l'ordonnanceur reste le filet de sûreté)."""
+        if db.engine.dialect.name != "postgresql":
+            return
+        db.session.execute(text("SELECT pg_notify(:channel, '')"), {"channel": QUEUE_NOTIFY_CHANNEL})
+        db.session.commit()
 
     @staticmethod
     def dequeue(job_id: str, status: str = QUEUE_DONE) -> bool:

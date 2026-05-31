@@ -8,8 +8,9 @@
 > débit STT distant) · **B6 ✅** (admission/backpressure : aging, capacité, VRAM, index,
 > cache `/capabilities`) · **B7 ✅** (failover actif/passif des nœuds : `inference.nodes`
 > liste ordonnée + client à bascule par priorité) · **B8 ✅** (profil de concurrence C7 :
-> classification sérielle/déléguée, mesure du % sériel + goulot, attente estimée).
-> Reste **B5 benchmark + B9** (cf. §8). Fait suite à la **Phase A**
+> classification sérielle/déléguée, mesure du % sériel + goulot, attente estimée) ·
+> **B9 ✅** (réveil instantané `LISTEN/NOTIFY`, optionnel, en complément du polling).
+> Reste seulement **B5 benchmark GPU distant** (matériel, cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -529,14 +530,22 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   `QueueStore.count_by_status`). **Refinement assumé** : l'observabilité vit côté **frontale**
   (l'orchestrateur connaît les durées par étape), pas dans le `/capabilities` du nœud comme
   esquissé en §C7.3. Additif, aucune orchestration nouvelle.
-- **B9 — (optionnel) `LISTEN/NOTIFY`** si la latence d'enqueue le justifie.
+- **B9 — `LISTEN/NOTIFY` (optionnel). ✅ FAIT.** `QueueNotifyListener`
+  (`transcria/queue/notify_listener.py`) : connexion psycopg **dédiée** sur un thread de fond
+  qui `LISTEN transcria_queue` et réveille l'ordonnanceur (`scheduler.wake`) ; reconnexion à
+  backoff borné, `wait_ready()` pour éviter la course au démarrage, no-op hors PostgreSQL
+  (`for_engine` → None). `QueueStore.notify_queue()` émet `NOTIFY` (petite transaction dédiée).
+  `submit_to_queue` l'appelle quand `workflow.queue.use_listen_notify` est vrai (best-effort).
+  **Le polling reste le filet de sûreté** : c'est purement une optimisation de latence (rôles
+  web/scheduler séparés), jamais une condition de correction.
 
 Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources, la priorité
 demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** pour le
 pilotage de capacité, **B9** au besoin.
 
-> **État au 2026-05-31** : B1, B2, B3, B4, B6, B7, B8 livrés ; B5 partiel (reste le benchmark GPU
-> distant) ; B9 (LISTEN/NOTIFY) non démarré, optionnel.
+> **État au 2026-05-31** : B1, B2, B3, B4, B6, B7, B8, B9 livrés. Phase B **complète côté code** ;
+> seul reste **B5 — le benchmark GPU distant** (dépend du matériel, pas du code) pour recommander
+> une valeur `inference.stt.concurrency > 1`.
 
 ### Notes d'implémentation (écarts assumés vs conception, points pour la suite)
 
@@ -674,7 +683,12 @@ pilotage de capacité, **B9** au besoin.
   `FailoverInferenceClient` trié par priorité (dédup, fallback `url`). Bascule : principal
   injoignable ⇒ secours servi ; principal up ⇒ secours jamais appelé ; 4xx ⇒ pas de bascule ;
   tous KO ⇒ `InferenceUnavailable` ; `health` = au moins un nœud.
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1397 tests** après B8,
+- **Réveil LISTEN/NOTIFY (B9). ✅** `for_engine` → None hors PostgreSQL ; `engine_conninfo`
+  réécrit le scheme ; le listener réveille sur notification (fausse connexion), se reconnecte
+  après erreur (backoff), s'arrête proprement (idempotent) ; intégration PostgreSQL réelle
+  (`notify_queue()` → un listener reçoit le réveil) ; `submit_to_queue` n'émet `NOTIFY` que si
+  `use_listen_notify` est vrai.
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1406 tests** après B9,
   couverture ≥ 78 %, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
 
 ---
@@ -715,7 +729,7 @@ pilotage de capacité, **B9** au besoin.
   (load-balancing + table `gpu_leases`) reste **différé** — à rouvrir si le débit requis
   dépasse ce qu'un seul nœud encaisse.
 - **D2 — Réveil du scheduler : TRANCHÉ.** **Polling** (`poll_interval_s` = 5 s) pour débuter ;
-  `LISTEN/NOTIFY` (plan B8) seulement si la latence d'enqueue gêne.
+  `LISTEN/NOTIFY` (plan B9, ✅ livré) seulement si la latence d'enqueue gêne.
 - **D3 — Serveur web : TRANCHÉ.** **`gunicorn`** (sync workers) derrière nginx. Ce n'est pas
   une dette technique parce que **C1** (web sans GPU, stateless) + **C2** (claim atomique en
   base) suppriment l'état partagé en mémoire — gunicorn ne fait que tirer parti de ce socle.

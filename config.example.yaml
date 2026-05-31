@@ -435,7 +435,12 @@ workflow:
     aging_enabled: true
     aging_interval_minutes: 30
     aging_max_bonus: 49
-    poll_interval_s: 5
+    poll_interval_s: 5            # latence max de prise en file en l'absence de NOTIFY
+    # Réveil instantané cross-process via PostgreSQL LISTEN/NOTIFY (B9). À activer quand le
+    # tier web (rôle 'web') et l'ordonnanceur (rôle 'scheduler') sont des process séparés et
+    # que la latence du poll (poll_interval_s) gêne. PostgreSQL requis ; le polling reste le
+    # filet de sûreté. Défaut false = mono-process, le poll suffit.
+    use_listen_notify: false
     starvation_timeout_hours: 24
   scheduling:
     enabled: false

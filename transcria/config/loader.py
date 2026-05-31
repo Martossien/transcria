@@ -392,6 +392,7 @@ _DEFAULT_CONFIG = {
             "aging_interval_minutes": 30,
             "aging_max_bonus": 49,
             "poll_interval_s": 5,
+            "use_listen_notify": False,
             "starvation_timeout_hours": 24,
         },
         "scheduling": {

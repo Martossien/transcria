@@ -19,6 +19,7 @@ from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.queue.allocator import GPUAllocator
 from transcria.queue.calendar import SchedulingCalendar
+from transcria.queue.notify_listener import QueueNotifyListener
 from transcria.queue.scheduler_lock import SchedulerLock
 from transcria.queue.store import QueueStore
 from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
@@ -44,6 +45,9 @@ class QueueScheduler:
         queue_cfg = config.get("workflow", {}).get("queue", {}) or {}
         execution_cfg = config.get("workflow", {}).get("execution", {}) or {}
         self.poll_interval_s = max(1, int(queue_cfg.get("poll_interval_s", 5)))
+        # Réveil instantané cross-process via LISTEN/NOTIFY (B9). Désactivé par défaut :
+        # le polling suffit en mono-process. Utile en rôles web/scheduler séparés (C1).
+        self.use_listen_notify = bool(queue_cfg.get("use_listen_notify", False))
         self.aging_enabled = bool(queue_cfg.get("aging_enabled", True))
         self.aging_interval_minutes = int(queue_cfg.get("aging_interval_minutes", 30))
         self.aging_max_bonus = int(queue_cfg.get("aging_max_bonus", 49))
@@ -62,6 +66,7 @@ class QueueScheduler:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._singleton_lock: SchedulerLock | None = None
+        self._notify_listener: QueueNotifyListener | None = None
         self._total_dispatched = 0
         self._last_iteration_s = 0.0
 
@@ -84,6 +89,13 @@ class QueueScheduler:
             daemon=True,
         )
         self._thread.start()
+        # Réveil instantané (B9) : optionnel, en complément du polling (filet de sûreté).
+        if self.use_listen_notify:
+            self._notify_listener = QueueNotifyListener.for_engine(
+                db.engine, self.wake, timeout_s=self.poll_interval_s
+            )
+            if self._notify_listener is not None:
+                self._notify_listener.start()
 
     @property
     def has_singleton_lock(self) -> bool:
@@ -92,6 +104,9 @@ class QueueScheduler:
     def stop(self, timeout_s: float = 30) -> None:
         self._stop_event.set()
         self._wake_event.set()
+        if self._notify_listener is not None:
+            self._notify_listener.stop()
+            self._notify_listener = None
         if self._thread:
             self._thread.join(timeout=timeout_s)
         self._executor.shutdown(wait=False, cancel_futures=False)
@@ -119,7 +134,13 @@ class QueueScheduler:
             mode=mode,
         )
         mark_execution_queued(job_id, mode)
-        self.wake()
+        self.wake()  # réveil intra-process (rôle 'all')
+        if self.use_listen_notify:
+            # Réveil cross-process (rôle 'web' → process 'scheduler') ; best-effort.
+            try:
+                QueueStore.notify_queue()
+            except Exception as exc:  # noqa: BLE001 — le polling reste le filet de sûreté
+                logger.warning("NOTIFY file ignoré (%s) — réveil au prochain poll", exc)
         return {
             "accepted": True,
             "status": "queued",
