@@ -6,7 +6,7 @@
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
 > débit STT distant) · **B6 partiel ✅** (aging ensembliste + capacité nœud au dispatch).
-> Reste **B5 benchmark + B6.3→B9** (cf. §8). Fait suite à la **Phase A**
+> Reste **B5 benchmark + B6.4→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -497,8 +497,10 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   Capacité nœud au dispatch ✅ : le scheduler lit `/capabilities` en best-effort et borne
   les nouveaux dispatchs par `available_remote_slots()` quand le nœud expose une saturation
   fiable ; si le nœud est injoignable ou incomplet, le pré-vol `resource_gate` conserve la
-  gestion defer/fail existante. Reste : admission VRAM-aware, index partiel, cache
-  `/capabilities`, pré-remplissage `SystemDetector` à l'install.
+  gestion defer/fail existante. Admission VRAM-aware ✅ : le scheduler vérifie le coût local
+  connu (`phases` ou `peak_vram_mb`) en ignorant les phases servies à distance, et vérifie la
+  VRAM distante via `gpus[].free_mb` quand `/capabilities` et le profil le permettent. Reste :
+  index partiel, cache `/capabilities`, pré-remplissage `SystemDetector` à l'install.
 - **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
   probe automatique. Aucune table ; transparent pour les jobs en file.
 - **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
@@ -575,6 +577,14 @@ pilotage de capacité, **B9** au besoin.
   connue est inférieure à la capacité locale. En cas d'erreur réseau/payload incomplet, il ne
   bloque pas : le pré-vol `resource_gate` reste responsable du mode dégradé. Tests ajoutés :
   calcul pur des slots STT/in-process et dispatch borné/saturé.
+- **B6.3 — admission VRAM-aware : FAIT.** `_resources_available()` remplace le check limité à
+  la première phase STT : il calcule le coût local maximal depuis `vram_profile.phases` ou
+  `peak_vram_mb`, retire les phases servies à distance (`stt`, `summary_stt`, `diarization`,
+  `voice_embed`), puis utilise `GPUAllocator.can_allocate()`. Côté distant,
+  `remote_vram_admits()` compare le coût des phases distantes à `gpus[].free_mb` avec la marge
+  `gpu.min_free_vram_mb`. Si les données sont absentes, comportement compatible : le pré-vol
+  existant garde l'autorité. Tests ajoutés : peak local, phase STT distante ignorée localement,
+  VRAM distante admise/refusée.
 
 ---
 

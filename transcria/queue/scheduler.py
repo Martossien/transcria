@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -12,7 +13,7 @@ from flask import Flask
 
 from transcria.database import db
 from transcria.inference.client import InferenceClientError, build_client_from_config
-from transcria.inference.resource_status import available_remote_slots, remote_requirements
+from transcria.inference.resource_status import available_remote_slots, remote_requirements, remote_vram_admits
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -25,6 +26,12 @@ from transcria.workflow.transitions import get_execution_status, is_cancel_reque
 logger = logging.getLogger(__name__)
 
 ProcessFn = Callable[[str, str, str], None]
+
+
+@dataclass(frozen=True)
+class _RemoteDispatchState:
+    slots: int | None = None
+    capabilities: dict | None = None
 
 
 class QueueScheduler:
@@ -166,14 +173,14 @@ class QueueScheduler:
         capacity = effective_max - QueueStore.count_running()
         if capacity <= 0:
             return 0
-        remote_slots = self._remote_capacity_limit()
-        if remote_slots is not None:
-            if remote_slots <= 0:
+        remote_state = self._remote_dispatch_state()
+        if remote_state.slots is not None:
+            if remote_state.slots <= 0:
                 logger.info("Dispatch queue différé: nœud de ressources saturé")
                 return 0
-            if remote_slots < capacity:
-                logger.info("Dispatch queue borné par le nœud de ressources: capacity=%d remote_slots=%d", capacity, remote_slots)
-                capacity = remote_slots
+            if remote_state.slots < capacity:
+                logger.info("Dispatch queue borné par le nœud de ressources: capacity=%d remote_slots=%d", capacity, remote_state.slots)
+                capacity = remote_state.slots
 
         dispatched = 0
         for entry in QueueStore.get_next_candidates(limit=max(16, capacity)):
@@ -193,16 +200,19 @@ class QueueScheduler:
             if audio_path is None:
                 QueueStore.dequeue(entry.job_id, status="failed")
                 continue
-            if not self._first_phase_resources_available(entry):
+            if not self._resources_available(entry, remote_state.capabilities):
                 continue
             if self._launch(entry.job_id, str(Path(audio_path)), entry.mode):
                 dispatched += 1
         return dispatched
 
-    def _first_phase_resources_available(self, entry) -> bool:
+    def _resources_available(self, entry, remote_capabilities: dict | None = None) -> bool:
         profile = entry.get_vram_profile()
-        phases = profile.get("phases") if isinstance(profile, dict) else {}
-        required_mb = int((phases or {}).get("stt") or 0)
+        remote_vram = remote_vram_admits(self.config, remote_capabilities, profile)
+        if remote_vram is False:
+            logger.info("Dispatch job différé: VRAM distante insuffisante", extra={"job_id": entry.job_id})
+            return False
+        required_mb = self._local_required_mb(profile)
         if required_mb <= 0:
             return True
         if self.allocator.can_allocate(required_mb) is not None:
@@ -212,7 +222,48 @@ class QueueScheduler:
             return self.allocator.can_allocate(required_mb) is not None
         return False
 
+    def _first_phase_resources_available(self, entry) -> bool:
+        # Compatibilité tests/appels historiques : B6.3 utilise désormais
+        # `_resources_available`, qui couvre aussi le peak local et la VRAM distante.
+        return self._resources_available(entry)
+
+    def _local_required_mb(self, profile: dict) -> int:
+        remote_phases = self._remote_phase_names()
+        phases = profile.get("phases") if isinstance(profile, dict) else {}
+        if isinstance(phases, dict) and phases:
+            values = [
+                self._positive_int(required_mb)
+                for phase, required_mb in phases.items()
+                if phase not in remote_phases
+            ]
+            return max(values, default=0)
+        if isinstance(profile, dict):
+            return self._positive_int(profile.get("peak_vram_mb"))
+        return 0
+
+    def _remote_phase_names(self) -> set[str]:
+        reqs = remote_requirements(self.config)
+        phases: set[str] = set()
+        if "stt" in reqs:
+            phases.update({"stt", "summary_stt"})
+        if "diarize" in reqs:
+            phases.add("diarization")
+        if "voice_embed" in reqs:
+            phases.add("voice_embed")
+        return phases
+
+    @staticmethod
+    def _positive_int(value) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return max(0, parsed)
+
     def _remote_capacity_limit(self) -> int | None:
+        return self._remote_dispatch_state().slots
+
+    def _remote_dispatch_state(self) -> _RemoteDispatchState:
         """Capacité distante exploitable pour ce tick, si elle est connue.
 
         Best-effort : en cas de nœud injoignable ou de payload incomplet, on garde
@@ -220,19 +271,19 @@ class QueueScheduler:
         avec la fenêtre d'indisponibilité configurée.
         """
         if not remote_requirements(self.config):
-            return None
+            return _RemoteDispatchState()
         client = build_client_from_config(self.config)
         if client is None:
-            return None
+            return _RemoteDispatchState()
         try:
             capabilities = client.capabilities()
         except InferenceClientError as exc:
             logger.warning("Capacité distante indisponible au dispatch — pré-vol conservé: %s", exc)
-            return None
+            return _RemoteDispatchState()
         slots = available_remote_slots(self.config, capabilities)
         if slots is not None:
             logger.debug("Capacité distante dispatch: slots=%s", slots)
-        return slots
+        return _RemoteDispatchState(slots=slots, capabilities=capabilities)
 
     def _launch(self, job_id: str, audio_path: str, mode: str) -> bool:
         # Claim atomique (Phase B / C2) : transition WAITING→RUNNING en base. Si une

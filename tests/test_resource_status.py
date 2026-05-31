@@ -12,6 +12,7 @@ from transcria.inference.resource_status import (
     assess_admission,
     available_remote_slots,
     remote_requirements,
+    remote_vram_admits,
     summarize_capabilities,
 )
 
@@ -168,6 +169,42 @@ def test_available_remote_slots_takes_minimum_required_inprocess_capacity():
     }
 
     assert available_remote_slots(cfg, caps) == 0
+
+
+def test_remote_vram_admits_remote_phase_when_gpu_has_headroom():
+    cfg = {
+        "gpu": {"min_free_vram_mb": 1000},
+        "models": {"stt_backend": "cohere"},
+        "inference": {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://h/v1"}}}},
+    }
+    profile = {"phases": {"stt": 6000, "diarization": 2000}}
+    caps = {"gpus": [{"index": 0, "free_mb": 7500, "total_mb": 24000}]}
+
+    assert remote_vram_admits(cfg, caps, profile) is True
+
+
+def test_remote_vram_rejects_when_no_gpu_has_enough_free_vram():
+    cfg = {
+        "gpu": {"min_free_vram_mb": 1000},
+        "models": {"stt_backend": "cohere"},
+        "inference": {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://h/v1"}}}},
+    }
+    profile = {"phases": {"stt": 6000}}
+    caps = {"gpus": [{"index": 0, "free_mb": 6500, "total_mb": 24000}]}
+
+    assert remote_vram_admits(cfg, caps, profile) is False
+
+
+def test_remote_vram_ignores_local_only_phase_costs():
+    cfg = {
+        "gpu": {"min_free_vram_mb": 1000},
+        "models": {"stt_backend": "cohere", "diarization_backend": "pyannote"},
+        "inference": {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://h/v1"}}}},
+    }
+    profile = {"phases": {"stt": 4000, "diarization": 60000}}
+    caps = {"gpus": [{"index": 0, "free_mb": 5500, "total_mb": 24000}]}
+
+    assert remote_vram_admits(cfg, caps, profile) is True
 
 
 # ── InferenceClient.capabilities() ────────────────────────────────────────────

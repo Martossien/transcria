@@ -154,6 +154,51 @@ def test_scheduler_skips_candidate_when_first_phase_vram_unavailable(app, owner_
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
 
 
+def test_scheduler_uses_peak_vram_profile_for_local_admission(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"peak_vram_mb": 12000})
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        seen = []
+
+        def fake_can_allocate(required_mb):
+            seen.append(required_mb)
+            return None
+
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", fake_can_allocate)
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0
+        assert launched == []
+        assert seen == [12000]
+        assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_scheduler_ignores_remote_phase_for_local_vram_admission(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        cfg["models"] = {"stt_backend": "cohere", "diarization_backend": "pyannote"}
+        cfg["inference"] = {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://stt/v1"}}}}
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"phases": {"stt": 60000, "diarization": 2000}})
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        monkeypatch.setattr(scheduler, "_remote_dispatch_state", lambda: type("S", (), {"slots": None, "capabilities": None})())
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", lambda required_mb: 0 if required_mb == 2000 else None)
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 1
+        assert launched == [job.id]
+
+
 def test_scheduler_limits_dispatch_with_remote_capacity(app, owner_id, tmp_path, monkeypatch):
     with app.app_context():
         _clear_queue()
@@ -165,7 +210,7 @@ def test_scheduler_limits_dispatch_with_remote_capacity(app, owner_id, tmp_path,
             QueueStore.enqueue(job.id, mode="fast")
 
         scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
-        monkeypatch.setattr(scheduler, "_remote_capacity_limit", lambda: 1)
+        monkeypatch.setattr(scheduler, "_remote_dispatch_state", lambda: type("S", (), {"slots": 1, "capabilities": None})())
         dispatched = scheduler._dispatch_iteration()
         scheduler._executor.shutdown(wait=True)
 
@@ -184,7 +229,29 @@ def test_scheduler_defers_when_remote_capacity_is_zero(app, owner_id, tmp_path, 
         QueueStore.enqueue(job.id, mode="fast")
 
         scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
-        monkeypatch.setattr(scheduler, "_remote_capacity_limit", lambda: 0)
+        monkeypatch.setattr(scheduler, "_remote_dispatch_state", lambda: type("S", (), {"slots": 0, "capabilities": None})())
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0
+        assert launched == []
+        assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_scheduler_defers_when_remote_vram_is_insufficient(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        cfg["gpu"] = {"min_free_vram_mb": 1000}
+        cfg["models"] = {"stt_backend": "cohere"}
+        cfg["inference"] = {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://stt/v1"}}}}
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"phases": {"stt": 6000}})
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        state = type("S", (), {"slots": 1, "capabilities": {"gpus": [{"index": 0, "free_mb": 6500, "total_mb": 24000}]}})()
+        monkeypatch.setattr(scheduler, "_remote_dispatch_state", lambda: state)
         dispatched = scheduler._dispatch_iteration()
         scheduler._executor.shutdown(wait=True)
 

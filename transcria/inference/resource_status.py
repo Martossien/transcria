@@ -142,6 +142,46 @@ def available_remote_slots(config: dict, capabilities: dict | None) -> int | Non
     return min(slots) if slots else None
 
 
+def remote_vram_admits(config: dict, capabilities: dict | None, vram_profile: dict | None) -> bool | None:
+    """Admission VRAM distante depuis `/capabilities`.
+
+    `True`  : le coût distant connu tient sur au moins un GPU du nœud.
+    `False` : le coût distant connu ne tient nulle part.
+    `None`  : pas de besoin distant ou données insuffisantes, laisser le pré-vol
+              existant décider.
+    """
+    reqs = remote_requirements(config)
+    if not reqs or not capabilities or not isinstance(vram_profile, dict):
+        return None
+    required_mb = _remote_required_mb(reqs, vram_profile)
+    if required_mb <= 0:
+        return None
+    headroom_mb = int((config.get("gpu", {}) or {}).get("min_free_vram_mb", 4000))
+    for gpu in capabilities.get("gpus", []) or []:
+        try:
+            free_mb = int(gpu.get("free_mb", 0))
+        except (TypeError, ValueError):
+            continue
+        if free_mb >= required_mb + headroom_mb:
+            return True
+    return False
+
+
+def _remote_required_mb(reqs: set[str], vram_profile: dict) -> int:
+    phases = vram_profile.get("phases")
+    if isinstance(phases, dict):
+        remote_phases: set[str] = set()
+        if "stt" in reqs:
+            remote_phases.update({"stt", "summary_stt"})
+        if "diarize" in reqs:
+            remote_phases.add("diarization")
+        if "voice_embed" in reqs:
+            remote_phases.add("voice_embed")
+        values = [_positive_int(phases.get(name)) for name in remote_phases]
+        return max(values, default=0)
+    return _positive_int(vram_profile.get("peak_vram_mb"))
+
+
 def _stt_slots(config: dict, capabilities: dict) -> int | None:
     backend = config.get("models", {}).get("stt_backend", "cohere")
     engine = next(
@@ -177,3 +217,11 @@ def _inprocess_slots(capabilities: dict, engine_name: str) -> int | None:
     except (TypeError, ValueError):
         return None
     return max(0, capacity - inflight - queued)
+
+
+def _positive_int(value) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, parsed)
