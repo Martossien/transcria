@@ -5,8 +5,9 @@
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
-> débit STT distant) · **B6 partiel ✅** (aging ensembliste + capacité nœud au dispatch).
-> Reste **B5 benchmark + B6.4→B9** (cf. §8). Fait suite à la **Phase A**
+> débit STT distant) · **B6 ✅** (admission/backpressure : aging, capacité, VRAM, index,
+> cache `/capabilities`).
+> Reste **B5 benchmark + B7→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -499,8 +500,11 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   fiable ; si le nœud est injoignable ou incomplet, le pré-vol `resource_gate` conserve la
   gestion defer/fail existante. Admission VRAM-aware ✅ : le scheduler vérifie le coût local
   connu (`phases` ou `peak_vram_mb`) en ignorant les phases servies à distance, et vérifie la
-  VRAM distante via `gpus[].free_mb` quand `/capabilities` et le profil le permettent. Reste :
-  index partiel, cache `/capabilities`, pré-remplissage `SystemDetector` à l'install.
+  VRAM distante via `gpus[].free_mb` quand `/capabilities` et le profil le permettent. Index
+  partiel ✅ : migration `8f2b6d0e4a1c` ajoute `ix_job_queue_waiting_order` pour l'ordre de
+  queue waiting. Cache `/capabilities` ✅ : `GET /api/resources/status` mutualise les polls
+  pendant ~5 s par process frontale, désactivable via `inference.resilience.capabilities_cache_ttl_s`.
+  Reste hors B6 : pré-remplissage matériel à l'install si l'on veut enrichir l'UX config.
 - **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
   probe automatique. Aucune table ; transparent pour les jobs en file.
 - **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
@@ -585,6 +589,13 @@ pilotage de capacité, **B9** au besoin.
   `gpu.min_free_vram_mb`. Si les données sont absentes, comportement compatible : le pré-vol
   existant garde l'autorité. Tests ajoutés : peak local, phase STT distante ignorée localement,
   VRAM distante admise/refusée.
+- **B6.4 — index + cache capabilities : FAIT.** `JobQueueEntry` déclare l'index
+  `ix_job_queue_waiting_order` (`status, base_priority, aging_bonus, position, submitted_at`)
+  avec filtre PostgreSQL `status='waiting'`, et la migration Alembic dédiée garde le schéma
+  synchronisé. La route frontale `/api/resources/status` ajoute un cache TTL court par process
+  (`capabilities_cache_ttl_s`, défaut 5 s), inclut `cached` dans la réponse, et expose un helper
+  de purge pour les tests/changements explicites. Tests ajoutés : route reachable/unreachable
+  avec `cached`, réutilisation du cache, désactivation TTL, anti-dérive Alembic.
 
 ---
 

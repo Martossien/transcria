@@ -1,6 +1,7 @@
 import copy
 import logging
 import re
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -64,6 +65,9 @@ DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
 PROCESS_START_TIME = time.time()
 LEXICON_DISPLAY_MAX_ENTRIES = 80
+_RESOURCE_STATUS_CACHE_LOCK = threading.Lock()
+_RESOURCE_STATUS_CACHE: dict[tuple, dict] = {}
+_DEFAULT_RESOURCE_STATUS_CACHE_TTL_S = 5.0
 
 
 def _audit_origin_from_url(value: str | None) -> str:
@@ -78,6 +82,60 @@ def _audit_origin_from_url(value: str | None) -> str:
 def _clean_job_title(title: str | None, default: str = DEFAULT_JOB_TITLE) -> str:
     cleaned = re.sub(r"[\x00-\x1f\x7f<>]", "", title or "").strip()
     return (cleaned or default)[:255]
+
+
+def _resource_status_cache_ttl_s(cfg: dict) -> float:
+    raw = ((cfg.get("inference", {}) or {}).get("resilience", {}) or {}).get(
+        "capabilities_cache_ttl_s",
+        _DEFAULT_RESOURCE_STATUS_CACHE_TTL_S,
+    )
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return _DEFAULT_RESOURCE_STATUS_CACHE_TTL_S
+
+
+def _resource_status_cache_key(cfg: dict, requirements: set[str]) -> tuple:
+    inference = cfg.get("inference", {}) or {}
+    models = cfg.get("models", {}) or {}
+    stt = inference.get("stt", {}) or {}
+    return (
+        inference.get("mode", "local"),
+        inference.get("url") or inference.get("base_url") or "",
+        models.get("stt_backend", "cohere"),
+        models.get("diarization_backend", "pyannote"),
+        tuple(sorted(requirements)),
+        repr(stt.get("backends", {})),
+    )
+
+
+def _get_cached_resource_status(key: tuple, now_s: float) -> dict | None:
+    with _RESOURCE_STATUS_CACHE_LOCK:
+        cached = _RESOURCE_STATUS_CACHE.get(key)
+        if not cached:
+            return None
+        if float(cached["expires_at"]) <= now_s:
+            _RESOURCE_STATUS_CACHE.pop(key, None)
+            return None
+        summary = copy.deepcopy(cached["summary"])
+    summary["cached"] = True
+    return summary
+
+
+def _set_cached_resource_status(key: tuple, summary: dict, ttl_s: float, now_s: float) -> None:
+    if ttl_s <= 0:
+        return
+    with _RESOURCE_STATUS_CACHE_LOCK:
+        _RESOURCE_STATUS_CACHE[key] = {
+            "expires_at": now_s + ttl_s,
+            "summary": copy.deepcopy(summary),
+        }
+
+
+def _clear_resource_status_cache() -> None:
+    """Réservé aux tests et aux changements explicites de config."""
+    with _RESOURCE_STATUS_CACHE_LOCK:
+        _RESOURCE_STATUS_CACHE.clear()
 
 
 def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> dict:
@@ -1056,11 +1114,20 @@ def api_resources_status():
 
     Interroge /capabilities du nœud ; injoignable → reachable=False (la frontale
     affiche rouge, l'admission bascule en file/échec selon §7.2). Voir
-    docs/SERVICE_RESSOURCES_GPU.md §7.
+    docs/SERVICE_RESSOURCES_GPU.md §7. Cache court par process pour éviter que
+    chaque client web martèle directement le nœud de ressources.
     """
     cfg = get_config()
     from transcria.inference.client import InferenceUnavailable, build_client_from_config
     from transcria.inference.resource_status import remote_requirements, summarize_capabilities
+
+    requirements = remote_requirements(cfg)
+    cache_key = _resource_status_cache_key(cfg, requirements)
+    ttl_s = _resource_status_cache_ttl_s(cfg)
+    now_s = time.monotonic()
+    cached = _get_cached_resource_status(cache_key, now_s)
+    if cached is not None:
+        return jsonify(cached)
 
     client = build_client_from_config(cfg)
     caps = None
@@ -1071,7 +1138,9 @@ def api_resources_status():
             logger.info("Panneau ressources : nœud injoignable — %s", exc)
             caps = None
     summary = summarize_capabilities(caps)
-    summary["requires_remote"] = sorted(remote_requirements(cfg))
+    summary["requires_remote"] = sorted(requirements)
+    summary["cached"] = False
+    _set_cached_resource_status(cache_key, summary, ttl_s, now_s)
     return jsonify(summary)
 
 

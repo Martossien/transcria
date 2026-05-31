@@ -6,6 +6,17 @@ from transcria.database import db
 
 class JobQueueEntry(db.Model):
     __tablename__ = "job_queue"
+    __table_args__ = (
+        db.Index(
+            "ix_job_queue_waiting_order",
+            "status",
+            "base_priority",
+            "aging_bonus",
+            "position",
+            "submitted_at",
+            postgresql_where=db.text("status = 'waiting'"),
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     job_id = db.Column(db.String(36), db.ForeignKey("jobs.id"), unique=True, nullable=False, index=True)
