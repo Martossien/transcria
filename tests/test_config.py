@@ -218,10 +218,21 @@ class TestAppDebugResolution:
             )
             f.flush()
             path = f.name
+        # create_app() appelle init_job_executor() qui remplace l'executor global
+        # (et démarre un scheduler). On capture l'executor précédent pour le restaurer
+        # et stopper celui qu'on crée, sinon son thread scheduler reste orphelin et
+        # poll la base jusqu'au teardown (logs « connection refused » à l'arrêt).
+        import transcria.services.job_executor as je
+        previous_executor = je.get_job_executor()
         try:
             app = create_app(path)
             assert app.config["SQLALCHEMY_DATABASE_URI"] == "sqlite:///:memory:"
         finally:
+            created = je.get_job_executor()
+            if created is not None and created is not previous_executor:
+                created.stop()
+            with je._executor_lock:
+                je._executor_service = previous_executor
             os.unlink(path)
 
     def test_no_debug_cli_overrides_config_and_env(self):
