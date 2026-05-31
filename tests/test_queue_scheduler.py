@@ -2,12 +2,11 @@ from datetime import datetime, timedelta, timezone
 
 from transcria.database import db
 from transcria.jobs.filesystem import JobFilesystem
-from transcria.jobs.store import JobStore
-from transcria.queue.models import JobQueueEntry
-from transcria.queue.calendar import SchedulingWindowStore
-from transcria.queue.models import SchedulingWindow
-from transcria.queue.scheduler import QueueScheduler
 from transcria.jobs.models import JobState
+from transcria.jobs.store import JobStore
+from transcria.queue.calendar import SchedulingWindowStore
+from transcria.queue.models import JobQueueEntry, SchedulingWindow
+from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QUEUE_CANCELLED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
 
@@ -153,3 +152,25 @@ def test_scheduler_skips_candidate_when_first_phase_vram_unavailable(app, owner_
         assert dispatched == 0
         assert launched == []
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_launch_claims_atomically_no_double_dispatch(app, owner_id, tmp_path):
+    """_launch revendique l'entrée : un 2nd appel (entrée déjà running) renvoie
+    False et ne soumet rien — pas de double-dispatch (Phase B / C2)."""
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+
+        first = scheduler._launch(job.id, "audio.mp3", "fast")
+        second = scheduler._launch(job.id, "audio.mp3", "fast")
+        scheduler._executor.shutdown(wait=True)
+
+        assert first is True
+        assert second is False
+        assert launched == [job.id]                       # soumis une seule fois
+        assert QueueStore.get_entry(job.id).status == QUEUE_RUNNING

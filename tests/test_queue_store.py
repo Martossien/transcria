@@ -152,3 +152,115 @@ def test_requeue_later_eligible_once_delay_elapsed(app, owner_id):
 def test_requeue_later_unknown_job_returns_false(app):
     with app.app_context():
         assert QueueStore.requeue_later("inexistant", datetime.now(timezone.utc)) is False
+
+
+# ── Claim atomique (Phase B / C2) ──────────────────────────────────────────────
+
+def test_claim_transitions_waiting_to_running(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Claim me")
+        QueueStore.enqueue(job.id)
+
+        assert QueueStore.claim(job.id) is True
+
+        entry = QueueStore.get_entry(job.id)
+        assert entry.status == QUEUE_RUNNING
+        assert entry.started_at is not None
+
+
+def test_claim_is_single_winner(app, owner_id):
+    """Deux claims séquentiels sur la même entrée : le 1er gagne, le 2nd échoue."""
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Once")
+        QueueStore.enqueue(job.id)
+
+        assert QueueStore.claim(job.id) is True
+        assert QueueStore.claim(job.id) is False           # déjà running
+        assert QueueStore.get_entry(job.id).status == QUEUE_RUNNING
+
+
+def test_claim_rejects_non_waiting_and_missing(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        assert QueueStore.claim("inexistant") is False     # absente
+
+        job = JobStore.create_job(owner_id, "Paused")
+        QueueStore.enqueue(job.id)
+        QueueStore.pause(job.id)
+        assert QueueStore.claim(job.id) is False            # statut != waiting
+        assert QueueStore.get_entry(job.id).status == QUEUE_PAUSED
+
+
+def test_claim_concurrent_same_entry_single_winner(app, owner_id):
+    """N threads réels (connexions PG distinctes) revendiquent la MÊME entrée :
+    exactement un `True`. Prouve l'absence de double-dispatch (limite #3)."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    with app.app_context():
+        if db.engine.dialect.name != "postgresql":
+            import pytest
+            pytest.skip("Test de concurrence : PostgreSQL uniquement")
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Contended")
+        QueueStore.enqueue(job.id)
+        job_id = job.id                      # chaîne capturée (objet ORM détaché hors contexte)
+
+    n = 8
+    barrier = threading.Barrier(n)
+
+    def _attempt() -> bool:
+        barrier.wait()                       # maximise le chevauchement
+        with app.app_context():
+            return QueueStore.claim(job_id)
+
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        results = list(pool.map(lambda _: _attempt(), range(n)))
+
+    assert sum(1 for r in results if r) == 1
+    with app.app_context():
+        assert QueueStore.get_entry(job_id).status == QUEUE_RUNNING
+
+
+def test_claim_concurrent_pool_each_claimed_once(app, owner_id):
+    """M entrées, N threads qui tentent toutes les entrées en parallèle :
+    chaque entrée est revendiquée par exactement un thread (aucun doublon)."""
+    import threading
+    from collections import Counter
+    from concurrent.futures import ThreadPoolExecutor
+
+    with app.app_context():
+        if db.engine.dialect.name != "postgresql":
+            import pytest
+            pytest.skip("Test de concurrence : PostgreSQL uniquement")
+        _clear_queue()
+        job_ids = []
+        for i in range(12):
+            job = JobStore.create_job(owner_id, f"Pool {i}")
+            QueueStore.enqueue(job.id)
+            job_ids.append(job.id)
+
+    n = 8
+    barrier = threading.Barrier(n)
+
+    def _drain() -> list[str]:
+        barrier.wait()
+        won = []
+        for jid in job_ids:
+            with app.app_context():
+                if QueueStore.claim(jid):
+                    won.append(jid)
+        return won
+
+    with ThreadPoolExecutor(max_workers=n) as pool:
+        per_thread = list(pool.map(lambda _: _drain(), range(n)))
+
+    winners = Counter(jid for won in per_thread for jid in won)
+    # Chaque entrée gagnée exactement une fois ; toutes les entrées prises.
+    assert set(winners) == set(job_ids)
+    assert all(count == 1 for count in winners.values())
+    with app.app_context():
+        for jid in job_ids:
+            assert QueueStore.get_entry(jid).status == QUEUE_RUNNING

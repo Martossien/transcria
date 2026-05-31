@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, update
+from sqlalchemy.engine import CursorResult
 
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupMembership, Role
@@ -226,6 +228,51 @@ class QueueStore:
         entry.paused_by = None
         db.session.commit()
         return True
+
+    @staticmethod
+    def claim(job_id: str) -> bool:
+        """Transition **atomique** WAITING→RUNNING, sûre quel que soit le nombre de
+        dispatchers (Phase B / C2).
+
+        Renvoie ``True`` si *cet* appelant a remporté l'entrée (et l'a passée RUNNING),
+        ``False`` si elle n'était plus disponible (déjà prise, terminée ou absente).
+        C'est le primitif anti-double-dispatch (limite #3) : une entrée n'est lancée
+        qu'une seule fois, même si deux orchestrateurs coexistent.
+
+        - **PostgreSQL** : verrou ligne ``FOR UPDATE SKIP LOCKED`` — un dispatcher
+          concurrent visant la même ligne la *saute* (pas d'attente) et repart sur une
+          autre. Le ``filter(status=waiting)`` garantit qu'une entrée déjà running/terminée
+          n'est jamais re-revendiquée.
+        - **Autres dialectes** (SQLite dev/tests) : UPDATE conditionnel atomique
+          (``WHERE status='waiting'`` + ``rowcount``).
+
+        La transaction est volontairement minuscule (aucune E/S) : on claim, on committe,
+        *puis* on lance le job hors transaction (cf. C2 — verrous tenus quelques ms).
+        """
+        now = datetime.now(timezone.utc)
+        if db.engine.dialect.name == "postgresql":
+            entry = db.session.execute(
+                db.select(JobQueueEntry)
+                .filter_by(job_id=job_id, status=QUEUE_WAITING)
+                .with_for_update(skip_locked=True)
+            ).scalar_one_or_none()
+            if entry is None:
+                db.session.rollback()   # libère la transaction ouverte par le SELECT
+                return False
+            entry.status = QUEUE_RUNNING
+            entry.started_at = now
+            db.session.commit()
+            return True
+        result = cast(
+            CursorResult,
+            db.session.execute(
+                update(JobQueueEntry)
+                .where(JobQueueEntry.job_id == job_id, JobQueueEntry.status == QUEUE_WAITING)
+                .values(status=QUEUE_RUNNING, started_at=now)
+            ),
+        )
+        db.session.commit()
+        return result.rowcount == 1
 
     @staticmethod
     def mark_running(job_id: str, gpu_index: int | None = None, phase: str | None = None) -> bool:

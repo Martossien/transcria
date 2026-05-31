@@ -160,8 +160,8 @@ class QueueScheduler:
                 continue
             if not self._first_phase_resources_available(entry):
                 continue
-            self._launch(entry.job_id, str(Path(audio_path)), entry.mode)
-            dispatched += 1
+            if self._launch(entry.job_id, str(Path(audio_path)), entry.mode):
+                dispatched += 1
         return dispatched
 
     def _first_phase_resources_available(self, entry) -> bool:
@@ -177,13 +177,18 @@ class QueueScheduler:
             return self.allocator.can_allocate(required_mb) is not None
         return False
 
-    def _launch(self, job_id: str, audio_path: str, mode: str) -> None:
-        QueueStore.mark_running(job_id)
+    def _launch(self, job_id: str, audio_path: str, mode: str) -> bool:
+        # Claim atomique (Phase B / C2) : transition WAITING→RUNNING en base. Si une
+        # autre instance a déjà pris l'entrée (ou si elle n'est plus waiting), on
+        # abandonne proprement — pas de double-dispatch.
+        if not QueueStore.claim(job_id):
+            return False
         future = self._executor.submit(self.process_fn, job_id, audio_path, mode)
         with self._running_lock:
             self._running[job_id] = future
             self._total_dispatched += 1
         future.add_done_callback(lambda fut, jid=job_id: self._on_done(jid, fut))  # type: ignore[misc]
+        return True
 
     def _on_done(self, job_id: str, future: Future) -> None:
         with self._running_lock:
