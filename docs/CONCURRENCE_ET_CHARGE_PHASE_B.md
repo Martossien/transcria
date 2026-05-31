@@ -4,7 +4,8 @@
 > **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
-> état de charge `/capabilities`). Reste **B5→B9** (cf. §8). Fait suite à la **Phase A**
+> état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation débit STT distant).
+> Reste **B5 benchmark→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -283,12 +284,16 @@ Le nœud est le composant le plus sollicité en parallèle. Quatre durcissements
    `ensure_in_progress` et `last_used_monotonic_s` quand le superviseur connaît le moteur.
    Ces champs permettent à la frontale et aux étapes C5/C7 de raisonner sur la charge réelle
    du nœud sans inférer depuis de simples voyants `loaded`/`up`.
-4. **Exploiter le batching continu de vLLM (débit STT).** Le mécanisme existe déjà :
+4. **Exploiter le batching continu de vLLM (débit STT). ✅ Instrumenté.** Le mécanisme existe déjà :
    **`inference.stt.concurrency`** (loader, défaut **1**) parallélise les tours d'un job via
    `STTService._transcribe_chunks_concurrent` (`transcria/stt/transcription.py:550`),
    **mais uniquement** si le transcripteur est `concurrent_safe` (backend distant). Le gain
    de débit du nœud consiste à **le porter à 4–8** sur backend distant (vLLM gère plusieurs
    requêtes en vol — cf. `SERVICE_RESSOURCES_GPU.md` §5, marqué « future ») et à mesurer.
+   La mesure est maintenant loguée par run : mode séquentiel/concurrent, backend, workers,
+   tours, segments, durée, tours/s et segments/s. Les valeurs invalides de
+   `inference.stt.concurrency` reviennent au mode séquentiel avec warning. Le défaut reste
+   **1** tant qu'un benchmark réel n'a pas validé une valeur cible pour le matériel.
    *Optionnel (D-ouverte)* : une borne **inter-jobs** (sémaphore global vers le moteur) si
    plusieurs jobs STT concurrents saturent le moteur. *Ne concerne que les moteurs
    OpenAI-compat (vLLM/SGLang), jamais les engines in-process (diarize/voice-embed).*
@@ -475,7 +480,11 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   moteurs STT avec `ensure_in_progress/last_used_monotonic_s`. L'invariant single-process du
   nœud est documenté dans `inference_service/README.md` et `inference_service/__main__.py`
   (`gunicorn --workers 1` ou `python -m inference_service`).
-- **B5 — Débit STT (C4.4).** Monter `inference.stt.concurrency` sur backend distant, mesures de débit.
+- **B5 — Débit STT (C4.4). PARTIEL.** Instrumentation et garde-fous faits : logs de débit
+  par run (`tours_s`, `segments_s`), mode séquentiel/concurrent explicite, bornage
+  `min(concurrency, tours)`, fallback séquentiel avec warning si config invalide. Reste :
+  benchmark réel pour choisir une valeur recommandée (`4–8` selon nœud) et documenter la
+  montée de `inference.stt.concurrency`.
 - **B6 — Admission à l'échelle + VRAM-aware (C5, D4).** Aging ensembliste, capacité nœud dans
   l'ordonnancement, index partiel, cache `/capabilities` ; `max_concurrent_jobs` rétrogradé en
   plafond, admission pilotée par la VRAM, pré-remplissage `SystemDetector` à l'install.
@@ -530,8 +539,13 @@ pilotage de capacité, **B9** au besoin.
   `ensure_in_progress` sans créer de verrou passif et protège `_last_used` par un verrou
   d'état. `summarize_capabilities()` propage ces champs au panneau frontale. Tests ajoutés :
   charge in-process avec deux threads, payload pur `/capabilities`, route Flask avec
-  superviseur factice, résumé frontale. Le `concurrent_safe` / `inference.stt.concurrency`
-  (B5) est la brique suivante.
+  superviseur factice, résumé frontale.
+- **B5 — instrumentation débit STT : PARTIEL.** `_transcribe_by_chunks()` logue le mode
+  choisi, puis un résumé avec backend, workers, tours, segments, durée, tours/s et segments/s.
+  `_chunk_concurrency()` refuse les valeurs invalides ou `<1` avec warning et revient à 1.
+  Tests ajoutés : logs séquentiel/concurrent, ordre préservé, parallélisme réel, bornage par
+  nombre de tours, fallback config invalide. Le benchmark matériel reste à faire avant de
+  recommander une valeur `inference.stt.concurrency > 1`.
 
 ---
 
@@ -552,8 +566,8 @@ pilotage de capacité, **B9** au besoin.
   (mêmes bonus appliqués) + un seul `UPDATE`.
 - **Backpressure** : nœud renvoyant 503 → `resource_gate` `defer` + `requeue_later` (déjà
   couvert §7.2, à étendre au cas moteur STT saturé / concurrence atteinte).
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1352 tests** après B4.3,
-  couverture `77.88%`, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1354 tests** après B5
+  instrumentation, couverture `77.90%`, seuil 65%), `ruff`/`mypy`/anti-dérive Alembic.
 
 ---
 

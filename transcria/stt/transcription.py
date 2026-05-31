@@ -1,5 +1,6 @@
 import logging
 import re
+import time
 from pathlib import Path
 
 import numpy as np
@@ -503,16 +504,32 @@ class Transcriber:
         mapping = self._build_name_mapping(speaker_mapping)
         total = len(chunks)
         workers = self._chunk_concurrency(total)
+        backend = getattr(self.transcriber, "model_name", self.transcriber.__class__.__name__)
+        started = time.monotonic()
 
         if workers > 1:
-            sl.info("Transcription par tour en concurrence : %d workers (%d tours)", workers, total)
-            return self._transcribe_chunks_concurrent(chunks, lang, mapping, workers, sl)
+            sl.info(
+                "Transcription par tour en concurrence: backend=%s workers=%d tours=%d",
+                backend,
+                workers,
+                total,
+            )
+            concurrent_segments = self._transcribe_chunks_concurrent(chunks, lang, mapping, workers, sl)
+            self._log_chunk_transcription_summary(sl, backend, total, len(concurrent_segments), started, workers=workers)
+            return concurrent_segments
 
+        sl.info(
+            "Transcription par tour séquentielle: backend=%s tours=%d concurrent_safe=%s",
+            backend,
+            total,
+            bool(getattr(self.transcriber, "concurrent_safe", False)),
+        )
         segments: list[dict] = []
         for i, chunk in enumerate(chunks):
             segments.extend(self._process_chunk(chunk, lang, mapping))
             if (i + 1) % 100 == 0 or (i + 1) == total:
                 sl.info("Progression transcription: %d/%d chunks", i + 1, total)
+        self._log_chunk_transcription_summary(sl, backend, total, len(segments), started, workers=1)
         return segments
 
     def _process_chunk(self, chunk: dict, lang: str, mapping: dict) -> list[dict]:
@@ -544,7 +561,15 @@ class Transcriber:
         if total <= 1 or not getattr(self.transcriber, "concurrent_safe", False):
             return 1
         stt_cfg = (self.config.get("inference", {}) or {}).get("stt", {}) or {}
-        workers = int(stt_cfg.get("concurrency", 1))
+        raw_workers = stt_cfg.get("concurrency", 1)
+        try:
+            workers = int(raw_workers)
+        except (TypeError, ValueError):
+            logger.warning("inference.stt.concurrency invalide (%r) — retour au mode séquentiel", raw_workers)
+            return 1
+        if workers < 1:
+            logger.warning("inference.stt.concurrency doit être >= 1 (%r) — retour au mode séquentiel", raw_workers)
+            return 1
         return max(1, min(workers, total))
 
     def _transcribe_chunks_concurrent(
@@ -563,6 +588,28 @@ class Transcriber:
                 if done % 100 == 0 or done == total:
                     sl.info("Progression transcription: %d/%d tours", done, total)
         return segments
+
+    @staticmethod
+    def _log_chunk_transcription_summary(
+        sl,
+        backend: str,
+        total_chunks: int,
+        segment_count: int,
+        started: float,
+        *,
+        workers: int,
+    ) -> None:
+        elapsed = max(0.001, time.monotonic() - started)
+        sl.info(
+            "Transcription par tour terminée: backend=%s workers=%d tours=%d segments=%d duree=%.2fs tours_s=%.2f segments_s=%.2f",
+            backend,
+            workers,
+            total_chunks,
+            segment_count,
+            elapsed,
+            total_chunks / elapsed,
+            segment_count / elapsed,
+        )
 
     @staticmethod
     def _build_name_mapping(speaker_mapping: dict | None) -> dict:

@@ -8,8 +8,6 @@ from __future__ import annotations
 import threading
 import time
 
-import pytest
-
 from transcria.stt.transcription import Transcriber
 
 
@@ -18,6 +16,7 @@ class _FakeTranscriber:
 
     def __init__(self, concurrent_safe: bool):
         self.concurrent_safe = concurrent_safe
+        self.model_name = "fake-remote" if concurrent_safe else "fake-local"
         self._active = 0
         self.max_active = 0
         self._lock = threading.Lock()
@@ -34,8 +33,16 @@ class _FakeTranscriber:
 
 
 class _SL:
+    def __init__(self):
+        self.messages: list[str] = []
+
     def info(self, *a, **k):
-        pass
+        if not a:
+            return
+        msg = str(a[0])
+        if len(a) > 1:
+            msg = msg % a[1:]
+        self.messages.append(msg)
 
 
 def _transcriber(fake, concurrency):
@@ -53,18 +60,24 @@ def _chunks(n):
 def test_order_preserved_sequential():
     fake = _FakeTranscriber(concurrent_safe=False)
     t = _transcriber(fake, concurrency=4)          # ignoré : backend non concurrent-safe
-    segs = t._transcribe_by_chunks(_chunks(6), "fr", None, _SL())
+    sl = _SL()
+    segs = t._transcribe_by_chunks(_chunks(6), "fr", None, sl)
     assert [s["text"] for s in segs] == [f"chunk-{i}" for i in range(6)]
     assert [s["start"] for s in segs] == [i * 10.0 for i in range(6)]  # offsets globaux
     assert fake.max_active == 1                     # resté séquentiel
+    assert any("Transcription par tour séquentielle: backend=fake-local" in msg for msg in sl.messages)
+    assert any("Transcription par tour terminée: backend=fake-local workers=1 tours=6 segments=6" in msg for msg in sl.messages)
 
 
 def test_concurrent_when_remote_and_configured():
     fake = _FakeTranscriber(concurrent_safe=True)
     t = _transcriber(fake, concurrency=4)
-    segs = t._transcribe_by_chunks(_chunks(8), "fr", None, _SL())
+    sl = _SL()
+    segs = t._transcribe_by_chunks(_chunks(8), "fr", None, sl)
     assert [s["text"] for s in segs] == [f"chunk-{i}" for i in range(8)]  # ORDRE préservé
     assert fake.max_active > 1                       # parallélisme réel observé
+    assert any("Transcription par tour en concurrence: backend=fake-remote workers=4 tours=8" in msg for msg in sl.messages)
+    assert any("Transcription par tour terminée: backend=fake-remote workers=4 tours=8 segments=8" in msg for msg in sl.messages)
 
 
 def test_concurrency_one_stays_sequential_even_if_remote():
@@ -90,3 +103,15 @@ def test_default_concurrency_is_sequential():
     t.transcriber = _FakeTranscriber(concurrent_safe=True)
     t.gpu_index = 0
     assert t._chunk_concurrency(total=10) == 1
+
+
+def test_invalid_concurrency_falls_back_to_sequential(caplog):
+    t = _transcriber(_FakeTranscriber(concurrent_safe=True), concurrency="beaucoup")
+    assert t._chunk_concurrency(total=10) == 1
+    assert "inference.stt.concurrency invalide" in caplog.text
+
+
+def test_zero_concurrency_falls_back_to_sequential(caplog):
+    t = _transcriber(_FakeTranscriber(concurrent_safe=True), concurrency=0)
+    assert t._chunk_concurrency(total=10) == 1
+    assert "inference.stt.concurrency doit être >= 1" in caplog.text
