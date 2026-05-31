@@ -5,6 +5,9 @@ import yaml
 
 _DEFAULT_CONFIG = {
     "server": {"host": "0.0.0.0", "port": 7870, "debug": True},
+    # Rôle du process (Phase B / C1) : all (tout-en-un, défaut) | web | scheduler.
+    # Surchargé par la variable d'environnement TRANSCRIA_ROLE.
+    "runtime": {"role": "all"},
     "storage": {"jobs_dir": "./jobs", "database_url": "sqlite:///transcrIA.db"},
     "voice_enrollment": {
         "enabled": False,

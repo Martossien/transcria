@@ -6,6 +6,15 @@ server:
   # Laisser false par défaut ; surchargeable via TRANSCRIA_DEBUG pour le dev local.
   debug: false
 
+runtime:
+  # Rôle du process (Phase B / montée en charge) :
+  #   all       : tout-en-un mono-process (défaut, dev et petits déploiements) ;
+  #   web       : tier HTTP sans état (gunicorn -w N) — n'exécute PAS la file ;
+  #   scheduler : orchestrateur unique qui draine la file et exécute les jobs.
+  # Surchargé par la variable d'environnement TRANSCRIA_ROLE. En distribué, lancer
+  # un (et un seul) process 'scheduler' + N process 'web' (verrou consultatif PG en garde-fou).
+  role: "all"
+
 storage:
   jobs_dir: "./jobs"
   # Base de données. SQLite convient au dev/poste isolé. En production, préférez

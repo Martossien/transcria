@@ -138,6 +138,9 @@ def create_app(config_path: str | None = None) -> Flask:
     def _assign_correlation_id() -> None:
         inject_correlation_id()
 
+    role = resolve_role(env_role=os.environ.get(_ROLE_ENV), config_role=cfg.get("runtime", {}).get("role"))
+    app.config["TRANSCRIA_ROLE"] = role
+
     with app.app_context():
         # create_all : bootstrap rapide pour le dev/les tests (base neuve). En prod,
         # le schéma est géré par Alembic (`alembic upgrade head` dans start.sh) ; sur
@@ -145,9 +148,44 @@ def create_app(config_path: str | None = None) -> Flask:
         # que les migrations Alembic et les modèles restent identiques.
         db.create_all()
         UserStore.ensure_admin(cfg)
-        init_job_executor(app, cfg)
+        # Rôle 'web' : tier HTTP sans état → n'exécute PAS la file (un orchestrateur
+        # 'scheduler'/'all' s'en charge ailleurs). L'enfilement reste possible.
+        init_job_executor(app, cfg, run_scheduler=role in ("scheduler", "all"))
 
+    logger.info("Process démarré (rôle=%s, scheduler=%s)", role, role in ("scheduler", "all"))
     return app
+
+
+_VALID_ROLES = ("web", "scheduler", "all")
+_ROLE_ENV = "TRANSCRIA_ROLE"
+
+
+def resolve_role(
+    cli_role: str | None = None,
+    env_role: str | None = None,
+    config_role: str | None = None,
+) -> str:
+    """Rôle du process (Phase B / C1).
+
+    - ``web`` : tier HTTP **sans état** (gunicorn ``-w N``) — n' exécute PAS la file ;
+    - ``scheduler`` : orchestrateur **unique** qui draine la file et exécute les jobs ;
+    - ``all`` : tout-en-un mono-process (**défaut**, comportement historique).
+
+    Priorité : CLI > env ``TRANSCRIA_ROLE`` > config ``runtime.role`` > ``all``.
+    Une valeur non reconnue retombe sur ``all`` avec un avertissement.
+    """
+    for candidate in (cli_role, env_role, config_role):
+        if not candidate:
+            continue
+        role = str(candidate).strip().lower()
+        if role in _VALID_ROLES:
+            return role
+        logger.warning(
+            "Rôle inconnu '%s' (attendus : %s) — repli sur 'all'.",
+            candidate, ", ".join(_VALID_ROLES),
+        )
+        return "all"
+    return "all"
 
 
 def resolve_debug_flag(cli_debug: bool | None, env_debug: str | None, config_debug: bool) -> bool:

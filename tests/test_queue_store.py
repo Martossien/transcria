@@ -154,6 +154,21 @@ def test_requeue_later_unknown_job_returns_false(app):
         assert QueueStore.requeue_later("inexistant", datetime.now(timezone.utc)) is False
 
 
+def test_count_running_reads_from_db(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        assert QueueStore.count_running() == 0
+        a = JobStore.create_job(owner_id, "A")
+        b = JobStore.create_job(owner_id, "B")
+        c = JobStore.create_job(owner_id, "C")
+        for j in (a, b, c):
+            QueueStore.enqueue(j.id)
+        QueueStore.claim(a.id)
+        QueueStore.claim(b.id)
+
+        assert QueueStore.count_running() == 2   # c reste waiting
+
+
 # ── Claim atomique (Phase B / C2) ──────────────────────────────────────────────
 
 def test_claim_transitions_waiting_to_running(app, owner_id):

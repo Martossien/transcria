@@ -251,6 +251,24 @@ class TestAppDebugResolution:
 
         assert resolve_debug_flag(None, None, True) is True
 
+    def test_resolve_role_defaults_to_all(self):
+        from app import resolve_role
+
+        assert resolve_role(None, None, None) == "all"
+
+    def test_resolve_role_priority_cli_then_env_then_config(self):
+        from app import resolve_role
+
+        assert resolve_role("web", "scheduler", "all") == "web"          # CLI prioritaire
+        assert resolve_role(None, "scheduler", "all") == "scheduler"     # puis env
+        assert resolve_role(None, None, "web") == "web"                  # puis config
+
+    def test_resolve_role_normalizes_and_rejects_unknown(self):
+        from app import resolve_role
+
+        assert resolve_role(None, "  Scheduler  ", None) == "scheduler"  # trim + casse
+        assert resolve_role(None, "bogus", None) == "all"                # inconnu → all
+
 
 class TestBootstrapConfig:
     def test_validate_config_accepts_execution_section(self):

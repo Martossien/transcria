@@ -321,6 +321,17 @@ class QueueStore:
         return changed
 
     @staticmethod
+    def count_running() -> int:
+        """Nombre de jobs RUNNING **lu en base** (autorité cross-process, Phase B / C1).
+
+        Remplace le comptage en mémoire (`len(self._running)`) pour le calcul de
+        capacité : reste correct même si plusieurs workers d'exécution coexistent.
+        """
+        return int(db.session.scalar(
+            db.select(func.count(JobQueueEntry.id)).filter(JobQueueEntry.status == QUEUE_RUNNING)
+        ) or 0)
+
+    @staticmethod
     def count_by_status() -> dict[str, int]:
         rows = db.session.execute(
             db.select(JobQueueEntry.status, func.count(JobQueueEntry.id)).group_by(JobQueueEntry.status)

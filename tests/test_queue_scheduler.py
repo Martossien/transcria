@@ -154,6 +154,39 @@ def test_scheduler_skips_candidate_when_first_phase_vram_unavailable(app, owner_
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
 
 
+def test_second_scheduler_does_not_start_when_lock_held(app, owner_id, tmp_path):
+    """Garde-fou « ordonnanceur unique » (C1) : le scheduler global de la fixture
+    `app` détient déjà le verrou consultatif → un nouveau start() ne démarre PAS de
+    thread (sinon double-dispatch)."""
+    with app.app_context():
+        cfg = _config(tmp_path)
+        sched = QueueScheduler(app, cfg, lambda *_: None)
+        sched.start()
+        try:
+            assert sched.has_singleton_lock is False
+            assert sched._thread is None
+        finally:
+            sched.stop()
+
+
+def test_web_role_executor_enqueues_without_starting_scheduler(app, owner_id, tmp_path):
+    """Rôle 'web' (run_scheduler=False) : le scheduler est créé pour enfiler mais son
+    thread n'est pas démarré ; submit enfile bien le job (un orchestrateur drainera)."""
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path, enabled=True)
+        job = _job_with_audio(owner_id, cfg)
+        svc = JobExecutorService(app, cfg, run_scheduler=False)
+        try:
+            assert svc._scheduler is not None      # créé (pour submit_to_queue)
+            assert svc._scheduler._thread is None  # mais pas démarré
+            result = svc.submit_process(job.id, "ignored.mp3", "fast")
+            assert result["accepted"] is True
+            assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+        finally:
+            svc.stop()
+
+
 def test_launch_claims_atomically_no_double_dispatch(app, owner_id, tmp_path):
     """_launch revendique l'entrée : un 2nd appel (entrée déjà running) renvoie
     False et ne soumet rien — pas de double-dispatch (Phase B / C2)."""

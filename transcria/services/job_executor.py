@@ -49,9 +49,13 @@ def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
 
 
 class JobExecutorService:
-    def __init__(self, app: Flask, config: dict):
+    def __init__(self, app: Flask, config: dict, run_scheduler: bool = True):
         self.app = app
         self.config = config
+        # run_scheduler=False (rôle 'web', C1) : on crée le scheduler pour POUVOIR
+        # enfiler (submit_to_queue écrit en base), mais on ne démarre pas son thread —
+        # c'est un process 'scheduler'/'all' qui draine la file.
+        self.run_scheduler = run_scheduler
         max_workers = int(
             config.get("workflow", {})
             .get("execution", {})
@@ -71,7 +75,8 @@ class JobExecutorService:
         self._scheduler: QueueScheduler | None = None
         if self.queue_enabled:
             self._scheduler = QueueScheduler(app, config, self._run_process)
-            self._scheduler.start()
+            if self.run_scheduler:
+                self._scheduler.start()
 
     def submit_process(
         self,
@@ -298,11 +303,14 @@ def _reconcile_interrupted_jobs(app: Flask, config: dict) -> None:
         sl.warning("Réconciliation: erreur ignorée", error=str(exc))
 
 
-def init_job_executor(app: Flask, config: dict) -> JobExecutorService:
+def init_job_executor(app: Flask, config: dict, run_scheduler: bool = True) -> JobExecutorService:
     global _executor_service
     with _executor_lock:
-        _executor_service = JobExecutorService(app, config)
-        _reconcile_interrupted_jobs(app, config)
+        _executor_service = JobExecutorService(app, config, run_scheduler=run_scheduler)
+        # Réconciliation des jobs interrompus : tâche d'orchestration → uniquement si
+        # ce process draine la file (rôle scheduler/all), pas dans le tier web.
+        if run_scheduler:
+            _reconcile_interrupted_jobs(app, config)
         return _executor_service
 
 

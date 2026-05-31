@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -9,13 +10,17 @@ from typing import Callable
 
 from flask import Flask
 
+from transcria.database import db
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.queue.allocator import GPUAllocator
 from transcria.queue.calendar import SchedulingCalendar
+from transcria.queue.scheduler_lock import SchedulerLock
 from transcria.queue.store import QueueStore
 from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
+
+logger = logging.getLogger(__name__)
 
 ProcessFn = Callable[[str, str, str], None]
 
@@ -47,11 +52,22 @@ class QueueScheduler:
         self._wake_event = threading.Event()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._singleton_lock: SchedulerLock | None = None
         self._total_dispatched = 0
         self._last_iteration_s = 0.0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
+            return
+        # Garde-fou « ordonnanceur unique » (C1 / I1) : verrou consultatif PostgreSQL.
+        # Si un autre process draine déjà la file, on NE démarre PAS de second thread.
+        self._singleton_lock = SchedulerLock(db.engine)
+        if not self._singleton_lock.try_acquire():
+            self._singleton_lock = None
+            logger.error(
+                "Un ordonnanceur de file tourne déjà (verrou consultatif détenu) — "
+                "ce process ne démarre pas le sien (invariant : scheduler unique)."
+            )
             return
         self._thread = threading.Thread(
             target=self._dispatch_loop,
@@ -60,12 +76,19 @@ class QueueScheduler:
         )
         self._thread.start()
 
+    @property
+    def has_singleton_lock(self) -> bool:
+        return self._singleton_lock is not None and self._singleton_lock.acquired
+
     def stop(self, timeout_s: float = 30) -> None:
         self._stop_event.set()
         self._wake_event.set()
         if self._thread:
             self._thread.join(timeout=timeout_s)
         self._executor.shutdown(wait=False, cancel_futures=False)
+        if self._singleton_lock is not None:
+            self._singleton_lock.release()
+            self._singleton_lock = None
 
     def wake(self) -> None:
         self._wake_event.set()
@@ -136,7 +159,9 @@ class QueueScheduler:
         if self.calendar.is_queue_paused():
             return 0
         effective_max = self.calendar.get_effective_max_workers(self.max_workers)
-        capacity = effective_max - self.running_count
+        # Capacité lue en base (autorité cross-process, C1) plutôt que sur le dict
+        # en mémoire : reste correct si plusieurs workers d'exécution coexistent.
+        capacity = effective_max - QueueStore.count_running()
         if capacity <= 0:
             return 0
 
