@@ -6,6 +6,15 @@ TranscrIA est un portail web de transcription et de valorisation de réunions lo
 
 Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio lisible, choix de traitement adapté, contrôle humain des participants/termes, puis transcription finale avec garde-fous contre les hallucinations ASR et les erreurs LLM.
 
+## Ce qui le distingue
+
+Quelques partis pris qui le démarquent d'un simple script de transcription :
+
+- **Deux topologies de déploiement.** En tout-en-un, les GPU sont locaux. En **frontale + nœud de ressources**, le STT (serveur compatible OpenAI : vLLM, SGLang, service maison), la diarisation et les empreintes vocales sont déportés sur une machine distante, avec un cycle d'autonomie VRAM **A/B/C** (réutilise le modèle déjà chargé → lance à la demande → `503` si saturé), un mode dégradé explicite et un panneau d'état des ressources. De quoi viser un déploiement élastique réaliste.
+- **Pensé comme un service, pas un script.** Frontale web multi-utilisateurs, base SQL (PostgreSQL en production), et options de durcissement sous charge : rôles web/ordonnanceur séparés, file persistante, claim de job atomique, failover des nœuds.
+- **Un vrai module audio, pas un wrapper `ffmpeg`.** Préflight acoustique (RMS, peak, clipping, SNR estimé, bande passante, flags de risque), analyse de scène (speech/music/noise, distribution H/F, zones problématiques), décision qualité (choix du backend et signaux de dégradation à partir des métriques), séparation Demucs, filtrage de scène, denoise expérimental, auto-loudnorm et VAD Silero — coordonnés avec la gestion VRAM/GPU.
+- **On réutilise les bons outils plutôt que de les réécrire.** Les phases LLM s'appuient sur **opencode** (skills, sous-agents, contexte isolé par mission, pilotage d'outils) ; le serving STT sur vLLM/SGLang. Même logique que de ne pas réimplémenter un kernel CUDA soi-même : s'adosser à des projets actifs et maintenus. C'est un choix d'ingénierie assumé, pas une dette.
+
 ## Fonctionnalités
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
@@ -31,7 +40,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
   - **Extraction structurée par la LLM** : décisions prises, actions à réaliser, points bloquants, points reportés, votes, résolutions, ordre du jour et prochaine date sont extraits du résumé via un prompt universel et un parseur tolérant (3 niveaux de repli `ok`/`partiel`/`échec`, dégradation gracieuse vers le rapport standard si l'extraction échoue). Affichés dans le document selon le type.
   - **Champs spécifiques au type** : 18 types de réunion (CSE, CSE extraordinaire, CODIR/COMEX, Point projet, Réunion client, Réunion de crise, Entretien individuel, Formation, Séminaire, Négociation…). Chaque type affiche dans l'interface des champs dédiés (président/secrétaire/quorum CSE, nom de projet/sprint, client/contrat…) repris dans le document et injectés dans le contexte LLM de correction.
   - **Thèmes visuels par type** : page de garde, titres de section, tableaux et pied de page adoptent une identité de couleur cohérente selon le type (bleu marine institutionnel CSE, teal projet, rouge crise, violet confidentiel…), avec bannière dédiée, badge confidentiel/crise et calcul automatique du quorum CSE.
-- **Tests et benchmarks** : suite pytest mockée (1031+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
+- **Tests et benchmarks** : suite pytest mockée (1400+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 
