@@ -5,8 +5,8 @@
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
-> débit STT distant) · **B6 partiel ✅** (aging ensembliste).
-> Reste **B5 benchmark + B6.2→B9** (cf. §8). Fait suite à la **Phase A**
+> débit STT distant) · **B6 partiel ✅** (aging ensembliste + capacité nœud au dispatch).
+> Reste **B5 benchmark + B6.3→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -493,10 +493,12 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   `inference.stt.concurrency`.
 - **B6 — Admission à l'échelle + VRAM-aware (C5, D4). PARTIEL.** Aging ensembliste ✅ :
   `QueueStore.apply_aging()` exécute un `UPDATE` atomique portable au lieu de matérialiser
-  toute la file, avec tests sur entrées récentes, plafonnement et statuts non waiting. Reste :
-  capacité nœud dans l'ordonnancement, index partiel, cache `/capabilities` ;
-  `max_concurrent_jobs` rétrogradé en plafond, admission pilotée par la VRAM, pré-remplissage
-  `SystemDetector` à l'install.
+  toute la file, avec tests sur entrées récentes, plafonnement et statuts non waiting.
+  Capacité nœud au dispatch ✅ : le scheduler lit `/capabilities` en best-effort et borne
+  les nouveaux dispatchs par `available_remote_slots()` quand le nœud expose une saturation
+  fiable ; si le nœud est injoignable ou incomplet, le pré-vol `resource_gate` conserve la
+  gestion defer/fail existante. Reste : admission VRAM-aware, index partiel, cache
+  `/capabilities`, pré-remplissage `SystemDetector` à l'install.
 - **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
   probe automatique. Aucune table ; transparent pour les jobs en file.
 - **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
@@ -565,6 +567,14 @@ pilotage de capacité, **B9** au besoin.
   `UPDATE job_queue ... WHERE status='waiting' ...` via SQLAlchemy (`case` portable SQLite/PG)
   et retourne le `rowcount`. Les entrées récentes ne bougent pas, les bonus sont plafonnés,
   et les statuts `paused`/`running` sont exclus. Tests ajoutés dans `test_queue_store.py`.
+- **B6.2 — capacité nœud dans l'ordonnancement : FAIT.** `available_remote_slots(config,
+  capabilities)` calcule une capacité pure depuis les exigences distantes : STT déclaré
+  (`inference.stt.concurrency`, cold-start borné à 1, `ensure_in_progress` à 0) et moteurs
+  in-process (`capacity - inflight - queued`). `QueueScheduler._remote_capacity_limit()`
+  interroge `/capabilities` une fois par tick et réduit le dispatch si la capacité distante
+  connue est inférieure à la capacité locale. En cas d'erreur réseau/payload incomplet, il ne
+  bloque pas : le pré-vol `resource_gate` reste responsable du mode dégradé. Tests ajoutés :
+  calcul pur des slots STT/in-process et dispatch borné/saturé.
 
 ---
 

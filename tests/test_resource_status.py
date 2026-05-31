@@ -10,6 +10,7 @@ import pytest
 from transcria.inference.client import InferenceClient, InferenceUnavailable
 from transcria.inference.resource_status import (
     assess_admission,
+    available_remote_slots,
     remote_requirements,
     summarize_capabilities,
 )
@@ -114,6 +115,59 @@ def test_summarize_reachable():
         "queued": 2,
         "busy": False,
     }
+
+
+# ── available_remote_slots ───────────────────────────────────────────────────
+
+def test_available_remote_slots_empty_for_local_or_missing_payload():
+    assert available_remote_slots({}, {"stt_engines": []}) is None
+    assert available_remote_slots(_REMOTE_CFG, None) is None
+
+
+def test_available_remote_slots_uses_stt_concurrency_when_engine_up():
+    cfg = {
+        "models": {"stt_backend": "cohere"},
+        "inference": {
+            "mode": "remote",
+            "stt": {
+                "concurrency": 4,
+                "backends": {"cohere": {"url": "http://h:8003/v1"}},
+            },
+        },
+    }
+    caps = {"stt_engines": [{"name": "cohere", "up": True}]}
+
+    assert available_remote_slots(cfg, caps) == 4
+
+
+def test_available_remote_slots_limits_cold_or_starting_stt_engine():
+    cfg = {
+        "models": {"stt_backend": "cohere"},
+        "inference": {"mode": "remote", "stt": {"concurrency": 8, "backends": {"cohere": {"url": "http://h/v1"}}}},
+    }
+
+    assert available_remote_slots(cfg, {"stt_engines": [{"name": "cohere", "up": False}]}) == 1
+    assert available_remote_slots(cfg, {"stt_engines": [{"name": "cohere", "up": False, "ensure_in_progress": True}]}) == 0
+
+
+def test_available_remote_slots_takes_minimum_required_inprocess_capacity():
+    cfg = {
+        "models": {"stt_backend": "cohere", "diarization_backend": "remote"},
+        "inference": {
+            "mode": "remote",
+            "url": "http://node:8002",
+            "stt": {"concurrency": 4, "backends": {"cohere": {"url": "http://h/v1"}}},
+        },
+    }
+    caps = {
+        "stt_engines": [{"name": "cohere", "up": True}],
+        "inprocess": [
+            {"name": "diarize", "capacity": 1, "inflight": 1, "queued": 0},
+            {"name": "voice-embed", "capacity": 2, "inflight": 0, "queued": 0},
+        ],
+    }
+
+    assert available_remote_slots(cfg, caps) == 0
 
 
 # ── InferenceClient.capabilities() ────────────────────────────────────────────

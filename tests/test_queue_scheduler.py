@@ -154,6 +154,45 @@ def test_scheduler_skips_candidate_when_first_phase_vram_unavailable(app, owner_
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
 
 
+def test_scheduler_limits_dispatch_with_remote_capacity(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        cfg["workflow"]["execution"]["max_concurrent_jobs"] = 4
+        launched = []
+        jobs = [_job_with_audio(owner_id, cfg, title=f"Remote cap {i}") for i in range(3)]
+        for job in jobs:
+            QueueStore.enqueue(job.id, mode="fast")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        monkeypatch.setattr(scheduler, "_remote_capacity_limit", lambda: 1)
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 1
+        assert len(launched) == 1
+        assert QueueStore.get_entry(launched[0]).status == QUEUE_RUNNING
+        assert sum(1 for job in jobs if QueueStore.get_entry(job.id).status == QUEUE_WAITING) == 2
+
+
+def test_scheduler_defers_when_remote_capacity_is_zero(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        monkeypatch.setattr(scheduler, "_remote_capacity_limit", lambda: 0)
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0
+        assert launched == []
+        assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
 def test_second_scheduler_does_not_start_when_lock_held(app, owner_id, tmp_path):
     """Garde-fou « ordonnanceur unique » (C1) : le scheduler global de la fixture
     `app` détient déjà le verrou consultatif → un nouveau start() ne démarre PAS de

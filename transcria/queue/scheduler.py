@@ -11,6 +11,8 @@ from typing import Callable
 from flask import Flask
 
 from transcria.database import db
+from transcria.inference.client import InferenceClientError, build_client_from_config
+from transcria.inference.resource_status import available_remote_slots, remote_requirements
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -164,6 +166,14 @@ class QueueScheduler:
         capacity = effective_max - QueueStore.count_running()
         if capacity <= 0:
             return 0
+        remote_slots = self._remote_capacity_limit()
+        if remote_slots is not None:
+            if remote_slots <= 0:
+                logger.info("Dispatch queue différé: nœud de ressources saturé")
+                return 0
+            if remote_slots < capacity:
+                logger.info("Dispatch queue borné par le nœud de ressources: capacity=%d remote_slots=%d", capacity, remote_slots)
+                capacity = remote_slots
 
         dispatched = 0
         for entry in QueueStore.get_next_candidates(limit=max(16, capacity)):
@@ -201,6 +211,28 @@ class QueueScheduler:
             self.allocator.force_free_gpu(self.allocator.preferred_gpu, allow_kill=True)
             return self.allocator.can_allocate(required_mb) is not None
         return False
+
+    def _remote_capacity_limit(self) -> int | None:
+        """Capacité distante exploitable pour ce tick, si elle est connue.
+
+        Best-effort : en cas de nœud injoignable ou de payload incomplet, on garde
+        le comportement existant. Le pré-vol `resource_gate` gère alors le defer/fail
+        avec la fenêtre d'indisponibilité configurée.
+        """
+        if not remote_requirements(self.config):
+            return None
+        client = build_client_from_config(self.config)
+        if client is None:
+            return None
+        try:
+            capabilities = client.capabilities()
+        except InferenceClientError as exc:
+            logger.warning("Capacité distante indisponible au dispatch — pré-vol conservé: %s", exc)
+            return None
+        slots = available_remote_slots(self.config, capabilities)
+        if slots is not None:
+            logger.debug("Capacité distante dispatch: slots=%s", slots)
+        return slots
 
     def _launch(self, job_id: str, audio_path: str, mode: str) -> bool:
         # Claim atomique (Phase B / C2) : transition WAITING→RUNNING en base. Si une

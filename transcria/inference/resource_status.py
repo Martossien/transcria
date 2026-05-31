@@ -110,3 +110,70 @@ def summarize_capabilities(capabilities: dict | None) -> dict:
         "gpus": capabilities.get("gpus", []),
         "engines": engines,
     }
+
+
+def available_remote_slots(config: dict, capabilities: dict | None) -> int | None:
+    """Capacité de dispatch distante actuellement exploitable.
+
+    Retourne :
+      - `None` si la config ne requiert pas de ressource distante, ou si
+        `/capabilities` ne contient pas assez d'information fiable pour borner ;
+      - un entier >= 0 si le nœud expose une capacité exploitable.
+
+    Cette valeur est une optimisation de backpressure scheduler. Elle ne remplace
+    pas le pré-vol `resource_gate`, qui reste l'autorité pour gérer les erreurs
+    réseau, le mode dégradé et l'auto-lancement des moteurs.
+    """
+    reqs = remote_requirements(config)
+    if not reqs or not capabilities:
+        return None
+
+    slots: list[int] = []
+    if "stt" in reqs:
+        stt_slots = _stt_slots(config, capabilities)
+        if stt_slots is not None:
+            slots.append(stt_slots)
+    for requirement, engine_name in (("diarize", "diarize"), ("voice_embed", "voice-embed")):
+        if requirement in reqs:
+            engine_slots = _inprocess_slots(capabilities, engine_name)
+            if engine_slots is not None:
+                slots.append(engine_slots)
+
+    return min(slots) if slots else None
+
+
+def _stt_slots(config: dict, capabilities: dict) -> int | None:
+    backend = config.get("models", {}).get("stt_backend", "cohere")
+    engine = next(
+        (item for item in capabilities.get("stt_engines", []) or [] if item.get("name") == backend),
+        None,
+    )
+    if not engine:
+        return None
+    if engine.get("ensure_in_progress"):
+        return 0
+    stt_cfg = (config.get("inference", {}) or {}).get("stt", {}) or {}
+    try:
+        configured = int(stt_cfg.get("concurrency", 1))
+    except (TypeError, ValueError):
+        configured = 1
+    configured = max(1, configured)
+    # Moteur éteint mais déclaré : le premier job peut déclencher ensure(CAS C),
+    # les autres attendront un tick suivant au lieu de se bousculer sur ensure.
+    return configured if engine.get("up") else 1
+
+
+def _inprocess_slots(capabilities: dict, engine_name: str) -> int | None:
+    engine = next(
+        (item for item in capabilities.get("inprocess", []) or [] if item.get("name") == engine_name),
+        None,
+    )
+    if not engine:
+        return None
+    try:
+        capacity = int(engine.get("capacity", 1))
+        inflight = int(engine.get("inflight", 0))
+        queued = int(engine.get("queued", 0))
+    except (TypeError, ValueError):
+        return None
+    return max(0, capacity - inflight - queued)
