@@ -5,8 +5,8 @@
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
-> débit STT distant).
-> Reste **B5 benchmark→B9** (cf. §8). Fait suite à la **Phase A**
+> débit STT distant) · **B6 partiel ✅** (aging ensembliste).
+> Reste **B5 benchmark + B6.2→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
@@ -491,9 +491,12 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   ces chiffres ne doivent pas être présentés comme mesures distantes. Reste : benchmark réel
   pour choisir une valeur recommandée (`4–8` selon nœud) et documenter la montée de
   `inference.stt.concurrency`.
-- **B6 — Admission à l'échelle + VRAM-aware (C5, D4).** Aging ensembliste, capacité nœud dans
-  l'ordonnancement, index partiel, cache `/capabilities` ; `max_concurrent_jobs` rétrogradé en
-  plafond, admission pilotée par la VRAM, pré-remplissage `SystemDetector` à l'install.
+- **B6 — Admission à l'échelle + VRAM-aware (C5, D4). PARTIEL.** Aging ensembliste ✅ :
+  `QueueStore.apply_aging()` exécute un `UPDATE` atomique portable au lieu de matérialiser
+  toute la file, avec tests sur entrées récentes, plafonnement et statuts non waiting. Reste :
+  capacité nœud dans l'ordonnancement, index partiel, cache `/capabilities` ;
+  `max_concurrent_jobs` rétrogradé en plafond, admission pilotée par la VRAM, pré-remplissage
+  `SystemDetector` à l'install.
 - **B7 — Failover actif/passif (C6).** `inference.nodes` (liste ordonnée), client à bascule,
   probe automatique. Aucune table ; transparent pour les jobs en file.
 - **B8 — Profil de concurrence & observabilité (C7).** Carte déclarative des classes d'étapes,
@@ -558,6 +561,10 @@ pilotage de capacité, **B9** au besoin.
   parallélisme réel, métriques persistables, bornage par nombre de tours, fallback config
   invalide, collecte/écriture des estimations locales. Le benchmark matériel distant reste à
   faire avant de recommander une valeur `inference.stt.concurrency > 1`.
+- **B6.1 — aging ensembliste : FAIT.** `QueueStore.apply_aging()` utilise un seul
+  `UPDATE job_queue ... WHERE status='waiting' ...` via SQLAlchemy (`case` portable SQLite/PG)
+  et retourne le `rowcount`. Les entrées récentes ne bougent pas, les bonus sont plafonnés,
+  et les statuts `paused`/`running` sont exclus. Tests ajoutés dans `test_queue_store.py`.
 
 ---
 

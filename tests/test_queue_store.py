@@ -104,6 +104,46 @@ def test_apply_aging_updates_old_waiting_entries(app, owner_id):
         assert QueueStore.get_entry(job.id).aging_bonus == 1
 
 
+def test_apply_aging_ignores_recent_waiting_entries(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Recent aging")
+        entry = QueueStore.enqueue(job.id, priority=50)
+        recent = datetime.now(timezone.utc) - timedelta(minutes=5)
+        entry.submitted_at = recent
+        entry.last_aging_at = recent
+        db.session.commit()
+
+        changed = QueueStore.apply_aging(interval_minutes=30, max_total_bonus=49)
+
+        assert changed == 0
+        assert QueueStore.get_entry(job.id).aging_bonus == 0
+
+
+def test_apply_aging_caps_bonus_and_skips_non_waiting_entries(app, owner_id):
+    with app.app_context():
+        _clear_queue()
+        old = datetime.now(timezone.utc) - timedelta(hours=2)
+        waiting = JobStore.create_job(owner_id, "Waiting cap")
+        paused = JobStore.create_job(owner_id, "Paused aging")
+        running = JobStore.create_job(owner_id, "Running aging")
+        for job in (waiting, paused, running):
+            entry = QueueStore.enqueue(job.id, priority=50)
+            entry.submitted_at = old
+            entry.last_aging_at = old
+            entry.aging_bonus = 48
+        QueueStore.pause(paused.id)
+        QueueStore.claim(running.id)
+        db.session.commit()
+
+        changed = QueueStore.apply_aging(interval_minutes=30, max_total_bonus=49)
+
+        assert changed == 1
+        assert QueueStore.get_entry(waiting.id).aging_bonus == 49
+        assert QueueStore.get_entry(paused.id).aging_bonus == 48
+        assert QueueStore.get_entry(running.id).aging_bonus == 48
+
+
 def test_future_scheduled_job_is_not_next_candidate(app, owner_id):
     with app.app_context():
         _clear_queue()

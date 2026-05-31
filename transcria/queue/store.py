@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import cast
 
-from sqlalchemy import func, or_, update
+from sqlalchemy import case, func, or_, update
 from sqlalchemy.engine import CursorResult
 
 from transcria.auth.groups import GroupStore
@@ -298,24 +298,26 @@ class QueueStore:
 
     @staticmethod
     def apply_aging(interval_minutes: int = 30, max_total_bonus: int = 49) -> int:
+        max_bonus = max(0, int(max_total_bonus))
+        if max_bonus <= 0:
+            return 0
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(minutes=max(1, int(interval_minutes)))
-        changed = 0
-        entries = db.session.execute(
-            db.select(JobQueueEntry).filter(JobQueueEntry.status == QUEUE_WAITING)
-        ).scalars().all()
-        for entry in entries:
-            last = entry.last_aging_at or entry.submitted_at
-            if last and last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            if last and last > cutoff:
-                continue
-            if int(entry.aging_bonus or 0) >= max_total_bonus:
-                entry.last_aging_at = now
-                continue
-            entry.aging_bonus = min(max_total_bonus, int(entry.aging_bonus or 0) + 1)
-            entry.last_aging_at = now
-            changed += 1
+        result = db.session.execute(
+            update(JobQueueEntry)
+            .where(JobQueueEntry.status == QUEUE_WAITING)
+            .where(JobQueueEntry.aging_bonus < max_bonus)
+            .where(func.coalesce(JobQueueEntry.last_aging_at, JobQueueEntry.submitted_at) <= cutoff)
+            .values(
+                aging_bonus=case(
+                    (JobQueueEntry.aging_bonus + 1 > max_bonus, max_bonus),
+                    else_=JobQueueEntry.aging_bonus + 1,
+                ),
+                last_aging_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        changed = max(0, int(cast(CursorResult, result).rowcount or 0))
         if changed:
             db.session.commit()
         return changed
@@ -361,4 +363,3 @@ class QueueStore:
             )
         )
         return int(current or 0) + 1
-
