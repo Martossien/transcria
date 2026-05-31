@@ -393,6 +393,22 @@ def parse_args() -> argparse.Namespace:
         help="Override YAML transmis à l'E2E, ex: workflow.vad.enabled_final=true. "
              "Répétable; appliqué à tous les combos du run.",
     )
+    parser.add_argument(
+        "--remote-stt", metavar="URL", default=None,
+        help="Transmettre --remote-stt à l'E2E pour mesurer un STT distant OpenAI-compatible.",
+    )
+    parser.add_argument(
+        "--remote-stt-api-key", metavar="KEY", default=None,
+        help="Clé API du serveur STT distant transmise à l'E2E.",
+    )
+    parser.add_argument(
+        "--remote-inference", metavar="URL", default=None,
+        help="Transmettre --remote-inference à l'E2E pour mesurer diarisation/voice-embed distantes.",
+    )
+    parser.add_argument(
+        "--remote-inference-api-key", metavar="KEY", default=None,
+        help="Clé API du service inference_service distant transmise à l'E2E.",
+    )
 
     # ── Sortie ───────────────────────────────────────────────────────────────
     parser.add_argument(
@@ -508,6 +524,15 @@ def build_e2e_cmd(
     # Global flag OU override par combo
     if args.skip_diarization or combo.get("skip_diarization", False):
         cmd.append("--skip-diarization")
+
+    if args.remote_stt:
+        cmd.extend(["--remote-stt", args.remote_stt])
+    if args.remote_stt_api_key:
+        cmd.extend(["--remote-stt-api-key", args.remote_stt_api_key])
+    if args.remote_inference:
+        cmd.extend(["--remote-inference", args.remote_inference])
+    if args.remote_inference_api_key:
+        cmd.extend(["--remote-inference-api-key", args.remote_inference_api_key])
 
     if combo["scene"] or combo["filter"]:
         cmd.append("--enable-audio-scene")
@@ -730,6 +755,9 @@ _CSV_FIELDS = [
     "skip_diarization", "overrides",
     "status",
     "init_s", "summary_s", "pipeline_s", "total_s",
+    "effective_stt_backend", "chunking_mode",
+    "stt_chunk_mode", "stt_chunk_workers", "stt_chunk_count", "stt_chunk_elapsed_s",
+    "stt_chunk_chunks_s", "stt_chunk_segments_s",
     "vram_peak_mb",
     "raw_segments", "raw_words", "corrected_exists",
     "source_separation_done", "scene_filter_done", "normalization_done",
@@ -742,6 +770,8 @@ def _extract_row(r: dict) -> dict:
     timings = r.get("timings") or {}
     srt = r.get("srt") or {}
     artifacts = r.get("artifacts") or {}
+    transcription_metadata = r.get("transcription_metadata") or {}
+    chunk_metrics = transcription_metadata.get("chunk_metrics") or {}
 
     total = sum(
         v for k, v in timings.items()
@@ -777,6 +807,14 @@ def _extract_row(r: dict) -> dict:
         "summary_s":            timings.get("summary_s", ""),
         "pipeline_s":           timings.get("pipeline_s", ""),
         "total_s":              round(total, 1) if total else "",
+        "effective_stt_backend": r.get("effective_stt_backend") or transcription_metadata.get("backend", ""),
+        "chunking_mode":        transcription_metadata.get("chunking_mode", ""),
+        "stt_chunk_mode":       chunk_metrics.get("mode", ""),
+        "stt_chunk_workers":    chunk_metrics.get("workers", ""),
+        "stt_chunk_count":      chunk_metrics.get("chunks", ""),
+        "stt_chunk_elapsed_s":  chunk_metrics.get("elapsed_s", ""),
+        "stt_chunk_chunks_s":   chunk_metrics.get("chunks_per_s", ""),
+        "stt_chunk_segments_s": chunk_metrics.get("segments_per_s", ""),
         "vram_peak_mb":         r.get("vram_peak_mb", ""),
         "raw_segments":         srt.get("raw_segments", ""),
         "raw_words":            srt.get("raw_words", ""),
@@ -828,8 +866,8 @@ def write_summary_md(
         "",
         "## Résultats",
         "",
-        "| ID  | STT     | dia      | VAD    | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | VRAM  | segs | mots | corr | zip | overrides |",
-        "|-----|---------|----------|--------|----|----|-----|-----|--------|--------|------|------|------|-------|-------|------|------|------|-----|-----------|",
+        "| ID  | STT     | dia      | VAD    | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | STTw | tours | tours/s | VRAM  | segs | mots | corr | zip | overrides |",
+        "|-----|---------|----------|--------|----|----|-----|-----|--------|--------|------|------|------|-------|------|-------|---------|-------|------|------|------|-----|-----------|",
     ]
 
     for row in rows:
@@ -858,6 +896,9 @@ def write_summary_md(
             f"| {_s('summary_s', 's')} "
             f"| {_s('pipeline_s', 's')} "
             f"| {_s('total_s', 's')} "
+            f"| {_s('stt_chunk_workers')} "
+            f"| {_s('stt_chunk_count')} "
+            f"| {_s('stt_chunk_chunks_s')} "
             f"| {_s('vram_peak_mb', 'M'):>5} "
             f"| {_s('raw_segments')} "
             f"| {_s('raw_words')} "
@@ -1004,6 +1045,8 @@ def main() -> int:
             "whisper_model_size": args.whisper_model_size,
             "pipeline_mode": args.pipeline_mode,
             "config_overrides": args.config_override,
+            "remote_stt": args.remote_stt,
+            "remote_inference": args.remote_inference,
             "workers": n_workers,
             "python_executable": PYTHON,
             "started_at": datetime.now().isoformat(),

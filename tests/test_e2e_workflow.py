@@ -1438,6 +1438,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "segments": transcription_metadata.get("segments"),
             "speaker_count": transcription_metadata.get("speaker_count"),
             "vad_final_enabled": transcription_metadata.get("vad_final_enabled"),
+            "chunk_metrics": transcription_metadata.get("chunk_metrics"),
         } if transcription_metadata else None,
 
         "segment_reliability_counts": reliability_counts,

@@ -62,6 +62,7 @@ class Transcriber:
         device = f"cuda:{gpu_index}" if gpu_index is not None else "cuda:0"
         self.transcriber = create_transcriber(config, device=device)
         self.gpu_index = gpu_index
+        self._last_chunk_metrics: dict | None = None
 
     # ── API publique ──────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ class Transcriber:
         speaker_mapping = fs.load_json("speakers/speaker_mapping.json")
 
         sl.info("DÉBUT transcription", backend=backend, gpu=self.gpu_index)
+        self._last_chunk_metrics = None
 
         from transcria.audio.vad_adaptive import AdaptiveVADConfig
 
@@ -163,6 +165,7 @@ class Transcriber:
             "backend": backend,
             "chunking_mode": chunking_mode,
             "chunking_forced_30s_reason": "audio_tres_faible" if force_30s_on_weak else None,
+            "chunk_metrics": self._last_chunk_metrics,
             "gpu_index": self.gpu_index,
             "language": lang,
             "segments": len(segments),
@@ -505,6 +508,7 @@ class Transcriber:
         total = len(chunks)
         workers = self._chunk_concurrency(total)
         backend = getattr(self.transcriber, "model_name", self.transcriber.__class__.__name__)
+        concurrent_safe = bool(getattr(self.transcriber, "concurrent_safe", False))
         started = time.monotonic()
 
         if workers > 1:
@@ -515,21 +519,37 @@ class Transcriber:
                 total,
             )
             concurrent_segments = self._transcribe_chunks_concurrent(chunks, lang, mapping, workers, sl)
-            self._log_chunk_transcription_summary(sl, backend, total, len(concurrent_segments), started, workers=workers)
+            self._last_chunk_metrics = self._log_chunk_transcription_summary(
+                sl,
+                backend,
+                total,
+                len(concurrent_segments),
+                started,
+                workers=workers,
+                concurrent_safe=concurrent_safe,
+            )
             return concurrent_segments
 
         sl.info(
             "Transcription par tour séquentielle: backend=%s tours=%d concurrent_safe=%s",
             backend,
             total,
-            bool(getattr(self.transcriber, "concurrent_safe", False)),
+            concurrent_safe,
         )
         segments: list[dict] = []
         for i, chunk in enumerate(chunks):
             segments.extend(self._process_chunk(chunk, lang, mapping))
             if (i + 1) % 100 == 0 or (i + 1) == total:
                 sl.info("Progression transcription: %d/%d chunks", i + 1, total)
-        self._log_chunk_transcription_summary(sl, backend, total, len(segments), started, workers=1)
+        self._last_chunk_metrics = self._log_chunk_transcription_summary(
+            sl,
+            backend,
+            total,
+            len(segments),
+            started,
+            workers=1,
+            concurrent_safe=concurrent_safe,
+        )
         return segments
 
     def _process_chunk(self, chunk: dict, lang: str, mapping: dict) -> list[dict]:
@@ -598,8 +618,11 @@ class Transcriber:
         started: float,
         *,
         workers: int,
-    ) -> None:
+        concurrent_safe: bool,
+    ) -> dict:
         elapsed = max(0.001, time.monotonic() - started)
+        chunks_per_s = total_chunks / elapsed
+        segments_per_s = segment_count / elapsed
         sl.info(
             "Transcription par tour terminée: backend=%s workers=%d tours=%d segments=%d duree=%.2fs tours_s=%.2f segments_s=%.2f",
             backend,
@@ -607,9 +630,20 @@ class Transcriber:
             total_chunks,
             segment_count,
             elapsed,
-            total_chunks / elapsed,
-            segment_count / elapsed,
+            chunks_per_s,
+            segments_per_s,
         )
+        return {
+            "mode": "concurrent" if workers > 1 else "sequential",
+            "backend": backend,
+            "workers": workers,
+            "concurrent_safe": concurrent_safe,
+            "chunks": total_chunks,
+            "segments": segment_count,
+            "elapsed_s": round(elapsed, 3),
+            "chunks_per_s": round(chunks_per_s, 3),
+            "segments_per_s": round(segments_per_s, 3),
+        }
 
     @staticmethod
     def _build_name_mapping(speaker_mapping: dict | None) -> dict:

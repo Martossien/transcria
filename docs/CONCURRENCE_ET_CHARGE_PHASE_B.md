@@ -4,7 +4,8 @@
 > **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
-> état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation débit STT distant).
+> état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale
+> débit STT distant).
 > Reste **B5 benchmark→B9** (cf. §8). Fait suite à la **Phase A**
 > (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
@@ -481,10 +482,15 @@ Chaque sous-phase est livrable et réversible (flag de config), TDD, sur Postgre
   nœud est documenté dans `inference_service/README.md` et `inference_service/__main__.py`
   (`gunicorn --workers 1` ou `python -m inference_service`).
 - **B5 — Débit STT (C4.4). PARTIEL.** Instrumentation et garde-fous faits : logs de débit
-  par run (`tours_s`, `segments_s`), mode séquentiel/concurrent explicite, bornage
-  `min(concurrency, tours)`, fallback séquentiel avec warning si config invalide. Reste :
-  benchmark réel pour choisir une valeur recommandée (`4–8` selon nœud) et documenter la
-  montée de `inference.stt.concurrency`.
+  par run (`tours_s`, `segments_s`), métriques persistées dans
+  `metadata/transcription_metadata.json` (`chunk_metrics`), mode séquentiel/concurrent
+  explicite, bornage `min(concurrency, tours)`, fallback séquentiel avec warning si config
+  invalide. Les benchs exposent maintenant `--remote-stt` / `--remote-inference` et remontent
+  ces champs dans les summaries. En attendant le serveur GPU distant, `scripts/estimate_local_b5.py`
+  produit un rapport **machine_locale / source=estimation** depuis les anciens `bench_results` ;
+  ces chiffres ne doivent pas être présentés comme mesures distantes. Reste : benchmark réel
+  pour choisir une valeur recommandée (`4–8` selon nœud) et documenter la montée de
+  `inference.stt.concurrency`.
 - **B6 — Admission à l'échelle + VRAM-aware (C5, D4).** Aging ensembliste, capacité nœud dans
   l'ordonnancement, index partiel, cache `/capabilities` ; `max_concurrent_jobs` rétrogradé en
   plafond, admission pilotée par la VRAM, pré-remplissage `SystemDetector` à l'install.
@@ -540,12 +546,18 @@ pilotage de capacité, **B9** au besoin.
   d'état. `summarize_capabilities()` propage ces champs au panneau frontale. Tests ajoutés :
   charge in-process avec deux threads, payload pur `/capabilities`, route Flask avec
   superviseur factice, résumé frontale.
-- **B5 — instrumentation débit STT : PARTIEL.** `_transcribe_by_chunks()` logue le mode
-  choisi, puis un résumé avec backend, workers, tours, segments, durée, tours/s et segments/s.
-  `_chunk_concurrency()` refuse les valeurs invalides ou `<1` avec warning et revient à 1.
-  Tests ajoutés : logs séquentiel/concurrent, ordre préservé, parallélisme réel, bornage par
-  nombre de tours, fallback config invalide. Le benchmark matériel reste à faire avant de
-  recommander une valeur `inference.stt.concurrency > 1`.
+- **B5 — instrumentation + estimation locale débit STT : PARTIEL.** `_transcribe_by_chunks()`
+  logue le mode choisi, puis un résumé avec backend, workers, tours, segments, durée, tours/s
+  et segments/s ; le même résumé est persisté dans `chunk_metrics`. `_chunk_concurrency()`
+  refuse les valeurs invalides ou `<1` avec warning et revient à 1. `tests/test_e2e_workflow.py`
+  expose `chunk_metrics` dans le JSON de résultat, `scripts/bench_audio.py` accepte les options
+  remote et ajoute les colonnes STT aux CSV/MD. `scripts/estimate_local_b5.py` agrège les
+  anciens logs de cette machine et écrit `local_b5_estimates.csv/.md` avec `scope=machine_locale`,
+  `source=estimation`, `confidence=low|medium` selon que les unités viennent d'un proxy segments
+  ancien ou de `chunk_metrics`. Tests ajoutés : logs séquentiel/concurrent, ordre préservé,
+  parallélisme réel, métriques persistables, bornage par nombre de tours, fallback config
+  invalide, collecte/écriture des estimations locales. Le benchmark matériel distant reste à
+  faire avant de recommander une valeur `inference.stt.concurrency > 1`.
 
 ---
 

@@ -67,6 +67,10 @@ def test_order_preserved_sequential():
     assert fake.max_active == 1                     # resté séquentiel
     assert any("Transcription par tour séquentielle: backend=fake-local" in msg for msg in sl.messages)
     assert any("Transcription par tour terminée: backend=fake-local workers=1 tours=6 segments=6" in msg for msg in sl.messages)
+    assert t._last_chunk_metrics["mode"] == "sequential"
+    assert t._last_chunk_metrics["workers"] == 1
+    assert t._last_chunk_metrics["chunks"] == 6
+    assert t._last_chunk_metrics["concurrent_safe"] is False
 
 
 def test_concurrent_when_remote_and_configured():
@@ -78,6 +82,10 @@ def test_concurrent_when_remote_and_configured():
     assert fake.max_active > 1                       # parallélisme réel observé
     assert any("Transcription par tour en concurrence: backend=fake-remote workers=4 tours=8" in msg for msg in sl.messages)
     assert any("Transcription par tour terminée: backend=fake-remote workers=4 tours=8 segments=8" in msg for msg in sl.messages)
+    assert t._last_chunk_metrics["mode"] == "concurrent"
+    assert t._last_chunk_metrics["workers"] == 4
+    assert t._last_chunk_metrics["chunks"] == 8
+    assert t._last_chunk_metrics["segments_per_s"] > 0
 
 
 def test_concurrency_one_stays_sequential_even_if_remote():
