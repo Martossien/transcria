@@ -1,8 +1,11 @@
 # TranscrIA — Migration vers une architecture API / serveur GPU distant
 
-> **Statut :** 🔵 Document de conception — base de travail, rien n'est implémenté ici  
-> **Auteur :** Martossien  
-> **Date :** 2026-05-30  
+> **Statut :** 🟢 **Implémenté** — sert désormais de **référence de contrat d'API** du
+> `inference_service` (les renvois `§4bis` dans `inference_service/` pointent ici). Diarisation,
+> empreinte vocale et STT distants sont en production ; voir aussi
+> [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md) (autonomie VRAM, A/B/C, admission §7.2)
+> et [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md) (failover des nœuds, rôles).  
+> **Auteur :** Martossien · **Cadrage initial :** 2026-05-30  
 > **Objectif :** faire de TranscrIA un **frontend / orchestrateur** qui appelle des serveurs d'inférence distants (vLLM, vLLM-omni, service maison) où résident les ressources GPU/VRAM, plutôt que de charger les modèles dans le process applicatif.
 
 ---

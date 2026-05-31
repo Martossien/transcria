@@ -289,7 +289,7 @@ resource_node:
 - **Installation** : réutiliser l'`install.sh` existant (il détecte déjà les GPU via `nvidia-smi`).
   **À vérifier/ajouter : un profil « nœud ressources seul »** (sans la frontale web/DB) — l'install
   actuel suppose le poste complet. Dépendances : `vllm_venv`, `librosa`/`soundfile`, pyannote,
-  ffmpeg, llama.cpp (cf. [`DEPENDENCIES_VENV.md`](DEPENDENCIES_VENV.md), [`INSTALL.md`](INSTALL.md)).
+  ffmpeg, llama.cpp (cf. [`INSTALL.md`](INSTALL.md)).
 - **Paramètres** exposés côté nœud (manifeste §8, ports, fractions VRAM, clé API).
 - **Détection ressources** : GPU, VRAM, modèles présents — au démarrage + via `/capabilities`.
 - **Réseau** : bind `0.0.0.0`, ports (service 8002, STT 8003/8005/8007, arbitrage 8080), pare-feu.

@@ -983,7 +983,7 @@ sudo journalctl -u transcria -f
 Le service expose trois endpoints publics utiles pour la supervision locale ou un reverse proxy :
 
 ```text
-GET /health   -> JSON simple, 200 si l'application et SQLite répondent
+GET /health   -> JSON simple, 200 si l'application et la base de données répondent
 GET /ready    -> JSON simple, 200 si le worker interne est prêt
 GET /metrics  -> texte Prometheus, métriques de base du service et des jobs
 ```
@@ -1084,6 +1084,19 @@ Placer le tier web derrière **nginx** (TLS, statique, gros uploads) :
 `deploy/nginx-transcria.conf.example`. Régler `--workers` (~`2×cœurs+1`) et
 `client_max_body_size` = `security.max_upload_size_mb`. `gunicorn` est dans
 `requirements.txt` (`pip install -r requirements.txt`).
+
+**Options de la montée en charge distribuée :**
+
+- **Réveil instantané** (`workflow.queue.use_listen_notify: true`) : un worker `web` qui
+  enfile un job réveille immédiatement l'ordonnanceur via PostgreSQL `LISTEN/NOTIFY`, au lieu
+  d'attendre le prochain *poll* (`poll_interval_s`, défaut 5 s). Le polling reste le filet de
+  sûreté ; n'activer que si la latence de prise en file gêne.
+- **Haute disponibilité du nœud de ressources** (`inference.nodes`) : déclarer une liste
+  ordonnée `[{url, priority}]`. La frontale vise le premier nœud joignable et **bascule
+  automatiquement** vers le suivant si le principal tombe (failover actif/passif) ; aucune
+  coordination VRAM inter-hôtes. Un `inference.url` seul reste accepté (un seul nœud).
+
+Référence complète : [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md).
 
 ---
 

@@ -4,7 +4,7 @@
 
 TranscrIA est un portail guidé de transcription de réunion destiné aux utilisateurs non techniciens (secrétaires de réunion). Il orchestre le dépôt d'un fichier audio/vidéo jusqu'à la production d'un package exploitable contenant le SRT corrigé (speakers + lexique), le contexte, les participants, le lexique, le rapport qualité, le rapport de correction, les points à vérifier, et un rapport Word professionnel (.docx) prêt à distribuer.
 
-**Stack :** Python 3.11+ / Flask / SQLAlchemy (SQLite) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / Parakeet TDT 0.6B v3 expérimental (NeMo) / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5
+**Stack :** Python 3.11+ / Flask / SQLAlchemy + Alembic (PostgreSQL en prod, SQLite en dev) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / Parakeet TDT 0.6B v3 expérimental (NeMo) / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5 / gunicorn (montée en charge)
 
 **Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
 
@@ -24,7 +24,7 @@ python app.py
 **Tests :** suite pytest — `python -m pytest tests/ -q`
 
 **Supervision locale :**
-- `GET /health` retourne un statut JSON simple du service et de la base SQLite
+- `GET /health` retourne un statut JSON simple du service et de la base de données
 - `GET /ready` retourne l’état de préparation du worker interne
 - `GET /metrics` expose des métriques Prometheus légères (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`)
 
@@ -237,7 +237,7 @@ server:
 
 storage:
   jobs_dir: "./jobs"        # Répertoire des données de traitement
-  database_url: "sqlite:///transcrIA.db"
+  database_url: "sqlite:///transcrIA.db"   # prod : postgresql+psycopg://… (ou TRANSCRIA_DATABASE_URL)
 
 auth:
   enabled: true
@@ -997,7 +997,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 
 | Route | Méthode | Auth | Description |
 |---|---|---|---|
-| `/health` | GET | Publique | Statut service + base SQLite |
+| `/health` | GET | Publique | Statut service + base de données |
 | `/ready` | GET | Publique | Préparation du worker interne |
 | `/metrics` | GET | Publique | Métriques Prometheus (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`, `transcria_queue_entries`) |
 | `/` | GET | login_required | Accueil (liste des traitements) |
@@ -1386,7 +1386,7 @@ Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements
 
 ## 9. Base de données
 
-TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`) avec SQLite par défaut. Au démarrage, `db.create_all()` crée les tables absentes. Cela suffit pour ajouter de nouvelles tables comme `groups`, mais ne migre pas les colonnes existantes. Toute évolution destructive ou ajout de colonne sur table existante doit passer par Flask-Migrate ou une migration manuelle documentée et testée.
+TranscrIA utilise Flask-SQLAlchemy (`transcria/database.py`). **PostgreSQL** (via `psycopg`) est la cible de production depuis la **Phase A** ; SQLite reste un repli mono-process pour le dev/les tests. Le DSN vient de `TRANSCRIA_DATABASE_URL` (prioritaire) puis `storage.database_url`. Le schéma est géré par **Alembic** : `start.sh` lance `alembic upgrade head` au démarrage, et le workflow d'évolution est `éditer le modèle → alembic revision --autogenerate → relire → upgrade`, gardé par le test anti-dérive `tests/test_alembic_migrations.py`. `db.create_all()` ne sert plus qu'au bootstrap dev/tests. Migration des données SQLite→PostgreSQL : `scripts/migrate_sqlite_to_postgres.py`. La concurrence applicative (Phase B : claim `FOR UPDATE SKIP LOCKED`, verrou consultatif d'ordonnanceur unique, `LISTEN/NOTIFY`) repose sur PostgreSQL — voir `docs/CONCURRENCE_ET_CHARGE_PHASE_B.md`.
 
 ### 9.1 Tables
 
@@ -1504,7 +1504,7 @@ cd transcria && python -m pytest tests/ -v
 
 ```
 instance/
-  transcrIA.db                    # Base SQLite
+  transcrIA.db                    # Base SQLite (repli dev ; prod = PostgreSQL)
 
 voices/
   subjects/{uuid}/consents/       # Preuves de consentement vocal

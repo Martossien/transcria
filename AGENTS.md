@@ -57,7 +57,7 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 - **Python 3.11+** avec annotations de type (`type | None`, pas `Optional`)
 - **Flask 3.x** + Flask-Login + Flask-SQLAlchemy
 - **Jinja2** pour les templates, **Bootstrap 5** pour le CSS
-- **SQLAlchemy** avec SQLite (`transcrIA.db` dans le cwd)
+- **SQLAlchemy** sur **PostgreSQL** (Phase A) via `psycopg` + **Alembic** (migrations) ; DSN dans `TRANSCRIA_DATABASE_URL`. SQLite (`transcrIA.db`) reste un repli mono-process pour le dev/les tests
 - **PyYAML** pour la configuration
 - **python-dotenv** pour charger `.env` au démarrage (`app.py`)
 - **torch + transformers + accelerate** pour Cohere ASR et Granite Speech expérimental (device_map GPU)
@@ -375,11 +375,13 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.
 
+**Montée en charge (Phase B, PostgreSQL requis)** : un **rôle** sépare le tier HTTP de l'orchestrateur — `runtime.role`/`TRANSCRIA_ROLE` ∈ `all` (défaut, tout-en-un) | `web` (gunicorn -w N, n'exécute pas la file) | `scheduler` (process unique qui draine la file). Garde-fous : claim de job atomique (`QueueStore.claim`, `FOR UPDATE SKIP LOCKED`), **ordonnanceur unique** par verrou consultatif PG (`scheduler_lock.py`), réveil optionnel `LISTEN/NOTIFY` (`workflow.queue.use_listen_notify`, sinon polling), **failover actif/passif** des nœuds de ressources (`inference.nodes`). Détail : `docs/CONCURRENCE_ET_CHARGE_PHASE_B.md`. Ne jamais lancer le tier `web` avec un contexte GPU : le GPU reste dans l'orchestrateur/le nœud.
+
 **Notifications email** : `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED)` ou `JobStore.update_state(FAILED)`. `_notify` délègue à `send_job_notification_async()` (module `transcria/notifications/mailer.py`) qui envoie l'email en daemon thread — jamais bloquant, absorbe toute exception. La configuration SMTP est dans `notifications.email` (`enabled`, `smtp_host`, `smtp_port`, `use_starttls`, `use_ssl`, `from_address`, `base_url`). Si `enabled=false` ou si l'adresse email de l'utilisateur est vide, aucune notification n'est envoyée.
 
 Les états de file restent dans `job_queue.status` (`waiting`, `paused`, `running`, `done`, `failed`, `cancelled`) et dans `extra_data.execution.status`; ne pas ajouter d'états `QUEUED` ou `WAITING_RESOURCES` à `JobState` sans revoir `WorkflowState`, `WORKFLOW_STEPS` et la documentation. En mode queue, `PipelineService.run_process(..., finalize_job_state=False)` laisse `JobExecutorService` publier les états terminaux dans l'ordre `job_queue` → `extra_data.execution` → `jobs.state`; ne pas remettre un `JobState.COMPLETED` direct dans le pipeline queue, cela recrée une course visible par l'API. Les routes sensibles de file/calendrier doivent être auditées via `audit_log()`.
 
-`transcria/queue/allocator.py` est le point de coordination GPU multi-job. Le scheduler ne réserve pas la VRAM à la place du pipeline : il fait seulement un pré-check de première phase. Les réservations effectives se font au moment des phases dans `WorkflowRunner`/`PipelineService` via `GPUAllocator` et `GPUSession`.
+`transcria/queue/allocator.py` est le point de coordination GPU multi-job. Le scheduler ne réserve pas la VRAM à la place du pipeline : son admission (`_resources_available`, B6.3) vérifie le coût VRAM **local** maximal du profil (hors phases servies à distance) et, si le nœud est distant, la VRAM libre distante via `/capabilities`. Les réservations effectives se font au moment des phases dans `WorkflowRunner`/`PipelineService` via `GPUAllocator` et `GPUSession`.
 
 Calendrier : `/admin/schedule` et `/api/schedule/windows` gèrent la table `scheduling_windows`. Règles supportées : `pause_queue`, `limit_concurrency`, `force_gpu`, `none`. `pause_queue` et `force_gpu` sont on/off ; `limit_concurrency` utilise `action_params.max_concurrent_jobs`. Ne pas ajouter de saisie "nombre de GPUs" au calendrier : avec la LLM d'arbitrage multi-GPU, seule la mesure runtime de `GPUAllocator` est fiable. `force_gpu` ne peut tuer que des processus correspondant aux `workflow.scheduling.kill_patterns` configurés, dans une fenêtre active.
 
@@ -419,7 +421,7 @@ Le parser accepte deux formats pour les participants probables :
 Le format avec crochets est le format cible du prompt. Ne pas hardcoder de métiers réels ou de domaines réels dans ces exemples ; utiliser des placeholders neutres (`Fonction A`, `Rôle A`, `Organisation A`).
 
 ### Lexiques centralisés (admin / admin groupe → section 6)
-Les lexiques centralisés sont gérés depuis `/admin/lexicons` par les admins globaux et les admins de groupe. Ils sont stockés en base SQLite (`group_lexicons`, `group_lexicon_entries`) et ne remplacent jamais le fichier de session validé par l'utilisateur.
+Les lexiques centralisés sont gérés depuis `/admin/lexicons` par les admins globaux et les admins de groupe. Ils sont stockés en base (`group_lexicons`, `group_lexicon_entries`) et ne remplacent jamais le fichier de session validé par l'utilisateur.
 
 Règles de périmètre :
 - Un admin global peut créer un lexique global ou de groupe.
@@ -546,4 +548,4 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/VAD_OR_NOT.md` | Analyse des systèmes VAD, tests comparatifs, recommandations par type de fichier |
 | `docs/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |
 | `docs/SERVICE_RESSOURCES_GPU.md` | Inférence distante v1 : topologies frontale/ressources, autonomie VRAM du STT (A/B/C), `/capabilities`, mode dégradé |
-| `docs/MIGRATION_API_SERVEUR_GPU.md` | Plan de migration vers une architecture API / serveur GPU distant |
+| `docs/MIGRATION_API_SERVEUR_GPU.md` | Contrat d'API du nœud de ressources distant (implémenté ; renvois §4bis depuis `inference_service/`) |

@@ -355,7 +355,7 @@ transcria/
 | [docs/PARAKEET_STT_INTEGRATION.md](docs/PARAKEET_STT_INTEGRATION.md) | Intégration Parakeet TDT 0.6B v3 |
 | [docs/FEATURE_DOCX_REPORT.md](docs/FEATURE_DOCX_REPORT.md) | Spec technique du rapport Word : sources de données, structure, template, roadmap |
 | [docs/STT_ADAPTATIF_ET_HYBRIDE.md](docs/STT_ADAPTATIF_ET_HYBRIDE.md) | Conception : caractérisation audio enrichie + mode hybride STT au segment |
-| [docs/MIGRATION_API_SERVEUR_GPU.md](docs/MIGRATION_API_SERVEUR_GPU.md) | Conception : bascule vers API / serveur GPU distant (vLLM, vLLM-omni, service maison) |
+| [docs/MIGRATION_API_SERVEUR_GPU.md](docs/MIGRATION_API_SERVEUR_GPU.md) | Contrat d'API du nœud de ressources distant (vLLM, vLLM-omni, service maison) — implémenté |
 | [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md) | Inférence distante v1 : topologies frontale/ressources, autonomie VRAM du STT (A/B/C), /capabilities, mode dégradé |
 | [tests/E2E_README.md](tests/E2E_README.md) | Utilisation du test E2E et options benchmark |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Guide de contribution |

@@ -62,8 +62,7 @@ backup/
 docs/plan_refactoring_*.md
 docs/archive/
 
-# Documents de conception internes (ne pas publier)
-docs/lexique_centralise_conception.md
+# Documents de conception internes (ne pas publier) — désormais sous docs/archive/
 docs/private/
 
 
@@ -79,6 +78,5 @@ archives/
 *.mp3
 !tests/test1.mp3
 !tests/test2.mp3
-docs/DEPENDENCIES_VENV.md
 .coverage
 coverage.xml

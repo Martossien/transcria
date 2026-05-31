@@ -607,6 +607,7 @@ inference:
     timeout_s: 1800
     retries: 2
     max_unavailable_s: 600      # mode dégradé : au-delà, un job dont le nœud reste injoignable échoue
+    capabilities_cache_ttl_s: 5 # B6.4 : TTL du cache de /api/resources/status (mutualise les /capabilities). 0 = désactivé
   auth:
     api_key_env: "TRANSCRIA_INFERENCE_API_KEY"   # clé API du service (variable d'env)
     api_key: ""

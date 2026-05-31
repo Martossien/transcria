@@ -63,13 +63,25 @@ python app.py --no-debug
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `jobs_dir` | string | `"./jobs"` | Répertoire racine des données de jobs (chemin relatif ou absolu) |
-| `database_url` | string | `"sqlite:///transcrIA.db"` | URL SQLAlchemy (SQLite par défaut) |
+| `database_url` | string | `"sqlite:///transcrIA.db"` | URL SQLAlchemy. **PostgreSQL recommandé en prod** (`postgresql+psycopg://…`, requis pour la concurrence Phase B) ; SQLite = repli mono-process dev/tests. La variable d'env `TRANSCRIA_DATABASE_URL` (prioritaire) garde le mot de passe hors config versionnée |
 
 **Redémarrage requis :** oui pour `database_url`. `jobs_dir` est relu par `JobFilesystem` à chaque opération (pas de cache).
 
 **Impact si modifié :**
 - `jobs_dir` : les jobs existants ne sont PAS déplacés. Si le chemin change, les anciens jobs sont "perdus" (fichiers toujours sur disque mais base orpheline de ces fichiers).
-- `database_url` : la base est initialisée une seule fois au démarrage (`db.create_all()`). Changer cette URL nécessite de migrer la base manuellement.
+- `database_url` : le schéma est géré par **Alembic** (`alembic upgrade head`, lancé par `start.sh`) ; `db.create_all()` ne sert qu'au bootstrap dev/tests. Changer d'URL nécessite de migrer les données (`scripts/migrate_sqlite_to_postgres.py`). Voir `docs/INSTALL.md` §7.
+
+---
+
+### `runtime`
+
+Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `role` | string | `"all"` | `all` (tout-en-un mono-process) \| `web` (tier HTTP sans état, `gunicorn -w N`, n'exécute pas la file) \| `scheduler` (orchestrateur **unique** qui draine la file et exécute les jobs). Surchargé par `TRANSCRIA_ROLE` |
+
+**Invariant :** en distribué, lancer **un seul** process `scheduler` + N process `web`. Un verrou consultatif PostgreSQL (`scheduler_lock.py`) refuse un second ordonnanceur. PostgreSQL est requis ; en SQLite on reste forcément en `all`.
 
 ---
 
@@ -623,6 +635,22 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 
 **Note :** la valeur par défaut `1` est volontaire sur un service GPU partagé. Monter plus haut sans revoir la stratégie VRAM augmentera fortement le risque de contention et d’échec.
 
+#### `workflow.concurrency_profile`
+
+**B8 — observabilité du goulot.** Surcharges déclaratives de la classe d'une étape du workflow,
+exposées dans `GET /api/resources/status` (clé `concurrency` : % sériel, étape goulot, attente
+estimée). Vide = la classe est **dérivée automatiquement** (STT distant `concurrent_safe` =
+*delegated*, sinon *serial*). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md) §C7.
+
+| Clé | Type | Description |
+|---|---|---|
+| `<étape>.class` | string | `serial` (ressource exclusive) \| `delegated` (capacité fixée par le backend opérateur) |
+| `<étape>.resource` | string | `gpu` \| `cpu` \| `llm` \| `stt_backend` (étiquette de la ressource arbitrée) |
+
+Étapes connues : `transcribe`, `diarization`, `voice_embed`, `correction`, `quality`, `export`.
+Ex. : `{"transcribe": {"class": "delegated", "resource": "stt_backend"}}`. Purement indicatif —
+aucune orchestration n'en découle (le multi-concurrence reste géré par les scripts de l'opérateur).
+
 #### `workflow.queue`
 
 Configuration de la file persistante et du scheduler applicatif. Quand elle est activée, `/api/jobs/<id>/process` écrit dans `job_queue`, puis `QueueScheduler` lance le pipeline dès que les conditions sont réunies.
@@ -634,9 +662,11 @@ Configuration de la file persistante et du scheduler applicatif. Quand elle est 
 | `aging_enabled` | bool | `true` | Active le bonus progressif des jobs en attente |
 | `aging_interval_minutes` | int | `30` | Intervalle d'attente donnant un point de bonus |
 | `aging_max_bonus` | int | `49` | Bonus maximal soustrait à la priorité effective |
-| `poll_interval_s` | int | `5` | Délai entre deux itérations de dispatch |
+| `poll_interval_s` | int | `5` | Délai entre deux itérations de dispatch (latence max de prise en file sans `NOTIFY`) |
+| `use_listen_notify` | bool | `false` | **B9** : réveil instantané de l'ordonnanceur via PostgreSQL `LISTEN/NOTIFY`. À activer quand les rôles `web` et `scheduler` sont des process séparés et que la latence du poll gêne. PostgreSQL requis ; le polling reste le filet de sûreté |
+| `starvation_timeout_hours` | int | `24` | Seuil d'alerte de famine d'un job en attente |
 
-**Redémarrage requis :** oui pour `enabled`, `poll_interval_s` et les paramètres de worker/scheduler, car `JobExecutorService` et `QueueScheduler` sont instanciés au démarrage. Les priorités passées à l'API sont persistées avec chaque entrée de file.
+**Redémarrage requis :** oui pour `enabled`, `poll_interval_s`, `use_listen_notify` et les paramètres de worker/scheduler, car `JobExecutorService` et `QueueScheduler` sont instanciés au démarrage. Les priorités passées à l'API sont persistées avec chaque entrée de file.
 
 **Permissions :** les admins globaux peuvent gérer toute la file. Les admins de groupe peuvent gérer uniquement les jobs appartenant aux membres de leurs groupes. Les mutations sont auditées.
 
@@ -806,6 +836,7 @@ Détail : [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md).
 |---|---|---|---|
 | `mode` | string | `"local"` | `local` \| `remote` \| `hybrid`. Active la sélection distante (diarize/voice-embed + STT par backend) |
 | `url` | string | `""` | URL du service Flask de ressources (diarize/voice-embed), ex. `http://HOST:8002`. Vide = local |
+| `nodes` | list | `[]` | **Failover actif/passif (B7)** : liste ordonnée `[{url, priority}]` (priorité = ordre). La frontale vise le premier nœud joignable et bascule automatiquement ; quand le principal revient, les jobs y repartent. Vide = un seul nœud (`url`) |
 | `fallback_local` | bool | `true` | Bascule locale si le service distant tombe (sauf 4xx définitif) |
 | `auth.api_key_env` | string | `"TRANSCRIA_INFERENCE_API_KEY"` | Variable d'env portant la clé API du service |
 | `auth.api_key` | string | `""` | Clé API en clair (priorité à la variable d'env) |
@@ -813,6 +844,7 @@ Détail : [`SERVICE_RESSOURCES_GPU.md`](SERVICE_RESSOURCES_GPU.md).
 | `resilience.timeout_s` | int | `1800` | Timeout par requête au service |
 | `resilience.retries` | int | `2` | Tentatives sur erreur transitoire (5xx/503/réseau) |
 | `resilience.max_unavailable_s` | int | `600` | Mode dégradé §7.2 : au-delà, un job dont les ressources distantes sont injoignables échoue explicitement (en deçà : mis en file) |
+| `resilience.capabilities_cache_ttl_s` | int/float | `5` | **B6.4** : TTL du cache de `GET /api/resources/status` (mutualise les appels `/capabilities` entre clients web). `0` = désactivé |
 
 #### `inference.stt`
 
@@ -889,6 +921,10 @@ Envoie un email à l'utilisateur propriétaire du job à la fin du traitement (s
 |---|---|---|
 | `TRANSCRIA_CONFIG` | Chemin vers le fichier config.yaml | `config.yaml` |
 | `TRANSCRIA_SECRET` | Clé secrète Flask (sessions) | `os.urandom(32).hex()` (aléatoire à chaque redémarrage) |
+| `TRANSCRIA_DATABASE_URL` | DSN base de données (prioritaire sur `storage.database_url`). Garde le mot de passe hors config versionnée. Ex. `postgresql+psycopg://transcria:***@127.0.0.1:5432/transcria` | Valeur de `storage.database_url` |
+| `TRANSCRIA_ROLE` | Rôle du process (montée en charge, Phase B) : `all` \| `web` \| `scheduler`. Prioritaire sur `runtime.role` | Valeur de `runtime.role` (= `all`) |
+| `TRANSCRIA_INFERENCE_API_KEY` | Clé API du nœud de ressources (diarize/voice-embed), si lancé avec auth | — (aucune auth) |
+| `TRANSCRIA_STT_API_KEY` | Clé API du serveur STT OpenAI-compat, si lancé avec `--api-key` | — (aucune auth) |
 | `TRANSCRIA_PORT` | Port d'écoute (surcharge CLI prioritaire) | Valeur de `config.yaml` ou 7870 |
 | `TRANSCRIA_HOST` | Hôte d'écoute | Valeur de `config.yaml` ou `0.0.0.0` |
 | `TRANSCRIA_DEBUG` | Mode debug (`"true"` = activé) | Valeur de `config.yaml` ou `false` |
