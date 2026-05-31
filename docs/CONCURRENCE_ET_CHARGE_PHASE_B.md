@@ -1,8 +1,9 @@
 # TranscrIA — Concurrence & montée en charge (Phase B)
 
-> **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11) ;
-> prête à implémenter (B1→B9). Fait suite à la **Phase A** (bascule PostgreSQL,
-> cf. migration commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
+> **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11).
+> **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
+> ordonnanceur unique, `914ea94`). Reste **B3→B9** (cf. §8). Fait suite à la **Phase A**
+> (bascule PostgreSQL, commit `66ffb16`). Construit sur `docs/SERVICE_RESSOURCES_GPU.md`
 > (autonomie VRAM, admission §7.2, A/B/C) sans en contredire les arbitrages.
 >
 > **Objectif** : permettre à la frontale d'encaisser la **charge web concurrente** et
@@ -447,12 +448,17 @@ Le **DSN PostgreSQL** (Phase A, `TRANSCRIA_DATABASE_URL`) est un **prérequis** 
 
 Chaque sous-phase est livrable et réversible (flag de config), TDD, sur PostgreSQL.
 
-- **B1 — Claim atomique (C2).** `claim_next_candidates` + bascule du scheduler. Aucun
-  changement de déploiement. *Filet de sûreté immédiat, base de tout le reste.*
-- **B2 — Rôles & unicité (C1).** Extraire le scheduler de `create_app` (`--role`), advisory
-  lock anti-double-scheduler, `running_count` lu en base. Mode `all` inchangé par défaut.
+- **B1 — Claim atomique (C2). ✅ FAIT (`8c40bc5`).** `QueueStore.claim(job_id)` +
+  `scheduler._launch` qui claim avant de soumettre. Aucun changement de déploiement.
+  *Filet de sûreté immédiat, base de tout le reste.*
+- **B2 — Rôles & unicité (C1). ✅ FAIT (`914ea94`).** `resolve_role()` (web|scheduler|all),
+  gating du scheduler dans `create_app` (`init_job_executor(run_scheduler=…)`), verrou
+  consultatif anti-double-scheduler (`scheduler_lock.py`), `QueueStore.count_running()` lu en
+  base. Mode `all` inchangé par défaut.
 - **B3 — Web multi-worker.** `gunicorn` pour `--role web`, services systemd séparés, doc
-  d'install. Le web devient scalable ; l'orchestrateur reste unique.
+  d'install. Le web devient scalable ; l'orchestrateur reste unique. *Inclut le câblage
+  restant : flag CLI `--role` dans `main()` et **arrêt franc** (`sys.exit(1)`) d'un process
+  `--role scheduler` dédié si le verrou est déjà tenu (cf. note d'implémentation).*
 - **B4 — Durcissement nœud (C4.1–C4.3).** Verrou `ensure` par moteur, single-process
   garanti, état de charge dans `/capabilities`.
 - **B5 — Débit STT (C4.4).** Monter `inference.stt.concurrency` sur backend distant, mesures de débit.
@@ -470,16 +476,50 @@ Ordre de valeur : **B1 → B2 → B4** d'abord (sûreté + serveur de ressources
 demandée), **B3/B5/B6** ensuite (débit + admission), **B7** pour la haute dispo, **B8** pour le
 pilotage de capacité, **B9** au besoin.
 
+### Notes d'implémentation (écarts assumés vs conception, points pour la suite)
+
+- **B1 — claim par entrée plutôt que batch.** La conception §C2 décrivait
+  `claim_next_candidates(limit)` (SELECT FOR UPDATE SKIP LOCKED + mark RUNNING en lot). À
+  l'implémentation, le claim a été fait **par entrée** (`QueueStore.claim(job_id)`, appelé
+  dans `scheduler._launch`) car le dispatch enchaîne des **vérifications par job** (job
+  existant, annulé, audio présent, **VRAM disponible** via `force_free_gpu` qui fait de l'E/S
+  lourde) qui doivent rester **avant** le claim et **hors** de la transaction de verrou.
+  Sémantique identique (atomicité, SKIP LOCKED sur PG, fallback UPDATE conditionnel sur
+  SQLite), transaction minuscule. Le comportement « ressources indisponibles → entrée laissée
+  WAITING » est ainsi préservé (pas de claim-puis-release).
+- **B2 — arrêt franc du scheduler dédié reporté à B3.** Le verrou consultatif est posé dans
+  `QueueScheduler.start()` : si indisponible, **aucun thread n'est démarré** (dégradation
+  silencieuse, adaptée au mode `all`/tests). Le `sys.exit(1)` prévu §C1 pour un **process
+  `--role scheduler` dédié** n'a pas de sens tant que cet entrypoint n'existe pas → il est
+  **rattaché à B3** (avec le flag CLI `--role` dans `main()`, aujourd'hui lu seulement via
+  `TRANSCRIA_ROLE`/config).
+- **Verrou = connexion dédiée.** `SchedulerLock` garde une connexion ouverte du pool pour la
+  vie du scheduler (le verrou est lié à la session ; libéré automatiquement à la mort du
+  process). Prévoir, en multi-instance réelle, que chaque orchestrateur consomme **1 connexion
+  permanente** en plus de son pool.
+- **Tests & scheduler global.** La suite crée l'app avec `role=all` (queue activée) → un
+  scheduler global tourne et **détient le verrou par défaut** pendant toute la session ; les
+  `start()` concurrents des tests échouent donc à l'acquérir (comportement voulu, qui sert
+  même de cas de test). La capacité étant désormais **lue en base** (`count_running()`),
+  garder à l'esprit cette source partagée si une future flakiness apparaît (piste : isoler les
+  tests scheduler avec une clé de verrou dédiée / `run_scheduler=False`).
+- **Pour B4.** Le superviseur STT (`stt_engine_supervisor.ensure_ready`) est déjà testable
+  avec sonde/lanceur injectés mais **n'a pas de verrou par moteur** : c'est le cœur de B4
+  (deux `ensure` concurrents ⇒ un seul lancement). Le `concurrent_safe`/`inference.stt.concurrency`
+  (B5) et l'état de charge dans `/capabilities` (B4.3, consommé par C5/C7) sont les briques suivantes.
+
 ---
 
 ## 9. Stratégie de test
 
-- **Claim concurrent (C2)** : N threads/process appelant `claim_next_candidates` en
-  parallèle sur PostgreSQL (via la fixture éphémère `pytest-postgresql` de la Phase A) →
-  assertion : **chaque entrée claimée exactement une fois**, aucun doublon. Test marqué
-  PostgreSQL-only.
-- **Unicité scheduler (C1)** : deux tentatives de prise de l'advisory lock → la 2ᵉ échoue
-  proprement (exit), la 1ʳᵉ tient.
+- **Claim concurrent (C2). ✅** N threads réels (connexions PG distinctes via la fixture
+  `pytest-postgresql`) appelant `QueueStore.claim` en parallèle → **chaque entrée claimée
+  exactement une fois**, aucun doublon (8 threads/même entrée → 1 gagnant ; 12 entrées/8
+  threads → chacune une fois). Tests PostgreSQL-only.
+- **Unicité scheduler (C1). ✅** Deux prises du verrou consultatif → la 2ᵉ échoue proprement
+  (la 1ʳᵉ tient) ; libération → ré-acquisition possible ; no-op hors PostgreSQL. Côté
+  scheduler : un `start()` sans verrou disponible **ne démarre aucun thread**
+  (`has_singleton_lock == False`). L'arrêt franc d'un process scheduler dédié relève de B3.
 - **`ensure` idempotent (C4)** : superviseur avec sonde/lanceur injectés (déjà testable,
   `stt_engine_supervisor.py`), deux `ensure_ready` concurrents du même moteur ⇒ **un seul
   lancement** (compteur du launcher == 1).
@@ -487,7 +527,7 @@ pilotage de capacité, **B9** au besoin.
   (mêmes bonus appliqués) + un seul `UPDATE`.
 - **Backpressure** : nœud renvoyant 503 → `resource_gate` `defer` + `requeue_later` (déjà
   couvert §7.2, à étendre au cas moteur STT saturé / concurrence atteinte).
-- **Non-régression** : toute la suite reste verte sur PostgreSQL (1332 tests aujourd'hui),
+- **Non-régression** : toute la suite reste verte sur PostgreSQL (**1347 tests** après B1+B2),
   `ruff`/`mypy`/anti-dérive Alembic.
 
 ---
