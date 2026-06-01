@@ -1,0 +1,43 @@
+[Unit]
+Description=TranscrIA Inference Service — Nœud de ressources GPU (diarize / voice-embed / STT)
+After=network-online.target
+Wants=network-online.target
+
+# Si PostgreSQL est sur cette machine, décommentez pour garantir l'ordre
+# Wants=postgresql.service
+
+[Service]
+Type=exec
+User=root
+Group=root
+WorkingDirectory=/home/admin_ia/transcria
+
+Environment="INFERENCE_HOST=0.0.0.0"
+Environment="INFERENCE_PORT=8002"
+Environment="INFERENCE_LOG_LEVEL=INFO"
+# Charger .env du projet (secrets, DSN, clés API)
+Environment="ENV_FILE=/home/admin_ia/transcria/.env"
+
+# Gunicorn (1 worker = 1 process GPU) :
+# Le moteur charge en VRAM dès le boot ; workers > 1 = VRAM × N.  Restons à 1.
+ExecStart=/home/admin_ia/transcria/venv/bin/gunicorn \
+    "inference_service:create_app()" \
+    -b "0.0.0.0:8002" \
+    --workers 1 \
+    --threads 4 \
+    --timeout 120 \
+    --access-logfile /var/log/transcria-inference-access.log \
+    --error-logfile /var/log/transcria-inference-error.log
+
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=15
+
+# Sécurité
+StandardOutput=append:/var/log/transcria-inference.log
+StandardError=append:/var/log/transcria-inference.log
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

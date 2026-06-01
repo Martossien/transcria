@@ -22,6 +22,8 @@
 #   --pg-user USER     Rôle/utilisateur PostgreSQL (défaut: transcria)
 #   --pg-password PWD  Mot de passe du rôle (défaut: généré aléatoirement)
 #   --pg-migrate       Migrer les données SQLite existantes vers PostgreSQL
+#   --inference-service  Installer le nœud de ressources GPU (inference_service)
+#                        (n'installe PAS le service web TranscrIA principal)
 #
 # Le script doit être lancé depuis le répertoire du dépôt TranscrIA.
 # ============================================================================
@@ -60,6 +62,8 @@ PG_USER="transcria"
 PG_PASSWORD=""         # généré si vide
 PG_MIGRATE=false
 
+INSTALL_INFERENCE=false   # --inference-service
+
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -79,6 +83,11 @@ while [[ $# -gt 0 ]]; do
         --pg-user)         PG_USER="$2"; shift 2 ;;
         --pg-password)     PG_PASSWORD="$2"; shift 2 ;;
         --pg-migrate)      PG_MIGRATE=true; shift ;;
+        --inference-service)
+            INSTALL_INFERENCE=true
+            # Le nœud de ressources GPU n'installe PAS le service systemd de l'app principale.
+            INSTALL_SERVICE=false
+            shift ;;
         -h|--help)
             awk 'NR>1 && /^[^#]/{exit} NR>1 && /^#/{sub(/^# ?/,""); print}' "$0"
             exit 0 ;;
@@ -309,7 +318,7 @@ else
         log_info "Ancien config.yaml sauvegardé : $BACKUP"
     fi
     log_info "Génération via bootstrap_config.py (auto-détection)..."
-    python "$INSTALL_DIR/scripts/bootstrap_config.py" \
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
         --example "$INSTALL_DIR/config.example.yaml" \
         --output "$CONFIG_PATH" \
         --force 2>&1 | sed 's/^/  /'
@@ -355,6 +364,148 @@ if [[ -z "$SETUP_PG" ]]; then
     fi
 fi
 
+_setup_postgres() {
+    local host="$1" port="$2" db="$3" user="$4" pass="$5"
+    local dsn="postgresql+psycopg://$user:$pass@$host:$port/$db"
+    local sqlite_db="$INSTALL_DIR/instance/transcrIA.db"
+
+    # ── Dossier de backup ─────────────────────────────────────
+    local backup_dir="$INSTALL_DIR/backups"
+    mkdir -p "$backup_dir"
+
+    # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
+    local pg_hba=""
+    pg_hba=$(sudo -u postgres psql -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
+    if [[ -f "$pg_hba" ]]; then
+        if grep -qE '^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident|peer)$' "$pg_hba"; then
+            log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
+            sudo -u postgres sed -i \
+                -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+ident\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
+                -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+peer\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
+                "$pg_hba"
+            if command -v systemctl &>/dev/null && systemctl is-active --quiet postgresql 2>/dev/null; then
+                systemctl reload postgresql
+            elif command -v service &>/dev/null; then
+                service postgresql reload
+            fi
+            sleep 1
+        fi
+    fi
+
+    # ── Rôle + base (idempotent) ──────────────────────────────
+    log_info "Vérification du rôle '$user' et de la base '$db'…"
+    local pg_super=(sudo -u postgres psql)
+    [[ $EUID -eq 0 ]] && pg_super=(psql)
+
+    if ! "${pg_super[@]}" -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" -v dbname="$db" <<'SQL'
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbname') \gexec
+SQL
+    then
+        log_error "Échec de la création rôle/base PostgreSQL — vérifiez les droits sudo sur le compte postgres."
+        return 1
+    fi
+    log_ok "Rôle et base PostgreSQL prêts"
+
+    # ── Écrire le DSN dans .env ───────────────────────────────
+    python - "$ENV_FILE" "$dsn" <<'PYEOF'
+import pathlib, sys
+env_file, dsn = pathlib.Path(sys.argv[1]), sys.argv[2]
+lines = env_file.read_text().splitlines() if env_file.exists() else []
+out, done = [], False
+for ln in lines:
+    if ln.lstrip("# ").startswith("TRANSCRIA_DATABASE_URL="):
+        out.append(f"TRANSCRIA_DATABASE_URL={dsn}"); done = True
+    else:
+        out.append(ln)
+if not done:
+    out.append(f"TRANSCRIA_DATABASE_URL={dsn}")
+env_file.write_text("\n".join(out) + "\n")
+PYEOF
+    chmod 600 "$ENV_FILE"
+    log_ok "DSN PostgreSQL écrit dans .env (chmod 600)"
+
+    # ── Détection état de la base ─────────────────────────────
+    local has_schema="" has_data="" alembic_ver=""
+    has_schema=$(sudo -u postgres psql -d "$db" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null)
+    has_data=$(sudo -u postgres psql -d "$db" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null)
+    alembic_ver=$(sudo -u postgres psql -d "$db" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null)
+    log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
+
+    # ── Schéma Alembic : up-to-date, vide, ou migrer ────────────
+    if [[ "$has_schema" -gt 0 && "${has_data:-0}" -gt 0 ]]; then
+        log_ok "La base '$db' existe déjà avec des données. Conservation."
+    elif [[ "$has_schema" -gt 0 && "${has_data:-0}" -eq 0 ]]; then
+        log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
+        if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+            log_ok "Schéma à jour (Alembic)"
+        else
+            log_error "Alembic a échoué. Tentative de reconstruction…"
+            sudo -u postgres psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
+            if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+                log_ok "Schéma reconstruit"
+            else
+                log_error "Alembic a échoué une seconde fois. Arrêt."
+                return 1
+            fi
+        fi
+    else
+        log_info "Création du schéma (alembic upgrade head)…"
+        if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+            log_ok "Schéma PostgreSQL créé"
+        else
+            log_error "Échec d'alembic upgrade head"
+            return 1
+        fi
+    fi
+
+    # ── Migration SQLite si base vide et SQLite existe ────────
+    if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]; then
+        log_info "Base SQLite détectée : $sqlite_db"
+        if [[ "$NON_INTERACTIVE" = true ]]; then
+            if [[ "$PG_MIGRATE" = true ]]; then
+                _do_pg_migrate "$dsn" "$sqlite_db"
+            else
+                log_info "Migration sautée (--pg-migrate absent)"
+            fi
+        else
+            echo ""
+            echo "Options :"
+            echo "  1. Migrer les données SQLite (conservation locale + copie PG)"
+            echo "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)"
+            echo -n "  Votre choix [1/2] : "
+            local mchoice
+            read -r mchoice
+            if [[ "$mchoice" = "1" ]]; then
+                _do_pg_migrate "$dsn" "$sqlite_db"
+            else
+                log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
+            fi
+        fi
+    fi
+
+    true
+}
+
+_do_pg_migrate() {
+    local dsn="$1" sqlite_db="$2"
+    local backup="$backup_dir/transcrIA_$(date +%Y%m%d_%H%M%S).db.bak"
+    cp "$sqlite_db" "$backup"
+    log_info "Backup SQLite sauvegardé : $backup"
+
+    log_info "Migration des données SQLite → PostgreSQL…"
+    if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
+            --source "sqlite:///$sqlite_db" 2>&1 | sed 's/^/  /'; then
+        log_ok "Données migrées"
+    else
+        log_error "Échec de la migration SQLite → PostgreSQL"
+        log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la basePG manuellement."
+    fi
+}
+
 if [[ "$SETUP_PG" != true ]]; then
     log_ok "Base SQLite conservée (storage.database_url de config.yaml)"
 elif ! command -v psql &>/dev/null; then
@@ -374,68 +525,9 @@ else
         log_info "Mot de passe du rôle '$PG_USER' généré automatiquement."
     fi
 
-    # Superutilisateur : sudo -u postgres (ou direct si déjà root postgres-capable)
-    if [[ $EUID -eq 0 ]]; then PG_SUPER=(psql); else PG_SUPER=(sudo -u postgres psql); fi
-
-    log_info "Création du rôle '$PG_USER' et de la base '$PG_DB'…"
-    # SQL transmis par stdin (le mot de passe n'apparaît pas dans la liste des process).
-    if "${PG_SUPER[@]}" -v ON_ERROR_STOP=1 -v role="$PG_USER" -v pwd="$PG_PASSWORD" -v dbname="$PG_DB" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
-WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
-SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbname') \gexec
-SQL
-    then
-        log_ok "Rôle et base PostgreSQL prêts"
-    else
-        log_error "Échec de la création rôle/base (accès au compte postgres ?). Installation interrompue."
-        exit 1
+    if _setup_postgres "$PG_HOST" "$PG_PORT" "$PG_DB" "$PG_USER" "$PG_PASSWORD"; then
+        DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"
     fi
-
-    # DSN dans .env (mot de passe hors config versionnée)
-    DSN="postgresql+psycopg://$PG_USER:$PG_PASSWORD@$PG_HOST:$PG_PORT/$PG_DB"
-    python - "$ENV_FILE" "$DSN" <<'PYEOF'
-import pathlib, sys
-env_file, dsn = pathlib.Path(sys.argv[1]), sys.argv[2]
-lines = env_file.read_text().splitlines() if env_file.exists() else []
-out, done = [], False
-for ln in lines:
-    if ln.lstrip("# ").startswith("TRANSCRIA_DATABASE_URL="):
-        out.append(f"TRANSCRIA_DATABASE_URL={dsn}"); done = True
-    else:
-        out.append(ln)
-if not done:
-    out.append(f"TRANSCRIA_DATABASE_URL={dsn}")
-env_file.write_text("\n".join(out) + "\n")
-PYEOF
-    chmod 600 "$ENV_FILE"
-    log_ok "DSN PostgreSQL écrit dans .env (chmod 600)"
-
-    # Schéma via Alembic
-    log_info "Création du schéma (alembic upgrade head)…"
-    if TRANSCRIA_DATABASE_URL="$DSN" alembic upgrade head 2>&1 | sed 's/^/  /'; then
-        log_ok "Schéma PostgreSQL créé"
-    else
-        log_error "Échec d'alembic upgrade head"
-        exit 1
-    fi
-
-    # Migration éventuelle des données SQLite existantes
-    SQLITE_DB="$INSTALL_DIR/instance/transcrIA.db"
-    if [[ -s "$SQLITE_DB" ]]; then
-        if [[ "$PG_MIGRATE" = true ]] || ask_yn "Migrer les données SQLite existantes ($SQLITE_DB) ?"; then
-            log_info "Migration des données SQLite → PostgreSQL…"
-            if TRANSCRIA_DATABASE_URL="$DSN" python "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
-                    --source "sqlite:///$SQLITE_DB" 2>&1 | sed 's/^/  /'; then
-                log_ok "Données migrées"
-            else
-                log_warn "Échec de la migration des données (schéma en place, base utilisable à vide)"
-            fi
-        fi
-    fi
-
-    DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"
 fi
 
 # ============================================================================
@@ -837,12 +929,61 @@ if [[ "$INSTALL_SERVICE" = true ]]; then
 fi
 
 # ============================================================================
+# SECTION 11.5 — Service systemd inference (nœud de ressources GPU)
+# ============================================================================
+if [[ "$INSTALL_INFERENCE" = true ]]; then
+    log_section "Service systemd inference"
+
+    INFERENCE_SRC="$INSTALL_DIR/deploy/transcria-inference.service"
+    INFERENCE_DST="/etc/systemd/system/transcria-inference.service"
+
+    if [[ ! -f "$INFERENCE_SRC" ]]; then
+        log_warn "transcria-inference.service introuvable — service non installé"
+        log_warn "  Vérifiez que deploy/transcria-inference.service existe."
+    else
+        TMP_INF=$(mktemp)
+        sed \
+            -e "s|/home/admin_ia/transcria|$INSTALL_DIR|g" \
+            -e "s|User=root|User=$SERVICE_USER|g" \
+            "$INFERENCE_SRC" > "$TMP_INF"
+
+        if [[ $EUID -eq 0 ]]; then
+            cp "$TMP_INF" "$INFERENCE_DST"
+            chmod 644 "$INFERENCE_DST"
+            systemctl daemon-reload
+            systemctl enable transcria-inference
+            log_ok "Service transcria-inference installé et activé"
+        elif command -v sudo &>/dev/null; then
+            sudo cp "$TMP_INF" "$INFERENCE_DST"
+            sudo chmod 644 "$INFERENCE_DST"
+            sudo systemctl daemon-reload
+            sudo systemctl enable transcria-inference
+            log_ok "Service transcria-inference installé et activé"
+        else
+            ADAPTED="$INSTALL_DIR/transcria-inference.service.adapted"
+            cp "$TMP_INF" "$ADAPTED"
+            log_warn "sudo indisponible — fichier adapté : $ADAPTED"
+            log_warn "Pour installer :"
+            log_warn "  sudo cp $ADAPTED $INFERENCE_DST"
+            log_warn "  sudo systemctl daemon-reload && sudo systemctl enable transcria-inference"
+        fi
+        rm -f "$TMP_INF"
+    fi
+fi
+
+# ============================================================================
 # SECTION 12 — Résumé final
 # ============================================================================
 log_section "Résumé de l'installation"
 
 echo ""
-echo -e "${BOLD}${GREEN}TranscrIA installé dans : $INSTALL_DIR${NC}"
+if [[ "$INSTALL_INFERENCE" = true ]]; then
+    echo -e "${BOLD}${GREEN}TranscrIA Inference Service (nœud de ressources GPU)${NC}"
+    echo -e "  Port  : 8002"
+    echo -e "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)"
+else
+    echo -e "${BOLD}${GREEN}TranscrIA installé dans : $INSTALL_DIR${NC}"
+fi
 echo ""
 
 # Bilan des modèles

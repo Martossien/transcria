@@ -104,6 +104,15 @@ cd transcria
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
+
+# PostgreSQL
+./install.sh --postgres             # Configurer PostgreSQL (crée rôle/base, écrit DSN, applique alembic)
+./install.sh --postgres --pg-migrate # + migre les données SQLite existantes
+./install.sh --no-postgres          # Forcer SQLite (pas de prompt PostgreSQL)
+./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
+
+# Nœud de ressources GPU
+./install.sh --inference-service    # Installer le nœud de ressources GPU seul (ne PAS installer le service web)
 ```
 
 ### Ce que install.sh ne fait pas
@@ -113,6 +122,60 @@ cd transcria
 - Compiler llama.cpp
 
 Ces étapes sont documentées dans les sections suivantes.
+
+### Modes d'installation
+
+TranscrIA propose **3 topologies de déploiement**.
+
+---
+
+#### 1. Tout-en-un (`role=all`) — défaut
+
+La frontale HTTP et les moteurs GPU tournent sur la même machine.  C'est le mode classique pour un poste isolé ou une charge modérée.
+
+```bash
+./install.sh --postgres
+```
+
+---
+
+#### 2. Déployer un nœud de ressources GPU **seul**
+
+Installe uniquement le service `inference_service` (Flask) qui expose :
+- `/infer/diarize` — diarisation pyannote
+- `/infer/voice-embed` — empreintes vocales  
+- `/engines/ensure` — lancement à la demande des moteurs STT
+- `/capabilities` — inventaire GPU/mémoire/libre
+
+Le nœud n'a **pas** de service web TranscrIA.  Il est contrôlé par une frontale distante via `config.yaml` (`inference.nodes[].url`).
+
+```bash
+./install.sh --inference-service   # Port 8002, n'installe PAS transcria.service
+```
+
+> **Particularités du nœud :**
+> - N'utilise pas PostgreSQL (pas de base locale)
+> - N'installe pas `transcria.service`
+> - Les modèles GPU doivent être téléchargés comme sur une install classique
+> - Le mot de passe `.env` pour la sécurité des endpoints `/infer/*` est lu depuis `.env` (clé `INFERENCE_API_KEY`)
+
+---
+
+#### 3. Phase B : Web multi-worker + ordonnanceur unique (séparation des rôles)
+
+Pour encaisser plus de trafic web, on sépare le tier HTTP (`role=web`, N workers gunicorn) de l'ordonnanceur unique (`role=scheduler`, 1 process, GPU). Nécessite PostgreSQL.
+
+```bash
+# Installer la frontale (sur machine 1, ou sur la même machine que le scheduler)
+./install.sh --postgres
+# puis configurer runtime.role=web dans config.yaml
+
+# Installer l'ordonnanceur (sur machine 2, ou sur la même machine)
+./install.sh --postgres
+# puis configurer runtime.role=scheduler dans config.yaml
+```
+
+Voir §11 pour les unités systemd dédiées (`transcria-web.service`, `transcria-scheduler.service`).
 
 ---
 
@@ -722,8 +785,20 @@ là où SQLite sérialise les écritures.
 > ```
 > Options : `--pg-host/--pg-port/--pg-db/--pg-user/--pg-password` (mot de passe généré si
 > omis). Sans `--postgres` ni `--no-postgres`, l'installeur pose la question. PostgreSQL
-> doit être installé au préalable (le script l'indique sinon). Les étapes manuelles
-> ci-dessous décrivent ce que fait le script.
+> doit être installé au préalable (le script l'indique sinon).
+>
+> **Comportement intelligent en cas de réinstallation :**
+> - Si la base PostgreSQL n'existe pas → création + `alembic upgrade head`
+> - Si la base existe avec le schéma mais **vide** → `alembic upgrade head` (ou reconstruction si corrompu)
+> - Si la base existe **avec des données** → conservation, aucune migration SQLite proposée
+>
+> **Migration SQLite partielle.** Si la base SQLite ne contient pas toutes les tables du schéma
+> (par exemple, uniquement `users` et `jobs` sans `groups`, `audit_logs`, etc.), le script
+> de migration saute les tables manquantes et copie celles qui existent.
+>
+> **Sécurité.** Le mot de passe est généré aléatoirement (32 caractères) et stocké dans
+> `.env` avec `chmod 600`. Le rôle est créé/re-créé de manière idempotente (même nom =
+> ALTER ROLE).
 
 **1. Créer le rôle et la base** (PostgreSQL ≥ 13) :
 
@@ -759,6 +834,10 @@ TRANSCRIA_DATABASE_URL=postgresql+psycopg://transcria:CHANGEZ_MOI@127.0.0.1:5432
 
 Le script copie toutes les tables dans l'ordre des dépendances, préserve les instants
 (datetimes en UTC) et réaligne les séquences. La cible doit être vide (`--truncate` sinon).
+
+Le script gère aussi les bases SQLite partielles : si une table n'existe pas en SQLite
+(par exemple la base ne contient que `users` et `jobs`), la table est automatiquement
+sauteée et le reste est copié sans erreur.
 
 > **Évolutions de schéma.** Après modification d'un modèle : `alembic revision --autogenerate -m "…"`,
 > relire la migration générée, puis `alembic upgrade head`. Le test `tests/test_alembic_migrations.py`
@@ -963,6 +1042,10 @@ export PID_FILE=/run/transcrIA.pid
 export VENV=/chemin/absolu/vers/transcria/venv
 ```
 
+> **Chargement de `.env`.** `start.sh` charge automatiquement le fichier `.env` du répertoire
+> d'installation (s'il existe) avant d'exécuter `alembic upgrade head`. Cela garantit que le
+> DSN PostgreSQL et les secrets sont visibles pour les migrations et l'application.
+
 ---
 
 ## 11. Service systemd
@@ -1054,7 +1137,23 @@ Si l'utilisateur du service n'a pas les droits d'écriture sur `/run/`, changer 
 Environment=PID_FILE=/tmp/transcrIA.pid
 ```
 
-### Montée en charge : web multi-worker + ordonnanceur unique (Phase B)
+#### 5. `TRANSCRIA_DATABASE_URL` absent (passage PostgreSQL)
+
+Si `install.sh` a créé un DSN PostgreSQL dans `.env` mais que le service systemd utilise un autre utilisateur (ex: `root`), le fichier `.env` du répertoire d'installation n'est pas lu. Le service retombe alors sur SQLite.
+
+**Solution** : ajouter la variable directement dans le fichier `transcria.service` :
+
+```ini
+Environment=TRANSCRIA_DATABASE_URL=postgresql+psycopg://transcria:VOTRE_MDP@127.0.0.1:5432/transcria
+```
+
+Ou copier le `.env` vers le home de l'utilisateur du service et le charger via :
+
+```ini
+Environment="TRANSCRIA_DATABASE_URL=postgresql+psycopg://transcria:VOTRE_MDP@127.0.0.1:5432/transcria"
+```
+
+`start.sh` charge automatiquement le `.env` du répertoire courant, mais uniquement s'il est situé dans le dossier du projet.
 
 Par défaut, `transcria.service` lance **un seul process** (`role=all`) : il sert le web
 *et* exécute la file. Cela suffit pour un poste isolé ou une charge modérée.

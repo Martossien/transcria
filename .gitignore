@@ -80,3 +80,7 @@ archives/
 !tests/test2.mp3
 .coverage
 coverage.xml
+
+# Backups générés par install.sh
+config.yaml.bak.*
+backups/

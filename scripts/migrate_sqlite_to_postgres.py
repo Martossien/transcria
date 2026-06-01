@@ -84,9 +84,19 @@ def migrate(source_url: str, target_url: str, truncate: bool) -> int:
             logger.info("tables cibles vidées (--truncate)")
 
         for table in db.metadata.sorted_tables:
+            # Vérifier si la table existe dans SQLite
+            try:
+                test = src.execute(select(func.count()).select_from(table))
+                _ = test.scalar()
+            except Exception:
+                logger.info("%-26s : SKIP (table inexistante en SQLite)", table.name)
+                continue
+
             existing = dst.execute(select(func.count()).select_from(table)).scalar() or 0
-            if existing:
-                sys.exit(f"La table cible '{table.name}' n'est pas vide ({existing} lignes). Utilisez --truncate.")
+            if existing and not truncate:
+                logger.warn("%-26s : SKIP (%d lignes existantes en cible)", table.name, existing)
+                continue
+
             rows = [dict(r) for r in src.execute(select(table)).mappings().all()]
             if rows:
                 dst.execute(table.insert(), rows)

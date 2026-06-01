@@ -49,11 +49,24 @@ mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$PID_FILE")"
 # ── Virtualenv ─────────────────────────────────────────────
 if [ -n "$VENV" ] && [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"
+    # S'assurer que les binaires du venv sont prioritaires (alembic, gunicorn, etc.)
+    export PATH="$VENV/bin:$PATH"
+fi
+
+# ── Variables d'environnement (.env) ─────────────────────
+# Charge TRANSCRIA_DATABASE_URL et les secrets avant Alembic.
+ENV_FILE="$SCRIPT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    source "$ENV_FILE"
+    set +a
 fi
 
 # ── Migrations de schéma (Alembic) ─────────────────────────
 # Met la base au niveau attendu avant de démarrer. En cas d'échec on n'amorce
 # pas le serveur (un schéma périmé corromprait les données).
+# Le alembic du venv doit être utilisé (pas celui du système) pour trouver les modules Python.
+echo "Alembic : $(which alembic)"
 echo "Application des migrations de base (alembic upgrade head)…"
 if ! alembic upgrade head; then
     echo "Erreur : échec des migrations Alembic. Démarrage annulé."
