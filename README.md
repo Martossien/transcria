@@ -6,6 +6,14 @@ TranscrIA est un portail web de transcription et de valorisation de réunions lo
 
 Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio lisible, choix de traitement adapté, contrôle humain des participants/termes, puis transcription finale avec garde-fous contre les hallucinations ASR et les erreurs LLM.
 
+## Statut du projet
+
+⚠️ **Développement actif — pas encore de version taguée.** TranscrIA est fonctionnel et couvert par une large suite de tests (1400+, CI verte), mais l'API, le schéma de configuration (`config.yaml`) et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante. À considérer pour de l'évaluation ou un pilote, pas encore comme une release stable à déployer sans validation de votre côté.
+
+- **Installation** : aujourd'hui via `./install.sh` (venv, dépendances, service systemd). Des **images Docker sont prévues une fois les tests et le développement stabilisés** — elles ne sont pas encore publiées.
+- **Modèles** : Cohere ASR, pyannote, faster-whisper et la LLM d'arbitrage sont à fournir et configurer localement (voir [docs/INSTALL.md](docs/INSTALL.md)).
+- **Retours bienvenus** : issues et pull requests via GitHub — voir [CONTRIBUTING.md](CONTRIBUTING.md) et [SECURITY.md](SECURITY.md).
+
 ## Ce qui le distingue
 
 Quelques partis pris qui le démarquent d'un simple script de transcription :
