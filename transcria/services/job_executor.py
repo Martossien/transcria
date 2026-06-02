@@ -178,7 +178,10 @@ class JobExecutorService:
                 QueueStore.dequeue(job_id, status="failed")
                 mark_execution_failed(job_id, str(exc))
                 JobStore.update_state(job_id, JobState.FAILED, str(exc))
-                _notify(self.config, job, "failed", str(exc))
+                # `job` chargé dans le premier app_context est détaché ici (sa session
+                # est fermée) : _notify accède à job.owner (lazy load) → l'email
+                # d'échec serait silencieusement perdu. On recharge dans CE contexte.
+                _notify(self.config, JobStore.get_by_id(job_id), "failed", str(exc))
             raise
         finally:
             self._finalize_tracking(job_id)
