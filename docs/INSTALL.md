@@ -106,10 +106,11 @@ cd transcria
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
 
 # PostgreSQL
-./install.sh --postgres             # Configurer PostgreSQL (crée rôle/base, écrit DSN, applique alembic)
+./install.sh --postgres             # PostgreSQL local : crée rôle/base, écrit DSN, applique alembic
 ./install.sh --postgres --pg-migrate # + migre les données SQLite existantes
 ./install.sh --no-postgres          # Forcer SQLite (pas de prompt PostgreSQL)
 ./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
+# PostgreSQL distant : créer d'abord rôle/base côté serveur, puis fournir --pg-host/--pg-user/--pg-password.
 
 # Nœud de ressources GPU
 ./install.sh --inference-service    # Installer le nœud de ressources GPU seul (ne PAS installer le service web)
@@ -778,7 +779,7 @@ production multi-utilisateurs, utilisez **PostgreSQL** : il encaisse la charge
 concurrente (la queue et le service de ressources sollicitent la base en parallèle)
 là où SQLite sérialise les écritures.
 
-> **Voie automatique (recommandée).** `install.sh` prend tout en charge :
+> **Voie automatique locale (recommandée).** `install.sh` prend tout en charge quand PostgreSQL est sur la même machine :
 > ```bash
 > ./install.sh --postgres                 # crée le rôle/la base, écrit le DSN, applique alembic
 > ./install.sh --postgres --pg-migrate    # + migre les données SQLite existantes
@@ -786,6 +787,9 @@ là où SQLite sérialise les écritures.
 > Options : `--pg-host/--pg-port/--pg-db/--pg-user/--pg-password` (mot de passe généré si
 > omis). Sans `--postgres` ni `--no-postgres`, l'installeur pose la question. PostgreSQL
 > doit être installé au préalable (le script l'indique sinon).
+> Si `--pg-host` pointe vers un serveur distant, le rôle et la base doivent déjà exister :
+> l'installeur vérifie la connexion, écrit le DSN et applique Alembic, mais ne crée pas d'objets
+> administratifs sur le serveur distant.
 >
 > **Comportement intelligent en cas de réinstallation :**
 > - Si la base PostgreSQL n'existe pas → création + `alembic upgrade head`

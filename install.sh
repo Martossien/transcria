@@ -14,9 +14,9 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
-#   --postgres         Configurer PostgreSQL (crée rôle/base, écrit le DSN, migre le schéma)
+#   --postgres         Configurer PostgreSQL (local : crée rôle/base ; distant : utilise une base existante)
 #   --no-postgres      Conserver SQLite (pas de prompt PostgreSQL)
-#   --pg-host HOST     Hôte PostgreSQL (défaut: 127.0.0.1)
+#   --pg-host HOST     Hôte PostgreSQL (défaut: 127.0.0.1 ; distant = rôle/base déjà créés)
 #   --pg-port PORT     Port PostgreSQL (défaut: 5432)
 #   --pg-db NAME       Nom de la base (défaut: transcria)
 #   --pg-user USER     Rôle/utilisateur PostgreSQL (défaut: transcria)
@@ -99,6 +99,15 @@ cd "$INSTALL_DIR"
 VENV="$INSTALL_DIR/venv"
 CONFIG_PATH="$INSTALL_DIR/config.yaml"
 ENV_FILE="$INSTALL_DIR/.env"
+if id "$SERVICE_USER" &>/dev/null 2>&1; then
+    SERVICE_HOME_GLOBAL=$(getent passwd "$SERVICE_USER" | cut -d: -f6)
+else
+    SERVICE_HOME_GLOBAL="/home/$SERVICE_USER"
+fi
+OPENCODE_HOME="$HOME"
+if [[ "$SERVICE_USER" != "${USER:-}" ]]; then
+    OPENCODE_HOME="$SERVICE_HOME_GLOBAL"
+fi
 
 # Helper pour les prompts interactifs
 ask() {
@@ -127,10 +136,55 @@ ask_yn() {
     [[ "$answer" =~ ^[oOyY]$ ]]
 }
 
+is_local_pg_host() {
+    local host="$1"
+    [[ "$host" = "127.0.0.1" || "$host" = "localhost" || "$host" = "::1" ]]
+}
+
+pg_admin_psql() {
+    # PostgreSQL local uniquement : exécute psql avec l'identité système postgres.
+    if command -v sudo &>/dev/null; then
+        sudo -u postgres psql "$@"
+    elif [[ $EUID -eq 0 ]] && command -v runuser &>/dev/null; then
+        runuser -u postgres -- psql "$@"
+    else
+        return 127
+    fi
+}
+
+pg_admin_sed() {
+    # PostgreSQL local uniquement : édite pg_hba.conf avec l'identité système postgres.
+    if command -v sudo &>/dev/null; then
+        sudo -u postgres sed "$@"
+    elif [[ $EUID -eq 0 ]] && command -v runuser &>/dev/null; then
+        runuser -u postgres -- sed "$@"
+    else
+        return 127
+    fi
+}
+
+pg_app_psql() {
+    local host="$1" port="$2" db="$3" user="$4" pass="$5"
+    shift 5
+    PGPASSWORD="$pass" psql -h "$host" -p "$port" -U "$user" -d "$db" "$@"
+}
+
+build_pg_dsn() {
+    local host="$1" port="$2" db="$3" user="$4" pass="$5"
+    python - "$host" "$port" "$db" "$user" "$pass" <<'PYEOF'
+from urllib.parse import quote
+import sys
+
+host, port, db, user, password = sys.argv[1:6]
+host_part = f"[{host}]" if ":" in host and not host.startswith("[") else host
+print(f"postgresql+psycopg://{quote(user, safe='')}:{quote(password, safe='')}@{host_part}:{port}/{quote(db, safe='')}")
+PYEOF
+}
+
 # Helper YAML — lit une clé dans config.yaml
 yaml_get() {
     local key="$1"
-    python3 -c "
+    "$VENV/bin/python" -c "
 import yaml, sys
 try:
     with open('$CONFIG_PATH') as f:
@@ -148,7 +202,7 @@ except Exception:
 # Helper YAML — écrit une valeur dans config.yaml
 yaml_set() {
     local key="$1" value="$2"
-    python3 -c "
+    "$VENV/bin/python" -c "
 import yaml, sys
 
 key_path = '$key'.split('.')
@@ -366,53 +420,76 @@ fi
 
 _setup_postgres() {
     local host="$1" port="$2" db="$3" user="$4" pass="$5"
-    local dsn="postgresql+psycopg://$user:$pass@$host:$port/$db"
+    local dsn
+    dsn=$(build_pg_dsn "$host" "$port" "$db" "$user" "$pass")
     local sqlite_db="$INSTALL_DIR/instance/transcrIA.db"
-    local pg_super=(sudo -u postgres psql)
-    local pg_sed=(sudo -u postgres sed)
-    if [[ $EUID -eq 0 ]]; then
-        pg_super=(psql)
-        pg_sed=(sed)
-    fi
+    local local_pg=false
+    is_local_pg_host "$host" && local_pg=true
 
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
     mkdir -p "$backup_dir"
 
-    # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
-    local pg_hba=""
-    pg_hba=$("${pg_super[@]}" -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
-    if [[ -f "$pg_hba" ]]; then
-        if grep -qE '^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident|peer)$' "$pg_hba"; then
-            log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
-            "${pg_sed[@]}" -i \
-                -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+ident\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
-                -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+peer\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
-                "$pg_hba"
-            if command -v systemctl &>/dev/null && systemctl is-active --quiet postgresql 2>/dev/null; then
-                systemctl reload postgresql
-            elif command -v service &>/dev/null; then
-                service postgresql reload
+    if [[ "$local_pg" = true ]]; then
+        # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
+        local pg_hba=""
+        pg_hba=$(pg_admin_psql -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
+        if [[ -f "$pg_hba" ]]; then
+            if grep -qE '^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident|peer)$' "$pg_hba"; then
+                log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
+                if pg_admin_sed -i \
+                    -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+ident\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
+                    -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+peer\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
+                    "$pg_hba"; then
+                    if command -v systemctl &>/dev/null && systemctl is-active --quiet postgresql 2>/dev/null; then
+                        if [[ $EUID -eq 0 ]]; then
+                            systemctl reload postgresql
+                        else
+                            sudo systemctl reload postgresql
+                        fi
+                    elif command -v service &>/dev/null; then
+                        if [[ $EUID -eq 0 ]]; then
+                            service postgresql reload
+                        else
+                            sudo service postgresql reload
+                        fi
+                    fi
+                    sleep 1
+                else
+                    log_warn "Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL."
+                fi
             fi
-            sleep 1
         fi
-    fi
 
-    # ── Rôle + base (idempotent) ──────────────────────────────
-    log_info "Vérification du rôle '$user' et de la base '$db'…"
+        # ── Rôle + base (idempotent) ──────────────────────────────
+        log_info "Vérification du rôle '$user' et de la base '$db'…"
 
-    if ! "${pg_super[@]}" -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" -v dbname="$db" <<'SQL'
+        if ! pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" -v dbname="$db" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbname') \gexec
 SQL
-    then
-        log_error "Échec de la création rôle/base PostgreSQL — vérifiez les droits sudo sur le compte postgres."
+        then
+            log_error "Échec de la création rôle/base PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
+            return 1
+        fi
+        log_ok "Rôle et base PostgreSQL prêts"
+    else
+        log_info "PostgreSQL distant détecté ($host) : rôle/base supposés déjà créés."
+    fi
+
+    if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
+        log_error "Connexion PostgreSQL impossible avec le rôle '$user' sur '$db@$host:$port'."
+        if [[ "$local_pg" = true ]]; then
+            log_warn "Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe."
+        else
+            log_warn "Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password."
+        fi
         return 1
     fi
-    log_ok "Rôle et base PostgreSQL prêts"
+    log_ok "Connexion PostgreSQL validée"
 
     # ── Écrire le DSN dans .env ───────────────────────────────
     python - "$ENV_FILE" "$dsn" <<'PYEOF'
@@ -434,9 +511,11 @@ PYEOF
 
     # ── Détection état de la base ─────────────────────────────
     local has_schema="" has_data="" alembic_ver=""
-    has_schema=$("${pg_super[@]}" -d "$db" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null)
-    has_data=$("${pg_super[@]}" -d "$db" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null)
-    alembic_ver=$("${pg_super[@]}" -d "$db" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null)
+    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null) || has_schema=0
+    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null) || has_data=0
+    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null) || alembic_ver=""
+    [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
+    [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
     log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
 
     # ── Schéma Alembic : up-to-date, vide, ou migrer ────────────
@@ -444,21 +523,26 @@ PYEOF
         log_ok "La base '$db' existe déjà avec des données. Conservation."
     elif [[ "$has_schema" -gt 0 && "${has_data:-0}" -eq 0 ]]; then
         log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
-        if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
             log_ok "Schéma à jour (Alembic)"
         else
-            log_error "Alembic a échoué. Tentative de reconstruction…"
-            "${pg_super[@]}" -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
-            if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
-                log_ok "Schéma reconstruit"
+            if [[ "$local_pg" = true ]]; then
+                log_error "Alembic a échoué. Tentative de reconstruction locale…"
+                pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
+                if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
+                    log_ok "Schéma reconstruit"
+                else
+                    log_error "Alembic a échoué une seconde fois. Arrêt."
+                    return 1
+                fi
             else
-                log_error "Alembic a échoué une seconde fois. Arrêt."
+                log_error "Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée."
                 return 1
             fi
         fi
     else
         log_info "Création du schéma (alembic upgrade head)…"
-        if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
+        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
             log_ok "Schéma PostgreSQL créé"
         else
             log_error "Échec d'alembic upgrade head"
@@ -527,7 +611,7 @@ elif ! command -v psql &>/dev/null; then
     log_warn  "  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql"
     log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
     log_warn  "Installation poursuivie en SQLite ; relancez avec --postgres une fois PostgreSQL installé."
-elif [[ $EUID -ne 0 ]] && ! command -v sudo &>/dev/null; then
+elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 ]] && ! command -v sudo &>/dev/null; then
     log_error "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres). SQLite conservé."
 else
     ask PG_HOST "Hôte PostgreSQL" "$PG_HOST"
@@ -750,6 +834,8 @@ log_section "opencode (moteur LLM)"
 OPENCODE_BIN=""
 if command -v opencode &>/dev/null; then
     OPENCODE_BIN=$(which opencode)
+elif [[ -x "$OPENCODE_HOME/.opencode/bin/opencode" ]]; then
+    OPENCODE_BIN="$OPENCODE_HOME/.opencode/bin/opencode"
 elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
     OPENCODE_BIN="$HOME/.opencode/bin/opencode"
 else
@@ -766,60 +852,19 @@ if [[ -n "$OPENCODE_BIN" ]]; then
 else
     log_warn "opencode non trouvé"
     echo ""
-    if ask_yn "Installer opencode dans ~/.opencode/bin/ ?"; then
-        OPENCODE_DEST="$HOME/.opencode/bin/opencode"
+    if ask_yn "Installer opencode dans $OPENCODE_HOME/.opencode/bin/ ?"; then
+        OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
         mkdir -p "$(dirname "$OPENCODE_DEST")"
         log_info "Téléchargement opencode (linux-x64)..."
         if curl -fsSL -o "$OPENCODE_DEST" \
             "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
             chmod +x "$OPENCODE_DEST"
+            if id "$SERVICE_USER" &>/dev/null 2>&1; then
+                chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode" 2>/dev/null || true
+            fi
             log_ok "opencode installé : $OPENCODE_DEST"
             OPENCODE_BIN="$OPENCODE_DEST"
             yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
-
-            # Configurer opencode.json pour le provider local (llama.cpp)
-            QWEN_PORT=$(yaml_get "services.qwen_port")
-            OPENCODE_CFG="$HOME/.config/opencode/opencode.json"
-            mkdir -p "$(dirname "$OPENCODE_CFG")"
-            if [[ ! -f "$OPENCODE_CFG" ]]; then
-                cat > "$OPENCODE_CFG" << EOF
-{
-  "\$schema": "https://opencode.ai/config.json",
-  "share": "manual",
-  "provider": {
-    "local": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Qwen 3.6 35B Arbitrage llama.cpp (Local)",
-      "options": {
-        "baseURL": "http://127.0.0.1:${QWEN_PORT:-8080}/v1",
-        "apiKey": "dummy-key",
-        "timeout": 9999999
-      },
-      "models": {
-        "qwen3-35b-arbitrage": {
-          "name": "Qwen 3.6 35B Arbitrage",
-          "limit": {
-            "context": 263144,
-            "output": 81920
-          }
-        }
-      }
-    }
-  },
-  "permission": {
-    "edit": { "*": "allow" },
-    "bash": "allow",
-    "read": "allow",
-    "write": "allow",
-    "glob": "allow",
-    "grep": "allow"
-  }
-}
-EOF
-                log_ok "opencode.json configuré : $OPENCODE_CFG"
-            else
-                log_info "opencode.json existant conservé : $OPENCODE_CFG"
-            fi
 
             # Ajouter au PATH dans .bashrc/.profile si nécessaire
             OPENCODE_DIR="$(dirname "$OPENCODE_DEST")"
@@ -843,6 +888,19 @@ EOF
     else
         log_info "opencode ignoré — résumé/correction LLM désactivé"
         log_info "Pour installer plus tard : https://opencode.ai"
+    fi
+fi
+
+if [[ -n "$OPENCODE_BIN" ]]; then
+    log_info "Configuration du provider opencode local…"
+    OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
+    if "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH" 2>&1 | sed 's/^/  /'; then
+        if id "$SERVICE_USER" &>/dev/null 2>&1; then
+            chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
+        fi
+        log_ok "opencode provider local configuré"
+    else
+        log_warn "Configuration opencode incomplète — relancez : $VENV/bin/python scripts/setup_opencode.py"
     fi
 fi
 
@@ -923,11 +981,24 @@ if [[ "$INSTALL_SERVICE" = true ]]; then
         else
             SERVICE_HOME="/home/$SERVICE_USER"
         fi
+        SERVICE_LOG_FILE="/var/log/transcrIA.log"
+        SERVICE_PID_FILE="/run/transcrIA.pid"
+        if [[ "$SERVICE_USER" != "root" ]]; then
+            SERVICE_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
+            SERVICE_PID_FILE="$INSTALL_DIR/run/transcrIA.pid"
+            mkdir -p "$(dirname "$SERVICE_LOG_FILE")" "$(dirname "$SERVICE_PID_FILE")"
+            if id "$SERVICE_USER" &>/dev/null 2>&1; then
+                chown -R "$SERVICE_USER:" "$(dirname "$SERVICE_LOG_FILE")" "$(dirname "$SERVICE_PID_FILE")" 2>/dev/null || true
+            fi
+        fi
 
         TMP_SERVICE=$(mktemp)
         sed \
             -e "s|/home/admin_ia/transcria|$INSTALL_DIR|g" \
             -e "s|User=root|User=$SERVICE_USER|g" \
+            -e "s|PIDFile=/run/transcrIA.pid|PIDFile=$SERVICE_PID_FILE|g" \
+            -e "s|Environment=LOG_FILE=.*|Environment=LOG_FILE=$SERVICE_LOG_FILE|g" \
+            -e "s|Environment=PID_FILE=.*|Environment=PID_FILE=$SERVICE_PID_FILE|g" \
             -e "s|Environment=VENV=.*|Environment=VENV=$VENV|g" \
             -e "s|HF_HOME=/home/admin_ia/|HF_HOME=${SERVICE_HOME}/|g" \
             -e "s|TRANSFORMERS_CACHE=/home/admin_ia/|TRANSFORMERS_CACHE=${SERVICE_HOME}/|g" \
@@ -970,11 +1041,23 @@ if [[ "$INSTALL_INFERENCE" = true ]]; then
         log_warn "transcria-inference.service introuvable — service non installé"
         log_warn "  Vérifiez que deploy/transcria-inference.service existe."
     else
+        INF_LOG_DIR="/var/log"
+        if [[ "$SERVICE_USER" != "root" ]]; then
+            INF_LOG_DIR="$INSTALL_DIR/logs"
+            mkdir -p "$INF_LOG_DIR"
+            if id "$SERVICE_USER" &>/dev/null 2>&1; then
+                chown -R "$SERVICE_USER:" "$INF_LOG_DIR" 2>/dev/null || true
+            fi
+        fi
         TMP_INF=$(mktemp)
         sed \
             -e "s|/home/admin_ia/transcria|$INSTALL_DIR|g" \
             -e "s|User=root|User=$SERVICE_USER|g" \
             -e "s|Group=root|Group=$SERVICE_USER|g" \
+            -e "s|/var/log/transcria-inference-access.log|$INF_LOG_DIR/transcria-inference-access.log|g" \
+            -e "s|/var/log/transcria-inference-error.log|$INF_LOG_DIR/transcria-inference-error.log|g" \
+            -e "s|/var/log/transcria-inference.log|$INF_LOG_DIR/transcria-inference.log|g" \
+            -e "s|ReadWritePaths=/var/log /home/admin_ia/transcria|ReadWritePaths=$INF_LOG_DIR $INSTALL_DIR|g" \
             "$INFERENCE_SRC" > "$TMP_INF"
 
         if [[ $EUID -eq 0 ]]; then
@@ -1055,6 +1138,8 @@ echo "  $INSTALL_DIR/start.sh --port 7870"
 echo "  # ou : sudo systemctl start transcria"
 echo ""
 echo "  Interface : http://localhost:7870"
-echo "  Logs      : tail -f /var/log/transcrIA.log"
+FINAL_LOG_FILE="/var/log/transcrIA.log"
+[[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
+echo "  Logs      : tail -f $FINAL_LOG_FILE"
 echo "  Statut    : $INSTALL_DIR/status.sh"
 echo ""
