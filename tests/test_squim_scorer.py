@@ -161,3 +161,30 @@ def test_score_global_falls_back_to_cpu_on_device_error(monkeypatch):
     out = score_global(sig, 16000, device="auto", model=_FakeSquim())
     # Sur machine sans GPU, le repli CPU produit quand même un score valide.
     assert out is None or set(out) == {"stoi", "pesq", "sisdr"}
+
+
+def test_concurrent_score_global_serialized_no_corruption():
+    # Plusieurs jobs simultanés appellent SQUIM en parallèle : le verrou doit empêcher
+    # l'entrelacement des inférences sur le modèle partagé (régression « bug sous charge »).
+    import threading
+
+    sig = np.ones(16000 * 30, dtype=np.float32) * 0.4
+    model = _FakeSquim()
+    results: list = []
+    errors: list = []
+
+    def worker():
+        try:
+            results.append(score_global(sig, 16000, model=model, probes=5, window_s=10.0))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors
+    assert len(results) == 8
+    assert all(r is not None and set(r) == {"stoi", "pesq", "sisdr"} for r in results)

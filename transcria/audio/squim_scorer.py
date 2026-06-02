@@ -15,6 +15,7 @@ téléchargement, et la logique de fenêtrage est pure (`iter_windows`).
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,13 @@ _DEFAULT_HOP_S = 2.5
 _DEFAULT_BATCH = 64
 _GLOBAL_PROBES = 5           # fenêtres réparties pour le score global (borne mémoire/CPU)
 _GLOBAL_WINDOW_S = 10.0      # durée d'une fenêtre de sonde du score global
+
+# Le modèle SQUIM est un singleton torch partagé. `.to(device)` mute le module en
+# place et un forward concurrent sur le même module n'est pas thread-safe : sous
+# plusieurs jobs simultanés, le preflight (hors sérialisation de l'allocateur GPU)
+# pourrait entrelacer deux inférences → device mismatch / scores corrompus. On
+# sérialise donc les inférences (coût faible : quelques fenêtres par appel).
+_INFER_LOCK = threading.Lock()
 
 _MODEL: Any = None           # singleton paresseux
 
@@ -109,13 +117,14 @@ def _infer_with_fallback(model, batch, device: str) -> list[tuple[float, float, 
     """Infère sur ``device`` ; sur erreur CUDA (GPU saturé/indisponible) replie une
     fois sur CPU au lieu de perdre la qualification (cas all-in-one GPU occupé)."""
     resolved = _resolve_device(device)
-    try:
-        return _infer(model.to(resolved), batch.to(resolved))
-    except RuntimeError as exc:
-        if resolved != "cpu":
-            logger.warning("[squim] inférence %s échouée (%s) — repli CPU", resolved, exc)
-            return _infer(model.to("cpu"), batch.to("cpu"))
-        raise
+    with _INFER_LOCK:
+        try:
+            return _infer(model.to(resolved), batch.to(resolved))
+        except RuntimeError as exc:
+            if resolved != "cpu":
+                logger.warning("[squim] inférence %s échouée (%s) — repli CPU", resolved, exc)
+                return _infer(model.to("cpu"), batch.to("cpu"))
+            raise
 
 
 def _probe_windows(waveform, probes: int, window_s: float):
