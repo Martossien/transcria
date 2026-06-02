@@ -997,6 +997,12 @@ def api_summary(job_id: str):
     if error_response:
         return error_response
 
+    # run_summary est synchrone dans la requête HTTP et reste SUMMARY_RUNNING pendant
+    # toute sa durée (STT rapide → scène → pyannote → LLM). Refuser un second appel
+    # concurrent évite deux pipelines GPU simultanés et la corruption de meeting_context.json.
+    if job.state == JobState.SUMMARY_RUNNING.value:
+        return jsonify({"error": "Un résumé est déjà en cours pour ce job."}), 409
+
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
@@ -1290,6 +1296,12 @@ def api_speakers_detect(job_id: str):
     job, error_response = _get_job_for_api(job_id)
     if error_response:
         return error_response
+
+    # run_speaker_detection est synchrone et publie SPEAKER_DETECTION_RUNNING le temps
+    # de pyannote. Refuser un second appel concurrent évite deux runs GPU simultanés et
+    # une course sur meeting_context.json (même classe que api_summary).
+    if job.state == JobState.SPEAKER_DETECTION_RUNNING.value:
+        return jsonify({"error": "Une détection des locuteurs est déjà en cours pour ce job."}), 409
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()

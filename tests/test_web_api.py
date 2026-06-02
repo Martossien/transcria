@@ -320,6 +320,34 @@ class TestJobWizard:
         r = admin_client.get("/jobs/nonexistent-uuid-1234567890")
         assert r.status_code == 404
 
+    def test_api_summary_rejects_when_already_running(self, admin_client, app):
+        """Un second appel à api_summary pendant SUMMARY_RUNNING doit renvoyer 409."""
+        job_id = self._make_job_id(admin_client)
+        if not job_id:
+            return
+        with app.app_context():
+            from transcria.jobs.store import JobStore
+            from transcria.jobs.models import JobState
+            JobStore.update_state(job_id, JobState.SUMMARY_RUNNING)
+
+        r = admin_client.post(f"/api/jobs/{job_id}/summary")
+        assert r.status_code == 409
+        assert "déjà en cours" in r.get_json()["error"]
+
+    def test_api_speakers_detect_rejects_when_already_running(self, admin_client, app):
+        """Un second appel à speakers/detect pendant SPEAKER_DETECTION_RUNNING doit renvoyer 409."""
+        job_id = self._make_job_id(admin_client)
+        if not job_id:
+            return
+        with app.app_context():
+            from transcria.jobs.store import JobStore
+            from transcria.jobs.models import JobState
+            JobStore.update_state(job_id, JobState.SPEAKER_DETECTION_RUNNING)
+
+        r = admin_client.post(f"/api/jobs/{job_id}/speakers/detect")
+        assert r.status_code == 409
+        assert "déjà en cours" in r.get_json()["error"]
+
     def _advance_to_participants_done(self, app, job_id):
         """Force l'état du job à PARTICIPANTS_DONE pour débloquer la section lexique."""
         with app.app_context():
