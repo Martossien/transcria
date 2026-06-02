@@ -66,7 +66,7 @@ def _test_config(database_url: str):
 @pytest.fixture(scope="session")
 def _pg_database(postgresql_proc):
     """Crée une base de test dédiée sur l'instance PG éphémère (le temps de la session)."""
-    dbname = "transcria_test"
+    dbname = f"transcria_pytest_{os.getpid()}"
     with DatabaseJanitor(
         user=postgresql_proc.user,
         host=postgresql_proc.host,
@@ -80,6 +80,9 @@ def _pg_database(postgresql_proc):
 
 @pytest.fixture(scope="session")
 def app(_pg_database):
+    previous_db_url = os.environ.get("TRANSCRIA_DATABASE_URL")
+    os.environ["TRANSCRIA_DATABASE_URL"] = _pg_database
+
     cfg = load_config()
     cfg = _deep_merge(cfg, _test_config(_pg_database))
 
@@ -108,6 +111,10 @@ def app(_pg_database):
 
     import shutil
     shutil.rmtree(_TEMP_DIR, ignore_errors=True)
+    if previous_db_url is None:
+        os.environ.pop("TRANSCRIA_DATABASE_URL", None)
+    else:
+        os.environ["TRANSCRIA_DATABASE_URL"] = previous_db_url
 
 
 @pytest.fixture
