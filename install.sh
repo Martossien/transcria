@@ -435,11 +435,11 @@ _setup_postgres() {
         local pg_hba=""
         pg_hba=$(pg_admin_psql -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
         if [[ -f "$pg_hba" ]]; then
-            if grep -qE '^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident|peer)$' "$pg_hba"; then
+            if grep -qE '^host[[:space:]]+(all|replication)[[:space:]]+all[[:space:]]+(127\.0\.0\.1/32|::1/128)[[:space:]]+(ident|peer)$' "$pg_hba"; then
                 log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
-                if pg_admin_sed -i \
-                    -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+ident\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
-                    -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+peer\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
+                if pg_admin_sed -i -E \
+                    -e 's/^(host[[:space:]]+all[[:space:]]+all[[:space:]]+(127\.0\.0\.1\/32|::1\/128)[[:space:]]+)(ident|peer)$/\1scram-sha-256/' \
+                    -e 's/^(host[[:space:]]+replication[[:space:]]+all[[:space:]]+(127\.0\.0\.1\/32|::1\/128)[[:space:]]+)(ident|peer)$/\1scram-sha-256/' \
                     "$pg_hba"; then
                     if command -v systemctl &>/dev/null && systemctl is-active --quiet postgresql 2>/dev/null; then
                         if [[ $EUID -eq 0 ]]; then
