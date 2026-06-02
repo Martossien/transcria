@@ -64,9 +64,16 @@ def _reset_sequences(target_conn) -> None:
             ).scalar()
             if not seq:
                 continue
+            if isinstance(seq, (bytes, bytearray)):
+                seq = seq.decode("utf-8")
             max_id = target_conn.execute(select(func.coalesce(func.max(col), 0))).scalar() or 0
             # is_called=true si des lignes existent (prochain nextval = max+1), sinon false.
-            target_conn.execute(text("SELECT setval(:s, :v, :called)"), {"s": seq, "v": max(int(max_id), 1), "called": int(max_id) > 0})
+            # On interpole le nom de séquence (sécurisé : vient de pg_get_serial_sequence) pour
+            # permettre le cast regclass que SQLAlchemy ne sait pas paramétrer.
+            target_conn.execute(
+                text(f'SELECT setval(\'{seq}\'::regclass, :v, :called)'),
+                {"v": max(int(max_id), 1), "called": int(max_id) > 0},
+            )
             logger.info("séquence %s réalignée sur %s", seq, max_id)
 
 
@@ -94,7 +101,7 @@ def migrate(source_url: str, target_url: str, truncate: bool) -> int:
 
             existing = dst.execute(select(func.count()).select_from(table)).scalar() or 0
             if existing and not truncate:
-                logger.warn("%-26s : SKIP (%d lignes existantes en cible)", table.name, existing)
+                logger.warning("%-26s : SKIP (%d lignes existantes en cible)", table.name, existing)
                 continue
 
             rows = [dict(r) for r in src.execute(select(table)).mappings().all()]

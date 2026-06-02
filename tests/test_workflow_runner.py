@@ -278,6 +278,8 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.gpu.opencode_runner import OpenCodeRunner
@@ -680,6 +682,8 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
             from transcria.stt.summary import SummaryGenerator
             from transcria.gpu.opencode_runner import OpenCodeRunner
@@ -1031,6 +1035,8 @@ class TestWorkflowRunnerRunCorrection:
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
             from transcria.gpu.opencode_runner import OpenCodeRunner
 

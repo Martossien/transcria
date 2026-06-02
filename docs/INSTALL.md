@@ -837,7 +837,15 @@ Le script copie toutes les tables dans l'ordre des dépendances, préserve les i
 
 Le script gère aussi les bases SQLite partielles : si une table n'existe pas en SQLite
 (par exemple la base ne contient que `users` et `jobs`), la table est automatiquement
-sauteée et le reste est copié sans erreur.
+sautée et le reste est copié sans erreur.
+
+> **Limites de la migration SQLite → PostgreSQL.**
+> - Les tables inexistantes en SQLite sont ignorées silencieusement (log INFO).
+> - Les tables cibles non vides sont ignorées sans `--truncate` (log WARNING).
+> - Les BLOBs SQLite sont copiés tels quels dans les colonnes `BYTEA` PostgreSQL.
+> - Les vues, triggers et procédures stockées SQLite ne sont pas migrés.
+> - La migration inverse (PostgreSQL → SQLite) n'est pas supportée.
+> - Un backup automatique du fichier SQLite est créé dans `backups/` avant migration.
 
 > **Évolutions de schéma.** Après modification d'un modèle : `alembic revision --autogenerate -m "…"`,
 > relire la migration générée, puis `alembic upgrade head`. Le test `tests/test_alembic_migrations.py`

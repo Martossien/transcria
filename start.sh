@@ -62,13 +62,21 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
+# pyenv global peut intercepter `python`/`alembic` (le shim résout d'abord
+# `pyenv version`, qui pointe sur voxtral-env). On force l'usage des binaires
+# du venv de TranscrIA pour éviter une résolution inattendue.
+VENV_PY="$VENV/bin/python"
+VENV_ALEMBIC="$VENV/bin/alembic"
+export PYENV_VERSION=""  # désactive le shim pyenv
+unset PYENV_VERSION  # neutralise aussi
+
 # ── Migrations de schéma (Alembic) ─────────────────────────
 # Met la base au niveau attendu avant de démarrer. En cas d'échec on n'amorce
 # pas le serveur (un schéma périmé corromprait les données).
 # Le alembic du venv doit être utilisé (pas celui du système) pour trouver les modules Python.
 echo "Alembic : $(which alembic)"
 echo "Application des migrations de base (alembic upgrade head)…"
-if ! alembic upgrade head; then
+if ! "$VENV_ALEMBIC" upgrade head; then
     echo "Erreur : échec des migrations Alembic. Démarrage annulé."
     exit 1
 fi
@@ -86,7 +94,7 @@ export TRANSCRIA_PORT="$PORT"
 export TRANSCRIA_HOST="$HOST"
 export TRANSCRIA_DEBUG="$DEBUG"
 
-START_CMD=(python app.py --port "$PORT" --host "$HOST")
+START_CMD=("$VENV_PY" app.py --port "$PORT" --host "$HOST")
 
 if command -v setsid >/dev/null 2>&1; then
     nohup setsid "${START_CMD[@]}" > "$LOG_FILE" 2>&1 < /dev/null &

@@ -17,11 +17,25 @@ _ORIG_CWD = os.getcwd()
 
 _TEMP_DIR = tempfile.mkdtemp(prefix="transcria_test_")
 
-# Instance PostgreSQL éphémère (initdb/pg_ctl locaux), partagée sur la session.
-# `pg_ctl` est résolu sur le PATH (les chemins par défaut de pytest-postgresql
-# visent Debian ; sur Fedora les binaires sont dans /usr/bin).
-_PG_CTL = shutil.which("pg_ctl")
-postgresql_proc = factories.postgresql_proc(host="127.0.0.1", executable=_PG_CTL)
+# Instance PostgreSQL : utilise un serveur externe si les variables d'environnement
+# TRANSCRIA_TEST_PG_* sont définies (CI GitHub Actions), sinon lance pg_ctl localement.
+_PG_HOST = os.environ.get("TRANSCRIA_TEST_PG_HOST")
+_PG_PORT = os.environ.get("TRANSCRIA_TEST_PG_PORT", "5432")
+_PG_USER = os.environ.get("TRANSCRIA_TEST_PG_USER", "postgres")
+_PG_PASSWORD = os.environ.get("TRANSCRIA_TEST_PG_PASSWORD", "")
+
+if _PG_HOST:
+    # Mode CI : serveur PostgreSQL externe (service GitHub Actions)
+    postgresql_proc = factories.postgresql_noproc(
+        host=_PG_HOST,
+        port=int(_PG_PORT),
+        user=_PG_USER,
+        password=_PG_PASSWORD,
+    )
+else:
+    # Mode local : lance pg_ctl (ne fonctionne pas en root)
+    _PG_CTL = shutil.which("pg_ctl")
+    postgresql_proc = factories.postgresql_proc(host="127.0.0.1", executable=_PG_CTL)
 
 
 def _pg_url(proc, dbname: str) -> str:

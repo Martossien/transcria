@@ -205,6 +205,10 @@ class TestAppDebugResolution:
     def test_create_app_accepts_explicit_config_path(self):
         from app import create_app
 
+        # Isoler ce test de TRANSCRIA_DATABASE_URL (chargé depuis .env par app.py)
+        # pour que storage.database_url du YAML temporaire soit bien utilisé.
+        previous_db_url = os.environ.pop("TRANSCRIA_DATABASE_URL", None)
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(
                 "server:\n"
@@ -234,6 +238,8 @@ class TestAppDebugResolution:
             with je._executor_lock:
                 je._executor_service = previous_executor
             os.unlink(path)
+            if previous_db_url is not None:
+                os.environ["TRANSCRIA_DATABASE_URL"] = previous_db_url
 
     def test_no_debug_cli_overrides_config_and_env(self):
         from app import resolve_debug_flag

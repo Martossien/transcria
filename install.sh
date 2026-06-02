@@ -467,11 +467,17 @@ PYEOF
         log_info "Base SQLite détectée : $sqlite_db"
         if [[ "$NON_INTERACTIVE" = true ]]; then
             if [[ "$PG_MIGRATE" = true ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db"
+                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir"
             else
                 log_info "Migration sautée (--pg-migrate absent)"
             fi
         else
+            local sqlite_size
+            sqlite_size=$(du -h "$sqlite_db" 2>/dev/null | cut -f1)
+            echo ""
+            echo "=== Migration SQLite → PostgreSQL ==="
+            echo "  Source : $sqlite_db ($sqlite_size)"
+            echo "  Cible  : $db@$host:$port"
             echo ""
             echo "Options :"
             echo "  1. Migrer les données SQLite (conservation locale + copie PG)"
@@ -480,7 +486,7 @@ PYEOF
             local mchoice
             read -r mchoice
             if [[ "$mchoice" = "1" ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db"
+                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir"
             else
                 log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
             fi
@@ -491,10 +497,13 @@ PYEOF
 }
 
 _do_pg_migrate() {
-    local dsn="$1" sqlite_db="$2"
+    local dsn="$1" sqlite_db="$2" backup_dir="$3"
     local backup="$backup_dir/transcrIA_$(date +%Y%m%d_%H%M%S).db.bak"
-    cp "$sqlite_db" "$backup"
-    log_info "Backup SQLite sauvegardé : $backup"
+    if ! cp "$sqlite_db" "$backup"; then
+        log_error "Échec du backup SQLite : $sqlite_db → $backup"
+        return 1
+    fi
+    log_ok "Backup SQLite sauvegardé : $backup"
 
     log_info "Migration des données SQLite → PostgreSQL…"
     if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
@@ -502,7 +511,7 @@ _do_pg_migrate() {
         log_ok "Données migrées"
     else
         log_error "Échec de la migration SQLite → PostgreSQL"
-        log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la basePG manuellement."
+        log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement."
     fi
 }
 
@@ -520,6 +529,21 @@ else
     ask PG_PORT "Port" "$PG_PORT"
     ask PG_DB   "Base" "$PG_DB"
     ask PG_USER "Rôle (utilisateur)" "$PG_USER"
+
+    # ── Validation des entrées ────────────────────────────────
+    if [[ ! "$PG_DB" =~ ^[a-zA-Z_][a-zA-Z0-9_]{0,62}$ ]]; then
+        log_error "Nom de base invalide : '$PG_DB' (attendu : [a-zA-Z_][a-zA-Z0-9_]{0,62})"
+        exit 1
+    fi
+    if [[ ! "$PG_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_]{0,62}$ ]]; then
+        log_error "Nom de rôle invalide : '$PG_USER' (attendu : [a-zA-Z_][a-zA-Z0-9_]{0,62})"
+        exit 1
+    fi
+    if [[ ! "$PG_PORT" =~ ^[0-9]+$ ]] || (( PG_PORT < 1 || PG_PORT > 65535 )); then
+        log_error "Port invalide : '$PG_PORT' (attendu : 1-65535)"
+        exit 1
+    fi
+
     if [[ -z "$PG_PASSWORD" ]]; then
         PG_PASSWORD=$(python -c "import secrets; print(secrets.token_urlsafe(24))")
         log_info "Mot de passe du rôle '$PG_USER' généré automatiquement."
@@ -945,6 +969,7 @@ if [[ "$INSTALL_INFERENCE" = true ]]; then
         sed \
             -e "s|/home/admin_ia/transcria|$INSTALL_DIR|g" \
             -e "s|User=root|User=$SERVICE_USER|g" \
+            -e "s|Group=root|Group=$SERVICE_USER|g" \
             "$INFERENCE_SRC" > "$TMP_INF"
 
         if [[ $EUID -eq 0 ]]; then

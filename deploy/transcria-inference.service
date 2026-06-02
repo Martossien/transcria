@@ -15,7 +15,6 @@ WorkingDirectory=/home/admin_ia/transcria
 Environment="INFERENCE_HOST=0.0.0.0"
 Environment="INFERENCE_PORT=8002"
 Environment="INFERENCE_LOG_LEVEL=INFO"
-# Charger .env du projet (secrets, DSN, clés API)
 Environment="ENV_FILE=/home/admin_ia/transcria/.env"
 
 # Gunicorn (1 worker = 1 process GPU) :
@@ -38,6 +37,8 @@ StandardOutput=append:/var/log/transcria-inference.log
 StandardError=append:/var/log/transcria-inference.log
 NoNewPrivileges=yes
 PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/log /home/admin_ia/transcria
 
 [Install]
 WantedBy=multi-user.target
