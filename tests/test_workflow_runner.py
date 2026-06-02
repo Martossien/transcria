@@ -759,6 +759,30 @@ class TestWorkflowRunnerRunSummary:
             assert updated.state == JobState.FAILED.value
             assert updated.error_message == "GPU crash"
 
+    def test_run_summary_stt_error_dict_sets_failed(self, app, owner_id, monkeypatch, tmp_path):
+        """STT renvoyant un dict d'erreur (sans exception) ne doit pas laisser SUMMARY_RUNNING orphelin."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Summary STT Error Dict")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
+            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+
+            from transcria.stt.summary import SummaryGenerator
+
+            monkeypatch.setattr(
+                SummaryGenerator, "generate_quick_summary",
+                lambda *a, **kw: {"error": "backend HS", "transcript_text": "", "summary_text": "Résumé indisponible."},
+            )
+
+            result = runner.run_summary(job, "/tmp/fake.wav", cfg)
+            assert result["error"] == "backend HS"
+
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == JobState.FAILED.value
+            assert updated.error_message == "backend HS"
+
     def test_run_summary_with_speaker_detection_enabled(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(
@@ -900,6 +924,65 @@ class TestWorkflowRunnerRunSpeakerDetection:
 
             updated = JobStore.get_by_id(job.id)
             assert updated.state == JobState.FAILED.value
+
+    def test_run_speaker_detection_update_state_false_keeps_state(self, app, owner_id, monkeypatch, tmp_path):
+        """En sous-phase de résumé (update_state=False), l'état global n'est pas touché.
+
+        Régression BUG-001 : pendant run_summary la diarisation ne doit pas faire passer
+        le job par SPEAKER_DETECTION_RUNNING/DONE (états « en avant » du wizard), sinon
+        compute_statuses marque summary=DONE et affiche un cadre contexte vide.
+        """
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Speaker Detect Subphase")
+            JobStore.update_state(job.id, JobState.SUMMARY_RUNNING)
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.stt.speaker_detection import SpeakerDetector
+
+            monkeypatch.setattr(
+                SpeakerDetector, "detect",
+                lambda self, job, audio_path, device="cpu": {"available": True, "speakers": [{"speaker_id": "SPEAKER_00"}]},
+            )
+            import torch
+            monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+            audio_path = str(tmp_path / "test.wav")
+            with open(audio_path, "w") as f:
+                f.write("fake")
+
+            result = runner.run_speaker_detection(job, audio_path, cfg, update_state=False)
+            assert result["available"] is True
+
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == JobState.SUMMARY_RUNNING.value
+
+    def test_run_speaker_detection_failure_update_state_false_keeps_state(self, app, owner_id, monkeypatch, tmp_path):
+        """Un échec pyannote en sous-phase de résumé reste best-effort : aucun FAILED global."""
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Speaker Detect Subphase Fail")
+            JobStore.update_state(job.id, JobState.SUMMARY_RUNNING)
+            runner = WorkflowRunner(JobStore, cfg)
+
+            from transcria.stt.speaker_detection import SpeakerDetector
+
+            monkeypatch.setattr(
+                SpeakerDetector, "detect",
+                lambda self, job, audio_path, device="cpu": (_ for _ in ()).throw(RuntimeError("No GPU")),
+            )
+            import torch
+            monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+            audio_path = str(tmp_path / "test.wav")
+            with open(audio_path, "w") as f:
+                f.write("fake")
+
+            result = runner.run_speaker_detection(job, audio_path, cfg, update_state=False)
+            assert "error" in result
+
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == JobState.SUMMARY_RUNNING.value
 
 
 class TestWorkflowRunnerRunTranscription:

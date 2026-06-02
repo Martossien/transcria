@@ -140,6 +140,11 @@ class WorkflowRunner:
         )
         if result.get("error") and not result.get("transcript_text"):
             sl.error("[1/3] STT rapide ÉCHEC — abandon résumé", error=result["error"], backend=backend)
+            # _run_quick_transcription pose déjà FAILED sur exception ; on garantit ici
+            # qu'aucun échec STT ne laisse le job bloqué en SUMMARY_RUNNING.
+            current = JobStore.get_by_id(job.id)
+            if current is None or current.state != JobState.FAILED.value:
+                self.store.update_state(job.id, JobState.FAILED, result["error"])
             return result
 
         sl.info("[2/4] Analyse de scène audio — début")
@@ -268,7 +273,9 @@ class WorkflowRunner:
             return
 
         try:
-            speakers_result = self.run_speaker_detection(job, audio_path, config)
+            speakers_result = self.run_speaker_detection(
+                job, audio_path, config, update_state=False
+            )
             if not speakers_result.get("available") or not speakers_result.get("speakers"):
                 return
 
@@ -991,10 +998,21 @@ class WorkflowRunner:
         fs.save_text("summary/diarization_context.md", content)
         return content
 
-    def run_speaker_detection(self, job: Job, audio_path: str, config: dict) -> dict:
+    def run_speaker_detection(
+        self, job: Job, audio_path: str, config: dict, update_state: bool = True
+    ) -> dict:
+        """Détecte les locuteurs via pyannote.
+
+        `update_state=True` (étape wizard autonome) publie les états globaux
+        `SPEAKER_DETECTION_RUNNING`/`DONE`/`FAILED`. `update_state=False` (sous-phase
+        de `run_summary`) ne touche pas à l'état du job : le résumé reste `SUMMARY_RUNNING`
+        jusqu'à `SUMMARY_DONE`, et la diarisation y est best-effort (échec → résumé
+        poursuit sans écraser l'état). Le résultat est toujours retourné via le dict.
+        """
         from pathlib import Path
 
-        self.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
+        if update_state:
+            self.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
         try:
             from transcria.stt.speaker_detection import SpeakerDetector
 
@@ -1016,15 +1034,18 @@ class WorkflowRunner:
                 logger.info("[speaker_detection] CUDA indisponible — pyannote sur CPU")
                 device = "cpu"
                 result = detector.detect(job, Path(audio_path), device=device)
-            self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
+            if update_state:
+                self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
             return result
         except GPUSessionError as exc:
             logger.error("[speaker_detection] VRAM insuffisante: %s", exc)
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
+            if update_state:
+                self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "speakers": []}
         except Exception as exc:
             logger.exception("Échec détection locuteurs")
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
+            if update_state:
+                self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "speakers": []}
 
     def run_transcription(self, job: Job, audio_path: str, config: dict) -> dict:
