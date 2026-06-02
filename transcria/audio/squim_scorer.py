@@ -24,8 +24,27 @@ _MIN_WINDOW_S = 1.0          # en deçà, scores instables → on saute
 _DEFAULT_SEGMENT_S = 5.0
 _DEFAULT_HOP_S = 2.5
 _DEFAULT_BATCH = 64
+_GLOBAL_PROBES = 5           # fenêtres réparties pour le score global (borne mémoire/CPU)
+_GLOBAL_WINDOW_S = 10.0      # durée d'une fenêtre de sonde du score global
 
 _MODEL: Any = None           # singleton paresseux
+
+
+def _resolve_device(device: str) -> str:
+    """Résout le device effectif. ``"auto"`` → ``"cuda"`` si un GPU est visible,
+    sinon ``"cpu"``. Toute valeur ``cuda*`` est repliée sur ``"cpu"`` si CUDA est
+    indisponible (frontale sans GPU). Jamais d'exception."""
+    d = (device or "cpu").strip().lower()
+    if d == "cpu":
+        return "cpu"
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda" if d == "auto" else device
+    except Exception:  # noqa: BLE001 — torch absent/cassé → CPU
+        pass
+    return "cpu"
 
 
 def _get_model() -> Any:
@@ -86,19 +105,65 @@ def _infer(model, batch) -> list[tuple[float, float, float]]:
     ]
 
 
-def score_global(signal_np, sample_rate: int, *, device: str = "cpu", model: Any = None) -> dict | None:
-    """Scores SQUIM globaux sur tout le signal. None si modèle indisponible/échec."""
+def _infer_with_fallback(model, batch, device: str) -> list[tuple[float, float, float]]:
+    """Infère sur ``device`` ; sur erreur CUDA (GPU saturé/indisponible) replie une
+    fois sur CPU au lieu de perdre la qualification (cas all-in-one GPU occupé)."""
+    resolved = _resolve_device(device)
+    try:
+        return _infer(model.to(resolved), batch.to(resolved))
+    except RuntimeError as exc:
+        if resolved != "cpu":
+            logger.warning("[squim] inférence %s échouée (%s) — repli CPU", resolved, exc)
+            return _infer(model.to("cpu"), batch.to("cpu"))
+        raise
+
+
+def _probe_windows(waveform, probes: int, window_s: float):
+    """Fenêtres réparties régulièrement pour un score global représentatif et borné
+    (et non l'intégralité d'un fichier long → OOM). Fichier court → fenêtre unique."""
+    win = int(window_s * _TARGET_SR)
+    total = waveform.shape[-1]
+    if total <= win or probes <= 1:
+        return [waveform]
+    step = (total - win) / (probes - 1)
+    starts = [int(round(i * step)) for i in range(probes)]
+    return [waveform[:, s: s + win] for s in starts]
+
+
+def score_global(
+    signal_np,
+    sample_rate: int,
+    *,
+    device: str = "cpu",
+    probes: int = _GLOBAL_PROBES,
+    window_s: float = _GLOBAL_WINDOW_S,
+    model: Any = None,
+) -> dict | None:
+    """Scores SQUIM globaux, moyennés sur quelques fenêtres réparties dans le fichier.
+
+    Borne la mémoire et le temps quelle que soit la durée : SQUIM est conçu pour des
+    extraits courts, et lui passer un fichier long en une fois provoque une allocation
+    démesurée (OOM observé sur audio > 1 h). None si modèle indisponible/échec.
+    """
     model = model or _get_model()
     if model is None or signal_np is None or getattr(signal_np, "size", 0) == 0:
         return None
     try:
+        import torch
 
         waveform, _ = _to_mono_16k(signal_np, sample_rate)
         if waveform.shape[-1] < int(_MIN_WINDOW_S * _TARGET_SR):
             return None
-        model = model.to(device)
-        stoi, pesq, sisdr = _infer(model, waveform.to(device))[0]
-        return {"stoi": stoi, "pesq": pesq, "sisdr": sisdr}
+        batch = torch.cat(_probe_windows(waveform, probes, window_s), dim=0)
+        scored = _infer_with_fallback(model, batch, device)
+        if not scored:
+            return None
+        n = len(scored)
+        return {
+            "stoi": round(sum(s[0] for s in scored) / n, 4),
+            "pesq": round(sum(s[1] for s in scored) / n, 4),
+            "sisdr": round(sum(s[2] for s in scored) / n, 2),
+        }
     except Exception as exc:  # noqa: BLE001
         logger.warning("[squim] échec score global : %s", exc)
         return None
@@ -131,12 +196,11 @@ def score_segments(
         if not windows:
             return []
 
-        model = model.to(device)
         results: list[dict] = []
         for batch_start in range(0, len(windows), batch_size):
             chunk = windows[batch_start: batch_start + batch_size]
-            batch = torch.cat([waveform[:, s:e] for s, e in chunk], dim=0).to(device)
-            for (s, e), (stoi, pesq, sisdr) in zip(chunk, _infer(model, batch)):
+            batch = torch.cat([waveform[:, s:e] for s, e in chunk], dim=0)
+            for (s, e), (stoi, pesq, sisdr) in zip(chunk, _infer_with_fallback(model, batch, device)):
                 results.append({
                     "start": round(s / sr, 2),
                     "end": round(e / sr, 2),

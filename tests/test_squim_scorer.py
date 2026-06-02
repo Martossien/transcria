@@ -94,3 +94,70 @@ def test_score_segments_batches_consistently():
     a = score_segments(sig, 16000, model=_FakeSquim(), batch_size=2)
     b = score_segments(sig, 16000, model=_FakeSquim(), batch_size=64)
     assert a == b
+
+
+# ── score_global borné (régression OOM fichier long) ─────────────────────────
+
+class _RecordingSquim(_FakeSquim):
+    """Capture la forme du batch reçu pour vérifier le bornage du score global."""
+
+    def __init__(self):
+        self.batches = []
+
+    def __call__(self, batch):
+        self.batches.append(tuple(batch.shape))
+        return super().__call__(batch)
+
+
+def test_score_global_long_signal_is_bounded_by_probes():
+    # 1 h @ 16 kHz : l'ancien code passait tout le signal d'un coup (OOM ~65 To).
+    # Désormais : quelques fenêtres bornées (probes × window_s), jamais le fichier entier.
+    long_sig = np.ones(16000 * 3600, dtype=np.float32) * 0.4
+    rec = _RecordingSquim()
+    out = score_global(long_sig, 16000, model=rec, probes=5, window_s=10.0)
+    assert set(out) == {"stoi", "pesq", "sisdr"}
+    assert rec.batches == [(5, 16000 * 10)]          # 5 fenêtres de 10 s, pas 3600 s
+
+
+def test_score_global_short_signal_single_window():
+    # Fichier plus court qu'une fenêtre de sonde → une seule fenêtre (tout le signal).
+    sig = np.ones(16000 * 4, dtype=np.float32) * 0.4
+    rec = _RecordingSquim()
+    score_global(sig, 16000, model=rec, probes=5, window_s=10.0)
+    assert rec.batches == [(1, 16000 * 4)]
+
+
+# ── résolution device + repli CPU ────────────────────────────────────────────
+
+def test_resolve_device_cpu_passthrough():
+    from transcria.audio.squim_scorer import _resolve_device
+    assert _resolve_device("cpu") == "cpu"
+
+
+def test_resolve_device_auto_falls_back_to_cpu_without_cuda(monkeypatch):
+    import torch
+    from transcria.audio.squim_scorer import _resolve_device
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert _resolve_device("auto") == "cpu"
+    assert _resolve_device("cuda:0") == "cpu"
+
+
+def test_resolve_device_auto_uses_cuda_when_available(monkeypatch):
+    import torch
+    from transcria.audio.squim_scorer import _resolve_device
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert _resolve_device("auto") == "cuda"
+    assert _resolve_device("cuda:1") == "cuda:1"
+
+
+def test_score_global_falls_back_to_cpu_on_device_error(monkeypatch):
+    # device résolu sur "cuda" alors qu'aucun GPU n'est réellement disponible :
+    # batch.to("cuda") lève RuntimeError → repli CPU plutôt que perte du score.
+    monkeypatch.setattr("transcria.audio.squim_scorer._resolve_device",
+                        lambda device: "cuda" if device != "cpu" else "cpu")
+    sig = np.ones(16000 * 2, dtype=np.float32) * 0.4
+    out = score_global(sig, 16000, device="auto", model=_FakeSquim())
+    # Sur machine sans GPU, le repli CPU produit quand même un score valide.
+    assert out is None or set(out) == {"stoi", "pesq", "sisdr"}

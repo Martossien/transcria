@@ -112,7 +112,7 @@ class AudioPreflightAnalyzer:
                 "flags": flags,
                 "risk_level": _risk_level(flags),
             }
-            if self.squim_enabled:
+            if self.squim_enabled or self.dnsmos_enabled:
                 self._augment_with_squim(result, signal, int(sample_rate))
             return result
         except Exception as exc:
@@ -120,18 +120,32 @@ class AudioPreflightAnalyzer:
             return {}
 
     def _augment_with_squim(self, result: dict, signal, sample_rate: int) -> None:
-        """Ajoute la qualification SQUIM : scores globaux (toujours) + difficulty_map
-        (lazy — seulement si l'audio n'est pas déjà « ok », ou si forcée pour le bench).
-        Best effort : toute erreur est avalée (n'altère jamais le diagnostic de base)."""
+        """Ajoute la qualification du son : DNSMOS global (indépendant), scores SQUIM
+        globaux, puis difficulty_map (lazy — seulement si l'audio n'est pas déjà « ok »,
+        ou si forcée pour le bench).
+
+        DNSMOS est calculé **en premier et indépendamment de SQUIM** : ses sondes sont
+        bornées (≤ quelques fenêtres de 9 s), donc il reste valide même quand SQUIM
+        échoue sur un fichier long. Best effort : toute erreur est avalée (n'altère
+        jamais le diagnostic de base)."""
         import time as _time
 
         from transcria.audio import squim_scorer
         from transcria.audio.difficulty_map import build_difficulty_map, summarize_difficulty
 
         t0 = _time.monotonic()
+
+        # DNSMOS global d'abord : indépendant de SQUIM, peut relever le risque et donc
+        # déclencher la difficulty_map SQUIM ci-dessous.
+        if self.dnsmos_enabled:
+            self._augment_dnsmos_global(result, signal, sample_rate)
+
+        if not self.squim_enabled:
+            return
+
         glob = squim_scorer.score_global(signal, sample_rate, device=self.squim_device)
         if glob is None:
-            return  # SQUIM indisponible : on n'ajoute rien
+            return  # SQUIM indisponible (ex. OOM) : DNSMOS déjà ajouté, on s'arrête là
         result["squim_global"] = glob
 
         flags = result.setdefault("flags", [])
@@ -142,11 +156,6 @@ class AudioPreflightAnalyzer:
         if glob["sisdr"] < self.squim_sisdr_threshold and "squim_sisdr_faible" not in flags:
             flags.append("squim_sisdr_faible")
         result["risk_level"] = _risk_level(flags)
-
-        # DNSMOS global (perceptif) : ajoute SIG/BAK/OVRL et peut relever le risque
-        # (donc déclencher la difficulty_map ci-dessous) si la qualité globale est basse.
-        if self.dnsmos_enabled:
-            self._augment_dnsmos_global(result, signal, sample_rate)
 
         # difficulty_map par fenêtre : coûteuse → lazy (audio non « ok ») sauf bench.
         if not self.squim_map_always and result["risk_level"] == "ok":

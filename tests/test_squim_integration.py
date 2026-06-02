@@ -129,6 +129,39 @@ def test_dnsmos_acoustic_disabled_by_default_in_bare_config(monkeypatch):
     assert "dnsmos_global" not in result
 
 
+# ── DNSMOS découplé de SQUIM (régression : SQUIM OOM ne doit pas masquer DNSMOS) ──
+
+def test_dnsmos_kept_when_squim_unavailable(monkeypatch):
+    # SQUIM échoue (None, ex. OOM sur fichier long) mais DNSMOS (sondes bornées) reste.
+    _patch_scorer(monkeypatch, glob=None)
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_global",
+                        lambda *a, **k: {"sig": 3.5, "bak": 4.0, "ovrl": 3.3})
+    result = {"flags": [], "risk_level": "ok"}
+    _full_analyzer()._augment_with_squim(result, _SIG, 16000)
+    assert result["dnsmos_global"] == {"sig": 3.5, "bak": 4.0, "ovrl": 3.3}
+    assert "squim_global" not in result            # SQUIM indisponible
+    assert "difficulty_map" not in result          # pas de segments SQUIM
+
+
+def test_dnsmos_runs_when_squim_disabled(monkeypatch):
+    # SQUIM désactivé, DNSMOS activé : DNSMOS doit tourner (et ne pas appeler SQUIM).
+    called = {"squim": False}
+    monkeypatch.setattr("transcria.audio.squim_scorer.score_global",
+                        lambda *a, **k: called.__setitem__("squim", True))
+    monkeypatch.setattr("transcria.audio.dnsmos_scorer.score_global",
+                        lambda *a, **k: {"sig": 2.0, "bak": 3.0, "ovrl": 2.0})
+    cfg = {"workflow": {"audio_preflight": {
+        "squim": {"enabled": False},
+        "dnsmos": {"enabled": True},
+    }}}
+    analyzer = AudioPreflightAnalyzer(cfg)
+    result = {"flags": [], "risk_level": "ok"}
+    analyzer._augment_with_squim(result, _SIG, 16000)
+    assert result["dnsmos_global"] == {"sig": 2.0, "bak": 3.0, "ovrl": 2.0}
+    assert "dnsmos_ovrl_faible" in result["flags"]
+    assert called["squim"] is False                # SQUIM jamais appelé
+
+
 # ── audio_quality : intègre les flags preflight (incohérence corrigée) ────────
 
 def test_quality_uses_preflight_squim_flag():

@@ -212,7 +212,7 @@ _DEFAULT_CONFIG = {
                 "enabled": True,          # SQUIM global toujours (cheap) quand le preflight tourne
                 "segment_s": 5.0,
                 "hop_s": 2.5,
-                "device": "cpu",          # "cuda:0" si GPU dispo (beaucoup plus rapide)
+                "device": "auto",         # GPU si visible (bcp plus rapide), repli CPU auto (frontale/GPU occupé)
                 "stoi_threshold": 0.70,
                 "pesq_threshold": 2.5,
                 "sisdr_threshold": 5.0,
