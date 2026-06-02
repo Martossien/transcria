@@ -432,6 +432,10 @@ bande passante et clipping pour produire des flags (`audio_faible`, `audio_tres_
 ultérieures (normalisation auto, débruitage, VAD adaptatif). Le résultat est sauvegardé
 dans `metadata/audio_preflight.json`.
 
+Le preflight peut être enrichi par trois qualifications optionnelles (sous-sections
+`squim`, `dnsmos`, `acoustic`) qui ajoutent des scores perceptifs/prédictifs et une
+`difficulty_map` par fenêtre. Détail de la conception : `docs/STT_ADAPTATIF_ET_HYBRIDE.md`.
+
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Activer l'analyse pré-diagnostic acoustique avant le pipeline |
@@ -445,6 +449,60 @@ dans `metadata/audio_preflight.json`.
 | `clipping_ratio_threshold` | float | `0.001` | Proportion d'échantillons clipping pour signaler le flag `clipping` |
 
 **Redémarrage requis :** non — lu à chaque pipeline via `PipelineService._run_audio_preflight()`.
+
+##### `workflow.audio_preflight.squim`
+
+Qualification SQUIM non-intrusive (STOI / PESQ / SI-SDR, modèle `SquimObjective` de
+torchaudio, CC-BY-4.0). Produit `squim_global` et, en lazy, une `difficulty_map` par
+fenêtre. Le **score global est borné** : il échantillonne quelques fenêtres réparties
+(`probes × window_s`, par défaut 5 × 10 s) puis moyenne — il ne passe jamais le fichier
+entier au modèle (sinon allocation démesurée → OOM sur audio long).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer la qualification SQUIM (score global + difficulty_map lazy) |
+| `segment_s` | float | `5.0` | Durée des fenêtres de la `difficulty_map` |
+| `hop_s` | float | `2.5` | Pas entre fenêtres de la `difficulty_map` |
+| `device` | string | `"auto"` | `auto` → GPU si visible sinon CPU ; repli CPU automatique sur erreur CUDA (frontale sans GPU / GPU occupé) |
+| `stoi_threshold` | float | `0.70` | STOI sous ce seuil → flag `squim_stoi_faible` |
+| `pesq_threshold` | float | `2.5` | PESQ sous ce seuil → flag `squim_pesq_faible` |
+| `sisdr_threshold` | float | `5.0` | SI-SDR (dB) sous ce seuil → flag `squim_sisdr_faible` |
+| `difficulty_map_always` | bool | `false` | `true` calcule la `difficulty_map` même si l'audio est « ok » (utile pour le bench) |
+
+**Note concurrence :** le modèle SQUIM est un singleton torch partagé ; ses inférences
+sont sérialisées par un verrou interne (sûr quand plusieurs jobs lancent le preflight en
+parallèle, hors sérialisation de l'allocateur GPU).
+
+**Redémarrage requis :** non — lu à chaque pipeline.
+
+##### `workflow.audio_preflight.dnsmos`
+
+Qualification perceptive DNSMOS P.835 (SIG / BAK / OVRL, MOS 1-5, modèle ONNX embarqué
+CC-BY-4.0). **Indépendante de SQUIM** : calculée en premier sur des sondes bornées (≤ 5
+fenêtres de 9 s), elle reste donc disponible même si SQUIM échoue. Inférence onnxruntime
+sur CPU (thread-safe).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer la qualification DNSMOS |
+| `ovrl_threshold` | float | `2.5` | OVRL sous ce seuil → flag `dnsmos_ovrl_faible` (peut déclencher la difficulty_map) |
+| `sig_bak_margin` | float | `0.0` | SIG < BAK − marge → signal `sig_lt_bak` (parole intrinsèquement dégradée) |
+
+**Redémarrage requis :** non — lu à chaque pipeline.
+
+##### `workflow.audio_preflight.acoustic`
+
+Métriques acoustiques par fenêtre (RT60, C50, SNR, suspicion de codec) calculées en
+numpy/scipy (CPU), injectées comme signaux dans la `difficulty_map`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Activer les métriques acoustiques par fenêtre |
+| `rt60_threshold` | float | `0.6` | RT60 (s) au-delà duquel le signal `rt60_eleve` est posé (réverbération longue) |
+| `snr_threshold` | float | `6.0` | SNR par fenêtre (dB) sous lequel `snr_faible` est posé |
+| `c50_threshold` | float | `-5.0` | C50 (dB) sous lequel `c50_faible` est posé (clarté faible) |
+
+**Redémarrage requis :** non — lu à chaque pipeline.
 
 #### `workflow.audio_denoise`
 

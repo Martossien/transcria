@@ -262,6 +262,29 @@ workflow:
     narrowband_hz_threshold: 3800.0
     clipping_threshold: 0.98
     clipping_ratio_threshold: 0.001
+    # Qualification SQUIM (STOI/PESQ/SI-SDR). Le score global est borné : il échantillonne
+    # quelques fenêtres réparties puis moyenne (jamais le fichier entier → pas d'OOM long).
+    squim:
+      enabled: true
+      segment_s: 5.0
+      hop_s: 2.5
+      device: "auto"            # auto = GPU si visible sinon CPU ; repli CPU auto sur erreur CUDA
+      stoi_threshold: 0.70
+      pesq_threshold: 2.5
+      sisdr_threshold: 5.0
+      difficulty_map_always: false   # true = calcule la difficulty_map même sur audio "ok" (bench)
+    # Qualification perceptive DNSMOS P.835 (SIG/BAK/OVRL). Indépendante de SQUIM
+    # (sondes bornées) ; reste disponible même si SQUIM échoue. Inférence ONNX CPU.
+    dnsmos:
+      enabled: true
+      ovrl_threshold: 2.5
+      sig_bak_margin: 0.0
+    # Métriques acoustiques par fenêtre (RT60/C50/SNR/codec, numpy/scipy CPU).
+    acoustic:
+      enabled: true
+      rt60_threshold: 0.6
+      snr_threshold: 6.0
+      c50_threshold: -5.0
   segment_reliability:
     # Ajoute reliability=ok|suspect|degrade sur chaque segment ASR.
     # Ce score ne supprime rien ; il sert au rapport qualité et aux futures protections LLM.

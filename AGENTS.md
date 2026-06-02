@@ -264,7 +264,7 @@ transcria/
 
 ### Patterns récurrents
 - **Config** : toujours via `get_config()`, jamais hardcoded. Les fonctions reçoivent `config: dict` en paramètre.
-- **JobFilesystem** : créé à chaque opération (`fs = JobFilesystem(jobs_dir, job_id)`), pas de cache.
+- **JobFilesystem** : créé à chaque opération (`fs = JobFilesystem(jobs_dir, job_id)`), pas de cache. `save_json()`/`save_text()` sont **atomiques** (fichier temporaire unique → `fsync` → `os.replace`) : un lecteur concurrent voit toujours l'ancien fichier complet ou le nouveau, jamais un contenu tronqué. Ne pas revenir à un `open(path, "w")` direct.
 - **Store** : classes statiques (`JobStore.create_job()`, `UserStore.get_by_id()`), pas d'instances.
 - **Routes web** : dans `web/routes.py` sur `web_bp`. Routes auth dans `auth/routes.py` sur `auth_bp`.
 - **Blueprints** : `auth_bp` (prefix `/`), `web_bp` (prefix `/`)
@@ -328,6 +328,11 @@ TranscrIA peut tourner **tout-en-un** (ressources GPU locales, mode historique) 
 
 Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le subprocess librosa se termine avant le chargement GPU pyannote/Whisper : pas de conflit de ressources. Ne jamais remplacer `audio_scene_filter` par une coupe d'audio sans remapper explicitement les timestamps.
 
+**Qualification du son (SQUIM / DNSMOS, dans le preflight) :** `AudioPreflightAnalyzer._augment_with_squim()` ajoute, quand activé (`workflow.audio_preflight.squim`/`dnsmos`), les scores SQUIM (`squim_global` : STOI/PESQ/SI-SDR) et DNSMOS (`dnsmos_global` : SIG/BAK/OVRL), plus une `difficulty_map` lazy par fenêtre. Trois contraintes à respecter (cf. `docs/STT_ADAPTATIF_ET_HYBRIDE.md`, `docs/CONFIG_REFERENCE.md`) :
+- **SQUIM `score_global` est borné** : il échantillonne quelques fenêtres réparties (`probes × window_s`, défaut 5 × 10 s) puis moyenne. Ne jamais lui passer le signal entier — sur un fichier long c'est une allocation démesurée → OOM, et SQUIM est de toute façon conçu pour des extraits courts.
+- **DNSMOS est indépendant de SQUIM** : calculé en premier (sondes bornées ≤ 5 × 9 s), il reste disponible même si SQUIM échoue. Ne pas le re-coupler à la réussite de SQUIM.
+- **Device et concurrence** : `squim.device="auto"` → GPU si visible, sinon CPU, avec repli CPU automatique sur erreur CUDA (frontale sans GPU / GPU occupé). Le modèle SQUIM est un singleton torch partagé ; ses inférences sont sérialisées par un verrou interne (`squim_scorer._INFER_LOCK`) car le preflight tourne hors sérialisation de l'allocateur GPU (plusieurs jobs simultanés). DNSMOS (onnxruntime) est thread-safe.
+
 **VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre au backend STT configuré que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale a le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite et le VAD final dégrade la qualité sur parole faible/chuchotée. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
 **VAD final auto sur audio dégradé :** désactivé par défaut (`workflow.vad.auto_enable_final_on_degraded=false`) car le VAD supprime trop de parole réelle. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète.
@@ -371,6 +376,10 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 
 ### Workflow (9 étapes affichées)
 Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspond à un `JobState`. Les transitions passent obligatoirement par `workflow/transitions.py`. Voir `docs/DATA_MODEL.md` pour le détail des états.
+
+**Contrat d'état pendant le résumé :** `run_summary()` reste en `SUMMARY_RUNNING` du début jusqu'à `SUMMARY_DONE`. Sa sous-phase de diarisation appelle `run_speaker_detection(..., update_state=False)` : elle **ne doit pas** publier `SPEAKER_DETECTION_RUNNING`/`DONE` (états « en avant » du wizard, classés étape Participants), sinon `compute_statuses()` marquerait `summary=DONE` et le template afficherait un cadre « Contexte » vide avant que `meeting_context.json` ne soit écrit. La diarisation y est best-effort (un échec n'écrase pas l'état, le résumé poursuit). Les états `SPEAKER_DETECTION_*` ne sont publiés que par la détection manuelle (`POST /api/jobs/<id>/speakers/detect`), après `SUMMARY_DONE`.
+
+**Garde anti-concurrence des phases synchrones :** `api_summary` et `api_speakers_detect` exécutent leur pipeline dans le thread HTTP et publient un état `RUNNING` pour toute leur durée. Ils renvoient `409` si le job est déjà `SUMMARY_RUNNING` / `SPEAKER_DETECTION_RUNNING` (anti double-lancement GPU et course sur `meeting_context.json`). `api_process` garde déjà la file via `can_start_processing` + `is_execution_active`.
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.

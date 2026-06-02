@@ -464,7 +464,7 @@ Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte 
 **`filesystem.py`**
 | Classe | Méthodes |
 |---|---|
-| `JobFilesystem(jobs_dir, job_id)` | `save_json()`, `load_json()`, `save_text()`, `load_text()`, `save_upload()`, `get_original_audio_path()`, `cleanup()` |
+| `JobFilesystem(jobs_dir, job_id)` | `save_json()`, `load_json()`, `save_text()`, `load_text()`, `save_upload()`, `get_original_audio_path()`, `cleanup()`. `save_json`/`save_text` écrivent de façon **atomique** (temp unique → `fsync` → `os.replace`) : aucun lecteur concurrent ne voit de fichier tronqué |
 
 Structure disque d'un job :
 ```
@@ -542,7 +542,7 @@ Contient `WORKFLOW_STEPS` (9 entrées, sans étape `speakers` séparée) et des 
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
 | `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé | GPUSession auto |
-| `run_speaker_detection(job, audio_path, config)` | pyannote diarization + formatage via GPUSession | GPUSession auto |
+| `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession | GPUSession auto |
 | `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers+lexique+orthographe | LLM arbitrage |

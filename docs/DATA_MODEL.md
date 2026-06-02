@@ -244,6 +244,13 @@ SUMMARY_DONE → ... → SPEAKER_DETECTION_RUNNING → SPEAKER_DETECTION_DONE
     → ... → READY_TO_PROCESS
 ```
 
+`SPEAKER_DETECTION_RUNNING`/`DONE` ne sont publiés que par la **détection manuelle**
+(`POST /api/jobs/<id>/speakers/detect`), à l'étape Participants après `SUMMARY_DONE`.
+La diarisation exécutée *pendant* `SUMMARY_RUNNING` (sous-phase de `run_summary`) appelle
+`run_speaker_detection(..., update_state=False)` et **ne change pas** l'état global :
+le job reste `SUMMARY_RUNNING` jusqu'à `SUMMARY_DONE`. Sinon `compute_statuses()`
+marquerait `summary=DONE` prématurément (cadre « Contexte » vide).
+
 Branches erreur/annulation :
 ```
 (n'importe quel état) → FAILED
