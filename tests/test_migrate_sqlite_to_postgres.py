@@ -8,6 +8,7 @@ Nécessite pytest-postgresql (base PG éphémère). Les cas testés :
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import tempfile
 
@@ -23,8 +24,14 @@ import transcria.jobs.models  # noqa: F401
 import transcria.queue.models  # noqa: F401
 import transcria.voice.models  # noqa: F401
 from alembic import command
-from scripts.migrate_sqlite_to_postgres import migrate
 from transcria.database import db
+
+# Charger le script de migration directement depuis le fichier (scripts/ n'est pas un package)
+_SCRIPT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "migrate_sqlite_to_postgres.py")
+_spec = importlib.util.spec_from_file_location("migrate_sqlite_to_postgres", _SCRIPT_PATH)
+_migrate_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_migrate_module)
+migrate = _migrate_module.migrate
 
 
 @pytest.fixture()
@@ -50,15 +57,22 @@ def pg_url(postgresql_proc):
 
 @pytest.fixture()
 def sqlite_with_users():
+    from datetime import datetime, timezone
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = f.name
     engine = create_engine(f"sqlite:///{path}")
     db.metadata.tables["users"].create(engine)
+    now = datetime.now(timezone.utc).isoformat()
     with engine.begin() as conn:
         conn.execute(
-            text("INSERT INTO users (id, username, email, password_hash, is_active, role_id) VALUES (:id, :u, :e, :p, 1, 1)"),
-            [{"id": 1, "u": "alice", "e": "alice@test", "p": "hash1"},
-             {"id": 2, "u": "bob", "e": "bob@test", "p": "hash2"}],
+            text(
+                "INSERT INTO users (id, username, display_name, email, password_hash, role, is_active, created_at) "
+                "VALUES (:id, :u, :dn, :e, :p, :r, 1, :now)"
+            ),
+            [
+                {"id": "11111111-1111-1111-1111-111111111111", "u": "alice", "dn": "Alice", "e": "alice@test", "p": "hash1", "r": "admin", "now": now},
+                {"id": "22222222-2222-2222-2222-222222222222", "u": "bob", "dn": "Bob", "e": "bob@test", "p": "hash2", "r": "operator", "now": now},
+            ],
         )
     engine.dispose()
     yield f"sqlite:///{path}"
