@@ -28,7 +28,7 @@ import sys
 # Permet d'exécuter le script directement (python scripts/…) : racine sur le path.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, func, inspect, select, text
 
 # Peupler db.metadata avec toutes les tables typées.
 import transcria.audit.models  # noqa: F401
@@ -82,35 +82,42 @@ def migrate(source_url: str, target_url: str, truncate: bool) -> int:
     target_engine = create_engine(target_url)
 
     total = 0
-    with source_engine.connect() as src, target_engine.begin() as dst:
-        dst.execute(text("SET TIME ZONE 'UTC'"))  # datetimes naïfs SQLite = UTC
+    try:
+        with source_engine.connect() as src, target_engine.begin() as dst:
+            source_inspector = inspect(src)
+            dst.execute(text("SET TIME ZONE 'UTC'"))  # datetimes naïfs SQLite = UTC
 
-        if truncate:
-            for table in reversed(db.metadata.sorted_tables):
-                dst.execute(table.delete())
-            logger.info("tables cibles vidées (--truncate)")
+            if truncate:
+                for table in reversed(db.metadata.sorted_tables):
+                    dst.execute(table.delete())
+                logger.info("tables cibles vidées (--truncate)")
 
-        for table in db.metadata.sorted_tables:
-            # Vérifier si la table existe dans SQLite
-            try:
-                test = src.execute(select(func.count()).select_from(table))
-                _ = test.scalar()
-            except Exception:
-                logger.info("%-26s : SKIP (table inexistante en SQLite)", table.name)
-                continue
+            for table in db.metadata.sorted_tables:
+                if not source_inspector.has_table(table.name):
+                    logger.info("%-26s : SKIP (table inexistante en SQLite)", table.name)
+                    continue
 
-            existing = dst.execute(select(func.count()).select_from(table)).scalar() or 0
-            if existing and not truncate:
-                logger.warning("%-26s : SKIP (%d lignes existantes en cible)", table.name, existing)
-                continue
+                source_columns = {column["name"] for column in source_inspector.get_columns(table.name)}
+                selected_columns = [column for column in table.columns if column.name in source_columns]
+                missing_columns = [column.name for column in table.columns if column.name not in source_columns]
+                if missing_columns:
+                    logger.info("%-26s : colonnes absentes en SQLite, defaults cible utilisés : %s", table.name, ", ".join(missing_columns))
 
-            rows = [dict(r) for r in src.execute(select(table)).mappings().all()]
-            if rows:
-                dst.execute(table.insert(), rows)
-            logger.info("%-26s : %d lignes copiées", table.name, len(rows))
-            total += len(rows)
+                existing = dst.execute(select(func.count()).select_from(table)).scalar() or 0
+                if existing and not truncate:
+                    logger.warning("%-26s : SKIP (%d lignes existantes en cible)", table.name, existing)
+                    continue
 
-        _reset_sequences(dst)
+                rows = [dict(r) for r in src.execute(select(*selected_columns)).mappings().all()] if selected_columns else []
+                if rows:
+                    dst.execute(table.insert(), rows)
+                logger.info("%-26s : %d lignes copiées", table.name, len(rows))
+                total += len(rows)
+
+            _reset_sequences(dst)
+    finally:
+        source_engine.dispose()
+        target_engine.dispose()
 
     logger.info("Migration terminée : %d lignes au total.", total)
     return total

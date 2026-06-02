@@ -368,6 +368,12 @@ _setup_postgres() {
     local host="$1" port="$2" db="$3" user="$4" pass="$5"
     local dsn="postgresql+psycopg://$user:$pass@$host:$port/$db"
     local sqlite_db="$INSTALL_DIR/instance/transcrIA.db"
+    local pg_super=(sudo -u postgres psql)
+    local pg_sed=(sudo -u postgres sed)
+    if [[ $EUID -eq 0 ]]; then
+        pg_super=(psql)
+        pg_sed=(sed)
+    fi
 
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
@@ -375,11 +381,11 @@ _setup_postgres() {
 
     # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
     local pg_hba=""
-    pg_hba=$(sudo -u postgres psql -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
+    pg_hba=$("${pg_super[@]}" -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
     if [[ -f "$pg_hba" ]]; then
         if grep -qE '^host\s+all\s+all\s+127\.0\.0\.1/32\s+(ident|peer)$' "$pg_hba"; then
             log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
-            sudo -u postgres sed -i \
+            "${pg_sed[@]}" -i \
                 -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+ident\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
                 -e 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+peer\$/host    all             all             127.0.0.1\/32            scram-sha-256/' \
                 "$pg_hba"
@@ -394,8 +400,6 @@ _setup_postgres() {
 
     # ── Rôle + base (idempotent) ──────────────────────────────
     log_info "Vérification du rôle '$user' et de la base '$db'…"
-    local pg_super=(sudo -u postgres psql)
-    [[ $EUID -eq 0 ]] && pg_super=(psql)
 
     if ! "${pg_super[@]}" -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" -v dbname="$db" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
@@ -430,9 +434,9 @@ PYEOF
 
     # ── Détection état de la base ─────────────────────────────
     local has_schema="" has_data="" alembic_ver=""
-    has_schema=$(sudo -u postgres psql -d "$db" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null)
-    has_data=$(sudo -u postgres psql -d "$db" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null)
-    alembic_ver=$(sudo -u postgres psql -d "$db" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null)
+    has_schema=$("${pg_super[@]}" -d "$db" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null)
+    has_data=$("${pg_super[@]}" -d "$db" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null)
+    alembic_ver=$("${pg_super[@]}" -d "$db" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null)
     log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
 
     # ── Schéma Alembic : up-to-date, vide, ou migrer ────────────
@@ -444,7 +448,7 @@ PYEOF
             log_ok "Schéma à jour (Alembic)"
         else
             log_error "Alembic a échoué. Tentative de reconstruction…"
-            sudo -u postgres psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
+            "${pg_super[@]}" -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
             if TRANSCRIA_DATABASE_URL="$dsn" alembic upgrade head 2>&1 | sed 's/^/  /'; then
                 log_ok "Schéma reconstruit"
             else
@@ -467,7 +471,7 @@ PYEOF
         log_info "Base SQLite détectée : $sqlite_db"
         if [[ "$NON_INTERACTIVE" = true ]]; then
             if [[ "$PG_MIGRATE" = true ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir"
+                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
             else
                 log_info "Migration sautée (--pg-migrate absent)"
             fi
@@ -486,7 +490,7 @@ PYEOF
             local mchoice
             read -r mchoice
             if [[ "$mchoice" = "1" ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir"
+                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
             else
                 log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
             fi
@@ -512,6 +516,7 @@ _do_pg_migrate() {
     else
         log_error "Échec de la migration SQLite → PostgreSQL"
         log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement."
+        return 1
     fi
 }
 

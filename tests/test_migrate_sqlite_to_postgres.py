@@ -11,9 +11,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import tempfile
+from datetime import datetime, timezone
 
 import pytest
-from alembic.config import Config
 from pytest_postgresql.janitor import DatabaseJanitor
 from sqlalchemy import create_engine, text
 
@@ -24,6 +24,7 @@ import transcria.jobs.models  # noqa: F401
 import transcria.queue.models  # noqa: F401
 import transcria.voice.models  # noqa: F401
 from alembic import command
+from alembic.config import Config
 from transcria.database import db
 
 # Charger le script de migration directement depuis le fichier (scripts/ n'est pas un package)
@@ -57,7 +58,6 @@ def pg_url(postgresql_proc):
 
 @pytest.fixture()
 def sqlite_with_users():
-    from datetime import datetime, timezone
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = f.name
     engine = create_engine(f"sqlite:///{path}")
@@ -70,9 +70,59 @@ def sqlite_with_users():
                 "VALUES (:id, :u, :dn, :e, :p, :r, 1, :now)"
             ),
             [
-                {"id": "11111111-1111-1111-1111-111111111111", "u": "alice", "dn": "Alice", "e": "alice@test", "p": "hash1", "r": "admin", "now": now},
-                {"id": "22222222-2222-2222-2222-222222222222", "u": "bob", "dn": "Bob", "e": "bob@test", "p": "hash2", "r": "operator", "now": now},
+                {
+                    "id": "11111111-1111-1111-1111-111111111111",
+                    "u": "alice",
+                    "dn": "Alice",
+                    "e": "alice@test",
+                    "p": "hash1",
+                    "r": "admin",
+                    "now": now,
+                },
+                {
+                    "id": "22222222-2222-2222-2222-222222222222",
+                    "u": "bob",
+                    "dn": "Bob",
+                    "e": "bob@test",
+                    "p": "hash2",
+                    "r": "operator",
+                    "now": now,
+                },
             ],
+        )
+    engine.dispose()
+    yield f"sqlite:///{path}"
+    os.unlink(path)
+
+
+@pytest.fixture()
+def sqlite_with_legacy_users():
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        path = f.name
+    engine = create_engine(f"sqlite:///{path}")
+    now = datetime.now(timezone.utc).isoformat()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id VARCHAR(36) PRIMARY KEY,
+                    username VARCHAR(80) NOT NULL UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    is_active BOOLEAN NOT NULL,
+                    created_at DATETIME NOT NULL,
+                    last_login DATETIME
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, password_hash, role, is_active, created_at) "
+                "VALUES (:id, :u, :p, :r, 1, :now)"
+            ),
+            {"id": "33333333-3333-3333-3333-333333333333", "u": "legacy", "p": "hash3", "r": "viewer", "now": now},
         )
     engine.dispose()
     yield f"sqlite:///{path}"
@@ -87,6 +137,16 @@ def test_migrate_basic(sqlite_with_users, pg_url):
         count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
     engine.dispose()
     assert count == 2
+
+
+def test_migrate_legacy_users_missing_new_columns(sqlite_with_legacy_users, pg_url):
+    total = migrate(sqlite_with_legacy_users, pg_url, truncate=False)
+    assert total == 1
+    engine = create_engine(pg_url)
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT username, display_name, email FROM users WHERE username = 'legacy'")).mappings().one()
+    engine.dispose()
+    assert row == {"username": "legacy", "display_name": "", "email": ""}
 
 
 def test_migrate_skip_non_empty_target(sqlite_with_users, pg_url):
