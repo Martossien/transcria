@@ -98,6 +98,8 @@ models:
   #   - chemin local (ex. "./models/cohere-asr/cohere-transcribe-03-2026") si le modèle
   #     a été pré-téléchargé sur disque — installé via install.sh.
   cohere_model_path: "CohereLabs/cohere-transcribe-03-2026"
+  # Optionnel : commit/snapshot HF à pinner si le cache local `refs/main` est incomplet.
+  cohere_model_revision: ""
   pyannote_model: "pyannote/speaker-diarization-community-1"
 
 cohere:

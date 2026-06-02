@@ -72,6 +72,7 @@ _DEFAULT_CONFIG = {
         "fallback_stt_model": "large-v3",
         # Repo HF (auto-résolu/téléchargé) ou chemin local d'un modèle pré-téléchargé.
         "cohere_model_path": "CohereLabs/cohere-transcribe-03-2026",
+        "cohere_model_revision": "",
         "pyannote_model": "pyannote/speaker-diarization-community-1",
     },
     "cohere": {

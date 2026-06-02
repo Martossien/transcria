@@ -251,11 +251,14 @@ class QueueScheduler:
     def _local_required_mb(self, profile: dict) -> int:
         remote_phases = self._remote_phase_names()
         phases = profile.get("phases") if isinstance(profile, dict) else {}
+        ignored_phases = set(remote_phases)
+        if isinstance(profile, dict) and profile.get("llm_shared"):
+            ignored_phases.add("llm_arbitration")
         if isinstance(phases, dict) and phases:
             values = [
                 self._positive_int(required_mb)
                 for phase, required_mb in phases.items()
-                if phase not in remote_phases
+                if phase not in ignored_phases
             ]
             return max(values, default=0)
         if isinstance(profile, dict):

@@ -179,6 +179,37 @@ def test_scheduler_uses_peak_vram_profile_for_local_admission(app, owner_id, tmp
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
 
 
+def test_scheduler_ignores_shared_llm_phase_for_initial_admission(app, owner_id, tmp_path, monkeypatch):
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(
+            job.id,
+            mode="fast",
+            vram_profile={
+                "phases": {"stt": 6000, "llm_arbitration": 60000},
+                "llm_shared": True,
+            },
+        )
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        seen = []
+
+        def fake_can_allocate(required_mb):
+            seen.append(required_mb)
+            return 0 if required_mb == 6000 else None
+
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", fake_can_allocate)
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 1
+        assert launched == [job.id]
+        assert seen == [6000]
+
+
 def test_scheduler_ignores_remote_phase_for_local_vram_admission(app, owner_id, tmp_path, monkeypatch):
     with app.app_context():
         _clear_queue()

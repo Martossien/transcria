@@ -31,6 +31,7 @@ class CohereTranscriber(BaseTranscriber):
     def __init__(
         self,
         model_path: str | None = None,
+        model_revision: str | None = None,
         device: str | None = None,
         chunk_length_s: int = 30,
         max_new_tokens: int = 448,
@@ -47,6 +48,7 @@ class CohereTranscriber(BaseTranscriber):
         lexicon_biasing_max_prefix_tokens: int = 20,
     ):
         self.model_path = model_path
+        self.model_revision = model_revision.strip() if isinstance(model_revision, str) and model_revision.strip() else None
         self.device = device or self._detect_device()
         self.chunk_length_s = chunk_length_s
         self.max_new_tokens = max_new_tokens
@@ -105,15 +107,19 @@ class CohereTranscriber(BaseTranscriber):
                     model_id = abs_path
 
             self._processor = AutoProcessor.from_pretrained(
-                model_id, trust_remote_code=True
+                model_id,
+                revision=self.model_revision,
+                trust_remote_code=True,
             )
             self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
                 model_id,
+                revision=self.model_revision,
                 torch_dtype=torch.bfloat16,
                 device_map=self.device,
                 trust_remote_code=True,
             )
-            logger.info("Cohere ASR chargé sur %s depuis %s", self.device, model_id)
+            revision = f"@{self.model_revision}" if self.model_revision else ""
+            logger.info("Cohere ASR chargé sur %s depuis %s%s", self.device, model_id, revision)
             return True
         except Exception as exc:
             logger.warning("Échec chargement Cohere ASR: %s", exc)

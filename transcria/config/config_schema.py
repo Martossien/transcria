@@ -187,6 +187,9 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
     _check_str(mod, "default_stt_model", "models.default_stt_model", r)
     _check_str(mod, "fallback_stt_model", "models.fallback_stt_model", r)
     _check_str(mod, "cohere_model_path", "models.cohere_model_path", r)
+    cohere_revision = mod.get("cohere_model_revision")
+    if cohere_revision is not None and not isinstance(cohere_revision, str):
+        r.add_error("models.cohere_model_revision: doit être une chaîne ou null")
     _check_str(mod, "pyannote_model", "models.pyannote_model", r)
 
     stt_model = mod.get("stt_backend", "")

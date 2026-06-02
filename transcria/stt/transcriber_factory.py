@@ -54,6 +54,7 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
 
     return CohereTranscriber(
         model_path=models_cfg.get("cohere_model_path"),
+        model_revision=models_cfg.get("cohere_model_revision"),
         device=device,
         chunk_length_s=cohere_cfg.get("chunk_length_s", 30),
         max_new_tokens=cohere_cfg.get("max_new_tokens", 448),
