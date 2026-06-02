@@ -1,8 +1,10 @@
 import json
 import mimetypes
+import os
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TextIO
 
 
 class JobFilesystem:
@@ -19,11 +21,33 @@ class JobFilesystem:
     def _json_path(self, relative: str) -> Path:
         return self.job_dir / relative
 
-    def save_json(self, relative: str, data: dict | list) -> None:
-        path = self._json_path(relative)
+    def _atomic_write(self, path: Path, write_fn: Callable[[TextIO], Any]) -> None:
+        """Écrit via fichier temporaire + os.replace pour une publication atomique.
+
+        Un lecteur concurrent (page job, autre phase) voit toujours l'ancien fichier
+        complet ou le nouveau, jamais un contenu tronqué. Le nom temporaire est unique
+        pour éviter toute collision entre écrivains simultanés (plusieurs jobs/phases).
+        """
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=2, default=str)
+        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                write_fn(fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
+    def save_json(self, relative: str, data: dict | list) -> None:
+        self._atomic_write(
+            self._json_path(relative),
+            lambda fh: json.dump(data, fh, ensure_ascii=False, indent=2, default=str),
+        )
 
     def load_json(self, relative: str) -> Any:
         path = self._json_path(relative)
@@ -33,10 +57,7 @@ class JobFilesystem:
             return json.load(fh)
 
     def save_text(self, relative: str, content: str) -> None:
-        path = self._json_path(relative)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(content)
+        self._atomic_write(self._json_path(relative), lambda fh: fh.write(content))
 
     def load_text(self, relative: str) -> str | None:
         path = self._json_path(relative)

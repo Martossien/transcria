@@ -132,3 +132,22 @@ class TestJobFilesystem:
     def test_nested_save(self, fs):
         fs.save_json("deep/nested/file.json", {"x": 1})
         assert (fs.job_dir / "deep" / "nested" / "file.json").is_file()
+
+    def test_save_json_is_atomic_no_tmp_residue(self, fs):
+        """save_json publie via tmp + rename : pas de fichier temporaire résiduel."""
+        fs.save_json("meeting.json", {"key": "value"})
+        assert fs.load_json("meeting.json") == {"key": "value"}
+        residues = [p for p in (fs.job_dir).iterdir() if p.name.endswith(".tmp")]
+        assert residues == []
+
+    def test_save_json_overwrite_keeps_valid_file(self, fs):
+        """Une réécriture remplace atomiquement le contenu sans corruption."""
+        fs.save_json("ctx.json", {"v": 1})
+        fs.save_json("ctx.json", {"v": 2, "extra": [1, 2, 3]})
+        assert fs.load_json("ctx.json") == {"v": 2, "extra": [1, 2, 3]}
+
+    def test_save_text_is_atomic(self, fs):
+        fs.save_text("notes.md", "# Titre\ncontenu")
+        assert fs.load_text("notes.md") == "# Titre\ncontenu"
+        residues = [p for p in (fs.job_dir).iterdir() if p.name.endswith(".tmp")]
+        assert residues == []
