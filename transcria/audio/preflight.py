@@ -37,6 +37,10 @@ class AudioPreflightAnalyzer:
         self.squim_enabled = bool(squim_cfg.get("enabled", False))
         self.squim_segment_s = float(squim_cfg.get("segment_s", 5.0))
         self.squim_hop_s = float(squim_cfg.get("hop_s", 2.5))
+        # Pas élargi en repli CPU : la frise par fenêtre sur CPU est l'étape la plus
+        # coûteuse (≈80 % du préflight) ; on privilégie la vitesse quand pas de GPU.
+        self.squim_hop_s_cpu = float(squim_cfg.get("hop_s_cpu", 5.0))
+        self.squim_vram_mb = float(squim_cfg.get("vram_mb", 5000))
         self.squim_device = str(squim_cfg.get("device", "cpu"))
         self.squim_stoi_threshold = float(squim_cfg.get("stoi_threshold", 0.70))
         self.squim_pesq_threshold = float(squim_cfg.get("pesq_threshold", 2.5))
@@ -143,46 +147,60 @@ class AudioPreflightAnalyzer:
         if not self.squim_enabled:
             return
 
-        glob = squim_scorer.score_global(signal, sample_rate, device=self.squim_device)
-        if glob is None:
-            return  # SQUIM indisponible (ex. OOM) : DNSMOS déjà ajouté, on s'arrête là
-        result["squim_global"] = glob
-
-        flags = result.setdefault("flags", [])
-        if glob["stoi"] < self.squim_stoi_threshold and "squim_stoi_faible" not in flags:
-            flags.append("squim_stoi_faible")
-        if glob["pesq"] < self.squim_pesq_threshold and "squim_pesq_faible" not in flags:
-            flags.append("squim_pesq_faible")
-        if glob["sisdr"] < self.squim_sisdr_threshold and "squim_sisdr_faible" not in flags:
-            flags.append("squim_sisdr_faible")
-        result["risk_level"] = _risk_level(flags)
-
-        # difficulty_map par fenêtre : coûteuse → lazy (audio non « ok ») sauf bench.
-        if not self.squim_map_always and result["risk_level"] == "ok":
-            logger.info("[audio_preflight] SQUIM global ok — difficulty_map non calculée (lazy)")
-            return
-
-        segments = squim_scorer.score_segments(
-            signal, sample_rate,
-            segment_s=self.squim_segment_s, hop_s=self.squim_hop_s, device=self.squim_device,
-        )
-        if not segments:
-            return
-        extra_signals = self._extra_window_signals(signal, sample_rate, segments)
-        difficulty_map = build_difficulty_map(
-            segments,
-            stoi_threshold=self.squim_stoi_threshold,
-            pesq_threshold=self.squim_pesq_threshold,
-            sisdr_threshold=self.squim_sisdr_threshold,
-            extra_signals=extra_signals,
-        )
-        result["difficulty_map"] = difficulty_map
-        result["difficulty_summary"] = summarize_difficulty(difficulty_map)
+        # Choix du device une seule fois : GPU le plus libre (≥ vram_mb) si dispo, sinon
+        # CPU. En repli CPU on élargit le pas (frise plus grossière mais rapide).
+        device = squim_scorer.pick_device(self.squim_device, required_mb=self.squim_vram_mb)
+        hop_s = self.squim_hop_s_cpu if device == "cpu" else self.squim_hop_s
         logger.info(
-            "[audio_preflight] difficulty_map: %d fenêtres (degrade=%d) en %.1fs",
-            result["difficulty_summary"]["windows"], result["difficulty_summary"]["degrade"],
-            _time.monotonic() - t0,
+            "[audio_preflight] SQUIM device=%s, hop=%.1fs (segment=%.1fs)",
+            device, hop_s, self.squim_segment_s,
         )
+
+        # Rend le cache VRAM réservé par SQUIM quel que soit le chemin de sortie
+        # (l'allocateur torch ne le libère pas seul) ; le modèle reste chargé.
+        try:
+            glob = squim_scorer.score_global(signal, sample_rate, device=device)
+            if glob is None:
+                return  # SQUIM indisponible (ex. OOM) : DNSMOS déjà ajouté, on s'arrête là
+            result["squim_global"] = glob
+
+            flags = result.setdefault("flags", [])
+            if glob["stoi"] < self.squim_stoi_threshold and "squim_stoi_faible" not in flags:
+                flags.append("squim_stoi_faible")
+            if glob["pesq"] < self.squim_pesq_threshold and "squim_pesq_faible" not in flags:
+                flags.append("squim_pesq_faible")
+            if glob["sisdr"] < self.squim_sisdr_threshold and "squim_sisdr_faible" not in flags:
+                flags.append("squim_sisdr_faible")
+            result["risk_level"] = _risk_level(flags)
+
+            # difficulty_map par fenêtre : coûteuse → lazy (audio non « ok ») sauf bench.
+            if not self.squim_map_always and result["risk_level"] == "ok":
+                logger.info("[audio_preflight] SQUIM global ok — difficulty_map non calculée (lazy)")
+                return
+
+            segments = squim_scorer.score_segments(
+                signal, sample_rate,
+                segment_s=self.squim_segment_s, hop_s=hop_s, device=device,
+            )
+            if not segments:
+                return
+            extra_signals = self._extra_window_signals(signal, sample_rate, segments)
+            difficulty_map = build_difficulty_map(
+                segments,
+                stoi_threshold=self.squim_stoi_threshold,
+                pesq_threshold=self.squim_pesq_threshold,
+                sisdr_threshold=self.squim_sisdr_threshold,
+                extra_signals=extra_signals,
+            )
+            result["difficulty_map"] = difficulty_map
+            result["difficulty_summary"] = summarize_difficulty(difficulty_map)
+            logger.info(
+                "[audio_preflight] difficulty_map: %d fenêtres (degrade=%d) en %.1fs",
+                result["difficulty_summary"]["windows"], result["difficulty_summary"]["degrade"],
+                _time.monotonic() - t0,
+            )
+        finally:
+            squim_scorer.release_cuda_cache()
 
     def _augment_dnsmos_global(self, result: dict, signal, sample_rate: int) -> None:
         """Ajoute les scores DNSMOS globaux (SIG/BAK/OVRL) et le flag associé.

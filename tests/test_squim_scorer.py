@@ -163,6 +163,92 @@ def test_score_global_falls_back_to_cpu_on_device_error(monkeypatch):
     assert out is None or set(out) == {"stoi", "pesq", "sisdr"}
 
 
+def test_release_cuda_cache_is_best_effort(monkeypatch):
+    # Sans CUDA : no-op silencieux, jamais d'exception.
+    import torch
+
+    from transcria.audio.squim_scorer import release_cuda_cache
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    release_cuda_cache()   # ne doit rien lever
+
+
+def test_release_cuda_cache_calls_empty_cache_when_cuda(monkeypatch):
+    import torch
+
+    from transcria.audio.squim_scorer import release_cuda_cache
+
+    called = {"n": 0}
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "empty_cache", lambda: called.__setitem__("n", called["n"] + 1))
+    release_cuda_cache()
+    assert called["n"] == 1
+
+
+def test_pick_device_cpu_passthrough():
+    from transcria.audio.squim_scorer import pick_device
+    assert pick_device("cpu") == "cpu"
+
+
+def test_pick_device_cpu_without_cuda(monkeypatch):
+    import torch
+    from transcria.audio.squim_scorer import pick_device
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert pick_device("auto") == "cpu"
+    assert pick_device("cuda") == "cpu"
+
+
+def test_pick_device_respects_explicit_index(monkeypatch):
+    import torch
+    from transcria.audio.squim_scorer import pick_device
+
+    # Index explicite : respecté tel quel, sans interroger la VRAM (choix opérateur).
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert pick_device("cuda:2") == "cuda:2"
+
+
+def test_pick_device_auto_selects_freest_gpu(monkeypatch):
+    # 3 GPU : 0 saturé (LLM), 1 moyennement libre, 2 le plus libre → on choisit le 2.
+    import transcria.audio.squim_scorer as sq
+
+    monkeypatch.setattr(sq, "_resolve_device", lambda device: "cuda" if device != "cpu" else "cpu")
+    free_by_index = {0: 800, 1: 6000, 2: 20000}  # Mo libres
+    monkeypatch.setattr(sq, "_free_cuda_devices",
+                        lambda required_mb: sorted(
+                            (i for i, mb in free_by_index.items() if mb >= required_mb),
+                            key=lambda i: free_by_index[i], reverse=True))
+    assert sq.pick_device("auto", required_mb=5000) == "cuda:2"
+
+
+def test_pick_device_auto_falls_back_to_cpu_when_all_busy(monkeypatch):
+    # Tous les GPU sous le seuil (ex. 8 GPU pleins) → CPU, jamais d'OOM ni d'éviction.
+    import transcria.audio.squim_scorer as sq
+
+    monkeypatch.setattr(sq, "_resolve_device", lambda device: "cuda" if device != "cpu" else "cpu")
+    monkeypatch.setattr(sq, "_free_cuda_devices", lambda required_mb: [])
+    assert sq.pick_device("auto", required_mb=5000) == "cpu"
+
+
+def test_score_segments_sticky_cpu_fallback_after_oom(monkeypatch, caplog):
+    # Régression perf : sous OOM GPU, on bascule CPU UNE fois pour tout le reste de
+    # l'appel (et non un essai CUDA raté par lot). On force un device CUDA invalide
+    # → batch.to(...) lève RuntimeError de façon déterministe sur tout hôte.
+    import logging
+
+    import transcria.audio.squim_scorer as sq
+
+    monkeypatch.setattr(sq, "_resolve_device", lambda device: "cuda:99" if device != "cpu" else "cpu")
+    sig = np.ones(16000 * 20, dtype=np.float32) * 0.45   # plusieurs lots avec batch_size=2
+    with caplog.at_level(logging.WARNING, logger="transcria.audio.squim_scorer"):
+        segs = score_segments(sig, 16000, device="auto", model=_FakeSquim(), batch_size=2)
+
+    # Frise complète malgré l'OOM (repli CPU) …
+    assert segs and all(set(s) == {"start", "end", "stoi", "pesq", "sisdr"} for s in segs)
+    # … et une SEULE bascule, pas une par lot (preuve du repli collant).
+    assert sum("bascule CPU" in r.message for r in caplog.records) == 1
+
+
 def test_concurrent_score_global_serialized_no_corruption():
     # Plusieurs jobs simultanés appellent SQUIM en parallèle : le verrou doit empêcher
     # l'entrelacement des inférences sur le modèle partagé (régression « bug sous charge »).

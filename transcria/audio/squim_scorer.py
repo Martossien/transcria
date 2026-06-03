@@ -27,6 +27,7 @@ _DEFAULT_HOP_S = 2.5
 _DEFAULT_BATCH = 64
 _GLOBAL_PROBES = 5           # fenêtres réparties pour le score global (borne mémoire/CPU)
 _GLOBAL_WINDOW_S = 10.0      # durée d'une fenêtre de sonde du score global
+_SQUIM_VRAM_MB = 5000        # VRAM nécessaire pour placer SQUIM (≈4,8 Go observés + marge)
 
 # Le modèle SQUIM est un singleton torch partagé. `.to(device)` mute le module en
 # place et un forward concurrent sur le même module n'est pas thread-safe : sous
@@ -53,6 +54,65 @@ def _resolve_device(device: str) -> str:
     except Exception:  # noqa: BLE001 — torch absent/cassé → CPU
         pass
     return "cpu"
+
+
+def _free_cuda_devices(required_mb: float) -> list[int]:
+    """Ordinaux CUDA *visibles* ayant ≥ ``required_mb`` de VRAM libre, triés du plus
+    libre au moins libre. Lecture seule (``torch.cuda.mem_get_info``) : ne tue jamais
+    aucun process et ne touche pas au GPU du LLM — on se contente de le contourner.
+    Respecte ``CUDA_VISIBLE_DEVICES`` (torch ne voit que les GPU autorisés)."""
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return []
+        scored: list[tuple[float, int]] = []
+        for i in range(torch.cuda.device_count()):
+            try:
+                free, _total = torch.cuda.mem_get_info(i)
+            except Exception:  # noqa: BLE001 — device illisible → ignoré
+                continue
+            free_mb = free / (1024 * 1024)
+            if free_mb >= required_mb:
+                scored.append((free_mb, i))
+        scored.sort(reverse=True)
+        return [idx for _free, idx in scored]
+    except Exception:  # noqa: BLE001 — torch absent/cassé
+        return []
+
+
+def pick_device(device: str, required_mb: float = _SQUIM_VRAM_MB) -> str:
+    """Résout le device en *choisissant un GPU libre* pour ``auto``/``cuda`` générique.
+
+    Sur une machine multi-GPU dont le GPU 0 est saturé par le LLM d'arbitrage, ``auto``
+    via ``_resolve_device`` retournerait ``"cuda"`` (= ``cuda:0``) → OOM. Ici on
+    sélectionne le GPU le **plus libre** ayant ≥ ``required_mb`` ; aucun éligible →
+    ``"cpu"`` (repli propre, jamais d'OOM, jamais d'éviction du LLM). Un index explicite
+    (``cuda:2``) est respecté tel quel — l'opérateur a tranché."""
+    resolved = _resolve_device(device)
+    if resolved == "cpu":
+        return "cpu"
+    if ":" in resolved:                      # index explicite → respecté
+        return resolved
+    free = _free_cuda_devices(required_mb)
+    return f"cuda:{free[0]}" if free else "cpu"
+
+
+def release_cuda_cache() -> None:
+    """Rend le cache d'activations CUDA réservé par les inférences SQUIM.
+
+    L'allocateur de cache de PyTorch ne restitue pas seul la VRAM réservée (elle
+    resterait « réservée mais libre » jusqu'à la fin du process) : sur un fichier
+    long, la frise peut réserver plusieurs Go. On les rend pour laisser le GPU à
+    d'autres jobs/modèles. **Le modèle singleton reste chargé** (réutilisable, ~28 Mo).
+    Best-effort : jamais bloquant."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:  # noqa: BLE001 — torch absent/cassé → rien à libérer
+        pass
 
 
 def _get_model() -> Any:
@@ -205,11 +265,27 @@ def score_segments(
         if not windows:
             return []
 
+        # Repli CPU « collant » : on résout le device une fois, et si un lot OOM sur GPU
+        # on bascule CPU pour TOUT le reste de l'appel. Sans ça, chaque lot retentait
+        # CUDA puis échouait (≈26 tentatives ratées observées sur 1 h d'audio).
+        eff = _resolve_device(device)
         results: list[dict] = []
         for batch_start in range(0, len(windows), batch_size):
             chunk = windows[batch_start: batch_start + batch_size]
             batch = torch.cat([waveform[:, s:e] for s, e in chunk], dim=0)
-            for (s, e), (stoi, pesq, sisdr) in zip(chunk, _infer_with_fallback(model, batch, device)):
+            with _INFER_LOCK:
+                try:
+                    scored = _infer(model.to(eff), batch.to(eff))
+                except RuntimeError as exc:
+                    if eff == "cpu":
+                        raise
+                    logger.warning(
+                        "[squim] inférence %s échouée (%s) — bascule CPU pour le reste de l'analyse",
+                        eff, exc,
+                    )
+                    eff = "cpu"                       # collant : plus de tentative CUDA
+                    scored = _infer(model.to(eff), batch.to(eff))
+            for (s, e), (stoi, pesq, sisdr) in zip(chunk, scored):
                 results.append({
                     "start": round(s / sr, 2),
                     "end": round(e / sr, 2),

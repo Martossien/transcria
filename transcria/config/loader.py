@@ -211,8 +211,10 @@ _DEFAULT_CONFIG = {
             "squim": {
                 "enabled": True,          # SQUIM global toujours (cheap) quand le preflight tourne
                 "segment_s": 5.0,
-                "hop_s": 2.5,
-                "device": "auto",         # GPU si visible (bcp plus rapide), repli CPU auto (frontale/GPU occupé)
+                "hop_s": 2.5,             # pas de la frise SQUIM sur GPU (pleine résolution)
+                "hop_s_cpu": 5.0,         # pas élargi en repli CPU (≈ ÷2 fenêtres → vitesse, cf. hybride)
+                "device": "auto",         # auto = GPU le PLUS libre (≥ vram_mb), sinon CPU. Contourne le GPU du LLM sans le tuer.
+                "vram_mb": 5000,          # VRAM requise pour placer SQUIM sur un GPU (≈4,8 Go observés + marge)
                 "stoi_threshold": 0.70,
                 "pesq_threshold": 2.5,
                 "sisdr_threshold": 5.0,
