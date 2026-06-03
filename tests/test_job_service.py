@@ -9,6 +9,7 @@ import pytest
 from transcria.jobs.models import JobState
 from transcria.services.job_service import (
     JobService,
+    _audio_summary_from_preflight,
     _merge_speakers_with_participants,
     _quality_summary_from_preflight,
 )
@@ -26,6 +27,44 @@ def test_quality_summary_from_preflight_exposes_risk_level():
 def test_quality_summary_from_preflight_ignores_missing_level():
     assert _quality_summary_from_preflight({}) == {}
     assert _quality_summary_from_preflight({"flags": ["audio_faible"]}) == {}
+
+
+# ---------------------------------------------------------------------------
+# _audio_summary_from_preflight (résumé compact persisté en base)
+# ---------------------------------------------------------------------------
+
+def test_audio_summary_empty_preflight():
+    assert _audio_summary_from_preflight({}) == {}
+
+
+def test_audio_summary_extracts_scalars_and_omits_none():
+    preflight = {
+        "risk_level": "suspect",
+        "flags": ["squim_pesq_faible"],
+        "duration_seconds": 4051.136,
+        "estimated_snr_db": 49.16,
+        "bandwidth_95_hz": 1165.8,
+        "squim_global": {"stoi": 0.84, "pesq": 1.62, "sisdr": 4.13},
+        "dnsmos_global": {"sig": 3.24, "bak": 4.01, "ovrl": 2.98},
+        "difficulty_summary": {"windows": 1620, "degrade": 1019, "degrade_ratio": 0.629},
+        # bruit non pertinent pour le résumé : ne doit pas remonter
+        "rms": 0.12,
+    }
+    out = _audio_summary_from_preflight(preflight)
+    assert out["risk_level"] == "suspect"
+    assert out["squim"]["pesq"] == 1.62
+    assert out["difficulty"]["degrade_ratio"] == 0.629
+    assert out["duration_s"] == 4051.136
+    # La frise par fenêtre n'est PAS embarquée (reste dans le JSON du job).
+    assert "difficulty_map" not in out
+    assert "rms" not in out
+
+
+def test_audio_summary_omits_absent_keys():
+    # Préflight de base sans SQUIM/DNSMOS : pas de clés à None.
+    out = _audio_summary_from_preflight({"risk_level": "ok", "estimated_snr_db": 30.0})
+    assert out == {"risk_level": "ok", "snr_db": 30.0}
+    assert "squim" not in out and "dnsmos" not in out
 
 
 # ---------------------------------------------------------------------------

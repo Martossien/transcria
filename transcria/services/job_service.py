@@ -75,6 +75,19 @@ class JobService:
             fs.save_json("metadata/audio_quality_decision.json", quality_decision)
         except Exception as exc:
             logger.warning("Décision qualité audio indisponible pour %s: %s", job.id, exc)
+
+        # Résumé audio compact en base (queryable à travers les jobs, sans la frise
+        # par fenêtre qui reste dans le JSON). Première brique d'un corpus pour calibrer
+        # l'arbitrage STT (difficulté ↔ moteur ↔ qualité). Best-effort, jamais bloquant.
+        summary = _audio_summary_from_preflight(preflight)
+        if summary:
+            try:
+                JobStore.update_extra_data(
+                    job.id, lambda extra: {**extra, "audio_summary": summary}
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Résumé audio non persisté pour %s: %s", job.id, exc)
+
         JobStore.update_state(job.id, JobState.ANALYZED)
 
         sl = get_structured_logger(__name__)
@@ -154,3 +167,25 @@ def _quality_summary_from_preflight(preflight: dict) -> dict:
     if not level:
         return {}
     return {"diagnostics": {"level": level}}
+
+
+def _audio_summary_from_preflight(preflight: dict) -> dict:
+    """Résumé audio **compact** destiné à la base (`extra_data.audio_summary`).
+
+    Volontairement sans la `difficulty_map` (1620 fenêtres → reste dans le JSON du
+    job) : on n'expose que des scalaires agrégés, requêtables à travers les jobs pour
+    échantillonner un corpus (p. ex. « jobs `degrade_ratio > 0.5` »). Les valeurs
+    absentes sont omises plutôt que mises à None."""
+    if not preflight:
+        return {}
+    keys = {
+        "risk_level": preflight.get("risk_level"),
+        "flags": preflight.get("flags"),
+        "duration_s": preflight.get("duration_seconds"),
+        "snr_db": preflight.get("estimated_snr_db"),
+        "bandwidth_95_hz": preflight.get("bandwidth_95_hz"),
+        "squim": preflight.get("squim_global"),          # {stoi, pesq, sisdr}
+        "dnsmos": preflight.get("dnsmos_global"),         # {sig, bak, ovrl}
+        "difficulty": preflight.get("difficulty_summary"),  # {windows, degrade, …, degrade_ratio}
+    }
+    return {k: v for k, v in keys.items() if v is not None}
