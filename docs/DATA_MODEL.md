@@ -64,6 +64,16 @@
 - `set_extra_data(value: dict)` : serialize en JSON
 - `to_dict() → dict` : sérialisation complète
 
+**Clés connues de `extra_data_json`** (dict libre, fusionné via `JobStore.update_extra_data`) :
+
+| Clé | Écrite par | Contenu |
+|---|---|---|
+| `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`), `mode`, timestamps, `cancel_requested` |
+| `meeting_context` | recouvrement de contexte | langue, métadonnées de réunion |
+| `last_non_terminal_state` | reprise | dernier état non terminal connu |
+| `_remote_unavailable_since` | `PipelineService` (mode dégradé §7.2) | horodatage d'indisponibilité des ressources distantes |
+| `audio_summary` | `JobService.analyze()` | **Résumé audio compact** (scalaires agrégés) : `risk_level`, `flags`, `duration_s`, `snr_db`, `bandwidth_95_hz`, `squim` (`{stoi,pesq,sisdr}`), `dnsmos` (`{sig,bak,ovrl}`), `difficulty` (`{windows,degrade,suspect,ok,degrade_ratio,worst}`). **Sans la `difficulty_map` par fenêtre** (qui reste dans `metadata/audio_preflight.json`). Destiné à requêter/échantillonner à travers les jobs (corpus de calibration STT). Clés à None omises. |
+
 ### Table `job_queue`
 
 File persistante utilisée par `QueueScheduler` quand `workflow.queue.enabled=true`.

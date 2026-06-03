@@ -90,6 +90,10 @@ Les seuils de `audio_quality` (`min_bit_rate`, `max_scene_noise_ratio`, `min_spe
 
 > Livrable : un tableau « signal → pouvoir prédictif » qui transforme des règles intuitives en règles validées. C'est l'amélioration la plus rentable de l'axe 1 — peu de code, beaucoup de fiabilité gagnée.
 
+**Première brique du corpus (déjà en place) :** `JobService.analyze()` persiste désormais un résumé audio compact dans `jobs.extra_data_json["audio_summary"]` (scalaires agrégés : `risk_level`, `flags`, `snr_db`, `squim`, `dnsmos`, `difficulty.degrade_ratio`…, **sans** la frise par fenêtre — voir `docs/DATA_MODEL.md`). Cela rend l'**échantillonnage cross-jobs requêtable** (ex. « tous les jobs `degrade_ratio > 0.5` ») sans rejouer les préflights. Ce qui **manque encore** pour calibrer : l'autre moitié du couple, à savoir le **résultat STT par segment** (moteur utilisé, confiance/`no_speech_prob`, idéalement WER vs référence) ; la difficulté seule, sans vérité terrain à laquelle la corréler, ne calibre rien. Le vrai jeu de données = `difficulté_segment × moteur × qualité_mesurée`.
+
+**Note perf (acquise) :** la `difficulty_map` à pleine résolution était l'étape la plus coûteuse du préflight (~9 min CPU sur 1 h d'audio). Depuis, `squim_scorer.pick_device()` place SQUIM sur le **GPU le plus libre** (≥ `squim.vram_mb`) sans toucher au LLM d'arbitrage → ~71 s mesurées (×7,6), à pleine résolution. C'est ce qui rend l'axe 2 (routage segment par segment) viable en temps : on garde la granularité complète sans payer le coût CPU. Repli CPU collant + frise grossie (`hop_s_cpu`) quand aucun GPU n'est libre (frontale / tous occupés). Cf. `AGENTS.md` § Qualification du son et `docs/CONFIG_REFERENCE.md`.
+
 ### 2.3 Sortie enrichie envisagée
 
 `audio_quality_decision.json` pourrait passer d'un verdict scalaire à une **carte de difficulté** :
@@ -210,4 +214,4 @@ scripts/compare_stt_segments.py           # alignement temporel des sorties
 docs/BENCHMARK.md                         # protocole de calibration (axe 1.a)
 ```
 
-Aucune modification de modèle de données bloquante : `difficulty_map` et les marqueurs d'arbitrage s'ajoutent aux JSON metadata existants.
+Aucune modification de modèle de données bloquante : `difficulty_map` et les marqueurs d'arbitrage s'ajoutent aux JSON metadata existants. Le résumé compact par job est déjà persisté en base (`extra_data.audio_summary`) ; l'instrumentation manquante pour le corpus est le **résultat STT par segment** (à logger pendant la transcription, pas dans le préflight).

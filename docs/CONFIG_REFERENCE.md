@@ -462,12 +462,20 @@ entier au modèle (sinon allocation démesurée → OOM sur audio long).
 |---|---|---|---|
 | `enabled` | bool | `true` | Activer la qualification SQUIM (score global + difficulty_map lazy) |
 | `segment_s` | float | `5.0` | Durée des fenêtres de la `difficulty_map` |
-| `hop_s` | float | `2.5` | Pas entre fenêtres de la `difficulty_map` |
-| `device` | string | `"auto"` | `auto` → GPU si visible sinon CPU ; repli CPU automatique sur erreur CUDA (frontale sans GPU / GPU occupé) |
+| `hop_s` | float | `2.5` | Pas entre fenêtres **sur GPU** (pleine résolution) |
+| `hop_s_cpu` | float | `5.0` | Pas entre fenêtres **en repli CPU** : élargi (≈÷2 fenêtres) pour privilégier la vitesse, le scoring par fenêtre CPU étant l'étape la plus coûteuse du preflight |
+| `device` | string | `"auto"` | `auto` → **GPU le plus libre** ayant ≥ `vram_mb` de VRAM, sinon CPU. Index explicite (`cuda:2`) respecté. Repli CPU automatique si un lot OOM (collant : plus de tentative CUDA ensuite) |
+| `vram_mb` | int | `5000` | VRAM requise pour placer SQUIM sur un GPU (≈4,8 Go observés + marge). Sert au choix du GPU le plus libre ; aucun éligible → CPU |
 | `stoi_threshold` | float | `0.70` | STOI sous ce seuil → flag `squim_stoi_faible` |
 | `pesq_threshold` | float | `2.5` | PESQ sous ce seuil → flag `squim_pesq_faible` |
 | `sisdr_threshold` | float | `5.0` | SI-SDR (dB) sous ce seuil → flag `squim_sisdr_faible` |
 | `difficulty_map_always` | bool | `false` | `true` calcule la `difficulty_map` même si l'audio est « ok » (utile pour le bench) |
+
+**Choix du GPU (multi-GPU) :** `device: auto` sélectionne, en lecture seule
+(`torch.cuda.mem_get_info`), le GPU **le plus libre** ayant ≥ `vram_mb`. Sur une machine
+dont le GPU 0 est occupé par le LLM d'arbitrage, SQUIM est ainsi placé sur un GPU libre
+(p. ex. `cuda:7`) **sans jamais évincer le LLM**. Si aucun GPU n'a la place (frontale sans
+GPU, ou tous occupés), repli CPU avec frise grossie (`hop_s_cpu`).
 
 **Note concurrence :** le modèle SQUIM est un singleton torch partagé ; ses inférences
 sont sérialisées par un verrou interne (sûr quand plusieurs jobs lancent le preflight en
