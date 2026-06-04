@@ -567,6 +567,18 @@ SPEAKER_00(SPEAKER_00): Bonjour tout le monde
     assert scores["cer"] == 0.0
 
 
+def test_score_reference_bench_loads_cohere_tune_results(tmp_path):
+    module = _load_script("score_reference_bench.py")
+    result_path = tmp_path / "T09.json"
+    result_path.write_text(json.dumps({"combo_id": "T09", "status": "ok"}), encoding="utf-8")
+
+    results = module.load_results(tmp_path)
+
+    assert len(results) == 1
+    assert results[0]["combo_id"] == "T09"
+    assert results[0]["_path"] == str(result_path)
+
+
 def test_arbitrate_hybrid_llm_builds_speaker_aware_units(tmp_path):
     module = _load_script("arbitrate_hybrid_llm.py")
     jobs_dir = tmp_path / "jobs"

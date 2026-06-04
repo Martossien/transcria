@@ -16,7 +16,13 @@ import re
 import unicodedata
 from pathlib import Path
 
-RESULT_PATTERNS = ["[0-9][0-9][0-9].json", "E[0-9][0-9].json", "S[0-9][0-9].json", "V[0-9][0-9].json"]
+RESULT_PATTERNS = [
+    "[0-9][0-9][0-9].json",
+    "E[0-9][0-9].json",
+    "S[0-9][0-9].json",
+    "V[0-9][0-9].json",
+    "T[0-9][0-9].json",
+]
 
 
 def normalize_text(text: str) -> str:
