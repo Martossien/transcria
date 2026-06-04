@@ -138,6 +138,8 @@ def test_bench_audio_passes_physical_gpu_without_cuda_visible_mask(tmp_path, mon
         remote_stt_api_key=None,
         remote_inference=None,
         remote_inference_api_key=None,
+        lexicon_json=None,
+        lexicon_term=[],
         resume=False,
         dry_run=False,
         verbose=False,
@@ -225,6 +227,55 @@ def test_bench_audio_vad_combo_id_normalization_and_summary_columns():
     assert row["vad_summary"] == "summary-off"
     assert row["vad_final"] == "final-off"
     assert row["whisper_vad_filter"] == "whisper-vad-on"
+
+
+def test_bench_audio_cohere_tune_matrix_is_pyannote_vad_off():
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(matrix="cohere_tune", group=None, combos=None)
+
+    combos = module.select_combos(args)
+
+    assert len(combos) == 9
+    assert {combo["id"] for combo in combos} == {f"T{i:02d}" for i in range(1, 10)}
+    assert all(combo["stt"] == "cohere" for combo in combos)
+    assert all(combo["skip_diarization"] is False for combo in combos)
+    assert all(combo["diarization_backend"] == "pyannote" for combo in combos)
+    assert all("workflow.vad.enabled_summary=false" in combo["overrides"] for combo in combos)
+    assert all("workflow.vad.enabled_final=false" in combo["overrides"] for combo in combos)
+    assert any("workflow.pyannote_chunking.max_chunk_s=20" in combo["overrides"] for combo in combos)
+    assert any("cohere.punctuation=false" in combo["overrides"] for combo in combos)
+    assert any(combo.get("enable_cohere_lexicon_biasing") is True for combo in combos)
+
+
+def test_bench_audio_cohere_tune_normalization_and_lexicon_forwarding(tmp_path):
+    module = _load_script("bench_audio.py")
+    args_select = SimpleNamespace(matrix="all", group=None, combos="t9")
+    combos = module.select_combos(args_select)
+    assert [combo["id"] for combo in combos] == ["T09"]
+
+    lexicon_json = tmp_path / "lexicon.json"
+    lexicon_json.write_text("[]", encoding="utf-8")
+    args = SimpleNamespace(
+        whisper_model_size="large-v3",
+        pipeline_mode="quality",
+        with_llm=False,
+        config_override=[],
+        skip_diarization=False,
+        remote_stt=None,
+        remote_stt_api_key=None,
+        remote_inference=None,
+        remote_inference_api_key=None,
+        lexicon_json=lexicon_json,
+        lexicon_term=["EBITDA|critique"],
+    )
+
+    cmd = module.build_e2e_cmd(combos[0], tmp_path / "audio.wav", tmp_path / "T09.json", "3", None, args)
+
+    assert "--enable-cohere-lexicon-biasing" in cmd
+    assert "--lexicon-json" in cmd
+    assert cmd[cmd.index("--lexicon-json") + 1] == str(lexicon_json)
+    assert "--lexicon-term" in cmd
+    assert cmd[cmd.index("--lexicon-term") + 1] == "EBITDA|critique"
 
 
 def test_arbitrate_hybrid_llm_candidate_accepts_e2e_result_json(tmp_path):

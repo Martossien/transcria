@@ -13,7 +13,8 @@ Matrices disponibles (--matrix) :
   extended : 12 combos exploration (diarization, décodage Whisper, Cohere rp)
   stt      : 24 combos Profil A (4 backends STT × 3 diarizations × 2 VAD)
   vad      : 8 combos ciblés VAD final / VAD interne Whisper
-  all      : base + extended + stt + vad (68 combos)
+  cohere_tune : 9 combos Cohere + pyannote pour calibrage qualité/vitesse
+  all      : base + extended + stt + vad + cohere_tune (77 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
     python scripts/bench_audio.py \\
@@ -444,6 +445,108 @@ assert len(VAD_COMBO_MATRIX) == 8, (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Matrice Cohere Tune — calibrage ciblé du chemin produit Cohere + pyannote
+#
+# Objectif : comparer des knobs Cohere isolés, avec diarisation pyannote conservée
+# et VAD final désactivé. Les variantes de chunking portent sur les tours pyannote
+# parce que c'est ce découpage qui pilote le chemin produit `pyannote_turns`.
+# ─────────────────────────────────────────────────────────────────────────────
+_COHERE_TUNE_BASE_OVERRIDES = [
+    "workflow.vad.enabled_summary=false",
+    "workflow.vad.enabled_final=false",
+]
+
+COHERE_TUNE_COMBO_MATRIX: list[dict] = [
+    {
+        "id": "T01", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": list(_COHERE_TUNE_BASE_OVERRIDES),
+        "label_extra": "cohere+pyannote+baseline",
+    },
+    {
+        "id": "T02", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.max_chunk_s=20"],
+        "label_extra": "cohere+pyannote+chunk20",
+    },
+    {
+        "id": "T03", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.max_chunk_s=35"],
+        "label_extra": "cohere+pyannote+chunk35",
+    },
+    {
+        "id": "T04", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["cohere.chunk_length_s=20"],
+        "label_extra": "cohere+fallback-chunk20",
+    },
+    {
+        "id": "T05", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["cohere.punctuation=false"],
+        "label_extra": "cohere+punctuation-off",
+    },
+    {
+        "id": "T06", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["cohere.repetition_penalty=1.0"],
+        "label_extra": "cohere+rp1.0",
+    },
+    {
+        "id": "T07", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["cohere.repetition_penalty=1.3"],
+        "label_extra": "cohere+rp1.3",
+    },
+    {
+        "id": "T08", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": _COHERE_TUNE_BASE_OVERRIDES + ["cohere.no_repeat_ngram_size=4"],
+        "label_extra": "cohere+no-repeat4",
+    },
+    {
+        "id": "T09", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "overrides": list(_COHERE_TUNE_BASE_OVERRIDES),
+        "enable_cohere_lexicon_biasing": True,
+        "label_extra": "cohere+lexicon-bias",
+    },
+]
+
+assert len(COHERE_TUNE_COMBO_MATRIX) == 9, (
+    f"La matrice Cohere Tune devrait contenir 9 combos, pas {len(COHERE_TUNE_COMBO_MATRIX)}"
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Arguments
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
@@ -461,12 +564,13 @@ def parse_args() -> argparse.Namespace:
 
     # ── Sélection des combos ─────────────────────────────────────────────────
     parser.add_argument(
-        "--matrix", choices=["base", "extended", "stt", "vad", "all"], default="base",
+        "--matrix", choices=["base", "extended", "stt", "vad", "cohere_tune", "all"], default="base",
         help="Matrice de combos : base (24 combos standard), "
              "extended (12 combos exploration), "
               "stt (24 combos Profil A : 4 backends × 3 diarizations × 2 VAD), "
              "vad (8 combos ciblés VAD final / VAD interne Whisper), "
-             "all (68 combos) — défaut: base",
+             "cohere_tune (9 combos Cohere + pyannote), "
+             "all (77 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,
@@ -534,6 +638,15 @@ def parse_args() -> argparse.Namespace:
              "Répétable; appliqué à tous les combos du run.",
     )
     parser.add_argument(
+        "--lexicon-term", action="append", default=[],
+        help="Terme de lexique transmis à l'E2E, format 'terme|priorité'. "
+             "Utile avec la variante cohere_tune T09.",
+    )
+    parser.add_argument(
+        "--lexicon-json", type=Path, default=None,
+        help="Fichier JSON de lexique transmis à l'E2E. Utile avec la variante cohere_tune T09.",
+    )
+    parser.add_argument(
         "--remote-stt", metavar="URL", default=None,
         help="Transmettre --remote-stt à l'E2E pour mesurer un STT distant OpenAI-compatible.",
     )
@@ -581,7 +694,7 @@ _GROUP_RANGES = {"A": range(1, 9), "B": range(9, 17), "C": range(17, 25)}
 
 
 def _normalize_combo_id(cid: str) -> str:
-    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01', 'v1' → 'V01'."""
+    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01', 'v1' → 'V01', 't1' → 'T01'."""
     s = cid.strip()
     if s.upper().startswith("E"):
         num = s[1:].lstrip("0") or "0"
@@ -592,6 +705,9 @@ def _normalize_combo_id(cid: str) -> str:
     if s.upper().startswith("V"):
         num = s[1:].lstrip("0") or "0"
         return f"V{int(num):02d}"
+    if s.upper().startswith("T"):
+        num = s[1:].lstrip("0") or "0"
+        return f"T{int(num):02d}"
     return s.zfill(3)
 
 
@@ -602,8 +718,16 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
         pool = list(STT_COMBO_MATRIX)
     elif args.matrix == "vad":
         pool = list(VAD_COMBO_MATRIX)
+    elif args.matrix == "cohere_tune":
+        pool = list(COHERE_TUNE_COMBO_MATRIX)
     elif args.matrix == "all":
-        pool = list(COMBO_MATRIX) + list(EXTENDED_COMBO_MATRIX) + list(STT_COMBO_MATRIX) + list(VAD_COMBO_MATRIX)
+        pool = (
+            list(COMBO_MATRIX)
+            + list(EXTENDED_COMBO_MATRIX)
+            + list(STT_COMBO_MATRIX)
+            + list(VAD_COMBO_MATRIX)
+            + list(COHERE_TUNE_COMBO_MATRIX)
+        )
     else:
         pool = list(COMBO_MATRIX)
 
@@ -611,7 +735,7 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
 
     # Filtre par groupe (matrice base uniquement)
     if args.group:
-        if args.matrix in {"extended", "stt", "vad"}:
+        if args.matrix in {"extended", "stt", "vad", "cohere_tune"}:
             logger.warning("--group ignoré avec --matrix %s", args.matrix)
         else:
             ids_in_group = {f"{i:03d}" for i in _GROUP_RANGES[args.group]}
@@ -692,6 +816,12 @@ def build_e2e_cmd(
         cmd.extend(["--remote-inference", args.remote_inference])
     if args.remote_inference_api_key:
         cmd.extend(["--remote-inference-api-key", args.remote_inference_api_key])
+    if args.lexicon_json:
+        cmd.extend(["--lexicon-json", str(args.lexicon_json)])
+    for term in args.lexicon_term:
+        cmd.extend(["--lexicon-term", term])
+    if combo.get("enable_cohere_lexicon_biasing", False):
+        cmd.append("--enable-cohere-lexicon-biasing")
 
     if combo["scene"] or combo["filter"]:
         cmd.append("--enable-audio-scene")

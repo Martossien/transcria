@@ -398,7 +398,7 @@ l'utilisateur confirme ≤ 4 locuteurs et que le backend STT n'est pas Cohere.
 ### 9.1 bench_audio.py — orchestrateur
 
 Lance des matrices de combos en parallèle sur un pool de GPUs. Chaque combo reçoit
-**1 GPU dédié** via `CUDA_VISIBLE_DEVICES` — les modèles s'y chargent sans interférence.
+**1 GPU physique ciblé** via l'argument E2E `--gpu` — les modèles s'y chargent sans interférence.
 
 #### Fonctionnement du parallélisme
 
@@ -427,7 +427,9 @@ Sur 8× RTX 3090 (24 Go), avec `--skip-llm` (recommandé pour bench pur) :
 | `stt` | 24 | ~8-12 min | ~60-90 min |
 | `base` | 24 | ~8-12 min | ~60-90 min |
 | `extended` | 12 | ~4-6 min | ~30-45 min |
-| `all` | 72 | ~25-40 min | ~3-5 h |
+| `vad` | 8 | ~3-5 min | ~20-35 min |
+| `cohere_tune` | 9 | ~4-8 min | ~35-60 min |
+| `all` | 77 | ~30-45 min | ~3-5 h |
 
 Ces durées varient selon la longueur de l'audio et les backends (Parakeet est ~63% plus
 lent que Cohere).
@@ -451,8 +453,8 @@ venv/bin/python scripts/bench_audio.py \
   --gpu-pool 3,4,5,6 \
   --skip-llm
 
-# ── Matrice complète — 72 combos sur 8 GPUs ──────────────────────────────────
-# base + extended + stt = 72 combos, 8 parallèles
+# ── Matrice complète — 77 combos sur 8 GPUs ──────────────────────────────────
+# base + extended + stt + vad + cohere_tune = 77 combos, 8 parallèles
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix all \
@@ -502,6 +504,16 @@ venv/bin/python scripts/bench_audio.py \
   --matrix vad \
   --gpu-pool 3 \
   --workers 1
+
+# ── Campagne Cohere Tune — chemin produit Cohere + pyannote ──────────────────
+# T01 baseline, T02/T03 chunk pyannote, T05 ponctuation off,
+# T06/T07 repetition_penalty, T08 no_repeat, T09 lexique optionnel.
+venv/bin/python scripts/bench_audio.py \
+  --audio bench_results/reference_corpus/T001_20260527/windows/W02_003500_004000/W02_003500_004000.wav \
+          bench_results/reference_corpus/T001_20260527/windows/W07_030500_031000/W07_030500_031000.wav \
+  --matrix cohere_tune \
+  --gpu-pool 3,5,6,7 \
+  --workers 2
 
 # ── Vérifier les commandes sans les lancer ────────────────────────────────────
 venv/bin/python scripts/bench_audio.py \
