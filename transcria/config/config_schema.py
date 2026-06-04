@@ -555,6 +555,7 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
         "merge_gap_s",
         "merge_max_chars",
         "non_latin_min_ratio",
+        "isolated_noise_artifact_max_s",
     ):
         _check_optional_number(cfg, key, f"workflow.transcription_cleanup.{key}", r)
     if "non_latin_min_chars" in cfg:
@@ -565,6 +566,7 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
         "subtitle_artifact_words",
         "generic_hallucination_patterns",
         "generic_hallucination_languages",
+        "isolated_noise_artifact_words",
     ):
         values = cfg.get(key, [])
         if not isinstance(values, list):

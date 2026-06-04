@@ -1142,6 +1142,35 @@ class TestDefaultSubtitleArtifactPatterns:
         result = [s["text"] for s in t._cleanup_transcription_segments(segs, language="en")]
         assert "thank you" in result
 
+    def test_punctuation_only_segment_removed(self):
+        """Un segment uniquement ponctuation/tiret ne doit pas survivre dans le SRT."""
+        result = self._run("– –", "Bonjour.")
+        assert "– –" not in result
+        assert "Bonjour." in result
+
+    def test_isolated_501_short_segment_removed(self):
+        """Artefact 501 isolé court observé sur Whisper → supprimé."""
+        result = self._run("501", "Bonjour.")
+        assert "501" not in result
+
+    def test_501_inside_sentence_kept(self):
+        """Un nombre dans une phrase réelle n'est pas un artefact isolé."""
+        result = self._run("Le dossier 501 est ouvert.", "Bonjour.")
+        assert "Le dossier 501 est ouvert." in result
+
+    def test_isolated_501_long_segment_kept(self):
+        """Un token configuré n'est supprimé que sur segment autonome court."""
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": {
+            "enabled": True,
+            "remove_subtitle_artifacts": True,
+            "remove_obvious_hallucinations": True,
+            "merge_short_segments": False,
+        }}}
+        segs = [{"start": 0.0, "end": 2.0, "text": "501"}]
+        result = [s["text"] for s in t._cleanup_transcription_segments(segs)]
+        assert result == ["501"]
+
 
 class TestSpeakerDetector:
     def test_detect_generates_missing_clips_when_turns_already_exist(self, app, owner_id, monkeypatch):

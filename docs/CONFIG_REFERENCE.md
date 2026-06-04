@@ -623,6 +623,8 @@ observées sur les bancs audio, et fusionne les micro-segments courts d'un même
 | `non_latin_min_ratio` | float | `0.25` | Ratio minimal caractères non latins / lettres du segment pour supprimer |
 | `generic_hallucination_languages` | list[string] | `["fr"]` | Langues de job où les phrases génériques anglaises isolées sont considérées comme hallucinations |
 | `generic_hallucination_patterns` | list[regex] | `[]` | Liste de patterns regex. Liste vide = utiliser les patterns intégrés (`thank you`, `bye`, etc. isolés) |
+| `isolated_noise_artifact_words` | list[string] | `["501"]` | Tokens isolés connus à supprimer seulement comme segment court autonome |
+| `isolated_noise_artifact_max_s` | float | `0.8` | Durée maximale d'un token isolé avant suppression |
 | `subtitle_artifact_patterns` | list[regex] | `[]` | Liste de patterns regex pour détecter les artefacts de sous-titrage. Liste vide = utiliser les patterns intégrés |
 | `subtitle_artifact_words` | list[string] | `[]` | Liste de phrases courtes normalisées à filtrer. Liste vide = utiliser les mots-clés intégrés |
 | `short_segment_max_s` | float | `0.45` | Durée maximale (s) pour qu'un segment soit considéré court |
@@ -632,7 +634,7 @@ observées sur les bancs audio, et fusionne les micro-segments courts d'un même
 
 Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, variantes tronquées) sont configurables via `subtitle_artifact_patterns` et `subtitle_artifact_words`. Si ces listes sont vides (défaut), les patterns et mots-clés intégrés au code sont utilisés.
 
-Le retrait d'hallucinations reste volontairement conservateur : il ne supprime pas tous les segments `suspect/degrade`, seulement les segments à signal textuel fort (texte majoritairement non latin pour une réunion française, ou phrase générique isolée comme `thank you`). Pour un job explicitement anglais, les phrases génériques anglaises isolées ne sont pas filtrées par défaut. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
+Le retrait d'hallucinations reste volontairement conservateur : il ne supprime pas tous les segments `suspect/degrade`, seulement les segments à signal textuel fort (texte majoritairement non latin pour une réunion française, ou phrase générique isolée comme `thank you`). Les artefacts numériques courts comme `501` ne sont supprimés que s'ils forment un segment autonome très court ; un nombre dans une vraie phrase est conservé. Pour un job explicitement anglais, les phrases génériques anglaises isolées ne sont pas filtrées par défaut. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
 
 #### `workflow.speaker_realignment`
 

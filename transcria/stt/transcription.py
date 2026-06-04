@@ -54,6 +54,9 @@ _DEFAULT_SHORT_SUBTITLE_ARTIFACTS = {
     "please like and subscribe",
     "don't forget to subscribe",
 }
+_DEFAULT_ISOLATED_NOISE_ARTIFACTS = {
+    "501",
+}
 _DEFAULT_NON_LATIN_CHAR_PATTERN = (
     r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
     r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
@@ -243,6 +246,7 @@ class Transcriber:
 
         artifact_patterns = self._build_artifact_patterns(cfg)
         artifact_words = self._build_artifact_words(cfg)
+        isolated_noise_words = self._build_isolated_noise_words(cfg)
         hallucination_patterns = self._build_generic_hallucination_patterns(cfg)
         non_latin_re = self._build_non_latin_pattern(cfg)
 
@@ -255,7 +259,13 @@ class Transcriber:
             text = str(segment.get("text") or "").strip()
             if not text:
                 continue
+            if self._is_punctuation_only_artifact(text):
+                removed_artifacts += 1
+                continue
             if remove_artifacts and self._is_subtitle_artifact(text, artifact_patterns, artifact_words):
+                removed_artifacts += 1
+                continue
+            if remove_artifacts and self._is_isolated_noise_artifact(text, segment, cfg, isolated_noise_words):
                 removed_artifacts += 1
                 continue
             if remove_obvious_hallucinations and self._is_obvious_hallucination(
@@ -308,6 +318,13 @@ class Transcriber:
         return _DEFAULT_SHORT_SUBTITLE_ARTIFACTS
 
     @staticmethod
+    def _build_isolated_noise_words(cfg: dict) -> set:
+        raw = cfg.get("isolated_noise_artifact_words")
+        if raw:
+            return {Transcriber._normalize_artifact_text(str(item)) for item in raw}
+        return _DEFAULT_ISOLATED_NOISE_ARTIFACTS
+
+    @staticmethod
     def _build_generic_hallucination_patterns(cfg: dict) -> list:
         raw = cfg.get("generic_hallucination_patterns")
         if raw:
@@ -331,6 +348,23 @@ class Transcriber:
         if Transcriber._word_count(text) > 6:
             return False
         return any(pattern.search(text) for pattern in patterns)
+
+    @staticmethod
+    def _is_punctuation_only_artifact(text: str) -> bool:
+        stripped = text.strip()
+        if not stripped:
+            return True
+        return not re.search(r"[^\W_]", stripped, flags=re.UNICODE)
+
+    @staticmethod
+    def _is_isolated_noise_artifact(text: str, segment: dict, cfg: dict, words: set) -> bool:
+        normalized = Transcriber._normalize_artifact_text(text)
+        if normalized not in words:
+            return False
+        if Transcriber._word_count(text) != 1:
+            return False
+        duration_s = float(segment.get("end") or 0.0) - float(segment.get("start") or 0.0)
+        return duration_s <= float(cfg.get("isolated_noise_artifact_max_s", 0.8))
 
     @staticmethod
     def _is_obvious_hallucination(

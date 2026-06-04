@@ -537,6 +537,8 @@ class TestBootstrapConfig:
         cfg["workflow"]["transcription_cleanup"]["merge_short_segments"] = "false"
         cfg["workflow"]["transcription_cleanup"]["subtitle_artifact_patterns"] = [123]
         cfg["workflow"]["transcription_cleanup"]["generic_hallucination_languages"] = ["fr", 123]
+        cfg["workflow"]["transcription_cleanup"]["isolated_noise_artifact_words"] = ["501", 123]
+        cfg["workflow"]["transcription_cleanup"]["isolated_noise_artifact_max_s"] = "short"
         cfg["workflow"]["transcription_cleanup"]["non_latin_char_pattern"] = "["
         cfg["workflow"]["transcription_cleanup"]["non_latin_min_chars"] = 0
         cfg["workflow"]["vad"]["auto_enable_final_on_degraded"] = "true"
@@ -549,6 +551,8 @@ class TestBootstrapConfig:
         assert any("workflow.transcription_cleanup.merge_short_segments" in msg for msg in result.errors)
         assert any("workflow.transcription_cleanup.subtitle_artifact_patterns[0]" in msg for msg in result.errors)
         assert any("workflow.transcription_cleanup.generic_hallucination_languages[1]" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.isolated_noise_artifact_words[1]" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.isolated_noise_artifact_max_s" in msg for msg in result.errors)
         assert any("workflow.transcription_cleanup.non_latin_char_pattern" in msg for msg in result.errors)
         assert any("workflow.transcription_cleanup.non_latin_min_chars" in msg for msg in result.errors)
         assert any("workflow.vad.auto_enable_final_on_degraded" in msg for msg in result.errors)

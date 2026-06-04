@@ -308,6 +308,8 @@ _DEFAULT_CONFIG = {
             "non_latin_min_ratio": 0.25,
             "generic_hallucination_languages": ["fr"],
             "generic_hallucination_patterns": [],
+            "isolated_noise_artifact_words": ["501"],
+            "isolated_noise_artifact_max_s": 0.8,
             "merge_short_segments": True,
             "short_segment_max_s": 0.45,
             "short_segment_max_words": 2,
