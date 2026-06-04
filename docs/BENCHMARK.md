@@ -586,6 +586,8 @@ venv/bin/python tests/test_e2e_workflow.py \
 | Option | Description |
 |---|---|
 | `--stt-backend` | `cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet` |
+| `--matrix pyannote_tune` | Lance les variantes Pxx dédiées pyannote + chunking |
+| `--known-speakers N` | Active la variante P02 avec `diarization.num_speakers=N` |
 | `--skip-llm` | Désactive résumé LLM et correction (recommandé pour bench pur) |
 | `--skip-diarization` | Désactive pyannote |
 | `--enable-audio-normalization` | Force la normalisation pré-STT |
@@ -594,6 +596,19 @@ venv/bin/python tests/test_e2e_workflow.py \
 | `--config-override CLE=VALEUR` | Override YAML ponctuel, répétable |
 | `--keep` | Conserve le job pour inspecter les SRT et artefacts |
 | `--keep-on-error` | Conserve le job en cas d'échec (debug) |
+
+Exemple ciblé diarisation pyannote sur une réunion longue :
+
+```bash
+venv/bin/python scripts/bench_audio.py \
+  --audio /chemin/reunion_longue.wav \
+  --matrix pyannote_tune \
+  --known-speakers 7 \
+  --gpu-pool 3,5 \
+  --workers 2 \
+  --output-dir bench_results/pyannote_tune_reunion \
+  --resume
+```
 
 ### 9.3 Sortie du bench
 

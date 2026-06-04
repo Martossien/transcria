@@ -278,6 +278,31 @@ def test_bench_audio_cohere_tune_normalization_and_lexicon_forwarding(tmp_path):
     assert cmd[cmd.index("--lexicon-term") + 1] == "EBITDA|critique"
 
 
+def test_bench_audio_pyannote_tune_matrix_excludes_exact_without_known_speakers():
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(matrix="pyannote_tune", group=None, combos=None, known_speakers=None)
+
+    combos = module.select_combos(args)
+
+    assert len(combos) == 10
+    assert "P02" not in {combo["id"] for combo in combos}
+    assert all(combo["stt"] == "cohere" for combo in combos)
+    assert all(combo["diarization_backend"] == "pyannote" for combo in combos)
+    assert all("workflow.vad.enabled_final=false" in combo["overrides"] for combo in combos)
+    assert any("workflow.pyannote_chunking.padding_s=0.30" in combo["overrides"] for combo in combos)
+
+
+def test_bench_audio_pyannote_tune_matrix_injects_known_speakers():
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(matrix="pyannote_tune", group=None, combos="p2", known_speakers=7)
+
+    combos = module.select_combos(args)
+
+    assert [combo["id"] for combo in combos] == ["P02"]
+    assert combos[0]["known_speakers"] == 7
+    assert "diarization.num_speakers=7" in combos[0]["overrides"]
+
+
 def test_arbitrate_hybrid_llm_candidate_accepts_e2e_result_json(tmp_path):
     module = _load_script("arbitrate_hybrid_llm.py")
     result = tmp_path / "result.json"

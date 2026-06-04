@@ -263,7 +263,7 @@ assert len(EXTENDED_COMBO_MATRIX) == 12, (
 # et avec/sans VAD résumé sur un audio propre (≤ 4 locuteurs pour inclure Sortformer).
 #
 # Dimensions :
-#   stt              : cohere, cohere_tf5, whisper, granite, parakeet (5)
+#   stt              : cohere, whisper, granite, parakeet (4)
 #   diarization      : pyannote, sortformer, OFF (3)
 #   vad_summary      : ON (défaut), OFF (2)
 #
@@ -547,6 +547,124 @@ assert len(COHERE_TUNE_COMBO_MATRIX) == 9, (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Matrice Pyannote Tune — calibrage diarisation + chunking pyannote
+#
+# Objectif : comparer uniquement les paramètres qui influencent le couple
+# pyannote → chunks STT. Le STT reste fixé à Cohere par défaut et le VAD final
+# reste désactivé pour ne pas confondre les effets.
+# `P02` est une variante "nombre exact connu" : elle n'est sélectionnée que si
+# l'utilisateur fournit --known-speakers N.
+# ─────────────────────────────────────────────────────────────────────────────
+_PYANNOTE_TUNE_BASE_OVERRIDES = [
+    "workflow.vad.enabled_summary=false",
+    "workflow.vad.enabled_final=false",
+    "models.diarization_backend=pyannote",
+]
+
+PYANNOTE_TUNE_COMBO_MATRIX: list[dict] = [
+    {
+        "id": "P01", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "auto",
+        "overrides": list(_PYANNOTE_TUNE_BASE_OVERRIDES),
+        "label_extra": "pyannote+auto",
+    },
+    {
+        "id": "P02", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "exact-known",
+        "requires_known_speakers": True,
+        "overrides": list(_PYANNOTE_TUNE_BASE_OVERRIDES),
+        "label_extra": "pyannote+num-speakers",
+    },
+    {
+        "id": "P03", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "range-2-20",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.min_speakers=2", "diarization.max_speakers=20"],
+        "label_extra": "pyannote+range2-20",
+    },
+    {
+        "id": "P04", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "range-2-12",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.min_speakers=2", "diarization.max_speakers=12"],
+        "label_extra": "pyannote+range2-12",
+    },
+    {
+        "id": "P05", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "range-3-12",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.min_speakers=3", "diarization.max_speakers=12"],
+        "label_extra": "pyannote+range3-12",
+    },
+    {
+        "id": "P06", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "micro-more-merge",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + [
+            "workflow.pyannote_chunking.micro_chunk_s=0.5",
+            "workflow.pyannote_chunking.micro_chunk_neighbor_gap_s=0.6",
+        ],
+        "label_extra": "pyannote+micro-merge",
+    },
+    {
+        "id": "P07", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "micro-less-merge",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + [
+            "workflow.pyannote_chunking.micro_chunk_s=0.2",
+            "workflow.pyannote_chunking.micro_chunk_neighbor_gap_s=0.25",
+        ],
+        "label_extra": "pyannote+micro-strict",
+    },
+    {
+        "id": "P08", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "padding-0.05",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.padding_s=0.05"],
+        "label_extra": "pyannote+pad0.05",
+    },
+    {
+        "id": "P09", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "padding-0.30",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.padding_s=0.30"],
+        "label_extra": "pyannote+pad0.30",
+    },
+    {
+        "id": "P10", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "chunk-20",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.max_chunk_s=20"],
+        "label_extra": "pyannote+chunk20",
+    },
+    {
+        "id": "P11", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "chunk-45",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.max_chunk_s=45"],
+        "label_extra": "pyannote+chunk45",
+    },
+]
+
+assert len(PYANNOTE_TUNE_COMBO_MATRIX) == 11, (
+    f"La matrice Pyannote Tune devrait contenir 11 combos, pas {len(PYANNOTE_TUNE_COMBO_MATRIX)}"
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Arguments
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
@@ -564,13 +682,14 @@ def parse_args() -> argparse.Namespace:
 
     # ── Sélection des combos ─────────────────────────────────────────────────
     parser.add_argument(
-        "--matrix", choices=["base", "extended", "stt", "vad", "cohere_tune", "all"], default="base",
+        "--matrix", choices=["base", "extended", "stt", "vad", "cohere_tune", "pyannote_tune", "all"], default="base",
         help="Matrice de combos : base (24 combos standard), "
              "extended (12 combos exploration), "
               "stt (24 combos Profil A : 4 backends × 3 diarizations × 2 VAD), "
              "vad (8 combos ciblés VAD final / VAD interne Whisper), "
              "cohere_tune (9 combos Cohere + pyannote), "
-             "all (77 combos) — défaut: base",
+             "pyannote_tune (11 combos diarisation/chunking pyannote), "
+             "all (88 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,
@@ -616,6 +735,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-diarization", action="store_true",
         help="Désactiver pyannote pour tous les combos (accélère le bench)",
+    )
+    parser.add_argument(
+        "--known-speakers", type=int, default=None,
+        help="Nombre exact de locuteurs connu depuis une référence externe. "
+             "Active P02 dans --matrix pyannote_tune et ajoute diarization.num_speakers=N.",
     )
 
     # ── Whisper ──────────────────────────────────────────────────────────────
@@ -694,7 +818,7 @@ _GROUP_RANGES = {"A": range(1, 9), "B": range(9, 17), "C": range(17, 25)}
 
 
 def _normalize_combo_id(cid: str) -> str:
-    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01', 'v1' → 'V01', 't1' → 'T01'."""
+    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01', 'v1' → 'V01', 't1' → 'T01', 'p1' → 'P01'."""
     s = cid.strip()
     if s.upper().startswith("E"):
         num = s[1:].lstrip("0") or "0"
@@ -708,7 +832,21 @@ def _normalize_combo_id(cid: str) -> str:
     if s.upper().startswith("T"):
         num = s[1:].lstrip("0") or "0"
         return f"T{int(num):02d}"
+    if s.upper().startswith("P"):
+        num = s[1:].lstrip("0") or "0"
+        return f"P{int(num):02d}"
     return s.zfill(3)
+
+
+def _with_known_speakers(combo: dict, known_speakers: int) -> dict:
+    """Ajoute l'override exact uniquement aux variantes qui le demandent."""
+    if not combo.get("requires_known_speakers"):
+        return combo
+    updated = dict(combo)
+    updated["overrides"] = list(combo.get("overrides", [])) + [f"diarization.num_speakers={known_speakers}"]
+    updated["label_extra"] = f"pyannote+num{known_speakers}"
+    updated["known_speakers"] = known_speakers
+    return updated
 
 
 def select_combos(args: argparse.Namespace) -> list[dict]:
@@ -720,6 +858,8 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
         pool = list(VAD_COMBO_MATRIX)
     elif args.matrix == "cohere_tune":
         pool = list(COHERE_TUNE_COMBO_MATRIX)
+    elif args.matrix == "pyannote_tune":
+        pool = list(PYANNOTE_TUNE_COMBO_MATRIX)
     elif args.matrix == "all":
         pool = (
             list(COMBO_MATRIX)
@@ -727,15 +867,22 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
             + list(STT_COMBO_MATRIX)
             + list(VAD_COMBO_MATRIX)
             + list(COHERE_TUNE_COMBO_MATRIX)
+            + list(PYANNOTE_TUNE_COMBO_MATRIX)
         )
     else:
         pool = list(COMBO_MATRIX)
 
     combos = pool
 
+    known_speakers = getattr(args, "known_speakers", None)
+    if known_speakers is None:
+        combos = [c for c in combos if not c.get("requires_known_speakers")]
+    else:
+        combos = [_with_known_speakers(c, known_speakers) for c in combos]
+
     # Filtre par groupe (matrice base uniquement)
     if args.group:
-        if args.matrix in {"extended", "stt", "vad", "cohere_tune"}:
+        if args.matrix in {"extended", "stt", "vad", "cohere_tune", "pyannote_tune"}:
             logger.warning("--group ignoré avec --matrix %s", args.matrix)
         else:
             ids_in_group = {f"{i:03d}" for i in _GROUP_RANGES[args.group]}
@@ -971,6 +1118,10 @@ def run_one_combo(
     if output_json.exists():
         try:
             result = json.loads(output_json.read_text())
+            for key in ("diarization_variant", "known_speakers", "label_extra"):
+                if key in combo:
+                    result[key] = combo[key]
+            result["overrides"] = list(combo.get("overrides", []))
             result["_elapsed_wall_s"] = round(elapsed, 1)
             _persist_transcription(result, output_json)
             return result
@@ -1043,7 +1194,8 @@ def run_parallel(
 # Résumé CSV + Markdown
 # ─────────────────────────────────────────────────────────────────────────────
 _CSV_FIELDS = [
-    "combo_id", "stt_backend", "diarization_backend", "vad_summary", "vad_final", "whisper_vad_filter", "scene", "sep", "norm", "filter",
+    "combo_id", "stt_backend", "diarization_backend", "diarization_variant", "known_speakers",
+    "vad_summary", "vad_final", "whisper_vad_filter", "scene", "sep", "norm", "filter",
     "skip_diarization", "overrides",
     "status",
     "init_s", "summary_s", "pipeline_s", "total_s",
@@ -1113,6 +1265,8 @@ def _extract_row(r: dict) -> dict:
         "combo_id":             r.get("combo_id", "?"),
         "stt_backend":          r.get("stt_backend", r.get("stt", "?")),
         "diarization_backend":  dia_be,
+        "diarization_variant":  r.get("diarization_variant", ""),
+        "known_speakers":       r.get("known_speakers", ""),
         "vad_summary":          vad_summary,
         "vad_final":            vad_final,
         "whisper_vad_filter":   whisper_vad_filter,
