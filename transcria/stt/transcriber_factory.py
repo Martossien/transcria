@@ -5,7 +5,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "whisper", "granite", "parakeet")
+_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet")
 
 
 def create_transcriber(
@@ -33,6 +33,8 @@ def create_transcriber(
 
     if backend == "cohere":
         return _create_cohere(config, device)
+    elif backend == "cohere_tf5":
+        return _create_cohere_tf5(config, device)
     elif backend == "whisper":
         return _create_whisper(config, device)
     elif backend == "granite":
@@ -70,6 +72,38 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
         lexicon_biasing_boost=lexicon_biasing_cfg.get("boost", 0.2),
         lexicon_biasing_start_boost=lexicon_biasing_cfg.get("start_boost", 0.05),
         lexicon_biasing_max_prefix_tokens=lexicon_biasing_cfg.get("max_prefix_tokens", 20),
+    )
+
+
+def _create_cohere_tf5(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.cohere_tf5_transcriber import CohereTf5Transcriber
+
+    models_cfg = config.get("models", {})
+    cohere_cfg = config.get("cohere", {})
+    tf5_cfg = config.get("cohere_tf5", {})
+
+    return CohereTf5Transcriber(
+        model_path=tf5_cfg.get("model_path") or models_cfg.get("cohere_model_path"),
+        model_revision=tf5_cfg.get("model_revision") or models_cfg.get("cohere_model_revision"),
+        device=device,
+        tf5_site=tf5_cfg.get("tf5_site"),
+        timeout_s=tf5_cfg.get("timeout_s", 7200),
+        chunk_length_s=tf5_cfg.get("chunk_length_s", cohere_cfg.get("chunk_length_s", 30)),
+        max_new_tokens=tf5_cfg.get("max_new_tokens", cohere_cfg.get("max_new_tokens", 448)),
+        punctuation=tf5_cfg.get("punctuation", cohere_cfg.get("punctuation", True)),
+        batch_size=tf5_cfg.get("batch_size", 96),
+        repetition_penalty=tf5_cfg.get("repetition_penalty", cohere_cfg.get("repetition_penalty", 1.2)),
+        no_repeat_ngram_size=tf5_cfg.get("no_repeat_ngram_size", cohere_cfg.get("no_repeat_ngram_size", 4)),
+        collapse_repetition_loops=tf5_cfg.get("collapse_repetition_loops", cohere_cfg.get("collapse_repetition_loops", True)),
+        repetition_loop_min_repeats=tf5_cfg.get(
+            "repetition_loop_min_repeats", cohere_cfg.get("repetition_loop_min_repeats", 4)
+        ),
+        repetition_loop_max_phrase_words=tf5_cfg.get(
+            "repetition_loop_max_phrase_words", cohere_cfg.get("repetition_loop_max_phrase_words", 10)
+        ),
+        repetition_loop_keep_repeats=tf5_cfg.get(
+            "repetition_loop_keep_repeats", cohere_cfg.get("repetition_loop_keep_repeats", 2)
+        ),
     )
 
 
@@ -188,7 +222,7 @@ def list_available_backends() -> list[str]:
 
 
 def get_backend_vram_mb(backend: str, config: dict) -> int:
-    if backend == "cohere":
+    if backend in {"cohere", "cohere_tf5"}:
         return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))
     elif backend == "whisper":
         from transcria.stt.whisper_transcriber import WhisperTranscriber

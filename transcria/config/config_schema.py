@@ -33,6 +33,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result)
     _check_cohere(cfg.get("cohere", {}), result)
+    _check_cohere_tf5(cfg.get("cohere_tf5", {}), result)
     _check_whisper(cfg.get("whisper", {}), result)
     _check_granite(cfg.get("granite", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
@@ -201,7 +202,7 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
 
 
 def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
-    valid = {"cohere", "whisper", "granite"}
+    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet"}
     backend = mod.get("stt_backend", "cohere")
     if not isinstance(backend, str) or backend not in valid:
         r.add_error(
@@ -403,6 +404,31 @@ def _check_cohere(cohere: dict, r: ValidationResult) -> None:
                         )
 
 
+def _check_cohere_tf5(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("cohere_tf5: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "cohere_tf5.enabled", r)
+    for key in ("tf5_site", "model_path"):
+        _check_str(cfg, key, f"cohere_tf5.{key}", r)
+    revision = cfg.get("model_revision")
+    if revision is not None and not isinstance(revision, str):
+        r.add_error("cohere_tf5.model_revision: doit être une chaîne ou null")
+    _check_int_range(cfg, "timeout_s", "cohere_tf5.timeout_s", 1, 86400, r)
+    _check_optional_number(cfg, "chunk_length_s", "cohere_tf5.chunk_length_s", r)
+    _check_int_range(cfg, "max_new_tokens", "cohere_tf5.max_new_tokens", 1, 4096, r)
+    _check_bool(cfg, "punctuation", "cohere_tf5.punctuation", r)
+    _check_int_range(cfg, "batch_size", "cohere_tf5.batch_size", 1, 512, r)
+    _check_optional_number(cfg, "repetition_penalty", "cohere_tf5.repetition_penalty", r)
+    _check_int_range(cfg, "no_repeat_ngram_size", "cohere_tf5.no_repeat_ngram_size", 0, 20, r)
+    _check_bool(cfg, "collapse_repetition_loops", "cohere_tf5.collapse_repetition_loops", r)
+    _check_int_range(cfg, "repetition_loop_min_repeats", "cohere_tf5.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(cfg, "repetition_loop_max_phrase_words", "cohere_tf5.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(cfg, "repetition_loop_keep_repeats", "cohere_tf5.repetition_loop_keep_repeats", 1, 20, r)
+
+
 def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:
     if cfg is None:
         return
@@ -410,8 +436,8 @@ def _check_quality_transcription(cfg: dict, r: ValidationResult) -> None:
         r.add_error("workflow.quality_transcription: doit être un objet YAML")
         return
     backend = cfg.get("force_stt_backend")
-    if backend is not None and backend not in {"cohere", "whisper", "granite"}:
-        r.add_error("workflow.quality_transcription.force_stt_backend: doit valoir cohere, whisper ou granite")
+    if backend is not None and backend not in {"cohere", "cohere_tf5", "whisper", "granite", "parakeet"}:
+        r.add_error("workflow.quality_transcription.force_stt_backend: doit valoir cohere, cohere_tf5, whisper, granite ou parakeet")
     _check_bool(cfg, "force_on_degraded_summary", "workflow.quality_transcription.force_on_degraded_summary", r)
     modes = cfg.get("enabled_for_modes", [])
     if not isinstance(modes, list):

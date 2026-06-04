@@ -119,7 +119,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `whisper`, `granite` ou `parakeet`) |
+| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite` ou `parakeet`) |
 | `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
@@ -136,7 +136,10 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 
 ### `cohere`
 
-Paramètres optionnels du backend Cohere ASR. Ces paramètres ne sont lus que si une section `[cohere]` existe dans `config.yaml`. En l'absence de cette section, les valeurs par défaut sont utilisées par `CohereTranscriber`.
+Paramètres optionnels du backend Cohere ASR principal. Cohere reste le backend
+production recommandé à ce stade (`models.stt_backend=cohere`). Ces paramètres
+ne sont lus que si une section `[cohere]` existe dans `config.yaml`. En l'absence
+de cette section, les valeurs par défaut sont utilisées par `CohereTranscriber`.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -157,6 +160,36 @@ Paramètres optionnels du backend Cohere ASR. Ces paramètres ne sont lus que si
 | `lexicon_biasing.max_prefix_tokens` | int | `20` | Profondeur maximale de recherche du préfixe dans chaque beam |
 
 **Redémarrage requis :** oui — le modèle est chargé en mémoire GPU.
+
+### `cohere_tf5`
+
+Backend expérimental opt-in (`models.stt_backend=cohere_tf5`) utilisant la classe
+native Transformers 5 `CohereAsrForConditionalGeneration`. Il doit rester isolé
+tant que Transformers 5 tire des versions incompatibles avec NeMo/datasets/lightning :
+installer la pile TF5 dans un répertoire dédié (`pip --target`) et pointer
+`cohere_tf5.tf5_site` vers ce répertoire. Cohere classique reste le défaut.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Marque documentaire ; l'activation réelle se fait via `models.stt_backend=cohere_tf5` |
+| `tf5_site` | string | `"/tmp/transcria_tf54_site"` | Répertoire `site-packages` isolé contenant Transformers 5 |
+| `model_path` | string | `"CohereLabs/cohere-transcribe-03-2026"` | Modèle Cohere ASR natif TF5 |
+| `model_revision` | string | `""` | Révision HF optionnelle |
+| `timeout_s` | int | `7200` | Timeout du worker subprocess TF5 |
+| `chunk_length_s` | int | `30` | Durée des chunks ASR |
+| `max_new_tokens` | int | `448` | Nombre maximal de tokens générés |
+| `punctuation` | bool | `true` | Demande la ponctuation via le processor TF5 |
+| `batch_size` | int | `96` | Batch de chunks internes quand un fichier complet est transcrit |
+| `repetition_penalty` | float | `1.2` | Pénalité de répétition |
+| `no_repeat_ngram_size` | int | `4` | Taille des n-grams bloqués |
+| `collapse_repetition_loops` | bool | `true` | Réduction des boucles répétitives post-ASR |
+| `repetition_loop_min_repeats` | int | `4` | Répétitions minimales pour détecter une boucle |
+| `repetition_loop_max_phrase_words` | int | `10` | Taille maximale d'une phrase répétée |
+| `repetition_loop_keep_repeats` | int | `2` | Répétitions conservées après réduction |
+
+**Usage recommandé :** bench et expérimentation contrôlée avec pyannote activé.
+Ne pas en faire le défaut avant d'ajouter des garde-fous de couverture et fallback
+Whisper sur sous-transcription.
 
 ### `whisper`
 

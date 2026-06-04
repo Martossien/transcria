@@ -163,7 +163,7 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "whisper", "granite", "parakeet"], default="cohere",
+        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet"], default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."
@@ -812,6 +812,10 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
             "  Cohere lex biasing   : "
             f"{'OUI' if cfg.get('cohere', {}).get('lexicon_biasing', {}).get('enabled', False) else 'non'}"
         )
+    if models.get("stt_backend") == "cohere_tf5":
+        cohere_tf5 = cfg.get("cohere_tf5", {})
+        print(f"  Cohere TF5 site      : {cohere_tf5.get('tf5_site', '/tmp/transcria_tf54_site')}")
+        print(f"  Cohere TF5 batch     : {cohere_tf5.get('batch_size', 96)}")
     if models.get("stt_backend") == "granite":
         granite = cfg.get("granite", {})
         print(f"  Granite model        : {granite.get('model_id', './models/granite-speech-4.1-2b')}")
@@ -1380,6 +1384,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     quality_data = fs.load_json("metadata/audio_quality_decision.json") or {}
     whisper_hotwords_data = fs.load_json("metadata/whisper_hotwords.json") or {}
     cohere_biasing_data = fs.load_json("metadata/cohere_lexicon_biasing.json") or {}
+    cohere_tf5_data = fs.load_json("metadata/cohere_tf5.json") or {}
     granite_data = fs.load_json("metadata/granite.json") or {}
     parakeet_data = fs.load_json("metadata/parakeet.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
@@ -1413,6 +1418,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "stt_backend": args.stt_backend,
         "effective_stt_backend": transcription_metadata.get("backend"),
         "whisper_model_size": args.whisper_model_size if args.stt_backend == "whisper" else None,
+        "cohere_tf5_data": cohere_tf5_data or None,
         "granite_data": granite_data or None,
         "parakeet_data": parakeet_data or None,
         "mode": args.mode,

@@ -31,6 +31,9 @@ class TestConfigLoading:
         assert cfg["whisper"]["lexicon_hotwords"]["enabled"] is False
         assert cfg["whisper"]["lexicon_hotwords"]["priorities"] == ["critique", "importante"]
         assert cfg["cohere"]["punctuation"] is True
+        assert cfg["cohere_tf5"]["enabled"] is False
+        assert cfg["cohere_tf5"]["tf5_site"] == "/tmp/transcria_tf54_site"
+        assert cfg["cohere_tf5"]["timeout_s"] == 7200
         assert get_default_config()["cohere"]["no_repeat_ngram_size"] == 4
         assert cfg["cohere"]["lexicon_biasing"]["enabled"] is False
         assert cfg["cohere"]["lexicon_biasing"]["priorities"] == ["critique", "importante", "normale"]
@@ -464,6 +467,24 @@ class TestBootstrapConfig:
         result = validate_config(cfg)
 
         assert result.is_valid
+
+    def test_validate_config_accepts_cohere_tf5_backend(self):
+        cfg = load_config()
+        cfg["models"]["stt_backend"] = "cohere_tf5"
+        cfg["workflow"]["quality_transcription"]["force_stt_backend"] = "cohere_tf5"
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_validate_config_rejects_invalid_cohere_tf5_batch_size(self):
+        cfg = load_config()
+        cfg["cohere_tf5"]["batch_size"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("cohere_tf5.batch_size" in msg for msg in result.errors)
 
     def test_validate_config_rejects_invalid_granite_prompt_mode(self):
         cfg = load_config()

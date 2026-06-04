@@ -585,7 +585,7 @@ venv/bin/python tests/test_e2e_workflow.py \
 
 | Option | Description |
 |---|---|
-| `--stt-backend` | `cohere`, `whisper`, `granite`, `parakeet` |
+| `--stt-backend` | `cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet` |
 | `--skip-llm` | Désactive résumé LLM et correction (recommandé pour bench pur) |
 | `--skip-diarization` | Désactive pyannote |
 | `--enable-audio-normalization` | Force la normalisation pré-STT |

@@ -263,7 +263,7 @@ assert len(EXTENDED_COMBO_MATRIX) == 12, (
 # et avec/sans VAD résumé sur un audio propre (≤ 4 locuteurs pour inclure Sortformer).
 #
 # Dimensions :
-#   stt              : cohere, whisper, granite, parakeet (4)
+#   stt              : cohere, cohere_tf5, whisper, granite, parakeet (5)
 #   diarization      : pyannote, sortformer, OFF (3)
 #   vad_summary      : ON (défaut), OFF (2)
 #

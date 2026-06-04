@@ -6,6 +6,7 @@ import pytest
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
 from transcria.quality.audio_quality import AudioQualityEvaluator
 from transcria.stt.anti_hallucination import collapse_repetition_loops, detect_repetition_loops
+from transcria.stt.cohere_tf5_transcriber import CohereTf5Transcriber
 from transcria.stt.cohere_transcriber import CohereTranscriber
 from transcria.stt.contextual_biasing import TrieContextualBiasProcessor, build_token_trie, select_lexicon_bias_terms
 from transcria.stt.forced_alignment import ForcedAlignmentService
@@ -163,6 +164,58 @@ class TestCohereTranscriber:
         assert isinstance(transcriber, CohereTranscriber)
         assert transcriber.punctuation is False
         assert transcriber.chunk_length_s == 23
+
+
+class TestCohereTf5Transcriber:
+    def test_cohere_tf5_backend_is_available_in_factory(self):
+        assert "cohere_tf5" in list_available_backends()
+
+    def test_create_cohere_tf5_transcriber_from_config(self):
+        cfg = {
+            "models": {"stt_backend": "cohere_tf5", "cohere_model_path": "CohereLabs/cohere-transcribe-03-2026"},
+            "cohere": {"punctuation": True, "no_repeat_ngram_size": 4},
+            "cohere_tf5": {
+                "tf5_site": "/tmp/transcria_tf54_site",
+                "batch_size": 32,
+                "timeout_s": 123,
+                "punctuation": False,
+                "no_repeat_ngram_size": 5,
+            },
+        }
+
+        transcriber = create_transcriber(cfg, device="cpu")
+
+        assert isinstance(transcriber, CohereTf5Transcriber)
+        assert transcriber.tf5_site == "/tmp/transcria_tf54_site"
+        assert transcriber.batch_size == 32
+        assert transcriber.timeout_s == 123
+        assert transcriber.punctuation is False
+        assert transcriber.no_repeat_ngram_size == 5
+
+    def test_cohere_tf5_uses_cohere_vram_budget(self):
+        cfg = {"gpu": {"cohere_vram_mb": 6400}}
+
+        assert get_backend_vram_mb("cohere_tf5", cfg) == 6400
+
+    def test_cohere_tf5_prechunked_batches_and_maps_speakers(self):
+        transcriber = CohereTf5Transcriber(batch_size=2)
+        transcriber.load = lambda: True
+        transcriber._run_worker = lambda chunks, language, speaker_mapping: [
+            {"start": 10.0, "end": 11.0, "speaker": "SPEAKER_00", "text": "texte 0"},
+            {"start": 12.0, "end": 13.0, "speaker": "Alice", "text": "texte 1"},
+        ]
+        chunks = [
+            {"start": 10.0, "end": 11.0, "speaker": "SPEAKER_00", "audio": [0.0]},
+            {"start": 12.0, "end": 13.0, "speaker": "SPEAKER_01", "audio": [0.0]},
+        ]
+
+        segments = transcriber.transcribe_prechunked(chunks, language="fr", speaker_mapping={"SPEAKER_01": "Alice"})
+
+        assert segments == [
+            {"start": 10.0, "end": 11.0, "speaker": "SPEAKER_00", "text": "texte 0"},
+            {"start": 12.0, "end": 13.0, "speaker": "Alice", "text": "texte 1"},
+        ]
+        assert transcriber.get_metadata()["chunking_mode"] == "pyannote_turns_batched"
 
 
 class TestWhisperQualityConfig:

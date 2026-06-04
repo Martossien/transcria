@@ -645,6 +645,26 @@ class Transcriber:
             )
             return concurrent_segments
 
+        transcribe_prechunked = getattr(self.transcriber, "transcribe_prechunked", None)
+        if callable(transcribe_prechunked):
+            sl.info("Transcription par tours batchée: backend=%s tours=%d", backend, total)
+            batched_segments = transcribe_prechunked(
+                chunks,
+                language=lang,
+                speaker_mapping=mapping,
+            )
+            batched_segments = [seg for seg in batched_segments if not seg.get("error")]
+            self._last_chunk_metrics = self._log_chunk_transcription_summary(
+                sl,
+                backend,
+                total,
+                len(batched_segments),
+                started,
+                workers=1,
+                concurrent_safe=concurrent_safe,
+            )
+            return batched_segments
+
         sl.info(
             "Transcription par tour séquentielle: backend=%s tours=%d concurrent_safe=%s",
             backend,
