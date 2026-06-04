@@ -579,6 +579,27 @@ def test_score_reference_bench_loads_cohere_tune_results(tmp_path):
     assert results[0]["_path"] == str(result_path)
 
 
+def test_bench_cohere_tf5_chunks_turns_and_formats_srt():
+    import numpy as np
+
+    module = _load_script("bench_cohere_tf5.py")
+    audio = np.zeros(10 * 16000, dtype=np.float32)
+    turns = [{"start": 1.0, "end": 6.5, "speaker": "SPEAKER_01"}]
+
+    chunks = module.chunk_turns(turns, audio, 16000, max_chunk_s=2.0)
+
+    assert [(round(chunk.start, 1), round(chunk.end, 1), chunk.speaker) for chunk in chunks] == [
+        (1.0, 3.0, "SPEAKER_01"),
+        (3.0, 5.0, "SPEAKER_01"),
+        (5.0, 6.5, "SPEAKER_01"),
+    ]
+    srt = module.segments_to_srt([
+        {"start": 1.0, "end": 2.5, "speaker": "SPEAKER_01", "text": "Bonjour"},
+    ])
+    assert "00:00:01,000 --> 00:00:02,500" in srt
+    assert "SPEAKER_01: Bonjour" in srt
+
+
 def test_arbitrate_hybrid_llm_builds_speaker_aware_units(tmp_path):
     module = _load_script("arbitrate_hybrid_llm.py")
     jobs_dir = tmp_path / "jobs"
