@@ -318,6 +318,17 @@ _DEFAULT_CONFIG = {
             "subtitle_artifact_patterns": [],
             "subtitle_artifact_words": [],
         },
+        "stt_hybrid": {
+            "enabled": False,
+            "primary_backend": "cohere",
+            "fallback_backend": "whisper",
+            "fallback_on_reliability": ["degrade"],
+            "review_on_reliability": ["suspect"],
+            "decision_margin": 3,
+            "window_s": 30.0,
+            "llm_arbitration_enabled": False,
+            "write_audit_artifacts": True,
+        },
         "audio_scene": {
             "enabled": False,
             "timeout_s": 120,

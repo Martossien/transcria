@@ -636,6 +636,31 @@ Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `So
 
 Le retrait d'hallucinations reste volontairement conservateur : il ne supprime pas tous les segments `suspect/degrade`, seulement les segments à signal textuel fort (texte majoritairement non latin pour une réunion française, ou phrase générique isolée comme `thank you`). Les artefacts numériques courts comme `501` ne sont supprimés que s'ils forment un segment autonome très court ; un nombre dans une vraie phrase est conservé. Pour un job explicitement anglais, les phrases génériques anglaises isolées ne sont pas filtrées par défaut. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
 
+#### `workflow.stt_hybrid`
+
+Contrat de configuration du futur mode qualité hybride Cohere→Whisper au segment.
+Ce bloc est **désactivé par défaut** et n'est pas encore branché dans le pipeline
+applicatif. Il ne doit pas être confondu avec `inference.mode=hybrid`, qui concerne
+le placement local/distant des ressources GPU.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active le mode hybride STT quand l'intégration pipeline sera livrée |
+| `primary_backend` | string | `"cohere"` | Backend chemin rapide à conserver si la fenêtre est propre |
+| `fallback_backend` | string | `"whisper"` | Backend de secours candidat sur zones non propres |
+| `fallback_on_reliability` | list[string] | `["degrade"]` | Niveaux `reliability` candidats à une bascule automatique |
+| `review_on_reliability` | list[string] | `["suspect"]` | Niveaux à envoyer en arbitrage LLM ou relecture humaine |
+| `decision_margin` | number | `3` | Marge minimale de score pour accepter un fallback heuristique |
+| `window_s` | number | `30.0` | Taille des fenêtres d'arbitrage prototype |
+| `llm_arbitration_enabled` | bool | `false` | Autorise l'arbitrage LLM des fenêtres `review` |
+| `write_audit_artifacts` | bool | `true` | Écrit les JSON/SRT/MD d'audit du mode hybride |
+
+**État actuel :** les scripts `build_hybrid_transcript.py` et
+`arbitrate_hybrid_llm.py` utilisent ce modèle de décision hors pipeline. Le
+pipeline normal ignore encore `workflow.stt_hybrid`; par sécurité, le schéma
+refuse `enabled: true` tant que l'activation produit n'est pas livrée avec
+artefacts d'audit par job.
+
 #### `workflow.speaker_realignment`
 
 Réaligne les locuteurs au niveau mot quand les timestamps `words` Whisper/CTC
@@ -1121,6 +1146,7 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `workflow.audio_scene_filter.*` | Non | Oui (PipelineService) |
 | `workflow.source_separation.*` | Non | Oui (PipelineService) |
 | `workflow.transcription_cleanup.*` | Non | Oui (Transcriber) |
+| `workflow.stt_hybrid.*` | Non | Non encore consommé (contrat futur) |
 | `workflow.segment_reliability.*` | Non | Oui |
 | `workflow.pyannote_chunking.*` | Non | Oui |
 | `workflow.summary_llm.*` | Non | Oui (SummaryGenerator, OpenCodeRunner) |

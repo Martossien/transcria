@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -555,6 +556,52 @@ def test_arbitrate_hybrid_llm_builds_speaker_aware_units(tmp_path):
     assert unit["candidates"][0]["speaker_text"].startswith("SPEAKER_00:")
 
 
+def test_arbitrate_hybrid_llm_accepts_two_candidates_in_prompt(tmp_path):
+    module = _load_script("arbitrate_hybrid_llm.py")
+    jobs_dir = tmp_path / "jobs"
+    for job_id, text in (("job_a", "Bonjour par A."), ("job_b", "Bonjour par B.")):
+        metadata = jobs_dir / job_id / "metadata"
+        metadata.mkdir(parents=True)
+        (metadata / "transcription_segments.json").write_text(
+            json.dumps([{"start": 0.0, "end": 10.0, "speaker": "SPEAKER_00", "text": text, "reliability": "ok"}]),
+            encoding="utf-8",
+        )
+
+    candidates = [
+        module._parse_candidate("A:cohere=job_a", jobs_dir),
+        module._parse_candidate("B:whisper=job_b", jobs_dir),
+    ]
+    dataset = module.build_units(candidates, jobs_dir, None, [], window_s=15.0, context_chars=200)
+    system_prompt, user_prompt = module._build_batch_prompt(dataset, dataset["units"])
+
+    assert "uniquement A|B|D" in system_prompt
+    assert "C =" not in user_prompt
+
+
+def test_arbitrate_hybrid_llm_filters_review_windows_from_hybrid_report(tmp_path):
+    module = _load_script("arbitrate_hybrid_llm.py")
+    dataset = {
+        "units": [
+            {"segment_id": "win_00000", "start": 0.0, "end": 30.0},
+            {"segment_id": "win_00001", "start": 30.0, "end": 60.0},
+        ]
+    }
+    report = {
+        "windows": [
+            {"start": 0.0, "end": 30.0, "decision": "cohere"},
+            {"start": 30.0, "end": 60.0, "decision": "review"},
+        ]
+    }
+    path = tmp_path / "hybrid.json"
+    path.write_text(json.dumps(report), encoding="utf-8")
+
+    filtered = module.filter_units_from_hybrid_report(dataset, path)
+
+    assert [unit["segment_id"] for unit in filtered["units"]] == ["win_00001"]
+    assert filtered["unit_filter"]["requested_windows"] == 1
+    assert filtered["unit_filter"]["kept_units"] == 1
+
+
 def test_arbitrate_hybrid_llm_parses_fenced_json():
     module = _load_script("arbitrate_hybrid_llm.py")
 
@@ -693,6 +740,76 @@ def test_build_hybrid_transcript_keeps_review_for_suspect_best_without_terms(tmp
 
     assert row["decision"] == "review"
     assert row["selected_label"] == "cohere"
+
+
+def test_build_hybrid_transcript_primary_fast_path_keeps_clean_primary():
+    module = _load_script("build_hybrid_transcript.py")
+    cohere = module.CandidateWindow(
+        label="cohere",
+        text="texte principal propre et complet",
+        reliability="ok",
+        no_speech_prob=None,
+        low_word_ratio=None,
+        source_indices=[0],
+        segment_count=1,
+        word_count=5,
+        char_count=33,
+        term_hits=[],
+        generic_hallucinations=[],
+    )
+    whisper = module.CandidateWindow(
+        label="whisper",
+        text="texte alternatif un peu plus long et propre",
+        reliability="ok",
+        no_speech_prob=0.01,
+        low_word_ratio=0.0,
+        source_indices=[0],
+        segment_count=1,
+        word_count=8,
+        char_count=42,
+        term_hits=[],
+        generic_hallucinations=[],
+    )
+
+    row = module.choose_window([cohere, whisper], 0.0, 30.0, margin=3, primary_label="cohere")
+
+    assert row["decision"] == "cohere"
+    assert row["selected_label"] == "cohere"
+
+
+def test_build_hybrid_transcript_primary_fallback_uses_safe_alternative():
+    module = _load_script("build_hybrid_transcript.py")
+    cohere = module.CandidateWindow(
+        label="cohere",
+        text="texte halluciné générique",
+        reliability="degrade",
+        no_speech_prob=None,
+        low_word_ratio=None,
+        source_indices=[0],
+        segment_count=1,
+        word_count=3,
+        char_count=24,
+        term_hits=[],
+        generic_hallucinations=["site web"],
+    )
+    whisper = module.CandidateWindow(
+        label="whisper",
+        text="la réunion reprend avec un point métier stable",
+        reliability="ok",
+        no_speech_prob=0.01,
+        low_word_ratio=0.0,
+        source_indices=[0],
+        segment_count=1,
+        word_count=8,
+        char_count=46,
+        term_hits=[],
+        generic_hallucinations=[],
+    )
+
+    row = module.choose_window([cohere, whisper], 0.0, 30.0, margin=3, primary_label="cohere")
+
+    assert row["decision"] == "whisper"
+    assert row["selected_label"] == "whisper"
 
 
 def test_build_hybrid_transcript_writes_readable_srt_chunks(tmp_path):

@@ -653,6 +653,47 @@ combos `S01/S02/S07/S08` : dans la matrice `stt`, le champ VAD historique cible
 le VAD de résumé (`workflow.vad.enabled_summary`) et peut ne pas changer le SRT
 final. Utiliser `--matrix vad`, puis lire les SRT des combos `V01..V08`.
 
+Prototype hybride hors pipeline :
+
+```bash
+venv/bin/python scripts/build_hybrid_transcript.py \
+  --candidate cohere=jobs/<job_cohere>/metadata/transcription_segments.json \
+  --candidate whisper=jobs/<job_whisper>/metadata/transcription_segments.json \
+  --primary-label cohere \
+  --window-s 30 \
+  --decision-margin 3 \
+  --output-json bench_results/hybrid/<audio>_hybrid.json \
+  --output-srt bench_results/hybrid/<audio>_hybrid.srt \
+  --output-md bench_results/hybrid/<audio>_hybrid.md
+```
+
+`--primary-label cohere` modélise la stratégie “Cohere chemin rapide” :
+conserver Cohere quand sa fenêtre est propre, basculer vers Whisper seulement si
+Cohere est non propre et que Whisper est sûr avec marge suffisante. Les fenêtres
+`review` ne sont pas des échecs : elles signalent que les heuristiques ne doivent
+pas décider seules. Elles doivent partir en arbitrage LLM ou en lecture humaine,
+car Whisper peut être plus fragmenté ou pénalisé par `no_speech_prob` sans être
+réellement meilleur sur le contenu.
+
+Préparer ensuite uniquement ces fenêtres `review` pour arbitrage LLM A/B :
+
+```bash
+venv/bin/python scripts/arbitrate_hybrid_llm.py \
+  --candidate A:cohere=<job_cohere> \
+  --candidate B:whisper=<job_whisper> \
+  --speaker-job <job_cohere> \
+  --window-s 30 \
+  --review-from-hybrid-json bench_results/hybrid/<audio>_hybrid.json \
+  --dry-run \
+  --output-json bench_results/hybrid/<audio>_review_arbitration.json \
+  --output-srt bench_results/hybrid/<audio>_review_arbitration.srt
+```
+
+Le `--dry-run` écrit le dataset et les prompts sans appeler la LLM. Le champ
+`dataset.unit_filter` trace le nombre de fenêtres `review` demandées et le nombre
+d'unités effectivement arbitrées. Le candidat C reste supporté pour les campagnes
+A/B/C historiques, mais il n'est plus obligatoire.
+
 ### 9.3.3 Analyse locale des résultats
 
 ```bash

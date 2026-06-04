@@ -31,6 +31,9 @@ class TestConfigLoading:
         assert cfg["whisper"]["lexicon_hotwords"]["priorities"] == ["critique", "importante"]
         assert cfg["cohere"]["lexicon_biasing"]["enabled"] is False
         assert cfg["cohere"]["lexicon_biasing"]["priorities"] == ["critique", "importante", "normale"]
+        assert cfg["workflow"]["stt_hybrid"]["enabled"] is False
+        assert cfg["workflow"]["stt_hybrid"]["primary_backend"] == "cohere"
+        assert cfg["workflow"]["stt_hybrid"]["fallback_backend"] == "whisper"
         assert cfg["auth"]["enabled"] is True
         assert cfg["security"]["max_upload_size_mb"] == 1024
         assert ".mp3" in cfg["security"]["allowed_upload_extensions"]
@@ -558,6 +561,35 @@ class TestBootstrapConfig:
         assert any("workflow.vad.auto_enable_final_on_degraded" in msg for msg in result.errors)
         assert any("workflow.vad.auto_enable_final_levels[1]" in msg for msg in result.errors)
         assert any("quality.thresholds.no_speech_prob_threshold" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_invalid_stt_hybrid_section(self):
+        cfg = load_config()
+        cfg["workflow"]["stt_hybrid"]["enabled"] = "true"
+        cfg["workflow"]["stt_hybrid"]["primary_backend"] = "cohere"
+        cfg["workflow"]["stt_hybrid"]["fallback_backend"] = "cohere"
+        cfg["workflow"]["stt_hybrid"]["fallback_on_reliability"] = ["degrade", "bad"]
+        cfg["workflow"]["stt_hybrid"]["review_on_reliability"] = "suspect"
+        cfg["workflow"]["stt_hybrid"]["decision_margin"] = "high"
+        cfg["workflow"]["stt_hybrid"]["llm_arbitration_enabled"] = "false"
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("workflow.stt_hybrid.enabled" in msg for msg in result.errors)
+        assert any("primary_backend et fallback_backend" in msg for msg in result.errors)
+        assert any("workflow.stt_hybrid.fallback_on_reliability[1]" in msg for msg in result.errors)
+        assert any("workflow.stt_hybrid.review_on_reliability" in msg for msg in result.errors)
+        assert any("workflow.stt_hybrid.decision_margin" in msg for msg in result.errors)
+        assert any("workflow.stt_hybrid.llm_arbitration_enabled" in msg for msg in result.errors)
+
+    def test_validate_config_rejects_enabled_stt_hybrid_until_pipeline_integration(self):
+        cfg = load_config()
+        cfg["workflow"]["stt_hybrid"]["enabled"] = True
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("workflow.stt_hybrid.enabled: mode non encore intégré au pipeline" in msg for msg in result.errors)
 
     def test_validate_config_rejects_invalid_whisper_lexicon_hotwords(self):
         cfg = load_config()

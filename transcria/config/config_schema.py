@@ -225,6 +225,7 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_pyannote_chunking(wf.get("pyannote_chunking", {}), r)
     _check_vad_section(wf.get("vad", {}), r)
     _check_transcription_cleanup(wf.get("transcription_cleanup", {}), r)
+    _check_stt_hybrid(wf.get("stt_hybrid", {}), r)
     _check_audio_scene(wf.get("audio_scene", {}), r)
     _check_audio_scene_filter(wf.get("audio_scene_filter", {}), r)
     _check_audio_normalization(wf.get("audio_normalization", {}), r)
@@ -575,6 +576,34 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
             for i, value in enumerate(values):
                 if not isinstance(value, str):
                     r.add_error(f"workflow.transcription_cleanup.{key}[{i}]: doit être une chaîne")
+
+
+def _check_stt_hybrid(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.stt_hybrid: doit être un objet YAML")
+        return
+    for key in ("enabled", "llm_arbitration_enabled", "write_audit_artifacts"):
+        _check_bool(cfg, key, f"workflow.stt_hybrid.{key}", r)
+    if cfg.get("enabled") is True:
+        r.add_error("workflow.stt_hybrid.enabled: mode non encore intégré au pipeline, doit rester false")
+    for key in ("primary_backend", "fallback_backend"):
+        _check_str(cfg, key, f"workflow.stt_hybrid.{key}", r)
+    primary = str(cfg.get("primary_backend") or "")
+    fallback = str(cfg.get("fallback_backend") or "")
+    if primary and fallback and primary == fallback:
+        r.add_error("workflow.stt_hybrid: primary_backend et fallback_backend doivent être différents")
+    for key in ("decision_margin", "window_s"):
+        _check_optional_number(cfg, key, f"workflow.stt_hybrid.{key}", r)
+    for key in ("fallback_on_reliability", "review_on_reliability"):
+        values = cfg.get(key, [])
+        if not isinstance(values, list):
+            r.add_error(f"workflow.stt_hybrid.{key}: doit être une liste")
+            continue
+        for i, value in enumerate(values):
+            if value not in {"ok", "suspect", "degrade"}:
+                r.add_error(f"workflow.stt_hybrid.{key}[{i}]: doit valoir ok, suspect ou degrade")
 
 
 def _check_audio_scene(cfg: dict, r: ValidationResult) -> None:

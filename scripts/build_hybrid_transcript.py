@@ -301,7 +301,32 @@ def _score_candidate(view: CandidateWindow, window_duration_s: float) -> tuple[i
     return score, reasons
 
 
-def choose_window(candidates: list[CandidateWindow], start: float, end: float, margin: int) -> dict:
+def _primary_is_clean(candidate: dict) -> bool:
+    return (
+        candidate["score"] >= 1
+        and candidate["reliability"] == "ok"
+        and not candidate["generic_hallucinations"]
+        and candidate["word_count"] > 2
+    )
+
+
+def _alternative_is_safe(candidate: dict) -> bool:
+    return (
+        candidate["score"] >= 1
+        and candidate["reliability"] == "ok"
+        and not candidate["generic_hallucinations"]
+        and candidate["word_count"] > 2
+    )
+
+
+def choose_window(
+    candidates: list[CandidateWindow],
+    start: float,
+    end: float,
+    margin: int,
+    *,
+    primary_label: str | None = None,
+) -> dict:
     duration = end - start
     scored: list[dict] = []
     for candidate in candidates:
@@ -324,12 +349,35 @@ def choose_window(candidates: list[CandidateWindow], start: float, end: float, m
     scored.sort(key=lambda item: (item["score"], item["word_count"]), reverse=True)
     best = scored[0] if scored else None
     second = scored[1] if len(scored) > 1 else None
+    primary = next((item for item in scored if item["label"] == primary_label), None) if primary_label else None
     decision = "review"
     selected_label = best["label"] if best else "review"
     selected_text = best["text"] if best else ""
     reason = "aucun candidat exploitable"
 
-    if best:
+    if primary and _primary_is_clean(primary):
+        challenger = next((item for item in scored if item["label"] != primary["label"]), None)
+        if not challenger or primary["score"] + margin >= challenger["score"]:
+            decision = primary["label"]
+            selected_label = primary["label"]
+            selected_text = primary["text"]
+            reason = f"{primary['label']} propre retenu comme chemin rapide"
+        else:
+            decision = challenger["label"]
+            selected_label = challenger["label"]
+            selected_text = challenger["text"]
+            reason = f"{challenger['label']} dépasse {primary['label']} avec marge {challenger['score']} > {primary['score']}"
+    elif primary and best and best["label"] != primary["label"] and _alternative_is_safe(best):
+        if best["score"] - primary["score"] >= margin:
+            decision = best["label"]
+            selected_label = best["label"]
+            selected_text = best["text"]
+            reason = f"fallback {best['label']} car {primary['label']} non propre et marge suffisante"
+        else:
+            selected_label = primary["label"]
+            selected_text = primary["text"]
+            reason = f"{primary['label']} non propre mais fallback insuffisamment meilleur"
+    elif best:
         if best["score"] < 1:
             reason = f"meilleur score trop faible ({best['label']}={best['score']})"
         elif best["reliability"] != "ok" and not best["term_hits"]:
@@ -352,7 +400,13 @@ def choose_window(candidates: list[CandidateWindow], start: float, end: float, m
     }
 
 
-def build_hybrid_report(sources: list[CandidateSource], lexicon_terms: list[str], window_s: float, decision_margin: int) -> dict:
+def build_hybrid_report(
+    sources: list[CandidateSource],
+    lexicon_terms: list[str],
+    window_s: float,
+    decision_margin: int,
+    primary_label: str | None = None,
+) -> dict:
     loaded = [(source, load_segments(source.segments_path)) for source in sources]
     windows = build_windows([segments for _, segments in loaded], window_s)
     rows: list[dict] = []
@@ -365,7 +419,7 @@ def build_hybrid_report(sources: list[CandidateSource], lexicon_terms: list[str]
             _window_view(source.label, start, end, segments, lexicon_terms)
             for source, segments in loaded
         ]
-        row = choose_window(candidate_views, start, end, decision_margin)
+        row = choose_window(candidate_views, start, end, decision_margin, primary_label=primary_label)
         counts[row["decision"]] = counts.get(row["decision"], 0) + 1
         rows.append(row)
 
@@ -374,6 +428,7 @@ def build_hybrid_report(sources: list[CandidateSource], lexicon_terms: list[str]
         "version": 1,
         "window_s": window_s,
         "decision_margin": decision_margin,
+        "primary_label": primary_label,
         "sources": [
             {
                 "label": source.label,
@@ -465,7 +520,8 @@ def write_markdown(report: dict, output: Path, max_rows: int) -> None:
         "",
         "## Lecture",
         "",
-        "`review` est volontairement conservateur : le SRT de sortie utilise le meilleur candidat, mais le JSON d'audit signale que la décision ne doit pas être automatisée sans relecture.",
+        "`review` est volontairement conservateur : le SRT de sortie utilise le meilleur candidat, "
+        "mais le JSON d'audit signale que la décision ne doit pas être automatisée sans relecture.",
         "",
         "## Fenêtres",
         "",
@@ -481,8 +537,13 @@ def write_markdown(report: dict, output: Path, max_rows: int) -> None:
             text = candidate["text"]
             if len(text) > 500:
                 text = text[:500].rsplit(" ", 1)[0] + "..."
+            candidate_summary = (
+                f"**{candidate['label']}** · score={candidate['score']} rel={candidate['reliability']} "
+                f"mots={candidate['word_count']} termes={candidate['term_hits']} "
+                f"alertes={candidate['generic_hallucinations']}"
+            )
             lines.extend([
-                f"**{candidate['label']}** · score={candidate['score']} rel={candidate['reliability']} mots={candidate['word_count']} termes={candidate['term_hits']} alertes={candidate['generic_hallucinations']}",
+                candidate_summary,
                 "",
                 f"> {text or '(vide)'}",
                 "",
@@ -513,10 +574,16 @@ def _parse_candidate(value: str, jobs_dir: Path) -> CandidateSource:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Construit un SRT hybride depuis plusieurs transcriptions STT.")
     parser.add_argument("--jobs-dir", type=Path, default=Path("jobs"))
-    parser.add_argument("--candidate", action="append", required=True, help="Format label=job_id ou label=/path/transcription_segments.json. Répéter 2+ fois.")
+    parser.add_argument(
+        "--candidate",
+        action="append",
+        required=True,
+        help="Format label=job_id ou label=/path/transcription_segments.json. Répéter 2+ fois.",
+    )
     parser.add_argument("--lexicon-json", type=Path, action="append", default=[])
     parser.add_argument("--window-s", type=float, default=30.0)
     parser.add_argument("--decision-margin", type=int, default=3)
+    parser.add_argument("--primary-label", help="Label du backend chemin rapide à conserver si propre, ex. cohere.")
     parser.add_argument("--max-srt-words", type=int, default=18)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-srt", type=Path, required=True)
@@ -541,7 +608,13 @@ def main() -> int:
             raise SystemExit(f"Segments introuvables pour {source.label}: {source.segments_path}")
 
     lexicon_terms = _load_lexicon_terms(args.lexicon_json)
-    report = build_hybrid_report(sources, lexicon_terms, args.window_s, args.decision_margin)
+    report = build_hybrid_report(
+        sources,
+        lexicon_terms,
+        args.window_s,
+        args.decision_margin,
+        primary_label=args.primary_label,
+    )
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_srt.parent.mkdir(parents=True, exist_ok=True)

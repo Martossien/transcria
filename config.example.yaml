@@ -370,6 +370,18 @@ workflow:
     # Listes non vides → remplacent entièrement les défauts.
     subtitle_artifact_patterns: []   # regex (ex. "\\bwatermark\\b")
     subtitle_artifact_words: []      # mots exacts normalisés (ex. "noise")
+  stt_hybrid:
+    # Mode qualité Cohere→Whisper au segment. Désactivé tant qu'il reste en
+    # prototype hors pipeline ; ne pas confondre avec inference.mode=hybrid.
+    enabled: false
+    primary_backend: cohere
+    fallback_backend: whisper
+    fallback_on_reliability: ["degrade"]
+    review_on_reliability: ["suspect"]
+    decision_margin: 3
+    window_s: 30.0
+    llm_arbitration_enabled: false
+    write_audit_artifacts: true
   audio_scene:
     # Analyse acoustique de scène en subprocess isolé (librosa — aucune dépendance GPU).
     # Produit : ratios parole/non-parole, segments horodatés, distribution H/F.

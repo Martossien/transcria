@@ -26,26 +26,29 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from build_hybrid_transcript import _clean_text
-from build_hybrid_transcript import _format_time
-from build_hybrid_transcript import _generic_hallucinations
-from build_hybrid_transcript import _load_lexicon_terms
-from build_hybrid_transcript import _low_word_ratio
-from build_hybrid_transcript import _max_no_speech_prob
-from build_hybrid_transcript import _overlap
-from build_hybrid_transcript import _slice_segments
-from build_hybrid_transcript import _term_hits
-from build_hybrid_transcript import _words
-from build_hybrid_transcript import _worst_reliability
-from build_hybrid_transcript import build_windows
-from build_hybrid_transcript import load_segments
-from build_hybrid_transcript import split_text_for_srt
+from build_hybrid_transcript import (  # noqa: E402
+    _clean_text,
+    _format_time,
+    _generic_hallucinations,
+    _load_lexicon_terms,
+    _low_word_ratio,
+    _max_no_speech_prob,
+    _overlap,
+    _slice_segments,
+    _term_hits,
+    _words,
+    _worst_reliability,
+    build_windows,
+    load_segments,
+    split_text_for_srt,
+)
 
 logging.basicConfig(
     format="%(asctime)s [arbitrate_hybrid_llm] %(message)s",
     datefmt="%H:%M:%S",
     level=logging.INFO,
     stream=sys.stderr,
+    force=True,
 )
 logger = logging.getLogger("arbitrate_hybrid_llm")
 
@@ -210,7 +213,14 @@ def _speaker_line(speaker_id: str, infos: dict[str, SpeakerInfo]) -> str:
     return f"{speaker_id}: " + ", ".join(details)
 
 
-def _candidate_window(candidate: Candidate, segments: list[dict], turns: list[dict], start: float, end: float, lexicon_terms: list[str]) -> dict:
+def _candidate_window(
+    candidate: Candidate,
+    segments: list[dict],
+    turns: list[dict],
+    start: float,
+    end: float,
+    lexicon_terms: list[str],
+) -> dict:
     selected = _slice_segments(segments, start, end)
     lines: list[str] = []
     for segment in selected:
@@ -252,7 +262,14 @@ def _context_summary(job_dir: Path, max_chars: int) -> str:
     return text
 
 
-def build_units(candidates: list[Candidate], jobs_dir: Path, speaker_job: str | None, lexicon_terms: list[str], window_s: float, context_chars: int) -> dict:
+def build_units(
+    candidates: list[Candidate],
+    jobs_dir: Path,
+    speaker_job: str | None,
+    lexicon_terms: list[str],
+    window_s: float,
+    context_chars: int,
+) -> dict:
     loaded = [(candidate, load_segments(candidate.segments_path)) for candidate in candidates]
     reference = jobs_dir / (speaker_job or candidates[0].job_id)
     turns = _speaker_turns(reference)
@@ -314,16 +331,24 @@ def _technical_line(candidate: dict) -> str:
     return ", ".join(fields)
 
 
+def _available_choices(dataset: dict) -> list[str]:
+    return [str(source["code"]) for source in dataset.get("sources") or []]
+
+
 def _build_batch_prompt(dataset: dict, units: list[dict]) -> tuple[str, str]:
+    choices = _available_choices(dataset)
+    choice_text = ", ".join(choices)
+    json_choice_text = "|".join([*choices, "D"])
     system_prompt = (
         "Tu es l'arbitre de transcription de TranscrIA. "
-        "Tu dois choisir la meilleure version parmi A, B ou C pour chaque segment, "
+        f"Tu dois choisir la meilleure version parmi {choice_text} pour chaque segment, "
         "ou D si aucune version n'est suffisamment fiable et qu'une relecture ou une relance est nécessaire. "
-        "Tu ne dois jamais réécrire le texte. Tu choisis uniquement A, B, C ou D. "
+        f"Tu ne dois jamais réécrire le texte. Tu choisis uniquement {json_choice_text}. "
         "Tiens compte des locuteurs, du contexte, des termes métier et des signaux techniques. "
         "Ne choisis pas une version qui mélange clairement deux locuteurs si une autre respecte mieux l'alternance. "
         "Réponds uniquement en JSON valide avec la forme "
-        '{"decisions":[{"segment_id":"win_00000","choice":"A|B|C|D","confidence":"high|medium|low","reason":"court","risks":["..."]}]}.'
+        f'{{"decisions":[{{"segment_id":"win_00000","choice":"{json_choice_text}",'
+        '"confidence":"high|medium|low","reason":"court","risks":["..."]}]}.'
     )
     lines = [
         f"Contexte réunion: {dataset.get('context_summary') or '(non disponible)'}",
@@ -356,6 +381,29 @@ def _build_batch_prompt(dataset: dict, units: list[dict]) -> tuple[str, str]:
             ])
         lines.append("")
     return system_prompt, "\n".join(lines)
+
+
+def filter_units_from_hybrid_report(dataset: dict, hybrid_json: Path) -> dict:
+    report = _load_json(hybrid_json)
+    if not isinstance(report, dict):
+        raise SystemExit(f"Rapport hybride invalide: {hybrid_json}")
+    review_keys = {
+        (round(float(window.get("start", 0.0)), 3), round(float(window.get("end", 0.0)), 3))
+        for window in report.get("windows") or []
+        if isinstance(window, dict) and str(window.get("decision") or "") == "review"
+    }
+    filtered = dict(dataset)
+    filtered["units"] = [
+        unit for unit in dataset.get("units") or []
+        if (round(float(unit.get("start", 0.0)), 3), round(float(unit.get("end", 0.0)), 3)) in review_keys
+    ]
+    filtered["unit_filter"] = {
+        "source": str(hybrid_json),
+        "mode": "review_windows",
+        "requested_windows": len(review_keys),
+        "kept_units": len(filtered["units"]),
+    }
+    return filtered
 
 
 def _strip_code_fence(text: str) -> str:
@@ -425,7 +473,7 @@ def parse_llm_response(text: str) -> dict:
     raw = _strip_code_fence(text)
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as exc:
+    except json.JSONDecodeError:
         match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
         if not match:
             return _parse_llm_response_lenient(text)
@@ -580,7 +628,12 @@ def write_srt(dataset: dict, arbitration: dict, output: Path, max_words: int) ->
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Arbitre A/B/C par lots LLM avec contexte locuteurs.")
     parser.add_argument("--jobs-dir", type=Path, default=Path("jobs"))
-    parser.add_argument("--candidate", action="append", required=True, help="Format A:cohere=job_id, B:whisper=job_id, C:whisper_hotwords=job_id")
+    parser.add_argument(
+        "--candidate",
+        action="append",
+        required=True,
+        help="Format A:cohere=job_id, B:whisper=job_id, C:whisper_hotwords=job_id",
+    )
     parser.add_argument("--speaker-job", help="Job de référence pour speaker_turns/speaker_stats. Défaut: candidat A")
     parser.add_argument("--lexicon-json", type=Path, action="append", default=[])
     parser.add_argument("--window-s", type=float, default=45.0)
@@ -591,6 +644,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--review-from-hybrid-json",
+        type=Path,
+        help="N'arbitre que les fenêtres decision=review d'un rapport build_hybrid_transcript.",
+    )
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-srt", type=Path, required=True)
     parser.add_argument("--max-srt-words", type=int, default=18)
@@ -600,9 +658,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     candidates = [_parse_candidate(raw, args.jobs_dir) for raw in args.candidate]
-    codes = {candidate.code for candidate in candidates}
-    if codes != {"A", "B", "C"}:
-        raise SystemExit("Il faut exactement les candidats A, B et C")
+    codes = [candidate.code for candidate in candidates]
+    if len(codes) != len(set(codes)):
+        raise SystemExit("Les codes candidats doivent être uniques")
+    if "A" not in codes or "B" not in codes or len(codes) not in {2, 3}:
+        raise SystemExit("Il faut les candidats A et B, avec C optionnel")
     for candidate in candidates:
         if not candidate.segments_path.exists():
             raise SystemExit(f"Segments introuvables pour {candidate.code}: {candidate.segments_path}")
@@ -611,6 +671,8 @@ def main() -> int:
 
     lexicon_terms = _load_lexicon_terms(args.lexicon_json)
     dataset = build_units(candidates, args.jobs_dir, args.speaker_job, lexicon_terms, args.window_s, args.context_chars)
+    if args.review_from_hybrid_json:
+        dataset = filter_units_from_hybrid_report(dataset, args.review_from_hybrid_json)
     arbitration = run_arbitration(dataset, args)
     result = {
         "tool": "arbitrate_hybrid_llm",
