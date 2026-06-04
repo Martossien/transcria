@@ -596,12 +596,13 @@ def test_score_reference_bench_loads_cohere_tune_results(tmp_path):
     module = _load_script("score_reference_bench.py")
     result_path = tmp_path / "T09.json"
     result_path.write_text(json.dumps({"combo_id": "T09", "status": "ok"}), encoding="utf-8")
+    pyannote_path = tmp_path / "P02.json"
+    pyannote_path.write_text(json.dumps({"combo_id": "P02", "status": "ok"}), encoding="utf-8")
 
     results = module.load_results(tmp_path)
 
-    assert len(results) == 1
-    assert results[0]["combo_id"] == "T09"
-    assert results[0]["_path"] == str(result_path)
+    assert [result["combo_id"] for result in results] == ["T09", "P02"]
+    assert {result["_path"] for result in results} == {str(result_path), str(pyannote_path)}
 
 
 def test_bench_cohere_tf5_chunks_turns_and_formats_srt():

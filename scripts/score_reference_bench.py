@@ -22,6 +22,7 @@ RESULT_PATTERNS = [
     "S[0-9][0-9].json",
     "V[0-9][0-9].json",
     "T[0-9][0-9].json",
+    "P[0-9][0-9].json",
 ]
 
 
@@ -158,23 +159,27 @@ def write_report(rows: list[dict], output: Path) -> None:
         "",
         "> WER/CER approximatifs contre le DOCX de référence. Le DOCX marché reste un proxy, pas une vérité parfaite.",
         "",
-        "| Fenêtre | STT | status | ref mots | hyp mots | ratio | WER | CER | temps | VRAM |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Fenêtre | Combo | STT | status | ref mots | hyp mots | ratio | WER | CER | temps | VRAM |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            f"| {row['window']} | {row['stt_backend']} | {row['status']} | {row['ref_words']} | {row['hyp_words']} | "
+            f"| {row['window']} | {row['combo_id']} | {row['stt_backend']} | {row['status']} | {row['ref_words']} | {row['hyp_words']} | "
             f"{_fmt(row['word_ratio'])} | {_fmt(row['wer'])} | {_fmt(row['cer'])} | "
             f"{_fmt(row['total_s'], 1)} | {_fmt(row['vram_peak_mb'], 0)} |"
         )
 
-    lines += ["", "## Moyennes par backend", ""]
-    for backend in sorted({row["stt_backend"] for row in rows}):
-        subset = [row for row in rows if row["stt_backend"] == backend and row["status"] == "ok"]
+    lines += ["", "## Moyennes par variante", ""]
+    groups = sorted({(row["combo_id"], row["stt_backend"]) for row in rows})
+    for combo_id, backend in groups:
+        subset = [
+            row for row in rows
+            if row["combo_id"] == combo_id and row["stt_backend"] == backend and row["status"] == "ok"
+        ]
         if not subset:
             continue
         lines += [
-            f"**{backend}** ({len(subset)} fenêtres OK)",
+            f"**{combo_id} / {backend}** ({len(subset)} fenêtres OK)",
             f"- WER moyen : {sum(row['wer'] for row in subset if row['wer'] is not None) / len(subset):.3f}",
             f"- CER moyen : {sum(row['cer'] for row in subset if row['cer'] is not None) / len(subset):.3f}",
             f"- Ratio mots moyen : {sum(row['word_ratio'] for row in subset if row['word_ratio'] is not None) / len(subset):.3f}",
