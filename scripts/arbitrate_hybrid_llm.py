@@ -71,6 +71,14 @@ class SpeakerInfo:
     source: str
 
 
+@dataclass(frozen=True)
+class LlmCallResult:
+    content: str
+    finish_reason: str
+    completion_tokens: int | None
+    response: dict[str, Any]
+
+
 def _load_json(path: Path) -> Any:
     if not path.exists():
         return None
@@ -493,7 +501,7 @@ def parse_llm_response(text: str) -> dict:
     return data
 
 
-def call_llm(system_prompt: str, user_content: str, port: int, model_id: str, timeout: int, max_tokens: int) -> str:
+def call_llm(system_prompt: str, user_content: str, port: int, model_id: str, timeout: int, max_tokens: int) -> LlmCallResult:
     url = f"http://127.0.0.1:{port}/v1/chat/completions"
     payload = {
         "model": model_id,
@@ -511,8 +519,25 @@ def call_llm(system_prompt: str, user_content: str, port: int, model_id: str, ti
     response = requests.post(url, json=payload, timeout=timeout)
     response.raise_for_status()
     data = response.json()
-    logger.info("Réponse LLM reçue en %.1fs", time.monotonic() - start)
-    return data["choices"][0]["message"]["content"]
+    choice = (data.get("choices") or [{}])[0]
+    message = choice.get("message") if isinstance(choice, dict) else {}
+    usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+    content = str((message or {}).get("content") or "")
+    finish_reason = str(choice.get("finish_reason") or "")
+    completion_tokens = usage.get("completion_tokens")
+    logger.info(
+        "Réponse LLM reçue en %.1fs finish_reason=%s completion_tokens=%s content_chars=%d",
+        time.monotonic() - start,
+        finish_reason or "n/a",
+        completion_tokens if completion_tokens is not None else "n/a",
+        len(content),
+    )
+    return LlmCallResult(
+        content=content,
+        finish_reason=finish_reason,
+        completion_tokens=int(completion_tokens) if isinstance(completion_tokens, int) else None,
+        response=data,
+    )
 
 
 def _batches(items: list[dict], size: int) -> list[list[dict]]:
@@ -529,6 +554,55 @@ def _write_prompt_files(output_dir: Path, namespace: str, batch_id: str, system_
     return {
         "system_prompt_path": str(system_path),
         "user_prompt_path": str(user_path),
+    }
+
+
+def _candidate_by_choice(unit: dict, choice: str) -> dict | None:
+    for candidate in unit.get("candidates") or []:
+        if str(candidate.get("code") or "").upper() == choice:
+            return candidate
+    return None
+
+
+def _enrich_decision_audit(unit: dict, decision: dict) -> dict:
+    choice = str(decision.get("choice") or "").upper()
+    warnings: list[str] = []
+    if choice == "D":
+        warnings.append("manual_review_required")
+        return {**decision, "audit_warnings": warnings}
+
+    candidate = _candidate_by_choice(unit, choice)
+    if not candidate:
+        warnings.append("selected_candidate_missing")
+        return {**decision, "audit_warnings": warnings}
+
+    reliability = str(candidate.get("reliability") or "")
+    no_speech_prob = candidate.get("no_speech_prob")
+    low_word_ratio = candidate.get("low_word_ratio")
+    generic_hallucinations = candidate.get("generic_hallucinations") or []
+
+    if reliability == "degrade":
+        warnings.append("selected_candidate_degrade")
+    elif reliability == "suspect":
+        warnings.append("selected_candidate_suspect")
+    if decision.get("confidence") == "high" and reliability != "ok":
+        warnings.append("high_confidence_on_non_ok_candidate")
+    if isinstance(no_speech_prob, float) and no_speech_prob >= 0.65:
+        warnings.append("selected_high_no_speech_prob")
+    if isinstance(low_word_ratio, float) and low_word_ratio >= 0.15:
+        warnings.append("selected_high_low_word_ratio")
+    if generic_hallucinations:
+        warnings.append("selected_generic_hallucination")
+
+    return {
+        **decision,
+        "selected_label": candidate.get("label"),
+        "selected_reliability": reliability,
+        "selected_no_speech_prob": no_speech_prob,
+        "selected_low_word_ratio": low_word_ratio,
+        "selected_word_count": candidate.get("word_count"),
+        "selected_generic_hallucinations": generic_hallucinations,
+        "audit_warnings": warnings,
     }
 
 
@@ -558,14 +632,27 @@ def run_arbitration(dataset: dict, args: argparse.Namespace) -> dict:
             batches_report.append(report)
             continue
         try:
-            raw = call_llm(system_prompt, user_prompt, args.arbitrage_port, args.model_id, args.timeout, args.max_tokens)
+            llm_result = call_llm(system_prompt, user_prompt, args.arbitrage_port, args.model_id, args.timeout, args.max_tokens)
             raw_path = raw_dir / f"{batch_id}.txt"
-            raw_path.write_text(raw, encoding="utf-8")
-            parsed = parse_llm_response(raw)
+            api_response_path = raw_dir / f"{batch_id}.response.json"
+            raw_path.write_text(llm_result.content, encoding="utf-8")
+            api_response_path.write_text(json.dumps(llm_result.response, ensure_ascii=False, indent=2), encoding="utf-8")
+            report.update({
+                "raw_response_path": str(raw_path),
+                "api_response_path": str(api_response_path),
+                "finish_reason": llm_result.finish_reason,
+                "completion_tokens": llm_result.completion_tokens,
+            })
+            if not llm_result.content.strip():
+                if llm_result.finish_reason == "length":
+                    raise ValueError("Réponse LLM vide: budget max_tokens épuisé dans le raisonnement")
+                raise ValueError("Réponse LLM vide: champ message.content absent")
+            parsed = parse_llm_response(llm_result.content)
+            units_by_id = {str(unit.get("segment_id")): unit for unit in units}
             for item in parsed["decisions"]:
                 segment_id = str(item.get("segment_id"))
-                decisions[segment_id] = item
-            report.update({"status": "done", "parsed": True, "raw_response_path": str(raw_path)})
+                decisions[segment_id] = _enrich_decision_audit(units_by_id.get(segment_id, {}), item)
+            report.update({"status": "done", "parsed": True})
             if parsed.get("parse_warning"):
                 report["parse_warning"] = parsed["parse_warning"]
         except Exception as exc:
@@ -578,6 +665,7 @@ def run_arbitration(dataset: dict, args: argparse.Namespace) -> dict:
                     "confidence": "low",
                     "reason": "échec parsing/appel LLM",
                     "risks": [str(exc)],
+                    "audit_warnings": ["manual_review_required", "llm_batch_error"],
                 }
         batches_report.append(report)
 

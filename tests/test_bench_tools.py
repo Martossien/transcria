@@ -602,6 +602,33 @@ def test_arbitrate_hybrid_llm_filters_review_windows_from_hybrid_report(tmp_path
     assert filtered["unit_filter"]["kept_units"] == 1
 
 
+def test_arbitrate_hybrid_llm_enriches_risky_selected_candidate():
+    module = _load_script("arbitrate_hybrid_llm.py")
+    unit = {
+        "segment_id": "win_00001",
+        "candidates": [
+            {
+                "code": "A",
+                "label": "cohere",
+                "reliability": "suspect",
+                "no_speech_prob": 0.72,
+                "low_word_ratio": 0.2,
+                "word_count": 12,
+                "generic_hallucinations": ["sous-titrage"],
+            }
+        ],
+    }
+    decision = {"segment_id": "win_00001", "choice": "A", "confidence": "high", "reason": "ok", "risks": []}
+
+    enriched = module._enrich_decision_audit(unit, decision)
+
+    assert enriched["selected_label"] == "cohere"
+    assert enriched["selected_reliability"] == "suspect"
+    assert "high_confidence_on_non_ok_candidate" in enriched["audit_warnings"]
+    assert "selected_high_no_speech_prob" in enriched["audit_warnings"]
+    assert "selected_generic_hallucination" in enriched["audit_warnings"]
+
+
 def test_arbitrate_hybrid_llm_parses_fenced_json():
     module = _load_script("arbitrate_hybrid_llm.py")
 
