@@ -58,6 +58,7 @@ def _create_cohere(config: dict, device: str | None) -> BaseTranscriber:
         device=device,
         chunk_length_s=cohere_cfg.get("chunk_length_s", 30),
         max_new_tokens=cohere_cfg.get("max_new_tokens", 448),
+        punctuation=cohere_cfg.get("punctuation", True),
         repetition_penalty=cohere_cfg.get("repetition_penalty", 1.2),
         no_repeat_ngram_size=cohere_cfg.get("no_repeat_ngram_size", 3),
         collapse_repetition_loops=cohere_cfg.get("collapse_repetition_loops", True),

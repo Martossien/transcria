@@ -35,6 +35,7 @@ class CohereTranscriber(BaseTranscriber):
         device: str | None = None,
         chunk_length_s: int = 30,
         max_new_tokens: int = 448,
+        punctuation: bool = True,
         repetition_penalty: float = 1.2,
         no_repeat_ngram_size: int = 3,
         collapse_repetition_loops: bool = True,
@@ -50,8 +51,9 @@ class CohereTranscriber(BaseTranscriber):
         self.model_path = model_path
         self.model_revision = model_revision.strip() if isinstance(model_revision, str) and model_revision.strip() else None
         self.device = device or self._detect_device()
-        self.chunk_length_s = chunk_length_s
-        self.max_new_tokens = max_new_tokens
+        self.chunk_length_s = int(chunk_length_s or 30)
+        self.max_new_tokens = int(max_new_tokens)
+        self.punctuation = bool(punctuation)
         self.repetition_penalty = repetition_penalty
         self.no_repeat_ngram_size = no_repeat_ngram_size
         self.collapse_repetition_loops = collapse_repetition_loops
@@ -67,6 +69,7 @@ class CohereTranscriber(BaseTranscriber):
         self._processor = None
         self._lexicon_logits_processor = None
         self._lexicon_biasing_stats: dict = {}
+        self._last_transcribe_metadata: dict = {}
 
     @staticmethod
     def _detect_device() -> str:
@@ -129,7 +132,7 @@ class CohereTranscriber(BaseTranscriber):
         self,
         audio_path: "Path | None",
         language: str = "fr",
-        chunk_length_s: int = 30,
+        chunk_length_s: int | None = None,
         progress_callback=None,
         audio_array: "numpy.ndarray | None" = None,
         sample_rate: int = 16000,
@@ -153,7 +156,9 @@ class CohereTranscriber(BaseTranscriber):
         import numpy as np
 
         _t0 = _time.time()
-        ch_len = chunk_length_s or self.chunk_length_s
+        ch_len = int(self.chunk_length_s if chunk_length_s is None else chunk_length_s)
+        if ch_len <= 0:
+            ch_len = self.chunk_length_s
 
         if audio_array is not None:
             audio = audio_array.astype(np.float32)
@@ -179,6 +184,8 @@ class CohereTranscriber(BaseTranscriber):
         if lang_code not in valid_codes:
             lang_code = "fr"
         logits_processor = self._build_lexicon_logits_processor()
+        prompt_text = self._build_prompt(lang_code)
+        prompt_mode = "cohere_build_prompt" if prompt_text is not None else "processor_language_legacy"
 
         chunk_count = 0
         total_chunks = int(total_samples / chunk_samples) + 1
@@ -188,35 +195,47 @@ class CohereTranscriber(BaseTranscriber):
             if len(chunk) < sr * 0.5:
                 continue
 
-            inputs = self._processor(
-                chunk,
-                sampling_rate=sr,
-                return_tensors="pt",
-                language=lang_code,
-            )
+            if prompt_text is not None:
+                inputs = self._processor(
+                    audio=chunk,
+                    text=prompt_text,
+                    sampling_rate=sr,
+                    return_tensors="pt",
+                )
+            else:
+                inputs = self._processor(
+                    chunk,
+                    sampling_rate=sr,
+                    return_tensors="pt",
+                    language=lang_code,
+                )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}
             if inputs["input_features"].dtype == torch.float32:
                 inputs["input_features"] = inputs["input_features"].to(
                     torch.bfloat16
                 )
+            if "input_ids" in inputs and "decoder_input_ids" not in inputs:
+                inputs["decoder_input_ids"] = inputs.pop("input_ids")
 
             with torch.no_grad():
-                decoder_attention_mask = torch.ones(
-                    (1, 1), dtype=torch.long, device=self.device
-                )
+                decoder_attention_mask = self._decoder_attention_mask(inputs, torch)
+                generate_kwargs = {
+                    "max_new_tokens": self.max_new_tokens,
+                    "repetition_penalty": self.repetition_penalty,
+                    "no_repeat_ngram_size": self.no_repeat_ngram_size,
+                    "do_sample": False,
+                    "decoder_attention_mask": decoder_attention_mask,
+                    "logits_processor": logits_processor,
+                }
+                if "decoder_input_ids" in inputs:
+                    generate_kwargs["decoder_input_ids"] = inputs["decoder_input_ids"]
+                    generate_kwargs["decoder_start_token_id"] = int(inputs["decoder_input_ids"][0, 0].item())
                 generated_ids = self._model.generate(
                     inputs["input_features"],
-                    max_new_tokens=self.max_new_tokens,
-                    repetition_penalty=self.repetition_penalty,
-                    no_repeat_ngram_size=self.no_repeat_ngram_size,
-                    do_sample=False,
-                    decoder_attention_mask=decoder_attention_mask,
-                    logits_processor=logits_processor,
+                    **generate_kwargs,
                 )
 
-            text = self._processor.decode(
-                generated_ids[0], skip_special_tokens=True
-            )
+            text = self._decode_generated_text(generated_ids, inputs, decoder_attention_mask)
             start_seconds = start_sample / sr
             end_seconds = end_sample / sr
 
@@ -252,7 +271,48 @@ class CohereTranscriber(BaseTranscriber):
             len(segments),
             elapsed / 60,
         )
+        self._last_transcribe_metadata = {
+            "backend": "cohere",
+            "model_name": self.model_name,
+            "language": lang_code,
+            "chunk_length_s": ch_len,
+            "max_new_tokens": self.max_new_tokens,
+            "punctuation": self.punctuation,
+            "prompt_mode": prompt_mode,
+            "repetition_penalty": self.repetition_penalty,
+            "no_repeat_ngram_size": self.no_repeat_ngram_size,
+            "segments": len(segments),
+            "elapsed_s": round(elapsed, 3),
+            "lexicon_biasing": self._lexicon_biasing_stats,
+        }
         return segments
+
+    def _build_prompt(self, language: str) -> str | None:
+        """Construit le prompt Cohere officiel quand le remote code l'expose."""
+        build_prompt = getattr(self._model, "build_prompt", None)
+        if not callable(build_prompt):
+            return None
+        return str(build_prompt(language=language, punctuation=self.punctuation))
+
+    def _decoder_attention_mask(self, inputs: dict, torch):
+        decoder_input_ids = inputs.get("decoder_input_ids")
+        if decoder_input_ids is None:
+            return torch.ones((1, 1), dtype=torch.long, device=self.device)
+        tokenizer = getattr(self._processor, "tokenizer", None)
+        pad_token_id = getattr(tokenizer, "pad_token_id", None)
+        if pad_token_id is None:
+            return torch.ones(decoder_input_ids.shape, dtype=torch.long, device=decoder_input_ids.device)
+        return decoder_input_ids.ne(pad_token_id).long()
+
+    def _decode_generated_text(self, generated_ids, inputs: dict, decoder_attention_mask) -> str:
+        token_ids = generated_ids[0]
+        decoder_input_ids = inputs.get("decoder_input_ids")
+        if decoder_input_ids is not None:
+            prompt_len = int(decoder_attention_mask[0].sum().item())
+            prompt_ids = decoder_input_ids[0][:prompt_len]
+            if token_ids.numel() >= prompt_len and token_ids[:prompt_len].detach().cpu().tolist() == prompt_ids.detach().cpu().tolist():
+                token_ids = token_ids[prompt_len:]
+        return self._processor.decode(token_ids, skip_special_tokens=True)
 
     def _build_lexicon_logits_processor(self):
         """Construit une seule fois le processeur de biasing lexique Cohere."""
@@ -304,6 +364,9 @@ class CohereTranscriber(BaseTranscriber):
             keep_repeats=self.repetition_loop_keep_repeats,
         )
 
+    def get_metadata(self) -> dict:
+        return dict(self._last_transcribe_metadata)
+
     def offload(self) -> None:
         import gc
 
@@ -312,6 +375,7 @@ class CohereTranscriber(BaseTranscriber):
         self._model = None
         self._processor = None
         self._lexicon_logits_processor = None
+        self._last_transcribe_metadata = {}
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

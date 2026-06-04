@@ -29,6 +29,7 @@ class TestConfigLoading:
         assert cfg["whisper"]["forced_alignment"]["backend"] == "torchaudio_ctc"
         assert cfg["whisper"]["lexicon_hotwords"]["enabled"] is False
         assert cfg["whisper"]["lexicon_hotwords"]["priorities"] == ["critique", "importante"]
+        assert cfg["cohere"]["punctuation"] is True
         assert cfg["cohere"]["lexicon_biasing"]["enabled"] is False
         assert cfg["cohere"]["lexicon_biasing"]["priorities"] == ["critique", "importante", "normale"]
         assert cfg["workflow"]["stt_hybrid"]["enabled"] is False
@@ -496,6 +497,7 @@ class TestBootstrapConfig:
         cfg = load_config()
         cfg["cohere"]["collapse_repetition_loops"] = "yes"
         cfg["cohere"]["max_new_tokens"] = 0
+        cfg["cohere"]["punctuation"] = "true"
         cfg["cohere"]["lexicon_biasing"]["enabled"] = "true"
         cfg["cohere"]["lexicon_biasing"]["priorities"] = ["critique", "urgente"]
         cfg["cohere"]["lexicon_biasing"]["boost"] = 3
@@ -506,6 +508,7 @@ class TestBootstrapConfig:
         assert not result.is_valid
         assert any("cohere.collapse_repetition_loops" in msg for msg in result.errors)
         assert any("cohere.max_new_tokens" in msg for msg in result.errors)
+        assert any("cohere.punctuation" in msg for msg in result.errors)
         assert any("cohere.lexicon_biasing.enabled" in msg for msg in result.errors)
         assert any("cohere.lexicon_biasing.priorities[1]" in msg for msg in result.errors)
         assert any("cohere.lexicon_biasing.boost" in msg for msg in result.errors)

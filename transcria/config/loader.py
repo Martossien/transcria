@@ -78,6 +78,7 @@ _DEFAULT_CONFIG = {
     "cohere": {
         "chunk_length_s": 30,
         "max_new_tokens": 448,
+        "punctuation": True,
         "repetition_penalty": 1.2,
         "no_repeat_ngram_size": 3,
         "collapse_repetition_loops": True,

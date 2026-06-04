@@ -364,6 +364,7 @@ def _check_cohere(cohere: dict, r: ValidationResult) -> None:
         return
     _check_optional_number(cohere, "chunk_length_s", "cohere.chunk_length_s", r)
     _check_int_range(cohere, "max_new_tokens", "cohere.max_new_tokens", 1, 4096, r)
+    _check_bool(cohere, "punctuation", "cohere.punctuation", r)
     _check_optional_number(cohere, "repetition_penalty", "cohere.repetition_penalty", r)
     _check_int_range(cohere, "no_repeat_ngram_size", "cohere.no_repeat_ngram_size", 0, 20, r)
     _check_bool(cohere, "collapse_repetition_loops", "cohere.collapse_repetition_loops", r)

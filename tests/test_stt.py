@@ -83,6 +83,60 @@ class TestCohereTranscriber:
         numbers = [line for line in lines if line.isdigit()]
         assert numbers == ["1", "2", "3"]
 
+    def test_transcribe_uses_configured_chunk_length_and_cohere_prompt(self):
+        import numpy as np
+        import torch
+
+        calls: list[dict] = []
+
+        class FakeTokenizer:
+            pad_token_id = 0
+
+        class FakeProcessor:
+            tokenizer = FakeTokenizer()
+
+            def __call__(self, audio=None, text=None, sampling_rate=None, return_tensors=None, **kwargs):
+                calls.append({"audio_samples": len(audio), "text": text, "kwargs": kwargs})
+                return {
+                    "input_features": torch.ones((1, 2), dtype=torch.float32),
+                    "input_ids": torch.tensor([[10, 11, 0]], dtype=torch.long),
+                }
+
+            def decode(self, token_ids, skip_special_tokens=True):
+                assert token_ids.detach().cpu().tolist() == [42, 43]
+                return "bonjour."
+
+        class FakeModel:
+            def build_prompt(self, language, punctuation=True):
+                return f"<|{language}|><|{'pnc' if punctuation else 'nopnc'}|>"
+
+            def generate(self, input_features, **kwargs):
+                calls[-1]["generate_kwargs"] = kwargs
+                assert kwargs["decoder_input_ids"].detach().cpu().tolist() == [[10, 11, 0]]
+                assert kwargs["decoder_attention_mask"].detach().cpu().tolist() == [[1, 1, 0]]
+                return torch.tensor([[10, 11, 42, 43]], dtype=torch.long)
+
+        transcriber = CohereTranscriber(chunk_length_s=17, punctuation=False)
+        transcriber._processor = FakeProcessor()
+        transcriber._model = FakeModel()
+        transcriber.load = lambda: True
+
+        segments = transcriber.transcribe(
+            audio_path=None,
+            audio_array=np.zeros(18 * 16000, dtype=np.float32),
+            sample_rate=16000,
+        )
+
+        assert len(segments) == 2
+        assert calls[0]["audio_samples"] == 17 * 16000
+        assert calls[0]["text"] == "<|fr|><|nopnc|>"
+        assert calls[0]["kwargs"] == {}
+        assert calls[0]["generate_kwargs"]["repetition_penalty"] == 1.2
+        assert segments[0]["text"] == "bonjour."
+        assert transcriber.get_metadata()["chunk_length_s"] == 17
+        assert transcriber.get_metadata()["punctuation"] is False
+        assert transcriber.get_metadata()["prompt_mode"] == "cohere_build_prompt"
+
     def test_offload_clears_model(self):
         ct = CohereTranscriber()
         ct._model = "fake"
@@ -96,6 +150,18 @@ class TestCohereTranscriber:
         if ct.available:
             result = ct.load()
             assert result is False
+
+    def test_create_cohere_transcriber_passes_punctuation_config(self):
+        cfg = {
+            "models": {"stt_backend": "cohere"},
+            "cohere": {"punctuation": False, "chunk_length_s": 23},
+        }
+
+        transcriber = create_transcriber(cfg, device="cpu")
+
+        assert isinstance(transcriber, CohereTranscriber)
+        assert transcriber.punctuation is False
+        assert transcriber.chunk_length_s == 23
 
 
 class TestWhisperQualityConfig:
