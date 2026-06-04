@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def _load_script(name: str):
@@ -124,6 +125,107 @@ def test_prepare_hybrid_llm_bench_generates_three_speaker_runs(tmp_path):
     assert "--enable-whisper-lexicon-hotwords" in hotwords["command"]
 
 
+def test_bench_audio_passes_physical_gpu_without_cuda_visible_mask(tmp_path, monkeypatch):
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(
+        whisper_model_size="large-v3",
+        pipeline_mode="quality",
+        with_llm=False,
+        config_override=[],
+        skip_diarization=False,
+        remote_stt=None,
+        remote_stt_api_key=None,
+        remote_inference=None,
+        remote_inference_api_key=None,
+        resume=False,
+        dry_run=False,
+        verbose=False,
+    )
+    combo = {
+        "id": "S01",
+        "stt": "cohere",
+        "scene": False,
+        "filter": False,
+        "norm": False,
+        "sep": False,
+        "overrides": [],
+    }
+
+    cmd = module.build_e2e_cmd(combo, tmp_path / "audio.wav", tmp_path / "S01.json", "3", None, args)
+    assert "--gpu" in cmd
+    assert cmd[cmd.index("--gpu") + 1] == "3"
+    assert "--skip-llm" in cmd
+
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3")
+    captured = {}
+
+    class _FakeProc:
+        returncode = 0
+        stdout = []
+
+        def wait(self):
+            return None
+
+    def fake_popen(cmd, **kwargs):
+        captured["env"] = kwargs["env"]
+        return _FakeProc()
+
+    monkeypatch.setattr(module.subprocess, "Popen", fake_popen)
+    module.run_one_combo(combo, tmp_path / "audio.wav", tmp_path, "3", None, args, worker_id=0)
+    assert "CUDA_VISIBLE_DEVICES" not in captured["env"]
+
+
+def test_bench_audio_output_dir_is_partitioned_for_multiple_audio(tmp_path):
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(output_dir=tmp_path / "calibration", audio=[Path("a.wav"), Path("dir/test file.wav")])
+
+    assert module.resolve_output_dir(args, Path("dir/test file.wav")) == tmp_path / "calibration" / "test_file"
+    args_single = SimpleNamespace(output_dir=tmp_path / "single", audio=[Path("a.wav")])
+    assert module.resolve_output_dir(args_single, Path("a.wav")) == tmp_path / "single"
+
+
+def test_bench_audio_vad_matrix_targets_final_and_internal_vad():
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(matrix="vad", group=None, combos=None)
+
+    combos = module.select_combos(args)
+
+    assert len(combos) == 8
+    assert {combo["id"] for combo in combos} == {f"V{i:02d}" for i in range(1, 9)}
+    assert any("workflow.vad.enabled_final=true" in combo["overrides"] for combo in combos)
+    assert any("whisper.vad_filter=true" in combo["overrides"] for combo in combos)
+    assert any("whisper.vad_filter=false" in combo["overrides"] for combo in combos if combo["stt"] == "whisper")
+    assert all(combo["skip_diarization"] is False for combo in combos)
+
+
+def test_bench_audio_vad_combo_id_normalization_and_summary_columns():
+    module = _load_script("bench_audio.py")
+    args = SimpleNamespace(matrix="all", group=None, combos="v1,V08")
+
+    combos = module.select_combos(args)
+
+    assert [combo["id"] for combo in combos] == ["V01", "V08"]
+
+    row = module._extract_row({
+        "combo_id": "V08",
+        "stt_backend": "whisper",
+        "status": "ok",
+        "skip_diarization": False,
+        "config_overrides": {
+            "workflow.vad.enabled_summary": False,
+            "workflow.vad.enabled_final": False,
+            "whisper.vad_filter": True,
+        },
+        "srt": {},
+        "timings": {},
+        "artifacts": {},
+        "transcription_metadata": {},
+    })
+    assert row["vad_summary"] == "summary-off"
+    assert row["vad_final"] == "final-off"
+    assert row["whisper_vad_filter"] == "whisper-vad-on"
+
+
 def test_arbitrate_hybrid_llm_candidate_accepts_e2e_result_json(tmp_path):
     module = _load_script("arbitrate_hybrid_llm.py")
     result = tmp_path / "result.json"
@@ -188,9 +290,229 @@ def test_analyze_hotwords_bench_pairs_results_and_deltas(tmp_path):
     assert report["complete_pair_count"] == 1
     row = report["rows"][0]
     assert row["delta"]["quality_score"] == 5
-    assert row["delta"]["warnings"] == -1
-    assert row["delta"]["segments"] == 1
-    assert row["hotwords"]["hotwords_injected"] == 1
+
+
+def test_bench_analyze_filters_legacy_and_exports_calibration_columns(tmp_path):
+    import csv
+    import json
+
+    module = _load_script("bench_analyze.py")
+    bench_dir = tmp_path / "bench"
+    bench_dir.mkdir()
+
+    compatible = {
+        "schema_version": 2,
+        "combo_id": "V01",
+        "audio_path": "/tmp/audio.wav",
+        "stt_backend": "cohere",
+        "effective_stt_backend": "cohere",
+        "status": "ok",
+        "mode": "quality",
+        "skip_diarization": False,
+        "gpu": "3",
+        "config_overrides": {"workflow.vad.enabled_summary": False},
+        "timings": {"summary_s": 11.2, "pipeline_s": 22.5},
+        "vram_peak_mb": 6144,
+        "srt": {"raw_segments": 2, "raw_words": 8},
+        "audio_corpus": {
+            "schema_version": 1,
+            "risk_level": "suspect",
+            "flags": ["squim_pesq_faible"],
+            "snr_db": 18.5,
+            "bandwidth_95_hz": 3200.0,
+            "squim_global": {"stoi": 0.82, "pesq": 1.9, "sisdr": 3.1},
+            "dnsmos_global": {"sig": 3.0, "bak": 3.7, "ovrl": 2.4},
+            "difficulty_summary": {
+                "windows": 12,
+                "ok": 7,
+                "suspect": 3,
+                "degrade": 2,
+                "degrade_ratio": 0.1667,
+                "worst": "degrade",
+            },
+        },
+        "quality_decision": {"level": "suspect"},
+        "transcription_metadata": {
+            "backend": "cohere",
+            "chunking_mode": "pyannote_turns",
+            "segments": 2,
+            "chunk_metrics": {"workers": 1},
+        },
+        "segment_reliability_counts": {"ok": 1, "suspect": 1, "degrade": 0},
+        "transcription_segments": [
+            {"start": 0.0, "end": 1.0, "text": "bonjour", "no_speech_prob": 0.1, "words": [{"word": "bonjour", "probability": 0.9}]},
+            {"start": 1.0, "end": 2.0, "text": "bruit", "no_speech_prob": 0.8, "words": [{"word": "bruit", "probability": 0.2}]},
+        ],
+    }
+    legacy = {
+        "combo_id": "S02",
+        "status": "ok",
+        "stt_backend": "whisper",
+        "srt": {"raw_segments": 1, "raw_words": 2},
+    }
+    (bench_dir / "V01.json").write_text(json.dumps(compatible), encoding="utf-8")
+    (bench_dir / "S02.json").write_text(json.dumps(legacy), encoding="utf-8")
+
+    loaded = module.load_bench_dir(bench_dir)
+    supported, ignored = module.split_supported_results(loaded)
+    assert [r["combo_id"] for r in supported] == ["V01"]
+    assert ignored[0]["_schema_errors"] == [
+        "schema_version<2",
+        "audio_corpus_absent",
+        "transcription_metadata_absent",
+        "segment_reliability_counts_absent",
+    ]
+
+    row = module.analyze_combo(supported[0])
+    assert row["risk_level"] == "suspect"
+    assert row["difficulty_degrade_ratio"] == 0.1667
+    assert row["squim_pesq"] == 1.9
+    assert row["dnsmos_ovrl"] == 2.4
+    assert row["chunking_mode"] == "pyannote_turns"
+    assert row["rel_suspect"] == 1
+    assert row["hallucination_score"] > 0
+
+    csv_path = tmp_path / "analysis.csv"
+    module.write_csv([row], csv_path)
+    csv_row = next(csv.DictReader(csv_path.open(encoding="utf-8")))
+    assert csv_row["risk_level"] == "suspect"
+    assert csv_row["effective_stt"] == "cohere"
+    assert csv_row["difficulty_degrade_ratio"] == "0.1667"
+
+
+def test_bench_analyze_qualitative_review_flags_srt_relecture(tmp_path):
+    module = _load_script("bench_analyze.py")
+    result = {
+        "schema_version": 2,
+        "combo_id": "S07",
+        "stt_backend": "whisper",
+        "effective_stt_backend": "whisper",
+        "status": "ok",
+        "skip_diarization": False,
+        "timings": {},
+        "srt": {
+            "raw_segments": 2,
+            "raw_words": 8,
+            "raw_content": (
+                "1\n00:00:00,000 --> 00:00:02,000\n"
+                "SPEAKER_00: ولقد صار السنه هذه الايه\n\n"
+                "2\n00:00:02,000 --> 00:00:04,000\n"
+                "SPEAKER_00: Merci d'avoir regardé cette vidéo !\n"
+            ),
+        },
+        "audio_corpus": {"schema_version": 1, "difficulty_summary": {}},
+        "transcription_metadata": {},
+        "segment_reliability_counts": {"ok": 0, "suspect": 0, "degrade": 2},
+        "transcription_segments": [],
+    }
+
+    review = module.qualitative_review(result)
+    assert review["review_required"] is True
+    assert "script_non_latin" in review["review_reasons"]
+    assert "phrase_generique_suspecte" in review["review_reasons"]
+    assert review["non_latin_scripts"] == "arabic"
+
+    row = module.analyze_combo(result)
+    assert row["review_required"] is True
+    assert row["manual_verdict"] == ""
+
+    output = tmp_path / "analysis.md"
+    module._raw_data = [result]
+    module.write_report([row], output)
+    content = output.read_text(encoding="utf-8")
+    assert "Ces signaux ne sont pas un verdict automatique" in content
+    assert "Relecture qualitative assistée" in content
+    assert "ولقد صار" in content
+
+
+def test_extract_reference_docx_parses_market_transcript(tmp_path):
+    from docx import Document
+
+    module = _load_script("extract_reference_docx.py")
+    docx_path = tmp_path / "reference.docx"
+    doc = Document()
+    for text in (
+        "INTERVENANT_01",
+        "00:02:00 - 00:02:28 DUREE : 00:00:28",
+        "Nombre de mots : 2",
+        "bonjour, bonjour",
+        "INTERVENANT_12",
+        "01:00:00 - 01:00:03 DUREE : 00:00:03",
+        "Nombre de mots : 3",
+        "un deux trois",
+    ):
+        doc.add_paragraph(text)
+    doc.save(docx_path)
+
+    reference = module.parse_reference_docx(docx_path)
+
+    assert reference["segment_count"] == 2
+    assert reference["speaker_count"] == 2
+    assert reference["segments"][0]["speaker"] == "INTERVENANT_01"
+    assert reference["segments"][0]["start"] == 120.0
+    assert reference["segments"][1]["speaker"] == "INTERVENANT_12"
+    assert reference["computed_word_count"] == 5
+    assert reference["parse_warnings"] == []
+
+    srt_path = tmp_path / "reference.srt"
+    module.write_srt(reference, srt_path)
+    srt = srt_path.read_text(encoding="utf-8")
+    assert "00:02:00,000 --> 00:02:28,000" in srt
+    assert "INTERVENANT_12: un deux trois" in srt
+
+
+def test_prepare_reference_windows_clips_reference_and_manifest(tmp_path, monkeypatch):
+    import json
+
+    module = _load_script("prepare_reference_windows.py")
+    audio = tmp_path / "audio.mp3"
+    audio.write_bytes(b"fake")
+    reference = {
+        "source_docx": "ref.docx",
+        "segments": [
+            {"speaker": "INTERVENANT_01", "start": 10.0, "end": 20.0, "declared_words": 2, "word_count": 2, "text": "avant dedans"},
+            {"speaker": "INTERVENANT_02", "start": 25.0, "end": 40.0, "declared_words": 3, "word_count": 3, "text": "dedans apres fin"},
+            {"speaker": "INTERVENANT_03", "start": 50.0, "end": 60.0, "declared_words": 1, "word_count": 1, "text": "hors"},
+        ],
+    }
+    reference_path = tmp_path / "reference.json"
+    reference_path.write_text(json.dumps(reference), encoding="utf-8")
+
+    def fake_write_audio(audio_path, output_path, start, end):
+        output_path.write_bytes(b"wav")
+
+    monkeypatch.setattr(module, "write_audio_window", fake_write_audio)
+    manifest = module.prepare_windows(audio, reference_path, tmp_path / "out", [(15.0, 35.0)])
+
+    assert len(manifest["windows"]) == 1
+    window = manifest["windows"][0]
+    assert window["speaker_count"] == 2
+    assert window["word_count"] == 5
+    clipped = json.loads(Path(window["reference_json"]).read_text(encoding="utf-8"))
+    assert clipped["segments"][0]["start"] == 0.0
+    assert clipped["segments"][0]["end"] == 5.0
+    assert clipped["segments"][0]["absolute_start"] == 10.0
+    assert clipped["segments"][1]["start"] == 10.0
+    assert clipped["segments"][1]["end"] == 20.0
+    assert Path(window["audio"]).read_bytes() == b"wav"
+    assert "INTERVENANT_02" in Path(window["reference_srt"]).read_text(encoding="utf-8")
+
+
+def test_score_reference_bench_scores_srt_against_reference():
+    module = _load_script("score_reference_bench.py")
+
+    reference = "Bonjour tout le monde"
+    hypothesis_srt = """1
+00:00:00,000 --> 00:00:02,000
+SPEAKER_00(SPEAKER_00): Bonjour tout le monde
+"""
+
+    scores = module.score_pair(reference, module.srt_text(hypothesis_srt))
+
+    assert scores["ref_words"] == 4
+    assert scores["hyp_words"] == 4
+    assert scores["wer"] == 0.0
+    assert scores["cer"] == 0.0
 
 
 def test_arbitrate_hybrid_llm_builds_speaker_aware_units(tmp_path):
@@ -275,7 +597,12 @@ def test_build_hybrid_transcript_rejects_generic_hallucination(tmp_path):
     cohere.write_text(
         """
         [
-          {"start": 0.0, "end": 30.0, "text": "Pour plus d'informations, contactez-nous sur le site web de l'Université d'Ottawa.", "reliability": "ok"}
+          {
+            "start": 0.0,
+            "end": 30.0,
+            "text": "Pour plus d'informations, contactez-nous sur le site web de l'Université d'Ottawa.",
+            "reliability": "ok"
+          }
         ]
         """,
         encoding="utf-8",

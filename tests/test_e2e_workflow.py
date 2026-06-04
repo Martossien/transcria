@@ -1011,6 +1011,102 @@ def print_json_artifact(fs, relative_path: str, label: str) -> dict | list | Non
     return data
 
 
+def _job_audio_summary(job_id: str | None) -> dict:
+    """Résumé audio compact persisté en base pour les campagnes de calibration STT.
+
+    Best-effort : le JSON E2E doit rester productible hors contexte DB ou sur un
+    job ancien. La frise `difficulty_map` n'est jamais embarquée ici ; elle reste
+    dans `metadata/audio_preflight.json`.
+    """
+    if not job_id:
+        return {}
+    try:
+        from transcria.jobs.store import JobStore
+
+        job = JobStore.get_by_id(job_id)
+        if job is None:
+            return {}
+        summary = job.get_extra_data().get("audio_summary") or {}
+        return summary if isinstance(summary, dict) else {}
+    except Exception:
+        return {}
+
+
+def _compact_difficulty_summary(preflight_data: dict) -> dict | None:
+    summary = preflight_data.get("difficulty_summary")
+    if isinstance(summary, dict):
+        return {
+            "windows": summary.get("windows"),
+            "ok": summary.get("ok"),
+            "suspect": summary.get("suspect"),
+            "degrade": summary.get("degrade"),
+            "degrade_ratio": summary.get("degrade_ratio"),
+            "worst": summary.get("worst"),
+        }
+
+    difficulty_map = preflight_data.get("difficulty_map")
+    if not isinstance(difficulty_map, list):
+        return None
+
+    counts = {"ok": 0, "suspect": 0, "degrade": 0}
+    for window in difficulty_map:
+        if not isinstance(window, dict):
+            continue
+        level = str(window.get("difficulty") or "ok")
+        if level in counts:
+            counts[level] += 1
+    total = sum(counts.values())
+    return {
+        "windows": total,
+        "ok": counts["ok"],
+        "suspect": counts["suspect"],
+        "degrade": counts["degrade"],
+        "degrade_ratio": round(counts["degrade"] / total, 4) if total else 0.0,
+        "worst": "degrade" if counts["degrade"] else ("suspect" if counts["suspect"] else "ok"),
+    }
+
+
+def _first_present(*values):
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _audio_corpus_snapshot(preflight_data: dict, job_audio_summary: dict) -> dict | None:
+    """Données stables pour corréler difficulté audio, moteur STT et qualité.
+
+    Le contrat reste compact et requêtable : uniquement scalaires ou agrégats.
+    Les mesures par fenêtre et les segments complets restent dans les artefacts du
+    job / bench pour éviter des JSON de campagne volumineux.
+    """
+    if not preflight_data and not job_audio_summary:
+        return None
+
+    source = job_audio_summary if isinstance(job_audio_summary, dict) else {}
+    flags = source.get("flags")
+    if flags is None:
+        flags = preflight_data.get("flags") or []
+    if not isinstance(flags, list):
+        flags = [str(flags)]
+
+    return {
+        "schema_version": 1,
+        "job_audio_summary": source or None,
+        "risk_level": _first_present(source.get("risk_level"), preflight_data.get("risk_level")),
+        "flags": flags,
+        "duration_s": _first_present(source.get("duration_s"), preflight_data.get("duration_seconds")),
+        "snr_db": _first_present(source.get("snr_db"), preflight_data.get("estimated_snr_db")),
+        "bandwidth_95_hz": _first_present(source.get("bandwidth_95_hz"), preflight_data.get("bandwidth_95_hz")),
+        "squim_global": _first_present(source.get("squim"), preflight_data.get("squim_global")),
+        "dnsmos_global": _first_present(source.get("dnsmos"), preflight_data.get("dnsmos_global")),
+        "difficulty_summary": _first_present(source.get("difficulty"), _compact_difficulty_summary(preflight_data)),
+        "difficulty_map_windows": len(preflight_data.get("difficulty_map") or [])
+        if isinstance(preflight_data.get("difficulty_map"), list)
+        else 0,
+    }
+
+
 def _count_srt(path: Path) -> tuple[int, int]:
     """Retourne (nb_segments, nb_mots) d'un fichier SRT."""
     if not path.exists():
@@ -1269,6 +1365,8 @@ def _docx_theme_info(meeting_ctx: dict) -> dict:
 def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> None:
     """Écrit le JSON de résultats structurés pour bench_audio.py."""
     workflow = cfg.get("workflow", {})
+    job_id = RESULTS.get("job_id")
+    job_audio_summary = _job_audio_summary(str(job_id) if job_id else None)
 
     # SRT stats
     srt_raw = fs.job_dir / "metadata" / "transcription.srt"
@@ -1348,6 +1446,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         },
 
         # Résultat global
+        "schema_version": 2,
         "status": "ok" if not [v for v in RESULTS.values() if v is False] else "fail",
         "errors": ERRORS,
 
@@ -1412,6 +1511,9 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "bandwidth_99_hz": preflight_data.get("bandwidth_99_hz"),
             "silence_ratio": preflight_data.get("silence_ratio"),
         } if preflight_data else None,
+
+        # Corpus STT : résumé compact pour calibration difficulté ↔ moteur ↔ qualité.
+        "audio_corpus": _audio_corpus_snapshot(preflight_data, job_audio_summary),
 
         # Données de scène (si disponibles)
         "audio_scene_data": {

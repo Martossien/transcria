@@ -607,13 +607,22 @@ c'est `SourceSeparationDecider` qui décide sur la base des signaux de
 #### `workflow.transcription_cleanup`
 
 Nettoyage déterministe post-STT appliqué après la transcription finale et le réalignement locuteurs.
-Supprime les artefacts de sous-titrage récurrents et fusionne les micro-segments courts d'un même locuteur.
+Supprime les artefacts de sous-titrage récurrents, retire les hallucinations textuelles évidentes
+observées sur les bancs audio, et fusionne les micro-segments courts d'un même locuteur.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active le nettoyage post-STT |
 | `merge_short_segments` | bool | `true` | Fusionne les segments courts (< seuils) avec le segment précédent si même locuteur |
 | `remove_subtitle_artifacts` | bool | `true` | Supprime les artefacts de sous-titrage récurrents |
+| `remove_obvious_hallucinations` | bool | `true` | Active le retrait déterministe des hallucinations textuelles évidentes |
+| `remove_non_latin_hallucinations` | bool | `true` | Supprime les segments majoritairement hors alphabet attendu (arabe, CJK, cyrillique, coréen) |
+| `remove_generic_hallucinations` | bool | `true` | Supprime les phrases génériques isolées connues, selon `generic_hallucination_languages` |
+| `non_latin_char_pattern` | string | regex Unicode | Regex des caractères considérés hors alphabet latin attendu |
+| `non_latin_min_chars` | int | `2` | Nombre minimal de caractères non latins avant filtrage |
+| `non_latin_min_ratio` | float | `0.25` | Ratio minimal caractères non latins / lettres du segment pour supprimer |
+| `generic_hallucination_languages` | list[string] | `["fr"]` | Langues de job où les phrases génériques anglaises isolées sont considérées comme hallucinations |
+| `generic_hallucination_patterns` | list[regex] | `[]` | Liste de patterns regex. Liste vide = utiliser les patterns intégrés (`thank you`, `bye`, etc. isolés) |
 | `subtitle_artifact_patterns` | list[regex] | `[]` | Liste de patterns regex pour détecter les artefacts de sous-titrage. Liste vide = utiliser les patterns intégrés |
 | `subtitle_artifact_words` | list[string] | `[]` | Liste de phrases courtes normalisées à filtrer. Liste vide = utiliser les mots-clés intégrés |
 | `short_segment_max_s` | float | `0.45` | Durée maximale (s) pour qu'un segment soit considéré court |
@@ -621,7 +630,9 @@ Supprime les artefacts de sous-titrage récurrents et fusionne les micro-segment
 | `merge_gap_s` | float | `0.5` | Durée maximale du gap (s) entre deux segments fusionnables |
 | `merge_max_chars` | int | `220` | Nombre maximal de caractères du segment fusionné résultant |
 
-Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, variantes tronquées) sont configurables via `subtitle_artifact_patterns` et `subtitle_artifact_words`. Si ces listes sont vides (défaut), les patterns et mots-clés intégrés au code sont utilisés. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, merged_short_segments=M`).
+Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, variantes tronquées) sont configurables via `subtitle_artifact_patterns` et `subtitle_artifact_words`. Si ces listes sont vides (défaut), les patterns et mots-clés intégrés au code sont utilisés.
+
+Le retrait d'hallucinations reste volontairement conservateur : il ne supprime pas tous les segments `suspect/degrade`, seulement les segments à signal textuel fort (texte majoritairement non latin pour une réunion française, ou phrase générique isolée comme `thank you`). Pour un job explicitement anglais, les phrases génériques anglaises isolées ne sont pas filtrées par défaut. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
 
 #### `workflow.speaker_realignment`
 

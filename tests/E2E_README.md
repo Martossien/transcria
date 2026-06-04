@@ -221,6 +221,12 @@ effectif est Cohere.
 > `metadata/audio_preflight.json` avec RMS, peak, SNR estimé, bande passante,
 > flags et `risk_level`. Le JSON de sortie E2E expose `audio_preflight_data`.
 
+> **Corpus STT** : `audio_corpus` expose un résumé compact et stable de la
+> difficulté audio, en priorité depuis `jobs.extra_data.audio_summary` puis depuis
+> `metadata/audio_preflight.json`. Il contient SQUIM/DNSMOS globaux et
+> `difficulty_summary`, jamais la `difficulty_map` complète par fenêtre. Le nombre
+> de fenêtres disponibles est seulement indiqué par `difficulty_map_windows`.
+
 > **Fiabilité segmentaire** : `segment_reliability` est actif par défaut et ajoute
 > `reliability=ok|suspect|degrade` aux segments bruts. Le JSON de sortie E2E
 > expose `segment_reliability_counts`. Les flags textuels configurables
@@ -302,6 +308,11 @@ imbriquées (`workflow.vad.threshold`).
 Les cas `pause_queue`, `pause_then_release` et `limit_concurrency` créent une entrée `job_queue` de sonde et exécutent une itération de scheduler en dry-run, sans charger les modèles GPU. `pause_then_release` vérifie qu'un job bloqué par l'agenda repart après suppression du créneau d'indisponibilité. Le cas `force_gpu` valide que la fenêtre active autorise le mode, mais ne tue aucun processus GPU réel dans l'E2E standard.
 
 `--process-via-api` couvre le chemin utilisateur réel : enqueue via API, dispatch par le scheduler Flask, exécution du pipeline en arrière-plan, finalisation de l'entrée `job_queue`. Il vérifie que l'état terminal est publié de façon cohérente (`jobs.state=completed`, `extra_data.execution.status=completed`, `job_queue.status=done`) avant de considérer le run terminé. Il n'est pas combinable avec `--schedule-case` dans ce script.
+
+`schema_version` versionne le JSON racine produit par `--output-json`. Le bloc
+`audio_corpus.schema_version` versionne séparément les champs destinés aux campagnes
+de calibration STT, pour permettre aux scripts d'analyse de refuser proprement un
+format trop ancien.
 
 Quand la LLM d'arbitrage est déjà active sur le port configuré, l'E2E doit observer le chemin CAS A (`/v1/models` + inférence saine, modèle attendu) : résumé et correction réutilisent le serveur existant au lieu d'exiger une nouvelle réservation de `gpu.llm_vram_mb`.
 
@@ -450,6 +461,7 @@ venv/bin/python tests/test_e2e_workflow.py \
 
 ```json
 {
+  "schema_version": 2,
   "combo_id": "023",
   "run_started_at": "2026-05-22T14:30:00+00:00",
   "audio_file": "test2.mp3",
@@ -526,6 +538,28 @@ venv/bin/python tests/test_e2e_workflow.py \
     "bandwidth_95_hz": 6200.0,
     "bandwidth_99_hz": 7600.0,
     "silence_ratio": 0.12
+  },
+  "audio_corpus": {
+    "schema_version": 1,
+    "job_audio_summary": {
+      "risk_level": "suspect",
+      "flags": ["squim_pesq_faible"],
+      "duration_s": 4051.136,
+      "snr_db": 49.16,
+      "bandwidth_95_hz": 1165.8,
+      "squim": {"stoi": 0.84, "pesq": 1.62, "sisdr": 4.13},
+      "dnsmos": {"sig": 3.24, "bak": 4.01, "ovrl": 2.98},
+      "difficulty": {"windows": 1620, "degrade": 1019, "degrade_ratio": 0.629}
+    },
+    "risk_level": "suspect",
+    "flags": ["squim_pesq_faible"],
+    "duration_s": 4051.136,
+    "snr_db": 49.16,
+    "bandwidth_95_hz": 1165.8,
+    "squim_global": {"stoi": 0.84, "pesq": 1.62, "sisdr": 4.13},
+    "dnsmos_global": {"sig": 3.24, "bak": 4.01, "ovrl": 2.98},
+    "difficulty_summary": {"windows": 1620, "degrade": 1019, "degrade_ratio": 0.629},
+    "difficulty_map_windows": 1620
   },
   "audio_scene_data": {
     "speech_ratio": 0.85,

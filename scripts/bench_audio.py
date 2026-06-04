@@ -12,7 +12,8 @@ Matrices disponibles (--matrix) :
   base     : 24 combos standard (5 dimensions : scene/sep/norm/filter/stt)
   extended : 12 combos exploration (diarization, décodage Whisper, Cohere rp)
   stt      : 24 combos Profil A (4 backends STT × 3 diarizations × 2 VAD)
-  all      : base + extended + stt (72 combos)
+  vad      : 8 combos ciblés VAD final / VAD interne Whisper
+  all      : base + extended + stt + vad (68 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
     python scripts/bench_audio.py \\
@@ -36,6 +37,12 @@ Sous-ensemble de combos :
         --audio tests/test2.mp3 \\
         --combos 001,005,S01,S07
 
+Benchmark ciblé VAD final/interne Whisper :
+    python scripts/bench_audio.py \\
+        --audio archives/audio_tests/test5.wav \\
+        --matrix vad \\
+        --gpu-pool 3
+
 Reprendre un bench interrompu :
     python scripts/bench_audio.py \\
         --audio tests/test1.mp3 \\
@@ -50,6 +57,7 @@ import csv
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -305,6 +313,137 @@ assert len(STT_COMBO_MATRIX) == 24, (
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Matrice VAD — relecture ciblée des hypothèses "VAD contre-productif"
+#
+# Objectif : comparer explicitement les SRT finaux avec :
+#   - VAD résumé ON/OFF
+#   - VAD final Silero ON/OFF
+#   - VAD interne faster-whisper ON/OFF
+#
+# La diarisation reste activée (pyannote) pour tester le comportement production.
+# Les IDs V01..V08 sont séparés de la matrice STT historique, où "VAD" désignait
+# seulement workflow.vad.enabled_summary.
+# ─────────────────────────────────────────────────────────────────────────────
+VAD_COMBO_MATRIX: list[dict] = [
+    {
+        "id": "V01", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-on",
+        "vad_final": "final-off",
+        "whisper_vad_filter": "",
+        "overrides": [
+            "workflow.vad.enabled_summary=true",
+            "workflow.vad.enabled_final=false",
+        ],
+        "label_extra": "cohere+summary-on+final-off",
+    },
+    {
+        "id": "V02", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "whisper_vad_filter": "",
+        "overrides": [
+            "workflow.vad.enabled_summary=false",
+            "workflow.vad.enabled_final=false",
+        ],
+        "label_extra": "cohere+summary-off+final-off",
+    },
+    {
+        "id": "V03", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-on",
+        "whisper_vad_filter": "",
+        "overrides": [
+            "workflow.vad.enabled_summary=false",
+            "workflow.vad.enabled_final=true",
+            "workflow.vad.threshold_final_degraded=0.35",
+        ],
+        "label_extra": "cohere+summary-off+final-on",
+    },
+    {
+        "id": "V04", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-on",
+        "vad_final": "final-on",
+        "whisper_vad_filter": "",
+        "overrides": [
+            "workflow.vad.enabled_summary=true",
+            "workflow.vad.enabled_final=true",
+            "workflow.vad.threshold_final_degraded=0.35",
+        ],
+        "label_extra": "cohere+summary-on+final-on",
+    },
+    {
+        "id": "V05", "stt": "whisper", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-on",
+        "vad_final": "final-off",
+        "whisper_vad_filter": "whisper-vad-off",
+        "overrides": [
+            "workflow.vad.enabled_summary=true",
+            "workflow.vad.enabled_final=false",
+            "whisper.vad_filter=false",
+        ],
+        "label_extra": "whisper+summary-on+final-off+internal-off",
+    },
+    {
+        "id": "V06", "stt": "whisper", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "whisper_vad_filter": "whisper-vad-off",
+        "overrides": [
+            "workflow.vad.enabled_summary=false",
+            "workflow.vad.enabled_final=false",
+            "whisper.vad_filter=false",
+        ],
+        "label_extra": "whisper+summary-off+final-off+internal-off",
+    },
+    {
+        "id": "V07", "stt": "whisper", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-on",
+        "whisper_vad_filter": "whisper-vad-off",
+        "overrides": [
+            "workflow.vad.enabled_summary=false",
+            "workflow.vad.enabled_final=true",
+            "workflow.vad.threshold_final_degraded=0.35",
+            "whisper.vad_filter=false",
+        ],
+        "label_extra": "whisper+summary-off+final-on+internal-off",
+    },
+    {
+        "id": "V08", "stt": "whisper", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "vad_summary": "summary-off",
+        "vad_final": "final-off",
+        "whisper_vad_filter": "whisper-vad-on",
+        "overrides": [
+            "workflow.vad.enabled_summary=false",
+            "workflow.vad.enabled_final=false",
+            "whisper.vad_filter=true",
+        ],
+        "label_extra": "whisper+summary-off+final-off+internal-on",
+    },
+]
+
+assert len(VAD_COMBO_MATRIX) == 8, (
+    f"La matrice VAD devrait contenir 8 combos, pas {len(VAD_COMBO_MATRIX)}"
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Arguments
 # ─────────────────────────────────────────────────────────────────────────────
 def parse_args() -> argparse.Namespace:
@@ -322,16 +461,17 @@ def parse_args() -> argparse.Namespace:
 
     # ── Sélection des combos ─────────────────────────────────────────────────
     parser.add_argument(
-        "--matrix", choices=["base", "extended", "stt", "all"], default="base",
+        "--matrix", choices=["base", "extended", "stt", "vad", "all"], default="base",
         help="Matrice de combos : base (24 combos standard), "
              "extended (12 combos exploration), "
               "stt (24 combos Profil A : 4 backends × 3 diarizations × 2 VAD), "
-             "all (48 combos) — défaut: base",
+             "vad (8 combos ciblés VAD final / VAD interne Whisper), "
+             "all (68 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,
         help="Sous-ensemble de combos à exécuter, ex: '001,005,E01,E04' "
-             "(accepte les IDs base et extended; défaut: toute la matrice sélectionnée)",
+             "(accepte les IDs base, extended, stt et vad; défaut: toute la matrice sélectionnée)",
     )
     parser.add_argument(
         "--group", choices=["A", "B", "C"], default=None,
@@ -441,7 +581,7 @@ _GROUP_RANGES = {"A": range(1, 9), "B": range(9, 17), "C": range(17, 25)}
 
 
 def _normalize_combo_id(cid: str) -> str:
-    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01'."""
+    """Normalise un ID de combo : '5' → '005', 'e1' → 'E01', 'S1' → 'S01', 'v1' → 'V01'."""
     s = cid.strip()
     if s.upper().startswith("E"):
         num = s[1:].lstrip("0") or "0"
@@ -449,6 +589,9 @@ def _normalize_combo_id(cid: str) -> str:
     if s.upper().startswith("S"):
         num = s[1:].lstrip("0") or "0"
         return f"S{int(num):02d}"
+    if s.upper().startswith("V"):
+        num = s[1:].lstrip("0") or "0"
+        return f"V{int(num):02d}"
     return s.zfill(3)
 
 
@@ -457,8 +600,10 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
         pool = list(EXTENDED_COMBO_MATRIX)
     elif args.matrix == "stt":
         pool = list(STT_COMBO_MATRIX)
+    elif args.matrix == "vad":
+        pool = list(VAD_COMBO_MATRIX)
     elif args.matrix == "all":
-        pool = list(COMBO_MATRIX) + list(EXTENDED_COMBO_MATRIX) + list(STT_COMBO_MATRIX)
+        pool = list(COMBO_MATRIX) + list(EXTENDED_COMBO_MATRIX) + list(STT_COMBO_MATRIX) + list(VAD_COMBO_MATRIX)
     else:
         pool = list(COMBO_MATRIX)
 
@@ -466,8 +611,8 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
 
     # Filtre par groupe (matrice base uniquement)
     if args.group:
-        if args.matrix == "extended":
-            logger.warning("--group ignoré avec --matrix extended")
+        if args.matrix in {"extended", "stt", "vad"}:
+            logger.warning("--group ignoré avec --matrix %s", args.matrix)
         else:
             ids_in_group = {f"{i:03d}" for i in _GROUP_RANGES[args.group]}
             combos = [c for c in combos if c["id"] in ids_in_group]
@@ -486,6 +631,20 @@ def select_combos(args: argparse.Namespace) -> list[dict]:
         sys.exit(1)
 
     return combos
+
+
+def _safe_audio_stem(audio_path: Path) -> str:
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", audio_path.stem).strip("._")
+    return stem or "audio"
+
+
+def resolve_output_dir(args: argparse.Namespace, audio_path: Path) -> Path:
+    if args.output_dir:
+        if len(args.audio) > 1:
+            return args.output_dir / _safe_audio_stem(audio_path)
+        return args.output_dir
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return BENCH_RESULTS_DIR / f"{_safe_audio_stem(audio_path)}_{ts}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -513,7 +672,7 @@ def build_e2e_cmd(
     ]
 
     if gpu_id is not None:
-        cmd.extend(["--gpu", "0"])
+        cmd.extend(["--gpu", str(gpu_id)])
 
     if arbitrage_port is not None:
         cmd.extend(["--arbitrage-port", str(arbitrage_port)])
@@ -644,8 +803,11 @@ def run_one_combo(
     t0 = time.monotonic()
 
     env = os.environ.copy()
-    if gpu_id is not None:
-        env["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+    # Ne pas fixer CUDA_VISIBLE_DEVICES ici : tests/test_e2e_workflow.py utilise
+    # TRANSCRIA_PREFERRED_GPU très tôt pour cibler le GPU physique, tandis que le
+    # VRAMManager/GPUAllocator scannent nvidia-smi en indices physiques. Masquer
+    # CUDA ici puis passer --gpu=0 ferait repartir les runs sur le GPU 0 physique.
+    env.pop("CUDA_VISIBLE_DEVICES", None)
 
     with open(log_file, "w", encoding="utf-8") as lf:
         lf.write(f"# Combo {combo['id']} — {label}\n")
@@ -751,7 +913,7 @@ def run_parallel(
 # Résumé CSV + Markdown
 # ─────────────────────────────────────────────────────────────────────────────
 _CSV_FIELDS = [
-    "combo_id", "stt_backend", "diarization_backend", "vad_summary", "scene", "sep", "norm", "filter",
+    "combo_id", "stt_backend", "diarization_backend", "vad_summary", "vad_final", "whisper_vad_filter", "scene", "sep", "norm", "filter",
     "skip_diarization", "overrides",
     "status",
     "init_s", "summary_s", "pipeline_s", "total_s",
@@ -764,6 +926,21 @@ _CSV_FIELDS = [
     "zip_export",
     "job_id", "job_dir",
 ]
+
+
+def _override_bool(config_overrides: dict, key: str) -> bool | None:
+    if key not in config_overrides:
+        return None
+    value = config_overrides[key]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return None
 
 
 def _extract_row(r: dict) -> dict:
@@ -789,13 +966,26 @@ def _extract_row(r: dict) -> dict:
         dia_be = "pyannote"
     vad_summary = r.get("vad_summary", "")
     if not vad_summary:
-        vad_off = "workflow.vad.enabled_summary" in cfg_overrides and cfg_overrides["workflow.vad.enabled_summary"] is False
-        vad_summary = "vad-off" if vad_off else "vad-on"
+        vad_summary_enabled = _override_bool(cfg_overrides, "workflow.vad.enabled_summary")
+        vad_summary = "summary-off" if vad_summary_enabled is False else "summary-on"
+    vad_final = r.get("vad_final", "")
+    if not vad_final:
+        vad_final_enabled = _override_bool(cfg_overrides, "workflow.vad.enabled_final")
+        vad_final = "final-on" if vad_final_enabled is True else "final-off"
+    whisper_vad_filter = r.get("whisper_vad_filter", "")
+    if not whisper_vad_filter and (r.get("stt_backend") or r.get("stt")) == "whisper":
+        whisper_vad_enabled = _override_bool(cfg_overrides, "whisper.vad_filter")
+        if whisper_vad_enabled is True:
+            whisper_vad_filter = "whisper-vad-on"
+        elif whisper_vad_enabled is False:
+            whisper_vad_filter = "whisper-vad-off"
     return {
         "combo_id":             r.get("combo_id", "?"),
         "stt_backend":          r.get("stt_backend", r.get("stt", "?")),
         "diarization_backend":  dia_be,
         "vad_summary":          vad_summary,
+        "vad_final":            vad_final,
+        "whisper_vad_filter":   whisper_vad_filter,
         "scene":                int(bool(r.get("audio_scene", r.get("scene", False)))),
         "sep":                  int(bool(r.get("source_separation", r.get("sep", False)))),
         "norm":                 int(bool(r.get("audio_normalization", r.get("norm", False)))),
@@ -866,8 +1056,9 @@ def write_summary_md(
         "",
         "## Résultats",
         "",
-        "| ID  | STT     | dia      | VAD    | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | STTw | tours | tours/s | VRAM  | segs | mots | corr | zip | overrides |",
-        "|-----|---------|----------|--------|----|----|-----|-----|--------|--------|------|------|------|-------|------|-------|---------|-------|------|------|------|-----|-----------|",
+        "| ID | STT | dia | VADs | VADf | Wvad | sc | sep | nrm | flt | no-dia | status | init | summ | pipe | total | "
+        "STTw | tours | tours/s | VRAM | segs | mots | corr | zip | overrides |",
+        "|-----|---------|----------|------|------|------|----|----|-----|-----|--------|--------|------|------|------|-------|------|-------|---------|-------|------|------|------|-----|-----------|",
     ]
 
     for row in rows:
@@ -886,6 +1077,8 @@ def write_summary_md(
             f"| {row['stt_backend']:<7} "
             f"| {dia:<8} "
             f"| {row.get('vad_summary', '—'):<7} "
+            f"| {row.get('vad_final', '—'):<7} "
+            f"| {row.get('whisper_vad_filter', '—') or '—':<7} "
             f"| {row['scene']} "
             f"| {row['sep']} "
             f"| {row['norm']} "
@@ -917,6 +1110,7 @@ def write_summary_md(
         "",
         "sc=audio_scene · sep=source_separation(demucs) · nrm=normalisation · flt=filtre_scène",
         "dia=backend diarisation (pyannote par défaut, sortformer, off)",
+        "VADs=workflow.vad.enabled_summary · VADf=workflow.vad.enabled_final · Wvad=whisper.vad_filter",
         "no-dia=diarization désactivée pour ce combo · overrides=config-overrides spécifiques",
         "corr=SRT corrigé présent · zip=export ZIP présent",
         "",
@@ -937,19 +1131,24 @@ def print_console_summary(results: list[dict]) -> None:
     print(f"\n{'=' * 80}")
     print(f"  BENCH TERMINÉ — {ok_count} OK / {fail_count} échec(s) / {len(rows)} combos")
     print(f"{'=' * 80}")
-    print(f"  {'ID':>3}  {'STT':<8} {'dia':<9} {'VAD':<7} sc sep nrm flt  {'status':<8}  {'total':>7}  {'VRAM':>6}  {'mots':>5}  overrides")
-    print(f"  {'-' * 100}")
+    print(
+        f"  {'ID':>3}  {'STT':<8} {'dia':<9} {'VADs':<11} {'VADf':<9} {'Wvad':<16} "
+        f"sc sep nrm flt  {'status':<8}  {'total':>7}  {'VRAM':>6}  {'mots':>5}  overrides"
+    )
+    print(f"  {'-' * 130}")
     for row in rows:
         total = f"{row['total_s']}s" if row["total_s"] else "—"
         vram = f"{row['vram_peak_mb']}M" if row.get("vram_peak_mb") else "—"
         mots = str(row["raw_words"]) if row["raw_words"] else "—"
         mark = "OK  " if row["status"] == "ok" else "FAIL"
         dia = row.get("diarization_backend", "") or "pyannote"
-        vad = row.get("vad_summary", "—")
+        vad_summary = row.get("vad_summary", "—")
+        vad_final = row.get("vad_final", "—")
+        whisper_vad_filter = row.get("whisper_vad_filter", "") or "—"
         ovr = row.get("overrides") or ""
         ovr_display = ovr[:30] + "…" if len(ovr) > 30 else ovr
         print(
-            f"  {row['combo_id']:>3}  {row['stt_backend']:<8} {dia:<9} {vad:<7}"
+            f"  {row['combo_id']:>3}  {row['stt_backend']:<8} {dia:<9} {vad_summary:<11} {vad_final:<9} {whisper_vad_filter:<16}"
             f" {row['scene']}   {row['sep']}   {row['norm']}   {row['filter']}  "
             f"{mark}      {total:>7}  {vram:>6}  {mots:>5}  {ovr_display}"
         )
@@ -1020,12 +1219,7 @@ def main() -> int:
         logger.info("=== Audio : %s ===", audio_path)
 
         # Répertoire de sortie
-        if args.output_dir:
-            output_dir = args.output_dir
-        else:
-            stem = audio_path.stem
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_dir = BENCH_RESULTS_DIR / f"{stem}_{ts}"
+        output_dir = resolve_output_dir(args, audio_path)
 
         output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("Sortie : %s", output_dir)
@@ -1094,7 +1288,7 @@ def main() -> int:
             global_rc = 1
 
     if not args.dry_run:
-        print(f"\n  Étape suivante : bench_eval.py sur les répertoires de sortie")
+        print("\n  Étape suivante : bench_eval.py sur les répertoires de sortie")
 
     return global_rc
 

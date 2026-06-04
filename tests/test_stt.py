@@ -3,25 +3,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from transcria.stt.cohere_transcriber import CohereTranscriber
-from transcria.stt.anti_hallucination import collapse_repetition_loops
-from transcria.stt.anti_hallucination import detect_repetition_loops
-from transcria.stt.contextual_biasing import TrieContextualBiasProcessor
-from transcria.stt.contextual_biasing import build_token_trie
-from transcria.stt.contextual_biasing import select_lexicon_bias_terms
-from transcria.stt.forced_alignment import ForcedAlignmentService
-from transcria.stt.granite_transcriber import GraniteTranscriber
-from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
-from transcria.stt.speaker_detection import SpeakerDetector
-from transcria.stt.transcription import Transcriber
-from transcria.stt.lexicon_hotwords import build_whisper_hotwords
-from transcria.stt.transcriber_factory import create_transcriber
-from transcria.stt.transcriber_factory import get_backend_vram_mb
-from transcria.stt.transcriber_factory import _effective_whisper_config
-from transcria.stt.transcriber_factory import list_available_backends
-from transcria.stt.whisper_transcriber import WhisperTranscriber
 from transcria.audio.vad_adaptive import AdaptiveVADConfig
 from transcria.quality.audio_quality import AudioQualityEvaluator
+from transcria.stt.anti_hallucination import collapse_repetition_loops, detect_repetition_loops
+from transcria.stt.cohere_transcriber import CohereTranscriber
+from transcria.stt.contextual_biasing import TrieContextualBiasProcessor, build_token_trie, select_lexicon_bias_terms
+from transcria.stt.forced_alignment import ForcedAlignmentService
+from transcria.stt.granite_transcriber import GraniteTranscriber
+from transcria.stt.lexicon_hotwords import build_whisper_hotwords
+from transcria.stt.speaker_detection import SpeakerDetector
+from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
+from transcria.stt.transcriber_factory import _effective_whisper_config, create_transcriber, get_backend_vram_mb, list_available_backends
+from transcria.stt.transcription import Transcriber
+from transcria.stt.whisper_transcriber import WhisperTranscriber
 
 
 class TestCohereTranscriber:
@@ -86,7 +80,7 @@ class TestCohereTranscriber:
         ]
         srt = ct.segments_to_srt(segments)
         lines = srt.strip().split("\n")
-        numbers = [l for l in lines if l.isdigit()]
+        numbers = [line for line in lines if line.isdigit()]
         assert numbers == ["1", "2", "3"]
 
     def test_offload_clears_model(self):
@@ -827,9 +821,9 @@ class TestTranscriber:
         with app.app_context():
             from pathlib import Path
 
+            from transcria.config import get_config
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.jobs.store import JobStore
-            from transcria.config import get_config
 
             cfg = get_config()
             job = JobStore.create_job(owner_id, "Speaker Map")
@@ -1095,14 +1089,58 @@ class TestDefaultSubtitleArtifactPatterns:
         assert "Subtitles by the Amara.org community" not in result
 
     def test_thank_you_alone_not_removed(self):
-        """'thank you' seul n'est PAS supprimé — phrase légitime en réunion."""
-        result = self._run("thank you", "Bonjour.")
+        """'thank you' seul reste conservable si le filtre hallucination est désactivé."""
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": {
+            "enabled": True,
+            "remove_subtitle_artifacts": True,
+            "remove_obvious_hallucinations": False,
+            "merge_short_segments": False,
+        }}}
+        segs = [
+            {"start": 0.0, "end": 0.3, "text": "thank you"},
+            {"start": 1.0, "end": 1.3, "text": "Bonjour."},
+        ]
+        result = [s["text"] for s in t._cleanup_transcription_segments(segs)]
         assert "thank you" in result
 
     def test_short_legitimate_french_word_not_removed(self):
         """Mot français courant court n'est PAS supprimé."""
         result = self._run("Merci.", "Bonjour.")
         assert "Merci." in result
+
+    def test_non_latin_hallucination_removed(self):
+        """Un segment majoritairement arabe/japonais sur réunion FR est supprimé."""
+        result = self._run("شكرا جزيلا", "Bonjour.")
+        assert "شكرا جزيلا" not in result
+        assert "Bonjour." in result
+
+    def test_mixed_french_with_small_non_latin_fragment_kept(self):
+        """Un texte français contenant un faible fragment non latin n'est pas supprimé."""
+        result = self._run("Bonjour 漢字 dossier.", "Point suivant.")
+        assert "Bonjour 漢字 dossier." in result
+
+    def test_standalone_thank_you_removed_for_french_cleanup(self):
+        """Sur transcription FR, 'thank you' isolé est une hallucination générique mesurée."""
+        result = self._run("thank you", "Bonjour.")
+        assert "thank you" not in result
+        assert "Bonjour." in result
+
+    def test_standalone_thank_you_kept_for_english_job(self):
+        """Sur job anglais explicite, le filtre générique français ne s'applique pas."""
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": {
+            "enabled": True,
+            "remove_subtitle_artifacts": True,
+            "remove_obvious_hallucinations": True,
+            "merge_short_segments": False,
+        }}}
+        segs = [
+            {"start": 0.0, "end": 0.3, "text": "thank you"},
+            {"start": 1.0, "end": 1.3, "text": "Next point."},
+        ]
+        result = [s["text"] for s in t._cleanup_transcription_segments(segs, language="en")]
+        assert "thank you" in result
 
 
 class TestSpeakerDetector:

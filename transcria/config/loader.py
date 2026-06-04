@@ -297,6 +297,17 @@ _DEFAULT_CONFIG = {
         "transcription_cleanup": {
             "enabled": True,
             "remove_subtitle_artifacts": True,
+            "remove_obvious_hallucinations": True,
+            "remove_non_latin_hallucinations": True,
+            "remove_generic_hallucinations": True,
+            "non_latin_char_pattern": (
+                r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
+                r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
+            ),
+            "non_latin_min_chars": 2,
+            "non_latin_min_ratio": 0.25,
+            "generic_hallucination_languages": ["fr"],
+            "generic_hallucination_patterns": [],
             "merge_short_segments": True,
             "short_segment_max_s": 0.45,
             "short_segment_max_words": 2,

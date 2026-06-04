@@ -540,11 +540,32 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
     if not isinstance(cfg, dict):
         r.add_error("workflow.transcription_cleanup: doit être un objet YAML")
         return
-    for key in ("enabled", "remove_subtitle_artifacts", "merge_short_segments"):
+    for key in (
+        "enabled",
+        "remove_subtitle_artifacts",
+        "remove_obvious_hallucinations",
+        "remove_non_latin_hallucinations",
+        "remove_generic_hallucinations",
+        "merge_short_segments",
+    ):
         _check_bool(cfg, key, f"workflow.transcription_cleanup.{key}", r)
-    for key in ("short_segment_max_s", "short_segment_max_words", "merge_gap_s", "merge_max_chars"):
+    for key in (
+        "short_segment_max_s",
+        "short_segment_max_words",
+        "merge_gap_s",
+        "merge_max_chars",
+        "non_latin_min_ratio",
+    ):
         _check_optional_number(cfg, key, f"workflow.transcription_cleanup.{key}", r)
-    for key in ("subtitle_artifact_patterns", "subtitle_artifact_words"):
+    if "non_latin_min_chars" in cfg:
+        _check_int_range(cfg, "non_latin_min_chars", "workflow.transcription_cleanup.non_latin_min_chars", 1, 100, r)
+    _check_regex_string(cfg, "non_latin_char_pattern", "workflow.transcription_cleanup.non_latin_char_pattern", r)
+    for key in (
+        "subtitle_artifact_patterns",
+        "subtitle_artifact_words",
+        "generic_hallucination_patterns",
+        "generic_hallucination_languages",
+    ):
         values = cfg.get(key, [])
         if not isinstance(values, list):
             r.add_error(f"workflow.transcription_cleanup.{key}: doit être une liste")

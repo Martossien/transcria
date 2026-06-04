@@ -342,9 +342,10 @@ Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désa
 **Nettoyage post-STT (`transcription_cleanup`)** : après la transcription, `Transcriber._cleanup_transcription_segments()` applique un nettoyage déterministe configurable via `workflow.transcription_cleanup` :
 
 - **Suppression d'artefacts** : les patterns de sous-titrage récurrents (`Sous-titrage ST' 501`, `FR 2021`, `Société Radio-Canada`, etc.) sont retirés des segments SRT. Les patterns sont configurables via `workflow.transcription_cleanup.subtitle_artifact_patterns` (liste de regex, défaut `[]` = utilisation des patterns intégrés) et `subtitle_artifact_words` (liste de phrases, défaut `[]` = utilisation des mots-clés intégrés). Les variantes tronquées (`-titrage`, `titrage fr`, `titrage st`) sont aussi filtrées.
+- **Retrait d'hallucinations évidentes** : les segments majoritairement non latins (arabe/CJK/cyrillique/coréen) et les phrases génériques isolées observées sur réunions françaises (`thank you`, `bye`, etc.) sont retirés avant génération SRT. Ce filtre est volontairement conservateur et désactivable (`remove_obvious_hallucinations`) ; il ne supprime pas tous les segments marqués `suspect/degrade`.
 - **Fusion de micro-segments** : les segments courts (< seuil configurable, même locuteur, gap court) sont fusionnés avec le segment précédent pour réduire les artefacts de fragmentation. Configurable via `merge_short_segments` (défaut `true`), `short_segment_max_s` (défaut 0.45), `short_segment_max_words` (défaut 2), `merge_gap_s` (défaut 0.5), `merge_max_chars` (défaut 220).
 
-Les deux opérations sont tracées dans les logs du pipeline (`removed_artifacts=N, merged_short_segments=M`).
+Les opérations sont tracées dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
 
 Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé également (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est désactivé par défaut. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète et les recommandations par type de fichier.
 

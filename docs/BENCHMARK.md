@@ -29,6 +29,21 @@ Ce document présente les résultats d'une campagne de tests systématiques comp
 4. **La diarisation est obligatoire** — sans elle, -17 à -40% des mots selon le backend
 5. **Les chiffres ne mesurent pas la qualité** — Granite = 200 mots mais en japonais ; toujours lire les SRT
 
+### 0.1 Règle méthodologique : les scripts n'établissent pas la vérité
+
+Les scripts de bench sont des outils de tri et de traçabilité, pas des arbitres de
+qualité. Les compteurs (`mots`, `segments`, `no_speech_prob`, `hall_score`,
+`reliability`) peuvent rater une transcription absurde ou pénaliser un SRT
+lisible. Exemple observé : une sortie avec hallucination arabe/anglaise peut
+avoir un score automatique faible si le backend ne fournit pas les probabilités
+attendues.
+
+`scripts/bench_analyze.py` produit donc une section **Relecture qualitative
+assistée**. Elle signale des motifs à inspecter (`script_non_latin`,
+`phrase_generique_suspecte`, `transcription_tres_courte`,
+`micro_fragments_possibles`) et expose des extraits. Ces signaux servent à
+prioriser la lecture humaine ; ils ne remplacent jamais le verdict manuel du SRT.
+
 ---
 
 ## 1. Recommandations production
@@ -478,6 +493,16 @@ venv/bin/python scripts/bench_audio.py \
   --combos S01,S04,S10,S22 \
   --gpu-pool 0,1
 
+# ── Campagne ciblée VAD final / VAD interne Whisper ──────────────────────────
+# À utiliser pour vérifier si le VAD coupe du contenu réel.
+# Les combos V01..V08 gardent pyannote actif et comparent summary VAD,
+# final VAD et whisper.vad_filter.
+venv/bin/python scripts/bench_audio.py \
+  --audio archives/audio_tests/test5.wav archives/audio_tests/extrait_reunions/cse_bruit_debut.wav \
+  --matrix vad \
+  --gpu-pool 3 \
+  --workers 1
+
 # ── Vérifier les commandes sans les lancer ────────────────────────────────────
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 --matrix all --dry-run
@@ -504,7 +529,7 @@ venv/bin/python scripts/bench_audio.py \
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD), `extended` (12 décodage), `all` (72) |
+| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD résumé), `vad` (8 combos VAD final/interne), `extended` (12 décodage), `all` (68) |
 | `--gpu-pool` | auto-détection | GPUs à utiliser, ex : `0,1,2,3` |
 | `--workers` | nb GPUs | Pipelines parallèles — ne pas dépasser nb GPUs sauf cas particulier |
 | `--min-free-vram-mb` | 10 000 | Seuil VRAM libre pour l'auto-détection GPU |
@@ -512,7 +537,7 @@ venv/bin/python scripts/bench_audio.py \
 | `--skip-llm` via E2E | — | Désactive LLM côté worker (recommandé pour bench pur) |
 | `--resume` | OFF | Saute les combos dont le JSON existe déjà |
 | `--keep` | OFF | Conserve les jobs après le run |
-| `--combos` | tous | Sous-ensemble, ex : `S01,S04,E03` |
+| `--combos` | tous | Sous-ensemble, ex : `S01,S04,E03,V08` |
 
 ### 9.2 test_e2e_workflow.py — run unitaire
 
@@ -571,6 +596,7 @@ bench_results/<audio>_<timestamp>/
 ```
 
 Chaque `<ID>.json` contient :
+- `schema_version` : version du contrat JSON racine (`2` pour le format avec `audio_corpus`)
 - `status` : `"ok"` ou `"fail(rc=N)"`
 - `timings` : `{init_s, summary_s, pipeline_s, ...}`
 - `vram_peak_mb` : consommation GPU max (thread nvidia-smi 3s)
@@ -578,6 +604,69 @@ Chaque `<ID>.json` contient :
 - `srt.raw_segments`, `srt.raw_words` : compteurs
 - `config_overrides` : overrides de config appliqués
 - `audio_preflight_data` : flags de pré-diagnostic (RMS, SNR, flags)
+- `audio_corpus` : résumé compact versionné pour calibration STT (`risk_level`, SQUIM/DNSMOS globaux, `difficulty_summary`, jamais la `difficulty_map` complète)
+- `transcription_metadata` : backend effectif, chunking, GPU, langue, nombre de segments, métriques de chunks
+- `segment_reliability_counts` : compteurs `ok|suspect|degrade` post-STT
+
+Les résumés `summary.csv`/`summary.md` exposent séparément :
+- `vad_summary` : `workflow.vad.enabled_summary`
+- `vad_final` : `workflow.vad.enabled_final`
+- `whisper_vad_filter` : VAD interne faster-whisper, uniquement pertinent pour Whisper
+
+### 9.3.1 Contrat minimal pour les campagnes de calibration STT
+
+Pour le chantier STT adaptatif/hybride, un JSON de bench exploitable doit contenir
+au minimum les blocs suivants. Un script d'analyse doit refuser ou marquer à part
+un résultat qui ne respecte pas ce contrat, au lieu de mélanger anciens et nouveaux
+formats.
+
+| Bloc | Champs indispensables | Usage |
+|---|---|---|
+| Racine | `schema_version`, `combo_id`, `audio_path`, `status`, `config_overrides` | Reproductibilité et filtrage |
+| Options | `stt_backend`, `effective_stt_backend`, `mode`, `skip_diarization`, `gpu` | Comparaison demandée vs réel |
+| Temps/VRAM | `timings.pipeline_s`, `timings.summary_s`, `vram_peak_mb` | Coût utilisateur et capacité GPU |
+| Audio | `audio_corpus.schema_version`, `risk_level`, `flags`, `squim_global`, `dnsmos_global`, `difficulty_summary` | Corréler difficulté ↔ qualité |
+| STT | `transcription_metadata.backend`, `chunking_mode`, `segments`, `chunk_metrics` | Expliquer les écarts de sortie |
+| Qualité | `segment_reliability_counts`, `quality_decision.level`, `srt.raw_segments`, `srt.raw_words` | Proxy automatique avant lecture humaine |
+
+`audio_corpus.job_audio_summary` reprend le résumé compact persisté en base dans
+`jobs.extra_data.audio_summary`. C'est le champ requêtable à travers les jobs. Le
+JSON de bench garde aussi les scalaires normalisés (`squim_global`,
+`dnsmos_global`, `difficulty_summary`) pour faciliter l'analyse hors base.
+
+Ne pas embarquer `difficulty_map` complète dans les agrégats CSV/Markdown : elle
+peut contenir des centaines ou milliers de fenêtres. Le JSON E2E indique seulement
+`difficulty_map_windows`; les fenêtres détaillées restent dans
+`jobs/<id>/metadata/audio_preflight.json` pour les audits ciblés.
+
+### 9.3.2 Protocole recommandé avant l'hybride
+
+1. Lancer une baseline multi-backend avec `--skip-llm`, préflight actif, SQUIM/DNSMOS activables selon la campagne.
+2. Agréger uniquement les runs `status=ok` et `schema_version >= 2`.
+3. Segmenter les résultats par `audio_corpus.risk_level`, `difficulty_summary.degrade_ratio`, backend effectif et `chunking_mode`.
+4. Lire les SRT des groupes extrêmes : `degrade_ratio` élevé mais bonne transcription, et `degrade_ratio` faible mais transcription mauvaise.
+5. Ajuster les seuils uniquement après corrélation entre difficulté audio, `segment_reliability_counts`, lecture humaine et, si disponible, WER sur référence.
+6. Déduire ensuite les règles de sélection de segments pour le mode hybride. La source primaire reste `reliability` post-STT ; `difficulty_summary` et la future `difficulty_map` servent de signaux secondaires.
+
+Pour la question spécifique “VAD ou sans VAD”, ne pas utiliser uniquement les
+combos `S01/S02/S07/S08` : dans la matrice `stt`, le champ VAD historique cible
+le VAD de résumé (`workflow.vad.enabled_summary`) et peut ne pas changer le SRT
+final. Utiliser `--matrix vad`, puis lire les SRT des combos `V01..V08`.
+
+### 9.3.3 Analyse locale des résultats
+
+```bash
+venv/bin/python scripts/bench_analyze.py --bench-dir bench_results/test2_20260527_184803
+```
+
+Produit `analysis.md` + `analysis.csv` : hallucinations probables, segments
+suspects, résumé par backend effectif et colonnes de calibration STT.
+
+`bench_analyze.py` n'agrège que les résultats `schema_version >= 2` avec
+`audio_corpus.schema_version >= 1`, `transcription_metadata` et
+`segment_reliability_counts`. Les anciens JSON sont listés dans la section
+“Runs ignorés” du rapport et exclus des statistiques pour éviter de mélanger des
+campagnes non comparables.
 
 ### 9.4 Lire les SRT — étape obligatoire
 
@@ -628,14 +717,31 @@ Ce que chercher lors de la lecture :
 
 ### 10.3 VAD Silero
 
-Utilisé en phase résumé uniquement (`workflow.vad.enabled_summary`).
-Le VAD final reste désactivé par défaut (dangereux sur voix faible).
+Le VAD de résumé (`workflow.vad.enabled_summary`) et le VAD final
+(`workflow.vad.enabled_final`) doivent être analysés séparément. Le VAD résumé
+peut accélérer la phase résumé sans modifier le SRT final. Le VAD final agit sur
+les chunks transmis au backend STT et peut donc supprimer de la parole réelle.
+Le VAD interne Whisper (`whisper.vad_filter`) est un troisième mécanisme
+distinct, propre à faster-whisper.
 
 | Profil | VAD résumé | Impact mesuré |
 |---|---|---|
 | A — audio propre | ON (défaut) | **Neutre** — 0% delta sur 9/12 configs |
 | B — audio bruité | OFF recommandé | **Nuisible** — Silero confond bruit et parole |
 | C — voix faible | ON acceptable | **Neutre** — weak_voice normalisation suffit |
+
+La matrice `vad` est la référence pour tester ces hypothèses :
+
+| ID | Backend | VAD résumé | VAD final | VAD interne Whisper |
+|---|---|---|---|---|
+| V01 | Cohere | ON | OFF | — |
+| V02 | Cohere | OFF | OFF | — |
+| V03 | Cohere | OFF | ON | — |
+| V04 | Cohere | ON | ON | — |
+| V05 | Whisper | ON | OFF | OFF |
+| V06 | Whisper | OFF | OFF | OFF |
+| V07 | Whisper | OFF | ON | OFF |
+| V08 | Whisper | OFF | OFF | ON |
 
 ### 10.4 Infrastructure de test
 

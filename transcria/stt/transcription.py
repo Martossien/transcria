@@ -54,6 +54,19 @@ _DEFAULT_SHORT_SUBTITLE_ARTIFACTS = {
     "please like and subscribe",
     "don't forget to subscribe",
 }
+_DEFAULT_NON_LATIN_CHAR_PATTERN = (
+    r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
+    r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
+)
+_DEFAULT_GENERIC_HALLUCINATION_PATTERNS = [
+    # Segments isolés observés sur silences/bruits de réunions françaises.
+    re.compile(r"^\s*thank\s+you\s*[.!?…]*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*thank\s+you\s+very\s+much\s*[.!?…]*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*thanks\s*[.!?…]*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*bye\s*[.!?…]*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*i\s+got\s+it\s*[.!?…]*\s*$", re.IGNORECASE),
+    re.compile(r"^\s*merci\s+d['’]avoir\s+regard[ée]\s+cette\s+vid[ée]o\s*[.!?…]*\s*$", re.IGNORECASE),
+]
 
 
 class Transcriber:
@@ -150,7 +163,7 @@ class Transcriber:
         segments = self._apply_speaker_realignment(
             segments, speaker_turns, speaker_mapping, sl
         )
-        segments = self._cleanup_transcription_segments(segments, sl)
+        segments = self._cleanup_transcription_segments(segments, sl, language=lang)
         segments = self._score_segment_reliability(segments, fs, sl)
         backend_metadata = self._backend_metadata()
         if backend_metadata:
@@ -218,20 +231,24 @@ class Transcriber:
             )
         return True
 
-    def _cleanup_transcription_segments(self, segments: list[dict], sl=None) -> list[dict]:
+    def _cleanup_transcription_segments(self, segments: list[dict], sl=None, language: str | None = None) -> list[dict]:
         """Nettoie les artefacts ASR mesurés et fusionne les micro-segments sûrs."""
         cfg = self.config.get("workflow", {}).get("transcription_cleanup", {}) or {}
         if not cfg.get("enabled", True):
             return segments
 
         remove_artifacts = cfg.get("remove_subtitle_artifacts", True)
+        remove_obvious_hallucinations = cfg.get("remove_obvious_hallucinations", True)
         merge_short = cfg.get("merge_short_segments", True)
 
         artifact_patterns = self._build_artifact_patterns(cfg)
         artifact_words = self._build_artifact_words(cfg)
+        hallucination_patterns = self._build_generic_hallucination_patterns(cfg)
+        non_latin_re = self._build_non_latin_pattern(cfg)
 
         cleaned: list[dict] = []
         removed_artifacts = 0
+        removed_hallucinations = 0
         merged_short = 0
 
         for segment in segments:
@@ -240,6 +257,15 @@ class Transcriber:
                 continue
             if remove_artifacts and self._is_subtitle_artifact(text, artifact_patterns, artifact_words):
                 removed_artifacts += 1
+                continue
+            if remove_obvious_hallucinations and self._is_obvious_hallucination(
+                text,
+                cfg,
+                hallucination_patterns,
+                non_latin_re,
+                language=language,
+            ):
+                removed_hallucinations += 1
                 continue
 
             current = dict(segment)
@@ -254,10 +280,11 @@ class Transcriber:
             else:
                 cleaned.append(current)
 
-        if sl and (removed_artifacts or merged_short):
+        if sl and (removed_artifacts or removed_hallucinations or merged_short):
             sl.info(
                 "Nettoyage transcription appliqué",
                 removed_artifacts=removed_artifacts,
+                removed_hallucinations=removed_hallucinations,
                 merged_short_segments=merged_short,
                 segments_before=len(segments),
                 segments_after=len(cleaned),
@@ -281,6 +308,18 @@ class Transcriber:
         return _DEFAULT_SHORT_SUBTITLE_ARTIFACTS
 
     @staticmethod
+    def _build_generic_hallucination_patterns(cfg: dict) -> list:
+        raw = cfg.get("generic_hallucination_patterns")
+        if raw:
+            return [re.compile(p, re.IGNORECASE) for p in raw]
+        return _DEFAULT_GENERIC_HALLUCINATION_PATTERNS
+
+    @staticmethod
+    def _build_non_latin_pattern(cfg: dict) -> re.Pattern:
+        raw = cfg.get("non_latin_char_pattern") or _DEFAULT_NON_LATIN_CHAR_PATTERN
+        return re.compile(str(raw), re.IGNORECASE)
+
+    @staticmethod
     def _is_subtitle_artifact(text: str, patterns: list | None = None, words: set | None = None) -> bool:
         if patterns is None:
             patterns = _DEFAULT_SUBTITLE_ARTIFACT_PATTERNS
@@ -292,6 +331,48 @@ class Transcriber:
         if Transcriber._word_count(text) > 6:
             return False
         return any(pattern.search(text) for pattern in patterns)
+
+    @staticmethod
+    def _is_obvious_hallucination(
+        text: str,
+        cfg: dict,
+        generic_patterns: list,
+        non_latin_re: re.Pattern,
+        *,
+        language: str | None = None,
+    ) -> bool:
+        if cfg.get("remove_non_latin_hallucinations", True):
+            min_chars = int(cfg.get("non_latin_min_chars", 2))
+            min_ratio = float(cfg.get("non_latin_min_ratio", 0.25))
+            if Transcriber._is_non_latin_hallucination(text, non_latin_re, min_chars, min_ratio):
+                return True
+
+        if cfg.get("remove_generic_hallucinations", True) and Transcriber._language_allows_generic_cleanup(language, cfg):
+            return any(pattern.search(text) for pattern in generic_patterns)
+
+        return False
+
+    @staticmethod
+    def _is_non_latin_hallucination(text: str, non_latin_re: re.Pattern, min_chars: int, min_ratio: float) -> bool:
+        non_latin_chars = non_latin_re.findall(text)
+        if len(non_latin_chars) < min_chars:
+            return False
+
+        letters = re.findall(r"[^\W\d_]", text, flags=re.UNICODE)
+        if not letters:
+            return False
+        ratio = len(non_latin_chars) / len(letters)
+        return ratio >= min_ratio
+
+    @staticmethod
+    def _language_allows_generic_cleanup(language: str | None, cfg: dict) -> bool:
+        allowed = cfg.get("generic_hallucination_languages") or ["fr"]
+        normalized_allowed = {str(item).lower().strip() for item in allowed if str(item).strip()}
+        if not normalized_allowed:
+            return False
+        normalized_language = str(language or cfg.get("expected_language") or "fr").lower().strip()
+        root_language = normalized_language.split("-", 1)[0].split("_", 1)[0]
+        return normalized_language in normalized_allowed or root_language in normalized_allowed
 
     @staticmethod
     def _normalize_artifact_text(text: str) -> str:

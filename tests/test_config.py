@@ -536,6 +536,9 @@ class TestBootstrapConfig:
         cfg = load_config()
         cfg["workflow"]["transcription_cleanup"]["merge_short_segments"] = "false"
         cfg["workflow"]["transcription_cleanup"]["subtitle_artifact_patterns"] = [123]
+        cfg["workflow"]["transcription_cleanup"]["generic_hallucination_languages"] = ["fr", 123]
+        cfg["workflow"]["transcription_cleanup"]["non_latin_char_pattern"] = "["
+        cfg["workflow"]["transcription_cleanup"]["non_latin_min_chars"] = 0
         cfg["workflow"]["vad"]["auto_enable_final_on_degraded"] = "true"
         cfg["workflow"]["vad"]["auto_enable_final_levels"] = ["degrade", ""]
         cfg["quality"]["thresholds"]["no_speech_prob_threshold"] = "0.5"
@@ -545,6 +548,9 @@ class TestBootstrapConfig:
         assert not result.is_valid
         assert any("workflow.transcription_cleanup.merge_short_segments" in msg for msg in result.errors)
         assert any("workflow.transcription_cleanup.subtitle_artifact_patterns[0]" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.generic_hallucination_languages[1]" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.non_latin_char_pattern" in msg for msg in result.errors)
+        assert any("workflow.transcription_cleanup.non_latin_min_chars" in msg for msg in result.errors)
         assert any("workflow.vad.auto_enable_final_on_degraded" in msg for msg in result.errors)
         assert any("workflow.vad.auto_enable_final_levels[1]" in msg for msg in result.errors)
         assert any("quality.thresholds.no_speech_prob_threshold" in msg for msg in result.errors)

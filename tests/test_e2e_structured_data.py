@@ -880,7 +880,49 @@ class TestRunnerThemeTracking:
         with app.app_context():
             cfg = get_config()
             from transcria.jobs.filesystem import JobFilesystem
+            from transcria.jobs.store import JobStore
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job)
+            fs.save_json(
+                "metadata/audio_preflight.json",
+                {
+                    "risk_level": "suspect",
+                    "flags": ["squim_pesq_faible"],
+                    "estimated_snr_db": 18.5,
+                    "bandwidth_95_hz": 3200.0,
+                    "squim_global": {"stoi": 0.82, "pesq": 1.9, "sisdr": 3.1},
+                    "dnsmos_global": {"sig": 3.0, "bak": 3.7, "ovrl": 2.4},
+                    "difficulty_summary": {
+                        "windows": 12,
+                        "ok": 7,
+                        "suspect": 3,
+                        "degrade": 2,
+                        "degrade_ratio": 0.1667,
+                        "worst": "degrade",
+                    },
+                },
+            )
+            JobStore.update_extra_data(
+                job,
+                lambda extra: {
+                    **extra,
+                    "audio_summary": {
+                        "risk_level": "suspect",
+                        "flags": ["squim_pesq_faible"],
+                        "snr_db": 18.5,
+                        "bandwidth_95_hz": 3200.0,
+                        "squim": {"stoi": 0.82, "pesq": 1.9, "sisdr": 3.1},
+                        "dnsmos": {"sig": 3.0, "bak": 3.7, "ovrl": 2.4},
+                        "difficulty": {
+                            "windows": 12,
+                            "ok": 7,
+                            "suspect": 3,
+                            "degrade": 2,
+                            "degrade_ratio": 0.1667,
+                            "worst": "degrade",
+                        },
+                    },
+                },
+            )
 
         e2e.RESULTS["job_id"] = job
         import sys as _sys
@@ -892,7 +934,8 @@ class TestRunnerThemeTracking:
             _sys.argv = old_argv
 
         out = tmp_path / "result.json"
-        e2e.write_output_json(out, args, cfg, fs)  # ne doit pas lever
+        with app.app_context():
+            e2e.write_output_json(out, args, cfg, fs)  # ne doit pas lever
 
         assert out.is_file()
         payload = _json.loads(out.read_text(encoding="utf-8"))
@@ -902,3 +945,8 @@ class TestRunnerThemeTracking:
         assert payload["docx_theme"]["meeting_type"] == "CSE"
         assert "PROCÈS-VERBAL" in payload["docx_theme"]["banner_text"].upper()
         assert payload["docx_theme"]["is_default_theme"] is False
+        assert payload["schema_version"] == 2
+        assert payload["audio_corpus"]["schema_version"] == 1
+        assert payload["audio_corpus"]["job_audio_summary"]["risk_level"] == "suspect"
+        assert payload["audio_corpus"]["squim_global"]["pesq"] == 1.9
+        assert payload["audio_corpus"]["difficulty_summary"]["degrade_ratio"] == 0.1667
