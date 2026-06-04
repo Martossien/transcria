@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import difflib
 import json
 import re
 import unicodedata
@@ -86,13 +87,16 @@ def score_pair(reference: str, hypothesis: str) -> dict:
     ref_norm = normalize_text(reference)
     hyp_norm = normalize_text(hypothesis)
     wer_distance = levenshtein(ref_words, hyp_words)
-    cer_distance = levenshtein(ref_norm, hyp_norm)
+    # Le Levenshtein caractère exact est prohibitif sur des fenêtres longues
+    # (plusieurs milliers de caractères × dizaines de combos). SequenceMatcher
+    # donne un proxy borné suffisant pour trier les backends avant relecture.
+    char_similarity = difflib.SequenceMatcher(None, ref_norm, hyp_norm, autojunk=False).ratio() if ref_norm else 0.0
     return {
         "ref_words": len(ref_words),
         "hyp_words": len(hyp_words),
         "word_ratio": round(len(hyp_words) / len(ref_words), 4) if ref_words else None,
         "wer": round(wer_distance / len(ref_words), 4) if ref_words else None,
-        "cer": round(cer_distance / len(ref_norm), 4) if ref_norm else None,
+        "cer": round(1.0 - char_similarity, 4) if ref_norm else None,
     }
 
 
