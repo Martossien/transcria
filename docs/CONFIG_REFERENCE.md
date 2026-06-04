@@ -144,7 +144,7 @@ Paramètres optionnels du backend Cohere ASR. Ces paramètres ne sont lus que si
 | `max_new_tokens` | int | `448` | Nombre maximal de tokens générés par chunk |
 | `punctuation` | bool | `true` | Demande au modèle Cohere de générer la ponctuation via son prompt natif (`false` à réserver aux benchmarks qualité/WER) |
 | `repetition_penalty` | float | `1.2` | Pénalité de répétition pour Cohere |
-| `no_repeat_ngram_size` | int | `3` | Taille des n-grams bloqués |
+| `no_repeat_ngram_size` | int | `4` | Taille des n-grams bloqués |
 | `collapse_repetition_loops` | bool | `true` | Activer la détection/réduction des boucles répétitives dans la transcription Cohere |
 | `repetition_loop_min_repeats` | int | `4` | Nombre minimal de répétitions pour détecter une boucle |
 | `repetition_loop_max_phrase_words` | int | `10` | Nombre maximal de mots dans une phrase répétée |

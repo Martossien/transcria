@@ -7,6 +7,7 @@ import pytest
 
 from transcria.config import _deep_merge, get_config_path, load_config, save_config
 from transcria.config.config_schema import validate_config
+from transcria.config.loader import get_default_config
 
 
 class TestConfigLoading:
@@ -30,6 +31,7 @@ class TestConfigLoading:
         assert cfg["whisper"]["lexicon_hotwords"]["enabled"] is False
         assert cfg["whisper"]["lexicon_hotwords"]["priorities"] == ["critique", "importante"]
         assert cfg["cohere"]["punctuation"] is True
+        assert get_default_config()["cohere"]["no_repeat_ngram_size"] == 4
         assert cfg["cohere"]["lexicon_biasing"]["enabled"] is False
         assert cfg["cohere"]["lexicon_biasing"]["priorities"] == ["critique", "importante", "normale"]
         assert cfg["workflow"]["stt_hybrid"]["enabled"] is False

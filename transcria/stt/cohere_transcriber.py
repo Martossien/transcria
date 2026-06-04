@@ -37,7 +37,7 @@ class CohereTranscriber(BaseTranscriber):
         max_new_tokens: int = 448,
         punctuation: bool = True,
         repetition_penalty: float = 1.2,
-        no_repeat_ngram_size: int = 3,
+        no_repeat_ngram_size: int = 4,
         collapse_repetition_loops: bool = True,
         repetition_loop_min_repeats: int = 4,
         repetition_loop_max_phrase_words: int = 10,

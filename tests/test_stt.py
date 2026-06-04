@@ -132,6 +132,7 @@ class TestCohereTranscriber:
         assert calls[0]["text"] == "<|fr|><|nopnc|>"
         assert calls[0]["kwargs"] == {}
         assert calls[0]["generate_kwargs"]["repetition_penalty"] == 1.2
+        assert calls[0]["generate_kwargs"]["no_repeat_ngram_size"] == 4
         assert segments[0]["text"] == "bonjour."
         assert transcriber.get_metadata()["chunk_length_s"] == 17
         assert transcriber.get_metadata()["punctuation"] is False

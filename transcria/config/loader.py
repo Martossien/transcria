@@ -80,7 +80,7 @@ _DEFAULT_CONFIG = {
         "max_new_tokens": 448,
         "punctuation": True,
         "repetition_penalty": 1.2,
-        "no_repeat_ngram_size": 3,
+        "no_repeat_ngram_size": 4,
         "collapse_repetition_loops": True,
         "repetition_loop_min_repeats": 4,
         "repetition_loop_max_phrase_words": 10,
