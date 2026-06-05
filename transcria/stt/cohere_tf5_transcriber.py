@@ -6,7 +6,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from transcria.stt.base_transcriber import BaseTranscriber
 
@@ -124,7 +124,9 @@ class CohereTf5Transcriber(BaseTranscriber):
             audio = audio_array.astype(np.float32)
             sr = sample_rate
         else:
-            audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            loaded_audio, loaded_sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            audio = loaded_audio
+            sr = int(loaded_sr)
 
         lang_code = self.supported_languages.get(language.lower(), language)
         if lang_code not in set(self.supported_languages.values()):
@@ -220,7 +222,7 @@ class CohereTf5Transcriber(BaseTranscriber):
             arrays_path = tmp_dir / "chunks.npz"
             input_path = tmp_dir / "request.json"
             output_path = tmp_dir / "response.json"
-            arrays = {}
+            arrays: dict[str, object] = {}
             chunk_meta = []
             for index, chunk in enumerate(chunks):
                 key = f"chunk_{index}"
@@ -232,7 +234,8 @@ class CohereTf5Transcriber(BaseTranscriber):
                     "end": round(float(chunk["end"]), 3),
                     "speaker": (speaker_mapping or {}).get(raw_speaker, raw_speaker),
                 })
-            np.savez(arrays_path, **arrays)
+            savez = cast(Any, np.savez)
+            savez(arrays_path, **arrays)
             input_path.write_text(json.dumps({
                 "arrays_path": str(arrays_path),
                 "chunks": chunk_meta,

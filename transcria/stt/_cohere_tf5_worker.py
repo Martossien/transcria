@@ -59,7 +59,10 @@ def _generate_batch(processor, model, torch, device: str, audio_batch: list, cfg
 
 def run(input_path: Path, output_path: Path) -> int:
     import torch
-    from transformers import AutoProcessor, CohereAsrForConditionalGeneration
+    import transformers
+    from transformers import AutoProcessor
+
+    CohereAsrForConditionalGeneration = getattr(transformers, "CohereAsrForConditionalGeneration")
 
     request = json.loads(input_path.read_text(encoding="utf-8"))
     arrays = np.load(request["arrays_path"])
