@@ -509,6 +509,20 @@ La transcription contient peut-être des termes métier, mais je ne peux pas les
         assert context["speaker"] == "SPEAKER_XX"
         assert context["quote"] == "De l'émenteal, ça ira comme ça ?"
 
+    def test_parse_termes_suspects_context_strips_llm_quote_wrappers(self):
+        context = '"[00:05] SPEAKER_XX: "De l\'émenteal, ça ira comme ça ?""'
+        text = """## Termes douteux à valider
+
+- **Emmental** [produit] (critique) | variantes_suspectes: émenteal | commentaire: à vérifier. | contextes: {context}
+
+""".format(context=context)
+        result = OpenCodeRunner._parse_structured_summary(text)
+
+        context = result["termes_suspects"][0]["contexts"][0]
+        assert context["timecode"] == "00:05"
+        assert context["speaker"] == "SPEAKER_XX"
+        assert context["quote"] == "De l'émenteal, ça ira comme ça ?"
+
     def test_parse_termes_suspects_context_long_meeting_mmss_over_99(self):
         text = """## Termes douteux à valider
 

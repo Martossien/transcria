@@ -399,9 +399,10 @@ def _processing_diagnostic_view(metadata: dict, segments: list) -> dict:
     }
 
 
-def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
+def _enrich_lexicon_context_audio(lexicon: list[dict], segments: list | None = None) -> list[dict]:
     """Ajoute des bornes audio parsées aux contextes de lexique pour l'UI."""
     enriched = copy.deepcopy(lexicon)
+    summary_segments = segments if isinstance(segments, list) else []
     total_playable = 0
     total_contexts = 0
     for term in enriched:
@@ -420,6 +421,16 @@ def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
                 context["audio_end"] = round(parsed[1], 3)
                 context["audio_available"] = True
                 playable += 1
+            elif context.get("quote"):
+                estimated = _resolve_context_audio_range("", str(context.get("quote", "")), summary_segments)
+                if estimated is not None:
+                    context["audio_start"] = round(estimated[0], 3)
+                    context["audio_end"] = round(estimated[1], 3)
+                    context["audio_available"] = True
+                    context["audio_estimated_from_quote"] = True
+                    playable += 1
+                else:
+                    context["audio_available"] = False
             else:
                 context["audio_available"] = False
             if bool(context.get("listened", False)):
@@ -438,23 +449,61 @@ def _enrich_lexicon_context_audio(lexicon: list[dict]) -> list[dict]:
     return enriched
 
 
+def _strip_lexicon_context_wrappers(value: str) -> str:
+    text = str(value or "").strip()
+    pairs = {
+        '"': '"',
+        "'": "'",
+        "«": "»",
+        "“": "”",
+        "‘": "’",
+        "`": "`",
+    }
+    while len(text) >= 2 and pairs.get(text[0]) == text[-1]:
+        text = text[1:-1].strip()
+    return text
+
+
+def _clean_lexicon_context_timecode(value: str) -> str:
+    text = _strip_lexicon_context_wrappers(value)
+    text = text.strip().strip("[]").strip()
+    return _strip_lexicon_context_wrappers(text)
+
+
+def _clean_lexicon_context_quote(value: str) -> str:
+    text = _strip_lexicon_context_wrappers(value)
+    text = text.strip().strip("|").strip()
+    return _strip_lexicon_context_wrappers(text)
+
+
 def _repair_lexicon_context_timecode(context: dict) -> None:
-    """Répare les anciens contextes où le timecode est resté dans la citation."""
-    if context.get("timecode"):
+    """Répare les contextes LLM dont le timecode ou la citation contiennent des guillemets parasites."""
+    raw_timecode = str(context.get("timecode", "") or "")
+    cleaned_timecode = _clean_lexicon_context_timecode(raw_timecode)
+    if cleaned_timecode != raw_timecode.strip():
+        context["timecode"] = cleaned_timecode
+
+    quote = _clean_lexicon_context_quote(str(context.get("quote", "") or ""))
+    if quote and quote != context.get("quote"):
+        context["quote"] = quote
+
+    if parse_time_range(cleaned_timecode) is not None:
         return
-    quote = str(context.get("quote", "") or "").strip()
     if not quote:
         return
-    timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d+)?)"
+
+    timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,3}:\d{2}(?::\d{2})?(?:[\.,]\d+)?s?)"
     time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
     match = re.match(
-        rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?(?:[«"](?P<quote_quoted>.+?)[»"]|(?P<quote_bare>.+?))\s*$',
+        rf'^[«"“]?\[?(?P<timecode>{time_range})\]?[»"”]?\s*'
+        rf'(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?'
+        rf'(?P<quote>.+?)\s*$',
         quote,
     )
     if not match:
         return
-    context["timecode"] = match.group("timecode").strip()
-    parsed_quote = (match.group("quote_quoted") or match.group("quote_bare") or "").strip()
+    context["timecode"] = _clean_lexicon_context_timecode(match.group("timecode"))
+    parsed_quote = _clean_lexicon_context_quote(match.group("quote") or "")
     if parsed_quote:
         context["quote"] = parsed_quote
     if match.group("speaker") and not context.get("speaker"):
@@ -803,7 +852,8 @@ def job_wizard(job_id: str):
     meeting = _recover_summary_speaker_hints(fs, meeting)
     session_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
     central_lexicons, initial_lexicon, central_lexicon_display = _central_lexicon_context(job, fs, session_lexicon, meeting)
-    lexicon = _enrich_lexicon_context_audio(initial_lexicon)
+    summary_segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
+    lexicon = _enrich_lexicon_context_audio(initial_lexicon, summary_segments)
     speakers_data = fs.load_json("speakers/speaker_stats.json") or {}
     voice_matches = fs.load_json("speakers/voice_matches.json") or {}
     audio_scene = fs.load_json("metadata/audio_scene.json") or {}
@@ -1258,7 +1308,9 @@ def api_lexicon_debug(job_id: str):
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     raw_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
-    enriched_lexicon = _enrich_lexicon_context_audio(raw_lexicon)
+    summary_data = fs.load_json("summary/summary.json") or {}
+    summary_segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
+    enriched_lexicon = _enrich_lexicon_context_audio(raw_lexicon, summary_segments)
 
     terms_debug = []
     for raw_term, enriched_term in zip(raw_lexicon, enriched_lexicon):
@@ -1278,6 +1330,8 @@ def api_lexicon_debug(job_id: str):
                 )
             if enr_ctx.get("quote") != raw_ctx.get("quote") and raw_ctx.get("quote"):
                 repair_notes.append("citation nettoyée (timecode/speaker retirés)")
+            if enr_ctx.get("audio_estimated_from_quote"):
+                repair_notes.append("audio estimé depuis la citation sans timecode")
 
             contexts_detail.append({
                 "index": i,
@@ -1288,6 +1342,7 @@ def api_lexicon_debug(job_id: str):
                 "audio_available": enr_ctx.get("audio_available", False),
                 "audio_start": enr_ctx.get("audio_start"),
                 "audio_end": enr_ctx.get("audio_end"),
+                "audio_estimated_from_quote": bool(enr_ctx.get("audio_estimated_from_quote", False)),
                 "listened": enr_ctx.get("listened", False),
                 "repair_notes": repair_notes,
             })

@@ -110,25 +110,51 @@ class OpenCodeRunner:
         return normalized
 
     @staticmethod
+    def _strip_summary_context_wrappers(value: str) -> str:
+        import re
+
+        text = str(value or "").strip()
+        text = re.sub(r"^`(.+)`$", r"\1", text).strip()
+        pairs = {
+            '"': '"',
+            "'": "'",
+            "«": "»",
+            "“": "”",
+            "‘": "’",
+        }
+        while len(text) >= 2 and pairs.get(text[0]) == text[-1]:
+            text = text[1:-1].strip()
+        return text
+
+    @staticmethod
+    def _clean_summary_context_quote(value: str) -> str:
+        text = OpenCodeRunner._strip_summary_context_wrappers(value)
+        text = text.strip().strip("|").strip()
+        text = OpenCodeRunner._strip_summary_context_wrappers(text)
+        return text[:500].strip()
+
+    @staticmethod
     def _parse_summary_contexts(value: str) -> list[dict]:
         import re
 
         contexts: list[dict] = []
         if not value:
             return contexts
-        chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=\[[^\]]+\])', value) if chunk.strip()]
+        chunks = [chunk.strip() for chunk in re.split(r'\s*\|\|\s*|\s*;\s*(?=["«“]?\[?[^\]]+\])', value) if chunk.strip()]
         if len(chunks) == 1 and " ; " in value:
             chunks = [chunk.strip() for chunk in value.split(" ; ") if chunk.strip()]
         timestamp = r"(?:\d+(?:[\.,]\d+)?s|\d{1,3}:\d{2}(?::\d{2})?(?:[\.,]\d+)?s?)"
         time_range = rf"{timestamp}(?:\s*(?:→|->|-)\s*{timestamp})?"
         for chunk in chunks[:3]:
-            text = chunk.strip()
+            text = OpenCodeRunner._strip_summary_context_wrappers(chunk)
             match = re.match(
-                rf'^\[?(?P<timecode>{time_range})\]?\s*(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?(?:[«"](?P<quote_quoted>.+?)[»"]|(?P<quote_bare>.+?))(?:\s*\((?P<reason>.+)\))?$',
+                rf'^[«"“]?\[?(?P<timecode>{time_range})\]?[»"”]?\s*'
+                rf'(?:(?P<speaker>SPEAKER_[A-Za-z0-9]+)\s*:\s*)?'
+                rf'(?P<quote>.+?)(?:\s*\((?P<reason>.+)\))?$',
                 text,
             )
             if match:
-                quote = (match.group("quote_quoted") or match.group("quote_bare") or "").strip()
+                quote = OpenCodeRunner._clean_summary_context_quote(match.group("quote") or "")
                 contexts.append({
                     "variant": "",
                     "timecode": match.group("timecode").strip(),
@@ -143,7 +169,7 @@ class OpenCodeRunner:
                         "variant": "",
                         "timecode": "",
                         "speaker": "",
-                        "quote": cleaned[:500],
+                        "quote": OpenCodeRunner._clean_summary_context_quote(cleaned),
                         "reason": "",
                     })
         return contexts

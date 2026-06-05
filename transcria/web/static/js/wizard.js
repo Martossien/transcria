@@ -453,8 +453,17 @@ var TranscrIA = window.TranscrIA || {};
         var item = button.closest('.lex-context-item');
         if (!item) return;
         var timecode = button.dataset.timecode || '';
-        if (!timecode.trim()) return;
         var quote = button.dataset.quote || '';
+        if (!timecode.trim() && !quote.trim()) {
+            var missingError = item.querySelector('.lex-context-audio-error');
+            if (!missingError) {
+                missingError = document.createElement('span');
+                missingError.className = 'text-danger lex-context-audio-error';
+                item.querySelector('.lex-context-actions').appendChild(missingError);
+            }
+            missingError.textContent = 'Extrait indisponible';
+            return;
+        }
 
         if (W._currentLexiconAudio && W._currentLexiconAudio.button === button) {
             if (W._currentLexiconAudio.audio.paused) {

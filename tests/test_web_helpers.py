@@ -175,6 +175,74 @@ def test_enrich_lexicon_context_audio_repairs_timecode_inside_quote():
     assert context["audio_available"] is True
 
 
+def test_enrich_lexicon_context_audio_strips_llm_quote_wrappers():
+    lexicon = [
+        {
+            "term": "Emmental",
+            "contexts": [
+                {"timecode": '"[00:05]"', "quote": '"De l\'émenteal, ça ira comme ça ?"'},
+                {"timecode": "", "quote": '"[00:07] SPEAKER_XX: "Le mieux, c\'est d\'y goûter.""'},
+            ],
+        }
+    ]
+
+    enriched = _enrich_lexicon_context_audio(lexicon)
+    first = enriched[0]["contexts"][0]
+    second = enriched[0]["contexts"][1]
+
+    assert first["timecode"] == "00:05"
+    assert first["quote"] == "De l'émenteal, ça ira comme ça ?"
+    assert first["audio_available"] is True
+    assert second["timecode"] == "00:07"
+    assert second["speaker"] == "SPEAKER_XX"
+    assert second["quote"] == "Le mieux, c'est d'y goûter."
+    assert second["audio_available"] is True
+
+
+def test_enrich_lexicon_context_audio_estimates_quote_without_timecode():
+    lexicon = [
+        {
+            "term": "GDMAP",
+            "contexts": [
+                {"timecode": "", "quote": "GDMAP et GSMOO"},
+            ],
+        }
+    ]
+    segments = [
+        {
+            "start": 40.0,
+            "end": 52.0,
+            "text": "Nous devons contrôler GDMAP et GSMOO avant la prochaine étape.",
+        }
+    ]
+
+    enriched = _enrich_lexicon_context_audio(lexicon, segments)
+    context = enriched[0]["contexts"][0]
+
+    assert context["audio_available"] is True
+    assert context["audio_estimated_from_quote"] is True
+    assert context["audio_start"] > 40.0
+    assert context["audio_end"] <= 52.0
+
+
+def test_enrich_lexicon_context_audio_keeps_unknown_quote_unavailable():
+    lexicon = [
+        {
+            "term": "GDMAP",
+            "contexts": [
+                {"timecode": "", "quote": "GDMAP et GSMOO"},
+            ],
+        }
+    ]
+    segments = [{"start": 40.0, "end": 52.0, "text": "Un autre passage sans ces termes."}]
+
+    enriched = _enrich_lexicon_context_audio(lexicon, segments)
+    context = enriched[0]["contexts"][0]
+
+    assert context["audio_available"] is False
+    assert "audio_estimated_from_quote" not in context
+
+
 def test_resolve_context_audio_range_reanchors_mismatched_llm_timecode():
     segments = [
         {
