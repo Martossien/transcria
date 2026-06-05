@@ -438,6 +438,28 @@ class TestBootstrapConfig:
 
         assert result.is_valid
 
+    def test_validate_config_accepts_diarization_runtime_batch_sizes(self):
+        cfg = load_config()
+        cfg["diarization"]["preload_audio"] = True
+        cfg["diarization"]["prepare_pcm_audio"] = True
+        cfg["diarization"]["prepare_pcm_timeout_s"] = 1800
+        cfg["diarization"]["prepare_pcm_duration_tolerance_s"] = 0.25
+        cfg["diarization"]["embedding_batch_size"] = 128
+        cfg["diarization"]["segmentation_batch_size"] = 64
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_validate_config_rejects_invalid_diarization_batch_size(self):
+        cfg = load_config()
+        cfg["diarization"]["embedding_batch_size"] = 0
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("diarization.embedding_batch_size" in err for err in result.errors)
+
     def test_validate_config_rejects_unknown_diarization_pipeline_param(self):
         cfg = load_config()
         cfg["diarization"]["pipeline_params"] = {

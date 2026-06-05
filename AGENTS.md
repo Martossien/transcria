@@ -117,6 +117,7 @@ transcria/
       scene_analyzer.py     # AudioSceneAnalyzer — orchestrateur subprocess analyse de scène
       _scene_analysis_worker.py # Worker subprocess : pipeline RMS→flatness/ZCR→pitch YIN (librosa)
       scene_filter.py       # AudioSceneFilterService — silence optionnel des zones non vocales sans décaler les timestamps
+      diarization_pcm.py    # DiarizationPcmPreparer — cache WAV PCM 16 kHz mono réservé à pyannote, timeline vérifiée
       denoise.py             # AudioDenoiseService — débruitage ffmpeg expérimental (afftdn, désactivé par défaut)
       normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle, auto-loudnorm si RMS < seuil, weak_voice
       source_separation.py  # SourceSeparationDecider + SourceSeparationService — separation vocaux/instrumentaux (demucs, désactivé par défaut)
@@ -135,7 +136,7 @@ transcria/
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
-      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + hook progress logué + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
+      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + preload audio + batch sizes + cache PCM optionnel + hook progress logué + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend ; apply_speaker_hint() applique la fourchette de locuteurs du job (+ guard Sortformer ≤ 4)
       remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)
@@ -317,6 +318,8 @@ TranscrIA peut tourner **tout-en-un** (ressources GPU locales, mode historique) 
 **Exception `audio_tres_faible` :** si le preflight détecte le flag `audio_tres_faible`, `Transcriber` force le mode 30s_fallback même si `exclusive_turns` est disponible. Sur ce type d'audio, pyannote ne détecte souvent qu'un seul tour court (~5 s), ce qui limiterait la transcription à ~17 % du signal. La cause est tracée dans `metadata/transcription_metadata.json` sous le champ `chunking_forced_30s_reason`.
 
 **Mode 30s_fallback :** si `exclusive_turns` est absent (premier run, pyannote indisponible, ou flag `audio_tres_faible`), chunking 30s fixe suivi de `_apply_speakers()` (overlap matching). Comportement identique à l'implémentation pré-refactoring.
+
+**Optimisations pyannote longues réunions :** `DiarizerService.diarize()` peut préparer un cache `speakers/diarization_16k_mono.wav` via `DiarizationPcmPreparer` si `diarization.prepare_pcm_audio=true`. Ce WAV PCM 16 kHz mono est **réservé à l'inférence pyannote** ; l'audio original reste la référence pour le checkpoint fonctionnel, les clips locuteurs et les embeddings de cache. Le préparateur écrit `speakers/diarization_audio.json`, réutilise le cache par empreinte source, et refuse le WAV préparé si la durée source/cible diverge au-delà de `diarization.prepare_pcm_duration_tolerance_s` (fallback automatique sur l'original). `diarization.preload_audio=true` passe `preload=True` à pyannote pour éviter les décodages/crops répétés ; `embedding_batch_size` et `segmentation_batch_size` sont appliqués comme réglages runtime best-effort. Ne pas remplacer cette optimisation par une coupe audio : la timeline doit rester identique.
 
 **Pré-traitement audio (avant STT) :** `PipelineService._run_pipeline_steps()` exécute les étapes suivantes avant la transcription finale :
 0. `_run_audio_preflight()` — analyse pré-STT rapide (RMS, SNR estimé, bande passante, clipping, flags `audio_faible`/`audio_tres_faible`/`snr_faible`), sauvegarde `metadata/audio_preflight.json`. Retourne les flags utilisés par les étapes suivantes.
@@ -553,7 +556,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 2. **Jamais** committer `config.yaml` (contient des chemins absolus de production) ni `.env` (secrets).
 3. **Toujours** passer `config: dict` en paramètre aux fonctions du moteur, jamais `get_config()` direct (sauf dans les routes).
 4. **Ne pas** modifier `JobState` ou `WORKFLOW_STEPS` sans mettre à jour `WorkflowState.compute_statuses()`.
-5. **Ne pas** ajouter de nouveaux fichiers runtime dans l'arborescence job ou le stockage sensible (`voices/`) sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `metadata/audio_normalization.json`, `metadata/audio_scene_filter.json`, `metadata/audio_preflight.json`, `metadata/audio_denoise.json`, `metadata/audio_excerpts/*.wav`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/voice_matches.json`.
+5. **Ne pas** ajouter de nouveaux fichiers runtime dans l'arborescence job ou le stockage sensible (`voices/`) sans documenter dans `DATA_MODEL.md`. Fichiers existants à ne pas supprimer sans mise à jour de `DATA_MODEL.md` : `metadata/audio_scene.json`, `metadata/audio_quality_decision.json`, `metadata/audio_normalization.json`, `metadata/audio_scene_filter.json`, `metadata/audio_preflight.json`, `metadata/audio_denoise.json`, `metadata/audio_excerpts/*.wav`, `speakers/diarization_audio.json`, `speakers/diarization_16k_mono.wav`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/voice_matches.json`.
 6. **Toujours** préserver les champs LLM dans `MeetingContextManager.save()` (la liste `llm_fields`).
 7. **Toujours** garder cohérents `meeting_context.json` et `job_context.yaml/json` quand un champ alimente le LLM de correction.
 8. **Toujours** protéger les endpoints système JSON avec les mêmes permissions que les pages HTML équivalentes.

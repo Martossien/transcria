@@ -763,6 +763,12 @@ n'ont pas changé.
 | `cache_audio_fingerprint` | bool | `true` | Vérifie taille/mtime/chemin de l'audio avant réutilisation |
 | `embedding_cache_enabled` | bool | `true` | Écrit un checkpoint acoustique par locuteur |
 | `embedding_clip_seconds` | float | `12.0` | Durée maximale utilisée par locuteur pour le checkpoint |
+| `preload_audio` | bool | `true` | Demande à pyannote de charger l'audio en RAM avant l'inférence. Accélère les réunions longues et les formats compressés en évitant les décodages répétés pendant l'extraction d'embeddings. |
+| `prepare_pcm_audio` | bool | `false` | Prépare un WAV PCM 16 kHz mono réservé à pyannote avant l'inférence. Optimisation best-effort : l'audio original est conservé si ffmpeg échoue ou si la durée source/cible diverge. |
+| `prepare_pcm_timeout_s` | int \| null | `1800` | Timeout ffmpeg de préparation PCM pyannote. |
+| `prepare_pcm_duration_tolerance_s` | float \| null | `0.25` | Écart maximal accepté entre la durée source et la durée WAV préparée. |
+| `embedding_batch_size` | int \| null | `64` | Taille des lots d'embeddings pyannote. `64` est un défaut prudent ; `96`/`128` sont des candidats de bench sur GPU avec forte marge VRAM. |
+| `segmentation_batch_size` | int \| null | `null` | Taille des lots de segmentation pyannote. `null` conserve la valeur du pipeline HF ; la segmentation n'est généralement pas le goulet observé. |
 | `progress_log_enabled` | bool | `true` | Active le hook de progression pyannote et les logs de sous-étapes longues |
 | `progress_log_interval_s` | float | `30.0` | Intervalle minimal entre deux logs d'avancement d'une même étape pyannote |
 | `min_speakers` | int \| null | `2` | Nombre minimal de locuteurs transmis à pyannote si `num_speakers` est absent |
@@ -770,6 +776,8 @@ n'ont pas changé.
 | `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
 
 **Override par job (fourchette UI) :** ces valeurs globales peuvent être surchargées par job. L'étape Résumé du wizard propose un champ optionnel min/max locuteurs, stocké dans `jobs.extra_data_json["speaker_hint"]`. À la diarisation, `diarizer_factory.apply_speaker_hint()` écrit `min_speakers`/`max_speakers` (et `num_speakers` si min == max) depuis ce hint, et bascule `models.diarization_backend` de `sortformer` vers `pyannote` si la borne haute saisie dépasse 4 (capacité Sortformer). Le hint ne s'applique qu'au job concerné ; la config globale reste inchangée.
+
+**Performance pyannote :** sur les longues réunions, le coût principal observé est `embeddings`, pas `segmentation`. `preload_audio=true` réduit les recoupes/décodages audio répétés. `prepare_pcm_audio=true` ajoute un cache WAV 16 kHz mono uniquement pour pyannote ; il conserve la timeline et refuse le fichier préparé si la durée ne correspond pas. `embedding_batch_size` réduit le nombre de lots pyannote, mais une valeur trop haute peut augmenter la VRAM et provoquer un OOM ; valider `96` ou `128` par bench avant d'en faire un réglage de production.
 
 #### `diarization.pipeline_params`
 

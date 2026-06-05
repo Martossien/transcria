@@ -622,6 +622,19 @@ diarization:
   cache_audio_fingerprint: true
   embedding_cache_enabled: true
   embedding_clip_seconds: 12.0
+  # Précharge l'audio en RAM avant pyannote. Recommandé pour les réunions longues
+  # et les formats compressés (m4a/mp4), afin d'éviter les décodages répétés.
+  preload_audio: true
+  # Prépare un cache WAV PCM 16 kHz mono uniquement pour pyannote. À activer après
+  # validation bench; conserve l'audio original si la durée source/cible diverge.
+  prepare_pcm_audio: false
+  prepare_pcm_timeout_s: 1800
+  prepare_pcm_duration_tolerance_s: 0.25
+  # Taille des lots embeddings pyannote. 64 est un défaut prudent; 96/128 peuvent
+  # être testés sur GPU avec beaucoup de VRAM, puis validés par bench.
+  embedding_batch_size: 64
+  # null = valeur du pipeline HF. La segmentation est rarement le goulet ici.
+  segmentation_batch_size: null
   progress_log_enabled: true
   progress_log_interval_s: 30.0
 
