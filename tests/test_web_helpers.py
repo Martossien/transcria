@@ -202,9 +202,9 @@ def test_enrich_lexicon_context_audio_strips_llm_quote_wrappers():
 def test_enrich_lexicon_context_audio_estimates_quote_without_timecode():
     lexicon = [
         {
-            "term": "GDMAP",
+            "term": "SIGLE_A",
             "contexts": [
-                {"timecode": "", "quote": "GDMAP et GSMOO"},
+                {"timecode": "", "quote": "SIGLE_A et SIGLE_B"},
             ],
         }
     ]
@@ -212,7 +212,7 @@ def test_enrich_lexicon_context_audio_estimates_quote_without_timecode():
         {
             "start": 40.0,
             "end": 52.0,
-            "text": "Nous devons contrôler GDMAP et GSMOO avant la prochaine étape.",
+            "text": "Nous devons contrôler SIGLE_A et SIGLE_B avant la prochaine étape.",
         }
     ]
 
@@ -228,9 +228,9 @@ def test_enrich_lexicon_context_audio_estimates_quote_without_timecode():
 def test_enrich_lexicon_context_audio_keeps_unknown_quote_unavailable():
     lexicon = [
         {
-            "term": "GDMAP",
+            "term": "SIGLE_A",
             "contexts": [
-                {"timecode": "", "quote": "GDMAP et GSMOO"},
+                {"timecode": "", "quote": "SIGLE_A et SIGLE_B"},
             ],
         }
     ]
@@ -275,7 +275,11 @@ def test_resolve_context_audio_range_estimates_quote_position_for_single_bad_tim
         {
             "start": 5.4,
             "end": 26.4,
-            "text": "Fait pas chaud ce matin. Qu'est-ce qu'il vous faudra ? Mettez-moi un peu d'émental, s'il-vous-plaît. De l'émenteal, ça ira comme ça ? Oui.",
+            "text": (
+                "Fait pas chaud ce matin. Qu'est-ce qu'il vous faudra ? "
+                "Mettez-moi un peu d'émental, s'il-vous-plaît. "
+                "De l'émenteal, ça ira comme ça ? Oui."
+            ),
         },
     ]
 

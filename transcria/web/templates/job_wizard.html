@@ -30,6 +30,9 @@
   .lex-context-play { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
   .lex-context-listened { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
   .lex-context-counter { margin-left: 6px; }
+  .workflow-status-banner { display: none; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+  .workflow-status-banner.is-visible { display: block; }
+  .workflow-status-banner .progress { height: 5px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -64,7 +67,6 @@
       </div>
     {% endfor %}
   </div>
-
   <!-- Step 1: File upload -->
   {% set file_status = statuses.get('file', 'todo') %}
   <div class="step-section {% if file_status == 'todo' or file_status == 'in_progress' %}current-step{% endif %}">
@@ -187,6 +189,7 @@
   {% if file_status == 'done' and audio_analysis %}
   <div class="step-section {% if summary_status == 'todo' or summary_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-3-circle-fill step-icon"></i> Résumé de contrôle</h3>
+    <div id="workflow-status-banner" class="alert alert-info workflow-status-banner mb-3" data-initial-state="{{ job.state }}" role="status" aria-live="polite"></div>
     {% if summary and summary.get('summary_text') and summary.summary_text not in ['Résumé de contrôle indisponible (LLM non configurée).', 'Résumé indisponible.'] %}
       <div class="card bg-light mb-3">
         <div class="card-body">

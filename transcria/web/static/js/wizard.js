@@ -703,6 +703,14 @@ var TranscrIA = window.TranscrIA || {};
     };
     var _TERMINAL_STATES = ['completed', 'export_ready', 'failed', 'cancelled'];
     var _REPROCESSABLE_STATES = ['completed', 'quality_checked', 'export_ready', 'failed', 'cancelled'];
+    var _LIVE_STATUS_STATES = [
+        'summary_running',
+        'speaker_detection_running',
+        'transcribing',
+        'diarizing',
+        'arbitrating',
+        'quality_checking'
+    ];
 
     var _LLM_TIMEOUT_S = parseInt(
         (document.getElementById('wizard-root') || {}).dataset.llmTimeout || '7200', 10
@@ -773,6 +781,97 @@ var TranscrIA = window.TranscrIA || {};
 
         return { setInfo: setInfo, poll: poll };
     }
+
+    function _ensureWorkflowStatusBanner() {
+        var banner = document.getElementById('workflow-status-banner');
+        if (banner) return banner;
+        var currentSection = document.querySelector('.step-section.current-step');
+        var progress = document.querySelector('.progress-container');
+        var anchor = currentSection || progress;
+        if (!anchor || !anchor.parentNode) return null;
+        banner = document.createElement('div');
+        banner.id = 'workflow-status-banner';
+        banner.className = 'alert alert-info workflow-status-banner mb-3';
+        banner.setAttribute('role', 'status');
+        banner.setAttribute('aria-live', 'polite');
+        if (currentSection) {
+            var heading = currentSection.querySelector('h3');
+            currentSection.insertBefore(banner, heading ? heading.nextSibling : currentSection.firstChild);
+        } else {
+            anchor.parentNode.insertBefore(banner, anchor.nextSibling);
+        }
+        return banner;
+    }
+
+    function _formatProgressAge(updatedAt) {
+        if (!updatedAt) return '';
+        var parsed = Date.parse(updatedAt);
+        if (Number.isNaN(parsed)) return '';
+        var seconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
+        if (seconds < 60) return 'mis à jour il y a ' + seconds + 's';
+        var minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return 'mis à jour il y a ' + minutes + 'min';
+        return 'mis à jour il y a ' + Math.floor(minutes / 60) + 'h';
+    }
+
+    function _renderWorkflowStatusBanner(banner, state, progress) {
+        var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
+        if (!isLive && !(progress && progress.message)) {
+            banner.classList.remove('is-visible');
+            banner.innerHTML = '';
+            return;
+        }
+
+        var label = _STATE_LABELS[state] || state || 'Traitement en cours';
+        var message = progress && progress.message ? progress.message : label;
+        var phase = progress && progress.phase ? progress.phase : '';
+        var pct = progress && typeof progress.percent === 'number' ? Math.max(0, Math.min(100, progress.percent)) : null;
+        var age = progress ? _formatProgressAge(progress.updated_at) : '';
+        var pctHtml = pct === null ? '' : '<span class="badge text-bg-light border">' + pct.toFixed(1).replace('.0', '') + '%</span>';
+        var phaseHtml = phase ? '<span class="text-muted small">' + W.escapeHtml(phase) + '</span>' : '';
+        var ageHtml = age ? '<span class="text-muted small">' + W.escapeHtml(age) + '</span>' : '';
+        var progressHtml = pct === null ? '' :
+            '<div class="progress mt-2" aria-hidden="true">' +
+            '<div class="progress-bar" style="width:' + pct + '%"></div>' +
+            '</div>';
+
+        banner.classList.add('is-visible');
+        banner.innerHTML =
+            '<div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">' +
+            '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+            '<span class="spinner-border spinner-border-sm text-primary" role="status"></span>' +
+            '<strong>' + W.escapeHtml(label) + '</strong>' +
+            '<span>' + W.escapeHtml(message) + '</span>' +
+            phaseHtml +
+            '</div>' +
+            '<div class="d-flex align-items-center gap-2">' + pctHtml + ageHtml + '</div>' +
+            '</div>' +
+            progressHtml;
+    }
+
+    W.initWorkflowStatusBanner = function () {
+        var banner = _ensureWorkflowStatusBanner();
+        if (!banner || !W.api) return;
+
+        function poll() {
+            W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
+                if (!r || r.data.error) {
+                    setTimeout(poll, 8000);
+                    return;
+                }
+                var state = r.data.state;
+                var progress = r.data.progress || null;
+                _renderWorkflowStatusBanner(banner, state, progress);
+                if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
+                    setTimeout(poll, 4000);
+                } else if (progress && progress.message) {
+                    setTimeout(poll, 12000);
+                }
+            });
+        }
+
+        poll();
+    };
 
     W.cancelProcessing = function () {
         W.api('/api/jobs/' + JOB_ID + '/process', 'POST', { mode: 'cancel' }).then(function () {
@@ -853,4 +952,5 @@ var TranscrIA = window.TranscrIA || {};
 })();
 
 window.TranscrIA = TranscrIA;
+TranscrIA.initWorkflowStatusBanner();
 console.log('[TranscrIA] wizard.js loaded, functions: ' + Object.keys(TranscrIA).join(', '));
