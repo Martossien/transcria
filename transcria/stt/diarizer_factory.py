@@ -1,10 +1,74 @@
 import logging
+from copy import deepcopy
 
 from transcria.stt.base_diarizer import BaseDiarizer
 
 logger = logging.getLogger(__name__)
 
 _DIARIZATION_BACKENDS = ("pyannote", "sortformer", "remote")
+
+# Sortformer est un modèle à 4 locuteurs maximum ; au-delà, seul pyannote convient.
+SORTFORMER_MAX_SPEAKERS = 4
+
+
+def _coerce_speaker_bound(value) -> int | None:
+    """Convertit une borne de locuteurs en entier >= 1, ou None si invalide."""
+    if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    ival = int(value)
+    return ival if ival >= 1 else None
+
+
+def apply_speaker_hint(config: dict, hint: dict | None) -> dict:
+    """Applique la fourchette de locuteurs choisie par l'utilisateur (par job).
+
+    ``hint`` est un dict ``{"min": int|None, "max": int|None}`` saisi à l'upload.
+    Retourne une **copie** de ``config`` avec :
+
+    - ``diarization.min_speakers`` / ``max_speakers`` renseignés depuis le hint ;
+    - ``diarization.num_speakers`` posé quand min == max (comptage exact, seul réglage
+      donnant un comptage parfait sur pyannote), et retiré quand une vraie fourchette
+      est fournie pour ne pas figer un ancien comptage exact ;
+    - bascule de ``models.diarization_backend`` de ``sortformer`` vers ``pyannote`` quand
+      la borne haute choisie par l'utilisateur dépasse la capacité de Sortformer
+      (``SORTFORMER_MAX_SPEAKERS``).
+
+    Si ``hint`` est absent ou invalide, ``config`` est renvoyé inchangé (copie).
+    """
+    cfg = deepcopy(config)
+    if not isinstance(hint, dict):
+        return cfg
+
+    vmin = _coerce_speaker_bound(hint.get("min"))
+    vmax = _coerce_speaker_bound(hint.get("max"))
+    if vmin is not None and vmax is not None and vmin > vmax:
+        vmin, vmax = vmax, vmin  # tolère une saisie inversée
+
+    diar = cfg.setdefault("diarization", {})
+    if vmin is not None:
+        diar["min_speakers"] = vmin
+    if vmax is not None:
+        diar["max_speakers"] = vmax
+    if vmin is not None and vmax is not None:
+        if vmin == vmax:
+            diar["num_speakers"] = vmin
+        else:
+            diar.pop("num_speakers", None)
+
+    # Guard backend : uniquement sur la borne haute explicitement choisie par
+    # l'utilisateur (jamais sur le maximum global par défaut, pour ne pas désactiver
+    # Sortformer sur les configurations qui l'emploient sans fourchette saisie).
+    user_upper = vmax if vmax is not None else vmin
+    backend = cfg.get("models", {}).get("diarization_backend", "pyannote")
+    if backend == "sortformer" and user_upper is not None and user_upper > SORTFORMER_MAX_SPEAKERS:
+        cfg.setdefault("models", {})["diarization_backend"] = "pyannote"
+        logger.info(
+            "Diarisation: fourchette utilisateur max=%d > %d (capacité Sortformer), "
+            "bascule du backend Sortformer → pyannote",
+            user_upper, SORTFORMER_MAX_SPEAKERS,
+        )
+
+    return cfg
 
 
 def create_diarizer(config: dict, device: str | None = None, progress_callback=None) -> BaseDiarizer:

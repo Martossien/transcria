@@ -4,10 +4,28 @@ from transcria.web.routes import (
     _audio_diagnostic_view,
     _enrich_lexicon_context_audio,
     _fill_missing_speaker_genders,
+    _normalize_speaker_hint,
     _processing_diagnostic_view,
     _recover_summary_speaker_hints,
     _resolve_context_audio_range,
 )
+
+
+def test_normalize_speaker_hint_keeps_valid_range():
+    assert _normalize_speaker_hint({"min": 3, "max": 7}) == {"min": 3, "max": 7}
+
+
+def test_normalize_speaker_hint_swaps_inverted_bounds():
+    assert _normalize_speaker_hint({"min": 9, "max": 2}) == {"min": 2, "max": 9}
+
+
+def test_normalize_speaker_hint_rejects_out_of_range_and_blanks():
+    assert _normalize_speaker_hint({"min": "", "max": 99}) == {"min": None, "max": None}
+    assert _normalize_speaker_hint({}) == {"min": None, "max": None}
+
+
+def test_normalize_speaker_hint_accepts_numeric_strings():
+    assert _normalize_speaker_hint({"min": "4", "max": "4"}) == {"min": 4, "max": 4}
 
 
 def test_audio_diagnostic_view_keeps_user_message_simple():

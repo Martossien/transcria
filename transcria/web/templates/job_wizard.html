@@ -230,6 +230,17 @@
       <button class="btn btn-warning btn-sm" onclick="TranscrIA.validateSummary('maybe')">Continuer quand même</button>
     {% else %}
       <p class="text-muted">Générez un résumé rapide pour vérifier le contenu du fichier.</p>
+      {% set speaker_hint = job.get_extra_data().get('speaker_hint') or {} %}
+      <div class="card card-body bg-light p-2 mb-2">
+        <label class="form-label small mb-1"><i class="bi bi-people-fill"></i> Nombre de locuteurs <span class="text-muted">(optionnel)</span></label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="number" min="1" max="50" id="speaker-min" class="form-control form-control-sm" style="width:6rem" placeholder="min" value="{{ speaker_hint.get('min') if speaker_hint.get('min') is not none else '' }}">
+          <span class="text-muted small">à</span>
+          <input type="number" min="1" max="50" id="speaker-max" class="form-control form-control-sm" style="width:6rem" placeholder="max" value="{{ speaker_hint.get('max') if speaker_hint.get('max') is not none else '' }}">
+          <span class="text-muted small">locuteurs</span>
+        </div>
+        <div class="form-text small">Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement.</div>
+      </div>
       <button class="btn btn-primary" onclick="TranscrIA.generateSummary()">
         <span id="summary-spinner" class="spinner d-none"></span> Générer le résumé
       </button>

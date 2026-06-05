@@ -1015,6 +1015,44 @@ def api_summary(job_id: str):
     return jsonify(result)
 
 
+def _normalize_speaker_hint(data: dict) -> dict:
+    """Normalise la fourchette de locuteurs saisie : entiers 1..50, min <= max.
+
+    Retourne ``{"min": int|None, "max": int|None}``. Une valeur vide ou hors plage
+    devient ``None`` (aucune contrainte sur cette borne).
+    """
+    def _coerce(value) -> int | None:
+        try:
+            ival = int(value)
+        except (TypeError, ValueError):
+            return None
+        return ival if 1 <= ival <= 50 else None
+
+    vmin = _coerce(data.get("min"))
+    vmax = _coerce(data.get("max"))
+    if vmin is not None and vmax is not None and vmin > vmax:
+        vmin, vmax = vmax, vmin
+    return {"min": vmin, "max": vmax}
+
+
+@web_bp.route("/api/jobs/<job_id>/speaker-hint", methods=["POST"])
+@login_required
+def api_speaker_hint(job_id: str):
+    """Mémorise la fourchette de locuteurs (min/max) choisie par l'utilisateur.
+
+    Indication facultative saisie après l'upload pour cadrer la diarisation (gain
+    de temps pyannote, meilleur comptage) et basculer automatiquement de Sortformer
+    vers pyannote si le maximum dépasse 4 locuteurs.
+    """
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    hint = _normalize_speaker_hint(request.get_json() or {})
+    JobStore.update_extra_data(job.id, lambda extra: {**extra, "speaker_hint": hint})
+    return jsonify({"status": "ok", "speaker_hint": hint})
+
+
 @web_bp.route("/api/jobs/<job_id>/context", methods=["POST"])
 @login_required
 def api_context(job_id: str):

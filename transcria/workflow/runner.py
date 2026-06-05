@@ -1083,8 +1083,10 @@ class WorkflowRunner:
         if update_state:
             self.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
         try:
+            from transcria.stt.diarizer_factory import apply_speaker_hint
             from transcria.stt.speaker_detection import SpeakerDetector
 
+            config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
             detector = SpeakerDetector(config)
             progress_callback = self._pyannote_progress_callback(
                 job, "summary" if not update_state else "speakers"
@@ -1194,8 +1196,9 @@ class WorkflowRunner:
             force=True,
         )
         try:
-            from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb
+            from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
 
+            config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
             diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
             diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
 
