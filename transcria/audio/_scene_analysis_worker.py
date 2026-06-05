@@ -20,6 +20,7 @@ _analyze_audio) importent librosa localement pour rester isolées.
 import copy
 import json
 import logging
+import statistics
 import sys
 from collections import defaultdict
 
@@ -48,6 +49,11 @@ _DEFAULT_CONFIG: dict = {
         # Spectral flatness < seuil ET ZCR < seuil → musique (harmoniques stables)
         "music_flatness_max": 0.12,
         "music_zcr_max": 0.10,
+        # Si la bande passante médiane du signal (rolloff 95 %) est inférieure à ce
+        # seuil, la classification « musique » est désactivée : la parole en bande
+        # étroite (codec téléphone/visio compressé) présente une flatness basse et
+        # serait sinon confondue avec de la musique. 0.0 = garde désactivée.
+        "music_suppress_bandwidth_hz": 3000.0,
         # Pitch médian ≥ seuil → voix féminine
         "female_pitch_hz": 165.0,
         # Durée minimale pour exposer une zone non vocale comme point de vigilance
@@ -257,6 +263,23 @@ def _frames_to_segments(labels: list, frame_duration: float, min_duration_s: flo
     return segments
 
 
+def _median_active_rolloff(rolloff, rms, energy_threshold: float) -> float:
+    """Médiane du rolloff spectral (95 % d'énergie) sur les seules trames actives.
+
+    Sert d'estimateur de la bande passante utile du signal, en ignorant les trames
+    silencieuses. Retourne ``0.0`` si aucune trame active. Fonction pure : testable
+    sans librosa.
+    """
+    active = [
+        float(roll)
+        for roll, energy in zip(rolloff, rms)
+        if energy > energy_threshold and roll > 0
+    ]
+    if not active:
+        return 0.0
+    return statistics.median(active)
+
+
 # ---------------------------------------------------------------------------
 # Analyse audio — importent librosa localement
 # ---------------------------------------------------------------------------
@@ -282,6 +305,7 @@ def _classify_scene_frames(signal, sr: int, thresholds: dict) -> tuple:
     noise_flatness_min = float(thresholds.get("noise_flatness_min", 0.40))
     music_flatness_max = float(thresholds.get("music_flatness_max", 0.12))
     music_zcr_max = float(thresholds.get("music_zcr_max", 0.10))
+    music_suppress_bandwidth_hz = float(thresholds.get("music_suppress_bandwidth_hz", 0.0))
 
     rms = librosa.feature.rms(
         y=signal, frame_length=_FRAME_LENGTH, hop_length=_HOP_LENGTH
@@ -297,13 +321,31 @@ def _classify_scene_frames(signal, sr: int, thresholds: dict) -> tuple:
     mean_rms = float(np.mean(positive_rms)) if positive_rms.size > 0 else 0.0
     energy_threshold = mean_rms * energy_ratio
 
+    # Garde bande étroite : sur un signal compressé (téléphone/visio), la parole a
+    # une flatness basse et serait classée « musique » à tort. Si la bande passante
+    # médiane est sous le seuil, on neutralise la classification musique.
+    suppress_music = False
+    if music_suppress_bandwidth_hz > 0.0:
+        rolloff = librosa.feature.spectral_rolloff(
+            y=signal, sr=sr, roll_percent=0.95,
+            n_fft=_FRAME_LENGTH, hop_length=_HOP_LENGTH,
+        )[0]
+        bandwidth_hz = _median_active_rolloff(rolloff, rms, energy_threshold)
+        suppress_music = 0.0 < bandwidth_hz < music_suppress_bandwidth_hz
+        if suppress_music:
+            logger.info(
+                "[scene_worker] Bande passante médiane %.0f Hz < %.0f Hz : "
+                "classification musique neutralisée (audio bande étroite)",
+                bandwidth_hz, music_suppress_bandwidth_hz,
+            )
+
     frame_labels: list = []
     for r, f, z in zip(rms, flatness, zcr):
         if r <= energy_threshold:
             frame_labels.append("noEnergy")
         elif f >= noise_flatness_min:
             frame_labels.append("noise")
-        elif f <= music_flatness_max and z <= music_zcr_max:
+        elif not suppress_music and f <= music_flatness_max and z <= music_zcr_max:
             frame_labels.append("music")
         else:
             frame_labels.append("speech")

@@ -421,6 +421,7 @@ workflow:
       noise_flatness_min: 0.40  # spectral flatness > seuil → bruit
       music_flatness_max: 0.12  # flatness < seuil ET ZCR < zcr_max → musique
       music_zcr_max: 0.10
+      music_suppress_bandwidth_hz: 3000.0  # bande passante médiane < seuil → musique neutralisée (parole bande étroite). 0 = désactivé
       female_pitch_hz: 165.0  # pitch médian ≥ seuil → voix féminine
       problem_segment_min_s: 2.0  # zone non vocale minimale exposée à la relecture
   audio_scene_filter:

@@ -660,8 +660,8 @@ def _check_audio_scene(cfg: dict, r: ValidationResult) -> None:
         else:
             for key in (
                 "energy_ratio", "min_segment_s", "noise_flatness_min",
-                "music_flatness_max", "music_zcr_max", "female_pitch_hz",
-                "problem_segment_min_s",
+                "music_flatness_max", "music_zcr_max", "music_suppress_bandwidth_hz",
+                "female_pitch_hz", "problem_segment_min_s",
             ):
                 _check_optional_number(thresholds, key, f"workflow.audio_scene.thresholds.{key}", r)
 

@@ -842,6 +842,26 @@ class TestAudioSceneWorkerStats:
         assert g["female_ratio"] == pytest.approx(0.0)
         assert g["dominant"] is None
 
+    def test_median_active_rolloff_uses_only_active_frames(self):
+        from transcria.audio._scene_analysis_worker import _median_active_rolloff
+
+        rolloff = [1500.0, 1600.0, 8000.0, 1700.0]
+        rms = [0.5, 0.5, 0.0001, 0.5]  # 3ᵉ trame inactive → exclue
+        bw = _median_active_rolloff(rolloff, rms, energy_threshold=0.01)
+        assert bw == pytest.approx(1600.0)
+
+    def test_median_active_rolloff_zero_when_no_active_frame(self):
+        from transcria.audio._scene_analysis_worker import _median_active_rolloff
+
+        bw = _median_active_rolloff([1500.0, 1600.0], [0.0, 0.0], energy_threshold=0.01)
+        assert bw == 0.0
+
+    def test_median_active_rolloff_ignores_zero_rolloff(self):
+        from transcria.audio._scene_analysis_worker import _median_active_rolloff
+
+        bw = _median_active_rolloff([0.0, 2000.0, 2200.0], [0.5, 0.5, 0.5], energy_threshold=0.01)
+        assert bw == pytest.approx(2100.0)
+
     def test_compute_signals_has_music_flag(self):
         from transcria.audio._scene_analysis_worker import _compute_signals
 

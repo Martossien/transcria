@@ -361,6 +361,7 @@ _DEFAULT_CONFIG = {
                 "noise_flatness_min": 0.40,
                 "music_flatness_max": 0.12,
                 "music_zcr_max": 0.10,
+                "music_suppress_bandwidth_hz": 3000.0,
                 "female_pitch_hz": 165.0,
                 "problem_segment_min_s": 2.0,
             },
