@@ -104,6 +104,7 @@ transcria/
     workflow/
       states.py             # WorkflowState.compute_statuses()
       steps.py              # WORKFLOW_STEPS (9 étapes)
+      progress.py           # WorkflowProgressReporter — progression UI persistée dans jobs.extra_data_json["workflow_progress"]
       runner.py             # WorkflowRunner — exécution des étapes
       transitions.py        # logique lancement / annulation / reprise
     audio/
@@ -134,7 +135,7 @@ transcria/
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
-      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
+      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + hook progress logué + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend
       remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)

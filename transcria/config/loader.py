@@ -192,6 +192,10 @@ _DEFAULT_CONFIG = {
         "enable_quality_mode": True,
         "enable_external_srt_editor_link": True,
         "enable_vad": True,
+        "progress": {
+            "enabled": True,
+            "update_interval_s": 10.0,
+        },
         "audio_quality": {
             "force_quality_backend": True,
             "degraded_levels": ["degrade"],
@@ -541,6 +545,8 @@ _DEFAULT_CONFIG = {
         "cache_audio_fingerprint": True,
         "embedding_cache_enabled": True,
         "embedding_clip_seconds": 12.0,
+        "progress_log_enabled": True,
+        "progress_log_interval_s": 30.0,
         "min_speakers": 2,
         "max_speakers": 20,
         "num_speakers": None,

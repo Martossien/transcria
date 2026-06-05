@@ -700,10 +700,17 @@ var TranscrIA = window.TranscrIA || {};
             return s < 60 ? s + 's' : Math.floor(s / 60) + 'min ' + (s % 60) + 's';
         }
 
-        function setInfo(msg) {
+        function setInfo(msg, progress) {
+            var detail = '';
+            if (progress && progress.message) {
+                detail = '<span class="text-muted">·</span><span>' + W.escapeHtml(progress.message) + '</span>';
+                if (typeof progress.percent === 'number') {
+                    detail += '<span class="badge text-bg-light border">' + progress.percent + '%</span>';
+                }
+            }
             div.innerHTML = '<div class="alert alert-info d-flex align-items-center gap-2">' +
                 '<span class="spinner-border spinner-border-sm" role="status"></span>' +
-                '<span>' + msg + '</span></div>';
+                '<span>' + W.escapeHtml(msg) + '</span>' + detail + '</div>';
         }
 
         function showLlmWarning() {
@@ -733,12 +740,13 @@ var TranscrIA = window.TranscrIA || {};
                         location.reload();
                     }
                 } else {
+                    var progress = r.data.progress || null;
                     // Afficher le warning si on est en arbitrating depuis trop longtemps
                     if (state === 'arbitrating' && !_warnShown && elapsedS() >= _LLM_WARN_S) {
                         _warnShown = true;
                         showLlmWarning();
                     } else if (!_warnShown) {
-                        setInfo(label + ' (' + elapsedStr() + ' écoulées)');
+                        setInfo(label + ' (' + elapsedStr() + ' écoulées)', progress);
                     }
                     setTimeout(poll, 4000);
                 }

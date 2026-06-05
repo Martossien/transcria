@@ -12,14 +12,14 @@ class SpeakerDetector:
     def __init__(self, config: dict):
         self.config = config
 
-    def detect(self, job: Job, audio_path: Path, device: str = "cuda:0") -> dict:
+    def detect(self, job: Job, audio_path: Path, device: str = "cuda:0", progress_callback=None) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
 
         diar_result = fs.load_json("speakers/speaker_turns.json")
         if diar_result is None:
             from transcria.stt.diarizer_factory import create_diarizer
 
-            ds = create_diarizer(self.config, device=device)
+            ds = create_diarizer(self.config, device=device, progress_callback=progress_callback)
             diar_result = ds.diarize(job, audio_path)
         elif diar_result.get("available") and fs.load_json("speakers/speaker_clips.json") is None:
             from transcria.stt.diarizer_factory import create_diarizer

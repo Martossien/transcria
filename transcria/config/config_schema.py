@@ -216,6 +216,7 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_speaker_detection", "workflow.enable_speaker_detection", r)
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
     _check_bool(wf, "enable_external_srt_editor_link", "workflow.enable_external_srt_editor_link", r)
+    _check_progress_section(wf.get("progress", {}), r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
     _check_queue_section(wf.get("queue", {}), r)
     _check_scheduling_section(wf.get("scheduling", {}), r)
@@ -236,6 +237,16 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
 
     _check_llm_section(wf.get("summary_llm", {}), "workflow.summary_llm", r, is_summary=True)
     _check_llm_section(wf.get("arbitration_llm", {}), "workflow.arbitration_llm", r, is_summary=False)
+
+
+def _check_progress_section(progress_cfg: dict, r: ValidationResult) -> None:
+    if not progress_cfg:
+        return
+    if not isinstance(progress_cfg, dict):
+        r.add_error("workflow.progress: doit être un objet YAML")
+        return
+    _check_bool(progress_cfg, "enabled", "workflow.progress.enabled", r)
+    _check_optional_number(progress_cfg, "update_interval_s", "workflow.progress.update_interval_s", r)
 
 
 def _check_whisper(whisper: dict, r: ValidationResult) -> None:
@@ -783,6 +794,8 @@ def _check_diarization(cfg: dict, r: ValidationResult) -> None:
     for key in ("cache_enabled", "cache_audio_fingerprint", "embedding_cache_enabled"):
         _check_bool(cfg, key, f"diarization.{key}", r)
     _check_optional_number(cfg, "embedding_clip_seconds", "diarization.embedding_clip_seconds", r)
+    _check_bool(cfg, "progress_log_enabled", "diarization.progress_log_enabled", r)
+    _check_optional_number(cfg, "progress_log_interval_s", "diarization.progress_log_interval_s", r)
     _check_diarization_pipeline_params(cfg.get("pipeline_params"), r)
 
 

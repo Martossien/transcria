@@ -359,7 +359,7 @@ transcria/
     stt/                         # Cohere, Whisper, Granite, Parakeet, BaseDiarizer, DiarizerService (pyannote), SortformerDiarizer (NeMo), diarizer_factory, alignement, fiabilité
     voice/                       # voix enregistrées, consentements, empreintes, matching
     web/                         # routes Flask, templates, JS
-    workflow/                    # étapes, transitions, runner
+    workflow/                    # étapes, transitions, runner, progression UI
   configs/prompts/               # prompts summary/correction
   scripts/                       # bootstrap, LLM, bench audio
   tests/                         # pytest + E2E GPU réel

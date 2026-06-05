@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 _DIARIZATION_BACKENDS = ("pyannote", "sortformer", "remote")
 
 
-def create_diarizer(config: dict, device: str | None = None) -> BaseDiarizer:
+def create_diarizer(config: dict, device: str | None = None, progress_callback=None) -> BaseDiarizer:
     """Instancie le backend de diarisation configuré.
 
     Lit ``models.diarization_backend`` dans la config (défaut : ``"pyannote"``).
@@ -45,6 +45,8 @@ def create_diarizer(config: dict, device: str | None = None) -> BaseDiarizer:
         return SortformerDiarizer(**kwargs)
 
     from transcria.stt.diarization import DiarizerService
+    if progress_callback is not None:
+        kwargs["progress_callback"] = progress_callback
     return DiarizerService(**kwargs)
 
 

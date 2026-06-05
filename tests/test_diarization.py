@@ -1,11 +1,14 @@
 """Tests for diarization backends — DiarizerService, SortformerDiarizer, factory."""
+import sys
+import types
+
 import numpy as np
 import pytest
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.stt.base_diarizer import BaseDiarizer
-from transcria.stt.diarization import DiarizerService
+from transcria.stt.diarization import DiarizerService, _PyannoteProgressLogger
 from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb, list_available_backends
 from transcria.stt.sortformer_diarizer import SortformerDiarizer
 
@@ -76,6 +79,73 @@ class TestDiarizerServiceFallback:
 
         with pytest.raises(RuntimeError, match="GPU OOM"):
             ds.diarize(job, audio_path)
+
+
+class TestDiarizerServiceProgressLogging:
+    def test_progress_hook_throttles_logs(self, caplog, monkeypatch):
+        current = {"value": 100.0}
+        monkeypatch.setattr("transcria.stt.diarization.time.monotonic", lambda: current["value"])
+        caplog.set_level("INFO", logger="transcria.stt.diarization")
+        hook = _PyannoteProgressLogger(interval_s=10.0)
+
+        hook("segmentation", object(), total=100, completed=0)
+        current["value"] = 105.0
+        hook("segmentation", object(), total=100, completed=40)
+        current["value"] = 111.0
+        hook("segmentation", object(), total=100, completed=50)
+        current["value"] = 112.0
+        hook("segmentation", object(), total=100, completed=100)
+
+        assert "étape 'segmentation' démarrée" in caplog.text
+        assert "50/100" in caplog.text
+        assert "100/100" in caplog.text
+        assert "40/100" not in caplog.text
+
+    def test_diarize_audio_passes_progress_hook_to_pipeline(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"progress_log_enabled": True, "progress_log_interval_s": 5.0}
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_bytes(b"fake audio")
+        hook_seen = {"value": None}
+
+        class _FakeAnnotation:
+            def itertracks(self, yield_label=False):
+                if yield_label:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00"
+                else:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None
+
+        class _FakeDiarization:
+            speaker_diarization = _FakeAnnotation()
+            exclusive_speaker_diarization = _FakeAnnotation()
+
+        class _FakePipeline:
+            @classmethod
+            def from_pretrained(cls, model_name, token=None):
+                return cls()
+
+            def to(self, device):
+                self.device = device
+
+            def __call__(self, audio, **kwargs):
+                hook_seen["value"] = kwargs.get("hook")
+                if hook_seen["value"] is not None:
+                    hook_seen["value"]("segmentation", object(), total=1, completed=1)
+                return _FakeDiarization()
+
+        fake_audio_mod = types.ModuleType("pyannote.audio")
+        fake_audio_mod.Pipeline = _FakePipeline
+        fake_pyannote_mod = types.ModuleType("pyannote")
+        fake_pyannote_mod.audio = fake_audio_mod
+        monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_mod)
+        monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_mod)
+        monkeypatch.setattr(type(DiarizerService(cfg, device="cpu")), "available", property(lambda self: True))
+
+        result = DiarizerService(cfg, device="cpu").diarize_audio(audio_path)
+
+        assert result["available"] is True
+        assert result["speakers"] == ["SPEAKER_00"]
+        assert isinstance(hook_seen["value"], _PyannoteProgressLogger)
 
 
 class TestDiarizerServiceExtractClips:

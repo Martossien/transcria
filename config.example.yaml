@@ -245,6 +245,9 @@ workflow:
   enable_quality_mode: true
   enable_external_srt_editor_link: true
   enable_vad: true
+  progress:
+    enabled: true
+    update_interval_s: 10.0
   audio_quality:
     force_quality_backend: true
     degraded_levels:
@@ -618,6 +621,8 @@ diarization:
   cache_audio_fingerprint: true
   embedding_cache_enabled: true
   embedding_clip_seconds: 12.0
+  progress_log_enabled: true
+  progress_log_interval_s: 30.0
 
   min_speakers: 2            # Empêche VBx de fusionner sous 2 locuteurs
   max_speakers: 20           # Plafond large, évite les explosions sur très long audio

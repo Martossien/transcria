@@ -7,6 +7,7 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.workflow.concurrency_profile import StageMetrics
+from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.transitions import is_cancel_requested
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,15 @@ class PipelineService:
         self.config = config
         from transcria.workflow.runner import WorkflowRunner
         self.runner = WorkflowRunner(JobStore, config)  # type: ignore[arg-type]
+        self._progress = WorkflowProgressReporter(config)
+
+    @property
+    def progress(self) -> WorkflowProgressReporter:
+        reporter = getattr(self, "_progress", None)
+        if reporter is None:
+            reporter = WorkflowProgressReporter(getattr(self, "config", {}) or {})
+            self._progress = reporter
+        return reporter
 
     @staticmethod
     def estimate_job_vram(config: dict, mode: str) -> dict:
@@ -52,6 +62,14 @@ class PipelineService:
 
         t0 = time.monotonic()
         sl.info("DÉBUT pipeline %s", mode, job_id=job.id, mode=mode)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="startup",
+            message="Préparation du traitement",
+            percent=1,
+            force=True,
+        )
 
         gated = self._remote_resource_gate(job, sl)
         if gated is not None:
@@ -65,6 +83,8 @@ class PipelineService:
             status = "OK" if not result.get("error") else "ERROR"
             sl.info("FIN pipeline %s", mode, job_id=job.id,
                     duree=round(elapsed, 1), status=status)
+            if not result.get("error"):
+                self.progress.clear(job.id)
             return result
         except Exception as exc:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
@@ -156,6 +176,14 @@ class PipelineService:
         audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
 
         sl.info("Transcription en cours", step="transcribe")
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="transcription",
+            message="Transcription finale en cours",
+            percent=35,
+            force=True,
+        )
         t0 = time.monotonic()
         transcribe_result = self.runner.run_transcription(job, audio_path, effective_config)
         transcribe_elapsed = time.monotonic() - t0
@@ -178,6 +206,7 @@ class PipelineService:
             t0 = time.monotonic()
             method = step_cfg["method"]
             sl.info("Étape en cours", step=step_cfg["name"])
+            self._publish_step_progress(job, step_cfg["name"], starting=True)
             result = method()
             elapsed = time.monotonic() - t0
 
@@ -199,11 +228,32 @@ class PipelineService:
                 return {"error": result["error"], "step": step_cfg["name"]}
             sl.info("Étape terminée", step=step_cfg["name"],
                     duree=round(elapsed, 1))
+            self._publish_step_progress(job, step_cfg["name"], starting=False)
             StageMetrics.get_instance().record(step_cfg["name"], elapsed)
 
         if finalize_job_state:
             JobStore.update_state(job.id, JobState.COMPLETED)
         return {"status": "completed", "transcription": transcribe_result}
+
+    def _publish_step_progress(self, job: Job, step_name: str, *, starting: bool) -> None:
+        messages = {
+            "diarization": ("Diarisation finale en cours", "Diarisation finale terminée", 60, 70),
+            "correction": ("Correction LLM du sous-titrage en cours", "Correction LLM terminée", 75, 82),
+            "quality": ("Contrôle qualité en cours", "Contrôle qualité terminé", 85, 90),
+            "export": ("Préparation du paquet final", "Paquet final prêt", 95, 100),
+        }
+        start_msg, end_msg, start_pct, end_pct = messages.get(
+            step_name,
+            (f"Étape {step_name} en cours", f"Étape {step_name} terminée", None, None),
+        )
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase=step_name,
+            message=start_msg if starting else end_msg,
+            percent=start_pct if starting else end_pct,
+            force=True,
+        )
 
     def _release_arbitrage_llm(self) -> None:
         if self.runner.vram.is_arbitrage_llm_running():
@@ -388,6 +438,14 @@ class PipelineService:
 
         t0 = time.monotonic()
         sl.info("[pipeline] Pré-diagnostic audio en cours", step="audio_preflight")
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_preflight",
+            message="Analyse technique du signal audio",
+            percent=5,
+            force=True,
+        )
         preflight = analyzer.analyze(Path(audio_path))
         if not preflight:
             sl.warning("[pipeline] Pré-diagnostic audio indisponible", step="audio_preflight")
@@ -418,6 +476,14 @@ class PipelineService:
             risk_level=preflight.get("risk_level"),
             flags=preflight.get("flags"),
         )
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_preflight",
+            message="Analyse technique audio terminée",
+            percent=12,
+            force=True,
+        )
         return preflight
 
     def _run_audio_scene_analysis(self, job: Job, audio_path: str, sl) -> dict:
@@ -443,6 +509,14 @@ class PipelineService:
 
         t0 = time.monotonic()
         sl.info("[pipeline] Analyse de scène en cours", step="audio_scene")
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_scene",
+            message="Analyse acoustique de la scène",
+            percent=15,
+            force=True,
+        )
 
         try:
             scene = analyzer.analyze(Path(audio_path))
@@ -471,6 +545,14 @@ class PipelineService:
                 noise_ratio=scene.get("noise_ratio"),
                 no_energy_ratio=scene.get("no_energy_ratio"),
                 problem_segments=len(scene.get("problem_segments") or []))
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_scene",
+            message="Analyse acoustique terminée",
+            percent=22,
+            force=True,
+        )
         return scene
 
     def _refresh_audio_quality_with_scene(self, job: Job, audio_scene: dict, sl) -> None:
@@ -570,6 +652,14 @@ class PipelineService:
 
         sl.info("[pipeline] Séparation de sources requise", step="source_sep",
                 reasons=reasons)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="source_separation",
+            message="Séparation vocale en cours",
+            percent=24,
+            force=True,
+        )
 
         output_path = Path(audio_path).parent / "vocals.wav"
         service = SourceSeparationService(self.config)
@@ -578,6 +668,14 @@ class PipelineService:
         if result_path != Path(audio_path):
             sl.info("[pipeline] Audio modifié après séparation vocale",
                     step="source_sep", vocals=result_path.name)
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="source_separation",
+                message="Séparation vocale terminée",
+                percent=28,
+                force=True,
+            )
         else:
             sl.warning("[pipeline] Séparation n'a pas produit de résultat, "
                        "audio original conservé", step="source_sep")
@@ -607,6 +705,14 @@ class PipelineService:
         output_path = Path(audio_path).parent / "scene_filtered.wav"
         sl.info("[pipeline] Filtrage scène audio requis", step="audio_scene_filter",
                 reasons=reasons, intervals=len(intervals))
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_scene_filter",
+            message="Filtrage des zones non vocales",
+            percent=29,
+            force=True,
+        )
         result_path = service.apply(Path(audio_path), output_path, intervals)
 
         if result_path == Path(audio_path):
@@ -633,6 +739,14 @@ class PipelineService:
 
         sl.info("[pipeline] Audio filtré par analyse de scène",
                 step="audio_scene_filter", output=result_path.name)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_scene_filter",
+            message="Filtrage audio terminé",
+            percent=31,
+            force=True,
+        )
         return str(result_path)
 
     def _run_audio_denoise(
@@ -658,6 +772,14 @@ class PipelineService:
         output_path = Path(audio_path).parent / "denoised.wav"
         sl.info("[pipeline] Débruitage audio requis", step="audio_denoise",
                 reasons=reasons, filters=filters)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_denoise",
+            message="Débruitage audio en cours",
+            percent=30,
+            force=True,
+        )
         result_path = service.apply(Path(audio_path), output_path, filters)
 
         if result_path == Path(audio_path):
@@ -685,6 +807,14 @@ class PipelineService:
 
         sl.info("[pipeline] Audio débruité",
                 step="audio_denoise", output=result_path.name)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_denoise",
+            message="Débruitage audio terminé",
+            percent=32,
+            force=True,
+        )
         return str(result_path)
 
     def _run_audio_normalization(
@@ -714,6 +844,14 @@ class PipelineService:
                     reasons=weak_reasons,
                     filters=weak_filters,
                 )
+                self.progress.update(
+                    job.id,
+                    step="processing",
+                    phase="audio_normalization",
+                    message="Normalisation voix faible en cours",
+                    percent=31,
+                    force=True,
+                )
                 output_path = Path(audio_path).parent / "normalized.wav"
                 result_path = service.apply(Path(audio_path), output_path, weak_filters)
                 if result_path != Path(audio_path):
@@ -728,6 +866,14 @@ class PipelineService:
                     )
                     sl.info("[pipeline] Audio normalisé (forcé — voix faible)",
                             step="audio_normalization", output=Path(result_path).name)
+                    self.progress.update(
+                        job.id,
+                        step="processing",
+                        phase="audio_normalization",
+                        message="Normalisation audio terminée",
+                        percent=33,
+                        force=True,
+                    )
                     return str(result_path)
 
             # Audio trop silencieux (chuchotement, micro lointain) : forcer loudnorm
@@ -745,6 +891,14 @@ class PipelineService:
                     threshold=rms_threshold,
                 )
                 forced_filters = ["loudnorm=I=-23:TP=-2:LRA=11"]
+                self.progress.update(
+                    job.id,
+                    step="processing",
+                    phase="audio_normalization",
+                    message="Normalisation audio en cours",
+                    percent=31,
+                    force=True,
+                )
                 output_path = Path(audio_path).parent / "normalized.wav"
                 result_path = service.apply(Path(audio_path), output_path, forced_filters)
                 if result_path != Path(audio_path):
@@ -755,6 +909,14 @@ class PipelineService:
                     )
                     sl.info("[pipeline] Audio normalisé (forcé — silence)",
                             step="audio_normalization", output=Path(result_path).name)
+                    self.progress.update(
+                        job.id,
+                        step="processing",
+                        phase="audio_normalization",
+                        message="Normalisation audio terminée",
+                        percent=33,
+                        force=True,
+                    )
                     return str(result_path)
             sl.debug("[pipeline] Normalisation audio non appliquée", step="audio_normalization",
                      reasons=reasons)
@@ -763,6 +925,14 @@ class PipelineService:
         output_path = Path(audio_path).parent / "normalized.wav"
         sl.info("[pipeline] Normalisation audio requise", step="audio_normalization",
                 reasons=reasons, filters=filters)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_normalization",
+            message="Normalisation audio en cours",
+            percent=31,
+            force=True,
+        )
         result_path = service.apply(Path(audio_path), output_path, filters)
 
         if result_path == Path(audio_path):
@@ -774,6 +944,14 @@ class PipelineService:
 
         sl.info("[pipeline] Audio normalisé",
                 step="audio_normalization", output=result_path.name)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="audio_normalization",
+            message="Normalisation audio terminée",
+            percent=33,
+            force=True,
+        )
         return str(result_path)
 
     def _save_audio_normalization_metadata(

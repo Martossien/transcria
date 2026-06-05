@@ -69,6 +69,7 @@
 | Clé | Écrite par | Contenu |
 |---|---|---|
 | `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`), `mode`, timestamps, `cancel_requested` |
+| `workflow_progress` | `WorkflowProgressReporter` | Progression UI courte : `step`, `phase`, `message`, `percent` optionnel, `updated_at`. Exposée par `/api/jobs/<id>/status`; messages non confidentiels et écritures throttlées |
 | `meeting_context` | recouvrement de contexte | langue, métadonnées de réunion |
 | `last_non_terminal_state` | reprise | dernier état non terminal connu |
 | `_remote_unavailable_since` | `PipelineService` (mode dégradé §7.2) | horodatage d'indisponibilité des ressources distantes |

@@ -8,6 +8,7 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.queue.allocator import GPUAllocator
+from transcria.workflow.progress import WorkflowProgressReporter
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class WorkflowRunner:
         self.config = config or {}
         self.vram = VRAMManager(config=self.config)
         self.allocator = GPUAllocator.get_instance(self.config)
+        self.progress = WorkflowProgressReporter(self.config)
 
     def _gpu_session(self, job: Job, model_name: str, required_mb: int, phase: str):
         if self._phase_runs_remotely(phase):
@@ -104,6 +106,24 @@ class WorkflowRunner:
         pg = getattr(self.allocator, "preferred_gpu", None)
         return int(pg) if pg is not None else 0
 
+    def _pyannote_progress_callback(self, job: Job, step: str):
+        def callback(pyannote_step: str, pyannote_percent: float | None) -> None:
+            message = f"Diarisation pyannote : {pyannote_step}"
+            percent = None
+            if pyannote_percent is not None:
+                base = 50.0 if step == "summary" else 60.0
+                span = 20.0 if step == "summary" else 10.0
+                percent = base + (span * pyannote_percent / 100.0)
+            self.progress.update(
+                job.id,
+                step=step,
+                phase="pyannote",
+                message=message,
+                percent=percent,
+            )
+
+        return callback
+
     @staticmethod
     def _cuda_available() -> bool:
         try:
@@ -126,6 +146,14 @@ class WorkflowRunner:
         sl.set_context(job_id=job.id, step="summary")
 
         self.store.update_state(job.id, JobState.SUMMARY_RUNNING)
+        self.progress.update(
+            job.id,
+            step="summary",
+            phase="summary_stt",
+            message="Résumé : transcription rapide en cours",
+            percent=5,
+            force=True,
+        )
         t0 = time.monotonic()
         sl.info("━━━ DÉBUT résumé ━━━")
 
@@ -148,17 +176,42 @@ class WorkflowRunner:
             return result
 
         sl.info("[2/4] Analyse de scène audio — début")
+        self.progress.update(
+            job.id,
+            step="summary",
+            phase="audio_scene",
+            message="Résumé : analyse acoustique de la réunion",
+            percent=35,
+            force=True,
+        )
         self._run_audio_scene_before_participants(job, audio_path, config, sl)
 
         sl.info("[3/4] Pyannote diarization — début")
+        self.progress.update(
+            job.id,
+            step="summary",
+            phase="pyannote",
+            message="Résumé : détection des locuteurs en cours",
+            percent=50,
+            force=True,
+        )
         self._run_pyannote_after_transcription(job, audio_path, config)
         sl.info("[3/4] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
 
         sl.info("[4/4] LLM résumé via arbitrage — début")
+        self.progress.update(
+            job.id,
+            step="summary",
+            phase="summary_llm",
+            message="Résumé : génération LLM en cours",
+            percent=80,
+            force=True,
+        )
         self._run_llm_summary(job, result, config, sl)
         sl.info("[4/4] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
         self.store.update_state(job.id, JobState.SUMMARY_DONE)
+        self.progress.clear(job.id)
         sl.info("━━━ FIN résumé ━━━ (%.1fs total)", time.monotonic() - t0,
                 transcript_chars=len(result.get("transcript_text", "")))
         return result
@@ -229,6 +282,14 @@ class WorkflowRunner:
 
         backend = config.get("models", {}).get("stt_backend", "cohere")
         vram_mb = get_backend_vram_mb(backend, config)
+        self.progress.update(
+            job.id,
+            step="summary",
+            phase="summary_stt",
+            message=f"Résumé : chargement STT {backend}",
+            percent=10,
+            force=True,
+        )
         try:
             with self._gpu_session(
                 job,
@@ -239,6 +300,14 @@ class WorkflowRunner:
                 generator = SummaryGenerator(config)
                 result = generator.generate_quick_summary(
                     job, Path(audio_path), gpu_index=gs.gpu_index
+                )
+                self.progress.update(
+                    job.id,
+                    step="summary",
+                    phase="summary_stt",
+                    message="Résumé : transcription rapide terminée",
+                    percent=30,
+                    force=True,
                 )
                 sl.info(
                     "STT rapide OK",
@@ -1017,6 +1086,9 @@ class WorkflowRunner:
             from transcria.stt.speaker_detection import SpeakerDetector
 
             detector = SpeakerDetector(config)
+            progress_callback = self._pyannote_progress_callback(
+                job, "summary" if not update_state else "speakers"
+            )
             if self._cuda_available():
                 with self._gpu_session(
                     job,
@@ -1029,11 +1101,15 @@ class WorkflowRunner:
                         "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
                         device, self.vram.pyannote_vram_mb,
                     )
-                    result = detector.detect(job, Path(audio_path), device=device)
+                    result = self._detect_speakers(
+                        detector, job, Path(audio_path), device=device, progress_callback=progress_callback
+                    )
             else:
                 logger.info("[speaker_detection] CUDA indisponible — pyannote sur CPU")
                 device = "cpu"
-                result = detector.detect(job, Path(audio_path), device=device)
+                result = self._detect_speakers(
+                    detector, job, Path(audio_path), device=device, progress_callback=progress_callback
+                )
             if update_state:
                 self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
             return result
@@ -1048,10 +1124,27 @@ class WorkflowRunner:
                 self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "speakers": []}
 
+    @staticmethod
+    def _detect_speakers(detector, job: Job, audio_path, *, device: str, progress_callback):
+        try:
+            return detector.detect(job, audio_path, device=device, progress_callback=progress_callback)
+        except TypeError as exc:
+            if "progress_callback" not in str(exc):
+                raise
+            return detector.detect(job, audio_path, device=device)
+
     def run_transcription(self, job: Job, audio_path: str, config: dict) -> dict:
         from pathlib import Path
 
         self.store.update_state(job.id, JobState.TRANSCRIBING)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="transcription",
+            message="Transcription finale en cours",
+            percent=35,
+            force=True,
+        )
 
         from transcria.stt.transcriber_factory import get_backend_vram_mb
 
@@ -1072,6 +1165,14 @@ class WorkflowRunner:
 
             transcriber = Transcriber(config, gpu_index=gpu)
             result = transcriber.transcribe(job, Path(audio_path))
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="transcription",
+                message="Transcription finale terminée",
+                percent=55,
+                force=True,
+            )
             return result
         except Exception as exc:
             logger.exception("Échec transcription")
@@ -1084,6 +1185,14 @@ class WorkflowRunner:
         from pathlib import Path
 
         self.store.update_state(job.id, JobState.DIARIZING)
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="diarization",
+            message="Diarisation finale en cours",
+            percent=60,
+            force=True,
+        )
         try:
             from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb
 
@@ -1102,12 +1211,20 @@ class WorkflowRunner:
                         "[diarization] backend=%s, GPU sélectionné: %s (%d Mo réservés)",
                         diar_backend, device, diar_vram_mb,
                     )
-                    diarizer = create_diarizer(config, device=device)
+                    diarizer = create_diarizer(
+                        config,
+                        device=device,
+                        progress_callback=self._pyannote_progress_callback(job, "processing"),
+                    )
                     result = diarizer.diarize(job, Path(audio_path))
                     diarizer.offload()
             else:
                 logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
-                diarizer = create_diarizer(config, device="cpu")
+                diarizer = create_diarizer(
+                    config,
+                    device="cpu",
+                    progress_callback=self._pyannote_progress_callback(job, "processing"),
+                )
                 try:
                     result = diarizer.diarize(job, Path(audio_path))
                 finally:
@@ -1118,6 +1235,14 @@ class WorkflowRunner:
             fs = self._get_fs(config, job.id)
             audio_scene = fs.load_json("metadata/audio_scene.json") or {}
             self._inject_speaker_genders(fs, audio_scene)
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="diarization",
+                message="Diarisation finale terminée",
+                percent=70,
+                force=True,
+            )
 
             return result
         except GPUSessionError as exc:
@@ -1131,12 +1256,28 @@ class WorkflowRunner:
 
     def run_quality_checks(self, job: Job, config: dict) -> dict:
         self.store.update_state(job.id, JobState.QUALITY_CHECKING)
+        self.progress.update(
+            job.id,
+            step="quality",
+            phase="quality_checks",
+            message="Contrôle qualité en cours",
+            percent=85,
+            force=True,
+        )
         try:
             from transcria.quality.quality_report import QualityReporter
 
             reporter = QualityReporter(config)
             result = reporter.run_all_checks(job)
             self.store.update_state(job.id, JobState.QUALITY_CHECKED)
+            self.progress.update(
+                job.id,
+                step="quality",
+                phase="quality_checks",
+                message="Contrôle qualité terminé",
+                percent=90,
+                force=True,
+            )
             return result
         except Exception as exc:
             logger.exception("Échec contrôle qualité")
@@ -1149,9 +1290,25 @@ class WorkflowRunner:
         from transcria.gpu.opencode_runner import OpenCodeRunner
         from transcria.jobs.filesystem import JobFilesystem
 
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="llm_correction",
+            message="Correction LLM du sous-titrage en cours",
+            percent=75,
+            force=True,
+        )
         llm_cfg = config.get("workflow", {}).get("arbitration_llm", {})
         if llm_cfg.get("enabled") is False:
             logger.info("Correction SRT ignorée (workflow.arbitration_llm.enabled=false)")
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="llm_correction",
+                message="Correction LLM désactivée",
+                percent=80,
+                force=True,
+            )
             return {"success": True, "skipped": True, "reason": "arbitration_llm.enabled=false"}
 
         fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
@@ -1235,6 +1392,14 @@ class WorkflowRunner:
                 logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
                 if result.get("warning"):
                     logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="llm_correction",
+                message="Correction LLM terminée",
+                percent=82,
+                force=True,
+            )
             return result
         except Exception as exc:
             logger.exception("Échec correction SRT: job=%s", job.id)
@@ -1253,6 +1418,14 @@ class WorkflowRunner:
             self.allocator.release_llm(job.id)
 
     def build_export(self, job: Job, config: dict) -> dict:
+        self.progress.update(
+            job.id,
+            step="export",
+            phase="package",
+            message="Préparation du paquet final",
+            percent=95,
+            force=True,
+        )
         try:
             from transcria.exports.package_builder import PackageBuilder
 
@@ -1264,6 +1437,7 @@ class WorkflowRunner:
                 return result
             self.store.update_state(job.id, JobState.EXPORT_READY)
             self.allocator.release(job.id)
+            self.progress.clear(job.id)
             return result
         except Exception as exc:
             logger.exception("Échec construction package")

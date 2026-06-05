@@ -762,6 +762,8 @@ n'ont pas changé.
 | `cache_audio_fingerprint` | bool | `true` | Vérifie taille/mtime/chemin de l'audio avant réutilisation |
 | `embedding_cache_enabled` | bool | `true` | Écrit un checkpoint acoustique par locuteur |
 | `embedding_clip_seconds` | float | `12.0` | Durée maximale utilisée par locuteur pour le checkpoint |
+| `progress_log_enabled` | bool | `true` | Active le hook de progression pyannote et les logs de sous-étapes longues |
+| `progress_log_interval_s` | float | `30.0` | Intervalle minimal entre deux logs d'avancement d'une même étape pyannote |
 | `min_speakers` | int \| null | `2` | Nombre minimal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `max_speakers` | int \| null | `20` | Nombre maximal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
@@ -812,6 +814,17 @@ estimée). Vide = la classe est **dérivée automatiquement** (STT distant `conc
 Étapes connues : `transcribe`, `diarization`, `voice_embed`, `correction`, `quality`, `export`.
 Ex. : `{"transcribe": {"class": "delegated", "resource": "stt_backend"}}`. Purement indicatif —
 aucune orchestration n'en découle (le multi-concurrence reste géré par les scripts de l'opérateur).
+
+#### `workflow.progress`
+
+Progression utilisateur persistée dans `jobs.extra_data_json["workflow_progress"]`
+et exposée par `GET /api/jobs/<id>/status`. Ce canal est distinct des logs techniques :
+messages courts, non confidentiels, et écritures DB throttlées.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active la progression détaillée affichée dans le wizard pendant les traitements longs |
+| `update_interval_s` | float | `10.0` | Intervalle minimal entre deux écritures DB non forcées pour un même job |
 
 #### `workflow.queue`
 

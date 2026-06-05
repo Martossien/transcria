@@ -1,6 +1,8 @@
 import logging
 import os
+import time
 from pathlib import Path
+from typing import Any, Callable
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -12,6 +14,90 @@ from transcria.stt.base_diarizer import BaseDiarizer
 logger = logging.getLogger(__name__)
 
 
+class _PyannoteProgressLogger:
+    """Hook pyannote qui journalise l'avancement sans spammer les logs."""
+
+    def __init__(
+        self,
+        interval_s: float = 30.0,
+        progress_callback: Callable[[str, float | None], None] | None = None,
+    ):
+        self.interval_s = max(1.0, float(interval_s))
+        self.progress_callback = progress_callback
+        self._started_at: dict[str, float] = {}
+        self._last_log_at: dict[str, float] = {}
+        self._last_completed: dict[str, int] = {}
+
+    def __call__(
+        self,
+        step_name: str,
+        step_artifact: Any,
+        file: dict | None = None,
+        total: int | None = None,
+        completed: int | None = None,
+    ) -> None:
+        del step_artifact, file
+        now = time.monotonic()
+        key = str(step_name)
+        if key not in self._started_at:
+            self._started_at[key] = now
+            self._last_log_at[key] = now
+            if total:
+                logger.info("Pyannote: étape '%s' démarrée (%d unités)", key, total)
+            else:
+                logger.info("Pyannote: étape '%s' démarrée", key)
+            self._notify(key, None)
+            if completed is None or total is None or total <= 0:
+                return
+
+        if completed is None or total is None or total <= 0:
+            if now - self._last_log_at[key] >= self.interval_s:
+                logger.info("Pyannote: étape '%s' toujours en cours (%.1fs)", key, now - self._started_at[key])
+                self._last_log_at[key] = now
+            return
+
+        previous = self._last_completed.get(key)
+        if previous == completed:
+            return
+        self._last_completed[key] = completed
+
+        finished = completed >= total
+        due = now - self._last_log_at[key] >= self.interval_s
+        if not finished and not due:
+            return
+
+        elapsed_s = now - self._started_at[key]
+        percent = min(100.0, max(0.0, completed * 100.0 / total))
+        if finished:
+            logger.info(
+                "Pyannote: étape '%s' terminée (%d/%d, %.1f%%, %.1fs)",
+                key,
+                completed,
+                total,
+                percent,
+                elapsed_s,
+            )
+        else:
+            logger.info(
+                "Pyannote: étape '%s' en cours (%d/%d, %.1f%%, %.1fs)",
+                key,
+                completed,
+                total,
+                percent,
+                elapsed_s,
+            )
+        self._notify(key, percent)
+        self._last_log_at[key] = now
+
+    def _notify(self, step_name: str, percent: float | None) -> None:
+        if self.progress_callback is None:
+            return
+        try:
+            self.progress_callback(step_name, percent)
+        except Exception as exc:  # noqa: BLE001 — progression UI best-effort
+            logger.debug("Notification progression pyannote ignorée: %s", exc)
+
+
 class DiarizerService(BaseDiarizer):
     """Backend de diarisation pyannote.audio (speaker-diarization-community-1).
 
@@ -19,8 +105,14 @@ class DiarizerService(BaseDiarizer):
     sont héritées de BaseDiarizer.
     """
 
-    def __init__(self, config: dict, device: str = "cuda:0"):
+    def __init__(
+        self,
+        config: dict,
+        device: str = "cuda:0",
+        progress_callback: Callable[[str, float | None], None] | None = None,
+    ):
         super().__init__(config, device)
+        self.progress_callback = progress_callback
         self._model_name: str = config.get("models", {}).get(
             "pyannote_model", "pyannote/speaker-diarization-community-1"
         )
@@ -38,6 +130,7 @@ class DiarizerService(BaseDiarizer):
             return False
 
     def diarize(self, job: Job, audio_path: Path) -> dict:
+        t0 = time.monotonic()
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         cached = self._load_cached_result(fs, audio_path)
         if cached is not None:
@@ -46,15 +139,24 @@ class DiarizerService(BaseDiarizer):
 
         # Calcul pur (sans effet de bord), puis persistance liée au job.
         result = self.diarize_audio(audio_path)
+        persist_t0 = time.monotonic()
         fs.save_json("speakers/speaker_turns.json", result)
+        logger.info("Diarization: speaker_turns.json écrit en %.1fs", time.monotonic() - persist_t0)
         if result.get("available"):
             fs.save_json(
                 "speakers/speaker_stats.json",
                 {"stats": result["stats"], "speakers": result["speakers"]},
             )
+            checkpoint_t0 = time.monotonic()
             self._save_cache_metadata(fs, audio_path, result)
+            logger.info("Diarization: checkpoint écrit en %.1fs", time.monotonic() - checkpoint_t0)
+            clips_t0 = time.monotonic()
             self._extract_clips(audio_path, result["turns"], result["speakers"], fs)
+            logger.info("Diarization: clips locuteurs terminés en %.1fs", time.monotonic() - clips_t0)
+            embeddings_t0 = time.monotonic()
             self._cache_speaker_embeddings(audio_path, result["turns"], result["speakers"], fs)
+            logger.info("Diarization: embeddings checkpoint terminés en %.1fs", time.monotonic() - embeddings_t0)
+        logger.info("Diarization: phase job terminée en %.1fs", time.monotonic() - t0)
         return result
 
     def diarize_audio(self, audio_path: Path) -> dict:
@@ -76,18 +178,24 @@ class DiarizerService(BaseDiarizer):
             import torch
             from pyannote.audio import Pipeline
 
+            total_t0 = time.monotonic()
             hf_token = os.environ.get("HF_TOKEN") or None
             logger.info("Chargement pyannote sur %s (token=%s)...", self.device, "oui" if hf_token else "non")
+            load_t0 = time.monotonic()
             pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
+            logger.info("Pyannote: modèle chargé en %.1fs", time.monotonic() - load_t0)
             pipeline_params = self._effective_pipeline_params()
             if pipeline_params:
                 logger.info("Diarization: paramètres pipeline pyannote = %s", pipeline_params)
                 try:
+                    instantiate_t0 = time.monotonic()
                     pipeline.instantiate(pipeline_params)
+                    logger.info("Pyannote: paramètres pipeline appliqués en %.1fs", time.monotonic() - instantiate_t0)
                 except ValueError as exc:
                     logger.warning("Paramètres pipeline pyannote ignorés: %s", exc)
+            move_t0 = time.monotonic()
             pipeline.to(torch.device(self.device))
-            logger.info("pyannote chargé sur %s", self.device)
+            logger.info("pyannote chargé sur %s en %.1fs", self.device, time.monotonic() - move_t0)
 
             diar_config = self.config.get("diarization", {})
             diar_kwargs: dict[str, int] = {}
@@ -108,7 +216,29 @@ class DiarizerService(BaseDiarizer):
             if diar_kwargs:
                 logger.info("Diarization: paramètres speakers = %s", diar_kwargs)
 
-            diarization = pipeline(str(audio_path), **diar_kwargs)
+            inference_t0 = time.monotonic()
+            size_mb = audio_path.stat().st_size / (1024 * 1024) if audio_path.exists() else 0.0
+            progress_hook = self._build_progress_hook()
+            logger.info(
+                "Pyannote: inférence démarrée | audio=%s, %.1f Mo, device=%s, hook_progress=%s",
+                audio_path.name,
+                size_mb,
+                self.device,
+                "oui" if progress_hook else "non",
+            )
+            if progress_hook is None:
+                diarization = pipeline(str(audio_path), **diar_kwargs)
+            else:
+                try:
+                    diarization = pipeline(str(audio_path), hook=progress_hook, **diar_kwargs)
+                except TypeError as exc:
+                    if "hook" not in str(exc):
+                        raise
+                    logger.warning("Pyannote: hook de progression non supporté par cette version, fallback sans hook")
+                    diarization = pipeline(str(audio_path), **diar_kwargs)
+            logger.info("Pyannote: inférence terminée en %.1fs", time.monotonic() - inference_t0)
+
+            parse_t0 = time.monotonic()
             annotation = diarization.speaker_diarization
             track_count = sum(1 for _ in annotation.itertracks())
             logger.info("Pyannote: %d tracks bruts dans l'annotation", track_count)
@@ -138,8 +268,10 @@ class DiarizerService(BaseDiarizer):
                     "speaking_time_seconds": round(spk_duration, 1),
                     "turn_count": sum(1 for t in turns if t["speaker"] == spk),
                 }
+            logger.info("Pyannote: annotation standard convertie en %.1fs", time.monotonic() - parse_t0)
 
             # Exclusive diarization : chaque instant = un seul locuteur, sans chevauchement.
+            exclusive_t0 = time.monotonic()
             exclusive_turns = []
             try:
                 exclusive_ann = diarization.exclusive_speaker_diarization
@@ -155,7 +287,13 @@ class DiarizerService(BaseDiarizer):
                 logger.warning("exclusive_speaker_diarization non disponible — fallback sur turns standard")
                 exclusive_turns = turns
 
-            logger.info("Diarization: %d locuteurs, %d segments", len(speakers_list), len(turns))
+            logger.info("Pyannote: exclusive diarization convertie en %.1fs", time.monotonic() - exclusive_t0)
+            logger.info(
+                "Diarization: %d locuteurs, %d segments, total %.1fs",
+                len(speakers_list),
+                len(turns),
+                time.monotonic() - total_t0,
+            )
             return {
                 "available": True,
                 "turns": turns,
@@ -170,3 +308,13 @@ class DiarizerService(BaseDiarizer):
         except Exception as exc:
             logger.exception("Échec diarization pyannote: %s", exc)
             return {"available": False, "turns": [], "speakers": [], "error": str(exc)}
+
+    def _build_progress_hook(self) -> _PyannoteProgressLogger | None:
+        diar_config = self.config.get("diarization", {})
+        if not diar_config.get("progress_log_enabled", True):
+            return None
+        raw_interval = diar_config.get("progress_log_interval_s", 30.0)
+        if isinstance(raw_interval, bool) or not isinstance(raw_interval, (int, float)):
+            logger.warning("diarization.progress_log_interval_s invalide (%r), défaut 30s", raw_interval)
+            raw_interval = 30.0
+        return _PyannoteProgressLogger(float(raw_interval), progress_callback=self.progress_callback)

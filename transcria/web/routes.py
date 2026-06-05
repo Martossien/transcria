@@ -1469,12 +1469,15 @@ def api_process(job_id: str):
 @login_required
 def api_job_status(job_id: str):
     """Endpoint léger de polling — état courant du job pendant le traitement."""
+    from transcria.workflow.progress import get_workflow_progress
+
     job, error_response = _get_job_for_api(job_id)
     if error_response:
         return error_response
     return jsonify({
         "state": job.state,
         "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
+        "progress": get_workflow_progress(job),
     })
 
 

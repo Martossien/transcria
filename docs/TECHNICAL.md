@@ -69,6 +69,7 @@ transcria/
 │   │   ├── __init__.py
 │   │   ├── states.py              # WorkflowState (compute_statuses, get_next_step), StepStatus
 │   │   ├── steps.py               # WORKFLOW_STEPS + helpers de navigation
+│   │   ├── progress.py            # WorkflowProgressReporter (progression UI persistée)
 │   │   └── runner.py              # WorkflowRunner
 │   │
 │   ├── audio/                     # Analyse et conversion audio
@@ -539,6 +540,12 @@ Contient `WORKFLOW_STEPS` (9 entrées, sans étape `speakers` séparée) et des 
 - `step_requires_speakers(step_id)` : retourne True pour processing, quality
 - `get_step_index(step_id)` / `get_next_step_id(step_id)`
 
+**`progress.py` — `WorkflowProgressReporter`**
+Persiste une progression utilisateur courte dans `jobs.extra_data_json["workflow_progress"]`.
+Le wizard la lit via `GET /api/jobs/<id>/status` pour afficher une activité discrète
+pendant les phases longues. Les écritures non forcées sont throttlées par
+`workflow.progress.update_interval_s`; les messages doivent rester courts et non confidentiels.
+
 **`runner.py` — `WorkflowRunner`**
 | Méthode | Description | GPU |
 |---|---|---|
@@ -734,7 +741,7 @@ Deux modes de chunking :
 |---|---|
 | `__init__(config, device)` | Appelle `super().__init__()` ; lit `models.pyannote_model` |
 | `available` | Vérifie `pyannote.audio` importable |
-| `diarize(job, audio_path)` | Charge pipeline pyannote → applique `diarization.pipeline_params` via `Pipeline.instantiate()` si configuré → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
+| `diarize(job, audio_path)` | Charge pipeline pyannote → applique `diarization.pipeline_params` via `Pipeline.instantiate()` si configuré → inférence avec hook de progression logué (`diarization.progress_log_*`) → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
 
 Le cache `speakers/diarization_checkpoint.json` inclut le modèle, l'empreinte audio,
 les contraintes locuteurs et les `pipeline_params` effectifs. Changer
