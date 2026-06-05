@@ -744,10 +744,12 @@ autour des chunks transmis au backend STT.
 | `micro_chunk_neighbor_gap_s` | float | `0.4` | Gap maximum entre deux micro-segments pour fusion (secondes) |
 | `isolated_min_chunk_s` | float | `0.3` | Durée minimale pour un segment isolé non fusionné |
 | `padding_s` | float | `0.15` | Padding autour des chunks pyannote (secondes). Les benches réunion 2026-06 ont montré qu'un padding `0.30` dégrade le texte sans améliorer le comptage locuteurs. |
-| `max_chunk_s` | int | `45` | Durée maximale d'un chunk (secondes). Les benches réunion 2026-06 ont montré un gain de vitesse vs `30` sans perte texte/locuteurs sur les fenêtres de référence. |
+| `max_chunk_s` | int | `45` | Durée maximale d'un chunk pyannote (secondes). Les benches réunion 2026-06 ont montré un gain de vitesse vs `30` sans perte texte/locuteurs sur les fenêtres de référence, avec `cohere.chunk_length_s=30`. |
 | `min_chunk_s` | float | `1.5` | Durée minimale d'un chunk (secondes) |
 
 **Redémarrage requis :** non — lu à chaque transcription.
+
+`max_chunk_s` et `cohere.chunk_length_s` sont deux limites différentes. Le premier borne les tours pyannote transmis au backend STT ; le second borne le découpage interne de Cohere. Le couple validé par bench est `45/30`. Ne pas interpréter l'ancien essai `workflow.pyannote_chunking.max_chunk_s=35` comme une validation de `cohere.chunk_length_s=35`.
 
 ### `diarization`
 
@@ -776,6 +778,12 @@ bench de référence n'a pas validé le réglage sur le corpus cible.
 | `clustering.threshold` | float \| null | `null` | Seuil VBx de clustering. Piste prioritaire pour tester le sous/sur-comptage en mode nombre inconnu. |
 | `clustering.Fa` | float \| null | `null` | Paramètre VBx interne, expérimental. |
 | `clustering.Fb` | float \| null | `null` | Paramètre VBx interne, expérimental. |
+
+Résultat de calibration 2026-06 : sur les fenêtres de référence d'une réunion dense,
+`clustering.threshold=0.50/0.55/0.65` n'a pas changé le comptage locuteurs ni le
+texte par rapport au mode pyannote automatique. Le nombre exact via
+`diarization.num_speakers` reste le seul réglage mesuré qui corrige totalement le
+comptage sur ce corpus.
 
 #### `workflow.execution`
 

@@ -385,7 +385,7 @@ jobs/<job_id>/
 ├── speakers/
 │   ├── speaker_turns.json          # Tours pyannote [{turns: [...], exclusive_turns: [...]}] (exclusive_turns via exclusive_speaker_diarization, sans chevauchements)
 │   ├── speaker_stats.json         # Stats par locuteur [{speaker_id, speaking_time_seconds, turn_count, ...}]
-│   ├── diarization_checkpoint.json # Empreinte audio + modèle pyannote pour réutiliser speaker_turns.json
+│   ├── diarization_checkpoint.json # Empreinte audio + modèle + paramètres diarisation pour réutiliser speaker_turns.json
 │   ├── speaker_embeddings.json    # Checkpoint acoustique par locuteur pour comparaison/reprise
 │   ├── speaker_mapping.json       # Mapping locuteur→participant [{mapping, speakers}]
 │   ├── voice_matches.json         # Suggestions voix enregistrées, scores et marges, sans embedding
@@ -454,6 +454,12 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
+
+`speakers/diarization_checkpoint.json` ne dépend pas seulement de l'audio et du
+modèle. Il contient aussi les contraintes locuteurs effectives
+(`min_speakers`/`max_speakers`/`num_speakers`) et les paramètres internes pyannote
+normalisés (`diarization.pipeline_params`). Modifier ces valeurs doit invalider le
+cache et produire un nouveau `speaker_turns.json`.
 
 ---
 

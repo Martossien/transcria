@@ -134,7 +134,7 @@ transcria/
       transcriber_factory.py# TranscriberFactory — sélection backend selon config
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
-      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + checkpoints
+      diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend
       remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)
@@ -221,7 +221,7 @@ transcria/
     stop_qwen_vllm.sh       # Wrapper legacy vLLM via stop_llm_backend.sh
     check_arbitrage_llm.sh  # Diagnostic : modèle actif, test d'inférence, cohérence config
     setup_opencode.py       # Configure opencode.json (provider local) de façon idempotente — cf. opencode_setup.py
-    bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices 24/36 combos
+    bench_audio.py          # Orchestrateur benchmark multi-GPU, matrices STT/VAD/Cohere/Pyannote
     bench_analyze.py        # Analyse locale sans LLM (hallucinations, timing, comparatif)
     bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
     _stt_serve_lib.sh       # Lib commune des lanceurs STT (moteur non hardcodé : STT_ENGINE vllm|sglang|custom)
@@ -372,7 +372,11 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 - `WorkflowRunner._inject_speaker_genders(fs, audio_scene)` : lit `speakers/speaker_turns.json` sur disque, appelle `_assign_speaker_genders`, met à jour `speaker_stats.json` (ne jamais écraser `gender` déjà renseigné). Appelée depuis `_run_pyannote_after_transcription` et `run_diarization`. **Prérequis timing** : `speaker_turns.json` et `audio_scene.json` doivent exister avant l'appel — `run_diarization` est toujours appelé après `_run_audio_scene_analysis` dans PipelineService, ce qui garantit cet ordre.
 - UI : bannière genre global dans l'étape Participants (si `audio_scene.gender.has_gender_data`), select genre par locuteur (Non déterminé/Féminin/Masculin). Le genre est persisté dans `speaker_stats.json` via `SpeakerDetector.save_mapping()` (champ `gender`). Pré-rempli automatiquement par `_inject_speaker_genders` si l'attribution acoustique réussit.
 
-**Checkpoints pyannote :** `DiarizerService` réutilise `speakers/speaker_turns.json` si `speakers/diarization_checkpoint.json` correspond au même modèle et à la même empreinte audio. `speakers/speaker_embeddings.json` stocke un checkpoint acoustique simple par locuteur. Ne pas supprimer ces fichiers sans mettre à jour `docs/DATA_MODEL.md`.
+**Checkpoints pyannote :** `DiarizerService` réutilise `speakers/speaker_turns.json` si `speakers/diarization_checkpoint.json` correspond au même modèle, à la même empreinte audio, aux mêmes contraintes locuteurs (`min_speakers`/`max_speakers`/`num_speakers`) et aux mêmes `diarization.pipeline_params`. `speakers/speaker_embeddings.json` stocke un checkpoint acoustique simple par locuteur. Ne pas supprimer ces fichiers sans mettre à jour `docs/DATA_MODEL.md`.
+
+**Chunking pyannote + Cohere :** le réglage production documenté est `workflow.pyannote_chunking.max_chunk_s=45` avec `cohere.chunk_length_s=30`. Ce n'est pas contradictoire : `max_chunk_s` borne les tours pyannote envoyés au backend, puis `CohereTranscriber` peut redécouper en chunks internes de 30 s. Le bench de référence réunion 2026-06 valide ce couple (`45/30`) pour un gain de vitesse sans perte texte/locuteurs. Ne pas passer Cohere à 35 s par défaut sans bench dédié `45/35` ou `35/35`.
+
+**Diarisation pyannote — nombre de locuteurs :** sur les fenêtres de référence réunion dense 2026-06, les seuils VBx testés (`clustering.threshold=0.50/0.55/0.65`) n'ont pas amélioré le comptage en mode nombre inconnu. Le seul résultat parfait mesuré est `diarization.num_speakers=N` quand le nombre exact est connu. `min_speakers`/`max_speakers` peuvent cadrer pyannote mais ne remplacent pas une indication utilisateur fiable sur les cas multi-participants difficiles.
 
 **`CohereTranscriber.transcribe()` accepte deux formes d'entrée :**
 - `transcribe(audio_path=Path(...))` — charge l'audio depuis le disque (usage standard)

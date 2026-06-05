@@ -721,6 +721,8 @@ Deux modes de chunking :
 | `offload()` | gc.collect() + cuda.empty_cache() — hérité par tous les backends |
 | `_load_cached_result(fs, audio_path)` | Vérifie cache disque via fingerprint audio+modèle |
 | `_save_cache_metadata(fs, audio_path, result)` | Écrit `diarization_checkpoint.json` |
+| `_effective_speaker_params()` | Normalise les contraintes locuteurs effectives (`min_speakers`, `max_speakers`, `num_speakers`) pour l'inférence et le cache |
+| `_effective_pipeline_params()` | Normalise `diarization.pipeline_params` en paramètres numériques pyannote, exclus du cache si absents |
 | `_extract_clips(audio_path, turns, speakers, fs)` | Extrait des extraits WAV par locuteur (3 clips, 3-12s) |
 | `_cache_speaker_embeddings(turns, audio_path, fs)` | Calcule et stocke les empreintes acoustiques par locuteur |
 | `_acoustic_embedding(audio, sr)` | Empreinte acoustique légère (durée, RMS) sans modèle ML |
@@ -732,7 +734,19 @@ Deux modes de chunking :
 |---|---|
 | `__init__(config, device)` | Appelle `super().__init__()` ; lit `models.pyannote_model` |
 | `available` | Vérifie `pyannote.audio` importable |
-| `diarize(job, audio_path)` | Charge pipeline pyannote → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
+| `diarize(job, audio_path)` | Charge pipeline pyannote → applique `diarization.pipeline_params` via `Pipeline.instantiate()` si configuré → inférence → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
+
+Le cache `speakers/diarization_checkpoint.json` inclut le modèle, l'empreinte audio,
+les contraintes locuteurs et les `pipeline_params` effectifs. Changer
+`diarization.num_speakers`, `min_speakers`/`max_speakers` ou un seuil VBx invalide
+donc le cache au lieu de réutiliser des tours produits avec une autre configuration.
+
+Calibration pyannote 2026-06 sur fenêtres de réunion dense : le réglage de chunking
+validé côté transcription est `workflow.pyannote_chunking.max_chunk_s=45` avec
+`cohere.chunk_length_s=30`. Les seuils VBx `clustering.threshold=0.50/0.55/0.65`
+n'ont pas amélioré le comptage en mode nombre inconnu ; `diarization.num_speakers`
+reste le seul levier mesuré qui force un comptage parfait quand l'information est
+connue.
 
 **`sortformer_diarizer.py` — `SortformerDiarizer(BaseDiarizer)`**
 

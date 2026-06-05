@@ -31,7 +31,7 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
 - **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés. Parakeet TDT 0.6B v3 (NVIDIA NeMo) en backend expérimental.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
-- **Diarisation multi-backend** : pyannote.audio (défaut, tours exclusifs, checkpoints, extraits audio) ou NVIDIA Sortformer 4spk via NeMo (jusqu'à 4 locuteurs, segments exclusifs natifs). Backend sélectionné par `models.diarization_backend`. Injection du genre vocal par locuteur sans écraser les choix utilisateur.
+- **Diarisation multi-backend** : pyannote.audio (défaut, tours exclusifs, checkpoints, extraits audio, paramètres internes expérimentaux) ou NVIDIA Sortformer 4spk via NeMo (jusqu'à 4 locuteurs, segments exclusifs natifs). Backend sélectionné par `models.diarization_backend`. Injection du genre vocal par locuteur sans écraser les choix utilisateur.
 - **Fiabilité segmentaire** : score `ok|suspect|degrade` par segment, signaux `no_speech_prob`, confiance mot-à-mot, micro-segments et artefacts de sous-titrage.
 - **Anti-hallucination ASR** : réduction de boucles répétitives pour Cohere, Whisper et Granite, nettoyage post-STT configurable.
 - **LLM d'arbitrage locale/OpenAI-compatible** : résumé structuré, rôles probables des locuteurs, termes douteux à valider, correction SRT avec lexique et contexte.
@@ -258,6 +258,10 @@ Avant la transcription finale, `PipelineService` peut exécuter :
 8. transcription : Cohere, Whisper ou Granite, chunking par tours pyannote si possible.
 9. post-traitement : nettoyage artefacts, fusion micro-segments, fiabilité par segment.
 
+Réglage STT/diarisation actuel issu des benches de référence réunion 2026-06 : Cohere reste le backend principal, pyannote reste le backend de diarisation par défaut, la transcription finale garde le VAD désactivé, et le couple validé est `workflow.pyannote_chunking.max_chunk_s=45` avec `cohere.chunk_length_s=30`. Les tours pyannote peuvent donc être plus longs que les chunks internes Cohere ; Cohere redécoupe si nécessaire. Les tests récents n'ont pas validé `cohere.chunk_length_s=35` comme nouveau défaut.
+
+Pour les réunions denses avec beaucoup de participants, le nombre de locuteurs reste le point dur. Les essais sur `diarization.pipeline_params.clustering.threshold` (`0.50`, `0.55`, `0.65`) n'ont pas amélioré le comptage en mode nombre inconnu. Quand le nombre exact est connu, `diarization.num_speakers` donne le meilleur résultat mesuré ; `min_speakers`/`max_speakers` restent des garde-fous mais pas une garantie.
+
 Artefacts importants par job :
 
 | Fichier | Rôle |
@@ -329,6 +333,8 @@ venv/bin/python scripts/bench_audio.py --help
 venv/bin/python scripts/bench_analyze.py --help
 venv/bin/python scripts/bench_eval.py --help
 ```
+
+Pour calibrer pyannote sur un corpus de référence, utiliser `--matrix pyannote_tune`. La variante P11 teste le réglage validé `workflow.pyannote_chunking.max_chunk_s=45`; P12/P13/P14 testent les seuils VBx expérimentaux. Si le nombre exact de locuteurs est connu pour une fenêtre, `--known-speakers N` active P02 avec `diarization.num_speakers=N`.
 
 Documentation E2E : [tests/E2E_README.md](tests/E2E_README.md).
 

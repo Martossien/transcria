@@ -429,7 +429,8 @@ Sur 8× RTX 3090 (24 Go), avec `--skip-llm` (recommandé pour bench pur) :
 | `extended` | 12 | ~4-6 min | ~30-45 min |
 | `vad` | 8 | ~3-5 min | ~20-35 min |
 | `cohere_tune` | 9 | ~4-8 min | ~35-60 min |
-| `all` | 77 | ~30-45 min | ~3-5 h |
+| `pyannote_tune` | 14 | ~5-10 min | ~45-75 min |
+| `all` | 91 | ~35-55 min | ~4-6 h |
 
 Ces durées varient selon la longueur de l'audio et les backends (Parakeet est ~63% plus
 lent que Cohere).
@@ -453,8 +454,8 @@ venv/bin/python scripts/bench_audio.py \
   --gpu-pool 3,4,5,6 \
   --skip-llm
 
-# ── Matrice complète — 77 combos sur 8 GPUs ──────────────────────────────────
-# base + extended + stt + vad + cohere_tune = 77 combos, 8 parallèles
+# ── Matrice complète — 91 combos sur 8 GPUs ──────────────────────────────────
+# base + extended + stt + vad + cohere_tune + pyannote_tune = 91 combos, 8 parallèles
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 \
   --matrix all \
@@ -515,6 +516,16 @@ venv/bin/python scripts/bench_audio.py \
   --gpu-pool 3,5,6,7 \
   --workers 2
 
+# ── Campagne Pyannote Tune — comptage locuteurs + chunking ───────────────────
+# P11 teste le chunking validé max_chunk_s=45.
+# P12/P13/P14 testent les seuils VBx expérimentaux.
+venv/bin/python scripts/bench_audio.py \
+  --audio bench_results/reference_corpus/T001_20260527/windows/W02_003500_004000/W02_003500_004000.wav \
+          bench_results/reference_corpus/T001_20260527/windows/W08_032500_033000/W08_032500_033000.wav \
+  --matrix pyannote_tune \
+  --gpu-pool 3,5 \
+  --workers 2
+
 # ── Vérifier les commandes sans les lancer ────────────────────────────────────
 venv/bin/python scripts/bench_audio.py \
   --audio tests/test2.mp3 --matrix all --dry-run
@@ -541,7 +552,7 @@ venv/bin/python scripts/bench_audio.py \
 
 | Option | Défaut | Description |
 |---|---|---|
-| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD résumé), `vad` (8 combos VAD final/interne), `extended` (12 décodage), `all` (68) |
+| `--matrix` | `base` | `base` (24 combos prétraitement), `stt` (24 backends×dia×VAD résumé), `vad` (8 combos VAD final/interne), `extended` (12 décodage), `cohere_tune` (9), `pyannote_tune` (14), `all` (91) |
 | `--gpu-pool` | auto-détection | GPUs à utiliser, ex : `0,1,2,3` |
 | `--workers` | nb GPUs | Pipelines parallèles — ne pas dépasser nb GPUs sauf cas particulier |
 | `--min-free-vram-mb` | 10 000 | Seuil VRAM libre pour l'auto-détection GPU |
@@ -609,6 +620,15 @@ venv/bin/python scripts/bench_audio.py \
   --output-dir bench_results/pyannote_tune_reunion \
   --resume
 ```
+
+Résultats de calibration 2026-06 sur 8 fenêtres d'une réunion dense avec DOCX de
+référence : P11 (`workflow.pyannote_chunking.max_chunk_s=45`, Cohere interne 30 s)
+a conservé le même WER/CER et le même comptage locuteurs que la baseline, avec un
+temps moyen plus bas. P09 (`padding_s=0.30`) a dégradé le texte et ne doit pas
+devenir un défaut. P12/P13/P14 (`diarization.pipeline_params.clustering.threshold`
+à `0.50/0.55/0.65`) n'ont pas amélioré le comptage locuteurs en mode nombre
+inconnu. P02 avec `--known-speakers N` reste le meilleur résultat mesuré quand le
+nombre exact est disponible.
 
 ### 9.3 Sortie du bench
 
