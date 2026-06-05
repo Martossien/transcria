@@ -260,7 +260,7 @@ Avant la transcription finale, `PipelineService` peut exécuter :
 
 Réglage STT/diarisation actuel issu des benches de référence réunion 2026-06 : Cohere reste le backend principal, pyannote reste le backend de diarisation par défaut, la transcription finale garde le VAD désactivé, et le couple validé est `workflow.pyannote_chunking.max_chunk_s=45` avec `cohere.chunk_length_s=30`. Les tours pyannote peuvent donc être plus longs que les chunks internes Cohere ; Cohere redécoupe si nécessaire. Les tests récents n'ont pas validé `cohere.chunk_length_s=35` comme nouveau défaut.
 
-Pour les réunions denses avec beaucoup de participants, le nombre de locuteurs reste le point dur. Les essais sur `diarization.pipeline_params.clustering.threshold` (`0.50`, `0.55`, `0.65`) n'ont pas amélioré le comptage en mode nombre inconnu. Quand le nombre exact est connu, `diarization.num_speakers` donne le meilleur résultat mesuré ; `min_speakers`/`max_speakers` restent des garde-fous mais pas une garantie.
+Pour les réunions denses avec beaucoup de participants, le nombre de locuteurs reste le point dur. Les essais sur `diarization.pipeline_params.clustering.threshold` (`0.50`, `0.55`, `0.65`) n'ont pas amélioré le comptage en mode nombre inconnu. Quand le nombre exact est connu, `diarization.num_speakers` donne le meilleur résultat mesuré ; `min_speakers`/`max_speakers` restent des garde-fous mais pas une garantie. L'étape Résumé du wizard propose pour cela un champ optionnel **min/max locuteurs** par job : il cadre pyannote (gain de temps, meilleur comptage, comptage exact si min = max) et bascule automatiquement vers pyannote si la borne haute dépasse la capacité de Sortformer (4 locuteurs).
 
 Artefacts importants par job :
 

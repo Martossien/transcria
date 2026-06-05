@@ -74,6 +74,7 @@
 | `last_non_terminal_state` | reprise | dernier état non terminal connu |
 | `_remote_unavailable_since` | `PipelineService` (mode dégradé §7.2) | horodatage d'indisponibilité des ressources distantes |
 | `audio_summary` | `JobService.analyze()` | **Résumé audio compact** (scalaires agrégés) : `risk_level`, `flags`, `duration_s`, `snr_db`, `bandwidth_95_hz`, `squim` (`{stoi,pesq,sisdr}`), `dnsmos` (`{sig,bak,ovrl}`), `difficulty` (`{windows,degrade,suspect,ok,degrade_ratio,worst}`). **Sans la `difficulty_map` par fenêtre** (qui reste dans `metadata/audio_preflight.json`). Destiné à requêter/échantillonner à travers les jobs (corpus de calibration STT). Clés à None omises. |
+| `speaker_hint` | `POST /api/jobs/<id>/speaker-hint` (`api_speaker_hint`) | Fourchette de locuteurs saisie à l'étape Résumé : `{min, max}` (entiers 1..50 ou `null`). Appliqué à la diarisation par `diarizer_factory.apply_speaker_hint()` (→ `diarization.min/max/num_speakers` + bascule Sortformer→pyannote si max > 4). N'affecte que ce job. |
 
 ### Table `job_queue`
 

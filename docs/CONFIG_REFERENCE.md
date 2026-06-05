@@ -432,6 +432,7 @@ se termine avant le chargement GPU.
 | `thresholds.noise_flatness_min` | float | `0.40` | Spectral flatness > seuil → bruit |
 | `thresholds.music_flatness_max` | float | `0.12` | Flatness < seuil ET ZCR < zcr_max → musique |
 | `thresholds.music_zcr_max` | float | `0.10` | Zero crossing rate maximal pour la classe musique |
+| `thresholds.music_suppress_bandwidth_hz` | float | `3000.0` | Si la bande passante médiane (rolloff 95 %) < seuil, la classe `music` est neutralisée (parole bande étroite faussement classée musique). `0` = garde désactivée |
 | `thresholds.female_pitch_hz` | float | `165.0` | Pitch médian ≥ seuil → voix féminine |
 | `thresholds.problem_segment_min_s` | float | `2.0` | Durée minimale d'une zone non vocale exposée dans `problem_segments` |
 
@@ -767,6 +768,8 @@ n'ont pas changé.
 | `min_speakers` | int \| null | `2` | Nombre minimal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `max_speakers` | int \| null | `20` | Nombre maximal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
+
+**Override par job (fourchette UI) :** ces valeurs globales peuvent être surchargées par job. L'étape Résumé du wizard propose un champ optionnel min/max locuteurs, stocké dans `jobs.extra_data_json["speaker_hint"]`. À la diarisation, `diarizer_factory.apply_speaker_hint()` écrit `min_speakers`/`max_speakers` (et `num_speakers` si min == max) depuis ce hint, et bascule `models.diarization_backend` de `sortformer` vers `pyannote` si la borne haute saisie dépasse 4 (capacité Sortformer). Le hint ne s'applique qu'au job concerné ; la config globale reste inchangée.
 
 #### `diarization.pipeline_params`
 
