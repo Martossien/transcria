@@ -791,9 +791,13 @@ def _check_diarization(cfg: dict, r: ValidationResult) -> None:
     if not isinstance(cfg, dict):
         r.add_error("diarization: doit être un objet YAML")
         return
-    for key in ("cache_enabled", "cache_audio_fingerprint", "embedding_cache_enabled"):
+    for key in ("cache_enabled", "cache_audio_fingerprint", "embedding_cache_enabled", "preload_audio", "prepare_pcm_audio"):
         _check_bool(cfg, key, f"diarization.{key}", r)
     _check_optional_number(cfg, "embedding_clip_seconds", "diarization.embedding_clip_seconds", r)
+    _check_optional_positive_int(cfg, "prepare_pcm_timeout_s", "diarization.prepare_pcm_timeout_s", r)
+    _check_optional_number(cfg, "prepare_pcm_duration_tolerance_s", "diarization.prepare_pcm_duration_tolerance_s", r)
+    _check_optional_positive_int(cfg, "embedding_batch_size", "diarization.embedding_batch_size", r)
+    _check_optional_positive_int(cfg, "segmentation_batch_size", "diarization.segmentation_batch_size", r)
     _check_bool(cfg, "progress_log_enabled", "diarization.progress_log_enabled", r)
     _check_optional_number(cfg, "progress_log_interval_s", "diarization.progress_log_interval_s", r)
     _check_diarization_pipeline_params(cfg.get("pipeline_params"), r)
@@ -1028,6 +1032,17 @@ def _check_optional_number(obj: dict, key: str, path: str, r: ValidationResult) 
         return
     if isinstance(val, bool) or not isinstance(val, (int, float)):
         r.add_error(f"{path}: doit être un nombre ou null")
+
+
+def _check_optional_positive_int(obj: dict, key: str, path: str, r: ValidationResult) -> None:
+    val = obj.get(key)
+    if val is None:
+        return
+    if isinstance(val, bool) or not isinstance(val, int):
+        r.add_error(f"{path}: doit être un entier positif ou null")
+        return
+    if val < 1:
+        r.add_error(f"{path}: doit être >= 1 ou null")
 
 
 def _check_regex_string(obj: dict, key: str, path: str, r: ValidationResult) -> None:

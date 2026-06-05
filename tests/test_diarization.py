@@ -1,10 +1,12 @@
 """Tests for diarization backends — DiarizerService, SortformerDiarizer, factory."""
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
 
+from transcria.audio.diarization_pcm import DiarizationPcmPreparer
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.stt.base_diarizer import BaseDiarizer
@@ -147,6 +149,110 @@ class TestDiarizerServiceProgressLogging:
         assert result["speakers"] == ["SPEAKER_00"]
         assert isinstance(hook_seen["value"], _PyannoteProgressLogger)
 
+    def test_diarize_audio_applies_pyannote_runtime_settings(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {
+            "embedding_batch_size": 128,
+            "segmentation_batch_size": 64,
+            "preload_audio": True,
+            "progress_log_enabled": False,
+        }
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_bytes(b"fake audio")
+        observed = {}
+
+        class _FakeAnnotation:
+            def itertracks(self, yield_label=False):
+                if yield_label:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00"
+                else:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None
+
+        class _FakeDiarization:
+            speaker_diarization = _FakeAnnotation()
+            exclusive_speaker_diarization = _FakeAnnotation()
+
+        class _FakePipeline:
+            embedding_batch_size = 32
+            segmentation_batch_size = 32
+
+            @classmethod
+            def from_pretrained(cls, model_name, token=None):
+                return cls()
+
+            def to(self, device):
+                self.device = device
+
+            def __call__(self, audio, **kwargs):
+                observed["embedding_batch_size"] = self.embedding_batch_size
+                observed["segmentation_batch_size"] = self.segmentation_batch_size
+                observed["preload"] = kwargs.get("preload")
+                observed["hook"] = kwargs.get("hook")
+                return _FakeDiarization()
+
+        fake_audio_mod = types.ModuleType("pyannote.audio")
+        fake_audio_mod.Pipeline = _FakePipeline
+        fake_pyannote_mod = types.ModuleType("pyannote")
+        fake_pyannote_mod.audio = fake_audio_mod
+        monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_mod)
+        monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_mod)
+        monkeypatch.setattr(type(DiarizerService(cfg, device="cpu")), "available", property(lambda self: True))
+
+        result = DiarizerService(cfg, device="cpu").diarize_audio(audio_path)
+
+        assert result["available"] is True
+        assert observed == {
+            "embedding_batch_size": 128,
+            "segmentation_batch_size": 64,
+            "preload": True,
+            "hook": None,
+        }
+
+    def test_diarize_audio_falls_back_when_preload_is_unsupported(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"preload_audio": True, "progress_log_enabled": False}
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_bytes(b"fake audio")
+        calls = []
+
+        class _FakeAnnotation:
+            def itertracks(self, yield_label=False):
+                if yield_label:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00"
+                else:
+                    yield types.SimpleNamespace(start=0.0, end=1.5), None
+
+        class _FakeDiarization:
+            speaker_diarization = _FakeAnnotation()
+            exclusive_speaker_diarization = _FakeAnnotation()
+
+        class _FakePipeline:
+            @classmethod
+            def from_pretrained(cls, model_name, token=None):
+                return cls()
+
+            def to(self, device):
+                self.device = device
+
+            def __call__(self, audio, **kwargs):
+                calls.append(dict(kwargs))
+                if kwargs.get("preload"):
+                    raise TypeError("unexpected keyword argument 'preload'")
+                return _FakeDiarization()
+
+        fake_audio_mod = types.ModuleType("pyannote.audio")
+        fake_audio_mod.Pipeline = _FakePipeline
+        fake_pyannote_mod = types.ModuleType("pyannote")
+        fake_pyannote_mod.audio = fake_audio_mod
+        monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_mod)
+        monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_mod)
+        monkeypatch.setattr(type(DiarizerService(cfg, device="cpu")), "available", property(lambda self: True))
+
+        result = DiarizerService(cfg, device="cpu").diarize_audio(audio_path)
+
+        assert result["available"] is True
+        assert calls == [{"preload": True}, {}]
+
 
 class TestDiarizerServiceExtractClips:
     def test_extract_clips_writes_json_structure(self, tmp_path):
@@ -239,6 +345,91 @@ class TestDiarizerServiceExtractClips:
 
         assert embedding["duration_seconds"] == 0.1
         assert embedding["rms"] == 0.5
+
+
+class TestDiarizationPcmPreparer:
+    def test_prepare_returns_source_when_disabled(self, tmp_path):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"prepare_pcm_audio": False}
+        source = tmp_path / "audio.mp3"
+        source.write_bytes(b"audio")
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], "pcm-disabled")
+
+        result = DiarizationPcmPreparer(cfg).prepare(fs, source)
+
+        assert result == source
+
+    def test_prepare_reuses_valid_cached_pcm(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"prepare_pcm_audio": True, "prepare_pcm_duration_tolerance_s": 0.25}
+        source = tmp_path / "audio.mp3"
+        source.write_bytes(b"audio")
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], "pcm-cache")
+        target = fs.job_dir / "speakers" / "diarization_16k_mono.wav"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"wav")
+        fingerprint = DiarizationPcmPreparer._source_fingerprint(source)
+        fs.save_json("speakers/diarization_audio.json", {"source_fingerprint": fingerprint, "target_path": str(target)})
+        monkeypatch.setattr(DiarizationPcmPreparer, "_is_pcm_16k_mono", staticmethod(lambda path: False))
+        monkeypatch.setattr(DiarizationPcmPreparer, "_duration_s", staticmethod(lambda path: 10.0))
+
+        result = DiarizationPcmPreparer(cfg).prepare(fs, source)
+
+        assert result == target
+
+    def test_prepare_falls_back_when_duration_differs(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {
+            "prepare_pcm_audio": True,
+            "prepare_pcm_timeout_s": 5,
+            "prepare_pcm_duration_tolerance_s": 0.01,
+        }
+        source = tmp_path / "audio.mp3"
+        source.write_bytes(b"audio")
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], "pcm-fallback")
+
+        def fake_run(cmd, check, capture_output, timeout):
+            del check, capture_output, timeout
+            Path(cmd[-1]).write_bytes(b"wav")
+            return types.SimpleNamespace(returncode=0)
+
+        def fake_duration(path):
+            return 10.0 if path == source else 10.2
+
+        monkeypatch.setattr(DiarizationPcmPreparer, "_is_pcm_16k_mono", staticmethod(lambda path: False))
+        monkeypatch.setattr("transcria.audio.diarization_pcm.subprocess.run", fake_run)
+        monkeypatch.setattr(DiarizationPcmPreparer, "_duration_s", staticmethod(fake_duration))
+
+        result = DiarizationPcmPreparer(cfg).prepare(fs, source)
+
+        assert result == source
+        metadata = fs.load_json("speakers/diarization_audio.json")
+        assert metadata["fallback"] == "source"
+        assert "durée source/cible divergente" in metadata["error"]
+
+    def test_diarizer_prepares_audio_only_for_pyannote_inference(self, tmp_path, monkeypatch):
+        cfg = _default_cfg(tmp_path)
+        source = tmp_path / "audio.mp3"
+        prepared = tmp_path / "audio_16k.wav"
+        source.write_bytes(b"audio")
+        prepared.write_bytes(b"wav")
+        job = Job(id="pcm-integrated", owner_id="u1", title="PCM", state=JobState.ANALYZED.value)
+        ds = DiarizerService(cfg, device="cpu")
+        seen = {}
+
+        monkeypatch.setattr(ds, "_load_cached_result", lambda fs, audio_path: None)
+        monkeypatch.setattr(ds, "_prepare_diarization_audio", lambda fs, audio_path: prepared)
+
+        def fake_diarize_audio(audio_path):
+            seen["diarize_audio_path"] = audio_path
+            return {"available": False, "turns": [], "speakers": []}
+
+        monkeypatch.setattr(ds, "diarize_audio", fake_diarize_audio)
+
+        result = ds.diarize(job, source)
+
+        assert result["available"] is False
+        assert seen["diarize_audio_path"] == prepared
 
 
 class TestDiarizerServiceConfigInit:

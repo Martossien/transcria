@@ -351,7 +351,7 @@ Les opérations sont tracées dans les logs du pipeline (`removed_artifacts=N, r
 
 Le VAD Silero reste actif par défaut en résumé. `AdaptiveVADConfig` adapte les seuils à partir de `metadata/audio_quality_decision.json` sans modifier la configuration globale. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé également (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est désactivé par défaut. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète et les recommandations par type de fichier.
 
-Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutiliser les tours si l'audio et le modèle n'ont pas changé, et `speakers/speaker_embeddings.json` comme checkpoint acoustique par locuteur.
+Pyannote écrit maintenant `speakers/diarization_checkpoint.json` pour réutiliser les tours si l'audio et le modèle n'ont pas changé, et `speakers/speaker_embeddings.json` comme checkpoint acoustique par locuteur. Sur les longues réunions, `diarization.preload_audio=true` passe `preload=True` au pipeline pyannote pour éviter les crops/décodages répétés. Si `diarization.prepare_pcm_audio=true`, `DiarizationPcmPreparer` crée un cache `speakers/diarization_16k_mono.wav` réservé à pyannote, contrôlé par durée source/cible et documenté dans `speakers/diarization_audio.json`.
 
 ---
 
@@ -741,7 +741,20 @@ Deux modes de chunking :
 |---|---|
 | `__init__(config, device)` | Appelle `super().__init__()` ; lit `models.pyannote_model` |
 | `available` | Vérifie `pyannote.audio` importable |
-| `diarize(job, audio_path)` | Charge pipeline pyannote → applique `diarization.pipeline_params` via `Pipeline.instantiate()` si configuré → inférence avec hook de progression logué (`diarization.progress_log_*`) → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
+| `diarize(job, audio_path)` | Prépare optionnellement un WAV PCM 16 kHz mono réservé à pyannote (`diarization.prepare_pcm_audio`) → charge pipeline pyannote → applique `diarization.pipeline_params` via `Pipeline.instantiate()` si configuré → applique `embedding_batch_size`/`segmentation_batch_size` → inférence avec `preload=True` si activé et hook de progression logué (`diarization.progress_log_*`) → turns + extraction `exclusive_speaker_diarization` dans `exclusive_turns` (fallback `AttributeError` → turns standard) → stats → sauvegarde |
+
+**`diarization_pcm.py` — `DiarizationPcmPreparer`**
+| Méthode | Description |
+|---|---|
+| `prepare(fs, source_path)` | Retourne l'audio original si l'option est désactivée ou si l'entrée est déjà PCM 16 kHz mono ; sinon crée/réutilise `speakers/diarization_16k_mono.wav` |
+| `_cached_pcm_is_valid(...)` | Vérifie le fichier préparé via empreinte source, chemin cible et durée |
+| `_duration_s(path)` | Mesure la durée via `AudioAnalyzer`/ffprobe |
+| `_source_fingerprint(path)` | Hash chemin absolu + taille + mtime ns pour invalider le cache |
+
+Le fichier PCM préparé ne remplace pas l'audio de référence du job : les clips, les
+embeddings de cache et `diarization_checkpoint.json` continuent d'utiliser l'audio
+original fourni à `diarize()`. Cela garde les artefacts utilisateur et l'invalidation
+de cache alignés sur le fichier source.
 
 Le cache `speakers/diarization_checkpoint.json` inclut le modèle, l'empreinte audio,
 les contraintes locuteurs et les `pipeline_params` effectifs. Changer
@@ -1570,6 +1583,8 @@ jobs/{uuid}/
   speakers/
     speaker_turns.json            # Turns pyannote (exclusive_turns inclus)
     speaker_stats.json            # Stats par locuteur (gender inclus si attribution acoustique)
+    diarization_audio.json         # Métadonnées du cache PCM pyannote (si prepare_pcm_audio)
+    diarization_16k_mono.wav       # WAV PCM 16 kHz mono réservé à pyannote (si activé)
     diarization_checkpoint.json   # Empreinte audio+modèle pour réutilisation pyannote
     speaker_embeddings.json       # Checkpoint acoustique par locuteur
     speaker_mapping.json          # Mapping SPEAKER_XX → participant

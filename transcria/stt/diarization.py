@@ -137,8 +137,9 @@ class DiarizerService(BaseDiarizer):
             logger.info("Diarization: checkpoint réutilisé (%d locuteurs)", len(cached.get("speakers", [])))
             return cached
 
+        diarization_audio_path = self._prepare_diarization_audio(fs, audio_path)
         # Calcul pur (sans effet de bord), puis persistance liée au job.
-        result = self.diarize_audio(audio_path)
+        result = self.diarize_audio(diarization_audio_path)
         persist_t0 = time.monotonic()
         fs.save_json("speakers/speaker_turns.json", result)
         logger.info("Diarization: speaker_turns.json écrit en %.1fs", time.monotonic() - persist_t0)
@@ -158,6 +159,18 @@ class DiarizerService(BaseDiarizer):
             logger.info("Diarization: embeddings checkpoint terminés en %.1fs", time.monotonic() - embeddings_t0)
         logger.info("Diarization: phase job terminée en %.1fs", time.monotonic() - t0)
         return result
+
+    def _prepare_diarization_audio(self, fs: JobFilesystem, audio_path: Path) -> Path:
+        try:
+            from transcria.audio.diarization_pcm import DiarizationPcmPreparer
+
+            prepared = DiarizationPcmPreparer(self.config).prepare(fs, audio_path)
+            if prepared != audio_path:
+                logger.info("Diarization: audio optimisé pyannote utilisé (%s)", prepared.name)
+            return prepared
+        except Exception as exc:  # noqa: BLE001 — optimisation best-effort
+            logger.warning("Diarization: préparation audio pyannote ignorée: %s", exc)
+            return audio_path
 
     def diarize_audio(self, audio_path: Path) -> dict:
         """Calcul de diarisation pur — aucun effet de bord job/fs/cache/clips.
@@ -193,6 +206,7 @@ class DiarizerService(BaseDiarizer):
                     logger.info("Pyannote: paramètres pipeline appliqués en %.1fs", time.monotonic() - instantiate_t0)
                 except ValueError as exc:
                     logger.warning("Paramètres pipeline pyannote ignorés: %s", exc)
+            self._apply_runtime_pipeline_settings(pipeline)
             move_t0 = time.monotonic()
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s en %.1fs", self.device, time.monotonic() - move_t0)
@@ -220,22 +234,14 @@ class DiarizerService(BaseDiarizer):
             size_mb = audio_path.stat().st_size / (1024 * 1024) if audio_path.exists() else 0.0
             progress_hook = self._build_progress_hook()
             logger.info(
-                "Pyannote: inférence démarrée | audio=%s, %.1f Mo, device=%s, hook_progress=%s",
+                "Pyannote: inférence démarrée | audio=%s, %.1f Mo, device=%s, hook_progress=%s, preload_audio=%s",
                 audio_path.name,
                 size_mb,
                 self.device,
                 "oui" if progress_hook else "non",
+                "oui" if self._preload_audio_enabled() else "non",
             )
-            if progress_hook is None:
-                diarization = pipeline(str(audio_path), **diar_kwargs)
-            else:
-                try:
-                    diarization = pipeline(str(audio_path), hook=progress_hook, **diar_kwargs)
-                except TypeError as exc:
-                    if "hook" not in str(exc):
-                        raise
-                    logger.warning("Pyannote: hook de progression non supporté par cette version, fallback sans hook")
-                    diarization = pipeline(str(audio_path), **diar_kwargs)
+            diarization = self._run_pipeline(pipeline, audio_path, progress_hook, diar_kwargs)
             logger.info("Pyannote: inférence terminée en %.1fs", time.monotonic() - inference_t0)
 
             parse_t0 = time.monotonic()
@@ -308,6 +314,57 @@ class DiarizerService(BaseDiarizer):
         except Exception as exc:
             logger.exception("Échec diarization pyannote: %s", exc)
             return {"available": False, "turns": [], "speakers": [], "error": str(exc)}
+
+    def _apply_runtime_pipeline_settings(self, pipeline) -> None:
+        for config_key, attr_name in (
+            ("embedding_batch_size", "embedding_batch_size"),
+            ("segmentation_batch_size", "segmentation_batch_size"),
+        ):
+            batch_size = self._positive_int_config(config_key)
+            if batch_size is None:
+                continue
+            if not hasattr(pipeline, attr_name):
+                logger.warning("Pyannote: paramètre %s non supporté par ce pipeline", attr_name)
+                continue
+            try:
+                setattr(pipeline, attr_name, batch_size)
+                logger.info("Pyannote: %s=%d appliqué", attr_name, batch_size)
+            except Exception as exc:  # noqa: BLE001 — compatibilité versions pyannote
+                logger.warning("Pyannote: impossible d'appliquer %s=%d: %s", attr_name, batch_size, exc)
+
+    def _run_pipeline(self, pipeline, audio_path: Path, progress_hook, diar_kwargs: dict[str, int]):
+        call_kwargs = dict(diar_kwargs)
+        if progress_hook is not None:
+            call_kwargs["hook"] = progress_hook
+        if self._preload_audio_enabled():
+            call_kwargs["preload"] = True
+
+        while True:
+            try:
+                return pipeline(str(audio_path), **call_kwargs)
+            except TypeError as exc:
+                message = str(exc)
+                if "preload" in call_kwargs and "preload" in message:
+                    logger.warning("Pyannote: preload audio non supporté par cette version, fallback sans preload")
+                    call_kwargs.pop("preload", None)
+                    continue
+                if "hook" in call_kwargs and "hook" in message:
+                    logger.warning("Pyannote: hook de progression non supporté par cette version, fallback sans hook")
+                    call_kwargs.pop("hook", None)
+                    continue
+                raise
+
+    def _preload_audio_enabled(self) -> bool:
+        return bool(self.config.get("diarization", {}).get("preload_audio", True))
+
+    def _positive_int_config(self, key: str) -> int | None:
+        value = self.config.get("diarization", {}).get(key)
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            logger.warning("diarization.%s ignoré: valeur invalide %r (attendu entier >= 1)", key, value)
+            return None
+        return value
 
     def _build_progress_hook(self) -> _PyannoteProgressLogger | None:
         diar_config = self.config.get("diarization", {})

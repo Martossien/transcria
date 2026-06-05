@@ -387,6 +387,8 @@ jobs/<job_id>/
 ├── speakers/
 │   ├── speaker_turns.json          # Tours pyannote [{turns: [...], exclusive_turns: [...]}] (exclusive_turns via exclusive_speaker_diarization, sans chevauchements)
 │   ├── speaker_stats.json         # Stats par locuteur [{speaker_id, speaking_time_seconds, turn_count, ...}]
+│   ├── diarization_audio.json      # Métadonnées du cache WAV PCM réservé à pyannote (source, cible, durées, fallback éventuel)
+│   ├── diarization_16k_mono.wav    # Cache WAV PCM 16 kHz mono utilisé uniquement par pyannote si diarization.prepare_pcm_audio=true
 │   ├── diarization_checkpoint.json # Empreinte audio + modèle + paramètres diarisation pour réutiliser speaker_turns.json
 │   ├── speaker_embeddings.json    # Checkpoint acoustique par locuteur pour comparaison/reprise
 │   ├── speaker_mapping.json       # Mapping locuteur→participant [{mapping, speakers}]
@@ -429,7 +431,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Upload | `input/original.<ext>` | `JobFilesystem.save_upload()` |
 | Analyse | `metadata/audio_analysis.json` | `AudioAnalyzer.analyze()` |
 | Résumé (Phase 1) | `summary/quick_transcript.txt`, `summary/summary.json`, `summary/summary.md` | `SummaryGenerator.generate_quick_summary()` |
-| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `create_diarizer().diarize()` (pyannote ou Sortformer selon `models.diarization_backend`) + `WorkflowRunner._write_diarization_context()` |
+| Résumé (Phase 1b) | `speakers/speaker_turns.json`, `speakers/speaker_stats.json`, `speakers/diarization_audio.json` et `speakers/diarization_16k_mono.wav` si cache PCM activé, `speakers/diarization_checkpoint.json`, `speakers/speaker_embeddings.json`, `speakers/samples/*.wav`, `speakers/speaker_clips.json`, `summary/diarization_context.md` | `create_diarizer().diarize()` (pyannote ou Sortformer selon `models.diarization_backend`) + `WorkflowRunner._write_diarization_context()` |
 | Résumé (Phase 2) | `summary/summary.md` (écrasé) | `OpenCodeRunner.run_summary()` |
 | Contexte | `context/meeting_context.json` | `MeetingContextManager.save()` |
 | Participants | `context/participants.json` | `ParticipantsManager.save()` |
@@ -462,6 +464,13 @@ modèle. Il contient aussi les contraintes locuteurs effectives
 (`min_speakers`/`max_speakers`/`num_speakers`) et les paramètres internes pyannote
 normalisés (`diarization.pipeline_params`). Modifier ces valeurs doit invalider le
 cache et produire un nouveau `speaker_turns.json`.
+
+`speakers/diarization_16k_mono.wav` est un cache de performance optionnel réservé
+à l'inférence pyannote. Il ne remplace pas l'audio de référence du job. Le fichier
+`speakers/diarization_audio.json` trace l'empreinte source, le chemin cible, les
+durées source/cible et le fallback éventuel. Si la durée diverge au-delà de
+`diarization.prepare_pcm_duration_tolerance_s`, TranscrIA ignore ce WAV et diarise
+l'audio original.
 
 ---
 
