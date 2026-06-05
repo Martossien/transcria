@@ -657,10 +657,34 @@ PYANNOTE_TUNE_COMBO_MATRIX: list[dict] = [
         "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["workflow.pyannote_chunking.max_chunk_s=45"],
         "label_extra": "pyannote+chunk45",
     },
+    {
+        "id": "P12", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "vbx-threshold-0.50",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.pipeline_params.clustering.threshold=0.50"],
+        "label_extra": "pyannote+vbx0.50",
+    },
+    {
+        "id": "P13", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "vbx-threshold-0.55",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.pipeline_params.clustering.threshold=0.55"],
+        "label_extra": "pyannote+vbx0.55",
+    },
+    {
+        "id": "P14", "stt": "cohere", "scene": False, "sep": False, "norm": False, "filter": False,
+        "skip_diarization": False,
+        "diarization_backend": "pyannote",
+        "diarization_variant": "vbx-threshold-0.65",
+        "overrides": _PYANNOTE_TUNE_BASE_OVERRIDES + ["diarization.pipeline_params.clustering.threshold=0.65"],
+        "label_extra": "pyannote+vbx0.65",
+    },
 ]
 
-assert len(PYANNOTE_TUNE_COMBO_MATRIX) == 11, (
-    f"La matrice Pyannote Tune devrait contenir 11 combos, pas {len(PYANNOTE_TUNE_COMBO_MATRIX)}"
+assert len(PYANNOTE_TUNE_COMBO_MATRIX) == 14, (
+    f"La matrice Pyannote Tune devrait contenir 14 combos, pas {len(PYANNOTE_TUNE_COMBO_MATRIX)}"
 )
 
 
@@ -688,8 +712,8 @@ def parse_args() -> argparse.Namespace:
               "stt (24 combos Profil A : 4 backends × 3 diarizations × 2 VAD), "
              "vad (8 combos ciblés VAD final / VAD interne Whisper), "
              "cohere_tune (9 combos Cohere + pyannote), "
-             "pyannote_tune (11 combos diarisation/chunking pyannote), "
-             "all (88 combos) — défaut: base",
+             "pyannote_tune (14 combos diarisation/chunking pyannote), "
+             "all (91 combos) — défaut: base",
     )
     parser.add_argument(
         "--combos", type=str, default=None,

@@ -284,12 +284,13 @@ def test_bench_audio_pyannote_tune_matrix_excludes_exact_without_known_speakers(
 
     combos = module.select_combos(args)
 
-    assert len(combos) == 10
+    assert len(combos) == 13
     assert "P02" not in {combo["id"] for combo in combos}
     assert all(combo["stt"] == "cohere" for combo in combos)
     assert all(combo["diarization_backend"] == "pyannote" for combo in combos)
     assert all("workflow.vad.enabled_final=false" in combo["overrides"] for combo in combos)
     assert any("workflow.pyannote_chunking.padding_s=0.30" in combo["overrides"] for combo in combos)
+    assert any("diarization.pipeline_params.clustering.threshold=0.50" in combo["overrides"] for combo in combos)
 
 
 def test_bench_audio_pyannote_tune_matrix_injects_known_speakers():

@@ -349,7 +349,7 @@ workflow:
     micro_chunk_neighbor_gap_s: 0.4
     isolated_min_chunk_s: 0.3
     padding_s: 0.15
-    max_chunk_s: 30
+    max_chunk_s: 45
     min_chunk_s: 1.5
   vad:
     enabled_summary: true
@@ -622,6 +622,15 @@ diarization:
   min_speakers: 2            # Empêche VBx de fusionner sous 2 locuteurs
   max_speakers: 20           # Plafond large, évite les explosions sur très long audio
   # num_speakers: null       # Nombre exact (prioritaire sur min/max) — réservé usage futur
+  pipeline_params:
+    # Paramètres internes pyannote expérimentaux. Laisser à null en production
+    # tant qu'un bench de référence n'a pas validé le réglage.
+    segmentation:
+      min_duration_off: null
+    clustering:
+      threshold: null
+      Fa: null
+      Fb: null
 
 security:
   retention_days: 365

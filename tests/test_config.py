@@ -409,7 +409,7 @@ class TestBootstrapConfig:
             "micro_chunk_neighbor_gap_s": 0.4,
             "isolated_min_chunk_s": 0.3,
             "padding_s": 0.15,
-            "max_chunk_s": 30,
+            "max_chunk_s": 45,
             "min_chunk_s": 1.5,
         }
         cfg["workflow"]["audio_denoise"] = {
@@ -426,6 +426,28 @@ class TestBootstrapConfig:
         result = validate_config(cfg)
 
         assert result.is_valid
+
+    def test_validate_config_accepts_diarization_pipeline_params(self):
+        cfg = load_config()
+        cfg["diarization"]["pipeline_params"] = {
+            "segmentation": {"min_duration_off": 0.2},
+            "clustering": {"threshold": 0.52, "Fa": 0.07, "Fb": None},
+        }
+
+        result = validate_config(cfg)
+
+        assert result.is_valid
+
+    def test_validate_config_rejects_unknown_diarization_pipeline_param(self):
+        cfg = load_config()
+        cfg["diarization"]["pipeline_params"] = {
+            "segmentation": {"threshold": 0.5},
+        }
+
+        result = validate_config(cfg)
+
+        assert not result.is_valid
+        assert any("diarization.pipeline_params.segmentation.threshold" in err for err in result.errors)
 
     def test_validate_config_rejects_invalid_segment_reliability_regex(self):
         cfg = load_config()

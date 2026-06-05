@@ -783,6 +783,34 @@ def _check_diarization(cfg: dict, r: ValidationResult) -> None:
     for key in ("cache_enabled", "cache_audio_fingerprint", "embedding_cache_enabled"):
         _check_bool(cfg, key, f"diarization.{key}", r)
     _check_optional_number(cfg, "embedding_clip_seconds", "diarization.embedding_clip_seconds", r)
+    _check_diarization_pipeline_params(cfg.get("pipeline_params"), r)
+
+
+def _check_diarization_pipeline_params(cfg: object, r: ValidationResult) -> None:
+    if cfg is None:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("diarization.pipeline_params: doit être un objet YAML")
+        return
+
+    allowed = {
+        "segmentation": {"min_duration_off"},
+        "clustering": {"threshold", "Fa", "Fb"},
+    }
+    for section, values in cfg.items():
+        if section not in allowed:
+            r.add_error(f"diarization.pipeline_params.{section}: section non supportée")
+            continue
+        if values is None:
+            continue
+        if not isinstance(values, dict):
+            r.add_error(f"diarization.pipeline_params.{section}: doit être un objet YAML")
+            continue
+        for key in values:
+            if key not in allowed[section]:
+                r.add_error(f"diarization.pipeline_params.{section}.{key}: paramètre non supporté")
+        for key in allowed[section]:
+            _check_optional_number(values, key, f"diarization.pipeline_params.{section}.{key}", r)
 
 
 def _check_llm_section(

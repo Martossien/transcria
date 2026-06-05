@@ -458,7 +458,7 @@ class Transcriber:
         total_duration: float,
         speaker_turns: dict,
         padding_s: float = 0.15,
-        max_chunk_s: int = 30,
+        max_chunk_s: int = 45,
         min_chunk_s: float = 1.5,
         chunk_cfg: dict | None = None,
     ) -> list[dict] | None:

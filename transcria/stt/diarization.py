@@ -79,6 +79,13 @@ class DiarizerService(BaseDiarizer):
             hf_token = os.environ.get("HF_TOKEN") or None
             logger.info("Chargement pyannote sur %s (token=%s)...", self.device, "oui" if hf_token else "non")
             pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
+            pipeline_params = self._effective_pipeline_params()
+            if pipeline_params:
+                logger.info("Diarization: paramètres pipeline pyannote = %s", pipeline_params)
+                try:
+                    pipeline.instantiate(pipeline_params)
+                except ValueError as exc:
+                    logger.warning("Paramètres pipeline pyannote ignorés: %s", exc)
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s", self.device)
 

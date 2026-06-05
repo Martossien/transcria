@@ -290,7 +290,7 @@ _DEFAULT_CONFIG = {
             "micro_chunk_neighbor_gap_s": 0.4,
             "isolated_min_chunk_s": 0.3,
             "padding_s": 0.15,
-            "max_chunk_s": 30,
+            "max_chunk_s": 45,
             "min_chunk_s": 1.5,
         },
         "vad": {
@@ -544,6 +544,16 @@ _DEFAULT_CONFIG = {
         "min_speakers": 2,
         "max_speakers": 20,
         "num_speakers": None,
+        "pipeline_params": {
+            "segmentation": {
+                "min_duration_off": None,
+            },
+            "clustering": {
+                "threshold": None,
+                "Fa": None,
+                "Fb": None,
+            },
+        },
     },
     "notifications": {
         "email": {

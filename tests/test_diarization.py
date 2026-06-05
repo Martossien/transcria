@@ -1,13 +1,13 @@
 """Tests for diarization backends — DiarizerService, SortformerDiarizer, factory."""
-import pytest
 import numpy as np
+import pytest
 
-from transcria.stt.diarization import DiarizerService
-from transcria.stt.sortformer_diarizer import SortformerDiarizer
-from transcria.stt.base_diarizer import BaseDiarizer
-from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb, list_available_backends
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
+from transcria.stt.base_diarizer import BaseDiarizer
+from transcria.stt.diarization import DiarizerService
+from transcria.stt.diarizer_factory import create_diarizer, get_diarizer_vram_mb, list_available_backends
+from transcria.stt.sortformer_diarizer import SortformerDiarizer
 
 
 def _default_cfg(tmp_path):
@@ -61,7 +61,6 @@ class TestDiarizerServiceFallback:
     def test_diarize_catches_pyannote_exception(self, tmp_path, monkeypatch):
         cfg = _default_cfg(tmp_path)
         job = Job(id="dia-error-1", owner_id="u1", title="Error Test", state=JobState.ANALYZED.value)
-        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
 
         ds = DiarizerService(cfg, device="cpu")
 
@@ -84,8 +83,6 @@ class TestDiarizerServiceExtractClips:
         cfg = _default_cfg(tmp_path)
         job = Job(id="dia-clips-4", owner_id="u1", title="Clips JSON", state=JobState.ANALYZED.value)
         fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-
-        ds = DiarizerService(cfg, device="cpu")
 
         turns = [
             {"start": 0.0, "end": 5.0, "speaker": "SPEAKER_00", "duration": 5.0},
@@ -131,6 +128,37 @@ class TestDiarizerServiceExtractClips:
         cached = ds._load_cached_result(fs, audio_path)
 
         assert cached == result
+
+    def test_pipeline_params_are_normalized_and_cached(self, tmp_path):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {
+            "cache_enabled": True,
+            "cache_audio_fingerprint": True,
+            "pipeline_params": {
+                "segmentation": {"min_duration_off": 0.2},
+                "clustering": {"threshold": 0.52, "Fa": None, "Fb": 0.75},
+            },
+        }
+        job = Job(id="dia-cache-pipeline", owner_id="u1", title="Cache", state=JobState.ANALYZED.value)
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_text("fake audio")
+        ds = DiarizerService(cfg, device="cpu")
+        result = {"available": True, "turns": [], "exclusive_turns": [], "speakers": ["SPEAKER_00"]}
+
+        assert ds._effective_pipeline_params() == {
+            "segmentation": {"min_duration_off": 0.2},
+            "clustering": {"threshold": 0.52, "Fb": 0.75},
+        }
+
+        fs.save_json("speakers/speaker_turns.json", result)
+        ds._save_cache_metadata(fs, audio_path, result)
+
+        cached = ds._load_cached_result(fs, audio_path)
+        assert cached == result
+
+        cfg["diarization"]["pipeline_params"]["clustering"]["threshold"] = 0.6
+        assert ds._load_cached_result(fs, audio_path) is None
 
     def test_acoustic_embedding_is_deterministic(self, tmp_path):
         cfg = _default_cfg(tmp_path)

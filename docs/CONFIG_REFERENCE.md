@@ -743,8 +743,8 @@ autour des chunks transmis au backend STT.
 | `micro_chunk_s` | float | `0.35` | Seuil de durée pour un micro-segment (secondes) |
 | `micro_chunk_neighbor_gap_s` | float | `0.4` | Gap maximum entre deux micro-segments pour fusion (secondes) |
 | `isolated_min_chunk_s` | float | `0.3` | Durée minimale pour un segment isolé non fusionné |
-| `padding_s` | float | `0.15` | Padding autour des chunks pyannote (secondes) |
-| `max_chunk_s` | int | `30` | Durée maximale d'un chunk (secondes) |
+| `padding_s` | float | `0.15` | Padding autour des chunks pyannote (secondes). Les benches réunion 2026-06 ont montré qu'un padding `0.30` dégrade le texte sans améliorer le comptage locuteurs. |
+| `max_chunk_s` | int | `45` | Durée maximale d'un chunk (secondes). Les benches réunion 2026-06 ont montré un gain de vitesse vs `30` sans perte texte/locuteurs sur les fenêtres de référence. |
 | `min_chunk_s` | float | `1.5` | Durée minimale d'un chunk (secondes) |
 
 **Redémarrage requis :** non — lu à chaque transcription.
@@ -760,6 +760,22 @@ n'ont pas changé.
 | `cache_audio_fingerprint` | bool | `true` | Vérifie taille/mtime/chemin de l'audio avant réutilisation |
 | `embedding_cache_enabled` | bool | `true` | Écrit un checkpoint acoustique par locuteur |
 | `embedding_clip_seconds` | float | `12.0` | Durée maximale utilisée par locuteur pour le checkpoint |
+| `min_speakers` | int \| null | `2` | Nombre minimal de locuteurs transmis à pyannote si `num_speakers` est absent |
+| `max_speakers` | int \| null | `20` | Nombre maximal de locuteurs transmis à pyannote si `num_speakers` est absent |
+| `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
+
+#### `diarization.pipeline_params`
+
+Paramètres internes pyannote expérimentaux. Ils sont appliqués via `Pipeline.instantiate()`
+avant l'inférence et inclus dans le checkpoint de cache. À laisser à `null` tant qu'un
+bench de référence n'a pas validé le réglage sur le corpus cible.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `segmentation.min_duration_off` | float \| null | `null` | Durée minimale de silence entre deux tours. Community-1 est powerset : `segmentation.threshold` n'est pas exposé par notre version. |
+| `clustering.threshold` | float \| null | `null` | Seuil VBx de clustering. Piste prioritaire pour tester le sous/sur-comptage en mode nombre inconnu. |
+| `clustering.Fa` | float \| null | `null` | Paramètre VBx interne, expérimental. |
+| `clustering.Fb` | float \| null | `null` | Paramètre VBx interne, expérimental. |
 
 #### `workflow.execution`
 

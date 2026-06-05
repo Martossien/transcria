@@ -82,6 +82,8 @@ class BaseDiarizer(ABC):
                 return None
         if metadata.get("diarization_speaker_params") != self._effective_speaker_params():
             return None
+        if metadata.get("diarization_pipeline_params") != self._effective_pipeline_params():
+            return None
         return result
 
     def _save_cache_metadata(self, fs: JobFilesystem, audio_path: Path, result: dict) -> None:
@@ -93,6 +95,7 @@ class BaseDiarizer(ABC):
             "speaker_count": len(result.get("speakers", [])),
             "turn_count": len(result.get("turns", [])),
             "diarization_speaker_params": self._effective_speaker_params(),
+            "diarization_pipeline_params": self._effective_pipeline_params(),
         })
 
     # ------------------------------------------------------------------
@@ -246,4 +249,20 @@ class BaseDiarizer(ABC):
             params[key] = ival
         return params or None
 
+    def _effective_pipeline_params(self) -> dict | None:
+        raw = self.config.get("diarization", {}).get("pipeline_params") or {}
+        if not isinstance(raw, dict):
+            return None
+        params: dict[str, dict[str, float]] = {}
+        for section, values in raw.items():
+            if not isinstance(values, dict):
+                continue
+            clean = {}
+            for key, value in values.items():
+                if value is None or isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                clean[str(key)] = float(value)
+            if clean:
+                params[str(section)] = clean
+        return params or None
 
