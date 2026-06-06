@@ -26,6 +26,72 @@ def _normalize_noise_text(text: str) -> str:
     return s
 
 
+def compute_quality_score(
+    reliability_counts: dict[str, int],
+    coverage_ratio: float | None,
+    coverage_threshold: float,
+    error_signals: dict[str, int],
+) -> int:
+    """Calcule un score de fiabilité 0-100 indépendant du volume de la réunion.
+
+    Le score reflète la *fiabilité de la transcription*, pas le nombre de points
+    à vérifier. Il combine trois facteurs :
+
+    1. **Fiabilité segmentaire** (ok / suspect / degrade) — signal principal,
+       normalisé par le nombre de segments pour rester comparable d'une réunion
+       de 5 minutes à une réunion de 2 heures.
+    2. **Couverture audio** — ne pénalise qu'en dessous du seuil attendu ; les
+       silences normaux d'une réunion ne doivent pas faire chuter le score.
+    3. **Déductions pour erreurs avérées** (chacune plafonnée, pondérée par
+       gravité) : noms de locuteurs altérés, hallucinations non latines,
+       segments étrangers/vides, variantes lexique non résolues.
+
+    Les signaux purement contextuels (silences, interjections courtes,
+    chevauchements non significatifs) ne sont **jamais** comptés ici : ils
+    restent des points à vérifier sans écraser le score.
+    """
+    ok = max(0, reliability_counts.get("ok", 0))
+    suspect = max(0, reliability_counts.get("suspect", 0))
+    degrade = max(0, reliability_counts.get("degrade", 0))
+    graded = ok + suspect + degrade
+    if graded > 0:
+        # suspect = demi-fiable ; degrade = non fiable.
+        base = 100.0 * (ok + 0.5 * suspect) / graded
+    else:
+        # Aucune information de fiabilité segmentaire : on part d'un score neutre
+        # que seules les erreurs avérées et la couverture viendront moduler.
+        base = 100.0
+
+    if (
+        coverage_ratio is not None
+        and coverage_threshold > 0
+        and coverage_ratio < coverage_threshold
+    ):
+        base *= max(0.0, coverage_ratio / coverage_threshold)
+
+    deductions = 0.0
+    deductions += min(20.0, 10.0 * error_signals.get("speaker_name_violations", 0))
+    deductions += min(15.0, 3.0 * error_signals.get("non_latin_segments", 0))
+    deductions += min(10.0, 2.0 * error_signals.get("foreign_segments", 0))
+    deductions += min(10.0, 5.0 * error_signals.get("empty_segments", 0))
+    deductions += min(10.0, 2.0 * error_signals.get("unresolved_lexicon_variants", 0))
+    deductions += min(5.0, 1.0 * error_signals.get("missing_lexicon_terms", 0))
+
+    return int(max(0, min(100, round(base - deductions))))
+
+
+def _segment_overlaps_zones(start: float, end: float, zones: list[dict]) -> bool:
+    """Indique si le segment [start, end] recoupe une zone audio problématique."""
+    for zone in zones:
+        z_start = zone.get("start")
+        z_end = zone.get("end")
+        if not isinstance(z_start, (int, float)) or not isinstance(z_end, (int, float)):
+            continue
+        if start < z_end and end > z_start:
+            return True
+    return False
+
+
 class QualityReporter:
     def __init__(self, config: dict):
         self.config = config
@@ -258,6 +324,11 @@ class QualityReporter:
             )
             warnings += min(len(non_latin_segments), 10)
 
+        # Zones audio problématiques (chargées tôt pour corroborer les segments courts).
+        audio_scene = fs.load_json("metadata/audio_scene.json") or {}
+        problem_segments = audio_scene.get("problem_segments") or []
+        problem_zones = [z for z in problem_segments if isinstance(z, dict)]
+
         suspicious_short = [
             s for s in segments
             if s.get("text")
@@ -265,29 +336,36 @@ class QualityReporter:
             and self._looks_like_asr_noise(s.get("text", ""))
         ]
         if suspicious_short:
+            corroborated = [
+                s for s in suspicious_short
+                if self._short_segment_is_corroborated(s, problem_zones, thresholds)
+            ]
             review_load["suspicious_short_segments"] = len(suspicious_short)
+            review_load["suspicious_short_corroborated"] = len(corroborated)
             checks.append({
                 "type": "suspicious_short_segments",
                 "count": len(suspicious_short),
+                "corroborated_count": len(corroborated),
                 "examples": [
                     {
                         "start": s.get("start"),
                         "end": s.get("end"),
                         "speaker": s.get("speaker", ""),
                         "text": s.get("text", "")[:80],
+                        "corroborated": self._short_segment_is_corroborated(s, problem_zones, thresholds),
                     }
                     for s in suspicious_short[:10]
                 ],
-                "severity": "warning",
+                "severity": "warning" if corroborated else "info",
             })
             review_points.append(
-                f"Segments courts suspects : {len(suspicious_short)} — souvent hallucinations sur bruit, silence ou chevauchement."
+                f"Segments courts : {len(suspicious_short)} dont {len(corroborated)} "
+                "corroborés (silence/bruit/faible confiance = probables hallucinations) ; "
+                "les autres sont des interjections brèves à confirmer."
             )
-            warnings += min(len(suspicious_short), 10)
+            warnings += min(len(corroborated), 10)
 
         # 8. Zones audio problématiques détectées avant transcription
-        audio_scene = fs.load_json("metadata/audio_scene.json") or {}
-        problem_segments = audio_scene.get("problem_segments") or []
         total_checks += 1
         if isinstance(problem_segments, list) and problem_segments:
             examples = [
@@ -445,6 +523,7 @@ class QualityReporter:
         duration_covered = sum(s.get("end", 0) - s.get("start", 0) for s in segments)
         audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
         audio_duration = audio_analysis.get("duration_seconds", 0)
+        coverage_ratio: float | None = None
         total_checks += 1
         if audio_duration > 0:
             coverage_ratio = duration_covered / audio_duration
@@ -465,13 +544,28 @@ class QualityReporter:
                 checks.append({"type": "high_word_rate", "rate": round(words_per_second, 2), "severity": "warning"})
                 review_points.append(f"Débit de mots élevé : {words_per_second:.1f} mots/s — possible erreur.")
 
+        error_signals = {
+            "speaker_name_violations": len(speaker_violations),
+            "non_latin_segments": len(non_latin_segments),
+            "foreign_segments": foreign_segments if foreign_segments >= 5 else 0,
+            "empty_segments": len(empty_segments),
+            "unresolved_lexicon_variants": unresolved_count,
+            "missing_lexicon_terms": len(missing_corrected),
+        }
+        quality_score = compute_quality_score(
+            reliability_counts,
+            coverage_ratio,
+            thresholds["coverage_ratio"],
+            error_signals,
+        )
+
         report = {
             "total_checks": total_checks,
             "warnings": warnings,
             "checks": checks,
             "review_points": review_points,
             "review_load": review_load,
-            "quality_score": max(0, 100 - warnings * 5),
+            "quality_score": quality_score,
         }
 
         logger.info("Rapport qualité job %s: score %d/100, %d checks, %d warnings",
@@ -611,12 +705,45 @@ class QualityReporter:
                     })
         return violations
 
+    def _short_segment_is_corroborated(
+        self, segment: dict, problem_zones: list[dict], thresholds: dict
+    ) -> bool:
+        """Un segment court n'est tenu pour une probable hallucination que s'il
+        est corroboré par un signal indépendant : recoupement d'une zone audio
+        problématique (silence/bruit/musique), probabilité de non-parole élevée,
+        ou faible confiance des mots. Sans corroboration, c'est une simple
+        interjection brève et non un défaut de qualité.
+        """
+        try:
+            start = float(segment.get("start", 0))
+            end = float(segment.get("end", 0))
+        except (TypeError, ValueError):
+            start = end = 0.0
+        if _segment_overlaps_zones(start, end, problem_zones):
+            return True
+
+        nsp = segment.get("no_speech_prob")
+        if nsp is not None and nsp > thresholds["no_speech_prob_threshold"]:
+            return True
+
+        words = segment.get("words") or []
+        if words:
+            conf_min = thresholds["low_word_confidence_min"]
+            low = sum(1 for w in words if w.get("probability", 1.0) < conf_min)
+            if low / len(words) > thresholds["low_word_confidence_ratio"]:
+                return True
+        return False
+
     def _looks_like_asr_noise(self, text: str) -> bool:
         stripped = text.strip()
         if not stripped:
             return False
         if _NON_LATIN_RE.search(stripped):
             return True
+        # Un nombre dicté (« 1,26 », « 70 », « 2027 ») est du contenu légitime,
+        # pas une hallucination, même sur un segment très court.
+        if any(c.isdigit() for c in stripped):
+            return False
         alpha = [c for c in stripped if c.isalpha()]
         if len(alpha) <= 2:
             return True

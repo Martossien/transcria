@@ -7,7 +7,7 @@ import pytest
 from transcria.quality.srt_checks import SRTChecker
 from transcria.quality.lexicon_checks import LexiconChecker
 from transcria.quality.review_points import ReviewPoints
-from transcria.quality.quality_report import QualityReporter
+from transcria.quality.quality_report import QualityReporter, compute_quality_score
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 
@@ -618,3 +618,166 @@ class TestSuspectLowWordConfidence:
         check = [c for c in report["checks"] if c["type"] == "suspect_low_word_confidence"][0]
         assert check["count"] == 1
         assert check["examples"][0]["low_conf_ratio"] > 0.5
+
+
+class TestComputeQualityScore:
+    """Le score reflète la fiabilité, pas le volume de points à vérifier."""
+
+    def test_full_reliability_scores_100(self):
+        score = compute_quality_score(
+            {"ok": 1000}, coverage_ratio=0.95, coverage_threshold=0.8, error_signals={}
+        )
+        assert score == 100
+
+    def test_no_reliability_info_is_neutral(self):
+        score = compute_quality_score(
+            {}, coverage_ratio=None, coverage_threshold=0.8, error_signals={}
+        )
+        assert score == 100
+
+    def test_suspect_segments_only_partially_penalize(self):
+        # 1384 ok + 198 suspect (demi-fiables) sur 1582 → ~93.7
+        score = compute_quality_score(
+            {"ok": 1384, "suspect": 198},
+            coverage_ratio=0.85,
+            coverage_threshold=0.8,
+            error_signals={},
+        )
+        assert 90 <= score <= 96
+
+    def test_degraded_segments_drag_score_down_proportionally(self):
+        score = compute_quality_score(
+            {"ok": 500, "degrade": 500},
+            coverage_ratio=0.95,
+            coverage_threshold=0.8,
+            error_signals={},
+        )
+        assert score == 50
+
+    def test_coverage_below_threshold_scales_score(self):
+        score = compute_quality_score(
+            {"ok": 100},
+            coverage_ratio=0.4,
+            coverage_threshold=0.8,
+            error_signals={},
+        )
+        assert score == 50  # 100 * (0.4 / 0.8)
+
+    def test_coverage_above_threshold_does_not_penalize(self):
+        score = compute_quality_score(
+            {"ok": 100},
+            coverage_ratio=0.82,
+            coverage_threshold=0.8,
+            error_signals={},
+        )
+        assert score == 100
+
+    def test_genuine_errors_are_deducted_and_capped(self):
+        # 5 violations de noms → plafond 20 pts ; 10 segments non latins → plafond 15
+        score = compute_quality_score(
+            {"ok": 1000},
+            coverage_ratio=0.95,
+            coverage_threshold=0.8,
+            error_signals={"speaker_name_violations": 5, "non_latin_segments": 10},
+        )
+        assert score == 100 - 20 - 15
+
+    def test_contextual_signals_never_reach_this_function(self):
+        # Silences/backchannels ne sont pas des entrées : un transcript fiable
+        # avec beaucoup de silences reste haut.
+        score = compute_quality_score(
+            {"ok": 1384, "suspect": 198},
+            coverage_ratio=0.84,
+            coverage_threshold=0.8,
+            error_signals={"unresolved_lexicon_variants": 1},
+        )
+        assert score >= 88
+
+
+class TestSuspiciousShortCorroboration:
+    @pytest.fixture
+    def tmp_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            yield d
+
+    def _setup(self, tmp_dir, job_id, segments, scene=None):
+        fs = JobFilesystem(tmp_dir, job_id)
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:02,000\nx\n")
+        fs.save_json("metadata/transcription_segments.json", segments)
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 600})
+        fs.save_json("context/session_lexicon.json", [])
+        if scene is not None:
+            fs.save_json("metadata/audio_scene.json", scene)
+        return fs
+
+    def test_backchannel_on_clean_audio_is_not_corroborated(self, tmp_dir):
+        # « D'accord » bref, sans zone audio problématique → interjection, pas hallucination.
+        self._setup(tmp_dir, "j-bc", [
+            {"start": 10.0, "end": 10.6, "text": "D'accord.", "speaker": "Alice"},
+        ])
+        reporter = QualityReporter({
+            "storage": {"jobs_dir": tmp_dir},
+            "quality": {"asr_noise_markers": ["d'accord"]},
+        })
+        job = Job(id="j-bc", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+        check = [c for c in report["checks"] if c["type"] == "suspicious_short_segments"][0]
+        assert check["count"] == 1
+        assert check["corroborated_count"] == 0
+        assert check["severity"] == "info"
+
+    def test_backchannel_over_silence_zone_is_corroborated(self, tmp_dir):
+        self._setup(tmp_dir, "j-corr", [
+            {"start": 10.0, "end": 10.6, "text": "Voilà.", "speaker": "Alice"},
+        ], scene={"problem_segments": [{"label": "noEnergy", "start": 9.5, "end": 11.0}]})
+        reporter = QualityReporter({
+            "storage": {"jobs_dir": tmp_dir},
+            "quality": {"asr_noise_markers": ["voilà"]},
+        })
+        job = Job(id="j-corr", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+        check = [c for c in report["checks"] if c["type"] == "suspicious_short_segments"][0]
+        assert check["corroborated_count"] == 1
+        assert check["severity"] == "warning"
+
+    def test_dictated_number_is_not_flagged_as_noise(self, tmp_dir):
+        self._setup(tmp_dir, "j-num", [
+            {"start": 10.0, "end": 10.5, "text": "1,26.", "speaker": "Alice"},
+        ])
+        reporter = QualityReporter({"storage": {"jobs_dir": tmp_dir}})
+        job = Job(id="j-num", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+        assert not [c for c in report["checks"] if c["type"] == "suspicious_short_segments"]
+
+    def test_degraded_meeting_does_not_score_zero(self, tmp_dir):
+        # Beaucoup de backchannels + silences mais fiabilité segmentaire élevée :
+        # le score doit rester élevé (régression du 0/100).
+        segments = []
+        for i in range(40):
+            segments.append({
+                "start": float(i * 10), "end": float(i * 10 + 8),
+                "text": "Contenu de réunion détaillé sur le sujet.",
+                "reliability": "ok", "reliability_reasons": [],
+            })
+        for i in range(20):
+            segments.append({
+                "start": float(400 + i), "end": float(400 + i + 0.6),
+                "text": "D'accord.", "speaker": "Bob",
+                "reliability": "suspect", "reliability_reasons": ["segment_court"],
+            })
+        fs = JobFilesystem(tmp_dir, "j-deg")
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:08,000\nx\n")
+        fs.save_json("metadata/transcription_segments.json", segments)
+        fs.save_json("metadata/audio_analysis.json", {"duration_seconds": 430})
+        fs.save_json("context/session_lexicon.json", [])
+        fs.save_json("metadata/audio_scene.json", {"problem_segments": [
+            {"label": "noEnergy", "start": float(400 + i), "end": float(400 + i + 0.6)}
+            for i in range(20)
+        ]})
+        reporter = QualityReporter({
+            "storage": {"jobs_dir": tmp_dir},
+            "quality": {"asr_noise_markers": ["d'accord"]},
+        })
+        job = Job(id="j-deg", owner_id="u1", title="T", state=JobState.QUALITY_CHECKING.value)
+        report = reporter.run_all_checks(job)
+        assert report["quality_score"] >= 80
