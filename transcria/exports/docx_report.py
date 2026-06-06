@@ -703,18 +703,29 @@ class DocxReport:
             r.font.name = "Calibri"
             p_head.paragraph_format.space_after = Pt(4)
 
-            for line in synth.splitlines():
-                line = line.strip()
-                if not line or line.startswith("#"):
+            for raw in synth.splitlines():
+                line = raw.strip()
+                if not line:
                     continue
-                # Nettoyer le markdown léger (**, __)
-                line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
-                line = re.sub(r"__(.+?)__", r"\1", line)
-                p = doc.add_paragraph(line)
-                p.paragraph_format.space_after = Pt(3)
-                for run in p.runs:
-                    run.font.size = Pt(10)
-                    run.font.name = "Calibri"
+                # Intertitre markdown (## …) → ligne en gras, légèrement détachée.
+                heading = re.match(r"^#{1,6}\s+(.*)$", line)
+                if heading:
+                    p = doc.add_paragraph()
+                    _add_markdown_runs(p, heading.group(1).strip(), size=10.5, bold_all=True)
+                    p.paragraph_format.space_before = Pt(6)
+                    p.paragraph_format.space_after = Pt(2)
+                    continue
+                # Puce markdown (- … ou * …).
+                bullet = re.match(r"^[-*]\s+(.*)$", line)
+                p = doc.add_paragraph()
+                if bullet:
+                    _add_markdown_runs(p, "•  " + bullet.group(1).strip(), size=10)
+                    p.paragraph_format.left_indent = Cm(0.5)
+                else:
+                    # Paragraphe de prose : le gras **…** (intertitres en début de
+                    # paragraphe) est rendu en gras réel au lieu d'être supprimé.
+                    _add_markdown_runs(p, line, size=10)
+                p.paragraph_format.space_after = Pt(4)
 
         # Champs utilisateur spécifiques au type (président CSE, nom projet, etc.)
         self._section_type_specific(doc)
@@ -1125,6 +1136,44 @@ def _extract_synthese(text: str) -> str:
     # Fallback : retourner le texte sans les titres markdown
     cleaned = re.sub(r"^#{1,3}\s+.+$", "", text, flags=re.MULTILINE)
     return cleaned.strip()
+
+
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
+
+
+def _split_markdown_bold(text: str) -> list[tuple[str, bool]]:
+    """Découpe un texte en segments ``(contenu, gras)`` selon le markdown `**..**`/`__..__`.
+
+    Les segments vides sont écartés. Un texte sans marqueur renvoie un unique
+    segment non gras. Sert à rendre le gras de la LLM dans le DOCX au lieu de
+    simplement retirer les astérisques.
+    """
+    segments: list[tuple[str, bool]] = []
+    pos = 0
+    for match in _MD_BOLD_RE.finditer(text):
+        if match.start() > pos:
+            segments.append((text[pos:match.start()], False))
+        segments.append((match.group(1) or match.group(2) or "", True))
+        pos = match.end()
+    if pos < len(text):
+        segments.append((text[pos:], False))
+    return [(content, bold) for content, bold in segments if content]
+
+
+def _add_markdown_runs(
+    paragraph: Any,
+    text: str,
+    *,
+    size: float = 10.0,
+    name: str = "Calibri",
+    bold_all: bool = False,
+) -> None:
+    """Ajoute ``text`` au paragraphe en rendant le gras markdown (`**`/`__`) en runs gras."""
+    for content, is_bold in _split_markdown_bold(text):
+        run = paragraph.add_run(content)
+        run.font.size = Pt(size)
+        run.font.name = name
+        run.font.bold = bool(is_bold or bold_all)
 
 
 # ── Point d'entrée public ─────────────────────────────────────────────────────

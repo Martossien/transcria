@@ -565,6 +565,26 @@ class OpenCodeRunner:
         return None, "", ""
 
     @staticmethod
+    def _strip_role_gender(text: str) -> str:
+        """Retire un marqueur de genre en fin de ligne participant (« Masculin ♂ », « Féminin ♀ »…).
+
+        Le genre vocal est un indice acoustique fourni à la LLM ; il a un champ
+        dédié dans l'UI et ne doit pas polluer le texte du rôle. Quand la LLM le
+        recopie malgré la consigne, on le retire ici de façon déterministe. La
+        ponctuation de phrase (point final) est préservée.
+        """
+        import re
+
+        cleaned = re.sub(
+            r"[\s—–\-(,;/]*\b(?:masculin|f[ée]minin|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        cleaned = re.sub(r"\s*[♂♀]\s*$", "", cleaned)
+        return cleaned.strip()
+
+    @staticmethod
     def _is_non_identifiable_participant_line(line: str) -> bool:
         """Détecte une vraie ligne placeholder, sans rejeter un rôle contenant ces mots."""
         text = OpenCodeRunner._clean_summary_cell(line.strip("- ").strip())
@@ -716,6 +736,7 @@ class OpenCodeRunner:
             speaker_roles: dict[str, dict] = {}
             for line in part_match.group(1).strip().split("\n"):
                 line = line.strip("- ").strip()
+                line = OpenCodeRunner._strip_role_gender(line)
                 if OpenCodeRunner._is_non_identifiable_participant_line(line):
                     continue
                 participants.append(line)

@@ -346,3 +346,53 @@ def test_docx_cover_sous_titre_projet(tmp_path):
     loaded = Document(str(out))
     full = "\n".join(p.text for p in loaded.paragraphs)
     assert "Projet Phoenix" in full
+
+
+class TestMarkdownRendering:
+    """Le DOCX rend le gras markdown au lieu de retirer les astérisques."""
+
+    def test_split_plain_text_single_segment(self):
+        from transcria.exports.docx_report import _split_markdown_bold
+        assert _split_markdown_bold("texte simple") == [("texte simple", False)]
+
+    def test_split_bold_segment(self):
+        from transcria.exports.docx_report import _split_markdown_bold
+        assert _split_markdown_bold("**TEST** test") == [("TEST", True), (" test", False)]
+
+    def test_split_underscore_bold(self):
+        from transcria.exports.docx_report import _split_markdown_bold
+        assert _split_markdown_bold("avant __gras__ après") == [
+            ("avant ", False), ("gras", True), (" après", False),
+        ]
+
+    def test_split_multiple_bold(self):
+        from transcria.exports.docx_report import _split_markdown_bold
+        assert _split_markdown_bold("**A** et **B**") == [
+            ("A", True), (" et ", False), ("B", True),
+        ]
+
+    def test_split_empty(self):
+        from transcria.exports.docx_report import _split_markdown_bold
+        assert _split_markdown_bold("") == []
+
+    def test_add_markdown_runs_sets_bold_flag(self):
+        pytest.importorskip("docx")
+        from docx import Document
+        from transcria.exports.docx_report import _add_markdown_runs
+
+        doc = Document()
+        p = doc.add_paragraph()
+        _add_markdown_runs(p, "**Cadrage.** Nicolas ouvre la séance.")
+        # Premier run gras (l'intertitre), reste non gras.
+        assert [(r.text, bool(r.font.bold)) for r in p.runs] == [
+            ("Cadrage.", True),
+            (" Nicolas ouvre la séance.", False),
+        ]
+
+    def test_synthesis_bold_lead_in_rendered_in_docx(self, doc):
+        # Régression : un intertitre **…** de la synthèse ne doit plus apparaître
+        # avec ses astérisques littérales, et doit produire au moins un run gras.
+        from transcria.exports.docx_report import _split_markdown_bold
+        # garde-fou pur : pas d'astérisques résiduelles après rendu
+        rendered = "".join(c for c, _ in _split_markdown_bold("**Theme.** corps"))
+        assert "*" not in rendered

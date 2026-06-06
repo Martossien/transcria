@@ -870,3 +870,47 @@ class TestRunSummaryInviteInstruction:
         runner.run_summary(str(tmp_path / "t.txt"), invite_path=str(tmp_path / "nope.md"))
 
         assert "brief d'invitation" not in captured["instruction"].lower()
+
+
+class TestStripRoleGender:
+    """Le genre recopié par la LLM dans le rôle est retiré (champ dédié ailleurs)."""
+
+    def test_strips_trailing_label_and_symbol(self):
+        assert OpenCodeRunner._strip_role_gender(
+            "présente les tickets et la salle de conseil. Masculin ♂"
+        ) == "présente les tickets et la salle de conseil."
+
+    def test_strips_feminine(self):
+        assert OpenCodeRunner._strip_role_gender("intervient sur RH Féminin ♀") == "intervient sur RH"
+
+    def test_strips_dash_separated_gender(self):
+        assert OpenCodeRunner._strip_role_gender("anime la revue — Masculin") == "anime la revue"
+
+    def test_strips_parenthesised_gender(self):
+        assert OpenCodeRunner._strip_role_gender("rôle (Féminin)") == "rôle"
+
+    def test_strips_standalone_symbol(self):
+        assert OpenCodeRunner._strip_role_gender("présente le budget ♂") == "présente le budget"
+
+    def test_keeps_role_without_gender(self):
+        role = "présente l'infrastructure serveur"
+        assert OpenCodeRunner._strip_role_gender(role) == role
+
+    def test_does_not_eat_word_masculine_inside(self):
+        # « masculin » au milieu d'une phrase n'est pas en fin → conservé.
+        role = "évoque le vestiaire masculin du bâtiment"
+        assert OpenCodeRunner._strip_role_gender(role) == role
+
+    def test_parse_summary_removes_gender_from_role(self):
+        text = (
+            "## Participants probables\n"
+            "- SPEAKER_00 [Didier] : présente les tickets. Masculin ♂\n"
+            "- SPEAKER_01 [Marie] : pilote ProWeb Féminin ♀\n"
+        )
+        result = OpenCodeRunner._parse_structured_summary(text)
+        assert "Masculin" not in result["participants_detectes"]
+        assert "♂" not in result["participants_detectes"]
+        assert "Féminin" not in result["participants_detectes"]
+        roles = result.get("speaker_roles", {})
+        assert roles["SPEAKER_00"]["role"] == "présente les tickets."
+        assert roles["SPEAKER_01"]["role"] == "pilote ProWeb"
