@@ -33,6 +33,48 @@ def _get_prompts_dir(config: dict | None = None) -> str:
     )
 
 
+def build_harmonization_glossary(participants: list, lexicon: list) -> str:
+    """Construit le glossaire validé (Markdown) pour harmoniser la synthèse.
+
+    Fonction pure : agrège les **noms de participants validés** et les **formes
+    canoniques du lexique** (avec variantes connues) en un glossaire compact que la
+    LLM applique en contexte sur la synthèse produite avant correction. Retourne une
+    chaîne vide si aucune donnée exploitable.
+    """
+    names: list[str] = []
+    for entry in participants or []:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name", "")).strip()
+        if name and name not in names:
+            names.append(name)
+
+    terms: list[str] = []
+    for entry in lexicon or []:
+        if not isinstance(entry, dict):
+            continue
+        target = str(entry.get("replace_by", "")).strip() or str(entry.get("term", "")).strip()
+        if not target:
+            continue
+        variants = [str(v).strip() for v in (entry.get("variants") or []) if str(v).strip()]
+        line = f"- {target}" + (f" ← {', '.join(variants)}" if variants else "")
+        if line not in terms:
+            terms.append(line)
+
+    if not names and not terms:
+        return ""
+
+    lines = ["# Glossaire validé (à appliquer en contexte sur la synthèse)", ""]
+    if names:
+        lines.append("## Noms de participants (orthographe validée)")
+        lines.extend(f"- {name}" for name in names)
+        lines.append("")
+    if terms:
+        lines.append("## Termes métier (forme validée ← variantes connues)")
+        lines.extend(terms)
+    return "\n".join(lines).strip() + "\n"
+
+
 class OpenCodeRunner:
     """Lance opencode pour exécuter des tâches LLM complexes (résumé, arbitrage)."""
 
@@ -850,4 +892,64 @@ class OpenCodeRunner:
             "report": report,
             "error": result.get("error", ""),
             "warning": result.get("warning", ""),
+        }
+
+    def run_final_review(
+        self,
+        srt_path: str,
+        summary_path: str,
+        glossary_path: str,
+        structured_data_path: str,
+    ) -> dict:
+        """Passe de relecture finale (A+C+D+G) sur les artefacts déjà produits.
+
+        Avec les données validées par l'humain, en une session opencode :
+        - **A** harmonise la synthèse sur le glossaire (noms + termes), en contexte ;
+        - **C** rend cohérents les noms/termes du glossaire dans tout le SRT corrigé ;
+        - **D** résout les variantes de lexique encore présentes dans le SRT ;
+        - **G** audite les données structurées contre le SRT (corrige nom/chiffre/date,
+          marque `[À VÉRIFIER]` les éléments non étayés), strictesse selon le type.
+
+        Ne re-résume ni ne re-corrige librement : applique seulement les formes
+        validées et la cohérence. Délégation @general obligatoire pour le SRT (C+D).
+
+        Returns: {"success", "reviewed_srt", "harmonized_summary",
+                  "reviewed_structured_data", "report", "error"}
+        """
+        prompt_file = os.path.join(_get_prompts_dir(self._config), "final_review_prompt.txt")
+        prompt_file = os.path.abspath(prompt_file)
+
+        instruction = (
+            f"Tu travailles dans le répertoire {self.work_dir}. "
+            f"Entrées : SRT corrigé {srt_path}, synthèse à harmoniser {summary_path}, "
+            f"glossaire validé {glossary_path}, données structurées {structured_data_path}. "
+            f"Exécute la relecture finale (A harmonisation synthèse, C+D cohérence et "
+            f"variantes du SRT via subagents @general, G audit des données structurées) "
+            f"sans rien re-résumer ni inventer, et écris exactement 4 fichiers dans ce "
+            f"répertoire : summary_harmonized.md, transcription_reviewed.srt (TOTALITE "
+            f"des segments, contenu SRT uniquement), structured_data_reviewed.json "
+            f"(même structure JSON), final_review_report.md (Markdown uniquement)."
+        )
+
+        result = self.run(instruction, prompt_file, timeout=self._get_correction_timeout())
+
+        def _read(name: str) -> str:
+            f = self.work_dir / name
+            return f.read_text(encoding="utf-8").strip() if f.is_file() else ""
+
+        reviewed_srt = _read("transcription_reviewed.srt")
+        harmonized_summary = _read("summary_harmonized.md")
+        reviewed_structured_data = _read("structured_data_reviewed.json")
+        report = _read("final_review_report.md")
+
+        # Au moins une sortie exploitable suffit : les fichiers produits font foi même
+        # si opencode sort en non-zéro (timeout, signal).
+        produced = any([reviewed_srt, harmonized_summary, reviewed_structured_data])
+        return {
+            "success": bool(produced) and (result["success"] or produced),
+            "reviewed_srt": reviewed_srt,
+            "harmonized_summary": harmonized_summary,
+            "reviewed_structured_data": reviewed_structured_data,
+            "report": report,
+            "error": "" if produced else result.get("error", ""),
         }

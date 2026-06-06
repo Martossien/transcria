@@ -914,3 +914,128 @@ class TestStripRoleGender:
         roles = result.get("speaker_roles", {})
         assert roles["SPEAKER_00"]["role"] == "présente les tickets."
         assert roles["SPEAKER_01"]["role"] == "pilote ProWeb"
+
+
+class TestBuildHarmonizationGlossary:
+    def test_names_and_terms_with_variants(self):
+        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        g = build_harmonization_glossary(
+            [{"name": "Jean Dupont"}, {"name": "Marie Martin"}],
+            [{"term": "PEI", "variants": ["PUI"]},
+             {"term": "ProWeb", "replace_by": "", "variants": ["pro-web", "ProWebs"]}],
+        )
+        assert "## Noms de participants (orthographe validée)" in g
+        assert "- Jean Dupont" in g and "- Marie Martin" in g
+        assert "## Termes métier (forme validée ← variantes connues)" in g
+        assert "- PEI ← PUI" in g
+        assert "- ProWeb ← pro-web, ProWebs" in g
+
+    def test_replace_by_takes_precedence_over_term(self):
+        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        g = build_harmonization_glossary([], [{"term": "tikeo", "replace_by": "Tickéo", "variants": []}])
+        assert "- Tickéo" in g and "tikeo" not in g
+
+    def test_empty_inputs_return_empty(self):
+        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        assert build_harmonization_glossary([], []) == ""
+        assert build_harmonization_glossary(None, None) == ""
+
+    def test_dedup_names(self):
+        from transcria.gpu.opencode_runner import build_harmonization_glossary
+        g = build_harmonization_glossary([{"name": "Jean Dupont"}, {"name": "Jean Dupont"}], [])
+        assert g.count("- Jean Dupont") == 1
+
+
+
+class TestRunFinalReviewInstruction:
+    def _capture(self, runner, monkeypatch, outputs=None):
+        captured = {}
+        outputs = {
+            "summary_harmonized.md": "# Synthèse\nPEI à 90 %.",
+            "transcription_reviewed.srt": "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: ok\n",
+            "structured_data_reviewed.json": '{"decisions": []}',
+            "final_review_report.md": "## Synthèse harmonisée\nok",
+        } if outputs is None else outputs
+
+        def fake_run(instruction, prompt_file, timeout=600):
+            captured["instruction"] = instruction
+            captured["prompt_file"] = prompt_file
+            for name, content in outputs.items():
+                (runner.work_dir / name).write_text(content, encoding="utf-8")
+            return {"success": True, "output": "", "events": 0}
+
+        monkeypatch.setattr(runner, "run", fake_run)
+        return captured
+
+    def test_instruction_references_all_inputs_and_reads_outputs(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        captured = self._capture(runner, monkeypatch)
+        res = runner.run_final_review(
+            str(tmp_path / "c.srt"), str(tmp_path / "s.md"),
+            str(tmp_path / "g.md"), str(tmp_path / "sd.json"),
+        )
+        assert captured["prompt_file"].endswith("final_review_prompt.txt")
+        for p in ("c.srt", "s.md", "g.md", "sd.json"):
+            assert str(tmp_path / p) in captured["instruction"]
+        assert res["success"] is True
+        assert "PEI" in res["harmonized_summary"]
+        assert res["reviewed_srt"]
+        assert res["reviewed_structured_data"] == '{"decisions": []}'
+        assert res["report"]
+
+    def test_failure_when_no_output(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        self._capture(runner, monkeypatch, outputs={})
+        res = runner.run_final_review(
+            str(tmp_path / "c.srt"), str(tmp_path / "s.md"),
+            str(tmp_path / "g.md"), str(tmp_path / "sd.json"),
+        )
+        assert res["success"] is False
+        assert res["harmonized_summary"] == ""
+
+
+class TestApplyFinalReview:
+    def test_applies_outputs_with_guards(self, tmp_path):
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        fs = JobFilesystem(str(tmp_path), "job-fr")
+        fs.save_text("metadata/transcription_corrigee.srt",
+                     "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: PUI\n")
+        fs.save_json("context/meeting_context.json", {"summary_llm": "x"})
+        result = {
+            "reviewed_srt": "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: PEI\n",
+            "harmonized_summary": "# Synthèse\nPEI",
+            "reviewed_structured_data": '{"decisions": ["[À VÉRIFIER] budget 60 000 €"]}',
+            "report": "## rapport",
+        }
+        applied = WorkflowRunner._apply_final_review(fs, result)
+        assert applied["srt_updated"] and applied["summary_harmonized"] and applied["structured_data_updated"]
+        srt = fs.load_text("metadata/transcription_corrigee.srt")
+        assert "PEI" in srt and "PUI" not in srt
+        ctx = fs.load_json("context/meeting_context.json")
+        assert ctx["summary_harmonized"] == "# Synthèse\nPEI"
+        assert ctx["structured_data"]["decisions"][0].startswith("[À VÉRIFIER]")
+        assert (fs.job_dir / "metadata" / "final_review_report.md").exists()
+
+    def test_srt_rejected_when_ratio_off(self, tmp_path):
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        fs = JobFilesystem(str(tmp_path), "job-fr2")
+        original = "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: " + ("mot " * 50) + "\n"
+        fs.save_text("metadata/transcription_corrigee.srt", original)
+        fs.save_json("context/meeting_context.json", {})
+        applied = WorkflowRunner._apply_final_review(fs, {"reviewed_srt": "1\nx\n"})
+        assert applied["srt_updated"] is False
+        assert fs.load_text("metadata/transcription_corrigee.srt") == original
+
+    def test_invalid_structured_data_kept(self, tmp_path):
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        fs = JobFilesystem(str(tmp_path), "job-fr3")
+        fs.save_json("context/meeting_context.json", {"structured_data": {"decisions": ["ok"]}})
+        applied = WorkflowRunner._apply_final_review(fs, {"reviewed_structured_data": "{not json"})
+        assert applied["structured_data_updated"] is False
+        assert fs.load_json("context/meeting_context.json")["structured_data"]["decisions"] == ["ok"]

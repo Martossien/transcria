@@ -682,7 +682,14 @@ class DocxReport:
         topic = ctx.get("topic", "").strip()
         objective = ctx.get("objective", "").strip()
         notes = ctx.get("notes", "").strip()
-        summary = (ctx.get("summary") or ctx.get("summary_llm") or "").strip()
+        # Priorité : édition manuelle (étape 4) > synthèse harmonisée sur le glossaire
+        # validé (post-correction) > synthèse brute de la LLM (pré-correction).
+        summary = (
+            ctx.get("summary")
+            or ctx.get("summary_harmonized")
+            or ctx.get("summary_llm")
+            or ""
+        ).strip()
 
         if topic:
             self._meta_row(doc, "Sujet", topic)

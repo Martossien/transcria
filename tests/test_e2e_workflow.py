@@ -2025,6 +2025,7 @@ def main() -> int:
                 ("speakers/diarization_checkpoint.json", "Checkpoint diarisation"),
                 ("speakers/speaker_embeddings.json",     "Embeddings locuteurs"),
                 ("summary/diarization_context.md",       "Contexte diarisation LLM"),
+                ("metadata/final_review_report.md",      "Rapport relecture finale (A+C+D+G)"),
             ]
             for rel_path, label in optional_artifacts:
                 assert_file(fs.job_dir / rel_path, label)
@@ -2208,6 +2209,15 @@ def main() -> int:
                 m = re.search(r"[Ss]ubstitutions?\s+lexique\s+appliquées?\s*:?\s*\**\s*(\d+)", txt)
                 if m:
                     info(f"Substitutions lexique appliquées (rapport correction) : {m.group(1)}")
+            # Relecture finale (A+C+D+G) : harmonisation synthèse + audit données structurées.
+            review_report = fs.job_dir / "metadata" / "final_review_report.md"
+            ctx_final = fs.load_json("context/meeting_context.json") or {}
+            if review_report.exists():
+                ok("Relecture finale exécutée (final_review_report.md présent)")
+            else:
+                info("Relecture finale absente (désactivée, sautée ou best-effort sans sortie)")
+            info(f"Synthèse harmonisée disponible : {'oui' if ctx_final.get('summary_harmonized') else 'non'}")
+            RESULTS["summary_harmonized"] = bool(ctx_final.get("summary_harmonized"))
             # Garde-fou : aucun rôle ne doit contenir le genre (champ dédié ailleurs).
             roles = [p.get("role", "") for p in ParticipantsManager.get(job, cfg["storage"]["jobs_dir"])]
             gender_leak = [r for r in roles if re.search(r"masculin|f[ée]minin|[♂♀]", r, re.IGNORECASE)]

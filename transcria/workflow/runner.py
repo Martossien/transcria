@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from types import SimpleNamespace
@@ -1288,7 +1289,7 @@ class WorkflowRunner:
             step="quality",
             phase="quality_checks",
             message="Contrôle qualité en cours",
-            percent=85,
+            percent=90,
             force=True,
         )
         try:
@@ -1302,7 +1303,7 @@ class WorkflowRunner:
                 step="quality",
                 phase="quality_checks",
                 message="Contrôle qualité terminé",
-                percent=90,
+                percent=92,
                 force=True,
             )
             return result
@@ -1443,6 +1444,162 @@ class WorkflowRunner:
             if llm_phase_reserved:
                 self.allocator.release_phase(job.id, "llm_arbitration")
             self.allocator.release_llm(job.id)
+
+    def run_final_review(self, job: Job, config: dict) -> dict:
+        """Phase de relecture finale (A+C+D+G) exécutée après la correction.
+
+        Avec les données validées par l'humain et la LLM d'arbitrage déjà chargée :
+        harmonise la synthèse sur le glossaire, fiabilise la cohérence des noms/termes
+        dans le SRT corrigé, résout les variantes de lexique restantes, et audite les
+        données structurées (décisions/actions/chiffres/dates) contre le SRT.
+
+        Best-effort : un échec n'interrompt **jamais** le pipeline (la correction et le
+        résumé restent valables) — la phase renvoie toujours ``success=True``.
+        """
+        from transcria.gpu.opencode_runner import OpenCodeRunner, build_harmonization_glossary
+        from transcria.jobs.filesystem import JobFilesystem
+
+        self.progress.update(
+            job.id,
+            step="processing",
+            phase="final_review",
+            message="Relecture finale : cohérence et fidélité",
+            percent=83,
+            force=True,
+        )
+
+        if config.get("workflow", {}).get("arbitration_llm", {}).get("enabled") is False:
+            return {"success": True, "skipped": True, "reason": "arbitration_llm.enabled=false"}
+
+        fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+        corrected_srt = fs.job_dir / "metadata" / "transcription_corrigee.srt"
+        if not corrected_srt.is_file():
+            logger.info("Relecture finale ignorée : SRT corrigé absent (job=%s)", job.id)
+            return {"success": True, "skipped": True, "reason": "no_corrected_srt"}
+
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+        participants = fs.load_json("context/participants.json") or []
+        lexicon = fs.load_json("context/session_lexicon.json") or []
+        glossary = build_harmonization_glossary(participants, lexicon)
+        summary_text = (meeting_ctx.get("summary_llm") or "").strip()
+        structured_data = meeting_ctx.get("structured_data") or {}
+        if not glossary and not summary_text and not structured_data:
+            logger.info("Relecture finale ignorée : rien à relire (job=%s)", job.id)
+            return {"success": True, "skipped": True, "reason": "nothing_to_review"}
+
+        if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
+            logger.warning("Relecture finale sautée — verrou LLM indisponible (job=%s)", job.id)
+            return {"success": True, "skipped": True, "reason": "llm_busy"}
+
+        llm_phase_reserved = False
+        llm_was_already_running = self.vram.is_arbitrage_llm_running()
+        try:
+            if self._should_reserve_llm_vram() and not llm_was_already_running:
+                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+                reservation = self.allocator.try_reserve(job.id, llm_vram_mb, "final_review")
+                if reservation is None:
+                    logger.warning("Relecture finale sautée — VRAM insuffisante (job=%s)", job.id)
+                    return {"success": True, "skipped": True, "reason": "vram_insufficient"}
+                llm_phase_reserved = True
+
+            api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+            if not self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+                logger.warning("Relecture finale sautée — LLM d'arbitrage non disponible (job=%s)", job.id)
+                return {"success": True, "skipped": True, "reason": "llm_unavailable"}
+
+            work = fs.job_dir / "metadata"
+            summary_file = work / "summary_to_harmonize.md"
+            glossary_file = work / "final_review_glossary.md"
+            structured_file = work / "structured_data.json"
+            summary_file.write_text(summary_text, encoding="utf-8")
+            glossary_file.write_text(glossary, encoding="utf-8")
+            structured_file.write_text(
+                json.dumps(structured_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+
+            opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
+            runner = OpenCodeRunner(str(work), opencode_bin=opencode_bin, config=config)
+            result = runner.run_final_review(
+                str(corrected_srt),
+                str(summary_file),
+                str(glossary_file),
+                str(structured_file),
+            )
+            applied = self._apply_final_review(fs, result)
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="final_review",
+                message="Relecture finale terminée",
+                percent=89,
+                force=True,
+            )
+            return {"success": True, **applied}
+        except Exception as exc:
+            logger.exception("Échec relecture finale (best-effort, pipeline poursuivi): job=%s", job.id)
+            if not llm_was_already_running:
+                self.vram.stop_arbitrage_llm()
+            return {"success": True, "error": str(exc), "review_applied": False}
+        finally:
+            if llm_phase_reserved:
+                self.allocator.release_phase(job.id, "final_review")
+            self.allocator.release_llm(job.id)
+
+    @staticmethod
+    def _apply_final_review(fs, result: dict) -> dict:
+        """Applique les sorties de la relecture finale, avec garde-fous.
+
+        - SRT relu : remplace le SRT corrigé **seulement** si la taille reste cohérente
+          (ratio 0.9–1.1) — sinon on conserve l'ancien (anti-troncature/anti-dérive).
+        - Synthèse harmonisée → ``meeting_context["summary_harmonized"]`` (le DOCX la
+          préfère à ``summary_llm`` mais après ``summary``, l'édition manuelle).
+        - Données structurées relues → ``meeting_context["structured_data"]`` si JSON
+          valide (sinon on garde l'ancien).
+        - Rapport → ``metadata/final_review_report.md``.
+        """
+        applied = {
+            "srt_updated": False,
+            "summary_harmonized": False,
+            "structured_data_updated": False,
+        }
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+
+        reviewed_srt = result.get("reviewed_srt") or ""
+        if reviewed_srt:
+            old = fs.load_text("metadata/transcription_corrigee.srt") or ""
+            ratio = (len(reviewed_srt) / len(old)) if old else 1.0
+            if 0.9 <= ratio <= 1.1:
+                fs.save_text("metadata/transcription_corrigee.srt", reviewed_srt)
+                applied["srt_updated"] = True
+            else:
+                logger.warning(
+                    "Relecture finale : SRT relu écarté (ratio %.2f hors [0.9, 1.1])", ratio
+                )
+
+        harmonized = result.get("harmonized_summary") or ""
+        if harmonized:
+            meeting_ctx["summary_harmonized"] = harmonized
+            applied["summary_harmonized"] = True
+
+        reviewed_sd = result.get("reviewed_structured_data") or ""
+        if reviewed_sd:
+            try:
+                parsed = json.loads(reviewed_sd)
+                if isinstance(parsed, dict):
+                    meeting_ctx["structured_data"] = parsed
+                    applied["structured_data_updated"] = True
+            except (ValueError, TypeError):
+                logger.warning("Relecture finale : structured_data relu non JSON — ancien conservé")
+
+        if applied["summary_harmonized"] or applied["structured_data_updated"]:
+            fs.save_json("context/meeting_context.json", meeting_ctx)
+
+        report = result.get("report") or ""
+        if report:
+            fs.save_text("metadata/final_review_report.md", report)
+
+        logger.info("Relecture finale appliquée: %s", applied)
+        return {"review_applied": True, **applied}
 
     def build_export(self, job: Job, config: dict) -> dict:
         self.progress.update(

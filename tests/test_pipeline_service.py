@@ -552,3 +552,46 @@ class TestPipelineStepsOrder:
         assert call_order.index("filter") < call_order.index("transcription")
         assert call_order.index("denoise") < call_order.index("transcription")
         assert call_order.index("normalization") < call_order.index("transcription")
+
+
+class TestPipelineSteps:
+    """La phase de relecture finale s'insère après correction, avant qualité."""
+
+    def test_final_review_between_correction_and_quality(self):
+        svc = _make_svc({"workflow": {"enable_quality_mode": True}})
+        names = [s["name"] for s in svc._define_pipeline_steps(_job(), "a.wav", "quality")]
+        assert names == ["diarization", "correction", "final_review", "quality", "export"]
+
+    def test_no_final_review_when_arbitration_disabled(self):
+        svc = _make_svc({"workflow": {"arbitration_llm": {"enabled": False}}})
+        names = [s["name"] for s in svc._define_pipeline_steps(_job(), "a.wav", "fast")]
+        assert "final_review" not in names
+        assert "correction" not in names
+        assert names == ["quality", "export"]
+
+
+class TestStepProgressConsistency:
+    """Les % du wrapper _publish_step_progress concordent avec ceux des méthodes."""
+
+    def test_final_review_and_quality_percents(self):
+        svc = _make_svc()
+        captured = {}
+
+        def fake_update(job_id, **kw):
+            captured.setdefault(kw.get("phase"), []).append(kw.get("percent"))
+
+        svc._progress = MagicMock(); svc._progress.update = fake_update
+        for name in ("final_review", "quality"):
+            svc._publish_step_progress(_job(), name, starting=True)
+            svc._publish_step_progress(_job(), name, starting=False)
+        # final_review : 83 (start) → 89 (end) ; quality : 90 → 92 (décalés pour la phase)
+        assert captured["final_review"] == [83, 89]
+        assert captured["quality"] == [90, 92]
+
+    def test_unknown_step_falls_back_without_percent(self):
+        svc = _make_svc()
+        captured = {}
+        svc._progress = MagicMock()
+        svc._progress.update = lambda job_id, **kw: captured.setdefault(kw.get("phase"), []).append(kw.get("percent"))
+        svc._publish_step_progress(_job(), "inconnue", starting=True)
+        assert captured["inconnue"] == [None]

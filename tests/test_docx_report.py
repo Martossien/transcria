@@ -396,3 +396,29 @@ class TestMarkdownRendering:
         # garde-fou pur : pas d'astérisques résiduelles après rendu
         rendered = "".join(c for c, _ in _split_markdown_bold("**Theme.** corps"))
         assert "*" not in rendered
+
+
+class TestSummaryHarmonizedPreference:
+    """Le DOCX préfère l'édition manuelle > la synthèse harmonisée > la brute."""
+
+    def test_harmonized_used_when_no_manual_summary(self):
+        pytest.importorskip("docx")
+        from transcria.exports.docx_report import DocxReport
+        ctx = {k: v for k, v in _CTX.items() if k != "summary"}
+        ctx["summary_harmonized"] = "## Synthèse\n**Cadrage.** PEI à 90 %."
+        ctx["summary_llm"] = "## Synthèse\n**Cadrage.** PUI à 90 %."
+        doc = DocxReport(ctx, [], {}, {}, "", {}).build()
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "PEI à 90 %" in text
+        assert "PUI" not in text
+
+    def test_manual_summary_wins_over_harmonized(self):
+        pytest.importorskip("docx")
+        from transcria.exports.docx_report import DocxReport
+        ctx = {**_CTX}
+        ctx["summary"] = "## Synthèse\nEdition humaine validee."
+        ctx["summary_harmonized"] = "## Synthèse\nHarmonise auto."
+        doc = DocxReport(ctx, [], {}, {}, "", {}).build()
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "Edition humaine validee" in text
+        assert "Harmonise auto" not in text

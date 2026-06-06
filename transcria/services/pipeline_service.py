@@ -239,7 +239,8 @@ class PipelineService:
         messages = {
             "diarization": ("Diarisation finale en cours", "Diarisation finale terminée", 60, 70),
             "correction": ("Correction LLM du sous-titrage en cours", "Correction LLM terminée", 75, 82),
-            "quality": ("Contrôle qualité en cours", "Contrôle qualité terminé", 85, 90),
+            "final_review": ("Relecture finale : cohérence et fidélité", "Relecture finale terminée", 83, 89),
+            "quality": ("Contrôle qualité en cours", "Contrôle qualité terminé", 90, 92),
             "export": ("Préparation du paquet final", "Paquet final prêt", 95, 100),
         }
         start_msg, end_msg, start_pct, end_pct = messages.get(
@@ -1033,6 +1034,14 @@ class PipelineService:
             steps.append({
                 "name": "correction",
                 "method": partial(self.runner.run_correction, job, self.config),
+            })
+            # Relecture finale (A+C+D+G) : harmonisation synthèse, cohérence/variantes
+            # du SRT corrigé, audit des données structurées. Après correction (besoin
+            # du SRT corrigé complet) et avant la qualité (pour que le score reflète le
+            # SRT relu). Best-effort : n'interrompt pas le pipeline.
+            steps.append({
+                "name": "final_review",
+                "method": partial(self.runner.run_final_review, job, self.config),
             })
         steps.append({
             "name": "quality",
