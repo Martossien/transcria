@@ -801,7 +801,7 @@ Produit par `QualityReporter` à l'étape qualité. Si `metadata/audio_scene.jso
 }
 ```
 
-Score = `max(0, 100 - warnings * 5)`. Les 16 contrôles :
+Score = `compute_quality_score(...)` : métrique de **fiabilité** (0-100) fondée sur le ratio de fiabilité segmentaire normalisé (`ok`/`suspect`/`degrade`), la couverture audio (pénalité seulement sous le seuil) et des déductions plafonnées/pondérées pour les erreurs avérées. Les signaux contextuels (silences, interjections courtes, chevauchements non significatifs) restent dans `review_points`/`review_load` mais ne touchent pas le score. Le champ `warnings` reste un décompte de relecture indépendant du score. Les 16 contrôles :
 
 1. empty_segments
 2. very_short_segments

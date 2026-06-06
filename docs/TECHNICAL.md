@@ -883,7 +883,7 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 6. Locuteurs non mappés (SPEAKER_XX)
 7. Termes normalisés du lexique absents (`replace_by`) dans le SRT corrigé
 7bis. Variantes de lexique non résolues (formes exactes et proches après correction)
-7ter. Garde-fous déterministes : noms de locuteurs modifiés (`speaker_name_violations`), segments marqués étrangers (`foreign_segments`), segments non latins (`non_latin_segments`), segments courts suspects de bruit ASR (`suspicious_short_segments`) — ces quatre sous-checks alimentent le `review_load`
+7ter. Garde-fous déterministes : noms de locuteurs modifiés (`speaker_name_violations`), segments marqués étrangers (`foreign_segments`), segments non latins (`non_latin_segments`), segments courts suspects de bruit ASR (`suspicious_short_segments`) — ces quatre sous-checks alimentent le `review_load`. Un segment court n'est compté comme *probable hallucination* (`corroborated_count`) que s'il est corroboré par un signal indépendant : recoupement d'une `problem_segment` audio (`_segment_overlaps_zones`), `no_speech_prob` élevé, ou faible confiance des mots. Sans corroboration, c'est une interjection brève (sévérité `info`). Un nombre dicté (« 1,26 ») n'est jamais classé bruit.
 8bis. Flags du pré-diagnostic acoustique (`audio_preflight_flags`) — `audio_faible`, `audio_tres_faible`, `snr_faible`, etc.
 9. Segments suspects : `no_speech_prob` élevé (hallucination Whisper sur silence/audio dégradé)
 10. Segments suspects : faible confiance mots (`suspect_low_word_confidence`) — ratio de mots à faible probabilité > seuil
@@ -891,7 +891,12 @@ Génère `context/job_context.yaml` et `context/job_context.json` avec : job_id,
 12. Couverture audio (< 80%)
 13. Ratio mots/seconde suspect (< 0.5 ou > 10)
 
-Score = max(0, 100 - warnings × 5). Sauvegarde quality_report.json, quality_report.md, review_points.json.
+Score (`compute_quality_score`, fonction pure) — reflète la **fiabilité de la transcription**, pas le volume de points à vérifier :
+- base = ratio de fiabilité segmentaire (`ok` plein, `suspect` à moitié, `degrade` nul), normalisé par le nombre de segments pour rester comparable d'une réunion de 5 min à 2 h ;
+- la couverture audio ne pénalise qu'**en dessous** du seuil configuré (les silences normaux ne font pas chuter le score) ;
+- déductions plafonnées et pondérées par gravité pour les **erreurs avérées** : noms de locuteurs altérés (≤20), hallucinations non latines (≤15), segments étrangers/vides/variantes lexique non résolues (≤10), termes lexique manquants (≤5).
+
+Les signaux purement contextuels (silences, interjections courtes, chevauchements non significatifs) restent dans les `review_points` mais ne touchent jamais le score. Le compteur `warnings` (« Points d'attention ») reste un décompte de relecture distinct du score. Sauvegarde quality_report.json, quality_report.md, review_points.json.
 
 **`review_points.py` — `ReviewPoints`**
 | Méthode | Description |
