@@ -110,6 +110,7 @@ transcria/
 │   │   ├── __init__.py
 │   │   ├── meeting_context.py     # MeetingContextManager + MEETING_TYPES
 │   │   ├── participants.py        # ParticipantsManager + default_participant
+│   │   ├── invite_parser.py       # sanitize_invite/render_invite_markdown — brief d'invitation (noms via e-mails, e-mails retirés)
 │   │   ├── lexicon.py             # LexiconManager + LEXICON_CATEGORIES/PRIORITIES
 │   │   └── job_context_builder.py # JobContextBuilder (build → YAML + JSON)
 │   │
@@ -182,7 +183,7 @@ transcria/
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
 │   └── prompts/
-│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.6 (@general obligatoire, synthèse proportionnée)
+│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.7 (@general obligatoire, synthèse proportionnée, brief d'invitation §4bis)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v2.2 (@general obligatoire)
 │
 ├── tests/                         # suite pytest + E2E (870+ tests)
@@ -550,7 +551,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé | GPUSession auto |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`) et le transmet à `run_summary` | GPUSession auto |
 | `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. Applique d'abord `apply_speaker_hint(config, job.extra_data["speaker_hint"])`. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
@@ -823,6 +824,14 @@ Constantes de module : `_DEFAULT_MODEL_ID` (repo HF), `_DEFAULT_NEMO_FILE` (nom 
 | `save(job, jobs_dir, participants)` | Valide (strip, id auto, default) et sauvegarde |
 | `default_participant()` | Retourne {id:"", name:"", function:"", service:"", role:"", is_animator:False, expected:True, comment:""} |
 
+**`invite_parser.py` — brief d'invitation (fonctions pures)**
+| Fonction | Description |
+|---|---|
+| `sanitize_invite(raw) → {brief, names}` | Parse une invitation collée. `names` : orthographe probable des participants dérivée des seules parties locales `prenom.nom` des e-mails (signal non ambigu ; exclut les boîtes de ressource type `MS118001-201`). `brief` : texte normalisé, **adresses e-mail retirées**, taille plafonnée. Générique (aucune donnée métier en dur), PII minimisée (e-mails jamais conservés). |
+| `render_invite_markdown(parsed) → str` | Rend `{brief, names}` en Markdown (`## Noms probables` + contexte) pour la LLM ; chaîne vide si rien d'exploitable. |
+
+Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sanitize_invite` → `extra_data["meeting_invite"]={brief, names}` → `WorkflowRunner._materialize_meeting_invite` écrit `summary/meeting_invite.md` → `OpenCodeRunner.run_summary(..., invite_path)`. Fichier hors liste blanche d'export (`package_builder`) : non inclus dans le ZIP.
+
 **`lexicon.py` — `LexiconManager`**
 | Méthode | Description |
 |---|---|
@@ -1020,7 +1029,7 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 |---|---|
 | `__init__(work_dir, model, provider, opencode_bin, config)` | Initialise avec répertoire de travail, modèle et binaire opencode configurables |
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
-| `run_summary(transcript_path, context_path, diarization_context_path)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible, lit le fichier summary.md produit et le parse |
+| `run_summary(transcript_path, context_path, diarization_context_path, invite_path=None)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible et, si `invite_path` pointe vers un fichier existant, ajoute une clause d'instruction marquant le brief d'invitation comme **indicatif** (orthographe des noms / rôles / ordre du jour, sans forcer de correspondance 1:1). Lit le `summary.md` produit et le parse |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + lexique filtré, écrit transcription_corrigee.srt + correction_report.md |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects) |
 
