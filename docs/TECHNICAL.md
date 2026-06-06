@@ -185,6 +185,7 @@ transcria/
 │   └── prompts/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.8 (@general obligatoire, brief d'invitation §4bis, genre hors nom/rôle)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v2.2 (@general obligatoire)
+│       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v1.0, après correction
 │
 ├── tests/                         # suite pytest + E2E (870+ tests)
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
@@ -556,6 +557,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
 | `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers + application du lexique validé en contexte + orthographe (prompt v2.2, @general obligatoire) | LLM arbitrage |
+| `run_final_review(job, config)` | **Phase de relecture finale (A+C+D+G)** après correction, avant qualité : harmonise la synthèse, rend cohérents noms/termes du SRT, résout les variantes, audite les données structurées (corrige nom/chiffre/date, marque `[À VÉRIFIER]`). Réutilise la LLM chargée. `_apply_final_review()` applique les sorties avec garde-fous (SRT relu si ratio 0.9–1.1, `summary_harmonized`, `structured_data` si JSON valide). **Best-effort** : renvoie toujours `success=True` | LLM arbitrage |
 | `run_quality_checks(job, config)` | 16 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |
 
@@ -1033,6 +1035,7 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
 | `run_summary(transcript_path, context_path, diarization_context_path, invite_path=None)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible et, si `invite_path` pointe vers un fichier existant, ajoute une clause d'instruction marquant le brief d'invitation comme **indicatif** (orthographe des noms / rôles / ordre du jour, sans forcer de correspondance 1:1). Lit le `summary.md` produit et le parse |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + lexique filtré, écrit transcription_corrigee.srt + correction_report.md |
+| `run_final_review(srt_path, summary_path, glossary_path, structured_data_path)` | Relecture finale en une session (prompt dédié `final_review_prompt.txt`, @general obligatoire pour le SRT) : A harmonise la synthèse, C+D fiabilisent cohérence/variantes du SRT, G audite les données structurées. Lit `summary_harmonized.md`, `transcription_reviewed.srt`, `structured_data_reviewed.json`, `final_review_report.md`. Glossaire bâti par `build_harmonization_glossary(participants, lexicon)` (fonction pure : noms validés + formes canoniques ← variantes) |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects). Applique `_strip_role_gender()` sur chaque ligne `## Participants probables` pour retirer un genre (Masculin/Féminin, ♂/♀) que la LLM aurait recopié dans le rôle (le genre a un champ dédié) |
 
 **Fichiers prompts** dans `configs/prompts/` :

@@ -360,7 +360,8 @@ jobs/<job_id>/
   │   ├── granite.json               # Métadonnées backend Granite si utilisé
   │   ├── parakeet.json              # Métadonnées backend Parakeet si utilisé
   │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
-│   └── correction_report.md       # Rapport de correction opencode si disponible
+│   ├── correction_report.md       # Rapport de correction opencode si disponible
+│   └── final_review_report.md     # Rapport de la relecture finale (A+C+D+G) si exécutée
 │
 ├── summary/
 │   ├── quick_transcript.txt        # Transcription Cohere brut (format: [0.0s → 30.0s]  texte)
@@ -456,6 +457,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Traitement (Parakeet expérimental) | `metadata/parakeet.json` | `ParakeetTranscriber.get_metadata()` |
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
+| Relecture finale (quality) | `metadata/transcription_corrigee.srt` (réécrit si ratio ok), `meeting_context["summary_harmonized"]` + `["structured_data"]`, `metadata/final_review_report.md` | `WorkflowRunner.run_final_review()` + `OpenCodeRunner.run_final_review()` — A+C+D+G, best-effort |
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
@@ -516,6 +518,7 @@ l'audio original.
   "speaker_count_pyannote": 4,
   "mots_cles": "budget, EBITDA, CA, pipeline",
   "summary_llm": "# Résumé de contrôle\n...",
+  "summary_harmonized": "# Résumé de contrôle\n...",
   "structured_data": {
     "decisions": ["Budget Q1 validé"],
     "actions": ["Marie : diffuser le CR avant vendredi"],

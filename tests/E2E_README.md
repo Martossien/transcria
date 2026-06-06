@@ -57,6 +57,7 @@ python -m pytest tests/test_e2e_structured_data.py -v   # 54 tests, ~5s, sans GP
    - Nettoyage post-STT (suppression d'artefacts de sous-titrage, fusion de
      micro-segments courts) si `workflow.transcription_cleanup` est actif
    - Correction LLM d'arbitrage (sauf `--skip-llm`) avec `context/session_lexicon_filtered.json`
+   - Relecture finale A+C+D+G (`WorkflowRunner.run_final_review`, sauf `--skip-llm`) : harmonise la synthèse, fiabilise la cohérence du SRT, audite les données structurées → `metadata/final_review_report.md`, `meeting_context["summary_harmonized"]`
    - Contrôle qualité → `quality/quality_report.json`
    - Export ZIP
 
@@ -153,7 +154,7 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 | `--speaker-max N` | aucun | Borne haute (bascule Sortformer→pyannote si > 4) |
 | `--meeting-invite "TEXTE\|@fichier"` | aucun | Brief d'invitation (objet/corps/destinataires). Préfixe `@` = lire un fichier. Nettoyé par `sanitize_invite()` (noms via e-mails, **e-mails retirés**), stocké dans `extra_data["meeting_invite"]` et utilisé par le résumé pour l'orthographe des noms / les rôles / l'ordre du jour |
 
-Le run affiche en fin de parcours une section **« Qualité & corrections »** : score qualité (`compute_quality_score`), nombre de segments courts et combien sont corroborés (probables hallucinations), nombre de substitutions lexique appliquées (rapport de correction) et un garde-fou vérifiant qu'aucun rôle participant ne contient le genre (Masculin/Féminin, ♂/♀). `--output-json` reprend `quality_score` et `role_gender_clean`.
+Le run affiche en fin de parcours une section **« Qualité & corrections »** : score qualité (`compute_quality_score`), nombre de segments courts et combien sont corroborés (probables hallucinations), nombre de substitutions lexique appliquées (rapport de correction), présence de la **relecture finale** (`final_review_report.md`) et de la synthèse harmonisée, et un garde-fou vérifiant qu'aucun rôle participant ne contient le genre (Masculin/Féminin, ♂/♀). `--output-json` reprend `quality_score`, `role_gender_clean` et `summary_harmonized`.
 
 > **Backend demandé vs backend effectif** : `--stt-backend` définit le backend
 > de départ du run. Le pipeline peut ensuite le remplacer via
