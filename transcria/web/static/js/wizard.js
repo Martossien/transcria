@@ -871,10 +871,15 @@ var TranscrIA = window.TranscrIA || {};
                 var progress = r.data.progress || null;
                 _renderWorkflowStatusBanner(banner, state, progress);
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
+                    // Phase active (résumé, traitement…) : rafraîchissement rapide.
                     setTimeout(poll, 4000);
-                } else if (progress && progress.message) {
-                    setTimeout(poll, 12000);
+                } else if (_TERMINAL_STATES.indexOf(state) === -1) {
+                    // État intermédiaire (analyzed, summary_done, context_done…) : continuer
+                    // à surveiller, sinon le démarrage d'une phase synchrone (ex. génération
+                    // du résumé) ne serait jamais affiché car le polling se serait arrêté.
+                    setTimeout(poll, 10000);
                 }
+                // État terminal (completed/export_ready/failed/cancelled) → arrêt du polling.
             });
         }
 
