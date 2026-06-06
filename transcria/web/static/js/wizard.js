@@ -80,8 +80,16 @@ var TranscrIA = window.TranscrIA || {};
             min: (minEl && minEl.value !== '') ? parseInt(minEl.value, 10) : null,
             max: (maxEl && maxEl.value !== '') ? parseInt(maxEl.value, 10) : null
         };
-        // Mémoriser la fourchette de locuteurs avant la diarisation (phase résumé).
+        var inviteEl = document.getElementById('meeting-invite');
+        var inviteText = inviteEl ? inviteEl.value.trim() : '';
+        // Mémoriser la fourchette de locuteurs puis, le cas échéant, le brief
+        // d'invitation, avant de lancer le résumé (diarisation + LLM).
         W.api('/api/jobs/' + JOB_ID + '/speaker-hint', 'POST', hint).then(function () {
+            if (inviteText) {
+                return W.api('/api/jobs/' + JOB_ID + '/meeting-invite', 'POST', { text: inviteText });
+            }
+            return null;
+        }).then(function () {
             return W.api('/api/jobs/' + JOB_ID + '/summary');
         }).then(function (r) {
             W.hideSpinner('summary-spinner');

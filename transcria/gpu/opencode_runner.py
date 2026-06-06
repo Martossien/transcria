@@ -462,7 +462,13 @@ class OpenCodeRunner:
             "tool_calls": total_tools,
         }
 
-    def run_summary(self, transcript_path: str, context_path: str | None = None, diarization_context_path: str | None = None) -> dict:
+    def run_summary(
+        self,
+        transcript_path: str,
+        context_path: str | None = None,
+        diarization_context_path: str | None = None,
+        invite_path: str | None = None,
+    ) -> dict:
         """Génère un résumé structuré via opencode.
 
         Returns:
@@ -487,6 +493,14 @@ class OpenCodeRunner:
             )
         if context_path and os.path.isfile(context_path):
             instruction += f"Le fichier de contexte est : {context_path}. "
+        if invite_path and os.path.isfile(invite_path):
+            instruction += (
+                f"Un brief d'invitation est fourni : {invite_path}. Il est INDICATIF "
+                "(invités ≠ présents, des présents peuvent manquer) : le nombre de voix "
+                "détectées prime. Sers-t'en uniquement pour l'orthographe des noms, les "
+                "rôles annoncés et la structure de l'ordre du jour, sans forcer de "
+                "correspondance 1:1 ni inventer de présence. "
+            )
         instruction += (
             "Lis la transcription, la diarization si elle est fournie, analyse-les ensemble, et produis un résumé structuré "
             "dans un fichier summary.md en suivant scrupuleusement le format du prompt système."

@@ -32,6 +32,7 @@ from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge, get_config
 from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore
+from transcria.context.invite_parser import sanitize_invite
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
@@ -1101,6 +1102,27 @@ def api_speaker_hint(job_id: str):
     hint = _normalize_speaker_hint(request.get_json() or {})
     JobStore.update_extra_data(job.id, lambda extra: {**extra, "speaker_hint": hint})
     return jsonify({"status": "ok", "speaker_hint": hint})
+
+
+@web_bp.route("/api/jobs/<job_id>/meeting-invite", methods=["POST"])
+@login_required
+def api_meeting_invite(job_id: str):
+    """Mémorise une invitation de réunion collée (objet, corps, destinataires).
+
+    Indication facultative, saisie avant la génération du résumé : elle fournit à
+    la LLM d'arbitrage des indices d'orthographe des noms et de structure (ordre du
+    jour, rôles). Le texte est nettoyé immédiatement : les adresses e-mail servent à
+    dériver l'orthographe des noms puis sont retirées — seuls le brief sans e-mail et
+    la liste de noms sont conservés (minimisation des données personnelles).
+    """
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    raw = (request.get_json() or {}).get("text", "")
+    invite = sanitize_invite(raw if isinstance(raw, str) else "")
+    JobStore.update_extra_data(job.id, lambda extra: {**extra, "meeting_invite": invite})
+    return jsonify({"status": "ok", "names": invite["names"]})
 
 
 @web_bp.route("/api/jobs/<job_id>/context", methods=["POST"])

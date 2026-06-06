@@ -828,3 +828,45 @@ class TestOpenCodeRunnerRunCorrection:
         assert result["success"] is True
         assert "corrigé" in result["corrected_srt"]
         assert "timeout" in result["warning"].lower()
+
+
+class TestRunSummaryInviteInstruction:
+    """La clause « brief d'invitation » n'apparaît que si un fichier d'invite existe."""
+
+    def _capture_instruction(self, runner, monkeypatch):
+        captured = {}
+
+        def fake_run(instruction, prompt_file, timeout=600):
+            captured["instruction"] = instruction
+            return {"success": False, "error": "stub", "output": "", "events": 0}
+
+        monkeypatch.setattr(runner, "run", fake_run)
+        return captured
+
+    def test_invite_clause_present_when_file_exists(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        invite = tmp_path / "meeting_invite.md"
+        invite.write_text("# Brief d'invitation\n", encoding="utf-8")
+        captured = self._capture_instruction(runner, monkeypatch)
+
+        runner.run_summary(str(tmp_path / "t.txt"), invite_path=str(invite))
+
+        assert "brief d'invitation" in captured["instruction"].lower()
+        assert "INDICATIF" in captured["instruction"]
+        assert str(invite) in captured["instruction"]
+
+    def test_no_invite_clause_when_path_is_none(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        captured = self._capture_instruction(runner, monkeypatch)
+
+        runner.run_summary(str(tmp_path / "t.txt"))
+
+        assert "brief d'invitation" not in captured["instruction"].lower()
+
+    def test_no_invite_clause_when_file_missing(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        captured = self._capture_instruction(runner, monkeypatch)
+
+        runner.run_summary(str(tmp_path / "t.txt"), invite_path=str(tmp_path / "nope.md"))
+
+        assert "brief d'invitation" not in captured["instruction"].lower()

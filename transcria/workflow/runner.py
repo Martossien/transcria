@@ -422,10 +422,12 @@ class WorkflowRunner:
                 opencode_bin=opencode_bin,
                 config=config,
             )
+            invite_path = self._materialize_meeting_invite(fs, job)
             parsed = runner.run_summary(
                 str(transcript_path),
                 str(context_path),
                 str(diarization_ctx_path),
+                invite_path,
             )
             self._apply_llm_suggestions(fs, result, parsed, sl)
         except Exception as exc:
@@ -434,6 +436,28 @@ class WorkflowRunner:
             if llm_phase_reserved:
                 self.allocator.release_phase(job.id, "summary_llm")
             self.allocator.release_llm(job.id)
+
+    @staticmethod
+    def _materialize_meeting_invite(fs, job: Job) -> str | None:
+        """Écrit le brief d'invitation (facultatif) dans le dossier de résumé.
+
+        Lit l'invitation déjà nettoyée stockée dans ``extra_data["meeting_invite"]``
+        (``{"brief", "names"}`` sans adresse e-mail) et la rend en Markdown pour la
+        LLM. Retourne le chemin du fichier, ou ``None`` si aucune invitation
+        exploitable n'a été fournie (cas normal).
+        """
+        invite_data = (job.get_extra_data() or {}).get("meeting_invite")
+        if not isinstance(invite_data, dict):
+            return None
+        from transcria.context.invite_parser import render_invite_markdown
+
+        markdown = render_invite_markdown(invite_data)
+        if not markdown:
+            return None
+        invite_file = fs.job_dir / "summary" / "meeting_invite.md"
+        invite_file.parent.mkdir(parents=True, exist_ok=True)
+        invite_file.write_text(markdown, encoding="utf-8")
+        return str(invite_file)
 
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:
