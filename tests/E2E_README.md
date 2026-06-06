@@ -145,6 +145,16 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 | `--lexicon-term "TERME[|priorité|catégorie|variante1;variante2]"` | aucun | Ajoute un terme au lexique de session du run. Répétable |
 | `--lexicon-json PATH` | aucun | Ajoute une liste JSON d'entrées de lexique au run |
 
+### Indices de réunion (facultatifs)
+
+| Option | Défaut | Description |
+|--------|--------|-------------|
+| `--speaker-min N` | aucun | Borne basse de la fourchette de locuteurs → `extra_data["speaker_hint"]` (appliquée à la diarisation ; si `min == max`, comptage exact) |
+| `--speaker-max N` | aucun | Borne haute (bascule Sortformer→pyannote si > 4) |
+| `--meeting-invite "TEXTE\|@fichier"` | aucun | Brief d'invitation (objet/corps/destinataires). Préfixe `@` = lire un fichier. Nettoyé par `sanitize_invite()` (noms via e-mails, **e-mails retirés**), stocké dans `extra_data["meeting_invite"]` et utilisé par le résumé pour l'orthographe des noms / les rôles / l'ordre du jour |
+
+Le run affiche en fin de parcours une section **« Qualité & corrections »** : score qualité (`compute_quality_score`), nombre de segments courts et combien sont corroborés (probables hallucinations), nombre de substitutions lexique appliquées (rapport de correction) et un garde-fou vérifiant qu'aucun rôle participant ne contient le genre (Masculin/Féminin, ♂/♀). `--output-json` reprend `quality_score` et `role_gender_clean`.
+
 > **Backend demandé vs backend effectif** : `--stt-backend` définit le backend
 > de départ du run. Le pipeline peut ensuite le remplacer via
 > `workflow.quality_transcription.force_stt_backend` si cette règle est explicitement

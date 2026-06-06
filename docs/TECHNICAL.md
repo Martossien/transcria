@@ -183,7 +183,7 @@ transcria/
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
 │   └── prompts/
-│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.7 (@general obligatoire, synthèse proportionnée, brief d'invitation §4bis)
+│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.8 (@general obligatoire, brief d'invitation §4bis, genre hors nom/rôle)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v2.2 (@general obligatoire)
 │
 ├── tests/                         # suite pytest + E2E (870+ tests)
@@ -937,6 +937,8 @@ rapport_<titre>.docx                     # rapport Word généré automatiquemen
 
 Génère un rapport Word professionnel **adapté au type de réunion** à partir des artefacts JSON d'un job terminé. Endpoint : `GET /api/jobs/<id>/download/docx`. Mis en cache dans `exports/rapport_<titre>.docx` et inclus automatiquement dans le ZIP. Module exclu de mypy (python-docx n'a pas de stubs).
 
+**Rendu Markdown** : le résumé LLM est du Markdown. `_split_markdown_bold(text)` (fonction pure) découpe le texte en segments `(contenu, gras)` selon `**…**`/`__…__` ; `_add_markdown_runs(paragraph, text)` les ajoute en runs **gras réels**. La Synthèse rend en plus les intertitres (`##` → ligne en gras détachée), les puces (`-`/`*`) et un espacement de paragraphe — corrige le gras non rendu et l'effet « tassé » (auparavant les astérisques étaient simplement supprimées et les lignes vides ignorées).
+
 | Section | Source | Condition |
 |---|---|---|
 | Page de garde (bannière+badge selon thème, titre, métadonnées, quorum CSE) | `meeting_context.json` + `quality_report.json` | Toujours |
@@ -1031,7 +1033,7 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
 | `run_summary(transcript_path, context_path, diarization_context_path, invite_path=None)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible et, si `invite_path` pointe vers un fichier existant, ajoute une clause d'instruction marquant le brief d'invitation comme **indicatif** (orthographe des noms / rôles / ordre du jour, sans forcer de correspondance 1:1). Lit le `summary.md` produit et le parse |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + lexique filtré, écrit transcription_corrigee.srt + correction_report.md |
-| `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects) |
+| `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects). Applique `_strip_role_gender()` sur chaque ligne `## Participants probables` pour retirer un genre (Masculin/Féminin, ♂/♀) que la LLM aurait recopié dans le rôle (le genre a un champ dédié) |
 
 **Fichiers prompts** dans `configs/prompts/` :
 - `summary_prompt.txt` : Prompt système pour le résumé structuré

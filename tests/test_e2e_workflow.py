@@ -61,6 +61,7 @@ import ast
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -296,6 +297,23 @@ Exemples :
     parser.add_argument(
         "--lexicon-json", type=Path, default=None,
         help="Fichier JSON contenant une liste d'entrées de lexique à ajouter au run.",
+    )
+    parser.add_argument(
+        "--speaker-min", type=int, default=None,
+        help="Fourchette de locuteurs (borne basse) → extra_data['speaker_hint']. "
+             "Si min == max, comptage exact appliqué à la diarisation.",
+    )
+    parser.add_argument(
+        "--speaker-max", type=int, default=None,
+        help="Fourchette de locuteurs (borne haute) → extra_data['speaker_hint'] "
+             "(bascule Sortformer→pyannote si > 4).",
+    )
+    parser.add_argument(
+        "--meeting-invite", type=str, default=None,
+        metavar="TEXTE|@fichier",
+        help="Brief d'invitation (objet/corps/destinataires) à coller. Préfixe '@' "
+             "pour lire un fichier. Stocké nettoyé dans extra_data['meeting_invite'] "
+             "(noms via e-mails, e-mails retirés) et utilisé par le résumé.",
     )
 
     # ── GPU et LLM ──────────────────────────────────────────────────────────
@@ -1801,6 +1819,24 @@ def main() -> int:
             RESULTS["prepare"] = True
             timer_end("prepare")
 
+            # ── Indices facultatifs : fourchette locuteurs + brief d'invitation ──
+            extra_updates: dict = {}
+            if args.speaker_min is not None or args.speaker_max is not None:
+                extra_updates["speaker_hint"] = {"min": args.speaker_min, "max": args.speaker_max}
+                ok(f"speaker_hint : min={args.speaker_min} max={args.speaker_max}")
+            if args.meeting_invite:
+                from transcria.context.invite_parser import sanitize_invite
+                raw_invite = args.meeting_invite
+                if raw_invite.startswith("@"):
+                    raw_invite = Path(raw_invite[1:]).read_text(encoding="utf-8")
+                invite = sanitize_invite(raw_invite)
+                extra_updates["meeting_invite"] = invite
+                ok(f"meeting_invite : {len(invite['names'])} nom(s) extrait(s), "
+                   f"{len(invite['brief'])} car. de brief (e-mails retirés)")
+            if extra_updates:
+                JobStore.update_extra_data(job_id, lambda extra: {**extra, **extra_updates})
+                job = JobStore.get_by_id(job_id)
+
             # ── Phase résumé ─────────────────────────────────────────────────
             if not args.skip_summary:
                 step("Résumé production (WorkflowRunner.run_summary)")
@@ -2154,6 +2190,33 @@ def main() -> int:
             if srt_corr.exists():
                 _, corr_words = _count_srt(srt_corr)
                 info(f"SRT corrigé   : {corr_words} mots")
+
+            # ── Qualité & corrections (score fiabilité, lexique, garde-fou genre) ──
+            section("Qualité & corrections")
+            qr = fs.load_json("quality/quality_report.json") or {}
+            if qr:
+                info(f"Score qualité : {qr.get('quality_score')}/100 "
+                     f"({qr.get('warnings')} point(s) d'attention)")
+                review_load = qr.get("review_load") or {}
+                s_short = review_load.get("suspicious_short_segments", 0)
+                s_corr = review_load.get("suspicious_short_corroborated", 0)
+                info(f"Segments courts : {s_short} (dont {s_corr} corroborés = probables hallucinations)")
+                RESULTS["quality_score"] = qr.get("quality_score")
+            corr_report = fs.job_dir / "metadata" / "correction_report.md"
+            if corr_report.exists():
+                txt = corr_report.read_text(encoding="utf-8")
+                m = re.search(r"[Ss]ubstitutions?\s+lexique\s+appliquées?\s*:?\s*\**\s*(\d+)", txt)
+                if m:
+                    info(f"Substitutions lexique appliquées (rapport correction) : {m.group(1)}")
+            # Garde-fou : aucun rôle ne doit contenir le genre (champ dédié ailleurs).
+            roles = [p.get("role", "") for p in ParticipantsManager.get(job, cfg["storage"]["jobs_dir"])]
+            gender_leak = [r for r in roles if re.search(r"masculin|f[ée]minin|[♂♀]", r, re.IGNORECASE)]
+            if gender_leak:
+                warn(f"Genre présent dans {len(gender_leak)} rôle(s) participant — fuite à corriger")
+                RESULTS["role_gender_clean"] = False
+            else:
+                ok("Aucune fuite de genre dans les rôles participants")
+                RESULTS["role_gender_clean"] = True
 
         except Exception as exc:
             fail("E2E interrompu par une exception", exc)
