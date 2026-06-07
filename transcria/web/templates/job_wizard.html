@@ -124,6 +124,29 @@
           sur {{ audio_diagnostic.difficulty.windows }} fenêtre(s) de 5 s.
         </div>
         {% endif %}
+        {% if audio_diagnostic.frise %}
+        {% set _frise_labels = {'ok': 'son exploitable', 'suspect': 'à surveiller', 'degrade': 'difficile'} %}
+        {% set _frise_classes = {'ok': 'success', 'suspect': 'warning', 'degrade': 'danger'} %}
+        <div class="mt-2">
+          <div class="small text-muted mb-1">Difficulté au fil du temps</div>
+          <div class="d-flex" style="height: 14px; border-radius: 4px; overflow: hidden;"
+               role="img" aria-label="Frise temporelle de la difficulté audio">
+            {% for seg in audio_diagnostic.frise %}
+            <div class="bg-{{ _frise_classes[seg.level] }}" style="width: {{ seg.pct }}%;"
+                 title="{{ seg.label }} · {{ _frise_labels[seg.level] }}{% if seg.reasons %} · {{ seg.reasons|join(', ') }}{% endif %}"></div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 0.7rem;">
+            <span>{{ audio_diagnostic.frise[0].label.split('–')[0] }}</span>
+            <span>{{ audio_diagnostic.frise[-1].label.split('–')[1] }}</span>
+          </div>
+          <div class="small mt-1">
+            <span class="badge text-bg-success">&nbsp;</span> exploitable
+            <span class="badge text-bg-warning ms-2">&nbsp;</span> à surveiller
+            <span class="badge text-bg-danger ms-2">&nbsp;</span> difficile
+          </div>
+        </div>
+        {% endif %}
         <details class="small mt-2">
           <summary>Voir les détails techniques</summary>
           {% if audio_diagnostic.perceptual.squim or audio_diagnostic.perceptual.dnsmos %}

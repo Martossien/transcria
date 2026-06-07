@@ -1,5 +1,6 @@
 import copy
 import logging
+import math
 import re
 import threading
 import time
@@ -139,6 +140,68 @@ def _clear_resource_status_cache() -> None:
         _RESOURCE_STATUS_CACHE.clear()
 
 
+_FRISE_LEVEL_RANK = {"ok": 0, "suspect": 1, "degrade": 2}
+
+
+def _fmt_mmss(seconds: float) -> str:
+    total = int(round(max(0.0, seconds)))
+    return f"{total // 60}:{total % 60:02d}"
+
+
+def _build_difficulty_frise(difficulty_map: list[dict] | None, max_buckets: int = 160) -> list[dict]:
+    """Réduit la `difficulty_map` par fenêtre en une frise temporelle bornée pour l'UI.
+
+    Regroupe les fenêtres consécutives en au plus `max_buckets` segments (le niveau
+    d'un segment est le **pire** des fenêtres qu'il couvre), avec une largeur `pct`
+    proportionnelle à la durée. Fonction pure, testable.
+
+    Args:
+        difficulty_map: liste `{start, end, difficulty, signals}` (cf. difficulty_map.py).
+        max_buckets: nombre maximal de segments rendus (anti-DOM massif sur longue réunion).
+
+    Returns:
+        Liste `{start, end, level, pct, label, signals}` triée par début, ou [] si vide.
+    """
+    windows = [
+        w for w in (difficulty_map or [])
+        if w.get("start") is not None and w.get("end") is not None
+    ]
+    if not windows:
+        return []
+    windows.sort(key=lambda w: float(w["start"]))
+    group_size = max(1, math.ceil(len(windows) / max_buckets))
+
+    frise: list[dict] = []
+    for i in range(0, len(windows), group_size):
+        chunk = windows[i:i + group_size]
+        start = float(chunk[0]["start"])
+        end = float(chunk[-1]["end"])
+        worst = "ok"
+        signals: list[str] = []
+        for w in chunk:
+            level = str(w.get("difficulty") or "ok")
+            if _FRISE_LEVEL_RANK.get(level, 0) > _FRISE_LEVEL_RANK.get(worst, 0):
+                worst = level
+            for sig in (w.get("signals") or []):
+                if sig not in signals:
+                    signals.append(sig)
+        frise.append({
+            "start": start,
+            "end": end,
+            "level": worst,
+            "duration": max(end - start, 0.0),
+            "label": f"{_fmt_mmss(start)}–{_fmt_mmss(end)}",
+            "signals": signals,
+        })
+
+    # Largeur normalisée pour remplir exactement la barre (les fenêtres SQUIM se
+    # chevauchent : la somme des durées ≠ span) — robuste au chevauchement et aux trous.
+    total_duration = max(sum(seg["duration"] for seg in frise), 1e-9)
+    for seg in frise:
+        seg["pct"] = round(100 * seg["duration"] / total_duration, 3)
+    return frise
+
+
 def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> dict:
     if not preflight:
         return {}
@@ -168,6 +231,8 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
         "rt60_eleve": "réverbération marquée",
         "c50_faible": "clarté faible",
         "codec_artefact": "bande téléphonique (codec)",
+        "overlap": "voix superposées",
+        "sig_lt_bak": "parole peu nette",
     }
     flags = [str(flag) for flag in preflight.get("flags", []) if flag]
     reasons = [flag_labels.get(flag, flag.replace("_", " ")) for flag in flags]
@@ -184,6 +249,10 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
     dnsmos = preflight.get("dnsmos_global") or {}
     summary = preflight.get("difficulty_summary") or {}
     advice = _audio_advice(dnsmos, flags) if level in {"suspect", "degrade"} else None
+
+    frise = _build_difficulty_frise(preflight.get("difficulty_map"))
+    for seg in frise:
+        seg["reasons"] = [flag_labels.get(s, s.replace("_", " ")) for s in seg["signals"][:3]]
 
     return {
         "level": level,
@@ -202,6 +271,7 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
             "degrade": summary.get("degrade"),
             "suspect": summary.get("suspect"),
         } if summary.get("windows") else None,
+        "frise": frise or None,
         "metrics": {
             "rms": preflight.get("rms"),
             "estimated_snr_db": preflight.get("estimated_snr_db"),

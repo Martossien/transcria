@@ -2,6 +2,7 @@
 
 from transcria.web.routes import (
     _audio_diagnostic_view,
+    _build_difficulty_frise,
     _enrich_lexicon_context_audio,
     _fill_missing_speaker_genders,
     _normalize_speaker_hint,
@@ -73,6 +74,63 @@ def test_audio_diagnostic_view_degraded_speech_advice():
     assert "Parole elle-même dégradée" in view["advice"]["text"]
 
 
+def test_build_difficulty_frise_empty_returns_empty_list():
+    assert _build_difficulty_frise([]) == []
+    assert _build_difficulty_frise(None) == []
+
+
+def test_build_difficulty_frise_one_segment_per_window_when_small():
+    frise = _build_difficulty_frise([
+        {"start": 0.0, "end": 5.0, "difficulty": "ok", "signals": []},
+        {"start": 5.0, "end": 10.0, "difficulty": "suspect", "signals": ["squim_stoi_faible"]},
+        {"start": 10.0, "end": 15.0, "difficulty": "degrade", "signals": ["overlap"]},
+    ])
+    assert [s["level"] for s in frise] == ["ok", "suspect", "degrade"]
+    # Largeurs proportionnelles à la durée → ~33% chacune, somme ≈ 100.
+    assert abs(sum(s["pct"] for s in frise) - 100.0) < 0.01
+    assert frise[1]["label"] == "0:05–0:10"
+    assert frise[2]["label"] == "0:10–0:15"
+
+
+def test_build_difficulty_frise_downsamples_and_keeps_worst_level():
+    windows = [
+        {"start": float(i), "end": float(i + 1),
+         "difficulty": "degrade" if i == 7 else "ok", "signals": ["overlap"] if i == 7 else []}
+        for i in range(20)
+    ]
+    frise = _build_difficulty_frise(windows, max_buckets=4)
+    assert len(frise) == 4
+    # Le segment couvrant la fenêtre 7 hérite du pire niveau (degrade).
+    degraded = [s for s in frise if s["level"] == "degrade"]
+    assert len(degraded) == 1
+    assert degraded[0]["start"] <= 7.0 < degraded[0]["end"]
+
+
+def test_build_difficulty_frise_skips_windows_missing_bounds():
+    frise = _build_difficulty_frise([
+        {"difficulty": "degrade", "signals": []},
+        {"start": 0.0, "end": 4.0, "difficulty": "suspect", "signals": []},
+    ])
+    assert len(frise) == 1
+    assert frise[0]["level"] == "suspect"
+
+
+def test_audio_diagnostic_view_exposes_frise_from_difficulty_map():
+    view = _audio_diagnostic_view({
+        "risk_level": "suspect",
+        "flags": ["squim_stoi_faible"],
+        "difficulty_summary": {"windows": 2, "degrade": 0, "suspect": 1, "ok": 1},
+        "difficulty_map": [
+            {"start": 0.0, "end": 5.0, "difficulty": "ok", "signals": []},
+            {"start": 5.0, "end": 10.0, "difficulty": "suspect", "signals": ["squim_stoi_faible"]},
+        ],
+    })
+    assert view["frise"] is not None
+    assert len(view["frise"]) == 2
+    # Les signaux techniques sont traduits en libellés lisibles pour le tooltip.
+    assert "intelligibilité réduite" in view["frise"][1]["reasons"]
+
+
 def test_audio_diagnostic_view_clean_audio_has_no_advice_or_difficulty():
     view = _audio_diagnostic_view({
         "risk_level": "ok",
@@ -82,6 +140,7 @@ def test_audio_diagnostic_view_clean_audio_has_no_advice_or_difficulty():
     })
     assert view["advice"] is None              # pas de conseil sur audio « ok »
     assert view["difficulty"] is None          # pas de difficulty_map (lazy)
+    assert view["frise"] is None               # pas de frise sans difficulty_map
     assert view["perceptual"]["squim"]["stoi"] == 0.95   # scores quand même exposés
 
 
