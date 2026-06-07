@@ -319,3 +319,52 @@ def test_claim_concurrent_pool_each_claimed_once(app, owner_id):
     with app.app_context():
         for jid in job_ids:
             assert QueueStore.get_entry(jid).status == QUEUE_RUNNING
+
+
+def test_enqueue_recovers_from_concurrent_insert_race(app, owner_id, monkeypatch):
+    """Course double-submit même job : le perdant (get_entry périmé → None) tente un
+    INSERT qui viole la contrainte unique → l'entrée gagnante est réutilisée (pas de 500)."""
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Race")
+        # Gagnant de la course : entrée déjà committée en base.
+        QueueStore.enqueue(job.id, priority=50, mode="fast")
+
+        real_get = QueueStore.get_entry
+        state = {"n": 0}
+
+        def flaky_get(jid):
+            state["n"] += 1
+            # 1er appel = lecture périmée du perdant (None) → force le chemin INSERT ;
+            # appels suivants (récupération) = vraie lecture.
+            return None if state["n"] == 1 else real_get(jid)
+
+        monkeypatch.setattr(QueueStore, "get_entry", staticmethod(flaky_get))
+
+        entry = QueueStore.enqueue(job.id, priority=20, mode="quality")
+
+        assert entry is not None
+        assert entry.job_id == job.id
+        assert entry.base_priority == 20      # métadonnées rafraîchies par _refresh_entry
+        assert entry.mode == "quality"
+        # une seule entrée en file pour ce job : pas de doublon
+        monkeypatch.undo()
+        assert db.session.query(JobQueueEntry).filter_by(job_id=job.id).count() == 1
+        _clear_queue()  # hygiène : ne pas laisser d'entrée résiduelle aux tests suivants
+
+
+def test_enqueue_reraises_unrelated_integrity_error(app, owner_id, monkeypatch):
+    """Si la récupération ne retrouve aucune entrée, l'IntegrityError est re-levée
+    (on ne masque pas une violation sans rapport avec l'unicité job_id)."""
+    import pytest
+    from sqlalchemy.exc import IntegrityError
+
+    with app.app_context():
+        _clear_queue()
+        job = JobStore.create_job(owner_id, "Race2")
+        QueueStore.enqueue(job.id, mode="fast")  # provoque la violation à l'INSERT suivant
+        monkeypatch.setattr(QueueStore, "get_entry", staticmethod(lambda jid: None))
+        with pytest.raises(IntegrityError):
+            QueueStore.enqueue(job.id, mode="fast")
+        db.session.rollback()
+        _clear_queue()  # hygiène : ne pas laisser d'entrée résiduelle aux tests suivants

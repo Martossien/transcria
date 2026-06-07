@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import cast
 
 from sqlalchemy import case, func, or_, text, update
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupMembership, Role
@@ -12,6 +14,8 @@ from transcria.database import db
 from transcria.jobs.models import Job
 from transcria.queue.models import JobQueueEntry
 from transcria.queue.notify_listener import QUEUE_NOTIFY_CHANNEL
+
+logger = logging.getLogger(__name__)
 
 QUEUE_WAITING = "waiting"
 QUEUE_PAUSED = "paused"
@@ -33,17 +37,7 @@ class QueueStore:
         priority = QueueStore._normalize_priority(priority)
         existing = QueueStore.get_entry(job_id)
         if existing is not None:
-            if existing.status in {QUEUE_DONE, QUEUE_CANCELLED, QUEUE_FAILED}:
-                existing.status = QUEUE_WAITING
-                existing.started_at = None
-                existing.gpu_index = None
-                existing.current_phase = None
-            existing.base_priority = priority
-            existing.scheduled_at = scheduled_at
-            existing.mode = mode
-            existing.set_vram_profile(vram_profile)
-            db.session.commit()
-            return existing
+            return QueueStore._refresh_entry(existing, priority, scheduled_at, vram_profile, mode)
 
         entry = JobQueueEntry(
             job_id=job_id,
@@ -57,8 +51,46 @@ class QueueStore:
         )
         entry.set_vram_profile(vram_profile)
         db.session.add(entry)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Course double-submit : un INSERT concurrent pour le même job_id a gagné
+            # (contrainte unique `job_queue.job_id`). On récupère l'entrée gagnante et on
+            # la réutilise → enqueue idempotent, pas de 500. La correction (un seul job
+            # en file, pas de double-run) était déjà assurée par la contrainte ; ici on
+            # rend la course gracieuse côté API.
+            db.session.rollback()
+            existing = QueueStore.get_entry(job_id)
+            if existing is None:
+                raise  # IntegrityError sans lien avec l'unicité job_id → ne pas masquer
+            logger.warning(
+                "enqueue: insertion concurrente détectée pour job_id=%s — réutilisation de l'entrée existante", job_id
+            )
+            return QueueStore._refresh_entry(existing, priority, scheduled_at, vram_profile, mode)
         return entry
+
+    @staticmethod
+    def _refresh_entry(
+        existing: JobQueueEntry,
+        priority: int,
+        scheduled_at: datetime | None,
+        vram_profile: dict | None,
+        mode: str,
+    ) -> JobQueueEntry:
+        """Réutilise une entrée existante (re-enqueue idempotent). Une entrée terminée
+        (done/cancelled/failed) repasse WAITING ; sinon on met seulement à jour les
+        métadonnées (priorité, planification, mode, profil VRAM)."""
+        if existing.status in {QUEUE_DONE, QUEUE_CANCELLED, QUEUE_FAILED}:
+            existing.status = QUEUE_WAITING
+            existing.started_at = None
+            existing.gpu_index = None
+            existing.current_phase = None
+        existing.base_priority = priority
+        existing.scheduled_at = scheduled_at
+        existing.mode = mode
+        existing.set_vram_profile(vram_profile)
+        db.session.commit()
+        return existing
 
     @staticmethod
     def notify_queue() -> None:
