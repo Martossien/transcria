@@ -8,7 +8,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 
 ## Statut du projet
 
-⚠️ **Développement actif — pas encore de version taguée.** TranscrIA est fonctionnel et couvert par une large suite de tests (1400+, CI verte), mais l'API, le schéma de configuration (`config.yaml`) et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante. À considérer pour de l'évaluation ou un pilote, pas encore comme une release stable à déployer sans validation de votre côté.
+⚠️ **Développement actif — pas encore de version taguée.** TranscrIA est fonctionnel et couvert par une large suite de tests (1600+, CI verte), mais l'API, le schéma de configuration (`config.yaml`) et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante. À considérer pour de l'évaluation ou un pilote, pas encore comme une release stable à déployer sans validation de votre côté.
 
 - **Installation** : aujourd'hui via `./install.sh` (venv, dépendances, service systemd). Des **images Docker sont prévues une fois les tests et le développement stabilisés** — elles ne sont pas encore publiées.
 - **Modèles** : Cohere ASR, pyannote, faster-whisper et la LLM d'arbitrage sont à fournir et configurer localement (voir [docs/INSTALL.md](docs/INSTALL.md)).
@@ -39,6 +39,7 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
 - **Interface utilisateur sobre** : diagnostic audio visible après analyse, options recommandées et options avancées, sans noyer l'utilisateur dans les détails techniques.
 - **Contrôle qualité** : score /100, rapport JSON/Markdown, points de relecture, diagnostics de transcription.
 - **Gestion multi-utilisateurs** : authentification, rôles, groupes, admins de groupe, visibilité partagée des jobs.
+- **Éditeur de configuration convivial** : la page `/admin/config` propose des formulaires lisibles (libellé, aide, validation par champ) pour les réglages courants — modèles/backends, LLM d'arbitrage, file & exécution, sécurité/upload, notifications email, voix, serveur — tout en conservant l'édition YAML complète dans un onglet avancé. Secrets masqués, modifications auditées.
 - **Notifications email** : email de fin de traitement envoyé au propriétaire du job (succès ou échec), configurable via SMTP/STARTTLS/SMTPS, fire-and-forget en tâche de fond.
 - **File GPU persistante** : mise en file activée par défaut, priorités, pause/reprise/annulation, démarrage différé (`scheduled_at`), profil VRAM par job, priority aging (bonus croissant contre la famine), limites de concurrence dynamiques.
 - **Planification des ressources par calendrier** : plages horaires par jour de semaine (timezone configurable, fenêtres à cheval sur minuit), 4 actions — `pause_queue`, `limit_concurrency`, `force_gpu`, `none` — avec résolution par priorité. CRUD auditable via l'interface admin.
@@ -50,7 +51,7 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
   - **Extraction structurée par la LLM** : décisions prises, actions à réaliser, points bloquants, points reportés, votes, résolutions, ordre du jour et prochaine date sont extraits du résumé via un prompt universel et un parseur tolérant (3 niveaux de repli `ok`/`partiel`/`échec`, dégradation gracieuse vers le rapport standard si l'extraction échoue). Affichés dans le document selon le type.
   - **Champs spécifiques au type** : 18 types de réunion (CSE, CSE extraordinaire, CODIR/COMEX, Point projet, Réunion client, Réunion de crise, Entretien individuel, Formation, Séminaire, Négociation…). Chaque type affiche dans l'interface des champs dédiés (président/secrétaire/quorum CSE, nom de projet/sprint, client/contrat…) repris dans le document et injectés dans le contexte LLM de correction.
   - **Thèmes visuels par type** : page de garde, titres de section, tableaux et pied de page adoptent une identité de couleur cohérente selon le type (bleu marine institutionnel CSE, teal projet, rouge crise, violet confidentiel…), avec bannière dédiée, badge confidentiel/crise et calcul automatique du quorum CSE.
-- **Tests et benchmarks** : suite pytest mockée (1400+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
+- **Tests et benchmarks** : suite pytest mockée (1600+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 

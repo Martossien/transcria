@@ -258,7 +258,7 @@ Package final
 En arrière-plan, TranscrIA coordonne plusieurs briques :
 
 - Flask pour le portail web ;
-- SQLite pour la base applicative ;
+- PostgreSQL pour la base applicative en production (SQLite en repli pour le développement) ;
 - Cohere ASR pour la transcription ;
 - pyannote pour la diarisation ;
 - LLM d'arbitrage via opencode pour le résumé et la correction ;

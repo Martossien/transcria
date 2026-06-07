@@ -187,7 +187,7 @@ transcria/
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v2.2 (@general obligatoire)
 │       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v1.0, après correction
 │
-├── tests/                         # suite pytest + E2E (870+ tests)
+├── tests/                         # suite pytest + E2E (1600+ tests)
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_audio.py              # 64 tests — Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre
 │   ├── test_audit.py              # 12 tests — AuditStore, rétention par famille
@@ -481,6 +481,7 @@ jobs/{uuid}/
 │   ├── transcription.srt
 │   ├── transcription_corrigee.srt      # SRT corrigé par opencode
 │   ├── transcription_segments.json
+│   ├── stt_corpus.json                 # Corpus difficulté↔qualité par segment (calibration STT, cf. STT_ADAPTATIF_ET_HYBRIDE.md)
 │   ├── speakers_map.json
 │   └── correction_report.md
 ├── summary/
@@ -1061,7 +1062,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/jobs/<id>/result` | GET | login_required + owner check | Page résultat |
 | `/jobs/<id>/delete` | POST | login_required + DELETE_JOBS | Suppression traitement |
 | `/system` | GET | login_required + ACCESS_SYSTEM | État technique (GPU dashboard) |
-| `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition YAML de la configuration |
+| `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition de la configuration : formulaires des réglages courants (onglet Réglages) + YAML complet (onglet avancé) |
 | `/admin/queue` | GET | admin global ou admin de groupe | Vue de la file persistante et actions par job |
 | `/admin/schedule` | GET | MANAGE_SCHEDULE | Gestion des créneaux de planification |
 | `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
@@ -1513,7 +1514,7 @@ La suite pytest couvre tous les modules. Lancer avec :
 cd transcria && python -m pytest tests/ -v
 ```
 
-870+ tests au total (sans les E2E GPU). Organisation :
+1600+ tests au total (sans les E2E GPU). Organisation :
 
 | Fichier | Tests | Couverture |
 |---|---|---|

@@ -1,7 +1,7 @@
 # TranscrIA — Concurrence & montée en charge (Phase B)
 
-> **Statut** : conception **validée** (décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11).
-> **Implémentation en cours** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
+> **Statut** : 🟢 **Phase B implémentée** (B1–B9 livrés ; décisions D1–D4 tranchées, revue du 2026-05-31 — cf. §11).
+> **Implémenté** : **B1 ✅** (claim atomique, `8c40bc5`) · **B2 ✅** (rôles +
 > ordonnanceur unique, `914ea94`) · **B3 ✅** (web multi-worker gunicorn + scheduler dédié +
 > systemd/nginx) · **B4 ✅** (nœud de ressources durci : ensure STT sérialisé,
 > état de charge `/capabilities`) · **B5 partiel ✅** (instrumentation + estimation locale

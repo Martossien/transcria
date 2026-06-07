@@ -68,7 +68,9 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -q
 ```
 
-Les tests utilisent SQLite en mémoire et des fixtures Flask. Pas besoin de GPU.
+Les tests s'appuient sur une base **PostgreSQL éphémère** (`pytest-postgresql`, lancée
+automatiquement — nécessite les binaires PostgreSQL locaux, ou les variables
+`TRANSCRIA_TEST_PG_*` pour viser un serveur existant) et des fixtures Flask. Pas besoin de GPU.
 
 ## Conventions
 

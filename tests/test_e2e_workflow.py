@@ -1980,6 +1980,7 @@ def main() -> int:
                 "context/job_context.yaml",
                 "metadata/transcription.srt",
                 "metadata/transcription_metadata.json",
+                "metadata/stt_corpus.json",
                 "quality/quality_report.json",
             ]
             if not args.skip_summary:
@@ -1998,14 +1999,22 @@ def main() -> int:
 
             found = sum(1 for p in expected if assert_file(fs.job_dir / p, p))
 
-            exports = list((fs.job_dir / "exports").glob("*.zip")) if (fs.job_dir / "exports").exists() else []
-            if exports:
-                ok(f"Export ZIP : {exports[0].name} ({exports[0].stat().st_size / 1024:.0f} Ko)")
+            exports_dir = fs.job_dir / "exports"
+            zips = list(exports_dir.glob("*.zip")) if exports_dir.exists() else []
+            docx_files = list(exports_dir.glob("*.docx")) if exports_dir.exists() else []
+            if zips:
+                ok(f"Export ZIP : {zips[0].name} ({zips[0].stat().st_size / 1024:.0f} Ko)")
                 found += 1
             else:
                 warn("Export ZIP absent")
+            if docx_files:
+                ok(f"Rapport DOCX : {docx_files[0].name} ({docx_files[0].stat().st_size / 1024:.0f} Ko)")
+                found += 1
+            else:
+                warn("Rapport DOCX absent")
 
-            RESULTS["verify"] = found == len(expected) + 1
+            # +2 : ZIP et DOCX, tous deux produits par la phase d'export.
+            RESULTS["verify"] = found == len(expected) + 2
             timer_end("verify")
 
             # ── Artefacts optionnels ─────────────────────────────────────────
@@ -2029,6 +2038,22 @@ def main() -> int:
             ]
             for rel_path, label in optional_artifacts:
                 assert_file(fs.job_dir / rel_path, label)
+
+            # ── Corpus difficulté↔qualité par segment (brique 2 de calibration) ──
+            section("Corpus STT (difficulté↔qualité par segment)")
+            corpus = fs.load_json("metadata/stt_corpus.json")
+            if isinstance(corpus, list) and corpus:
+                joined = sum(1 for r in corpus if r.get("difficulty") is not None)
+                rated = sum(1 for r in corpus if r.get("quality_measure") is not None)
+                ok(f"stt_corpus : {len(corpus)} segments · difficulté jointe={joined} · quality_measure={rated}")
+                if not args.skip_llm:
+                    # Correction exécutée → le proxy taux d'édition (brut↔corrigé) doit être rempli.
+                    (ok if rated > 0 else warn)(
+                        "quality_measure rempli (proxy taux d'édition)" if rated > 0
+                        else "quality_measure vide alors que la correction a tourné"
+                    )
+            else:
+                warn("stt_corpus.json absent ou vide")
 
             # ── Détail prétraitements ────────────────────────────────────────
             section("Détail des prétraitements audio")

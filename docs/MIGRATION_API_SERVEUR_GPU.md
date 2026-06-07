@@ -119,7 +119,7 @@ Périmètre **réduit** depuis la confirmation vLLM : ce service ne porte plus l
 Un service FastAPI hébergé près des GPU, contrat propre à TranscrIA :
 
 ```
-POST /infer/diarize        body: audio (ref ou upload) + options  → tours, embeddings, samples
+POST /infer/diarize        body: audio (ref ou upload) + num/min/max_speakers (optionnels)  → tours, embeddings, samples
 POST /infer/voice-embed    body: audio  → vecteur d'empreinte
 POST /infer/transcribe     body: audio + backend(parakeet) + lang  → segments enrichis  (optionnel)
 GET  /health  /ready  /models                                     → supervision
