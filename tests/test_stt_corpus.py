@@ -5,6 +5,9 @@ from types import SimpleNamespace
 from transcria.stt.corpus import (
     build_segment_corpus,
     difficulty_for_range,
+    enrich_corpus_with_quality,
+    parse_srt_blocks,
+    segment_edit_rate,
     summarize_corpus,
 )
 
@@ -137,6 +140,93 @@ def test_summarize_corpus_empty():
     summary = summarize_corpus([])
     assert summary["segments"] == 0
     assert summary["by_difficulty"] == {}
+
+
+_SRT = """1
+00:00:00,000 --> 00:00:02,000
+SPEAKER_00: bonjour le monde
+
+2
+00:00:06,000 --> 00:00:09,000
+SPEAKER_01(Alice): il faut valider le budget PEI
+
+3
+00:00:10,000 --> 00:00:12,000
+sans locuteur ici
+"""
+
+
+def test_parse_srt_blocks_strips_speaker_prefix_and_parses_time():
+    blocks = parse_srt_blocks(_SRT)
+    assert len(blocks) == 3
+    assert blocks[0]["start"] == 0.0 and blocks[0]["end"] == 2.0
+    assert blocks[0]["text"] == "bonjour le monde"
+    # préfixe SPEAKER_XX(Nom): retiré
+    assert blocks[1]["text"] == "il faut valider le budget PEI"
+    assert blocks[1]["start"] == 6.0
+    # ligne sans préfixe conservée telle quelle
+    assert blocks[2]["text"] == "sans locuteur ici"
+
+
+def test_parse_srt_blocks_empty():
+    assert parse_srt_blocks("") == []
+
+
+def test_segment_edit_rate_identical_is_zero():
+    assert segment_edit_rate("bonjour le monde", "bonjour le monde") == 0.0
+
+
+def test_segment_edit_rate_full_change_is_one():
+    assert segment_edit_rate("alpha beta", "gamma delta epsilon") == 1.0
+
+
+def test_segment_edit_rate_partial():
+    # 1 substitution sur 3 mots de référence
+    assert segment_edit_rate("le budget pei", "le budget pei validé") > 0.0
+    assert segment_edit_rate("le budget pui", "le budget pei") == round(1 / 3, 4)
+
+
+def test_segment_edit_rate_empty_reference():
+    assert segment_edit_rate("", "") == 0.0
+    assert segment_edit_rate("", "ajout") == 1.0
+
+
+def test_enrich_corpus_with_quality_aligns_by_timecode():
+    raw = [
+        {"start": 0.0, "end": 2.0, "text": "bonjour le monde"},
+        {"start": 6.0, "end": 9.0, "text": "il faut valider le budget pui"},
+        {"start": 10.0, "end": 12.0, "text": "sans locuteur ici"},
+    ]
+    corpus = build_segment_corpus(raw, "cohere", [])
+    blocks = parse_srt_blocks(_SRT)
+    filled = enrich_corpus_with_quality(corpus, raw, blocks)
+    assert filled == 3
+    # seg 0 inchangé → 0.0 ; seg 1 a une correction (pui→pei) → > 0 ; seg 2 inchangé → 0.0
+    assert corpus[0]["quality_measure"] == 0.0
+    assert corpus[1]["quality_measure"] > 0.0
+    assert corpus[2]["quality_measure"] == 0.0
+
+
+def test_enrich_corpus_no_match_leaves_none():
+    raw = [{"start": 500.0, "end": 502.0, "text": "hors plage"}]
+    corpus = build_segment_corpus(raw, "cohere", [])
+    filled = enrich_corpus_with_quality(corpus, raw, parse_srt_blocks(_SRT))
+    assert filled == 0
+    assert corpus[0]["quality_measure"] is None
+
+
+def test_summarize_corpus_reports_quality_means_after_enrichment():
+    raw = [
+        _seg(0.0, 2.0, reliability="ok"),
+        _seg(6.0, 9.0, reliability="suspect"),
+    ]
+    corpus = build_segment_corpus(raw, "cohere", _MAP)
+    corpus[0]["quality_measure"] = 0.0
+    corpus[1]["quality_measure"] = 0.5
+    summary = summarize_corpus(corpus)
+    assert summary["quality_measure_mean"] == 0.25
+    # moyenne d'édition par niveau de difficulté (signal de calibration)
+    assert "edit_rate_mean" in summary["by_difficulty"]["degrade"]
 
 
 class _FakeFs:

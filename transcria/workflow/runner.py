@@ -1282,6 +1282,41 @@ class WorkflowRunner:
             self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc)}
 
+    def _enrich_stt_corpus_quality(self, job: Job, config: dict) -> None:
+        """Remplit `quality_measure` du corpus STT (proxy taux d'édition brut↔corrigé).
+
+        Exécuté en début de qualité, donc **après** correction et relecture finale :
+        le SRT corrigé est définitif. Best-effort : aucune erreur n'affecte la qualité.
+        Sans SRT corrigé (correction désactivée), ne fait rien.
+        """
+        if not config.get("workflow", {}).get("stt_corpus", {}).get("enabled", True):
+            return
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.stt.corpus import enrich_corpus_with_quality, parse_srt_blocks, summarize_corpus
+
+            fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+            corpus = fs.load_json("metadata/stt_corpus.json")
+            raw_segments = fs.load_json("metadata/transcription_segments.json")
+            corrected = fs.load_text("metadata/transcription_corrigee.srt")
+            if not corpus or not raw_segments or not corrected:
+                return
+            filled = enrich_corpus_with_quality(corpus, raw_segments, parse_srt_blocks(corrected))
+            if not filled:
+                return
+            fs.save_json("metadata/stt_corpus.json", corpus)
+            summary = summarize_corpus(corpus)
+            try:
+                self.store.update_extra_data(job.id, lambda extra: {**extra, "stt_corpus_summary": summary})
+            except Exception as exc:
+                logger.warning("Mise à jour stt_corpus_summary (qualité) ignorée: %s", exc)
+            logger.info(
+                "Corpus STT enrichi du proxy qualité (job=%s): %d/%d segments, taux d'édition moyen=%s",
+                job.id, filled, len(corpus), summary.get("quality_measure_mean"),
+            )
+        except Exception as exc:
+            logger.warning("Enrichissement qualité du corpus STT ignoré (job=%s): %s", job.id, exc)
+
     def run_quality_checks(self, job: Job, config: dict) -> dict:
         self.store.update_state(job.id, JobState.QUALITY_CHECKING)
         self.progress.update(
@@ -1292,6 +1327,7 @@ class WorkflowRunner:
             percent=90,
             force=True,
         )
+        self._enrich_stt_corpus_quality(job, config)
         try:
             from transcria.quality.quality_report import QualityReporter
 
