@@ -63,6 +63,7 @@ _DEFAULT_CONFIG = {
         "arbitrage_script": "./scripts/launch_arbitrage.sh",
         "stop_script": "./scripts/stop_arbitrage_llm.sh",
         "arbitrage_llm_port": 8080,
+        "arbitrage_api_model_id": "",
         "llm_cleanup_ports": [8000],
     },
     "models": {

@@ -2,7 +2,7 @@
 
 import pytest
 
-from transcria.config import load_config
+from transcria.config.loader import get_default_config
 from transcria.web.config_form import (
     CONFIG_FORM_SECTIONS,
     SECRET_SENTINEL,
@@ -20,8 +20,13 @@ _ALL_FIELDS = [f for section in CONFIG_FORM_SECTIONS for f in section["fields"]]
 
 @pytest.mark.parametrize("field", _ALL_FIELDS, ids=[f["path"] for f in _ALL_FIELDS])
 def test_every_form_path_resolves_in_default_config(field):
-    """Anti-dérive : un chemin de formulaire faux/renommé doit casser les tests."""
-    cfg = load_config()
+    """Anti-dérive : chaque chemin de formulaire doit exister dans la config **par défaut**.
+
+    On valide contre `get_default_config()` (pas `load_config()`) : déterministe partout,
+    indépendant d'un `config.yaml` local — un chemin présent seulement dans une config de
+    prod (mais absent des defaults) doit casser le test, comme sur une installation neuve.
+    """
+    cfg = get_default_config()
     sentinel = object()
     assert get_dotted(cfg, field["path"], sentinel) is not sentinel, field["path"]
 

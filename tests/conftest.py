@@ -59,6 +59,13 @@ def _test_config(database_url: str):
             "enable_speaker_detection": False,
             "enable_quality_mode": False,
             "summary_llm": {"enabled": False},
+            # Le scheduler global démarré par create_app() poll la DB de test partagée.
+            # Avec le défaut (5 s) sa boucle de fond dispatche/dequeue les jobs que les
+            # tests de scheduler enfilent (jobs_dir ≠ tmp_path → audio introuvable →
+            # dequeue "failed"), ce qui rend ces tests flaky. Un intervalle long le rend
+            # dormant : les tests pilotent eux-mêmes `_dispatch_iteration()`.
+            # (use_listen_notify=False par défaut → pas de réveil par NOTIFY.)
+            "queue": {"poll_interval_s": 3600},
         },
     }
 
