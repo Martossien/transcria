@@ -5,3 +5,4 @@ ruff>=0.4
 mypy>=1.10
 types-PyYAML
 types-requests
+playwright>=1.60   # walkthrough UI (scripts/ui_walkthrough.py) — navigateur via `playwright install chromium`
