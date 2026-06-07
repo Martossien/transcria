@@ -395,6 +395,12 @@ workflow:
     # Listes non vides → remplacent entièrement les défauts.
     subtitle_artifact_patterns: []   # regex (ex. "\\bwatermark\\b")
     subtitle_artifact_words: []      # mots exacts normalisés (ex. "noise")
+  stt_corpus:
+    # Corpus de calibration difficulté↔qualité STT par segment. Pour chaque job,
+    # écrit metadata/stt_corpus.json (difficulté jointe × moteur × fiabilité par
+    # segment) et un agrégat compact dans extra_data.stt_corpus_summary (requêtable
+    # cross-jobs). Coût négligeable ; sert à calibrer les seuils SQUIM/DNSMOS.
+    enabled: true
   stt_hybrid:
     # Mode qualité Cohere→Whisper au segment. Désactivé tant qu'il reste en
     # prototype hors pipeline ; ne pas confondre avec inference.mode=hybrid.

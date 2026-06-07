@@ -168,6 +168,7 @@ class Transcriber:
         )
         segments = self._cleanup_transcription_segments(segments, sl, language=lang)
         segments = self._score_segment_reliability(segments, fs, sl)
+        corpus_summary = self._write_stt_corpus(job, segments, backend, fs, sl)
         backend_metadata = self._backend_metadata()
         if backend_metadata:
             fs.save_json(f"metadata/{backend}.json", backend_metadata)
@@ -188,6 +189,7 @@ class Transcriber:
             "speaker_count": speaker_count,
             "vad_final_enabled": vad_enabled,
             "backend_metadata_path": f"metadata/{backend}.json" if backend_metadata else None,
+            "difficulty_corpus": corpus_summary,
         })
         fs.save_json("metadata/speakers_map.json", speaker_map)
 
@@ -859,6 +861,39 @@ class Transcriber:
         except Exception as exc:
             logger.warning("Scorage fiabilité segments ignoré: %s", exc)
             return segments
+
+    def _write_stt_corpus(self, job: Job, segments: list[dict], backend: str, fs: JobFilesystem, sl) -> dict | None:
+        """Écrit le corpus difficulté↔qualité par segment (brique 2 de calibration).
+
+        Persiste `metadata/stt_corpus.json` (lignes par segment) et promeut un
+        agrégat compact dans `extra_data.stt_corpus_summary` (requêtable cross-jobs).
+        Best-effort : aucune erreur ne doit interrompre la transcription.
+        """
+        corpus_cfg = self.config.get("workflow", {}).get("stt_corpus", {}) or {}
+        if not corpus_cfg.get("enabled", True):
+            return None
+        try:
+            from transcria.stt.corpus import build_segment_corpus, summarize_corpus
+
+            preflight = fs.load_json("metadata/audio_preflight.json") or {}
+            corpus = build_segment_corpus(segments, backend, preflight.get("difficulty_map") or [])
+            fs.save_json("metadata/stt_corpus.json", corpus)
+            summary = summarize_corpus(corpus)
+            sl.info(
+                "Corpus STT par segment écrit",
+                segments=summary.get("segments"),
+                by_difficulty={k: v.get("count") for k, v in (summary.get("by_difficulty") or {}).items()},
+            )
+            try:
+                from transcria.jobs.store import JobStore
+
+                JobStore.update_extra_data(job.id, lambda extra: {**extra, "stt_corpus_summary": summary})
+            except Exception as exc:
+                logger.warning("Promotion stt_corpus_summary en base ignorée: %s", exc)
+            return summary
+        except Exception as exc:
+            logger.warning("Écriture corpus STT ignorée: %s", exc)
+            return None
 
     def _backend_metadata(self) -> dict:
         getter = getattr(self.transcriber, "get_metadata", None)

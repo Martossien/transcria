@@ -340,6 +340,9 @@ _DEFAULT_CONFIG = {
             "subtitle_artifact_patterns": [],
             "subtitle_artifact_words": [],
         },
+        "stt_corpus": {
+            "enabled": True,
+        },
         "stt_hybrid": {
             "enabled": False,
             "primary_backend": "cohere",

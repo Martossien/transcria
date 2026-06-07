@@ -671,6 +671,19 @@ Les artefacts de sous-titrage supprimés (`Sous-titrage ST' 501`, `FR 2021`, `So
 
 Le retrait d'hallucinations reste volontairement conservateur : il ne supprime pas tous les segments `suspect/degrade`, seulement les segments à signal textuel fort (texte majoritairement non latin pour une réunion française, ou phrase générique isolée comme `thank you`). Les artefacts numériques courts comme `501` ne sont supprimés que s'ils forment un segment autonome très court ; un nombre dans une vraie phrase est conservé. Pour un job explicitement anglais, les phrases génériques anglaises isolées ne sont pas filtrées par défaut. L'opération est tracée dans les logs du pipeline (`removed_artifacts=N, removed_hallucinations=N, merged_short_segments=M`).
 
+#### `workflow.stt_corpus`
+
+Corpus de calibration difficulté↔qualité STT par segment (brique 2, cf.
+`docs/STT_ADAPTATIF_ET_HYBRIDE.md`). Pour chaque job, `Transcriber` joint chaque
+segment transcrit à la `difficulty_map` par fenêtre et écrit `metadata/stt_corpus.json`
+(une ligne par segment : difficulté jointe × moteur × confiance native × fiabilité,
+plus un emplacement `quality_measure` réservé à la vérité terrain/WER). Un agrégat
+compact est promu dans `extra_data.stt_corpus_summary` (requêtable cross-jobs).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Écrit le corpus par segment + l'agrégat compact. Coût négligeable ; désactiver pour ne rien ajouter aux jobs. |
+
 #### `workflow.stt_hybrid`
 
 Contrat de configuration du futur mode qualité hybride Cohere→Whisper au segment.
@@ -1228,6 +1241,7 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `workflow.audio_scene_filter.*` | Non | Oui (PipelineService) |
 | `workflow.source_separation.*` | Non | Oui (PipelineService) |
 | `workflow.transcription_cleanup.*` | Non | Oui (Transcriber) |
+| `workflow.stt_corpus.*` | Non | Oui (Transcriber — corpus difficulté↔qualité) |
 | `workflow.stt_hybrid.*` | Non | Non encore consommé (contrat futur) |
 | `workflow.segment_reliability.*` | Non | Oui |
 | `workflow.pyannote_chunking.*` | Non | Oui |
