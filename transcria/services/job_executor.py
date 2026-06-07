@@ -44,8 +44,14 @@ def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
             event=event,
             error=error,
         )
-    except Exception:
-        pass  # Les notifications ne doivent jamais bloquer le pipeline
+    except Exception as exc:
+        # Les notifications ne doivent jamais bloquer le pipeline, mais l'échec
+        # (ex. owner détaché hors session dans le thread worker) doit rester traçable
+        # — sinon une notification absente est un angle mort indébogable.
+        get_structured_logger(__name__).warning(
+            "Notification email ignorée (event=%s, job=%s): %s",
+            event, getattr(job, "id", None), exc,
+        )
 
 
 class JobExecutorService:

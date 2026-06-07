@@ -289,3 +289,43 @@ def test_send_smtp_plain_skips_login_when_no_credentials():
         _send_smtp(_ecfg_plain(), "to@test.com", "Subj", "<p>html</p>", "text")
         srv.login.assert_not_called()
         srv.sendmail.assert_called_once()
+
+
+class TestNotifyHook:
+    """Hook _notify (job_executor) : robuste + traçable, jamais bloquant."""
+
+    def test_notify_delegates_with_resolved_owner_email(self):
+        from transcria.services import job_executor
+
+        owner = SimpleNamespace(email="alice@test.com", display_name="Alice", username="alice")
+        job = SimpleNamespace(id="j1", title="Réunion", owner=owner)
+        with patch.object(job_executor, "send_job_notification_async") as send:
+            job_executor._notify({"k": 1}, job, "completed", error=None)
+        send.assert_called_once()
+        kwargs = send.call_args.kwargs
+        assert kwargs["to_email"] == "alice@test.com"
+        assert kwargs["display_name"] == "Alice"
+        assert kwargs["job_id"] == "j1"
+        assert kwargs["event"] == "completed"
+
+    def test_notify_never_raises_and_logs_when_owner_unresolvable(self):
+        from transcria.services import job_executor
+
+        class _DetachedJob:
+            id = "job-x"
+            title = "T"
+
+            @property
+            def owner(self):
+                raise RuntimeError("instance détachée hors session")
+
+        fake_log = MagicMock()
+        with patch.object(job_executor, "get_structured_logger", return_value=fake_log):
+            with patch.object(job_executor, "send_job_notification_async") as send:
+                # ne doit jamais lever
+                job_executor._notify({}, _DetachedJob(), "failed", error="boom")
+        send.assert_not_called()
+        fake_log.warning.assert_called_once()
+        # l'échec est traçable : event et job_id présents dans le log
+        assert "failed" in fake_log.warning.call_args.args
+        assert "job-x" in fake_log.warning.call_args.args
