@@ -46,19 +46,88 @@
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <span>config.yaml</span>
-    <code>{{ config_path }}</code>
-  </div>
-  <div class="card-body">
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="tab-form" data-bs-toggle="tab" data-bs-target="#pane-form"
+            type="button" role="tab">Réglages</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-yaml" data-bs-toggle="tab" data-bs-target="#pane-yaml"
+            type="button" role="tab">YAML (avancé)</button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="pane-form" role="tabpanel">
     <form method="POST" action="/admin/config">
-      <textarea name="config_yaml" class="form-control font-monospace" rows="28" spellcheck="false">{{ config_yaml }}</textarea>
-      <div class="mt-3 d-flex gap-2">
-        <button type="submit" class="btn btn-primary">Sauvegarder</button>
+      <input type="hidden" name="_mode" value="form">
+      {% for section in sections %}
+      <div class="card mb-3">
+        <div class="card-header">
+          {{ section.title }}
+          {% if section.help %}<div class="small text-muted fw-normal">{{ section.help }}</div>{% endif %}
+        </div>
+        <div class="card-body">
+          {% for field in section.fields %}
+          <div class="mb-3 row">
+            <label class="col-sm-4 col-form-label" for="f-{{ field.path }}">{{ field.label }}</label>
+            <div class="col-sm-8">
+              {% if field.type == "bool" %}
+              <div class="form-check form-switch pt-2">
+                <input class="form-check-input" type="checkbox" role="switch"
+                       id="f-{{ field.path }}" name="{{ field.path }}"
+                       {% if values[field.path] %}checked{% endif %}>
+              </div>
+              {% elif field.type == "select" %}
+              <select class="form-select" id="f-{{ field.path }}" name="{{ field.path }}">
+                {% for opt in field.options %}
+                <option value="{{ opt }}" {% if values[field.path] == opt %}selected{% endif %}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              {% elif field.type == "csv" %}
+              <input type="text" class="form-control" id="f-{{ field.path }}" name="{{ field.path }}"
+                     value="{{ (values[field.path] or []) | join(', ') }}">
+              {% elif field.type == "password" %}
+              <input type="password" class="form-control" id="f-{{ field.path }}" name="{{ field.path }}"
+                     value="{{ values[field.path] if values[field.path] is not none else '' }}" autocomplete="new-password">
+              {% else %}
+              <input type="{{ 'number' if field.type == 'int' else 'text' }}" class="form-control"
+                     id="f-{{ field.path }}" name="{{ field.path }}"
+                     value="{{ values[field.path] if values[field.path] is not none else '' }}">
+              {% endif %}
+              {% if field.help %}<div class="form-text">{{ field.help }}</div>{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-primary">Sauvegarder les réglages</button>
         <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
       </div>
     </form>
+  </div>
+
+  <div class="tab-pane fade" id="pane-yaml" role="tabpanel">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>config.yaml — édition complète</span>
+        <code>{{ config_path }}</code>
+      </div>
+      <div class="card-body">
+        <p class="small text-muted">Édition libre de toute la configuration. Référence des paramètres :
+          <code>docs/CONFIG_REFERENCE.md</code>. Les secrets masqués (********) sont préservés si laissés tels quels.</p>
+        <form method="POST" action="/admin/config">
+          <input type="hidden" name="_mode" value="yaml">
+          <textarea name="config_yaml" class="form-control font-monospace" rows="28" spellcheck="false">{{ config_yaml }}</textarea>
+          <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Sauvegarder le YAML</button>
+            <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

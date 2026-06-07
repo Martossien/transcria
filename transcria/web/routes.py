@@ -48,6 +48,12 @@ from transcria.jobs.store import JobStore
 from transcria.services.config_service import ConfigService
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
+from transcria.web.config_form import (
+    CONFIG_FORM_SECTIONS,
+    build_partial_config,
+    display_values,
+    restore_masked_secrets,
+)
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
@@ -2011,13 +2017,18 @@ def system_status():
     return render_template("dashboard_status.html", status=status, app_config=cfg)
 
 
-def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None, status: int = 200):
+def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None,
+                        status: int = 200, values: dict | None = None):
+    if values is None:
+        values = display_values(ConfigService.get_singleton(), CONFIG_FORM_SECTIONS)
     return render_template(
         "admin_config.html",
         config_yaml=config_yaml,
         config_path=config_path,
         system_info=ConfigService.detect_system(),
         validation_errors=validation_errors or [],
+        sections=CONFIG_FORM_SECTIONS,
+        values=values,
     ), status
 
 
@@ -2028,7 +2039,27 @@ def admin_config():
     cfg = ConfigService.get_singleton()
     config_path = ConfigService.get_path()
 
-    if request.method == "POST":
+    if request.method == "POST" and request.form.get("_mode") == "form":
+        partial = build_partial_config(request.form, CONFIG_FORM_SECTIONS)
+        partial = restore_masked_secrets(partial, cfg, CONFIG_FORM_SECTIONS)
+        merged = _deep_merge(cfg, partial)
+        ok, errors, warnings = ConfigService.save_if_valid(merged, config_path)
+
+        for warn in warnings:
+            flash(warn, "warning")
+
+        if not ok:
+            for err in errors:
+                flash(err, "error")
+            flash(f"{len(errors)} erreur(s) de validation. Sauvegarde annulée.", "error")
+            config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)
+            return _render_config_form(config_yaml, config_path, errors, 400, values=display_values(merged, CONFIG_FORM_SECTIONS))
+
+        flash("Réglages sauvegardés.", "success")
+        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=config_path)
+        cfg = ConfigService.get_singleton()
+
+    elif request.method == "POST":
         raw_yaml = request.form.get("config_yaml", "")
         try:
             loaded = yaml.safe_load(raw_yaml) or {}

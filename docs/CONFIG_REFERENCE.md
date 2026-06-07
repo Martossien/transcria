@@ -11,6 +11,14 @@ La configuration est chargée depuis `config.yaml` (ou le chemin dans la variabl
 5. `set_config(cfg)` met à jour le singleton en mémoire après sauvegarde/rechargement
 6. Les modules qui capturent une config passée au constructeur ne voient pas forcément les mises à jour tant qu'ils ne sont pas réinstanciés
 
+### Édition depuis l'interface (`/admin/config`)
+
+La page `/admin/config` propose deux onglets :
+- **Réglages** (par défaut) : formulaires lisibles (libellé + aide + validation) pour les paramètres les plus courants — modèles/backends, LLM d'arbitrage, file & exécution, sécurité/upload, notifications email, voix, serveur & compte admin. La spécification déclarative est dans `transcria/web/config_form.py` (`CONFIG_FORM_SECTIONS`) ; un formulaire ne soumet qu'un dict **partiel** fusionné (`_deep_merge`) dans la config complète, donc aucune autre clé n'est perdue.
+- **YAML (avancé)** : édition libre de tout `config.yaml` (toutes les sections de ce document).
+
+Dans les deux cas, la sauvegarde passe par `ConfigService.save_if_valid()` (validation) et est auditée (`CONFIG_EDIT`). Les secrets (ex. `auth.first_admin_password`) sont masqués (`********`) et préservés s'ils sont laissés tels quels.
+
 ### Fichiers de configuration
 
 | Fichier | Rôle | Dans git ? |
