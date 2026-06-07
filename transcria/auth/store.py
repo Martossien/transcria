@@ -73,6 +73,13 @@ class UserStore:
         return db.session.scalar(db.select(func.count(User.id)))
 
     @staticmethod
+    def count_active_admins() -> int:
+        """Nombre d'administrateurs globaux actifs (pour interdire le verrouillage)."""
+        return db.session.scalar(
+            db.select(func.count(User.id)).filter_by(role=Role.ADMIN.value, is_active=True)
+        )
+
+    @staticmethod
     def ensure_admin(config: dict) -> None:
         if UserStore.count_users() > 0:
             return

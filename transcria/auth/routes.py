@@ -1,3 +1,5 @@
+import logging
+
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
@@ -8,8 +10,20 @@ from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.store import UserStore
 
+logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
 MIN_PASSWORD_LENGTH = 8
+
+
+def _removes_last_active_admin(user, new_role: Role, new_active: bool, active_admin_count: int) -> bool:
+    """Vrai si l'édition retirerait le dernier administrateur global actif.
+
+    Fonction pure : `user` doit exposer `role_enum` et `is_active`. Bloque la
+    rétrogradation comme la désactivation quand il ne reste qu'un seul admin actif.
+    """
+    currently_active_admin = user.role_enum == Role.ADMIN and user.is_active
+    stays_active_admin = new_role == Role.ADMIN and new_active
+    return currently_active_admin and not stays_active_admin and active_admin_count <= 1
 
 
 def _password_validation_error(password: str, confirmation: str | None = None) -> str | None:
@@ -145,6 +159,22 @@ def user_edit(user_id: str):
         except ValueError:
             role = user.role_enum
 
+        new_active = request.form.get("is_active") is not None
+
+        # Garde anti-verrouillage : ne jamais retirer le dernier administrateur global
+        # actif (rétrogradation OU désactivation). Sans cela, un admin pourrait se
+        # rétrograder/désactiver lui-même et rendre la plateforme non administrable.
+        if _removes_last_active_admin(user, role, new_active, UserStore.count_active_admins()):
+            flash(
+                "Action refusée : ce compte est le dernier administrateur actif. "
+                "Promouvez d'abord un autre administrateur.", "error",
+            )
+            logger.warning(
+                "Tentative de retrait du dernier admin actif (user=%s) par %s — refusée.",
+                user.username, current_user.username,
+            )
+            return render_template("user_form.html", roles=Role, user=user), 400
+
         if new_password:
             validation_error = _password_validation_error(new_password, password_confirm)
             if validation_error:
@@ -156,7 +186,6 @@ def user_edit(user_id: str):
         if new_password:
             UserStore.change_password(user_id, new_password)
 
-        new_active = request.form.get("is_active") is not None
         if new_active != user.is_active:
             UserStore.update_user(user_id, is_active=new_active)
 
@@ -257,6 +286,10 @@ def group_edit(group_id: str):
             elif GroupStore.add_member(group.id, user_id, role) is None:
                 flash("Utilisateur introuvable ou inactif.", "error")
             else:
+                audit_log(
+                    AuditAction.GROUP_MEMBER_ADD, target_type="group", target_id=group.id,
+                    target_label=group.name, details={"member_id": user_id, "role": role.value},
+                )
                 flash("Membre ajouté au groupe.", "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
@@ -274,6 +307,10 @@ def group_edit(group_id: str):
                 flash("Le groupe doit conserver au moins un admin de groupe.", "error")
             else:
                 GroupStore.remove_member(group.id, user_id)
+                audit_log(
+                    AuditAction.GROUP_MEMBER_REMOVE, target_type="group", target_id=group.id,
+                    target_label=group.name, details={"member_id": user_id},
+                )
                 flash("Membre retiré du groupe.", "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 

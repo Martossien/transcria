@@ -2011,8 +2011,8 @@ def api_push_to_editor(job_id: str):
 @requires(Permission.ACCESS_SYSTEM)
 def system_status():
     cfg = get_config()
-    db_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
-    client = DashboardClient(db_url)
+    dashboard_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
+    client = DashboardClient(dashboard_url)
     status = client.get_system_status()
     return render_template("dashboard_status.html", status=status, app_config=cfg)
 

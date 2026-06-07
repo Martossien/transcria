@@ -1,8 +1,49 @@
+from types import SimpleNamespace
+
 import pytest
 from werkzeug.security import check_password_hash
 
 from transcria.auth.models import Role, ROLE_HIERARCHY, User
 from transcria.auth.permissions import Permission, get_user_permissions, requires
+from transcria.auth.routes import _removes_last_active_admin
+
+
+def _admin(active=True):
+    return SimpleNamespace(role_enum=Role.ADMIN, is_active=active)
+
+
+class TestRemovesLastActiveAdmin:
+    def test_demoting_sole_admin_is_blocked(self):
+        assert _removes_last_active_admin(_admin(), Role.VIEWER, True, 1) is True
+
+    def test_deactivating_sole_admin_is_blocked(self):
+        assert _removes_last_active_admin(_admin(), Role.ADMIN, False, 1) is True
+
+    def test_demoting_one_of_two_admins_is_allowed(self):
+        assert _removes_last_active_admin(_admin(), Role.VIEWER, True, 2) is False
+
+    def test_keeping_sole_admin_admin_is_allowed(self):
+        assert _removes_last_active_admin(_admin(), Role.ADMIN, True, 1) is False
+
+    def test_editing_non_admin_is_never_blocked(self):
+        user = SimpleNamespace(role_enum=Role.OPERATOR, is_active=True)
+        assert _removes_last_active_admin(user, Role.VIEWER, True, 1) is False
+
+    def test_inactive_admin_not_counted_as_last(self):
+        # un admin déjà inactif n'est pas « le dernier admin actif »
+        assert _removes_last_active_admin(_admin(active=False), Role.VIEWER, True, 1) is False
+
+
+class TestCountActiveAdmins:
+    def test_count_reflects_new_and_demoted_admins(self, app):
+        from transcria.auth.store import UserStore
+        with app.app_context():
+            base = UserStore.count_active_admins()
+            assert base >= 1
+            created = UserStore.create_user("admin_count_test", "pw12345678", role=Role.ADMIN)
+            assert UserStore.count_active_admins() == base + 1
+            UserStore.update_user(created.id, is_active=False)
+            assert UserStore.count_active_admins() == base
 
 
 class TestRoleHierarchy:

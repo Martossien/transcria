@@ -44,7 +44,7 @@ class TestDashboardClient:
     def test_instantiation(self):
         client = DashboardClient("http://127.0.0.1:5001")
         assert client.base_url == "http://127.0.0.1:5001"
-        assert client.timeout == 10
+        assert client.timeout == 3
 
     def test_custom_timeout(self):
         client = DashboardClient(timeout=5)
@@ -58,7 +58,35 @@ class TestDashboardClient:
         client = DashboardClient("http://127.0.0.1:19999", timeout=1)
         status = client.get_system_status()
         assert isinstance(status, dict)
-        assert not status.get("available", True) or "error" in status
+        assert status["available"] is False
+
+    def test_get_system_status_short_circuits_when_dashboard_down(self):
+        """Dashboard injoignable → un seul appel (metrics), pas 4 timeouts en série."""
+        client = DashboardClient("http://127.0.0.1:5001", timeout=1)
+        calls: list[str] = []
+
+        def fake_get(path: str) -> dict:
+            calls.append(path)
+            return {"error": "connection refused", "available": False}
+
+        client._get = fake_get  # type: ignore[method-assign]
+        status = client.get_system_status()
+        assert status["available"] is False
+        assert calls == ["/api/v1/metrics"]  # court-circuit : aucun appel supplémentaire
+
+    def test_get_system_status_available_when_metrics_ok(self):
+        client = DashboardClient("http://127.0.0.1:5001", timeout=1)
+        payloads = {
+            "/api/v1/metrics": {"cpu": {"percent": 5}, "ram": {"percent": 30}, "model": "m"},
+            "/api/v1/gpus": {"gpus": [{"index": 0}]},
+            "/api/v1/services": {"services": {"llm": "up"}},
+            "/api/v1/gpus/processes": {"processes": []},
+        }
+        client._get = lambda path: payloads[path]  # type: ignore[method-assign]
+        status = client.get_system_status()
+        assert status["available"] is True
+        assert status["gpus"] == [{"index": 0}]
+        assert status["model"] == "m"
 
 
 class TestOpenCodeRunner:

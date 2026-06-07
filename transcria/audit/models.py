@@ -41,6 +41,8 @@ class AuditAction(str, enum.Enum):
     GROUP_CREATE = "group_create"
     GROUP_MODIFY = "group_modify"
     GROUP_DELETE = "group_delete"
+    GROUP_MEMBER_ADD = "group_member_add"
+    GROUP_MEMBER_REMOVE = "group_member_remove"
 
     LEXICON_CREATE = "lexicon_create"
     LEXICON_MODIFY = "lexicon_modify"

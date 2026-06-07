@@ -187,12 +187,11 @@ Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'or
 | `DOWNLOAD_EXPORTS` | x | x | x | x |
 | `VIEW_QUALITY_REPORTS` | x | x | x | |
 | `RETRY_PROCESSING` | x | x | | |
-| `MANAGE_QUEUE` | x | | | |
 | `MANAGE_SCHEDULE` | x | | | |
 
 Décorateur : `@requires(Permission.VIEW_ALL_JOBS)` → 401 si non authentifié, 403 si pas la permission.
 
-`MANAGE_QUEUE` et `MANAGE_SCHEDULE` sont attribuées au rôle `admin`. En complément, les admins de groupe accèdent aux pages et APIs de file sur leur périmètre via des contrôles explicites (`GroupStore.is_group_admin()` et appartenance au groupe du propriétaire du job), sans recevoir ces permissions globales.
+`MANAGE_SCHEDULE` est attribuée au rôle `admin`. La gestion de la **file** n'a pas de permission globale dédiée : l'accès aux pages et APIs de file passe par des contrôles explicites (`_can_manage_queue()`/`_can_manage_queue_job()` → admin global **ou** admin de groupe, restreint au périmètre du groupe du propriétaire du job).
 
 ### GroupRole (auth/models.py)
 

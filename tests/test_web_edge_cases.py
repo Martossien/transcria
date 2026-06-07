@@ -5,6 +5,37 @@ import copy
 import uuid
 
 
+class TestGroupMemberAudit:
+    def test_add_and_remove_member_are_audited(self, admin_client, app):
+        with app.app_context():
+            from transcria.audit.store import AuditStore
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+
+            group = GroupStore.create_group(f"grp-audit-{uuid.uuid4().hex[:8]}")
+            member = UserStore.create_user(f"m-{uuid.uuid4().hex[:8]}", "pw12345678", role=Role.OPERATOR)
+            group_id, member_id = group.id, member.id
+
+        # Ajout d'un membre → audité GROUP_MEMBER_ADD
+        admin_client.post(f"/admin/groups/{group_id}/edit",
+                          data={"action": "add_member", "user_id": member_id, "role": "member"},
+                          follow_redirects=True)
+        with app.app_context():
+            from transcria.audit.store import AuditStore
+            added = AuditStore.query(action="group_member_add", target_id=group_id)
+            assert any(e.details_json and member_id in e.details_json for e in added)
+
+        # Retrait du membre → audité GROUP_MEMBER_REMOVE
+        admin_client.post(f"/admin/groups/{group_id}/edit",
+                          data={"action": "remove_member", "user_id": member_id},
+                          follow_redirects=True)
+        with app.app_context():
+            from transcria.audit.store import AuditStore
+            removed = AuditStore.query(action="group_member_remove", target_id=group_id)
+            assert len(removed) >= 1
+
+
 class TestAuthEdgeCases:
     def test_login_empty_username(self, client):
         r = client.post("/login", data={"username": "", "password": "test"})
