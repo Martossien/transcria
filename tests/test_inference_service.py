@@ -297,9 +297,11 @@ class _FakeDiarBackend:
     def __init__(self, result=None):
         self.result = result if result is not None else _DIAR_RESULT
         self.calls = 0
+        self.last_speaker_params = "UNSET"
 
-    def diarize_audio(self, audio_path):
+    def diarize_audio(self, audio_path, *, speaker_params=None):
         self.calls += 1
+        self.last_speaker_params = speaker_params
         return self.result
 
 
@@ -512,3 +514,60 @@ def test_upload_trop_gros_413(tmp_path):
                content_type="multipart/form-data")
     assert r.status_code == 413
     assert r.get_json()["error"] == "payload_too_large"
+
+
+# ── /infer/diarize : transmission de la contrainte de locuteurs par appel ────────
+
+class _FakeDiarizeEngine:
+    """Capture les speaker_params reçus pour vérifier le forwarding de la route."""
+
+    def __init__(self):
+        self.last_speaker_params = "UNSET"
+
+    def diarize(self, audio_path, *, speaker_params=None):
+        self.last_speaker_params = speaker_params
+        return {"available": True, "turns": [], "exclusive_turns": [], "speakers": [], "stats": {}}
+
+
+def _diarize_client(diar):
+    app = create_app(
+        config={"voice_enrollment": {"embedding": {"device": "cpu"}}},
+        engine=_make_engine(),
+        diarize_engine=diar,
+    )
+    app.config["TESTING"] = True
+    return app.test_client()
+
+
+def test_diarize_route_forwards_speaker_params_file_ref(wav_file):
+    diar = _FakeDiarizeEngine()
+    r = _diarize_client(diar).post(
+        "/infer/diarize", json={"audio_path": str(wav_file), "min_speakers": 3, "max_speakers": 7}
+    )
+    assert r.status_code == 200
+    assert diar.last_speaker_params == {"min_speakers": 3, "max_speakers": 7}
+
+
+def test_diarize_route_forwards_speaker_params_upload(wav_file):
+    diar = _FakeDiarizeEngine()
+    with open(wav_file, "rb") as fh:
+        data = {"file": (fh, "ref.wav"), "num_speakers": "4"}
+        r = _diarize_client(diar).post("/infer/diarize", data=data, content_type="multipart/form-data")
+    assert r.status_code == 200
+    assert diar.last_speaker_params == {"num_speakers": 4}
+
+
+def test_diarize_route_no_params_passes_none(wav_file):
+    diar = _FakeDiarizeEngine()
+    r = _diarize_client(diar).post("/infer/diarize", json={"audio_path": str(wav_file)})
+    assert r.status_code == 200
+    assert diar.last_speaker_params is None
+
+
+def test_diarize_route_ignores_non_integer_speaker_params(wav_file):
+    diar = _FakeDiarizeEngine()
+    r = _diarize_client(diar).post(
+        "/infer/diarize", json={"audio_path": str(wav_file), "num_speakers": "abc"}
+    )
+    assert r.status_code == 200
+    assert diar.last_speaker_params is None

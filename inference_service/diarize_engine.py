@@ -113,17 +113,21 @@ class DiarizeEngine:
 
     # ── Diarisation ─────────────────────────────────────────────────────────--
 
-    def diarize(self, audio_path: Path) -> dict:
+    def diarize(self, audio_path: Path, *, speaker_params: dict | None = None) -> dict:
         """Diarise un audio. Sérialisé par verrou (un GPU à la fois).
 
         Retourne le dict canonique (`available`, `turns`, `exclusive_turns`,
         `speakers`, `stats`). Lève GpuBusyError (CAS C) si VRAM saturée.
+
+        `speaker_params` : contrainte de locuteurs par appel (`num_speakers`/
+        `min_speakers`/`max_speakers`) transmise par la frontale ; prioritaire sur la
+        config statique du nœud. `None` → config du moteur.
         """
         started = time.monotonic()
         with self._load.acquire("diarize"):
             backend = self._ensure_loaded()
             try:
-                result = backend.diarize_audio(audio_path)  # type: ignore[attr-defined]
+                result = backend.diarize_audio(audio_path, speaker_params=speaker_params)  # type: ignore[attr-defined]
             except Exception as exc:  # noqa: BLE001
                 if _is_oom(exc):
                     logger.warning("Diarisation refusée — VRAM saturée (CAS C) : %s", exc)

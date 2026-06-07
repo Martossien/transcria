@@ -627,3 +627,94 @@ class TestDiarizerFactory:
         cfg = {"gpu": {"sortformer_vram_mb": 4000, "pyannote_vram_mb": 2500}}
         assert get_diarizer_vram_mb("sortformer", cfg) == 4000
         assert get_diarizer_vram_mb("pyannote", cfg) == 2500
+
+
+class TestNormalizeSpeakerParams:
+    """Validateur partagé config statique / override par appel (BaseDiarizer)."""
+
+    def test_keeps_valid_positive_ints(self):
+        assert BaseDiarizer._normalize_speaker_params({"num_speakers": 5}) == {"num_speakers": 5}
+        assert BaseDiarizer._normalize_speaker_params(
+            {"min_speakers": 3, "max_speakers": 7}
+        ) == {"min_speakers": 3, "max_speakers": 7}
+
+    def test_drops_invalid_and_handles_none(self):
+        assert BaseDiarizer._normalize_speaker_params(
+            {"num_speakers": 0, "min_speakers": "x", "max_speakers": True}
+        ) == {}
+        assert BaseDiarizer._normalize_speaker_params(None) == {}
+
+    def test_coerces_float_to_int(self):
+        assert BaseDiarizer._normalize_speaker_params({"num_speakers": 4.0}) == {"num_speakers": 4}
+
+
+def _install_fake_pyannote(monkeypatch, seen: dict):
+    """Installe un pyannote factice qui capture les kwargs d'appel du pipeline."""
+    class _FakeAnnotation:
+        def itertracks(self, yield_label=False):
+            if yield_label:
+                yield types.SimpleNamespace(start=0.0, end=1.5), None, "SPEAKER_00"
+            else:
+                yield types.SimpleNamespace(start=0.0, end=1.5), None
+
+    class _FakeDiarization:
+        speaker_diarization = _FakeAnnotation()
+        exclusive_speaker_diarization = _FakeAnnotation()
+
+    class _FakePipeline:
+        @classmethod
+        def from_pretrained(cls, model_name, token=None):
+            return cls()
+
+        def to(self, device):
+            self.device = device
+
+        def __call__(self, audio, **kwargs):
+            seen.clear()
+            seen.update(kwargs)
+            return _FakeDiarization()
+
+    fake_audio_mod = types.ModuleType("pyannote.audio")
+    fake_audio_mod.Pipeline = _FakePipeline
+    fake_pyannote_mod = types.ModuleType("pyannote")
+    fake_pyannote_mod.audio = fake_audio_mod
+    monkeypatch.setitem(sys.modules, "pyannote", fake_pyannote_mod)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", fake_audio_mod)
+
+
+class TestDiarizeAudioSpeakerParams:
+    """diarize_audio honore une contrainte de locuteurs par appel (hint distant)."""
+
+    def _service(self, tmp_path, monkeypatch, static_diar):
+        cfg = _default_cfg(tmp_path)
+        cfg["diarization"] = {"progress_log_enabled": False, **static_diar}
+        monkeypatch.setattr(
+            type(DiarizerService(cfg, device="cpu")), "available", property(lambda self: True)
+        )
+        audio_path = tmp_path / "audio.wav"
+        audio_path.write_bytes(b"fake audio")
+        return DiarizerService(cfg, device="cpu"), audio_path
+
+    def test_per_call_override_takes_precedence_over_static_config(self, tmp_path, monkeypatch):
+        seen: dict = {}
+        _install_fake_pyannote(monkeypatch, seen)
+        svc, audio_path = self._service(tmp_path, monkeypatch, {"num_speakers": 2})
+        svc.diarize_audio(audio_path, speaker_params={"min_speakers": 4, "max_speakers": 6})
+        assert "num_speakers" not in seen          # statique ignoré
+        assert seen.get("min_speakers") == 4
+        assert seen.get("max_speakers") == 6
+
+    def test_falls_back_to_static_config_without_override(self, tmp_path, monkeypatch):
+        seen: dict = {}
+        _install_fake_pyannote(monkeypatch, seen)
+        svc, audio_path = self._service(tmp_path, monkeypatch, {"num_speakers": 3})
+        svc.diarize_audio(audio_path)
+        assert seen.get("num_speakers") == 3
+
+    def test_override_revalidated_at_boundary(self, tmp_path, monkeypatch):
+        seen: dict = {}
+        _install_fake_pyannote(monkeypatch, seen)
+        svc, audio_path = self._service(tmp_path, monkeypatch, {})
+        # valeurs invalides (réseau) → ignorées, pas d'injection au pipeline
+        svc.diarize_audio(audio_path, speaker_params={"num_speakers": 0, "min_speakers": "x"})
+        assert "num_speakers" not in seen and "min_speakers" not in seen

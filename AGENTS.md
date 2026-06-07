@@ -141,7 +141,7 @@ transcria/
       sortformer_diarizer.py# SortformerDiarizer(BaseDiarizer) — NVIDIA Sortformer 4spk v2.1 expérimental (NeMo, language-agnostic, max 4 locuteurs, chargement HF ou `.nemo` local via `_find_nemo_file`)
       diarizer_factory.py   # create_diarizer(), get_diarizer_vram_mb(), list_available_backends() — sélection backend selon models.diarization_backend ; apply_speaker_hint() applique la fourchette de locuteurs du job (+ guard Sortformer ≤ 4)
       remote_transcriber.py # RemoteTranscriber(BaseTranscriber) — STT distant (protocole OpenAI, concurrent_safe)
-      remote_diarizer.py    # RemoteDiarizer(BaseDiarizer) — diarisation distante via inference_service
+      remote_diarizer.py    # RemoteDiarizer(BaseDiarizer) — diarisation distante via inference_service ; transmet la fourchette de locuteurs (_effective_speaker_params → client.diarize(speaker_params) → /infer/diarize), parité local/distant
       speaker_detection.py  # SpeakerDetector
       summary.py            # SummaryGenerator — VAD pré-transcription + backend STT configuré
     context/

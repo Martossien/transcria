@@ -172,13 +172,20 @@ class DiarizerService(BaseDiarizer):
             logger.warning("Diarization: préparation audio pyannote ignorée: %s", exc)
             return audio_path
 
-    def diarize_audio(self, audio_path: Path) -> dict:
+    def diarize_audio(self, audio_path: Path, *, speaker_params: dict | None = None) -> dict:
         """Calcul de diarisation pur — aucun effet de bord job/fs/cache/clips.
 
         Réutilisable hors pipeline (ex. service d'inférence distant). Retourne
         toujours le dict canonique (`available`, `turns`, `exclusive_turns`,
         `speakers`, `stats`), y compris en cas d'indisponibilité ou d'OOM
         (`available=False` + `message`/`error`).
+
+        Args:
+            speaker_params: contrainte de locuteurs **par appel** (`num_speakers`/
+                `min_speakers`/`max_speakers`), p. ex. la fourchette saisie par
+                l'utilisateur transmise par le nœud distant. Prioritaire sur la config
+                statique du moteur, re-validée ici (défense au bord réseau). `None` →
+                on retombe sur la config `diarization` du moteur.
         """
         if not self.available:
             logger.warning("pyannote non disponible")
@@ -211,24 +218,12 @@ class DiarizerService(BaseDiarizer):
             pipeline.to(torch.device(self.device))
             logger.info("pyannote chargé sur %s en %.1fs", self.device, time.monotonic() - move_t0)
 
-            diar_config = self.config.get("diarization", {})
-            diar_kwargs: dict[str, int] = {}
-            for key in ("num_speakers", "min_speakers", "max_speakers"):
-                val = diar_config.get(key)
-                if val is None:
-                    continue
-                if isinstance(val, bool) or not isinstance(val, (int, float)):
-                    logger.warning(
-                        "Diarization.%s ignoré: type invalide %s (attendu entier)", key, type(val).__name__
-                    )
-                    continue
-                ival = int(val)
-                if ival < 1:
-                    logger.warning("Diarization.%s ignoré: %d < 1", key, ival)
-                    continue
-                diar_kwargs[key] = ival
+            # Contrainte par appel (hint distant) prioritaire sur la config statique.
+            source = speaker_params if speaker_params is not None else self.config.get("diarization", {})
+            diar_kwargs = self._normalize_speaker_params(source)
             if diar_kwargs:
-                logger.info("Diarization: paramètres speakers = %s", diar_kwargs)
+                origin = "par appel" if speaker_params is not None else "config"
+                logger.info("Diarization: paramètres speakers (%s) = %s", origin, diar_kwargs)
 
             inference_t0 = time.monotonic()
             size_mb = audio_path.stat().st_size / (1024 * 1024) if audio_path.exists() else 0.0

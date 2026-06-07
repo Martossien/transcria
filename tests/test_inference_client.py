@@ -312,8 +312,9 @@ class _FakeClient:
         self.raise_exc = raise_exc
         self.calls = 0
 
-    def diarize(self, audio_path):
+    def diarize(self, audio_path, speaker_params=None):
         self.calls += 1
+        self.speaker_params = speaker_params
         if self.raise_exc:
             raise self.raise_exc
         return self.result
@@ -393,3 +394,42 @@ def test_factory_route_vers_remote():
     diar = create_diarizer(cfg, device="cpu")
     assert isinstance(diar, RemoteDiarizer)
     assert "remote" in list_available_backends()
+
+
+# ── Contrainte de locuteurs par appel (parité fourchette locuteurs) ──────────────
+
+def test_diarize_file_ref_transmet_speaker_params_en_json():
+    sess = _FakeSession([_FakeResponse(200, _DIAR_OK)])
+    client = InferenceClient("http://svc:8002", transport="file_ref", session=sess, retries=0)
+    client.diarize(Path("/x/a.wav"), {"min_speakers": 3, "max_speakers": 7})
+    assert sess.calls[0]["kwargs"]["json"] == {
+        "audio_path": "/x/a.wav", "min_speakers": 3, "max_speakers": 7,
+    }
+
+
+def test_diarize_upload_transmet_speaker_params_en_form(tmp_path):
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"RIFF....")
+    sess = _FakeSession([_FakeResponse(200, _DIAR_OK)])
+    client = InferenceClient("http://svc", transport="upload", session=sess, retries=0)
+    client.diarize(audio, {"num_speakers": 4})
+    kwargs = sess.calls[0]["kwargs"]
+    assert "files" in kwargs
+    assert kwargs["data"] == {"num_speakers": "4"}
+
+
+def test_diarize_sans_speaker_params_n_ajoute_rien():
+    sess = _FakeSession([_FakeResponse(200, _DIAR_OK)])
+    client = InferenceClient("http://svc", transport="file_ref", session=sess, retries=0)
+    client.diarize(Path("/x/a.wav"))
+    assert sess.calls[0]["kwargs"]["json"] == {"audio_path": "/x/a.wav"}
+
+
+def test_voice_embed_inchange_pas_de_form_data(tmp_path):
+    audio = tmp_path / "a.wav"
+    audio.write_bytes(b"RIFF....")
+    sess = _FakeSession([_FakeResponse(200, {"dim": 8})])
+    client = InferenceClient("http://svc", transport="upload", session=sess, retries=0)
+    client.voice_embed(audio)
+    # upload sans extra → data=None (pas de champs scalaires parasites)
+    assert sess.calls[0]["kwargs"].get("data") is None

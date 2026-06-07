@@ -63,9 +63,16 @@ class RemoteDiarizer(BaseDiarizer):
         if self._client is None:
             return self._fallback_or_fail(job, audio_path, fs, reason="aucun client distant configuré")
 
+        # Fourchette de locuteurs par job : `apply_speaker_hint` l'a écrite dans
+        # config["diarization"] avant la création du diariseur ; on la transmet au nœud
+        # pour la parité avec le mode local (sans elle, le comptage se dégrade).
+        speaker_params = self._effective_speaker_params()
         try:
-            logger.info("Diarization (remote): appel du service pour %s", audio_path.name)
-            result = self._client.diarize(audio_path)
+            logger.info(
+                "Diarization (remote): appel du service pour %s (speaker_params=%s)",
+                audio_path.name, speaker_params,
+            )
+            result = self._client.diarize(audio_path, speaker_params)
         except InferenceUnavailable as exc:
             logger.warning("Diarization (remote): service indisponible — %s", exc)
             return self._fallback_or_fail(job, audio_path, fs, reason=str(exc))

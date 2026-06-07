@@ -124,9 +124,14 @@ class InferenceClient:
             raise InferenceUnavailable(f"{url} injoignable: {exc}") from exc
         return self._parse(resp, url)  # 503 busy → InferenceUnavailable ; 404 → RequestError
 
-    def diarize(self, audio_path: Path) -> dict:
-        """Diarise un audio via /infer/diarize. Retourne le dict canonique."""
-        return self._post_audio("/infer/diarize", audio_path)
+    def diarize(self, audio_path: Path, speaker_params: dict | None = None) -> dict:
+        """Diarise un audio via /infer/diarize. Retourne le dict canonique.
+
+        `speaker_params` (`num_speakers`/`min_speakers`/`max_speakers`) est transmis au
+        nœud (JSON en file_ref, champs de formulaire en upload) pour honorer la fourchette
+        de locuteurs par job — parité avec le mode local.
+        """
+        return self._post_audio("/infer/diarize", audio_path, extra=speaker_params)
 
     def voice_embed(self, audio_path: Path) -> dict:
         """Empreinte vocale via /infer/voice-embed. Retourne le payload embedding."""
@@ -137,12 +142,12 @@ class InferenceClient:
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
 
-    def _post_audio(self, path: str, audio_path: Path) -> dict:
+    def _post_audio(self, path: str, audio_path: Path, *, extra: dict | None = None) -> dict:
         url = f"{self.base_url}{path}"
         last_exc: Exception | None = None
         for attempt in range(self.retries + 1):
             try:
-                resp = self._send(url, audio_path)
+                resp = self._send(url, audio_path, extra=extra)
                 return self._parse(resp, url)
             except InferenceUnavailable as exc:
                 last_exc = exc
@@ -155,14 +160,19 @@ class InferenceClient:
                 raise
         raise last_exc or InferenceUnavailable(f"{url} indisponible")
 
-    def _send(self, url: str, audio_path: Path):
+    def _send(self, url: str, audio_path: Path, *, extra: dict | None = None):
+        extra = extra or {}
         try:
             if self.transport == "upload":
                 with open(audio_path, "rb") as fh:
                     files = {"file": (audio_path.name, fh)}
-                    return self._session.post(url, files=files, headers=self._headers(), timeout=self.timeout_s)
+                    # Champs scalaires (ex. num/min/max_speakers) → multipart form fields.
+                    data = {k: str(v) for k, v in extra.items()}
+                    return self._session.post(
+                        url, files=files, data=data or None, headers=self._headers(), timeout=self.timeout_s
+                    )
             return self._session.post(
-                url, json={"audio_path": str(audio_path)}, headers=self._headers(), timeout=self.timeout_s
+                url, json={"audio_path": str(audio_path), **extra}, headers=self._headers(), timeout=self.timeout_s
             )
         except requests.exceptions.RequestException as exc:
             # Timeout, connexion refusée, DNS… = indisponibilité → fallback possible.
@@ -246,8 +256,8 @@ class FailoverInferenceClient(InferenceClient):
     def ensure_engine(self, name: str) -> dict:
         return self._failover(lambda c: c.ensure_engine(name), f"ensure:{name}")
 
-    def diarize(self, audio_path: Path) -> dict:
-        return self._failover(lambda c: c.diarize(audio_path), "diarize")
+    def diarize(self, audio_path: Path, speaker_params: dict | None = None) -> dict:
+        return self._failover(lambda c: c.diarize(audio_path, speaker_params), "diarize")
 
     def voice_embed(self, audio_path: Path) -> dict:
         return self._failover(lambda c: c.voice_embed(audio_path), "voice_embed")

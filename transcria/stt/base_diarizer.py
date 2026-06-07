@@ -234,11 +234,17 @@ class BaseDiarizer(ABC):
         h.update(str(int(stat.st_mtime)).encode("ascii"))
         return h.hexdigest()
 
-    def _effective_speaker_params(self) -> dict | None:
-        diar_cfg = self.config.get("diarization", {})
-        params = {}
+    @staticmethod
+    def _normalize_speaker_params(source: dict | None) -> dict[str, int]:
+        """Extrait/valide `num_speakers`/`min_speakers`/`max_speakers` depuis un dict.
+
+        Source = config `diarization` (chemin local) **ou** une contrainte par job reçue
+        du réseau (chemin distant) : la même validation s'applique aux deux (entiers ≥ 1,
+        types invalides ignorés). Fonction pure → testable et réutilisable.
+        """
+        params: dict[str, int] = {}
         for key in ("num_speakers", "min_speakers", "max_speakers"):
-            val = diar_cfg.get(key)
+            val = (source or {}).get(key)
             if val is None:
                 continue
             if isinstance(val, bool) or not isinstance(val, (int, float)):
@@ -247,7 +253,10 @@ class BaseDiarizer(ABC):
             if ival < 1:
                 continue
             params[key] = ival
-        return params or None
+        return params
+
+    def _effective_speaker_params(self) -> dict | None:
+        return self._normalize_speaker_params(self.config.get("diarization", {})) or None
 
     def _effective_pipeline_params(self) -> dict | None:
         raw = self.config.get("diarization", {}).get("pipeline_params") or {}
