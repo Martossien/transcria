@@ -18,6 +18,10 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt  # pytest, pytest-cov
 python scripts/bootstrap_config.py --output config.yaml
 
+# Préflight de diagnostic (GPU-free, sans effet de bord) — à lancer après config.yaml
+venv/bin/python scripts/doctor.py            # config, schéma DB, script/serveur LLM, opencode, nœuds, dossiers
+venv/bin/python scripts/doctor.py --strict   # avertissements = échec (code ≠ 0)
+
 # Lancer l'application (dev)
 source venv/bin/activate
 python app.py
@@ -84,6 +88,8 @@ transcria/
       config_schema.py      # validate_config(), ValidationResult
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque
     database.py             # db = SQLAlchemy()
+    diagnostics/
+      doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
       models.py             # User, Role, Group, GroupMembership, GroupRole
@@ -219,6 +225,7 @@ transcria/
     lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
+    doctor.py               # Préflight GPU-free (cf. transcria/diagnostics/doctor.py) — wrapper CLI mince
     launch_arbitrage.sh     # Lance le backend LLM local configuré (llama-server par défaut)
     stop_llm_backend.sh     # Arrêt générique par port, PID file ou pattern explicite
     stop_arbitrage_llm.sh   # Wrapper d'arrêt standard de la LLM d'arbitrage

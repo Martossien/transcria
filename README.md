@@ -110,6 +110,15 @@ Options utiles :
 
 Guide complet : [docs/INSTALL.md](docs/INSTALL.md).
 
+Après avoir rempli `config.yaml`, un **préflight de diagnostic** (sans GPU, sans effet de bord) valide l'installation et signale les pannes classiques avant de lancer un job :
+
+```bash
+venv/bin/python scripts/doctor.py            # config, schéma DB, script/serveur LLM, opencode, nœuds, dossiers
+venv/bin/python scripts/doctor.py --strict   # avertissements = échec (code ≠ 0, pour le déploiement)
+```
+
+Il attrape par exemple un schéma de base dérivé (`alembic upgrade head` oublié après un `git pull`) ou un script LLM introuvable — voir le [dépannage](docs/INSTALL.md#12-dépannage).
+
 ## Configuration
 
 La configuration applicative est dans `config.yaml` (non versionné). Le template complet est [config.example.yaml](config.example.yaml), et la référence détaillée est [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md).

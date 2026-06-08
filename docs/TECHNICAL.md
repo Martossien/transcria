@@ -42,6 +42,7 @@ transcria/
 │   ├── __init__.py
 │   ├── config/                    # loader.py, config_schema.py, system_detector.py
 │   ├── database.py                # Instance SQLAlchemy
+│   ├── diagnostics/               # doctor.py — préflight GPU-free (config, schéma DB, LLM, opencode, nœuds, dossiers)
 │   ├── logging_setup.py           # Configuration logging (RotatingFileHandler)
 │   │
 │   ├── auth/                      # Authentification & rôles
@@ -1529,6 +1530,7 @@ cd transcria && python -m pytest tests/ -v
 | `test_config.py` | 40 | Chargement YAML, sauvegarde config, env var, debug |
 | `test_context.py` | 27 | Meeting, participants, lexique, builder |
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
+| `test_doctor.py` | 31 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code |
 | `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |
 | `test_gpu.py` | 72 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée, diagnostic lancement LLM |

@@ -318,6 +318,14 @@ print(f'pyannote.audio {pyannote.audio.__version__}')
 # pyannote.audio 4.x
 ```
 
+Une fois `config.yaml` rempli (étape suivante), lancez aussi le préflight
+**`transcria doctor`** — il valide la config, le schéma de base, le script/serveur
+LLM, opencode et les dossiers de travail sans toucher au GPU (voir [§12 Dépannage](#12-dépannage)) :
+
+```bash
+venv/bin/python scripts/doctor.py
+```
+
 ### Pièges connus lors de l'installation
 
 #### 1. `ModuleNotFoundError: No module named 'transformers'`
@@ -1222,6 +1230,37 @@ Référence complète : [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHAR
 
 ## 12. Dépannage
 
+### Préflight automatique : `transcria doctor`
+
+Avant de débugger à la main, lancez le **préflight de diagnostic**. Il vérifie en
+quelques secondes, **sans GPU et sans effet de bord**, les causes les plus
+fréquentes d'un job qui échoue sans message clair :
+
+```bash
+venv/bin/python scripts/doctor.py
+# ou : venv/bin/python -m transcria.diagnostics.doctor
+```
+
+| Vérification | Détecte |
+|---|---|
+| Configuration | `config.yaml` illisible (YAML cassé) |
+| Base de données (schéma) | **schéma dérivé** — table/colonne attendue par les modèles absente de la base (base créée hors Alembic, ou `alembic upgrade head` oublié après un `git pull`) |
+| Script de lancement LLM | `services.arbitrage_script` introuvable ou non exécutable |
+| LLM d'arbitrage (serveur) | aucun serveur sur le port (rappelle le log à consulter) ; modèle actif ≠ `arbitrage_api_model_id` |
+| Binaire opencode | `opencode` introuvable alors qu'une phase LLM est activée |
+| Nœud(s) distant(s) | en mode `remote`/`hybrid`, nœud de ressources injoignable |
+| Dossiers de travail | `storage.jobs_dir` / `voice_enrollment.storage_dir` non inscriptibles |
+
+Options : `--config <fichier>`, `--json` (pour l'outillage/CI), `--strict` (les
+avertissements deviennent des échecs). Code de sortie **0** si aucun échec bloquant,
+**1** sinon — utilisable dans un script de déploiement (« ne démarre pas si rouge »).
+Chaque ligne en `WARN`/`FAIL` affiche une piste de correction (`↳`).
+
+> Exemple typique attrapé par le doctor : après un `git pull`, la base n'avait pas
+> reçu `alembic upgrade head` → la colonne `job_queue.error_message` manquait. Le
+> doctor l'affiche en `FAIL` (« schéma dérivé ») avec la commande à lancer, au lieu
+> de laisser des jobs partir en échec silencieux.
+
 ### Erreur « ModuleNotFoundError: torch »
 
 PyTorch n'est pas installé ou pas dans le bon environnement. Toujours activer le venv :
@@ -1280,6 +1319,9 @@ sortie **et les dernières lignes de ce log** sont écrits en `ERROR` dans le jo
 TranscrIA (la mort précoce est détectée immédiatement, sans attendre les 600 s).
 
 ```bash
+# 0. Vue d'ensemble rapide (config, script, serveur, modèle attendu)
+venv/bin/python scripts/doctor.py
+
 # 1. Lire le log de lancement capturé (la vraie cause y figure)
 tail -n 40 /tmp/arbitrage_llm_8080.log
 
