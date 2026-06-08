@@ -62,6 +62,7 @@ _DEFAULT_CONFIG = {
         "srt_editor_easy_url": "http://127.0.0.1:7861",
         "arbitrage_script": "./scripts/launch_arbitrage.sh",
         "stop_script": "./scripts/stop_arbitrage_llm.sh",
+        "arbitrage_log_path": "",
         "arbitrage_llm_port": 8080,
         "arbitrage_api_model_id": "",
         "llm_cleanup_ports": [8000],

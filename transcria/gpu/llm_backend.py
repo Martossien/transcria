@@ -1,7 +1,9 @@
 import logging
+import os
 import subprocess
 import time
 from abc import ABC, abstractmethod
+from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 
@@ -58,15 +60,53 @@ class LLMBackend(ABC):
         return _check_port_open(port, timeout=timeout)
 
     @staticmethod
-    def _wait_for_port(port: int, timeout: int = 300) -> bool:
+    def _diagnostic_tail(log_path: str | None, n_lines: int = 25) -> str:
+        """Renvoie les dernières lignes du log de lancement, pour expliquer une panne.
+
+        Sans ce contexte, un échec de démarrage (binaire introuvable, OOM GPU,
+        ``tensor-split`` incompatible…) reste invisible : le serveur sort en
+        silence et l'on n'observe qu'un timeout d'attente du port.
+        """
+        if not log_path or not os.path.isfile(log_path):
+            return f"(aucun log de lancement disponible: {log_path or 'sortie non capturée'})"
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                lines = fh.readlines()
+        except OSError as exc:
+            return f"(impossible de lire {log_path}: {exc})"
+        tail = "".join(lines[-n_lines:]).strip()
+        if not tail:
+            return f"(log de lancement vide: {log_path})"
+        return f"Dernières lignes de {log_path}:\n{tail}"
+
+    @staticmethod
+    def _wait_for_port(
+        port: int,
+        timeout: int = 300,
+        *,
+        proc: "subprocess.Popen | None" = None,
+        log_path: str | None = None,
+    ) -> bool:
         start = time.time()
         deadline = start + timeout
         while time.time() < deadline:
             if LLMBackend.is_port_open(port):
                 logger.info("Port %d répond après %.0fs", port, time.time() - start)
                 return True
+            # Mort précoce du process lancé : inutile d'attendre tout le timeout —
+            # on remonte le code de sortie et le log pour expliquer la panne.
+            if proc is not None and proc.poll() is not None:
+                logger.error(
+                    "Le serveur LLM s'est arrêté avant d'ouvrir le port %d "
+                    "(code de sortie=%s). %s",
+                    port, proc.returncode, LLMBackend._diagnostic_tail(log_path),
+                )
+                return False
             time.sleep(5)
-        logger.error("Timeout attente port %d après %ds", port, timeout)
+        logger.error(
+            "Timeout attente port %d après %ds — le serveur LLM ne répond pas. %s",
+            port, timeout, LLMBackend._diagnostic_tail(log_path),
+        )
         return False
 
 
@@ -112,6 +152,9 @@ class ScriptLLMBackend(LLMBackend):
         svc = config.get("services", {})
         self.launch_script: str = svc.get("arbitrage_script", "./scripts/launch_arbitrage.sh")
         self.stop_script: str = svc.get("stop_script", "./scripts/stop_arbitrage_llm.sh")
+        # Sortie du script de lancement, capturée pour diagnostiquer les pannes de
+        # démarrage (mirroir de la convention du superviseur STT, cf. stt_<name>_<port>.log).
+        self.launch_log_path: str = svc.get("arbitrage_log_path") or f"/tmp/arbitrage_llm_{self.port}.log"
         self._launched_by_us = False
 
     @property
@@ -122,8 +165,6 @@ class ScriptLLMBackend(LLMBackend):
         return self.is_port_open(self.port)
 
     def ensure_available(self) -> bool:
-        import os
-
         if self.is_available():
             logger.debug("LLM (script) déjà disponible sur le port %d", self.port)
             self._launched_by_us = False
@@ -138,21 +179,39 @@ class ScriptLLMBackend(LLMBackend):
             self._kill_port(self.port)
             time.sleep(3)
 
-        logger.info("Lancement LLM via %s", self.launch_script)
+        logger.info("Lancement LLM via %s (sortie → %s)", self.launch_script, self.launch_log_path)
+        log_fh: IO[bytes] | int
+        try:
+            log_fh = open(self.launch_log_path, "ab")
+        except OSError as exc:
+            logger.warning(
+                "Impossible d'ouvrir le log de lancement %s (%s) — sortie non capturée",
+                self.launch_log_path, exc,
+            )
+            log_fh = subprocess.DEVNULL
         try:
             proc = subprocess.Popen(
                 ["/bin/bash", self.launch_script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_fh,
+                stderr=log_fh,
+                stdin=subprocess.DEVNULL,
                 start_new_session=True,
             )
             self._pid = proc.pid
             self._launched_by_us = True
             logger.info("LLM lancé — PID %d, attente port %d...", proc.pid, self.port)
-            return self._wait_for_port(self.port, timeout=600)
+            return self._wait_for_port(
+                self.port, timeout=600, proc=proc, log_path=self.launch_log_path,
+            )
         except Exception as exc:
             logger.error("Échec lancement LLM: %s", exc)
             return False
+        finally:
+            if log_fh is not subprocess.DEVNULL:
+                try:
+                    log_fh.close()  # type: ignore[union-attr]
+                except OSError:
+                    pass
 
     def shutdown(self) -> bool:
         if not self._launched_by_us:

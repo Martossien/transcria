@@ -672,6 +672,81 @@ class TestVRAMManagerWaitForPort:
         result = VRAMManager._wait_for_port(8080, timeout=0)
         assert result is False
 
+    def test_wait_for_port_detects_early_process_death(self, monkeypatch, caplog, tmp_path):
+        """Si le serveur sort avant d'ouvrir le port, on n'attend pas tout le
+        timeout et on remonte code de sortie + tail du log (le point aveugle
+        du rapport : LLM down sans aucun log explicatif)."""
+        monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
+        sleeps = {"n": 0}
+        monkeypatch.setattr(time, "sleep", lambda s: sleeps.__setitem__("n", sleeps["n"] + 1))
+
+        log_file = tmp_path / "arbitrage.log"
+        log_file.write_text("llama_model_load: error loading model: failed to open GGUF\n")
+
+        class DeadProc:
+            returncode = 1
+
+            def poll(self):
+                return 1  # déjà mort
+
+        with caplog.at_level("ERROR"):
+            result = VRAMManager._wait_for_port(
+                8080, timeout=600, proc=DeadProc(), log_path=str(log_file)
+            )
+        assert result is False
+        assert sleeps["n"] == 0  # sortie immédiate, pas d'attente du timeout
+        assert "s'est arrêté avant d'ouvrir le port" in caplog.text
+        assert "failed to open GGUF" in caplog.text
+
+    def test_wait_for_port_timeout_includes_log_tail(self, monkeypatch, caplog, tmp_path):
+        monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+        monkeypatch.setattr(time, "time", lambda: 0)
+
+        log_file = tmp_path / "arbitrage.log"
+        log_file.write_text("CUDA error: out of memory\n")
+
+        with caplog.at_level("ERROR"):
+            result = VRAMManager._wait_for_port(8080, timeout=0, log_path=str(log_file))
+        assert result is False
+        assert "out of memory" in caplog.text
+
+    def test_diagnostic_tail_handles_missing_and_empty(self, tmp_path):
+        assert "sortie non capturée" in VRAMManager._diagnostic_tail(None)
+        assert "sortie non capturée" in VRAMManager._diagnostic_tail("")
+        missing = tmp_path / "nope.log"
+        assert "aucun log de lancement disponible" in VRAMManager._diagnostic_tail(str(missing))
+        empty = tmp_path / "empty.log"
+        empty.write_text("")
+        assert "vide" in VRAMManager._diagnostic_tail(str(empty))
+
+    def test_launch_arbitrage_captures_output_to_log(self, monkeypatch, tmp_path):
+        """Le lancement doit rediriger stdout/stderr vers le fichier de log
+        configuré (plus de DEVNULL silencieux)."""
+        log_file = tmp_path / "arb.log"
+        mgr = VRAMManager(config=_default_config(arbitrage_log_path=str(log_file)))
+        monkeypatch.setattr(os.path, "isfile", lambda p: True)
+        monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
+        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: True))
+        monkeypatch.setattr(time, "sleep", lambda s: None)
+
+        captured = {}
+
+        class FakePopen:
+            pid = 4242
+
+            def __init__(self, *a, **kw):
+                captured["stdout"] = kw.get("stdout")
+                captured["stderr"] = kw.get("stderr")
+
+        monkeypatch.setattr(subprocess, "Popen", FakePopen)
+        result = mgr.launch_arbitrage_llm()
+        assert result is True
+        # stdout/stderr pointent vers un fichier ouvert (pas DEVNULL)
+        assert captured["stdout"] is not subprocess.DEVNULL
+        assert captured["stdout"] is captured["stderr"]
+        assert mgr.arbitrage_log_path == str(log_file)
+
 
 class TestVRAMManagerLaunchArbitrageLLM:
     def test_launch_arbitrage_script_not_found(self, monkeypatch):
@@ -684,7 +759,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
-        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600: True))
+        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: True))
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
         launched = {"done": False}
@@ -711,7 +786,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(fake_is_port_open))
         monkeypatch.setattr(VRAMManager, "_kill_port", lambda self, port: True)
-        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600: True))
+        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: True))
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
         class FakePopen:
@@ -740,7 +815,7 @@ class TestVRAMManagerLaunchArbitrageLLM:
         mgr = VRAMManager(config=_default_config())
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(VRAMManager, "is_port_open", staticmethod(lambda port: False))
-        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600: False))
+        monkeypatch.setattr(VRAMManager, "_wait_for_port", staticmethod(lambda port, timeout=600, **kw: False))
         monkeypatch.setattr(time, "sleep", lambda s: None)
 
         class FakePopen:

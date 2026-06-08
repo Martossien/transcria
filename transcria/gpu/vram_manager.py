@@ -3,6 +3,7 @@ import logging
 import os
 import subprocess
 import time
+from typing import IO
 
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.cuda_visible import (
@@ -59,6 +60,11 @@ class VRAMManager:
         self.stop_script: str = os.environ.get(
             "TRANSCRIA_STOP_SCRIPT",
             services.get("stop_script", "./scripts/stop_arbitrage_llm.sh"),
+        )
+        # Sortie du script d'arbitrage, capturée pour diagnostiquer les pannes de
+        # démarrage (binaire introuvable, OOM GPU, tensor-split incompatible…).
+        self.arbitrage_log_path: str = services.get("arbitrage_log_path") or (
+            f"/tmp/arbitrage_llm_{self.arbitrage_llm_port}.log"
         )
         self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
@@ -383,11 +389,24 @@ class VRAMManager:
                 self._kill_port(self.arbitrage_llm_port)
                 time.sleep(3)
 
-        logger.info("Lancement LLM d'arbitrage via %s...", self.arbitrage_script)
+        logger.info(
+            "Lancement LLM d'arbitrage via %s (sortie → %s)...",
+            self.arbitrage_script, self.arbitrage_log_path,
+        )
+        log_fh: IO[bytes] | int
+        try:
+            log_fh = open(self.arbitrage_log_path, "ab")
+        except OSError as exc:
+            logger.warning(
+                "Impossible d'ouvrir le log de lancement %s (%s) — sortie non capturée",
+                self.arbitrage_log_path, exc,
+            )
+            log_fh = subprocess.DEVNULL
         try:
             proc = subprocess.Popen(
                 ["/bin/bash", self.arbitrage_script],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                stdout=log_fh, stderr=log_fh,
+                stdin=subprocess.DEVNULL,
                 start_new_session=True,
             )
             self._arbitrage_llm_pid = proc.pid
@@ -404,10 +423,19 @@ class VRAMManager:
                 proc.pid,
                 self.arbitrage_llm_port,
             )
-            return self._wait_for_port(self.arbitrage_llm_port, timeout=600)
+            return self._wait_for_port(
+                self.arbitrage_llm_port, timeout=600,
+                proc=proc, log_path=self.arbitrage_log_path,
+            )
         except Exception as exc:
             logger.error("Échec lancement LLM d'arbitrage: %s", exc)
             return False
+        finally:
+            if log_fh is not subprocess.DEVNULL:
+                try:
+                    log_fh.close()  # type: ignore[union-attr]
+                except OSError:
+                    pass
 
     def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
         """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
@@ -531,13 +559,50 @@ class VRAMManager:
         return _check_port_open(port)
 
     @staticmethod
-    def _wait_for_port(port: int, timeout: int = 300) -> bool:
+    def _diagnostic_tail(log_path: str | None, n_lines: int = 25) -> str:
+        """Renvoie les dernières lignes du log de lancement, pour expliquer une panne.
+
+        Sans ce contexte, un échec de démarrage du serveur LLM reste invisible :
+        le process sort en silence et l'on n'observe qu'un timeout d'attente du port.
+        """
+        if not log_path or not os.path.isfile(log_path):
+            return f"(aucun log de lancement disponible: {log_path or 'sortie non capturée'})"
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                lines = fh.readlines()
+        except OSError as exc:
+            return f"(impossible de lire {log_path}: {exc})"
+        tail = "".join(lines[-n_lines:]).strip()
+        if not tail:
+            return f"(log de lancement vide: {log_path})"
+        return f"Dernières lignes de {log_path}:\n{tail}"
+
+    @staticmethod
+    def _wait_for_port(
+        port: int,
+        timeout: int = 300,
+        *,
+        proc: "subprocess.Popen | None" = None,
+        log_path: str | None = None,
+    ) -> bool:
         start = time.time()
         deadline = start + timeout
         while time.time() < deadline:
             if VRAMManager.is_port_open(port):
                 logger.info("Port %d répond après %.0fs", port, time.time() - start)
                 return True
+            # Mort précoce du process lancé : inutile d'attendre tout le timeout —
+            # on remonte le code de sortie et le log pour expliquer la panne.
+            if proc is not None and proc.poll() is not None:
+                logger.error(
+                    "Le serveur LLM s'est arrêté avant d'ouvrir le port %d "
+                    "(code de sortie=%s). %s",
+                    port, proc.returncode, VRAMManager._diagnostic_tail(log_path),
+                )
+                return False
             time.sleep(5)
-        logger.error("Timeout attente port %d après %ds", port, timeout)
+        logger.error(
+            "Timeout attente port %d après %ds — le serveur LLM ne répond pas. %s",
+            port, timeout, VRAMManager._diagnostic_tail(log_path),
+        )
         return False

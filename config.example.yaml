@@ -76,6 +76,10 @@ services:
   srt_editor_easy_url: "http://127.0.0.1:7861"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
+  # Fichier où est capturée la sortie du script de lancement (stdout+stderr).
+  # Indispensable pour diagnostiquer une LLM qui ne démarre pas (binaire introuvable,
+  # OOM GPU, tensor-split incompatible…). Vide = /tmp/arbitrage_llm_<port>.log
+  arbitrage_log_path: ""
   arbitrage_llm_port: 8080
   # Ports de backends LLM concurrents à libérer avant de lancer la LLM d'arbitrage
   # Exemples: vLLM, SGLang, llama.cpp, ik_llama.cpp exposés sur un autre port

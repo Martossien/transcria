@@ -1165,6 +1165,7 @@ Limites :
 |---|---|---|
 | `services.arbitrage_script` | `./scripts/launch_arbitrage.sh` | Script bash de lancement de la LLM d'arbitrage |
 | `services.stop_script` | `./scripts/stop_arbitrage_llm.sh` | Script bash d'arrêt de la LLM d'arbitrage |
+| `services.arbitrage_log_path` | `""` | Fichier de capture de la sortie (stdout+stderr) du script de lancement. Vide ⇒ `/tmp/arbitrage_llm_<port>.log` |
 | `services.arbitrage_llm_port` | `8080` | Port du serveur LLM d'arbitrage |
 | `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
 | `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
@@ -1184,6 +1185,7 @@ Overrides environnement :
 - `TRANSCRIA_STOP_SCRIPT`
 
 Note d'exploitation :
+- **Diagnostic d'un démarrage LLM raté.** `launch_arbitrage_llm()` redirige la sortie du script vers `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`). Si le serveur sort avant d'ouvrir le port (binaire introuvable, OOM GPU, `--tensor-split` incompatible avec le nombre de GPUs…), le runtime n'attend plus tout le timeout : il détecte la mort précoce du process et loggue en `ERROR` le code de sortie **et les dernières lignes de ce fichier**. Si la LLM reste « down » après lancement, consulter ce log (et `./scripts/check_arbitrage_llm.sh`).
 - Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec le modèle local configuré sur cette machine.
 - `services.llm_cleanup_ports` est volontairement générique : il peut contenir des ports vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre serveur OpenAI-compatible concurrent.
 - La clé `qwen_port` reste acceptée en lecture par `_normalize_config` (alias de `arbitrage_llm_port`). Les méthodes `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
