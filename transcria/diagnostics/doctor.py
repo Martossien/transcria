@@ -110,10 +110,10 @@ def diff_live_schema(database_uri: str) -> list[tuple[str, str]]:
     suffit à attraper l'incident d'origine. Lève en cas de base injoignable
     (l'appelant transforme cela en ``fail``).
     """
-    from sqlalchemy import create_engine
-
     from alembic.autogenerate import compare_metadata
     from alembic.migration import MigrationContext
+    from sqlalchemy import create_engine
+
     from transcria.database import db
 
     _register_models()

@@ -4,6 +4,14 @@ line-length = 140
 [tool.ruff.lint]
 select = ["E", "W", "F", "I"]
 
+# Tri d'imports déterministe entre local et CI. Le dossier racine `alembic/`
+# (migrations, sans __init__.py) est auto-détecté comme first-party par certaines
+# versions de ruff → on force `alembic` en third-party (ce qu'il est) et on épingle
+# nos paquets first-party.
+[tool.ruff.lint.isort]
+known-first-party = ["transcria", "inference_service"]
+known-third-party = ["alembic"]
+
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
