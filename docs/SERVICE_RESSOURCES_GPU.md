@@ -281,6 +281,14 @@ resource_node:
   VRAM locale pour une phase servie à distance. **Priorisé** dans le plan (§12, étape 2).
 - **Sécurité réseau** : clé API partagée déjà en place (Flask `enforce_api_key` ; vLLM `--api-key`).
   Un 401 est **définitif** (pas de retry ni de bascule locale) — testé.
+- **Observabilité du lancement LLM d'arbitrage** : `VRAMManager.launch_arbitrage_llm` (et
+  `ScriptLLMBackend.ensure_available`) **capturent la sortie du script** dans
+  `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`, comme le superviseur STT le
+  fait déjà via `stt_<name>_<port>.log`). L'attente du port **détecte la mort précoce du process**
+  (`proc.poll()`) et abandonne sans attendre les 600 s ; en cas d'échec (mort précoce **ou** timeout),
+  le code de sortie et les dernières lignes du log sont écrits en `ERROR`. Sans cela, un démarrage raté
+  (binaire absent, OOM, `--tensor-split` ≠ nb GPUs) restait invisible — seul subsistait le placeholder
+  « Résumé indisponible (LLM non configurée) ». Cf. dépannage `INSTALL.md` §12.
 
 ---
 

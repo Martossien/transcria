@@ -200,7 +200,7 @@ transcria/
 │   ├── test_diarization.py        # 37 tests — DiarizerService, SortformerDiarizer, BaseDiarizer, factory
 │   ├── test_edge_cases.py         # 17 tests — Cas limites contexte/exports/transitions
 │   ├── test_exports.py            # 3 tests — PackageBuilder
-│   ├── test_gpu.py                # 68 tests — VRAMManager, CUDA_VISIBLE_DEVICES, libération VRAM ciblée
+│   ├── test_gpu.py                # 72 tests — VRAMManager, CUDA_VISIBLE_DEVICES, libération VRAM ciblée, diagnostic lancement LLM
 │   ├── test_gpu_allocator.py      # 7 tests — Réservations GPU, remapping CUDA visible, verrou LLM
 │   ├── test_integrations.py       # 12 tests — DashboardClient, SrtEditorLink, OpenCodeRunner
 │   ├── test_job_service.py        # 2 tests — JobService
@@ -993,6 +993,7 @@ Tous les appels sont en try/except avec log debug si le dashboard est indisponib
 Les valeurs clés sont lues depuis `config.yaml` :
 - `services.arbitrage_script` (défaut `./scripts/launch_arbitrage.sh`)
 - `services.stop_script` (défaut `./scripts/stop_arbitrage_llm.sh`)
+- `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`) — capture stdout+stderr du lancement
 - `services.arbitrage_llm_port` (8080), `services.llm_cleanup_ports` (`[8000]`)
 - `gpu.cohere_vram_mb`, `gpu.pyannote_vram_mb`, `gpu.llm_vram_mb`, `gpu.min_free_vram_mb`
 
@@ -1004,13 +1005,14 @@ Les valeurs clés sont lues depuis `config.yaml` :
 | `ensure_free(required_mb, preferred_gpu)` | Scanne les GPUs visibles si le GPU courant est insuffisant → sélectionne le meilleur → log scan complet |
 | `is_arbitrage_llm_running()` | Retourne True si l'API OpenAI-compatible répond (`/v1/models` + inférence test), avec fallback port/PID uniquement si nécessaire |
 | `ensure_arbitrage_llm_ready(expected_model_id)` | Point d'entrée unique avant usage LLM : CAS A réutilisation, CAS B mauvais modèle, CAS C lancement — chaque chemin logué explicitement |
-| `launch_arbitrage_llm()` | Lance `services.arbitrage_script` → attend port (timeout 600s) |
+| `launch_arbitrage_llm()` | Lance `services.arbitrage_script` (sortie capturée dans `arbitrage_log_path`) → attend port (timeout 600s) → en cas d'échec, logue en `ERROR` le code de sortie + les dernières lignes du log |
 | `stop_arbitrage_llm()` | Arrête la LLM d'arbitrage via `services.stop_script`, puis libère `arbitrage_llm_port` en fallback |
 | `stop_cleanup_llm_ports()` | Libère les ports `services.llm_cleanup_ports` (vLLM, SGLang, llama.cpp, ik_llama.cpp ou autre backend concurrent) |
 | `free_all_gpus()` | stop_cleanup_llm_ports + stop_arbitrage_llm + offload_all (reset forcé uniquement) |
 | `is_port_open(port)` | Vérifie `/v1/models` accessible + teste une inférence réelle `/v1/completions` |
 | `_log_all_gpus(label)` | Logue VRAM libre/totale/utilisée de chaque GPU (utilisé par ensure_free lors d'un basculement) |
-| `_wait_for_port(port, timeout)` | Boucle d'attente avec `is_port_open` toutes les 5s |
+| `_wait_for_port(port, timeout, *, proc, log_path)` | Boucle d'attente (`is_port_open` toutes les 5s) ; si `proc` est fourni, détecte sa mort précoce (`proc.poll()`) et abandonne sans attendre le timeout |
+| `_diagnostic_tail(log_path)` | Dernières lignes du log de lancement, pour expliquer une panne dans les logs `ERROR` |
 | `track_model / untrack_model` | Enregistre/désenregistre un modèle chargé |
 | `offload_all()` | Vide `_loaded_models` + gc + cuda.empty_cache |
 
@@ -1529,7 +1531,7 @@ cd transcria && python -m pytest tests/ -v
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
 | `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |
-| `test_gpu.py` | 68 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée |
+| `test_gpu.py` | 72 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée, diagnostic lancement LLM |
 | `test_gpu_allocator.py` | 7 | Réservations GPU, remapping CUDA visible, verrou LLM |
 | `test_integrations.py` | 12 | Dashboard, SRT Editor, OpenCodeRunner |
 | `test_job_service.py` | 2 | JobService |

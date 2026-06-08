@@ -1265,6 +1265,37 @@ ls -la /opt/transcria/scripts/launch_arbitrage.sh
 chmod +x /opt/transcria/scripts/launch_arbitrage.sh
 ```
 
+### La LLM d'arbitrage ne démarre pas (résumés/corrections « indisponibles »)
+
+Symptôme : les jobs se terminent mais les résumés/corrections affichent
+« Résumé indisponible (LLM non configurée) », alors que la LLM est censée tourner.
+Cause la plus fréquente : le script de lancement **part puis le serveur meurt
+immédiatement** (chemin de binaire faux, modèle GGUF introuvable, **OOM GPU**,
+`--tensor-split`/`--fit-target` avec un nombre de valeurs ≠ du nombre de GPUs…).
+
+TranscrIA **capture la sortie du script de lancement** dans
+`services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`). En cas
+d'échec — mort précoce du process **ou** timeout d'attente du port — le code de
+sortie **et les dernières lignes de ce log** sont écrits en `ERROR` dans le journal
+TranscrIA (la mort précoce est détectée immédiatement, sans attendre les 600 s).
+
+```bash
+# 1. Lire le log de lancement capturé (la vraie cause y figure)
+tail -n 40 /tmp/arbitrage_llm_8080.log
+
+# 2. Vérifier l'état serveur ↔ config (port, modèle actif, test d'inférence)
+./scripts/check_arbitrage_llm.sh
+
+# 3. Lancer le script à la main pour voir l'erreur en direct
+./scripts/launch_arbitrage.sh
+```
+
+Points à vérifier dans `scripts/launch_arbitrage.sh` (ou votre propre script) :
+le chemin de `llama-server`, le chemin du modèle GGUF, et surtout que
+`--tensor-split` / `--fit-target` comptent **autant de valeurs que de GPUs**
+(ex. `1,1` et `4000,4000` pour 2 GPUs, pas `1,1,1`). Côté `config.yaml`,
+`gpu.llm_vram_mb` doit tenir dans la VRAM réellement disponible par GPU.
+
 ### Erreur « pyannote non disponible »
 
 ```bash

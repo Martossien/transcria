@@ -118,7 +118,7 @@ Points à vérifier après installation :
 
 - `auth.first_admin_password` : changer la valeur initiale avant usage réel.
 - `models.*` : chemins ou noms des modèles Cohere, Whisper et pyannote.
-- `services.arbitrage_*` : script, port et alias réel du backend LLM.
+- `services.arbitrage_*` : script, port, alias réel et **log de lancement** du backend LLM. `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`) capture la sortie du script ; si la LLM ne démarre pas (résumés « indisponibles »), TranscrIA loggue en `ERROR` le code de sortie et les dernières lignes de ce fichier — voir le dépannage « La LLM d'arbitrage ne démarre pas » dans [docs/INSTALL.md](docs/INSTALL.md#12-dépannage).
 - `workflow.summary_llm.model_id` et `workflow.arbitration_llm.model_id` si les phases LLM sont activées.
 - `workflow.queue.*`, `workflow.execution.max_concurrent_jobs` et `workflow.scheduling.*` pour la file persistante, le parallélisme et les créneaux calendrier.
 - `security.max_upload_size_mb` et extensions autorisées selon l'environnement.
