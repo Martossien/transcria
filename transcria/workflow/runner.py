@@ -1379,6 +1379,12 @@ class WorkflowRunner:
             diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
             diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
 
+            # Diarisation servie à distance (nœud de ressources, backend `remote`) :
+            # aucune VRAM locale à réserver. On saute le GPUSession (sinon réservation
+            # fantôme de `diarization` Mo localement — et pire, le reclaim pourrait
+            # stopper la LLM à tort pour une phase qui tourne à distance).
+            runs_remote = self._phase_runs_remotely("diarization")
+
             def _attempt_cuda() -> dict:
                 with self._gpu_session(
                     job,
@@ -1400,7 +1406,18 @@ class WorkflowRunner:
                     diarizer.offload()
                     return res
 
-            if self._cuda_available():
+            if runs_remote:
+                logger.info("[diarization] backend distant — aucune réservation VRAM locale")
+                diarizer = create_diarizer(
+                    config,
+                    device=None,
+                    progress_callback=self._pyannote_progress_callback(job, "processing"),
+                )
+                try:
+                    result = diarizer.diarize(job, Path(audio_path))
+                finally:
+                    diarizer.offload()
+            elif self._cuda_available():
                 try:
                     result = _attempt_cuda()
                 except GPUSessionError:

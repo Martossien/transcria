@@ -326,9 +326,11 @@ resource_node:
   **fausse contention VRAM** → OOM possible ou **rejets à tort** de tâches locales ; et incohérence
   sur une frontale **CPU-only** (réserver une VRAM qui n'existe pas). Correction : ne pas réserver de
   VRAM locale pour une phase servie à distance (`WorkflowRunner._phase_runs_remotely` → `_reserve_gpu_phase`
-  retourne une réservation à 0 VRAM). **Le résumé est aussi couvert** : `_run_quick_transcription` saute
-  le `_gpu_session` local quand `summary_stt` est distant (sinon réservation fantôme de 6000 Mo et
-  attente VRAM à tort sur un tier sans GPU).
+  retourne une réservation à 0 VRAM). **Toutes les phases sont couvertes** : `run_transcription` (`stt`,
+  via `_reserve_gpu_phase`), `_run_quick_transcription` (`summary_stt`) et `run_diarization`
+  (`diarization`) sautent toute réservation/`_gpu_session` locale quand la phase est servie à distance
+  (sinon réservation fantôme — 6000 Mo STT, 2000 Mo diarisation — et attente VRAM à tort sur un tier
+  sans GPU). La détection de locuteurs du résumé (pyannote) reste **toujours locale** (jamais déléguée).
 - **Sécurité réseau** : clé API partagée déjà en place (Flask `enforce_api_key` ; vLLM `--api-key`).
   Un 401 est **définitif** (pas de retry ni de bascule locale) — testé.
 - **Observabilité du lancement LLM d'arbitrage** : `VRAMManager.launch_arbitrage_llm` (et

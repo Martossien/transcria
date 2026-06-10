@@ -280,6 +280,32 @@ def test_quick_transcription_skips_local_gpu_when_stt_remote(app, owner_id, monk
         assert not result.get("vram_wait")
 
 
+def test_run_diarization_skips_local_gpu_when_remote(app, owner_id, monkeypatch, tmp_path):
+    with app.app_context():
+        cfg = _cfg(tmp_path)
+        cfg["models"]["diarization_backend"] = "remote"   # _phase_runs_remotely("diarization") = True
+        job = JobStore.create_job(owner_id, "Remote diar")
+        runner = WorkflowRunner(JobStore, cfg)
+
+        def _boom(*a, **k):
+            raise AssertionError("_gpu_session ne doit pas être appelé en diarisation distante")
+
+        monkeypatch.setattr(runner, "_gpu_session", _boom)
+        monkeypatch.setattr(runner, "_cuda_available", lambda: True)  # même avec CUDA, le distant skippe
+        monkeypatch.setattr(WorkflowRunner, "_inject_speaker_genders", lambda self, fs, scene: {})
+        monkeypatch.setattr(
+            "transcria.stt.diarizer_factory.create_diarizer",
+            lambda config, device=None, progress_callback=None: SimpleNamespace(
+                diarize=lambda job, path: {"available": True, "speakers": [{"speaker_id": "SPEAKER_00"}]},
+                offload=lambda: None,
+            ),
+        )
+
+        result = runner.run_diarization(job, str(tmp_path / "a.wav"), cfg)
+        assert result.get("available") is True
+        assert not result.get("vram_wait")
+
+
 class _DummySL:
     """Logger structuré factice : absorbe info/warning/error/exception/debug + set_context."""
     def __getattr__(self, _name):
