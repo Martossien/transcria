@@ -42,6 +42,13 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 venv/bin/python -m pytest tests/ -q              # suite mockée majoritaire, pas de GPU requis
 venv/bin/python -m pytest tests/test_auth.py -v
 
+# ⚠️ PostgreSQL de test : par défaut conftest lance un Postgres éphémère via pg_ctl/initdb
+#    — qui ÉCHOUE en root (« initdb erreur 1 »). En local/root, pointer vers un Postgres
+#    EXISTANT (mode noproc, sans initdb) en exportant :
+#      export TRANSCRIA_TEST_PG_HOST=127.0.0.1 TRANSCRIA_TEST_PG_PORT=5432 \
+#             TRANSCRIA_TEST_PG_USER=postgres TRANSCRIA_TEST_PG_PASSWORD=...
+#    (le serveur doit autoriser CREATE DATABASE ; chaque run crée/détruit une base jetable).
+
 # CI (.github/workflows/tests.yml) — 3 gates, reproductibles en local :
 ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
 mypy transcria/ inference_service/ --ignore-missing-imports

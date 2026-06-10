@@ -259,6 +259,7 @@ def check_opencode_smoke(
     cfg: dict,
     *,
     runner_factory: Callable[..., Any] | None = None,
+    probe: Callable[[int], dict | None] | None = None,
 ) -> CheckResult:
     """Test RÉEL opencode → LLM → texte (opt-in `--llm-smoke`).
 
@@ -266,6 +267,10 @@ def check_opencode_smoke(
     Attrape la classe de panne « opencode exit 0 mais 0 texte » (incident e62295c1).
     Nécessite la LLM d'arbitrage up et consomme de la VRAM — d'où l'opt-in (ce test
     rompt le contrat GPU-free / sans effet de bord du préflight par défaut).
+
+    Pré-sonde le serveur LLM (`/v1/models`) AVANT opencode : si la LLM n'écoute pas, on
+    échoue **immédiatement** avec une consigne claire au lieu d'attendre le timeout
+    opencode (jusqu'à 120 s).
     """
     name = "Production LLM (opencode smoke)"
     workflow = cfg.get("workflow", {})
@@ -279,6 +284,18 @@ def check_opencode_smoke(
     services = cfg.get("services", {})
     port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
     log_path = services.get("arbitrage_log_path") or f"/tmp/arbitrage_llm_{port}.log"
+
+    # Pré-vol rapide : éviter un timeout opencode de ~120 s si la LLM est down.
+    probe = probe or _probe_openai_models
+    try:
+        models = probe(port)
+    except Exception:  # noqa: BLE001
+        models = None
+    if not models:
+        return CheckResult(
+            name, FAIL, f"LLM d'arbitrage injoignable sur le port {port} — smoke non lancé",
+            hint=f"Lancez-la d'abord (./scripts/launch_arbitrage.sh) puis relancez ; en cas d'échec de démarrage, lire {log_path}.",
+        )
 
     if runner_factory is None:
         from transcria.gpu.opencode_runner import OpenCodeRunner

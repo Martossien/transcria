@@ -1259,9 +1259,11 @@ Chaque ligne en `WARN`/`FAIL` affiche une piste de correction (`↳`).
 **Test approfondi de production LLM** — `--llm-smoke` (opt-in) lance *réellement*
 opencode contre la LLM d'arbitrage avec une consigne triviale et vérifie qu'elle
 **produit du texte**. Il attrape la panne « opencode exit 0 mais 0 texte » (résumé
-silencieusement vide). Contrairement au préflight par défaut (GPU-free, sans effet de
-bord), ce test **nécessite la LLM up et consomme de la VRAM** — à lancer avant un gros
-batch ou après un changement de modèle/prompt :
+silencieusement vide). Il **pré-sonde** d'abord le serveur LLM : si celui-ci ne répond
+pas, le test échoue **immédiatement** (« LLM injoignable sur le port N — lancez-la
+d'abord ») sans attendre le timeout opencode. Contrairement au préflight par défaut
+(GPU-free, sans effet de bord), ce test **nécessite la LLM up et consomme de la VRAM** —
+à lancer avant un gros batch ou après un changement de modèle/prompt :
 
 ```bash
 venv/bin/python scripts/doctor.py --llm-smoke

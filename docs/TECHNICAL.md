@@ -1534,7 +1534,7 @@ cd transcria && python -m pytest tests/ -v
 | `test_config.py` | 40 | Chargement YAML, sauvegarde config, env var, debug |
 | `test_context.py` | 27 | Meeting, participants, lexique, builder |
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
-| `test_doctor.py` | 37 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code, smoke opencode→LLM (`--llm-smoke`) |
+| `test_doctor.py` | 38 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code, smoke opencode→LLM (`--llm-smoke`, dont pré-sonde « LLM down → FAIL rapide ») |
 | `test_incident_e62295c1.py` | 10 | Suites incident : détection « 0 texte » LLM (mtime), retry ≤3 + `summary_llm_failed` relançable, saut STT en cache, arrêt LLM inactive pour débloquer un STT, saut réservation locale en STT distant |
 | `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |

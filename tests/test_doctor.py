@@ -304,24 +304,47 @@ def _stub_runner_factory(run_result, *, write_smoke=None):
     return lambda work_dir, config=None: _StubRunner(work_dir, config)
 
 
+# Sonde LLM injectée pour des tests déterministes (sans dépendre d'un vrai serveur).
+def _probe_up(port):
+    return {"data": [{"id": "local/t"}]}
+
+
+def _probe_down(port):
+    return None
+
+
 def test_opencode_smoke_ok_when_text_produced():
     factory = _stub_runner_factory({"success": True, "output": "OK", "files": []})
-    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory, probe=_probe_up)
     assert res.status == doc.OK
 
 
 def test_opencode_smoke_ok_when_file_written():
     factory = _stub_runner_factory({"success": True, "output": "", "files": []}, write_smoke="OK")
-    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory, probe=_probe_up)
     assert res.status == doc.OK
 
 
 def test_opencode_smoke_fail_when_zero_text():
     # opencode exit 0 mais aucun texte ni fichier : la panne de l'incident e62295c1.
     factory = _stub_runner_factory({"success": True, "output": "", "files": [], "events_count": 9})
-    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory, probe=_probe_up)
     assert res.status == doc.FAIL
     assert "aucun texte" in res.detail.lower()
+
+
+def test_opencode_smoke_fail_fast_when_llm_down():
+    # LLM injoignable : FAIL immédiat (pas de lancement opencode → pas de timeout 120 s).
+    called = {"runner": False}
+
+    def _boom_factory(work_dir, config=None):
+        called["runner"] = True
+        raise AssertionError("opencode ne doit pas être lancé si la LLM est down")
+
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=_boom_factory, probe=_probe_down)
+    assert res.status == doc.FAIL
+    assert "injoignable" in res.detail.lower()
+    assert called["runner"] is False
 
 
 def test_opencode_smoke_skipped_when_llm_disabled():
