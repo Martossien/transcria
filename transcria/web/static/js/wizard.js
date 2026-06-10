@@ -93,6 +93,19 @@ var TranscrIA = window.TranscrIA || {};
             return W.api('/api/jobs/' + JOB_ID + '/summary');
         }).then(function (r) {
             W.hideSpinner('summary-spinner');
+            if (r.data.vram_wait) {
+                // VRAM momentanément insuffisante : le job n'a pas échoué, l'admin est
+                // prévenu. On affiche un bandeau d'attente et on relance automatiquement
+                // /summary jusqu'à ce que la mémoire GPU se libère (reprise sans action).
+                var msg = r.data.message ||
+                    'VRAM insuffisante : l\'administrateur a été prévenu. ' +
+                    'Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.';
+                document.getElementById('summary-result').innerHTML =
+                    '<div class="alert alert-warning"><span class="spinner-border spinner-border-sm me-2"></span>' +
+                    W.escapeHtml(msg) + '</div>';
+                setTimeout(W.generateSummary, 20000);
+                return;
+            }
             if (r.data.error) {
                 document.getElementById('summary-result').innerHTML =
                     '<div class="alert alert-danger">' + r.data.error + '</div>';
@@ -101,6 +114,18 @@ var TranscrIA = window.TranscrIA || {};
             }
         });
     };
+
+    // Auto-sauvegarde de l'invitation au blur : un collé survit ainsi à une étape
+    // échouée/abandonnée (la sauvegarde au clic « Générer le résumé » reste en place).
+    (function () {
+        var inviteEl = document.getElementById('meeting-invite');
+        if (!inviteEl) { return; }
+        inviteEl.addEventListener('blur', function () {
+            var text = inviteEl.value.trim();
+            if (!text) { return; }
+            W.api('/api/jobs/' + JOB_ID + '/meeting-invite', 'POST', { text: text });
+        });
+    })();
 
     W.validateSummary = function (choice) {
         console.log('[TranscrIA] validateSummary(' + choice + ')');

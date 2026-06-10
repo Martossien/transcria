@@ -1295,6 +1295,16 @@ Vérifier la VRAM disponible :
 nvidia-smi
 ```
 
+> **Mise en attente automatique (pas d'échec)** : si la VRAM est insuffisante au moment
+> où une phase GPU démarre (STT rapide, transcription, diarisation, détection de
+> locuteurs), TranscrIA **ne marque plus le job en échec**. Le job passe « **en attente
+> de VRAM** » et **reprend tout seul** dès que la mémoire se libère (arrêt d'une autre
+> LLM, fin d'un autre traitement). Les **administrateurs sont prévenus une fois** par
+> e-mail (si `notifications.email` est activé) et voient un **bandeau** indiquant le
+> nombre de jobs en attente ; un `WARNING` est aussi tracé dans les logs. TranscrIA ne
+> tue jamais un process GPU tiers — c'est à l'admin de libérer la VRAM s'il veut
+> accélérer la reprise. Voir `docs/SERVICE_RESSOURCES_GPU.md` §7.2.
+
 ### Erreur « Script d'arbitrage introuvable »
 
 Les chemins `arbitrage_script` et `stop_script` dans `config.yaml` doivent pointer vers des scripts exécutables :

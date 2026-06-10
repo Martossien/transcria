@@ -146,6 +146,9 @@ class WorkflowRunner:
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="summary")
 
+        # État avant le résumé : restauré tel quel si la VRAM manque (le job n'échoue
+        # pas, il revient à l'étape « Générer le résumé » prêt à reprendre).
+        prior_state = job.state
         self.store.update_state(job.id, JobState.SUMMARY_RUNNING)
         self.progress.update(
             job.id,
@@ -167,6 +170,18 @@ class WorkflowRunner:
             time.monotonic() - t0,
             backend=backend,
         )
+        if result.get("vram_wait"):
+            # VRAM transitoire pour le STT rapide : on n'échoue pas, on remonte le signal.
+            # L'appelant (api_summary) met le job en attente, alerte l'admin et laisse
+            # le client relancer automatiquement. On restaure l'état pré-résumé pour ne
+            # pas laisser le job bloqué en SUMMARY_RUNNING.
+            sl.warning("[1/3] STT rapide en attente de VRAM — résumé reporté",
+                       required_vram_mb=result.get("required_mb"), backend=backend)
+            try:
+                self.store.update_state(job.id, JobState(prior_state))
+            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
+                pass
+            return result
         if result.get("error") and not result.get("transcript_text"):
             sl.error("[1/3] STT rapide ÉCHEC — abandon résumé", error=result["error"], backend=backend)
             # _run_quick_transcription pose déjà FAILED sur exception ; on garantit ici
@@ -317,9 +332,15 @@ class WorkflowRunner:
                     transcript_chars=len(result.get("transcript_text", "")),
                 )
         except GPUSessionError as exc:
+            # VRAM momentanément indisponible (transitoire) : pas un échec terminal.
+            # On remonte un signal `vram_wait` ; l'appelant met le job en attente et
+            # alerte l'admin au lieu de marquer FAILED. Voir docs/SERVICE_RESSOURCES_GPU.md.
             sl.warning("VRAM insuffisante pour le STT rapide", backend=backend, required_vram_mb=vram_mb, error=str(exc))
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
             return {
+                "vram_wait": True,
+                "required_mb": int(vram_mb),
+                "phase": "summary_stt",
+                "reason": str(exc),
                 "error": str(exc),
                 "transcript_text": "",
                 "summary_text": "Résumé indisponible.",
@@ -1141,10 +1162,17 @@ class WorkflowRunner:
                 self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
             return result
         except GPUSessionError as exc:
+            # VRAM transitoire : on n'échoue pas, on remonte `vram_wait` (mise en attente
+            # + alerte admin par l'appelant). vram_mb pyannote = self.vram.pyannote_vram_mb.
             logger.error("[speaker_detection] VRAM insuffisante: %s", exc)
-            if update_state:
-                self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc), "speakers": []}
+            return {
+                "vram_wait": True,
+                "required_mb": int(self.vram.pyannote_vram_mb),
+                "phase": "speaker_detection",
+                "reason": str(exc),
+                "error": str(exc),
+                "speakers": [],
+            }
         except Exception as exc:
             logger.exception("Échec détection locuteurs")
             if update_state:
@@ -1183,8 +1211,16 @@ class WorkflowRunner:
             "stt",
         )
         if reservation is None:
-            self.store.update_state(job.id, JobState.FAILED, "VRAM insuffisante")
-            return {"error": "VRAM insuffisante pour la transcription"}
+            # VRAM transitoire : mise en attente + alerte admin (pas FAILED).
+            msg = f"VRAM insuffisante pour la transcription ({required_vram_mb} Mo requis)"
+            logger.warning("[transcription] %s", msg)
+            return {
+                "vram_wait": True,
+                "required_mb": int(required_vram_mb),
+                "phase": "stt",
+                "reason": msg,
+                "error": msg,
+            }
         gpu = reservation.gpu_index
 
         try:
@@ -1274,9 +1310,15 @@ class WorkflowRunner:
 
             return result
         except GPUSessionError as exc:
+            # VRAM transitoire : mise en attente + alerte admin (pas FAILED).
             logger.error("[diarization] VRAM insuffisante: %s", exc)
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc)}
+            return {
+                "vram_wait": True,
+                "required_mb": int(diar_vram_mb),
+                "phase": "diarization",
+                "reason": str(exc),
+                "error": str(exc),
+            }
         except Exception as exc:
             logger.exception("Échec diarisation")
             self.store.update_state(job.id, JobState.FAILED, str(exc))

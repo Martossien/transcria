@@ -76,6 +76,17 @@
       {% endfor %}
     {% endwith %}
 
+    {% if vram_waiting_count and vram_waiting_count > 0 %}
+      <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-gpu-card me-2"></i>
+        <div>
+          <strong>{{ vram_waiting_count }}</strong> traitement(s) en attente de VRAM.
+          La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée.
+          Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise.
+        </div>
+      </div>
+    {% endif %}
+
     {% block content %}{% endblock %}
   </div>
 

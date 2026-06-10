@@ -142,6 +142,36 @@ _ERROR_BLOCK = """\
             word-break:break-all;">{error}</p>
 </div>"""
 
+_BODY_VRAM_WAIT = """\
+<p style="margin:0 0 16px;color:#333333;font-size:15px;">
+  Bonjour {display_name},
+</p>
+<p style="margin:0 0 24px;color:#333333;font-size:15px;">
+  Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est
+  insuffisante pour la phase <strong>{phase}</strong> ({required_mb}&nbsp;Mo requis).
+  Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM
+  sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement)
+  pour accélérer la reprise.
+</p>
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
+  <tr>
+    <td style="padding:16px 20px;">
+      <p style="margin:0 0 6px;color:#666666;font-size:12px;text-transform:uppercase;
+                letter-spacing:0.5px;">Travail</p>
+      <p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">{job_title}</p>
+    </td>
+  </tr>
+</table>
+<p style="margin:0 0 24px;text-align:center;">
+  <a href="{job_url}"
+     style="display:inline-block;background:#d97706;color:#ffffff;
+            text-decoration:none;padding:12px 28px;border-radius:6px;
+            font-size:15px;font-weight:bold;">
+    Voir le traitement &rarr;
+  </a>
+</p>"""
+
 
 def _build_html_success(display_name: str, job_title: str, job_id: str, base_url: str) -> str:
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
@@ -187,6 +217,42 @@ def _build_html_failure(
         header_icon="✗",
         header_title="Échec de transcription",
         body_html=body,
+    )
+
+
+def _build_html_vram_wait(
+    display_name: str, job_title: str, job_id: str, required_mb: int, phase: str, base_url: str
+) -> str:
+    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
+    subject = f"En attente de VRAM : {job_title}"
+    body = _BODY_VRAM_WAIT.format(
+        display_name=display_name,
+        job_title=job_title,
+        job_url=job_url,
+        required_mb=required_mb,
+        phase=phase,
+    )
+    return _HTML_BASE.format(
+        subject=subject,
+        header_bg="#d97706",
+        header_icon="⏳",
+        header_title="Traitement en attente de VRAM",
+        body_html=body,
+    )
+
+
+def _build_text_vram_wait(
+    display_name: str, job_title: str, job_id: str, required_mb: int, phase: str, base_url: str
+) -> str:
+    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
+    return (
+        f"Bonjour {display_name},\n\n"
+        f"Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase "
+        f"{phase}, {required_mb} Mo requis).\n"
+        f"Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée.\n\n"
+        f"Travail : {job_title}\n"
+        f"Lien    : {job_url}\n\n"
+        "Cet email a été envoyé automatiquement par TranscrIA."
     )
 
 
@@ -303,4 +369,45 @@ def send_job_notification_async(
             )
 
     t = threading.Thread(target=_do_send, daemon=True, name=f"mailer-{job_id[:8]}-{event}")
+    t.start()
+
+
+def send_admin_vram_alert_async(
+    cfg: dict,
+    admin_emails: list[str],
+    job_title: str,
+    job_id: str,
+    required_mb: int,
+    phase: str,
+) -> None:
+    """Alerte les administrateurs qu'un job est en attente de VRAM (tâche de fond).
+
+    Best-effort : aucune exception remontée. Ignoré si l'email est désactivé, mal
+    configuré, ou si aucune adresse admin n'est fournie.
+    """
+    ecfg = build_email_config(cfg)
+    recipients = [e for e in dict.fromkeys(admin_emails or []) if e]
+    if not ecfg.enabled:
+        return
+    if not recipients:
+        logger.debug("Alerte VRAM admin ignorée: aucun email admin (job=%s)", job_id)
+        return
+    if not ecfg.smtp_host or not ecfg.from_address:
+        logger.warning("Alerte VRAM admin ignorée: SMTP non configuré (job=%s)", job_id)
+        return
+
+    subject = f"[TranscrIA] En attente de VRAM : {job_title}"
+
+    def _do_send() -> None:
+        for to_email in recipients:
+            name = to_email.split("@")[0]
+            html = _build_html_vram_wait(name, job_title, job_id, required_mb, phase, ecfg.base_url)
+            text = _build_text_vram_wait(name, job_title, job_id, required_mb, phase, ecfg.base_url)
+            try:
+                _send_smtp(ecfg, to_email, subject, html, text)
+                logger.info("Alerte VRAM admin envoyée: job=%s to=%s", job_id, to_email)
+            except Exception:
+                logger.exception("Échec alerte VRAM admin: job=%s to=%s", job_id, to_email)
+
+    t = threading.Thread(target=_do_send, daemon=True, name=f"mailer-vram-{job_id[:8]}")
     t.start()

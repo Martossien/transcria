@@ -92,6 +92,22 @@ class PipelineService:
                 JobStore.update_state(job.id, JobState.FAILED, str(exc))
             return {"error": str(exc), "step": "pipeline"}
 
+    @staticmethod
+    def _vram_wait_result(phase_result: dict, *, step: str) -> dict:
+        """Normalise un résultat de phase `vram_wait` pour remontée à l'exécuteur.
+
+        Conserve le motif/la VRAM requise et un délai de re-tentative ; l'exécuteur
+        re-queue alors le job (reprise auto), comme pour le mode `deferred` (§7.2).
+        """
+        return {
+            "vram_wait": True,
+            "required_mb": int(phase_result.get("required_mb") or 0),
+            "phase": phase_result.get("phase") or step,
+            "reason": phase_result.get("reason") or phase_result.get("error") or "VRAM insuffisante",
+            "retry_after_s": int(phase_result.get("retry_after_s", 30)),
+            "step": step,
+        }
+
     def _remote_resource_gate(self, job: Job, sl) -> dict | None:
         """Pré-vol des ressources distantes (admission §7.2 + auto-lancement STT).
 
@@ -191,6 +207,10 @@ class PipelineService:
                 duree=round(transcribe_elapsed, 1),
                 segments=len(transcribe_result.get("segments", [])))
 
+        if transcribe_result.get("vram_wait"):
+            # VRAM transitoire : on ne marque PAS FAILED, on remonte `vram_wait` jusqu'à
+            # l'exécuteur qui re-queue le job (reprise auto à la prochaine fenêtre VRAM).
+            return self._vram_wait_result(transcribe_result, step="transcription")
         if transcribe_result.get("error"):
             return {"error": transcribe_result["error"], "step": "transcription"}
         # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
@@ -209,6 +229,14 @@ class PipelineService:
             self._publish_step_progress(job, step_cfg["name"], starting=True)
             result = method()
             elapsed = time.monotonic() - t0
+
+            if result.get("vram_wait"):
+                # VRAM transitoire en cours de pipeline : mise en attente + re-queue
+                # (pas d'état terminal). Le pipeline repart du début au redispatch.
+                sl.warning("Étape en attente de VRAM", step=step_cfg["name"],
+                           required_vram_mb=result.get("required_mb"),
+                           duree=round(elapsed, 1))
+                return self._vram_wait_result(result, step=step_cfg["name"])
 
             # Une étape échoue si "success" est explicitement False,
             # ou si "error" est non-vide sans "success" dans le résultat.

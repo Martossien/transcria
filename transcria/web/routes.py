@@ -61,11 +61,27 @@ from transcria.workflow.transitions import (
     get_execution_status,
     is_execution_active,
     mark_execution_cancelled,
+    mark_execution_waiting_vram,
     request_execution_cancel,
 )
 
 web_bp = Blueprint("web", __name__)
 logger = logging.getLogger(__name__)
+
+
+@web_bp.app_context_processor
+def inject_vram_waiting_count():
+    """Expose le nombre de jobs en attente de VRAM aux templates (bandeau admin).
+
+    Calculé uniquement pour les administrateurs ; 0 sinon (aucun coût pour les autres).
+    Best-effort : ne casse jamais le rendu.
+    """
+    try:
+        if current_user and current_user.is_authenticated and current_user.has_role(Role.ADMIN):
+            return {"vram_waiting_count": JobStore.count_waiting_vram()}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"vram_waiting_count": 0}
 
 MEETING_TYPES_LIST = MEETING_TYPES
 TYPE_SPECIFIC_FIELDS_JSON = __import__("json").dumps(TYPE_SPECIFIC_FIELDS, ensure_ascii=False)
@@ -1139,6 +1155,28 @@ def api_summary(job_id: str):
 
     runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.run_summary(job, str(audio_path), cfg)
+
+    if result.get("vram_wait"):
+        # VRAM momentanément insuffisante : le job N'A PAS échoué (run_summary a déjà
+        # restauré son état pré-résumé). On le marque « en attente de VRAM », on alerte
+        # l'admin une seule fois, et le client relancera /summary automatiquement.
+        required_mb = int(result.get("required_mb") or 0)
+        phase = result.get("phase") or "summary_stt"
+        first_wait = mark_execution_waiting_vram(job.id, required_mb=required_mb, phase=phase)
+        if first_wait:
+            from transcria.notifications.admin_alerts import alert_admin_vram_wait
+
+            alert_admin_vram_wait(cfg, job, required_mb=required_mb, phase=phase)
+        return jsonify({
+            "vram_wait": True,
+            "required_mb": required_mb,
+            "phase": phase,
+            "message": (
+                "VRAM insuffisante : l'administrateur a été prévenu. "
+                "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
+            ),
+        })
+
     return jsonify(result)
 
 

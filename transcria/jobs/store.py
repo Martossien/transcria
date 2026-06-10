@@ -22,6 +22,25 @@ class JobStore:
         return db.session.get(Job, job_id)
 
     @staticmethod
+    def count_waiting_vram() -> int:
+        """Nombre de jobs en attente de VRAM (statut d'exécution transitoire).
+
+        Filtre best-effort sur le JSON `extra_data_json` (portable SQLite/PostgreSQL) :
+        sert au bandeau d'alerte admin. Retourne 0 hors contexte DB.
+        """
+        try:
+            return int(
+                db.session.scalar(
+                    db.select(func.count(Job.id)).filter(
+                        Job.extra_data_json.like('%"status": "waiting_vram"%')
+                    )
+                )
+                or 0
+            )
+        except Exception:  # noqa: BLE001
+            return 0
+
+    @staticmethod
     def list_for_user(user, include_all: bool = False) -> list[Job]:
         if include_all or user.has_role(Role.ADMIN):
             return list(db.session.execute(db.select(Job).order_by(Job.created_at.desc())).scalars().all())

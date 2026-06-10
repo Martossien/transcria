@@ -270,10 +270,10 @@
       {% set meeting_invite = job.get_extra_data().get('meeting_invite') or {} %}
       <div class="card card-body bg-light p-2 mb-2">
         <label for="meeting-invite" class="form-label small mb-1"><i class="bi bi-envelope-paper"></i> Invitation de la réunion <span class="text-muted">(optionnel)</span></label>
-        <textarea id="meeting-invite" class="form-control form-control-sm" rows="4" placeholder="Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé."></textarea>
+        <textarea id="meeting-invite" class="form-control form-control-sm" rows="4" placeholder="Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé.">{{ meeting_invite.get('brief', '') }}</textarea>
         <div class="form-text small">
           Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées.
-          {% if meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> Invitation enregistrée — {{ meeting_invite.get('names')|length }} nom(s) détecté(s). Laissez vide pour la réutiliser, ou recollez pour remplacer.</span>{% endif %}
+          {% if meeting_invite.get('brief') or meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> Invitation enregistrée{% if meeting_invite.get('names') %} — {{ meeting_invite.get('names')|length }} nom(s) détecté(s){% endif %}. Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer.</span>{% endif %}
         </div>
       </div>
       <button class="btn btn-primary" onclick="TranscrIA.generateSummary()">

@@ -23,7 +23,10 @@ PREPROCESSING_READY_STATES = {
 }
 
 EXECUTION_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
-EXECUTION_ACTIVE_STATUSES = {"queued", "running"}
+# `waiting_vram` : ressource GPU locale momentanément indisponible (transitoire,
+# comme `deferred` pour les ressources distantes). Le job N'EST PAS terminal — il
+# patiente puis reprend automatiquement dès que la VRAM se libère.
+EXECUTION_ACTIVE_STATUSES = {"queued", "running", "waiting_vram"}
 
 
 def utcnow_iso() -> str:
@@ -105,6 +108,37 @@ def mark_execution_failed(job_id: str, error_message: str) -> None:
     )
 
 
+def mark_execution_waiting_vram(job_id: str, *, required_mb: int, phase: str) -> bool:
+    """Marque un job en attente de VRAM (transitoire) et indique s'il faut alerter l'admin.
+
+    Retourne True si c'est la PREMIÈRE entrée en attente de cet épisode (donc une alerte
+    admin doit partir), False ensuite. L'anti-spam repose sur un drapeau persistant
+    `vram_alert_sent` au niveau racine d'extra_data — et NON sur le statut d'exécution,
+    car chaque re-dispatch repasse d'abord par `mark_execution_started` (statut "running").
+    Le drapeau n'est levé qu'aux transitions terminales (completed/failed/cancelled).
+    """
+    should_alert = {"value": False}
+
+    def updater(extra: dict) -> dict:
+        execution = dict(extra.get("execution") or {})
+        execution.update(
+            {
+                "status": "waiting_vram",
+                "required_vram_mb": int(required_mb),
+                "phase": phase,
+                "waiting_since": utcnow_iso(),
+                "finished_at": None,
+            }
+        )
+        extra["execution"] = execution
+        should_alert["value"] = not extra.get("vram_alert_sent")
+        extra["vram_alert_sent"] = True
+        return extra
+
+    JobStore.update_extra_data(job_id, updater)
+    return should_alert["value"]
+
+
 def request_execution_cancel(job_id: str) -> None:
     _merge_execution(
         job_id,
@@ -135,6 +169,11 @@ def _merge_execution(job_id: str, updates: dict) -> None:
         execution = dict(extra.get("execution") or {})
         execution.update(updates)
         extra["execution"] = execution
+        # Fin d'un épisode : on réarme l'anti-spam VRAM pour qu'une future attente
+        # ré-alerte l'admin. (Les transitions queued/running/waiting_vram ne réarment
+        # pas, sinon chaque re-dispatch d'un job en attente re-spammerait.)
+        if updates.get("status") in EXECUTION_TERMINAL_STATUSES:
+            extra["vram_alert_sent"] = False
         return extra
 
     JobStore.update_extra_data(job_id, updater)

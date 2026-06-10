@@ -15,6 +15,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger, inject_correlation_id
+from transcria.notifications.admin_alerts import alert_admin_vram_wait
 from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QueueStore
@@ -26,6 +27,7 @@ from transcria.workflow.transitions import (
     mark_execution_failed,
     mark_execution_queued,
     mark_execution_started,
+    mark_execution_waiting_vram,
 )
 
 
@@ -169,6 +171,21 @@ class JobExecutorService:
                     mark_execution_queued(job_id, mode)
                     sl.info("Job différé (ressources distantes) — nouvelle tentative dans %ds",
                             retry_after, job_id=job_id, reason=result.get("reason"))
+                elif result.get("vram_wait"):
+                    # VRAM locale momentanément insuffisante (transitoire) : on re-queue
+                    # au lieu d'échouer (reprise auto par le scheduler dès libération).
+                    # Pas d'état terminal, pas de mail d'échec propriétaire. L'admin est
+                    # alerté UNE seule fois (premier passage en attente).
+                    required_mb = int(result.get("required_mb") or 0)
+                    phase = result.get("phase") or "stt"
+                    retry_after = int(result.get("retry_after_s", 30))
+                    scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    QueueStore.requeue_later(job_id, scheduled_at)
+                    first_wait = mark_execution_waiting_vram(job_id, required_mb=required_mb, phase=phase)
+                    sl.warning("Job en attente de VRAM — nouvelle tentative dans %ds",
+                               retry_after, job_id=job_id, required_vram_mb=required_mb, phase=phase)
+                    if first_wait:
+                        alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
                 elif result.get("error"):
                     QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, result["error"])

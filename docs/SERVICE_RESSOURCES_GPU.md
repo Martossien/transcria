@@ -224,12 +224,34 @@ Scénario probable en split (réseau, redémarrage, crash GPU). Politique **expl
 | Situation | Comportement |
 |---|---|
 | Indispo **transitoire** (503 / timeout ponctuel) | re-queue différé (**implémenté** : `QueueStore.requeue_later` + `scheduled_at`) — le job **attend** puis re-tente, il n'échoue pas |
+| **VRAM locale insuffisante** pour une phase GPU (STT/transcription/diarisation/locuteurs) | **mise en attente `waiting_vram`** (statut d'exécution non terminal), **pas de FAILED** : le job re-queue et **reprend automatiquement** dès libération de la VRAM. L'**admin est alerté une seule fois** par épisode (e-mail + log `WARNING` + bandeau in-app). TranscrIA **ne tue jamais** un process GPU tiers (`force_free_gpu` reste bridé aux `kill_patterns` dans la fenêtre calendaire). Côté résumé synchrone, le client relance `/summary` automatiquement. Voir le détail §7.2-bis ci-dessous. |
 | Indispo **prolongée** (nœud rouge) | nouvelles transcriptions **acceptées mais mises en file** (jamais perdues), statut clair « ressources indisponibles » + notification ; **on ne bloque pas** la soumission et **on ne boucle pas indéfiniment** en silence |
 | Fenêtre de retry **dépassée** (`max_unavailable_s`, configurable) | le job est marqué **échec** avec raison explicite (pas de crash, pas de blocage) |
 | `fallback_local` actif **et** GPU local présent | bascule locale possible ; **en frontale CPU-only, pas de fallback** → file + notification est la seule issue saine |
 
 > Principe : **jamais d'échec silencieux ni de spin infini**. Le job est soit en file (visible), soit
-> en échec explicite après une fenêtre bornée.
+> en attente VRAM (visible, admin alerté), soit en échec explicite après une fenêtre bornée.
+
+#### 7.2-bis — Attente de VRAM locale (mécanique)
+
+Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, jamais comme un échec :
+
+- **Détection** : les phases GPU (`WorkflowRunner.run_transcription` / `run_diarization` /
+  `run_speaker_detection`, et `_run_quick_transcription` pour le résumé) renvoient un signal
+  `{"vram_wait": True, "required_mb", "phase", "reason"}` au lieu d'appeler `update_state(FAILED)`.
+- **File principale** : `PipelineService._run_pipeline_steps` propage `vram_wait` ;
+  `JobExecutorService._run_process` re-queue via `QueueStore.requeue_later` + marque
+  `mark_execution_waiting_vram`. Le scheduler (`_resources_available`) garde le job en attente tant
+  que `GPUAllocator.can_allocate` échoue, puis le redispatche → **reprise automatique**.
+- **Résumé synchrone** (`api_summary`) : pas de scheduler — l'état pré-résumé est restauré, le job
+  passe `waiting_vram`, et le wizard (`wizard.js`) **relance `/summary` toutes les 20 s** jusqu'au
+  succès.
+- **Alerte admin (une fois par épisode)** : `transcria/notifications/admin_alerts.alert_admin_vram_wait`
+  → e-mail aux comptes ADMIN actifs (`send_admin_vram_alert_async`) + log `WARNING` structuré.
+  L'anti-spam repose sur un drapeau persistant `extra_data.vram_alert_sent`, réarmé uniquement aux
+  transitions terminales (completed/failed/cancelled) — pas à chaque re-dispatch.
+- **Bandeau in-app** : `base.html` affiche le nombre de jobs en attente (`JobStore.count_waiting_vram`)
+  aux administrateurs, via le context processor `inject_vram_waiting_count`.
 
 **En tout-en-un**, le service ressources est local : une indisponibilité = **crash process**, restauré
 par **systemd** en quelques secondes. Seule la **1ʳᵉ ligne (transitoire)** s'applique alors — le job

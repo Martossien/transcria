@@ -553,12 +553,11 @@ class TestPipelineServiceStateRecovery:
 
 class TestWorkflowRunnerRunSummary:
     def test_run_summary_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):
-        """_gpu_session lève GPUSessionError → erreur VRAM propagée, état FAILED.
+        """_gpu_session lève GPUSessionError → signal `vram_wait` (PAS FAILED).
 
-        run_summary utilise _gpu_session (GPUSession + allocateur) plutôt que
-        _reserve_gpu_phase. En présence d'un GPU réel, l'allocateur réussit et
-        contourne ensure_free. On mocke _gpu_session pour lever GPUSessionError
-        directement, ce qui est le comportement attendu en VRAM insuffisante.
+        Une VRAM insuffisante est transitoire : run_summary remonte `vram_wait` et
+        restaure l'état pré-résumé au lieu de marquer FAILED. L'appelant (api_summary)
+        met alors le job en attente et le client relance automatiquement.
         """
         from transcria.gpu.gpu_session import GPUSessionError
         import contextlib
@@ -566,6 +565,7 @@ class TestWorkflowRunnerRunSummary:
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
             job = JobStore.create_job(owner_id, "VRAM Fail")
+            prior_state = job.state
             runner = WorkflowRunner(JobStore, cfg)
 
             @contextlib.contextmanager
@@ -576,11 +576,14 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner, "_gpu_session", fake_gpu_session)
 
             result = runner.run_summary(job, "/tmp/fake.wav", cfg)
-            assert "error" in result
-            assert "VRAM" in result["error"]
+            assert result.get("vram_wait") is True
+            assert result.get("required_mb")
+            assert result.get("phase") == "summary_stt"
 
             updated = JobStore.get_by_id(job.id)
-            assert updated.state == JobState.FAILED.value
+            # Le job N'EST PAS FAILED : il est revenu à son état pré-résumé.
+            assert updated.state != JobState.FAILED.value
+            assert updated.state == prior_state
 
     def test_run_summary_success_cohere_only(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
@@ -987,10 +990,10 @@ class TestWorkflowRunnerRunSpeakerDetection:
 
 class TestWorkflowRunnerRunTranscription:
     def test_run_transcription_vram_insufficient(self, app, owner_id, monkeypatch, tmp_path):
-        """_reserve_gpu_phase retourne None → erreur VRAM, état FAILED.
+        """_reserve_gpu_phase retourne None → signal `vram_wait` (PAS FAILED).
 
-        Mocke _reserve_gpu_phase directement : en présence d'un GPU réel,
-        l'allocateur réussit et contourne ensure_free, rendant le mock obsolète.
+        VRAM transitoire : run_transcription remonte `vram_wait` ; le pipeline propage
+        et l'exécuteur re-queue le job (reprise auto), sans état terminal.
         """
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
@@ -1000,11 +1003,15 @@ class TestWorkflowRunnerRunTranscription:
             monkeypatch.setattr(runner, "_reserve_gpu_phase", lambda job, required_mb, phase: (None, False))
 
             result = runner.run_transcription(job, "/tmp/fake.wav", cfg)
-            assert "error" in result
-            assert "VRAM" in result["error"]
+            assert result.get("vram_wait") is True
+            assert result.get("required_mb")
+            assert result.get("phase") == "stt"
 
             updated = JobStore.get_by_id(job.id)
-            assert updated.state == JobState.FAILED.value
+            # Pas d'état terminal sur VRAM : le job sera re-queué (reprise auto). Le
+            # pipeline redémarre du début, donc l'état TRANSCRIBING courant est sans
+            # conséquence ; seul compte le fait qu'il N'EST PAS FAILED.
+            assert updated.state != JobState.FAILED.value
 
     def test_run_transcription_success(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
