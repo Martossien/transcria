@@ -13,6 +13,7 @@ from flask import (
     Blueprint,
     Response,
     abort,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -72,6 +73,11 @@ logger = logging.getLogger(__name__)
 _VRAM_WAIT_MESSAGE = (
     "VRAM insuffisante : l'administrateur a été prévenu. "
     "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
+)
+
+_SUMMARY_QUEUED_MESSAGE = (
+    "Résumé mis en file sur le nœud GPU — il s'exécutera automatiquement "
+    "et la page se rafraîchira dès qu'il sera prêt."
 )
 
 _SUMMARY_LLM_FAILED_MESSAGE = (
@@ -1188,16 +1194,26 @@ def api_summary(job_id: str):
         and pending.mode == SUMMARY_MODE
         and pending.status in {QUEUE_WAITING, QUEUE_RUNNING, QUEUE_PAUSED}
     ):
-        return jsonify({
-            "vram_wait": True,
-            "queued": True,
-            "message": _VRAM_WAIT_MESSAGE,
-        })
+        return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
+
+    # Topologie split : le frontal (`role=web`) n'a pas (forcément) de GPU et ne doit
+    # JAMAIS exécuter de phase GPU. On enfile le résumé sur le worker GPU (nœud de
+    # ressources), qui exécute STT/diarisation/LLM ; le client poll GET /status. La
+    # décision se fait sur le RÔLE, pas sur une détection matérielle (un éventuel petit
+    # GPU frontal est volontairement ignoré). En `all-in-one`, exécution synchrone.
+    if current_app.config.get("TRANSCRIA_ROLE", "all") == "web":
+        executor = get_job_executor()
+        if executor is None:
+            return jsonify({"error": "Worker de traitement indisponible"}), 503
+        executor.submit_process(
+            job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg)
+        )
+        return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
 
     from transcria.workflow.runner import WorkflowRunner
 

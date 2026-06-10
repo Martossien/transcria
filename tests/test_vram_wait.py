@@ -189,6 +189,54 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
     assert submits[0]["vram_profile"]["phases"]["summary_stt"]
 
 
+def test_api_summary_routes_to_worker_when_role_web(app, monkeypatch):
+    """Split : le frontal (role=web, sans GPU) n'exécute PAS le résumé — il l'enfile sur
+    le worker GPU (mode `summary`) et le client poll. Décision sur le rôle, pas le matériel."""
+    from transcria.jobs.filesystem import JobFilesystem
+
+    submits = []
+    ran = {"sync": False}
+
+    def _no_sync(self, job, audio_path, cfg):
+        ran["sync"] = True
+        return {}
+
+    monkeypatch.setattr("transcria.workflow.runner.WorkflowRunner.run_summary", _no_sync)
+
+    class _StubExecutor:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            submits.append(mode)
+            return {"accepted": True}
+
+    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        from transcria.config import get_config
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "Web summary")
+        JobStore.update_state(job.id, JobState.ANALYZED)
+        job_id = job.id
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        (fs.job_dir / "input" / "original.wav").write_text("fake")
+
+    previous_role = app.config.get("TRANSCRIA_ROLE", "all")
+    app.config["TRANSCRIA_ROLE"] = "web"
+    try:
+        resp = client.post(f"/api/jobs/{job_id}/summary")
+    finally:
+        app.config["TRANSCRIA_ROLE"] = previous_role
+
+    assert resp.status_code == 200
+    assert resp.get_json().get("queued") is True
+    assert submits == ["summary"]          # enfilé sur le worker
+    assert ran["sync"] is False            # JAMAIS exécuté en synchrone sur le frontal
+
+
 # ---------------------------------------------------------------------------
 # Invitation : prefill du brief + badge sur brief seul (sans e-mail/noms)
 # ---------------------------------------------------------------------------

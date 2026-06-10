@@ -93,11 +93,11 @@ var TranscrIA = window.TranscrIA || {};
             return W.api('/api/jobs/' + JOB_ID + '/summary');
         }).then(function (r) {
             W.hideSpinner('summary-spinner');
-            if (r.data.vram_wait) {
-                // VRAM momentanément insuffisante : le job n'a pas échoué et une reprise
-                // SERVEUR a été enfilée (le scheduler relance le résumé dès libération de
-                // la VRAM, même sans page ouverte). Le client se contente de POLLER l'état
-                // — il NE relance PAS /summary (sinon course avec le serveur).
+            if (r.data.vram_wait || r.data.queued) {
+                // Résumé pris en charge côté SERVEUR (nœud GPU) : soit en attente de VRAM
+                // (reprise auto), soit enfilé parce que le frontal n'a pas de GPU (split).
+                // Dans les deux cas le client se contente de POLLER l'état — il NE relance
+                // PAS /summary (sinon course avec le worker).
                 var msg = r.data.message ||
                     'VRAM insuffisante : l\'administrateur a été prévenu. ' +
                     'Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.';

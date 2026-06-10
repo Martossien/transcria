@@ -243,7 +243,14 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   `JobExecutorService._run_process` re-queue via `QueueStore.requeue_later` + marque
   `mark_execution_waiting_vram`. Le scheduler (`_resources_available`) garde le job en attente tant
   que `GPUAllocator.can_allocate` échoue, puis le redispatche → **reprise automatique**.
-- **Résumé synchrone** (`api_summary`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
+- **Frontal `role=web` sans GPU (split)** : le résumé n'est **jamais** exécuté sur le frontal —
+  `api_summary` l'**enfile directement** sur le worker GPU (mode `summary`) et le client poll
+  `GET /status`. Le frontal ne fait qu'orchestrer ; **toute** la charge GPU (STT, diarisation,
+  **LLM** comprise) est portée par la machine GPU (worker/nœud de ressources). La décision repose
+  sur le **rôle**, pas sur une détection matérielle (un éventuel petit GPU frontal est ignoré).
+  Rappel : la LLM d'arbitrage est **locale au worker**, pas servie par le nœud de ressources — donc
+  le worker doit avoir un GPU. Une LLM 35B en CPU est inexploitable (≈100-300× plus lente).
+- **Résumé synchrone** (`api_summary`, `role=all`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
   `vram_wait`, l'état pré-résumé est restauré, le job passe `waiting_vram`, et une **reprise serveur**
   est **enfilée** (`submit_process(mode="summary")`, profil VRAM `summary_stt`). Le scheduler relance
   alors `run_summary` via `_run_process` dès que l'admission VRAM le permet — **même sans page
