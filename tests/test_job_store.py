@@ -84,6 +84,22 @@ class TestJobStore:
             updated = JobStore.update_state(job.id, JobState.FAILED, "Something went wrong")
             assert updated.error_message == "Something went wrong"
 
+    def test_update_state_clears_stale_error_on_recovery(self, app, owner_id):
+        """Invariant : error_message non vide ⟺ state == FAILED. Une transition hors
+        FAILED (reprise) efface un vieux message (sinon il reste collé et trompe l'UI)."""
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Recovery")
+            JobStore.update_state(job.id, JobState.FAILED, "VRAM insuffisante pour cohere-summary")
+            assert JobStore.get_by_id(job.id).error_message == "VRAM insuffisante pour cohere-summary"
+
+            # Reprise : retour à un état non terminal → message effacé.
+            JobStore.update_state(job.id, JobState.READY_TO_PROCESS)
+            assert JobStore.get_by_id(job.id).error_message is None
+
+            # Et un succès final reste propre.
+            JobStore.update_state(job.id, JobState.COMPLETED)
+            assert JobStore.get_by_id(job.id).error_message is None
+
     def test_update_job(self, app, owner_id):
         with app.app_context():
             job = JobStore.create_job(owner_id, "Old")

@@ -70,8 +70,15 @@ class JobStore:
             extra["last_non_terminal_state"] = job.state
             job.set_extra_data(extra)
         job.state = state.value
-        if error_message is not None:
-            job.error_message = error_message
+        # Invariant : `error_message` ne reflète qu'un échec COURANT. Toute transition
+        # hors FAILED l'efface (sinon un vieux message — ex. « VRAM insuffisante » d'une
+        # tentative précédente — reste collé après une reprise réussie et trompe l'UI).
+        # Le détail par exécution reste tracé dans `extra_data.execution.last_error`.
+        if state == JobState.FAILED:
+            if error_message is not None:
+                job.error_message = error_message
+        else:
+            job.error_message = error_message  # défaut None → efface l'ancien message
         db.session.commit()
         return job
 
