@@ -69,6 +69,29 @@ web_bp = Blueprint("web", __name__)
 logger = logging.getLogger(__name__)
 
 
+_VRAM_WAIT_MESSAGE = (
+    "VRAM insuffisante : l'administrateur a été prévenu. "
+    "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
+)
+
+
+def _summary_vram_profile(cfg: dict) -> dict:
+    """Profil VRAM d'une reprise serveur du résumé : pilote l'admission du scheduler.
+
+    Le résumé ne charge que le STT rapide ; l'admission ne dispatchera l'entrée que
+    lorsque cette VRAM est réellement libre (sinon le job patiente en file).
+    """
+    from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+    summary_vram = int(get_backend_vram_mb(backend, cfg))
+    return {
+        "mode": "summary",
+        "peak_vram_mb": summary_vram,
+        "phases": {"summary_stt": summary_vram},
+    }
+
+
 @web_bp.app_context_processor
 def inject_vram_waiting_count():
     """Expose le nombre de jobs en attente de VRAM aux templates (bandeau admin).
@@ -1146,6 +1169,24 @@ def api_summary(job_id: str):
     if job.state == JobState.SUMMARY_RUNNING.value:
         return jsonify({"error": "Un résumé est déjà en cours pour ce job."}), 409
 
+    # Une reprise serveur du résumé peut déjà être en file (après une attente de VRAM) :
+    # ne PAS relancer en synchrone (sinon deux run_summary concurrents). Le client doit
+    # poller GET /status — le scheduler reprend dès que la VRAM se libère.
+    from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
+    from transcria.services.job_executor import SUMMARY_MODE
+
+    pending = QueueStore.get_entry(job.id)
+    if (
+        pending is not None
+        and pending.mode == SUMMARY_MODE
+        and pending.status in {QUEUE_WAITING, QUEUE_RUNNING, QUEUE_PAUSED}
+    ):
+        return jsonify({
+            "vram_wait": True,
+            "queued": True,
+            "message": _VRAM_WAIT_MESSAGE,
+        })
+
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
@@ -1159,9 +1200,26 @@ def api_summary(job_id: str):
     if result.get("vram_wait"):
         # VRAM momentanément insuffisante : le job N'A PAS échoué (run_summary a déjà
         # restauré son état pré-résumé). On le marque « en attente de VRAM », on alerte
-        # l'admin une seule fois, et le client relancera /summary automatiquement.
+        # l'admin une seule fois, puis on enfile une reprise SERVEUR (mode `summary`) :
+        # le scheduler relancera run_summary dès que la VRAM le permet, même sans page
+        # ouverte. Le client n'a plus qu'à poller GET /status.
         required_mb = int(result.get("required_mb") or 0)
         phase = result.get("phase") or "summary_stt"
+
+        # Enfiler la reprise serveur d'abord (submit_process pose le statut « queued »),
+        # PUIS marquer « waiting_vram » : le statut final reflète l'attente de VRAM (et
+        # alimente le bandeau admin), tandis que l'entrée de file pilote la reprise.
+        executor = get_job_executor()
+        if executor is not None:
+            executor.submit_process(
+                job.id,
+                str(audio_path),
+                SUMMARY_MODE,
+                vram_profile=_summary_vram_profile(cfg),
+            )
+        else:
+            logger.warning("Reprise serveur du résumé indisponible (worker absent) — job=%s", job.id)
+
         first_wait = mark_execution_waiting_vram(job.id, required_mb=required_mb, phase=phase)
         if first_wait:
             from transcria.notifications.admin_alerts import alert_admin_vram_wait
@@ -1169,12 +1227,10 @@ def api_summary(job_id: str):
             alert_admin_vram_wait(cfg, job, required_mb=required_mb, phase=phase)
         return jsonify({
             "vram_wait": True,
+            "queued": executor is not None,
             "required_mb": required_mb,
             "phase": phase,
-            "message": (
-                "VRAM insuffisante : l'administrateur a été prévenu. "
-                "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
-            ),
+            "message": _VRAM_WAIT_MESSAGE,
         })
 
     return jsonify(result)

@@ -94,16 +94,15 @@ var TranscrIA = window.TranscrIA || {};
         }).then(function (r) {
             W.hideSpinner('summary-spinner');
             if (r.data.vram_wait) {
-                // VRAM momentanément insuffisante : le job n'a pas échoué, l'admin est
-                // prévenu. On affiche un bandeau d'attente et on relance automatiquement
-                // /summary jusqu'à ce que la mémoire GPU se libère (reprise sans action).
+                // VRAM momentanément insuffisante : le job n'a pas échoué et une reprise
+                // SERVEUR a été enfilée (le scheduler relance le résumé dès libération de
+                // la VRAM, même sans page ouverte). Le client se contente de POLLER l'état
+                // — il NE relance PAS /summary (sinon course avec le serveur).
                 var msg = r.data.message ||
                     'VRAM insuffisante : l\'administrateur a été prévenu. ' +
                     'Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.';
-                document.getElementById('summary-result').innerHTML =
-                    '<div class="alert alert-warning"><span class="spinner-border spinner-border-sm me-2"></span>' +
-                    W.escapeHtml(msg) + '</div>';
-                setTimeout(W.generateSummary, 20000);
+                W.showVramWaitBanner(msg);
+                W.pollSummaryResume();
                 return;
             }
             if (r.data.error) {
@@ -112,6 +111,34 @@ var TranscrIA = window.TranscrIA || {};
             } else {
                 location.reload();
             }
+        });
+    };
+
+    W.showVramWaitBanner = function (msg) {
+        var el = document.getElementById('summary-result');
+        if (!el) { return; }
+        el.innerHTML =
+            '<div class="alert alert-warning"><span class="spinner-border spinner-border-sm me-2"></span>' +
+            W.escapeHtml(msg) + '</div>';
+    };
+
+    // Poll en lecture seule de l'état du job pendant la reprise serveur du résumé.
+    // Recharge la page quand le résumé est prêt (summary_done) ; affiche l'erreur si
+    // le job échoue ; sinon ré-interroge toutes les 20 s. Aucun POST /summary ici.
+    W.pollSummaryResume = function () {
+        W.api('/api/jobs/' + JOB_ID + '/status').then(function (r) {
+            var state = (r.data && r.data.state) || '';
+            if (state === 'summary_done' || state === 'context_done') {
+                location.reload();
+                return;
+            }
+            if (state === 'failed') {
+                var err = (r.data && r.data.error) || 'Le résumé a échoué.';
+                document.getElementById('summary-result').innerHTML =
+                    '<div class="alert alert-danger">' + W.escapeHtml(err) + '</div>';
+                return;
+            }
+            setTimeout(W.pollSummaryResume, 20000);
         });
     };
 

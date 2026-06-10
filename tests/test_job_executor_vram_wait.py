@@ -70,3 +70,38 @@ def test_vram_wait_requeues_without_failing_and_alerts_admin_once(app, owner_id,
         assert len(alerts) == 1  # anti-spam : une seule alerte tant que le job reste en attente
     finally:
         svc._executor.shutdown(wait=False)
+
+
+def test_summary_mode_success_does_not_mark_completed_nor_notify(app, owner_id, monkeypatch):
+    """Mode `summary` (reprise serveur) : run_summary gère l'état (SUMMARY_DONE) ;
+    l'exécuteur libère seulement la file, sans COMPLETED ni e-mail propriétaire."""
+    svc = JobExecutorService(app, {"workflow": {"queue": {"enabled": False}}})
+    notifs = []
+
+    def fake_summary(self, job, audio_path, config):
+        JobStore.update_state(job.id, JobState.SUMMARY_DONE)
+        return {"transcript_text": "ok", "summary_text": "résumé"}
+
+    monkeypatch.setattr("transcria.workflow.runner.WorkflowRunner.run_summary", fake_summary)
+    monkeypatch.setattr(
+        "transcria.services.job_executor._notify",
+        lambda cfg, job, event, error=None: notifs.append(event),
+    )
+
+    try:
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Summary resume")
+            JobStore.update_state(job.id, JobState.ANALYZED)
+            QueueStore.enqueue(job.id, mode="summary")
+            job_id = job.id
+
+        svc._run_process(job_id, "/tmp/a.wav", "summary")
+
+        with app.app_context():
+            j = JobStore.get_by_id(job_id)
+            assert j.state == JobState.SUMMARY_DONE.value  # surtout PAS completed
+            assert QueueStore.get_entry(job_id).status == "done"
+
+        assert notifs == []  # pas de notification propriétaire pour une reprise de résumé
+    finally:
+        svc._executor.shutdown(wait=False)

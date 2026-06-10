@@ -243,9 +243,15 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   `JobExecutorService._run_process` re-queue via `QueueStore.requeue_later` + marque
   `mark_execution_waiting_vram`. Le scheduler (`_resources_available`) garde le job en attente tant
   que `GPUAllocator.can_allocate` échoue, puis le redispatche → **reprise automatique**.
-- **Résumé synchrone** (`api_summary`) : pas de scheduler — l'état pré-résumé est restauré, le job
-  passe `waiting_vram`, et le wizard (`wizard.js`) **relance `/summary` toutes les 20 s** jusqu'au
-  succès.
+- **Résumé synchrone** (`api_summary`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
+  `vram_wait`, l'état pré-résumé est restauré, le job passe `waiting_vram`, et une **reprise serveur**
+  est **enfilée** (`submit_process(mode="summary")`, profil VRAM `summary_stt`). Le scheduler relance
+  alors `run_summary` via `_run_process` dès que l'admission VRAM le permet — **même sans page
+  ouverte**. `_run_process` traite ce mode à part : `run_summary` gère l'état (`SUMMARY_DONE`/`FAILED`),
+  l'exécuteur libère seulement la file (pas de `COMPLETED` ni d'e-mail propriétaire). Le wizard
+  (`wizard.js`) ne relance plus `/summary` ; il **poll `GET /status`** et recharge à `summary_done`
+  (zéro double-exécution : `api_summary` refuse une relance synchrone tant qu'une entrée `summary` est
+  active).
 - **Alerte admin (une fois par épisode)** : `transcria/notifications/admin_alerts.alert_admin_vram_wait`
   → e-mail aux comptes ADMIN actifs (`send_admin_vram_alert_async`) + log `WARNING` structuré.
   L'anti-spam repose sur un drapeau persistant `extra_data.vram_alert_sent`, réarmé uniquement aux

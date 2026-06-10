@@ -134,6 +134,8 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
     from transcria.jobs.filesystem import JobFilesystem
 
     alerts = []
+    submits = []
+
     # WorkflowRunner est importé localement dans api_summary → patcher le module runner.
     monkeypatch.setattr(
         "transcria.workflow.runner.WorkflowRunner.run_summary",
@@ -143,6 +145,15 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
         "transcria.notifications.admin_alerts.alert_admin_vram_wait",
         lambda cfg, job, *, required_mb, phase: alerts.append((required_mb, phase)),
     )
+
+    # Stub de l'exécuteur : on vérifie que la reprise serveur est enfilée (mode summary)
+    # sans déclencher d'exécution réelle en arrière-plan (test déterministe).
+    class _StubExecutor:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            submits.append({"mode": mode, "vram_profile": kwargs.get("vram_profile")})
+            return {"accepted": True}
+
+    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
@@ -172,6 +183,10 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
         assert job2.get_extra_data()["execution"]["status"] == "waiting_vram"
 
     assert alerts == [(6000, "summary_stt")]
+    # Reprise serveur enfilée en mode `summary` avec un profil VRAM dédié.
+    assert len(submits) == 1
+    assert submits[0]["mode"] == "summary"
+    assert submits[0]["vram_profile"]["phases"]["summary_stt"]
 
 
 # ---------------------------------------------------------------------------
