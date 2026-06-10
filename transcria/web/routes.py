@@ -1845,6 +1845,12 @@ def api_reprocess(job_id: str):
     if executor is None:
         return jsonify({"error": "Worker de traitement indisponible"}), 503
 
+    # Reprocess = run PROPRE (lexique/prompt modifiés) : vider l'état de reprise, sinon
+    # le pipeline reprenable sauterait toutes les phases déjà faites → no-op silencieux.
+    from transcria.workflow.resume import reset_resume_state
+
+    reset_resume_state(JobStore, job.id)
+
     result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours"}), 409

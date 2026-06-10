@@ -121,6 +121,44 @@ def test_resume_skips_transcription_via_artifact(app, owner_id, monkeypatch, tmp
         assert "transcription" in resume.get_completed_phases(JobStore.get_by_id(job.id))
 
 
+def test_reprocess_route_resets_resume_state(app, monkeypatch):
+    """Régression : /reprocess d'un job complété doit VIDER l'état de reprise, sinon le
+    pipeline reprenable sauterait toutes les phases (no-op)."""
+    from transcria.jobs.filesystem import JobFilesystem
+    from transcria.jobs.models import JobState
+
+    submits = []
+
+    class _Stub:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            submits.append(mode)
+            return {"accepted": True}
+
+    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _Stub())
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        from transcria.config import get_config
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "Reprocess")
+        JobStore.update_state(job.id, JobState.EXPORT_READY)
+        for ph in ("preprocess", "transcription", "diarization", "correction", "quality", "export"):
+            resume.mark_phase_done(JobStore, job.id, ph)
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job.id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        (fs.job_dir / "input" / "original.wav").write_text("fake")
+        job_id = job.id
+
+    resp = client.post(f"/api/jobs/{job_id}/reprocess", json={"mode": "fast"})
+    assert resp.status_code == 202
+    assert submits == ["fast"]
+    with app.app_context():
+        assert resume.get_completed_phases(JobStore.get_by_id(job_id)) == []  # état de reprise vidé
+
+
 def test_reset_clears_resume_state(app, owner_id, tmp_path):
     with app.app_context():
         job = JobStore.create_job(owner_id, "Reset")
