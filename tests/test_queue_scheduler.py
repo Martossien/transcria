@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from transcria.database import db
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
@@ -9,6 +11,17 @@ from transcria.queue.models import JobQueueEntry, SchedulingWindow
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QUEUE_CANCELLED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
 from transcria.services.job_executor import JobExecutorService
+
+
+@pytest.fixture(autouse=True)
+def _no_real_llm_reclaim(monkeypatch):
+    """Garde-fou : neutralise la récupération VRAM (catégorie 1) dans les tests scheduler.
+
+    Sans cela, sur une machine où la VRAIE LLM d'arbitrage tourne, l'admission d'un job
+    bloqué exécuterait réellement le script d'arrêt. Par défaut « aucune LLM inactive à
+    récupérer » ; les tests qui veulent l'exercer re-patchent explicitement.
+    """
+    monkeypatch.setattr(QueueScheduler, "_reclaim_idle_arbitrage_llm", lambda self: False)
 
 
 def _clear_queue():
@@ -177,6 +190,92 @@ def test_scheduler_uses_peak_vram_profile_for_local_admission(app, owner_id, tmp
         assert launched == []
         assert seen == [12000]
         assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_admission_reclaims_idle_arbitrage_llm_then_dispatches(app, owner_id, tmp_path, monkeypatch):
+    """Catégorie 1 : un job bloqué derrière NOTRE LLM d'arbitrage inactive est dispatché
+    après l'arrêt de la LLM (récupération VRAM à l'admission, sans calendrier)."""
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"phases": {"stt": 6000}})
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+
+        state = {"reclaimed": False, "alloc_calls": 0}
+
+        def fake_can_allocate(required_mb):
+            state["alloc_calls"] += 1
+            return 0 if state["reclaimed"] else None   # libre seulement après reclaim
+
+        def fake_reclaim(self):
+            state["reclaimed"] = True
+            return True
+
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", fake_can_allocate)
+        monkeypatch.setattr(QueueScheduler, "_reclaim_idle_arbitrage_llm", fake_reclaim)
+
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert state["reclaimed"] is True
+        assert state["alloc_calls"] == 2               # 1er échec → reclaim → 2e succès
+        assert dispatched == 1
+        assert launched == [job.id]
+
+
+def test_admission_no_force_free_when_own_only(app, owner_id, tmp_path, monkeypatch):
+    """own-only (défaut) : pas de préemption tierce même dans la fenêtre calendaire."""
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)  # gpu.preemption absent → défaut own-only
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"phases": {"stt": 6000}})
+        scheduler = QueueScheduler(app, cfg, lambda *a: None)
+
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", lambda required_mb: None)
+        monkeypatch.setattr(scheduler.calendar, "is_force_gpu_allowed", lambda *a, **k: True)
+        forced = {"n": 0}
+        monkeypatch.setattr(scheduler.allocator, "force_free_gpu",
+                            lambda *a, **k: forced.__setitem__("n", forced["n"] + 1) or 0)
+
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0
+        assert forced["n"] == 0                        # own-only ne tue jamais de tiers
+        assert QueueStore.get_entry(job.id).status == QUEUE_WAITING
+
+
+def test_admission_force_free_when_aggressive_and_calendar(app, owner_id, tmp_path, monkeypatch):
+    """aggressive + fenêtre calendaire : préemption tierce via force_free_gpu."""
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        cfg["gpu"] = {"preemption": "aggressive"}
+        job = _job_with_audio(owner_id, cfg)
+        QueueStore.enqueue(job.id, mode="fast", vram_profile={"phases": {"stt": 6000}})
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: None)
+
+        forced = {"n": 0}
+        state = {"freed": False}
+
+        def fake_can_allocate(required_mb):
+            return 0 if state["freed"] else None
+
+        def fake_force_free(gpu, allow_kill=False):
+            forced["n"] += 1
+            state["freed"] = True
+            return 26000
+
+        monkeypatch.setattr(scheduler.allocator, "can_allocate", fake_can_allocate)
+        monkeypatch.setattr(scheduler.calendar, "is_force_gpu_allowed", lambda *a, **k: True)
+        monkeypatch.setattr(scheduler.allocator, "force_free_gpu", fake_force_free)
+
+        scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+        assert forced["n"] == 1                        # tier préempté (aggressive + fenêtre)
 
 
 def test_scheduler_ignores_shared_llm_phase_for_initial_admission(app, owner_id, tmp_path, monkeypatch):

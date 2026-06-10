@@ -59,6 +59,20 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         ],
     },
     {
+        "title": "Ressources GPU",
+        "help": "Récupération de la VRAM quand un job est bloqué faute de mémoire GPU.",
+        "fields": [
+            {"path": "gpu.preemption", "label": "Politique de préemption VRAM", "type": "select",
+             "options": ["own-only", "aggressive"],
+             "help": "own-only (recommandé) : n'arrête que NOS process gérés inactifs "
+                     "(LLM d'arbitrage), jamais un process tiers. aggressive : préempte "
+                     "aussi les serveurs d'inférence tiers, uniquement dans la fenêtre "
+                     "calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."},
+            {"path": "gpu.min_free_vram_mb", "label": "VRAM libre minimale (Mo)", "type": "int",
+             "help": "Marge libre exigée en plus du besoin d'une phase avant de l'allouer."},
+        ],
+    },
+    {
         "title": "Sécurité & upload",
         "help": "Limites d'upload et suppression des jobs.",
         "fields": [

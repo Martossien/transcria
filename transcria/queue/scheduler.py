@@ -234,14 +234,56 @@ class QueueScheduler:
             logger.info("Dispatch job différé: VRAM distante insuffisante", extra={"job_id": entry.job_id})
             return False
         required_mb = self._local_required_mb(profile)
+        # `required_mb` exclut déjà la phase `llm_arbitration` quand la LLM est partagée
+        # (`llm_shared`) : un job qui n'a plus que la phase LLM (déjà chaude) est admis
+        # ici sans rien réserver. Ne reste que le besoin des phases NON-LLM (STT/diar).
         if required_mb <= 0:
             return True
         if self.allocator.can_allocate(required_mb) is not None:
             return True
-        if self.calendar.is_force_gpu_allowed():
+
+        # Bloqué : une phase NON-LLM manque de VRAM. Catégorie 1 (TOUJOURS, indépendante
+        # du calendrier) : si NOTRE LLM d'arbitrage inactive occupe la VRAM, on l'arrête
+        # proprement (elle sera relancée à la phase de correction) puis on re-teste. Sans
+        # cela, un job resterait en `waiting` indéfiniment derrière notre propre LLM chaude.
+        if self._reclaim_idle_arbitrage_llm():
+            if self.allocator.can_allocate(required_mb) is not None:
+                return True
+
+        # Catégorie 3 (opt-in `gpu.preemption=aggressive` ET fenêtre calendaire `force_gpu`)
+        # : préempter les serveurs d'inférence TIERS (kill_patterns, process non trackés).
+        if self._preemption_aggressive() and self.calendar.is_force_gpu_allowed():
             self.allocator.force_free_gpu(self.allocator.preferred_gpu, allow_kill=True)
             return self.allocator.can_allocate(required_mb) is not None
         return False
+
+    def _preemption_aggressive(self) -> bool:
+        policy = str((self.config.get("gpu", {}) or {}).get("preemption", "own-only")).strip().lower()
+        return policy == "aggressive"
+
+    def _reclaim_idle_arbitrage_llm(self) -> bool:
+        """Catégorie 1 : arrête NOTRE LLM d'arbitrage inactive pour libérer la VRAM.
+
+        Mutualise la logique avec `WorkflowRunner` via `stop_idle_arbitrage_llm`.
+        Best-effort : ne bloque jamais le dispatch.
+        """
+        try:
+            from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
+
+            return stop_idle_arbitrage_llm(self.allocator, self._vram_manager(), log=logger)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Reclaim LLM d'arbitrage (admission) impossible: %s", exc)
+            return False
+
+    def _vram_manager(self):
+        """VRAMManager paresseux (config seule, sans effet GPU à la construction)."""
+        vram = getattr(self, "_vram", None)
+        if vram is None:
+            from transcria.gpu.vram_manager import VRAMManager
+
+            vram = VRAMManager(self.config)
+            self._vram = vram
+        return vram
 
     def _first_phase_resources_available(self, entry) -> bool:
         # Compatibilité tests/appels historiques : B6.3 utilise désormais

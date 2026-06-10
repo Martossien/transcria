@@ -258,14 +258,25 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   transitions terminales (completed/failed/cancelled) — pas à chaque re-dispatch.
 - **Bandeau in-app** : `base.html` affiche le nombre de jobs en attente (`JobStore.count_waiting_vram`)
   aux administrateurs, via le context processor `inject_vram_waiting_count`.
-- **Déblocage par arrêt de NOTRE LLM inactive** : si un STT manque de VRAM parce que la LLM
-  d'arbitrage (souvent étalée sur tous les GPU via `--tensor-split`) la détient encore, l'attente
-  serait sans fin (rien ne la libère). Avant de renvoyer `vram_wait`, les phases STT appellent
-  `WorkflowRunner._reclaim_vram_from_idle_arbitrage_llm` : si la LLM tourne **et** que le verrou LLM
-  est **libre** (preuve qu'aucun job ne l'utilise), elle est **arrêtée** (`stop_arbitrage_llm` — notre
-  process géré, jamais un tiers) puis la réservation est **retentée une fois**. Si le verrou est
-  détenu (correction/relecture d'un autre job en cours), on ne tue rien et on patiente. Garde-fou
-  multi-job essentiel ; sinon la LLM reste chaude pour le job suivant.
+- **Déblocage par arrêt de NOTRE LLM inactive (catégorie 1, à deux niveaux)** : si un STT/diarisation
+  manque de VRAM parce que la LLM d'arbitrage chaude (souvent étalée sur tous les GPU via
+  `--tensor-split`) la détient encore, l'attente serait sans fin (rien ne la libère). On arrête alors
+  **proprement notre LLM d'arbitrage si elle est inactive** (verrou LLM **libre** = aucun job ne s'en
+  sert ; `stop_arbitrage_llm`, relancée à la phase de correction) — helper partagé
+  `transcria/gpu/vram_reclaim.stop_idle_arbitrage_llm`. Deux points de déclenchement :
+  - **en cours de phase** (`WorkflowRunner`, sur `GPUSessionError`) puis re-réservation ;
+  - **à l'admission du scheduler** (`_resources_available`) **avant** dispatch — indispensable, car
+    sinon un job en file resterait `waiting` indéfiniment derrière notre propre LLM (le reclaim
+    de phase ne tourne jamais tant que le job n'est pas dispatché).
+  On ne stoppe jamais la LLM « pour la phase LLM elle-même » : la phase `llm_arbitration` est déjà
+  ignorée à l'admission quand la LLM est partagée (`llm_shared`). Le besoin déclencheur est toujours
+  une phase **non-LLM**. C'est **notre** process géré, jamais un tiers ; indépendant du calendrier.
+- **Politique `gpu.preemption`** (réglable dans `/admin/config` → « Ressources GPU ») :
+  - `own-only` (**défaut**, infra partagée) : catégorie 1 seulement (nos process trackés inactifs).
+  - `aggressive` : autorise en plus la préemption de serveurs d'inférence **tiers** (`kill_patterns`,
+    process non trackés via `force_free_gpu`), **uniquement dans la fenêtre calendaire `force_gpu`**.
+    À réserver à un GPU dédié à TranscrIA. La distinction « à nous / tiers » s'appuie sur
+    `GPUAllocator._tracked_pids` (PID que nous avons lancés).
 
 **En tout-en-un**, le service ressources est local : une indisponibilité = **crash process**, restauré
 par **systemd** en quelques secondes. Seule la **1ʳᵉ ligne (transitoire)** s'applique alors — le job

@@ -56,6 +56,13 @@ _DEFAULT_CONFIG = {
         "parakeet_vram_mb": 8000,
         "sortformer_vram_mb": 3500,
         "min_free_vram_mb": 4000,
+        # Politique de récupération VRAM à l'admission d'un job bloqué :
+        #   own-only  (défaut) : n'arrête QUE nos propres process gérés inactifs (LLM
+        #                        d'arbitrage trackée) ; ne touche jamais un process tiers.
+        #   aggressive          : préempte aussi les serveurs d'inférence tiers
+        #                        (kill_patterns), UNIQUEMENT dans la fenêtre calendaire
+        #                        `force_gpu`. À réserver à un GPU dédié à TranscrIA.
+        "preemption": "own-only",
     },
     "services": {
         "dashboard_llm_url": "http://127.0.0.1:5001",

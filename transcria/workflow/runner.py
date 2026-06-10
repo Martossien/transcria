@@ -291,31 +291,15 @@ class WorkflowRunner:
         }
 
     def _reclaim_vram_from_idle_arbitrage_llm(self, sl) -> bool:
-        """Tente de libérer de la VRAM en arrêtant NOTRE LLM d'arbitrage si elle est inactive.
+        """Libère la VRAM en arrêtant NOTRE LLM d'arbitrage inactive (catégorie 1).
 
-        N'arrête la LLM que si (a) elle tourne et (b) le verrou LLM est libre — c.-à-d.
-        qu'aucun job ne l'utilise (correction/relecture/résumé en cours). Garde-fou
-        multi-job : on ne tue jamais une LLM en service. Retourne True si on a stoppé la
-        LLM (VRAM potentiellement libérée), False sinon. C'est notre propre process géré
-        (jamais un process tiers — cf. `force_free_gpu`).
+        Délègue au helper partagé `stop_idle_arbitrage_llm` (mutualisé avec l'admission
+        du scheduler). N'arrête la LLM que si elle tourne et que le verrou LLM est libre
+        (aucun job ne l'utilise). Jamais un process tiers.
         """
-        try:
-            if not self.vram.is_arbitrage_llm_running():
-                return False
-            # try_acquire_llm(timeout_s=0) réussit seulement si personne ne détient le
-            # verrou : preuve qu'aucun consommateur actif n'utilise la LLM.
-            if not self.allocator.try_acquire_llm("", timeout_s=0):
-                sl.info("VRAM bloquée par la LLM d'arbitrage, mais elle est en cours d'utilisation — on patiente")
-                return False
-            try:
-                sl.warning("Arrêt de la LLM d'arbitrage (inactive) pour libérer la VRAM d'un STT en attente")
-                self.vram.stop_arbitrage_llm()
-            finally:
-                self.allocator.release_llm("")
-            return True
-        except Exception as exc:  # noqa: BLE001 — best-effort, ne jamais aggraver
-            sl.warning("Libération VRAM via arrêt LLM d'arbitrage impossible: %s", exc)
-            return False
+        from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
+
+        return stop_idle_arbitrage_llm(self.allocator, self.vram, log=sl)
 
     @staticmethod
     def _get_fs(config: dict, job_id: str):
