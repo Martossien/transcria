@@ -144,7 +144,8 @@ transcria/
 │   │
 │   ├── notifications/             # Notifications applicatives
 │   │   ├── __init__.py
-│   │   └── mailer.py              # EmailConfig, build_email_config(), send_job_notification_async(), _send_smtp()
+│   │   ├── mailer.py              # EmailConfig, build_email_config(), send_job_notification_async(), send_admin_vram_alert_async(), _send_smtp()
+│   │   └── admin_alerts.py        # get_admin_emails(), alert_admin_vram_wait() — alerte ADMIN « en attente de VRAM » (e-mail + log)
 │   │
 │   ├── services/                  # Services métier
 │   │   ├── job_executor.py       # JobExecutorService (worker thread) + _notify() hook email
@@ -207,6 +208,7 @@ transcria/
 │   ├── test_job_service.py        # 2 tests — JobService
 │   ├── test_job_store.py          # 15 tests — JobStore CRUD, purge rétention
 │   ├── test_jobs.py               # 19 tests — Job model, filesystem
+│   ├── test_job_executor_vram_wait.py # 2 tests — re-queue + alerte admin sur VRAM, mode summary
 │   ├── test_mailer.py             # 20 tests — EmailConfig, templates, async dispatch, modes SMTP
 │   ├── test_opencode_runner.py    # 54 tests — opencode, parsing résumé, correction
 │   ├── test_pipeline_service.py   # 19 tests — Analyse de scène, séparation, filtrage, normalisation, ordre pipeline
@@ -219,6 +221,7 @@ transcria/
 │   ├── test_summary_generator.py  # 1 test — Résumé rapide
 │   ├── test_voice.py              # 13 tests — VoiceStore, empreintes, matching
 │   ├── test_voice_e2e.py          # 1 test — Flux E2E voix enregistrées
+│   ├── test_vram_wait.py          # 9 tests — attente VRAM (transitions, comptage, alerte admin, route résumé, invitation)
 │   ├── test_web_api.py            # 54 tests — Routes web (login, jobs, upload, admin config, lexique debug)
 │   ├── test_web_edge_cases.py     # 53 tests — Erreurs API, rôles, accès jobs, pipeline
 │   ├── test_web_helpers.py        # 13 tests — Helpers web (audio diagnostic, enrichissement lexique, locuteurs)
@@ -554,7 +557,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`) et le transmet à `run_summary` | GPUSession auto |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`) et le transmet à `run_summary`. Sur VRAM insuffisante au STT rapide, restaure l'état pré-résumé et renvoie `{"vram_wait": True, ...}` (au lieu de FAILED) — l'appelant met en attente + enfile la reprise serveur | GPUSession auto |
 | `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. Applique d'abord `apply_speaker_hint(config, job.extra_data["speaker_hint"])`. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
@@ -1151,6 +1154,7 @@ Flux normal :
 4. Le pipeline réserve la VRAM au moment exact de chaque phase via `GPUAllocator`/`GPUSession`; le scheduler ne double-réserve pas.
 5. En mode queue, `JobExecutorService` appelle `PipelineService.run_process(..., finalize_job_state=False)`, puis publie l'état terminal dans l'ordre `job_queue.status` → `extra_data.execution.status` → `jobs.state`.
 6. En fin de pipeline, l'entrée de file passe en `done`, `failed` ou `cancelled`.
+7. **VRAM insuffisante (transitoire)** : si une phase renvoie `vram_wait`, `_run_process` ne marque pas FAILED — il re-queue (`requeue_later`) + `mark_execution_waiting_vram` (statut non terminal) et alerte l'admin une fois (`alert_admin_vram_wait`). Le scheduler reprend dès que l'admission VRAM passe. Le **résumé synchrone** réutilise ce chemin via le mode de file `summary` (`JobExecutorService.SUMMARY_MODE`) : `_run_process` y exécute `run_summary` au lieu du pipeline et ne marque ni `COMPLETED` ni e-mail propriétaire (l'état est géré par `run_summary`). Voir `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis.
 
 Règles calendrier :
 

@@ -68,7 +68,8 @@
 
 | Clé | Écrite par | Contenu |
 |---|---|---|
-| `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`), `mode`, timestamps, `cancel_requested` |
+| `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`, plus `waiting_vram` non terminal en cas de VRAM insuffisante transitoire), `mode`, timestamps, `cancel_requested`, `required_vram_mb`/`phase` (si `waiting_vram`) |
+| `vram_alert_sent` | `mark_execution_waiting_vram` | Drapeau anti-spam de l'alerte admin VRAM. Levé à la 1ʳᵉ entrée en attente, réarmé seulement aux transitions terminales (`completed`/`failed`/`cancelled`). |
 | `workflow_progress` | `WorkflowProgressReporter` | Progression UI courte : `step`, `phase`, `message`, `percent` optionnel, `updated_at`. Exposée par `/api/jobs/<id>/status`; messages non confidentiels et écritures throttlées |
 | `meeting_context` | recouvrement de contexte | langue, métadonnées de réunion |
 | `last_non_terminal_state` | reprise | dernier état non terminal connu |
@@ -100,7 +101,7 @@ File persistante utilisée par `QueueScheduler` quand `workflow.queue.enabled=tr
 | `paused_by` | String(36) | FK → users.id, nullable | Utilisateur ayant mis en pause |
 | `mode` | String(20) | NOT NULL, default="fast" | Mode `fast` ou `quality` |
 
-`job_queue.status` est distinct de `jobs.state`. Le workflow utilisateur reste porté par `JobState`; l'état de file est un état d'exécution runtime. `extra_data.execution.status` garde aussi la trace `queued → running → completed|failed|cancelled` pour la reprise et les APIs de polling.
+`job_queue.status` est distinct de `jobs.state`. Le workflow utilisateur reste porté par `JobState`; l'état de file est un état d'exécution runtime. `extra_data.execution.status` garde aussi la trace `queued → running → completed|failed|cancelled` pour la reprise et les APIs de polling. Un statut **`waiting_vram`** (non terminal) signale une VRAM locale momentanément insuffisante : le job re-queue et reprend automatiquement, sans passer par `failed` (cf. `mark_execution_waiting_vram`, `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis).
 
 ### Table `scheduling_windows`
 

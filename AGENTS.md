@@ -112,7 +112,7 @@ transcria/
       steps.py              # WORKFLOW_STEPS (9 étapes)
       progress.py           # WorkflowProgressReporter — progression UI persistée dans jobs.extra_data_json["workflow_progress"]
       runner.py             # WorkflowRunner — exécution des étapes
-      transitions.py        # logique lancement / annulation / reprise
+      transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
       converter.py          # AudioConverter (ffmpeg)
@@ -192,7 +192,8 @@ transcria/
       resource_gate.py      # prepare_remote_resources() — pré-vol admission + auto-lancement STT
     notifications/
       __init__.py
-      mailer.py             # EmailConfig, build_email_config(), send_job_notification_async() — SMTP fire-and-forget daemon thread
+      mailer.py             # EmailConfig, build_email_config(), send_job_notification_async(), send_admin_vram_alert_async() — SMTP fire-and-forget daemon thread
+      admin_alerts.py       # get_admin_emails() + alert_admin_vram_wait() — alerte ADMIN « job en attente de VRAM » (e-mail + log WARNING), best-effort
     services/
       job_executor.py       # JobExecutorService — worker interne (thread) + _notify() hook email après COMPLETED/FAILED
       job_service.py        # JobService
@@ -410,6 +411,8 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 
 **Contrat d'état pendant le résumé :** `run_summary()` reste en `SUMMARY_RUNNING` du début jusqu'à `SUMMARY_DONE`. Sa sous-phase de diarisation appelle `run_speaker_detection(..., update_state=False)` : elle **ne doit pas** publier `SPEAKER_DETECTION_RUNNING`/`DONE` (états « en avant » du wizard, classés étape Participants), sinon `compute_statuses()` marquerait `summary=DONE` et le template afficherait un cadre « Contexte » vide avant que `meeting_context.json` ne soit écrit. La diarisation y est best-effort (un échec n'écrase pas l'état, le résumé poursuit). Les états `SPEAKER_DETECTION_*` ne sont publiés que par la détection manuelle (`POST /api/jobs/<id>/speakers/detect`), après `SUMMARY_DONE`.
 
+**VRAM insuffisante = attente, jamais FAILED :** une indisponibilité VRAM est transitoire. Les phases GPU (`run_transcription`, `run_diarization`, `run_speaker_detection`, `_run_quick_transcription`) renvoient un signal `{"vram_wait": True, "required_mb", "phase"}` au lieu d'appeler `update_state(FAILED)` ; seul le `except Exception` générique reste un échec réel. **File principale** : `PipelineService` propage `vram_wait`, `JobExecutorService._run_process` re-queue (`requeue_later`) + `mark_execution_waiting_vram` (statut d'exécution non terminal) — pas d'e-mail d'échec propriétaire ; le scheduler reprend dès admission VRAM possible. **Résumé synchrone** : `api_summary` restaure l'état pré-résumé et **enfile une reprise serveur** (mode de file `summary`, profil VRAM `summary_stt`) que le scheduler reprend même sans page ouverte ; `_run_process` exécute alors `run_summary` (qui pose `SUMMARY_DONE`/`FAILED`) sans marquer `COMPLETED` ni notifier le propriétaire. Le wizard poll `GET /status` et recharge à `summary_done` (`api_summary` refuse une relance synchrone tant qu'une entrée `summary` est active → pas de double-run). L'admin est alerté **une seule fois** par épisode (`alert_admin_vram_wait` : e-mail + log + bandeau `JobStore.count_waiting_vram`) ; anti-spam via le drapeau persistant `extra_data.vram_alert_sent`, réarmé seulement aux transitions terminales. TranscrIA **ne tue jamais** un process GPU tiers. Voir `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis.
+
 **Garde anti-concurrence des phases synchrones :** `api_summary` et `api_speakers_detect` exécutent leur pipeline dans le thread HTTP et publient un état `RUNNING` pour toute leur durée. Ils renvoient `409` si le job est déjà `SUMMARY_RUNNING` / `SPEAKER_DETECTION_RUNNING` (anti double-lancement GPU et course sur `meeting_context.json`). `api_process` garde déjà la file via `can_start_processing` + `is_execution_active`.
 
 ### Modèle service/worker
@@ -417,7 +420,7 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 
 **Montée en charge (Phase B, PostgreSQL requis)** : un **rôle** sépare le tier HTTP de l'orchestrateur — `runtime.role`/`TRANSCRIA_ROLE` ∈ `all` (défaut, tout-en-un) | `web` (gunicorn -w N, n'exécute pas la file) | `scheduler` (process unique qui draine la file). Garde-fous : claim de job atomique (`QueueStore.claim`, `FOR UPDATE SKIP LOCKED`), **ordonnanceur unique** par verrou consultatif PG (`scheduler_lock.py`), réveil optionnel `LISTEN/NOTIFY` (`workflow.queue.use_listen_notify`, sinon polling), **failover actif/passif** des nœuds de ressources (`inference.nodes`). Détail : `docs/CONCURRENCE_ET_CHARGE_PHASE_B.md`. Ne jamais lancer le tier `web` avec un contexte GPU : le GPU reste dans l'orchestrateur/le nœud.
 
-**Notifications email** : `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED)` ou `JobStore.update_state(FAILED)`. `_notify` délègue à `send_job_notification_async()` (module `transcria/notifications/mailer.py`) qui envoie l'email en daemon thread — jamais bloquant, absorbe toute exception. La configuration SMTP est dans `notifications.email` (`enabled`, `smtp_host`, `smtp_port`, `use_starttls`, `use_ssl`, `from_address`, `base_url`). Si `enabled=false` ou si l'adresse email de l'utilisateur est vide, aucune notification n'est envoyée.
+**Notifications email** : `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED)` ou `JobStore.update_state(FAILED)`. `_notify` délègue à `send_job_notification_async()` (module `transcria/notifications/mailer.py`) qui envoie l'email en daemon thread — jamais bloquant, absorbe toute exception. La configuration SMTP est dans `notifications.email` (`enabled`, `smtp_host`, `smtp_port`, `use_starttls`, `use_ssl`, `from_address`, `base_url`). Si `enabled=false` ou si l'adresse email de l'utilisateur est vide, aucune notification n'est envoyée. **Alerte admin VRAM** : à part du flux propriétaire ci-dessus, `notifications/admin_alerts.alert_admin_vram_wait()` prévient les comptes **ADMIN** actifs (`send_admin_vram_alert_async`) quand un job entre en attente de VRAM — une seule fois par épisode (cf. contrat d'état VRAM ci-dessus).
 
 Les états de file restent dans `job_queue.status` (`waiting`, `paused`, `running`, `done`, `failed`, `cancelled`) et dans `extra_data.execution.status`; ne pas ajouter d'états `QUEUED` ou `WAITING_RESOURCES` à `JobState` sans revoir `WorkflowState`, `WORKFLOW_STEPS` et la documentation. En mode queue, `PipelineService.run_process(..., finalize_job_state=False)` laisse `JobExecutorService` publier les états terminaux dans l'ordre `job_queue` → `extra_data.execution` → `jobs.state`; ne pas remettre un `JobState.COMPLETED` direct dans le pipeline queue, cela recrée une course visible par l'API. Les routes sensibles de file/calendrier doivent être auditées via `audit_log()`.
 
