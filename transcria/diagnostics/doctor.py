@@ -24,7 +24,7 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 OK = "ok"
 WARN = "warn"
@@ -255,6 +255,70 @@ def check_opencode(
     return CheckResult(name, OK, f"trouvé : {resolved}")
 
 
+def check_opencode_smoke(
+    cfg: dict,
+    *,
+    runner_factory: Callable[..., Any] | None = None,
+) -> CheckResult:
+    """Test RÉEL opencode → LLM → texte (opt-in `--llm-smoke`).
+
+    Lance opencode avec une consigne triviale et vérifie qu'il **produit du texte**.
+    Attrape la classe de panne « opencode exit 0 mais 0 texte » (incident e62295c1).
+    Nécessite la LLM d'arbitrage up et consomme de la VRAM — d'où l'opt-in (ce test
+    rompt le contrat GPU-free / sans effet de bord du préflight par défaut).
+    """
+    name = "Production LLM (opencode smoke)"
+    workflow = cfg.get("workflow", {})
+    if not (workflow.get("summary_llm", {}).get("enabled", False)
+            or workflow.get("arbitration_llm", {}).get("enabled", False)):
+        return CheckResult(name, OK, "phases LLM désactivées — smoke non requis")
+
+    import tempfile
+    from pathlib import Path
+
+    services = cfg.get("services", {})
+    port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
+    log_path = services.get("arbitrage_log_path") or f"/tmp/arbitrage_llm_{port}.log"
+
+    if runner_factory is None:
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+
+        runner_factory = OpenCodeRunner
+
+    try:
+        timeout_s = int(workflow.get("arbitration_llm", {}).get("smoke_timeout_seconds", 120))
+    except (TypeError, ValueError):
+        timeout_s = 120
+
+    with tempfile.TemporaryDirectory(prefix="transcria_doctor_smoke_") as tmp:
+        work = Path(tmp)
+        prompt_file = work / "smoke_prompt.txt"
+        prompt_file.write_text("Tu es un assistant de test de diagnostic. Suis exactement la consigne.", encoding="utf-8")
+        runner = runner_factory(str(work), config=cfg)
+        result = runner.run(
+            "Écris exactement le texte « OK » dans un fichier nommé smoke.md, sans rien d'autre.",
+            str(prompt_file),
+            timeout=timeout_s,
+        )
+        if not result.get("success"):
+            return CheckResult(
+                name, FAIL, f"opencode a échoué : {result.get('error', 'inconnu')}",
+                hint=f"Vérifier la LLM d'arbitrage (port {port}) et lire {log_path}.",
+            )
+        smoke = work / "smoke.md"
+        produced = bool(result.get("output")) or (
+            smoke.is_file() and bool(smoke.read_text(encoding="utf-8").strip())
+        )
+        if not produced:
+            return CheckResult(
+                name, FAIL,
+                "opencode a terminé (exit 0) mais la LLM n'a produit AUCUN texte ni fichier",
+                hint="La LLM démarre mais ne génère rien (transcript/contexte trop long, modèle ou "
+                     f"prompt inadapté). Lire {log_path}.",
+            )
+    return CheckResult(name, OK, f"opencode → LLM → texte : production confirmée (port {port})")
+
+
 def check_inference_nodes(
     cfg: dict,
     *,
@@ -376,9 +440,16 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
 )
 
 
-def run_doctor(config_path: str | None = None, *, loader: Callable[..., dict] | None = None) -> list[CheckResult]:
+def run_doctor(
+    config_path: str | None = None,
+    *,
+    loader: Callable[..., dict] | None = None,
+    llm_smoke: bool = False,
+) -> list[CheckResult]:
     """Charge la config puis exécute toutes les vérifications. La config illisible
-    court-circuite (un seul ``fail``, le reste dépend d'elle)."""
+    court-circuite (un seul ``fail``, le reste dépend d'elle).
+
+    `llm_smoke=True` ajoute le test réel opencode→LLM→texte (opt-in, non GPU-free)."""
     if loader is None:
         from transcria.config.loader import load_config
 
@@ -391,7 +462,8 @@ def run_doctor(config_path: str | None = None, *, loader: Callable[..., dict] | 
 
     path_used = config_path or os.environ.get("TRANSCRIA_CONFIG") or "config.yaml"
     results = [CheckResult("Configuration", OK, f"chargée ({path_used})")]
-    for check in _CHECKS:
+    checks = (*_CHECKS, check_opencode_smoke) if llm_smoke else _CHECKS
+    for check in checks:
         try:
             results.append(check(cfg))
         except Exception as exc:  # noqa: BLE001 — une vérif ne doit jamais crasher le doctor
@@ -445,9 +517,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default=None, help="chemin de config.yaml (défaut : TRANSCRIA_CONFIG ou ./config.yaml)")
     parser.add_argument("--strict", action="store_true", help="traiter les avertissements comme des échecs (code de sortie ≠ 0)")
     parser.add_argument("--json", action="store_true", help="sortie JSON (pour l'outillage / CI)")
+    parser.add_argument("--llm-smoke", action="store_true",
+                        help="ajoute un test RÉEL opencode→LLM→texte (nécessite la LLM up + VRAM ; non GPU-free)")
     args = parser.parse_args(argv)
 
-    results = run_doctor(config_path=args.config)
+    results = run_doctor(config_path=args.config, llm_smoke=args.llm_smoke)
     if args.json:
         import json
 

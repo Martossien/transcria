@@ -105,6 +105,18 @@ var TranscrIA = window.TranscrIA || {};
                 W.pollSummaryResume();
                 return;
             }
+            if (r.data.summary_llm_failed) {
+                // La LLM n'a rien produit après 3 tentatives : transcript conservé, job
+                // non validé mais relançable (la relance réutilise le STT en cache).
+                var failMsg = r.data.message ||
+                    'Le résumé n\'a pas pu être généré (LLM sans production après 3 tentatives). ' +
+                    'La transcription est conservée — vous pouvez relancer.';
+                document.getElementById('summary-result').innerHTML =
+                    '<div class="alert alert-warning">' + W.escapeHtml(failMsg) +
+                    '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="TranscrIA.generateSummary()">' +
+                    'Relancer le résumé</button></div></div>';
+                return;
+            }
             if (r.data.error) {
                 document.getElementById('summary-result').innerHTML =
                     '<div class="alert alert-danger">' + r.data.error + '</div>';

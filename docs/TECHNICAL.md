@@ -42,7 +42,7 @@ transcria/
 │   ├── __init__.py
 │   ├── config/                    # loader.py, config_schema.py, system_detector.py
 │   ├── database.py                # Instance SQLAlchemy
-│   ├── diagnostics/               # doctor.py — préflight GPU-free (config, schéma DB, LLM, opencode, nœuds, dossiers)
+│   ├── diagnostics/               # doctor.py — préflight GPU-free (config, schéma DB, LLM, opencode, nœuds, dossiers) ; `--llm-smoke` opt-in = test réel opencode→LLM→texte
 │   ├── logging_setup.py           # Configuration logging (RotatingFileHandler)
 │   │
 │   ├── auth/                      # Authentification & rôles
@@ -557,7 +557,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`) et le transmet à `run_summary`. Sur VRAM insuffisante au STT rapide, restaure l'état pré-résumé et renvoie `{"vram_wait": True, ...}` (au lieu de FAILED) — l'appelant met en attente + enfile la reprise serveur | GPUSession auto |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Réutilise le transcript en cache (`_load_cached_quick_summary`) pour éviter de refaire le STT à une relance. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`). Sur VRAM insuffisante au STT rapide, restaure l'état pré-résumé et renvoie `{"vram_wait": True, ...}` — l'appelant met en attente + enfile la reprise serveur. Si la LLM ne produit rien après **3 tentatives** (`_run_llm_summary`), renvoie `{"summary_llm_failed": True}` : pas de `SUMMARY_DONE`, `meeting_context` non corrompu, relançable | GPUSession auto |
 | `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. Applique d'abord `apply_speaker_hint(config, job.extra_data["speaker_hint"])`. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
@@ -1040,7 +1040,7 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 |---|---|
 | `__init__(work_dir, model, provider, opencode_bin, config)` | Initialise avec répertoire de travail, modèle et binaire opencode configurables |
 | `run(instruction, prompt_file, timeout)` | Lance `opencode run --format json --model {provider}/{model}` via `subprocess.Popen` → parse NDJSON → retourne {success, output, files, events_count, tool_calls} |
-| `run_summary(transcript_path, context_path, diarization_context_path, invite_path=None)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible et, si `invite_path` pointe vers un fichier existant, ajoute une clause d'instruction marquant le brief d'invitation comme **indicatif** (orthographe des noms / rôles / ordre du jour, sans forcer de correspondance 1:1). Lit le `summary.md` produit et le parse |
+| `run_summary(transcript_path, context_path, diarization_context_path, invite_path=None)` | Génère un résumé structuré via opencode + LLM d'arbitrage. Inclut la diarization acoustique si disponible et, si `invite_path` pointe vers un fichier existant, ajoute une clause d'instruction marquant le brief d'invitation comme **indicatif** (orthographe des noms / rôles / ordre du jour, sans forcer de correspondance 1:1). Vérifie qu'opencode a **réellement (ré)écrit** `summary.md` (mtime avant/après) ou émis du texte → expose `_summary_produced` ; le placeholder de `SummaryGenerator` n'est jamais parsé comme résumé |
 | `run_correction(srt_path, context_path, lexicon_path)` | Correction SRT : lit transcription.srt + job_context.yaml + lexique filtré, écrit transcription_corrigee.srt + correction_report.md |
 | `run_final_review(srt_path, summary_path, glossary_path, structured_data_path)` | Relecture finale en une session (prompt dédié `final_review_prompt.txt`, @general obligatoire pour le SRT) : A harmonise la synthèse, C+D fiabilisent cohérence/variantes du SRT, G audite les données structurées. Lit `summary_harmonized.md`, `transcription_reviewed.srt`, `structured_data_reviewed.json`, `final_review_report.md`. Glossaire bâti par `build_harmonization_glossary(participants, lexicon)` (fonction pure : noms validés + formes canoniques ← variantes) |
 | `_parse_structured_summary(text)` | Parse le markdown LLM en dictionnaire avec regex (title_suggere, type_suggere, sujet_suggere, objectif_suggere, notes_suggeres, participants_detectes, mots_cles, speaker_count, termes_suspects). Applique `_strip_role_gender()` sur chaque ligne `## Participants probables` pour retirer un genre (Masculin/Féminin, ♂/♀) que la LLM aurait recopié dans le rôle (le genre a un champ dédié) |
@@ -1534,7 +1534,8 @@ cd transcria && python -m pytest tests/ -v
 | `test_config.py` | 40 | Chargement YAML, sauvegarde config, env var, debug |
 | `test_context.py` | 27 | Meeting, participants, lexique, builder |
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
-| `test_doctor.py` | 31 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code |
+| `test_doctor.py` | 37 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code, smoke opencode→LLM (`--llm-smoke`) |
+| `test_incident_e62295c1.py` | 9 | Suites incident : détection « 0 texte » LLM (mtime), retry ≤3 + `summary_llm_failed` relançable, saut STT en cache, arrêt LLM inactive pour débloquer un STT |
 | `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |
 | `test_gpu.py` | 72 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée, diagnostic lancement LLM |

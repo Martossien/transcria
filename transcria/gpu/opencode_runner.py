@@ -548,38 +548,52 @@ class OpenCodeRunner:
             "dans un fichier summary.md en suivant scrupuleusement le format du prompt système."
         )
 
+        # `summary.md` contient déjà le placeholder écrit par SummaryGenerator. La seule
+        # preuve fiable qu'opencode a produit un résumé est qu'il l'ait RÉÉCRIT (mtime
+        # postérieur) — ou, à défaut, qu'il ait émis du texte sur stdout. On capture donc
+        # le mtime AVANT le run. (On n'utilise pas un glob *.md : meeting_invite.md /
+        # diarization_context.md sont écrits juste avant opencode et seraient pris à tort.)
+        summary_file = self.work_dir / "summary.md"
+        mtime_before = summary_file.stat().st_mtime if summary_file.is_file() else 0.0
+
         result = self.run(
             instruction,
             prompt_file,
             timeout=self._get_summary_timeout(),
         )
         summary_text = ""
-        parsed = {}
+        produced = False
+        parsed: dict = {}
 
         if result["success"]:
-            summary_file = self.work_dir / "summary.md"
-            if summary_file.is_file():
+            rewrote = summary_file.is_file() and summary_file.stat().st_mtime > mtime_before
+            if rewrote:
                 summary_text = summary_file.read_text(encoding="utf-8").strip()
-            else:
-                logger.warning("run_summary: summary.md absent de %s — recherche de fallback *.md", self.work_dir)
-                for f in sorted(self.work_dir.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
-                    summary_text = f.read_text(encoding="utf-8").strip()
-                    logger.warning("run_summary: fallback sur %s (%d octets)", f.name, len(summary_text))
-                    break
-            if not summary_text and result["output"]:
-                logger.warning("run_summary: aucun fichier .md trouvé, repli sur stdout (%d octets)", len(result["output"]))
-                summary_text = result["output"]
+                produced = bool(summary_text)
+            elif result.get("output"):
+                # opencode a produit du texte sur stdout sans (ré)écrire summary.md.
+                logger.warning("run_summary: summary.md non réécrit — repli sur stdout (%d octets)",
+                               len(result["output"]))
+                summary_text = result["output"].strip()
+                produced = bool(summary_text)
 
-        if not summary_text:
-            logger.warning(
-                "run_summary: résumé vide après opencode (events=%d, output=%d octets) — meeting_context ne sera pas mis à jour",
-                result.get("events_count", 0),
-                len(result.get("output", "")),
-            )
-        else:
+        if produced:
             parsed = self._parse_structured_summary(summary_text)
+        else:
+            # opencode terminé mais SANS production (n'a ni réécrit summary.md ni émis de
+            # texte) : le summary.md présent est le placeholder → on ne le parse PAS et on
+            # ne le stocke PAS. L'appelant décide (retry / échec relançable).
+            logger.warning(
+                "run_summary: aucun résumé produit par la LLM (success=%s, summary.md réécrit=%s, "
+                "output=%d octets, events=%d) — placeholder ignoré, meeting_context non mis à jour",
+                result.get("success"),
+                bool(result.get("success") and summary_file.is_file() and summary_file.stat().st_mtime > mtime_before),
+                len(result.get("output", "")),
+                result.get("events_count", 0),
+            )
 
-        parsed["summary_text"] = summary_text or "Résumé indisponible."
+        parsed["_summary_produced"] = produced
+        parsed["summary_text"] = summary_text if produced else "Résumé indisponible."
         return parsed
 
     @staticmethod

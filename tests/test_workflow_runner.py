@@ -718,6 +718,7 @@ class TestWorkflowRunnerRunSummary:
                 fs_dir = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
                 fs_dir.save_text("summary/summary.md", "# Résumé\n\n**Titre suggéré :** Budget Q1\n")
                 return {
+                    "_summary_produced": True,
                     "summary_text": "# Résumé\n\n**Titre suggéré :** Budget Q1\n",
                     "title_suggere": "Budget Q1",
                     "type_suggere": "Réunion interne",

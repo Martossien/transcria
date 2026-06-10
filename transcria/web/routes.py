@@ -74,6 +74,13 @@ _VRAM_WAIT_MESSAGE = (
     "Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
 )
 
+_SUMMARY_LLM_FAILED_MESSAGE = (
+    "Le résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte "
+    "après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). "
+    "La transcription rapide est conservée — vous pouvez relancer le résumé "
+    "(diagnostic : transcria doctor --llm-smoke)."
+)
+
 
 def _summary_vram_profile(cfg: dict) -> dict:
     """Profil VRAM d'une reprise serveur du résumé : pilote l'admission du scheduler.
@@ -1231,6 +1238,15 @@ def api_summary(job_id: str):
             "required_mb": required_mb,
             "phase": phase,
             "message": _VRAM_WAIT_MESSAGE,
+        })
+
+    if result.get("summary_llm_failed"):
+        # La LLM d'arbitrage n'a rien produit après 3 tentatives : le résumé n'est PAS
+        # validé (meeting_context non corrompu, job non SUMMARY_DONE), mais relançable.
+        return jsonify({
+            "summary_llm_failed": True,
+            "attempts": 3,
+            "message": _SUMMARY_LLM_FAILED_MESSAGE,
         })
 
     return jsonify(result)

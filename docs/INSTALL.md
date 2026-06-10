@@ -1256,6 +1256,17 @@ avertissements deviennent des échecs). Code de sortie **0** si aucun échec blo
 **1** sinon — utilisable dans un script de déploiement (« ne démarre pas si rouge »).
 Chaque ligne en `WARN`/`FAIL` affiche une piste de correction (`↳`).
 
+**Test approfondi de production LLM** — `--llm-smoke` (opt-in) lance *réellement*
+opencode contre la LLM d'arbitrage avec une consigne triviale et vérifie qu'elle
+**produit du texte**. Il attrape la panne « opencode exit 0 mais 0 texte » (résumé
+silencieusement vide). Contrairement au préflight par défaut (GPU-free, sans effet de
+bord), ce test **nécessite la LLM up et consomme de la VRAM** — à lancer avant un gros
+batch ou après un changement de modèle/prompt :
+
+```bash
+venv/bin/python scripts/doctor.py --llm-smoke
+```
+
 > Exemple typique attrapé par le doctor : après un `git pull`, la base n'avait pas
 > reçu `alembic upgrade head` → la colonne `job_queue.error_message` manquait. Le
 > doctor l'affiche en `FAIL` (« schéma dérivé ») avec la commande à lancer, au lieu

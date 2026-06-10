@@ -278,8 +278,67 @@ def test_format_report_contains_statuses():
 
 
 def test_main_json_and_exit_code(capsys, monkeypatch):
-    monkeypatch.setattr(doc, "run_doctor", lambda config_path=None: [doc.CheckResult("X", doc.FAIL, "d")])
+    monkeypatch.setattr(doc, "run_doctor", lambda config_path=None, llm_smoke=False: [doc.CheckResult("X", doc.FAIL, "d")])
     code = doc.main(["--json"])
     out = capsys.readouterr().out
     assert code == doc.EXIT_FAIL
     assert '"status"' in out and "FAIL".lower() in out.lower()
+
+
+# ── check_opencode_smoke (--llm-smoke) ────────────────────────────────────
+
+_LLM_CFG = {"workflow": {"summary_llm": {"enabled": True}, "arbitration_llm": {"model_id": "local/t"}}}
+
+
+def _stub_runner_factory(run_result, *, write_smoke=None):
+    class _StubRunner:
+        def __init__(self, work_dir, config=None):
+            self.work_dir = work_dir
+
+        def run(self, instruction, prompt_file, timeout=600):
+            if write_smoke is not None:
+                from pathlib import Path
+                (Path(self.work_dir) / "smoke.md").write_text(write_smoke, encoding="utf-8")
+            return run_result
+
+    return lambda work_dir, config=None: _StubRunner(work_dir, config)
+
+
+def test_opencode_smoke_ok_when_text_produced():
+    factory = _stub_runner_factory({"success": True, "output": "OK", "files": []})
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    assert res.status == doc.OK
+
+
+def test_opencode_smoke_ok_when_file_written():
+    factory = _stub_runner_factory({"success": True, "output": "", "files": []}, write_smoke="OK")
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    assert res.status == doc.OK
+
+
+def test_opencode_smoke_fail_when_zero_text():
+    # opencode exit 0 mais aucun texte ni fichier : la panne de l'incident e62295c1.
+    factory = _stub_runner_factory({"success": True, "output": "", "files": [], "events_count": 9})
+    res = doc.check_opencode_smoke(_LLM_CFG, runner_factory=factory)
+    assert res.status == doc.FAIL
+    assert "aucun texte" in res.detail.lower()
+
+
+def test_opencode_smoke_skipped_when_llm_disabled():
+    res = doc.check_opencode_smoke({"workflow": {"summary_llm": {"enabled": False}, "arbitration_llm": {"enabled": False}}})
+    assert res.status == doc.OK
+    assert "désactivées" in res.detail
+
+
+def test_run_doctor_excludes_smoke_by_default(monkeypatch):
+    monkeypatch.setattr(doc, "_CHECKS", ())
+    names = [r.name for r in doc.run_doctor(loader=lambda p: _LLM_CFG, llm_smoke=False)]
+    assert not any("smoke" in n.lower() for n in names)
+
+
+def test_run_doctor_includes_smoke_when_requested(monkeypatch):
+    monkeypatch.setattr(doc, "_CHECKS", ())
+    monkeypatch.setattr(doc, "check_opencode_smoke",
+                        lambda cfg: doc.CheckResult("Production LLM (opencode smoke)", doc.OK, "ok"))
+    names = [r.name for r in doc.run_doctor(loader=lambda p: _LLM_CFG, llm_smoke=True)]
+    assert any("smoke" in n.lower() for n in names)

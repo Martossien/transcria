@@ -162,8 +162,17 @@ class WorkflowRunner:
         sl.info("━━━ DÉBUT résumé ━━━")
 
         backend = config.get("models", {}).get("stt_backend", "cohere")
-        sl.info("[1/3] STT rapide — chargement GPU", backend=backend)
-        result = self._run_quick_transcription(job, audio_path, config, sl)
+        # Relance bon marché : si un transcript rapide valide existe déjà (ex. après un
+        # échec LLM relançable, ou une régénération), on le réutilise au lieu de relancer
+        # le STT GPU. La transcription est déterministe sur le même audio.
+        cached = self._load_cached_quick_summary(config, job.id)
+        if cached is not None:
+            sl.info("[1/3] STT rapide — réutilisation du transcript en cache (pas de GPU)",
+                    backend=backend, segments=cached.get("segment_count", 0))
+            result = cached
+        else:
+            sl.info("[1/3] STT rapide — chargement GPU", backend=backend)
+            result = self._run_quick_transcription(job, audio_path, config, sl)
         sl.info(
             "[1/3] STT rapide terminé — %d segments, %.1fs",
             result.get("segment_count", 0),
@@ -226,11 +235,87 @@ class WorkflowRunner:
         self._run_llm_summary(job, result, config, sl)
         sl.info("[4/4] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
+        if result.get("summary_llm_failed"):
+            # La LLM n'a rien produit après retries : on NE valide PAS le résumé (pas de
+            # SUMMARY_DONE, meeting_context non corrompu). Le job revient à son état
+            # pré-résumé → relançable via « Générer le résumé » (STT réutilisé du cache).
+            from transcria.workflow.transitions import utcnow_iso
+
+            self.store.update_extra_data(
+                job.id,
+                lambda extra: {**extra, "summary_llm_failed": {"attempts": 3, "at": utcnow_iso()}},
+            )
+            try:
+                self.store.update_state(job.id, JobState(prior_state))
+            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
+                pass
+            self.progress.clear(job.id)
+            sl.info("━━━ FIN résumé (LLM non produite — relançable) ━━━ (%.1fs total)",
+                    time.monotonic() - t0)
+            return result
+
+        # Succès : effacer un éventuel drapeau d'échec antérieur, puis valider le résumé.
+        self.store.update_extra_data(
+            job.id, lambda extra: {k: v for k, v in extra.items() if k != "summary_llm_failed"}
+        )
         self.store.update_state(job.id, JobState.SUMMARY_DONE)
         self.progress.clear(job.id)
         sl.info("━━━ FIN résumé ━━━ (%.1fs total)", time.monotonic() - t0,
                 transcript_chars=len(result.get("transcript_text", "")))
         return result
+
+    def _load_cached_quick_summary(self, config: dict, job_id: str) -> dict | None:
+        """Reconstruit le résultat du STT rapide depuis le disque, ou None si absent.
+
+        Permet de relancer un résumé (ex. après un échec LLM) sans refaire le STT GPU :
+        la transcription est déterministe sur le même audio. Exige un transcript ET des
+        segments non vides pour être considérée valide.
+        """
+        try:
+            fs = self._get_fs(config, job_id)
+            transcript_text = fs.load_text("summary/quick_transcript.txt")
+            summary_json = fs.load_json("summary/summary.json") or {}
+        except Exception:  # noqa: BLE001 — disque illisible : on refera le STT
+            return None
+        segments = summary_json.get("segments") if isinstance(summary_json, dict) else None
+        if not transcript_text or not segments:
+            return None
+        transcript_short = "\n".join(
+            seg.get("text", seg.get("error", "")) for seg in segments[:50]
+        )
+        return {
+            "transcript_text": transcript_text,
+            "transcript_short": transcript_short,
+            "segment_count": len(segments),
+            "_from_cache": True,
+        }
+
+    def _reclaim_vram_from_idle_arbitrage_llm(self, sl) -> bool:
+        """Tente de libérer de la VRAM en arrêtant NOTRE LLM d'arbitrage si elle est inactive.
+
+        N'arrête la LLM que si (a) elle tourne et (b) le verrou LLM est libre — c.-à-d.
+        qu'aucun job ne l'utilise (correction/relecture/résumé en cours). Garde-fou
+        multi-job : on ne tue jamais une LLM en service. Retourne True si on a stoppé la
+        LLM (VRAM potentiellement libérée), False sinon. C'est notre propre process géré
+        (jamais un process tiers — cf. `force_free_gpu`).
+        """
+        try:
+            if not self.vram.is_arbitrage_llm_running():
+                return False
+            # try_acquire_llm(timeout_s=0) réussit seulement si personne ne détient le
+            # verrou : preuve qu'aucun consommateur actif n'utilise la LLM.
+            if not self.allocator.try_acquire_llm("", timeout_s=0):
+                sl.info("VRAM bloquée par la LLM d'arbitrage, mais elle est en cours d'utilisation — on patiente")
+                return False
+            try:
+                sl.warning("Arrêt de la LLM d'arbitrage (inactive) pour libérer la VRAM d'un STT en attente")
+                self.vram.stop_arbitrage_llm()
+            finally:
+                self.allocator.release_llm("")
+            return True
+        except Exception as exc:  # noqa: BLE001 — best-effort, ne jamais aggraver
+            sl.warning("Libération VRAM via arrêt LLM d'arbitrage impossible: %s", exc)
+            return False
 
     @staticmethod
     def _get_fs(config: dict, job_id: str):
@@ -306,7 +391,7 @@ class WorkflowRunner:
             percent=10,
             force=True,
         )
-        try:
+        def _attempt() -> dict:
             with self._gpu_session(
                 job,
                 f"{backend}-summary",
@@ -314,7 +399,7 @@ class WorkflowRunner:
                 "summary_stt",
             ) as gs:
                 generator = SummaryGenerator(config)
-                result = generator.generate_quick_summary(
+                res = generator.generate_quick_summary(
                     job, Path(audio_path), gpu_index=gs.gpu_index
                 )
                 self.progress.update(
@@ -328,9 +413,21 @@ class WorkflowRunner:
                 sl.info(
                     "STT rapide OK",
                     backend=backend,
-                    segments=result.get("segment_count", 0),
-                    transcript_chars=len(result.get("transcript_text", "")),
+                    segments=res.get("segment_count", 0),
+                    transcript_chars=len(res.get("transcript_text", "")),
                 )
+                return res
+
+        try:
+            try:
+                result = _attempt()
+            except GPUSessionError:
+                # VRAM insuffisante : si NOTRE LLM d'arbitrage inactive la bloque, on la
+                # stoppe pour libérer la VRAM puis on retente UNE fois avant d'abandonner.
+                if self._reclaim_vram_from_idle_arbitrage_llm(sl):
+                    result = _attempt()
+                else:
+                    raise
         except GPUSessionError as exc:
             # VRAM momentanément indisponible (transitoire) : pas un échec terminal.
             # On remonte un signal `vram_wait` ; l'appelant met le job en attente et
@@ -445,13 +542,34 @@ class WorkflowRunner:
                 config=config,
             )
             invite_path = self._materialize_meeting_invite(fs, job)
-            parsed = runner.run_summary(
-                str(transcript_path),
-                str(context_path),
-                str(diarization_ctx_path),
-                invite_path,
-            )
-            self._apply_llm_suggestions(fs, result, parsed, sl)
+            # La LLM peut « réussir » (opencode exit 0) sans rien produire (0 texte,
+            # summary.md non réécrit — typiquement contexte trop long). On retente la
+            # SEULE sous-étape LLM jusqu'à 3 fois (LLM déjà chargée : pas de re-STT, pas
+            # de re-réservation). Après 3 échecs : on ne corrompt pas meeting_context et
+            # on signale `summary_llm_failed` (l'appelant rend le job relançable).
+            max_llm_attempts = 3
+            parsed = {}
+            for attempt in range(1, max_llm_attempts + 1):
+                parsed = runner.run_summary(
+                    str(transcript_path),
+                    str(context_path),
+                    str(diarization_ctx_path),
+                    invite_path,
+                )
+                if parsed.get("_summary_produced"):
+                    if attempt > 1:
+                        sl.info("LLM résumé produit à la tentative %d/%d", attempt, max_llm_attempts)
+                    break
+                if attempt < max_llm_attempts:
+                    sl.warning("LLM résumé sans production (tentative %d/%d) — nouvel essai",
+                               attempt, max_llm_attempts)
+
+            if parsed.get("_summary_produced"):
+                self._apply_llm_suggestions(fs, result, parsed, sl)
+            else:
+                sl.error("LLM résumé non produit après %d tentatives — meeting_context préservé, "
+                         "résumé marqué indisponible (relançable)", max_llm_attempts)
+                result["summary_llm_failed"] = True
         except Exception as exc:
             logger.warning("Erreur opencode: %s", exc)
         finally:
@@ -1210,6 +1328,10 @@ class WorkflowRunner:
             required_vram_mb,
             "stt",
         )
+        if reservation is None and self._reclaim_vram_from_idle_arbitrage_llm(logger):
+            # VRAM insuffisante mais libérable : on a stoppé notre LLM d'arbitrage inactive,
+            # on retente la réservation une fois.
+            reservation, managed_by_allocator = self._reserve_gpu_phase(job, required_vram_mb, "stt")
         if reservation is None:
             # VRAM transitoire : mise en attente + alerte admin (pas FAILED).
             msg = f"VRAM insuffisante pour la transcription ({required_vram_mb} Mo requis)"
@@ -1263,7 +1385,7 @@ class WorkflowRunner:
             diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
             diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
 
-            if self._cuda_available():
+            def _attempt_cuda() -> dict:
                 with self._gpu_session(
                     job,
                     diar_backend,
@@ -1280,8 +1402,20 @@ class WorkflowRunner:
                         device=device,
                         progress_callback=self._pyannote_progress_callback(job, "processing"),
                     )
-                    result = diarizer.diarize(job, Path(audio_path))
+                    res = diarizer.diarize(job, Path(audio_path))
                     diarizer.offload()
+                    return res
+
+            if self._cuda_available():
+                try:
+                    result = _attempt_cuda()
+                except GPUSessionError:
+                    # VRAM bloquée par notre LLM d'arbitrage inactive : on la stoppe et on
+                    # retente une fois avant de basculer en attente VRAM.
+                    if self._reclaim_vram_from_idle_arbitrage_llm(logger):
+                        result = _attempt_cuda()
+                    else:
+                        raise
             else:
                 logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
                 diarizer = create_diarizer(

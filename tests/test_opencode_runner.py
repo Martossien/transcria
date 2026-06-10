@@ -623,7 +623,8 @@ class TestOpenCodeRunnerRunSummary:
         assert captured["timeout"] == 4321
 
     def test_run_summary_reads_summary_md(self, tmp_path, monkeypatch):
-        (tmp_path / "summary.md").write_text("# Résumé\n\n**Titre suggéré :** Mon titre\n", encoding="utf-8")
+        # Contrat : run_summary n'utilise summary.md QUE si opencode l'a (ré)écrit pendant
+        # le run (mtime postérieur). On simule donc opencode qui écrit le résumé structuré.
         (tmp_path / "quick_transcript.txt").write_text("[0s->1s] Bonjour", encoding="utf-8")
         prompt_dir = os.path.join(_get_prompts_dir())
         os.makedirs(prompt_dir, exist_ok=True)
@@ -633,12 +634,14 @@ class TestOpenCodeRunnerRunSummary:
                 f.write("Tu es un assistant.")
 
         def fake_run(self, instruction, prompt_file_arg, timeout=600):
-            return {"success": True, "output": "Résumé généré", "files": [], "events_count": 1, "tool_calls": 0}
+            (tmp_path / "summary.md").write_text("# Résumé\n\n**Titre suggéré :** Mon titre\n", encoding="utf-8")
+            return {"success": True, "output": "", "files": [str(tmp_path / "summary.md")], "events_count": 2, "tool_calls": 1}
 
         monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
 
         runner = _make_runner(tmp_path)
         result = runner.run_summary(str(tmp_path / "quick_transcript.txt"))
+        assert result["_summary_produced"] is True
         assert result["title_suggere"] == "Mon titre"
         assert "Mon titre" in result["summary_text"]
 
