@@ -243,6 +243,12 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   `JobExecutorService._run_process` re-queue via `QueueStore.requeue_later` + marque
   `mark_execution_waiting_vram`. Le scheduler (`_resources_available`) garde le job en attente tant
   que `GPUAllocator.can_allocate` échoue, puis le redispatche → **reprise automatique**.
+- **Pipeline reprenable + admission par phases restantes** : le pipeline **saute les phases déjà
+  faites** au redispatch (`extra_data.pipeline.completed_phases`, cf. `docs/PIPELINE_REPRISE.md`) →
+  un re-queue ne refait pas le STT. Et l'admission n'exige que la VRAM des **phases restantes**
+  (`_done_profile_phases` → `_local_required_mb` exclut les phases faites) : un job où il ne reste
+  que la correction exige la **VRAM LLM**, pas le STT. C'est ce qui résout « par construction » le cas
+  d'un STT bloqué qui boucle, et permet à `run_correction` de renvoyer simplement `vram_wait`.
 - **Frontal `role=web` sans GPU (split)** : le résumé n'est **jamais** exécuté sur le frontal —
   `api_summary` l'**enfile directement** sur le worker GPU (mode `summary`) et le client poll
   `GET /status`. Le frontal ne fait qu'orchestrer ; **toute** la charge GPU (STT, diarisation,

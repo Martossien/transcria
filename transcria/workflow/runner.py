@@ -1622,7 +1622,18 @@ class WorkflowRunner:
                     "llm_arbitration",
                 )
                 if reservation is None:
-                    return {"success": False, "error": "VRAM insuffisante pour la LLM d'arbitrage"}
+                    # VRAM transitoire : pas de FAILED. On remonte `vram_wait` → re-queue ;
+                    # au redispatch, la reprise saute STT/diarisation (déjà sur disque) et
+                    # l'admission exige la VRAM LLM (seule phase restante) → ni boucle de
+                    # re-STT ni worker figé. Cf. docs/PIPELINE_REPRISE.md.
+                    msg = f"VRAM insuffisante pour la LLM d'arbitrage ({llm_vram_mb} Mo requis)"
+                    logger.warning("[correction] %s", msg)
+                    return {
+                        "vram_wait": True,
+                        "required_mb": int(llm_vram_mb),
+                        "phase": "llm_arbitration",
+                        "reason": msg,
+                    }
                 llm_phase_reserved = True
 
             launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)

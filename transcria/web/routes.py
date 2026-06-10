@@ -1739,6 +1739,13 @@ def api_process(job_id: str):
     if priority is not None and not _can_manage_queue_job(job):
         priority = None
 
+    # Re-soumission utilisateur (ou nouveau run) : repartir d'un état de reprise PROPRE.
+    # Les re-queues AUTOMATIQUES (vram_wait/deferred) préservent `completed_phases` — c'est
+    # eux qui permettent la reprise ; ici c'est une intention utilisateur de (re)lancer.
+    from transcria.workflow.resume import reset_resume_state
+
+    reset_resume_state(JobStore, job.id)
+
     from transcria.services.pipeline_service import PipelineService
 
     vram_profile = PipelineService.estimate_job_vram(cfg, mode)

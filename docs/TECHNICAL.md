@@ -71,6 +71,7 @@ transcria/
 │   │   ├── states.py              # WorkflowState (compute_statuses, get_next_step), StepStatus
 │   │   ├── steps.py               # WORKFLOW_STEPS + helpers de navigation
 │   │   ├── progress.py            # WorkflowProgressReporter (progression UI persistée)
+│   │   ├── resume.py              # État de reprise pipeline (completed_phases / audio_path, is_phase_done) — cf. docs/PIPELINE_REPRISE.md
 │   │   └── runner.py              # WorkflowRunner
 │   │
 │   ├── audio/                     # Analyse et conversion audio
@@ -1155,6 +1156,7 @@ Flux normal :
 5. En mode queue, `JobExecutorService` appelle `PipelineService.run_process(..., finalize_job_state=False)`, puis publie l'état terminal dans l'ordre `job_queue.status` → `extra_data.execution.status` → `jobs.state`.
 6. En fin de pipeline, l'entrée de file passe en `done`, `failed` ou `cancelled`.
 7. **VRAM insuffisante (transitoire)** : si une phase renvoie `vram_wait`, `_run_process` ne marque pas FAILED — il re-queue (`requeue_later`) + `mark_execution_waiting_vram` (statut non terminal) et alerte l'admin une fois (`alert_admin_vram_wait`). Le scheduler reprend dès que l'admission VRAM passe. Le **résumé synchrone** réutilise ce chemin via le mode de file `summary` (`JobExecutorService.SUMMARY_MODE`) : `_run_process` y exécute `run_summary` au lieu du pipeline et ne marque ni `COMPLETED` ni e-mail propriétaire (l'état est géré par `run_summary`). Voir `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis.
+8. **Pipeline reprenable** : `_run_pipeline_steps` saute les phases déjà faites (`extra_data.pipeline.completed_phases` ∪ artefact, `transcria/workflow/resume.py`) → un re-queue **ne refait pas** le STT/diarisation. L'admission (`_local_required_mb` + `_done_profile_phases`) n'exige que la VRAM des **phases restantes**. État réinitialisé à la re-soumission (`api_process` → `reset_resume_state`), préservé sur re-queue auto. Cf. `docs/PIPELINE_REPRISE.md`.
 
 Règles calendrier :
 

@@ -70,6 +70,7 @@
 |---|---|---|
 | `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`, plus `waiting_vram` non terminal en cas de VRAM insuffisante transitoire), `mode`, timestamps, `cancel_requested`, `required_vram_mb`/`phase` (si `waiting_vram`) |
 | `vram_alert_sent` | `mark_execution_waiting_vram` | Drapeau anti-spam de l'alerte admin VRAM. Levé à la 1ʳᵉ entrée en attente, réarmé seulement aux transitions terminales (`completed`/`failed`/`cancelled`). |
+| `pipeline` | `transcria/workflow/resume.py` (via `PipelineService`) | État de **reprise** du pipeline : `completed_phases` (liste ordonnée des phases réussies, écrite atomiquement après succès) et `audio_path` (chemin audio final après transforms pré-STT). Permet de **sauter les phases déjà faites** au re-dispatch. Vidé par `reset_resume_state` à une re-soumission utilisateur ; **préservé** sur les re-queues automatiques. Cf. `docs/PIPELINE_REPRISE.md`. |
 | `workflow_progress` | `WorkflowProgressReporter` | Progression UI courte : `step`, `phase`, `message`, `percent` optionnel, `updated_at`. Exposée par `/api/jobs/<id>/status`; messages non confidentiels et écritures throttlées |
 | `meeting_context` | recouvrement de contexte | langue, métadonnées de réunion |
 | `last_non_terminal_state` | reprise | dernier état non terminal connu |

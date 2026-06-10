@@ -182,61 +182,97 @@ class PipelineService:
 
         effective_config = self._config_for_mode(mode, job)
 
-        # Étapes pré-transcription : analyse de scène puis séparation optionnelle
-        audio_preflight = self._run_audio_preflight(job, audio_path, sl)
-        audio_scene = self._run_audio_scene_analysis(job, audio_path, sl)
-        self._refresh_audio_quality_with_scene(job, audio_scene, sl)
-        audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
-        audio_path = self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl)
-        audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
-        audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
+        # Pipeline REPRENABLE : on saute les phases déjà faites (marqueur `completed_phases`
+        # ∪ artefact atomique sur disque) et on reprend à la première incomplète. Voir
+        # docs/PIPELINE_REPRISE.md. `done` est chargé une fois (état du dispatch courant).
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow import resume
 
-        sl.info("Transcription en cours", step="transcribe")
-        self.progress.update(
-            job.id,
-            step="processing",
-            phase="transcription",
-            message="Transcription finale en cours",
-            percent=35,
-            force=True,
-        )
-        t0 = time.monotonic()
-        transcribe_result = self.runner.run_transcription(job, audio_path, effective_config)
-        transcribe_elapsed = time.monotonic() - t0
-        sl.info("Transcription terminée", step="transcribe",
-                duree=round(transcribe_elapsed, 1),
-                segments=len(transcribe_result.get("segments", [])))
+        fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+        done = set(resume.get_completed_phases(job))
 
-        if transcribe_result.get("vram_wait"):
-            # VRAM transitoire : on ne marque PAS FAILED, on remonte `vram_wait` jusqu'à
-            # l'exécuteur qui re-queue le job (reprise auto à la prochaine fenêtre VRAM).
-            return self._vram_wait_result(transcribe_result, step="transcription")
-        if transcribe_result.get("error"):
-            return {"error": transcribe_result["error"], "step": "transcription"}
-        # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
-        StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
+        def _done(phase: str) -> bool:
+            if phase in done:
+                return True
+            if resume.artifact_exists(phase, fs):  # rétro-remplissage (run interrompu)
+                resume.mark_phase_done(JobStore, job.id, phase)
+                done.add(phase)
+                return True
+            return False
+
+        # ── Préprocess (transforms audio) : un seul checkpoint ──
+        if _done("preprocess"):
+            audio_path = resume.get_processed_audio_path(job) or audio_path
+            sl.info("Préprocess déjà fait — reprise (skip transforms audio)", audio=audio_path)
+        else:
+            audio_preflight = self._run_audio_preflight(job, audio_path, sl)
+            audio_scene = self._run_audio_scene_analysis(job, audio_path, sl)
+            self._refresh_audio_quality_with_scene(job, audio_scene, sl)
+            audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
+            audio_path = self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl)
+            audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
+            audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
+            resume.set_processed_audio_path(JobStore, job.id, audio_path)
+            resume.mark_phase_done(JobStore, job.id, "preprocess")
+            done.add("preprocess")
+
+        # ── Transcription (STT) ──
+        transcribe_result: dict = {}
+        if _done("transcription"):
+            sl.info("Transcription déjà faite — reprise (skip STT)")
+        else:
+            sl.info("Transcription en cours", step="transcribe")
+            self.progress.update(
+                job.id,
+                step="processing",
+                phase="transcription",
+                message="Transcription finale en cours",
+                percent=35,
+                force=True,
+            )
+            t0 = time.monotonic()
+            transcribe_result = self.runner.run_transcription(job, audio_path, effective_config)
+            transcribe_elapsed = time.monotonic() - t0
+            sl.info("Transcription terminée", step="transcribe",
+                    duree=round(transcribe_elapsed, 1),
+                    segments=len(transcribe_result.get("segments", [])))
+
+            if transcribe_result.get("vram_wait"):
+                # VRAM transitoire : on ne marque PAS FAILED, on remonte `vram_wait` jusqu'à
+                # l'exécuteur qui re-queue le job (reprise auto, sans refaire ce qui est fait).
+                return self._vram_wait_result(transcribe_result, step="transcription")
+            if transcribe_result.get("error"):
+                return {"error": transcribe_result["error"], "step": "transcription"}
+            # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
+            StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
+            resume.mark_phase_done(JobStore, job.id, "transcription")
+            done.add("transcription")
 
         steps = self._define_pipeline_steps(job, audio_path, mode)
 
         for step_cfg in steps:
+            name = step_cfg["name"]
+            if _done(name):
+                sl.info("Étape déjà faite — reprise (skip)", step=name)
+                continue
             if self._is_cancel_requested(job.id):
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.CANCELLED)
-                return {"error": "Traitement annulé", "step": step_cfg["name"], "cancelled": True}
+                return {"error": "Traitement annulé", "step": name, "cancelled": True}
             t0 = time.monotonic()
             method = step_cfg["method"]
-            sl.info("Étape en cours", step=step_cfg["name"])
-            self._publish_step_progress(job, step_cfg["name"], starting=True)
+            sl.info("Étape en cours", step=name)
+            self._publish_step_progress(job, name, starting=True)
             result = method()
             elapsed = time.monotonic() - t0
 
             if result.get("vram_wait"):
-                # VRAM transitoire en cours de pipeline : mise en attente + re-queue
-                # (pas d'état terminal). Le pipeline repart du début au redispatch.
-                sl.warning("Étape en attente de VRAM", step=step_cfg["name"],
+                # VRAM transitoire en cours de pipeline : mise en attente + re-queue. Au
+                # redispatch, la reprise saute les phases déjà faites (pas de re-travail).
+                sl.warning("Étape en attente de VRAM", step=name,
                            required_vram_mb=result.get("required_mb"),
                            duree=round(elapsed, 1))
-                return self._vram_wait_result(result, step=step_cfg["name"])
+                return self._vram_wait_result(result, step=name)
 
             # Une étape échoue si "success" est explicitement False,
             # ou si "error" est non-vide sans "success" dans le résultat.
@@ -248,16 +284,17 @@ class PipelineService:
                 else bool(result.get("error"))
             )
             if step_failed:
-                sl.error("Étape échouée", step=step_cfg["name"],
+                sl.error("Étape échouée", step=name,
                          error=result.get("error"),
                          duree=round(elapsed, 1))
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.FAILED, result["error"])
-                return {"error": result["error"], "step": step_cfg["name"]}
-            sl.info("Étape terminée", step=step_cfg["name"],
-                    duree=round(elapsed, 1))
-            self._publish_step_progress(job, step_cfg["name"], starting=False)
-            StageMetrics.get_instance().record(step_cfg["name"], elapsed)
+                return {"error": result["error"], "step": name}
+            resume.mark_phase_done(JobStore, job.id, name)
+            done.add(name)
+            sl.info("Étape terminée", step=name, duree=round(elapsed, 1))
+            self._publish_step_progress(job, name, starting=False)
+            StageMetrics.get_instance().record(name, elapsed)
 
         if finalize_job_state:
             JobStore.update_state(job.id, JobState.COMPLETED)

@@ -233,8 +233,9 @@ class QueueScheduler:
         if remote_vram is False:
             logger.info("Dispatch job différé: VRAM distante insuffisante", extra={"job_id": entry.job_id})
             return False
-        required_mb = self._local_required_mb(profile)
-        # `required_mb` exclut déjà la phase `llm_arbitration` quand la LLM est partagée
+        required_mb = self._local_required_mb(profile, self._done_profile_phases(entry.job_id))
+        # `required_mb` exclut les phases déjà faites (reprise) et la phase `llm_arbitration`
+        # quand la LLM est partagée
         # (`llm_shared`) : un job qui n'a plus que la phase LLM (déjà chaude) est admis
         # ici sans rien réserver. Ne reste que le besoin des phases NON-LLM (STT/diar).
         if required_mb <= 0:
@@ -290,10 +291,36 @@ class QueueScheduler:
         # `_resources_available`, qui couvre aussi le peak local et la VRAM distante.
         return self._resources_available(entry)
 
-    def _local_required_mb(self, profile: dict) -> int:
+    def _done_profile_phases(self, job_id: str) -> set[str]:
+        """Phases du profil VRAM déjà réalisées (pipeline reprenable) → à exclure du besoin.
+
+        Mappe les phases de reprise (`completed_phases`) vers les clés du profil VRAM :
+        un job dont il ne reste que la correction n'exige plus que la VRAM LLM, pas le STT.
+        Voir docs/PIPELINE_REPRISE.md.
+        """
+        try:
+            from transcria.workflow.resume import get_completed_phases
+
+            job = JobStore.get_by_id(job_id)
+            if job is None:
+                return set()
+            done = get_completed_phases(job)
+        except Exception:  # noqa: BLE001
+            return set()
+        ignored: set[str] = set()
+        if "transcription" in done:
+            ignored |= {"stt", "summary_stt"}
+        if "diarization" in done:
+            ignored.add("diarization")
+        if "correction" in done or "final_review" in done:
+            ignored.add("llm_arbitration")
+        return ignored
+
+    def _local_required_mb(self, profile: dict, completed_profile_phases: set[str] | None = None) -> int:
         remote_phases = self._remote_phase_names()
         phases = profile.get("phases") if isinstance(profile, dict) else {}
         ignored_phases = set(remote_phases)
+        ignored_phases |= (completed_profile_phases or set())  # phases déjà faites (reprise)
         if isinstance(profile, dict) and profile.get("llm_shared"):
             ignored_phases.add("llm_arbitration")
         if isinstance(phases, dict) and phases:

@@ -225,6 +225,30 @@ def test_admission_reclaims_idle_arbitrage_llm_then_dispatches(app, owner_id, tm
         assert launched == [job.id]
 
 
+def test_admission_excludes_completed_phases(app, owner_id, tmp_path, monkeypatch):
+    """Pipeline reprenable : un job dont le STT est déjà fait n'exige plus que la VRAM
+    des phases RESTANTES (ici la diarisation), pas le pic global."""
+    from transcria.workflow import resume
+
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        job = _job_with_audio(owner_id, cfg)
+        resume.mark_phase_done(JobStore, job.id, "transcription")  # STT déjà fait
+        QueueStore.enqueue(job.id, mode="quality",
+                           vram_profile={"phases": {"stt": 6000, "diarization": 2000}})
+        scheduler = QueueScheduler(app, cfg, lambda *a: None)
+
+        seen = []
+        monkeypatch.setattr(scheduler.allocator, "can_allocate",
+                            lambda required_mb: seen.append(required_mb) or None)
+        scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        # STT exclu (déjà fait) → on n'exige que la diarisation restante.
+        assert seen == [2000]
+
+
 def test_admission_no_force_free_when_own_only(app, owner_id, tmp_path, monkeypatch):
     """own-only (défaut) : pas de préemption tierce même dans la fenêtre calendaire."""
     with app.app_context():
