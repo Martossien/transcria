@@ -249,13 +249,15 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   (`_done_profile_phases` → `_local_required_mb` exclut les phases faites) : un job où il ne reste
   que la correction exige la **VRAM LLM**, pas le STT. C'est ce qui résout « par construction » le cas
   d'un STT bloqué qui boucle, et permet à `run_correction` de renvoyer simplement `vram_wait`.
-- **Frontal `role=web` sans GPU (split)** : le résumé n'est **jamais** exécuté sur le frontal —
-  `api_summary` l'**enfile directement** sur le worker GPU (mode `summary`) et le client poll
-  `GET /status`. Le frontal ne fait qu'orchestrer ; **toute** la charge GPU (STT, diarisation,
-  **LLM** comprise) est portée par la machine GPU (worker/nœud de ressources). La décision repose
-  sur le **rôle**, pas sur une détection matérielle (un éventuel petit GPU frontal est ignoré).
-  Rappel : la LLM d'arbitrage est **locale au worker**, pas servie par le nœud de ressources — donc
-  le worker doit avoir un GPU. Une LLM 35B en CPU est inexploitable (≈100-300× plus lente).
+- **Frontal `role=web` sans GPU (split)** : **aucune** phase GPU n'est exécutée sur le frontal. Les
+  **étapes GPU synchrones** du wizard — **résumé** (`api_summary`) **et détection de locuteurs**
+  (`api_speakers_detect`) — sont **enfilées sur le worker GPU** (modes de file `summary`/`speakers`,
+  `JobExecutorService.STEP_MODES`) ; le client poll `GET /status` et la page se rafraîchit. Le frontal
+  ne fait qu'orchestrer ; **toute** la charge GPU (STT, diarisation, détection, **LLM** comprise) est
+  portée par la machine GPU (worker/nœud de ressources). La décision repose sur le **rôle**, pas sur
+  une détection matérielle (un éventuel petit GPU frontal est ignoré). Rappel : la LLM d'arbitrage est
+  **locale au worker**, pas servie par le nœud de ressources — donc le worker doit avoir un GPU. Une
+  LLM 35B en CPU est inexploitable (≈100-300× plus lente).
 - **Résumé synchrone** (`api_summary`, `role=all`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
   `vram_wait`, l'état pré-résumé est restauré, le job passe `waiting_vram`, et une **reprise serveur**
   est **enfilée** (`submit_process(mode="summary")`, profil VRAM `summary_stt`). Le scheduler relance

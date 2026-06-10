@@ -62,10 +62,12 @@ def _test_config(database_url: str):
             # Le scheduler global démarré par create_app() poll la DB de test partagée.
             # Avec le défaut (5 s) sa boucle de fond dispatche/dequeue les jobs que les
             # tests de scheduler enfilent (jobs_dir ≠ tmp_path → audio introuvable →
-            # dequeue "failed"), ce qui rend ces tests flaky. Un intervalle long le rend
-            # dormant : les tests pilotent eux-mêmes `_dispatch_iteration()`.
-            # (use_listen_notify=False par défaut → pas de réveil par NOTIFY.)
-            "queue": {"poll_interval_s": 3600},
+            # dequeue "failed"), ce qui rend ces tests flaky. 300 s (= max du schéma) le
+            # rend dormant pendant un test (< 1 s) : les tests pilotent eux-mêmes
+            # `_dispatch_iteration()`. NB : valeur **schéma-valide** (1-300) pour que le
+            # test de sauvegarde `/admin/config` (qui valide la config fusionnée) passe
+            # de façon déterministe. (use_listen_notify=False → pas de réveil par NOTIFY.)
+            "queue": {"poll_interval_s": 300},
         },
     }
 

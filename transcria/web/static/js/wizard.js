@@ -126,33 +126,27 @@ var TranscrIA = window.TranscrIA || {};
         });
     };
 
-    W.showVramWaitBanner = function (msg) {
-        var el = document.getElementById('summary-result');
+    W.showWaitBanner = function (elId, msg) {
+        var el = document.getElementById(elId);
         if (!el) { return; }
         el.innerHTML =
             '<div class="alert alert-warning"><span class="spinner-border spinner-border-sm me-2"></span>' +
             W.escapeHtml(msg) + '</div>';
     };
+    W.showVramWaitBanner = function (msg) { W.showWaitBanner('summary-result', msg); };
 
-    // Poll en lecture seule de l'état du job pendant la reprise serveur du résumé.
-    // Recharge la page quand le résumé est prêt (summary_done) ; affiche l'erreur si
-    // le job échoue ; sinon ré-interroge toutes les 20 s. Aucun POST /summary ici.
-    W.pollSummaryResume = function () {
+    // Poll en lecture seule pendant qu'une étape GPU s'exécute côté SERVEUR (worker GPU) :
+    // reprise après attente VRAM, ou frontal sans GPU qui a délégué au nœud de ressources.
+    // Recharge la page dès que l'exécution n'est plus active (terminée — succès OU échec ;
+    // le rechargement affiche l'état réel). Aucun POST de relance ici (pas de course).
+    W.pollServerStep = function () {
         W.api('/api/jobs/' + JOB_ID + '/status').then(function (r) {
-            var state = (r.data && r.data.state) || '';
-            if (state === 'summary_done' || state === 'context_done') {
-                location.reload();
-                return;
-            }
-            if (state === 'failed') {
-                var err = (r.data && r.data.error) || 'Le résumé a échoué.';
-                document.getElementById('summary-result').innerHTML =
-                    '<div class="alert alert-danger">' + W.escapeHtml(err) + '</div>';
-                return;
-            }
-            setTimeout(W.pollSummaryResume, 20000);
+            var es = (r.data && r.data.execution_status) || 'idle';
+            if (es === 'idle') { location.reload(); return; }   // terminé → recharger
+            setTimeout(W.pollServerStep, 20000);
         });
     };
+    W.pollSummaryResume = W.pollServerStep;  // compat (résumé)
 
     // Auto-sauvegarde de l'invitation au blur : un collé survit ainsi à une étape
     // échouée/abandonnée (la sauvegarde au clic « Générer le résumé » reste en place).
@@ -413,6 +407,14 @@ var TranscrIA = window.TranscrIA || {};
         W.showSpinner('speaker-spinner');
         W.api('/api/jobs/' + JOB_ID + '/speakers/detect').then(function (r) {
             W.hideSpinner('speaker-spinner');
+            if (r.data && r.data.queued) {
+                // Frontal sans GPU : la détection a été déléguée au worker GPU. On poll
+                // l'état et on recharge dès qu'elle est terminée (pas de re-POST).
+                W.showWaitBanner('speaker-result', r.data.message ||
+                    'Détection des locuteurs lancée sur le nœud GPU — la page se rafraîchira.');
+                W.pollServerStep();
+                return;
+            }
             if (r.status === 200) { location.reload(); }
             else {
                 document.getElementById('speaker-result').innerHTML =

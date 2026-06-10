@@ -30,11 +30,15 @@ from transcria.workflow.transitions import (
     mark_execution_waiting_vram,
 )
 
-# Mode de file dédié au résumé synchrone re-soumis après une attente de VRAM. Le
-# scheduler le draine comme un job normal (admission VRAM-aware + re-queue), mais
-# _run_process exécute run_summary au lieu du pipeline complet et n'applique pas l'état
-# terminal COMPLETED/FAILED du pipeline (run_summary gère lui-même l'état du job).
+# Modes de file dédiés aux ÉTAPES GPU synchrones routées vers le worker (frontal `web`
+# sans GPU, ou reprise serveur après attente VRAM) : `summary` (run_summary) et `speakers`
+# (run_speaker_detection). Le scheduler les draine comme des jobs normaux (admission
+# VRAM-aware + re-queue), mais `_run_process` y exécute le runner d'étape au lieu du
+# pipeline complet — le runner gère lui-même l'état du job, l'exécuteur ne libère que la
+# file (pas de COMPLETED/FAILED de pipeline, pas d'e-mail propriétaire).
 SUMMARY_MODE = "summary"
+SPEAKER_MODE = "speakers"
+STEP_MODES = (SUMMARY_MODE, SPEAKER_MODE)
 
 
 def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
@@ -161,14 +165,18 @@ class JobExecutorService:
                     mark_execution_cancelled(job_id)
                     return
 
-                is_summary = mode == SUMMARY_MODE
-                if is_summary:
-                    # Reprise serveur du résumé synchrone après attente de VRAM :
-                    # run_summary gère lui-même l'état du job (SUMMARY_DONE / FAILED).
+                is_step_mode = mode in STEP_MODES
+                if is_step_mode:
+                    # Étape GPU synchrone routée vers le worker (frontal sans GPU / reprise
+                    # serveur) : le runner gère lui-même l'état du job (SUMMARY_DONE /
+                    # SPEAKER_DETECTION_DONE / FAILED). L'exécuteur ne libère que la file.
                     from transcria.workflow.runner import WorkflowRunner
 
                     runner = WorkflowRunner(JobStore, self.config)  # type: ignore[arg-type]
-                    result = runner.run_summary(job, audio_path, self.config)
+                    if mode == SUMMARY_MODE:
+                        result = runner.run_summary(job, audio_path, self.config)
+                    else:  # SPEAKER_MODE
+                        result = runner.run_speaker_detection(job, audio_path, self.config, update_state=True)
                 else:
                     pipeline = PipelineService(self.config)
                     result = pipeline.run_process(job, audio_path, mode, finalize_job_state=False)
@@ -205,20 +213,20 @@ class JobExecutorService:
                 elif result.get("error"):
                     QueueStore.dequeue(job_id, status="failed")
                     mark_execution_failed(job_id, result["error"])
-                    if is_summary:
-                        # run_summary a déjà posé l'état FAILED réel ; le résumé n'est pas
-                        # le livrable final, on ne notifie pas le propriétaire par e-mail.
-                        sl.warning("Résumé (reprise serveur) en échec", job_id=job_id, error=result["error"])
+                    if is_step_mode:
+                        # Le runner d'étape a déjà posé l'état FAILED réel ; ce n'est pas le
+                        # livrable final, on ne notifie pas le propriétaire par e-mail.
+                        sl.warning("Étape GPU (worker) en échec", job_id=job_id, mode=mode, error=result["error"])
                     else:
                         JobStore.update_state(job_id, JobState.FAILED, result["error"])
                         _notify(self.config, job, "failed", result["error"])
-                elif is_summary:
-                    # Succès du résumé : run_summary a déjà posé SUMMARY_DONE. On libère
-                    # seulement la file et l'épisode d'exécution — pas de COMPLETED ni d'e-mail
-                    # (le job poursuit son parcours wizard normal).
+                elif is_step_mode:
+                    # Succès d'une étape GPU (résumé / détection) : le runner a déjà posé
+                    # l'état (SUMMARY_DONE / SPEAKER_DETECTION_DONE). On libère seulement la
+                    # file — pas de COMPLETED ni d'e-mail (le job poursuit son parcours wizard).
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
-                    sl.info("Résumé (reprise serveur) terminé", job_id=job_id)
+                    sl.info("Étape GPU (worker) terminée", job_id=job_id, mode=mode)
                 else:
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)

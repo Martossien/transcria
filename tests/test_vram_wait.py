@@ -237,6 +237,54 @@ def test_api_summary_routes_to_worker_when_role_web(app, monkeypatch):
     assert ran["sync"] is False            # JAMAIS exécuté en synchrone sur le frontal
 
 
+def test_api_speakers_detect_routes_to_worker_when_role_web(app, monkeypatch):
+    """Split : la détection de locuteurs (pyannote, GPU) n'est PAS exécutée sur le frontal
+    CPU-only — elle est enfilée sur le worker GPU (mode `speakers`)."""
+    from transcria.jobs.filesystem import JobFilesystem
+
+    submits = []
+    ran = {"sync": False}
+
+    def _no_sync(self, job, audio_path, cfg, update_state=True):
+        ran["sync"] = True
+        return {}
+
+    monkeypatch.setattr("transcria.workflow.runner.WorkflowRunner.run_speaker_detection", _no_sync)
+
+    class _StubExecutor:
+        def submit_process(self, job_id, audio_path, mode, **kwargs):
+            submits.append(mode)
+            return {"accepted": True}
+
+    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
+
+    client = app.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
+
+    with app.app_context():
+        from transcria.auth.store import UserStore
+        from transcria.config import get_config
+        admin = UserStore.get_by_username("admin")
+        job = JobStore.create_job(admin.id, "Web speakers")
+        JobStore.update_state(job.id, JobState.SUMMARY_DONE)
+        job_id = job.id
+        fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_id)
+        (fs.job_dir / "input").mkdir(parents=True, exist_ok=True)
+        (fs.job_dir / "input" / "original.wav").write_text("fake")
+
+    previous_role = app.config.get("TRANSCRIA_ROLE", "all")
+    app.config["TRANSCRIA_ROLE"] = "web"
+    try:
+        resp = client.post(f"/api/jobs/{job_id}/speakers/detect")
+    finally:
+        app.config["TRANSCRIA_ROLE"] = previous_role
+
+    assert resp.status_code == 200
+    assert resp.get_json().get("queued") is True
+    assert submits == ["speakers"]
+    assert ran["sync"] is False
+
+
 # ---------------------------------------------------------------------------
 # Invitation : prefill du brief + badge sur brief seul (sans e-mail/noms)
 # ---------------------------------------------------------------------------

@@ -80,12 +80,23 @@ _SUMMARY_QUEUED_MESSAGE = (
     "et la page se rafraîchira dès qu'il sera prêt."
 )
 
+_SPEAKER_QUEUED_MESSAGE = (
+    "Détection des locuteurs lancée sur le nœud GPU — elle s'exécutera automatiquement "
+    "et la page se rafraîchira dès qu'elle sera prête."
+)
+
 _SUMMARY_LLM_FAILED_MESSAGE = (
     "Le résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte "
     "après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). "
     "La transcription rapide est conservée — vous pouvez relancer le résumé "
     "(diagnostic : transcria doctor --llm-smoke)."
 )
+
+
+def _speaker_vram_profile(cfg: dict) -> dict:
+    """Profil VRAM d'une détection de locuteurs (pyannote) routée vers le worker."""
+    pyannote = int(cfg.get("gpu", {}).get("pyannote_vram_mb", 2000))
+    return {"mode": "speakers", "peak_vram_mb": pyannote, "phases": {"speaker_detection": pyannote}}
 
 
 def _summary_vram_profile(cfg: dict) -> dict:
@@ -1620,10 +1631,33 @@ def api_speakers_detect(job_id: str):
     if job.state == JobState.SPEAKER_DETECTION_RUNNING.value:
         return jsonify({"error": "Une détection des locuteurs est déjà en cours pour ce job."}), 409
 
+    # Détection déjà en file sur le worker (frontal sans GPU) : ne pas relancer en synchrone.
+    from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, QueueStore
+    from transcria.services.job_executor import SPEAKER_MODE
+
+    pending = QueueStore.get_entry(job.id)
+    if (
+        pending is not None
+        and pending.mode == SPEAKER_MODE
+        and pending.status in {QUEUE_WAITING, QUEUE_RUNNING, QUEUE_PAUSED}
+    ):
+        return jsonify({"queued": True, "message": _SPEAKER_QUEUED_MESSAGE})
+
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
+
+    # Frontal `role=web` (sans GPU) : la détection (pyannote) est une phase GPU → on la
+    # délègue au worker GPU comme le résumé. Le client poll GET /status. En `all`, synchrone.
+    if current_app.config.get("TRANSCRIA_ROLE", "all") == "web":
+        executor = get_job_executor()
+        if executor is None:
+            return jsonify({"error": "Worker de traitement indisponible"}), 503
+        executor.submit_process(
+            job.id, str(audio_path), SPEAKER_MODE, vram_profile=_speaker_vram_profile(cfg)
+        )
+        return jsonify({"queued": True, "message": _SPEAKER_QUEUED_MESSAGE})
 
     from transcria.workflow.runner import WorkflowRunner
 
