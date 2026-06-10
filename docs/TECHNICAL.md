@@ -557,7 +557,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | Méthode | Description | GPU |
 |---|---|---|
 | `run_analyze(job, audio_path)` | ffprobe | — |
-| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Réutilise le transcript en cache (`_load_cached_quick_summary`) pour éviter de refaire le STT à une relance. Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`). Sur VRAM insuffisante au STT rapide, restaure l'état pré-résumé et renvoie `{"vram_wait": True, ...}` — l'appelant met en attente + enfile la reprise serveur. Si la LLM ne produit rien après **3 tentatives** (`_run_llm_summary`), renvoie `{"summary_llm_failed": True}` : pas de `SUMMARY_DONE`, `meeting_context` non corrompu, relançable | GPUSession auto |
+| `run_summary(job, audio_path, config)` | Cohere transcription → pyannote si activé → opencode résumé. Réutilise le transcript en cache (`_load_cached_quick_summary`) pour éviter de refaire le STT à une relance. Saute la réservation VRAM locale quand `summary_stt` est servi à distance (`_phase_runs_remotely`). Matérialise au passage `summary/meeting_invite.md` depuis `extra_data["meeting_invite"]` (`_materialize_meeting_invite`). Sur VRAM insuffisante au STT rapide, restaure l'état pré-résumé et renvoie `{"vram_wait": True, ...}` — l'appelant met en attente + enfile la reprise serveur. Si la LLM ne produit rien après **3 tentatives** (`_run_llm_summary`), renvoie `{"summary_llm_failed": True}` : pas de `SUMMARY_DONE`, `meeting_context` non corrompu, relançable | GPUSession auto |
 | `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. Applique d'abord `apply_speaker_hint(config, job.extra_data["speaker_hint"])`. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
@@ -1535,7 +1535,7 @@ cd transcria && python -m pytest tests/ -v
 | `test_context.py` | 27 | Meeting, participants, lexique, builder |
 | `test_diarization.py` | 37 | DiarizerService, SortformerDiarizer, BaseDiarizer, diarizer_factory |
 | `test_doctor.py` | 37 | Préflight `transcria doctor` : diff de schéma, script/serveur LLM, opencode, nœuds, dossiers, exit code, smoke opencode→LLM (`--llm-smoke`) |
-| `test_incident_e62295c1.py` | 9 | Suites incident : détection « 0 texte » LLM (mtime), retry ≤3 + `summary_llm_failed` relançable, saut STT en cache, arrêt LLM inactive pour débloquer un STT |
+| `test_incident_e62295c1.py` | 10 | Suites incident : détection « 0 texte » LLM (mtime), retry ≤3 + `summary_llm_failed` relançable, saut STT en cache, arrêt LLM inactive pour débloquer un STT, saut réservation locale en STT distant |
 | `test_edge_cases.py` | 17 | Cas limites contexte/exports/transitions |
 | `test_exports.py` | 3 | PackageBuilder |
 | `test_gpu.py` | 72 | VRAMManager, `CUDA_VISIBLE_DEVICES`, libération VRAM ciblée, diagnostic lancement LLM |

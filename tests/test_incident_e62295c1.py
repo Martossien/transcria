@@ -254,6 +254,32 @@ def test_run_transcription_reclaims_then_succeeds(app, owner_id, monkeypatch, tm
         assert "error" not in result
 
 
+# ---------------------------------------------------------------------------
+# Split / nœud de ressources : STT du résumé distant ⇒ pas de réservation VRAM locale
+# ---------------------------------------------------------------------------
+
+def test_quick_transcription_skips_local_gpu_when_stt_remote(app, owner_id, monkeypatch, tmp_path):
+    with app.app_context():
+        cfg = _cfg(tmp_path)
+        # Route le STT cohere vers un nœud distant (inference.mode=remote + endpoint).
+        cfg["inference"] = {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://node:9000"}}}}
+        job = JobStore.create_job(owner_id, "Remote STT")
+        runner = WorkflowRunner(JobStore, cfg)
+
+        # Le GPUSession local ne doit JAMAIS être ouvert quand le STT est distant.
+        def _boom(*a, **k):
+            raise AssertionError("_gpu_session ne doit pas être appelé en STT distant")
+
+        monkeypatch.setattr(runner, "_gpu_session", _boom)
+        from transcria.stt.summary import SummaryGenerator
+        monkeypatch.setattr(SummaryGenerator, "generate_quick_summary",
+                            lambda self, job, audio_path, gpu_index=0: {"transcript_text": "remote", "segment_count": 2})
+
+        result = runner._run_quick_transcription(job, str(tmp_path / "a.wav"), cfg, _DummySL())
+        assert result.get("segment_count") == 2
+        assert not result.get("vram_wait")
+
+
 class _DummySL:
     """Logger structuré factice : absorbe info/warning/error/exception/debug + set_context."""
     def __getattr__(self, _name):

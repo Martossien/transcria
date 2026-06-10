@@ -391,43 +391,53 @@ class WorkflowRunner:
             percent=10,
             force=True,
         )
+        # STT du résumé servi à distance (topologie split, inference.mode remote/hybrid) :
+        # aucune VRAM locale à réserver. On saute le GPUSession (sinon réservation fantôme
+        # de `summary_stt` localement → fausse contention / attente VRAM à tort sur un tier
+        # sans GPU). Cf. docs/SERVICE_RESSOURCES_GPU.md §9 et §7.2-bis.
+        runs_remote = self._phase_runs_remotely("summary_stt")
+
         def _attempt() -> dict:
+            generator = SummaryGenerator(config)
+            if runs_remote:
+                return generator.generate_quick_summary(
+                    job, Path(audio_path), gpu_index=self._default_remote_gpu_index()
+                )
             with self._gpu_session(
                 job,
                 f"{backend}-summary",
                 vram_mb,
                 "summary_stt",
             ) as gs:
-                generator = SummaryGenerator(config)
-                res = generator.generate_quick_summary(
+                return generator.generate_quick_summary(
                     job, Path(audio_path), gpu_index=gs.gpu_index
                 )
-                self.progress.update(
-                    job.id,
-                    step="summary",
-                    phase="summary_stt",
-                    message="Résumé : transcription rapide terminée",
-                    percent=30,
-                    force=True,
-                )
-                sl.info(
-                    "STT rapide OK",
-                    backend=backend,
-                    segments=res.get("segment_count", 0),
-                    transcript_chars=len(res.get("transcript_text", "")),
-                )
-                return res
 
         try:
             try:
                 result = _attempt()
             except GPUSessionError:
-                # VRAM insuffisante : si NOTRE LLM d'arbitrage inactive la bloque, on la
-                # stoppe pour libérer la VRAM puis on retente UNE fois avant d'abandonner.
+                # VRAM insuffisante (chemin local) : si NOTRE LLM d'arbitrage inactive la
+                # bloque, on la stoppe pour libérer la VRAM puis on retente UNE fois.
                 if self._reclaim_vram_from_idle_arbitrage_llm(sl):
                     result = _attempt()
                 else:
                     raise
+            self.progress.update(
+                job.id,
+                step="summary",
+                phase="summary_stt",
+                message="Résumé : transcription rapide terminée",
+                percent=30,
+                force=True,
+            )
+            sl.info(
+                "STT rapide OK",
+                backend=backend,
+                remote=runs_remote,
+                segments=result.get("segment_count", 0),
+                transcript_chars=len(result.get("transcript_text", "")),
+            )
         except GPUSessionError as exc:
             # VRAM momentanément indisponible (transitoire) : pas un échec terminal.
             # On remonte un signal `vram_wait` ; l'appelant met le job en attente et

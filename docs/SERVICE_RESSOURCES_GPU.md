@@ -314,7 +314,10 @@ resource_node:
   charge localement** (observé : `phase=stt gpu=5 vram=6000` pendant un run 100 % distant). Impact :
   **fausse contention VRAM** → OOM possible ou **rejets à tort** de tâches locales ; et incohérence
   sur une frontale **CPU-only** (réserver une VRAM qui n'existe pas). Correction : ne pas réserver de
-  VRAM locale pour une phase servie à distance. **Priorisé** dans le plan (§12, étape 2).
+  VRAM locale pour une phase servie à distance (`WorkflowRunner._phase_runs_remotely` → `_reserve_gpu_phase`
+  retourne une réservation à 0 VRAM). **Le résumé est aussi couvert** : `_run_quick_transcription` saute
+  le `_gpu_session` local quand `summary_stt` est distant (sinon réservation fantôme de 6000 Mo et
+  attente VRAM à tort sur un tier sans GPU).
 - **Sécurité réseau** : clé API partagée déjà en place (Flask `enforce_api_key` ; vLLM `--api-key`).
   Un 401 est **définitif** (pas de retry ni de bascule locale) — testé.
 - **Observabilité du lancement LLM d'arbitrage** : `VRAMManager.launch_arbitrage_llm` (et
