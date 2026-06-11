@@ -52,6 +52,14 @@
             type="button" role="tab">Réglages</button>
   </li>
   <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-prompts" data-bs-toggle="tab" data-bs-target="#pane-prompts"
+            type="button" role="tab">Prompts LLM</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="tab-scripts" data-bs-toggle="tab" data-bs-target="#pane-scripts"
+            type="button" role="tab">Scripts (lecture seule)</button>
+  </li>
+  <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-yaml" data-bs-toggle="tab" data-bs-target="#pane-yaml"
             type="button" role="tab">YAML (avancé)</button>
   </li>
@@ -107,6 +115,64 @@
         <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
       </div>
     </form>
+  </div>
+
+  <div class="tab-pane fade" id="pane-prompts" role="tabpanel">
+    <div class="alert alert-info small">
+      <i class="bi bi-info-circle"></i> Ces prompts pilotent la LLM d'arbitrage (résumé,
+      correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à
+      chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux
+      <strong>prochains</strong> traitements (aucun redémarrage nécessaire).
+    </div>
+    <form method="POST" action="/admin/config">
+      <input type="hidden" name="_mode" value="prompts">
+      {% for p in prompts %}
+      <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span>{{ p.label }}</span>
+          <code class="small fw-normal">{{ p.path }}</code>
+        </div>
+        <div class="card-body">
+          {% if p.help %}<p class="small text-muted">{{ p.help }}</p>{% endif %}
+          {% if not p.exists %}
+          <div class="alert alert-warning py-1 small">Fichier absent — il sera créé à la sauvegarde.</div>
+          {% endif %}
+          <textarea name="prompt-{{ p.name }}" class="form-control prompt-editor" rows="14"
+                    spellcheck="false">{{ p.content }}</textarea>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="d-flex gap-2 mb-4">
+        <button type="submit" class="btn btn-primary">Sauvegarder les prompts</button>
+        <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="tab-pane fade" id="pane-scripts" role="tabpanel">
+    <div class="alert alert-info small">
+      <i class="bi bi-shield-lock"></i> Les scripts sont affichés en <strong>lecture seule</strong> :
+      les éditer depuis le navigateur permettrait d'exécuter du code arbitraire sur le serveur.
+      Leurs <em>chemins</em> se règlent dans l'onglet Réglages / YAML ; leur contenu se modifie en SSH.
+    </div>
+    {% for s in scripts %}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>{{ s.label }}
+          {% if not s.configured %}<span class="badge text-bg-secondary ms-1">non configuré</span>
+          {% elif not s.exists %}<span class="badge text-bg-danger ms-1">introuvable</span>
+          {% elif not s.executable %}<span class="badge text-bg-warning ms-1">non exécutable</span>
+          {% else %}<span class="badge text-bg-success ms-1">prêt</span>{% endif %}
+        </span>
+        <code class="small fw-normal">{{ s.path or '—' }}</code>
+      </div>
+      {% if s.exists %}
+      <div class="card-body">
+        <pre class="script-view mb-0">{{ s.content }}</pre>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
 
   <div class="tab-pane fade" id="pane-yaml" role="tabpanel">

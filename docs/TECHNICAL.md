@@ -167,6 +167,9 @@ transcria/
 │   └── web/                       # Interface utilisateur
 │       ├── __init__.py
 │       ├── routes.py              # Routes Flask (pages + API REST)
+│       ├── ui_labels.py           # Libellés FR des états de job (filtres Jinja state_label/state_badge)
+│       ├── prompt_files.py        # Édition web des prompts LLM (liste fermée, .bak, atomique) + scripts lecture seule
+│       ├── static/css/transcria.css  # Feuille de style applicative (tokens — docs/REFONTE_UI.md)
 │       └── templates/             # Templates Jinja2 (Bootstrap 5)
 │           ├── base.html
 │           ├── login.html

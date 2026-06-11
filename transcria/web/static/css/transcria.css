@@ -1,0 +1,107 @@
+/* TranscrIA — feuille de style applicative (docs/REFONTE_UI.md).
+   Les variables (tokens) sont la seule source des couleurs : ne pas coder en dur. */
+
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --warning: #ea580c;
+  --warning-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --info-bg: #dbeafe;
+}
+
+body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+
+/* ── Navbar ─────────────────────────────────────────────────────────────── */
+.navbar { background: var(--card); border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+.navbar-brand { font-weight: 700; color: var(--primary) !important; font-size: 1.25rem; }
+.navbar .nav-link { color: var(--text); border-radius: 8px; padding: 6px 12px; }
+.navbar .nav-link:hover { background: var(--bg); }
+.navbar .nav-link.active { background: var(--info-bg); color: var(--primary); font-weight: 600; }
+.navbar .dropdown-item.active, .navbar .dropdown-item:active { background: var(--info-bg); color: var(--primary); }
+
+/* ── Cartes / flash ─────────────────────────────────────────────────────── */
+.card { border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04); }
+.card-header { background: var(--card); border-bottom: 1px solid var(--border); font-weight: 600; }
+.btn-primary { background: var(--primary); border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-dark); }
+.flash-msg { padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; }
+.flash-error { background: var(--danger-bg); color: var(--danger); }
+.flash-success { background: var(--success-bg); color: var(--success); }
+.flash-info { background: var(--info-bg); color: var(--primary); }
+.flash-warning { background: var(--warning-bg); color: var(--warning); }
+
+/* ── Stepper du wizard (libellés COMPLETS, largeurs égales) ─────────────── */
+.progress-container { display: flex; gap: 6px; margin-bottom: 24px; }
+.progress-step {
+  flex: 1 1 0; min-width: 0; text-align: center; padding: 8px 4px; border-radius: 8px;
+  background: var(--border); color: var(--text-muted); border: 2px solid transparent;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.progress-step .step-num { font-weight: 700; font-size: 0.85rem; line-height: 1; }
+.progress-step .step-num .bi { font-size: 0.85rem; }
+.progress-step .step-name { font-size: 0.72rem; line-height: 1.15; overflow-wrap: break-word; max-width: 100%; }
+.progress-step.done { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+.progress-step.current { background: var(--info-bg); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.progress-step.error { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+@media (max-width: 900px) {
+  .progress-container { flex-wrap: wrap; }
+  .progress-step { flex: 1 1 30%; }
+}
+
+/* ── Sections d'étape du wizard ─────────────────────────────────────────── */
+.wizard-container { max-width: 900px; margin: 0 auto; }
+.step-section { margin-bottom: 32px; padding: 24px; background: var(--card); border-radius: 12px; border: 2px solid var(--border); }
+.step-section.current-step { border-color: var(--primary); }
+.step-section h3 { font-size: 1.1rem; margin-bottom: 16px; }
+.step-section h3 .step-icon { margin-right: 8px; }
+.step-section .btn { margin-top: 12px; }
+.step-card { transition: all 0.2s; }
+.step-card.active { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+.step-done { opacity: 0.6; }
+
+/* ── Composants du wizard ───────────────────────────────────────────────── */
+.participant-row, .lexicon-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.participant-row input, .lexicon-row input, .participant-row select, .lexicon-row select { flex: 1; min-width: 120px; }
+.lexicon-card { position: relative; display: block; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+.lexicon-grid { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(220px, 1.8fr) minmax(160px, 1fr) 120px; gap: 6px 10px; align-items: end; padding-right: 34px; }
+.lexicon-card .lex-remove { position: absolute; top: 12px; right: 12px; margin-top: 0; }
+@media (max-width: 760px) {
+  .lexicon-grid { grid-template-columns: 1fr; padding-right: 0; }
+  .lexicon-card .lex-remove { position: static; margin-top: 8px; }
+}
+.speaker-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #f1f5f9; border-radius: 8px; margin-bottom: 8px; }
+.speaker-item select { min-width: 200px; }
+.quality-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; }
+.quality-warning { background: var(--warning-bg); color: #92400e; }
+.quality-error { background: var(--danger-bg); color: #991b1b; }
+.quality-ok { background: var(--success-bg); color: #166534; }
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: currentColor; border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.clips-audio { display: block; width: 100%; margin-top: 6px; padding: 6px 8px; background: #fafafa; border-radius: 6px; border-left: 3px solid var(--primary); }
+.clips-audio audio { display: block; width: 100%; height: 32px; margin: 3px 0; }
+.lex-context-item { padding: 8px 0; border-top: 1px solid #e5e7eb; }
+.lex-context-item:first-child { border-top: 0; }
+.lex-context-actions { display: flex; align-items: center; gap: 10px; margin-top: 5px; flex-wrap: wrap; }
+.lex-context-play { width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.lex-context-listened { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); }
+.lex-context-counter { margin-left: 6px; }
+.workflow-status-banner { display: none; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 8px; padding: 10px 12px; }
+.workflow-status-banner.is-visible { display: block; }
+.workflow-status-banner .progress { height: 5px; }
+
+/* ── Divers ─────────────────────────────────────────────────────────────── */
+.srt-preview {
+  background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px;
+  font-family: monospace; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 0.85rem;
+}
+.prompt-editor { font-family: monospace; font-size: 0.85rem; }
+.script-view { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; font-family: monospace; max-height: 480px; overflow-y: auto; white-space: pre-wrap; font-size: 0.8rem; }

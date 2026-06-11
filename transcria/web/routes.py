@@ -56,6 +56,7 @@ from transcria.web.config_form import (
     display_values,
     restore_masked_secrets,
 )
+from transcria.web.ui_labels import state_badge, state_label
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
@@ -115,6 +116,17 @@ def _summary_vram_profile(cfg: dict) -> dict:
         "peak_vram_mb": summary_vram,
         "phases": {"summary_stt": summary_vram},
     }
+
+
+@web_bp.app_template_filter("state_label")
+def _state_label_filter(state):
+    """Libellé français d'un état de job — aucun état brut à l'écran (REFONTE_UI)."""
+    return state_label(state)
+
+
+@web_bp.app_template_filter("state_badge")
+def _state_badge_filter(state):
+    return state_badge(state)
 
 
 @web_bp.app_context_processor
@@ -2253,15 +2265,34 @@ def system_status():
     dashboard_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
     client = DashboardClient(dashboard_url)
     status = client.get_system_status()
-    return render_template("dashboard_status.html", status=status, app_config=cfg)
+    # Page consciente du RÔLE (docs/REFONTE_UI.md lot D) : une frontale CPU-only
+    # n'affiche pas de panneaux GPU locaux trompeurs ; le backend de stockage des
+    # fichiers de jobs et sa volumétrie sont visibles ici.
+    runtime_role = current_app.config.get("TRANSCRIA_ROLE", "all")
+    storage_backend = artifact_store.backend_name(cfg)
+    storage_stats = None
+    if storage_backend == "pg":
+        try:
+            storage_stats = artifact_store.store_stats()
+        except Exception:
+            logger.exception("Volumétrie du magasin de fichiers indisponible")
+    return render_template(
+        "dashboard_status.html", status=status, app_config=cfg,
+        runtime_role=runtime_role, storage_backend=storage_backend, storage_stats=storage_stats,
+    )
 
 
 def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None,
                         status: int = 200, values: dict | None = None):
+    from transcria.web import prompt_files
+
+    cfg_now = ConfigService.get_singleton()
     if values is None:
-        values = display_values(ConfigService.get_singleton(), CONFIG_FORM_SECTIONS)
+        values = display_values(cfg_now, CONFIG_FORM_SECTIONS)
     return render_template(
         "admin_config.html",
+        prompts=prompt_files.load_prompts(cfg_now),
+        scripts=prompt_files.load_scripts(cfg_now),
         config_yaml=config_yaml,
         config_path=config_path,
         system_info=ConfigService.detect_system(),
@@ -2297,6 +2328,29 @@ def admin_config():
         flash("Réglages sauvegardés.", "success")
         audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=config_path)
         cfg = ConfigService.get_singleton()
+
+    elif request.method == "POST" and request.form.get("_mode") == "prompts":
+        # Édition des prompts LLM : liste FERMÉE de fichiers connus (prompt_files),
+        # garde non-vide + backup .bak — voir docs/REFONTE_UI.md.
+        from transcria.web import prompt_files
+
+        saved = 0
+        for spec in prompt_files.PROMPT_FILES:
+            submitted = request.form.get(f"prompt-{spec['name']}")
+            if submitted is None:
+                continue
+            current = next((p["content"] for p in prompt_files.load_prompts(cfg)
+                            if p["name"] == spec["name"]), "")
+            if submitted.replace("\r\n", "\n") == current:
+                continue
+            ok, message = prompt_files.save_prompt(cfg, spec["name"], submitted)
+            flash(message, "success" if ok else "error")
+            if ok:
+                saved += 1
+                audit_log(AuditAction.CONFIG_EDIT, target_type="prompt",
+                          target_label=spec["filename"])
+        if saved == 0:
+            flash("Aucun prompt modifié.", "info")
 
     elif request.method == "POST":
         raw_yaml = request.form.get("config_yaml", "")

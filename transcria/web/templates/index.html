@@ -20,9 +20,7 @@
         <div class="small text-muted mb-2">Partagé par {{ job.owner.display_name or job.owner.username }}</div>
         {% endif %}
         <div class="d-flex justify-content-between align-items-center">
-          <span class="badge bg-{% if job.state == 'completed' %}success{% elif job.state == 'failed' %}danger{% else %}secondary{% endif %}">
-            {{ job.state }}
-          </span>
+          <span class="badge {{ job.state|state_badge }}">{{ job.state|state_label }}</span>
           <small class="text-muted">{{ job.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
         </div>
         <div class="mt-2 d-flex gap-1 flex-wrap">

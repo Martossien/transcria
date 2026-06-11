@@ -1,7 +1,21 @@
 {% extends "base.html" %}
 {% block title %}État système — TranscrIA{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">État technique du système</h1>
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+  <h1 class="h3 mb-0">État technique du système</h1>
+  <span class="badge {{ 'text-bg-primary' if runtime_role == 'all' else 'text-bg-info' }}"
+        title="Rôle du process (runtime.role / TRANSCRIA_ROLE)">
+    mode {{ 'tout-en-un' if runtime_role == 'all' else 'frontale (web)' if runtime_role == 'web' else runtime_role }}
+  </span>
+</div>
+{% if runtime_role == 'web' %}
+<div class="alert alert-info small">
+  <i class="bi bi-info-circle"></i> Cette machine est une <strong>frontale sans GPU</strong> :
+  toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de
+  ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources
+  GPU distantes est dans le panneau « Ressources distantes ».
+</div>
+{% endif %}
 {% if status and status.available %}
 <div class="row">
   <div class="col-md-6">
@@ -34,8 +48,9 @@
     </div>
   </div>
   <div class="col-md-6">
+    {% if runtime_role != 'web' or status.gpus %}
     <div class="card mb-3">
-      <div class="card-header">GPU</div>
+      <div class="card-header">GPU (machine locale)</div>
       <div class="card-body">
         {% if status.gpus %}
         {% for gpu in status.gpus %}
@@ -50,6 +65,7 @@
         {% endif %}
       </div>
     </div>
+    {% endif %}
     {% if status.model %}
     <div class="card mb-3">
       <div class="card-header">Modèle actif</div>
@@ -59,11 +75,36 @@
   </div>
 </div>
 {% else %}
-<div class="alert alert-warning">
+<div class="alert {{ 'alert-info' if runtime_role == 'web' else 'alert-warning' }}">
   <i class="bi bi-exclamation-triangle"></i> Dashboard LLM indisponible sur {{ app_config.services.dashboard_llm_url if app_config else 'port 5001' }}.
-  <br><small>Le dashboard doit être lancé pour afficher l'état technique.</small>
+  <br><small>{% if runtime_role == 'web' %}Normal sur une frontale : le dashboard tourne sur la machine GPU.
+  {% else %}Le dashboard doit être lancé pour afficher l'état technique.{% endif %}</small>
 </div>
 {% endif %}
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>Stockage des fichiers de jobs</span>
+    <span class="badge {{ 'text-bg-primary' if storage_backend == 'pg' else 'text-bg-secondary' }}">
+      backend {{ storage_backend }}</span>
+  </div>
+  <div class="card-body small">
+    {% if storage_backend == 'pg' %}
+    <p class="mb-1">Fichiers répliqués via PostgreSQL (topologie split sans disque partagé —
+      <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>).</p>
+    {% if storage_stats %}
+    <p class="mb-0"><strong>{{ storage_stats.files }}</strong> fichier(s) en base —
+      <strong>{{ (storage_stats.bytes / (1024*1024)) | round(1) }} Mo</strong>.
+      Le volume redescend après chaque traitement terminé (purge de l'audio).</p>
+    {% else %}
+    <p class="mb-0 text-muted">Volumétrie indisponible.</p>
+    {% endif %}
+    {% else %}
+    <p class="mb-0 text-muted">Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un
+      ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>.</p>
+    {% endif %}
+  </div>
+</div>
 
 <div class="card mb-3" id="remote-resources-card">
   <div class="card-header d-flex justify-content-between align-items-center">
