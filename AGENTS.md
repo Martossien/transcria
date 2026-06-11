@@ -277,6 +277,12 @@ transcria/
 - Pas de commentaires sauf si le code est non évident
 - Chaînes en français pour les messages utilisateur et la documentation
 - Messages de log en français
+- **Prêt-à-traduire (discipline i18n, sans i18n)** : tout libellé d'état de job passe par
+  `transcria/web/ui_labels.py` (filtres `state_label`/`state_badge`) — jamais d'état brut ni de
+  libellé en dur dans un template ou du JS ; les prompts LLM restent des **fichiers**
+  (`configs/prompts/`), jamais des chaînes en dur ; ne pas stocker en base des messages destinés
+  à l'affichage quand une clé suffit. Objectif : pouvoir ajouter une langue plus tard **sans
+  refonte** (cf. README « Language »). On ne traduit pas aujourd'hui ; on ne se l'interdit pas demain.
 
 ### Nomenclature
 - Fichiers Python : `snake_case.py`
