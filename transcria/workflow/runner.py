@@ -1673,7 +1673,22 @@ class WorkflowRunner:
                 opencode_bin=opencode_bin,
                 config=config,
             )
-            result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path_for_correction))
+            # opencode peut « réussir » (exit 0) sans RIEN produire (0 texte, aucun
+            # fichier écrit — famille e62295c1, observé avec Ministral 14B le 12/06/2026).
+            # Avant : l'étape était validée en silence, SRT brut servi comme corrigé,
+            # relecture finale sautée, qualité calculée sur du non-corrigé. Doctrine :
+            # retry ≤ 3 (LLM déjà chargée, seule la passe LLM est rejouée) puis échec
+            # EXPLICITE relançable (le pipeline reprenable ne rejouera que la correction).
+            max_llm_attempts = 3
+            result: dict = {}
+            for attempt in range(1, max_llm_attempts + 1):
+                result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path_for_correction))
+                if not result["success"] or result["corrected_srt"]:
+                    break
+                logger.warning(
+                    "[correction] LLM sans production (exit 0, 0 texte) — tentative %d/%d",
+                    attempt, max_llm_attempts,
+                )
             if result["success"] and result["corrected_srt"]:
                 fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
                 if result["report"]:
@@ -1681,6 +1696,14 @@ class WorkflowRunner:
                 logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
                 if result.get("warning"):
                     logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
+            elif result["success"]:
+                msg = (
+                    f"La LLM d'arbitrage n'a produit aucune correction après {max_llm_attempts} tentatives "
+                    "(cause fréquente : modèle insuffisant pour la tâche, prompt ou transcript trop long). "
+                    "Le SRT brut est conservé — relancez le traitement, seule la correction sera rejouée."
+                )
+                logger.error("[correction] %s", msg)
+                result = {"success": False, "error": msg}
             self.progress.update(
                 job.id,
                 step="processing",

@@ -149,7 +149,9 @@ class TestWorkflowRunnerSpeakerRoles:
         assert mapping["speakers"][0]["mapped_name"] == "martossien"
 
 
-class TestWorkflowRunnerRunCorrection:
+class TestWorkflowRunnerRunCorrectionPrompting:
+    # NB: renommée le 12/06/2026 — un doublon de nom avec la classe plus bas
+    # masquait TOUS ces tests (jamais collectés par pytest).
     def test_run_correction_passes_config_and_keeps_partial_timeout_output(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(
@@ -174,6 +176,7 @@ class TestWorkflowRunnerRunCorrection:
             fs.save_text("context/session_lexicon.json", "[]\n")
 
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
             monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
             monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
             monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
@@ -196,6 +199,70 @@ class TestWorkflowRunnerRunCorrection:
 
             assert result["success"] is True
             assert captured["config_timeout"] == 1234
+            assert "corrigé" in fs.load_text("metadata/transcription_corrigee.srt")
+
+    def _correction_setup(self, app, owner_id, monkeypatch, tmp_path, title):
+        cfg = _default_config(
+            storage={"jobs_dir": str(tmp_path / "jobs")},
+            workflow={
+                "enable_quick_summary": True, "enable_speaker_detection": True,
+                "enable_quality_mode": True, "summary_llm": {"enabled": False},
+                "arbitration_llm": {"model_id": "local/test-llm-arbitrage", "opencode_bin": "opencode"},
+            },
+        )
+        job = JobStore.create_job(owner_id, title)
+        runner = WorkflowRunner(JobStore, cfg)
+        from transcria.jobs.filesystem import JobFilesystem
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")
+        fs.save_text("context/job_context.yaml", "meeting: {}\n")
+        fs.save_text("context/session_lexicon.json", "[]\n")
+        monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
+        monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
+        monkeypatch.setattr(runner.vram, "free_all_gpus", lambda: True)
+        monkeypatch.setattr(runner.vram, "launch_arbitrage_llm", lambda: True)
+        monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+        return cfg, job, runner, fs
+
+    def test_run_correction_zero_output_retries_then_fails_loud(self, app, owner_id, monkeypatch, tmp_path):
+        """opencode exit 0 sans rien produire (famille e62295c1, vu avec Ministral 14B
+        le 12/06/2026) : AVANT, l'étape était validée en silence (SRT brut servi comme
+        corrigé). Désormais : retry ≤ 3 puis échec EXPLICITE relançable."""
+        with app.app_context():
+            cfg, job, runner, fs = self._correction_setup(app, owner_id, monkeypatch, tmp_path, "Correction 0 texte")
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+            calls = {"n": 0}
+
+            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+                calls["n"] += 1
+                return {"success": True, "corrected_srt": "", "report": "", "error": ""}
+
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+            result = runner.run_correction(job, cfg)
+
+            assert calls["n"] == 3  # retries (LLM déjà chargée : passes LLM seulement)
+            assert result["success"] is False
+            assert "aucune correction" in result["error"]
+            assert fs.load_text("metadata/transcription_corrigee.srt") is None  # rien de faux publié
+
+    def test_run_correction_recovers_on_second_attempt(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg, job, runner, fs = self._correction_setup(app, owner_id, monkeypatch, tmp_path, "Correction retry OK")
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+            calls = {"n": 0}
+
+            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    return {"success": True, "corrected_srt": "", "report": "", "error": ""}
+                return {"success": True, "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nBonjour corrigé\n",
+                        "report": "", "error": ""}
+
+            monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+            result = runner.run_correction(job, cfg)
+
+            assert calls["n"] == 2
+            assert result["success"] is True
             assert "corrigé" in fs.load_text("metadata/transcription_corrigee.srt")
 
     def test_run_correction_filters_session_lexicon_before_llm(self, app, owner_id, monkeypatch, tmp_path):
@@ -226,6 +293,7 @@ class TestWorkflowRunnerRunCorrection:
             ])
 
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
             captured = {}
 
             def fake_run_correction(self, srt_path, context_path, lexicon_path):
