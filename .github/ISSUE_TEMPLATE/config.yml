@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📖 Installation & troubleshooting guide
+    url: https://github.com/Martossien/transcria/blob/main/docs/INSTALL.md
+    about: "Setup, models, systemd, distributed deployment, common failures (run scripts/doctor.py first!)"
+  - name: 🔒 Security issue
+    url: https://github.com/Martossien/transcria/blob/main/SECURITY.md
+    about: "Please do NOT open a public issue for vulnerabilities — see the security policy."

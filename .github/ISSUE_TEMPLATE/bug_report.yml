@@ -1,0 +1,62 @@
+name: "🐞 Bug report"
+description: "Something doesn't work as expected / Quelque chose ne fonctionne pas comme prévu"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! French or English are both welcome.
+        *Merci pour votre signalement — vous pouvez écrire en français.*
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Clear description of the bug, and what you expected instead.
+      placeholder: "Uploading a 2h .m4a file fails at the diarization step with…"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a job, upload file X
+        2. Run the quick summary
+        3. See error…
+    validations:
+      required: true
+  - type: dropdown
+    id: topology
+    attributes:
+      label: Deployment topology
+      options:
+        - All-in-one (single machine)
+        - Web frontend + GPU worker (role=web / role=scheduler)
+        - With remote inference node (inference_service)
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, GPU(s), database (SQLite/PostgreSQL), relevant `config.yaml` excerpts (NO secrets).
+      placeholder: |
+        - OS: Ubuntu 24.04
+        - Python: 3.12
+        - GPU: 2× RTX 3090
+        - DB: PostgreSQL 16
+        - STT backend: cohere
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`scripts/doctor.py` output"
+      description: "Run `venv/bin/python scripts/doctor.py` and paste the result — it catches most setup issues."
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Application logs around the failure. Please redact any sensitive content.
+      render: text

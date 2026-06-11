@@ -1,0 +1,39 @@
+name: "💡 Feature request"
+description: "Suggest an idea or improvement / Proposer une idée ou une amélioration"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        French or English are both welcome. *Vous pouvez écrire en français.*
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the use case — the real-world situation, not just the solution.
+      placeholder: "When processing board meetings, we need…"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What you would like to happen. Sketches, examples and alternatives welcome.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Audio pipeline (preflight, separation, VAD…)
+        - Transcription / STT backends
+        - Diarization / speakers
+        - LLM phases (summary, correction, prompts)
+        - Web UI / workflow
+        - Queue / GPU scheduling / topologies
+        - Exports (SRT, DOCX, package)
+        - Security / RBAC / audit
+        - Other
+    validations:
+      required: true
