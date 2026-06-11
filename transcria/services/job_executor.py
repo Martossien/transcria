@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask
 
 from transcria.database import db
+from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
@@ -109,6 +110,10 @@ class JobExecutorService:
             existing_entry = QueueStore.get_entry(job_id)
             if existing_entry is not None and existing_entry.status in {"waiting", "paused", "running"}:
                 return {"accepted": False, "reason": "already_active"}
+            # Backend `pg` : les entrées du worker (audio, contexte, mapping locuteurs)
+            # doivent être en base AVANT l'enfilage. Idempotent (no-op si déjà poussé) ;
+            # ré-alimente `input/` après une purge (ex. reprocess d'un job terminé).
+            artifact_store.push_job_files(self.config, job_id, prefixes=artifact_store.INPUT_PREFIXES)
             return self._scheduler.submit_to_queue(
                 job_id,
                 mode,
@@ -165,6 +170,13 @@ class JobExecutorService:
                     mark_execution_cancelled(job_id)
                     return
 
+                # Backend `pg` (split sans filesystem partagé) : matérialise les fichiers
+                # du job (audio, contexte, artefacts des dispatchs précédents) AVANT de
+                # travailler — la reprise par artefact marche même sur un autre worker ou
+                # après un disque vidé. Une erreur ici doit échouer le job (visible,
+                # relançable) plutôt que de produire un résultat sans entrées.
+                artifact_store.pull_job_files(self.config, job_id)
+
                 is_step_mode = mode in STEP_MODES
                 if is_step_mode:
                     # Étape GPU synchrone routée vers le worker (frontal sans GPU / reprise
@@ -181,10 +193,19 @@ class JobExecutorService:
                     pipeline = PipelineService(self.config)
                     result = pipeline.run_process(job, audio_path, mode, finalize_job_state=False)
 
+                # Filet de durabilité (backend `pg`) : pousse les fichiers produits, même
+                # partiels (utiles à la reprise sur un autre worker et à l'affichage
+                # frontale). Les phases du pipeline ont déjà poussé à leur checkpoint ;
+                # ceci couvre les étapes (`summary`/`speakers`) et les fichiers hors phase.
+                # Un échec doit remonter : un résultat non durable n'est pas un résultat.
+                artifact_store.push_job_files(self.config, job_id)
+
                 if result.get("cancelled"):
                     QueueStore.dequeue(job_id, status="cancelled")
                     mark_execution_cancelled(job_id)
                     JobStore.update_state(job_id, JobState.CANCELLED)
+                    if not is_step_mode:
+                        self._purge_input_blobs(job_id, sl)
                 elif result.get("deferred"):
                     # Mode dégradé §7.2 : ressources distantes injoignables (transitoire).
                     # On replanifie au lieu d'échouer (terminaison garantie par la fenêtre
@@ -220,6 +241,7 @@ class JobExecutorService:
                     else:
                         JobStore.update_state(job_id, JobState.FAILED, result["error"])
                         _notify(self.config, job, "failed", result["error"])
+                        self._purge_input_blobs(job_id, sl)
                 elif is_step_mode:
                     # Succès d'une étape GPU (résumé / détection) : le runner a déjà posé
                     # l'état (SUMMARY_DONE / SPEAKER_DETECTION_DONE). On libère seulement la
@@ -232,6 +254,7 @@ class JobExecutorService:
                     mark_execution_completed(job_id)
                     JobStore.update_state(job_id, JobState.COMPLETED)
                     _notify(self.config, job, "completed")
+                    self._purge_input_blobs(job_id, sl)
         except Exception as exc:
             with self.app.app_context():
                 QueueStore.dequeue(job_id, status="failed")
@@ -241,9 +264,23 @@ class JobExecutorService:
                 # est fermée) : _notify accède à job.owner (lazy load) → l'email
                 # d'échec serait silencieusement perdu. On recharge dans CE contexte.
                 _notify(self.config, JobStore.get_by_id(job_id), "failed", str(exc))
+                if mode not in STEP_MODES:
+                    self._purge_input_blobs(job_id, sl)
             raise
         finally:
             self._finalize_tracking(job_id)
+
+    def _purge_input_blobs(self, job_id: str, sl) -> None:
+        """Purge les blobs `input/` (backend `pg`) à l'état terminal du pipeline complet.
+
+        Best-effort : ne masque jamais l'issue du job. L'original reste sur le disque de
+        la frontale ; un reprocess re-poussera `input/` à l'enfilage (`submit_process`).
+        Pas de purge après une étape `summary`/`speakers` : l'audio resservira au worker.
+        """
+        try:
+            artifact_store.purge_input_files(self.config, job_id)
+        except Exception as exc:
+            sl.warning("Purge des blobs input/ impossible (non bloquant)", job_id=job_id, error=str(exc))
 
     def _finalize_tracking(self, job_id: str) -> None:
         with self._lock:

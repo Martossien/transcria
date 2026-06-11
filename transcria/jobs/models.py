@@ -72,6 +72,47 @@ class Job(db.Model):
         }
 
 
+class JobFile(db.Model):
+    """Copie de référence d'un fichier de job (topologie split sans filesystem partagé).
+
+    Quand `storage.shared_backend: pg`, les `jobs_dir` locaux sont des caches : la version
+    qui fait foi pendant la vie du job est ici (contenu dans `job_file_chunks`).
+    Voir docs/STOCKAGE_PARTAGE_JOBS.md.
+    """
+
+    __tablename__ = "job_files"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    job_id = db.Column(
+        db.String(36), db.ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    relpath = db.Column(db.String(512), nullable=False)
+    sha256 = db.Column(db.String(64), nullable=False)
+    size_bytes = db.Column(db.BigInteger, nullable=False, default=0)
+    chunk_count = db.Column(db.Integer, nullable=False, default=0)
+    updated_at = db.Column(
+        db.DateTime(timezone=True), nullable=False,
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (db.UniqueConstraint("job_id", "relpath", name="uq_job_files_job_relpath"),)
+
+
+class JobFileChunk(db.Model):
+    """Contenu d'un JobFile, découpé en chunks (mémoire bornée au push/pull)."""
+
+    __tablename__ = "job_file_chunks"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    file_id = db.Column(
+        db.Integer, db.ForeignKey("job_files.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    seq = db.Column(db.Integer, nullable=False)
+    data = db.Column(db.LargeBinary, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint("file_id", "seq", name="uq_job_file_chunks_file_seq"),)
+
+
 def get_state_order(state: JobState) -> int:
     states = list(JobState)
     try:

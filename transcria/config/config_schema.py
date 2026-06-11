@@ -58,6 +58,11 @@ def _check_server(srv: dict, r: ValidationResult) -> None:
 def _check_storage(sto: dict, r: ValidationResult) -> None:
     _check_str(sto, "jobs_dir", "storage.jobs_dir", r)
     _check_str(sto, "database_url", "storage.database_url", r)
+    backend = sto.get("shared_backend")
+    if backend is not None and backend not in ("fs", "pg"):
+        r.add_error("storage.shared_backend: doit être 'fs' ou 'pg'")
+    if backend == "pg" and not str(sto.get("database_url", "")).startswith("postgresql"):
+        r.add_error("storage.shared_backend: 'pg' requiert une base PostgreSQL (storage.database_url)")
 
 
 def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:

@@ -43,6 +43,7 @@ from transcria.context.participants import ParticipantsManager
 from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
 from transcria.integrations.srt_editor_link import SrtEditorLink
+from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
@@ -129,6 +130,41 @@ def inject_vram_waiting_count():
     except Exception:  # noqa: BLE001
         pass
     return {"vram_waiting_count": 0}
+
+@web_bp.before_app_request
+def _materialize_job_files():
+    """Backend `pg` (split sans filesystem partagé) : matérialisation PARESSEUSE.
+
+    Avant toute requête portant un `job_id`, rapatrie depuis la base les fichiers du job
+    que ce tier n'a pas encore (artefacts écrits par le worker : SRT, qualité, clips…).
+    Throttlé (au plus un pull par job par fenêtre) et best-effort : ne bloque jamais la
+    requête — au pire la donnée apparaît au passage suivant.
+    """
+    cfg = get_config()
+    if not artifact_store.is_pg_backend(cfg):
+        return
+    job_id = (request.view_args or {}).get("job_id")
+    if job_id:
+        artifact_store.pull_job_files_throttled(cfg, job_id)
+
+
+@web_bp.after_app_request
+def _push_job_files_after_write(response):
+    """Backend `pg` : après une ÉCRITURE réussie portant un `job_id`, pousse en base les
+    fichiers modifiés (contexte, participants, lexique, mapping locuteurs…).
+
+    Hook global volontaire : tout endpoint d'écriture présent ou FUTUR est couvert sans
+    enrôlement manuel (règle d'or du chantier — ne jamais supposer un disque commun).
+    Idempotent et bon marché quand rien n'a changé (comparaison via manifeste local).
+    Une erreur remonte (500) : une sauvegarde non durable ne doit pas paraître réussie.
+    """
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400:
+        cfg = get_config()
+        job_id = (request.view_args or {}).get("job_id")
+        if job_id and artifact_store.is_pg_backend(cfg):
+            artifact_store.push_job_files(cfg, job_id)
+    return response
+
 
 MEETING_TYPES_LIST = MEETING_TYPES
 TYPE_SPECIFIC_FIELDS_JSON = __import__("json").dumps(TYPE_SPECIFIC_FIELDS, ensure_ascii=False)
@@ -1963,6 +1999,20 @@ def api_download_package(job_id: str):
         return error_response
 
     zip_path = Path(cfg["storage"]["jobs_dir"]) / job.id / "exports" / f"transcrIA_job_{job.id}.zip"
+    if artifact_store.is_pg_backend(cfg):
+        # Backend `pg` : le zip n'est PAS transporté en base (il contient l'audio). On le
+        # (re)construit localement depuis les artefacts matérialisés, s'il est absent ou
+        # plus vieux que le dernier artefact synchronisé (ex. job retraité par le worker).
+        stale = (not zip_path.is_file()) or (
+            zip_path.stat().st_mtime_ns < artifact_store.newest_synced_mtime_ns(cfg, job.id)
+        )
+        if stale:
+            from transcria.exports.package_builder import PackageBuilder
+            build = PackageBuilder(cfg).build_package(job)
+            if build.get("error"):
+                logger.error("Reconstruction locale du package impossible: job=%s erreur=%s",
+                             job.id, build["error"])
+                abort(500)
     if not zip_path.is_file():
         abort(404)
 

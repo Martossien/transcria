@@ -72,6 +72,7 @@ python app.py --no-debug
 |---|---|---|---|
 | `jobs_dir` | string | `"./jobs"` | Répertoire racine des données de jobs (chemin relatif ou absolu) |
 | `database_url` | string | `"sqlite:///transcrIA.db"` | URL SQLAlchemy. **PostgreSQL recommandé en prod** (`postgresql+psycopg://…`, requis pour la concurrence Phase B) ; SQLite = repli mono-process dev/tests. La variable d'env `TRANSCRIA_DATABASE_URL` (prioritaire) garde le mot de passe hors config versionnée |
+| `shared_backend` | string | `"fs"` | Stockage des fichiers de jobs entre tiers : `fs` = disque local (tout-en-un, ou split avec `jobs_dir` partagé NFS) ; `pg` = fichiers **répliqués via PostgreSQL** (tables `job_files`/`job_file_chunks`) — **requis** quand `role=web` et `role=scheduler` tournent sur deux machines sans filesystem commun. Exige une base PostgreSQL. Voir `docs/STOCKAGE_PARTAGE_JOBS.md` |
 
 **Redémarrage requis :** oui pour `database_url`. `jobs_dir` est relu par `JobFilesystem` à chaque opération (pas de cache).
 

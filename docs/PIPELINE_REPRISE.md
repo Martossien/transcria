@@ -43,6 +43,13 @@ Base saine déjà en place :
 artefact non ambigu existe (rétro-remplissage si le run a planté avant d'écrire le
 marqueur). L'artefact fait foi.
 
+> **Extension (chantier stockage partagé, `docs/STOCKAGE_PARTAGE_JOBS.md`)** : en backend
+> `pg`, le checkpoint **pousse les artefacts en base AVANT le marqueur**
+> (`PipelineService._checkpoint`) — une phase n'est « faite » que si ses fichiers sont
+> durables. Le pull au début de `_run_process` re-matérialise les artefacts → la reprise
+> devient **portable entre workers**. Et un `audio_path` mémorisé absent du disque local
+> fait **rejouer le préprocess** (chemin mort d'un autre worker) au lieu d'échouer.
+
 ## 4. Carte phase → artefact → reprise
 
 | Phase | Méthode | Artefact (non ambigu) | Reprise |

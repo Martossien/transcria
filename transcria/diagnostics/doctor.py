@@ -388,6 +388,44 @@ def check_storage(
     return CheckResult(name, OK, ", ".join(f"{label}={path}" for label, path in targets) + " inscriptibles")
 
 
+def check_shared_storage(cfg: dict) -> CheckResult:
+    """Topologie split : les fichiers de jobs doivent être visibles des deux tiers.
+
+    En `role=web`/`scheduler` avec `shared_backend: fs`, rien ne garantit que la frontale
+    et le worker voient le même `jobs_dir` (deux machines = audio introuvable côté worker,
+    téléchargements 404 côté frontale). Voir docs/STOCKAGE_PARTAGE_JOBS.md."""
+    name = "Stockage des fichiers de jobs (split)"
+    role = (
+        os.environ.get("TRANSCRIA_ROLE")
+        or (cfg.get("runtime") or {}).get("role")
+        or "all"
+    ).strip().lower()
+    backend = str((cfg.get("storage") or {}).get("shared_backend") or "fs").strip().lower()
+
+    if backend == "pg":
+        url = (
+            os.environ.get("TRANSCRIA_DATABASE_URL")
+            or cfg.get("storage", {}).get("database_url", "")
+        )
+        if not str(url).startswith("postgresql"):
+            return CheckResult(
+                name, FAIL, "shared_backend=pg mais la base n'est pas PostgreSQL",
+                hint="Le backend pg réplique les fichiers via PostgreSQL : corriger storage.database_url.",
+            )
+        return CheckResult(
+            name, OK,
+            "backend pg : fichiers répliqués via PostgreSQL (tables job_files — schéma vérifié par « Base de données »)",
+        )
+    if role in ("web", "scheduler"):
+        return CheckResult(
+            name, WARN,
+            f"role={role} avec shared_backend=fs : exige un jobs_dir PARTAGÉ entre frontale et worker",
+            hint="Deux machines sans montage commun → passer storage.shared_backend: pg "
+                 "(cf. docs/STOCKAGE_PARTAGE_JOBS.md) ; même machine ou NFS → OK, ignorer.",
+        )
+    return CheckResult(name, OK, "tout-en-un (fs) : disque local suffisant")
+
+
 # ── Sondes / helpers effectifs (injectables ci-dessus) ────────────────────
 
 
@@ -454,6 +492,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_opencode,
     check_inference_nodes,
     check_storage,
+    check_shared_storage,
 )
 
 

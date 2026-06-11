@@ -2,7 +2,9 @@ import logging
 import time
 from copy import deepcopy
 from functools import partial
+from pathlib import Path
 
+from transcria.jobs import artifact_store
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -191,18 +193,32 @@ class PipelineService:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         done = set(resume.get_completed_phases(job))
 
+        def _checkpoint(phase: str) -> None:
+            # Backend `pg` (split) : les artefacts doivent être DURABLES en base avant le
+            # marqueur — sinon un autre tier croirait la phase faite sans ses fichiers.
+            # Si le push échoue, la phase n'est pas marquée → rejouée au prochain dispatch.
+            artifact_store.push_job_files(self.config, job.id)
+            resume.mark_phase_done(JobStore, job.id, phase)
+            done.add(phase)
+
         def _done(phase: str) -> bool:
             if phase in done:
                 return True
             if resume.artifact_exists(phase, fs):  # rétro-remplissage (run interrompu)
-                resume.mark_phase_done(JobStore, job.id, phase)
-                done.add(phase)
+                _checkpoint(phase)
                 return True
             return False
 
         # ── Préprocess (transforms audio) : un seul checkpoint ──
-        if _done("preprocess"):
-            audio_path = resume.get_processed_audio_path(job) or audio_path
+        preprocess_done = _done("preprocess")
+        resumed_audio = resume.get_processed_audio_path(job) if preprocess_done else None
+        if preprocess_done and resumed_audio and not Path(resumed_audio).is_file():
+            # Chemin mémorisé absent de CE disque (reprise sur un autre worker / cache
+            # vidé) : on rejoue les transforms plutôt que d'échouer sur un chemin mort.
+            sl.warning("Audio prétraité absent localement — préprocess rejoué", audio=resumed_audio)
+            preprocess_done = False
+        if preprocess_done:
+            audio_path = resumed_audio or audio_path
             sl.info("Préprocess déjà fait — reprise (skip transforms audio)", audio=audio_path)
         else:
             audio_preflight = self._run_audio_preflight(job, audio_path, sl)
@@ -213,8 +229,7 @@ class PipelineService:
             audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
             audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
             resume.set_processed_audio_path(JobStore, job.id, audio_path)
-            resume.mark_phase_done(JobStore, job.id, "preprocess")
-            done.add("preprocess")
+            _checkpoint("preprocess")
 
         # ── Transcription (STT) ──
         transcribe_result: dict = {}
@@ -245,8 +260,7 @@ class PipelineService:
                 return {"error": transcribe_result["error"], "step": "transcription"}
             # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
             StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
-            resume.mark_phase_done(JobStore, job.id, "transcription")
-            done.add("transcription")
+            _checkpoint("transcription")
 
         steps = self._define_pipeline_steps(job, audio_path, mode)
 
@@ -290,8 +304,7 @@ class PipelineService:
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.FAILED, result["error"])
                 return {"error": result["error"], "step": name}
-            resume.mark_phase_done(JobStore, job.id, name)
-            done.add(name)
+            _checkpoint(name)
             sl.info("Étape terminée", step=name, duree=round(elapsed, 1))
             self._publish_step_progress(job, name, starting=False)
             StageMetrics.get_instance().record(name, elapsed)

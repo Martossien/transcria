@@ -55,9 +55,10 @@ transcria/
 │   │
 │   ├── jobs/                      # Gestion des traitements
 │   │   ├── __init__.py
-│   │   ├── models.py              # Modèle Job, JobState (20 états)
+│   │   ├── models.py              # Modèle Job, JobState (20 états), JobFile/JobFileChunk (magasin pg)
 │   │   ├── store.py               # JobStore (CRUD jobs, count_jobs)
-│   │   └── filesystem.py          # JobFilesystem (I/O disque, save_json/load_json/save_text/load_text/save_upload)
+│   │   ├── filesystem.py          # JobFilesystem (I/O disque, save_json/load_json/save_text/load_text/save_upload)
+│   │   └── artifact_store.py      # Magasin de fichiers partagé via PostgreSQL (split web/scheduler — push/pull/purge, sha256)
 │   │
 │   ├── queue/                     # File persistante, scheduler et calendrier GPU
 │   │   ├── allocator.py           # GPUAllocator (réservations atomiques, verrou LLM, PID tracking)
@@ -475,6 +476,18 @@ Au premier démarrage, `UserStore.ensure_admin()` logue un warning si le compte 
 | Classe | Méthodes |
 |---|---|
 | `JobFilesystem(jobs_dir, job_id)` | `save_json()`, `load_json()`, `save_text()`, `load_text()`, `save_upload()`, `get_original_audio_path()`, `cleanup()`. `save_json`/`save_text` écrivent de façon **atomique** (temp unique → `fsync` → `os.replace`) : aucun lecteur concurrent ne voit de fichier tronqué |
+
+**`artifact_store.py`** — magasin de fichiers de jobs partagé via PostgreSQL (`storage.shared_backend: pg`, topologie split sans filesystem commun — `docs/STOCKAGE_PARTAGE_JOBS.md`)
+| Fonction | Description |
+|---|---|
+| `push_job_files(cfg, job_id, prefixes=…)` | Pousse en base les fichiers locaux nouveaux/modifiés (upsert idempotent par sha256, transaction par fichier, chunks 8 Mo) |
+| `pull_job_files(cfg, job_id, prefixes=…)` | Matérialise localement les fichiers de la base (tmp + sha256 vérifié + `os.replace`) ; n'écrase jamais un fichier local modifié non poussé (manifeste `.sync_state.json`) |
+| `pull_job_files_throttled(cfg, job_id)` | Pull paresseux best-effort (hook `before_app_request`, au plus 1 pull/job/2 s) |
+| `purge_input_files(cfg, job_id)` | Supprime les blobs `input/` (poids lourd) aux états terminaux du pipeline |
+| `delete_job_files(job_id)` | Purge totale à la suppression du job (en plus du `ON DELETE CASCADE`) |
+| `newest_synced_mtime_ns(cfg, job_id)` | Fraîcheur des artefacts locaux (test de péremption du package zip reconstruit) |
+
+No-op intégral quand `shared_backend` vaut `fs` (défaut). Préfixes synchronisés : `input/`, `context/`, `metadata/`, `speakers/`, `quality/`, `summary/` ; exclus : `exports/` (reconstruit localement), `audio/` (intermédiaires), `metadata/audio_excerpts/` (cache à la demande).
 
 Structure disque d'un job :
 ```

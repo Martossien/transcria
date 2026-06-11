@@ -24,6 +24,11 @@ storage:
   # la variable d'environnement TRANSCRIA_DATABASE_URL, prioritaire sur cette valeur.
   # Le schéma est géré par Alembic (`alembic upgrade head`, lancé par start.sh).
   database_url: "sqlite:///transcrIA.db"
+  # Stockage des fichiers de jobs entre tiers (docs/STOCKAGE_PARTAGE_JOBS.md) :
+  #   fs (défaut) : disque local — tout-en-un, ou split avec jobs_dir partagé (NFS).
+  #   pg : fichiers répliqués via PostgreSQL — REQUIS quand la frontale (role=web) et le
+  #        worker (role=scheduler) tournent sur deux machines SANS filesystem commun.
+  shared_backend: "fs"
 
 voice_enrollment:
   # Reconnaissance vocale des locuteurs (donnée biométrique). N'expose que des

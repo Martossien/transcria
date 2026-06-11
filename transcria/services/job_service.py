@@ -28,6 +28,13 @@ class JobService:
         fs = JobFilesystem(jobs_dir, job.id)
         result = fs.save_upload(file_data, filename)
 
+        # Backend `pg` (split sans filesystem partagé) : l'audio doit être durable en base
+        # AVANT de déclarer l'upload réussi — sinon le worker ne le verra jamais. Une
+        # erreur ici doit remonter (l'utilisateur saura que l'upload a échoué).
+        from transcria.config import get_config
+        from transcria.jobs import artifact_store
+        artifact_store.push_job_files(get_config(), job.id, prefixes=("input/",))
+
         stem = Path(filename).stem or filename
         current_title = (job.title or "").strip()
         if not current_title or current_title == "Réunion sans titre":
@@ -135,6 +142,10 @@ class JobService:
             return False
         fs = JobFilesystem(jobs_dir, job.id)
         fs.cleanup()
+        # Purge explicite des blobs (la FK CASCADE est une ceinture supplémentaire ;
+        # inconditionnel : la table peut contenir des lignes d'une période en backend pg).
+        from transcria.jobs import artifact_store
+        artifact_store.delete_job_files(job.id)
         JobStore.delete_job(job.id)
         logger.info("Job supprimé: %s", job.id)
         return True

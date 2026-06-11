@@ -81,6 +81,10 @@ def test_resume_skips_completed_phases(app, owner_id, monkeypatch, tmp_path):
         cfg = _cfg(tmp_path)
         job = JobStore.create_job(owner_id, "Resume")
         # Simule un run précédent : préprocess + STT + diarisation déjà faits.
+        # Le fichier prétraité DOIT exister localement : depuis le chantier stockage
+        # partagé, un chemin mémorisé absent de ce disque (reprise sur un autre worker)
+        # fait légitimement rejouer le préprocess.
+        (tmp_path / "processed.wav").write_bytes(b"RIFFfake")
         resume.set_processed_audio_path(JobStore, job.id, str(tmp_path / "processed.wav"))
         for ph in ("preprocess", "transcription", "diarization"):
             resume.mark_phase_done(JobStore, job.id, ph)

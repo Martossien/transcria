@@ -176,6 +176,15 @@ Pour encaisser plus de trafic web, on sépare le tier HTTP (`role=web`, N worker
 # puis configurer runtime.role=scheduler dans config.yaml
 ```
 
+> ⚠️ **Fichiers de jobs (deux machines)** : la frontale et l'ordonnanceur doivent voir les
+> **mêmes fichiers** (`storage.jobs_dir`) — audio uploadé, contexte, SRT, livrables. Sur
+> deux machines **sans montage partagé**, configurez `storage.shared_backend: pg` des deux
+> côtés : les fichiers sont alors **répliqués via PostgreSQL** (aucun NFS à opérer,
+> intégrité sha256, purge automatique de l'audio en fin de traitement). Sur une seule
+> machine (ou avec un NFS existant), gardez le défaut `fs`. Détails et garanties :
+> [`STOCKAGE_PARTAGE_JOBS.md`](STOCKAGE_PARTAGE_JOBS.md). `transcria doctor` signale une
+> topologie split sans backend adapté.
+
 Voir §11 pour les unités systemd dédiées (`transcria-web.service`, `transcria-scheduler.service`).
 
 ---
@@ -1189,6 +1198,12 @@ voir §7) :
 
 Le rôle est choisi par la variable d'environnement `TRANSCRIA_ROLE` (ou `runtime.role`
 dans `config.yaml`, ou `python app.py --role …`).
+
+**Fichiers de jobs en split multi-machines** : les deux rôles partagent la base, mais les
+fichiers (`storage.jobs_dir`) restent locaux à chaque machine. Deux machines sans montage
+commun ⇒ `storage.shared_backend: pg` des deux côtés (réplication des fichiers via
+PostgreSQL — cf. [`STOCKAGE_PARTAGE_JOBS.md`](STOCKAGE_PARTAGE_JOBS.md)). Même machine ou
+NFS ⇒ `fs` (défaut).
 
 Unités systemd fournies dans `deploy/` (migration oneshot + web + scheduler) :
 

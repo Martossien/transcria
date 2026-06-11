@@ -258,6 +258,15 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   une détection matérielle (un éventuel petit GPU frontal est ignoré). Rappel : la LLM d'arbitrage est
   **locale au worker**, pas servie par le nœud de ressources — donc le worker doit avoir un GPU. Une
   LLM 35B en CPU est inexploitable (≈100-300× plus lente).
+- **Fichiers de jobs en split (frontale ≠ machine worker)** : les deux tiers partagent la base mais
+  PAS le disque — l'audio uploadé sur la frontale, le contexte (invitation/lexique/mapping) et les
+  artefacts produits par le worker (SRT, qualité, clips, résumé) doivent circuler. Solution intégrée :
+  `storage.shared_backend: pg` — les fichiers sont **répliqués via PostgreSQL** (push à l'upload/
+  enfilage et à chaque checkpoint de phase, matérialisation paresseuse côté frontale, intégrité
+  sha256, purge de l'audio aux états terminaux). Le nœud de ressources, lui, ne stocke **jamais**
+  de fichier utilisateur (audio reçu par upload HTTP en fichier temporaire, supprimé à la fin de la
+  requête). Détails : `docs/STOCKAGE_PARTAGE_JOBS.md` ; garde-fou : check « Stockage des fichiers de
+  jobs (split) » du `doctor`.
 - **Résumé synchrone** (`api_summary`, `role=all`) : la 1ʳᵉ tentative reste synchrone (UX immédiate). Sur
   `vram_wait`, l'état pré-résumé est restauré, le job passe `waiting_vram`, et une **reprise serveur**
   est **enfilée** (`submit_process(mode="summary")`, profil VRAM `summary_stt`). Le scheduler relance

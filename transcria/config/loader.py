@@ -8,7 +8,9 @@ _DEFAULT_CONFIG = {
     # Rôle du process (Phase B / C1) : all (tout-en-un, défaut) | web | scheduler.
     # Surchargé par la variable d'environnement TRANSCRIA_ROLE.
     "runtime": {"role": "all"},
-    "storage": {"jobs_dir": "./jobs", "database_url": "sqlite:///transcrIA.db"},
+    # shared_backend : fs (défaut, disque local/NFS) | pg (fichiers de jobs répliqués via
+    # PostgreSQL — requis en split web/scheduler multi-machines sans filesystem partagé).
+    "storage": {"jobs_dir": "./jobs", "database_url": "sqlite:///transcrIA.db", "shared_backend": "fs"},
     "voice_enrollment": {
         "enabled": False,
         "storage_dir": "./voices",

@@ -104,6 +104,34 @@ File persistante utilisée par `QueueScheduler` quand `workflow.queue.enabled=tr
 
 `job_queue.status` est distinct de `jobs.state`. Le workflow utilisateur reste porté par `JobState`; l'état de file est un état d'exécution runtime. `extra_data.execution.status` garde aussi la trace `queued → running → completed|failed|cancelled` pour la reprise et les APIs de polling. Un statut **`waiting_vram`** (non terminal) signale une VRAM locale momentanément insuffisante : le job re-queue et reprend automatiquement, sans passer par `failed` (cf. `mark_execution_waiting_vram`, `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis).
 
+### Tables `job_files` / `job_file_chunks`
+
+Magasin de fichiers de jobs **partagé via PostgreSQL** (`storage.shared_backend: pg`) —
+topologie split `web`/`scheduler` sans filesystem commun. Les `jobs_dir` locaux sont des
+caches matérialisés ; la copie de référence vit ici pendant la vie du job. Vides en
+backend `fs` (défaut). Voir `docs/STOCKAGE_PARTAGE_JOBS.md`.
+
+| Colonne (`job_files`) | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | Integer | PK autoincrement | Identifiant interne |
+| `job_id` | String(36) | FK → jobs.id ON DELETE CASCADE, NOT NULL, INDEX | Job propriétaire |
+| `relpath` | String(512) | NOT NULL, UNIQUE avec job_id | Chemin relatif posix dans le job_dir (ex. `metadata/transcription.srt`) |
+| `sha256` | String(64) | NOT NULL | Empreinte d'intégrité, vérifiée à la matérialisation |
+| `size_bytes` | BigInteger | NOT NULL | Taille du fichier |
+| `chunk_count` | Integer | NOT NULL | Nombre de chunks dans `job_file_chunks` |
+| `updated_at` | DateTime(tz) | NOT NULL | Dernière mise à jour (upsert) |
+
+| Colonne (`job_file_chunks`) | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | Integer | PK autoincrement | Identifiant interne |
+| `file_id` | Integer | FK → job_files.id ON DELETE CASCADE, NOT NULL, INDEX | Fichier parent |
+| `seq` | Integer | NOT NULL, UNIQUE avec file_id | Ordre du chunk |
+| `data` | LargeBinary | NOT NULL | Contenu (chunks de 8 Mo → mémoire bornée) |
+
+Les blobs `input/` (le poids lourd) sont **purgés** aux états terminaux du pipeline ;
+les artefacts (Ko–Mo) restent jusqu'à la suppression du job. Chaque machine garde un
+manifeste local `jobs_dir/<job_id>/.sync_state.json` (cache d'état de synchro, hors base).
+
 ### Table `scheduling_windows`
 
 Créneaux calendaires évalués par `SchedulingCalendar`.

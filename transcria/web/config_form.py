@@ -56,6 +56,12 @@ CONFIG_FORM_SECTIONS: list[dict] = [
              "help": "Mise en file des traitements (recommandé)."},
             {"path": "workflow.execution.max_concurrent_jobs", "label": "Jobs simultanés max", "type": "int",
              "help": "Concurrence par défaut (1 = comportement historique)."},
+            {"path": "storage.shared_backend", "label": "Stockage des fichiers de jobs", "type": "select",
+             "options": ["fs", "pg"],
+             "help": "fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir "
+                     "partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la "
+                     "frontale (role=web) et le worker (role=scheduler) sont sur deux machines "
+                     "sans filesystem commun (cf. docs/STOCKAGE_PARTAGE_JOBS.md)."},
         ],
     },
     {
