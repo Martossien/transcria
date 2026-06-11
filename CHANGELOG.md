@@ -6,6 +6,9 @@ Le format suit une logique proche de Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed
+- **500 à la suppression d'un job déjà traité** (incident du 11/06/2026, `POST /jobs/<id>/delete`) : la relation ORM `Job↔JobQueueEntry` n'avait **pas de cascade** — à la suppression du job, SQLAlchemy « désassociait » l'entrée de file (`UPDATE job_queue SET job_id=NULL`) → violation NOT NULL → Internal Server Error. Tout job **passé en file** (c.-à-d. tout job réellement traité) était insupprimable depuis l'UI. Même classe de bug corrigée sur `voice_matches.job_id` (suggestions de matching vocal → violation FK). Correctif : `cascade="all, delete-orphan"` sur les deux relations — supprimer un job supprime son entrée de file et ses suggestions vocales (le référentiel de voix, lui, survit). Tests de régression : suppression d'un job avec entrée `done`, avec entrée `waiting`, et avec suggestion vocale.
+
 ### Changed
 - **Vitrine GitHub** : `README.md` réécrit **en anglais** (positionnement self-hosted/souveraineté, différenciateurs, captures d'écran de la nouvelle interface dans `docs/screenshots/`, quickstart, statut honnête « French-first ») ; l'ancien README français est conservé et mis à jour dans `README.fr.md` (liens croisés). **Licence : AGPL-3.0 → Apache-2.0** (permissive avec concession explicite de brevets — l'AGPL freinait l'évaluation/adoption ; le détenteur du copyright a validé le changement). Discipline « prêt-à-traduire » gravée dans AGENTS.md (libellés via `ui_labels.py`, prompts en fichiers, pas de messages d'affichage figés en base) — l'i18n reste une évolution possible sans refonte, pas un chantier actuel.
 

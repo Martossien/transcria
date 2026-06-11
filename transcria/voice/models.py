@@ -172,7 +172,11 @@ class VoiceMatch(db.Model):
     decided_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     decided_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    job = db.relationship("Job")
+    # cascade delete-orphan : les suggestions de matching sont liées au job — supprimer
+    # le job les supprime (sinon DELETE jobs → violation FK job_id → 500).
+    job = db.relationship(
+        "Job", backref=db.backref("voice_matches", cascade="all, delete-orphan", lazy="select")
+    )
     subject = db.relationship("VoiceSubject")
     profile = db.relationship("VoiceProfile")
     creator = db.relationship("User", foreign_keys=[created_by])

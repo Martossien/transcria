@@ -34,7 +34,13 @@ class JobQueueEntry(db.Model):
     paused_by = db.Column(db.String(36), db.ForeignKey("users.id"), nullable=True)
     mode = db.Column(db.String(20), nullable=False, default="fast")
 
-    job = db.relationship("Job", backref=db.backref("queue_entry", uselist=False))
+    # cascade delete-orphan : supprimer un Job supprime son entrée de file. Sans cela,
+    # SQLAlchemy « désassocie » (UPDATE job_id=NULL) → violation NOT NULL → 500 à la
+    # suppression d'un job déjà passé en file (incident du 11/06/2026).
+    job = db.relationship(
+        "Job",
+        backref=db.backref("queue_entry", uselist=False, cascade="all, delete-orphan"),
+    )
     paused_by_user = db.relationship("User", foreign_keys=[paused_by])
 
     def get_vram_profile(self) -> dict:
