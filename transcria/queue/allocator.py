@@ -274,6 +274,84 @@ class GPUAllocator:
         with self._alloc_lock:
             return self._select_gpu_locked(int(required_mb), preferred_gpu)
 
+    # ── LLM d'arbitrage : moteur MULTI-GPU à placement contrôlé par le script ──────
+    #
+    # La LLM (ex. 35B Q8 ≈ 60 Go) s'étale sur plusieurs cartes via le script de
+    # lancement (CUDA_VISIBLE_DEVICES + --tensor-split) : son besoin ne tiendra JAMAIS
+    # sur un seul GPU. La modéliser par `try_reserve()` mono-GPU était insatisfaisable
+    # par construction (audit du 11/06/2026) : on la modélise désormais comme un besoin
+    # PAR GPU (total ÷ nb de cartes) vérifié/réservé sur les GPU que le script utilise
+    # réellement (`gpu.llm_gpu_indices`, défaut = tous les GPU visibles).
+
+    def _llm_gpu_indices(self) -> list[int]:
+        """GPU (index visibles) utilisés par le script LLM. Défaut : tous."""
+        configured = (self.config.get("gpu", {}) or {}).get("llm_gpu_indices")
+        if isinstance(configured, list) and configured:
+            return [int(i) for i in configured]
+        visible_devices = parse_cuda_visible_devices()
+        indices = []
+        for gpu in self.get_gpu_info():
+            idx = to_visible_device_index(
+                gpu.get("id", 0), visible_devices,
+                allow_remapped_ordinal=bool(gpu.get("cuda_visible_remapped")),
+            )
+            if idx is not None:
+                indices.append(idx)
+        return sorted(indices)
+
+    @staticmethod
+    def _llm_per_gpu_mb(total_mb: int, gpu_count: int) -> int:
+        return -(-int(total_mb) // max(1, gpu_count))  # plafond (ceil)
+
+    def can_host_llm(self, total_mb: int) -> bool:
+        """Chaque GPU du placement LLM a-t-il la part requise (+ marge) de libre ?"""
+        indices = self._llm_gpu_indices()
+        if not indices:
+            return False
+        share = self._llm_per_gpu_mb(total_mb, len(indices))
+        with self._alloc_lock:
+            return all(
+                self._get_available_vram_mb_locked(idx) >= share + self.min_free_mb
+                for idx in indices
+            )
+
+    def try_reserve_llm(self, job_id: str, total_mb: int, phase: str) -> bool:
+        """Réserve la LLM multi-GPU pour un job : une part par GPU du placement,
+        TOUT-OU-RIEN (aucune réservation laissée en cas d'échec partiel).
+
+        Idempotent par (job, phase) ; libérer via `release_phase(job_id, phase)`
+        (qui supprime déjà toutes les parts) ou `release(job_id)`."""
+        if not job_id or not phase:
+            raise ValueError("job_id et phase requis")
+        total_mb = int(total_mb)
+        if total_mb <= 0:
+            raise ValueError("total_mb doit être positif")
+
+        indices = self._llm_gpu_indices()
+        if not indices:
+            return False
+        share = self._llm_per_gpu_mb(total_mb, len(indices))
+        with self._alloc_lock:
+            if self._find_reservation_locked(job_id, phase) is not None:
+                return True
+            for idx in indices:
+                if self._get_available_vram_mb_locked(idx) < share + self.min_free_mb:
+                    logger.info(
+                        "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (%d Mo/GPU sur %s, GPU %d insuffisant)",
+                        job_id, phase, total_mb, share, indices, idx,
+                    )
+                    return False
+            now = time.monotonic()
+            for idx in indices:
+                self._gpu_reservations.setdefault(idx, []).append(Reservation(
+                    job_id=job_id, gpu_index=idx, vram_mb=share, phase=phase, reserved_at=now,
+                ))
+            logger.info(
+                "LLM réservée: job=%s phase=%s total=%d Mo (%d Mo/GPU sur %s)",
+                job_id, phase, total_mb, share, indices,
+            )
+            return True
+
     def reserve(self, job_id: str, gpu_index: int, vram_mb: int, phase: str = "stt") -> bool:
         with self._alloc_lock:
             existing = self._find_reservation_locked(job_id, phase)

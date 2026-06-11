@@ -295,6 +295,22 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
   On ne stoppe jamais la LLM « pour la phase LLM elle-même » : la phase `llm_arbitration` est déjà
   ignorée à l'admission quand la LLM est partagée (`llm_shared`). Le besoin déclencheur est toujours
   une phase **non-LLM**. C'est **notre** process géré, jamais un tiers ; indépendant du calendrier.
+- **VRAM de la LLM d'arbitrage = besoin MULTI-GPU (audit du 11/06/2026)** : la LLM (ex. 35B Q8
+  ≈ 60 Go) s'étale sur plusieurs cartes via son script de lancement (`CUDA_VISIBLE_DEVICES` +
+  `--tensor-split`) — son besoin ne tient JAMAIS sur un seul GPU. L'ancien modèle (réservation
+  mono-GPU de `llm_vram_mb`) était **insatisfaisable par construction** : code mort tant que la
+  LLM tournait, et **deadlock `vram_wait`** dès qu'il fallait la relancer (après un reclaim,
+  un crash, ou en lancement à la demande). De plus le drapeau stocké `llm_shared` était
+  inconditionnellement vrai → l'admission ne vérifiait jamais la LLM. Nouveau modèle :
+  - `gpu.llm_vram_mb` = empreinte **totale**, `gpu.llm_gpu_indices` = cartes du script
+    (défaut : tous les GPU visibles) ; le besoin par carte = total ÷ nb de cartes ;
+  - `GPUAllocator.can_host_llm` (lecture) et `try_reserve_llm` (réservation **tout-ou-rien**,
+    une part par carte, libérée d'un bloc par `release_phase`) ;
+  - phases `summary_llm` et `llm_arbitration` du runner : réservation multi-GPU ;
+  - **admission** (`_llm_admissible`) sur la **vérité vivante** : LLM en marche → réellement
+    partagée (rien à exiger) ; éteinte → `can_host_llm` requis ; le max mono-GPU
+    (`_local_required_mb`) ne compte plus que les phases NON-LLM (STT/diarisation).
+  À recalibrer (`llm_vram_mb` + `llm_gpu_indices`) à chaque changement de modèle/script.
 - **Politique `gpu.preemption`** (réglable dans `/admin/config` → « Ressources GPU ») :
   - `own-only` (**défaut**, infra partagée) : catégorie 1 seulement (nos process trackés inactifs).
   - `aggressive` : autorise en plus la préemption de serveurs d'inférence **tiers** (`kill_patterns`,

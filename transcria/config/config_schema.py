@@ -163,6 +163,14 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
     _check_int_range(gpu, "llm_vram_mb", "gpu.llm_vram_mb", 1000, 500000, r)
     _check_int_range(gpu, "granite_vram_mb", "gpu.granite_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "min_free_vram_mb", "gpu.min_free_vram_mb", 100, 50000, r)
+    indices = gpu.get("llm_gpu_indices")
+    if indices is not None:
+        if not isinstance(indices, list) or not indices or not all(
+            isinstance(i, int) and 0 <= i <= 63 for i in indices
+        ):
+            r.add_error("gpu.llm_gpu_indices: doit être une liste non vide d'index GPU (entiers ≥ 0), ou absent (= tous)")
+        elif len(set(indices)) != len(indices):
+            r.add_error("gpu.llm_gpu_indices: index GPU dupliqués")
 
 
 def _check_services(svc: dict, r: ValidationResult) -> None:

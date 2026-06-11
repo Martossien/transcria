@@ -529,12 +529,10 @@ class WorkflowRunner:
         try:
             if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
                 llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-                reservation = self.allocator.try_reserve(
-                    job.id,
-                    llm_vram_mb,
-                    "summary_llm",
-                )
-                if reservation is None:
+                # Réservation MULTI-GPU : la LLM s'étale sur les cartes du script
+                # (gpu.llm_gpu_indices) — total ÷ nb de GPU par carte, tout-ou-rien.
+                # (L'ancien try_reserve mono-GPU était insatisfaisable par construction.)
+                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "summary_llm"):
                     # Pénurie VRAM transitoire : signal vram_wait (mise en attente +
                     # reprise auto). L'ancien skip silencieux concluait SUMMARY_DONE
                     # avec le placeholder — invisible pour l'utilisateur.
@@ -1647,12 +1645,10 @@ class WorkflowRunner:
         try:
             if self._should_reserve_llm_vram() and not llm_was_already_running:
                 llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-                reservation = self.allocator.try_reserve(
-                    job.id,
-                    llm_vram_mb,
-                    "llm_arbitration",
-                )
-                if reservation is None:
+                # Réservation MULTI-GPU (total ÷ nb de GPU du placement, tout-ou-rien) —
+                # cf. GPUAllocator.try_reserve_llm. L'ancien try_reserve mono-GPU rendait
+                # la relance de la LLM après reclaim IMPOSSIBLE (deadlock vram_wait).
+                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "llm_arbitration"):
                     # VRAM transitoire : pas de FAILED. On remonte `vram_wait` → re-queue ;
                     # au redispatch, la reprise saute STT/diarisation (déjà sur disque) et
                     # l'admission exige la VRAM LLM (seule phase restante) → ni boucle de

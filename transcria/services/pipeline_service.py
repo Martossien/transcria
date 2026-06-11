@@ -49,6 +49,10 @@ class PipelineService:
             "mode": mode,
             "peak_vram_mb": max(phases.values()) if phases else 0,
             "phases": phases,
+            # HÉRITÉ (affichage seulement) : l'admission n'utilise PLUS ce drapeau — il
+            # était inconditionnellement vrai. Elle interroge la vérité vivante
+            # (LLM en marche → partagée ; éteinte → can_host_llm multi-GPU). Cf.
+            # QueueScheduler._llm_admissible et l'audit VRAM du 11/06/2026.
             "llm_shared": "llm_arbitration" in phases,
         }
 

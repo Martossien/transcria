@@ -242,7 +242,12 @@ parakeet:
 gpu:
   cohere_vram_mb: 6000
   pyannote_vram_mb: 2000
+  # Empreinte TOTALE de la LLM d'arbitrage (tous GPU confondus). La LLM est un moteur
+  # MULTI-GPU : son placement est décidé par le script de lancement (CUDA_VISIBLE_DEVICES
+  # + --tensor-split). Déclarez ici les cartes qu'il utilise — la vérification/réservation
+  # se fait PAR GPU (total ÷ nb de cartes). llm_gpu_indices absent = tous les GPU visibles.
   llm_vram_mb: 60000
+  # llm_gpu_indices: [0, 1, 2]
   granite_vram_mb: 6000
   parakeet_vram_mb: 8000
   sortformer_vram_mb: 3500

@@ -53,7 +53,11 @@ _DEFAULT_CONFIG = {
     "gpu": {
         "cohere_vram_mb": 6000,
         "pyannote_vram_mb": 2000,
+        # Empreinte TOTALE de la LLM d'arbitrage (tous GPU confondus) et cartes utilisées
+        # par son script de lancement (CUDA_VISIBLE_DEVICES/tensor-split). None = tous les
+        # GPU visibles. La vérification/réservation se fait PAR GPU (total ÷ nb cartes).
         "llm_vram_mb": 60000,
+        "llm_gpu_indices": None,
         "granite_vram_mb": 6000,
         "parakeet_vram_mb": 8000,
         "sortformer_vram_mb": 3500,

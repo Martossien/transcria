@@ -1176,8 +1176,9 @@ Limites :
 | `gpu.sortformer_vram_mb` | `3500` | VRAM estimée Sortformer (NeMo) — lue par `get_diarizer_vram_mb("sortformer", config)` |
 | `gpu.granite_vram_mb` | `6000` | VRAM estimée Granite |
 | `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
-| `gpu.llm_vram_mb` | `60000` | VRAM estimée LLM |
-| `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre exigée en plus du besoin d'une phase |
+| `gpu.llm_vram_mb` | `60000` | Empreinte **TOTALE** de la LLM d'arbitrage, tous GPU confondus. La LLM est un moteur **multi-GPU** à placement contrôlé par son script de lancement : la vérification/réservation se fait **par carte** (total ÷ nb de cartes de `llm_gpu_indices`), jamais en mono-GPU. **À recalibrer à chaque changement de modèle** (35B Q8 ≈ 60000 ; 14B Q8 ≈ 16000 hors KV étendu) |
+| `gpu.llm_gpu_indices` | absent (= tous) | Index (visibles) des GPU que le script LLM utilise (`CUDA_VISIBLE_DEVICES` + `--tensor-split`). Doit refléter le script — l'allocateur vérifie la place sur **ces** cartes-là. Ex. `[0, 1, 2]` |
+| `gpu.min_free_vram_mb` | `4000` | VRAM minimale libre exigée en plus du besoin d'une phase (appliquée **par GPU**, y compris pour chaque part de la LLM) |
 | `gpu.preemption` | `own-only` | Politique de récupération VRAM à l'admission d'un job bloqué. `own-only` : n'arrête que **nos** process gérés inactifs (LLM d'arbitrage trackée, arrêtée proprement et relancée à la demande), **jamais** un process tiers. `aggressive` : préempte aussi les serveurs d'inférence **tiers** (`workflow.scheduling.kill_patterns`, process non trackés via `force_free_gpu`), **uniquement** dans la fenêtre calendaire `force_gpu` — à réserver à un GPU dédié. Réglable dans `/admin/config` → « Ressources GPU ». Cf. `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis. |
 
 `CUDA_VISIBLE_DEVICES` est supporté pour les runs isolés : les ids physiques remontés par le dashboard sont remappés vers les ordinaux CUDA visibles avant chargement modèle. `CUDA_VISIBLE_DEVICES=-1` désactive la sélection GPU. `TRANSCRIA_PREFERRED_GPU` désigne alors un ordinal visible, pas forcément l'id physique.

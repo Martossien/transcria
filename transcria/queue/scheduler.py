@@ -254,11 +254,20 @@ class QueueScheduler:
         if remote_vram is False:
             logger.info("Dispatch job différé: VRAM distante insuffisante", extra={"job_id": entry.job_id})
             return False
-        required_mb = self._local_required_mb(profile, self._done_profile_phases(entry.job_id))
-        # `required_mb` exclut les phases déjà faites (reprise) et la phase `llm_arbitration`
-        # quand la LLM est partagée
-        # (`llm_shared`) : un job qui n'a plus que la phase LLM (déjà chaude) est admis
-        # ici sans rien réserver. Ne reste que le besoin des phases NON-LLM (STT/diar).
+        done_phases = self._done_profile_phases(entry.job_id)
+        # La LLM d'arbitrage est un besoin MULTI-GPU (total ÷ nb de cartes du placement),
+        # vérifié à part avec la VÉRITÉ VIVANTE : LLM en marche → réellement partagée
+        # (rien à exiger) ; éteinte → chaque GPU du placement doit pouvoir l'héberger.
+        # (L'ancien drapeau stocké `llm_shared` était TOUJOURS vrai — l'admission ne
+        # vérifiait jamais la LLM, même éteinte : audit du 11/06/2026.)
+        if not self._llm_admissible(profile, done_phases):
+            logger.info(
+                "Dispatch job différé: VRAM multi-GPU insuffisante pour (re)lancer la LLM d'arbitrage",
+                extra={"job_id": entry.job_id},
+            )
+            return False
+        required_mb = self._local_required_mb(profile, done_phases)
+        # `required_mb` = max mono-GPU des phases NON-LLM restantes (STT/diarisation).
         if required_mb <= 0:
             return True
         if self.allocator.can_allocate(required_mb) is not None:
@@ -337,13 +346,38 @@ class QueueScheduler:
             ignored.add("llm_arbitration")
         return ignored
 
+    def _llm_admissible(self, profile: dict, completed_profile_phases: set[str]) -> bool:
+        """La phase LLM restante (s'il y en a une) peut-elle être servie ?
+
+        - LLM **en marche** → partagée, rien à exiger (vérité vivante, pas le drapeau
+          stocké `llm_shared` qui était inconditionnellement vrai) ;
+        - LLM **éteinte** → `can_host_llm` : chaque GPU du placement script
+          (`gpu.llm_gpu_indices`) doit avoir sa part (total ÷ nb cartes) de libre.
+        Best-effort : une sonde en échec n'empêche jamais l'admission (la réservation
+        en phase reste le garde-fou final)."""
+        phases = profile.get("phases") if isinstance(profile, dict) else {}
+        llm_mb = self._positive_int((phases or {}).get("llm_arbitration"))
+        if llm_mb <= 0 or "llm_arbitration" in completed_profile_phases:
+            return True
+        if "llm_arbitration" in self._remote_phase_names():
+            return True
+        try:
+            if self._vram_manager().is_arbitrage_llm_running():
+                return True
+        except Exception:  # noqa: BLE001 — sonde best-effort
+            return True
+        try:
+            return self.allocator.can_host_llm(llm_mb)
+        except Exception:  # noqa: BLE001
+            return True
+
     def _local_required_mb(self, profile: dict, completed_profile_phases: set[str] | None = None) -> int:
         remote_phases = self._remote_phase_names()
         phases = profile.get("phases") if isinstance(profile, dict) else {}
         ignored_phases = set(remote_phases)
         ignored_phases |= (completed_profile_phases or set())  # phases déjà faites (reprise)
-        if isinstance(profile, dict) and profile.get("llm_shared"):
-            ignored_phases.add("llm_arbitration")
+        # La LLM est un besoin MULTI-GPU : jamais dans le max mono-GPU (cf. _llm_admissible).
+        ignored_phases.add("llm_arbitration")
         if isinstance(phases, dict) and phases:
             values = [
                 self._positive_int(required_mb)

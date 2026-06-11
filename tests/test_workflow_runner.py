@@ -778,11 +778,10 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.allocator, "release_llm", lambda job_id: None)
             monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: True)
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: False)
-            # Pénurie UNIQUEMENT pour la phase LLM (le STT rapide doit passer).
-            orig_reserve = runner.allocator.try_reserve
+            # Pénurie pour la réservation MULTI-GPU de la LLM (le STT rapide passe).
             monkeypatch.setattr(
-                runner.allocator, "try_reserve",
-                lambda job_id, vram, phase: None if phase == "summary_llm" else orig_reserve(job_id, vram, phase),
+                runner.allocator, "try_reserve_llm",
+                lambda job_id, total_mb, phase: False,
             )
 
             result = runner.run_summary(job, "/tmp/fake.wav", cfg)

@@ -313,7 +313,7 @@ def test_scheduler_ignores_shared_llm_phase_for_initial_admission(app, owner_id,
             mode="fast",
             vram_profile={
                 "phases": {"stt": 6000, "llm_arbitration": 60000},
-                "llm_shared": True,
+                "llm_shared": True,  # HÉRITÉ : l'admission n'utilise plus ce drapeau
             },
         )
 
@@ -325,6 +325,11 @@ def test_scheduler_ignores_shared_llm_phase_for_initial_admission(app, owner_id,
             return 0 if required_mb == 6000 else None
 
         monkeypatch.setattr(scheduler.allocator, "can_allocate", fake_can_allocate)
+        # Vérité vivante (remplace le drapeau stocké) : la LLM tourne → partagée.
+        monkeypatch.setattr(
+            scheduler, "_vram_manager",
+            lambda: type("V", (), {"is_arbitrage_llm_running": lambda self: True})(),
+        )
         dispatched = scheduler._dispatch_iteration()
         scheduler._executor.shutdown(wait=True)
 
