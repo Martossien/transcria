@@ -156,6 +156,22 @@ suppression du job           → delete_job_files + CASCADE
   formulaire admin), check `doctor`, suppression job ; tests.
 - [x] **Lot 5 — Docs** : INSTALL §11/§13, SERVICE_RESSOURCES_GPU, AGENTS.md,
   CONFIG_REFERENCE, DATA_MODEL, TECHNICAL, CHANGELOG.
+- [x] **Lot 6 — Passe d'audit post-livraison** (2 bugs corrigés + points de contrôle) :
+  - **Dispatch worker neuf** : le scheduler concluait « audio introuvable » → `failed`
+    **avant** toute matérialisation. Désormais `_materialize_job_inputs` tire `input/`
+    depuis la base puis re-résout le chemin (le scénario split de base — worker au
+    disque vierge — fonctionne).
+  - **Purge contournée par le hook web** : `after_app_request` poussait `input/` — une
+    édition de contexte sur un job terminé re-poussait l'audio en base. Le hook pousse
+    désormais `WEB_WRITE_PREFIXES` (tout sauf `input/` ; l'audio reste poussé à l'upload
+    et à l'enfilage).
+  - **Pull paresseux réservé aux authentifiés** (pas de SELECT par job_id arbitraire
+    pour un anonyme).
+  - **Fail-fast au démarrage** : `assert_runtime_compatible` — `shared_backend: pg` sur
+    un dialecte non-PostgreSQL refuse de démarrer (sinon split silencieusement cassé).
+    Le backend est tracé dans le log de démarrage (`stockage_jobs=fs|pg`).
+  - **Sonde doctor** : en backend `pg`, `check_shared_storage` sonde l'existence des
+    tables `job_files` (utile avant le premier démarrage ; injectable pour les tests).
 
 ## 10. Vérification
 

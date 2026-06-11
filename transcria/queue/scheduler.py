@@ -219,6 +219,11 @@ class QueueScheduler:
                 continue
             audio_path = JobFilesystem(self.jobs_dir, entry.job_id).get_original_audio_path()
             if audio_path is None:
+                # Backend `pg` (split sans filesystem partagé) : l'audio vit en base et
+                # n'est peut-être pas encore matérialisé sur CE disque (worker neuf, cache
+                # vidé). On le matérialise AVANT de conclure « audio introuvable ».
+                audio_path = self._materialize_job_inputs(entry.job_id)
+            if audio_path is None:
                 QueueStore.dequeue(entry.job_id, status="failed")
                 continue
             if not self._resources_available(entry, remote_state.capabilities):
@@ -226,6 +231,22 @@ class QueueScheduler:
             if self._launch(entry.job_id, str(Path(audio_path)), entry.mode):
                 dispatched += 1
         return dispatched
+
+    def _materialize_job_inputs(self, job_id: str):
+        """Matérialise `input/` depuis la base (backend `pg`) et re-résout l'audio.
+
+        Retourne le chemin audio, ou None (backend `fs`, blob absent, ou erreur — loguée :
+        le dequeue `failed` qui suit reste visible et relançable)."""
+        from transcria.jobs import artifact_store
+
+        if not artifact_store.is_pg_backend(self.config):
+            return None
+        try:
+            artifact_store.pull_job_files(self.config, job_id, prefixes=("input/",))
+        except Exception:
+            logger.exception("Matérialisation de l'audio impossible au dispatch", extra={"job_id": job_id})
+            return None
+        return JobFilesystem(self.jobs_dir, job_id).get_original_audio_path()
 
     def _resources_available(self, entry, remote_capabilities: dict | None = None) -> bool:
         profile = entry.get_vram_profile()

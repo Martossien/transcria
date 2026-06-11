@@ -142,6 +142,10 @@ def create_app(config_path: str | None = None) -> Flask:
     app.config["TRANSCRIA_ROLE"] = role
 
     with app.app_context():
+        # Garde-fou stockage partagé (fail-fast) : `shared_backend: pg` sur un autre
+        # dialecte que PostgreSQL = split silencieusement cassé. On refuse de démarrer.
+        from transcria.jobs.artifact_store import assert_runtime_compatible, backend_name
+        assert_runtime_compatible(cfg, db.engine.dialect.name)
         # create_all : bootstrap rapide pour le dev/les tests (base neuve). En prod,
         # le schéma est géré par Alembic (`alembic upgrade head` dans start.sh) ; sur
         # une base déjà à jour create_all est un no-op. Le test anti-dérive garantit
@@ -152,7 +156,8 @@ def create_app(config_path: str | None = None) -> Flask:
         # 'scheduler'/'all' s'en charge ailleurs). L'enfilement reste possible.
         init_job_executor(app, cfg, run_scheduler=should_run_scheduler(role))
 
-    logger.info("Process démarré (rôle=%s, scheduler=%s)", role, role in ("scheduler", "all"))
+    logger.info("Process démarré (rôle=%s, scheduler=%s, stockage_jobs=%s)",
+                role, role in ("scheduler", "all"), backend_name(cfg))
     return app
 
 

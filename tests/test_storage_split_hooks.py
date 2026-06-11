@@ -249,7 +249,7 @@ class TestWebHooks:
         assert pulls == [job_id]
 
     def test_push_after_successful_write(self, app, admin_client, owner_id, monkeypatch):
-        pushes: list[str] = []
+        pushes: list[tuple] = []
         monkeypatch.setattr("transcria.web.routes.artifact_store.is_pg_backend", lambda cfg: True)
         monkeypatch.setattr(
             "transcria.web.routes.artifact_store.pull_job_files_throttled",
@@ -257,12 +257,26 @@ class TestWebHooks:
         )
         monkeypatch.setattr(
             "transcria.web.routes.artifact_store.push_job_files",
-            lambda cfg, job_id, **kw: pushes.append(job_id),
+            lambda cfg, job_id, **kw: pushes.append((job_id, tuple(kw.get("prefixes") or ()))),
         )
         job_id = _make_job(app, owner_id, state=JobState.SUMMARY_DONE)
         resp = admin_client.post(f"/api/jobs/{job_id}/context", json={"brief": "invitation"})
         assert resp.status_code == 200
-        assert pushes == [job_id]
+        # WEB_WRITE_PREFIXES (jamais input/) : ne pas annuler la purge terminale.
+        assert pushes == [(job_id, artifact_store.WEB_WRITE_PREFIXES)]
+        assert "input/" not in artifact_store.WEB_WRITE_PREFIXES
+
+    def test_no_pull_for_unauthenticated_request(self, app, client, owner_id, monkeypatch):
+        """Pas de travail (SELECT par job_id arbitraire) pour un anonyme."""
+        pulls: list[str] = []
+        monkeypatch.setattr("transcria.web.routes.artifact_store.is_pg_backend", lambda cfg: True)
+        monkeypatch.setattr(
+            "transcria.web.routes.artifact_store.pull_job_files_throttled",
+            lambda cfg, job_id, **kw: pulls.append(job_id),
+        )
+        job_id = _make_job(app, owner_id, state=JobState.UPLOADED)
+        client.get(f"/api/jobs/{job_id}/status")  # non connecté → 401/redirect
+        assert pulls == []
 
     def test_no_push_after_read_or_failed_write(self, app, admin_client, owner_id, monkeypatch):
         pushes: list[str] = []
@@ -328,6 +342,67 @@ class TestPackageRebuild:
         assert len(resp.data) > 0
 
 
+class TestSchedulerMaterialization:
+    """Worker neuf / cache vidé : le dispatch matérialise input/ avant de conclure
+    « audio introuvable » (sinon le job passerait failed sans même tenter le pull)."""
+
+    def _scheduler(self, app, tmp_path, backend):
+        from transcria.queue.scheduler import QueueScheduler
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path), "shared_backend": backend},
+            "workflow": {"queue": {"enabled": True, "poll_interval_s": 300}},
+        }
+        return QueueScheduler(app, cfg, lambda *a: None)  # jamais démarré (pas de thread)
+
+    def test_materializes_audio_from_store(self, app, tmp_path, monkeypatch):
+        sched = self._scheduler(app, tmp_path, "pg")
+
+        def fake_pull(cfg, job_id, prefixes=None, **kw):
+            assert tuple(prefixes) == ("input/",)
+            dest = tmp_path / job_id / "input"
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "original.mp3").write_bytes(b"audio")
+
+        monkeypatch.setattr("transcria.jobs.artifact_store.pull_job_files", fake_pull)
+        path = sched._materialize_job_inputs("job-neuf")
+        assert path is not None and path.name == "original.mp3"
+
+    def test_noop_in_fs_backend(self, app, tmp_path, monkeypatch):
+        sched = self._scheduler(app, tmp_path, "fs")
+        monkeypatch.setattr(
+            "transcria.jobs.artifact_store.pull_job_files",
+            lambda *a, **k: pytest.fail("pull ne doit pas être appelé en backend fs"),
+        )
+        assert sched._materialize_job_inputs("job-x") is None
+
+    def test_pull_error_returns_none(self, app, tmp_path, monkeypatch):
+        sched = self._scheduler(app, tmp_path, "pg")
+
+        def boom(*a, **k):
+            raise RuntimeError("base indisponible")
+        monkeypatch.setattr("transcria.jobs.artifact_store.pull_job_files", boom)
+        assert sched._materialize_job_inputs("job-x") is None
+
+    def test_blob_absent_returns_none(self, app, tmp_path, monkeypatch):
+        sched = self._scheduler(app, tmp_path, "pg")
+        monkeypatch.setattr("transcria.jobs.artifact_store.pull_job_files", lambda *a, **k: None)
+        assert sched._materialize_job_inputs("job-x") is None
+
+
+class TestStartupGuard:
+    def test_pg_backend_on_sqlite_refuses_to_start(self):
+        cfg = {"storage": {"shared_backend": "pg"}}
+        with pytest.raises(RuntimeError, match="PostgreSQL"):
+            artifact_store.assert_runtime_compatible(cfg, "sqlite")
+
+    def test_pg_backend_on_postgresql_ok(self):
+        artifact_store.assert_runtime_compatible({"storage": {"shared_backend": "pg"}}, "postgresql")
+
+    def test_fs_backend_any_dialect_ok(self):
+        artifact_store.assert_runtime_compatible({"storage": {"shared_backend": "fs"}}, "sqlite")
+        artifact_store.assert_runtime_compatible({}, "sqlite")
+
+
 class TestDoctorAndSchema:
     def test_doctor_warns_on_split_role_with_fs(self, monkeypatch):
         monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
@@ -346,7 +421,22 @@ class TestDoctorAndSchema:
             "runtime": {"role": "scheduler"},
             "storage": {"shared_backend": "pg", "database_url": "postgresql+psycopg://u@h/db"},
         }
-        assert check_shared_storage(cfg).status == OK
+        assert check_shared_storage(cfg, table_exists=lambda uri: True).status == OK
+
+    def test_doctor_fails_pg_backend_when_tables_missing(self, monkeypatch):
+        monkeypatch.delenv("TRANSCRIA_DATABASE_URL", raising=False)
+        cfg = {"storage": {"shared_backend": "pg", "database_url": "postgresql+psycopg://u@h/db"}}
+        result = check_shared_storage(cfg, table_exists=lambda uri: False)
+        assert result.status == FAIL
+        assert "job_files" in result.detail
+
+    def test_doctor_fails_pg_backend_when_db_unreachable(self, monkeypatch):
+        monkeypatch.delenv("TRANSCRIA_DATABASE_URL", raising=False)
+        cfg = {"storage": {"shared_backend": "pg", "database_url": "postgresql+psycopg://u@h/db"}}
+
+        def boom(uri):
+            raise ConnectionError("refusée")
+        assert check_shared_storage(cfg, table_exists=boom).status == FAIL
 
     def test_doctor_fails_pg_backend_without_postgres(self, monkeypatch):
         monkeypatch.delenv("TRANSCRIA_DATABASE_URL", raising=False)

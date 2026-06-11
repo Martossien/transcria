@@ -48,6 +48,11 @@ EXCLUDED_PREFIXES: tuple[str, ...] = ("metadata/audio_excerpts/",)
 # Préfixes que la frontale pousse à l'enfilage (entrées du worker).
 INPUT_PREFIXES: tuple[str, ...] = ("input/", "context/", "speakers/")
 
+# Préfixes poussés par le hook d'écriture web (`after_app_request`) : tout SAUF `input/`.
+# L'audio est poussé explicitement (upload, enfilage) ; le re-pousser ici annulerait la
+# purge terminale (une simple édition de contexte sur un job terminé regonflerait la base).
+WEB_WRITE_PREFIXES: tuple[str, ...] = tuple(p for p in SYNCED_PREFIXES if p != "input/")
+
 MANIFEST_NAME = ".sync_state.json"
 
 
@@ -61,6 +66,18 @@ def backend_name(cfg: dict) -> str:
 
 def is_pg_backend(cfg: dict) -> bool:
     return backend_name(cfg) == "pg"
+
+
+def assert_runtime_compatible(cfg: dict, dialect_name: str) -> None:
+    """Garde-fou de démarrage (fail-fast) : backend `pg` ⇒ base PostgreSQL.
+
+    Sans lui, un `shared_backend: pg` sur SQLite démarrerait « normalement » et le split
+    serait silencieusement cassé (réplication des fichiers inopérante)."""
+    if is_pg_backend(cfg) and dialect_name != "postgresql":
+        raise RuntimeError(
+            f"storage.shared_backend: pg requiert une base PostgreSQL (dialecte actuel : {dialect_name}). "
+            "Corriger storage.database_url, ou repasser storage.shared_backend: fs."
+        )
 
 
 def _job_dir(cfg: dict, job_id: str) -> Path:

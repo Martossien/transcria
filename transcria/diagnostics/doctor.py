@@ -388,12 +388,18 @@ def check_storage(
     return CheckResult(name, OK, ", ".join(f"{label}={path}" for label, path in targets) + " inscriptibles")
 
 
-def check_shared_storage(cfg: dict) -> CheckResult:
+def check_shared_storage(
+    cfg: dict,
+    *,
+    table_exists: Callable[[str], bool] | None = None,
+) -> CheckResult:
     """Topologie split : les fichiers de jobs doivent être visibles des deux tiers.
 
     En `role=web`/`scheduler` avec `shared_backend: fs`, rien ne garantit que la frontale
     et le worker voient le même `jobs_dir` (deux machines = audio introuvable côté worker,
-    téléchargements 404 côté frontale). Voir docs/STOCKAGE_PARTAGE_JOBS.md."""
+    téléchargements 404 côté frontale). En backend `pg`, sonde l'existence des tables
+    `job_files` (utile AVANT le premier démarrage de l'app, qui les crée sinon).
+    Voir docs/STOCKAGE_PARTAGE_JOBS.md."""
     name = "Stockage des fichiers de jobs (split)"
     role = (
         os.environ.get("TRANSCRIA_ROLE")
@@ -412,9 +418,22 @@ def check_shared_storage(cfg: dict) -> CheckResult:
                 name, FAIL, "shared_backend=pg mais la base n'est pas PostgreSQL",
                 hint="Le backend pg réplique les fichiers via PostgreSQL : corriger storage.database_url.",
             )
+        probe = table_exists or _job_files_table_exists
+        try:
+            ready = probe(str(url))
+        except Exception as exc:  # noqa: BLE001 — panne de connexion = fail explicite
+            return CheckResult(
+                name, FAIL, f"backend pg : base injoignable ({exc})",
+                hint="Vérifier que PostgreSQL tourne et que le DSN est correct.",
+            )
+        if not ready:
+            return CheckResult(
+                name, FAIL, "backend pg : tables job_files absentes",
+                hint="Appliquer `alembic upgrade head` (ou démarrer l'app, qui les crée via create_all).",
+            )
         return CheckResult(
             name, OK,
-            "backend pg : fichiers répliqués via PostgreSQL (tables job_files — schéma vérifié par « Base de données »)",
+            "backend pg : fichiers répliqués via PostgreSQL (tables job_files présentes)",
         )
     if role in ("web", "scheduler"):
         return CheckResult(
@@ -427,6 +446,17 @@ def check_shared_storage(cfg: dict) -> CheckResult:
 
 
 # ── Sondes / helpers effectifs (injectables ci-dessus) ────────────────────
+
+
+def _job_files_table_exists(uri: str) -> bool:
+    """Sonde l'existence de la table `job_files` (backend pg), hors process Flask."""
+    from sqlalchemy import create_engine, inspect
+
+    engine = create_engine(uri)
+    try:
+        return bool(inspect(engine).has_table("job_files"))
+    finally:
+        engine.dispose()
 
 
 def _probe_openai_models(port: int, timeout: int = 3) -> dict | None:

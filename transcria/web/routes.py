@@ -143,6 +143,10 @@ def _materialize_job_files():
     cfg = get_config()
     if not artifact_store.is_pg_backend(cfg):
         return
+    # Réservé aux requêtes authentifiées : pas de travail (SELECT par job_id arbitraire)
+    # pour un anonyme — la route répondra 401/redirect de toute façon.
+    if not (current_user and current_user.is_authenticated):
+        return
     job_id = (request.view_args or {}).get("job_id")
     if job_id:
         artifact_store.pull_job_files_throttled(cfg, job_id)
@@ -162,7 +166,8 @@ def _push_job_files_after_write(response):
         cfg = get_config()
         job_id = (request.view_args or {}).get("job_id")
         if job_id and artifact_store.is_pg_backend(cfg):
-            artifact_store.push_job_files(cfg, job_id)
+            # WEB_WRITE_PREFIXES (pas `input/`) : ne pas annuler la purge terminale.
+            artifact_store.push_job_files(cfg, job_id, prefixes=artifact_store.WEB_WRITE_PREFIXES)
     return response
 
 
