@@ -741,6 +741,102 @@ class TestWorkflowRunnerRunSummary:
             assert meeting_ctx is not None
             assert meeting_ctx.get("title_suggere") == "Budget Q1"
 
+    def _llm_phase_runner(self, cfg, job, monkeypatch, tmp_path):
+        """Mocks communs pour atteindre la sous-étape LLM du résumé sans GPU réel."""
+        runner = WorkflowRunner(JobStore, cfg)
+        from transcria.stt.speaker_detection import SpeakerDetector
+        from transcria.stt.summary import SummaryGenerator
+        import torch
+
+        monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
+        monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
+        monkeypatch.setattr(runner.vram, "stop_arbitrage_llm", lambda: True)
+        monkeypatch.setattr(SummaryGenerator, "generate_quick_summary", lambda *a, **kw: {
+            "transcript_text": "[0s->60s] Discussion", "transcript_short": "Discussion",
+            "summary_text": "Résumé de contrôle indisponible (LLM non configurée).",
+            "segment_count": 3,
+        })
+        monkeypatch.setattr(SpeakerDetector, "detect",
+                            lambda self, job, audio_path, device="cpu": {"available": False})
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        return runner
+
+    def test_run_summary_llm_vram_shortage_returns_vram_wait(self, app, owner_id, monkeypatch, tmp_path):
+        """Doctrine « VRAM insuffisante = attente, jamais dégradé silencieux » : la pénurie
+        VRAM de la sous-étape LLM remontait un skip muet → SUMMARY_DONE avec placeholder
+        (incident Ministral du 11/06/2026). Désormais : vram_wait + état restauré."""
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={"enable_quick_summary": True, "summary_llm": {"enabled": True},
+                          "arbitration_llm": {"model_id": "local/test-llm"}},
+            )
+            job = JobStore.create_job(owner_id, "Summary LLM VRAM")
+            prior_state = job.state
+            runner = self._llm_phase_runner(cfg, job, monkeypatch, tmp_path)
+            monkeypatch.setattr(runner.allocator, "try_acquire_llm", lambda job_id, timeout_s=300: True)
+            monkeypatch.setattr(runner.allocator, "release_llm", lambda job_id: None)
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: True)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: False)
+            # Pénurie UNIQUEMENT pour la phase LLM (le STT rapide doit passer).
+            orig_reserve = runner.allocator.try_reserve
+            monkeypatch.setattr(
+                runner.allocator, "try_reserve",
+                lambda job_id, vram, phase: None if phase == "summary_llm" else orig_reserve(job_id, vram, phase),
+            )
+
+            result = runner.run_summary(job, "/tmp/fake.wav", cfg)
+
+            assert result.get("vram_wait") is True
+            assert result.get("phase") == "summary_llm"
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == prior_state  # restauré, PAS summary_done
+            assert not (updated.get_extra_data() or {}).get("summary_llm_failed")
+
+    def test_run_summary_llm_lock_busy_returns_vram_wait(self, app, owner_id, monkeypatch, tmp_path):
+        """Verrou LLM occupé par un autre job : attente (avant : skip muet → SUMMARY_DONE)."""
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={"enable_quick_summary": True, "summary_llm": {"enabled": True},
+                          "arbitration_llm": {"model_id": "local/test-llm"}},
+            )
+            job = JobStore.create_job(owner_id, "Summary LLM verrou")
+            prior_state = job.state
+            runner = self._llm_phase_runner(cfg, job, monkeypatch, tmp_path)
+            monkeypatch.setattr(runner.allocator, "try_acquire_llm", lambda job_id, timeout_s=300: False)
+
+            result = runner.run_summary(job, "/tmp/fake.wav", cfg)
+
+            assert result.get("vram_wait") is True
+            assert "verrou" in (result.get("reason") or "")
+            assert JobStore.get_by_id(job.id).state == prior_state
+
+    def test_run_summary_llm_launch_failure_flags_relaunchable(self, app, owner_id, monkeypatch, tmp_path):
+        """Panne de lancement LLM : signalée + relançable (avant : SUMMARY_DONE placeholder)."""
+        with app.app_context():
+            cfg = _default_config(
+                storage={"jobs_dir": str(tmp_path / "jobs")},
+                workflow={"enable_quick_summary": True, "summary_llm": {"enabled": True},
+                          "arbitration_llm": {"model_id": "local/test-llm"}},
+            )
+            job = JobStore.create_job(owner_id, "Summary LLM panne")
+            prior_state = job.state
+            runner = self._llm_phase_runner(cfg, job, monkeypatch, tmp_path)
+            monkeypatch.setattr(runner.allocator, "try_acquire_llm", lambda job_id, timeout_s=300: True)
+            monkeypatch.setattr(runner.allocator, "release_llm", lambda job_id: None)
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: False)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: False)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready",
+                                lambda expected_model_id=None: False)
+
+            result = runner.run_summary(job, "/tmp/fake.wav", cfg)
+
+            assert result.get("summary_llm_failed") is True
+            updated = JobStore.get_by_id(job.id)
+            assert updated.state == prior_state  # pas SUMMARY_DONE
+            assert (updated.get_extra_data() or {}).get("summary_llm_failed")
+
     def test_run_summary_exception_sets_failed(self, app, owner_id, monkeypatch, tmp_path):
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})

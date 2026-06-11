@@ -235,6 +235,20 @@ class WorkflowRunner:
         self._run_llm_summary(job, result, config, sl)
         sl.info("[4/4] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
 
+        if result.get("vram_wait"):
+            # VRAM/verrou transitoire pour la LLM du résumé : même contrat que le STT
+            # rapide — restaurer l'état pré-résumé et remonter le signal (mise en
+            # attente + reprise auto). STT/diarisation restent en cache : la reprise
+            # ne rejouera que la phase LLM.
+            sl.warning("[4/4] LLM résumé en attente de VRAM — résumé reporté",
+                       required_vram_mb=result.get("required_mb"))
+            try:
+                self.store.update_state(job.id, JobState(prior_state))
+            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
+                pass
+            self.progress.clear(job.id)
+            return result
+
         if result.get("summary_llm_failed"):
             # La LLM n'a rien produit après retries : on NE valide PAS le résumé (pas de
             # SUMMARY_DONE, meeting_context non corrompu). Le job revient à son état
@@ -502,7 +516,13 @@ class WorkflowRunner:
             arbitrage_port,
         )
         if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
-            sl.warning("LLM résumé sautée — verrou LLM indisponible")
+            # LLM occupée par un autre job (transitoire) : attente + reprise, JAMAIS un
+            # SUMMARY_DONE silencieux avec le placeholder (doctrine vram_wait).
+            sl.warning("LLM résumé en attente — verrou LLM occupé par un autre job")
+            result.update({
+                "vram_wait": True, "required_mb": 0, "phase": "summary_llm",
+                "reason": "verrou LLM occupé (un autre traitement utilise la LLM d'arbitrage)",
+            })
             return
 
         llm_phase_reserved = False
@@ -515,14 +535,25 @@ class WorkflowRunner:
                     "summary_llm",
                 )
                 if reservation is None:
-                    sl.warning("LLM résumé sautée — VRAM insuffisante", required_vram_mb=llm_vram_mb)
+                    # Pénurie VRAM transitoire : signal vram_wait (mise en attente +
+                    # reprise auto). L'ancien skip silencieux concluait SUMMARY_DONE
+                    # avec le placeholder — invisible pour l'utilisateur.
+                    sl.warning("LLM résumé en attente de VRAM", required_vram_mb=llm_vram_mb)
+                    result.update({
+                        "vram_wait": True, "required_mb": int(llm_vram_mb),
+                        "phase": "summary_llm",
+                        "reason": f"VRAM insuffisante pour la LLM d'arbitrage ({llm_vram_mb} Mo requis)",
+                    })
                     return
                 llm_phase_reserved = True
 
             launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
 
             if not launched:
-                sl.warning("LLM d'arbitrage non disponible — résumé LLM sauté (transcription rapide conservée)")
+                # Panne de lancement LLM : même famille que « 0 texte » (e62295c1) —
+                # signaler + bloquer relançable, pas de SUMMARY_DONE avec placeholder.
+                sl.warning("LLM d'arbitrage non disponible — résumé signalé en échec (relançable)")
+                result["summary_llm_failed"] = True
                 return
 
             model_id = llm_config.get("model_id")
