@@ -1,5 +1,8 @@
 # Contribuer à TranscrIA
 
+> 🇬🇧 *Contributions in English are welcome — issues and pull requests can be written
+> in English even though this guide and the codebase comments are in French.*
+
 Merci de votre intérêt pour TranscrIA. Ce document explique comment contribuer
 efficacement.
 
