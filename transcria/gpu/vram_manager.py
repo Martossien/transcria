@@ -394,14 +394,28 @@ class VRAMManager:
             self.arbitrage_script, self.arbitrage_log_path,
         )
         log_fh: IO[bytes] | int
+        effective_log_path = self.arbitrage_log_path
         try:
-            log_fh = open(self.arbitrage_log_path, "ab")
-        except OSError as exc:
-            logger.warning(
-                "Impossible d'ouvrir le log de lancement %s (%s) — sortie non capturée",
-                self.arbitrage_log_path, exc,
-            )
-            log_fh = subprocess.DEVNULL
+            log_fh = open(effective_log_path, "ab")
+        except OSError as first_exc:
+            # /tmp est sticky (fs.protected_regular) : un fichier créé par un AUTRE
+            # utilisateur y est inouvrable (EPERM) même pour root → repli sur un chemin
+            # par utilisateur. Perdre ce log rend un lancement en échec (exit≠0)
+            # indiagnosticable (incident Ministral du 11/06/2026).
+            effective_log_path = f"{self.arbitrage_log_path}.{os.getuid()}"
+            try:
+                log_fh = open(effective_log_path, "ab")
+                logger.warning(
+                    "Log de lancement %s inouvrable (%s) — repli sur %s",
+                    self.arbitrage_log_path, first_exc, effective_log_path,
+                )
+            except OSError as exc:
+                logger.warning(
+                    "Impossible d'ouvrir le log de lancement %s (%s) — sortie non capturée",
+                    effective_log_path, exc,
+                )
+                log_fh = subprocess.DEVNULL
+                effective_log_path = self.arbitrage_log_path
         try:
             proc = subprocess.Popen(
                 ["/bin/bash", self.arbitrage_script],
@@ -425,7 +439,7 @@ class VRAMManager:
             )
             return self._wait_for_port(
                 self.arbitrage_llm_port, timeout=600,
-                proc=proc, log_path=self.arbitrage_log_path,
+                proc=proc, log_path=effective_log_path,
             )
         except Exception as exc:
             logger.error("Échec lancement LLM d'arbitrage: %s", exc)
@@ -463,16 +477,23 @@ class VRAMManager:
                         json={
                             "model": active_model_id,
                             "prompt": "Bonjour",
-                            "max_tokens": 5,
+                            # 64 tokens (pas 5) : un modèle « reasoning » dépense ses
+                            # premiers tokens dans <think>, séparés en reasoning_content
+                            # par llama.cpp — avec 5 tokens, `text` restait vide et la
+                            # sonde DÉTRUISAIT un serveur sain (incident du 11/06/2026).
+                            "max_tokens": 64,
                             "temperature": 0,
                         },
-                        timeout=30,
+                        timeout=60,
                     )
                     if r2.status_code == 200:
                         choices = r2.json().get("choices", [])
-                        server_healthy = (
-                            len(choices) > 0
-                            and len(choices[0].get("text", "")) > 0
+                        first = choices[0] if choices else {}
+                        # Preuve de vie = le serveur a généré QUELQUE CHOSE : du texte
+                        # ou du raisonnement (modèles reasoning).
+                        server_healthy = bool(
+                            str(first.get("text") or "").strip()
+                            or str(first.get("reasoning_content") or "").strip()
                         )
         except Exception as exc:
             logger.debug("Sondage LLM d'arbitrage port %d: %s", self.arbitrage_llm_port, exc)

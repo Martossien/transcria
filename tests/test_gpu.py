@@ -914,3 +914,90 @@ class TestVRAMManagerFreeAllGpus:
 
         result = mgr.free_all_gpus()
         assert result is False
+
+
+class TestEnsureArbitrageLlmHealthProbe:
+    """Sonde de santé compatible modèles « reasoning » (incident du 11/06/2026).
+
+    Un modèle reasoning dépense ses premiers tokens dans <think> (séparés en
+    `reasoning_content` par llama.cpp) : avec 5 tokens et l'exigence `text` non vide,
+    la sonde jugeait « malade » un serveur sain et le REDÉMARRAIT."""
+
+    def _probe(self, monkeypatch, completion_payload):
+        vm = VRAMManager(_default_config(arbitrage_api_model_id="modele-test"))
+        restarted = {"called": False}
+        monkeypatch.setattr(vm, "launch_arbitrage_llm", lambda: restarted.update(called=True) or True)
+        monkeypatch.setattr(vm, "stop_arbitrage_llm", lambda: True)
+        monkeypatch.setattr(vm, "free_all_gpus", lambda: True)
+        monkeypatch.setattr(vm, "_get_port_pid", lambda port: "1234")
+
+        import requests as _requests
+
+        class _Resp:
+            def __init__(self, payload):
+                self.status_code = 200
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        monkeypatch.setattr(
+            _requests, "get",
+            lambda url, timeout=5: _Resp({"data": [{"id": "modele-test"}]}),
+        )
+        monkeypatch.setattr(
+            _requests, "post",
+            lambda url, json=None, timeout=60: _Resp(completion_payload),
+        )
+        result = vm.ensure_arbitrage_llm_ready(expected_model_id="modele-test")
+        return result, restarted["called"]
+
+    def test_reasoning_only_output_is_healthy(self, monkeypatch):
+        """reasoning_content sans text = serveur VIVANT → réutilisé, pas redémarré."""
+        ok, restarted = self._probe(monkeypatch, {
+            "choices": [{"text": "", "reasoning_content": "Je réfléchis à la salutation."}],
+        })
+        assert ok is True
+        assert restarted is False
+
+    def test_plain_text_output_is_healthy(self, monkeypatch):
+        ok, restarted = self._probe(monkeypatch, {
+            "choices": [{"text": "Bonjour !"}],
+        })
+        assert ok is True
+        assert restarted is False
+
+    def test_empty_output_triggers_restart(self, monkeypatch):
+        """Aucun token produit (ni texte ni raisonnement) = serveur réellement malade."""
+        ok, restarted = self._probe(monkeypatch, {
+            "choices": [{"text": "", "reasoning_content": ""}],
+        })
+        assert restarted is True
+        assert ok is True  # relancée avec succès (mock)
+
+
+class TestArbitrageLaunchLogFallback:
+    @pytest.mark.skipif(os.geteuid() == 0, reason="root ignore chmod 000 — le repli ne se déclenche pas")
+    def test_unwritable_log_falls_back_to_per_user_path(self, monkeypatch, tmp_path):
+        """/tmp sticky + fichier d'un autre utilisateur (EPERM) : la sortie du lancement
+        doit être capturée AILLEURS, pas perdue (exit≠0 indiagnosticable sinon)."""
+        blocked = tmp_path / "arbitrage.log"
+        blocked.write_text("")
+        blocked.chmod(0o000)
+        script = tmp_path / "launch.sh"
+        script.write_text("#!/bin/bash\necho bonjour-du-script\n")
+        script.chmod(0o755)
+        vm = VRAMManager(_default_config(
+            arbitrage_script=str(script), arbitrage_log_path=str(blocked),
+        ))
+        monkeypatch.setattr(vm, "is_port_open", lambda port: False)
+        monkeypatch.setattr(vm, "_wait_for_port", lambda port, timeout=600, proc=None, log_path=None: True)
+        monkeypatch.setattr(vm, "_stop_cleanup_ports", lambda: None, raising=False)
+        try:
+            assert vm.launch_arbitrage_llm() is True
+        finally:
+            blocked.chmod(0o644)
+        fallback = tmp_path / f"arbitrage.log.{os.getuid()}"
+        time.sleep(0.3)  # le script écrit de façon asynchrone (Popen détaché)
+        assert fallback.is_file()
+        assert "bonjour-du-script" in fallback.read_text()
