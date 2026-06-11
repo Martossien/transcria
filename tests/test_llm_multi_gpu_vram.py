@@ -11,21 +11,26 @@ from __future__ import annotations
 from transcria.queue.allocator import GPUAllocator
 
 
-def _allocator(tmp_path, gpu_count=3, free_mb=23500, total_mb=24576, llm_indices=None):
+def _allocator(tmp_path, gpu_count=3, free_mb=23500, total_mb=24576, llm_indices=None,
+               per_gpu_free=None, llm_per_gpu=None):
+    """`per_gpu_free` : liste de Mo libres par carte (cartes HÉTÉROGÈNES)."""
     cfg = {
         "gpu": {"min_free_vram_mb": 1000},
         "workflow": {"scheduling": {"pid_file": str(tmp_path / "pids.json")}},
     }
     if llm_indices is not None:
         cfg["gpu"]["llm_gpu_indices"] = llm_indices
+    if llm_per_gpu is not None:
+        cfg["gpu"]["llm_vram_mb_per_gpu"] = llm_per_gpu
+    frees = per_gpu_free if per_gpu_free is not None else [free_mb] * gpu_count
     alloc = GPUAllocator(cfg)
     alloc.get_gpu_info = lambda: [
         {
             "id": i,
             "name": f"GPU {i}",
-            "memory": {"free": free_mb / 1024, "used": (total_mb - free_mb) / 1024, "total": total_mb / 1024},
+            "memory": {"free": f / 1024, "used": max(0, total_mb - f) / 1024, "total": total_mb / 1024},
         }
-        for i in range(gpu_count)
+        for i, f in enumerate(frees)
     ]
     return alloc
 
@@ -62,6 +67,45 @@ class TestCanHostLlm:
     def test_no_gpu_means_not_hostable(self, tmp_path):
         alloc = _allocator(tmp_path, gpu_count=0)
         assert alloc.can_host_llm(16000) is False
+
+
+class TestHeterogeneousGpus:
+    """Les cartes ne font pas toutes 24 Go (2/4/8/12/16/32/48/64…) : la part de la LLM
+    par carte peut être inégale (`--tensor-split 3,1`) et les petites phases doivent
+    aller sur les cartes qui conviennent — pas sur celles du placement LLM."""
+
+    def test_unequal_split_via_per_gpu_shares(self, tmp_path):
+        """24 Go + 8 Go avec tensor-split inégal : la répartition égale échoue,
+        les parts déclarées par carte passent."""
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 7500], llm_indices=[0, 1])
+        # Égal : 24000/2 = 12000 + 1000 marge > 7500 sur la petite carte → refus.
+        assert alloc.can_host_llm(24000) is False
+        alloc2 = _allocator(tmp_path, per_gpu_free=[23500, 7500], llm_indices=[0, 1],
+                            llm_per_gpu=[18000, 6000])
+        assert alloc2.can_host_llm(24000) is True
+        assert alloc2.try_reserve_llm("job-llm", 24000, "llm_arbitration") is True
+        assert alloc2.get_available_vram_mb(0) == 23500 - 18000
+        assert alloc2.get_available_vram_mb(1) == 7500 - 6000
+
+    def test_small_phase_lands_on_the_card_that_fits(self, tmp_path):
+        """Carte 8 Go + carte 24 Go : un STT de 6000 va sur la 24 Go (6000+1000 > 7000...
+        ici 6 Go libres sur la petite) — la mesure réelle par carte décide."""
+        alloc = _allocator(tmp_path, per_gpu_free=[6000, 23500])
+        reservation = alloc.try_reserve("job-stt", 6000, "stt")
+        assert reservation is not None and reservation.gpu_index == 1
+
+    def test_small_phase_prefers_non_llm_gpus(self, tmp_path):
+        """Placement LLM explicite [0,1] : une petite phase va sur le GPU 2 même si
+        les cartes LLM ont plus de VRAM libre (préserver la relance de la LLM)."""
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 23500, 20000], llm_indices=[0, 1])
+        reservation = alloc.try_reserve("job-stt", 6000, "stt")
+        assert reservation is not None and reservation.gpu_index == 2
+
+    def test_llm_gpu_used_when_others_full(self, tmp_path):
+        """Mais si seules les cartes LLM conviennent, on les utilise (pas de famine)."""
+        alloc = _allocator(tmp_path, per_gpu_free=[23500, 23500, 2000], llm_indices=[0, 1])
+        reservation = alloc.try_reserve("job-stt", 6000, "stt")
+        assert reservation is not None and reservation.gpu_index in (0, 1)
 
 
 class TestTryReserveLlm:

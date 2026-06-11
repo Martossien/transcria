@@ -171,6 +171,14 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
             r.add_error("gpu.llm_gpu_indices: doit être une liste non vide d'index GPU (entiers ≥ 0), ou absent (= tous)")
         elif len(set(indices)) != len(indices):
             r.add_error("gpu.llm_gpu_indices: index GPU dupliqués")
+    per_gpu = gpu.get("llm_vram_mb_per_gpu")
+    if per_gpu is not None:
+        if not isinstance(per_gpu, list) or not per_gpu or not all(
+            isinstance(mb, int) and mb > 0 for mb in per_gpu
+        ):
+            r.add_error("gpu.llm_vram_mb_per_gpu: doit être une liste non vide de Mo (entiers > 0), ou absent (= parts égales)")
+        elif isinstance(indices, list) and len(per_gpu) != len(indices):
+            r.add_error("gpu.llm_vram_mb_per_gpu: doit avoir autant d'éléments que gpu.llm_gpu_indices")
 
 
 def _check_services(svc: dict, r: ValidationResult) -> None:

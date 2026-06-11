@@ -253,8 +253,17 @@ class GPUAllocator:
             else:
                 ordered.append(gpu)
 
+        # Préserver les cartes du placement LLM : une petite phase (STT 6 Go, pyannote
+        # 2 Go) posée sur une carte de la LLM bloquerait sa (re)mise en route alors que
+        # d'autres cartes conviennent. On préfère donc les GPU HORS placement, à
+        # disponibilité suffisante (avec le défaut « tous les GPU », aucun effet).
+        try:
+            llm_gpus = set(self._llm_gpu_indices())
+        except Exception:  # noqa: BLE001 — la sélection ne doit jamais échouer pour ça
+            llm_gpus = set()
+
         best_idx: int | None = None
-        best_free = -1
+        best_key: tuple[bool, int] | None = None
         for gpu in ordered:
             gpu_id = to_visible_device_index(
                 gpu.get("id", 0),
@@ -264,9 +273,12 @@ class GPUAllocator:
             if gpu_id is None:
                 continue
             available = self._get_available_vram_mb_locked(gpu_id)
-            if available >= required_mb + self.min_free_mb and available > best_free:
+            if available < required_mb + self.min_free_mb:
+                continue
+            key = (gpu_id not in llm_gpus, available)
+            if best_key is None or key > best_key:
                 best_idx = gpu_id
-                best_free = available
+                best_key = key
         return best_idx
 
     def can_allocate(self, required_mb: int, preferred_gpu: int | None = None) -> int | None:
@@ -303,15 +315,29 @@ class GPUAllocator:
     def _llm_per_gpu_mb(total_mb: int, gpu_count: int) -> int:
         return -(-int(total_mb) // max(1, gpu_count))  # plafond (ceil)
 
+    def _llm_shares(self, total_mb: int, indices: list[int]) -> dict[int, int]:
+        """Part de VRAM par GPU du placement LLM.
+
+        Cartes HÉTÉROGÈNES (8/12/16/24/48 Go…) ou `--tensor-split` inégal :
+        `gpu.llm_vram_mb_per_gpu` (liste alignée sur `llm_gpu_indices`) déclare la part
+        réelle de chaque carte. À défaut : répartition égale (split homogène)."""
+        per_gpu = (self.config.get("gpu", {}) or {}).get("llm_vram_mb_per_gpu")
+        if isinstance(per_gpu, list) and len(per_gpu) == len(indices) and all(
+            isinstance(mb, (int, float)) and mb > 0 for mb in per_gpu
+        ):
+            return {idx: int(mb) for idx, mb in zip(indices, per_gpu)}
+        share = self._llm_per_gpu_mb(total_mb, len(indices))
+        return {idx: share for idx in indices}
+
     def can_host_llm(self, total_mb: int) -> bool:
-        """Chaque GPU du placement LLM a-t-il la part requise (+ marge) de libre ?"""
+        """Chaque GPU du placement LLM a-t-il SA part requise (+ marge) de libre ?"""
         indices = self._llm_gpu_indices()
         if not indices:
             return False
-        share = self._llm_per_gpu_mb(total_mb, len(indices))
+        shares = self._llm_shares(total_mb, indices)
         with self._alloc_lock:
             return all(
-                self._get_available_vram_mb_locked(idx) >= share + self.min_free_mb
+                self._get_available_vram_mb_locked(idx) >= shares[idx] + self.min_free_mb
                 for idx in indices
             )
 
@@ -330,25 +356,25 @@ class GPUAllocator:
         indices = self._llm_gpu_indices()
         if not indices:
             return False
-        share = self._llm_per_gpu_mb(total_mb, len(indices))
+        shares = self._llm_shares(total_mb, indices)
         with self._alloc_lock:
             if self._find_reservation_locked(job_id, phase) is not None:
                 return True
             for idx in indices:
-                if self._get_available_vram_mb_locked(idx) < share + self.min_free_mb:
+                if self._get_available_vram_mb_locked(idx) < shares[idx] + self.min_free_mb:
                     logger.info(
-                        "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (%d Mo/GPU sur %s, GPU %d insuffisant)",
-                        job_id, phase, total_mb, share, indices, idx,
+                        "Allocation LLM impossible: job=%s phase=%s besoin=%d Mo (parts=%s, GPU %d insuffisant)",
+                        job_id, phase, total_mb, shares, idx,
                     )
                     return False
             now = time.monotonic()
             for idx in indices:
                 self._gpu_reservations.setdefault(idx, []).append(Reservation(
-                    job_id=job_id, gpu_index=idx, vram_mb=share, phase=phase, reserved_at=now,
+                    job_id=job_id, gpu_index=idx, vram_mb=shares[idx], phase=phase, reserved_at=now,
                 ))
             logger.info(
-                "LLM réservée: job=%s phase=%s total=%d Mo (%d Mo/GPU sur %s)",
-                job_id, phase, total_mb, share, indices,
+                "LLM réservée: job=%s phase=%s total=%d Mo (parts=%s)",
+                job_id, phase, total_mb, shares,
             )
             return True
 

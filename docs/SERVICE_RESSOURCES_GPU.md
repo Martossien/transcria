@@ -311,6 +311,12 @@ Une VRAM insuffisante est traitée comme une indisponibilité **transitoire**, j
     partagée (rien à exiger) ; éteinte → `can_host_llm` requis ; le max mono-GPU
     (`_local_required_mb`) ne compte plus que les phases NON-LLM (STT/diarisation).
   À recalibrer (`llm_vram_mb` + `llm_gpu_indices`) à chaque changement de modèle/script.
+- **Parc hétérogène (cartes de 2 à 64 Go)** : aucune taille n'est supposée — la mesure réelle
+  par carte (nvidia-smi) est l'autorité, les besoins par moteur sont des réglages. En plus :
+  `gpu.llm_vram_mb_per_gpu` déclare une part **inégale** par carte (`--tensor-split 3,1` sur
+  24+8 Go) ; la sélection de GPU des petites phases **préfère les cartes hors placement LLM**
+  (à disponibilité suffisante) pour ne pas bloquer la relance de la LLM ; et
+  `gpu.min_free_vram_mb` (marge par carte) est à réduire sur les petites cartes.
 - **Politique `gpu.preemption`** (réglable dans `/admin/config` → « Ressources GPU ») :
   - `own-only` (**défaut**, infra partagée) : catégorie 1 seulement (nos process trackés inactifs).
   - `aggressive` : autorise en plus la préemption de serveurs d'inférence **tiers** (`kill_patterns`,

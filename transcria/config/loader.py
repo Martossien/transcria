@@ -58,6 +58,9 @@ _DEFAULT_CONFIG = {
         # GPU visibles. La vérification/réservation se fait PAR GPU (total ÷ nb cartes).
         "llm_vram_mb": 60000,
         "llm_gpu_indices": None,
+        # Cartes hétérogènes / tensor-split inégal : part RÉELLE par GPU (liste alignée
+        # sur llm_gpu_indices, ex. [18000, 6000] pour 24+8 Go). None = répartition égale.
+        "llm_vram_mb_per_gpu": None,
         "granite_vram_mb": 6000,
         "parakeet_vram_mb": 8000,
         "sortformer_vram_mb": 3500,

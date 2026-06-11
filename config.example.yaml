@@ -248,9 +248,14 @@ gpu:
   # se fait PAR GPU (total ÷ nb de cartes). llm_gpu_indices absent = tous les GPU visibles.
   llm_vram_mb: 60000
   # llm_gpu_indices: [0, 1, 2]
+  # Cartes HÉTÉROGÈNES (8/12/16/24/48 Go…) ou --tensor-split inégal : part réelle par
+  # carte, alignée sur llm_gpu_indices (ex. [18000, 6000] pour 24+8 Go). Absent = égal.
+  # llm_vram_mb_per_gpu: [20000, 20000, 20000]
   granite_vram_mb: 6000
   parakeet_vram_mb: 8000
   sortformer_vram_mb: 3500
+  # Marge libre exigée PAR GPU en plus du besoin d'une phase. À RÉDUIRE sur les
+  # petites cartes (4-8 Go) : 4000 y interdirait presque toute allocation.
   min_free_vram_mb: 4000
 
 workflow:
