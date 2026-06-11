@@ -131,6 +131,61 @@ suppression du job           → delete_job_files + CASCADE
 
 `shared_backend: pg` avec `role=all` est inoffensif (push/pull idempotents sur le même disque).
 
+## 7-bis. Conflits hors manifeste (diagnostic et résolution)
+
+**Définition** : au pull, un fichier existe localement, n'est **pas** dans le manifeste
+`.sync_state.json` (donc cette machine ne l'a ni poussé ni matérialisé), et son contenu
+**diffère** de la version en base. Le système ne peut pas trancher qui a raison → il
+**ne détruit rien** : le fichier local est conservé, un `WARNING` est logué et le pull
+remonte `conflicts > 0`.
+
+**Quand ça arrive** : job d'avant l'activation du backend `pg` (fichiers historiques des
+deux côtés), édition manuelle d'un fichier directement sur le disque, manifeste supprimé
+ou corrompu. En fonctionnement normal (toutes les écritures passent par l'app), ça ne se
+produit pas — chaque écriture met le manifeste à jour.
+
+**Résolution** (au choix, par fichier) :
+- *Adopter la version en base* : supprimer le fichier local → le prochain pull le
+  matérialise proprement (et renseigne le manifeste).
+- *Adopter la version locale* : re-sauvegarder via l'UI (le push réconciliera), ou
+  `python -c "from transcria.jobs import artifact_store; from transcria.config import get_config; artifact_store.push_job_files(get_config(), '<job_id>')"`.
+- Cas identiques (contenus égaux) : adoptés automatiquement, sans action.
+
+## 7-ter. Procédure de bascule (split deux machines, backend `pg`)
+
+Sur **chaque** machine (frontale `role=web` et worker `role=scheduler`) :
+
+```bash
+# 1. Config (config.yaml — les DEUX côtés, même base PostgreSQL)
+#    storage.shared_backend: pg
+# 2. Migration (crée job_files / job_file_chunks ; start.sh le fait aussi)
+venv/bin/alembic upgrade head
+# 3. Vérification AVANT redémarrage
+venv/bin/python scripts/doctor.py     # check « Stockage des fichiers de jobs (split) » = OK
+# 4. Redémarrer les services (transcria-web / transcria-scheduler)
+# 5. Contrôles post-bascule
+#    - log de démarrage : « Process démarré (rôle=…, stockage_jobs=pg) »
+#    - lancer un job de bout en bout depuis la frontale : upload → traitement → télécharger
+#      le SRT et le package depuis la frontale (c'est LE test du chantier)
+#    - /metrics : transcria_job_files_total / transcria_job_files_bytes bougent pendant le
+#      job, et le volume redescend après l'état terminal (purge input/)
+```
+
+Garde-fous actifs : démarrage **refusé** si `pg` sans base PostgreSQL
+(`assert_runtime_compatible`) ; `doctor` FAIL si la base est injoignable ou la migration
+absente ; WARN si rôles séparés en backend `fs`.
+
+## 7-quater. Monitoring (à brancher en production)
+
+- **`/metrics`** (Prometheus) : `transcria_job_files_total` et `transcria_job_files_bytes`.
+  Lecture : le volume monte pendant les jobs actifs et **redescend aux états terminaux**
+  (purge `input/`). Une croissance continue = purge qui ne joue pas (jobs jamais
+  terminés ?) ou jobs jamais supprimés → alerte à poser sur la dérive (ex.
+  `increase(transcria_job_files_bytes[7d]) > seuil`).
+- **Logs** : `Artefacts poussés/matérialisés` (volumes, durées), `Synchro incomplète: N
+  conflit(s)` (cf. §7-bis), `Purge des blobs input/ impossible` (non bloquant mais à
+  surveiller).
+
 ## 8. Anticipation (versions futures — PAS dans ce lot)
 
 - **N frontales** : déjà couvert par construction — chaque frontale matérialise paresseusement

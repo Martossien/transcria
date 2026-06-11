@@ -167,9 +167,10 @@ class TestIntegrity:
         _write(worker, job_id, "summary/summary.json", b'{"version": "locale"}')
         with app.app_context():
             artifact_store.push_job_files(_cfg(front), job_id)
-            artifact_store.pull_job_files(_cfg(worker), job_id)
-        # Conflit hors manifeste : on ne détruit rien (signalé en WARNING).
+            stats = artifact_store.pull_job_files(_cfg(worker), job_id)
+        # Conflit hors manifeste : on ne détruit rien (signalé en WARNING + compteur).
         assert (worker / job_id / "summary/summary.json").read_bytes() == b'{"version": "locale"}'
+        assert stats["conflicts"] == 1
 
 
 class TestPurge:
@@ -208,6 +209,24 @@ class TestPurge:
             artifact_store.push_job_files(_cfg(tmp_path), job_id)
             assert artifact_store.delete_job_files(job_id) == 2
             assert db.session.query(JobFile).filter_by(job_id=job_id).count() == 0
+
+
+class TestMonitoring:
+    def test_store_stats_counts_files_and_bytes(self, app, tmp_path, job_id):
+        _write(tmp_path, job_id, "input/original.mp3", b"x" * 100)
+        _write(tmp_path, job_id, "metadata/transcription.srt", b"y" * 50)
+        with app.app_context():
+            before = artifact_store.store_stats()
+            artifact_store.push_job_files(_cfg(tmp_path), job_id)
+            after = artifact_store.store_stats()
+        assert after["files"] == before["files"] + 2
+        assert after["bytes"] == before["bytes"] + 150
+
+    def test_metrics_endpoint_exposes_job_files_gauges(self, client):
+        resp = client.get("/metrics")
+        assert resp.status_code == 200
+        assert b"transcria_job_files_total" in resp.data
+        assert b"transcria_job_files_bytes" in resp.data
 
 
 class TestThrottledPull:

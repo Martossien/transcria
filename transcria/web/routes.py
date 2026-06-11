@@ -950,6 +950,10 @@ def _render_prometheus_metrics() -> str:
         queue_counts = QueueStore.count_by_status() if db_ok else {}
     except Exception:
         queue_counts = {}
+    try:
+        blob_stats = artifact_store.store_stats() if db_ok else {"files": 0, "bytes": 0}
+    except Exception:
+        blob_stats = {"files": 0, "bytes": 0}
     lines = [
         "# HELP transcria_up Indique si le service TranscrIA est disponible.",
         "# TYPE transcria_up gauge",
@@ -975,6 +979,13 @@ def _render_prometheus_metrics() -> str:
         f'transcria_queue_entries{{status="waiting"}} {queue_counts.get("waiting", 0)}',
         f'transcria_queue_entries{{status="paused"}} {queue_counts.get("paused", 0)}',
         f'transcria_queue_entries{{status="running"}} {queue_counts.get("running", 0)}',
+        "# HELP transcria_job_files_total Fichiers de jobs répliqués en base (storage.shared_backend=pg ; 0 en fs).",
+        "# TYPE transcria_job_files_total gauge",
+        f"transcria_job_files_total {blob_stats['files']}",
+        "# HELP transcria_job_files_bytes Volume (octets) des fichiers de jobs répliqués en base "
+        "(croissance continue = purge input/ qui ne joue pas).",
+        "# TYPE transcria_job_files_bytes gauge",
+        f"transcria_job_files_bytes {blob_stats['bytes']}",
         "# HELP transcria_jobs_state Nombre de jobs par état.",
         "# TYPE transcria_jobs_state gauge",
     ]

@@ -165,6 +165,19 @@ def _matches_prefixes(relpath: str, prefixes: Iterable[str]) -> bool:
     return any(relpath.startswith(p) for p in prefixes)
 
 
+def store_stats() -> dict:
+    """Volumétrie du magasin (monitoring `/metrics`) : fichiers et octets en base.
+
+    À surveiller en production : une croissance continue signale une purge `input/`
+    qui ne joue pas (jobs jamais terminés) ou des jobs jamais supprimés."""
+    from sqlalchemy import func
+
+    count, total = (
+        db.session.query(func.count(JobFile.id), func.coalesce(func.sum(JobFile.size_bytes), 0)).one()
+    )
+    return {"files": int(count), "bytes": int(total)}
+
+
 def newest_synced_mtime_ns(cfg: dict, job_id: str) -> int:
     """mtime (ns) du fichier synchronisé le plus récent du job sur CE disque.
 
@@ -297,7 +310,7 @@ def pull_job_files(
     (modifications locales non poussées) n'est JAMAIS écrasé — le push réconciliera.
     """
     if not is_pg_backend(cfg):
-        return {"backend": backend_name(cfg), "pulled": 0, "skipped": 0, "bytes": 0}
+        return {"backend": backend_name(cfg), "pulled": 0, "skipped": 0, "bytes": 0, "conflicts": 0}
 
     t0 = time.monotonic()
     job_dir = _job_dir(cfg, job_id)
@@ -310,6 +323,7 @@ def pull_job_files(
 
     pulled = 0
     skipped = 0
+    conflicts = 0
     total_bytes = 0
     manifest_dirty = False
     for file_id, relpath, sha, size_bytes, chunk_count in rows:
@@ -333,9 +347,10 @@ def pull_job_files(
                     continue
                 logger.warning(
                     "Conflit de synchro (fichier local hors manifeste, contenu différent — non écrasé): "
-                    "job=%s fichier=%s", job_id, relpath,
+                    "job=%s fichier=%s — résolution : cf. docs/STOCKAGE_PARTAGE_JOBS.md §7-bis",
+                    job_id, relpath,
                 )
-                skipped += 1
+                conflicts += 1
                 continue
             if not _stat_matches(entry, st):
                 logger.warning(
@@ -358,7 +373,12 @@ def pull_job_files(
             "Artefacts matérialisés depuis la base: job=%s fichiers=%d octets=%d durée=%dms",
             job_id, pulled, total_bytes, duration_ms,
         )
-    return {"backend": "pg", "pulled": pulled, "skipped": skipped, "bytes": total_bytes}
+    if conflicts:
+        logger.warning(
+            "Synchro incomplète: %d conflit(s) hors manifeste non résolus (job=%s) — "
+            "voir docs/STOCKAGE_PARTAGE_JOBS.md §7-bis", conflicts, job_id,
+        )
+    return {"backend": "pg", "pulled": pulled, "skipped": skipped, "bytes": total_bytes, "conflicts": conflicts}
 
 
 def _materialize(job_id: str, file_id: int, relpath: str, sha: str, chunk_count: int, dest: Path) -> None:
