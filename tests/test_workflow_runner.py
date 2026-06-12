@@ -1841,3 +1841,31 @@ class TestWriteDiarizationContextWithSpeakerGenders:
 
         assert content is not None
         assert "Genre vocal par locuteur" not in content
+
+
+class TestApplyFinalReviewStructuredDataNormalisation:
+    """Le JSON relu par la relecture finale est normalisé en « listes de chaînes »
+    (contrat du DOCX/UI) — stocké brut, un item dict faisait planter le rapport DOCX."""
+
+    def test_items_dicts_normalises_en_chaines(self, tmp_path):
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        fs = JobFilesystem(str(tmp_path), "job-fr-norm")
+        fs.save_text("metadata/transcription_corrigee.srt", "1\n00:00:01,000 --> 00:00:02,000\nA: ok\n")
+        fs.save_json("context/meeting_context.json", {"title": "T"})
+
+        result = {
+            "reviewed_structured_data": (
+                '{"decisions": [{"objet": "budget", "resultat": "adopté"}, "Décision B"],'
+                ' "votes": "Vote unique : adopté", "prochaine_date": "2026-07-01"}'
+            ),
+        }
+        applied = WorkflowRunner._apply_final_review(fs, result)
+
+        assert applied["structured_data_updated"] is True
+        sd = (fs.load_json("context/meeting_context.json") or {}).get("structured_data") or {}
+        assert all(isinstance(item, str) for item in sd.get("decisions", []))
+        assert "Décision B" in sd["decisions"]
+        assert sd["votes"] == ["Vote unique : adopté"]  # scalaire → liste de chaînes
+        assert sd["prochaine_date"] == "2026-07-01"

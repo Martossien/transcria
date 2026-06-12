@@ -422,3 +422,126 @@ class TestSummaryHarmonizedPreference:
         text = "\n".join(p.text for p in doc.paragraphs)
         assert "Edition humaine validee" in text
         assert "Harmonise auto" not in text
+
+
+# ── Robustesse produit final (passe qualité 12/06/2026) ───────────────────────
+
+class TestSrtParserFormatNomSimple:
+    """Le SRT corrigé peut arriver au format lisible « Nom: texte » (un agent LLM a
+    déjà réécrit le préfixe SPEAKER_XX(Nom) malgré la consigne — job réel 4bda98cb).
+    Sans repli, la colonne Locuteur du rapport était vide et le nom collé au texte."""
+
+    def test_nom_simple_parse(self):
+        from transcria.exports.docx_report import _parse_srt
+        entries = _parse_srt("1\n00:00:01,000 --> 00:00:02,000\nVendeur: Bonjour madame.\n\n")
+        assert entries[0]["speaker"] == "Vendeur"
+        assert entries[0]["text"] == "Bonjour madame."
+
+    def test_nom_accentue_et_compose(self):
+        from transcria.exports.docx_report import _parse_srt
+        entries = _parse_srt("1\n00:00:01,000 --> 00:00:02,000\nÉlise Martin : D'accord.\n\n")
+        assert entries[0]["speaker"] == "Élise Martin"
+        assert entries[0]["text"] == "D'accord."
+
+    def test_format_strict_prioritaire(self):
+        from transcria.exports.docx_report import _parse_srt
+        entries = _parse_srt("1\n00:00:01,000 --> 00:00:02,000\nSPEAKER_01(Vendeur): Bonjour.\n\n")
+        assert entries[0]["speaker"] == "Vendeur"  # nom humain, pas le préfixe brut
+
+    def test_ligne_sans_locuteur_minuscule(self):
+        from transcria.exports.docx_report import _parse_srt
+        entries = _parse_srt("1\n00:00:01,000 --> 00:00:02,000\nmusique d'ambiance\n\n")
+        assert entries[0]["speaker"] == ""
+
+
+class TestDureeReunion:
+    def test_duree_depuis_dernier_timestamp(self):
+        from transcria.exports.docx_report import _srt_duration_seconds
+        assert _srt_duration_seconds(_SRT) == 22  # 00:00:22,152
+
+    def test_fmt_duration(self):
+        from transcria.exports.docx_report import _fmt_duration
+        assert _fmt_duration(45) == "1 min"
+        assert _fmt_duration(60 * 73) == "1 h 13 min"
+        assert _fmt_duration(3600) == "1 h"
+
+    def test_duree_sur_la_couverture(self, doc):
+        assert "Durée" in _table_texts(doc)
+
+
+class TestStructuredDataRobuste:
+    """Le JSON relu par la relecture finale peut dévier de « listes de chaînes »
+    (items dicts, scalaires) : le rapport final ne plante jamais pour autant."""
+
+    def _build(self, structured):
+        from transcria.exports.docx_report import DocxReport
+        report = DocxReport(_CTX, _PARTICIPANTS, _SPEAKER_STATS, _QUALITY, _SRT, structured)
+        return report.build()
+
+    def test_items_dicts_coerces_en_texte(self):
+        doc = self._build({"decisions": [{"objet": "budget", "resultat": "adopté"}, "Décision B"]})
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "Décision B" in text
+        assert "budget" in text  # le dict est rendu en texte, pas une exception
+
+    def test_champ_scalaire_accepte(self):
+        doc = self._build({"actions": "Relancer le fournisseur"})
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "Relancer le fournisseur" in text
+
+    def test_gras_markdown_rendu_sans_asterisques(self):
+        doc = self._build({"decisions": ["**Adopté** : budget 2026"]})
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "**" not in text
+        assert "Adopté" in text
+
+
+class TestPointsAVerifierCouvertureComplete:
+    """Un avertissement du rapport qualité n'est jamais caché au lecteur du DOCX —
+    notamment un nom de locuteur ALTÉRÉ par la LLM (severity=error)."""
+
+    def _build_with_checks(self, checks):
+        from transcria.exports.docx_report import DocxReport
+        quality = {"quality_score": 70, "checks": checks}
+        report = DocxReport(_CTX, _PARTICIPANTS, _SPEAKER_STATS, quality, _SRT, {})
+        doc = report.build()
+        return "\n".join(c.text for t in doc.tables for r in t.rows for c in r.cells)
+
+    def test_speaker_name_violations_affiche(self):
+        text = self._build_with_checks([{
+            "type": "speaker_name_violations", "severity": "error", "count": 1,
+            "violations": [{"speaker_id": "SPEAKER_00", "found": "Mme Dupond", "expected": "Mme Dupont"}],
+        }])
+        assert "Nom de locuteur altéré" in text
+        assert "Mme Dupond" in text and "Mme Dupont" in text
+
+    def test_missing_lexicon_terms_affiche(self):
+        text = self._build_with_checks([
+            {"type": "missing_lexicon_terms", "severity": "warning", "terms": ["Emmental"]},
+        ])
+        assert "Terme du lexique non appliqué" in text
+        assert "Emmental" in text
+
+    def test_unmapped_speakers_affiche(self):
+        text = self._build_with_checks([
+            {"type": "unmapped_speakers", "severity": "warning", "count": 3},
+        ])
+        assert "Locuteurs non identifiés" in text
+
+    def test_check_inconnu_repli_generique(self):
+        text = self._build_with_checks([
+            {"type": "empty_segments", "severity": "warning", "count": 2},
+        ])
+        assert "Segments vides" in text
+        assert "2 élément(s)" in text
+
+    def test_info_toujours_filtre(self):
+        text = self._build_with_checks([
+            {"type": "time_gaps", "severity": "info", "count": 4},
+        ])
+        assert "Points à vérifier".upper() not in text.upper()
+
+
+def test_footer_absent_de_la_couverture(doc):
+    """La page de garde reste vierge : pas de « Page 1/N » sur la couverture."""
+    assert doc.sections[0].different_first_page_header_footer is True

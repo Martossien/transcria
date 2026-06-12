@@ -315,6 +315,13 @@ _SRT_BLOCK = re.compile(
     re.DOTALL,
 )
 _SPEAKER_LINE = re.compile(r"^[A-Z_0-9]+\(([^)]+)\):\s*(.+)$")
+# Repli : SRT dont les locuteurs sont au format lisible « Nom: texte » (observé en réel —
+# un agent LLM peut réécrire le préfixe `SPEAKER_XX(Nom):` en `Nom:` malgré la consigne).
+# Sans ce repli, la colonne Locuteur du rapport est vide et le nom reste collé au texte.
+# Heuristique prudente : majuscule initiale (accents inclus), ≤ 40 caractères avant le
+# deux-points — un libellé de prose type « Note : » peut matcher, compromis assumé.
+_SPEAKER_LINE_PLAIN = re.compile(r"^([A-ZÀ-ÖØ-Þ][^:\n]{0,39}?)\s*:\s+(.+)$")
+_SRT_END_TIME = re.compile(r"-->\s*(\d{2}):(\d{2}):(\d{2}),\d{3}")
 
 
 def _parse_srt(srt_text: str) -> list[dict[str, str]]:
@@ -327,7 +334,7 @@ def _parse_srt(srt_text: str) -> list[dict[str, str]]:
             line = line.strip()
             if not line:
                 continue
-            sm = _SPEAKER_LINE.match(line)
+            sm = _SPEAKER_LINE.match(line) or _SPEAKER_LINE_PLAIN.match(line)
             if sm:
                 entries.append({
                     "timestamp": timestamp,
@@ -337,6 +344,24 @@ def _parse_srt(srt_text: str) -> list[dict[str, str]]:
             else:
                 entries.append({"timestamp": timestamp, "speaker": "", "text": line})
     return entries
+
+
+def _srt_duration_seconds(srt_text: str) -> int:
+    """Durée de la réunion = dernier timestamp de FIN du SRT (0 si introuvable)."""
+    last = 0
+    for h, m, s in _SRT_END_TIME.findall(srt_text):
+        last = max(last, int(h) * 3600 + int(m) * 60 + int(s))
+    return last
+
+
+def _fmt_duration(seconds: int) -> str:
+    h, rem = divmod(int(seconds), 3600)
+    m = round(rem / 60)
+    if h and m == 60:
+        h, m = h + 1, 0
+    if h:
+        return f"{h} h {m:02d} min" if m else f"{h} h"
+    return f"{max(m, 1)} min"
 
 
 # ── Classe principale ─────────────────────────────────────────────────────────
@@ -356,6 +381,7 @@ class DocxReport:
         self.speakers: list[dict] = (speaker_stats or {}).get("speakers", [])
         self.quality = quality or {}
         self.srt_entries = _parse_srt(srt_text)
+        self.duration_s = _srt_duration_seconds(srt_text)
         self.merged = self._merge_participants()
         self.structured_data: dict = structured_data or {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
@@ -374,7 +400,7 @@ class DocxReport:
         result: list[dict] = []
 
         for p in self.participants:
-            spk = spk_map.get(p["id"], {})
+            spk = spk_map.get(p.get("id"), {})
             time_s = float(spk.get("speaking_time_seconds", 0))
             pct = round(100 * time_s / max(total_time, 0.001))
             result.append({
@@ -531,6 +557,8 @@ class DocxReport:
         meta_rows: list[tuple[str, str]] = []
         if date and date != "—":
             meta_rows.append(("Date", date))
+        if self.duration_s:
+            meta_rows.append(("Durée", _fmt_duration(self.duration_s)))
         if mtype:
             meta_rows.append(("Type", mtype))
         if svc:
@@ -838,7 +866,7 @@ class DocxReport:
 
     # ── Section 1c : Données enrichies LLM (décisions, actions, votes…) ─────────
 
-    def _section_enriched(self, doc: Document) -> None:
+    def _section_enriched(self, doc: Document) -> int:
         """Sections issues de l'extraction LLM structurée.
 
         Principe : **une donnée extraite n'est jamais cachée**. Toute section
@@ -853,15 +881,25 @@ class DocxReport:
         sd = self.structured_data
         section_num = 2  # numéro de section courant avant Participants
 
+        def _as_str_items(val: Any) -> list[str]:
+            # Défense : la structure canonique est une liste de chaînes, mais le JSON
+            # relu par la relecture finale peut dévier (dicts, scalaires) — un rapport
+            # final ne plante jamais pour autant, on coerce en texte.
+            if isinstance(val, str):
+                return [val.strip()] if val.strip() else []
+            if isinstance(val, (list, tuple)):
+                return [s for s in (str(item).strip() for item in val) if s]
+            return []
+
         # (label, items) dans l'ordre PV — chaque section affichée si non vide
         ordered = [
-            ("Ordre du jour",        sd.get("points_odj")),
-            ("Décisions prises",     sd.get("decisions")),
-            ("Votes",                sd.get("votes")),
-            ("Résolutions adoptées", sd.get("resolutions")),
-            ("Actions à réaliser",   sd.get("actions")),
-            ("Points bloquants",     sd.get("blocages")),
-            ("Points reportés",      sd.get("reports")),
+            ("Ordre du jour",        _as_str_items(sd.get("points_odj"))),
+            ("Décisions prises",     _as_str_items(sd.get("decisions"))),
+            ("Votes",                _as_str_items(sd.get("votes"))),
+            ("Résolutions adoptées", _as_str_items(sd.get("resolutions"))),
+            ("Actions à réaliser",   _as_str_items(sd.get("actions"))),
+            ("Points bloquants",     _as_str_items(sd.get("blocages"))),
+            ("Points reportés",      _as_str_items(sd.get("reports"))),
         ]
         shown: list[tuple[str, list[str]]] = [
             (label, items) for label, items in ordered if items
@@ -880,9 +918,8 @@ class DocxReport:
                 run_bullet = p.add_run("▸  ")
                 run_bullet.font.color.rgb = self.theme.accent
                 run_bullet.font.size = Pt(9)
-                run = p.add_run(item)
-                run.font.size = Pt(10)
-                run.font.name = "Calibri"
+                # Gras markdown de la LLM rendu en vrai gras (pas de ** littéraux).
+                _add_markdown_runs(p, item, size=10)
 
         # Prochaine date — footer discret si mentionnée
         if sd.get("prochaine_date"):
@@ -893,7 +930,7 @@ class DocxReport:
             r_lbl.font.bold = True
             r_lbl.font.color.rgb = _GREY_DARK
             r_lbl.font.name = "Calibri"
-            r_val = p.add_run(sd["prochaine_date"])
+            r_val = p.add_run(str(sd["prochaine_date"]))
             r_val.font.size = Pt(9)
             r_val.font.color.rgb = self.theme.accent
             r_val.font.name = "Calibri"
@@ -1026,6 +1063,18 @@ class DocxReport:
 
     # ── Section 4 : Points à vérifier (conditionnelle) ────────────────────────
 
+    # Libellés français des checks sans rendu dédié (repli générique — un avertissement
+    # du rapport qualité n'est JAMAIS caché au lecteur du document final).
+    _CHECK_LABELS_FR: dict[str, str] = {
+        "empty_segments": "Segments vides",
+        "short_segments": "Segments très courts",
+        "long_segments": "Segments très longs",
+        "overlaps": "Chevauchements de parole",
+        "audio_preflight_flags": "Alertes de qualité audio",
+        "suspect_no_speech_prob": "Segments à faible probabilité de parole",
+        "suspicious_short_segments": "Segments courts suspects",
+    }
+
     def _section_quality(self, doc: Document, base: int = 4) -> None:
         checks = self.quality.get("checks", [])
         points: list[tuple[str, str]] = []  # (emoji_label, description)
@@ -1055,6 +1104,37 @@ class DocxReport:
                     points.append(("✎  Terme à valider", f"{ev['term']} (variante : {ev['variant']})"))
                 for cf in check.get("close_forms", []):
                     points.append(("✎  Orthographe à vérifier", f"{cf['form']} proche de {cf['term']}"))
+
+            elif ctype == "speaker_name_violations":
+                # severity=error : un nom de locuteur a été ALTÉRÉ dans le SRT corrigé —
+                # information capitale pour le relecteur du document final.
+                for v in check.get("violations", [])[:10]:
+                    points.append((
+                        "⚠  Nom de locuteur altéré",
+                        f"{v.get('speaker_id', '?')} : « {v.get('found', '')} » au lieu de « {v.get('expected', '')} »",
+                    ))
+
+            elif ctype == "missing_lexicon_terms":
+                for term in check.get("terms", [])[:10]:
+                    points.append(("✎  Terme du lexique non appliqué", f"« {term} » introuvable dans la transcription corrigée"))
+
+            elif ctype == "unmapped_speakers":
+                points.append(("⚠  Locuteurs non identifiés",
+                               f"{check.get('count', 0)} segment(s) sans participant associé"))
+
+            elif ctype == "foreign_segments":
+                points.append(("🔍  Segments en langue étrangère",
+                               f"{check.get('count', 0)} segment(s) marqué(s) — hallucination ASR ou zone bruitée probable"))
+
+            elif ctype == "non_latin_segments":
+                points.append(("🔍  Caractères non latins",
+                               f"{check.get('count', 0)} segment(s) — zones à réécouter"))
+
+            else:
+                label = self._CHECK_LABELS_FR.get(str(ctype), str(ctype).replace("_", " ").capitalize())
+                count = check.get("count")
+                desc = f"{count} élément(s) concerné(s)" if count else "détails dans quality_report.md"
+                points.append((f"⚠  {label}", desc))
 
         if not points:
             return
@@ -1092,6 +1172,9 @@ class DocxReport:
         score  = self.quality.get("quality_score")
 
         section = doc.sections[0]
+        # Page de garde vierge (pas de « Page 1/N » sur la couverture) : le pied de
+        # page ci-dessous ne s'applique qu'à partir de la page 2.
+        section.different_first_page_header_footer = True
         footer  = section.footer
         footer.is_linked_to_previous = False
         p = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()

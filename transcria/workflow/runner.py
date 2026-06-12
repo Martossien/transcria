@@ -1899,7 +1899,12 @@ class WorkflowRunner:
             try:
                 parsed = json.loads(reviewed_sd)
                 if isinstance(parsed, dict):
-                    meeting_ctx["structured_data"] = parsed
+                    # Normalisation OBLIGATOIRE : la structure canonique est « listes de
+                    # chaînes » (contrat du DOCX et de l'UI). Le JSON relu par la LLM peut
+                    # dévier (items dicts, scalaires) — stocké brut, il faisait planter la
+                    # génération du rapport DOCX (add_run sur un non-texte).
+                    from transcria.gpu.opencode_runner import OpenCodeRunner
+                    meeting_ctx["structured_data"] = OpenCodeRunner._normalize_structured_data(parsed)
                     applied["structured_data_updated"] = True
             except (ValueError, TypeError):
                 logger.warning("Relecture finale : structured_data relu non JSON — ancien conservé")

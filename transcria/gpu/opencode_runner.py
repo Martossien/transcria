@@ -661,7 +661,6 @@ class OpenCodeRunner:
         return lowered.startswith("non identifiable")
 
     @staticmethod
-    @staticmethod
     def _normalize_structured_data(raw: dict) -> dict:
         """Normalise le dict brut extrait du JSON LLM en structure canonique."""
         result = dict(_STRUCTURED_DATA_EMPTY)

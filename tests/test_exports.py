@@ -54,3 +54,18 @@ class TestPackageBuilder:
         builder = PackageBuilder(config)
         result = builder.build_package(job)
         assert Path(result["zip_path"]).is_file()
+
+    def test_zip_contains_summary_and_final_review_report(self, tmp_dir):
+        """Le résumé et le rapport de relecture finale sont des LIVRABLES : ils
+        manquaient au paquet final (passe qualité 12/06/2026)."""
+        job = self._prepare_job(tmp_dir, "job-pkg-3")
+        fs = JobFilesystem(tmp_dir, "job-pkg-3")
+        fs.save_text("summary/summary.md", "# Résumé de contrôle\nLa réunion a décidé X.")
+        fs.save_text("metadata/final_review_report.md", "## Relecture finale\nRAS.")
+        config = {"storage": {"jobs_dir": tmp_dir}}
+        result = PackageBuilder(config).build_package(job)
+
+        with zipfile.ZipFile(result["zip_path"], "r") as zf:
+            names = zf.namelist()
+            assert "summary/summary.md" in names
+            assert "quality/final_review_report.md" in names

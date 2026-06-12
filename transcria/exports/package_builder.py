@@ -33,10 +33,12 @@ class PackageBuilder:
                 self._add_if_exists(zf, fs, "context/session_lexicon.json", "context/session_lexicon.json")
                 self._add_if_exists(zf, fs, "speakers/speaker_mapping.json", "context/speaker_mapping.json")
                 self._add_if_exists(zf, fs, "speakers/speaker_stats.json", "context/speaker_stats.json")
+                self._add_if_exists(zf, fs, "summary/summary.md", "summary/summary.md")
                 self._add_if_exists(zf, fs, "quality/quality_report.md", "quality/quality_report.md")
                 self._add_if_exists(zf, fs, "quality/quality_report.json", "quality/quality_report.json")
                 self._add_if_exists(zf, fs, "quality/review_points.json", "quality/review_points.json")
                 self._add_if_exists(zf, fs, "metadata/correction_report.md", "quality/correction_report.md")
+                self._add_if_exists(zf, fs, "metadata/final_review_report.md", "quality/final_review_report.md")
                 self._add_docx_report(zf, fs, job)
         except Exception as exc:
             logger.exception("Échec création package ZIP")
