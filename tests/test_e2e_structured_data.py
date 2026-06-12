@@ -575,11 +575,14 @@ class TestDocxHTTPEnriched:
 # ── 7. Intégrité du prompt (section 8b) ──────────────────────────────────────
 
 class TestPromptIntegrity:
-    def test_prompt_contient_section_8b(self):
+    def test_prompt_contient_section_donnees_structurees(self):
+        # v3 : on vérifie l'INTENTION (la section existe), plus un numéro de section
+        # fragile — la renumérotation v3 a montré que les numéros bougent.
         prompt_path = Path(__file__).parent.parent / "configs" / "prompts" / "summary_prompt.txt"
         assert prompt_path.is_file(), "summary_prompt.txt introuvable"
         content = prompt_path.read_text(encoding="utf-8")
-        assert "## 8b. Section données structurées" in content
+        assert "Section données structurées" in content
+        assert "## Données structurées" in content  # le titre exact lu par le parseur
 
     def test_prompt_contient_tous_les_champs_json(self):
         prompt_path = Path(__file__).parent.parent / "configs" / "prompts" / "summary_prompt.txt"
@@ -588,16 +591,16 @@ class TestPromptIntegrity:
                       "votes", "resolutions", "points_odj", "prochaine_date"):
             assert f'"{field}"' in content, f"Champ {field!r} absent du prompt"
 
-    def test_prompt_contient_verification_16(self):
+    def test_prompt_verification_finale_couvre_le_json(self):
         prompt_path = Path(__file__).parent.parent / "configs" / "prompts" / "summary_prompt.txt"
         content = prompt_path.read_text(encoding="utf-8")
-        assert "Données structurées" in content
-        assert "16." in content
+        assert "Vérification finale" in content
+        assert "JSON valide" in content
 
-    def test_prompt_contient_etape_4b(self):
+    def test_prompt_deroule_inclut_le_bloc_json(self):
         prompt_path = Path(__file__).parent.parent / "configs" / "prompts" / "summary_prompt.txt"
         content = prompt_path.read_text(encoding="utf-8")
-        assert "4b." in content
+        assert "bloc JSON" in content
 
 
 # ── 8. Nouveaux types de réunion ──────────────────────────────────────────────
