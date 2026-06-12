@@ -157,3 +157,44 @@ class TestPermissions:
         def dummy():
             return "ok"
         assert callable(dummy)
+
+
+class TestUnauthenticatedResponses:
+    """Session expirée/absente : 401 JSON sur /api/, redirection HTML ailleurs.
+
+    Incident du 12/06/2026 : la session du navigateur invalidée entre deux polls →
+    toutes les routes API répondaient 302 → page HTML de login ; fetch suivait la
+    redirection (status 200 + HTML), le front affichait « Réponse serveur invalide »
+    et martelait le serveur pendant des heures sans signal exploitable.
+    """
+
+    def test_api_route_returns_401_json_not_redirect(self, app):
+        client = app.test_client()
+        resp = client.get("/api/jobs/abc-123/status")
+        assert resp.status_code == 401
+        assert resp.is_json
+        assert resp.get_json().get("auth_required") is True
+        assert "reconnectez" in resp.get_json().get("error", "")
+
+    def test_api_post_returns_401_json(self, app):
+        client = app.test_client()
+        resp = client.post("/api/jobs/abc-123/summary")
+        assert resp.status_code == 401
+        assert resp.is_json
+
+    def test_html_page_still_redirects_to_login(self, app):
+        client = app.test_client()
+        resp = client.get("/jobs/abc-123")
+        assert resp.status_code == 302
+        assert "/login" in resp.headers["Location"]
+
+    def test_session_cookie_name_is_app_specific(self, app):
+        """Les cookies ignorent le port : sur un hôte multi-apps (127.0.0.1), le nom
+        Flask par défaut `session` entre en collision entre applications — une autre
+        app écrase le cookie et déconnecte TranscrIA en silence."""
+        assert app.config["SESSION_COOKIE_NAME"] == "transcria_session"
+        client = app.test_client()
+        login = client.post("/login", data={"username": "admin", "password": "admin-change-me"})
+        assert login.status_code == 302
+        cookies = login.headers.getlist("Set-Cookie")
+        assert any(c.startswith("transcria_session=") for c in cookies)

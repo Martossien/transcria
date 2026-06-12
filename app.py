@@ -121,11 +121,35 @@ def create_app(config_path: str | None = None) -> Flask:
 
     db.init_app(app)
 
+    # Nom de cookie PROPRE à TranscrIA : les cookies ignorent le port — sur une machine
+    # qui héberge plusieurs apps web en 127.0.0.1 (cas dev/all-in-one typique), une autre
+    # app Flask posant son cookie `session` par défaut ÉCRASE le nôtre et déconnecte
+    # l'utilisateur en silence (incident du 12/06/2026 : session morte entre deux polls).
+    app.config["SESSION_COOKIE_NAME"] = "transcria_session"
+
     from flask_login import LoginManager
 
     login_manager = LoginManager()
     login_manager.login_view = "auth.login"
     login_manager.init_app(app)
+
+    @login_manager.unauthorized_handler
+    def _unauthorized():
+        # Une route API appelée en fetch ne doit JAMAIS répondre 302 → page HTML de
+        # login : fetch suit la redirection, reçoit du HTML avec un status 200, le front
+        # échoue à parser le JSON (« Réponse serveur invalide ») et continue de marteler
+        # le serveur sans comprendre (observé : 4 h de polls en 302). API → 401 JSON
+        # explicite (wizard-api.js redirige vers /login) ; pages HTML → redirection
+        # historique vers la page de connexion.
+        from flask import jsonify, redirect, request
+        from flask_login import login_url
+
+        if request.path.startswith("/api/"):
+            return jsonify({
+                "error": "Session expirée ou invalide — reconnectez-vous.",
+                "auth_required": True,
+            }), 401
+        return redirect(login_url("auth.login", request.url))
 
     from transcria.auth.models import User
     from transcria.auth.store import UserStore

@@ -11,6 +11,15 @@ TranscrIA.api = function (endpoint, method, body) {
     }
     console.log('[TranscrIA] api ' + resolvedMethod + ' ' + endpoint);
     return fetch(endpoint, opts).then(function (r) {
+        // Session expirée/invalide : le serveur répond 401 JSON sur les routes /api/
+        // (et certains proxys peuvent encore rediriger vers /login). Dans les deux cas,
+        // on renvoie l'utilisateur se connecter au lieu d'afficher « Réponse serveur
+        // invalide » et de repartir en boucle de polls non authentifiés.
+        if (r.status === 401 || (r.redirected && r.url.indexOf('/login') !== -1)) {
+            console.warn('[TranscrIA] session expirée — redirection vers /login');
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+            return { status: 401, data: { error: 'Session expirée — redirection vers la connexion…' } };
+        }
         return r.text().then(function (text) {
             var data = {};
             if (text) {
