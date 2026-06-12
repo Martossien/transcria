@@ -24,6 +24,7 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
 
 OK = "ok"
@@ -423,6 +424,101 @@ def check_storage(
     return CheckResult(name, OK, ", ".join(f"{label}={path}" for label, path in targets) + " inscriptibles")
 
 
+def expected_model_assets(cfg: dict) -> list[tuple[str, str, str]]:
+    """Modèles que CETTE machine doit avoir en cache local, d'après la config.
+
+    Retourne des triplets ``(libellé, type, référence)`` avec type ∈ ``hf`` (id
+    Hugging Face), ``path`` (chemin local), ``torchaudio`` (asset torch hub).
+    Fonction pure et testable. Une phase servie À DISTANCE (``inference.mode:
+    remote``) n'a pas besoin de ses poids ici ; en ``hybrid`` le repli local reste
+    possible, donc on vérifie. Les modèles téléchargés au runtime échouent (ou
+    pendent) derrière un proxy d'entreprise non configuré — cf. docs/INSTALL.md
+    § « Réseau d'entreprise »."""
+    assets: list[tuple[str, str, str]] = []
+    remote_only = str((cfg.get("inference") or {}).get("mode", "local")).strip().lower() == "remote"
+
+    def _kind(ref: str) -> str:
+        return "path" if ref.startswith(("/", "./", "~")) else "hf"
+
+    models = cfg.get("models", {}) or {}
+    if not remote_only:
+        stt = str(models.get("stt_backend", "cohere")).strip().lower()
+        if stt == "cohere":
+            ref = str((cfg.get("cohere") or {}).get("model_path", "CohereLabs/cohere-transcribe-03-2026"))
+            assets.append(("STT Cohere", _kind(ref), ref))
+        elif stt == "whisper":
+            size = str((cfg.get("whisper") or {}).get("model_size", "large-v3"))
+            assets.append(("STT Whisper", "hf", f"Systran/faster-whisper-{size}"))
+        elif stt == "granite":
+            ref = str((cfg.get("granite") or {}).get("model_id", "./models/granite-speech-4.1-2b"))
+            assets.append(("STT Granite", _kind(ref), ref))
+        elif stt == "parakeet":
+            ref = str((cfg.get("parakeet") or {}).get("model_id", "nvidia/parakeet-tdt-0.6b-v3"))
+            assets.append(("STT Parakeet", _kind(ref), ref))
+
+        diar = str(models.get("diarization_backend", "pyannote")).strip().lower()
+        if diar == "sortformer":
+            ref = str((cfg.get("sortformer") or {}).get("model_id", "nvidia/diar_streaming_sortformer_4spk-v2.1"))
+            assets.append(("Diarisation Sortformer", _kind(ref), ref))
+        else:
+            ref = str(models.get("model_id", "pyannote/speaker-diarization-community-1"))
+            assets.append(("Diarisation pyannote", _kind(ref), ref))
+
+    voice = cfg.get("voice_enrollment", {}) or {}
+    if voice.get("enabled"):
+        ref = str((voice.get("embedding") or {}).get("model_id", "pyannote/speaker-diarization-community-1"))
+        if not any(r == ref for _, _, r in assets):
+            assets.append(("Empreintes vocales", _kind(ref), ref))
+
+    preflight = ((cfg.get("workflow") or {}).get("audio_preflight") or {})
+    if preflight.get("enabled", True) and (preflight.get("squim") or {}).get("enabled"):
+        assets.append(("SQUIM (préflight)", "torchaudio", "models/squim_objective_dns2020.pth"))
+    return assets
+
+
+def _model_asset_exists(kind: str, ref: str) -> bool:
+    """Présence d'un modèle en cache local, sans réseau ni chargement."""
+    if kind == "path":
+        return Path(ref).expanduser().exists()
+    if kind == "torchaudio":
+        torch_home = Path(os.environ.get("TORCH_HOME", "~/.cache/torch")).expanduser()
+        return (torch_home / "hub" / "torchaudio" / ref).is_file()
+    hub = os.environ.get("HF_HUB_CACHE")
+    hub_dir = Path(hub).expanduser() if hub else Path(
+        os.environ.get("HF_HOME", "~/.cache/huggingface")
+    ).expanduser() / "hub"
+    model_dir = hub_dir / ("models--" + ref.replace("/", "--"))
+    return model_dir.is_dir() and any(model_dir.rglob("*"))
+
+
+def check_local_models(
+    cfg: dict,
+    *,
+    asset_exists: Callable[[str, str], bool] | None = None,
+) -> CheckResult:
+    """Les modèles requis par la config doivent être en cache local.
+
+    Un modèle absent est téléchargé au runtime : derrière un proxy d'entreprise non
+    configuré dans l'environnement du service, ce téléchargement échoue — ou pend
+    indéfiniment (incident SQUIM du 12/06/2026 : préflight gelé, job bloqué). Ce
+    check rend le manque visible AVANT le premier job."""
+    name = "Modèles locaux (cache)"
+    exists = asset_exists or _model_asset_exists
+    assets = expected_model_assets(cfg)
+    if not assets:
+        return CheckResult(name, OK, "aucun modèle local requis (phases servies à distance)")
+    missing = [(label, ref) for label, kind, ref in assets if not exists(kind, ref)]
+    if not missing:
+        return CheckResult(name, OK, f"{len(assets)} modèle(s) requis présents en cache local")
+    return CheckResult(
+        name, WARN,
+        "absent(s) du cache local : " + "; ".join(f"{label} ({ref})" for label, ref in missing),
+        hint="Pré-télécharger depuis une session disposant du réseau (proxy d'entreprise compris), "
+             "ex. `huggingface-cli download <id>` — cf. docs/INSTALL.md § « Réseau d'entreprise ». "
+             "Sinon le premier job tentera le téléchargement et échouera si la sortie réseau est bloquée.",
+    )
+
+
 def check_shared_storage(
     cfg: dict,
     *,
@@ -569,6 +665,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_arbitrage_llm,
     check_opencode,
     check_inference_nodes,
+    check_local_models,
     check_storage,
     check_shared_storage,
 )

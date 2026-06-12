@@ -665,6 +665,47 @@ La caractérisation acoustique du préflight (`workflow.audio_preflight.{squim,d
 
 Attribution des poids : voir `THIRD_PARTY_NOTICES.md`.
 
+### Réseau d'entreprise : proxy et modèles
+
+Sur un réseau d'entreprise, la sortie internet directe est souvent **bloquée ou —
+pire — silencieusement absorbée** (la connexion s'établit puis ne reçoit jamais
+rien). Tout téléchargement de modèle tenté au runtime échoue alors… ou **pend
+indéfiniment** et fige le job. Trois règles :
+
+**1. Déclarer le proxy dans `.env`** — pas seulement dans le shell. Le service
+systemd n'hérite **pas** de l'environnement du shell ; `.env` est lu à la fois par
+systemd (`EnvironmentFile`) et par le mode dev (`python-dotenv`) :
+
+```bash
+# .env
+http_proxy=http://proxy.exemple.interne:3128
+https_proxy=http://proxy.exemple.interne:3128
+# IMPORTANT : exclure le trafic local/interne (LLM port 8080, PostgreSQL,
+# nœuds de ressources inference.nodes…) sinon il passerait par le proxy.
+no_proxy=127.0.0.1,localhost
+```
+
+`install.sh` détecte un proxy présent dans l'environnement de l'installeur et
+propose de le persister dans `.env` automatiquement.
+
+**2. Pré-télécharger les modèles** depuis une session qui a le réseau (proxy
+exporté), plutôt que de compter sur le téléchargement au premier job :
+
+| Modèle | Cache | Commande |
+|---|---|---|
+| Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `huggingface-cli download <model_id>` |
+| pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `huggingface-cli download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
+| Whisper (faster-whisper) | `$HF_HOME/hub` | `huggingface-cli download Systran/faster-whisper-large-v3` |
+| SQUIM (préflight) | `~/.cache/torch/hub/torchaudio/models/` | `curl -o ~/.cache/torch/hub/torchaudio/models/squim_objective_dns2020.pth https://download.pytorch.org/torchaudio/models/squim_objective_dns2020.pth` |
+| LLM d'arbitrage (GGUF) | chemin du script de lancement | `huggingface-cli download <repo_gguf>` puis adapter `scripts/launch_arbitrage.sh` |
+
+**3. Vérifier avant le premier job** : `venv/bin/python scripts/doctor.py` comporte
+un check « Modèles locaux (cache) » qui liste, selon la config active, les modèles
+absents du cache local (sans réseau ni GPU). `install.sh` affiche le même état dans
+son tableau récapitulatif. Garde-fou runtime : le chargement SQUIM est borné par un
+timeout socket — sur un réseau muet il échoue proprement en ~30 s (préflight
+poursuivi sans SQUIM) au lieu de pendre.
+
 ---
 
 ## 7. Configuration

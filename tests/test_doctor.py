@@ -84,6 +84,63 @@ def test_check_encoding_fail_on_unreachable():
     assert "secret" not in res.detail
 
 
+# ── expected_model_assets / check_local_models ────────────────────────────
+
+
+def test_expected_assets_defaults_cohere_pyannote():
+    assets = doc.expected_model_assets({})
+    labels = [a[0] for a in assets]
+    assert "STT Cohere" in labels
+    assert "Diarisation pyannote" in labels
+
+
+def test_expected_assets_follow_configured_backends():
+    cfg = {
+        "models": {"stt_backend": "whisper", "diarization_backend": "sortformer"},
+        "whisper": {"model_size": "large-v3"},
+        "sortformer": {"model_id": "nvidia/diar_streaming_sortformer_4spk-v2.1"},
+    }
+    assets = {label: (kind, ref) for label, kind, ref in doc.expected_model_assets(cfg)}
+    assert assets["STT Whisper"] == ("hf", "Systran/faster-whisper-large-v3")
+    assert assets["Diarisation Sortformer"][1].startswith("nvidia/")
+    assert "STT Cohere" not in assets
+
+
+def test_expected_assets_empty_in_remote_mode():
+    """En mode remote, STT et diarisation sont servis par le nœud distant :
+    leurs poids n'ont rien à faire sur cette machine."""
+    cfg = {"inference": {"mode": "remote"}}
+    labels = [a[0] for a in doc.expected_model_assets(cfg)]
+    assert "STT Cohere" not in labels
+    assert "Diarisation pyannote" not in labels
+
+
+def test_expected_assets_include_squim_when_enabled():
+    cfg = {"workflow": {"audio_preflight": {"enabled": True, "squim": {"enabled": True}}}}
+    kinds = {label: kind for label, kind, _ in doc.expected_model_assets(cfg)}
+    assert kinds.get("SQUIM (préflight)") == "torchaudio"
+
+
+def test_expected_assets_local_path_detected():
+    cfg = {"models": {"stt_backend": "granite"}, "granite": {"model_id": "./models/granite-speech-4.1-2b"}}
+    assets = {label: kind for label, kind, _ in doc.expected_model_assets(cfg)}
+    assert assets["STT Granite"] == "path"
+
+
+def test_check_local_models_ok_when_all_cached():
+    res = doc.check_local_models({}, asset_exists=lambda kind, ref: True)
+    assert res.status == doc.OK
+
+
+def test_check_local_models_warn_lists_missing():
+    """Modèle absent du cache ⇒ warn + hint pré-téléchargement (incident SQUIM :
+    téléchargement au runtime qui pend derrière un proxy d'entreprise non configuré)."""
+    res = doc.check_local_models({}, asset_exists=lambda kind, ref: kind != "hf")
+    assert res.status == doc.WARN
+    assert "Cohere" in res.detail
+    assert "Réseau d'entreprise" in (res.hint or "")
+
+
 # ── diff de schéma réel (SQLite éphémère) ─────────────────────────────────
 
 

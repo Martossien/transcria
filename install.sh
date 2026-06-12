@@ -401,6 +401,38 @@ else
     log_ok "TRANSCRIA_SECRET présent dans .env"
 fi
 
+# ── Proxy d'entreprise ──────────────────────────────────────────────────────
+# Le service systemd n'hérite PAS de l'environnement du shell : un proxy connu du
+# seul shell rend les téléchargements de modèles impossibles depuis le service —
+# au pire la connexion directe est silencieusement absorbée et le téléchargement
+# PEND (job figé). Persister le proxy dans .env le propage au service
+# (EnvironmentFile systemd) ET au mode dev (python-dotenv). Cf. docs/INSTALL.md
+# § « Réseau d'entreprise : proxy et modèles ».
+if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; then
+    _proxy_https="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
+    _proxy_http="${http_proxy:-${HTTP_PROXY:-$_proxy_https}}"
+    _proxy_no="${no_proxy:-${NO_PROXY:-127.0.0.1,localhost}}"
+    if grep -qE '^https?_proxy=' "$ENV_FILE" 2>/dev/null; then
+        log_ok "Proxy déjà présent dans .env"
+    else
+        PERSIST_PROXY=true
+        if [[ "$NON_INTERACTIVE" != true ]]; then
+            ask_yn "Proxy détecté ($_proxy_https) : le persister dans .env pour le service ?" || PERSIST_PROXY=false
+        fi
+        if [[ "$PERSIST_PROXY" = true ]]; then
+            {
+                echo ""
+                echo "# Proxy d'entreprise — sans lui, les téléchargements de modèles échouent ou"
+                echo "# pendent depuis le service systemd (docs/INSTALL.md § Réseau d'entreprise)."
+                echo "http_proxy=$_proxy_http"
+                echo "https_proxy=$_proxy_https"
+                echo "no_proxy=$_proxy_no"
+            } >> "$ENV_FILE"
+            log_ok "Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)"
+        fi
+    fi
+fi
+
 # ============================================================================
 # SECTION 6.5 — Base de données PostgreSQL (optionnel, recommandé en prod)
 # ============================================================================
@@ -712,6 +744,16 @@ else
     log_warn "pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)"
 fi
 
+# ── SQUIM (préflight qualité, asset torchaudio) ─────────────────────────────
+SQUIM_PTH="${TORCH_HOME:-$HOME/.cache/torch}/hub/torchaudio/models/squim_objective_dns2020.pth"
+SQUIM_OK=false
+if [[ -f "$SQUIM_PTH" ]]; then
+    SQUIM_OK=true
+    log_ok "SQUIM préflight  : $SQUIM_PTH"
+else
+    log_warn "SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)"
+fi
+
 # ── Qwen 35B GGUF ────────────────────────────────────────────────────────────
 QWEN_GGUF=$(find "$INSTALL_DIR/models" -name "*.gguf" 2>/dev/null | head -1 || true)
 QWEN_OK=false
@@ -739,6 +781,10 @@ printf "  │ %-31s │ %s │ %-63s │\n" \
     "Qwen 35B GGUF (~48 Go)" \
     "$( [[ "$QWEN_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
     "$( [[ "$QWEN_OK" = true ]] && echo "$(basename "$QWEN_GGUF")" || echo "bartowski/Qwen3.6-35B-A3B-GGUF")"
+printf "  │ %-31s │ %s │ %-63s │\n" \
+    "SQUIM préflight (~28 Mo)" \
+    "$( [[ "$SQUIM_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
+    "$( [[ "$SQUIM_OK" = true ]] && echo "cache torchaudio" || echo "cf. docs/INSTALL.md § Réseau d'entreprise")"
 echo "  └─────────────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────┘"
 
 # ============================================================================

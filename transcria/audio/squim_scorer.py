@@ -28,6 +28,7 @@ _DEFAULT_BATCH = 64
 _GLOBAL_PROBES = 5           # fenêtres réparties pour le score global (borne mémoire/CPU)
 _GLOBAL_WINDOW_S = 10.0      # durée d'une fenêtre de sonde du score global
 _SQUIM_VRAM_MB = 5000        # VRAM nécessaire pour placer SQUIM (≈4,8 Go observés + marge)
+_DOWNLOAD_TIMEOUT_S = 30.0   # borne le téléchargement des poids par torchaudio (cf. _get_model)
 
 # Le modèle SQUIM est un singleton torch partagé. `.to(device)` mute le module en
 # place et un forward concurrent sur le même module n'est pas thread-safe : sous
@@ -116,18 +117,32 @@ def release_cuda_cache() -> None:
 
 
 def _get_model() -> Any:
-    """Charge SquimObjective (paresseux). Retourne None si indisponible."""
+    """Charge SquimObjective (paresseux). Retourne None si indisponible.
+
+    Si les poids ne sont pas en cache, torchaudio les télécharge via urllib **sans
+    timeout** : sur un réseau qui absorbe la connexion (sortie directe bloquée
+    derrière un proxy d'entreprise), l'appel pendrait indéfiniment — et gèlerait le
+    préflight, donc le job (incident du 12/06/2026). Un timeout socket temporaire
+    transforme ce gel en échec propre : warning logué, SQUIM sauté, préflight
+    poursuivi (DNSMOS et la suite n'en dépendent pas). Diagnostic du cache des
+    modèles : `scripts/doctor.py` (check « Modèles locaux »)."""
     global _MODEL
     if _MODEL is None:
+        import socket
+
+        previous_timeout = socket.getdefaulttimeout()
         try:
             from torchaudio.pipelines import SQUIM_OBJECTIVE
 
+            socket.setdefaulttimeout(_DOWNLOAD_TIMEOUT_S)
             _MODEL = SQUIM_OBJECTIVE.get_model()
             _MODEL.eval()
             logger.info("[squim] modèle SquimObjective chargé (CC-BY-4.0, ~28 Mo)")
         except Exception as exc:  # noqa: BLE001 — best effort, jamais bloquant
             logger.warning("[squim] modèle indisponible : %s", exc)
             return None
+        finally:
+            socket.setdefaulttimeout(previous_timeout)
     return _MODEL
 
 
