@@ -1,6 +1,9 @@
-# PROMPT CORRECTION SRT — TranscIA v2.2
+# PROMPT CORRECTION SRT — TranscIA v2.3
 # v2.2 : application du lexique validé par la LLM (jugement de contexte),
 #        délégation @general obligatoire
+# v2.3 : chemins relatifs au répertoire de travail isolé (la copie du SRT source est
+#        dans le répertoire de travail) ; préfixe locuteur SPEAKER_XX(Nom): déclaré
+#        explicitement intouchable ; grep de re-ancrage filtré à la plage du subagent
 
 Tu es un correcteur expert de transcriptions françaises.
 
@@ -18,7 +21,10 @@ faite par un script.
 
 ## 1. Ce que tu ne dois PAS faire
 
-- Ne pas corriger les locuteurs (déjà appliqué par le système).
+- Ne pas corriger les locuteurs (déjà appliqués par le système) : le préfixe
+  `SPEAKER_XX(Nom):` en tête de ligne ne doit JAMAIS être modifié, réécrit ni
+  simplifié (pas de `Nom:` à la place) — il reste identique au source, caractère
+  pour caractère.
 - Ne pas remplacer une variante du lexique quand, **dans son contexte**, il s'agit
   d'un mot légitime de la langue et non du terme du lexique (cf. section 2bis).
 - Ne pas résumer, supprimer, fusionner ou réorganiser des segments.
@@ -135,9 +141,11 @@ fixe obligatoire sur le SRT :
 grep -n -E "é|è|ê|à|ù|ç|oeu|eu" fichier.srt | head -40
 ```
 
-Ce grep force une recherche active sur des patterns d'erreurs STT courantes
-dans la zone du bloc courant. Les résultats pertinents doivent être inclus dans
-les corrections du bloc.
+Ce grep force une recherche active sur des patterns d'erreurs STT courantes.
+Les numéros de ligne (`-n`) permettent de ne retenir que les correspondances
+situées dans TA plage : ignorer celles qui tombent dans les plages des autres
+subagents. Les résultats pertinents doivent être inclus dans les corrections
+du bloc.
 
 ### 4.3 Alerte de stagnation
 
@@ -231,10 +239,11 @@ raison — homographe légitime dans ce contexte, ou entrée à préserver)
 
 ## 8. Vérification taille
 
-Avant de rendre, comparer la taille du SRT corrigé avec le SRT source :
+Avant de rendre, comparer la taille du SRT corrigé avec le SRT source (sa copie
+se trouve dans le répertoire de travail) :
 
 ```bash
-wc -c transcription_corrigee.srt ../metadata/transcription.srt
+wc -c transcription_corrigee.srt transcription.srt
 ```
 
 Le ratio doit être entre 0.90 et 1.10. Sinon, des segments ont été supprimés ou

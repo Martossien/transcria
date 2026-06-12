@@ -302,7 +302,9 @@ class TestWorkflowRunnerRunCorrectionPrompting:
                     captured["lexicon"] = json.load(fh)
                 return {
                     "success": True,
-                    "corrected_srt": "corrigé",
+                    # SRT corrigé STRUCTURELLEMENT valide : la garde d'intégrité exige
+                    # la parité des segments avec le source (1 timecode ici).
+                    "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nLe DNS répond à l'API.\n",
                     "report": "",
                     "warning": "",
                     "error": "",
@@ -1869,3 +1871,67 @@ class TestApplyFinalReviewStructuredDataNormalisation:
         assert "Décision B" in sd["decisions"]
         assert sd["votes"] == ["Vote unique : adopté"]  # scalaire → liste de chaînes
         assert sd["prochaine_date"] == "2026-07-01"
+
+
+class TestCorrectedSrtIntegrityGuard:
+    """Garde déterministe du contrat de correction : le prompt exige (parité des
+    segments, ratio anti-résumé), le code vérifie — un SRT tronqué ou réécrit ne
+    passe plus avec un simple « non vide »."""
+
+    def _src(self, n_segments: int, line: str = "SPEAKER_00(Alice): Bonjour à tous.") -> str:
+        return "".join(
+            f"{i}\n00:00:{i:02d},000 --> 00:00:{i + 1:02d},000\n{line}\n\n"
+            for i in range(1, n_segments + 1)
+        )
+
+    def test_conforme_passe(self):
+        src = self._src(50)
+        assert WorkflowRunner._corrected_srt_integrity_error(src, src) is None
+
+    def test_segments_perdus_detectes(self):
+        src = self._src(50)
+        truncated = self._src(25)
+        err = WorkflowRunner._corrected_srt_integrity_error(src, truncated)
+        assert err is not None and "25 segments au lieu de 50" in err
+
+    def test_reecriture_prefixes_locuteurs_detectee(self):
+        """Cas réel (Ministral, job 4bda98cb) : préfixes `SPEAKER_XX(Nom):` réécrits
+        en `Nom:` — même nombre de segments mais ratio de taille hors fenêtre."""
+        src = self._src(60)
+        rewritten = self._src(60, line="Alice: Bonjour à tous.")
+        err = WorkflowRunner._corrected_srt_integrity_error(src, rewritten)
+        assert err is not None and "ratio" in err
+
+    def test_petit_srt_exempt_du_ratio(self):
+        """Sur un SRT minuscule, une correction d'un mot fait varier le ratio sans
+        signal : seul le compte de segments est exigé."""
+        src = "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n"
+        corrected = "1\n00:00:00,000 --> 00:00:05,000\nBonjour corrigé et complété\n"
+        assert WorkflowRunner._corrected_srt_integrity_error(src, corrected) is None
+
+    def test_run_correction_refuse_un_corrige_tronque(self, app, owner_id, monkeypatch, tmp_path):
+        with app.app_context():
+            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
+            job = JobStore.create_job(owner_id, "Correction tronquée")
+            runner = WorkflowRunner(JobStore, cfg)
+
+            monkeypatch.setattr(runner, "_should_reserve_llm_vram", lambda: False)
+            monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+            monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
+
+            from transcria.jobs.filesystem import JobFilesystem
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            src = self._src(40)
+            fs.save_text("metadata/transcription.srt", src)
+
+            from transcria.gpu.opencode_runner import OpenCodeRunner
+            truncated = self._src(10)
+            monkeypatch.setattr(
+                OpenCodeRunner, "run_correction",
+                lambda self_r, s, c, lx: {"success": True, "corrected_srt": truncated, "report": "", "error": ""},
+            )
+
+            result = runner.run_correction(job, cfg)
+            assert result["success"] is False
+            assert "10 segments au lieu de 40" in result["error"]
+            assert fs.load_text("metadata/transcription_corrigee.srt") is None  # rien d'écrit

@@ -1712,12 +1712,21 @@ class WorkflowRunner:
                 )
             workspace.verify_and_restore_sources()
             if result["success"] and result["corrected_srt"]:
-                fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
-                if result["report"]:
-                    fs.save_text("metadata/correction_report.md", result["report"])
-                logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
-                if result.get("warning"):
-                    logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
+                # Garde déterministe d'intégrité : le prompt EXIGE (parité des segments,
+                # ratio anti-résumé), le code VÉRIFIE — l'auto-déclaration de l'agent ne
+                # suffit pas (un SRT tronqué ou réécrit passait avec « non vide »).
+                source_srt = fs.load_text("metadata/transcription.srt") or ""
+                integrity_error = self._corrected_srt_integrity_error(source_srt, result["corrected_srt"])
+                if integrity_error:
+                    logger.error("[correction] %s", integrity_error)
+                    result = {"success": False, "error": integrity_error}
+                else:
+                    fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
+                    if result["report"]:
+                        fs.save_text("metadata/correction_report.md", result["report"])
+                    logger.info("Correction SRT terminée (%d caractères)", len(result["corrected_srt"]))
+                    if result.get("warning"):
+                        logger.warning("Correction SRT terminée avec avertissement: %s", result["warning"])
             elif result["success"]:
                 msg = (
                     f"La LLM d'arbitrage n'a produit aucune correction après {max_llm_attempts} tentatives "
@@ -1751,6 +1760,38 @@ class WorkflowRunner:
             if llm_phase_reserved:
                 self.allocator.release_phase(job.id, "llm_arbitration")
             self.allocator.release_llm(job.id)
+
+    @staticmethod
+    def _corrected_srt_integrity_error(source: str, corrected: str) -> str | None:
+        """Garde déterministe du contrat de correction (motif « le prompt exige, le code vérifie »).
+
+        - **Parité des segments** : même nombre de timecodes (`-->`) que le source —
+          aucun segment supprimé, fusionné ou ajouté (toujours vérifiée).
+        - **Ratio anti-résumé/réécriture** : taille corrigée / source dans [0.90, 1.10],
+          comme l'exige le prompt — mais seulement au-delà d'une taille minimale : sur
+          un SRT minuscule, une seule correction fait varier le ratio sans aucun signal.
+          Attrape aussi la réécriture des préfixes locuteurs (`SPEAKER_XX(Nom):` → `Nom:`,
+          violation observée avec un modèle plus faible).
+
+        Retourne un message d'erreur explicite et relançable, ou None si intègre.
+        """
+        src_segments = source.count("-->")
+        out_segments = corrected.count("-->")
+        if src_segments and out_segments != src_segments:
+            return (
+                f"SRT corrigé non conforme : {out_segments} segments au lieu de {src_segments} "
+                "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
+                "relancez le traitement, seule la correction sera rejouée."
+            )
+        if len(source) >= 2000:
+            ratio = len(corrected) / max(len(source), 1)
+            if not (0.90 <= ratio <= 1.10):
+                return (
+                    f"SRT corrigé non conforme : ratio de taille {ratio:.2f} hors [0.90, 1.10] "
+                    "(contenu tronqué, résumé ou réécrit — ex. préfixes locuteurs altérés). "
+                    "Le SRT brut est conservé — relancez le traitement, seule la correction sera rejouée."
+                )
+        return None
 
     def run_final_review(self, job: Job, config: dict) -> dict:
         """Phase de relecture finale (A+C+D+G) exécutée après la correction.

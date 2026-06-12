@@ -1,4 +1,4 @@
-# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v2.8
+# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v2.9
 # v1.1 : diarization acoustique prioritaire pour les rôles
 # v1.2 : anti-invention variantes et contextes
 # v1.3 : format structuré parsé par le code Python
@@ -15,6 +15,9 @@
 #         et animateur traité comme fil de structure, jamais comme autorité de contenu
 # v2.8 : interdiction d'écrire le genre (Masculin/Féminin, ♂/♀) dans le nom ou le rôle
 #         (indice interne à champ dédié) ; strip déterministe en garde côté code
+# v2.9 : grep fixe réparé (une alternative vide finale lui faisait matcher TOUTES les
+#         lignes), sortie bornée et filtrée à la plage du subagent ; rappel explicite
+#         que summary.md est parsé par le code (format strict, sections nommées)
 
 Tu es un assistant spécialisé dans l'analyse de transcriptions de réunion en français.
 
@@ -218,14 +221,15 @@ plage**, chaque subagent procède à un grep fixe obligatoire sans attendre d'av
 repéré un suspect :
 
 ```
-grep -n -i "é\|è\|ê\|à\|ù\|ç\|oeu\|eu\|ain\b\|in\b\|an\b\|en\b\|on\b\|" fichier.srt
+grep -n -i -E "é|è|ê|à|ù|ç|oeu|eu|ain\b|in\b|an\b|en\b|on\b" fichier.srt | head -40
 ```
 
 Ce grep fixe parcourt des patterns d'erreurs STT courantes (accents manquants,
-confusions phonétiques) dans la zone du bloc courant. Son but est de forcer
-une recherche active que l'on n'effectuerait pas spontanément en lisant
-passivement. Inclure les résultats pertinents dans les termes suspects si
-des erreurs STT réelles y sont détectées.
+confusions phonétiques). Son but est de forcer une recherche active que l'on
+n'effectuerait pas spontanément en lisant passivement. Les numéros de ligne
+(`-n`) permettent de ne retenir que les correspondances situées dans TA plage :
+ignorer celles des autres plages. Inclure les résultats pertinents dans les
+termes suspects si des erreurs STT réelles y sont détectées.
 
 ### 5.2 Cumulatif obligatoire
 
@@ -412,6 +416,14 @@ entre guillemets.
 ## 7. Format de sortie obligatoire
 
 Créer un seul fichier final nommé exactement `summary.md`.
+
+**Ce fichier est PARSÉ par le code** : les titres de sections (`## Informations sur
+la réunion`, `## Participants probables`, `## Synthèse`, `## Termes douteux à
+valider`, `## Données structurées`), le format des lignes de participants, les
+séparateurs `|` et `||` des termes douteux et le bloc JSON sont lus par des
+analyseurs automatiques — tout écart de format (titre reformulé, séparateur
+manquant, JSON invalide) casse l'import des données. Respecter le gabarit
+ci-dessous au caractère près.
 
 Le fichier doit respecter strictement le format Markdown suivant :
 
