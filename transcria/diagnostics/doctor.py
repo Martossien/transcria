@@ -170,6 +170,41 @@ def check_database(
     )
 
 
+def check_database_encoding(
+    cfg: dict,
+    *,
+    database_uri: str | None = None,
+    prober: Callable[[str], str] | None = None,
+) -> CheckResult:
+    """La base PostgreSQL doit être en UTF8.
+
+    `SQL_ASCII` (hérité d'un initdb sans locale) stocke les octets sans validation :
+    pas de protection contre un client mal encodé, fonctions texte serveur byte-wise,
+    et les clients qui ne forcent pas `client_encoding` reçoivent des `bytes`
+    (psycopg3). L'app force client_encoding=utf8 (défense), mais la base doit être
+    créée/migrée en UTF8 — procédure : docs/INSTALL.md, section « Encodage »."""
+    name = "Base de données (encodage)"
+    uri = database_uri or _resolve_database_uri(cfg)
+    if not uri.startswith("postgresql"):
+        return CheckResult(name, OK, "SQLite — encodage géré par le fichier, rien à vérifier")
+    probe = prober or _probe_server_encoding
+    try:
+        encoding = str(probe(uri)).upper()
+    except Exception as exc:  # noqa: BLE001 — toute panne de connexion = fail explicite
+        return CheckResult(
+            name, FAIL, f"base injoignable ({_redact_uri(uri)}) : {exc}",
+            hint="Vérifier que la base tourne et que TRANSCRIA_DATABASE_URL / storage.database_url est correct.",
+        )
+    if encoding == "UTF8":
+        return CheckResult(name, OK, "PostgreSQL en UTF8")
+    return CheckResult(
+        name, WARN,
+        f"PostgreSQL en {encoding} (UTF8 attendu) — texte stocké sans validation d'encodage",
+        hint="Migrer la base (dump → CREATE DATABASE … ENCODING 'UTF8' TEMPLATE template0 → restore), "
+             "cf. docs/INSTALL.md § Encodage. L'app force client_encoding=utf8 en attendant.",
+    )
+
+
 def check_arbitrage_script(
     cfg: dict,
     *,
@@ -448,6 +483,18 @@ def check_shared_storage(
 # ── Sondes / helpers effectifs (injectables ci-dessus) ────────────────────
 
 
+def _probe_server_encoding(uri: str) -> str:
+    """Sonde l'encodage serveur de la base PostgreSQL, hors process Flask."""
+    from sqlalchemy import create_engine
+
+    engine = create_engine(uri)
+    try:
+        with engine.connect() as conn:
+            return str(conn.exec_driver_sql("SHOW server_encoding").scalar())
+    finally:
+        engine.dispose()
+
+
 def _job_files_table_exists(uri: str) -> bool:
     """Sonde l'existence de la table `job_files` (backend pg), hors process Flask."""
     from sqlalchemy import create_engine, inspect
@@ -517,6 +564,7 @@ def _redact_uri(uri: str) -> str:
 
 _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_database,
+    check_database_encoding,
     check_arbitrage_script,
     check_arbitrage_llm,
     check_opencode,

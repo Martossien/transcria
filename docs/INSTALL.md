@@ -826,10 +826,18 @@ là où SQLite sérialise les écritures.
 ```bash
 sudo -u postgres psql <<'SQL'
 CREATE ROLE transcria LOGIN PASSWORD 'CHANGEZ_MOI';
-CREATE DATABASE transcria OWNER transcria;
+CREATE DATABASE transcria OWNER transcria ENCODING 'UTF8' TEMPLATE template0;
 SQL
 sudo systemctl enable --now postgresql
 ```
+
+> **`ENCODING 'UTF8' TEMPLATE template0` n'est pas optionnel.** Sans cette clause, la base
+> hérite de l'encodage de `template1` — sur un cluster initialisé sans locale (conteneur
+> minimal, `initdb` en locale `C`), c'est `SQL_ASCII` : le texte est stocké **sans aucune
+> validation d'encodage** et psycopg3 renvoie les colonnes texte en `bytes`. Si la locale du
+> cluster est incompatible avec UTF8, ajoutez `LC_COLLATE 'C' LC_CTYPE 'C'` à la commande.
+> Voir la section [Encodage de la base](#encodage-de-la-base-utf8-requis) pour migrer une
+> base existante au mauvais encodage.
 
 **2. Renseigner le DSN** dans `.env` (le mot de passe reste hors de la config versionnée) :
 
@@ -871,6 +879,51 @@ sautée et le reste est copié sans erreur.
 > **Évolutions de schéma.** Après modification d'un modèle : `alembic revision --autogenerate -m "…"`,
 > relire la migration générée, puis `alembic upgrade head`. Le test `tests/test_alembic_migrations.py`
 > garantit que migrations et modèles ne divergent pas.
+
+### Encodage de la base (UTF8 requis)
+
+La base PostgreSQL de TranscrIA doit être en encodage **UTF8**. Une base en `SQL_ASCII`
+(héritée d'un `initdb` sans locale — fréquent sur les conteneurs minimaux) stocke les octets
+sans validation : aucune protection contre un client mal encodé, fonctions texte serveur
+byte-wise (`lower()`, `ILIKE`, tri), et tout client qui ne force pas `client_encoding`
+reçoit des `bytes` au lieu de `str` (psycopg3).
+
+Défenses en place dans le projet :
+
+- `install.sh` crée la base avec `ENCODING 'UTF8' TEMPLATE template0` et avertit si une base
+  existante a un autre encodage ;
+- l'application force `client_encoding=utf8` sur toutes ses connexions et logue un WARNING
+  au démarrage si le serveur n'est pas en UTF8 ;
+- `scripts/doctor.py` comporte un check « Base de données (encodage) » (WARN, échec en `--strict`) ;
+- la suite de tests force `PGCLIENTENCODING=UTF8` (indépendante du cluster hôte).
+
+**Migrer une base existante au mauvais encodage** (quelques minutes, service arrêté) :
+
+```bash
+sudo systemctl stop transcria.service
+
+# 1. Dump logique (les données écrites par TranscrIA sont déjà de l'UTF-8 valide)
+sudo -u postgres pg_dump --encoding=UTF8 transcria > /tmp/transcria_utf8.sql
+
+# 2. Recréer la base en UTF8 (l'ancienne est conservée sous un autre nom, par sécurité)
+sudo -u postgres psql <<'SQL'
+ALTER DATABASE transcria RENAME TO transcria_old_encoding;
+CREATE DATABASE transcria OWNER transcria ENCODING 'UTF8' TEMPLATE template0;
+SQL
+
+# 3. Restaurer — la restauration VALIDE chaque octet : une erreur d'encodage ici
+#    signale une donnée corrompue à corriger dans le dump avant de poursuivre.
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d transcria < /tmp/transcria_utf8.sql
+
+sudo systemctl start transcria.service
+venv/bin/python scripts/doctor.py        # le check encodage doit passer en OK
+# Après quelques jours de fonctionnement vérifié :
+#   sudo -u postgres psql -c 'DROP DATABASE transcria_old_encoding;'
+```
+
+> Si le cluster entier est en `SQL_ASCII` (vérifier : `psql -l`), pensez aussi à recréer
+> `template1` en UTF8 pour que toute future base naisse correcte, ou spécifiez toujours
+> `ENCODING 'UTF8' TEMPLATE template0` à la création.
 
 ### Créer le répertoire des jobs
 

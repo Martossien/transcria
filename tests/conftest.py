@@ -13,6 +13,11 @@ from transcria.config import _deep_merge, load_config
 # ceux-ci tournent sur une base PostgreSQL éphémère dédiée.
 os.environ.pop("TRANSCRIA_DATABASE_URL", None)
 
+# Les bases jetables héritent de template1 : sur un cluster initdb-é sans locale
+# (SQL_ASCII), psycopg3 renverrait les colonnes texte en bytes. Forcer le décodage
+# UTF8 côté client rend la suite indépendante de l'encodage du cluster hôte.
+os.environ.setdefault("PGCLIENTENCODING", "UTF8")
+
 _ORIG_CWD = os.getcwd()
 
 _TEMP_DIR = tempfile.mkdtemp(prefix="transcria_test_")

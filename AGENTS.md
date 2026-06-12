@@ -603,6 +603,18 @@ La suite pytest dans les modules `test_*.py` (plus E2E) couvre stores, config, c
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).
 
+### PostgreSQL — encodage UTF8 requis (jamais SQL_ASCII)
+Une base héritée d'un cluster `initdb`-é sans locale est en `SQL_ASCII` : texte stocké **sans
+validation d'encodage**, fonctions texte serveur byte-wise, et psycopg3 renvoie les colonnes
+texte en `bytes` pour tout client qui ne force pas `client_encoding` (symptôme vu en local :
+`StringDataRightTruncation` sur un INSERT avec un id en bytes). Défense en profondeur, à ne pas
+détricoter : `install.sh` crée la base avec `ENCODING 'UTF8' TEMPLATE template0` (+ garde sur
+base existante) ; `app.engine_options()` force `client_encoding=utf8` sur toutes les connexions
+PostgreSQL (+ WARNING au démarrage si serveur ≠ UTF8) ; `doctor` a un check « Base de données
+(encodage) » ; `tests/conftest.py` pose `PGCLIENTENCODING=UTF8` (les bases jetables pytest
+héritent de `template1`). Migration d'une base existante : docs/INSTALL.md § « Encodage de la
+base ». Ne jamais écrire un `CREATE DATABASE` (code, script ou doc) sans clause d'encodage.
+
 ### E2E : utiliser impérativement `venv/bin/python`, pas `python`
 Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv (`pyannote`, `torch`, `cohere_transcriber`). Lancer `python tests/test_e2e_workflow.py` depuis le système donne « pyannote non disponible » silencieusement. Toujours utiliser `venv/bin/python tests/test_e2e_workflow.py` ou activer le venv au préalable (`source venv/bin/activate`).
 

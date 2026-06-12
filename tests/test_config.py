@@ -284,6 +284,20 @@ class TestAppDebugResolution:
         assert resolve_role(None, "  Scheduler  ", None) == "scheduler"  # trim + casse
         assert resolve_role(None, "bogus", None) == "all"                # inconnu → all
 
+    def test_engine_options_postgres_forces_utf8_client_encoding(self):
+        """Sans client_encoding forcé, une base SQL_ASCII (cluster initdb-é sans
+        locale) fait remonter les colonnes texte en bytes via psycopg3."""
+        from app import engine_options
+
+        opts = engine_options("postgresql+psycopg://u:p@h/db")
+        assert opts["connect_args"]["client_encoding"] == "utf8"
+
+    def test_engine_options_sqlite_has_no_client_encoding(self):
+        from app import engine_options
+
+        opts = engine_options("sqlite:///x.db")
+        assert "client_encoding" not in opts.get("connect_args", {})
+
     def test_should_run_scheduler_by_role(self):
         from app import should_run_scheduler
 

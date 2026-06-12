@@ -37,8 +37,10 @@ def engine_options(database_uri: str) -> dict:
     """Options du moteur SQLAlchemy adaptées au dialecte.
 
     PostgreSQL : pool robuste sous charge (`pool_pre_ping` contre les connexions
-    coupées, recyclage périodique, débordement contrôlé). SQLite : délai d'attente
-    de verrou (comportement historique — mono-fichier).
+    coupées, recyclage périodique, débordement contrôlé) et `client_encoding`
+    forcé à UTF8 — sans lui, une base au mauvais encodage (ex. SQL_ASCII hérité
+    d'un initdb sans locale) fait remonter les colonnes texte en `bytes` via
+    psycopg3. SQLite : délai d'attente de verrou (comportement historique).
     """
     if database_uri.startswith("postgresql"):
         return {
@@ -46,11 +48,35 @@ def engine_options(database_uri: str) -> dict:
             "pool_size": 10,
             "max_overflow": 20,
             "pool_recycle": 1800,
-            "connect_args": {"connect_timeout": 10},
+            "connect_args": {"connect_timeout": 10, "client_encoding": "utf8"},
         }
     if database_uri.startswith("sqlite"):
         return {"connect_args": {"timeout": 30}}
     return {"pool_pre_ping": True}
+
+
+def _warn_if_database_encoding_unsafe() -> None:
+    """Avertit (sans bloquer) si la base PostgreSQL n'est pas en UTF8.
+
+    `SQL_ASCII` stocke les octets sans validation : aucune protection contre un
+    client mal encodé, fonctions texte serveur byte-wise, et tout client qui ne
+    force pas `client_encoding` reçoit des `bytes`. L'app reste fonctionnelle
+    (cf. `engine_options`), mais la base doit être migrée — procédure dans
+    docs/INSTALL.md, diagnostic : `scripts/doctor.py`."""
+    try:
+        if db.engine.dialect.name != "postgresql":
+            return
+        with db.engine.connect() as conn:
+            encoding = conn.exec_driver_sql("SHOW server_encoding").scalar()
+        if str(encoding).upper() != "UTF8":
+            logger.warning(
+                "La base PostgreSQL est en encodage %s (UTF8 attendu). Les connexions de "
+                "l'app forcent client_encoding=utf8, mais migrez la base dès que possible "
+                "(procédure : docs/INSTALL.md, section « Encodage de la base »).",
+                encoding,
+            )
+    except Exception:  # noqa: BLE001 — une sonde de diagnostic ne doit jamais casser le démarrage
+        logger.debug("Sonde d'encodage de la base impossible", exc_info=True)
 
 
 def _redacted_uri(database_uri: str) -> str:
@@ -146,6 +172,7 @@ def create_app(config_path: str | None = None) -> Flask:
         # dialecte que PostgreSQL = split silencieusement cassé. On refuse de démarrer.
         from transcria.jobs.artifact_store import assert_runtime_compatible, backend_name
         assert_runtime_compatible(cfg, db.engine.dialect.name)
+        _warn_if_database_encoding_unsafe()
         # create_all : bootstrap rapide pour le dev/les tests (base neuve). En prod,
         # le schéma est géré par Alembic (`alembic upgrade head` dans start.sh) ; sur
         # une base déjà à jour create_all est un no-op. Le test anti-dérive garantit

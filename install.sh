@@ -461,19 +461,45 @@ _setup_postgres() {
             fi
         fi
 
-        # ── Rôle + base (idempotent) ──────────────────────────────
+        # ── Rôle (idempotent) ─────────────────────────────────────
         log_info "Vérification du rôle '$user' et de la base '$db'…"
 
-        if ! pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" -v dbname="$db" <<'SQL'
+        if ! pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
-SELECT format('CREATE DATABASE %I OWNER %I', :'dbname', :'role')
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'dbname') \gexec
 SQL
         then
-            log_error "Échec de la création rôle/base PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
+            log_error "Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
             return 1
+        fi
+
+        # ── Base (idempotent) — encodage UTF8 IMPOSÉ, jamais hérité de template1 :
+        #    un cluster initdb-é sans locale donne du SQL_ASCII (texte stocké sans
+        #    validation, psycopg3 renvoie des bytes). TEMPLATE template0 permet de
+        #    fixer l'encodage quelle que soit la base modèle du cluster.
+        local db_exists=""
+        db_exists=$(pg_admin_psql -At -v dbname="$db" <<'SQL'
+SELECT 1 FROM pg_database WHERE datname = :'dbname';
+SQL
+        ) || db_exists=""
+        if [[ "$db_exists" != "1" ]]; then
+            if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
+SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \gexec
+SQL
+            then
+                # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
+                # locale C, qui accepte tout encodage (tri linguistique côté Python).
+                log_warn "CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…"
+                if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
+SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',
+              :'dbname', :'role', 'UTF8', 'C', 'C') \gexec
+SQL
+                then
+                    log_error "Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres."
+                    return 1
+                fi
+            fi
         fi
         log_ok "Rôle et base PostgreSQL prêts"
     else
@@ -490,6 +516,17 @@ SQL
         return 1
     fi
     log_ok "Connexion PostgreSQL validée"
+
+    # ── Garde encodage : UTF8 requis (cf. docs/INSTALL.md § Encodage de la base) ──
+    local db_encoding=""
+    db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
+        -c "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();" 2>/dev/null) || db_encoding=""
+    if [[ -n "$db_encoding" && "$db_encoding" != "UTF8" ]]; then
+        log_warn "⚠ La base '$db' existe déjà en encodage $db_encoding (UTF8 attendu) :"
+        log_warn "  texte stocké SANS validation d'encodage — migrez-la dès que possible"
+        log_warn "  (procédure : docs/INSTALL.md, section « Encodage de la base »)."
+        log_warn "  L'application force client_encoding=utf8 et reste fonctionnelle en attendant."
+    fi
 
     # ── Écrire le DSN dans .env ───────────────────────────────
     python - "$ENV_FILE" "$dsn" <<'PYEOF'

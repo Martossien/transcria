@@ -46,6 +46,44 @@ def test_check_database_fail_on_unreachable():
     assert "secret" not in res.detail  # mot de passe masqué
 
 
+# ── check_database_encoding ───────────────────────────────────────────────
+
+
+def test_check_encoding_ok_on_utf8():
+    res = doc.check_database_encoding(
+        {}, database_uri="postgresql+psycopg://u:p@h/db", prober=lambda uri: "UTF8"
+    )
+    assert res.status == doc.OK
+
+
+def test_check_encoding_skips_sqlite():
+    res = doc.check_database_encoding({}, database_uri="sqlite:///x.db")
+    assert res.status == doc.OK
+    assert "SQLite" in res.detail
+
+
+def test_check_encoding_warn_on_sql_ascii():
+    """Cluster initdb-é sans locale ⇒ base SQL_ASCII : texte sans validation, psycopg3
+    renvoie des bytes aux clients qui ne forcent pas client_encoding ⇒ warn + procédure."""
+    res = doc.check_database_encoding(
+        {}, database_uri="postgresql+psycopg://u:p@h/db", prober=lambda uri: "SQL_ASCII"
+    )
+    assert res.status == doc.WARN
+    assert "SQL_ASCII" in res.detail
+    assert "UTF8" in (res.hint or "")
+
+
+def test_check_encoding_fail_on_unreachable():
+    def boom(uri):
+        raise OSError("connection refused")
+
+    res = doc.check_database_encoding(
+        {"storage": {"database_url": "postgresql+psycopg://u:secret@h/db"}}, prober=boom
+    )
+    assert res.status == doc.FAIL
+    assert "secret" not in res.detail
+
+
 # ── diff de schéma réel (SQLite éphémère) ─────────────────────────────────
 
 
