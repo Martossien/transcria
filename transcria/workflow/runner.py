@@ -504,9 +504,6 @@ class WorkflowRunner:
         from transcria.gpu.opencode_runner import OpenCodeRunner
 
         fs = self._get_fs(config, job.id)
-        transcript_path = fs.job_dir / "summary" / "quick_transcript.txt"
-        context_path = fs.job_dir / "context" / "job_context.yaml"
-        diarization_ctx_path = fs.job_dir / "summary" / "diarization_context.md"
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
         arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
@@ -558,13 +555,23 @@ class WorkflowRunner:
             opencode_bin = config.get("workflow", {}).get(
                 "arbitration_llm", {}
             ).get("opencode_bin")
+            # Isolation : l'agent ne tourne plus dans summary/ (canonique) mais dans un
+            # scratch avec des copies — cf. AgentWorkspace. Le summary.md canonique est
+            # écrit par le runner (_apply_llm_suggestions), jamais par l'agent.
+            from transcria.workflow.agent_workspace import AgentWorkspace
+
+            invite_path = self._materialize_meeting_invite(fs, job)
+            workspace = AgentWorkspace(fs, "summary")
+            staged_transcript = workspace.stage("summary/quick_transcript.txt")
+            staged_context = workspace.stage("context/job_context.yaml")
+            staged_diar_ctx = workspace.stage("summary/diarization_context.md")
+            staged_invite = str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
             runner = OpenCodeRunner(
-                str(fs.job_dir / "summary"),
+                str(workspace.scratch_dir),
                 model=model_id,
                 opencode_bin=opencode_bin,
                 config=config,
             )
-            invite_path = self._materialize_meeting_invite(fs, job)
             # La LLM peut « réussir » (opencode exit 0) sans rien produire (0 texte,
             # summary.md non réécrit — typiquement contexte trop long). On retente la
             # SEULE sous-étape LLM jusqu'à 3 fois (LLM déjà chargée : pas de re-STT, pas
@@ -574,10 +581,10 @@ class WorkflowRunner:
             parsed = {}
             for attempt in range(1, max_llm_attempts + 1):
                 parsed = runner.run_summary(
-                    str(transcript_path),
-                    str(context_path),
-                    str(diarization_ctx_path),
-                    invite_path,
+                    str(staged_transcript),
+                    str(staged_context),
+                    str(staged_diar_ctx),
+                    staged_invite,
                 )
                 if parsed.get("_summary_produced"):
                     if attempt > 1:
@@ -587,12 +594,15 @@ class WorkflowRunner:
                     sl.warning("LLM résumé sans production (tentative %d/%d) — nouvel essai",
                                attempt, max_llm_attempts)
 
+            workspace.verify_and_restore_sources()
             if parsed.get("_summary_produced"):
                 self._apply_llm_suggestions(fs, result, parsed, sl)
+                workspace.cleanup(success=True)
             else:
                 sl.error("LLM résumé non produit après %d tentatives — meeting_context préservé, "
                          "résumé marqué indisponible (relançable)", max_llm_attempts)
                 result["summary_llm_failed"] = True
+                workspace.cleanup(success=False)
         except Exception as exc:
             logger.warning("Erreur opencode: %s", exc)
         finally:
@@ -1593,7 +1603,6 @@ class WorkflowRunner:
 
         fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         srt_path = fs.job_dir / "metadata" / "transcription.srt"
-        context_path = fs.job_dir / "context" / "job_context.yaml"
         lexicon_path = fs.job_dir / "context" / "session_lexicon.json"
         filtered_lexicon_path = fs.job_dir / "context" / "session_lexicon_filtered.json"
 
@@ -1667,9 +1676,21 @@ class WorkflowRunner:
             if not launched:
                 return {"success": False, "error": "LLM d'arbitrage non disponible"}
 
+            # Isolation : l'agent travaille dans un scratch avec des COPIES — jamais dans
+            # metadata/ (incident 4bda98cb : transcription.srt source réécrit par l'agent).
+            # Les sorties sont collectées du scratch puis écrites atomiquement au canonique.
+            from transcria.workflow.agent_workspace import AgentWorkspace
+
+            workspace = AgentWorkspace(fs, "correction")
+            staged_srt = workspace.stage("metadata/transcription.srt")
+            staged_context = workspace.stage("context/job_context.yaml")
+            staged_lexicon = workspace.stage(
+                str(lexicon_path_for_correction.relative_to(fs.job_dir))
+            )
+
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
             runner = OpenCodeRunner(
-                str(fs.job_dir / "metadata"),
+                str(workspace.scratch_dir),
                 opencode_bin=opencode_bin,
                 config=config,
             )
@@ -1682,13 +1703,14 @@ class WorkflowRunner:
             max_llm_attempts = 3
             result: dict = {}
             for attempt in range(1, max_llm_attempts + 1):
-                result = runner.run_correction(str(srt_path), str(context_path), str(lexicon_path_for_correction))
+                result = runner.run_correction(str(staged_srt), str(staged_context), str(staged_lexicon))
                 if not result["success"] or result["corrected_srt"]:
                     break
                 logger.warning(
                     "[correction] LLM sans production (exit 0, 0 texte) — tentative %d/%d",
                     attempt, max_llm_attempts,
                 )
+            workspace.verify_and_restore_sources()
             if result["success"] and result["corrected_srt"]:
                 fs.save_text("metadata/transcription_corrigee.srt", result["corrected_srt"])
                 if result["report"]:
@@ -1704,6 +1726,7 @@ class WorkflowRunner:
                 )
                 logger.error("[correction] %s", msg)
                 result = {"success": False, "error": msg}
+            workspace.cleanup(success=bool(result.get("success")))
             self.progress.update(
                 job.id,
                 step="processing",
@@ -1791,25 +1814,31 @@ class WorkflowRunner:
                 logger.warning("Relecture finale sautée — LLM d'arbitrage non disponible (job=%s)", job.id)
                 return {"success": True, "skipped": True, "reason": "llm_unavailable"}
 
-            work = fs.job_dir / "metadata"
-            summary_file = work / "summary_to_harmonize.md"
-            glossary_file = work / "final_review_glossary.md"
-            structured_file = work / "structured_data.json"
-            summary_file.write_text(summary_text, encoding="utf-8")
-            glossary_file.write_text(glossary, encoding="utf-8")
-            structured_file.write_text(
-                json.dumps(structured_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            # Isolation : scratch + copies (cf. AgentWorkspace). Le matériel de prompt
+            # (synthèse à harmoniser, glossaire, données structurées) est TRANSITOIRE —
+            # regénéré à chaque run — il vit dans le scratch, plus dans metadata/ (il
+            # sort donc aussi de la synchro pg, où il n'avait rien à faire).
+            from transcria.workflow.agent_workspace import AgentWorkspace
+
+            workspace = AgentWorkspace(fs, "final_review")
+            staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
+            summary_file = workspace.write_input("summary_to_harmonize.md", summary_text)
+            glossary_file = workspace.write_input("final_review_glossary.md", glossary)
+            structured_file = workspace.write_input(
+                "structured_data.json", json.dumps(structured_data, ensure_ascii=False, indent=2)
             )
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
-            runner = OpenCodeRunner(str(work), opencode_bin=opencode_bin, config=config)
+            runner = OpenCodeRunner(str(workspace.scratch_dir), opencode_bin=opencode_bin, config=config)
             result = runner.run_final_review(
-                str(corrected_srt),
+                str(staged_srt),
                 str(summary_file),
                 str(glossary_file),
                 str(structured_file),
             )
+            workspace.verify_and_restore_sources()
             applied = self._apply_final_review(fs, result)
+            workspace.cleanup(success=True)
             self.progress.update(
                 job.id,
                 step="processing",

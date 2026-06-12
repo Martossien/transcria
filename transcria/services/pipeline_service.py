@@ -188,27 +188,47 @@ class PipelineService:
 
         effective_config = self._config_for_mode(mode, job)
 
-        # Pipeline REPRENABLE : on saute les phases déjà faites (marqueur `completed_phases`
-        # ∪ artefact atomique sur disque) et on reprend à la première incomplète. Voir
-        # docs/PIPELINE_REPRISE.md. `done` est chargé une fois (état du dispatch courant).
+        # Pipeline REPRENABLE v2 : une phase n'est sautée que si marqueur + artefact +
+        # PROVENANCE intacte (empreintes sha256 de ses entrées, prises au checkpoint).
+        # Quand une phase amont se rejoue, les empreintes des phases aval ne correspondent
+        # plus → elles se ré-exécutent (jamais de rapport/export calculé sur du périmé).
+        # Voir docs/PIPELINE_REPRISE.md. `done`/`recorded_fps` chargés une fois (état du
+        # dispatch courant), tenus à jour en mémoire ET en base à chaque transition.
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.workflow import resume
 
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         done = set(resume.get_completed_phases(job))
+        recorded_fps = resume.get_phase_fingerprints(job)
 
         def _checkpoint(phase: str) -> None:
-            # Backend `pg` (split) : les artefacts doivent être DURABLES en base avant le
-            # marqueur — sinon un autre tier croirait la phase faite sans ses fichiers.
-            # Si le push échoue, la phase n'est pas marquée → rejouée au prochain dispatch.
+            # Empreintes AVANT le push : la provenance décrit les fichiers locaux qui
+            # viennent de servir/d'être produits. Backend `pg` (split) : les artefacts
+            # doivent être DURABLES en base avant le marqueur — sinon un autre tier
+            # croirait la phase faite sans ses fichiers. Si le push échoue, la phase
+            # n'est pas marquée → rejouée au prochain dispatch.
+            fingerprints = resume.compute_input_fingerprints(phase, fs)
             artifact_store.push_job_files(self.config, job.id)
-            resume.mark_phase_done(JobStore, job.id, phase)
+            resume.mark_phase_done(JobStore, job.id, phase, fingerprints)
             done.add(phase)
+            recorded_fps[phase] = fingerprints
 
         def _done(phase: str) -> bool:
             if phase in done:
-                return True
-            if resume.artifact_exists(phase, fs):  # rétro-remplissage (run interrompu)
+                if resume.phase_state_valid(phase, fs, recorded_fps.get(phase)):
+                    return True
+                # Provenance invalide (une phase amont s'est rejouée, artefact manquant,
+                # ou marqueur legacy sans empreintes) : on retire le marqueur EN BASE
+                # avant d'exécuter — l'admission VRAM et l'UI restent vraies même si un
+                # vram_wait coupe la chaîne ici. Doute → re-run, jamais de skip périmé.
+                sl.warning("Étape invalidée — entrées modifiées en amont, ré-exécution", step=phase)
+                resume.unmark_phase(JobStore, job.id, phase)
+                done.discard(phase)
+                recorded_fps.pop(phase, None)
+                return False
+            if phase == "transcription" and resume.artifact_exists(phase, fs):
+                # Rétro-remplissage limité à la phase la plus chère, sans entrée
+                # empreintée : SRT présent ⇒ STT fait (run interrompu avant le marqueur).
                 _checkpoint(phase)
                 return True
             return False

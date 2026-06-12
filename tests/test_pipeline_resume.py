@@ -78,14 +78,18 @@ def test_fresh_run_executes_and_marks_all_phases(app, owner_id, monkeypatch, tmp
 
 def test_resume_skips_completed_phases(app, owner_id, monkeypatch, tmp_path):
     with app.app_context():
+        from transcria.jobs.filesystem import JobFilesystem
         cfg = _cfg(tmp_path)
         job = JobStore.create_job(owner_id, "Resume")
         # Simule un run précédent : préprocess + STT + diarisation déjà faits.
         # Le fichier prétraité DOIT exister localement : depuis le chantier stockage
         # partagé, un chemin mémorisé absent de ce disque (reprise sur un autre worker)
-        # fait légitimement rejouer le préprocess.
+        # fait légitimement rejouer le préprocess. Depuis la provenance v2, l'artefact
+        # déclaré d'une phase marquée doit lui aussi exister (un STT fait a son SRT).
         (tmp_path / "processed.wav").write_bytes(b"RIFFfake")
         resume.set_processed_audio_path(JobStore, job.id, str(tmp_path / "processed.wav"))
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:01,000\nok\n")
         for ph in ("preprocess", "transcription", "diarization"):
             resume.mark_phase_done(JobStore, job.id, ph)
 
@@ -161,6 +165,183 @@ def test_reprocess_route_resets_resume_state(app, monkeypatch):
     assert submits == ["fast"]
     with app.app_context():
         assert resume.get_completed_phases(JobStore.get_by_id(job_id)) == []  # état de reprise vidé
+
+
+def _instrument_artifacts(svc, monkeypatch, fs, outputs):
+    """Phases qui ÉCRIVENT leurs artefacts — la provenance v2 empreinte ces fichiers.
+
+    `outputs` est un dict mutable relu à chaque exécution : le test pilote le contenu
+    produit par chaque run (sortie différente = amont rejoué, identique = idempotent).
+    """
+    calls: dict[str, int] = {}
+
+    def _count(name, fn):
+        def _wrapped(*a, **k):
+            calls[name] = calls.get(name, 0) + 1
+            return fn()
+        return _wrapped
+
+    monkeypatch.setattr(svc, "_run_audio_preflight", _count("preprocess", lambda: {}))
+    monkeypatch.setattr(svc, "_run_audio_scene_analysis", lambda *a, **k: {})
+    monkeypatch.setattr(svc, "_refresh_audio_quality_with_scene", lambda *a, **k: None)
+    for m in ("_run_source_separation", "_run_audio_scene_filter",
+              "_run_audio_denoise", "_run_audio_normalization"):
+        monkeypatch.setattr(svc, m, lambda job, audio, *a, **k: audio)
+
+    def _stt():
+        fs.save_text("metadata/transcription.srt", outputs["srt"])
+        return {"segments": [1]}
+
+    def _corr():
+        fs.save_text("metadata/transcription_corrigee.srt", outputs["corrigee"])
+        return {"success": True}
+
+    def _qual():
+        fs.save_json("quality/quality_report.json", {"score": outputs.get("score", 97)})
+        return {"success": True}
+
+    monkeypatch.setattr(svc.runner, "run_transcription", _count("transcription", _stt))
+    monkeypatch.setattr(svc.runner, "run_diarization", _count("diarization", lambda: {"available": True}))
+    monkeypatch.setattr(svc.runner, "run_correction", _count("correction", _corr))
+    monkeypatch.setattr(svc.runner, "run_final_review", _count("final_review", lambda: {"success": True}))
+    monkeypatch.setattr(svc.runner, "run_quality_checks", _count("quality", _qual))
+    monkeypatch.setattr(svc.runner, "build_export", _count("export", lambda: {"success": True}))
+    return calls
+
+
+def _full_run(app_cfg, job, svc_calls, tmp_path):
+    svc, calls = svc_calls
+    result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
+    assert result.get("status") == "completed"
+    return calls
+
+
+class TestProvenance:
+    """Provenance v2 : un skip n'est légitime que si les ENTRÉES de la phase n'ont pas
+    bougé depuis son checkpoint (empreintes sha256). Régression du job 4bda98cb :
+    correction rejouée → rapport qualité skippé sur artefact périmé (97/100 calculé
+    sur le SRT brut d'un run précédent)."""
+
+    def _setup(self, app, owner_id, monkeypatch, tmp_path, outputs):
+        from transcria.jobs.filesystem import JobFilesystem
+        cfg = _cfg(tmp_path)
+        (tmp_path / "a.wav").write_bytes(b"RIFFfake")
+        job = JobStore.create_job(owner_id, "Provenance")
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        svc = PipelineService(cfg)
+        calls = _instrument_artifacts(svc, monkeypatch, fs, outputs)
+        return job, fs, svc, calls
+
+    def test_upstream_rerun_invalidates_downstream(self, app, owner_id, monkeypatch, tmp_path):
+        """LE bug : l'amont change → les phases aval marquées faites se RÉ-EXÉCUTENT."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            _full_run(None, job, (svc, calls), tmp_path)
+            calls.clear()
+
+            # Le SRT brut change (STT rejoué / source modifiée hors marqueurs) et la
+            # correction produira une sortie différente.
+            fs.save_text("metadata/transcription.srt", "v2 brut")
+            outputs["corrigee"] = "v2 corrigée"
+
+            _full_run(None, job, (svc, calls), tmp_path)
+            # transcription : marqueur + artefact + entrées vides → skip (pas d'empreinte audio).
+            assert calls.get("transcription") is None
+            assert calls.get("diarization") is None
+            # correction : empreinte du SRT brut ≠ → invalidée → rejouée.
+            assert calls.get("correction") == 1
+            # quality/export : leurs entrées (SRT corrigé…) ont changé → rejouées, pas de
+            # rapport périmé skippé.
+            assert calls.get("quality") == 1
+            assert calls.get("export") == 1
+            done = resume.get_completed_phases(JobStore.get_by_id(job.id))
+            assert {"correction", "quality", "export"} <= set(done)
+
+    def test_byte_identical_rerun_keeps_downstream_skipped(self, app, owner_id, monkeypatch, tmp_path):
+        """Sémantique exacte : amont rejoué à sortie byte-identique → l'aval skippe."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            _full_run(None, job, (svc, calls), tmp_path)
+            calls.clear()
+
+            # La correction doit se rejouer (artefact supprimé) mais reproduit le même octet.
+            (fs.job_dir / "metadata" / "transcription_corrigee.srt").unlink()
+
+            _full_run(None, job, (svc, calls), tmp_path)
+            assert calls.get("correction") == 1
+            # Entrées de quality/export inchangées (corrigé identique) → skip légitime.
+            assert calls.get("quality") is None
+            assert calls.get("export") is None
+
+    def test_legacy_marker_without_fingerprints_reruns(self, app, owner_id, monkeypatch, tmp_path):
+        """Marqueur sans empreintes (job en vol au déploiement v2) : doute → re-run."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            (tmp_path / "processed.wav").write_bytes(b"RIFFfake")
+            resume.set_processed_audio_path(JobStore, job.id, str(tmp_path / "processed.wav"))
+            fs.save_text("metadata/transcription.srt", "v1 brut")
+            fs.save_text("metadata/transcription_corrigee.srt", "v1 corrigée")
+            # Marquage legacy : sans empreintes.
+            for ph in ("preprocess", "transcription", "correction"):
+                resume.mark_phase_done(JobStore, job.id, ph)
+
+            _full_run(None, job, (svc, calls), tmp_path)
+            # transcription : entrées vides déclarées → marqueur legacy suffit.
+            assert calls.get("transcription") is None
+            # correction : entrées déclarées sans empreintes enregistrées → rejouée.
+            assert calls.get("correction") == 1
+
+    def test_same_content_different_mtime_still_skips(self, app, owner_id, monkeypatch, tmp_path):
+        """Cross-machine (split pg) : le pull rematérialise sans préserver les mtimes —
+        la fraîcheur est par CONTENU, un même octet à mtime différent skippe toujours."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            _full_run(None, job, (svc, calls), tmp_path)
+            calls.clear()
+
+            # Simule la rematérialisation : mêmes contenus, mtimes neufs.
+            for rel in ("metadata/transcription.srt", "metadata/transcription_corrigee.srt"):
+                content = (fs.job_dir / rel).read_text(encoding="utf-8")
+                fs.save_text(rel, content)
+
+            _full_run(None, job, (svc, calls), tmp_path)
+            assert calls == {}  # tout est sauté : rien n'a changé en contenu
+
+    def test_quality_artifact_without_marker_reruns(self, app, owner_id, monkeypatch, tmp_path):
+        """Plus de rétro-remplissage aveugle : un quality_report.json orphelin (sans
+        marqueur) ne vaut pas « phase faite » — il peut dater d'un autre état du SRT."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            fs.save_json("quality/quality_report.json", {"score": 97})  # artefact périmé orphelin
+
+            _full_run(None, job, (svc, calls), tmp_path)
+            assert calls.get("quality") == 1  # recalculé, pas adopté
+
+    def test_invalidation_unmarks_phase_in_db_before_execution(self, app, owner_id, monkeypatch, tmp_path):
+        """L'invalidation est PERSISTÉE avant d'exécuter : si un vram_wait coupe la chaîne
+        à cet endroit, l'admission du re-queue voit la phase comme restante (VRAM LLM
+        comptée), et l'UI ne prétend pas qu'elle est faite."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            _full_run(None, job, (svc, calls), tmp_path)
+
+            # L'amont change, et la correction tombe en pénurie VRAM au re-run.
+            fs.save_text("metadata/transcription.srt", "v2 brut")
+            monkeypatch.setattr(
+                svc.runner, "run_correction",
+                lambda *a, **k: {"vram_wait": True, "required_mb": 16000, "phase": "llm_arbitration"},
+            )
+            result = svc._run_pipeline_steps(job, str(tmp_path / "a.wav"), "quality", _SL(), finalize_job_state=False)
+            assert result.get("vram_wait")
+            done = resume.get_completed_phases(JobStore.get_by_id(job.id))
+            assert "correction" not in done  # marqueur retiré EN BASE avant l'exécution
+            assert "transcription" in done   # l'amont sauté reste marqué
 
 
 def test_reset_clears_resume_state(app, owner_id, tmp_path):

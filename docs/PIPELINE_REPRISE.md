@@ -39,9 +39,11 @@ Base saine déjà en place :
 | `audio_path` | `extra_data.pipeline.audio_path` | Chemin audio **final** après transforms pré-STT — pour reprendre **sans** rejouer séparation/filtre/débruitage/normalisation. |
 | `current_phase` | `job_queue.current_phase` (live) | Indice de progression pour l'**UI** et l'**admission**. |
 
-**`is_phase_done(job, phase, fs)`** : vrai si `phase ∈ completed_phases` **ou** si son
-artefact non ambigu existe (rétro-remplissage si le run a planté avant d'écrire le
-marqueur). L'artefact fait foi.
+**`is_phase_done(job, phase, fs)`** *(v2 — voir §10)* : vrai si `phase ∈
+completed_phases` **et** son artefact déclaré est présent **et** la provenance est
+intacte (empreintes sha256 des entrées inchangées). Le rétro-remplissage « artefact
+présent ⇒ fait » est restreint à `transcription` (v1 l'appliquait à toute phase — c'était
+le trou : un artefact ne dit pas de quelles entrées il a été calculé).
 
 > **Extension (chantier stockage partagé, `docs/STOCKAGE_PARTAGE_JOBS.md`)** : en backend
 > `pg`, le checkpoint **pousse les artefacts en base AVANT le marqueur**
@@ -106,3 +108,76 @@ re-queues automatiques (`vram_wait`/`deferred`) — c'est tout l'intérêt.
 d'une phase faite, reprise à la correction sans re-STT, `audio_path` rechargé, reset au
 reprocess, admission = VRAM des phases restantes. Aucun redémarrage systemd ; aucun arrêt
 réel de LLM en test.
+
+## 10. v2 — Provenance des artefacts (empreintes d'entrées)
+
+### 10.1 Le trou de la v1 (job réel 4bda98cb)
+
+La v1 décidait du skip **localement à la phase** (« mon marqueur ou mon artefact
+existe »). Or le pipeline est une **chaîne de dépendances** : la correction lit
+`transcription.srt`, la qualité lit `transcription_corrigee.srt`, l'export emballe tout.
+Observé en réel : la correction se rejoue (nouveau SRT corrigé) → `quality` voit son
+`quality_report.json` présent → **skip** → le rapport affiché (97/100) avait été calculé
+sur le SRT **brut** d'un run précédent. Aucun signal : un artefact ne savait pas de
+quelles entrées il avait été calculé.
+
+### 10.2 Le modèle v2
+
+Chaque phase **déclare ses entrées** (`resume._PHASE_INPUTS`, fichiers texte/JSON
+synchronisés). Au checkpoint, `compute_input_fingerprints` enregistre leur **sha256**
+dans `extra_data.pipeline.phase_inputs[phase]`. Une phase marquée n'est sautée que si
+(`resume.phase_state_valid`) :
+
+1. son **artefact déclaré** (`_PHASE_ARTIFACT`) est présent ;
+2. ses **empreintes enregistrées** existent et sont **identiques** aux empreintes actuelles.
+
+L'**invalidation aval est une conséquence** : l'amont rejoué produit un fichier différent
+→ l'empreinte de la phase aval ne correspond plus → elle se ré-exécute. Cas limite
+correct : un amont rejoué à sortie **byte-identique** laisse l'aval sauté (résultat
+identique par construction). Au mismatch, le marqueur est **retiré en base**
+(`unmark_phase`) *avant* d'exécuter — l'admission VRAM (`_done_profile_phases`) et l'UI
+restent vraies même si un `vram_wait` coupe la chaîne à cet endroit.
+
+Choix assumés :
+- **sha256, pas mtime** : en split `pg`, `pull_job_files` rematérialise **sans préserver
+  les mtimes** — seule la comparaison par contenu est stable entre machines ;
+- **audio exclu des empreintes** : gros, intermédiaires hors synchro, débruitage non
+  bit-exact entre machines — l'empreinter ferait rejouer le STT à chaque changement de
+  worker (la boucle éradiquée). Un changement d'entrée audio passe par la re-soumission
+  utilisateur (reset) ;
+- **doute → re-run** : marqueur sans empreintes (job en vol au déploiement v2), fichier
+  illisible, artefact manquant ⇒ on rejoue. Se rejouer est toujours sûr ; se sauter à
+  tort jamais ;
+- **rétro-remplissage restreint à `transcription`** : phase la plus chère, sans entrée
+  empreintée — SRT présent ⇒ STT fait. Pour les autres, un artefact orphelin (sans
+  marqueur) ne vaut rien : il peut dater d'un autre état des entrées.
+
+### 10.3 Isolation des agents LLM (`AgentWorkspace`)
+
+Second invariant nécessaire à « l'artefact fait foi » : un artefact checkpointé est
+**immuable pour l'agent**. Incident : l'agent de correction (cwd=`metadata/`, Edit actif)
+a réécrit `transcription.srt`. Depuis `transcria/workflow/agent_workspace.py` :
+
+- chaque phase agent (correction, relecture finale, résumé) tourne dans un **scratch**
+  `jobs/<id>/work/<phase>/` avec des **copies** de ses entrées (`stage`) ou du matériel
+  de prompt transitoire écrit directement dedans (`write_input` — ex.
+  `summary_to_harmonize.md`, qui ne vit plus dans `metadata/`) ;
+- `work/` est **hors whitelist de synchro** (`SYNCED_PREFIXES`) : jamais en base ;
+- le runner **collecte** les sorties du scratch, les valide (retry ≤3, ratio 0.9–1.1) et
+  écrit lui-même le canonique via `JobFilesystem` (atomique) ;
+- après l'agent, `verify_and_restore_sources()` re-hash les canoniques : fichier stagé
+  muté → **restauré** depuis la copie pristine (+ ERROR) ; canonique surveillé
+  (`metadata/`, `context/`, `summary/`) muté hors stage → **signalé** (en `pg`, un
+  re-pull répare) ;
+- scratch supprimé après succès, conservé pour diagnostic après échec.
+
+### 10.4 Suivi v2
+
+- [x] Provenance : `_PHASE_INPUTS`, `compute_input_fingerprints`, `phase_state_valid`,
+      `mark_phase_done(fingerprints)`, `unmark_phase` ; `_done`/`_checkpoint` v2 dans
+      `PipelineService`. Tests `tests/test_pipeline_resume.py::TestProvenance`.
+- [x] Isolation agents : `AgentWorkspace` + câblage `run_correction`,
+      `run_final_review`, `_run_llm_summary`. Tests `tests/test_agent_workspace.py`.
+- [ ] (Optionnel, différé) Garde d'admission : faire profiter `_done_profile_phases`
+      d'une validation de provenance côté scheduler (aujourd'hui : l'unmark au dispatch
+      suffit, le vram_wait couvre le créneau).

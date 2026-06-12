@@ -179,7 +179,10 @@ class TestPipelineCheckpoint:
         orig_mark = resume.mark_phase_done
         monkeypatch.setattr(
             "transcria.workflow.resume.mark_phase_done",
-            lambda store, job_id, phase: (events.append(f"mark:{phase}"), orig_mark(store, job_id, phase)),
+            lambda store, job_id, phase, fingerprints=None: (
+                events.append(f"mark:{phase}"),
+                orig_mark(store, job_id, phase, fingerprints),
+            ),
         )
 
         job_id = _make_job(app, owner_id)
