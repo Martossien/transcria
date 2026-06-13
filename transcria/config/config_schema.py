@@ -58,6 +58,9 @@ def _check_server(srv: dict, r: ValidationResult) -> None:
 def _check_storage(sto: dict, r: ValidationResult) -> None:
     _check_str(sto, "jobs_dir", "storage.jobs_dir", r)
     _check_str(sto, "database_url", "storage.database_url", r)
+    # Optionnel (défaut calculé = tempdir système) : valider uniquement si fourni.
+    if "agent_work_dir" in sto:
+        _check_str(sto, "agent_work_dir", "storage.agent_work_dir", r)
     backend = sto.get("shared_backend")
     if backend is not None and backend not in ("fs", "pg"):
         r.add_error("storage.shared_backend: doit être 'fs' ou 'pg'")

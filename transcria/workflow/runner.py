@@ -558,10 +558,10 @@ class WorkflowRunner:
             # Isolation : l'agent ne tourne plus dans summary/ (canonique) mais dans un
             # scratch avec des copies — cf. AgentWorkspace. Le summary.md canonique est
             # écrit par le runner (_apply_llm_suggestions), jamais par l'agent.
-            from transcria.workflow.agent_workspace import AgentWorkspace
+            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
             invite_path = self._materialize_meeting_invite(fs, job)
-            workspace = AgentWorkspace(fs, "summary")
+            workspace = AgentWorkspace(fs, "summary", work_root=resolve_agent_work_root(config))
             staged_transcript = workspace.stage("summary/quick_transcript.txt")
             staged_context = workspace.stage("context/job_context.yaml")
             staged_diar_ctx = workspace.stage("summary/diarization_context.md")
@@ -1679,9 +1679,9 @@ class WorkflowRunner:
             # Isolation : l'agent travaille dans un scratch avec des COPIES — jamais dans
             # metadata/ (incident 4bda98cb : transcription.srt source réécrit par l'agent).
             # Les sorties sont collectées du scratch puis écrites atomiquement au canonique.
-            from transcria.workflow.agent_workspace import AgentWorkspace
+            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
-            workspace = AgentWorkspace(fs, "correction")
+            workspace = AgentWorkspace(fs, "correction", work_root=resolve_agent_work_root(config))
             staged_srt = workspace.stage("metadata/transcription.srt")
             staged_context = workspace.stage("context/job_context.yaml")
             staged_lexicon = workspace.stage(
@@ -1859,9 +1859,9 @@ class WorkflowRunner:
             # (synthèse à harmoniser, glossaire, données structurées) est TRANSITOIRE —
             # regénéré à chaque run — il vit dans le scratch, plus dans metadata/ (il
             # sort donc aussi de la synchro pg, où il n'avait rien à faire).
-            from transcria.workflow.agent_workspace import AgentWorkspace
+            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
-            workspace = AgentWorkspace(fs, "final_review")
+            workspace = AgentWorkspace(fs, "final_review", work_root=resolve_agent_work_root(config))
             staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
             summary_file = workspace.write_input("summary_to_harmonize.md", summary_text)
             glossary_file = workspace.write_input("final_review_glossary.md", glossary)
@@ -1957,7 +1957,15 @@ class WorkflowRunner:
         if report:
             fs.save_text("metadata/final_review_report.md", report)
 
-        logger.info("Relecture finale appliquée: %s", applied)
+        not_applied = [k for k, v in applied.items() if not v]
+        if not_applied:
+            logger.warning(
+                "Relecture finale partielle — non appliqué au canonique : %s (sorties "
+                "manquantes ou invalides de l'agent ; livrable conservé en l'état)",
+                ", ".join(not_applied),
+            )
+        else:
+            logger.info("Relecture finale appliquée intégralement: %s", applied)
         return {"review_applied": True, **applied}
 
     def build_export(self, job: Job, config: dict) -> dict:

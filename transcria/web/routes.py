@@ -2408,6 +2408,7 @@ def delete_job(job_id: str):
 
     assert job is not None
     audit_log(AuditAction.JOB_DELETE, target_type="job", target_id=job.id, target_label=job.title)
-    JobService.delete(job.id, cfg["storage"]["jobs_dir"])
+    from transcria.workflow.agent_workspace import resolve_agent_work_root
+    JobService.delete(job.id, cfg["storage"]["jobs_dir"], agent_work_dir=resolve_agent_work_root(cfg))
     flash("Traitement supprimé.", "info")
     return redirect(url_for("web.index"))

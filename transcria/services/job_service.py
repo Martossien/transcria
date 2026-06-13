@@ -136,12 +136,18 @@ class JobService:
         }
 
     @staticmethod
-    def delete(job_id: str, jobs_dir: str) -> bool:
+    def delete(job_id: str, jobs_dir: str, agent_work_dir: str | None = None) -> bool:
         job = JobStore.get_by_id(job_id)
         if job is None:
             return False
         fs = JobFilesystem(jobs_dir, job.id)
         fs.cleanup()
+        # Scratch d'agent conservé après échec : vit hors de job_dir (cf. AgentWorkspace),
+        # donc non couvert par rmtree(job_dir) ci-dessus — purge explicite pour éviter
+        # les orphelins sous agent_work_dir. No-op si rien à supprimer (cas nominal :
+        # cleanup(success) a déjà purgé).
+        from transcria.workflow.agent_workspace import AgentWorkspace
+        AgentWorkspace.purge_job(agent_work_dir, job.id)
         # Purge explicite des blobs (la FK CASCADE est une ceinture supplémentaire ;
         # inconditionnel : la table peut contenir des lignes d'une période en backend pg).
         from transcria.jobs import artifact_store

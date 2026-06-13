@@ -6,11 +6,19 @@ l'artefact SOURCE du job. Or le pipeline reprenable repose sur « l'artefact fai
 un artefact checkpointé doit être IMMUABLE pour l'agent, sinon toute la provenance
 (empreintes, skip, rapports) est bâtie sur du sable.
 
-Contrat (cf. AGENTS.md — règle : aucun agent LLM ne tourne dans un répertoire canonique) :
-- l'agent reçoit un scratch ``jobs/<id>/work/<phase>/`` contenant des COPIES de ses
-  entrées (``stage``) ou des fichiers transitoires écrits directement (``write_input``) ;
-- ``work/`` est hors de la whitelist de synchro (`artifact_store.SYNCED_PREFIXES`) :
-  jamais poussé en base, jamais considéré canonique ;
+Contrat (cf. AGENTS.md — règle : aucun agent LLM ne tourne dans un répertoire canonique
+NI dans l'arbre du dépôt) :
+- l'agent reçoit un scratch ``<agent_work_dir>/<job_id>/<phase>/`` placé **hors de
+  l'arbre du dépôt** (défaut : ``<tempdir>/transcria-agent-work/``). Deux raisons :
+  (1) opencode détermine sa « racine de projet » en remontant l'arborescence depuis le
+  cwd — sous le dépôt, il chargerait le ``AGENTS.md`` (95 Ko de doc dev) dans le contexte
+  de chaque agent étroit, et ancrerait ``bash``/``read``/``write`` sur la racine git (les
+  chemins relatifs de l'agent échouaient → ``FileNotFoundError`` → évasion ``/tmp``
+  bloquée en headless). Hors dépôt, le scratch DEVIENT la racine de projet : contexte
+  propre, chemins relatifs fiables, tout est « in-project ». (2) il contient des COPIES
+  des entrées (``stage``) ou des fichiers transitoires (``write_input``) ;
+- le scratch n'est ni sous ``job_dir`` ni dans `artifact_store.SYNCED_PREFIXES` :
+  jamais poussé en base, jamais re-matérialisé au pull, jamais considéré canonique ;
 - le runner collecte les sorties du scratch, les valide, puis les écrit lui-même dans le
   canonique via `JobFilesystem` (écritures atomiques) — l'agent n'écrit jamais le canonique ;
 - après l'agent, ``verify_and_restore_sources()`` re-hash les fichiers canoniques :
@@ -39,6 +47,23 @@ _WATCH_EXCLUDED = ("metadata/audio_excerpts/",)
 
 _ABSENT = "absent"
 
+# Sous-répertoire du tempdir système quand `storage.agent_work_dir` n'est pas configuré.
+_DEFAULT_WORK_SUBDIR = "transcria-agent-work"
+
+
+def resolve_agent_work_root(config: dict | None) -> str:
+    """Racine des scratch d'agents, garantie **hors de l'arbre du dépôt**.
+
+    Override explicite : ``storage.agent_work_dir`` (utile en Docker pour pointer un
+    volume dédié). Défaut : ``<tempdir système>/transcria-agent-work`` — toujours
+    écrivable, sans ``AGENTS.md`` ancêtre, dans les 3 modes (le scratch est local au
+    process qui exécute la phase : worker en split pg, hôte GPU en inférence distante).
+    """
+    cfg_val = ((config or {}).get("storage") or {}).get("agent_work_dir")
+    if cfg_val and str(cfg_val).strip():
+        return str(cfg_val).strip()
+    return str(Path(tempfile.gettempdir()) / _DEFAULT_WORK_SUBDIR)
+
 
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -51,10 +76,17 @@ def _sha256_file(path: Path) -> str:
 class AgentWorkspace:
     """Scratch isolé d'une phase agent + garde d'immuabilité des sources canoniques."""
 
-    def __init__(self, fs, phase: str):
+    def __init__(self, fs, phase: str, work_root: str | None = None):
         self._fs = fs
         self.phase = phase
-        self.scratch_dir: Path = fs.job_dir / "work" / phase
+        # work_root fourni (production) → scratch hors dépôt, isolé par job ET phase :
+        # ``<work_root>/<job_id>/<phase>``. Le job_id (= fs.job_dir.name) est nécessaire
+        # car work_root est partagé entre tous les jobs. Fallback legacy sans work_root
+        # (tests unitaires) : ancien emplacement sous job_dir.
+        if work_root:
+            self.scratch_dir: Path = Path(work_root) / fs.job_dir.name / phase
+        else:
+            self.scratch_dir = fs.job_dir / "work" / phase
         # Purge à l'entrée : un scratch conservé après échec ne doit pas polluer ce run.
         if self.scratch_dir.exists():
             shutil.rmtree(self.scratch_dir, ignore_errors=True)
@@ -197,3 +229,17 @@ class AgentWorkspace:
                 "[agent_workspace:%s] Scratch conservé pour diagnostic : %s",
                 self.phase, self.scratch_dir,
             )
+
+    @staticmethod
+    def purge_job(work_root: str | None, job_id: str) -> None:
+        """Supprime tous les scratch d'un job (``<work_root>/<job_id>/``).
+
+        Appelé à la suppression d'un job : un scratch conservé après échec vit désormais
+        hors de ``job_dir`` (donc hors du ``rmtree(job_dir)`` de `JobFilesystem.cleanup`).
+        Sans cet appel, un échec laisserait un orphelin sous ``agent_work_dir``.
+        """
+        if not work_root or not job_id:
+            return
+        target = Path(work_root) / job_id
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)

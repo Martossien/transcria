@@ -403,3 +403,22 @@ class TestJobServiceDelete:
                     JobService.delete(job_id, d)
 
                 MockFs.return_value.cleanup.assert_called_once()
+
+    def test_delete_purges_agent_scratch(self, app, owner_id):
+        """Le scratch d'agent vit hors de job_dir : la suppression doit le purger
+        explicitement (sinon orphelin d'un échec sous agent_work_dir)."""
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as work_root:
+            with app.app_context():
+                info = JobService.create(owner_id, "scratch purge")
+                job_id = info["job_id"]
+                scratch = Path(work_root) / job_id / "final_review"
+                scratch.mkdir(parents=True)
+                (scratch / "leftover.md").write_text("débris d'un échec conservé")
+
+                with patch("transcria.services.job_service.JobFilesystem") as MockFs:
+                    MockFs.return_value.cleanup.return_value = None
+                    JobService.delete(job_id, d, agent_work_dir=work_root)
+
+                assert not (Path(work_root) / job_id).exists()

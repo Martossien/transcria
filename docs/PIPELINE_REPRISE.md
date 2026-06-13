@@ -159,17 +159,36 @@ Second invariant nécessaire à « l'artefact fait foi » : un artefact checkpoi
 a réécrit `transcription.srt`. Depuis `transcria/workflow/agent_workspace.py` :
 
 - chaque phase agent (correction, relecture finale, résumé) tourne dans un **scratch**
-  `jobs/<id>/work/<phase>/` avec des **copies** de ses entrées (`stage`) ou du matériel
-  de prompt transitoire écrit directement dedans (`write_input` — ex.
-  `summary_to_harmonize.md`, qui ne vit plus dans `metadata/`) ;
-- `work/` est **hors whitelist de synchro** (`SYNCED_PREFIXES`) : jamais en base ;
+  `<storage.agent_work_dir>/<job_id>/<phase>/`, **hors de l'arbre du dépôt** (défaut :
+  `<tempdir>/transcria-agent-work/`, via `resolve_agent_work_root(config)`), avec des
+  **copies** de ses entrées (`stage`) ou du matériel de prompt transitoire (`write_input`
+  — ex. `summary_to_harmonize.md`, qui ne vit plus dans `metadata/`) ;
+- **pourquoi hors dépôt** (incident 6f4f4cad) : opencode fixe sa racine de projet en
+  remontant depuis le cwd. Sous le dépôt, il chargeait `AGENTS.md` (~95 Ko de doc dev)
+  dans le contexte de chaque agent étroit et ancrait `bash`/`read`/`write` sur la racine
+  git → chemins relatifs cassés (`FileNotFoundError`), puis évasion `/tmp` rejetée en
+  headless → run avorté, 2/4 fichiers en silence. Hors dépôt, le scratch DEVIENT la
+  racine de projet : contexte propre, chemins relatifs fiables, tout est « in-project ».
+  `TMPDIR` est aussi pointé sur le scratch (temporaires réflexes in-project). `AGENTS.md`
+  ne bouge pas — seul le lieu d'exécution des phases change ;
+- le scratch n'est ni sous `job_dir` ni dans `SYNCED_PREFIXES` : jamais en base, jamais
+  re-matérialisé au pull ; `AgentWorkspace.purge_job()` le nettoie à la suppression du
+  job (hors `job_dir`, donc non couvert par `rmtree(job_dir)`) ;
 - le runner **collecte** les sorties du scratch, les valide (retry ≤3, ratio 0.9–1.1) et
   écrit lui-même le canonique via `JobFilesystem` (atomique) ;
+- **observabilité** : la relecture finale loggue un `WARNING` si <4 fichiers produits
+  (avec la liste des manquants) ou si opencode sort non-zéro — la livraison partielle
+  n'est plus silencieuse ;
 - après l'agent, `verify_and_restore_sources()` re-hash les canoniques : fichier stagé
   muté → **restauré** depuis la copie pristine (+ ERROR) ; canonique surveillé
   (`metadata/`, `context/`, `summary/`) muté hors stage → **signalé** (en `pg`, un
   re-pull répare) ;
 - scratch supprimé après succès, conservé pour diagnostic après échec.
+
+**Couverture des 3 modes :** le scratch est local au process qui exécute la phase
+(worker en split `pg`, hôte GPU en inférence distante) ; aucun chemin de la file de
+jobs, de la synchro `pg`, de l'export ou de l'UI ne le référence — déménagement
+transparent.
 
 ### 10.4 Suivi v2
 
