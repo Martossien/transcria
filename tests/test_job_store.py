@@ -123,6 +123,39 @@ class TestJobStore:
             assert updated.get_extra_data()["existing"] is True
             assert updated.get_extra_data()["execution"]["status"] == "queued"
 
+    def test_update_extra_data_nonexistent_returns_none(self, app, owner_id):
+        with app.app_context():
+            assert JobStore.update_extra_data("inconnu", lambda e: {**e, "x": 1}) is None
+
+    def test_update_extra_data_passes_a_copy_to_updater(self, app, owner_id):
+        """L'updater reçoit une COPIE de l'extra_data : seul ce qu'il RETOURNE est persisté
+        (muter l'argument sans le retourner n'altère pas la ligne)."""
+        with app.app_context():
+            from transcria.database import db
+
+            job = JobStore.create_job(owner_id, "iso")
+            job.set_extra_data({"k": 1})
+            db.session.commit()
+
+            def updater(extra):
+                extra["k"] = 999  # mutation de l'argument (ignorée)
+                return {"k": 2}
+
+            JobStore.update_extra_data(job.id, updater)
+            assert JobStore.get_by_id(job.id).get_extra_data() == {"k": 2}
+
+    def test_update_extra_data_sequential_writers_accumulate(self, app, owner_id):
+        """Deux écritures séquentielles de tiers différents (annulation puis progression)
+        s'accumulent sans se perdre. Sous PostgreSQL, le FOR UPDATE fait que deux écritures
+        CONCURRENTES se comportent comme ces deux écritures séquentielles (sérialisation)."""
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "merge")
+            JobStore.update_extra_data(job.id, lambda e: {**e, "execution": {"cancel_requested": True}})
+            JobStore.update_extra_data(job.id, lambda e: {**e, "workflow_progress": {"percent": 50}})
+            extra = JobStore.get_by_id(job.id).get_extra_data()
+            assert extra["execution"]["cancel_requested"] is True
+            assert extra["workflow_progress"]["percent"] == 50
+
     def test_delete_job(self, app, owner_id):
         with app.app_context():
             job = JobStore.create_job(owner_id, "Delete Me")

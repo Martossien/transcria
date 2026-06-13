@@ -45,6 +45,20 @@ CHUNK_SIZE = 8 * 1024 * 1024
 SYNCED_PREFIXES: tuple[str, ...] = ("input/", "context/", "metadata/", "speakers/", "quality/", "summary/")
 EXCLUDED_PREFIXES: tuple[str, ...] = ("metadata/audio_excerpts/",)
 
+# Intermédiaires audio dérivés du préprocess, écrits SOUS `input/` (Path(audio).parent) :
+# volumineux, RECALCULABLES et locaux au worker — exclus de la synchro pour ne pas
+# gonfler la base en backend `pg` (seul `input/original.{ext}` doit voyager). La reprise
+# n'en dépend pas : sur un autre worker, le préprocess est rejoué (cf. `_run_pipeline_steps`
+# « Audio prétraité absent localement — préprocess rejoué »). Ne PAS utiliser un motif
+# `input/*.wav` : un upload .wav donne `input/original.wav`, qui DOIT rester synchronisé.
+# RÈGLE : toute nouvelle sortie de transform audio écrite sous `input/` s'ajoute ici.
+_EXCLUDED_AUDIO_INTERMEDIATES: frozenset[str] = frozenset({
+    "input/vocals.wav",
+    "input/scene_filtered.wav",
+    "input/denoised.wav",
+    "input/normalized.wav",
+})
+
 # Préfixes que la frontale pousse à l'enfilage (entrées du worker).
 INPUT_PREFIXES: tuple[str, ...] = ("input/", "context/", "speakers/")
 
@@ -140,7 +154,10 @@ def _hash_file(path: Path) -> str:
 
 
 def _is_excluded(relpath: str) -> bool:
-    return any(relpath.startswith(p) for p in EXCLUDED_PREFIXES)
+    return (
+        relpath in _EXCLUDED_AUDIO_INTERMEDIATES
+        or any(relpath.startswith(p) for p in EXCLUDED_PREFIXES)
+    )
 
 
 def _iter_local_files(job_dir: Path, prefixes: Iterable[str]) -> Iterator[tuple[str, Path]]:

@@ -95,7 +95,24 @@ class JobStore:
 
     @staticmethod
     def update_extra_data(job_id: str, updater) -> Job | None:
-        job = db.session.get(Job, job_id)
+        # Verrou de ligne pour le read-modify-write : `extra_data_json` est un point de
+        # contention partagé entre tiers/threads — la frontale y écrit (annulation,
+        # édition de contexte), le scheduler y écrit fréquemment pendant le traitement
+        # (progression, marqueurs de reprise, statut d'exécution). Sans `FOR UPDATE`, deux
+        # écritures concurrentes du MÊME job se perdent (lost-update) — p.ex. une demande
+        # d'annulation écrasée par une mise à jour de progression. `with_for_update()`
+        # sérialise (le 2ᵉ lecteur attend le 1ᵉ commit) ; `populate_existing` force la
+        # relecture de la valeur committée sous le verrou (et non un instantané périmé du
+        # cache d'identité). FOR UPDATE est émis en PostgreSQL et ignoré sans erreur en
+        # SQLite (mono-process, sérialisé par le verrou de fichier). Motif déjà éprouvé
+        # dans `QueueStore.claim()`.
+        stmt = (
+            db.select(Job)
+            .where(Job.id == job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        job = db.session.execute(stmt).scalar_one_or_none()
         if job is None:
             return None
         extra = job.get_extra_data()

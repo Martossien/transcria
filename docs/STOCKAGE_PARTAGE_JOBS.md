@@ -76,8 +76,12 @@ poussées → le push réconciliera ; log WARNING).
 
 **Préfixes synchronisés** : `input/`, `context/`, `metadata/`, `speakers/`, `quality/`, `summary/`.
 **Exclus** : `exports/` (zip/docx **reconstruits localement à la demande** sur la frontale —
-inutile de transporter un zip qui contient l'audio), `audio/` (intermédiaires du préprocess,
-locaux au worker), `metadata/audio_excerpts/` (cache d'extraits généré à la demande).
+inutile de transporter un zip qui contient l'audio), `metadata/audio_excerpts/` (cache
+d'extraits généré à la demande), et les **WAV intermédiaires du préprocess écrits sous
+`input/`** (`vocals.wav`, `scene_filtered.wav`, `denoised.wav`, `normalized.wav` —
+volumineux, **recalculables**, locaux au worker : `_EXCLUDED_AUDIO_INTERMEDIATES`). Seul
+`input/original.{ext}` voyage (un upload `.wav` reste donc synchronisé). La reprise n'en
+dépend pas : sur un autre worker, le préprocess est rejoué.
 
 ### Réponses aux trois questions de conception
 

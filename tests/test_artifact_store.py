@@ -119,6 +119,26 @@ class TestExclusions:
             relpaths = [r for (r,) in db.session.query(JobFile.relpath).filter_by(job_id=job_id)]
         assert relpaths == ["metadata/transcription.srt"]
 
+    def test_audio_intermediates_under_input_not_pushed(self, app, tmp_path, job_id):
+        """Les WAV dérivés du préprocess (sous input/) sont volumineux/recalculables :
+        exclus de la synchro pour ne pas gonfler la base en backend pg."""
+        for name in ("vocals.wav", "scene_filtered.wav", "denoised.wav", "normalized.wav"):
+            _write(tmp_path, job_id, f"input/{name}", b"audio intermediaire volumineux")
+        _write(tmp_path, job_id, "input/original.m4a", b"audio source")
+        with app.app_context():
+            artifact_store.push_job_files(_cfg(tmp_path), job_id)
+            relpaths = {r for (r,) in db.session.query(JobFile.relpath).filter_by(job_id=job_id)}
+        assert relpaths == {"input/original.m4a"}  # seul l'original voyage
+
+    def test_original_wav_upload_is_still_pushed(self, app, tmp_path, job_id):
+        """Garde-fou : un upload .wav donne input/original.wav, qui DOIT rester synchronisé
+        (l'exclusion vise les noms dérivés, jamais l'original)."""
+        _write(tmp_path, job_id, "input/original.wav", b"upload wav")
+        with app.app_context():
+            artifact_store.push_job_files(_cfg(tmp_path), job_id)
+            relpaths = {r for (r,) in db.session.query(JobFile.relpath).filter_by(job_id=job_id)}
+        assert "input/original.wav" in relpaths
+
 
 class TestIntegrity:
     def test_corrupted_chunk_fails_without_partial_file(self, app, tmp_path, job_id):
