@@ -409,7 +409,16 @@ class GPUAllocator:
             self._cleanup_cuda_cache()
             logger.info("GPU libéré: job=%s phase=%s vram=%d Mo", job_id, phase, released)
 
-    def release(self, job_id: str) -> None:
+    def release_reservations(self, job_id: str) -> int:
+        """Libère les réservations VRAM (accounting) d'un job — **sans** toucher au verrou
+        LLM (`threading.Lock` partagé, dont la libération hors propriétaire est délicate).
+
+        Ne supprime QUE les réservations de CE job (sûr même avec d'autres jobs
+        concurrents) ; idempotent (no-op si rien à libérer). Retourne les Mo récupérés.
+        Sert de **filet de sécurité** de fin de job (cf. `QueueScheduler._on_done`) : les
+        phases libèrent déjà via `GPUSession`/`finally`, ceci garantit zéro fuite
+        d'accounting même sur un chemin de crash imprévu.
+        """
         released = 0
         with self._alloc_lock:
             for gpu_index, reservations in list(self._gpu_reservations.items()):
@@ -423,9 +432,14 @@ class GPUAllocator:
                     self._gpu_reservations[gpu_index] = kept
                 else:
                     self._gpu_reservations.pop(gpu_index, None)
-        self.release_llm(job_id)
         if released:
             self._cleanup_cuda_cache()
+        return released
+
+    def release(self, job_id: str) -> None:
+        released = self.release_reservations(job_id)
+        self.release_llm(job_id)
+        if released:
             logger.info("Réservations GPU libérées: job=%s vram=%d Mo", job_id, released)
 
     @staticmethod

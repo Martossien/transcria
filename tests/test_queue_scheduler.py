@@ -472,3 +472,44 @@ def test_launch_claims_atomically_no_double_dispatch(app, owner_id, tmp_path):
         assert second is False
         assert launched == [job.id]                       # soumis une seule fois
         assert QueueStore.get_entry(job.id).status == QUEUE_RUNNING
+
+
+def test_on_done_surfaces_exception_and_runs_safety_release(app, owner_id, tmp_path, caplog, monkeypatch):
+    """`_on_done` : (1) loggue une exception non gérée du thread de job (sinon avalée par
+    le Future), (2) déclenche le filet de sécurité VRAM (release_reservations) pour le job."""
+    import logging
+    from concurrent.futures import Future
+
+    with app.app_context():
+        scheduler = QueueScheduler(app, _config(tmp_path), lambda *a: None)
+        calls = []
+        monkeypatch.setattr(scheduler.allocator, "release_reservations",
+                            lambda jid: calls.append(jid) or 0)
+        fut: Future = Future()
+        fut.set_exception(RuntimeError("crash dans le finally"))
+
+        with caplog.at_level(logging.ERROR):
+            scheduler._on_done("job-x", fut)
+
+        assert calls == ["job-x"]  # filet de sécurité invoqué pour CE job
+        assert any("exception non gérée" in r.getMessage() for r in caplog.records)
+
+
+def test_on_done_success_releases_without_error_log(app, owner_id, tmp_path, caplog, monkeypatch):
+    """Cas nominal : le filet de sécurité tourne (idempotent), aucun log d'erreur."""
+    import logging
+    from concurrent.futures import Future
+
+    with app.app_context():
+        scheduler = QueueScheduler(app, _config(tmp_path), lambda *a: None)
+        calls = []
+        monkeypatch.setattr(scheduler.allocator, "release_reservations",
+                            lambda jid: calls.append(jid) or 0)
+        fut: Future = Future()
+        fut.set_result(None)
+
+        with caplog.at_level(logging.ERROR):
+            scheduler._on_done("job-y", fut)
+
+        assert calls == ["job-y"]
+        assert not any("exception non gérée" in r.getMessage() for r in caplog.records)

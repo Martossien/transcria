@@ -123,6 +123,56 @@ def test_release_phase_only_releases_matching_job_phase(tmp_path):
     assert snapshot["gpus"][0]["reserved_vram_mb"] == 5000
 
 
+def test_release_reservations_frees_only_target_job_and_returns_mb(tmp_path):
+    """Filet de sécurité : libère TOUTES les réservations d'un job (toutes phases),
+    n'touche pas aux autres jobs, et retourne les Mo récupérés."""
+    alloc = _allocator(tmp_path, free_mb=24000)
+    alloc.try_reserve("job-a", 4000, "stt")
+    alloc.try_reserve("job-a", 2000, "diarization")
+    alloc.try_reserve("job-b", 3000, "stt")
+
+    reclaimed = alloc.release_reservations("job-a")
+
+    assert reclaimed == 6000  # 4000 + 2000, les deux phases de job-a
+    snapshot = alloc.get_snapshot()
+    remaining = {(r["job_id"], r["phase"]) for r in snapshot["gpus"][0]["reservations"]}
+    assert remaining == {("job-b", "stt")}
+
+
+def test_release_reservations_is_idempotent_noop(tmp_path):
+    """Idempotent : rappelé sur un job déjà libéré (ou inconnu) → 0, aucun effet."""
+    alloc = _allocator(tmp_path, free_mb=24000)
+    alloc.try_reserve("job-a", 4000, "stt")
+    assert alloc.release_reservations("job-a") == 4000
+    assert alloc.release_reservations("job-a") == 0   # déjà libéré
+    assert alloc.release_reservations("inconnu") == 0  # jamais réservé
+
+
+def test_release_reservations_does_not_touch_llm_lock(tmp_path):
+    """Le filet de sécurité ne doit PAS libérer le verrou LLM (délicat, géré ailleurs) :
+    un job concurrent qui tient le verrou le conserve."""
+    alloc = _allocator(tmp_path, free_mb=24000)
+    alloc.try_reserve("job-a", 4000, "stt")
+    assert alloc.try_acquire_llm("job-b") is True   # job-b tient le verrou LLM
+
+    alloc.release_reservations("job-a")             # filet de sécurité sur job-a
+
+    # Le verrou LLM de job-b est intact : un tiers ne peut toujours pas l'acquérir.
+    assert alloc.try_acquire_llm("job-c") is False
+
+
+def test_release_still_frees_reservations_and_llm(tmp_path):
+    """Régression : release() complet libère TOUJOURS l'accounting ET le verrou LLM."""
+    alloc = _allocator(tmp_path, free_mb=24000)
+    alloc.try_reserve("job-a", 4000, "stt")
+    assert alloc.try_acquire_llm("job-a") is True
+
+    alloc.release("job-a")
+
+    assert alloc.get_snapshot()["gpus"][0]["reserved_vram_mb"] == 0
+    assert alloc.try_acquire_llm("job-b") is True   # verrou LLM bien libéré
+
+
 def test_gpu_session_releases_only_its_phase(tmp_path):
     alloc = _allocator(tmp_path, free_mb=24000)
     alloc.try_reserve("job-b", 3000, "stt")

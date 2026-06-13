@@ -449,6 +449,29 @@ class QueueScheduler:
     def _on_done(self, job_id: str, future: Future) -> None:
         with self._running_lock:
             self._running.pop(job_id, None)
+        # Surface une exception non gérée du thread de job (sinon avalée par le Future) :
+        # `_run_process` gère et re-lève déjà ses erreurs, mais une défaillance dans son
+        # propre `except`/`finally` disparaîtrait sans aucune trace.
+        try:
+            exc = future.exception()
+        except Exception:  # noqa: BLE001 — future annulé / état inattendu : ne pas masquer la suite
+            exc = None
+        if exc is not None:
+            logger.error("Thread de job terminé sur exception non gérée (job=%s)", job_id, exc_info=exc)
+        # Filet de sécurité VRAM : réclame toute réservation d'accounting résiduelle de CE
+        # job (idempotent ; ne touche PAS le verrou LLM, déjà géré par les `finally` du
+        # pipeline). Pour un process unique à longue vie gérant une ressource rare, une
+        # réservation fuitée ampute la VRAM jusqu'à la famine d'admission. Si ce filet
+        # récupère réellement quelque chose, c'est qu'une phase n'a pas libéré → WARNING.
+        try:
+            reclaimed = self.allocator.release_reservations(job_id)
+            if reclaimed:
+                logger.warning(
+                    "Filet de sécurité : %d Mo de réservation GPU récupérés (job=%s) — "
+                    "une phase n'avait pas libéré, à investiguer", reclaimed, job_id,
+                )
+        except Exception:  # noqa: BLE001 — le nettoyage ne doit jamais masquer l'issue du job
+            logger.exception("Filet de sécurité GPU échoué (job=%s)", job_id)
         self.wake()
 
     def get_runtime_snapshot(self) -> dict:
