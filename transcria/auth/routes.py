@@ -26,6 +26,28 @@ def _removes_last_active_admin(user, new_role: Role, new_active: bool, active_ad
     return currently_active_admin and not stays_active_admin and active_admin_count <= 1
 
 
+def _is_safe_next_url(target: str | None) -> bool:
+    """Vrai si `target` est un chemin local sûr pour une redirection post-login.
+
+    Anti open-redirect : `startswith("/")` seul laisse passer `//evil.com` (URL
+    protocol-relative → le navigateur va sur https://evil.com). On exige un chemin
+    absolu local, en rejetant :
+    - protocol-relative (`//host`, `/\\host`) ;
+    - tout ce qui, une fois les `\\t \\r \\n` retirés (les navigateurs les suppriment
+      AVANT d'interpréter l'URL — `"/\\t/evil.com"` deviendrait `"//evil.com"`),
+      n'est plus un simple chemin (présence d'un schéma ou d'un netloc).
+    """
+    if not target:
+        return False
+    cleaned = target.replace("\t", "").replace("\r", "").replace("\n", "")
+    if not cleaned.startswith("/") or cleaned.startswith("//") or cleaned.startswith("/\\"):
+        return False
+    from urllib.parse import urlparse
+
+    parsed = urlparse(cleaned)
+    return not parsed.scheme and not parsed.netloc
+
+
 def _password_validation_error(password: str, confirmation: str | None = None) -> str | None:
     if len(password) < MIN_PASSWORD_LENGTH:
         return f"Le mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."
@@ -47,7 +69,7 @@ def login():
             login_user(user)
             audit_log(AuditAction.LOGIN)
             next_url = request.args.get("next")
-            if next_url and next_url.startswith("/"):
+            if _is_safe_next_url(next_url):
                 return redirect(next_url)
             return redirect(url_for("web.index"))
         audit_log(AuditAction.LOGIN_FAILED, target_label=username)
@@ -56,7 +78,7 @@ def login():
     return render_template("login.html")
 
 
-@auth_bp.route("/logout")
+@auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     audit_log(AuditAction.LOGOUT)

@@ -986,6 +986,7 @@ def _check_quality(quality: dict, r: ValidationResult) -> None:
 def _check_security(sec: dict, r: ValidationResult) -> None:
     _check_int_range(sec, "retention_days", "security.retention_days", 0, 3650, r)
     _check_bool(sec, "allow_job_delete", "security.allow_job_delete", r)
+    _check_bool(sec, "session_cookie_secure", "security.session_cookie_secure", r)
     _check_int_range(sec, "max_upload_size_mb", "security.max_upload_size_mb", 1, 102400, r)
 
     extensions = sec.get("allowed_upload_extensions", [])

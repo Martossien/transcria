@@ -127,6 +127,22 @@ def create_app(config_path: str | None = None) -> Flask:
     # l'utilisateur en silence (incident du 12/06/2026 : session morte entre deux polls).
     app.config["SESSION_COOKIE_NAME"] = "transcria_session"
 
+    # Durcissement du cookie de session (sécurité) :
+    # - HTTPONLY : inaccessible au JS (défaut Flask True, rendu explicite).
+    # - SAMESITE=Lax : le cookie n'est PAS envoyé sur une requête POST cross-site →
+    #   neutralise le CSRF sur les routes mutantes (création d'admin, suppression de job,
+    #   sauvegarde de config…) SANS jeton CSRF. Le `fetch` same-origin du wizard et les
+    #   échanges inter-tiers (frontale↔scheduler↔GPU, qui passent par la DB / l'API
+    #   machine-à-machine, sans cookie de session) ne sont PAS affectés.
+    # - SECURE : piloté par config (`security.session_cookie_secure`, défaut False). À
+    #   activer derrière HTTPS (frontale en prod) ; laissé False par défaut pour ne pas
+    #   casser le login d'un tier accédé en HTTP (dev / all-in-one / GPU interne).
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = bool(
+        cfg.get("security", {}).get("session_cookie_secure", False)
+    )
+
     from flask_login import LoginManager
 
     login_manager = LoginManager()

@@ -5,7 +5,44 @@ from werkzeug.security import check_password_hash
 
 from transcria.auth.models import Role, ROLE_HIERARCHY, User
 from transcria.auth.permissions import Permission, get_user_permissions, requires
-from transcria.auth.routes import _removes_last_active_admin
+from transcria.auth.routes import _is_safe_next_url, _removes_last_active_admin
+
+
+class TestSafeNextUrl:
+    """Anti open-redirect sur le paramètre `next` du login."""
+
+    def test_local_paths_allowed(self):
+        assert _is_safe_next_url("/")
+        assert _is_safe_next_url("/jobs/abc")
+        assert _is_safe_next_url("/admin/config?tab=raw")
+
+    def test_protocol_relative_rejected(self):
+        # `//evil.com` et `/\evil.com` → le navigateur va sur https://evil.com.
+        assert not _is_safe_next_url("//evil.com")
+        assert not _is_safe_next_url("/\\evil.com")
+
+    def test_absolute_url_rejected(self):
+        assert not _is_safe_next_url("https://evil.com/x")
+        assert not _is_safe_next_url("http://evil.com")
+
+    def test_control_char_bypass_rejected(self):
+        # Les navigateurs retirent \t\r\n AVANT d'interpréter : "/\t/evil.com" → "//evil.com".
+        assert not _is_safe_next_url("/\t/evil.com")
+        assert not _is_safe_next_url("/\r\n//evil.com")
+
+    def test_empty_or_none_rejected(self):
+        assert not _is_safe_next_url("")
+        assert not _is_safe_next_url(None)
+        assert not _is_safe_next_url("relative/path")  # pas absolu
+
+
+class TestSessionCookieHardening:
+    def test_cookie_flags_applied(self, app):
+        assert app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+        assert app.config["SESSION_COOKIE_HTTPONLY"] is True
+        assert app.config["SESSION_COOKIE_NAME"] == "transcria_session"
+        # SECURE piloté par config (défaut False pour ne pas casser le HTTP dev/interne).
+        assert app.config["SESSION_COOKIE_SECURE"] is False
 
 
 def _admin(active=True):

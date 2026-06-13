@@ -19,8 +19,12 @@ class TestAuthentication:
         assert r.status_code == 401
 
     def test_logout_redirects(self, admin_client):
-        r = admin_client.get("/logout", follow_redirects=True)
+        r = admin_client.post("/logout", follow_redirects=True)
         assert r.status_code == 200
+
+    def test_logout_get_not_allowed(self, admin_client):
+        # Logout est POST-only (anti-CSRF : un <img src="/logout"> ne doit pas déconnecter).
+        assert admin_client.get("/logout").status_code == 405
 
     def test_protected_page_redirects_to_login(self, client):
         r = client.get("/", follow_redirects=True)

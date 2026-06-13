@@ -965,6 +965,7 @@ Configuration du LLM d'arbitrage/correction SRT.
 |---|---|---|---|
 | `retention_days` | int | `365` | Durée de rétention des jobs terminaux (`completed`, `failed`, `cancelled`) |
 | `allow_job_delete` | bool | `true` | Autorise la suppression de jobs (vérifié dans la route `delete_job`) |
+| `session_cookie_secure` | bool | `false` | Pose l'attribut `Secure` sur le cookie de session (`SESSION_COOKIE_SECURE`). **Mettre `true` derrière HTTPS** (frontale en prod). Laissé `false` par défaut pour ne pas casser le login d'un tier accédé en HTTP (dev / all-in-one / GPU interne). Le cookie est toujours `HttpOnly` + `SameSite=Lax` (anti-CSRF). |
 | `max_upload_size_mb` | int | `1024` | Taille maximale d'upload Flask (`MAX_CONTENT_LENGTH`) en Mio |
 | `allowed_upload_extensions` | list[str] | `[".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]` | Extensions autorisées pour l'upload |
 | `audit_retention_days` | int | `1095` | Durée de rétention des logs d'audit (3 ans). Distinct de `retention_days` qui concerne les jobs. |

@@ -69,7 +69,7 @@ class TestAuthEdgeCases:
         client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
         r = client.get("/")
         assert r.status_code == 200
-        client.get("/logout")
+        client.post("/logout")
         r = client.get("/")
         assert r.status_code == 302
 
