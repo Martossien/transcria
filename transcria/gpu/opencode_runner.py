@@ -415,14 +415,22 @@ class OpenCodeRunner:
 
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
+        # --dir fixe la RACINE DE PROJET d'opencode sur le scratch. Indispensable :
+        # opencode détermine sa racine via --dir/PWD, PAS via le cwd du process — un
+        # simple Popen(cwd=…) est ignoré (vérifié : la session restait ancrée sur le
+        # dépôt). Avec le scratch hors dépôt + --dir, opencode (a) ne remonte vers aucun
+        # AGENTS.md, (b) ancre bash/read/write sur le scratch (chemins relatifs fiables),
+        # (c) considère les entrées stagées « in-project » → lues/écrites sans la
+        # permission external_directory qui, en headless, ne peut qu'avorter le run.
         cmd = [
             opencode_path, "run", "--format", "json",
+            "--dir", str(self.work_dir),
             "--model", self.model_ref,
             instruction,
             "-f", prompt_file,
         ]
 
-        logger.info("opencode run --model %s (cwd=%s)", self.model_ref, self.work_dir)
+        logger.info("opencode run --model %s (dir=%s)", self.model_ref, self.work_dir)
         logger.debug("CMD: %s", " ".join(cmd))
 
         pid_file = self.work_dir / ".opencode.pid"
@@ -430,12 +438,18 @@ class OpenCodeRunner:
         stdout, stderr = "", ""
 
         try:
+            # TMPDIR = le scratch : tout fichier temporaire réflexe (python tempfile,
+            # défauts d'outils) reste DANS le projet opencode (= le scratch) plutôt que
+            # dans /tmp, qui est « external_directory » et rejeté en mode headless
+            # (le rejet avorte le run en silence). Ceinture+bretelles avec le scratch
+            # hors dépôt qui rend déjà les chemins relatifs fiables.
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(self.work_dir),
+                env={**os.environ, "TMPDIR": str(self.work_dir)},
             )
             pid_file.write_text(str(proc.pid))
             logger.info("opencode démarré PID=%d (job_dir=%s)", proc.pid, self.work_dir.name)
@@ -950,10 +964,32 @@ class OpenCodeRunner:
             f = self.work_dir / name
             return f.read_text(encoding="utf-8").strip() if f.is_file() else ""
 
-        reviewed_srt = _read("transcription_reviewed.srt")
-        harmonized_summary = _read("summary_harmonized.md")
-        reviewed_structured_data = _read("structured_data_reviewed.json")
-        report = _read("final_review_report.md")
+        outputs = {
+            "transcription_reviewed.srt": _read("transcription_reviewed.srt"),
+            "summary_harmonized.md": _read("summary_harmonized.md"),
+            "structured_data_reviewed.json": _read("structured_data_reviewed.json"),
+            "final_review_report.md": _read("final_review_report.md"),
+        }
+        reviewed_srt = outputs["transcription_reviewed.srt"]
+        harmonized_summary = outputs["summary_harmonized.md"]
+        reviewed_structured_data = outputs["structured_data_reviewed.json"]
+        report = outputs["final_review_report.md"]
+
+        # Observabilité : la livraison partielle (l'agent écrit < 4 fichiers, ou le run
+        # est avorté en cours) était jusqu'ici INVISIBLE — « succès » dès 1 fichier, sans
+        # trace. On loggue explicitement le bilan et les manquants.
+        missing = [name for name, content in outputs.items() if not content]
+        if missing:
+            logger.warning(
+                "Relecture finale : %d/4 fichiers produits — manquants : %s",
+                4 - len(missing), ", ".join(missing),
+            )
+        if not result["success"]:
+            logger.warning(
+                "Relecture finale : opencode a signalé un échec (%s) — %d/4 fichiers "
+                "néanmoins présents, exploités en best-effort",
+                result.get("error", "?"), 4 - len(missing),
+            )
 
         # Au moins une sortie exploitable suffit : les fichiers produits font foi même
         # si opencode sort en non-zéro (timeout, signal).

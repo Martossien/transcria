@@ -731,6 +731,14 @@ server:
 storage:
   jobs_dir: "./jobs"
   database_url: "sqlite:///transcrIA.db"
+  # agent_work_dir : optionnel. Scratch de travail des agents LLM opencode, qui DOIT
+  # être HORS de l'arbre du dépôt (sinon opencode y charge AGENTS.md ~95 Ko et ancre ses
+  # outils sur la racine git → l'agent déraille). Défaut si absent :
+  # <tempdir système>/transcria-agent-work (le service tournant en root → sous le tempdir
+  # de root). En Docker, pointez un volume dédié, p.ex. /var/lib/transcria/agent-work.
+  # Créé automatiquement au premier usage ; nettoyé après chaque phase et à la
+  # suppression du job.
+  # agent_work_dir: "/var/lib/transcria/agent-work"
 
 auth:
   enabled: true

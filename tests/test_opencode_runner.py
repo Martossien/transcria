@@ -234,6 +234,30 @@ class TestOpenCodeRunnerRun:
         assert result["success"] is True
         assert opencode_bin in captured_cmd["cmd"][0] or "custom_opencode" in captured_cmd["cmd"][0]
 
+    def test_run_sets_tmpdir_to_work_dir(self, tmp_path, monkeypatch):
+        """TMPDIR = scratch : les fichiers temporaires réflexes restent in-project
+        (sinon /tmp = external_directory rejeté en headless → run avorté en silence)."""
+        import shutil
+        captured = {}
+
+        def capturing_popen(cmd, **kw):
+            captured["cmd"] = cmd
+            captured.update(kw)
+            return _FakePopen(stdout="{}", returncode=0)
+
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
+        monkeypatch.setattr(os.path, "isfile", lambda p: True)
+        monkeypatch.setattr(subprocess, "Popen", capturing_popen)
+
+        runner = _make_runner(tmp_path)
+        runner.run("Test", str(tmp_path / "prompt.txt"))
+        assert captured["env"]["TMPDIR"] == str(runner.work_dir)
+        assert "PATH" in captured["env"]  # l'env parent est préservé, pas remplacé
+        # --dir fixe la racine de projet opencode sur le scratch (sinon opencode reste
+        # ancré sur PWD/dépôt → AGENTS.md chargé + entrées stagées « external »).
+        assert "--dir" in captured["cmd"]
+        assert captured["cmd"][captured["cmd"].index("--dir") + 1] == str(runner.work_dir)
+
     def test_run_creates_work_dir(self, tmp_path, monkeypatch):
         import shutil
         work_dir = tmp_path / "new_subdir" / "workspace"
@@ -995,6 +1019,26 @@ class TestRunFinalReviewInstruction:
         )
         assert res["success"] is False
         assert res["harmonized_summary"] == ""
+
+    def test_partial_output_logs_warning(self, tmp_path, monkeypatch, caplog):
+        """Observabilité (incident 6f4f4cad) : 2/4 fichiers produits → WARNING explicite
+        nommant les manquants, au lieu d'un « succès » silencieux."""
+        import logging
+        runner = _make_runner(tmp_path)
+        self._capture(runner, monkeypatch, outputs={
+            "summary_harmonized.md": "# Synthèse",
+            "transcription_reviewed.srt": "1\n00:00:00,000 --> 00:00:01,000\nx\n",
+        })
+        with caplog.at_level(logging.WARNING):
+            res = runner.run_final_review(
+                str(tmp_path / "c.srt"), str(tmp_path / "s.md"),
+                str(tmp_path / "g.md"), str(tmp_path / "sd.json"),
+            )
+        assert res["success"] is True  # best-effort : 2/4 exploités
+        msgs = " ".join(r.getMessage() for r in caplog.records)
+        assert "2/4 fichiers" in msgs
+        assert "structured_data_reviewed.json" in msgs
+        assert "final_review_report.md" in msgs
 
 
 class TestApplyFinalReview:
