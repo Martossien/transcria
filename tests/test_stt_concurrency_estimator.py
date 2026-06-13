@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from transcria.benchmarks.stt_concurrency_estimator import BenchMeasurement
 from transcria.benchmarks.stt_concurrency_estimator import collect_measurements
 from transcria.benchmarks.stt_concurrency_estimator import estimate_local_concurrency
 from transcria.benchmarks.stt_concurrency_estimator import write_estimates
@@ -33,6 +34,23 @@ def _write_result(run_dir, combo_id="S01", *, chunk_metrics=None):
         ),
         encoding="utf-8",
     )
+
+
+def test_estimate_handles_zero_transcribe_time_without_crash(tmp_path):
+    """Mesure dégénérée (transcribe_s == 0) : pas de 0/0 (l'ancien calcul recomputait
+    estimated_speedup par baseline/estimated_transcribe = 0/0)."""
+    m = BenchMeasurement(
+        result_path=tmp_path / "x.json", combo_id="Z", audio_file="a.mp3", run_name="r",
+        stt_backend="cohere", effective_stt_backend="cohere", chunking_mode="pyannote_turns",
+        source_workers=1, unit_count=10, unit_basis="chunk_metrics",
+        transcribe_s=0.0, pipeline_s=0.0, audio_duration_s=0.0, segments=10,
+    )
+    estimates = estimate_local_concurrency([m], target_workers=[1, 4], efficiency=0.75)
+    assert len(estimates) == 2
+    assert all(e.estimated_transcribe_s == 0.0 for e in estimates)
+    # estimated_speedup reste le speedup _speedup() (≥ 1.0), pas un NaN/erreur.
+    assert estimates[0].estimated_speedup == 1.0   # 1 worker → x1
+    assert estimates[1].estimated_speedup > 1.0    # 4 workers → > x1
 
 
 def test_collect_measurements_uses_segments_proxy_for_legacy_results(tmp_path):

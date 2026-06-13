@@ -127,7 +127,11 @@ def estimate_local_concurrency(
                     target_workers=workers,
                     efficiency=efficiency,
                     estimated_transcribe_s=round(estimated_transcribe_s, 3),
-                    estimated_speedup=round(sequential_baseline_s / estimated_transcribe_s, 3),
+                    # `estimated_speedup` est déjà calculé (l. ci-dessus, _speedup ≥ 1.0) :
+                    # le réutiliser au lieu de `baseline / estimated_transcribe_s` évite un
+                    # 0/0 quand transcribe_s == 0 (audio dégénéré → baseline et transcribe
+                    # estimé nuls). Valeur identique pour baseline > 0.
+                    estimated_speedup=round(estimated_speedup, 3),
                     estimated_pipeline_s=round(estimated_pipeline_s, 3) if estimated_pipeline_s is not None else None,
                     confidence="medium" if measurement.unit_basis == "chunk_metrics" else "low",
                 )
