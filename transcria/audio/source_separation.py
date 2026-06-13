@@ -388,7 +388,7 @@ class SourceSeparationService:
             raise ValueError(
                 f"Stem '{stem_name}' absent du modèle {model_name}. "
                 f"Tiges disponibles : {available}"
-            )
+            ) from None
 
         vocals: Any = sources[0, stem_idx]   # (channels, samples)
 

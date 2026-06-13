@@ -58,11 +58,39 @@ def resolve_agent_work_root(config: dict | None) -> str:
     volume dédié). Défaut : ``<tempdir système>/transcria-agent-work`` — toujours
     écrivable, sans ``AGENTS.md`` ancêtre, dans les 3 modes (le scratch est local au
     process qui exécute la phase : worker en split pg, hôte GPU en inférence distante).
+
+    L'override est **résolu en absolu** (un chemin relatif tomberait sous le CWD = le
+    dépôt → réintroduirait la pollution AGENTS.md) et **vérifié** : un fichier de règles
+    ancêtre déclenche un WARNING (cf. _warn_if_rules_file_ancestor).
     """
     cfg_val = ((config or {}).get("storage") or {}).get("agent_work_dir")
     if cfg_val and str(cfg_val).strip():
-        return str(cfg_val).strip()
+        root = Path(str(cfg_val).strip()).expanduser().resolve()
+        _warn_if_rules_file_ancestor(root)
+        return str(root)
     return str(Path(tempfile.gettempdir()) / _DEFAULT_WORK_SUBDIR)
+
+
+def _warn_if_rules_file_ancestor(root: Path) -> None:
+    """Avertit si ``root`` a un ``AGENTS.md``/``CLAUDE.md`` ancêtre.
+
+    opencode fixe sa racine de projet sur le scratch (``--dir``) et charge le premier
+    fichier de règles trouvé **en remontant** — exactement la régression du 13/06 (job
+    6f4f4cad) si le scratch retombe dans l'arbre du dépôt. Le scratch DOIT vivre hors de
+    tout arbre de règles ; on ne bloque pas (l'opérateur peut avoir une raison), on rend
+    le risque visible.
+    """
+    for ancestor in [root, *root.parents]:
+        for marker in ("AGENTS.md", "CLAUDE.md"):
+            if (ancestor / marker).is_file():
+                logger.warning(
+                    "storage.agent_work_dir=%s : fichier de règles ancêtre détecté (%s). "
+                    "opencode le chargera dans le contexte de chaque agent LLM (pollution, "
+                    "outils ancrés sur l'arbre du dépôt). Choisissez un répertoire hors de "
+                    "tout arbre AGENTS.md/CLAUDE.md (défaut : tempdir système).",
+                    root, ancestor / marker,
+                )
+                return
 
 
 def _sha256_file(path: Path) -> str:

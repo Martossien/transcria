@@ -62,7 +62,7 @@ def run(input_path: Path, output_path: Path) -> int:
     import transformers
     from transformers import AutoProcessor
 
-    CohereAsrForConditionalGeneration = getattr(transformers, "CohereAsrForConditionalGeneration")
+    CohereAsrForConditionalGeneration = transformers.CohereAsrForConditionalGeneration
 
     request = json.loads(input_path.read_text(encoding="utf-8"))
     arrays = np.load(request["arrays_path"])

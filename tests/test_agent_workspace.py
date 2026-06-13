@@ -126,6 +126,30 @@ class TestResolveAgentWorkRoot:
     def test_blank_override_falls_back(self):
         assert resolve_agent_work_root({"storage": {"agent_work_dir": "   "}}).endswith("transcria-agent-work")
 
+    def test_relative_override_resolved_to_absolute(self):
+        """Un chemin relatif tomberait sous le CWD (= le dépôt) → réintroduirait la
+        pollution AGENTS.md. Il est donc résolu en absolu."""
+        root = resolve_agent_work_root({"storage": {"agent_work_dir": "agent_scratch"}})
+        assert Path(root).is_absolute()
+
+    def test_warns_when_rules_file_is_ancestor(self, tmp_path, caplog):
+        """Un agent_work_dir sous un arbre AGENTS.md/CLAUDE.md déclenche un WARNING
+        (opencode chargerait le fichier de règles — la régression du 13/06)."""
+        import logging
+        (tmp_path / "AGENTS.md").write_text("# règles dev\n")
+        work = tmp_path / "sub" / "agent_work"
+        with caplog.at_level(logging.WARNING):
+            root = resolve_agent_work_root({"storage": {"agent_work_dir": str(work)}})
+        assert root == str(work.resolve())
+        assert any("fichier de règles ancêtre" in r.getMessage() for r in caplog.records)
+
+    def test_no_warning_for_clean_dir(self, tmp_path, caplog):
+        import logging
+        work = tmp_path / "agent_work"  # aucun AGENTS.md au-dessus
+        with caplog.at_level(logging.WARNING):
+            resolve_agent_work_root({"storage": {"agent_work_dir": str(work)}})
+        assert not any("fichier de règles" in r.getMessage() for r in caplog.records)
+
 
 class TestPurgeJob:
     def test_removes_job_scratch_tree(self, tmp_path):

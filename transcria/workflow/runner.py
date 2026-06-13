@@ -904,7 +904,7 @@ class WorkflowRunner:
             "Tout", "Tous", "Toute", "Toutes", "Cette", "Ces",
             "Mon", "Ton", "Son", "Ma", "Ta", "Sa", "Notre", "Votre", "Leur", "Leurs",
             "Aussi", "Même", "Encore", "Voilà", "Voila", "Ici", "Là", "Bien", "Très",
-            "Ça", "Cela", "Celui", "Celle", "Ceux", "Celles", "Moi", "Toi", "Lui", "Eux",
+            "Cela", "Celui", "Celle", "Ceux", "Celles", "Moi", "Toi", "Lui", "Eux",
         })
 
         spk_caps: dict = defaultdict(Counter)
