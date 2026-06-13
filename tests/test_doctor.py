@@ -291,6 +291,35 @@ def test_check_inference_remote_down_no_fallback_fail():
     assert res.status == doc.FAIL
 
 
+def test_check_node_gpus_local_ok():
+    res = doc.check_inference_node_gpus({"inference": {"mode": "local"}})
+    assert res.status == doc.OK
+
+
+def test_check_node_gpus_warns_when_node_reports_no_gpu():
+    """Check d'installation : un nœud joignable qui n'énumère aucun GPU → WARN
+    (sinon, en prod, les jobs distants défèrent en silence au pré-vol)."""
+    cfg = {"inference": {"mode": "remote", "url": "http://n1"}}
+    res = doc.check_inference_node_gpus(cfg, capabilities_probe=lambda u: {"gpus": []})
+    assert res.status == doc.WARN
+    assert "n'énumèrent aucun GPU" in res.detail
+
+
+def test_check_node_gpus_ok_when_node_reports_gpu():
+    cfg = {"inference": {"mode": "remote", "url": "http://n1"}}
+    res = doc.check_inference_node_gpus(
+        cfg, capabilities_probe=lambda u: {"gpus": [{"index": 0, "free_mb": 12000}]}
+    )
+    assert res.status == doc.OK
+
+
+def test_check_node_gpus_skips_when_node_unreachable():
+    """Nœud injoignable (probe → None) : pas de double-FAIL (couvert par joignabilité)."""
+    cfg = {"inference": {"mode": "remote", "url": "http://n1"}}
+    res = doc.check_inference_node_gpus(cfg, capabilities_probe=lambda u: None)
+    assert res.status == doc.OK
+
+
 # ── check_storage ─────────────────────────────────────────────────────────
 
 

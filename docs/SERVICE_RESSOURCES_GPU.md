@@ -27,6 +27,8 @@
 | Concurrence STT par tour (v1.1) | `inference.stt.concurrency` (`transcria/stt/transcription.py`) | ✅ |
 | Re-queue différé avec backoff (§7.2) | `QueueStore.requeue_later` + `job_executor` (`scheduled_at`) | ✅ |
 | Idle-stop moteurs externes (v1.2) | `SttEngineSupervisor.reap_idle` (opportuniste via `/capabilities`) | ✅ (minimal) |
+| Admission VRAM distante (backpressure) | `remote_vram_admits` — données GPU manquantes ⇒ `None` (déférer au pré-vol, pas de famine) + log throttlé scheduler | ✅ |
+| Check d'install GPU du nœud | `doctor.check_inference_node_gpus` (nœud joignable doit énumérer ses GPU via `/capabilities`) | ✅ |
 
 ---
 

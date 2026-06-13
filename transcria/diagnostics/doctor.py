@@ -403,6 +403,63 @@ def check_inference_nodes(
                        hint="Démarrer le nœud de ressources, ou activer inference.fallback_local.")
 
 
+def _caps_reports_gpu(capabilities: dict) -> bool:
+    """True si `/capabilities` énumère au moins un GPU avec un `free_mb` lisible."""
+    for gpu in capabilities.get("gpus", []) or []:
+        if not isinstance(gpu, dict):
+            continue
+        raw = gpu.get("free_mb")
+        if raw is None:
+            continue
+        try:
+            int(raw)
+        except (TypeError, ValueError):
+            continue
+        return True
+    return False
+
+
+def check_inference_node_gpus(
+    cfg: dict,
+    *,
+    capabilities_probe: Callable[[str], dict | None] | None = None,
+) -> CheckResult:
+    """Un nœud de ressources joignable doit énumérer ses GPU (`free_mb`) via `/capabilities`.
+
+    Détecté À L'INSTALLATION : sinon, en prod, les jobs distants défèrent **en silence**
+    au pré-vol (`remote_vram_admits` → None faute de données GPU) au lieu d'être
+    dispatchés normalement. Mieux vaut le voir au `doctor` que via des jobs qui stagnent.
+    """
+    name = "GPU des nœuds de ressources distants"
+    inference = cfg.get("inference", {})
+    mode = inference.get("mode", "local")
+    if mode == "local":
+        return CheckResult(name, OK, "topologie locale — pas de nœud distant à sonder")
+
+    nodes = inference.get("nodes") or []
+    urls = [n.get("url", "") for n in nodes if n.get("url")] if nodes else []
+    if not urls and inference.get("url"):
+        urls = [inference["url"]]
+    if not urls:
+        return CheckResult(name, OK, "aucun nœud configuré — couvert par le check de joignabilité")
+
+    probe = capabilities_probe or _probe_node_capabilities
+    reachable = [(u, caps) for u in urls if (caps := _safe_capabilities(probe, u)) is not None]
+    if not reachable:
+        return CheckResult(name, OK, "aucun nœud ne renvoie /capabilities — couvert par le check de joignabilité")
+
+    without_gpu = [u for u, caps in reachable if not _caps_reports_gpu(caps)]
+    if without_gpu:
+        return CheckResult(
+            name, WARN,
+            f"{len(without_gpu)}/{len(reachable)} nœud(s) joignable(s) n'énumèrent aucun GPU : "
+            + ", ".join(without_gpu),
+            hint="Vérifier nvidia-smi / la configuration GPU du nœud distant ; sinon les jobs "
+                 "distants défèrent au pré-vol (admission VRAM impossible) au lieu d'être dispatchés.",
+        )
+    return CheckResult(name, OK, f"{len(reachable)} nœud(s) joignable(s) énumèrent leurs GPU")
+
+
 def check_storage(
     cfg: dict,
     *,
@@ -631,6 +688,27 @@ def _safe_health(health: Callable[[str], bool], url: str) -> bool:
         return False
 
 
+def _probe_node_capabilities(url: str, timeout: int = 3) -> dict | None:
+    import requests
+
+    try:
+        resp = requests.get(f"{url.rstrip('/')}/capabilities", timeout=timeout)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        return data if isinstance(data, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _safe_capabilities(probe: Callable[[str], dict | None], url: str) -> dict | None:
+    try:
+        result = probe(url)
+        return result if isinstance(result, dict) else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _dir_writable(path: str) -> bool:
     """True si on peut écrire dans ``path`` (ou, s'il n'existe pas, dans son parent)."""
     if os.path.isdir(path):
@@ -665,6 +743,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_arbitrage_llm,
     check_opencode,
     check_inference_nodes,
+    check_inference_node_gpus,
     check_local_models,
     check_storage,
     check_shared_storage,

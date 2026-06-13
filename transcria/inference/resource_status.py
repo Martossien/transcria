@@ -157,14 +157,48 @@ def remote_vram_admits(config: dict, capabilities: dict | None, vram_profile: di
     if required_mb <= 0:
         return None
     headroom_mb = int((config.get("gpu", {}) or {}).get("min_free_vram_mb", 4000))
+    saw_usable = False
     for gpu in capabilities.get("gpus", []) or []:
-        try:
-            free_mb = int(gpu.get("free_mb", 0))
-        except (TypeError, ValueError):
+        if not isinstance(gpu, dict):
             continue
+        raw = gpu.get("free_mb")
+        if raw is None:
+            continue  # free_mb absent → donnée GPU inexploitable pour ce GPU
+        try:
+            free_mb = int(raw)
+        except (TypeError, ValueError):
+            continue  # free_mb illisible → idem
+        saw_usable = True
         if free_mb >= required_mb + headroom_mb:
             return True
-    return False
+    # Aucune donnée GPU exploitable (liste vide OU aucun free_mb lisible) = données
+    # insuffisantes → None : laisser le pré-vol (resource_gate, l'autorité) décider.
+    # Retourner False ici BLOQUERAIT le dispatch en permanence (famine) si le nœud
+    # n'énumère pas ses GPU. False seulement quand on a vu des GPU et qu'aucun ne tient.
+    return False if saw_usable else None
+
+
+def remote_gpu_data_missing(config: dict, capabilities: dict | None) -> bool:
+    """True si le job requiert du distant, le nœud est joignable (capabilities présentes)
+    mais n'expose AUCUN GPU avec un `free_mb` exploitable.
+
+    Prédicat **pur** de diagnostic : le scheduler s'en sert pour émettre un WARNING
+    throttlé (le dispatch défère alors au pré-vol via `remote_vram_admits` → None).
+    """
+    if not remote_requirements(config) or not capabilities:
+        return False
+    for gpu in capabilities.get("gpus", []) or []:
+        if not isinstance(gpu, dict):
+            continue
+        raw = gpu.get("free_mb")
+        if raw is None:
+            continue
+        try:
+            int(raw)
+        except (TypeError, ValueError):
+            continue
+        return False  # au moins un GPU avec donnée exploitable
+    return True
 
 
 def _remote_required_mb(reqs: set[str], vram_profile: dict) -> int:

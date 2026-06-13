@@ -11,10 +11,17 @@ from transcria.inference.client import InferenceClient, InferenceUnavailable
 from transcria.inference.resource_status import (
     assess_admission,
     available_remote_slots,
+    remote_gpu_data_missing,
     remote_requirements,
     remote_vram_admits,
     summarize_capabilities,
 )
+
+_REMOTE_CFG = {
+    "gpu": {"min_free_vram_mb": 1000},
+    "models": {"stt_backend": "cohere"},
+    "inference": {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://h/v1"}}}},
+}
 
 # ── remote_requirements ───────────────────────────────────────────────────────
 
@@ -205,6 +212,36 @@ def test_remote_vram_ignores_local_only_phase_costs():
     caps = {"gpus": [{"index": 0, "free_mb": 5500, "total_mb": 24000}]}
 
     assert remote_vram_admits(cfg, caps, profile) is True
+
+
+def test_remote_vram_returns_none_when_node_reports_no_gpu():
+    """Nœud joignable mais sans GPU énuméré (nvidia-smi KO) : données insuffisantes →
+    None (déférer au pré-vol), PAS False (qui bloquerait le dispatch en permanence)."""
+    profile = {"phases": {"stt": 6000}}
+    assert remote_vram_admits(_REMOTE_CFG, {"gpus": []}, profile) is None
+    assert remote_vram_admits(_REMOTE_CFG, {}, profile) is None  # pas de clé gpus
+
+
+def test_remote_vram_returns_none_when_gpus_have_no_readable_free_mb():
+    """GPU listés mais free_mb illisibles/absents partout → None (donnée inexploitable)."""
+    profile = {"phases": {"stt": 6000}}
+    caps = {"gpus": [{"index": 0, "free_mb": "n/a"}, {"index": 1}]}  # illisible + absent
+    assert remote_vram_admits(_REMOTE_CFG, caps, profile) is None
+
+
+def test_remote_vram_false_when_gpus_present_but_none_fit():
+    """Au moins un GPU lisible mais aucun ne tient → False (vraie pénurie distante)."""
+    profile = {"phases": {"stt": 6000}}
+    caps = {"gpus": [{"index": 0, "free_mb": 100}]}
+    assert remote_vram_admits(_REMOTE_CFG, caps, profile) is False
+
+
+def test_remote_gpu_data_missing_predicate():
+    profile_caps_empty = {"gpus": []}
+    assert remote_gpu_data_missing(_REMOTE_CFG, profile_caps_empty) is True   # joignable, 0 GPU
+    assert remote_gpu_data_missing(_REMOTE_CFG, {"gpus": [{"free_mb": 5000}]}) is False  # GPU OK
+    assert remote_gpu_data_missing(_REMOTE_CFG, None) is False  # injoignable → autre check
+    assert remote_gpu_data_missing({"models": {"stt_backend": "cohere"}}, profile_caps_empty) is False  # tout local
 
 
 # ── InferenceClient.capabilities() ────────────────────────────────────────────

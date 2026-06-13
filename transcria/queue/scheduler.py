@@ -13,7 +13,12 @@ from flask import Flask
 
 from transcria.database import db
 from transcria.inference.client import InferenceClientError, build_client_from_config
-from transcria.inference.resource_status import available_remote_slots, remote_requirements, remote_vram_admits
+from transcria.inference.resource_status import (
+    available_remote_slots,
+    remote_gpu_data_missing,
+    remote_requirements,
+    remote_vram_admits,
+)
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -69,6 +74,9 @@ class QueueScheduler:
         self._notify_listener: QueueNotifyListener | None = None
         self._total_dispatched = 0
         self._last_iteration_s = 0.0
+        # Throttle du WARNING « nœud distant sans donnée GPU » : on ne loggue qu'au
+        # CHANGEMENT d'état (pas à chaque tick du dispatch — sinon spam toutes les N s).
+        self._warned_no_remote_gpu = False
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -428,6 +436,20 @@ class QueueScheduler:
         except InferenceClientError as exc:
             logger.warning("Capacité distante indisponible au dispatch — pré-vol conservé: %s", exc)
             return _RemoteDispatchState()
+        # Nœud joignable mais n'énumérant aucun GPU exploitable : le dispatch défère au
+        # pré-vol (remote_vram_admits → None). Signalé UNE fois au changement d'état —
+        # symptôme d'un nœud mal configuré (nvidia-smi/capabilities), à corriger.
+        if remote_gpu_data_missing(self.config, capabilities):
+            if not self._warned_no_remote_gpu:
+                logger.warning(
+                    "Nœud de ressources joignable mais sans donnée GPU exploitable "
+                    "(/capabilities n'énumère aucun free_mb) — dispatch déféré au pré-vol. "
+                    "Vérifier nvidia-smi / la configuration GPU du nœud distant."
+                )
+                self._warned_no_remote_gpu = True
+        elif self._warned_no_remote_gpu:
+            logger.info("Nœud de ressources : données GPU de nouveau disponibles.")
+            self._warned_no_remote_gpu = False
         slots = available_remote_slots(self.config, capabilities)
         if slots is not None:
             logger.debug("Capacité distante dispatch: slots=%s", slots)
