@@ -190,9 +190,9 @@ transcria/
 ├── configs/                       # Prompts et lexique
 │   ├── lexique_metier.txt
 │   └── prompts/
-│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v2.8 (@general obligatoire, brief d'invitation §4bis, genre hors nom/rôle)
-│       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v2.2 (@general obligatoire)
-│       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v1.0, après correction
+│       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v3.0 (contrat de priorités en tête, consigne subagent citable, @general obligatoire)
+│       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v3.0 (contrat de priorités, SPEAKER_XX(nom) intouchable)
+│       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v3.0, après correction
 │
 ├── tests/                         # suite pytest + E2E (1600+ tests)
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
@@ -578,7 +578,7 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | `run_speaker_detection(job, audio_path, config, update_state=True)` | pyannote diarization + formatage via GPUSession. Applique d'abord `apply_speaker_hint(config, job.extra_data["speaker_hint"])`. `update_state=True` (détection manuelle) publie `SPEAKER_DETECTION_RUNNING/DONE/FAILED` ; `update_state=False` (sous-phase de `run_summary`) ne touche pas l'état (le job reste `SUMMARY_RUNNING`, diarisation best-effort) | GPUSession auto |
 | `run_transcription(job, audio_path, config)` | Cohere ASR → segments → apply_speakers → SRT | GPUSession auto |
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
-| `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers + application du lexique validé en contexte + orthographe (prompt v2.2, @general obligatoire) | LLM arbitrage |
+| `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers + application du lexique validé en contexte + orthographe (prompt v3.0, @general obligatoire) | LLM arbitrage |
 | `run_final_review(job, config)` | **Phase de relecture finale (A+C+D+G)** après correction, avant qualité : harmonise la synthèse, rend cohérents noms/termes du SRT, résout les variantes, audite les données structurées (corrige nom/chiffre/date, marque `[À VÉRIFIER]`). Réutilise la LLM chargée. `_apply_final_review()` applique les sorties avec garde-fous (SRT relu si ratio 0.9–1.1, `summary_harmonized`, `structured_data` si JSON valide). **Best-effort** : renvoie toujours `success=True` | LLM arbitrage |
 | `run_quality_checks(job, config)` | 16 contrôles qualité | — |
 | `build_export(job, config)` | Package ZIP | — |

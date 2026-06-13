@@ -73,8 +73,9 @@ python app.py --no-debug
 | `jobs_dir` | string | `"./jobs"` | Répertoire racine des données de jobs (chemin relatif ou absolu) |
 | `database_url` | string | `"sqlite:///transcrIA.db"` | URL SQLAlchemy. **PostgreSQL recommandé en prod** (`postgresql+psycopg://…`, requis pour la concurrence Phase B) ; SQLite = repli mono-process dev/tests. La variable d'env `TRANSCRIA_DATABASE_URL` (prioritaire) garde le mot de passe hors config versionnée |
 | `shared_backend` | string | `"fs"` | Stockage des fichiers de jobs entre tiers : `fs` = disque local (tout-en-un, ou split avec `jobs_dir` partagé NFS) ; `pg` = fichiers **répliqués via PostgreSQL** (tables `job_files`/`job_file_chunks`) — **requis** quand `role=web` et `role=scheduler` tournent sur deux machines sans filesystem commun. Exige une base PostgreSQL. Voir `docs/STOCKAGE_PARTAGE_JOBS.md` |
+| `agent_work_dir` | string | `<tempdir système>/transcria-agent-work` (calculé si absent) | Répertoire de travail (scratch) des agents LLM opencode (résumé, correction, relecture). **Doit rester HORS de l'arbre du dépôt** : opencode y fixerait sa racine de projet (via `--dir`) et, sous le dépôt, chargerait `AGENTS.md` (~95 Ko) dans le contexte de chaque agent + ancrerait ses outils sur la racine git. Résolu par `resolve_agent_work_root()` ; scratch isolé par `<job_id>/<phase>`, créé au premier usage, purgé après chaque phase et à la suppression du job. En Docker, pointer un volume dédié. Voir `docs/PIPELINE_REPRISE.md` §10.3 |
 
-**Redémarrage requis :** oui pour `database_url`. `jobs_dir` est relu par `JobFilesystem` à chaque opération (pas de cache).
+**Redémarrage requis :** oui pour `database_url`. `jobs_dir` est relu par `JobFilesystem` à chaque opération (pas de cache) ; `agent_work_dir` est relu à chaque phase agent (`resolve_agent_work_root(config)`), pas de cache.
 
 **Impact si modifié :**
 - `jobs_dir` : les jobs existants ne sont PAS déplacés. Si le chemin change, les anciens jobs sont "perdus" (fichiers toujours sur disque mais base orpheline de ces fichiers).
@@ -1221,8 +1222,9 @@ Seuils de détection des segments suspects dans `QualityReporter`. Ces checks al
 
 | Fichier | Utilisé par | Description |
 |---|---|---|
-| `summary_prompt.txt` | `OpenCodeRunner.run_summary()` | Prompt système pour le résumé structuré v2.0 (394 lignes) |
-| `correction_prompt.txt` | `OpenCodeRunner.run_correction()` | Prompt système pour la correction SRT v1.9 (612 lignes) |
+| `summary_prompt.txt` | `OpenCodeRunner.run_summary()` | Prompt système pour le résumé structuré v3.0 (477 lignes) |
+| `correction_prompt.txt` | `OpenCodeRunner.run_correction()` | Prompt système pour la correction SRT v3.0 (276 lignes) |
+| `final_review_prompt.txt` | `OpenCodeRunner.run_final_review()` | Prompt système pour la relecture finale A+C+D+G v3.0 (120 lignes) |
 
 Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (remonte de 2 niveaux).
 

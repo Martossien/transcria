@@ -441,7 +441,11 @@ jobs/<job_id>/
 │   ├── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio, rapport DOCX)
 │   └── rapport_<titre>.docx         # Rapport Word professionnel généré à la demande
 │
-└── .opencode.pid                    # PID du processus opencode (écrit par OpenCodeRunner.run(), lu par _kill_orphaned_opencode())
+└── (pas de work/ ici) Le scratch des agents LLM vit HORS du job dir ET hors du dépôt :
+    <storage.agent_work_dir>/<job_id>/<phase>/ (défaut <tempdir>/transcria-agent-work/).
+    opencode y est lancé avec --dir ; .opencode.pid y est écrit par OpenCodeRunner.run()
+    (lu par _kill_orphaned_opencode()). Purgé après succès / à la suppression du job.
+    Cf. docs/PIPELINE_REPRISE.md §10.3.
 ```
 
 ### Arborescence voix enregistrées
