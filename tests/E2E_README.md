@@ -156,6 +156,10 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 
 Le run affiche en fin de parcours une section **« Qualité & corrections »** : score qualité (`compute_quality_score`), nombre de segments courts et combien sont corroborés (probables hallucinations), nombre de substitutions lexique appliquées (rapport de correction), présence de la **relecture finale** (`final_review_report.md`) et de la synthèse harmonisée, et un garde-fou vérifiant qu'aucun rôle participant ne contient le genre (Masculin/Féminin, ♂/♀). `--output-json` reprend `quality_score`, `role_gender_clean` et `summary_harmonized`.
 
+**Hard-checks qui font échouer le run (`return 1`) :**
+- **Relecture finale** : en `--mode quality` **sans** `--skip-llm`, `metadata/final_review_report.md` (non vide) **et** `summary_harmonized` dans `meeting_context.json` sont **obligatoires** — une livraison partielle de la relecture (le bug 2/4 du 13/06 : rapport manquant) fait désormais échouer le run au lieu d'un simple avertissement. En `fast`/`--skip-llm`, la relecture ne tourne pas : ces artefacts sont alors de simples constats.
+- **Isolation des agents** : aucun répertoire `work/` ne doit exister sous le `job_dir` — le scratch des agents opencode vit dans `storage.agent_work_dir` (hors dépôt) et opencode y est lancé avec `--dir`. Un `work/` sous le job_dir signalerait une régression de l'isolation.
+
 > **Backend demandé vs backend effectif** : `--stt-backend` définit le backend
 > de départ du run. Le pipeline peut ensuite le remplacer via
 > `workflow.quality_transcription.force_stt_backend` si cette règle est explicitement
@@ -668,8 +672,9 @@ Le champ `docx_theme` reflète le rendu DOCX par type de réunion :
 | `quality/quality_report.json` | Toujours |
 | `speakers/speaker_stats.json` | Si locuteurs détectés |
 | `speakers/speaker_mapping.json` | Si locuteurs détectés |
-| `metadata/transcription_corrigee.srt` | Si LLM active (absent si `--skip-llm`) |
+| `metadata/transcription_corrigee.srt` | Si LLM active (absent si `--skip-llm`) ; réécrit par la relecture finale en mode quality |
 | `metadata/correction_report.md` | Si LLM active (absent si `--skip-llm`) |
+| `metadata/final_review_report.md` | **Obligatoire** en `--mode quality` sans `--skip-llm` (hard-check) ; absent en fast/`--skip-llm` |
 | `exports/*.zip` | Toujours |
 | `exports/rapport_*.docx` | Toujours (généré et inclus dans le ZIP par `PackageBuilder`) |
 | `context/meeting_context.json` → `structured_data` | Si phase résumé LLM active (absent si `--skip-llm`) |

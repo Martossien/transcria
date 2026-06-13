@@ -2017,6 +2017,17 @@ def main() -> int:
             RESULTS["verify"] = found == len(expected) + 2
             timer_end("verify")
 
+            # Isolation des agents LLM : le scratch vit dans agent_work_dir (hors job_dir,
+            # hors dépôt) et opencode y est lancé avec --dir. Aucun `work/` ne doit donc
+            # exister sous le job_dir — preuve end-to-end que les agents ne tournent plus
+            # dans l'arbre du dépôt (où AGENTS.md polluait le contexte).
+            scratch_in_jobdir = (fs.job_dir / "work").exists()
+            if scratch_in_jobdir:
+                fail("Scratch agent trouvé sous job_dir/work — isolation hors dépôt rompue")
+            else:
+                ok("Isolation agents : aucun scratch sous job_dir (scratch dans agent_work_dir)")
+            RESULTS["scratch_outside_jobdir"] = not scratch_in_jobdir
+
             # ── Artefacts optionnels ─────────────────────────────────────────
             section("Artefacts optionnels (selon config)")
             optional_artifacts = [
@@ -2034,7 +2045,8 @@ def main() -> int:
                 ("speakers/diarization_checkpoint.json", "Checkpoint diarisation"),
                 ("speakers/speaker_embeddings.json",     "Embeddings locuteurs"),
                 ("summary/diarization_context.md",       "Contexte diarisation LLM"),
-                ("metadata/final_review_report.md",      "Rapport relecture finale (A+C+D+G)"),
+                # final_review_report.md : géré en hard-check conditionnel (mode quality +
+                # LLM) plus bas, pas ici — sinon « absent » en fast/--skip-llm était du bruit.
             ]
             for rel_path, label in optional_artifacts:
                 assert_file(fs.job_dir / rel_path, label)
@@ -2234,15 +2246,30 @@ def main() -> int:
                 m = re.search(r"[Ss]ubstitutions?\s+lexique\s+appliquées?\s*:?\s*\**\s*(\d+)", txt)
                 if m:
                     info(f"Substitutions lexique appliquées (rapport correction) : {m.group(1)}")
-            # Relecture finale (A+C+D+G) : harmonisation synthèse + audit données structurées.
+            # Relecture finale (A+C+D+G) : harmonisation synthèse + cohérence SRT + audit
+            # données structurées. Contrat du code : run_final_review s'exécute en mode
+            # quality avec LLM ; un run sain produit final_review_report.md ET applique
+            # summary_harmonized. Ces deux-là sont donc des HARD-CHECKS dans cette condition
+            # (le bug 2/4 du 13/06 — rapport manquant — n'était que « warn » avant), et de
+            # simples constats en fast / --skip-llm où la relecture ne tourne pas.
+            review_expected = (args.mode == "quality" and not args.skip_llm)
             review_report = fs.job_dir / "metadata" / "final_review_report.md"
             ctx_final = fs.load_json("context/meeting_context.json") or {}
-            if review_report.exists():
+            review_ok = review_report.exists() and review_report.stat().st_size > 0
+            harmonized = bool(ctx_final.get("summary_harmonized"))
+            if review_ok:
                 ok("Relecture finale exécutée (final_review_report.md présent)")
+                if review_expected:
+                    RESULTS["final_review"] = True
+            elif review_expected:
+                fail("Relecture finale attendue (mode quality + LLM) mais final_review_report.md "
+                     "absent ou vide — livraison partielle (cf. WARNING relecture dans les logs)")
+                RESULTS["final_review"] = False
             else:
-                info("Relecture finale absente (désactivée, sautée ou best-effort sans sortie)")
-            info(f"Synthèse harmonisée disponible : {'oui' if ctx_final.get('summary_harmonized') else 'non'}")
-            RESULTS["summary_harmonized"] = bool(ctx_final.get("summary_harmonized"))
+                info("Relecture finale absente (fast / --skip-llm : non exécutée)")
+            info(f"Synthèse harmonisée disponible : {'oui' if harmonized else 'non'}")
+            if review_expected:
+                RESULTS["summary_harmonized"] = harmonized
             # Garde-fou : aucun rôle ne doit contenir le genre (champ dédié ailleurs).
             roles = [p.get("role", "") for p in ParticipantsManager.get(job, cfg["storage"]["jobs_dir"])]
             gender_leak = [r for r in roles if re.search(r"masculin|f[ée]minin|[♂♀]", r, re.IGNORECASE)]
