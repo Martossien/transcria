@@ -383,7 +383,7 @@ class DocxReport:
         self.srt_entries = _parse_srt(srt_text)
         self.duration_s = _srt_duration_seconds(srt_text)
         self.merged = self._merge_participants()
-        self.structured_data: dict = structured_data or {}
+        self.structured_data: dict = structured_data if isinstance(structured_data, dict) else {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
         self.type_specific_data: dict = ctx.get("type_specific_data") or {}
         self.theme: _DocxTheme = _get_theme(self.meeting_type)
@@ -707,9 +707,13 @@ class DocxReport:
         ctx = self.ctx
         self._section_heading(doc, "1.", "Contexte de la réunion")
 
-        topic = ctx.get("topic", "").strip()
-        objective = ctx.get("objective", "").strip()
-        notes = ctx.get("notes", "").strip()
+        # `or ""` AVANT .strip() : une clé présente à `null` renvoie None (le défaut de
+        # .get ne couvre que les clés ABSENTES) → None.strip() planterait tout le rapport.
+        # `str(... or "")` couvre null / absent / vide / non-chaîne (un livrable final ne
+        # plante jamais sur un champ de contexte mal typé).
+        topic = str(ctx.get("topic") or "").strip()
+        objective = str(ctx.get("objective") or "").strip()
+        notes = str(ctx.get("notes") or "").strip()
         # Priorité : édition manuelle (étape 4) > synthèse harmonisée sur le glossaire
         # validé (post-correction) > synthèse brute de la LLM (pré-correction).
         summary = (

@@ -185,6 +185,31 @@ def test_genere_sans_participants(tmp_path):
     assert out.is_file()
 
 
+def test_genere_avec_champs_contexte_null(tmp_path):
+    """Robustesse livrable : un meeting_context avec topic/objective/notes à `null`
+    (clé présente, valeur None — LLM sans suggestion) ne doit PAS planter le rapport
+    (`.get(k, "")` renvoie None, pas le défaut, sur une clé présente-null → None.strip())."""
+    pytest.importorskip("docx")
+    from transcria.exports.docx_report import DocxReport
+
+    ctx = {"title": "Réunion", "topic": None, "objective": None, "notes": None}
+    out = tmp_path / "ctx_null.docx"
+    DocxReport(ctx, [], {}, {}, "").build().save(str(out))
+    assert out.is_file()
+
+
+def test_genere_avec_structured_data_non_dict(tmp_path):
+    """Robustesse livrable : un structured_data mal typé (non-dict legacy/malformé) est
+    toléré (ignoré) au lieu de planter `_section_enriched` (sd.get sur un non-dict)."""
+    pytest.importorskip("docx")
+    from transcria.exports.docx_report import DocxReport
+
+    out = tmp_path / "sd_str.docx"
+    # structured_data = chaîne (non-dict) : ne doit pas lever.
+    DocxReport({"title": "X"}, [], {}, {}, "", structured_data="pas un dict").build().save(str(out))
+    assert out.is_file()
+
+
 def test_genere_avec_sensitivity_high(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
