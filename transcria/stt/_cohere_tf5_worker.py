@@ -62,7 +62,10 @@ def run(input_path: Path, output_path: Path) -> int:
     import transformers
     from transformers import AutoProcessor
 
-    CohereAsrForConditionalGeneration = transformers.CohereAsrForConditionalGeneration
+    # getattr (et non l'accès attribut direct) : CohereAsrForConditionalGeneration n'est
+    # pas dans les stubs transformers → mypy --strict lèverait attr-defined. getattr le
+    # contourne proprement (ruff B009 n'est pas dans le périmètre CI). NE PAS « simplifier ».
+    CohereAsrForConditionalGeneration = getattr(transformers, "CohereAsrForConditionalGeneration")
 
     request = json.loads(input_path.read_text(encoding="utf-8"))
     arrays = np.load(request["arrays_path"])

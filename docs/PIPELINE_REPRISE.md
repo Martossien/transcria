@@ -64,6 +64,17 @@ le trou : un artefact ne dit pas de quelles entrées il a été calculé).
 | `quality` | `runner.run_quality_checks` | `quality/quality_report.json` | marqueur (+ artefact) |
 | `export` | `runner.build_export` | `exports/…` | marqueur |
 
+**Skip best-effort transitoire (relecture finale).** `run_final_review` est best-effort :
+si la LLM est momentanément indisponible (occupée par un autre job, VRAM insuffisante,
+non prête), elle retourne `{success: True, skipped: True, retryable: True}`. Le pipeline
+**ne la marque alors PAS faite** (`resume.mark_phase_skipped` au lieu de `_checkpoint`) et
+note la raison dans `extra_data.pipeline.skipped_phases` — sinon un skip dû à une
+contention passagère gravait la phase « faite » et l'harmonisation/audit était perdue en
+silence (et jamais rejouée). Un skip **permanent** (`enabled=false`, `no_corrected_srt`,
+`nothing_to_review`), lui, est légitimement marqué fait. La provenance reste cohérente :
+une relecture rejouée plus tard réécrit `transcription_corrigee.srt` → les empreintes de
+`quality`/`export` changent → elles se ré-exécutent.
+
 ## 5. Admission consciente de la reprise
 
 `QueueScheduler._local_required_mb` calcule la VRAM requise = **max sur les phases

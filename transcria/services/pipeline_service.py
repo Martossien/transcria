@@ -328,7 +328,16 @@ class PipelineService:
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.FAILED, result["error"])
                 return {"error": result["error"], "step": name}
-            _checkpoint(name)
+            if result.get("skipped") and result.get("retryable"):
+                # Skip TRANSITOIRE (ressource momentanément indisponible — ex. relecture
+                # finale best-effort sautée car LLM occupée par un autre job). On ne le
+                # marque PAS fait (sinon jamais rejoué = perte silencieuse) ; on enregistre
+                # la raison (auditable / surfaçable UI). Le pipeline continue.
+                sl.warning("Étape sautée (cause transitoire) — non marquée faite, rejouée à un re-traitement",
+                           step=name, reason=result.get("reason"))
+                resume.mark_phase_skipped(JobStore, job.id, name, result.get("reason") or "transient")
+            else:
+                _checkpoint(name)
             sl.info("Étape terminée", step=name, duree=round(elapsed, 1))
             self._publish_step_progress(job, name, starting=False)
             StageMetrics.get_instance().record(name, elapsed)

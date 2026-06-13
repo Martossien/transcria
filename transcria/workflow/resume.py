@@ -118,6 +118,19 @@ def get_processed_audio_path(job) -> str | None:
     return path if isinstance(path, str) and path else None
 
 
+def get_skipped_phases(job) -> dict[str, str]:
+    """Phases sautées pour cause TRANSITOIRE (ressource indisponible), par raison.
+
+    Permet à l'UI / l'audit de savoir qu'un livrable est dégradé (ex. relecture finale
+    non exécutée faute de LLM disponible) au lieu d'un silence. Vidé quand la phase finit
+    par réussir (cf. mark_phase_done).
+    """
+    skipped = _pipeline_state(job).get("skipped_phases")
+    if not isinstance(skipped, dict):
+        return {}
+    return {str(k): str(v) for k, v in skipped.items()}
+
+
 def _sha256_file(path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as fh:
@@ -192,6 +205,36 @@ def mark_phase_done(store, job_id: str, phase: str, fingerprints: dict[str, str]
             # Marquage sans empreintes : ne pas laisser traîner une provenance périmée.
             inputs.pop(phase, None)
         pipeline["phase_inputs"] = inputs
+        # Une phase qui finit par réussir n'est plus « sautée » : nettoyer le flag.
+        skipped = dict(pipeline.get("skipped_phases") or {})
+        if skipped.pop(phase, None) is not None:
+            pipeline["skipped_phases"] = skipped
+        extra["pipeline"] = pipeline
+        return extra
+
+    store.update_extra_data(job_id, updater)
+
+
+def mark_phase_skipped(store, job_id: str, phase: str, reason: str) -> None:
+    """Note qu'une phase a été sautée pour cause TRANSITOIRE, SANS la marquer faite.
+
+    Un skip transitoire (LLM occupée par un autre job, VRAM momentanément insuffisante)
+    n'a rien produit : la phase ne doit donc PAS entrer dans ``completed_phases`` (sinon
+    elle ne serait jamais rejouée — perte silencieuse). On enregistre la raison dans
+    ``skipped_phases`` (auditable, surfaçable en UI) et on garantit l'absence de tout
+    marqueur/empreinte périmés pour cette phase. Idempotent, atomique.
+    """
+    def updater(extra: dict) -> dict:
+        pipeline = dict(extra.get("pipeline") or {})
+        pipeline["completed_phases"] = [
+            p for p in (pipeline.get("completed_phases") or []) if p != phase
+        ]
+        inputs = dict(pipeline.get("phase_inputs") or {})
+        inputs.pop(phase, None)
+        pipeline["phase_inputs"] = inputs
+        skipped = dict(pipeline.get("skipped_phases") or {})
+        skipped[phase] = str(reason)
+        pipeline["skipped_phases"] = skipped
         extra["pipeline"] = pipeline
         return extra
 

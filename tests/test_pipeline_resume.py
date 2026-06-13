@@ -343,6 +343,76 @@ class TestProvenance:
             assert "correction" not in done  # marqueur retiré EN BASE avant l'exécution
             assert "transcription" in done   # l'amont sauté reste marqué
 
+    def test_transient_final_review_skip_not_marked_done(self, app, owner_id, monkeypatch, tmp_path):
+        """Relecture finale (best-effort) sautée pour cause TRANSITOIRE (LLM occupée par
+        un autre job) : enregistrée `skipped`, JAMAIS marquée faite (sinon jamais rejouée
+        = perte silencieuse de l'harmonisation), pipeline complété malgré tout."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            monkeypatch.setattr(
+                svc.runner, "run_final_review",
+                lambda *a, **k: {"success": True, "skipped": True, "retryable": True, "reason": "llm_busy"},
+            )
+            _full_run(None, job, (svc, calls), tmp_path)
+            j = JobStore.get_by_id(job.id)
+            done = resume.get_completed_phases(j)
+            assert "final_review" not in done                         # PAS gravée faite
+            assert {"correction", "quality", "export"} <= set(done)   # le reste l'est
+            assert resume.get_skipped_phases(j) == {"final_review": "llm_busy"}
+
+    def test_permanent_final_review_skip_is_marked_done(self, app, owner_id, monkeypatch, tmp_path):
+        """Skip PERMANENT (rien à relire) : marqué fait (légitime), pas dans skipped_phases —
+        la distinction transitoire (retryable) / permanent est respectée."""
+        with app.app_context():
+            outputs = {"srt": "v1 brut", "corrigee": "v1 corrigée"}
+            job, fs, svc, calls = self._setup(app, owner_id, monkeypatch, tmp_path, outputs)
+            monkeypatch.setattr(
+                svc.runner, "run_final_review",
+                lambda *a, **k: {"success": True, "skipped": True, "reason": "nothing_to_review"},
+            )
+            _full_run(None, job, (svc, calls), tmp_path)
+            j = JobStore.get_by_id(job.id)
+            assert "final_review" in resume.get_completed_phases(j)
+            assert resume.get_skipped_phases(j) == {}
+
+
+class TestSkippedPhases:
+    """Suivi des skips transitoires (resume.mark_phase_skipped / get_skipped_phases)."""
+
+    def test_mark_skipped_records_reason_without_completing(self, app, owner_id):
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "skip")
+            resume.mark_phase_skipped(JobStore, job.id, "final_review", "llm_busy")
+            j = JobStore.get_by_id(job.id)
+            assert "final_review" not in resume.get_completed_phases(j)
+            assert resume.get_skipped_phases(j) == {"final_review": "llm_busy"}
+
+    def test_mark_skipped_removes_stale_completed_marker(self, app, owner_id):
+        """Si la phase avait été (à tort) marquée faite, un skip transitoire l'en retire."""
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "skip2")
+            resume.mark_phase_done(JobStore, job.id, "final_review", {"context/x": "h"})
+            resume.mark_phase_skipped(JobStore, job.id, "final_review", "vram_insufficient")
+            j = JobStore.get_by_id(job.id)
+            assert "final_review" not in resume.get_completed_phases(j)
+            assert resume.get_phase_fingerprints(j).get("final_review") is None
+            assert resume.get_skipped_phases(j)["final_review"] == "vram_insufficient"
+
+    def test_success_clears_skipped_flag(self, app, owner_id):
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "skip3")
+            resume.mark_phase_skipped(JobStore, job.id, "final_review", "llm_busy")
+            resume.mark_phase_done(JobStore, job.id, "final_review", {"context/x": "h"})
+            j = JobStore.get_by_id(job.id)
+            assert "final_review" in resume.get_completed_phases(j)
+            assert resume.get_skipped_phases(j) == {}
+
+    def test_get_skipped_empty_by_default(self, app, owner_id):
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "skip4")
+            assert resume.get_skipped_phases(JobStore.get_by_id(job.id)) == {}
+
 
 def test_reset_clears_resume_state(app, owner_id, tmp_path):
     with app.app_context():

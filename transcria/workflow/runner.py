@@ -1837,7 +1837,7 @@ class WorkflowRunner:
 
         if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
             logger.warning("Relecture finale sautée — verrou LLM indisponible (job=%s)", job.id)
-            return {"success": True, "skipped": True, "reason": "llm_busy"}
+            return {"success": True, "skipped": True, "retryable": True, "reason": "llm_busy"}
 
         llm_phase_reserved = False
         llm_was_already_running = self.vram.is_arbitrage_llm_running()
@@ -1847,13 +1847,13 @@ class WorkflowRunner:
                 reservation = self.allocator.try_reserve(job.id, llm_vram_mb, "final_review")
                 if reservation is None:
                     logger.warning("Relecture finale sautée — VRAM insuffisante (job=%s)", job.id)
-                    return {"success": True, "skipped": True, "reason": "vram_insufficient"}
+                    return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
                 llm_phase_reserved = True
 
             api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
             if not self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
                 logger.warning("Relecture finale sautée — LLM d'arbitrage non disponible (job=%s)", job.id)
-                return {"success": True, "skipped": True, "reason": "llm_unavailable"}
+                return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
 
             # Isolation : scratch + copies (cf. AgentWorkspace). Le matériel de prompt
             # (synthèse à harmoniser, glossaire, données structurées) est TRANSITOIRE —
