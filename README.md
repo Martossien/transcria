@@ -64,7 +64,9 @@ cd transcria
 ./install.sh            # venv, dependencies, CUDA-matched PyTorch, config.yaml, optional systemd unit
 ```
 
-Bring your own models (STT weights, pyannote, a GGUF for the arbitration LLM — see [docs/INSTALL.md](docs/INSTALL.md)), fill in `config.yaml`, then validate the install with the built-in preflight — no GPU needed, no side effects:
+**Arbitration LLM, auto-selected by VRAM.** During install, TranscrIA detects your total GPU memory, **recommends the matching tier** (12 / 16 / 24 / 32 / 48 / 64 GB), and offers to **download the right GGUF** (with your HF token) and activate it — one prompt, no manual model-picking. Below 12 GB it falls back to **raw transcription** (no correction/summary LLM). The per-tier models are benchmarked in [docs/BENCH_LLM_PALIERS.md](docs/BENCH_LLM_PALIERS.md); switch anytime with `scripts/switch_arbitrage_llm.sh <tier>`.
+
+Still bring your own STT weights and pyannote cache (see [docs/INSTALL.md](docs/INSTALL.md)), fill in `config.yaml`, then validate the install with the built-in preflight — no GPU needed, no side effects:
 
 ```bash
 venv/bin/python scripts/doctor.py            # config, DB schema, LLM server, opencode, nodes, storage

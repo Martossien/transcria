@@ -988,6 +988,114 @@ if [[ -n "$OPENCODE_BIN" ]]; then
 fi
 
 # ============================================================================
+# SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle
+# ============================================================================
+log_section "LLM d'arbitrage — sélection selon la VRAM"
+
+# Détection de la VRAM (en plus de GPU_COUNT déjà connu plus haut).
+GPU_VRAM_TOTAL_MB=0; GPU_VRAM_MAX_MB=0
+if [[ "$GPU_COUNT" -gt 0 ]] && command -v nvidia-smi &>/dev/null; then
+    while read -r _mb; do
+        [[ "$_mb" =~ ^[0-9]+$ ]] || continue
+        GPU_VRAM_TOTAL_MB=$((GPU_VRAM_TOTAL_MB + _mb))
+        if (( _mb > GPU_VRAM_MAX_MB )); then GPU_VRAM_MAX_MB=$_mb; fi
+    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null || true)
+fi
+
+# Palier recommandé selon la VRAM TOTALE (seuils calés sur les bench — marge ≥1 Go).
+recommend_llm_tier() {
+    local t="$1"
+    if   (( t >= 60000 )); then echo 64
+    elif (( t >= 46000 )); then echo 48
+    elif (( t >= 31000 )); then echo 32
+    elif (( t >= 23000 )); then echo 24
+    elif (( t >= 15500 )); then echo 16
+    elif (( t >= 11500 )); then echo 12
+    else echo 0; fi
+}
+
+# Table des modèles par palier — validée Phase A (cf. docs/BENCH_LLM_PALIERS.md).
+declare -A LLM_REPO=(  [12]="unsloth/Qwen3.5-9B-GGUF"  [16]="unsloth/Qwen3.5-9B-GGUF"  [24]="unsloth/gemma-4-12b-it-GGUF"  [32]="unsloth/Qwen3.6-27B-GGUF"  [48]="unsloth/Qwen3.6-35B-A3B-GGUF"  [64]="unsloth/Qwen3.6-35B-A3B-GGUF" )
+declare -A LLM_FILE=(  [12]="Qwen3.5-9B-Q5_K_M.gguf"   [16]="Qwen3.5-9B-Q6_K.gguf"     [24]="gemma-4-12b-it-Q6_K.gguf"     [32]="Qwen3.6-27B-Q5_K_M.gguf"   [48]="Qwen3.6-35B-A3B-UD-Q6_K.gguf"  [64]="Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf" )
+declare -A LLM_DIR=(   [12]="Qwen3.5-9B-Q5_K_M"        [16]="Qwen3.5-9B-Q6_K"          [24]="gemma-4-12b-it-Q6_K"          [32]="Qwen3.6-27B-Q5_K_M"        [48]="Qwen3.6-35B-A3B-UD-Q6_K"       [64]="Qwen3.6-35B-A3B-UD-Q8_K_XL" )
+declare -A LLM_LABEL=( [12]="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)"  [16]="Qwen3.5-9B Q6_K (256K, ~7 Go)"  [24]="Gemma 4 12B Q6_K (256K, ~9,2 Go)"  [32]="Qwen3.6-27B Q5_K_M (192K, ~19 Go)"  [48]="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)"  [64]="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)" )
+
+if (( GPU_VRAM_TOTAL_MB < 11500 )); then
+    log_warn "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go) — pas de LLM d'arbitrage local."
+    log_info "TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)."
+elif [[ -z "${OPENCODE_BIN:-}" ]]; then
+    log_warn "opencode absent — LLM d'arbitrage non configurable (transcription brute)."
+    log_info "Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard."
+else
+    log_ok "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio sur ${GPU_COUNT} GPU (plus grande carte ${GPU_VRAM_MAX_MB} Mio)"
+    REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
+    log_info "Palier recommandé : ${REC_TIER} Go → ${LLM_LABEL[$REC_TIER]}"
+    log_info "Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer."
+    ask LLM_TIER "Palier LLM à installer" "$REC_TIER"
+
+    if [[ -n "${LLM_TIER:-}" && -n "${LLM_REPO[$LLM_TIER]:-}" ]]; then
+        ask MODELS_DIR_CHOICE "Répertoire de téléchargement des modèles" "$HOME/models"
+        MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
+        mkdir -p "$MODELS_DIR_CHOICE"
+
+        # Détection du binaire llama-server (≥ b9630 requis pour les archis récentes).
+        LLAMA_SRV=""
+        for c in "$(command -v llama-server 2>/dev/null || true)" \
+                 "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
+            if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
+        done
+        ask LLAMA_SRV "Chemin du binaire llama-server (≥ b9630)" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
+
+        REPO="${LLM_REPO[$LLM_TIER]}"; GG="${LLM_FILE[$LLM_TIER]}"
+        DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"
+
+        if [[ -f "$DEST/$GG" ]]; then
+            log_ok "Modèle déjà présent : $DEST/$GG"
+        elif ask_yn "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO ?"; then
+            HF_DL=""
+            if command -v hf &>/dev/null; then HF_DL="hf"
+            elif command -v huggingface-cli &>/dev/null; then HF_DL="huggingface-cli"; fi
+            if [[ -z "$HF_DL" ]]; then
+                log_error "Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub"
+            else
+                if [[ -n "${CURRENT_HF_TOKEN:-}" ]]; then export HF_TOKEN="$CURRENT_HF_TOKEN"; fi
+                log_info "Téléchargement ($HF_DL) de $GG → $DEST (peut prendre plusieurs minutes)…"
+                if "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST" 2>&1 | sed 's/^/  /'; then
+                    log_ok "Modèle téléchargé : $DEST/$GG"
+                else
+                    log_error "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN."
+                fi
+            fi
+        else
+            log_info "Téléchargement ignoré."
+        fi
+
+        # Adapter les défauts des profils à CETTE machine (MODELS_DIR / llama-server),
+        # puis basculer sur le palier choisi (copie profil → launch_arbitrage.sh + sync VRAM/GPU).
+        if [[ -f "$DEST/$GG" ]]; then
+            for p in "$INSTALL_DIR"/scripts/arbitrage_profiles/*.sh; do
+                sed -i "s|:-/home/admin_ia/models}|:-$MODELS_DIR_CHOICE}|g" "$p"
+                if [[ -n "$LLAMA_SRV" ]]; then
+                    sed -i "s|:-/home/admin_ia/llama.cpp/build/bin/llama-server}|:-$LLAMA_SRV}|g" "$p"
+                fi
+            done
+            log_ok "Profils adaptés (MODELS_DIR=$MODELS_DIR_CHOICE, llama-server=$LLAMA_SRV)"
+            if bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb" 2>&1 | sed 's/^/  /'; then
+                log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
+                log_info "Démarrage de la LLM : géré par TranscrIA via scripts/launch_arbitrage.sh."
+            else
+                log_warn "Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh ${LLM_TIER}gb"
+            fi
+        else
+            log_info "Modèle absent — palier non activé (transcription brute pour l'instant)."
+        fi
+    else
+        log_info "LLM d'arbitrage ignoré — transcription brute. Activable plus tard :"
+        log_info "  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)"
+    fi
+fi
+
+# ============================================================================
 # SECTION 10 — Vérification des imports Python
 # ============================================================================
 log_section "Vérification des imports"

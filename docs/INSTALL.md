@@ -89,6 +89,7 @@ cd transcria
 | Modèles IA | Vérifie Cohere ASR, cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
 | opencode | Détecte dans PATH / `~/.opencode/bin/` — propose l'installation + génère `opencode.json` |
+| **LLM d'arbitrage** | **Détecte la VRAM GPU, recommande le palier (12/16/24/32/48/64 Go), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
 | Résumé | Bilan clair OK/MANQUANT pour chaque modèle et les valeurs restantes à corriger |
@@ -119,10 +120,28 @@ cd transcria
 ### Ce que install.sh ne fait pas
 
 - Installer les pilotes NVIDIA ou le CUDA Toolkit (section 3)
-- Télécharger le modèle Qwen 35B GGUF (~48 Go) automatiquement (trop volumineux)
-- Compiler llama.cpp
+- Compiler **llama.cpp** (le binaire `llama-server` ≥ b9630 est à fournir ; install.sh le détecte/le demande)
+- Télécharger les poids **STT (Cohere)** et le cache **pyannote** automatiquement (l'install les vérifie et propose Cohere ; pyannote nécessite `HF_TOKEN` + acceptation des conditions)
 
 Ces étapes sont documentées dans les sections suivantes.
+
+### Sélection automatique de la LLM d'arbitrage selon la VRAM
+
+À l'installation (après opencode), install.sh **détecte la VRAM GPU totale** (`nvidia-smi`), **recommande le palier** adapté et propose de **télécharger le GGUF** correspondant (client `hf`, repli `huggingface-cli`) puis de **basculer** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
+
+| VRAM totale | Palier | Modèle (validé en Phase A) | Repo HF | Contexte |
+|---|---|---|---|---|
+| < 12 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
+| ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
+| ≥ 16 Go | 16 | Qwen3.5-9B Q6_K | `unsloth/Qwen3.5-9B-GGUF` | 256K |
+| ≥ 24 Go | 24 | Gemma 4 12B Q6_K | `unsloth/gemma-4-12b-it-GGUF` | 256K |
+| ≥ 32 Go | 32 | Qwen3.6-27B **Q5_K_M** | `unsloth/Qwen3.6-27B-GGUF` | 192K |
+| ≥ 48 Go | 48 | Qwen3.6-35B-A3B UD-Q6_K | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
+| ≥ 64 Go | 64 | Qwen3.6-35B-A3B UD-Q8_K_XL | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
+
+> Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md). Les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
+
+**Portabilité des profils** : les scripts `scripts/arbitrage_profiles/<palier>_*.sh` référencent leurs chemins via `${MODELS_DIR:-…}` et `${LLAMA_SERVER:-…}`. install.sh écrit les bons défauts pour votre machine (répertoire des modèles choisi, binaire `llama-server` détecté), puis `scripts/switch_arbitrage_llm.sh <palier>` recopie le profil sur `launch_arbitrage.sh` et synchronise la compta VRAM/GPU de `config.yaml`. Pour changer de palier après coup : télécharger le modèle puis `scripts/switch_arbitrage_llm.sh <palier>`.
 
 ### Modes d'installation
 
