@@ -486,10 +486,10 @@ mkdir -p $HOME/.config/opencode
         "timeout": 9999999
       },
       "models": {
-        "qwen3-35b-arbitrage": {
-          "name": "Qwen 3.6 35B Arbitrage",
+        "arbitrage": {
+          "name": "LLM d'arbitrage (local, alias générique)",
           "limit": {
-            "context": 263144,
+            "context": 262144,
             "output": 81920
           }
         }

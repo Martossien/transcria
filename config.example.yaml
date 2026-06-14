@@ -91,9 +91,11 @@ services:
   llm_cleanup_ports:
     - 8000
   # model_id tel que rapporté par /v1/models (alias du backend OpenAI-compatible)
-  # utilisé par ensure_arbitrage_llm_ready() pour éviter un redémarrage inutile
-  # lancer scripts/check_arbitrage_llm.sh pour obtenir la valeur exacte
-  # arbitrage_api_model_id: "votre-modele-llm-ici"
+  # utilisé par ensure_arbitrage_llm_ready() pour éviter un redémarrage inutile.
+  # Par convention on fixe l'alias générique `arbitrage` (--alias arbitrage dans le
+  # script de lancement) afin qu'il ne change jamais selon le palier VRAM.
+  # lancer scripts/check_arbitrage_llm.sh pour confirmer la valeur exacte servie.
+  # arbitrage_api_model_id: "arbitrage"
 
 models:
   stt_backend: "cohere"
@@ -557,7 +559,10 @@ workflow:
     windows: []
   summary_llm:
     enabled: true
-    model_id: "local/votre-modele-llm-ici"
+    # Alias GÉNÉRIQUE recommandé : `local/arbitrage`. On garde ce nom stable quel
+    # que soit le modèle réellement servi (palier VRAM) ; seul le script de lancement
+    # change. La clé `arbitrage` doit exister dans opencode.json (provider `local`).
+    model_id: "local/arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
   arbitration_llm:
@@ -565,10 +570,10 @@ workflow:
     # PRÉREQUIS quand enabled: true — sinon le step "correction" attend puis échoue :
     #   - opencode installé + provider `local` configuré (voir docs) ;
     #   - un LLM OpenAI-compatible joignable sur api_base ;
-    #   - model_id renseigné avec la valeur RÉELLE (remplacer le placeholder ci-dessous).
+    #   - model_id = alias opencode (par convention `local/arbitrage`, cf. AGENTS.md).
     # Mettre enabled: false pour désactiver complètement l'étape de correction.
     enabled: true
-    model_id: "local/votre-modele-llm-ici"
+    model_id: "local/arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"

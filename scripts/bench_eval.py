@@ -39,7 +39,7 @@ import requests
 REPO_ROOT = Path(__file__).parent.parent
 PROMPT_FILE = REPO_ROOT / "prompts" / "bench_eval_prompt.txt"
 DEFAULT_PORT = 8080
-DEFAULT_MODEL = "qwen3-35b-arbitrage-ud-q8_k_xl"
+DEFAULT_MODEL = "arbitrage"
 DEFAULT_MAX_WORDS = 3000
 
 logger = logging.getLogger("bench_eval")

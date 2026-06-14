@@ -57,20 +57,52 @@ def test_find_extra_candidate_has_priority():
 # ── provider block / ensure ───────────────────────────────────────────────────
 
 def test_local_provider_block_shape():
-    b = local_provider_block("http://127.0.0.1:8080/v1", "qwen3-35b-arbitrage")
+    b = local_provider_block("http://127.0.0.1:8080/v1", "arbitrage")
     assert b["npm"] == "@ai-sdk/openai-compatible"
     assert b["options"]["baseURL"] == "http://127.0.0.1:8080/v1"
-    assert "qwen3-35b-arbitrage" in b["models"]
+    assert "arbitrage" in b["models"]
+    assert "limit" not in b["models"]["arbitrage"]  # pas de limit si non fourni
+
+
+def test_local_provider_block_emits_limit_when_given():
+    b = local_provider_block("http://127.0.0.1:8080/v1", "arbitrage", context=262144, output=81920)
+    assert b["models"]["arbitrage"]["limit"] == {"context": 262144, "output": 81920}
 
 
 def test_ensure_creates_config(tmp_path):
     cfg = tmp_path / "sub" / "opencode.json"
-    data = ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "qwen3-35b-arbitrage")
+    data = ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "arbitrage")
     assert cfg.is_file()
     on_disk = json.loads(cfg.read_text())
     assert on_disk["provider"]["local"]["options"]["baseURL"] == "http://127.0.0.1:8080/v1"
     assert on_disk["$schema"] == "https://opencode.ai/config.json"
     assert data == on_disk
+    # fresh install : limit par défaut posé (sinon opencode tronque les grands contextes)
+    assert on_disk["provider"]["local"]["models"]["arbitrage"]["limit"] == {
+        "context": 262144, "output": 81920,
+    }
+
+
+def test_ensure_preserves_existing_limit_on_rerun(tmp_path):
+    # Régression visée : relancer le setup ne doit PAS perdre la fenêtre de contexte.
+    cfg = tmp_path / "opencode.json"
+    ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "old", context=263144, output=99999)
+    # re-run avec un autre nom de modèle, SANS repréciser le limit
+    ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "arbitrage")
+    d = json.loads(cfg.read_text())
+    assert d["provider"]["local"]["models"]["arbitrage"]["limit"] == {
+        "context": 263144, "output": 99999,  # limit précédent préservé
+    }
+
+
+def test_ensure_explicit_limit_overrides_existing(tmp_path):
+    cfg = tmp_path / "opencode.json"
+    ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "arbitrage", context=100, output=50)
+    ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "arbitrage", context=131072, output=32768)
+    d = json.loads(cfg.read_text())
+    assert d["provider"]["local"]["models"]["arbitrage"]["limit"] == {
+        "context": 131072, "output": 32768,
+    }
 
 
 def test_ensure_preserves_other_keys_and_providers(tmp_path):

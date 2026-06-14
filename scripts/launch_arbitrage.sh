@@ -15,7 +15,7 @@ export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 
 numactl --interleave=all /home/admin_ia/llama.cpp/build/bin/llama-server \
 --model /root/models/qwen3-35b-arbitrage/UD-Q8_K_XL/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf \
---alias qwen3-35b-arbitrage-ud-q8_k_xl \
+--alias arbitrage \
 --host 0.0.0.0 --port 8080 \
 --ctx-size 263144 \
 --n-predict 81920 \

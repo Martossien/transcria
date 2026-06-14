@@ -8,7 +8,7 @@ résumé/correction échouent silencieusement. Ce script règle ça de façon id
 Exemples :
     venv/bin/python scripts/setup_opencode.py                       # défauts depuis config.yaml
     venv/bin/python scripts/setup_opencode.py --base-url http://192.168.1.59:8080/v1  # nœud distant
-    venv/bin/python scripts/setup_opencode.py --model qwen3-35b-arbitrage
+    venv/bin/python scripts/setup_opencode.py --model arbitrage
 """
 from __future__ import annotations
 
@@ -31,6 +31,10 @@ def main() -> int:
     ap.add_argument("--model", default=None, help="nom du modèle servi (défaut : depuis config.yaml)")
     ap.add_argument("--config-path", default="~/.config/opencode/opencode.json",
                     help="chemin du opencode.json (défaut : ~/.config/opencode/opencode.json)")
+    ap.add_argument("--context", type=int, default=None,
+                    help="limit.context du modèle (défaut : préserve l'existant, sinon 262144)")
+    ap.add_argument("--output", type=int, default=None,
+                    help="limit.output du modèle (défaut : préserve l'existant, sinon 81920)")
     args = ap.parse_args()
 
     try:
@@ -41,18 +45,20 @@ def main() -> int:
 
     llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
     base_url = args.base_url or default_base_url(cfg)
-    model = args.model or llm.get("model_id") or "qwen3-35b-arbitrage"
-    if "/" in model:                       # "local/qwen3-..." → clé modèle "qwen3-..."
+    model = args.model or llm.get("model_id") or "arbitrage"
+    if "/" in model:                       # "local/arbitrage" → clé modèle "arbitrage"
         model = model.split("/", 1)[1]
 
     binary = find_opencode_binary(config_bin=llm.get("opencode_bin"))
     print(f"opencode binaire : {binary or 'INTROUVABLE (installez opencode, cf. docs/INSTALL.md §5)'}")
 
     path = Path(args.config_path).expanduser()
-    ensure_local_provider(path, base_url, model)
+    data = ensure_local_provider(path, base_url, model, context=args.context, output=args.output)
+    limit = data["provider"]["local"]["models"][model].get("limit", {})
     print(f"provider 'local' écrit dans {path}")
     print(f"  baseURL = {base_url}")
     print(f"  model   = {model}")
+    print(f"  limit   = context {limit.get('context')} / output {limit.get('output')}")
     print("✅ opencode configuré. Vérifiez la LLM avec scripts/check_arbitrage_llm.sh.")
     return 0
 

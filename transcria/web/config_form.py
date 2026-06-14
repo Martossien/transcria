@@ -39,7 +39,7 @@ CONFIG_FORM_SECTIONS: list[dict] = [
             {"path": "workflow.arbitration_llm.enabled", "label": "Activer la correction LLM", "type": "bool",
              "help": "Désactiver pour produire un SRT brut sans correction."},
             {"path": "workflow.summary_llm.model_id", "label": "Modèle de résumé", "type": "text",
-             "help": "Identifiant opencode, ex. local/qwen3-35b-arbitrage."},
+             "help": "Identifiant opencode, ex. local/arbitrage."},
             {"path": "workflow.arbitration_llm.model_id", "label": "Modèle de correction", "type": "text",
              "help": "Identifiant opencode du modèle de correction du SRT."},
             {"path": "services.arbitrage_llm_port", "label": "Port du serveur LLM", "type": "int",

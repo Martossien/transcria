@@ -61,14 +61,50 @@ def find_opencode_binary(
     return None
 
 
-def local_provider_block(base_url: str, model_id: str, *, display_name: str = "LLM d'arbitrage (local)") -> dict:
-    """Bloc `provider.local` au format opencode courant (openai-compatible)."""
+# Limite de contexte/sortie par défaut quand rien n'est connu (modèles 256K natifs).
+_DEFAULT_LIMIT_CONTEXT = 262144
+_DEFAULT_LIMIT_OUTPUT = 81920
+
+
+def local_provider_block(
+    base_url: str,
+    model_id: str,
+    *,
+    display_name: str = "LLM d'arbitrage (local)",
+    context: int | None = None,
+    output: int | None = None,
+) -> dict:
+    """Bloc `provider.local` au format opencode courant (openai-compatible).
+
+    Si `context`/`output` sont fournis, ils alimentent le `limit` du modèle — sans
+    quoi opencode retombe sur un défaut interne et peut tronquer l'historique sur
+    les grandes réunions (cf. AGENTS.md).
+    """
+    model_entry: dict = {"name": display_name}
+    if context is not None and output is not None:
+        model_entry["limit"] = {"context": context, "output": output}
     return {
         "npm": "@ai-sdk/openai-compatible",
         "name": display_name,
         "options": {"baseURL": base_url, "apiKey": "dummy-key", "timeout": 9999999},
-        "models": {model_id: {"name": display_name}},
+        "models": {model_id: model_entry},
     }
+
+
+def _existing_local_limit(provider: dict) -> dict | None:
+    """Récupère le `limit` du 1er modèle de `provider.local` existant (ou None)."""
+    if not isinstance(provider, dict):
+        return None
+    local = provider.get("local")
+    if not isinstance(local, dict):
+        return None
+    models = local.get("models")
+    if not isinstance(models, dict):
+        return None
+    for entry in models.values():
+        if isinstance(entry, dict) and isinstance(entry.get("limit"), dict):
+            return entry["limit"]
+    return None
 
 
 def ensure_local_provider(
@@ -77,11 +113,18 @@ def ensure_local_provider(
     model_id: str,
     *,
     display_name: str = "LLM d'arbitrage (local)",
+    context: int | None = None,
+    output: int | None = None,
 ) -> dict:
     """Écrit/met à jour le provider `local` dans opencode.json, **sans rien casser**.
 
     Préserve `$schema`, les autres providers et toutes les autres clés (permission…).
     Idempotent : redéfinit uniquement `provider.local`. Retourne la config écrite.
+
+    Le `limit` (context/output) est résolu par ordre de priorité :
+    **explicite** (args `context`/`output`) > **existant** (limit déjà dans le fichier,
+    préservé d'une exécution à l'autre) > **défaut** (262144/81920). Garantit qu'on ne
+    perd jamais la fenêtre de contexte en relançant le setup.
     """
     path = Path(config_path)
 
@@ -99,7 +142,13 @@ def ensure_local_provider(
     if not isinstance(provider, dict):
         provider = {}
         data["provider"] = provider
-    provider["local"] = local_provider_block(base_url, model_id, display_name=display_name)
+
+    existing = _existing_local_limit(provider) or {}
+    ctx = context if context is not None else existing.get("context", _DEFAULT_LIMIT_CONTEXT)
+    out = output if output is not None else existing.get("output", _DEFAULT_LIMIT_OUTPUT)
+    provider["local"] = local_provider_block(
+        base_url, model_id, display_name=display_name, context=ctx, output=out
+    )
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

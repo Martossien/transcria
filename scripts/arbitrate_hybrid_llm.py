@@ -728,7 +728,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=10)
     parser.add_argument("--context-chars", type=int, default=1200)
     parser.add_argument("--arbitrage-port", type=int, default=8080)
-    parser.add_argument("--model-id", default="qwen3-35b-arbitrage-ud-q8_k_xl")
+    parser.add_argument("--model-id", default="arbitrage")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--max-tokens", type=int, default=4096)
     parser.add_argument("--dry-run", action="store_true")

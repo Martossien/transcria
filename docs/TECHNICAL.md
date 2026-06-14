@@ -301,13 +301,13 @@ workflow:
     enabled: true
   summary_llm:
     enabled: true
-    model_id: "qwen3-35b-arbitrage-ud-q8_k_xl"
+    model_id: "arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 1800
     use_chat_api: true
   arbitration_llm:
     enabled: false
-    model_id: "local/qwen3-35b-arbitrage"
+    model_id: "local/arbitrage"
     api_base: "http://127.0.0.1:8080/v1"
     timeout_seconds: 7200
     opencode_bin: "opencode"
@@ -1454,11 +1454,11 @@ Le dashboard-llm (port 5001) fournit l'état GPU en temps réel via `/api/v1/gpu
 
 ## 8. opencode
 
-Le fichier `~/.config/opencode/opencode.json` doit au minimum définir le provider `local` utilisé par `model_id` (par défaut `local/qwen3-35b-arbitrage`).
+Le fichier `~/.config/opencode/opencode.json` doit au minimum définir le provider `local` utilisé par `model_id` (par défaut `local/arbitrage` — alias **générique stable**, cf. AGENTS.md).
 
 `OpenCodeRunner` appelle :
 ```
-opencode run --format json --model local/qwen3-35b-arbitrage <instruction> -f <prompt_file>
+opencode run --format json --model local/arbitrage <instruction> -f <prompt_file>
 ```
 
 Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements de type `text` fournissent le texte généré, les événements `tool_use` les appels d'outils.
