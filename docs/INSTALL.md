@@ -129,12 +129,12 @@ Ces étapes sont documentées dans les sections suivantes.
 
 À l'installation (après opencode), install.sh **détecte la VRAM GPU totale** (`nvidia-smi`), **recommande le palier** adapté et propose de **télécharger le GGUF** correspondant (client `hf`, repli `huggingface-cli`) puis de **basculer** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
 
-| VRAM totale | Palier | Modèle (validé en Phase A) | Repo HF | Contexte |
+| VRAM totale | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
 |---|---|---|---|---|
 | < 12 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
 | ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
 | ≥ 16 Go | 16 | Qwen3.5-9B Q6_K | `unsloth/Qwen3.5-9B-GGUF` | 256K |
-| ≥ 24 Go | 24 | Gemma 4 12B Q6_K | `unsloth/gemma-4-12b-it-GGUF` | 256K |
+| ≥ 24 Go | 24 | Qwen3.6-35B-A3B **UD-IQ4_NL_XL** | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 | ≥ 32 Go | 32 | Qwen3.6-27B **Q5_K_M** | `unsloth/Qwen3.6-27B-GGUF` | 192K |
 | ≥ 48 Go | 48 | Qwen3.6-35B-A3B UD-Q6_K | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 | ≥ 64 Go | 64 | Qwen3.6-35B-A3B UD-Q8_K_XL | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |

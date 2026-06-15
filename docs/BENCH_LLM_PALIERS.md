@@ -41,7 +41,7 @@ validé en production. La colonne « vs réf » d'une fiche = **meilleur / égal
 | 12 Go | **Qwen3.5-9B** | Q5_K_M | `12gb_qwen3.5-9b-q5km.sh` | 192K¹ | ✅ retenu (Phase A) — remplace LFM2.5 |
 | ~~12 Go~~ | ~~LFM2.5-8B-A1B~~ | ~~Q8_0~~ | _(retiré)_ | 128K | ❌ écarté (Phase A) — incapable du workflow agentique |
 | 16 Go | Qwen3.5-9B | Q6_K | `16gb_qwen3.5-9b.sh` | 256K | ✅ retenu (Phase A) — à confirmer Phase B |
-| 24 Go | Gemma 4 12B | Q6_K | `24gb_gemma4-12b.sh` | 256K | ✅ retenu (Phase A) — à confirmer Phase B |
+| 24 Go | **Qwen3.6-35B-A3B** | UD-IQ4_NL_XL | `24gb_qwen3.6-35b-a3b-iq4nl-xl.sh` | 256K | ✅ retenu (Phase B) — remplace Gemma 4 12B (écarté : 5× plus lent, régressions) |
 | 32 Go | **Qwen3.6-27B** | Q5_K_M | `32gb_qwen3.6-27b-q5km.sh` | 192K² | ✅ retenu (Phase A) — niveau réf, remplace Gemma 26B |
 | ~~32 Go~~ | ~~Gemma 4 26B A4B~~ | ~~Q4_K_M~~ | _(retiré)_ | 256K | ❌ remplacé — glyphes/JSON cassés (artefacts Q4) |
 | 48 Go | Qwen3.6-35B-A3B | UD-Q6_K | `48gb_qwen3.6-35b-a3b.sh` | 256K | ⭐ référence (Phase A faite) — émission propre, résumé le plus fin |
@@ -237,13 +237,73 @@ Verdict Phase B : <…>
 
 ---
 
+## Résultats Phase B — audio technique local (confidentiel, ~17 min, ~3 500 tokens)
+
+> **Axe testé** : ce contenu **ne teste PAS le point de rupture du contexte** (trop court pour
+> départager 192K vs 256K) mais la **fidélité sur vocabulaire technique** et deux paramètres
+> jusque-là non mesurés : **temps de traitement** et **VRAM réelle**. Particularité exploitée : la
+> STT (Cohere, commune à tous les paliers) **déforme plusieurs noms propres** (noms d'outils /
+> produits / rôles) en quasi-homophones ; **le travail de la LLM est de les récupérer depuis le
+> contexte**. Diarisation : 2 locuteurs bien séparés sur tous les paliers. (Contenu non détaillé ici —
+> document confidentiel ; on ne consigne que les métriques de bench.)
+
+| | **12 Go** Qwen3.5-9B Q5 | **24 Go** Gemma 4 12B Q6 | **48 Go** Qwen3.6-35B-A3B Q6 |
+|---|---|---|---|
+| **Temps total** | 13,4 min | **67 min** 🔴 | **13,2 min** ✅ |
+| └ correction / relecture | ~3 / ~4 min | ~36 / ~26 min | ~3 / ~5 min |
+| **VRAM LLM** | 10,5 Go (1 GPU) | 13,3 Go (1 GPU) | 26,8 Go poids + 2,66 Go KV@256K + ~2,7 Go/GPU compute (2 GPU) |
+| **Résumé** | fidèle, complet | correct mais **écourté** | **le plus complet** |
+| **Récup. noms propres déformés** | ✗ | ✗ (omet) | ✅ regroupe les variantes |
+| **Lexique auto** | bruité (faux noms propres) | « suspect » (honnête mais non récupéré) | **variantes regroupées → forme canonique** |
+| **Correction SRT** | 1 régression (mot correct → non-mot) | **3 régressions** (dont un mot correct dégradé) 🔴 | **0 régression**, marque `[INCERTAIN]` |
+| **Suivi consignes** | rapport FR conforme | **rapport en anglais** 🔴 | rapport FR conforme |
+
+**Enseignements** :
+1. **Le temps n'est pas monotone avec la taille.** Le **dense 12B (Gemma) est 5× plus lent** que le MoE 35B-A3B (3B actifs) et le hybride SSM 9B, qui décodent à vitesse comparable. Le dense paie plein pot ; MoE et SSM non.
+2. **Gemma 24 Go est disqualifié sur ce contenu** : 5× le temps **et** qualité moindre (3 régressions de correction + rapport anglais = suivi de consigne défaillant). → **chercher un autre modèle 24 Go** (voir piste ci-dessous).
+3. **Le 35B-A3B (48 Go) = point d'équilibre** : qualité de référence (récupère les noms propres déformés, correction chirurgicale via `[INCERTAIN]`) **à la vitesse du palier 12 Go**. Le « gros modèle » ne coûte quasi rien en latence grâce au MoE — seulement 2 GPU.
+4. **Score qualité 100/100 sur les 3 paliers** : il est **structurel** (timecodes, complétude) et **aveugle à la fidélité sémantique** (ne voit pas une substitution erronée de nom propre). La lecture humaine reste l'arbitre.
+
+### Remplaçant du 24 Go — 35B-A3B en 4-bit mono-GPU (4 quants testés, 15/06/2026)
+
+Plutôt qu'un autre modèle, on garde le **35B-A3B de référence** en quant plus basse pour tenir sur
+**1 carte 24 Go**. KV mesuré du 35B (qwen35moe, head_count_kv=2, Gated Delta Net) : **négligeable**
+(2,66 Go @256K, ~2 Go @192K) → le budget est dicté par les **poids**. Quatre quants testés sur le
+même audio (même protocole) :
+
+| Quant | Poids | Temps total | Contexte tenu | VRAM / marge | Récup. noms propres (cas le + dur) | Correction SRT |
+|---|---|---|---|---|---|---|
+| Q3_K_XL | 16 Go | ❌ abandonné | 256K | 19,3 / 4,8 Go | — | spirale agentique (relecture >16 min, sorties non écrites) |
+| **IQ4_NL** | 17 Go | 44 min | 256K | 20,4 / **3,6 Go** | ✅ / ✅ **seul à réussir le cas le + dur** | conservatrice, 0 régression |
+| **IQ4_NL_XL** ⭐ | 19 Go | **28,6 min** | 256K | 22,3 / 1,8 Go | ✅ / ✗ (échoue le cas le + dur) | **agressive** (22 corr.), 0 régression mais 2-3 devinettes risquées |
+| Q4_K_M | 21 Go | 27,1 min | **192K seulement** | 23,9 / **0,2 Go** 🔴 | ✅ / ✗ (échoue le cas le + dur) | conservatrice + 5 `[INCERTAIN]`, 0 régression |
+
+**Conclusions** :
+1. **Aucun quant ne corrige la lenteur** : 27–44 min = **2–3× le Q6 de réf** (13 min). L'hypothèse
+   « K-quant plus rapide que i-quant sur 3090 » est **fausse** (Q4_K_M = le plus lent en correction,
+   473 s). Le goulot est **le 35B en 4-bit sur 1 seule 3090** ; le Q6 n'allait vite que réparti sur
+   **2 GPU**. La variance (27 vs 44 min) vient du **pattern agentique** (fan-out subagents), pas du quant.
+2. **Q3_K_XL écarté** : 3-bit trop agressif → comportement agentique instable (sur-exploration,
+   parsings ratés relancés). **Q4_K_M écarté pour la prod** : 0,2 Go libre et 256K impossible → OOM
+   sur une vraie carte 24 Go (affichage/autres procs).
+3. **RETENU : IQ4_NL_XL** — meilleur compromis vitesse/qualité/contexte/marge ; corrige réellement le
+   SRT (livrable plus propre) ; 256K avec 1,8 Go de marge. Réserves : échoue le nom propre le plus dur
+   (l'IQ4_NL standard, plus lent, était seul à le récupérer) et fait 2-3 devinettes (la relecture
+   finale en rattrape une partie).
+
+> **Enseignement de palier** : « 24 Go = 35B mono-GPU » = **qualité de référence au prix de 2–3× la
+> latence**. Si la latence prime sur ce palier, préférer un modèle plus petit (Qwen3.6-27B du 32 Go,
+> ou rester sur le Qwen3.5-9B du 16 Go). Profil livré : `24gb_qwen3.6-35b-a3b-iq4nl-xl.sh`.
+
+---
+
 ## Synthèse finale (à remplir une fois les paliers évalués)
 
 | Palier | Modèle retenu | Fidélité | Résumé | Contexte (VRAM) | Correction activable ? | Décision Phase A |
 |---|---|---|---|---|---|---|
 | 12 Go | **Qwen3.5-9B Q5_K_M** | ✅ | ✅ | 192K (~1,9 Go libres) | **oui** | retenu (remplace LFM2.5 ❌) |
 | 16 Go | **Qwen3.5-9B Q6_K** | ✅ | ✅ | 256K | oui | retenu |
-| 24 Go | **Gemma 4 12B Q6_K** | ✅ | ✅ (+podcast, terme suspect) | 256K | oui | retenu |
+| 24 Go | **Qwen3.6-35B-A3B UD-IQ4_NL_XL** | ✅✅ | ✅✅ | 256K (~1,8 Go libre) | oui | retenu Phase B (remplace Gemma ❌ ; 35B 4-bit mono-GPU, qualité réf, ~2,5× plus lent que le Q6 2-GPU) |
 | 32 Go | **Qwen3.6-27B Q5_K_M** | ✅✅ | ✅✅ niveau réf | 192K (~1,4–3,6 Go libres) | oui | retenu (remplace Gemma 26B Q4 ❌) |
 | 48 Go | **Qwen3.6-35B-A3B UD-Q6_K** | ✅✅ | ✅✅ (FLE) | 256K | oui | ⭐ référence |
 | 64 Go | Qwen3.6-35B-A3B UD-Q8_K_XL | ✅✅ | ✅✅ | 256K | oui | ≈ Q6 (pas de gain Q8) |
