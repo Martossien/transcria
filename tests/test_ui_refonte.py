@@ -68,6 +68,63 @@ class TestHomeAndWizard:
         assert "Le traitement a échoué" not in html
 
 
+class TestWizardSummaryEdit:
+    """Étape 4 « Contexte » — l'édition manuelle du résumé doit atteindre les livrables.
+
+    Régression : le textarea du résumé était rendu HORS du `<form id="context-form">`,
+    donc `saveContext()` (FormData(#context-form)) ne le soumettait jamais → la clé
+    `summary` restait vide et le DOCX retombait toujours sur `summary_llm` (texte brut
+    de la LLM). Le contrat (cf. docx_report._meta, runner._apply_final_review) est :
+    édition manuelle (`summary`) > synthèse harmonisée > synthèse brute.
+    """
+
+    def _seed_meeting(self, app, owner_id, ctx: dict) -> str:
+        from transcria.jobs.filesystem import JobFilesystem
+        with app.app_context():
+            job = JobStore.create_job(owner_id, "Réunion résumé éditable")
+            # L'étape 4 (Contexte) ne se rend qu'à partir de summary_status == 'done'.
+            JobStore.update_state(job.id, JobState.SUMMARY_DONE)
+            cfg = get_config()
+            JobFilesystem(cfg["storage"]["jobs_dir"], job.id).save_json(
+                "context/meeting_context.json", ctx
+            )
+            return job.id
+
+    def test_editable_summary_is_inside_the_submitted_form(self, app, admin_client, owner_id):
+        job_id = self._seed_meeting(app, owner_id, {"summary_llm": "## Synthèse\nRésumé IA initial."})
+        html = admin_client.get(f"/jobs/{job_id}").data.decode()
+        assert 'name="summary"' in html  # le champ est bien rendu…
+        form = html.split('<form id="context-form">', 1)[1].split("</form>", 1)[0]
+        assert 'name="summary"' in form  # …et DANS le formulaire que saveContext() POST
+
+    def test_context_save_persists_edited_summary_without_losing_llm_original(self, app, admin_client, owner_id):
+        from transcria.jobs.filesystem import JobFilesystem
+        job_id = self._seed_meeting(app, owner_id, {"summary_llm": "Résumé IA brut."})
+        resp = admin_client.post(
+            f"/api/jobs/{job_id}/context",
+            json={"title": "Comité", "summary": "RÉSUMÉ CORRIGÉ À LA MAIN"},
+        )
+        assert resp.status_code == 200
+        with app.app_context():
+            cfg = get_config()
+            ctx = JobFilesystem(cfg["storage"]["jobs_dir"], job_id).load_json("context/meeting_context.json")
+        assert ctx["summary"] == "RÉSUMÉ CORRIGÉ À LA MAIN"  # l'édition est persistée
+        assert ctx["summary_llm"] == "Résumé IA brut."        # l'original LLM est préservé
+
+    def test_docx_prefers_manual_summary_over_llm(self):
+        from transcria.exports.docx_report import DocxReport
+        ctx = {
+            "meeting_type": "Réunion interne",
+            "summary": "SYNTHESE EDITEE MANUELLEMENT",
+            "summary_llm": "## Synthèse\nSYNTHESE BRUTE DE LA LLM",
+        }
+        srt = "1\n00:00:00,000 --> 00:00:01,000\nBonjour\n"
+        doc = DocxReport(ctx, [], {}, {}, srt).build()
+        text = "\n".join(p.text for p in doc.paragraphs)
+        assert "SYNTHESE EDITEE MANUELLEMENT" in text
+        assert "SYNTHESE BRUTE DE LA LLM" not in text
+
+
 class TestNavbar:
     def test_admin_sees_dropdown_menu(self, admin_client):
         html = admin_client.get("/").data.decode()
