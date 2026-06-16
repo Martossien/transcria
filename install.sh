@@ -993,12 +993,15 @@ fi
 log_section "LLM d'arbitrage — sélection selon la VRAM"
 
 # Détection de la VRAM (en plus de GPU_COUNT déjà connu plus haut).
-GPU_VRAM_TOTAL_MB=0; GPU_VRAM_MAX_MB=0
+# GPU_SIZES_CSV = tailles PAR carte (Mio) : c'est ce qui permet de raisonner par
+# PLACEMENT réel (mono/split, plus petite carte) et non sur la simple somme.
+GPU_VRAM_TOTAL_MB=0; GPU_VRAM_MAX_MB=0; GPU_SIZES_CSV=""
 if [[ "$GPU_COUNT" -gt 0 ]] && command -v nvidia-smi &>/dev/null; then
     while read -r _mb; do
         [[ "$_mb" =~ ^[0-9]+$ ]] || continue
         GPU_VRAM_TOTAL_MB=$((GPU_VRAM_TOTAL_MB + _mb))
         if (( _mb > GPU_VRAM_MAX_MB )); then GPU_VRAM_MAX_MB=$_mb; fi
+        GPU_SIZES_CSV="${GPU_SIZES_CSV:+$GPU_SIZES_CSV,}$_mb"
     done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null || true)
 fi
 
@@ -1030,8 +1033,30 @@ elif [[ -z "${OPENCODE_BIN:-}" ]]; then
     log_info "Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard."
 else
     log_ok "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio sur ${GPU_COUNT} GPU (plus grande carte ${GPU_VRAM_MAX_MB} Mio)"
-    REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
-    log_info "Palier recommandé : ${REC_TIER} Go → ${LLM_LABEL[$REC_TIER]}"
+    # Recommandation par PLACEMENT réel (tient compte du mono/split et de la taille de
+    # CHAQUE carte) ; repli défensif sur la table par somme si le planner échoue.
+    REC_TIER=""
+    if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
+        _plan_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_plan.$$")
+        if _plan_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" \
+                         plan --gpus "$GPU_SIZES_CSV" --format shell 2>"$_plan_warn"); then
+            # N'évalue QUE nos propres affectations LLM_* (sûr).
+            eval "$(printf '%s\n' "$_plan_out" | grep -E '^LLM_[A-Z_]+=')"
+            REC_TIER="${LLM_TIER:-}"
+            [[ -s "$_plan_warn" ]] && sed 's/^/  /' "$_plan_warn"
+        fi
+        rm -f "$_plan_warn"
+    fi
+    if [[ -z "$REC_TIER" ]]; then
+        REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
+        log_warn "Planner de placement indisponible — recommandation par VRAM totale (moins fiable)."
+    fi
+    if [[ "$REC_TIER" == "0" || -z "$REC_TIER" ]]; then
+        REC_TIER=""
+        log_warn "Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée."
+    else
+        log_info "Palier recommandé : ${REC_TIER} Go → ${LLM_LABEL[$REC_TIER]}"
+    fi
     log_info "Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer."
     ask LLM_TIER "Palier LLM à installer" "$REC_TIER"
 
@@ -1084,6 +1109,20 @@ else
             log_ok "Profils adaptés (MODELS_DIR=$MODELS_DIR_CHOICE, llama-server=$LLAMA_SRV)"
             if bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb" 2>&1 | sed 's/^/  /'; then
                 log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
+                # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
+                # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.
+                if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
+                    _cal_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_cal.$$")
+                    if "$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" plan \
+                         --gpus "$GPU_SIZES_CSV" --tier "$LLM_TIER" \
+                         --config "$CONFIG_PATH" --apply --format shell >/dev/null 2>"$_cal_warn"; then
+                        log_ok "Calibration GPU écrite (placement réel par carte)."
+                    else
+                        log_warn "Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh"
+                    fi
+                    [[ -s "$_cal_warn" ]] && sed 's/^/  /' "$_cal_warn"
+                    rm -f "$_cal_warn"
+                fi
                 log_info "Démarrage de la LLM : géré par TranscrIA via scripts/launch_arbitrage.sh."
             else
                 log_warn "Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh ${LLM_TIER}gb"

@@ -46,9 +46,12 @@ echo "  Modèle actif (API)     : $ACTIVE_MODEL"
 
 echo ""
 echo "━━━ Test d'inférence ━━━━━━━━━━━━━━━━━━"
-INFER=$(curl -sf --max-time 30 "http://127.0.0.1:${PORT}/v1/completions" \
+# 64 tokens (pas 5) : un modèle « reasoning » dépense ses premiers tokens dans <think>
+# (séparés en reasoning_content par llama.cpp) — avec 5 tokens, `text` restait vide et
+# l'on concluait à tort à une panne (cf. incident du 11/06/2026, corrigé côté Python).
+INFER=$(curl -sf --max-time 60 "http://127.0.0.1:${PORT}/v1/completions" \
     -H "Content-Type: application/json" \
-    -d "{\"model\": \"$ACTIVE_MODEL\", \"prompt\": \"Bonjour\", \"max_tokens\": 5, \"temperature\": 0}" \
+    -d "{\"model\": \"$ACTIVE_MODEL\", \"prompt\": \"Bonjour\", \"max_tokens\": 64, \"temperature\": 0}" \
     2>/dev/null)
 
 if [ -z "$INFER" ]; then
@@ -59,7 +62,10 @@ import sys, json
 try:
     data = json.load(sys.stdin)
     choices = data.get('choices', [])
-    print(choices[0].get('text', '(vide)') if choices else '(aucun choix)')
+    first = choices[0] if choices else {}
+    # Preuve de vie = texte OU raisonnement (modèles reasoning).
+    out = (first.get('text') or first.get('reasoning_content') or '').strip()
+    print(out[:80] if out else '(vide)')
 except Exception as e:
     print(f'(erreur: {e})')
 " 2>/dev/null)
@@ -77,4 +83,21 @@ elif [ "$API_MODEL_ID" = "$ACTIVE_MODEL" ]; then
 else
     echo "  ✗ Mismatch — config: '$API_MODEL_ID' ≠ actif: '$ACTIVE_MODEL'"
     echo "    → Corriger dans config.yaml : arbitrage_api_model_id: $ACTIVE_MODEL"
+fi
+
+echo ""
+echo "━━━ Calibration VRAM (déclaré vs mesuré) ━━━"
+# Mesure la VRAM RÉELLE consommée par carte et la compare à gpu.llm_vram_mb_per_gpu.
+# Détecte une calibration périmée (modèle/quant/ctx changé), une marge critique (OOM
+# imminent) ou un GPU retiré. Lecture seule ; n'écrit ni ne tue jamais rien.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLANNER="$SCRIPT_DIR/plan_llm_placement.py"
+PY=""
+for c in "$SCRIPT_DIR/../venv/bin/python" "$(command -v python3 2>/dev/null)"; do
+    if [ -n "$c" ] && [ -x "$c" ]; then PY="$c"; break; fi
+done
+if [ -z "$PY" ] || [ ! -f "$PLANNER" ]; then
+    echo "  ⚠ Planner indisponible ($PLANNER) — contrôle de calibration ignoré."
+else
+    "$PY" "$PLANNER" verify --config "$CONFIG" --port "$PORT" || true
 fi
