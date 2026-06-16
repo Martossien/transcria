@@ -10,6 +10,9 @@ par des jobs en échec sans cause lisible :
 - **script de lancement LLM manquant ou non exécutable** ;
 - **LLM d'arbitrage injoignable** (avec le bon log à consulter) ;
 - **binaire opencode absent** alors qu'une phase LLM est activée ;
+- **modèle LLM non résolu par opencode** — le `model_id` du pipeline (ex.
+  ``local/arbitrage``) n'a aucune clé correspondante dans le provider opencode
+  (panne « aucun texte produit » sinon vue seulement au 1ᵉʳ résumé) ;
 - **nœud de ressources distant injoignable** en topologie remote/hybrid ;
 - **dossiers de travail non inscriptibles**.
 
@@ -289,6 +292,95 @@ def check_opencode(
             hint="Installer opencode et/ou définir TRANSCRIA_OPENCODE_BIN — cf. docs/INSTALL.md.",
         )
     return CheckResult(name, OK, f"trouvé : {resolved}")
+
+
+def _opencode_config_path() -> str:
+    """Chemin du opencode.json qu'opencode lirait pour CET utilisateur.
+
+    Suit la résolution d'opencode : ``OPENCODE_CONFIG`` explicite, sinon
+    ``$XDG_CONFIG_HOME/opencode/opencode.json``, sinon ``~/.config/opencode/...``.
+    """
+    env = os.environ.get("OPENCODE_CONFIG")
+    if env:
+        return env
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "opencode", "opencode.json")
+
+
+def _read_opencode_config(path: str) -> dict | None:
+    """Lit et parse le opencode.json ; None si absent/illisible/non-objet."""
+    import json
+
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def check_opencode_model_resolution(
+    cfg: dict,
+    *,
+    config_path: str | None = None,
+    reader: Callable[[str], dict | None] | None = None,
+) -> CheckResult:
+    """Vérifie (statiquement, sans LLM) que le `model_id` du pipeline se RÉSOUT côté opencode.
+
+    Le pipeline lance ``opencode run --model <workflow.arbitration_llm.model_id>``
+    (ex. ``local/arbitrage``). Si le provider opencode n'expose pas une clé de modèle
+    portant ce nom, l'appel échoue par « aucun texte produit » — panne silencieuse,
+    diagnostiquée seulement au 1ᵉʳ résumé en prod (incident du 16/06/2026 : config
+    opencode keyée ``qwen3-35b-arbitrage`` alors que le pipeline demandait ``arbitrage``).
+    Ce contrôle est GPU-free et ne démarre PAS la LLM (contrairement au smoke opt-in) :
+    il attrape le décalage à l'install / au doctor par défaut.
+    """
+    name = "Résolution du modèle opencode (provider local)"
+    workflow = cfg.get("workflow", {})
+    summary_on = workflow.get("summary_llm", {}).get("enabled", False)
+    arbitration_on = workflow.get("arbitration_llm", {}).get("enabled", False)
+    if not (summary_on or arbitration_on):
+        return CheckResult(name, OK, "phases LLM désactivées — résolution non requise")
+
+    model_id = ((workflow.get("arbitration_llm", {}) or {}).get("model_id") or "").strip()
+    if not model_id:
+        return CheckResult(
+            name, WARN, "workflow.arbitration_llm.model_id non défini",
+            hint="Définir model_id (ex. local/arbitrage) dans config.yaml.",
+        )
+    if "/" not in model_id:
+        return CheckResult(
+            name, WARN, f"model_id « {model_id} » sans provider (attendu provider/modèle, ex. local/arbitrage)",
+            hint="opencode résout les modèles sous la forme provider/modèle.",
+        )
+    provider, _, model_key = model_id.partition("/")
+
+    path = config_path or _opencode_config_path()
+    reader = reader or _read_opencode_config
+    data = reader(path)
+    if data is None:
+        return CheckResult(
+            name, FAIL, f"config opencode introuvable/illisible : {path}",
+            hint="Lancer scripts/setup_opencode.py (génère provider.local d'après config.yaml).",
+        )
+    providers = data.get("provider") or {}
+    prov = providers.get(provider)
+    if not isinstance(prov, dict) or not isinstance(prov.get("models"), dict):
+        return CheckResult(
+            name, FAIL, f"provider opencode « {provider} » absent (ou sans modèles) dans {path}",
+            hint=f"Lancer scripts/setup_opencode.py (écrit provider.{provider} selon config.yaml).",
+        )
+    models = prov["models"]
+    if model_key not in models:
+        available = ", ".join(models) or "(aucun)"
+        return CheckResult(
+            name, FAIL,
+            f"opencode {provider} n'expose pas le modèle « {model_key} » (présents : {available}) — "
+            f"« {model_id} » ne se résout pas → phases LLM en « aucun texte produit »",
+            hint="Réaligner avec scripts/setup_opencode.py (régénère provider.local d'après "
+                 "workflow.arbitration_llm.model_id — contrat d'alias générique).",
+        )
+    return CheckResult(name, OK, f"« {model_id} » résout (provider {provider}, modèle {model_key})")
 
 
 def check_opencode_smoke(
@@ -742,6 +834,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_arbitrage_script,
     check_arbitrage_llm,
     check_opencode,
+    check_opencode_model_resolution,
     check_inference_nodes,
     check_inference_node_gpus,
     check_local_models,

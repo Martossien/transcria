@@ -599,9 +599,12 @@ class WorkflowRunner:
                 self._apply_llm_suggestions(fs, result, parsed, sl)
                 workspace.cleanup(success=True)
             else:
-                sl.error("LLM résumé non produit après %d tentatives — meeting_context préservé, "
-                         "résumé marqué indisponible (relançable)", max_llm_attempts)
+                failure_kind = parsed.get("_failure_kind", "empty_output")
+                sl.error("LLM résumé non produit après %d tentatives (cause=%s : %s) — meeting_context "
+                         "préservé, résumé marqué indisponible (relançable)", max_llm_attempts,
+                         failure_kind, parsed.get("_failure_detail", ""))
                 result["summary_llm_failed"] = True
+                result["summary_llm_error_kind"] = failure_kind
                 workspace.cleanup(success=False)
         except Exception as exc:
             logger.warning("Erreur opencode: %s", exc)

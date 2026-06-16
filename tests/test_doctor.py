@@ -7,10 +7,7 @@ manquante après un schéma non migré).
 """
 from __future__ import annotations
 
-import os
-
 from transcria.diagnostics import doctor as doc
-
 
 # ── check_database ────────────────────────────────────────────────────────
 
@@ -489,3 +486,51 @@ def test_run_doctor_includes_smoke_when_requested(monkeypatch):
                         lambda cfg: doc.CheckResult("Production LLM (opencode smoke)", doc.OK, "ok"))
     names = [r.name for r in doc.run_doctor(loader=lambda p: _LLM_CFG, llm_smoke=True)]
     assert any("smoke" in n.lower() for n in names)
+
+
+# ── check_opencode_model_resolution (statique, sans LLM) ──────────────────────
+
+_RESOLVE_CFG = {"workflow": {"arbitration_llm": {"enabled": True, "model_id": "local/arbitrage"}}}
+
+
+def test_resolution_skipped_when_llm_disabled():
+    res = doc.check_opencode_model_resolution({"workflow": {}}, reader=lambda p: {})
+    assert res.status == doc.OK
+
+
+def test_resolution_ok_when_provider_exposes_key():
+    cfg_oc = {"provider": {"local": {"models": {"arbitrage": {"name": "x"}}}}}
+    res = doc.check_opencode_model_resolution(_RESOLVE_CFG, reader=lambda p: cfg_oc)
+    assert res.status == doc.OK
+
+
+def test_resolution_fail_on_key_mismatch_lists_available():
+    """Reproduction de l'incident : pipeline veut 'arbitrage', opencode keyé autrement."""
+    cfg_oc = {"provider": {"local": {"models": {"qwen3-35b-arbitrage": {"name": "x"}}}}}
+    res = doc.check_opencode_model_resolution(_RESOLVE_CFG, reader=lambda p: cfg_oc)
+    assert res.status == doc.FAIL
+    assert "qwen3-35b-arbitrage" in res.detail  # liste les modèles présents
+    assert "setup_opencode" in (res.hint or "")
+
+
+def test_resolution_fail_on_missing_provider():
+    cfg_oc = {"provider": {"ik_local": {"models": {"arbitrage": {}}}}}
+    res = doc.check_opencode_model_resolution(_RESOLVE_CFG, reader=lambda p: cfg_oc)
+    assert res.status == doc.FAIL
+
+
+def test_resolution_fail_on_unreadable_config():
+    res = doc.check_opencode_model_resolution(_RESOLVE_CFG, reader=lambda p: None)
+    assert res.status == doc.FAIL
+
+
+def test_resolution_warn_on_model_id_without_provider():
+    cfg = {"workflow": {"arbitration_llm": {"enabled": True, "model_id": "arbitrage"}}}
+    res = doc.check_opencode_model_resolution(cfg, reader=lambda p: {})
+    assert res.status == doc.WARN
+
+
+def test_resolution_warn_on_missing_model_id():
+    cfg = {"workflow": {"summary_llm": {"enabled": True}, "arbitration_llm": {}}}
+    res = doc.check_opencode_model_resolution(cfg, reader=lambda p: {})
+    assert res.status == doc.WARN

@@ -1086,3 +1086,46 @@ class TestApplyFinalReview:
         applied = WorkflowRunner._apply_final_review(fs, {"reviewed_structured_data": "{not json"})
         assert applied["structured_data_updated"] is False
         assert fs.load_json("context/meeting_context.json")["structured_data"]["decisions"] == ["ok"]
+
+
+class TestRunErrorEventSurfaced:
+    """L'erreur opencode arrive comme événement JSON sur stdout (pas stderr) :
+    le message d'erreur doit la refléter, pas rester vide (incident du 16/06/2026)."""
+
+    def test_error_event_on_stdout_becomes_message(self, tmp_path, monkeypatch):
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
+        monkeypatch.setattr(os.path, "isfile", lambda p: True)
+        monkeypatch.setattr(os.path, "abspath", lambda p: p)
+        err = json.dumps({"type": "error", "error": {
+            "name": "UnknownError",
+            "data": {"message": "Unexpected server error. Check server logs for details."}}})
+        monkeypatch.setattr(subprocess, "Popen", _fake_popen(stdout=err, stderr="", returncode=1))
+
+        runner = _make_runner(tmp_path)
+        result = runner.run("instr", "/tmp/prompt.txt")
+        assert result["success"] is False
+        assert result["error_kind"] == "opencode_error"
+        assert "UnknownError" in result["error"]
+        assert "Unexpected server error" in result["error"]
+
+
+class TestSummaryFailureClassification:
+    """run_summary distingue opencode_error (exit≠0) de empty_output (exit 0, 0 texte)."""
+
+    def test_failure_kind_opencode_error_when_run_fails(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        monkeypatch.setattr(runner, "run", lambda *a, **k: {
+            "success": False, "error_kind": "opencode_error",
+            "error": "opencode exit 1: UnknownError: Unexpected server error"})
+        parsed = runner.run_summary("/tmp/transcript.txt")
+        assert parsed["_summary_produced"] is False
+        assert parsed["_failure_kind"] == "opencode_error"
+        assert "UnknownError" in parsed["_failure_detail"]
+
+    def test_failure_kind_empty_output_when_exit0_no_text(self, tmp_path, monkeypatch):
+        runner = _make_runner(tmp_path)
+        monkeypatch.setattr(runner, "run", lambda *a, **k: {"success": True, "output": "", "files": []})
+        parsed = runner.run_summary("/tmp/transcript.txt")
+        assert parsed["_summary_produced"] is False
+        assert parsed["_failure_kind"] == "empty_output"

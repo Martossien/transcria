@@ -87,11 +87,24 @@ _SPEAKER_QUEUED_MESSAGE = (
     "et la page se rafraîchira dès qu'elle sera prête."
 )
 
+# Production vide : opencode a tourné (exit 0) mais n'a émis aucun texte → piste
+# transcript/modèle/prompt.
 _SUMMARY_LLM_FAILED_MESSAGE = (
-    "Le résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte "
-    "après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). "
+    "Le résumé n'a pas pu être généré : la LLM d'arbitrage a répondu mais n'a produit "
+    "aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). "
     "La transcription rapide est conservée — vous pouvez relancer le résumé "
     "(diagnostic : transcria doctor --llm-smoke)."
+)
+
+# Erreur opencode : la LLM n'a pas pu être appelée correctement (modèle non résolu côté
+# opencode, serveur en erreur, binaire absent…) → PAS un problème de transcript ; le
+# diagnostic statique « transcria doctor » pointe la vraie cause (résolution du modèle).
+_SUMMARY_LLM_UNREACHABLE_MESSAGE = (
+    "Le résumé n'a pas pu être généré : la LLM d'arbitrage n'a pas pu être appelée "
+    "correctement (modèle non résolu côté opencode, ou serveur en erreur) — ce n'est pas "
+    "un problème de transcript. La transcription rapide est conservée. "
+    "Diagnostic : transcria doctor (vérifie la résolution du modèle opencode et le serveur ; "
+    "réaligner avec scripts/setup_opencode.py si besoin)."
 )
 
 
@@ -1334,10 +1347,16 @@ def api_summary(job_id: str):
     if result.get("summary_llm_failed"):
         # La LLM d'arbitrage n'a rien produit après 3 tentatives : le résumé n'est PAS
         # validé (meeting_context non corrompu, job non SUMMARY_DONE), mais relançable.
+        # Le message dépend de la CLASSE de panne (corrections opposées) : erreur opencode
+        # (modèle non résolu / serveur) → doctor ; production vide → transcript/prompt.
+        error_kind = result.get("summary_llm_error_kind", "empty_output")
+        message = (_SUMMARY_LLM_UNREACHABLE_MESSAGE if error_kind == "opencode_error"
+                   else _SUMMARY_LLM_FAILED_MESSAGE)
         return jsonify({
             "summary_llm_failed": True,
+            "error_kind": error_kind,
             "attempts": 3,
-            "message": _SUMMARY_LLM_FAILED_MESSAGE,
+            "message": message,
         })
 
     return jsonify(result)

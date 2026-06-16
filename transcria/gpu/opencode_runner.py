@@ -494,8 +494,19 @@ class OpenCodeRunner:
                      proc.returncode, total_text, total_tools, len(events))
 
         if proc.returncode != 0:
-            err = stderr[:500] if stderr else ""
-            return {"success": False, "error": f"opencode exit {proc.returncode}: {err}"}
+            detail = stderr[:500].strip()
+            if not detail:
+                # L'erreur opencode arrive souvent comme événement JSON sur stdout
+                # (ex. modèle non résolu → « UnknownError: Unexpected server error »),
+                # pas sur stderr — sans ça le message d'erreur serait vide.
+                for ev in events:
+                    if ev.get("type") == "error":
+                        e = ev.get("error", {}) or {}
+                        msg = (e.get("data") or {}).get("message") or ""
+                        detail = f"{e.get('name', 'error')}: {msg}".strip().rstrip(":").strip()
+                        break
+            return {"success": False, "error_kind": "opencode_error",
+                    "error": f"opencode exit {proc.returncode}: {detail}".rstrip()}
 
         # Extraire le texte produit
         output_text = "\n".join(
@@ -608,6 +619,17 @@ class OpenCodeRunner:
 
         parsed["_summary_produced"] = produced
         parsed["summary_text"] = summary_text if produced else "Résumé indisponible."
+        if not produced:
+            # Distingue deux classes de panne aux corrections OPPOSÉES :
+            #   - opencode_error : opencode n'a pas tourné (exit≠0, modèle non résolu,
+            #     serveur en erreur, binaire absent, timeout) → diagnostic config/infra.
+            #   - empty_output : opencode a fini (exit 0) mais n'a produit aucun texte
+            #     → transcript trop long / modèle / prompt.
+            if not result.get("success"):
+                parsed["_failure_kind"] = "opencode_error"
+                parsed["_failure_detail"] = result.get("error", "")
+            else:
+                parsed["_failure_kind"] = "empty_output"
         return parsed
 
     @staticmethod
