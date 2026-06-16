@@ -18,7 +18,7 @@
 #     - 262144 (256K) → 11 809 Mio : ~0,5 Go libre seulement → uniquement carte SANS
 #       affichage ; déconseillé. KV : chaque −64K libère ~1,1 Gio.
 #     Adaptez --ctx-size à VOTRE carte.
-# RUNTIME  : llama.cpp ≥ b9630 (archi gated-delta). Adaptez le chemin de llama-server.
+# RUNTIME  : llama.cpp ≥ b9630 (archi gated-delta). Adaptez le chemin de llama-server (qualifiez-le : scripts/detect_llama_server.py).
 #
 # ÉCHANTILLONNAGE — valeurs OFFICIELLES Qwen3.5 (fiche HF, Best Practices), profil
 # « tâches précises » en mode thinking (correction = FIDÉLITÉ, pas créativité) :
@@ -31,7 +31,7 @@ set -euo pipefail
 # CUDA_HOME pointe sur la CUDA réelle de la machine (outils annexes, fallback lib).
 export CUDA_HOME=/usr/local/cuda-13.1
 export PATH=$CUDA_HOME/bin:${PATH:-}
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
+export LD_LIBRARY_PATH=${LLAMA_LD_LIBRARY_PATH:+$LLAMA_LD_LIBRARY_PATH:}$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 
 # Palier 12 Go = une seule carte. Surchargez ARBITRAGE_GPU pour choisir un GPU libre.
 export CUDA_VISIBLE_DEVICES="${ARBITRAGE_GPU:-0}"

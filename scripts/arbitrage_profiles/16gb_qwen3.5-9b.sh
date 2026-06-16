@@ -15,7 +15,7 @@
 #            structured-output / tool-use, contexte natif 262 144 tokens.
 # QUANT    : Q6_K (7,46 Go). VRAM @256K KV Q8 ≈ 13 Go → tient sur UNE carte 24 Go.
 # RUNTIME  : nécessite llama.cpp RÉCENT (≥ b9630, archi gated-delta) sinon
-#            « unknown model architecture ». Adaptez le chemin de llama-server.
+#            « unknown model architecture ». Adaptez le chemin de llama-server (qualifiez-le : scripts/detect_llama_server.py).
 #
 # ÉCHANTILLONNAGE — valeurs OFFICIELLES Qwen3.5 (fiche HF, section Best Practices),
 # profil « tâches précises » en mode thinking (la correction de transcription est
@@ -32,7 +32,7 @@ set -euo pipefail
 # CUDA_HOME pointe sur la CUDA réelle de la machine (outils annexes, fallback lib).
 export CUDA_HOME=/usr/local/cuda-13.1
 export PATH=$CUDA_HOME/bin:${PATH:-}
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
+export LD_LIBRARY_PATH=${LLAMA_LD_LIBRARY_PATH:+$LLAMA_LD_LIBRARY_PATH:}$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 
 # Palier 16 Go = une seule carte. Surchargez ARBITRAGE_GPU pour choisir un GPU libre
 # (la prod 35B occupe 0,1,2 ; ce profil et la prod ne coexistent PAS sur le port 8080).

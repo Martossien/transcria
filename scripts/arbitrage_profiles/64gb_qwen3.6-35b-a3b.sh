@@ -21,7 +21,7 @@ set -euo pipefail
 # CUDA_HOME pointe sur la CUDA réelle de la machine (outils annexes, fallback lib).
 export CUDA_HOME=/usr/local/cuda-13.1
 export PATH=$CUDA_HOME/bin:${PATH:-}
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
+export LD_LIBRARY_PATH=${LLAMA_LD_LIBRARY_PATH:+$LLAMA_LD_LIBRARY_PATH:}$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
 
 numactl --interleave=all "${LLAMA_SERVER:-/home/admin_ia/llama.cpp/build/bin/llama-server}" \
 --model "${MODELS_DIR:-/home/admin_ia/models}/Qwen3.6-35B-A3B-UD-Q8_K_XL/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf" \

@@ -1065,13 +1065,39 @@ else
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
         mkdir -p "$MODELS_DIR_CHOICE"
 
-        # Détection du binaire llama-server (≥ b9630 requis pour les archis récentes).
-        LLAMA_SRV=""
-        for c in "$(command -v llama-server 2>/dev/null || true)" \
-                 "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
-            if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
-        done
-        ask LLAMA_SRV "Chemin du binaire llama-server (≥ b9630)" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
+        # Détection + QUALIFICATION du binaire llama-server (≥ b9630 requis pour les
+        # archis gated-delta/gemma4). Le détecteur fait la recherche élargie (env, PATH,
+        # ~/llama.cpp, ~/ik_llama.cpp, /opt, envs conda), résout la VRAIE version via
+        # l'arbre git (le numéro de --version est NON FIABLE : un vrai b9632 affiche 579)
+        # et vérifie la résolution des .so (RPATH/conda) — un binaire qui ne chargera pas
+        # est signalé ici, pas au premier run. Repli défensif sur l'ancienne boucle.
+        LLAMA_SRV=""; LLAMA_LD_HINT=""
+        if [[ -x "$VENV/bin/python" ]]; then
+            _ll_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_llama.$$")
+            if _ll_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/detect_llama_server.py" \
+                           --format shell 2>"$_ll_warn"); then
+                eval "$(printf '%s\n' "$_ll_out" | grep -E '^LLAMA_[A-Z_]+=')"
+                LLAMA_SRV="${LLAMA_SERVER:-}"
+                LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
+                if [[ "${LLAMA_OK:-0}" == "1" ]]; then
+                    log_ok "llama-server qualifié : ${LLAMA_SRV} (build ${LLAMA_BUILD:-?}, source ${LLAMA_BUILD_SOURCE:-?})"
+                elif [[ -n "$LLAMA_SRV" ]]; then
+                    log_warn "llama-server trouvé mais NON utilisable (${LLAMA_LEVEL:-?}) : ${LLAMA_SRV}"
+                fi
+                if [[ -n "$LLAMA_LD_HINT" ]]; then
+                    log_warn "Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=$LLAMA_LD_HINT dans l'environnement du service (les profils l'honorent)."
+                fi
+            fi
+            [[ -s "$_ll_warn" ]] && sed 's/^/  /' "$_ll_warn"
+            rm -f "$_ll_warn"
+        fi
+        if [[ -z "$LLAMA_SRV" ]]; then
+            for c in "$(command -v llama-server 2>/dev/null || true)" \
+                     "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
+                if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
+            done
+        fi
+        ask LLAMA_SRV "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
 
         REPO="${LLM_REPO[$LLM_TIER]}"; GG="${LLM_FILE[$LLM_TIER]}"
         DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"

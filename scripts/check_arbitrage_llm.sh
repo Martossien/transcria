@@ -101,3 +101,15 @@ if [ -z "$PY" ] || [ ! -f "$PLANNER" ]; then
 else
     "$PY" "$PLANNER" verify --config "$CONFIG" --port "$PORT" || true
 fi
+
+echo ""
+echo "━━━ Runtime llama-server (version / libs / CUDA) ━━━"
+# Qualifie le binaire que le profil lancerait : version réelle (≥ b9630 via l'arbre
+# git, le numéro de --version étant non fiable), résolution des .so (RPATH/conda) et
+# build CUDA. Détecte « binaire trouvé mais qui ne chargera pas ». Lecture seule.
+DETECTOR="$SCRIPT_DIR/detect_llama_server.py"
+if [ -z "$PY" ] || [ ! -f "$DETECTOR" ]; then
+    echo "  ⚠ Détecteur indisponible ($DETECTOR) — contrôle runtime ignoré."
+else
+    "$PY" "$DETECTOR" || true
+fi
