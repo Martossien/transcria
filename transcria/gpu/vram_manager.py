@@ -5,6 +5,7 @@ import subprocess
 import time
 from typing import IO
 
+from transcria.gpu._port_utils import generation_confirmed
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
@@ -477,24 +478,18 @@ class VRAMManager:
                         json={
                             "model": active_model_id,
                             "prompt": "Bonjour",
-                            # 64 tokens (pas 5) : un modèle « reasoning » dépense ses
-                            # premiers tokens dans <think>, séparés en reasoning_content
-                            # par llama.cpp — avec 5 tokens, `text` restait vide et la
-                            # sonde DÉTRUISAIT un serveur sain (incident du 11/06/2026).
                             "max_tokens": 64,
                             "temperature": 0,
                         },
                         timeout=60,
                     )
                     if r2.status_code == 200:
-                        choices = r2.json().get("choices", [])
-                        first = choices[0] if choices else {}
-                        # Preuve de vie = le serveur a généré QUELQUE CHOSE : du texte
-                        # ou du raisonnement (modèles reasoning).
-                        server_healthy = bool(
-                            str(first.get("text") or "").strip()
-                            or str(first.get("reasoning_content") or "").strip()
-                        )
+                        # Preuve de génération unifiée (texte / raisonnement / tokens
+                        # générés) — même définition que la sonde partagée `is_port_open`,
+                        # source unique et testée. Un modèle « reasoning » dépense ses
+                        # premiers tokens dans <think> (→ reasoning_content) : une sonde
+                        # `text`-only détruisait un serveur sain (incident du 11/06/2026).
+                        server_healthy = generation_confirmed(r2.json())
         except Exception as exc:
             logger.debug("Sondage LLM d'arbitrage port %d: %s", self.arbitrage_llm_port, exc)
 
