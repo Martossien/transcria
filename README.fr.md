@@ -102,7 +102,7 @@ cd transcria
 
 `install.sh` crée le venv, installe les dépendances, choisit le wheel PyTorch adapté à CUDA, génère `config.yaml`, guide les valeurs critiques et peut installer le service systemd.
 
-**LLM d'arbitrage auto-sélectionnée selon la VRAM.** À l'installation, TranscrIA **détecte la VRAM GPU totale**, **recommande le palier adapté** (12 / 16 / 24 / 32 / 48 / 64 Go) et propose de **télécharger le bon GGUF** (avec votre token HF) puis de l'activer — un seul prompt, sans choisir le modèle à la main. En dessous de 12 Go, repli en **transcription brute** (pas de LLM de correction/résumé). Modèles par palier benchés dans [docs/BENCH_LLM_PALIERS.md](docs/BENCH_LLM_PALIERS.md) ; bascule à tout moment via `scripts/switch_arbitrage_llm.sh <palier>`.
+**LLM d'arbitrage auto-sélectionnée selon la VRAM.** À l'installation, TranscrIA **détecte les GPU** et **recommande le plus grand palier réellement plaçable** (12 / 16 / 24 / 32 / 48 / 64 Go) — par placement carte par carte (mono ou split), pas sur la simple VRAM totale — et propose de **télécharger le bon GGUF** (avec votre token HF) puis de l'activer — un seul prompt, sans choisir le modèle à la main. En dessous de 12 Go, repli en **transcription brute** (pas de LLM de correction/résumé). Modèles par palier benchés dans [docs/BENCH_LLM_PALIERS.md](docs/BENCH_LLM_PALIERS.md) ; bascule à tout moment via `scripts/switch_arbitrage_llm.sh <palier>`.
 
 Options utiles :
 

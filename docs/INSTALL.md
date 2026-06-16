@@ -89,7 +89,7 @@ cd transcria
 | Modèles IA | Vérifie Cohere ASR, cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
 | opencode | Détecte dans PATH / `~/.opencode/bin/` — propose l'installation + génère `opencode.json` |
-| **LLM d'arbitrage** | **Détecte la VRAM GPU, recommande le palier (12/16/24/32/48/64 Go), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
+| **LLM d'arbitrage** | **Détecte les GPU, recommande le palier plaçable (12/16/24/32/48/64 Go, placement par carte), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
 | Résumé | Bilan clair OK/MANQUANT pour chaque modèle et les valeurs restantes à corriger |
@@ -127,9 +127,9 @@ Ces étapes sont documentées dans les sections suivantes.
 
 ### Sélection automatique de la LLM d'arbitrage selon la VRAM
 
-À l'installation (après opencode), install.sh **détecte la VRAM GPU totale** (`nvidia-smi`), **recommande le palier** adapté et propose de **télécharger le GGUF** correspondant (client `hf`, repli `huggingface-cli`) puis de **basculer** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
+À l'installation (après opencode), install.sh **détecte les GPU** (`nvidia-smi`) et **recommande le plus grand palier réellement plaçable** sur la topologie — par **placement réel carte par carte** (module `transcria/gpu/llm_placement.py`), et non sur la simple VRAM totale. Il propose de **télécharger le GGUF** correspondant (client `hf`, repli `huggingface-cli`) puis de **basculer** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
 
-| VRAM totale | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
+| Seuil¹ | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
 |---|---|---|---|---|
 | < 12 Go | — | *transcription brute* (pas de LLM de correction/résumé) | — | — |
 | ≥ 12 Go | 12 | Qwen3.5-9B **Q5_K_M** | `unsloth/Qwen3.5-9B-GGUF` | 192K |
@@ -139,9 +139,9 @@ Ces étapes sont documentées dans les sections suivantes.
 | ≥ 48 Go | 48 | Qwen3.6-35B-A3B UD-Q6_K | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 | ≥ 64 Go | 64 | Qwen3.6-35B-A3B UD-Q8_K_XL | `unsloth/Qwen3.6-35B-A3B-GGUF` | 256K |
 
-> Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md). Les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
+> ¹ La sélection se fait par **placement réel**, pas sur la VRAM totale : un palier **mono-GPU** (12/16/24) exige **une** carte ≥ l'empreinte du modèle ; un palier **splité** (32/48/64) exige **N** cartes tenant chacune leur part (+ marge). La somme seule ne suffit pas — *2× 8 Go ≠ palier 16* (aucun modèle mono ne tient sur 8 Go), et *2× 5090 (64 Go)* donne le palier **48** (profil 2 cartes), pas 64 (profil 3 cartes). Le départage des modèles par palier (lecture humaine, fidélité de correction) est détaillé dans [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) ; les paliers 12 et 32 Go sont calés à **192K** pour garder ≥1 Go de VRAM libre (mesuré).
 
-**Portabilité des profils** : les scripts `scripts/arbitrage_profiles/<palier>_*.sh` référencent leurs chemins via `${MODELS_DIR:-…}` et `${LLAMA_SERVER:-…}`. install.sh écrit les bons défauts pour votre machine (répertoire des modèles choisi, binaire `llama-server` détecté), puis `scripts/switch_arbitrage_llm.sh <palier>` recopie le profil sur `launch_arbitrage.sh` et synchronise la compta VRAM/GPU de `config.yaml`. Pour changer de palier après coup : télécharger le modèle puis `scripts/switch_arbitrage_llm.sh <palier>`.
+**Portabilité des profils** : les scripts `scripts/arbitrage_profiles/<palier>_*.sh` référencent leurs chemins via `${MODELS_DIR:-…}` et `${LLAMA_SERVER:-…}`. install.sh écrit les bons défauts pour votre machine (répertoire des modèles choisi, binaire `llama-server` détecté), puis `scripts/switch_arbitrage_llm.sh <palier>` recopie le profil sur `launch_arbitrage.sh`. **La calibration VRAM par carte** (`gpu.llm_vram_mb` / `llm_gpu_indices` / `llm_vram_mb_per_gpu`) est ensuite écrite par le planner selon le placement **réel** de la machine (`scripts/plan_llm_placement.py … --apply`, round-trip non destructif) — elle remplace les valeurs de banc du `switch`. Pour changer de palier après coup : télécharger le modèle, `scripts/switch_arbitrage_llm.sh <palier>`, puis **re-mesurer** avec `scripts/check_arbitrage_llm.sh` (compare la VRAM réelle par carte au déclaré : dérive, marge critique, débordement).
 
 ### Modes d'installation
 
