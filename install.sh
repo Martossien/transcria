@@ -844,37 +844,53 @@ SQL
     [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
     log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
 
-    # ── Schéma Alembic : up-to-date, vide, ou migrer ────────────
-    if [[ "$has_schema" -gt 0 && "${has_data:-0}" -gt 0 ]]; then
-        log_ok "La base '$db' existe déjà avec des données. Conservation."
-    elif [[ "$has_schema" -gt 0 && "${has_data:-0}" -eq 0 ]]; then
-        log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
-        if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-            log_ok "Schéma à jour (Alembic)"
-        else
-            if [[ "$local_pg" = true ]]; then
-                log_error "Alembic a échoué. Tentative de reconstruction locale…"
-                pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
-                if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                    log_ok "Schéma reconstruit"
+    # ── Schéma Alembic : up-to-date, vide, ou créer ────────────
+    local schema_action
+    schema_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --schema-action \
+        --has-schema "$has_schema" \
+        --has-data "$has_data") || {
+        log_error "Impossible de décider l'action Alembic PostgreSQL."
+        return 1
+    }
+    case "$schema_action" in
+        keep)
+            log_ok "La base '$db' existe déjà avec des données. Conservation."
+            ;;
+        upgrade-existing)
+            log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
+            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                log_ok "Schéma à jour (Alembic)"
+            else
+                if [[ "$local_pg" = true ]]; then
+                    log_error "Alembic a échoué. Tentative de reconstruction locale…"
+                    pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
+                    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                        log_ok "Schéma reconstruit"
+                    else
+                        log_error "Alembic a échoué une seconde fois. Arrêt."
+                        return 1
+                    fi
                 else
-                    log_error "Alembic a échoué une seconde fois. Arrêt."
+                    log_error "Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée."
                     return 1
                 fi
+            fi
+            ;;
+        create)
+            log_info "Création du schéma (alembic upgrade head)…"
+            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                log_ok "Schéma PostgreSQL créé"
             else
-                log_error "Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée."
+                log_error "Échec d'alembic upgrade head"
                 return 1
             fi
-        fi
-    else
-        log_info "Création du schéma (alembic upgrade head)…"
-        if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-            log_ok "Schéma PostgreSQL créé"
-        else
-            log_error "Échec d'alembic upgrade head"
+            ;;
+        *)
+            log_error "Action Alembic PostgreSQL inconnue : $schema_action"
             return 1
-        fi
-    fi
+            ;;
+    esac
 
     # ── Migration SQLite si base vide et SQLite existe ────────
     if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]; then

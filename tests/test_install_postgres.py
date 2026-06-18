@@ -3,13 +3,17 @@ from __future__ import annotations
 import os
 import stat
 
+import pytest
+
 from transcria.install_postgres import (
     backup_sqlite_database,
     build_pg_dsn,
+    decide_schema_action,
     generate_pg_password,
     human_file_size,
     is_local_pg_host,
     main,
+    parse_non_negative_int,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
     validate_pg_inputs,
@@ -132,6 +136,37 @@ def test_validate_pg_inputs_rejects_invalid_identifier_and_port():
 
 def test_validate_pg_inputs_rejects_leading_zero_port_to_avoid_ambiguity():
     assert validate_pg_inputs("transcria", "transcria", "05432") == ["Port invalide : '05432' (attendu : 1-65535)"]
+
+
+def test_parse_non_negative_int_for_postgres_counts():
+    assert parse_non_negative_int("0", name="has_schema") == 0
+    assert parse_non_negative_int(12, name="has_data") == 12
+
+
+def test_parse_non_negative_int_rejects_invalid_counts():
+    with pytest.raises(ValueError, match="has_schema invalide : abc"):
+        parse_non_negative_int("abc", name="has_schema")
+
+    with pytest.raises(ValueError, match="has_data négatif invalide : -1"):
+        parse_non_negative_int("-1", name="has_data")
+
+
+def test_decide_schema_action_from_database_state():
+    assert decide_schema_action("5", "2") == "keep"
+    assert decide_schema_action("5", "0") == "upgrade-existing"
+    assert decide_schema_action("0", "0") == "create"
+
+
+def test_install_postgres_cli_decides_schema_action(capsys):
+    assert main(["--schema-action", "--has-schema", "3", "--has-data", "0"]) == 0
+
+    assert capsys.readouterr().out == "upgrade-existing\n"
+
+
+def test_install_postgres_cli_rejects_invalid_schema_action_counts(capsys):
+    assert main(["--schema-action", "--has-schema", "bad", "--has-data", "0"]) == 2
+
+    assert "has_schema invalide : bad" in capsys.readouterr().err
 
 
 def test_install_postgres_cli_validates_inputs(capsys):

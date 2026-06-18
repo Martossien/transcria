@@ -510,6 +510,9 @@ La validation des entrées PostgreSQL (`db`, `user`, `port`) passe par
 L'ajustement `pg_hba.conf` ne dépend plus d'un pré-scan `grep` côté shell :
 `install.sh` appelle directement `transcria.install_postgres`, puis recharge
 PostgreSQL seulement si le helper retourne `changed>0`.
+La décision de schéma PostgreSQL (`keep`, `upgrade-existing`, `create`) est rendue
+par `transcria.install_postgres --schema-action` à partir des compteurs `psql`,
+ce qui retire une condition métier supplémentaire de `_setup_postgres`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

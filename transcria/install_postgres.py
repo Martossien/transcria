@@ -78,6 +78,28 @@ def validate_pg_inputs(db: str, user: str, port: str | int) -> list[str]:
     return errors
 
 
+def parse_non_negative_int(value: str | int, *, name: str) -> int:
+    """Parse un compteur PostgreSQL non négatif retourné par psql."""
+    try:
+        parsed = int(str(value))
+    except ValueError as exc:
+        raise ValueError(f"{name} invalide : {value}") from exc
+    if parsed < 0:
+        raise ValueError(f"{name} négatif invalide : {value}")
+    return parsed
+
+
+def decide_schema_action(has_schema: str | int, has_data: str | int) -> str:
+    """Décide l'action Alembic à partir de l'état courant de la base."""
+    schema_count = parse_non_negative_int(has_schema, name="has_schema")
+    data_count = parse_non_negative_int(has_data, name="has_data")
+    if schema_count > 0 and data_count > 0:
+        return "keep"
+    if schema_count > 0:
+        return "upgrade-existing"
+    return "create"
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -134,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file-size", action="store_true", help="affiche la taille humaine d'un fichier")
     parser.add_argument("--generate-password", action="store_true", help="génère un mot de passe PostgreSQL")
     parser.add_argument("--validate-inputs", action="store_true", help="valide db/user/port PostgreSQL")
+    parser.add_argument("--schema-action", action="store_true", help="décide l'action Alembic depuis has_schema/has_data")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
     parser.add_argument("--db", default=None)
@@ -142,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sqlite-db", default=None)
     parser.add_argument("--backup-dir", default=None)
     parser.add_argument("--suffix", default=None)
+    parser.add_argument("--has-schema", default=None)
+    parser.add_argument("--has-data", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -194,6 +219,18 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(error)
         return 1 if errors else 0
+
+    if args.schema_action:
+        missing = [name for name in ("has_schema", "has_data") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --schema-action: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(decide_schema_action(args.has_schema, args.has_data))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
 
     if args.path is None:
         print("path requis hors --dsn/--is-local-host", file=sys.stderr)
