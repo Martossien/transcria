@@ -518,6 +518,9 @@ inline ou une évaluation brute.
 Les sorties shell à variables fixes (`HAVE_*`, `GPU_COUNT`/`CUDA_VER_FROM_SMI`/
 `NVIDIA_WARNING`, `CUDA_TAG`/`CUDA_WARNING`) passent aussi par une liste blanche
 de noms avant évaluation.
+La sortie shell du plan de profil (`install_profiles --format shell`) passe par la
+même liste blanche ; les seuls `eval` restants sont confinés dans les helpers de
+filtrage.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

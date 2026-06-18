@@ -97,6 +97,14 @@ def test_install_script_filters_named_helper_outputs_before_eval():
     assert 'eval "$TORCH_TAG_OUT"' not in content
 
 
+def test_install_script_filters_profile_plan_output_before_eval():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "INSTALL_PROFILE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG" in content
+    assert "PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG" in content
+    assert 'eval "$plan_shell"' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 

@@ -149,6 +149,33 @@ print_install_plan() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$python_bin" "${args[@]}"
 }
 
+eval_named_shell_assignments() {
+    # Évalue uniquement les variables explicitement listées.
+    local content="$1" line key value filtered="" allowed=" " value_pattern
+    shift
+    for key in "$@"; do
+        allowed+="$key "
+    done
+    value_pattern="^(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        if [[ "$line" == "$key" || "$allowed" != *" $key "* ]]; then
+            log_warn "Sortie helper ignorée : $line"
+            continue
+        fi
+        if [[ "$value" =~ $value_pattern ]]; then
+            filtered+="$line"$'\n'
+        else
+            log_warn "Valeur helper ignorée ($key)"
+        fi
+    done <<< "$content"
+    if [[ -n "$filtered" ]]; then
+        eval "$filtered"
+    fi
+}
+
 load_install_profile_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
@@ -169,7 +196,9 @@ load_install_profile_plan() {
         log_error "$plan_shell"
         exit 1
     fi
-    eval "$plan_shell"
+    eval_named_shell_assignments "$plan_shell" \
+        INSTALL_PROFILE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG \
+        PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG
 }
 
 load_install_profile_plan
@@ -238,33 +267,6 @@ eval_prefixed_shell_assignments() {
             filtered+="$line"$'\n'
         else
             log_warn "Sortie helper ignorée ($prefix) : $line"
-        fi
-    done <<< "$content"
-    if [[ -n "$filtered" ]]; then
-        eval "$filtered"
-    fi
-}
-
-eval_named_shell_assignments() {
-    # Évalue uniquement les variables explicitement listées.
-    local content="$1" line key value filtered="" allowed=" " value_pattern
-    shift
-    for key in "$@"; do
-        allowed+="$key "
-    done
-    value_pattern="^(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        key="${line%%=*}"
-        value="${line#*=}"
-        if [[ "$line" == "$key" || "$allowed" != *" $key "* ]]; then
-            log_warn "Sortie helper ignorée : $line"
-            continue
-        fi
-        if [[ "$value" =~ $value_pattern ]]; then
-            filtered+="$line"$'\n'
-        else
-            log_warn "Valeur helper ignorée ($key)"
         fi
     done <<< "$content"
     if [[ -n "$filtered" ]]; then
