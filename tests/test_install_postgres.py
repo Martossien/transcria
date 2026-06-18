@@ -19,6 +19,7 @@ from transcria.install_postgres import (
     render_connection_failure,
     render_database_sql,
     render_encoding_warnings,
+    render_pg_hba_rewrite_result,
     render_role_sql,
     render_schema_action_log,
     render_state_query,
@@ -361,6 +362,22 @@ def test_install_postgres_cli_validates_inputs(capsys):
     out = capsys.readouterr().out
     assert "Nom de base invalide" in out
     assert "Port invalide" in out
+
+
+def test_render_pg_hba_rewrite_result_decides_reload_action():
+    assert render_pg_hba_rewrite_result("changed=0") == "ACTION:none\n"
+    assert render_pg_hba_rewrite_result("changed=2") == "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
+
+
+def test_render_pg_hba_rewrite_result_rejects_invalid_result():
+    with pytest.raises(ValueError, match="résultat pg_hba.conf invalide : modified=1"):
+        render_pg_hba_rewrite_result("modified=1")
+
+
+def test_install_postgres_cli_renders_pg_hba_rewrite_result(capsys):
+    assert main(["--pg-hba-rewrite-result", "--result", "changed=1"]) == 0
+
+    assert capsys.readouterr().out == "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
 
 
 def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():

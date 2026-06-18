@@ -744,24 +744,35 @@ _setup_postgres() {
         if [[ -f "$pg_hba" ]]; then
             local pg_hba_result=""
             if pg_hba_result=$(pg_admin_python_module transcria.install_postgres "$pg_hba"); then
-                if [[ "$pg_hba_result" != "changed=0" ]]; then
-                    log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
-                    if [[ "$pg_hba_result" =~ ^changed=[1-9][0-9]*$ ]]; then
-                        if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
-                            if [[ $EUID -eq 0 ]]; then
-                                systemctl reload postgresql
-                            else
-                                sudo systemctl reload postgresql
-                            fi
-                        elif [[ "$HAVE_SERVICE" = true ]]; then
-                            if [[ $EUID -eq 0 ]]; then
-                                service postgresql reload
-                            else
-                                sudo service postgresql reload
-                            fi
-                        fi
-                        sleep 1
+                local pg_hba_decision="" pg_hba_reload=false
+                pg_hba_decision=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+                    --pg-hba-rewrite-result \
+                    --result "$pg_hba_result") || {
+                    log_warn "Résultat pg_hba.conf invalide : $pg_hba_result"
+                    return 1
+                }
+                while IFS= read -r line; do
+                    if [[ "$line" == INFO:* ]]; then
+                        log_info "${line#INFO:}"
+                    elif [[ "$line" == ACTION:reload ]]; then
+                        pg_hba_reload=true
                     fi
+                done <<< "$pg_hba_decision"
+                if [[ "$pg_hba_reload" = true ]]; then
+                    if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
+                        if [[ $EUID -eq 0 ]]; then
+                            systemctl reload postgresql
+                        else
+                            sudo systemctl reload postgresql
+                        fi
+                    elif [[ "$HAVE_SERVICE" = true ]]; then
+                        if [[ $EUID -eq 0 ]]; then
+                            service postgresql reload
+                        else
+                            sudo service postgresql reload
+                        fi
+                    fi
+                    sleep 1
                 fi
             else
                 log_warn "Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL."

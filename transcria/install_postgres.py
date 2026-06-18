@@ -14,6 +14,7 @@ from urllib.parse import quote
 _LOCAL_TCP_PEER_RE = re.compile(
     r"^(?P<prefix>\s*host\s+(?:all|replication)\s+all\s+(?:127\.0\.0\.1/32|::1/128)\s+)(?:ident|peer)(?P<suffix>\s*(?:#.*)?)$"
 )
+_PG_HBA_REWRITE_RESULT_RE = re.compile(r"^changed=(?P<count>[0-9]+)$")
 _PG_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,62}$")
 _STATE_QUERIES = {
     "database-exists": "SELECT 1 FROM pg_database WHERE datname = :'dbname';",
@@ -207,6 +208,17 @@ def render_schema_action_log(*, db: str, action: str) -> str:
     raise ValueError(f"action Alembic PostgreSQL inconnue : {action}")
 
 
+def render_pg_hba_rewrite_result(result: str) -> str:
+    """Interprète le résultat de réécriture pg_hba.conf pour le shell."""
+    match = _PG_HBA_REWRITE_RESULT_RE.fullmatch(result.strip())
+    if not match:
+        raise ValueError(f"résultat pg_hba.conf invalide : {result}")
+    changed = int(match.group("count"))
+    if changed == 0:
+        return "ACTION:none\n"
+    return "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -272,6 +284,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--connection-failure", action="store_true", help="rend les messages d'échec de connexion PostgreSQL")
     parser.add_argument("--state-summary", action="store_true", help="rend le résumé d'état PostgreSQL")
     parser.add_argument("--schema-action-log", action="store_true", help="rend le message initial d'une action Alembic")
+    parser.add_argument("--pg-hba-rewrite-result", action="store_true", help="interprète le résultat changed=N de réécriture pg_hba.conf")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -290,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--local-pg", default=None)
     parser.add_argument("--alembic-version", default="")
     parser.add_argument("--action", default=None)
+    parser.add_argument("--result", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -433,6 +447,17 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             print(render_schema_action_log(db=args.db, action=args.action), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.pg_hba_rewrite_result:
+        if args.result is None:
+            print("--result requis avec --pg-hba-rewrite-result", file=sys.stderr)
+            return 2
+        try:
+            print(render_pg_hba_rewrite_result(args.result), end="")
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

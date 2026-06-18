@@ -240,6 +240,14 @@ def test_install_script_delegates_postgres_state_queries():
     assert "tables public=$has_schema" not in content
 
 
+def test_install_script_delegates_pg_hba_rewrite_result_parsing():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--pg-hba-rewrite-result" in content
+    assert '"$pg_hba_result" =~ ^changed=' not in content
+    assert '[[ "$pg_hba_result" != "changed=0" ]]' not in content
+
+
 def test_install_script_delegates_postgres_encoding_warnings():
     content = _INSTALL.read_text(encoding="utf-8")
 

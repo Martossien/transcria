@@ -532,6 +532,9 @@ Le résumé d'état PostgreSQL avant Alembic (`tables public`, version Alembic,
 nombre d'utilisateurs) est rendu par `transcria.install_postgres --state-summary`.
 Les messages initiaux associés aux actions Alembic (`keep`, `upgrade-existing`,
 `create`) sont rendus par `transcria.install_postgres --schema-action-log`.
+L'interprétation du résultat de réécriture `pg_hba.conf` (`changed=N` →
+`ACTION:none|reload`) passe par `transcria.install_postgres --pg-hba-rewrite-result`,
+afin d'éviter une regex de décision côté shell.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.
