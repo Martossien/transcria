@@ -243,6 +243,14 @@ def test_install_script_delegates_postgres_encoding_warnings():
     assert "L'application force client_encoding=utf8" not in content
 
 
+def test_install_script_delegates_postgres_connection_failure_messages():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--connection-failure" in content
+    assert "Connexion PostgreSQL impossible avec le rôle" not in content
+    assert "Créez la base et le rôle côté serveur" not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 

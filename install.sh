@@ -805,12 +805,21 @@ _setup_postgres() {
     fi
 
     if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
-        log_error "Connexion PostgreSQL impossible avec le rôle '$user' sur '$db@$host:$port'."
-        if [[ "$local_pg" = true ]]; then
-            log_warn "Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe."
-        else
-            log_warn "Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password."
-        fi
+        local connection_failure=""
+        connection_failure=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --connection-failure \
+            --db "$db" \
+            --user "$user" \
+            --host "$host" \
+            --port "$port" \
+            --local-pg "$local_pg")
+        while IFS= read -r line; do
+            if [[ "$line" == ERROR:* ]]; then
+                log_error "${line#ERROR:}"
+            elif [[ "$line" == WARN:* ]]; then
+                log_warn "${line#WARN:}"
+            fi
+        done <<< "$connection_failure"
         return 1
     fi
     log_ok "Connexion PostgreSQL validée"

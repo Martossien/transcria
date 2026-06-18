@@ -177,6 +177,18 @@ def render_encoding_warnings(db: str, encoding: str) -> str:
     ]) + "\n"
 
 
+def render_connection_failure(*, db: str, user: str, host: str, port: str, local_pg: str | bool) -> str:
+    """Rend les messages d'échec de connexion PostgreSQL."""
+    lines = [
+        f"ERROR:Connexion PostgreSQL impossible avec le rôle '{user}' sur '{db}@{host}:{port}'.",
+    ]
+    if parse_bool(local_pg, name="local_pg"):
+        lines.append("WARN:Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe.")
+    else:
+        lines.append("WARN:Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password.")
+    return "\n".join(lines) + "\n"
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -239,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--database-sql", action="store_true", help="rend le SQL idempotent de création de base PostgreSQL")
     parser.add_argument("--state-query", choices=sorted(_STATE_QUERIES), default=None, help="rend une requête de lecture d'état PostgreSQL")
     parser.add_argument("--encoding-warnings", action="store_true", help="rend les avertissements d'encodage PostgreSQL")
+    parser.add_argument("--connection-failure", action="store_true", help="rend les messages d'échec de connexion PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -254,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--non-interactive", default=None)
     parser.add_argument("--pg-migrate", default=None)
     parser.add_argument("--encoding", default=None)
+    parser.add_argument("--local-pg", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -356,6 +370,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"arguments manquants pour --encoding-warnings: {', '.join(missing)}", file=sys.stderr)
             return 2
         print(render_encoding_warnings(args.db, args.encoding), end="")
+        return 0
+
+    if args.connection_failure:
+        missing = [name for name in ("db", "user", "host", "port", "local_pg") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --connection-failure: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_connection_failure(db=args.db, user=args.user, host=args.host, port=args.port, local_pg=args.local_pg), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         return 0
 
     if args.path is None:

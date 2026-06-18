@@ -16,6 +16,7 @@ from transcria.install_postgres import (
     main,
     parse_bool,
     parse_non_negative_int,
+    render_connection_failure,
     render_database_sql,
     render_encoding_warnings,
     render_role_sql,
@@ -258,6 +259,35 @@ def test_install_postgres_cli_renders_encoding_warnings(capsys):
     assert main(["--encoding-warnings", "--db", "transcria", "--encoding", "LATIN1"]) == 0
 
     assert "LATIN1" in capsys.readouterr().out
+
+
+def test_render_connection_failure_for_local_postgres():
+    assert render_connection_failure(db="transcria", user="app", host="127.0.0.1", port="5432", local_pg=True) == (
+        "ERROR:Connexion PostgreSQL impossible avec le rôle 'app' sur 'transcria@127.0.0.1:5432'.\n"
+        "WARN:Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe.\n"
+    )
+
+
+def test_render_connection_failure_for_remote_postgres():
+    assert render_connection_failure(db="transcria", user="app", host="db.internal", port="5432", local_pg=False) == (
+        "ERROR:Connexion PostgreSQL impossible avec le rôle 'app' sur 'transcria@db.internal:5432'.\n"
+        "WARN:Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password.\n"
+    )
+
+
+def test_install_postgres_cli_renders_connection_failure(capsys):
+    assert main([
+        "--connection-failure",
+        "--db", "transcria",
+        "--user", "app",
+        "--host", "db.internal",
+        "--port", "5432",
+        "--local-pg", "false",
+    ]) == 0
+
+    rendered = capsys.readouterr().out
+    assert rendered.startswith("ERROR:Connexion PostgreSQL impossible")
+    assert "Créez la base" in rendered
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):
