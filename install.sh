@@ -206,7 +206,7 @@ ask() {
     # ask VARNAME "Question" "défaut"
     local varname="$1" question="$2" default="${3:-}"
     if [[ "$NON_INTERACTIVE" = true ]]; then
-        eval "$varname=\"$default\""
+        printf -v "$varname" '%s' "$default"
         return
     fi
     if [[ -n "$default" ]]; then
@@ -216,7 +216,7 @@ ask() {
     fi
     local answer
     read -r answer
-    eval "$varname=\"${answer:-$default}\""
+    printf -v "$varname" '%s' "${answer:-$default}"
 }
 
 ask_yn() {

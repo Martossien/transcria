@@ -59,6 +59,13 @@ def test_install_script_shell_syntax_is_valid():
     assert result.returncode == 0, result.stderr
 
 
+def test_install_script_does_not_eval_interactive_answers():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert 'eval "$varname=' not in content
+    assert 'printf -v "$varname"' in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
