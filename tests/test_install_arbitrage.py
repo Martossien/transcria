@@ -4,9 +4,10 @@ import os
 import stat
 from pathlib import Path
 
+import pytest
 import yaml
 
-from transcria.install_arbitrage import apply_profile, render_wrapper, status
+from transcria.install_arbitrage import apply_profile, render_setup_log, render_wrapper, status
 
 
 def _make_repo(tmp_path: Path) -> tuple[Path, Path]:
@@ -82,3 +83,37 @@ def test_status_reports_configured_script(tmp_path):
 
     assert lines[0] == "services.arbitrage_script: ./scripts/launch_arbitrage.sh"
     assert "script introuvable" in lines[1]
+
+
+def test_render_setup_log_for_llm_selection_events():
+    assert render_setup_log(event="profile-skipped", profile="web") == "INFO:Profil web : LLM d'arbitrage locale non requise\n"
+    assert render_setup_log(event="vram-too-low", value="8192") == "WARN:VRAM totale 8192 Mio (< 12 Go) — pas de LLM d'arbitrage local.\n"
+    assert render_setup_log(event="raw-mode") == (
+        "INFO:TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés).\n"
+    )
+    assert render_setup_log(event="opencode-missing") == (
+        "WARN:opencode absent — LLM d'arbitrage non configurable (transcription brute).\n"
+    )
+    assert render_setup_log(event="opencode-install-later") == (
+        "INFO:Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard.\n"
+    )
+    assert render_setup_log(event="vram-status", value="49152", gpu_count="2", max_mb="24576") == (
+        "OK:VRAM : total 49152 Mio sur 2 GPU (plus grande carte 24576 Mio)\n"
+    )
+    assert render_setup_log(event="planner-fallback") == (
+        "WARN:Planner de placement indisponible — recommandation par VRAM totale (moins fiable).\n"
+    )
+    assert render_setup_log(event="no-tier") == (
+        "WARN:Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée.\n"
+    )
+    assert render_setup_log(event="recommended-tier", tier="24", label="Qwen test") == (
+        "INFO:Palier recommandé : 24 Go → Qwen test\n"
+    )
+    assert render_setup_log(event="tiers-info") == (
+        "INFO:Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer.\n"
+    )
+
+
+def test_render_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement LLM inconnu : bad"):
+        render_setup_log(event="bad")

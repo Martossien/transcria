@@ -440,6 +440,9 @@ génère `scripts/generated/launch_arbitrage.local.sh`, pointe
 `services.arbitrage_script` vers ce wrapper local et met à jour la calibration GPU via
 les helpers Python. `scripts/launch_arbitrage.sh` redevient un exemple/compatibilité,
 pas un fichier local à réécrire.
+Les messages de sélection initiale de la LLM d'arbitrage (profil sans LLM, VRAM
+insuffisante, opencode absent, statut VRAM, fallback planner et palier recommandé)
+passent aussi par `transcria.install_arbitrage --setup-log`.
 Le rendu systemd legacy `transcria.service` utilise désormais aussi
 `transcria.install_systemd` au lieu d'un bloc `sed`. L'ajustement local
 `pg_hba.conf` est isolé dans `transcria.install_postgres`, qui transforme uniquement

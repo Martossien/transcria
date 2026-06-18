@@ -1534,8 +1534,34 @@ fi
 # ============================================================================
 log_section "LLM d'arbitrage — sélection selon la VRAM"
 
+log_llm_setup_event() {
+    local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --setup-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$profile" \
+        --gpu-count "$gpu_count" \
+        --max-mb "$max_mb" \
+        --tier-value "$tier" \
+        --label "$label") || {
+        log_error "Impossible de rendre le message LLM : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie LLM ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
-    log_info "Profil $INSTALL_PROFILE : LLM d'arbitrage locale non requise"
+    log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
 else
 
 # Détection de la VRAM (en plus de GPU_COUNT déjà connu plus haut).
@@ -1572,13 +1598,13 @@ declare -A LLM_DIR=(   [12]="Qwen3.5-9B-Q5_K_M"        [16]="Qwen3.5-9B-Q6_K"   
 declare -A LLM_LABEL=( [12]="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)"  [16]="Qwen3.5-9B Q6_K (256K, ~7 Go)"  [24]="Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, ~19 Go — mono-GPU 24 Go)"  [32]="Qwen3.6-27B Q5_K_M (192K, ~19 Go)"  [48]="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)"  [64]="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)" )
 
 if (( GPU_VRAM_TOTAL_MB < 11500 )); then
-    log_warn "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go) — pas de LLM d'arbitrage local."
-    log_info "TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)."
+    log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
+    log_llm_setup_event raw-mode
 elif [[ -z "${OPENCODE_BIN:-}" ]]; then
-    log_warn "opencode absent — LLM d'arbitrage non configurable (transcription brute)."
-    log_info "Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard."
+    log_llm_setup_event opencode-missing
+    log_llm_setup_event opencode-install-later
 else
-    log_ok "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio sur ${GPU_COUNT} GPU (plus grande carte ${GPU_VRAM_MAX_MB} Mio)"
+    log_llm_setup_event vram-status "$GPU_VRAM_TOTAL_MB" "" "$GPU_COUNT" "$GPU_VRAM_MAX_MB"
     # Recommandation par PLACEMENT réel (tient compte du mono/split et de la taille de
     # CHAQUE carte) ; repli défensif sur la table par somme si le planner échoue.
     REC_TIER=""
@@ -1594,15 +1620,15 @@ else
     fi
     if [[ -z "$REC_TIER" ]]; then
         REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
-        log_warn "Planner de placement indisponible — recommandation par VRAM totale (moins fiable)."
+        log_llm_setup_event planner-fallback
     fi
     if [[ "$REC_TIER" == "0" || -z "$REC_TIER" ]]; then
         REC_TIER=""
-        log_warn "Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée."
+        log_llm_setup_event no-tier
     else
-        log_info "Palier recommandé : ${REC_TIER} Go → ${LLM_LABEL[$REC_TIER]}"
+        log_llm_setup_event recommended-tier "" "" "" "" "$REC_TIER" "${LLM_LABEL[$REC_TIER]}"
     fi
-    log_info "Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer."
+    log_llm_setup_event tiers-info
     ask LLM_TIER "Palier LLM à installer" "$REC_TIER"
 
     if [[ -n "${LLM_TIER:-}" && -n "${LLM_REPO[$LLM_TIER]:-}" ]]; then

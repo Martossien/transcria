@@ -260,6 +260,23 @@ def test_install_script_delegates_opencode_setup_logs_and_prompt():
     assert "opencode non requis" not in content
 
 
+def test_install_script_delegates_llm_selection_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_arbitrage --setup-log" in content
+    assert "log_llm_setup_event" in content
+    assert "LLM d'arbitrage locale non requise" not in content
+    assert "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go)" not in content
+    assert "TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)" not in content
+    assert "opencode absent — LLM d'arbitrage non configurable" not in content
+    assert "Installez opencode puis relancez" not in content
+    assert "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio" not in content
+    assert "Planner de placement indisponible" not in content
+    assert "Aucun palier LLM ne tient" not in content
+    assert "Palier recommandé :" not in content
+    assert "Paliers : 12 / 16 / 24 / 32 / 48 / 64" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 
