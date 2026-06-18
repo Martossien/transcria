@@ -74,6 +74,21 @@ def test_install_script_resolves_user_home_through_python_helper():
     assert "python3 -c" not in content
 
 
+def test_install_script_delegates_prerequisite_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_prerequisites setup-log" in content
+    assert "log_prerequisite_event" in content
+    assert "Python $version :" not in content
+    assert "Python 3.11+ requis" not in content
+    assert "nvidia-smi — $GPU_COUNT" not in content
+    assert "nvidia-smi non trouvé ou inutilisable" not in content
+    assert "$name : $path" not in content
+    assert "$name manquant. Installer avec: apt install ffmpeg" not in content
+    assert "$name manquant." not in content
+    assert "lsof manquant — requis par start.sh/stop.sh" not in content
+
+
 def test_install_script_uses_run_indented_for_command_output_prefixing():
     content = _INSTALL.read_text(encoding="utf-8")
 

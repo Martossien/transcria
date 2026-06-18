@@ -589,6 +589,8 @@ Les messages et la question d'installation opencode passent par
 uniquement le téléchargement, les permissions et la configuration effective.
 Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
+Les messages de prérequis (Python, nvidia-smi et binaires requis/optionnels)
+passent par `transcria.install_prerequisites setup-log`.
 La même brique fournit `first-available` pour les alternatives `hf`/`huggingface-cli`,
 `psql` et le fallback PATH de `llama-server`.
 Les capacités système (`sudo`, `runuser`, `systemctl`, `service`, `nvidia-smi`) sont

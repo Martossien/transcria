@@ -473,19 +473,42 @@ secure_env_file() {
 # ============================================================================
 log_section "Vérification des prérequis"
 
+log_prerequisite_event() {
+    local event="$1" name="${2:-}" value="${3:-}" path="${4:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites setup-log \
+        --event "$event" \
+        --name "$name" \
+        --value "$value" \
+        --path "$path") || {
+        log_error "Impossible de rendre le message prérequis : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie prérequis ignorée : $line"
+    fi
+}
+
 PYTHON_BIN=""
 for candidate in python3.13 python3.12 python3.11 python3; do
     if command -v "$candidate" &>/dev/null; then
         version=$("$candidate" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true)
         if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
             PYTHON_BIN="$candidate"
-            log_ok "Python $version : $(which $candidate)"
+            log_prerequisite_event python-ok "" "$version" "$(which "$candidate")"
             break
         fi
     fi
 done
 if [[ -z "$PYTHON_BIN" ]]; then
-    log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
+    log_prerequisite_event python-missing
     exit 1
 fi
 
@@ -501,9 +524,9 @@ NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHO
 eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
     GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING
 if [[ -z "$NVIDIA_WARNING" ]]; then
-    log_ok "nvidia-smi — $GPU_COUNT GPU(s), CUDA $CUDA_VER_FROM_SMI"
+    log_prerequisite_event nvidia-ok "" "$GPU_COUNT" "$CUDA_VER_FROM_SMI"
 else
-    log_warn "nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)"
+    log_prerequisite_event nvidia-missing
 fi
 
 PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
@@ -516,21 +539,13 @@ while IFS=$'\t' read -r status name path; do
     [[ -z "$name" ]] && continue
     case "$status" in
         OK)
-            log_ok "$name : $path"
+            log_prerequisite_event binary-ok "$name" "" "$path"
             ;;
         MISSING_REQUIRED)
-            if [[ "$name" = "ffmpeg" || "$name" = "ffprobe" ]]; then
-                log_error "$name manquant. Installer avec: apt install ffmpeg"
-            else
-                log_error "$name manquant."
-            fi
+            log_prerequisite_event binary-required-missing "$name"
             ;;
         MISSING_OPTIONAL)
-            if [[ "$name" = "lsof" ]]; then
-                log_warn "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof"
-            else
-                log_warn "$name manquant"
-            fi
+            log_prerequisite_event binary-optional-missing "$name"
             ;;
     esac
 done <<< "$PREREQ_BINARIES_OUT"
