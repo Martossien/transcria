@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import sys
 from dataclasses import dataclass
 from typing import Any
 
@@ -117,6 +118,7 @@ class PlanRenderContext:
     postgres_migrate: bool = False
     doctor_profile: str | None = None
     doctor_enabled: bool = True
+    doctor_strict: bool = False
 
 
 def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> str:
@@ -143,6 +145,7 @@ def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> s
         f"needs_admin_config={str(plan.needs_admin_config).lower()}",
         f"doctor_profile={context.doctor_profile or plan.profile}",
         f"doctor_enabled={str(context.doctor_enabled).lower()}",
+        f"doctor_strict={str(context.doctor_strict).lower()}",
         "",
         "systemd_units:",
     ]
@@ -226,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pg-user", default="transcria")
     parser.add_argument("--pg-migrate", action="store_true")
     parser.add_argument("--skip-doctor", action="store_true")
+    parser.add_argument("--strict-doctor", action="store_true")
     pg = parser.add_mutually_exclusive_group()
     pg.add_argument("--postgres", action="store_true", help="force PostgreSQL")
     pg.add_argument("--sqlite-dev", "--allow-sqlite-dev", "--no-postgres", action="store_true", help="force SQLite dev local")
@@ -236,6 +240,9 @@ def main(argv: list[str] | None = None) -> int:
         setup_postgres = True
     elif args.sqlite_dev:
         setup_postgres = False
+    if args.skip_doctor and args.strict_doctor:
+        print("--skip-doctor et --strict-doctor sont incompatibles", file=sys.stderr)
+        return 1
 
     try:
         plan = resolve_install_plan(
@@ -259,6 +266,7 @@ def main(argv: list[str] | None = None) -> int:
                 postgres_migrate=args.pg_migrate,
                 doctor_profile=args.profile,
                 doctor_enabled=not args.skip_doctor,
+                doctor_strict=args.strict_doctor,
             ),
         )
         print(sys_stdout, end="")

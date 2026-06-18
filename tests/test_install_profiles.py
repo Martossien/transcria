@@ -115,6 +115,7 @@ needs_llm=false
 needs_admin_config=true
 doctor_profile=web
 doctor_enabled=true
+doctor_strict=false
 
 systemd_units:
   - transcria-migrate.service
@@ -140,6 +141,7 @@ def test_render_install_plan_text_can_disable_doctor():
 
     assert "doctor_profile=web" in rendered
     assert "doctor_enabled=false" in rendered
+    assert "doctor_strict=false" in rendered
     assert rendered.count("systemd_units:") == 1
 
 
@@ -191,6 +193,7 @@ def test_install_profiles_cli_outputs_text_plan(capsys):
     assert "install_torch=false" in rendered
     assert "setup_postgres=false" in rendered
     assert "doctor_enabled=true" in rendered
+    assert "doctor_strict=false" in rendered
     assert "  - transcria-inference.service" in rendered
 
 
@@ -200,6 +203,22 @@ def test_install_profiles_cli_text_plan_honors_skip_doctor(capsys):
     rendered = capsys.readouterr().out
     assert "doctor_profile=web" in rendered
     assert "doctor_enabled=false" in rendered
+    assert "doctor_strict=false" in rendered
+
+
+def test_install_profiles_cli_text_plan_honors_strict_doctor(capsys):
+    assert main(["--profile", "web", "--format", "text", "--strict-doctor"]) == 0
+
+    rendered = capsys.readouterr().out
+    assert "doctor_enabled=true" in rendered
+    assert "doctor_strict=true" in rendered
+
+
+def test_install_profiles_cli_rejects_skip_and_strict_doctor(capsys):
+    assert main(["--profile", "web", "--format", "text", "--skip-doctor", "--strict-doctor"]) == 1
+
+    captured = capsys.readouterr()
+    assert "--skip-doctor et --strict-doctor sont incompatibles" in captured.err
 
 
 def test_install_profiles_cli_outputs_shell_plan(capsys):

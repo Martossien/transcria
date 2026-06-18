@@ -115,6 +115,7 @@ cd transcria
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
 ./install.sh --skip-doctor         # Sauter explicitement la validation post-install doctor
+./install.sh --strict-doctor       # Validation post-install stricte (warnings doctor = échec)
 
 # PostgreSQL
 ./install.sh --postgres             # PostgreSQL local : crée rôle/base, écrit DSN, applique alembic

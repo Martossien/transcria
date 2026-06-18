@@ -113,6 +113,15 @@ def test_install_script_supports_explicit_skip_doctor():
     assert 'DOCTOR_STATUS="sauté (--skip-doctor)"' in content
 
 
+def test_install_script_supports_strict_doctor():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--strict-doctor" in content
+    assert "STRICT_DOCTOR=true" in content
+    assert 'DOCTOR_ARGS+=(--strict)' in content
+    assert "--skip-doctor et --strict-doctor sont incompatibles" in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -407,8 +416,24 @@ def test_plan_honors_skip_doctor():
     assert result.returncode == 0
     assert "doctor_profile=web" in result.stdout
     assert "doctor_enabled=false" in result.stdout
+    assert "doctor_strict=false" in result.stdout
     assert "needs_llm=false" in result.stdout
     assert "  - transcria-web.service" in result.stdout
+
+
+def test_plan_honors_strict_doctor():
+    result = _run_install("--profile", "web", "--strict-doctor", "--plan")
+
+    assert result.returncode == 0
+    assert "doctor_enabled=true" in result.stdout
+    assert "doctor_strict=true" in result.stdout
+
+
+def test_plan_rejects_skip_and_strict_doctor():
+    result = _run_install("--profile", "web", "--skip-doctor", "--strict-doctor", "--plan")
+
+    assert result.returncode == 1
+    assert "--skip-doctor et --strict-doctor sont incompatibles" in result.stdout
 
 
 def test_invalid_split_sqlite_combination_fails_before_plan():

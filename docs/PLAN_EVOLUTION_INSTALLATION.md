@@ -576,6 +576,8 @@ des checks au profil, et valide les premiers invariants critiques
 `resource-node`, manifeste `resource_node.engines`, conflits systemd connus).
 `install.sh` lance `doctor --profile <profil>` par défaut en post-install ; le saut
 doit être explicite via `--skip-doctor` et apparaît dans `--plan`/le résumé final.
+`--strict-doctor` durcit cette barrière pour les installations préproduction/audit en
+promouvant les avertissements doctor en échec.
 
 Tâches :
 
