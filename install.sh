@@ -73,6 +73,11 @@ PROFILE_EXPLICIT=false
 PLAN_ONLY=false
 DOCTOR_STATUS="non exécuté"
 INF_LOG_DIR="/var/log"
+HAVE_NVIDIA_SMI=false
+HAVE_RUNUSER=false
+HAVE_SERVICE=false
+HAVE_SUDO=false
+HAVE_SYSTEMCTL=false
 
 # ── Parsing des arguments ─────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
@@ -232,9 +237,9 @@ is_local_pg_host() {
 
 pg_admin_psql() {
     # PostgreSQL local uniquement : exécute psql avec l'identité système postgres.
-    if command -v sudo &>/dev/null; then
+    if [[ "$HAVE_SUDO" = true ]]; then
         sudo -u postgres psql "$@"
-    elif [[ $EUID -eq 0 ]] && command -v runuser &>/dev/null; then
+    elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
         runuser -u postgres -- psql "$@"
     else
         return 127
@@ -243,9 +248,9 @@ pg_admin_psql() {
 
 pg_admin_python_module() {
     # PostgreSQL local uniquement : exécute un module Python avec l'identité système postgres.
-    if command -v sudo &>/dev/null; then
+    if [[ "$HAVE_SUDO" = true ]]; then
         sudo -u postgres env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"
-    elif [[ $EUID -eq 0 ]] && command -v runuser &>/dev/null; then
+    elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
         runuser -u postgres -- env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"
     else
         return 127
@@ -352,6 +357,10 @@ if [[ -z "$PYTHON_BIN" ]]; then
     log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
     exit 1
 fi
+
+SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+    system-capabilities --format shell)
+eval "$SYSTEM_CAPABILITIES_OUT"
 
 GPU_COUNT=0
 CUDA_VER_FROM_SMI=""
@@ -619,13 +628,13 @@ _setup_postgres() {
                 if [[ "$pg_hba_result" != "changed=0" ]]; then
                     log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
                     if [[ "$pg_hba_result" =~ ^changed=[1-9][0-9]*$ ]]; then
-                        if command -v systemctl &>/dev/null && systemctl is-active --quiet postgresql 2>/dev/null; then
+                        if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
                             if [[ $EUID -eq 0 ]]; then
                                 systemctl reload postgresql
                             else
                                 sudo systemctl reload postgresql
                             fi
-                        elif command -v service &>/dev/null; then
+                        elif [[ "$HAVE_SERVICE" = true ]]; then
                             if [[ $EUID -eq 0 ]]; then
                                 service postgresql reload
                             else
@@ -828,7 +837,7 @@ elif [[ "$PSQL_AVAILABLE" != true ]]; then
     log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
     log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
     exit 1
-elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 ]] && ! command -v sudo &>/dev/null; then
+elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
     log_error "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres)."
     log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
     exit 1
@@ -1160,7 +1169,7 @@ else
 # GPU_SIZES_CSV = tailles PAR carte (Mio) : c'est ce qui permet de raisonner par
 # PLACEMENT réel (mono/split, plus petite carte) et non sur la simple somme.
 GPU_VRAM_TOTAL_MB=0; GPU_VRAM_MAX_MB=0; GPU_SIZES_CSV=""
-if [[ "$GPU_COUNT" -gt 0 ]] && command -v nvidia-smi &>/dev/null; then
+if [[ "$GPU_COUNT" -gt 0 && "$HAVE_NVIDIA_SMI" = true ]]; then
     while read -r _mb; do
         [[ "$_mb" =~ ^[0-9]+$ ]] || continue
         GPU_VRAM_TOTAL_MB=$((GPU_VRAM_TOTAL_MB + _mb))
@@ -1360,7 +1369,7 @@ install_systemd_unit() {
         systemctl daemon-reload
         systemctl enable "$unit"
         log_ok "Service $unit installé et activé"
-    elif command -v sudo &>/dev/null; then
+    elif [[ "$HAVE_SUDO" = true ]]; then
         sudo cp "$rendered" "$dst"
         sudo chmod 644 "$dst"
         sudo systemctl daemon-reload
@@ -1434,7 +1443,7 @@ fi
 if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PROFILE" = "scheduler" || "$INSTALL_PROFILE" = "migrate" ) ]]; then
     log_section "Services systemd split"
 
-    if command -v systemctl &>/dev/null && systemctl is-enabled --quiet transcria 2>/dev/null; then
+    if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
         log_warn "transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :"
         log_warn "  sudo systemctl disable --now transcria.service"
     fi
@@ -1511,7 +1520,7 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
             systemctl daemon-reload
             systemctl enable transcria-inference
             log_ok "Service transcria-inference installé et activé"
-        elif command -v sudo &>/dev/null; then
+        elif [[ "$HAVE_SUDO" = true ]]; then
             sudo cp "$TMP_INF" "$INFERENCE_DST"
             sudo chmod 644 "$INFERENCE_DST"
             sudo systemctl daemon-reload

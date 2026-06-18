@@ -508,6 +508,10 @@ Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
 La même brique fournit `first-available` pour les alternatives `hf`/`huggingface-cli`,
 `psql` et le fallback PATH de `llama-server`.
+Les capacités système (`sudo`, `runuser`, `systemctl`, `service`, `nvidia-smi`) sont
+détectées une seule fois via `transcria.install_prerequisites system-capabilities`,
+ce qui évite les `command -v` dispersés tout en gardant les actions privilégiées
+explicites dans `install.sh`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

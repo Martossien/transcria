@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from transcria.install_prerequisites import (
     check_binaries,
+    detect_system_capabilities,
     first_available,
     has_missing_required,
     main,
     render_binary_checks,
     render_first_available,
+    render_system_capabilities,
 )
 
 
@@ -45,6 +47,26 @@ def test_render_first_available_supports_shell_format():
 
     assert match is not None
     assert render_first_available(match, output_format="shell") == "FIRST_AVAILABLE_NAME=hf\nFIRST_AVAILABLE_PATH='/opt/tools/hf cli'"
+
+
+def test_detect_system_capabilities_maps_expected_binaries():
+    available = {"sudo", "systemctl", "nvidia-smi"}
+
+    capabilities = detect_system_capabilities(which=lambda name: f"/bin/{name}" if name in available else None)
+
+    assert capabilities == {
+        "HAVE_NVIDIA_SMI": True,
+        "HAVE_RUNUSER": False,
+        "HAVE_SERVICE": False,
+        "HAVE_SUDO": True,
+        "HAVE_SYSTEMCTL": True,
+    }
+
+
+def test_render_system_capabilities_shell_is_stable():
+    output = render_system_capabilities({"HAVE_SUDO": True, "HAVE_RUNUSER": False}, output_format="shell")
+
+    assert output == "HAVE_RUNUSER=false\nHAVE_SUDO=true"
 
 
 def test_install_prerequisites_cli_check_binaries_success(capsys, monkeypatch):
@@ -86,3 +108,14 @@ def test_install_prerequisites_cli_first_available_missing(capsys, monkeypatch):
     assert main(["first-available", "--name", "hf"]) == 1
 
     assert capsys.readouterr().out == ""
+
+
+def test_install_prerequisites_cli_system_capabilities(capsys, monkeypatch):
+    monkeypatch.setattr(
+        "transcria.install_prerequisites.detect_system_capabilities",
+        lambda: {"HAVE_SUDO": True, "HAVE_SYSTEMCTL": False},
+    )
+
+    assert main(["system-capabilities", "--format", "tsv"]) == 0
+
+    assert capsys.readouterr().out == "HAVE_SUDO\t1\nHAVE_SYSTEMCTL\t0\n"

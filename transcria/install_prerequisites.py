@@ -81,6 +81,26 @@ def render_first_available(check: BinaryCheck, *, output_format: str) -> str:
     raise ValueError(f"format non supporté: {output_format}")
 
 
+def detect_system_capabilities(*, which: WhichFn = shutil.which) -> dict[str, bool]:
+    """Détecte les outils système utilisés par les branches privilégiées de l'installateur."""
+    binaries = {
+        "sudo": "HAVE_SUDO",
+        "runuser": "HAVE_RUNUSER",
+        "systemctl": "HAVE_SYSTEMCTL",
+        "service": "HAVE_SERVICE",
+        "nvidia-smi": "HAVE_NVIDIA_SMI",
+    }
+    return {variable: which(binary) is not None for binary, variable in binaries.items()}
+
+
+def render_system_capabilities(capabilities: dict[str, bool], *, output_format: str) -> str:
+    if output_format == "shell":
+        return "\n".join(f"{key}={'true' if value else 'false'}" for key, value in sorted(capabilities.items()))
+    if output_format == "tsv":
+        return "\n".join(f"{key}\t{'1' if value else '0'}" for key, value in sorted(capabilities.items()))
+    raise ValueError(f"format non supporté: {output_format}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers de prérequis système TranscrIA.")
     subparsers = parser.add_subparsers(dest="command")
@@ -92,6 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     first_parser = subparsers.add_parser("first-available", help="retourne le premier binaire disponible")
     first_parser.add_argument("--name", action="append", required=True)
     first_parser.add_argument("--format", choices=["tsv", "shell", "path", "name"], default="tsv")
+
+    caps_parser = subparsers.add_parser("system-capabilities", help="détecte les outils système disponibles")
+    caps_parser.add_argument("--format", choices=["tsv", "shell"], default="tsv")
 
     args = parser.parse_args(argv)
     if args.command == "check-binaries":
@@ -105,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
         if match is None:
             return 1
         print(render_first_available(match, output_format=args.format))
+        return 0
+    if args.command == "system-capabilities":
+        print(render_system_capabilities(detect_system_capabilities(), output_format=args.format))
         return 0
 
     print("commande prérequis inconnue", file=sys.stderr)

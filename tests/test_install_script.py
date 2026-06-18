@@ -160,6 +160,19 @@ def test_install_script_finds_download_clients_through_python_helper():
     assert "command -v llama-server" not in content
 
 
+def test_install_script_detects_system_capabilities_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "system-capabilities --format shell" in content
+    assert "HAVE_SUDO" in content
+    assert "HAVE_SYSTEMCTL" in content
+    assert "command -v sudo" not in content
+    assert "command -v runuser" not in content
+    assert "command -v systemctl" not in content
+    assert "command -v service" not in content
+    assert "command -v nvidia-smi" not in content
+
+
 def test_install_script_reads_opencode_version_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
