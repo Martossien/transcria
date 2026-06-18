@@ -1090,6 +1090,45 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
 | `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `idle_timeout_s > 0` active l'idle-stop opportuniste de ce moteur (défaut `0` = résident) |
 
+`./install.sh --profile resource-node` génère ce manifeste pour Cohere et Whisper
+lors de la création initiale de `config.yaml`, si des GPU et les scripts
+`scripts/launch_stt_*.sh` sont détectés. Une config existante n'est pas réécrite.
+
+`venv/bin/python scripts/doctor.py --profile resource-node` valide le manifeste
+avant exploitation : noms et ports uniques, ports valides, GPU entier positif,
+`gpu_mem` dans `0 < valeur <= 1`, port non réservé au service `inference_service`
+(`INFERENCE_PORT`, 8002 par défaut), script présent, script non exécutable signalé
+en avertissement. Il sonde aussi les ports STT locaux : un port libre est valide,
+un serveur OpenAI-compatible déjà actif est valide, un autre service occupant le
+port est un échec. Un nœud sans moteur STT déclaré reste valide pour
+`/infer/diarize` et `/infer/voice-embed`, mais le doctor émet un avertissement car
+`/engines/ensure` ne pourra lancer aucun STT.
+
+Smoke de plan de contrôle, sans lancement GPU :
+
+```bash
+TRANSCRIA_INFERENCE_API_KEY=... \
+  venv/bin/python scripts/smoke_resource_node.py \
+  --url http://127.0.0.1:8002 \
+  --api-key-env TRANSCRIA_INFERENCE_API_KEY
+```
+
+Rotation de clé :
+
+```bash
+venv/bin/python scripts/rotate_resource_node_key.py --print-key
+sudo systemctl restart transcria-inference
+```
+
+Par défaut, le script écrit `.env` atomiquement, crée `.env.bak`, applique des
+permissions `0600` et n'affiche pas le secret sans `--print-key`.
+
+Côté frontale/scheduler, `doctor --profile web|scheduler|all-in-one` vérifie aussi
+qu'un backend STT distant (`inference.stt.backends.*.url`) est accompagné d'un
+nœud de contrôle (`inference.url` ou `inference.nodes[]`). Sans ce nœud, la
+transcription distante peut être configurée, mais l'auto-lancement
+`/engines/ensure` ne peut pas être déclenché proprement.
+
 ---
 
 ## Section `notifications`
