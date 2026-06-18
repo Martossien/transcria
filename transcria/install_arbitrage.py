@@ -8,6 +8,7 @@ from pathlib import Path
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
+from transcria.install_prerequisites import first_available
 
 TIER_VRAM_MB: dict[str, int] = {
     "12gb": 12000,
@@ -35,6 +36,12 @@ class LlmTierMetadata:
     file: str
     directory: str
     label: str
+
+
+@dataclass(frozen=True)
+class DownloadClient:
+    name: str
+    path: Path | None
 
 
 LLM_TIERS: dict[str, LlmTierMetadata] = {
@@ -116,6 +123,23 @@ def render_tier_metadata_shell(tier: str) -> str:
             f"LLM_FILE={_shell_quote(metadata.file)}",
             f"LLM_DIR={_shell_quote(metadata.directory)}",
             f"LLM_LABEL={_shell_quote(metadata.label)}",
+            "",
+        ]
+    )
+
+
+def select_download_client() -> DownloadClient:
+    """Sélectionne le client HuggingFace préféré sans lancer de téléchargement."""
+    match = first_available(["hf", "huggingface-cli"])
+    return DownloadClient(name=match.name if match else "", path=match.path if match else None)
+
+
+def render_download_client_shell(client: DownloadClient) -> str:
+    """Rend le client de téléchargement LLM sous forme d'affectations shell filtrables."""
+    return "\n".join(
+        [
+            f"LLM_HF_DL={_shell_quote(client.name)}",
+            f"LLM_HF_DL_PATH={_shell_quote(str(client.path or ''))}",
             "",
         ]
     )
@@ -328,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", default="")
     parser.add_argument("--recommend-tier", action="store_true", help="recommande un palier depuis --total-vram-mb")
     parser.add_argument("--tier-info", action="store_true", help="rend les métadonnées shell d'un palier")
+    parser.add_argument("--download-client", action="store_true", help="rend le client HuggingFace disponible pour télécharger la LLM")
     parser.add_argument("--total-vram-mb", type=int, default=0)
     args = parser.parse_args(argv)
 
@@ -362,6 +387,9 @@ def main(argv: list[str] | None = None) -> int:
                 print("--tier-value requis avec --tier-info", file=sys.stderr)
                 return 2
             print(render_tier_metadata_shell(args.tier_value), end="")
+            return 0
+        if args.download_client:
+            print(render_download_client_shell(select_download_client()), end="")
             return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):

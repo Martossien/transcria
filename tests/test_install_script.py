@@ -638,7 +638,8 @@ def test_install_script_finds_download_clients_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "cohere-download-plan" in content
-    assert "first-available --name hf --name huggingface-cli" in content
+    assert "arbitrage_helper --download-client" in content
+    assert "first-available --name hf --name huggingface-cli" not in content
     assert "first-available --name huggingface-cli --format shell" not in content
     assert "first-available --name llama-server" in content
     assert "check-binaries --required psql" in content

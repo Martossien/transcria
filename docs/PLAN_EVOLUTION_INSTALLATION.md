@@ -467,6 +467,9 @@ entre orchestration shell et logique Python testée.
 La matrice des paliers LLM d'arbitrage (repo, fichier GGUF, répertoire, libellé)
 et la recommandation par VRAM totale sont sorties de `install.sh` vers
 `transcria.install_arbitrage`, avec CLI shell filtrable et tests unitaires.
+La sélection du client de téléchargement LLM (`hf` puis `huggingface-cli`) est
+également rendue par `transcria.install_arbitrage --download-client`; le shell
+conserve seulement l'appel explicite de téléchargement du GGUF.
 La détection locale des modèles (Cohere, cache pyannote, SQUIM, premier GGUF)
 est également regroupée dans `transcria.install_models detect-local`; `install.sh`
 ne fait plus que charger les variables filtrées et afficher les statuts rendus.

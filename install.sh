@@ -1580,13 +1580,9 @@ else
         if [[ -f "$DEST/$GG" ]]; then
             log_llm_setup_event model-present "$DEST/$GG"
         elif ask_yn "$LLM_DOWNLOAD_PROMPT"; then
-            HF_DL=""
-            FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
-            if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
-                    first-available --name hf --name huggingface-cli --format shell 2>/dev/null); then
-                eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_DL_OUT"
-                HF_DL="$FIRST_AVAILABLE_NAME"
-            fi
+            LLM_DOWNLOAD_CLIENT=$(arbitrage_helper --download-client)
+            eval_named_shell_assignments "$LLM_DOWNLOAD_CLIENT" LLM_HF_DL LLM_HF_DL_PATH
+            HF_DL="$LLM_HF_DL"
             if [[ -z "$HF_DL" ]]; then
                 log_llm_setup_event hf-cli-missing
             else

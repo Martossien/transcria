@@ -8,13 +8,16 @@ import pytest
 import yaml
 
 from transcria.install_arbitrage import (
+    DownloadClient,
     apply_profile,
     get_tier_metadata,
     recommend_tier,
+    render_download_client_shell,
     render_prompt,
     render_setup_log,
     render_tier_metadata_shell,
     render_wrapper,
+    select_download_client,
     status,
 )
 
@@ -210,3 +213,25 @@ def test_render_tier_metadata_shell_is_filterable():
     assert "LLM_FILE='Qwen3.6-35B-A3B-UD-Q6_K.gguf'" in rendered
     assert "LLM_DIR='Qwen3.6-35B-A3B-UD-Q6_K'" in rendered
     assert "LLM_LABEL='Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)'" in rendered
+
+
+def test_select_download_client_prefers_hf(monkeypatch):
+    monkeypatch.setattr(
+        "transcria.install_arbitrage.first_available",
+        lambda names: type("Check", (), {"name": names[0], "path": Path("/usr/bin/hf")})(),
+    )
+
+    assert select_download_client() == DownloadClient(name="hf", path=Path("/usr/bin/hf"))
+
+
+def test_select_download_client_handles_missing_client(monkeypatch):
+    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+
+    assert select_download_client() == DownloadClient(name="", path=None)
+
+
+def test_render_download_client_shell_is_filterable():
+    rendered = render_download_client_shell(DownloadClient(name="huggingface-cli", path=Path("/opt/hf cli")))
+
+    assert "LLM_HF_DL='huggingface-cli'" in rendered
+    assert "LLM_HF_DL_PATH='/opt/hf cli'" in rendered
