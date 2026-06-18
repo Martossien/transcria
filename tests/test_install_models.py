@@ -17,6 +17,9 @@ from transcria.install_models import (
     render_model_detection_table,
     render_model_status_log,
     render_model_summary,
+    render_pyannote_download_prompt,
+    render_pyannote_setup_log,
+    render_pyannote_token_prompt,
     resolve_repo_relative_path,
 )
 
@@ -215,6 +218,32 @@ def test_render_cohere_setup_prompt_is_stable():
     assert rendered.endswith("  Votre choix [1/2/3] : ")
 
 
+def test_render_pyannote_setup_log_for_known_events():
+    assert render_pyannote_setup_log(event="missing-token") == "WARN:HF_TOKEN manquant — requis pour télécharger pyannote\n"
+    assert render_pyannote_setup_log(event="create-token-url") == (
+        "INFO:(Créer un token sur https://huggingface.co/settings/tokens)\n"
+    )
+    assert render_pyannote_setup_log(event="accept-terms-url") == (
+        "INFO:(Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-community-1)\n"
+    )
+    assert render_pyannote_setup_log(event="token-saved") == "OK:HF_TOKEN sauvegardé dans .env\n"
+    assert render_pyannote_setup_log(event="download-start") == "INFO:Téléchargement pyannote (peut prendre quelques minutes)...\n"
+    assert render_pyannote_setup_log(event="download-ok") == "OK:pyannote téléchargé\n"
+    assert render_pyannote_setup_log(event="download-failed") == (
+        "ERROR:Téléchargement pyannote échoué — vérifiez le token et les conditions HF\n"
+    )
+
+
+def test_render_pyannote_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement pyannote inconnu : bad"):
+        render_pyannote_setup_log(event="bad")
+
+
+def test_render_pyannote_prompts_are_stable():
+    assert render_pyannote_token_prompt() == "  HF_TOKEN (laisser vide pour ignorer) : "
+    assert render_pyannote_download_prompt() == "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"
+
+
 def test_install_models_cli_checks_cohere_non_empty(tmp_path: Path):
     cohere = tmp_path / "models" / "cohere"
     cohere.mkdir(parents=True)
@@ -292,6 +321,20 @@ def test_install_models_cli_prints_cohere_setup_prompt(capsys):
     assert main(["cohere-setup-prompt"]) == 0
 
     assert capsys.readouterr().out.endswith("  Votre choix [1/2/3] : ")
+
+
+def test_install_models_cli_prints_pyannote_setup_log(capsys):
+    assert main(["pyannote-setup-log", "--event", "download-ok"]) == 0
+
+    assert capsys.readouterr().out == "OK:pyannote téléchargé\n"
+
+
+def test_install_models_cli_prints_pyannote_prompts(capsys):
+    assert main(["pyannote-token-prompt"]) == 0
+    assert capsys.readouterr().out == "  HF_TOKEN (laisser vide pour ignorer) : "
+
+    assert main(["pyannote-download-prompt"]) == 0
+    assert capsys.readouterr().out == "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"
 
 
 def test_download_pyannote_pipeline_uses_token_and_model_id():

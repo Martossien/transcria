@@ -558,6 +558,10 @@ SQUIM, LLM, profils sans modèles locaux) sont rendues par
 Les messages et le prompt interactif de configuration Cohere passent par
 `transcria.install_models cohere-setup-log` et `cohere-setup-prompt`, le shell
 conservant seulement la saisie utilisateur et l'exécution du téléchargement.
+Les messages, prompts et résultat de préchargement pyannote passent également par
+`transcria.install_models pyannote-setup-log`, `pyannote-token-prompt` et
+`pyannote-download-prompt`, avec un flux shell explicite `if/else` pour le
+téléchargement.
 La lecture de version opencode passe par `transcria.install_opencode` au lieu d'un
 pipeline shell `--version | head`.
 La recherche du binaire opencode (PATH, home service, home utilisateur, chemin

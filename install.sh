@@ -1226,6 +1226,26 @@ log_cohere_setup_event() {
     fi
 }
 
+log_pyannote_setup_event() {
+    local event="$1" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-setup-log \
+        --event "$event") || {
+        log_error "Impossible de rendre le message pyannote : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie pyannote ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     # ── Cohere ASR ───────────────────────────────────────────────────────────
     COHERE_PATH=$(yaml_get "models.cohere_model_path")
@@ -1373,24 +1393,29 @@ fi
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$PYANNOTE_OK" = false ]]; then
     echo ""
     if [[ -z "$CURRENT_HF_TOKEN" ]]; then
-        log_warn "HF_TOKEN manquant — requis pour télécharger pyannote"
-        log_info "(Créer un token sur https://huggingface.co/settings/tokens)"
-        log_info "(Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-community-1)"
+        log_pyannote_setup_event missing-token
+        log_pyannote_setup_event create-token-url
+        log_pyannote_setup_event accept-terms-url
         if [[ "$NON_INTERACTIVE" = false ]]; then
-            echo -n "  HF_TOKEN (laisser vide pour ignorer) : "
+            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-token-prompt
             read -rs CURRENT_HF_TOKEN; echo ""
         fi
     fi
 
     if [[ -n "$CURRENT_HF_TOKEN" ]]; then
         env_set "HF_TOKEN" "$CURRENT_HF_TOKEN"
-        log_ok "HF_TOKEN sauvegardé dans .env"
+        log_pyannote_setup_event token-saved
 
-        if ask_yn "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"; then
-            log_info "Téléchargement pyannote (peut prendre quelques minutes)..."
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models download-pyannote \
-                --hf-token "$CURRENT_HF_TOKEN" && log_ok "pyannote téléchargé" && PYANNOTE_OK=true || \
-            log_error "Téléchargement pyannote échoué — vérifiez le token et les conditions HF"
+        PYANNOTE_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-download-prompt)
+        if ask_yn "$PYANNOTE_DOWNLOAD_PROMPT"; then
+            log_pyannote_setup_event download-start
+            if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models download-pyannote \
+                    --hf-token "$CURRENT_HF_TOKEN" >/dev/null; then
+                log_pyannote_setup_event download-ok
+                PYANNOTE_OK=true
+            else
+                log_pyannote_setup_event download-failed
+            fi
         fi
     fi
 fi

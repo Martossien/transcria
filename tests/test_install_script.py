@@ -216,6 +216,25 @@ def test_install_script_delegates_cohere_setup_logs_and_prompt():
     assert "Modèle Cohere ignoré" not in content
 
 
+def test_install_script_delegates_pyannote_setup_logs_and_prompts():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_models pyannote-setup-log" in content
+    assert "-m transcria.install_models pyannote-token-prompt" in content
+    assert "-m transcria.install_models pyannote-download-prompt" in content
+    assert "log_pyannote_setup_event" in content
+    assert "HF_TOKEN manquant — requis pour télécharger pyannote" not in content
+    assert "https://huggingface.co/settings/tokens" not in content
+    assert "Accepter les conditions" not in content
+    assert "HF_TOKEN (laisser vide pour ignorer)" not in content
+    assert "HF_TOKEN sauvegardé dans .env" not in content
+    assert "Télécharger pyannote/speaker-diarization-community-1 maintenant" not in content
+    assert "Téléchargement pyannote (peut prendre quelques minutes)" not in content
+    assert "pyannote téléchargé" not in content
+    assert "Téléchargement pyannote échoué" not in content
+    assert "&& log_ok \"pyannote téléchargé\"" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 
