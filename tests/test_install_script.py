@@ -156,7 +156,7 @@ def test_install_script_filters_named_helper_outputs_before_eval():
 def test_install_script_filters_profile_plan_output_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "INSTALL_PROFILE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG" in content
+    assert "INSTALL_PROFILE INSTALL_RUNTIME_ROLE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG" in content
     assert "PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG" in content
     assert 'eval "$plan_shell"' not in content
 
@@ -390,6 +390,7 @@ def test_plan_resource_node_defaults_to_no_postgres_and_no_llm():
 
     assert result.returncode == 0
     assert "profile=resource-node" in result.stdout
+    assert "runtime_role=none" in result.stdout
     assert "inference_service=true" in result.stdout
     assert "setup_postgres=false" in result.stdout
     assert "needs_local_models=true" in result.stdout
@@ -403,6 +404,7 @@ def test_plan_all_in_one_honors_no_service_and_no_torch():
 
     assert result.returncode == 0
     assert "profile=all-in-one" in result.stdout
+    assert "runtime_role=all" in result.stdout
     assert "systemd=false" in result.stdout
     assert "legacy_service=false" in result.stdout
     assert "install_torch=false" in result.stdout

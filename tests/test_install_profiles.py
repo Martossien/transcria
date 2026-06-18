@@ -20,17 +20,18 @@ def test_unknown_profile_fails_with_expected_values():
 
 
 @pytest.mark.parametrize(
-    ("profile", "units", "needs_local_models", "needs_llm", "needs_admin_config", "setup_postgres"),
+    ("profile", "runtime_role", "units", "needs_local_models", "needs_llm", "needs_admin_config", "setup_postgres"),
     [
-        ("all-in-one", ("transcria.service",), True, True, True, None),
-        ("web", ("transcria-migrate.service", "transcria-web.service"), False, False, True, True),
-        ("scheduler", ("transcria-migrate.service", "transcria-scheduler.service"), True, True, True, True),
-        ("resource-node", ("transcria-inference.service",), True, False, False, False),
-        ("migrate", ("transcria-migrate.service",), False, False, False, True),
+        ("all-in-one", "all", ("transcria.service",), True, True, True, None),
+        ("web", "web", ("transcria-migrate.service", "transcria-web.service"), False, False, True, True),
+        ("scheduler", "scheduler", ("transcria-migrate.service", "transcria-scheduler.service"), True, True, True, True),
+        ("resource-node", None, ("transcria-inference.service",), True, False, False, False),
+        ("migrate", None, ("transcria-migrate.service",), False, False, False, True),
     ],
 )
 def test_resolve_install_plan_matches_profile_matrix(
     profile,
+    runtime_role,
     units,
     needs_local_models,
     needs_llm,
@@ -39,6 +40,7 @@ def test_resolve_install_plan_matches_profile_matrix(
 ):
     plan = resolve_install_plan(profile)
 
+    assert plan.runtime_role == runtime_role
     assert plan.systemd_units == units
     assert plan.needs_local_models is needs_local_models
     assert plan.needs_llm is needs_llm
@@ -70,6 +72,7 @@ def test_install_plan_to_dict_is_json_stable():
 
     assert plan.to_dict() == {
         "profile": "web",
+        "runtime_role": "web",
         "legacy_service": False,
         "inference_service": False,
         "setup_postgres": True,
@@ -98,6 +101,7 @@ def test_render_install_plan_text_matches_install_script_contract():
     assert rendered == """TranscrIA install plan
 ======================
 profile=web
+runtime_role=web
 install_dir=/opt/transcria
 service_user=transcria
 systemd=true
@@ -151,6 +155,7 @@ def test_render_install_plan_shell_outputs_profile_decisions():
     rendered = render_install_plan_shell(plan)
 
     assert rendered == """INSTALL_PROFILE=resource-node
+INSTALL_RUNTIME_ROLE=''
 INSTALL_SERVICE=false
 INSTALL_INFERENCE=true
 SETUP_PG=false
@@ -165,6 +170,7 @@ def test_render_install_plan_shell_preserves_prompt_postgres_as_empty_string():
 
     rendered = render_install_plan_shell(plan)
 
+    assert "INSTALL_RUNTIME_ROLE=all\n" in rendered
     assert "SETUP_PG=''\n" in rendered
 
 
@@ -188,6 +194,7 @@ def test_install_profiles_cli_outputs_text_plan(capsys):
 
     rendered = capsys.readouterr().out
     assert "profile=resource-node" in rendered
+    assert "runtime_role=none" in rendered
     assert "install_dir=/opt/transcria" in rendered
     assert "service_user=gpu" in rendered
     assert "install_torch=false" in rendered
@@ -226,6 +233,7 @@ def test_install_profiles_cli_outputs_shell_plan(capsys):
 
     rendered = capsys.readouterr().out
     assert "INSTALL_PROFILE=web" in rendered
+    assert "INSTALL_RUNTIME_ROLE=web" in rendered
     assert "INSTALL_SERVICE=false" in rendered
     assert "SETUP_PG=true" in rendered
     assert "PROFILE_NEEDS_LOCAL_MODELS=false" in rendered

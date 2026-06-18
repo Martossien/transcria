@@ -214,7 +214,7 @@ load_install_profile_plan() {
         exit 1
     fi
     eval_named_shell_assignments "$plan_shell" \
-        INSTALL_PROFILE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG \
+        INSTALL_PROFILE INSTALL_RUNTIME_ROLE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG \
         PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG
 }
 
@@ -598,33 +598,19 @@ else
     log_ok "TRANSCRIA_SECRET présent dans .env"
 fi
 
-case "$INSTALL_PROFILE" in
-    all-in-one)
-        if [[ "$PROFILE_EXPLICIT" = true ]]; then
-            yaml_set "runtime.role" "all"
-            env_set "TRANSCRIA_ROLE" "all"
-            log_ok "Profil d'installation : all-in-one (TRANSCRIA_ROLE=all)"
-        else
-            log_ok "Profil d'installation : all-in-one (défaut)"
-        fi
-        ;;
-    web)
-        yaml_set "runtime.role" "web"
-        env_set "TRANSCRIA_ROLE" "web"
-        log_ok "Profil d'installation : web (TRANSCRIA_ROLE=web)"
-        ;;
-    scheduler)
-        yaml_set "runtime.role" "scheduler"
-        env_set "TRANSCRIA_ROLE" "scheduler"
-        log_ok "Profil d'installation : scheduler (TRANSCRIA_ROLE=scheduler)"
-        ;;
-    resource-node)
-        log_ok "Profil d'installation : resource-node (inference_service)"
-        ;;
-    migrate)
-        log_ok "Profil d'installation : migrate (Alembic only)"
-        ;;
-esac
+if [[ -n "${INSTALL_RUNTIME_ROLE:-}" && ( "$INSTALL_PROFILE" != "all-in-one" || "$PROFILE_EXPLICIT" = true ) ]]; then
+    yaml_set "runtime.role" "$INSTALL_RUNTIME_ROLE"
+    env_set "TRANSCRIA_ROLE" "$INSTALL_RUNTIME_ROLE"
+    log_ok "Profil d'installation : $INSTALL_PROFILE (TRANSCRIA_ROLE=$INSTALL_RUNTIME_ROLE)"
+elif [[ "$INSTALL_PROFILE" = "all-in-one" ]]; then
+    log_ok "Profil d'installation : all-in-one (défaut)"
+elif [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
+    log_ok "Profil d'installation : resource-node (inference_service)"
+elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
+    log_ok "Profil d'installation : migrate (Alembic only)"
+else
+    log_ok "Profil d'installation : $INSTALL_PROFILE"
+fi
 
 if [[ "$INSTALL_INFERENCE" = true ]]; then
     INFERENCE_KEY_STATUS=$(env_ensure_secret "TRANSCRIA_INFERENCE_API_KEY" 16 "urlsafe" "" "Clé API du service inference_service (/infer/* et /engines/*).")

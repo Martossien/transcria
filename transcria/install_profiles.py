@@ -13,6 +13,7 @@ VALID_INSTALL_PROFILES = ("all-in-one", "web", "scheduler", "resource-node", "mi
 @dataclass(frozen=True)
 class ProfileSpec:
     name: str
+    runtime_role: str | None
     legacy_service: bool
     inference_service: bool
     requires_postgres: bool
@@ -26,6 +27,7 @@ class ProfileSpec:
 _SPECS: dict[str, ProfileSpec] = {
     "all-in-one": ProfileSpec(
         name="all-in-one",
+        runtime_role="all",
         legacy_service=True,
         inference_service=False,
         requires_postgres=False,
@@ -37,6 +39,7 @@ _SPECS: dict[str, ProfileSpec] = {
     ),
     "web": ProfileSpec(
         name="web",
+        runtime_role="web",
         legacy_service=False,
         inference_service=False,
         requires_postgres=True,
@@ -48,6 +51,7 @@ _SPECS: dict[str, ProfileSpec] = {
     ),
     "scheduler": ProfileSpec(
         name="scheduler",
+        runtime_role="scheduler",
         legacy_service=False,
         inference_service=False,
         requires_postgres=True,
@@ -59,6 +63,7 @@ _SPECS: dict[str, ProfileSpec] = {
     ),
     "resource-node": ProfileSpec(
         name="resource-node",
+        runtime_role=None,
         legacy_service=False,
         inference_service=True,
         requires_postgres=False,
@@ -70,6 +75,7 @@ _SPECS: dict[str, ProfileSpec] = {
     ),
     "migrate": ProfileSpec(
         name="migrate",
+        runtime_role=None,
         legacy_service=False,
         inference_service=False,
         requires_postgres=True,
@@ -85,6 +91,7 @@ _SPECS: dict[str, ProfileSpec] = {
 @dataclass(frozen=True)
 class InstallPlan:
     profile: str
+    runtime_role: str | None
     legacy_service: bool
     inference_service: bool
     setup_postgres: bool | None
@@ -96,6 +103,7 @@ class InstallPlan:
     def to_dict(self) -> dict[str, Any]:
         return {
             "profile": self.profile,
+            "runtime_role": self.runtime_role,
             "legacy_service": self.legacy_service,
             "inference_service": self.inference_service,
             "setup_postgres": self.setup_postgres,
@@ -128,6 +136,7 @@ def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> s
         "TranscrIA install plan",
         "======================",
         f"profile={plan.profile}",
+        f"runtime_role={plan.runtime_role or 'none'}",
         f"install_dir={context.install_dir}",
         f"service_user={context.service_user}",
         f"systemd={str(bool(plan.systemd_units)).lower()}",
@@ -168,6 +177,7 @@ def render_install_plan_shell(plan: InstallPlan) -> str:
 
     assignments = {
         "INSTALL_PROFILE": plan.profile,
+        "INSTALL_RUNTIME_ROLE": plan.runtime_role,
         "INSTALL_SERVICE": plan.legacy_service,
         "INSTALL_INFERENCE": plan.inference_service,
         "SETUP_PG": plan.setup_postgres,
@@ -205,6 +215,7 @@ def resolve_install_plan(
     units = spec.systemd_units if systemd else ()
     return InstallPlan(
         profile=spec.name,
+        runtime_role=spec.runtime_role,
         legacy_service=spec.legacy_service and systemd,
         inference_service=spec.inference_service,
         setup_postgres=effective_postgres,
