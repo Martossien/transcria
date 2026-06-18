@@ -528,6 +528,8 @@ audités et testés hors du shell.
 Les messages d'échec de connexion PostgreSQL local/distant sont rendus par
 `transcria.install_postgres --connection-failure`, avec seulement le préfixage
 `ERROR`/`WARN` conservé côté shell.
+Le résumé d'état PostgreSQL avant Alembic (`tables public`, version Alembic,
+nombre d'utilisateurs) est rendu par `transcria.install_postgres --state-summary`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

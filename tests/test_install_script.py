@@ -230,9 +230,11 @@ def test_install_script_delegates_postgres_state_queries():
 
     assert "pg_state_query" in content
     assert "--state-query" in content
+    assert "--state-summary" in content
     assert "SELECT COUNT(*) FROM users" not in content
     assert "SELECT version_num FROM alembic_version" not in content
     assert "pg_encoding_to_char" not in content
+    assert "tables public=$has_schema" not in content
 
 
 def test_install_script_delegates_postgres_encoding_warnings():

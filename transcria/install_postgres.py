@@ -189,6 +189,13 @@ def render_connection_failure(*, db: str, user: str, host: str, port: str, local
     return "\n".join(lines) + "\n"
 
 
+def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int, alembic_version: str) -> str:
+    """Rend le résumé d'état PostgreSQL affiché avant décision Alembic."""
+    schema_count = parse_non_negative_int(has_schema, name="has_schema")
+    data_count = parse_non_negative_int(has_data, name="has_data")
+    return f"Base '{db}' : tables public={schema_count} | alembic='{alembic_version}' | utilisateurs={data_count}\n"
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -252,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-query", choices=sorted(_STATE_QUERIES), default=None, help="rend une requête de lecture d'état PostgreSQL")
     parser.add_argument("--encoding-warnings", action="store_true", help="rend les avertissements d'encodage PostgreSQL")
     parser.add_argument("--connection-failure", action="store_true", help="rend les messages d'échec de connexion PostgreSQL")
+    parser.add_argument("--state-summary", action="store_true", help="rend le résumé d'état PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -268,6 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pg-migrate", default=None)
     parser.add_argument("--encoding", default=None)
     parser.add_argument("--local-pg", default=None)
+    parser.add_argument("--alembic-version", default="")
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -379,6 +388,26 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             print(render_connection_failure(db=args.db, user=args.user, host=args.host, port=args.port, local_pg=args.local_pg), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.state_summary:
+        missing = [name for name in ("db", "has_schema", "has_data") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --state-summary: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(
+                render_state_summary(
+                    db=args.db,
+                    has_schema=args.has_schema,
+                    has_data=args.has_data,
+                    alembic_version=args.alembic_version,
+                ),
+                end="",
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

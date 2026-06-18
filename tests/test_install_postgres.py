@@ -21,6 +21,7 @@ from transcria.install_postgres import (
     render_encoding_warnings,
     render_role_sql,
     render_state_query,
+    render_state_summary,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
     validate_pg_inputs,
@@ -288,6 +289,24 @@ def test_install_postgres_cli_renders_connection_failure(capsys):
     rendered = capsys.readouterr().out
     assert rendered.startswith("ERROR:Connexion PostgreSQL impossible")
     assert "Créez la base" in rendered
+
+
+def test_render_state_summary_normalizes_database_counts():
+    assert render_state_summary(db="transcria", has_schema="12", has_data="3", alembic_version="abc123") == (
+        "Base 'transcria' : tables public=12 | alembic='abc123' | utilisateurs=3\n"
+    )
+
+
+def test_install_postgres_cli_renders_state_summary(capsys):
+    assert main([
+        "--state-summary",
+        "--db", "transcria",
+        "--has-schema", "12",
+        "--has-data", "3",
+        "--alembic-version", "abc123",
+    ]) == 0
+
+    assert capsys.readouterr().out == "Base 'transcria' : tables public=12 | alembic='abc123' | utilisateurs=3\n"
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):

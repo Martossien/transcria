@@ -851,7 +851,12 @@ _setup_postgres() {
     alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query alembic-version)" 2>/dev/null) || alembic_ver=""
     [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
     [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
-    log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
+    log_info "$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --state-summary \
+        --db "$db" \
+        --has-schema "$has_schema" \
+        --has-data "$has_data" \
+        --alembic-version "$alembic_ver")"
 
     # ── Schéma Alembic : up-to-date, vide, ou créer ────────────
     local schema_action
