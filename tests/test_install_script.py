@@ -363,6 +363,10 @@ def test_install_script_delegates_configuration_setup_logs():
     assert "Trop court — inchangé" not in content
     assert "config.yaml mis à jour" not in content
     assert ".env sécurisé pour l'utilisateur de service" not in content
+    assert "doctor.py sauté à la demande" not in content
+    assert "doctor.py : aucun échec bloquant" not in content
+    assert "doctor.py a détecté des points à corriger" not in content
+    assert "doctor.py non disponible — validation post-install sautée" not in content
 
 
 def test_install_script_delegates_postgres_schema_action_decision():

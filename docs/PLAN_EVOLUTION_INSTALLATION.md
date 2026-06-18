@@ -484,6 +484,8 @@ Le bilan final base de données / configuration / doctor est rendu par
 `transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
 `install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et
 `DOCTOR_STATUS`.
+Les messages de validation post-install `doctor.py` (sauté, OK, avertissements,
+indisponible) passent aussi par `transcria.install_summary setup-log`.
 Les messages de préparation et configuration interactive (`config.yaml`, `.env`,
 secrets, profil runtime, clé inference, proxy, mot de passe admin et sécurisation
 env) sont aussi rendus par

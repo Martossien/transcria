@@ -1955,7 +1955,7 @@ log_section "Validation post-install"
 
 if [[ "$SKIP_DOCTOR" = true ]]; then
     DOCTOR_STATUS="sauté (--skip-doctor)"
-    log_warn "doctor.py sauté à la demande (--skip-doctor)"
+    log_config_setup_event doctor-skipped
 elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     DOCTOR_ARGS=(--config "$CONFIG_PATH" --profile "$INSTALL_PROFILE")
     if [[ "$STRICT_DOCTOR" = true ]]; then
@@ -1963,14 +1963,14 @@ elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     fi
     if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" "${DOCTOR_ARGS[@]}"; then
         DOCTOR_STATUS="OK"
-        log_ok "doctor.py : aucun échec bloquant"
+        log_config_setup_event doctor-ok
     else
         DOCTOR_STATUS="WARN/FAIL"
-        log_warn "doctor.py a détecté des points à corriger avant production"
+        log_config_setup_event doctor-warn
     fi
 else
     DOCTOR_STATUS="non disponible"
-    log_warn "doctor.py non disponible — validation post-install sautée"
+    log_config_setup_event doctor-unavailable
 fi
 
 # ============================================================================
