@@ -619,24 +619,43 @@ log_ok "jobs/, models/, instance/ prêts"
 # ============================================================================
 log_section "Configuration"
 
+log_config_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary setup-log \
+        --event "$event" \
+        --profile "$INSTALL_PROFILE" \
+        --runtime-role "${INSTALL_RUNTIME_ROLE:-}" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message de configuration : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    else
+        log_warn "Sortie configuration ignorée : $line"
+    fi
+}
+
 if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = false ]]; then
-    log_ok "config.yaml existant conservé"
-    log_info "(--force-config pour régénérer)"
+    log_config_setup_event config-kept
+    log_config_setup_event force-hint
 else
     if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = true ]]; then
         BACKUP_SUFFIX="$(date +%Y%m%d_%H%M%S)"
         BACKUP=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file backup \
             --file "$CONFIG_PATH" \
             --suffix "$BACKUP_SUFFIX")
-        log_info "Ancien config.yaml sauvegardé : $BACKUP"
+        log_config_setup_event config-backup "$BACKUP"
     fi
-    log_info "Génération via bootstrap_config.py (auto-détection)..."
+    log_config_setup_event config-generate-start
     run_indented env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
         --example "$INSTALL_DIR/config.example.yaml" \
         --output "$CONFIG_PATH" \
         --profile "$INSTALL_PROFILE" \
         --force
-    log_ok "config.yaml généré"
+    log_config_setup_event config-generated
 fi
 
 # Créer .env à partir du template si absent
@@ -647,31 +666,31 @@ PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.
 # Générer TRANSCRIA_SECRET si absent ou valeur par défaut
 SECRET_STATUS=$(env_ensure_secret "TRANSCRIA_SECRET" 8 "hex" "change-me-to-a-random-secret")
 if [[ "$SECRET_STATUS" = "created" ]]; then
-    log_ok "Clé secrète Flask générée dans .env"
+    log_config_setup_event secret-created
 else
-    log_ok "TRANSCRIA_SECRET présent dans .env"
+    log_config_setup_event secret-present
 fi
 
 if [[ -n "${INSTALL_RUNTIME_ROLE:-}" && ( "$INSTALL_PROFILE" != "all-in-one" || "$PROFILE_EXPLICIT" = true ) ]]; then
     yaml_set "runtime.role" "$INSTALL_RUNTIME_ROLE"
     env_set "TRANSCRIA_ROLE" "$INSTALL_RUNTIME_ROLE"
-    log_ok "Profil d'installation : $INSTALL_PROFILE (TRANSCRIA_ROLE=$INSTALL_RUNTIME_ROLE)"
+    log_config_setup_event profile-runtime
 elif [[ "$INSTALL_PROFILE" = "all-in-one" ]]; then
-    log_ok "Profil d'installation : all-in-one (défaut)"
+    log_config_setup_event profile-all-default
 elif [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    log_ok "Profil d'installation : resource-node (inference_service)"
+    log_config_setup_event profile-resource-node
 elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    log_ok "Profil d'installation : migrate (Alembic only)"
+    log_config_setup_event profile-migrate
 else
-    log_ok "Profil d'installation : $INSTALL_PROFILE"
+    log_config_setup_event profile-generic
 fi
 
 if [[ "$INSTALL_INFERENCE" = true ]]; then
     INFERENCE_KEY_STATUS=$(env_ensure_secret "TRANSCRIA_INFERENCE_API_KEY" 16 "urlsafe" "" "Clé API du service inference_service (/infer/* et /engines/*).")
     if [[ "$INFERENCE_KEY_STATUS" = "present" ]]; then
-        log_ok "TRANSCRIA_INFERENCE_API_KEY présent dans .env"
+        log_config_setup_event inference-key-present
     else
-        log_ok "TRANSCRIA_INFERENCE_API_KEY généré dans .env (chmod 600)"
+        log_config_setup_event inference-key-created
     fi
 fi
 
@@ -690,7 +709,7 @@ if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; th
             --env-file "$ENV_FILE" \
             --key http_proxy \
             --key https_proxy; then
-        log_ok "Proxy déjà présent dans .env"
+        log_config_setup_event proxy-present
     else
         PERSIST_PROXY=true
         if [[ "$NON_INTERACTIVE" != true ]]; then
@@ -701,7 +720,7 @@ if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; th
             env_set "https_proxy" "$_proxy_https"
             env_set "no_proxy" "$_proxy_no"
             secure_env_file
-            log_ok "Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)"
+            log_config_setup_event proxy-persisted
         fi
     fi
 fi

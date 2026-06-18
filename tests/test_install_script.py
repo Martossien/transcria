@@ -211,6 +211,21 @@ def test_install_script_uses_final_status_renderers():
     assert '[[ "$DB_BACKEND" == PostgreSQL* ]]' not in content
 
 
+def test_install_script_delegates_configuration_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_summary setup-log" in content
+    assert "log_config_setup_event" in content
+    assert "config.yaml existant conservé" not in content
+    assert "Ancien config.yaml sauvegardé" not in content
+    assert "Génération via bootstrap_config.py" not in content
+    assert "Clé secrète Flask générée" not in content
+    assert "TRANSCRIA_SECRET présent" not in content
+    assert "Profil d'installation : $INSTALL_PROFILE" not in content
+    assert "TRANSCRIA_INFERENCE_API_KEY présent" not in content
+    assert "Proxy déjà présent dans .env" not in content
+
+
 def test_install_script_delegates_postgres_schema_action_decision():
     content = _INSTALL.read_text(encoding="utf-8")
 

@@ -7,6 +7,7 @@ from transcria.install_summary import (
     parse_non_negative_int,
     render_configuration_summary,
     render_database_summary,
+    render_setup_log,
 )
 
 
@@ -79,3 +80,40 @@ def test_install_summary_cli_rejects_invalid_remaining_changes(capsys):
     ]) == 2
 
     assert "entier négatif invalide" in capsys.readouterr().err
+
+
+def test_render_setup_log_for_config_file_events():
+    assert render_setup_log(event="config-kept") == "OK:config.yaml existant conservé\n"
+    assert render_setup_log(event="force-hint") == "INFO:(--force-config pour régénérer)\n"
+    assert render_setup_log(event="config-backup", value="/opt/transcria/config.yaml.20260101.bak") == (
+        "INFO:Ancien config.yaml sauvegardé : /opt/transcria/config.yaml.20260101.bak\n"
+    )
+    assert render_setup_log(event="config-generate-start") == "INFO:Génération via bootstrap_config.py (auto-détection)...\n"
+    assert render_setup_log(event="config-generated") == "OK:config.yaml généré\n"
+
+
+def test_render_setup_log_for_env_and_profile_events():
+    assert render_setup_log(event="secret-created") == "OK:Clé secrète Flask générée dans .env\n"
+    assert render_setup_log(event="secret-present") == "OK:TRANSCRIA_SECRET présent dans .env\n"
+    assert render_setup_log(event="profile-runtime", profile="web", runtime_role="web") == (
+        "OK:Profil d'installation : web (TRANSCRIA_ROLE=web)\n"
+    )
+    assert render_setup_log(event="profile-all-default") == "OK:Profil d'installation : all-in-one (défaut)\n"
+    assert render_setup_log(event="profile-resource-node") == "OK:Profil d'installation : resource-node (inference_service)\n"
+    assert render_setup_log(event="profile-migrate") == "OK:Profil d'installation : migrate (Alembic only)\n"
+    assert render_setup_log(event="profile-generic", profile="scheduler") == "OK:Profil d'installation : scheduler\n"
+    assert render_setup_log(event="inference-key-present") == "OK:TRANSCRIA_INFERENCE_API_KEY présent dans .env\n"
+    assert render_setup_log(event="inference-key-created") == "OK:TRANSCRIA_INFERENCE_API_KEY généré dans .env (chmod 600)\n"
+    assert render_setup_log(event="proxy-present") == "OK:Proxy déjà présent dans .env\n"
+    assert render_setup_log(event="proxy-persisted") == "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
+
+
+def test_render_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement de configuration inconnu : bad"):
+        render_setup_log(event="bad")
+
+
+def test_install_summary_cli_prints_setup_log(capsys):
+    assert main(["setup-log", "--event", "profile-runtime", "--profile", "web", "--runtime-role", "web"]) == 0
+
+    assert capsys.readouterr().out == "OK:Profil d'installation : web (TRANSCRIA_ROLE=web)\n"

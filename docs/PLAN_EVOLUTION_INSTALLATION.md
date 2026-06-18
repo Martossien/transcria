@@ -472,6 +472,9 @@ Le bilan final base de données / configuration / doctor est rendu par
 `transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
 `install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et
 `DOCTOR_STATUS`.
+Les messages de préparation configuration (`config.yaml`, `.env`, secrets,
+profil runtime, clé inference et proxy) sont aussi rendus par
+`transcria.install_summary setup-log`.
 La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée dans
 `transcria.install_torch`, avec tests sur les seuils CUDA et le cas CUDA 13+.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,
