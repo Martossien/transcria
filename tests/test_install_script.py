@@ -243,6 +243,13 @@ def test_install_script_delegates_sqlite_migration_logs_and_prompt():
     assert "Migration SQLite → PostgreSQL" not in content
     assert "  1. Migrer les données SQLite" not in content
     assert "Action de migration SQLite inconnue" not in content
+    assert "log_sqlite_migrate_event" in content
+    assert "Échec du backup SQLite" not in content
+    assert "Backup SQLite sauvegardé" not in content
+    assert "Migration des données SQLite → PostgreSQL" not in content
+    assert "Données migrées" not in content
+    assert "Échec de la migration SQLite" not in content
+    assert "partiellement remplie" not in content
 
 
 def test_install_script_delegates_postgres_role_and_database_sql_rendering():

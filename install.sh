@@ -1040,6 +1040,29 @@ _setup_postgres() {
 
 _do_pg_migrate() {
     local dsn="$1" sqlite_db="$2" backup_dir="$3"
+    log_sqlite_migrate_event() {
+        local event="$1" backup_path="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --sqlite-migration-log \
+            --event "$event" \
+            --sqlite-db "$sqlite_db" \
+            --backup-path "$backup_path") || {
+            log_error "Impossible de rendre le message de migration SQLite : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie migration SQLite ignorée : $line"
+        fi
+    }
+
     local backup_suffix
     backup_suffix="$(date +%Y%m%d_%H%M%S)"
     local backup
@@ -1048,18 +1071,18 @@ _do_pg_migrate() {
             --sqlite-db "$sqlite_db" \
             --backup-dir "$backup_dir" \
             --suffix "$backup_suffix"); then
-        log_error "Échec du backup SQLite : $sqlite_db → $backup"
+        log_sqlite_migrate_event backup-error "$backup"
         return 1
     fi
-    log_ok "Backup SQLite sauvegardé : $backup"
+    log_sqlite_migrate_event backup-ok "$backup"
 
-    log_info "Migration des données SQLite → PostgreSQL…"
+    log_sqlite_migrate_event migrate-start
     if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
             --source "sqlite:///$sqlite_db"; then
-        log_ok "Données migrées"
+        log_sqlite_migrate_event migrate-ok
     else
-        log_error "Échec de la migration SQLite → PostgreSQL"
-        log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement."
+        log_sqlite_migrate_event migrate-failed
+        log_sqlite_migrate_event migrate-partial
         return 1
     fi
 }

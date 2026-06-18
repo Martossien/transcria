@@ -458,6 +458,27 @@ def test_render_sqlite_migration_log_for_known_events():
     assert render_sqlite_migration_log(event="unknown-action", sqlite_db="/app/instance/transcrIA.db", action="bad") == (
         "ERROR:Action de migration SQLite inconnue : bad\n"
     )
+    assert render_sqlite_migration_log(
+        event="backup-error",
+        sqlite_db="/app/instance/transcrIA.db",
+        backup_path="/app/backups/transcrIA.db.bak",
+    ) == "ERROR:Échec du backup SQLite : /app/instance/transcrIA.db → /app/backups/transcrIA.db.bak\n"
+    assert render_sqlite_migration_log(
+        event="backup-ok",
+        sqlite_db="/app/instance/transcrIA.db",
+        backup_path="/app/backups/transcrIA.db.bak",
+    ) == "OK:Backup SQLite sauvegardé : /app/backups/transcrIA.db.bak\n"
+    assert render_sqlite_migration_log(event="migrate-start", sqlite_db="/app/instance/transcrIA.db") == (
+        "INFO:Migration des données SQLite → PostgreSQL…\n"
+    )
+    assert render_sqlite_migration_log(event="migrate-ok", sqlite_db="/app/instance/transcrIA.db") == "OK:Données migrées\n"
+    assert render_sqlite_migration_log(event="migrate-failed", sqlite_db="/app/instance/transcrIA.db") == (
+        "ERROR:Échec de la migration SQLite → PostgreSQL\n"
+    )
+    assert render_sqlite_migration_log(event="migrate-partial", sqlite_db="/app/instance/transcrIA.db") == (
+        "WARN:La base PostgreSQL est peut-être partiellement remplie. "
+        "Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement.\n"
+    )
 
 
 def test_render_sqlite_migration_log_rejects_unknown_event():

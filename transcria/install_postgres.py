@@ -261,7 +261,7 @@ def render_alembic_log(*, event: str, action: str = "") -> str:
     raise ValueError(f"événement Alembic PostgreSQL inconnu : {event}")
 
 
-def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "") -> str:
+def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "", backup_path: str = "") -> str:
     """Rend les messages liés à la migration SQLite vers PostgreSQL."""
     if event == "detected":
         return f"INFO:Base SQLite détectée : {sqlite_db}\n"
@@ -271,6 +271,21 @@ def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "")
         return f"INFO:Migration ignorée — PG reste vide, {sqlite_db} conservé\n"
     if event == "unknown-action":
         return f"ERROR:Action de migration SQLite inconnue : {action}\n"
+    if event == "backup-error":
+        return f"ERROR:Échec du backup SQLite : {sqlite_db} → {backup_path}\n"
+    if event == "backup-ok":
+        return f"OK:Backup SQLite sauvegardé : {backup_path}\n"
+    if event == "migrate-start":
+        return "INFO:Migration des données SQLite → PostgreSQL…\n"
+    if event == "migrate-ok":
+        return "OK:Données migrées\n"
+    if event == "migrate-failed":
+        return "ERROR:Échec de la migration SQLite → PostgreSQL\n"
+    if event == "migrate-partial":
+        return (
+            "WARN:La base PostgreSQL est peut-être partiellement remplie. "
+            "Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement.\n"
+        )
     raise ValueError(f"événement de migration SQLite inconnu : {event}")
 
 
@@ -384,6 +399,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--result", default=None)
     parser.add_argument("--event", default=None)
     parser.add_argument("--sqlite-size", default=None)
+    parser.add_argument("--backup-path", default="")
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -572,7 +588,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"arguments manquants pour --sqlite-migration-log: {', '.join(missing)}", file=sys.stderr)
             return 2
         try:
-            print(render_sqlite_migration_log(event=args.event, sqlite_db=args.sqlite_db, action=args.action or ""), end="")
+            print(
+                render_sqlite_migration_log(
+                    event=args.event,
+                    sqlite_db=args.sqlite_db,
+                    action=args.action or "",
+                    backup_path=args.backup_path,
+                ),
+                end="",
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
