@@ -47,13 +47,42 @@ def installed_torch_cuda_version(import_module: Any = importlib.import_module) -
     return str(cuda or "cpu")
 
 
+def render_setup_log(*, event: str, value: str = "") -> str:
+    """Rend les messages d'installation PyTorch utilisés par install.sh."""
+    if event == "installed":
+        return f"OK:PyTorch déjà installé (CUDA {value})\n"
+    if event == "install-cpu":
+        return "INFO:Installation PyTorch CPU...\n"
+    if event == "install-cuda":
+        return f"INFO:Installation PyTorch {value}...\n"
+    if event == "install-ok":
+        return "OK:PyTorch installé\n"
+    if event == "skipped":
+        return "INFO:Skippé (--no-torch)\n"
+    raise ValueError(f"événement PyTorch inconnu : {event}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Sélectionne le tag PyTorch adapté à la version CUDA détectée.")
     parser.add_argument("--cuda-version", default=None)
     parser.add_argument("--force-cuda", default=None)
     parser.add_argument("--installed-cuda", action="store_true", help="affiche la version CUDA du torch installé, ou vide si absent")
+    parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation PyTorch")
+    parser.add_argument("--event", default="")
+    parser.add_argument("--value", default="")
     parser.add_argument("--format", choices=("tag", "shell"), default="tag")
     args = parser.parse_args(argv)
+
+    if args.setup_log:
+        if not args.event:
+            print("--event requis avec --setup-log", file=sys.stderr)
+            return 2
+        try:
+            print(render_setup_log(event=args.event, value=args.value), end="")
+            return 0
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     if args.installed_cuda:
         installed = installed_torch_cuda_version()

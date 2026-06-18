@@ -123,6 +123,18 @@ def test_install_script_delegates_local_setup_logs():
     assert "jobs/, models/, instance/ prêts" not in content
 
 
+def test_install_script_delegates_torch_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_torch --setup-log" in content
+    assert "log_torch_event" in content
+    assert "PyTorch déjà installé" not in content
+    assert "Installation PyTorch CPU" not in content
+    assert "Installation PyTorch $CUDA_TAG" not in content
+    assert "PyTorch installé" not in content
+    assert "Skippé (--no-torch)" not in content
+
+
 def test_install_script_reuses_split_systemd_unit_installer():
     content = _INSTALL.read_text(encoding="utf-8")
 

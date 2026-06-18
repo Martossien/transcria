@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from transcria.install_torch import installed_torch_cuda_version, main, select_torch_cuda_tag
+from transcria.install_torch import installed_torch_cuda_version, main, render_setup_log, select_torch_cuda_tag
 
 
 def test_select_torch_cuda_tag_honors_forced_tag():
@@ -80,3 +80,17 @@ def test_install_torch_cli_outputs_nothing_when_torch_missing(capsys, monkeypatc
     assert main(["--installed-cuda"]) == 0
 
     assert capsys.readouterr().out == ""
+
+
+def test_render_setup_log_for_torch_events():
+    assert render_setup_log(event="installed", value="12.6") == "OK:PyTorch déjà installé (CUDA 12.6)\n"
+    assert render_setup_log(event="install-cpu") == "INFO:Installation PyTorch CPU...\n"
+    assert render_setup_log(event="install-cuda", value="cu126") == "INFO:Installation PyTorch cu126...\n"
+    assert render_setup_log(event="install-ok") == "OK:PyTorch installé\n"
+    assert render_setup_log(event="skipped") == "INFO:Skippé (--no-torch)\n"
+
+
+def test_install_torch_cli_prints_setup_log(capsys):
+    assert main(["--setup-log", "--event", "install-cuda", "--value", "cu124"]) == 0
+
+    assert capsys.readouterr().out == "INFO:Installation PyTorch cu124...\n"

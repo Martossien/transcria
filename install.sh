@@ -598,6 +598,27 @@ pip install --upgrade pip --quiet
 # ============================================================================
 log_section "PyTorch"
 
+log_torch_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch --setup-log \
+        --event "$event" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message PyTorch : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie PyTorch ignorée : $line"
+    fi
+}
+
 if [[ "$INSTALL_TORCH" = true ]]; then
     TORCH_TAG_ARGS=(--format shell)
     if [[ -n "$CUDA_VER_FROM_SMI" ]]; then
@@ -615,23 +636,23 @@ if [[ "$INSTALL_TORCH" = true ]]; then
     TORCH_INSTALLED=false
     INSTALLED_CUDA=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch --installed-cuda)
     if [[ -n "$INSTALLED_CUDA" && "$INSTALLED_CUDA" != "None" ]]; then
-        log_ok "PyTorch déjà installé (CUDA $INSTALLED_CUDA)"
+        log_torch_event installed "$INSTALLED_CUDA"
         TORCH_INSTALLED=true
     fi
 
     if [[ "$TORCH_INSTALLED" = false ]]; then
         if [[ "$CUDA_TAG" = "cpu" ]]; then
-            log_info "Installation PyTorch CPU..."
+            log_torch_event install-cpu
             pip install torch torchvision torchaudio --quiet
         else
-            log_info "Installation PyTorch $CUDA_TAG..."
+            log_torch_event install-cuda "$CUDA_TAG"
             pip install torch torchvision torchaudio \
                 --index-url "https://download.pytorch.org/whl/${CUDA_TAG}" --quiet
         fi
-        log_ok "PyTorch installé"
+        log_torch_event install-ok
     fi
 else
-    log_info "Skippé (--no-torch)"
+    log_torch_event skipped
 fi
 
 # ============================================================================
