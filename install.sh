@@ -619,24 +619,43 @@ log_ok "jobs/, models/, instance/ prêts"
 # ============================================================================
 log_section "Configuration"
 
+log_config_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary setup-log \
+        --event "$event" \
+        --profile "$INSTALL_PROFILE" \
+        --runtime-role "${INSTALL_RUNTIME_ROLE:-}" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message de configuration : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    else
+        log_warn "Sortie configuration ignorée : $line"
+    fi
+}
+
 if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = false ]]; then
-    log_ok "config.yaml existant conservé"
-    log_info "(--force-config pour régénérer)"
+    log_config_setup_event config-kept
+    log_config_setup_event force-hint
 else
     if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = true ]]; then
         BACKUP_SUFFIX="$(date +%Y%m%d_%H%M%S)"
         BACKUP=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file backup \
             --file "$CONFIG_PATH" \
             --suffix "$BACKUP_SUFFIX")
-        log_info "Ancien config.yaml sauvegardé : $BACKUP"
+        log_config_setup_event config-backup "$BACKUP"
     fi
-    log_info "Génération via bootstrap_config.py (auto-détection)..."
+    log_config_setup_event config-generate-start
     run_indented env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
         --example "$INSTALL_DIR/config.example.yaml" \
         --output "$CONFIG_PATH" \
         --profile "$INSTALL_PROFILE" \
         --force
-    log_ok "config.yaml généré"
+    log_config_setup_event config-generated
 fi
 
 # Créer .env à partir du template si absent
@@ -647,31 +666,31 @@ PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.
 # Générer TRANSCRIA_SECRET si absent ou valeur par défaut
 SECRET_STATUS=$(env_ensure_secret "TRANSCRIA_SECRET" 8 "hex" "change-me-to-a-random-secret")
 if [[ "$SECRET_STATUS" = "created" ]]; then
-    log_ok "Clé secrète Flask générée dans .env"
+    log_config_setup_event secret-created
 else
-    log_ok "TRANSCRIA_SECRET présent dans .env"
+    log_config_setup_event secret-present
 fi
 
 if [[ -n "${INSTALL_RUNTIME_ROLE:-}" && ( "$INSTALL_PROFILE" != "all-in-one" || "$PROFILE_EXPLICIT" = true ) ]]; then
     yaml_set "runtime.role" "$INSTALL_RUNTIME_ROLE"
     env_set "TRANSCRIA_ROLE" "$INSTALL_RUNTIME_ROLE"
-    log_ok "Profil d'installation : $INSTALL_PROFILE (TRANSCRIA_ROLE=$INSTALL_RUNTIME_ROLE)"
+    log_config_setup_event profile-runtime
 elif [[ "$INSTALL_PROFILE" = "all-in-one" ]]; then
-    log_ok "Profil d'installation : all-in-one (défaut)"
+    log_config_setup_event profile-all-default
 elif [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    log_ok "Profil d'installation : resource-node (inference_service)"
+    log_config_setup_event profile-resource-node
 elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    log_ok "Profil d'installation : migrate (Alembic only)"
+    log_config_setup_event profile-migrate
 else
-    log_ok "Profil d'installation : $INSTALL_PROFILE"
+    log_config_setup_event profile-generic
 fi
 
 if [[ "$INSTALL_INFERENCE" = true ]]; then
     INFERENCE_KEY_STATUS=$(env_ensure_secret "TRANSCRIA_INFERENCE_API_KEY" 16 "urlsafe" "" "Clé API du service inference_service (/infer/* et /engines/*).")
     if [[ "$INFERENCE_KEY_STATUS" = "present" ]]; then
-        log_ok "TRANSCRIA_INFERENCE_API_KEY présent dans .env"
+        log_config_setup_event inference-key-present
     else
-        log_ok "TRANSCRIA_INFERENCE_API_KEY généré dans .env (chmod 600)"
+        log_config_setup_event inference-key-created
     fi
 fi
 
@@ -690,7 +709,7 @@ if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; th
             --env-file "$ENV_FILE" \
             --key http_proxy \
             --key https_proxy; then
-        log_ok "Proxy déjà présent dans .env"
+        log_config_setup_event proxy-present
     else
         PERSIST_PROXY=true
         if [[ "$NON_INTERACTIVE" != true ]]; then
@@ -701,7 +720,7 @@ if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; th
             env_set "https_proxy" "$_proxy_https"
             env_set "no_proxy" "$_proxy_no"
             secure_env_file
-            log_ok "Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)"
+            log_config_setup_event proxy-persisted
         fi
     fi
 fi
@@ -1186,6 +1205,47 @@ log_model_status_event() {
     fi
 }
 
+log_cohere_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-log \
+        --event "$event" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message Cohere : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie Cohere ignorée : $line"
+    fi
+}
+
+log_pyannote_setup_event() {
+    local event="$1" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-setup-log \
+        --event "$event") || {
+        log_error "Impossible de rendre le message pyannote : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie pyannote ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     # ── Cohere ASR ───────────────────────────────────────────────────────────
     COHERE_PATH=$(yaml_get "models.cohere_model_path")
@@ -1253,16 +1313,16 @@ CHANGED_CONFIG=false
 CURRENT_PWD=$(yaml_get "auth.first_admin_password")
 if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$CURRENT_PWD" = "CHANGE-ME" ]]; then
     echo ""
-    log_warn "Mot de passe admin : valeur par défaut 'CHANGE-ME'"
+    log_config_setup_event admin-default-password
     if ask_yn "Définir le mot de passe admin maintenant ?"; then
         echo -n "  Nouveau mot de passe (min 8 caractères) : "
         read -rs ADMIN_PASS; echo ""
         if [[ ${#ADMIN_PASS} -ge 8 ]]; then
             yaml_set "auth.first_admin_password" "$ADMIN_PASS"
-            log_ok "Mot de passe admin défini"
+            log_config_setup_event admin-password-set
             CHANGED_CONFIG=true
         else
-            log_warn "Trop court — inchangé. Éditez config.yaml manuellement."
+            log_config_setup_event admin-password-too-short
         fi
     fi
 fi
@@ -1270,27 +1330,21 @@ fi
 # ── Chemin du modèle Cohere ───────────────────────────────────────────────────
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
     echo ""
-    log_warn "Le modèle Cohere ASR est introuvable au chemin configuré."
-    log_info "Chemin actuel dans config.yaml : $(yaml_get 'models.cohere_model_path')"
-    echo ""
-    echo "  Options :"
-    echo "   1. Entrer le chemin où le modèle est déjà téléchargé"
-    echo "   2. Télécharger maintenant (nécessite huggingface-cli + accès CohereLabs)"
-    echo "   3. Ignorer (pipeline STT non fonctionnel)"
-    echo ""
+    log_cohere_setup_event missing
+    log_cohere_setup_event current-path "$(yaml_get 'models.cohere_model_path')"
     if [[ "$NON_INTERACTIVE" = false ]]; then
-        echo -n "  Votre choix [1/2/3] : "
+        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-prompt
         read -r COHERE_CHOICE
         case "$COHERE_CHOICE" in
             1)
                 ask COHERE_NEW_PATH "Chemin absolu du modèle Cohere" "$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
                 if [[ -d "$COHERE_NEW_PATH" ]]; then
                     yaml_set "models.cohere_model_path" "$COHERE_NEW_PATH"
-                    log_ok "cohere_model_path mis à jour : $COHERE_NEW_PATH"
+                    log_cohere_setup_event path-updated "$COHERE_NEW_PATH"
                     COHERE_OK=true
                     CHANGED_CONFIG=true
                 else
-                    log_warn "Chemin introuvable — config inchangée"
+                    log_cohere_setup_event path-missing
                 fi
                 ;;
             2)
@@ -1298,7 +1352,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
                     --install-dir "$INSTALL_DIR" \
                     --path "$DEST" >/dev/null
-                log_info "Téléchargement de CohereLabs/cohere-transcribe-03-2026..."
+                log_cohere_setup_event download-start
                 HF_COHERE_CLI=""
                 FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
                 if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
@@ -1307,20 +1361,23 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                     HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
                 fi
                 if [[ -n "$HF_COHERE_CLI" ]]; then
-                    "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
-                        --local-dir "$DEST" --local-dir-use-symlinks False && \
-                    yaml_set "models.cohere_model_path" "$DEST" && \
-                    log_ok "Modèle Cohere téléchargé et configuré" && \
-                    COHERE_OK=true && CHANGED_CONFIG=true || \
-                    log_error "Téléchargement échoué — vérifiez vos accès HuggingFace"
+                    if "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
+                            --local-dir "$DEST" --local-dir-use-symlinks False; then
+                        yaml_set "models.cohere_model_path" "$DEST"
+                        log_cohere_setup_event download-ok
+                        COHERE_OK=true
+                        CHANGED_CONFIG=true
+                    else
+                        log_cohere_setup_event download-failed
+                    fi
                 else
-                    log_warn "huggingface-cli non trouvé — installer avec: pip install huggingface_hub"
-                    log_info "Commande manuelle :"
-                    log_info "  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 --local-dir $DEST --local-dir-use-symlinks False"
+                    log_cohere_setup_event cli-missing
+                    log_cohere_setup_event manual-command-title
+                    log_cohere_setup_event manual-command "$DEST"
                 fi
                 ;;
             *)
-                log_info "Modèle Cohere ignoré — pipeline STT désactivé"
+                log_cohere_setup_event ignored
                 ;;
         esac
     fi
@@ -1336,31 +1393,36 @@ fi
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$PYANNOTE_OK" = false ]]; then
     echo ""
     if [[ -z "$CURRENT_HF_TOKEN" ]]; then
-        log_warn "HF_TOKEN manquant — requis pour télécharger pyannote"
-        log_info "(Créer un token sur https://huggingface.co/settings/tokens)"
-        log_info "(Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-community-1)"
+        log_pyannote_setup_event missing-token
+        log_pyannote_setup_event create-token-url
+        log_pyannote_setup_event accept-terms-url
         if [[ "$NON_INTERACTIVE" = false ]]; then
-            echo -n "  HF_TOKEN (laisser vide pour ignorer) : "
+            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-token-prompt
             read -rs CURRENT_HF_TOKEN; echo ""
         fi
     fi
 
     if [[ -n "$CURRENT_HF_TOKEN" ]]; then
         env_set "HF_TOKEN" "$CURRENT_HF_TOKEN"
-        log_ok "HF_TOKEN sauvegardé dans .env"
+        log_pyannote_setup_event token-saved
 
-        if ask_yn "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"; then
-            log_info "Téléchargement pyannote (peut prendre quelques minutes)..."
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models download-pyannote \
-                --hf-token "$CURRENT_HF_TOKEN" && log_ok "pyannote téléchargé" && PYANNOTE_OK=true || \
-            log_error "Téléchargement pyannote échoué — vérifiez le token et les conditions HF"
+        PYANNOTE_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-download-prompt)
+        if ask_yn "$PYANNOTE_DOWNLOAD_PROMPT"; then
+            log_pyannote_setup_event download-start
+            if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models download-pyannote \
+                    --hf-token "$CURRENT_HF_TOKEN" >/dev/null; then
+                log_pyannote_setup_event download-ok
+                PYANNOTE_OK=true
+            else
+                log_pyannote_setup_event download-failed
+            fi
         fi
     fi
 fi
 
-[[ "$CHANGED_CONFIG" = true ]] && log_ok "config.yaml mis à jour" || true
+[[ "$CHANGED_CONFIG" = true ]] && log_config_setup_event config-updated || true
 secure_env_file
-log_ok ".env sécurisé pour l'utilisateur de service ($SERVICE_USER)"
+log_config_setup_event env-secured "$SERVICE_USER"
 
 # ============================================================================
 # SECTION 9 — opencode (moteur LLM pour résumé/correction)

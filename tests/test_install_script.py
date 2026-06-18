@@ -199,6 +199,42 @@ def test_install_script_delegates_model_status_logs():
     assert "vérification des modèles GPU locaux sautée" not in content
 
 
+def test_install_script_delegates_cohere_setup_logs_and_prompt():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_models cohere-setup-log" in content
+    assert "-m transcria.install_models cohere-setup-prompt" in content
+    assert "log_cohere_setup_event" in content
+    assert "Le modèle Cohere ASR est introuvable" not in content
+    assert "Chemin actuel dans config.yaml" not in content
+    assert "cohere_model_path mis à jour" not in content
+    assert "Chemin introuvable — config inchangée" not in content
+    assert "Téléchargement de CohereLabs" not in content
+    assert "Modèle Cohere téléchargé et configuré" not in content
+    assert "Téléchargement échoué — vérifiez vos accès HuggingFace" not in content
+    assert "huggingface-cli non trouvé" not in content
+    assert "Modèle Cohere ignoré" not in content
+
+
+def test_install_script_delegates_pyannote_setup_logs_and_prompts():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_models pyannote-setup-log" in content
+    assert "-m transcria.install_models pyannote-token-prompt" in content
+    assert "-m transcria.install_models pyannote-download-prompt" in content
+    assert "log_pyannote_setup_event" in content
+    assert "HF_TOKEN manquant — requis pour télécharger pyannote" not in content
+    assert "https://huggingface.co/settings/tokens" not in content
+    assert "Accepter les conditions" not in content
+    assert "HF_TOKEN (laisser vide pour ignorer)" not in content
+    assert "HF_TOKEN sauvegardé dans .env" not in content
+    assert "Télécharger pyannote/speaker-diarization-community-1 maintenant" not in content
+    assert "Téléchargement pyannote (peut prendre quelques minutes)" not in content
+    assert "pyannote téléchargé" not in content
+    assert "Téléchargement pyannote échoué" not in content
+    assert "&& log_ok \"pyannote téléchargé\"" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -209,6 +245,26 @@ def test_install_script_uses_final_status_renderers():
     assert 'echo -e "${BOLD}Base de données' not in content
     assert 'echo -e "${BOLD}Configuration' not in content
     assert '[[ "$DB_BACKEND" == PostgreSQL* ]]' not in content
+
+
+def test_install_script_delegates_configuration_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_summary setup-log" in content
+    assert "log_config_setup_event" in content
+    assert "config.yaml existant conservé" not in content
+    assert "Ancien config.yaml sauvegardé" not in content
+    assert "Génération via bootstrap_config.py" not in content
+    assert "Clé secrète Flask générée" not in content
+    assert "TRANSCRIA_SECRET présent" not in content
+    assert "Profil d'installation : $INSTALL_PROFILE" not in content
+    assert "TRANSCRIA_INFERENCE_API_KEY présent" not in content
+    assert "Proxy déjà présent dans .env" not in content
+    assert "Mot de passe admin : valeur par défaut" not in content
+    assert "Mot de passe admin défini" not in content
+    assert "Trop court — inchangé" not in content
+    assert "config.yaml mis à jour" not in content
+    assert ".env sécurisé pour l'utilisateur de service" not in content
 
 
 def test_install_script_delegates_postgres_schema_action_decision():
