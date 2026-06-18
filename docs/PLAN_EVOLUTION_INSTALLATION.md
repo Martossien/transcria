@@ -555,6 +555,9 @@ premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire le
 Les lignes de statut individuelles de vérification modèles (Cohere, pyannote,
 SQUIM, LLM, profils sans modèles locaux) sont rendues par
 `transcria.install_models status-log`.
+Les messages et le prompt interactif de configuration Cohere passent par
+`transcria.install_models cohere-setup-log` et `cohere-setup-prompt`, le shell
+conservant seulement la saisie utilisateur et l'exécution du téléchargement.
 La lecture de version opencode passe par `transcria.install_opencode` au lieu d'un
 pipeline shell `--version | head`.
 La recherche du binaire opencode (PATH, home service, home utilisateur, chemin

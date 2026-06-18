@@ -1205,6 +1205,27 @@ log_model_status_event() {
     fi
 }
 
+log_cohere_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-log \
+        --event "$event" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message Cohere : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie Cohere ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     # ── Cohere ASR ───────────────────────────────────────────────────────────
     COHERE_PATH=$(yaml_get "models.cohere_model_path")
@@ -1289,27 +1310,21 @@ fi
 # ── Chemin du modèle Cohere ───────────────────────────────────────────────────
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
     echo ""
-    log_warn "Le modèle Cohere ASR est introuvable au chemin configuré."
-    log_info "Chemin actuel dans config.yaml : $(yaml_get 'models.cohere_model_path')"
-    echo ""
-    echo "  Options :"
-    echo "   1. Entrer le chemin où le modèle est déjà téléchargé"
-    echo "   2. Télécharger maintenant (nécessite huggingface-cli + accès CohereLabs)"
-    echo "   3. Ignorer (pipeline STT non fonctionnel)"
-    echo ""
+    log_cohere_setup_event missing
+    log_cohere_setup_event current-path "$(yaml_get 'models.cohere_model_path')"
     if [[ "$NON_INTERACTIVE" = false ]]; then
-        echo -n "  Votre choix [1/2/3] : "
+        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-prompt
         read -r COHERE_CHOICE
         case "$COHERE_CHOICE" in
             1)
                 ask COHERE_NEW_PATH "Chemin absolu du modèle Cohere" "$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
                 if [[ -d "$COHERE_NEW_PATH" ]]; then
                     yaml_set "models.cohere_model_path" "$COHERE_NEW_PATH"
-                    log_ok "cohere_model_path mis à jour : $COHERE_NEW_PATH"
+                    log_cohere_setup_event path-updated "$COHERE_NEW_PATH"
                     COHERE_OK=true
                     CHANGED_CONFIG=true
                 else
-                    log_warn "Chemin introuvable — config inchangée"
+                    log_cohere_setup_event path-missing
                 fi
                 ;;
             2)
@@ -1317,7 +1332,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
                     --install-dir "$INSTALL_DIR" \
                     --path "$DEST" >/dev/null
-                log_info "Téléchargement de CohereLabs/cohere-transcribe-03-2026..."
+                log_cohere_setup_event download-start
                 HF_COHERE_CLI=""
                 FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
                 if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
@@ -1326,20 +1341,23 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                     HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
                 fi
                 if [[ -n "$HF_COHERE_CLI" ]]; then
-                    "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
-                        --local-dir "$DEST" --local-dir-use-symlinks False && \
-                    yaml_set "models.cohere_model_path" "$DEST" && \
-                    log_ok "Modèle Cohere téléchargé et configuré" && \
-                    COHERE_OK=true && CHANGED_CONFIG=true || \
-                    log_error "Téléchargement échoué — vérifiez vos accès HuggingFace"
+                    if "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
+                            --local-dir "$DEST" --local-dir-use-symlinks False; then
+                        yaml_set "models.cohere_model_path" "$DEST"
+                        log_cohere_setup_event download-ok
+                        COHERE_OK=true
+                        CHANGED_CONFIG=true
+                    else
+                        log_cohere_setup_event download-failed
+                    fi
                 else
-                    log_warn "huggingface-cli non trouvé — installer avec: pip install huggingface_hub"
-                    log_info "Commande manuelle :"
-                    log_info "  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 --local-dir $DEST --local-dir-use-symlinks False"
+                    log_cohere_setup_event cli-missing
+                    log_cohere_setup_event manual-command-title
+                    log_cohere_setup_event manual-command "$DEST"
                 fi
                 ;;
             *)
-                log_info "Modèle Cohere ignoré — pipeline STT désactivé"
+                log_cohere_setup_event ignored
                 ;;
         esac
     fi

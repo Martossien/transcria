@@ -199,6 +199,23 @@ def test_install_script_delegates_model_status_logs():
     assert "vérification des modèles GPU locaux sautée" not in content
 
 
+def test_install_script_delegates_cohere_setup_logs_and_prompt():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_models cohere-setup-log" in content
+    assert "-m transcria.install_models cohere-setup-prompt" in content
+    assert "log_cohere_setup_event" in content
+    assert "Le modèle Cohere ASR est introuvable" not in content
+    assert "Chemin actuel dans config.yaml" not in content
+    assert "cohere_model_path mis à jour" not in content
+    assert "Chemin introuvable — config inchangée" not in content
+    assert "Téléchargement de CohereLabs" not in content
+    assert "Modèle Cohere téléchargé et configuré" not in content
+    assert "Téléchargement échoué — vérifiez vos accès HuggingFace" not in content
+    assert "huggingface-cli non trouvé" not in content
+    assert "Modèle Cohere ignoré" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 

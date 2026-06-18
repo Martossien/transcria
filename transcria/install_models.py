@@ -180,6 +180,46 @@ def render_model_status_log(*, event: str, value: str = "", profile: str = "") -
     raise ValueError(f"événement modèle inconnu : {event}")
 
 
+def render_cohere_setup_log(*, event: str, value: str = "") -> str:
+    """Rend les messages interactifs de configuration du modèle Cohere."""
+    if event == "missing":
+        return "WARN:Le modèle Cohere ASR est introuvable au chemin configuré.\n"
+    if event == "current-path":
+        return f"INFO:Chemin actuel dans config.yaml : {value}\n"
+    if event == "path-updated":
+        return f"OK:cohere_model_path mis à jour : {value}\n"
+    if event == "path-missing":
+        return "WARN:Chemin introuvable — config inchangée\n"
+    if event == "download-start":
+        return "INFO:Téléchargement de CohereLabs/cohere-transcribe-03-2026...\n"
+    if event == "download-ok":
+        return "OK:Modèle Cohere téléchargé et configuré\n"
+    if event == "download-failed":
+        return "ERROR:Téléchargement échoué — vérifiez vos accès HuggingFace\n"
+    if event == "cli-missing":
+        return "WARN:huggingface-cli non trouvé — installer avec: pip install huggingface_hub\n"
+    if event == "manual-command-title":
+        return "INFO:Commande manuelle :\n"
+    if event == "manual-command":
+        return f"INFO:  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 --local-dir {value} --local-dir-use-symlinks False\n"
+    if event == "ignored":
+        return "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
+    raise ValueError(f"événement Cohere inconnu : {event}")
+
+
+def render_cohere_setup_prompt() -> str:
+    """Rend le prompt interactif de configuration Cohere."""
+    return "\n".join([
+        "",
+        "  Options :",
+        "   1. Entrer le chemin où le modèle est déjà téléchargé",
+        "   2. Télécharger maintenant (nécessite huggingface-cli + accès CohereLabs)",
+        "   3. Ignorer (pipeline STT non fonctionnel)",
+        "",
+        "  Votre choix [1/2/3] : ",
+    ])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Détection locale des modèles TranscrIA pour install.sh.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -221,6 +261,12 @@ def main(argv: list[str] | None = None) -> int:
     status_parser.add_argument("--event", required=True)
     status_parser.add_argument("--value", default="")
     status_parser.add_argument("--profile", default="")
+
+    cohere_log_parser = subparsers.add_parser("cohere-setup-log", help="rend un message de configuration Cohere")
+    cohere_log_parser.add_argument("--event", required=True)
+    cohere_log_parser.add_argument("--value", default="")
+
+    subparsers.add_parser("cohere-setup-prompt", help="rend le prompt de configuration Cohere")
 
     args = parser.parse_args(argv)
     try:
@@ -266,6 +312,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "status-log":
             print(render_model_status_log(event=args.event, value=args.value, profile=args.profile), end="")
+            return 0
+        if args.command == "cohere-setup-log":
+            print(render_cohere_setup_log(event=args.event, value=args.value), end="")
+            return 0
+        if args.command == "cohere-setup-prompt":
+            print(render_cohere_setup_prompt(), end="")
             return 0
     except (OSError, ImportError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

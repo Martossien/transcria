@@ -12,6 +12,8 @@ from transcria.install_models import (
     is_non_empty_dir,
     main,
     parse_bool,
+    render_cohere_setup_log,
+    render_cohere_setup_prompt,
     render_model_detection_table,
     render_model_status_log,
     render_model_summary,
@@ -181,6 +183,38 @@ def test_render_model_status_log_rejects_unknown_event():
         render_model_status_log(event="bad")
 
 
+def test_render_cohere_setup_log_for_known_events():
+    assert render_cohere_setup_log(event="missing") == "WARN:Le modèle Cohere ASR est introuvable au chemin configuré.\n"
+    assert render_cohere_setup_log(event="current-path", value="./models/cohere") == (
+        "INFO:Chemin actuel dans config.yaml : ./models/cohere\n"
+    )
+    assert render_cohere_setup_log(event="path-updated", value="/opt/cohere") == "OK:cohere_model_path mis à jour : /opt/cohere\n"
+    assert render_cohere_setup_log(event="path-missing") == "WARN:Chemin introuvable — config inchangée\n"
+    assert render_cohere_setup_log(event="download-start") == "INFO:Téléchargement de CohereLabs/cohere-transcribe-03-2026...\n"
+    assert render_cohere_setup_log(event="download-ok") == "OK:Modèle Cohere téléchargé et configuré\n"
+    assert render_cohere_setup_log(event="download-failed") == "ERROR:Téléchargement échoué — vérifiez vos accès HuggingFace\n"
+    assert render_cohere_setup_log(event="cli-missing") == "WARN:huggingface-cli non trouvé — installer avec: pip install huggingface_hub\n"
+    assert render_cohere_setup_log(event="manual-command-title") == "INFO:Commande manuelle :\n"
+    assert render_cohere_setup_log(event="manual-command", value="/opt/models/cohere") == (
+        "INFO:  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 "
+        "--local-dir /opt/models/cohere --local-dir-use-symlinks False\n"
+    )
+    assert render_cohere_setup_log(event="ignored") == "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
+
+
+def test_render_cohere_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement Cohere inconnu : bad"):
+        render_cohere_setup_log(event="bad")
+
+
+def test_render_cohere_setup_prompt_is_stable():
+    rendered = render_cohere_setup_prompt()
+
+    assert "Entrer le chemin où le modèle est déjà téléchargé" in rendered
+    assert "Télécharger maintenant" in rendered
+    assert rendered.endswith("  Votre choix [1/2/3] : ")
+
+
 def test_install_models_cli_checks_cohere_non_empty(tmp_path: Path):
     cohere = tmp_path / "models" / "cohere"
     cohere.mkdir(parents=True)
@@ -246,6 +280,18 @@ def test_install_models_cli_prints_status_log(capsys):
     assert main(["status-log", "--event", "llm-not-required", "--profile", "web"]) == 0
 
     assert capsys.readouterr().out == "INFO:LLM d'arbitrage : non requis pour le profil web\n"
+
+
+def test_install_models_cli_prints_cohere_setup_log(capsys):
+    assert main(["cohere-setup-log", "--event", "ignored"]) == 0
+
+    assert capsys.readouterr().out == "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
+
+
+def test_install_models_cli_prints_cohere_setup_prompt(capsys):
+    assert main(["cohere-setup-prompt"]) == 0
+
+    assert capsys.readouterr().out.endswith("  Votre choix [1/2/3] : ")
 
 
 def test_download_pyannote_pipeline_uses_token_and_model_id():
