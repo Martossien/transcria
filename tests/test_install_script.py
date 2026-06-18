@@ -277,6 +277,30 @@ def test_install_script_delegates_llm_selection_setup_logs():
     assert "Paliers : 12 / 16 / 24 / 32 / 48 / 64" not in content
 
 
+def test_install_script_delegates_llm_download_and_activation_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "log_llm_setup_event llama-qualified" in content
+    assert "log_llm_setup_event model-downloaded" in content
+    assert "llama-server qualifié :" not in content
+    assert "llama-server trouvé mais NON utilisable" not in content
+    assert "Libs llama hors chemins standard" not in content
+    assert "Modèle déjà présent :" not in content
+    assert "Ni 'hf' ni 'huggingface-cli' trouvés" not in content
+    assert "peut prendre plusieurs minutes" not in content
+    assert "Modèle téléchargé :" not in content
+    assert "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN" not in content
+    assert "Téléchargement ignoré." not in content
+    assert "alias générique 'arbitrage'" not in content
+    assert "Calibration GPU écrite" not in content
+    assert "Calibration auto échouée" not in content
+    assert "Démarrage de la LLM" not in content
+    assert "Bascule de palier incomplète" not in content
+    assert "Modèle absent — palier non activé" not in content
+    assert "LLM d'arbitrage ignoré" not in content
+    assert "après téléchargement du modèle" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 

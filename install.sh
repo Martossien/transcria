@@ -1653,12 +1653,12 @@ else
                 LLAMA_SRV="${LLAMA_SERVER:-}"
                 LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
                 if [[ "${LLAMA_OK:-0}" == "1" ]]; then
-                    log_ok "llama-server qualifié : ${LLAMA_SRV} (build ${LLAMA_BUILD:-?}, source ${LLAMA_BUILD_SOURCE:-?})"
+                    log_llm_setup_event llama-qualified "$LLAMA_SRV" "" "" "" "${LLAMA_BUILD:-?}" "${LLAMA_BUILD_SOURCE:-?}"
                 elif [[ -n "$LLAMA_SRV" ]]; then
-                    log_warn "llama-server trouvé mais NON utilisable (${LLAMA_LEVEL:-?}) : ${LLAMA_SRV}"
+                    log_llm_setup_event llama-unusable "$LLAMA_SRV" "" "" "" "${LLAMA_LEVEL:-?}"
                 fi
                 if [[ -n "$LLAMA_LD_HINT" ]]; then
-                    log_warn "Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=$LLAMA_LD_HINT dans l'environnement du service (les profils l'honorent)."
+                    log_llm_setup_event llama-ld-hint "$LLAMA_LD_HINT"
                 fi
             fi
             print_indented_file "$_ll_warn"
@@ -1681,7 +1681,7 @@ else
         DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"
 
         if [[ -f "$DEST/$GG" ]]; then
-            log_ok "Modèle déjà présent : $DEST/$GG"
+            log_llm_setup_event model-present "$DEST/$GG"
         elif ask_yn "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO ?"; then
             HF_DL=""
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
@@ -1691,25 +1691,25 @@ else
                 HF_DL="$FIRST_AVAILABLE_NAME"
             fi
             if [[ -z "$HF_DL" ]]; then
-                log_error "Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub"
+                log_llm_setup_event hf-cli-missing
             else
                 if [[ -n "${CURRENT_HF_TOKEN:-}" ]]; then export HF_TOKEN="$CURRENT_HF_TOKEN"; fi
-                log_info "Téléchargement ($HF_DL) de $GG → $DEST (peut prendre plusieurs minutes)…"
+                log_llm_setup_event download-start "$GG" "" "" "" "$HF_DL" "$DEST"
                 if run_indented "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST"; then
-                    log_ok "Modèle téléchargé : $DEST/$GG"
+                    log_llm_setup_event model-downloaded "$DEST/$GG"
                 else
-                    log_error "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN."
+                    log_llm_setup_event download-failed
                 fi
             fi
         else
-            log_info "Téléchargement ignoré."
+            log_llm_setup_event download-skipped
         fi
 
         # Générer le wrapper local pour CETTE machine (MODELS_DIR / llama-server),
         # puis basculer sur le palier choisi sans modifier les profils versionnés.
         if [[ -f "$DEST/$GG" ]]; then
             if run_indented env MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb"; then
-                log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
+                log_llm_setup_event tier-activated "" "" "" "" "$LLM_TIER"
                 # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
                 # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.
                 if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
@@ -1717,23 +1717,23 @@ else
                     if "$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" plan \
                          --gpus "$GPU_SIZES_CSV" --tier "$LLM_TIER" \
                          --config "$CONFIG_PATH" --apply --format shell >/dev/null 2>"$_cal_warn"; then
-                        log_ok "Calibration GPU écrite (placement réel par carte)."
+                        log_llm_setup_event calibration-ok
                     else
-                        log_warn "Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh"
+                        log_llm_setup_event calibration-failed
                     fi
                     print_indented_file "$_cal_warn"
                     rm -f "$_cal_warn"
                 fi
-                log_info "Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script."
+                log_llm_setup_event start-managed
             else
-                log_warn "Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh ${LLM_TIER}gb"
+                log_llm_setup_event switch-incomplete "" "" "" "" "$LLM_TIER"
             fi
         else
-            log_info "Modèle absent — palier non activé (transcription brute pour l'instant)."
+            log_llm_setup_event model-absent
         fi
     else
-        log_info "LLM d'arbitrage ignoré — transcription brute. Activable plus tard :"
-        log_info "  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)"
+        log_llm_setup_event ignored
+        log_llm_setup_event manual-switch
     fi
 fi
 fi

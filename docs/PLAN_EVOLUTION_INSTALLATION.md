@@ -443,6 +443,9 @@ pas un fichier local à réécrire.
 Les messages de sélection initiale de la LLM d'arbitrage (profil sans LLM, VRAM
 insuffisante, opencode absent, statut VRAM, fallback planner et palier recommandé)
 passent aussi par `transcria.install_arbitrage --setup-log`.
+Les messages de qualification `llama-server`, téléchargement GGUF, activation de
+palier et calibration GPU passent par le même renderer ; `install.sh` conserve
+encore les prompts, la table des modèles et les commandes effectives.
 Le rendu systemd legacy `transcria.service` utilise désormais aussi
 `transcria.install_systemd` au lieu d'un bloc `sed`. L'ajustement local
 `pg_hba.conf` est isolé dans `transcria.install_postgres`, qui transforme uniquement

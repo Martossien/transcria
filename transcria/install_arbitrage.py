@@ -161,6 +161,43 @@ def render_setup_log(
         return f"INFO:Palier recommandé : {tier} Go → {label}\n"
     if event == "tiers-info":
         return "INFO:Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer.\n"
+    if event == "llama-qualified":
+        return f"OK:llama-server qualifié : {value} (build {tier}, source {label})\n"
+    if event == "llama-unusable":
+        return f"WARN:llama-server trouvé mais NON utilisable ({tier}) : {value}\n"
+    if event == "llama-ld-hint":
+        return (
+            "WARN:Libs llama hors chemins standard — exportez "
+            f"LLAMA_LD_LIBRARY_PATH={value} dans l'environnement du service (les profils l'honorent).\n"
+        )
+    if event == "model-present":
+        return f"OK:Modèle déjà présent : {value}\n"
+    if event == "hf-cli-missing":
+        return "ERROR:Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub\n"
+    if event == "download-start":
+        return f"INFO:Téléchargement ({tier}) de {value} → {label} (peut prendre plusieurs minutes)…\n"
+    if event == "model-downloaded":
+        return f"OK:Modèle téléchargé : {value}\n"
+    if event == "download-failed":
+        return "ERROR:Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN.\n"
+    if event == "download-skipped":
+        return "INFO:Téléchargement ignoré.\n"
+    if event == "tier-activated":
+        return f"OK:Palier {tier} Go activé (alias générique 'arbitrage').\n"
+    if event == "calibration-ok":
+        return "OK:Calibration GPU écrite (placement réel par carte).\n"
+    if event == "calibration-failed":
+        return "WARN:Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh\n"
+    if event == "start-managed":
+        return "INFO:Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script.\n"
+    if event == "switch-incomplete":
+        return f"WARN:Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh {tier}gb\n"
+    if event == "model-absent":
+        return "INFO:Modèle absent — palier non activé (transcription brute pour l'instant).\n"
+    if event == "ignored":
+        return "INFO:LLM d'arbitrage ignoré — transcription brute. Activable plus tard :\n"
+    if event == "manual-switch":
+        return "INFO:  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)\n"
     raise ValueError(f"événement LLM inconnu : {event}")
 
 

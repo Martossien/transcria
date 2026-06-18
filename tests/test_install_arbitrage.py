@@ -114,6 +114,45 @@ def test_render_setup_log_for_llm_selection_events():
     )
 
 
+def test_render_setup_log_for_llm_download_and_activation_events():
+    assert render_setup_log(event="llama-qualified", value="/opt/llama-server", tier="9632", label="git") == (
+        "OK:llama-server qualifié : /opt/llama-server (build 9632, source git)\n"
+    )
+    assert render_setup_log(event="llama-unusable", value="/opt/llama-server", tier="too-old") == (
+        "WARN:llama-server trouvé mais NON utilisable (too-old) : /opt/llama-server\n"
+    )
+    assert render_setup_log(event="llama-ld-hint", value="/opt/llama/lib") == (
+        "WARN:Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=/opt/llama/lib "
+        "dans l'environnement du service (les profils l'honorent).\n"
+    )
+    assert render_setup_log(event="model-present", value="/models/model.gguf") == "OK:Modèle déjà présent : /models/model.gguf\n"
+    assert render_setup_log(event="hf-cli-missing") == (
+        "ERROR:Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub\n"
+    )
+    assert render_setup_log(event="download-start", value="model.gguf", tier="hf", label="/models") == (
+        "INFO:Téléchargement (hf) de model.gguf → /models (peut prendre plusieurs minutes)…\n"
+    )
+    assert render_setup_log(event="model-downloaded", value="/models/model.gguf") == "OK:Modèle téléchargé : /models/model.gguf\n"
+    assert render_setup_log(event="download-failed") == "ERROR:Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN.\n"
+    assert render_setup_log(event="download-skipped") == "INFO:Téléchargement ignoré.\n"
+    assert render_setup_log(event="tier-activated", tier="48") == "OK:Palier 48 Go activé (alias générique 'arbitrage').\n"
+    assert render_setup_log(event="calibration-ok") == "OK:Calibration GPU écrite (placement réel par carte).\n"
+    assert render_setup_log(event="calibration-failed") == "WARN:Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh\n"
+    assert render_setup_log(event="start-managed") == (
+        "INFO:Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script.\n"
+    )
+    assert render_setup_log(event="switch-incomplete", tier="48") == (
+        "WARN:Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh 48gb\n"
+    )
+    assert render_setup_log(event="model-absent") == (
+        "INFO:Modèle absent — palier non activé (transcription brute pour l'instant).\n"
+    )
+    assert render_setup_log(event="ignored") == "INFO:LLM d'arbitrage ignoré — transcription brute. Activable plus tard :\n"
+    assert render_setup_log(event="manual-switch") == (
+        "INFO:  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)\n"
+    )
+
+
 def test_render_setup_log_rejects_unknown_event():
     with pytest.raises(ValueError, match="événement LLM inconnu : bad"):
         render_setup_log(event="bad")
