@@ -1034,7 +1034,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
                 if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                         first-available --name huggingface-cli --format shell 2>/dev/null); then
-                    eval "$HF_COHERE_OUT"
+                    eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_COHERE_OUT"
                     HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
                 fi
                 if [[ -n "$HF_COHERE_CLI" ]]; then
@@ -1286,7 +1286,7 @@ else
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if LLAMA_FALLBACK_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                     first-available --name llama-server --format shell 2>/dev/null); then
-                eval "$LLAMA_FALLBACK_OUT"
+                eval_prefixed_shell_assignments FIRST_AVAILABLE "$LLAMA_FALLBACK_OUT"
             fi
             for c in "$FIRST_AVAILABLE_PATH" \
                      "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
@@ -1305,7 +1305,7 @@ else
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                     first-available --name hf --name huggingface-cli --format shell 2>/dev/null); then
-                eval "$HF_DL_OUT"
+                eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_DL_OUT"
                 HF_DL="$FIRST_AVAILABLE_NAME"
             fi
             if [[ -z "$HF_DL" ]]; then

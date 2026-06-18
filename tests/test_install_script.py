@@ -76,6 +76,15 @@ def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     assert "grep -E '^LLAMA_[A-Z_]+='" not in content
 
 
+def test_install_script_filters_first_available_helper_outputs_before_eval():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "eval_prefixed_shell_assignments FIRST_AVAILABLE" in content
+    assert 'eval "$HF_COHERE_OUT"' not in content
+    assert 'eval "$LLAMA_FALLBACK_OUT"' not in content
+    assert 'eval "$HF_DL_OUT"' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
