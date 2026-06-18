@@ -527,6 +527,8 @@ inline de `install.sh`.
 Le préfixage des sorties de commandes longues (`bootstrap_config`, Alembic,
 migration SQLite, opencode, téléchargements, switch LLM) passe par `run_indented`
 au lieu de pipelines `2>&1 | sed`.
+Le préfixage des fichiers temporaires de warning passe par `print_indented_file`,
+supprimant aussi les derniers `sed 's/^/  /'` de `install.sh`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

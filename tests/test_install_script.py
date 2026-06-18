@@ -81,6 +81,8 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
     assert "run_indented env TRANSCRIA_DATABASE_URL=" in content
     assert "run_indented env PYTHONPATH=" in content
     assert "2>&1 | sed 's/^/  /'" not in content
+    assert "print_indented_file" in content
+    assert "sed 's/^/  /'" not in content
 
 
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():

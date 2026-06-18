@@ -263,6 +263,14 @@ run_indented() {
     done
 }
 
+print_indented_file() {
+    local path="$1"
+    [[ -s "$path" ]] || return 0
+    while IFS= read -r line; do
+        printf '  %s\n' "$line"
+    done < "$path"
+}
+
 eval_prefixed_shell_assignments() {
     # Évalue uniquement des affectations shell KEY=VALUE produites par nos helpers.
     local prefix="$1" content="$2" line filtered="" pattern
@@ -1269,7 +1277,7 @@ else
                          plan --gpus "$GPU_SIZES_CSV" --format shell 2>"$_plan_warn"); then
             eval_prefixed_shell_assignments LLM "$_plan_out"
             REC_TIER="${LLM_TIER:-}"
-            [[ -s "$_plan_warn" ]] && sed 's/^/  /' "$_plan_warn"
+            print_indented_file "$_plan_warn"
         fi
         rm -f "$_plan_warn"
     fi
@@ -1316,7 +1324,7 @@ else
                     log_warn "Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=$LLAMA_LD_HINT dans l'environnement du service (les profils l'honorent)."
                 fi
             fi
-            [[ -s "$_ll_warn" ]] && sed 's/^/  /' "$_ll_warn"
+            print_indented_file "$_ll_warn"
             rm -f "$_ll_warn"
         fi
         if [[ -z "$LLAMA_SRV" ]]; then
@@ -1376,7 +1384,7 @@ else
                     else
                         log_warn "Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh"
                     fi
-                    [[ -s "$_cal_warn" ]] && sed 's/^/  /' "$_cal_warn"
+                    print_indented_file "$_cal_warn"
                     rm -f "$_cal_warn"
                 fi
                 log_info "Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script."
