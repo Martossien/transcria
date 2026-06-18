@@ -512,6 +512,8 @@ Les capacités système (`sudo`, `runuser`, `systemctl`, `service`, `nvidia-smi`
 détectées une seule fois via `transcria.install_prerequisites system-capabilities`,
 ce qui évite les `command -v` dispersés tout en gardant les actions privilégiées
 explicites dans `install.sh`.
+Les sorties shell `LLM_*` et `LLAMA_*` des helpers LLM sont filtrées par préfixe et
+format d'affectation avant `eval`, au lieu de passer par `grep -E` inline.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

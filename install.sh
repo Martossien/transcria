@@ -228,6 +228,23 @@ ask_yn() {
     [[ "$answer" =~ ^[oOyY]$ ]]
 }
 
+eval_prefixed_shell_assignments() {
+    # Évalue uniquement des affectations shell KEY=VALUE produites par nos helpers.
+    local prefix="$1" content="$2" line filtered="" pattern
+    pattern="^${prefix}_[A-Z_]+=(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ $pattern ]]; then
+            filtered+="$line"$'\n'
+        else
+            log_warn "Sortie helper ignorée ($prefix) : $line"
+        fi
+    done <<< "$content"
+    if [[ -n "$filtered" ]]; then
+        eval "$filtered"
+    fi
+}
+
 is_local_pg_host() {
     local host="$1"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
@@ -1213,8 +1230,7 @@ else
         _plan_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_plan.$$")
         if _plan_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" \
                          plan --gpus "$GPU_SIZES_CSV" --format shell 2>"$_plan_warn"); then
-            # N'évalue QUE nos propres affectations LLM_* (sûr).
-            eval "$(printf '%s\n' "$_plan_out" | grep -E '^LLM_[A-Z_]+=')"
+            eval_prefixed_shell_assignments LLM "$_plan_out"
             REC_TIER="${LLM_TIER:-}"
             [[ -s "$_plan_warn" ]] && sed 's/^/  /' "$_plan_warn"
         fi
@@ -1251,7 +1267,7 @@ else
             _ll_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_llama.$$")
             if _ll_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/detect_llama_server.py" \
                            --format shell 2>"$_ll_warn"); then
-                eval "$(printf '%s\n' "$_ll_out" | grep -E '^LLAMA_[A-Z_]+=')"
+                eval_prefixed_shell_assignments LLAMA "$_ll_out"
                 LLAMA_SRV="${LLAMA_SERVER:-}"
                 LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
                 if [[ "${LLAMA_OK:-0}" == "1" ]]; then

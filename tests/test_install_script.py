@@ -66,6 +66,16 @@ def test_install_script_does_not_eval_interactive_answers():
     assert 'printf -v "$varname"' in content
 
 
+def test_install_script_filters_llm_shell_helper_outputs_before_eval():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "eval_prefixed_shell_assignments()" in content
+    assert "eval_prefixed_shell_assignments LLM" in content
+    assert "eval_prefixed_shell_assignments LLAMA" in content
+    assert "grep -E '^LLM_[A-Z_]+='" not in content
+    assert "grep -E '^LLAMA_[A-Z_]+='" not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
