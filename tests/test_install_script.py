@@ -93,6 +93,18 @@ def test_install_script_reuses_systemd_unit_installer_for_inference():
     assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
 
 
+def test_install_script_reuses_split_systemd_unit_installer():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "install_deploy_unit()" in content
+    assert '"transcria-migrate.service.adapted"' in content
+    assert '"transcria-web.service.adapted"' in content
+    assert '"transcria-scheduler.service.adapted"' in content
+    assert "TMP_MIGRATE=" not in content
+    assert "TMP_WEB=" not in content
+    assert "TMP_SCHEDULER=" not in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 

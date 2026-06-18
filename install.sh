@@ -1457,6 +1457,19 @@ render_deploy_unit() {
         > "$dst_tmp"
 }
 
+install_deploy_unit() {
+    local src="$1" dst="$2" unit="$3" adapted_name="$4"
+    if [[ ! -f "$src" ]]; then
+        log_warn "$unit.service introuvable — service non installé"
+        return 0
+    fi
+    local tmp_unit
+    tmp_unit=$(mktemp)
+    render_deploy_unit "$src" "$tmp_unit"
+    install_systemd_unit "$tmp_unit" "$dst" "$unit" "$adapted_name"
+    rm -f "$tmp_unit"
+}
+
 if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     log_section "Service systemd"
 
@@ -1509,36 +1522,24 @@ if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PRO
         log_warn "  sudo systemctl disable --now transcria.service"
     fi
 
-    MIGRATE_SRC="$INSTALL_DIR/deploy/transcria-migrate.service"
-    if [[ ! -f "$MIGRATE_SRC" ]]; then
-        log_warn "transcria-migrate.service introuvable — service non installé"
-    else
-        TMP_MIGRATE=$(mktemp)
-        render_deploy_unit "$MIGRATE_SRC" "$TMP_MIGRATE"
-        install_systemd_unit "$TMP_MIGRATE" "/etc/systemd/system/transcria-migrate.service" "transcria-migrate" "transcria-migrate.service.adapted"
-        rm -f "$TMP_MIGRATE"
-    fi
+    install_deploy_unit \
+        "$INSTALL_DIR/deploy/transcria-migrate.service" \
+        "/etc/systemd/system/transcria-migrate.service" \
+        "transcria-migrate" \
+        "transcria-migrate.service.adapted"
 
     if [[ "$INSTALL_PROFILE" = "web" ]]; then
-        WEB_SRC="$INSTALL_DIR/deploy/transcria-web.service"
-        if [[ ! -f "$WEB_SRC" ]]; then
-            log_warn "transcria-web.service introuvable — service non installé"
-        else
-            TMP_WEB=$(mktemp)
-            render_deploy_unit "$WEB_SRC" "$TMP_WEB"
-            install_systemd_unit "$TMP_WEB" "/etc/systemd/system/transcria-web.service" "transcria-web" "transcria-web.service.adapted"
-            rm -f "$TMP_WEB"
-        fi
+        install_deploy_unit \
+            "$INSTALL_DIR/deploy/transcria-web.service" \
+            "/etc/systemd/system/transcria-web.service" \
+            "transcria-web" \
+            "transcria-web.service.adapted"
     elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-        SCHEDULER_SRC="$INSTALL_DIR/deploy/transcria-scheduler.service"
-        if [[ ! -f "$SCHEDULER_SRC" ]]; then
-            log_warn "transcria-scheduler.service introuvable — service non installé"
-        else
-            TMP_SCHEDULER=$(mktemp)
-            render_deploy_unit "$SCHEDULER_SRC" "$TMP_SCHEDULER"
-            install_systemd_unit "$TMP_SCHEDULER" "/etc/systemd/system/transcria-scheduler.service" "transcria-scheduler" "transcria-scheduler.service.adapted"
-            rm -f "$TMP_SCHEDULER"
-        fi
+        install_deploy_unit \
+            "$INSTALL_DIR/deploy/transcria-scheduler.service" \
+            "/etc/systemd/system/transcria-scheduler.service" \
+            "transcria-scheduler" \
+            "transcria-scheduler.service.adapted"
     fi
 fi
 

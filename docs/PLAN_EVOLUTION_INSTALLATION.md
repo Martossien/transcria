@@ -532,6 +532,9 @@ supprimant aussi les derniers `sed 's/^/  /'` de `install.sh`.
 L'installation de l'unité `transcria-inference.service` réutilise le wrapper commun
 `install_systemd_unit`, supprimant la duplication `cp/chmod/systemctl` dédiée au
 nœud de ressources.
+Les unités split `transcria-migrate`, `transcria-web` et `transcria-scheduler`
+passent par `install_deploy_unit`, qui centralise source manquante, rendu temporaire,
+installation et cleanup.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
