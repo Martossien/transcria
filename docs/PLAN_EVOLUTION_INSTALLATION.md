@@ -455,6 +455,23 @@ Les variables d'exécution dérivées du profil (`INSTALL_SERVICE`, `INSTALL_INF
 `SETUP_PG`, `PROFILE_NEEDS_*`) sont également chargées depuis
 `transcria.install_profiles --format shell`, ce qui supprime la matrice de décisions
 shell restante.
+Le rôle runtime applicatif (`runtime.role` / `TRANSCRIA_ROLE`) est maintenant porté
+par la même matrice Python : `all-in-one` rend `all`, `web` rend `web`,
+`scheduler` rend `scheduler`, tandis que `resource-node` et `migrate` n'ont pas de
+rôle applicatif à écrire.
+Les textes de résumé final dépendants du profil et les commandes de démarrage
+recommandées sont rendus par `transcria.install_profiles` (`summary` /
+`next-steps`), ce qui retire une nouvelle série de branches profil de `install.sh`.
+Le bilan final des modèles est rendu par `transcria.install_models summary` à partir
+des états détectés par le shell, ce qui laisse `install.sh` orchestrer la détection
+sans porter le texte conditionnel de synthèse.
+Le tableau de vérification locale des modèles est également rendu par
+`transcria.install_models detection-table`, ce qui retire les `printf` de tableau
+du shell tout en conservant la détection existante.
+Le bilan final base de données / configuration / doctor est rendu par
+`transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
+`install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et
+`DOCTOR_STATUS`.
 La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée dans
 `transcria.install_torch`, avec tests sur les seuils CUDA et le cas CUDA 13+.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,
@@ -493,9 +510,47 @@ La validation des entrées PostgreSQL (`db`, `user`, `port`) passe par
 L'ajustement `pg_hba.conf` ne dépend plus d'un pré-scan `grep` côté shell :
 `install.sh` appelle directement `transcria.install_postgres`, puis recharge
 PostgreSQL seulement si le helper retourne `changed>0`.
+La décision de schéma PostgreSQL (`keep`, `upgrade-existing`, `create`) est rendue
+par `transcria.install_postgres --schema-action` à partir des compteurs `psql`,
+ce qui retire une condition métier supplémentaire de `_setup_postgres`.
+La décision de migration SQLite vers PostgreSQL (`none`, `prompt`, `migrate`,
+`skip`) est également rendue par `transcria.install_postgres`, en gardant seulement
+le prompt utilisateur et l'exécution de migration dans le shell.
+Les SQL idempotents de création/mise à jour du rôle et de création de base UTF8
+sont rendus par `transcria.install_postgres --role-sql/--database-sql`, ce qui
+retire les heredocs SQL métier de `_setup_postgres`.
+Les requêtes de lecture d'état PostgreSQL (existence de base, encodage, compteurs,
+version Alembic) sont centralisées dans `transcria.install_postgres --state-query`
+au lieu d'être dispersées en chaînes `psql -c` dans `install.sh`.
+Les avertissements d'encodage PostgreSQL non UTF8 sont rendus par
+`transcria.install_postgres --encoding-warnings`, afin de garder ces messages
+audités et testés hors du shell.
+Les messages d'échec de connexion PostgreSQL local/distant sont rendus par
+`transcria.install_postgres --connection-failure`, avec seulement le préfixage
+`ERROR`/`WARN` conservé côté shell.
+Le résumé d'état PostgreSQL avant Alembic (`tables public`, version Alembic,
+nombre d'utilisateurs) est rendu par `transcria.install_postgres --state-summary`.
+Les messages initiaux associés aux actions Alembic (`keep`, `upgrade-existing`,
+`create`) sont rendus par `transcria.install_postgres --schema-action-log`.
+L'interprétation du résultat de réécriture `pg_hba.conf` (`changed=N` →
+`ACTION:none|reload`) passe par `transcria.install_postgres --pg-hba-rewrite-result`,
+afin d'éviter une regex de décision côté shell.
+Les messages de bootstrap PostgreSQL local/distant (rôle/base, repli locale C,
+connexion validée, DSN écrit) sont rendus par `transcria.install_postgres --setup-log`.
+Les messages de résultat Alembic PostgreSQL (succès, reconstruction locale,
+échec distant, action inconnue) sont rendus par `transcria.install_postgres --alembic-log`.
+Les logs, le prompt interactif et les messages de backup/exécution de migration
+SQLite vers PostgreSQL sont rendus par `transcria.install_postgres --sqlite-migration-log`
+et `--sqlite-migration-prompt`.
+Les messages de choix global SQLite/PostgreSQL (SQLite conservée, prérequis
+PostgreSQL manquants, mot de passe généré, backend final) sont rendus par
+`transcria.install_postgres --database-setup-log`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.
+Les lignes de statut individuelles de vérification modèles (Cohere, pyannote,
+SQUIM, LLM, profils sans modèles locaux) sont rendues par
+`transcria.install_models status-log`.
 La lecture de version opencode passe par `transcria.install_opencode` au lieu d'un
 pipeline shell `--version | head`.
 La recherche du binaire opencode (PATH, home service, home utilisateur, chemin
@@ -512,6 +567,29 @@ Les capacités système (`sudo`, `runuser`, `systemctl`, `service`, `nvidia-smi`
 détectées une seule fois via `transcria.install_prerequisites system-capabilities`,
 ce qui évite les `command -v` dispersés tout en gardant les actions privilégiées
 explicites dans `install.sh`.
+Les sorties shell `LLM_*`, `LLAMA_*` et `FIRST_AVAILABLE_*` des helpers sont filtrées
+par préfixe et format d'affectation avant `eval`, au lieu de passer par `grep -E`
+inline ou une évaluation brute.
+Les sorties shell à variables fixes (`HAVE_*`, `GPU_COUNT`/`CUDA_VER_FROM_SMI`/
+`NVIDIA_WARNING`, `CUDA_TAG`/`CUDA_WARNING`) passent aussi par une liste blanche
+de noms avant évaluation.
+La sortie shell du plan de profil (`install_profiles --format shell`) passe par la
+même liste blanche ; les seuls `eval` restants sont confinés dans les helpers de
+filtrage.
+La résolution du home de l'utilisateur de service passe par
+`transcria.install_prerequisites user-home`, supprimant le dernier `python3 -c`
+inline de `install.sh`.
+Le préfixage des sorties de commandes longues (`bootstrap_config`, Alembic,
+migration SQLite, opencode, téléchargements, switch LLM) passe par `run_indented`
+au lieu de pipelines `2>&1 | sed`.
+Le préfixage des fichiers temporaires de warning passe par `print_indented_file`,
+supprimant aussi les derniers `sed 's/^/  /'` de `install.sh`.
+L'installation de l'unité `transcria-inference.service` réutilise le wrapper commun
+`install_systemd_unit`, supprimant la duplication `cp/chmod/systemctl` dédiée au
+nœud de ressources.
+Les unités split `transcria-migrate`, `transcria-web` et `transcria-scheduler`
+passent par `install_deploy_unit`, qui centralise source manquante, rendu temporaire,
+installation et cleanup.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
@@ -551,6 +629,10 @@ all-in-one|web|scheduler|resource-node|migrate`, charge `.env`, adapte la liste
 des checks au profil, et valide les premiers invariants critiques
 (rôle runtime, PostgreSQL pour `web`/`scheduler`/`migrate`, clé API pour
 `resource-node`, manifeste `resource_node.engines`, conflits systemd connus).
+`install.sh` lance `doctor --profile <profil>` par défaut en post-install ; le saut
+doit être explicite via `--skip-doctor` et apparaît dans `--plan`/le résumé final.
+`--strict-doctor` durcit cette barrière pour les installations préproduction/audit en
+promouvant les avertissements doctor en échec.
 
 Tâches :
 

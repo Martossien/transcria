@@ -16,6 +16,8 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --skip-doctor      Ne pas lancer scripts/doctor.py en fin d'installation
+#   --strict-doctor    Lancer doctor.py en mode strict (warnings = échec)
 #   --postgres         Configurer PostgreSQL (local : crée rôle/base ; distant : utilise une base existante)
 #   --sqlite-dev       Utiliser SQLite explicitement (dev local mono-process uniquement)
 #   --allow-sqlite-dev Alias de --sqlite-dev
@@ -58,6 +60,8 @@ FORCE_CUDA=""
 HF_TOKEN=""
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
+SKIP_DOCTOR=false
+STRICT_DOCTOR=false
 PYTHON_BIN=""
 SETUP_PG=""            # "" = à décider (prompt) ; true/false = explicite
 PG_HOST="127.0.0.1"
@@ -95,6 +99,8 @@ while [[ $# -gt 0 ]]; do
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
         --force-config)    FORCE_CONFIG=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
+        --skip-doctor)     SKIP_DOCTOR=true; shift ;;
+        --strict-doctor)   STRICT_DOCTOR=true; shift ;;
         --postgres)        SETUP_PG=true; shift ;;
         --sqlite-dev|--allow-sqlite-dev|--no-postgres)
             SETUP_PG=false
@@ -119,6 +125,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$SKIP_DOCTOR" = true && "$STRICT_DOCTOR" = true ]]; then
+    log_error "--skip-doctor et --strict-doctor sont incompatibles"
+    exit 1
+fi
+
 print_install_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
@@ -141,12 +152,45 @@ print_install_plan() {
     if [[ "$PG_MIGRATE" = true ]]; then
         args+=(--pg-migrate)
     fi
+    if [[ "$SKIP_DOCTOR" = true ]]; then
+        args+=(--skip-doctor)
+    fi
+    if [[ "$STRICT_DOCTOR" = true ]]; then
+        args+=(--strict-doctor)
+    fi
     if [[ "$SETUP_PG" = true ]]; then
         args+=(--postgres)
     elif [[ "$SETUP_PG" = false ]]; then
         args+=(--sqlite-dev)
     fi
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$python_bin" "${args[@]}"
+}
+
+eval_named_shell_assignments() {
+    # Évalue uniquement les variables explicitement listées.
+    local content="$1" line key value filtered="" allowed=" " value_pattern
+    shift
+    for key in "$@"; do
+        allowed+="$key "
+    done
+    value_pattern="^(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        if [[ "$line" == "$key" || "$allowed" != *" $key "* ]]; then
+            log_warn "Sortie helper ignorée : $line"
+            continue
+        fi
+        if [[ "$value" =~ $value_pattern ]]; then
+            filtered+="$line"$'\n'
+        else
+            log_warn "Valeur helper ignorée ($key)"
+        fi
+    done <<< "$content"
+    if [[ -n "$filtered" ]]; then
+        eval "$filtered"
+    fi
 }
 
 load_install_profile_plan() {
@@ -169,7 +213,58 @@ load_install_profile_plan() {
         log_error "$plan_shell"
         exit 1
     fi
-    eval "$plan_shell"
+    eval_named_shell_assignments "$plan_shell" \
+        INSTALL_PROFILE INSTALL_RUNTIME_ROLE INSTALL_SERVICE INSTALL_INFERENCE SETUP_PG \
+        PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG
+}
+
+print_profile_text() {
+    local format="$1"
+    local final_log_file="${2:-/var/log/transcrIA.log}"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_profiles \
+        --profile "$INSTALL_PROFILE" \
+        --format "$format" \
+        --install-dir "$INSTALL_DIR" \
+        --service-user "$SERVICE_USER" \
+        --venv "$VENV" \
+        --inference-log-dir "$INF_LOG_DIR" \
+        --final-log-file "$final_log_file"
+}
+
+print_model_summary() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models summary \
+        --profile "$INSTALL_PROFILE" \
+        --needs-local-models "$PROFILE_NEEDS_LOCAL_MODELS" \
+        --needs-llm "$PROFILE_NEEDS_LLM" \
+        --cohere-ok "$COHERE_OK" \
+        --pyannote-ok "$PYANNOTE_OK" \
+        --qwen-ok "$QWEN_OK" \
+        --opencode-bin "${OPENCODE_BIN:-}"
+}
+
+print_model_detection_table() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models detection-table \
+        --cohere-ok "$COHERE_OK" \
+        --cohere-path "${COHERE_PATH:-}" \
+        --pyannote-ok "$PYANNOTE_OK" \
+        --pyannote-cache "${PYANNOTE_CACHE:-}" \
+        --needs-llm "$PROFILE_NEEDS_LLM" \
+        --qwen-ok "$QWEN_OK" \
+        --qwen-gguf "${QWEN_GGUF:-}" \
+        --squim-ok "$SQUIM_OK"
+}
+
+print_database_summary() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary database \
+        --db-backend "$DB_BACKEND"
+}
+
+print_configuration_summary() {
+    local remaining_changes="$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary configuration \
+        --config-path "$CONFIG_PATH" \
+        --remaining-changes "$remaining_changes" \
+        --doctor-status "$DOCTOR_STATUS"
 }
 
 load_install_profile_plan
@@ -184,7 +279,7 @@ VENV="$INSTALL_DIR/venv"
 CONFIG_PATH="$INSTALL_DIR/config.yaml"
 ENV_FILE="$INSTALL_DIR/.env"
 resolve_user_home() {
-    python3 -c 'import pwd, sys; print(pwd.getpwnam(sys.argv[1]).pw_dir)' "$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "${PYTHON_BIN:-python3}" -m transcria.install_prerequisites user-home --user "$1"
 }
 if id "$SERVICE_USER" &>/dev/null 2>&1; then
     SERVICE_HOME_GLOBAL=$(resolve_user_home "$SERVICE_USER")
@@ -226,6 +321,37 @@ ask_yn() {
     echo -n "  $question [o/N] : "
     local answer; read -r answer
     [[ "$answer" =~ ^[oOyY]$ ]]
+}
+
+run_indented() {
+    "$@" 2>&1 | while IFS= read -r line; do
+        printf '  %s\n' "$line"
+    done
+}
+
+print_indented_file() {
+    local path="$1"
+    [[ -s "$path" ]] || return 0
+    while IFS= read -r line; do
+        printf '  %s\n' "$line"
+    done < "$path"
+}
+
+eval_prefixed_shell_assignments() {
+    # Évalue uniquement des affectations shell KEY=VALUE produites par nos helpers.
+    local prefix="$1" content="$2" line filtered="" pattern
+    pattern="^${prefix}_[A-Z_]+=(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ $pattern ]]; then
+            filtered+="$line"$'\n'
+        else
+            log_warn "Sortie helper ignorée ($prefix) : $line"
+        fi
+    done <<< "$content"
+    if [[ -n "$filtered" ]]; then
+        eval "$filtered"
+    fi
 }
 
 is_local_pg_host() {
@@ -272,6 +398,11 @@ build_pg_dsn() {
         --db "$db" \
         --user "$user" \
         --password "$pass"
+}
+
+pg_state_query() {
+    local name="$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --state-query "$name"
 }
 
 # Helper YAML — lit une clé dans config.yaml
@@ -360,13 +491,15 @@ fi
 
 SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
     system-capabilities --format shell)
-eval "$SYSTEM_CAPABILITIES_OUT"
+eval_named_shell_assignments "$SYSTEM_CAPABILITIES_OUT" \
+    HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL
 
 GPU_COUNT=0
 CUDA_VER_FROM_SMI=""
 NVIDIA_WARNING=""
 NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_hardware --format shell)
-eval "$NVIDIA_DETECT_OUT"
+eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
+    GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING
 if [[ -z "$NVIDIA_WARNING" ]]; then
     log_ok "nvidia-smi — $GPU_COUNT GPU(s), CUDA $CUDA_VER_FROM_SMI"
 else
@@ -436,7 +569,7 @@ if [[ "$INSTALL_TORCH" = true ]]; then
         TORCH_TAG_ARGS+=(--force-cuda "$FORCE_CUDA")
     fi
     TORCH_TAG_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch "${TORCH_TAG_ARGS[@]}")
-    eval "$TORCH_TAG_OUT"
+    eval_named_shell_assignments "$TORCH_TAG_OUT" CUDA_TAG CUDA_WARNING
     if [[ -n "${CUDA_WARNING:-}" ]]; then
         log_warn "$CUDA_WARNING"
     fi
@@ -498,11 +631,11 @@ else
         log_info "Ancien config.yaml sauvegardé : $BACKUP"
     fi
     log_info "Génération via bootstrap_config.py (auto-détection)..."
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
+    run_indented env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
         --example "$INSTALL_DIR/config.example.yaml" \
         --output "$CONFIG_PATH" \
         --profile "$INSTALL_PROFILE" \
-        --force 2>&1 | sed 's/^/  /'
+        --force
     log_ok "config.yaml généré"
 fi
 
@@ -519,33 +652,19 @@ else
     log_ok "TRANSCRIA_SECRET présent dans .env"
 fi
 
-case "$INSTALL_PROFILE" in
-    all-in-one)
-        if [[ "$PROFILE_EXPLICIT" = true ]]; then
-            yaml_set "runtime.role" "all"
-            env_set "TRANSCRIA_ROLE" "all"
-            log_ok "Profil d'installation : all-in-one (TRANSCRIA_ROLE=all)"
-        else
-            log_ok "Profil d'installation : all-in-one (défaut)"
-        fi
-        ;;
-    web)
-        yaml_set "runtime.role" "web"
-        env_set "TRANSCRIA_ROLE" "web"
-        log_ok "Profil d'installation : web (TRANSCRIA_ROLE=web)"
-        ;;
-    scheduler)
-        yaml_set "runtime.role" "scheduler"
-        env_set "TRANSCRIA_ROLE" "scheduler"
-        log_ok "Profil d'installation : scheduler (TRANSCRIA_ROLE=scheduler)"
-        ;;
-    resource-node)
-        log_ok "Profil d'installation : resource-node (inference_service)"
-        ;;
-    migrate)
-        log_ok "Profil d'installation : migrate (Alembic only)"
-        ;;
-esac
+if [[ -n "${INSTALL_RUNTIME_ROLE:-}" && ( "$INSTALL_PROFILE" != "all-in-one" || "$PROFILE_EXPLICIT" = true ) ]]; then
+    yaml_set "runtime.role" "$INSTALL_RUNTIME_ROLE"
+    env_set "TRANSCRIA_ROLE" "$INSTALL_RUNTIME_ROLE"
+    log_ok "Profil d'installation : $INSTALL_PROFILE (TRANSCRIA_ROLE=$INSTALL_RUNTIME_ROLE)"
+elif [[ "$INSTALL_PROFILE" = "all-in-one" ]]; then
+    log_ok "Profil d'installation : all-in-one (défaut)"
+elif [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
+    log_ok "Profil d'installation : resource-node (inference_service)"
+elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
+    log_ok "Profil d'installation : migrate (Alembic only)"
+else
+    log_ok "Profil d'installation : $INSTALL_PROFILE"
+fi
 
 if [[ "$INSTALL_INFERENCE" = true ]]; then
     INFERENCE_KEY_STATUS=$(env_ensure_secret "TRANSCRIA_INFERENCE_API_KEY" 16 "urlsafe" "" "Clé API du service inference_service (/infer/* et /engines/*).")
@@ -612,6 +731,67 @@ _setup_postgres() {
     local local_pg=false
     is_local_pg_host "$host" && local_pg=true
 
+    log_postgres_setup_event() {
+        local event="$1" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --setup-log \
+            --event "$event" \
+            --db "$db" \
+            --user "$user" \
+            --host "$host") || {
+            log_error "Impossible de rendre le message PostgreSQL : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie PostgreSQL ignorée : $line"
+        fi
+    }
+
+    log_postgres_alembic_event() {
+        local event="$1" action="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --alembic-log \
+            --event "$event" \
+            --action "$action") || {
+            log_error "Impossible de rendre le message Alembic PostgreSQL : $event"
+            return 1
+        }
+        if [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie Alembic PostgreSQL ignorée : $line"
+        fi
+    }
+
+    log_sqlite_migration_event() {
+        local event="$1" action="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --sqlite-migration-log \
+            --event "$event" \
+            --sqlite-db "$sqlite_db" \
+            --action "$action") || {
+            log_error "Impossible de rendre le message de migration SQLite : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie migration SQLite ignorée : $line"
+        fi
+    }
+
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
@@ -625,24 +805,35 @@ _setup_postgres() {
         if [[ -f "$pg_hba" ]]; then
             local pg_hba_result=""
             if pg_hba_result=$(pg_admin_python_module transcria.install_postgres "$pg_hba"); then
-                if [[ "$pg_hba_result" != "changed=0" ]]; then
-                    log_info "Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…"
-                    if [[ "$pg_hba_result" =~ ^changed=[1-9][0-9]*$ ]]; then
-                        if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
-                            if [[ $EUID -eq 0 ]]; then
-                                systemctl reload postgresql
-                            else
-                                sudo systemctl reload postgresql
-                            fi
-                        elif [[ "$HAVE_SERVICE" = true ]]; then
-                            if [[ $EUID -eq 0 ]]; then
-                                service postgresql reload
-                            else
-                                sudo service postgresql reload
-                            fi
-                        fi
-                        sleep 1
+                local pg_hba_decision="" pg_hba_reload=false
+                pg_hba_decision=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+                    --pg-hba-rewrite-result \
+                    --result "$pg_hba_result") || {
+                    log_warn "Résultat pg_hba.conf invalide : $pg_hba_result"
+                    return 1
+                }
+                while IFS= read -r line; do
+                    if [[ "$line" == INFO:* ]]; then
+                        log_info "${line#INFO:}"
+                    elif [[ "$line" == ACTION:reload ]]; then
+                        pg_hba_reload=true
                     fi
+                done <<< "$pg_hba_decision"
+                if [[ "$pg_hba_reload" = true ]]; then
+                    if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
+                        if [[ $EUID -eq 0 ]]; then
+                            systemctl reload postgresql
+                        else
+                            sudo systemctl reload postgresql
+                        fi
+                    elif [[ "$HAVE_SERVICE" = true ]]; then
+                        if [[ $EUID -eq 0 ]]; then
+                            service postgresql reload
+                        else
+                            sudo service postgresql reload
+                        fi
+                    fi
+                    sleep 1
                 fi
             else
                 log_warn "Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL."
@@ -650,15 +841,12 @@ _setup_postgres() {
         fi
 
         # ── Rôle (idempotent) ─────────────────────────────────────
-        log_info "Vérification du rôle '$user' et de la base '$db'…"
+        log_postgres_setup_event local-check
 
-        if ! pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
-WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
-SQL
+        if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --role-sql \
+            | pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass"
         then
-            log_error "Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
+            log_postgres_setup_event role-error
             return 1
         fi
 
@@ -667,138 +855,214 @@ SQL
         #    validation, psycopg3 renvoie des bytes). TEMPLATE template0 permet de
         #    fixer l'encodage quelle que soit la base modèle du cluster.
         local db_exists=""
-        db_exists=$(pg_admin_psql -At -v dbname="$db" <<'SQL'
-SELECT 1 FROM pg_database WHERE datname = :'dbname';
-SQL
-        ) || db_exists=""
+        db_exists=$(pg_admin_psql -At -v dbname="$db" -c "$(pg_state_query database-exists)") || db_exists=""
         if [[ "$db_exists" != "1" ]]; then
-            if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
-SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \gexec
-SQL
+            if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql \
+                | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
             then
                 # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
                 # locale C, qui accepte tout encodage (tri linguistique côté Python).
-                log_warn "CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…"
-                if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
-SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',
-              :'dbname', :'role', 'UTF8', 'C', 'C') \gexec
-SQL
+                log_postgres_setup_event database-fallback
+                if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql --fallback-locale-c \
+                    | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
                 then
-                    log_error "Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres."
+                    log_postgres_setup_event database-error
                     return 1
                 fi
             fi
         fi
-        log_ok "Rôle et base PostgreSQL prêts"
+        log_postgres_setup_event local-ready
     else
-        log_info "PostgreSQL distant détecté ($host) : rôle/base supposés déjà créés."
+        log_postgres_setup_event remote-detected
     fi
 
     if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
-        log_error "Connexion PostgreSQL impossible avec le rôle '$user' sur '$db@$host:$port'."
-        if [[ "$local_pg" = true ]]; then
-            log_warn "Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe."
-        else
-            log_warn "Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password."
-        fi
+        local connection_failure=""
+        connection_failure=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --connection-failure \
+            --db "$db" \
+            --user "$user" \
+            --host "$host" \
+            --port "$port" \
+            --local-pg "$local_pg")
+        while IFS= read -r line; do
+            if [[ "$line" == ERROR:* ]]; then
+                log_error "${line#ERROR:}"
+            elif [[ "$line" == WARN:* ]]; then
+                log_warn "${line#WARN:}"
+            fi
+        done <<< "$connection_failure"
         return 1
     fi
-    log_ok "Connexion PostgreSQL validée"
+    log_postgres_setup_event connection-ok
 
     # ── Garde encodage : UTF8 requis (cf. docs/INSTALL.md § Encodage de la base) ──
     local db_encoding=""
     db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
-        -c "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();" 2>/dev/null) || db_encoding=""
-    if [[ -n "$db_encoding" && "$db_encoding" != "UTF8" ]]; then
-        log_warn "⚠ La base '$db' existe déjà en encodage $db_encoding (UTF8 attendu) :"
-        log_warn "  texte stocké SANS validation d'encodage — migrez-la dès que possible"
-        log_warn "  (procédure : docs/INSTALL.md, section « Encodage de la base »)."
-        log_warn "  L'application force client_encoding=utf8 et reste fonctionnelle en attendant."
+        -c "$(pg_state_query encoding)" 2>/dev/null) || db_encoding=""
+    local encoding_warnings=""
+    encoding_warnings=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --encoding-warnings \
+        --db "$db" \
+        --encoding "$db_encoding")
+    if [[ -n "$encoding_warnings" ]]; then
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && log_warn "$line"
+        done <<< "$encoding_warnings"
     fi
 
     # ── Écrire le DSN dans .env ───────────────────────────────
     env_set "TRANSCRIA_DATABASE_URL" "$dsn"
     secure_env_file
-    log_ok "DSN PostgreSQL écrit dans .env (chmod 600)"
+    log_postgres_setup_event dsn-written
 
     # ── Détection état de la base ─────────────────────────────
     local has_schema="" has_data="" alembic_ver=""
-    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null) || has_schema=0
-    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null) || has_data=0
-    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null) || alembic_ver=""
+    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query public-table-count)" 2>/dev/null) || has_schema=0
+    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query users-count)" 2>/dev/null) || has_data=0
+    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query alembic-version)" 2>/dev/null) || alembic_ver=""
     [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
     [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
-    log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"
+    log_info "$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --state-summary \
+        --db "$db" \
+        --has-schema "$has_schema" \
+        --has-data "$has_data" \
+        --alembic-version "$alembic_ver")"
 
-    # ── Schéma Alembic : up-to-date, vide, ou migrer ────────────
-    if [[ "$has_schema" -gt 0 && "${has_data:-0}" -gt 0 ]]; then
-        log_ok "La base '$db' existe déjà avec des données. Conservation."
-    elif [[ "$has_schema" -gt 0 && "${has_data:-0}" -eq 0 ]]; then
-        log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
-        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
-            log_ok "Schéma à jour (Alembic)"
-        else
-            if [[ "$local_pg" = true ]]; then
-                log_error "Alembic a échoué. Tentative de reconstruction locale…"
-                pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
-                if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
-                    log_ok "Schéma reconstruit"
+    # ── Schéma Alembic : up-to-date, vide, ou créer ────────────
+    local schema_action
+    schema_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --schema-action \
+        --has-schema "$has_schema" \
+        --has-data "$has_data") || {
+        log_error "Impossible de décider l'action Alembic PostgreSQL."
+        return 1
+    }
+    local schema_action_log=""
+    schema_action_log=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --schema-action-log \
+        --db "$db" \
+        --action "$schema_action") || {
+        log_error "Impossible de rendre le message d'action Alembic PostgreSQL."
+        return 1
+    }
+    case "$schema_action" in
+        keep)
+            log_ok "${schema_action_log#OK:}"
+            ;;
+        upgrade-existing)
+            log_info "${schema_action_log#INFO:}"
+            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                log_postgres_alembic_event upgrade-ok
+            else
+                if [[ "$local_pg" = true ]]; then
+                    log_postgres_alembic_event rebuild-start
+                    pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
+                    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                        log_postgres_alembic_event rebuild-ok
+                    else
+                        log_postgres_alembic_event rebuild-failed
+                        return 1
+                    fi
                 else
-                    log_error "Alembic a échoué une seconde fois. Arrêt."
+                    log_postgres_alembic_event remote-upgrade-failed
                     return 1
                 fi
+            fi
+            ;;
+        create)
+            log_info "${schema_action_log#INFO:}"
+            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
+                log_postgres_alembic_event create-ok
             else
-                log_error "Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée."
+                log_postgres_alembic_event create-failed
                 return 1
             fi
-        fi
-    else
-        log_info "Création du schéma (alembic upgrade head)…"
-        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
-            log_ok "Schéma PostgreSQL créé"
-        else
-            log_error "Échec d'alembic upgrade head"
+            ;;
+        *)
+            log_postgres_alembic_event unknown-action "$schema_action"
             return 1
-        fi
-    fi
+            ;;
+    esac
 
     # ── Migration SQLite si base vide et SQLite existe ────────
-    if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]; then
-        log_info "Base SQLite détectée : $sqlite_db"
-        if [[ "$NON_INTERACTIVE" = true ]]; then
-            if [[ "$PG_MIGRATE" = true ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
-            else
-                log_info "Migration sautée (--pg-migrate absent)"
-            fi
-        else
+    local sqlite_present=false sqlite_migration_action
+    [[ -s "$sqlite_db" ]] && sqlite_present=true
+    sqlite_migration_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --sqlite-migration-action \
+        --sqlite-present "$sqlite_present" \
+        --has-data "$has_data" \
+        --non-interactive "$NON_INTERACTIVE" \
+        --pg-migrate "$PG_MIGRATE") || {
+        log_error "Impossible de décider la migration SQLite vers PostgreSQL."
+        return 1
+    }
+    case "$sqlite_migration_action" in
+        none)
+            ;;
+        migrate)
+            log_sqlite_migration_event detected
+            _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
+            ;;
+        skip)
+            log_sqlite_migration_event detected
+            log_sqlite_migration_event skipped
+            ;;
+        prompt)
+            log_sqlite_migration_event detected
             local sqlite_size
             sqlite_size=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
                 --file-size "$sqlite_db" 2>/dev/null || echo "taille inconnue")
-            echo ""
-            echo "=== Migration SQLite → PostgreSQL ==="
-            echo "  Source : $sqlite_db ($sqlite_size)"
-            echo "  Cible  : $db@$host:$port"
-            echo ""
-            echo "Options :"
-            echo "  1. Migrer les données SQLite (conservation locale + copie PG)"
-            echo "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)"
-            echo -n "  Votre choix [1/2] : "
+            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+                --sqlite-migration-prompt \
+                --sqlite-db "$sqlite_db" \
+                --sqlite-size "$sqlite_size" \
+                --db "$db" \
+                --host "$host" \
+                --port "$port"
             local mchoice
             read -r mchoice
             if [[ "$mchoice" = "1" ]]; then
                 _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
             else
-                log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
+                log_sqlite_migration_event ignored
             fi
-        fi
-    fi
+            ;;
+        *)
+            log_sqlite_migration_event unknown-action "$sqlite_migration_action"
+            return 1
+            ;;
+    esac
 
     true
 }
 
 _do_pg_migrate() {
     local dsn="$1" sqlite_db="$2" backup_dir="$3"
+    log_sqlite_migrate_event() {
+        local event="$1" backup_path="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --sqlite-migration-log \
+            --event "$event" \
+            --sqlite-db "$sqlite_db" \
+            --backup-path "$backup_path") || {
+            log_error "Impossible de rendre le message de migration SQLite : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie migration SQLite ignorée : $line"
+        fi
+    }
+
     local backup_suffix
     backup_suffix="$(date +%Y%m%d_%H%M%S)"
     local backup
@@ -807,18 +1071,18 @@ _do_pg_migrate() {
             --sqlite-db "$sqlite_db" \
             --backup-dir "$backup_dir" \
             --suffix "$backup_suffix"); then
-        log_error "Échec du backup SQLite : $sqlite_db → $backup"
+        log_sqlite_migrate_event backup-error "$backup"
         return 1
     fi
-    log_ok "Backup SQLite sauvegardé : $backup"
+    log_sqlite_migrate_event backup-ok "$backup"
 
-    log_info "Migration des données SQLite → PostgreSQL…"
-    if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
-            --source "sqlite:///$sqlite_db" 2>&1 | sed 's/^/  /'; then
-        log_ok "Données migrées"
+    log_sqlite_migrate_event migrate-start
+    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
+            --source "sqlite:///$sqlite_db"; then
+        log_sqlite_migrate_event migrate-ok
     else
-        log_error "Échec de la migration SQLite → PostgreSQL"
-        log_warn "La base PostgreSQL est peut-être partiellement remplie. Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement."
+        log_sqlite_migrate_event migrate-failed
+        log_sqlite_migrate_event migrate-partial
         return 1
     fi
 }
@@ -829,17 +1093,40 @@ if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcr
     PSQL_AVAILABLE=true
 fi
 
+postgres_database_setup_message() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --database-setup-log \
+        --event "$1" \
+        --user "$PG_USER" \
+        --db "$PG_DB" \
+        --host "$PG_HOST" \
+        --port "$PG_PORT"
+}
+
+log_database_setup_event() {
+    local event="$1" line
+    while IFS= read -r line; do
+        if [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        elif [[ -n "$line" ]]; then
+            log_warn "Sortie choix DB ignorée : $line"
+        fi
+    done < <(postgres_database_setup_message "$event")
+}
+
 if [[ "$SETUP_PG" != true ]]; then
-    log_ok "Base SQLite conservée (storage.database_url de config.yaml)"
+    log_database_setup_event sqlite-kept
 elif [[ "$PSQL_AVAILABLE" != true ]]; then
-    log_error "psql introuvable — PostgreSQL n'est pas installé."
-    log_warn  "  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql"
-    log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
-    log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
+    log_database_setup_event psql-missing
     exit 1
 elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
-    log_error "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres)."
-    log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
+    log_database_setup_event sudo-missing
     exit 1
 else
     ask PG_HOST "Hôte PostgreSQL" "$PG_HOST"
@@ -862,13 +1149,14 @@ else
 
     if [[ -z "$PG_PASSWORD" ]]; then
         PG_PASSWORD=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --generate-password)
-        log_info "Mot de passe du rôle '$PG_USER' généré automatiquement."
+        log_database_setup_event password-generated
     fi
 
     if _setup_postgres "$PG_HOST" "$PG_PORT" "$PG_DB" "$PG_USER" "$PG_PASSWORD"; then
-        DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"
+        DB_BACKEND=$(postgres_database_setup_message configured)
+        DB_BACKEND="${DB_BACKEND#VALUE:}"
     else
-        log_error "PostgreSQL demandé mais la configuration a échoué."
+        log_database_setup_event config-failed
         exit 1
     fi
 fi
@@ -877,6 +1165,26 @@ fi
 # SECTION 7 — Vérification des modèles IA
 # ============================================================================
 log_section "Vérification des modèles IA"
+
+log_model_status_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models status-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$INSTALL_PROFILE") || {
+        log_error "Impossible de rendre le statut modèle : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    else
+        log_warn "Sortie modèle ignorée : $line"
+    fi
+}
 
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     # ── Cohere ASR ───────────────────────────────────────────────────────────
@@ -889,9 +1197,9 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
             --path "$COHERE_PATH" \
             --install-dir "$INSTALL_DIR"; then
         COHERE_OK=true
-        log_ok "Cohere ASR       : $COHERE_PATH"
+        log_model_status_event cohere-ok "$COHERE_PATH"
     else
-        log_warn "Cohere ASR       : ABSENT  ($COHERE_PATH)"
+        log_model_status_event cohere-missing "$COHERE_PATH"
     fi
 
     # ── pyannote (cache HuggingFace) ─────────────────────────────────────────
@@ -900,18 +1208,18 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
         --hf-cache "$HF_CACHE" 2>/dev/null || true)
     if [[ -n "$PYANNOTE_CACHE" ]]; then
         PYANNOTE_OK=true
-        log_ok "pyannote cache   : $(basename "$PYANNOTE_CACHE")"
+        log_model_status_event pyannote-ok "$PYANNOTE_CACHE"
     else
-        log_warn "pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)"
+        log_model_status_event pyannote-missing
     fi
 
     # ── SQUIM (préflight qualité, asset torchaudio) ─────────────────────────
     SQUIM_PTH="${TORCH_HOME:-$HOME/.cache/torch}/hub/torchaudio/models/squim_objective_dns2020.pth"
     if [[ -f "$SQUIM_PTH" ]]; then
         SQUIM_OK=true
-        log_ok "SQUIM préflight  : $SQUIM_PTH"
+        log_model_status_event squim-ok "$SQUIM_PTH"
     else
-        log_warn "SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)"
+        log_model_status_event squim-missing
     fi
 
     if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
@@ -920,40 +1228,18 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
             --models-dir "$INSTALL_DIR/models" 2>/dev/null || true)
         if [[ -n "$QWEN_GGUF" ]]; then
             QWEN_OK=true
-            log_ok "LLM arbitrage    : $QWEN_GGUF"
+            log_model_status_event llm-ok "$QWEN_GGUF"
         else
-            log_warn "LLM arbitrage    : ABSENT  (résumé/correction LLM non disponible)"
+            log_model_status_event llm-missing
         fi
     else
-        log_info "LLM d'arbitrage : non requis pour le profil $INSTALL_PROFILE"
+        log_model_status_event llm-not-required
     fi
 
-    # ── Tableau récap ───────────────────────────────────────────────────────
     echo ""
-    echo "  ┌─────────────────────────────────┬──────────┬─────────────────────────────────────────────────────────────────┐"
-    echo "  │ Modèle                          │  Statut  │ Info                                                            │"
-    echo "  ├─────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤"
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "Cohere ASR (STT ~6 Go)" \
-        "$( [[ "$COHERE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$COHERE_OK" = true ]] && echo "$(basename "$COHERE_PATH")" || echo "huggingface-cli download CohereLabs/...")"
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "pyannote diarization (~2 Go)" \
-        "$( [[ "$PYANNOTE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$PYANNOTE_OK" = true ]] && echo "$(basename "$PYANNOTE_CACHE")" || echo "HF_TOKEN requis + accepter conditions HF")"
-    if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-        printf "  │ %-31s │ %s │ %-63s │\n" \
-            "LLM arbitrage GGUF" \
-            "$( [[ "$QWEN_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-            "$( [[ "$QWEN_OK" = true ]] && echo "$(basename "$QWEN_GGUF")" || echo "palier configurable via install.sh")"
-    fi
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "SQUIM préflight (~28 Mo)" \
-        "$( [[ "$SQUIM_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$SQUIM_OK" = true ]] && echo "cache torchaudio" || echo "cf. docs/INSTALL.md § Réseau d'entreprise")"
-    echo "  └─────────────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────┘"
+    print_model_detection_table
 else
-    log_info "Profil $INSTALL_PROFILE : vérification des modèles GPU locaux sautée"
+    log_model_status_event local-models-skipped
 fi
 
 # ============================================================================
@@ -1017,7 +1303,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
                 if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                         first-available --name huggingface-cli --format shell 2>/dev/null); then
-                    eval "$HF_COHERE_OUT"
+                    eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_COHERE_OUT"
                     HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
                 fi
                 if [[ -n "$HF_COHERE_CLI" ]]; then
@@ -1143,7 +1429,7 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     if [[ -n "$OPENCODE_BIN" ]]; then
         log_info "Configuration du provider opencode local…"
         OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
-        if "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH" 2>&1 | sed 's/^/  /'; then
+        if run_indented "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH"; then
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
             fi
@@ -1213,10 +1499,9 @@ else
         _plan_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_plan.$$")
         if _plan_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" \
                          plan --gpus "$GPU_SIZES_CSV" --format shell 2>"$_plan_warn"); then
-            # N'évalue QUE nos propres affectations LLM_* (sûr).
-            eval "$(printf '%s\n' "$_plan_out" | grep -E '^LLM_[A-Z_]+=')"
+            eval_prefixed_shell_assignments LLM "$_plan_out"
             REC_TIER="${LLM_TIER:-}"
-            [[ -s "$_plan_warn" ]] && sed 's/^/  /' "$_plan_warn"
+            print_indented_file "$_plan_warn"
         fi
         rm -f "$_plan_warn"
     fi
@@ -1251,7 +1536,7 @@ else
             _ll_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_llama.$$")
             if _ll_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/detect_llama_server.py" \
                            --format shell 2>"$_ll_warn"); then
-                eval "$(printf '%s\n' "$_ll_out" | grep -E '^LLAMA_[A-Z_]+=')"
+                eval_prefixed_shell_assignments LLAMA "$_ll_out"
                 LLAMA_SRV="${LLAMA_SERVER:-}"
                 LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
                 if [[ "${LLAMA_OK:-0}" == "1" ]]; then
@@ -1263,14 +1548,14 @@ else
                     log_warn "Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=$LLAMA_LD_HINT dans l'environnement du service (les profils l'honorent)."
                 fi
             fi
-            [[ -s "$_ll_warn" ]] && sed 's/^/  /' "$_ll_warn"
+            print_indented_file "$_ll_warn"
             rm -f "$_ll_warn"
         fi
         if [[ -z "$LLAMA_SRV" ]]; then
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if LLAMA_FALLBACK_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                     first-available --name llama-server --format shell 2>/dev/null); then
-                eval "$LLAMA_FALLBACK_OUT"
+                eval_prefixed_shell_assignments FIRST_AVAILABLE "$LLAMA_FALLBACK_OUT"
             fi
             for c in "$FIRST_AVAILABLE_PATH" \
                      "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
@@ -1289,7 +1574,7 @@ else
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
                     first-available --name hf --name huggingface-cli --format shell 2>/dev/null); then
-                eval "$HF_DL_OUT"
+                eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_DL_OUT"
                 HF_DL="$FIRST_AVAILABLE_NAME"
             fi
             if [[ -z "$HF_DL" ]]; then
@@ -1297,7 +1582,7 @@ else
             else
                 if [[ -n "${CURRENT_HF_TOKEN:-}" ]]; then export HF_TOKEN="$CURRENT_HF_TOKEN"; fi
                 log_info "Téléchargement ($HF_DL) de $GG → $DEST (peut prendre plusieurs minutes)…"
-                if "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST" 2>&1 | sed 's/^/  /'; then
+                if run_indented "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST"; then
                     log_ok "Modèle téléchargé : $DEST/$GG"
                 else
                     log_error "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN."
@@ -1310,7 +1595,7 @@ else
         # Générer le wrapper local pour CETTE machine (MODELS_DIR / llama-server),
         # puis basculer sur le palier choisi sans modifier les profils versionnés.
         if [[ -f "$DEST/$GG" ]]; then
-            if MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb" 2>&1 | sed 's/^/  /'; then
+            if run_indented env MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb"; then
                 log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
                 # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
                 # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.
@@ -1323,7 +1608,7 @@ else
                     else
                         log_warn "Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh"
                     fi
-                    [[ -s "$_cal_warn" ]] && sed 's/^/  /' "$_cal_warn"
+                    print_indented_file "$_cal_warn"
                     rm -f "$_cal_warn"
                 fi
                 log_info "Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script."
@@ -1396,6 +1681,19 @@ render_deploy_unit() {
         > "$dst_tmp"
 }
 
+install_deploy_unit() {
+    local src="$1" dst="$2" unit="$3" adapted_name="$4"
+    if [[ ! -f "$src" ]]; then
+        log_warn "$unit.service introuvable — service non installé"
+        return 0
+    fi
+    local tmp_unit
+    tmp_unit=$(mktemp)
+    render_deploy_unit "$src" "$tmp_unit"
+    install_systemd_unit "$tmp_unit" "$dst" "$unit" "$adapted_name"
+    rm -f "$tmp_unit"
+}
+
 if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     log_section "Service systemd"
 
@@ -1448,36 +1746,24 @@ if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PRO
         log_warn "  sudo systemctl disable --now transcria.service"
     fi
 
-    MIGRATE_SRC="$INSTALL_DIR/deploy/transcria-migrate.service"
-    if [[ ! -f "$MIGRATE_SRC" ]]; then
-        log_warn "transcria-migrate.service introuvable — service non installé"
-    else
-        TMP_MIGRATE=$(mktemp)
-        render_deploy_unit "$MIGRATE_SRC" "$TMP_MIGRATE"
-        install_systemd_unit "$TMP_MIGRATE" "/etc/systemd/system/transcria-migrate.service" "transcria-migrate" "transcria-migrate.service.adapted"
-        rm -f "$TMP_MIGRATE"
-    fi
+    install_deploy_unit \
+        "$INSTALL_DIR/deploy/transcria-migrate.service" \
+        "/etc/systemd/system/transcria-migrate.service" \
+        "transcria-migrate" \
+        "transcria-migrate.service.adapted"
 
     if [[ "$INSTALL_PROFILE" = "web" ]]; then
-        WEB_SRC="$INSTALL_DIR/deploy/transcria-web.service"
-        if [[ ! -f "$WEB_SRC" ]]; then
-            log_warn "transcria-web.service introuvable — service non installé"
-        else
-            TMP_WEB=$(mktemp)
-            render_deploy_unit "$WEB_SRC" "$TMP_WEB"
-            install_systemd_unit "$TMP_WEB" "/etc/systemd/system/transcria-web.service" "transcria-web" "transcria-web.service.adapted"
-            rm -f "$TMP_WEB"
-        fi
+        install_deploy_unit \
+            "$INSTALL_DIR/deploy/transcria-web.service" \
+            "/etc/systemd/system/transcria-web.service" \
+            "transcria-web" \
+            "transcria-web.service.adapted"
     elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-        SCHEDULER_SRC="$INSTALL_DIR/deploy/transcria-scheduler.service"
-        if [[ ! -f "$SCHEDULER_SRC" ]]; then
-            log_warn "transcria-scheduler.service introuvable — service non installé"
-        else
-            TMP_SCHEDULER=$(mktemp)
-            render_deploy_unit "$SCHEDULER_SRC" "$TMP_SCHEDULER"
-            install_systemd_unit "$TMP_SCHEDULER" "/etc/systemd/system/transcria-scheduler.service" "transcria-scheduler" "transcria-scheduler.service.adapted"
-            rm -f "$TMP_SCHEDULER"
-        fi
+        install_deploy_unit \
+            "$INSTALL_DIR/deploy/transcria-scheduler.service" \
+            "/etc/systemd/system/transcria-scheduler.service" \
+            "transcria-scheduler" \
+            "transcria-scheduler.service.adapted"
     fi
 fi
 
@@ -1514,26 +1800,7 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
             --inference-log-dir "$INF_LOG_DIR" \
             > "$TMP_INF"
 
-        if [[ $EUID -eq 0 ]]; then
-            cp "$TMP_INF" "$INFERENCE_DST"
-            chmod 644 "$INFERENCE_DST"
-            systemctl daemon-reload
-            systemctl enable transcria-inference
-            log_ok "Service transcria-inference installé et activé"
-        elif [[ "$HAVE_SUDO" = true ]]; then
-            sudo cp "$TMP_INF" "$INFERENCE_DST"
-            sudo chmod 644 "$INFERENCE_DST"
-            sudo systemctl daemon-reload
-            sudo systemctl enable transcria-inference
-            log_ok "Service transcria-inference installé et activé"
-        else
-            ADAPTED="$INSTALL_DIR/transcria-inference.service.adapted"
-            cp "$TMP_INF" "$ADAPTED"
-            log_warn "sudo indisponible — fichier adapté : $ADAPTED"
-            log_warn "Pour installer :"
-            log_warn "  sudo cp $ADAPTED $INFERENCE_DST"
-            log_warn "  sudo systemctl daemon-reload && sudo systemctl enable transcria-inference"
-        fi
+        install_systemd_unit "$TMP_INF" "$INFERENCE_DST" "transcria-inference" "transcria-inference.service.adapted"
         rm -f "$TMP_INF"
     fi
 fi
@@ -1543,8 +1810,15 @@ fi
 # ============================================================================
 log_section "Validation post-install"
 
-if [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
-    if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" --config "$CONFIG_PATH" --profile "$INSTALL_PROFILE"; then
+if [[ "$SKIP_DOCTOR" = true ]]; then
+    DOCTOR_STATUS="sauté (--skip-doctor)"
+    log_warn "doctor.py sauté à la demande (--skip-doctor)"
+elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
+    DOCTOR_ARGS=(--config "$CONFIG_PATH" --profile "$INSTALL_PROFILE")
+    if [[ "$STRICT_DOCTOR" = true ]]; then
+        DOCTOR_ARGS+=(--strict)
+    fi
+    if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" "${DOCTOR_ARGS[@]}"; then
         DOCTOR_STATUS="OK"
         log_ok "doctor.py : aucun échec bloquant"
     else
@@ -1562,95 +1836,23 @@ fi
 log_section "Résumé de l'installation"
 
 echo ""
-if [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA Inference Service (nœud de ressources GPU)${NC}"
-    echo -e "  Port  : 8002"
-    echo -e "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)"
-elif [[ "$INSTALL_PROFILE" = "web" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA tier web installé dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : web (Gunicorn, sans scheduler)"
-elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA scheduler installé dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : scheduler (ordonnanceur unique)"
-elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA migrations installées dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : migration Alembic uniquement"
-else
-    echo -e "${BOLD}${GREEN}TranscrIA installé dans : $INSTALL_DIR${NC}"
-fi
+print_profile_text summary
 echo ""
 
-# Bilan des modèles
-echo -e "${BOLD}Modèles IA :${NC}"
-if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
-    $COHERE_OK  && echo -e "  ${GREEN}[OK]${NC} Cohere ASR" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026"
-    $PYANNOTE_OK && echo -e "  ${GREEN}[OK]${NC} pyannote diarization" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} pyannote — HF_TOKEN dans .env + accepter conditions HuggingFace"
-else
-    echo -e "  ${BLUE}[INFO]${NC} Modèles GPU locaux non requis pour le profil $INSTALL_PROFILE"
-fi
-if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-    $QWEN_OK    && echo -e "  ${GREEN}[OK]${NC} LLM d'arbitrage GGUF" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} LLM d'arbitrage GGUF — choisir un palier dans install.sh"
-    [[ -n "$OPENCODE_BIN" ]] \
-        && echo -e "  ${GREEN}[OK]${NC} opencode : $OPENCODE_BIN" \
-        || echo -e "  ${YELLOW}[MANQUANT]${NC} opencode — résumé/correction LLM désactivé"
-else
-    echo -e "  ${BLUE}[INFO]${NC} LLM/opencode non requis pour le profil $INSTALL_PROFILE"
-fi
+print_model_summary
 
 # Vérifier s'il reste des CHANGE-ME dans config.yaml
 REMAINING_CHANGES=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file count-text \
     --file "$CONFIG_PATH" \
     --text "CHANGE-ME" 2>/dev/null || echo 0)
 echo ""
-echo -e "${BOLD}Base de données :${NC}"
-if [[ "$DB_BACKEND" == PostgreSQL* ]]; then
-    echo -e "  ${GREEN}[OK]${NC} $DB_BACKEND — DSN dans .env (TRANSCRIA_DATABASE_URL)"
-else
-    echo -e "  ${BLUE}[INFO]${NC} $DB_BACKEND — réservé au dev local ; passez à PostgreSQL hors dev : ./install.sh --postgres"
-fi
+print_database_summary
 
 echo ""
-echo -e "${BOLD}Configuration :${NC}"
-if [[ "$REMAINING_CHANGES" -gt 0 ]]; then
-    echo -e "  ${YELLOW}[WARN]${NC} $CONFIG_PATH contient encore ${REMAINING_CHANGES} valeur(s) 'CHANGE-ME'"
-    echo "         Éditer config.yaml avant le premier démarrage"
-else
-    echo -e "  ${GREEN}[OK]${NC} config.yaml — aucune valeur par défaut restante"
-fi
-echo -e "  ${BLUE}[INFO]${NC} doctor.py : $DOCTOR_STATUS"
+print_configuration_summary "$REMAINING_CHANGES"
 
 echo ""
-if [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    echo -e "${BOLD}Lancer le nœud de ressources :${NC}"
-    echo "  sudo systemctl start transcria-inference"
-    echo "  Health    : http://localhost:8002/health"
-    echo "  Capacités : http://localhost:8002/capabilities"
-    echo "  Logs      : tail -f $INF_LOG_DIR/transcria-inference.log"
-elif [[ "$INSTALL_PROFILE" = "web" ]]; then
-    echo -e "${BOLD}Lancer la frontale web :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-    echo "  sudo systemctl start transcria-web"
-    echo "  Interface : http://localhost:7870"
-elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-    echo -e "${BOLD}Lancer l'ordonnanceur :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-    echo "  sudo systemctl start transcria-scheduler"
-elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    echo -e "${BOLD}Lancer les migrations :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-else
-    echo -e "${BOLD}Lancer TranscrIA :${NC}"
-    echo "  export VENV=\"$VENV\""
-    echo "  $INSTALL_DIR/start.sh --port 7870"
-    echo "  # ou : sudo systemctl start transcria"
-    echo ""
-    echo "  Interface : http://localhost:7870"
-    FINAL_LOG_FILE="/var/log/transcrIA.log"
-    [[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
-    echo "  Logs      : tail -f $FINAL_LOG_FILE"
-    echo "  Statut    : $INSTALL_DIR/status.sh"
-fi
+FINAL_LOG_FILE="/var/log/transcrIA.log"
+[[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
+print_profile_text next-steps "$FINAL_LOG_FILE"
 echo ""

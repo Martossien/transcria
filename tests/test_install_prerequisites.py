@@ -9,6 +9,7 @@ from transcria.install_prerequisites import (
     render_binary_checks,
     render_first_available,
     render_system_capabilities,
+    resolve_user_home,
 )
 
 
@@ -69,6 +70,10 @@ def test_render_system_capabilities_shell_is_stable():
     assert output == "HAVE_RUNUSER=false\nHAVE_SUDO=true"
 
 
+def test_resolve_user_home_uses_injected_lookup():
+    assert resolve_user_home("transcria", get_home=lambda user: f"/srv/{user}") == "/srv/transcria"
+
+
 def test_install_prerequisites_cli_check_binaries_success(capsys, monkeypatch):
     def fake_check_binaries(required: list[str], optional: list[str]):
         return check_binaries(required, optional, which=lambda name: f"/bin/{name}")
@@ -119,3 +124,24 @@ def test_install_prerequisites_cli_system_capabilities(capsys, monkeypatch):
     assert main(["system-capabilities", "--format", "tsv"]) == 0
 
     assert capsys.readouterr().out == "HAVE_SUDO\t1\nHAVE_SYSTEMCTL\t0\n"
+
+
+def test_install_prerequisites_cli_user_home_success(capsys, monkeypatch):
+    monkeypatch.setattr("transcria.install_prerequisites.resolve_user_home", lambda user: f"/home/{user}")
+
+    assert main(["user-home", "--user", "transcria"]) == 0
+
+    assert capsys.readouterr().out == "/home/transcria\n"
+
+
+def test_install_prerequisites_cli_user_home_missing(capsys, monkeypatch):
+    def missing_user(_user: str) -> str:
+        raise KeyError("missing")
+
+    monkeypatch.setattr("transcria.install_prerequisites.resolve_user_home", missing_user)
+
+    assert main(["user-home", "--user", "missing"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "utilisateur introuvable: missing" in captured.err

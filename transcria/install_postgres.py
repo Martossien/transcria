@@ -14,7 +14,15 @@ from urllib.parse import quote
 _LOCAL_TCP_PEER_RE = re.compile(
     r"^(?P<prefix>\s*host\s+(?:all|replication)\s+all\s+(?:127\.0\.0\.1/32|::1/128)\s+)(?:ident|peer)(?P<suffix>\s*(?:#.*)?)$"
 )
+_PG_HBA_REWRITE_RESULT_RE = re.compile(r"^changed=(?P<count>[0-9]+)$")
 _PG_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,62}$")
+_STATE_QUERIES = {
+    "database-exists": "SELECT 1 FROM pg_database WHERE datname = :'dbname';",
+    "encoding": "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();",
+    "public-table-count": "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'",
+    "users-count": "SELECT COUNT(*) FROM users",
+    "alembic-version": "SELECT version_num FROM alembic_version",
+}
 
 
 def is_local_pg_host(host: str) -> bool:
@@ -78,6 +86,250 @@ def validate_pg_inputs(db: str, user: str, port: str | int) -> list[str]:
     return errors
 
 
+def parse_non_negative_int(value: str | int, *, name: str) -> int:
+    """Parse un compteur PostgreSQL non négatif retourné par psql."""
+    try:
+        parsed = int(str(value))
+    except ValueError as exc:
+        raise ValueError(f"{name} invalide : {value}") from exc
+    if parsed < 0:
+        raise ValueError(f"{name} négatif invalide : {value}")
+    return parsed
+
+
+def parse_bool(value: str | bool, *, name: str) -> bool:
+    """Parse un booléen CLI stable."""
+    if isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} booléen invalide : {value}")
+
+
+def decide_schema_action(has_schema: str | int, has_data: str | int) -> str:
+    """Décide l'action Alembic à partir de l'état courant de la base."""
+    schema_count = parse_non_negative_int(has_schema, name="has_schema")
+    data_count = parse_non_negative_int(has_data, name="has_data")
+    if schema_count > 0 and data_count > 0:
+        return "keep"
+    if schema_count > 0:
+        return "upgrade-existing"
+    return "create"
+
+
+def decide_sqlite_migration_action(
+    *,
+    sqlite_present: str | bool,
+    has_data: str | int,
+    non_interactive: str | bool,
+    pg_migrate: str | bool,
+) -> str:
+    """Décide si la migration SQLite doit être lancée, sautée ou demandée."""
+    if not parse_bool(sqlite_present, name="sqlite_present"):
+        return "none"
+    if parse_non_negative_int(has_data, name="has_data") > 0:
+        return "none"
+    if not parse_bool(non_interactive, name="non_interactive"):
+        return "prompt"
+    return "migrate" if parse_bool(pg_migrate, name="pg_migrate") else "skip"
+
+
+def render_role_sql() -> str:
+    """Rend le SQL idempotent de création/mise à jour du rôle applicatif."""
+    return (
+        "SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')\n"
+        "WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \\gexec\n"
+        "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \\gexec\n"
+    )
+
+
+def render_database_sql(*, fallback_locale_c: bool = False) -> str:
+    """Rend le SQL idempotent de création de base UTF8."""
+    if fallback_locale_c:
+        return (
+            "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',\n"
+            "              :'dbname', :'role', 'UTF8', 'C', 'C') \\gexec\n"
+        )
+    return "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \\gexec\n"
+
+
+def render_state_query(name: str) -> str:
+    """Rend une requête de lecture d'état PostgreSQL utilisée par install.sh."""
+    try:
+        return _STATE_QUERIES[name] + "\n"
+    except KeyError as exc:
+        expected = ", ".join(sorted(_STATE_QUERIES))
+        raise ValueError(f"requête inconnue: {name} (attendues: {expected})") from exc
+
+
+def render_encoding_warnings(db: str, encoding: str) -> str:
+    """Rend les avertissements quand une base existante n'est pas en UTF8."""
+    encoding = encoding.strip()
+    if not encoding or encoding == "UTF8":
+        return ""
+    return "\n".join([
+        f"La base '{db}' existe déjà en encodage {encoding} (UTF8 attendu) :",
+        "texte stocké SANS validation d'encodage — migrez-la dès que possible",
+        "(procédure : docs/INSTALL.md, section « Encodage de la base »).",
+        "L'application force client_encoding=utf8 et reste fonctionnelle en attendant.",
+    ]) + "\n"
+
+
+def render_connection_failure(*, db: str, user: str, host: str, port: str, local_pg: str | bool) -> str:
+    """Rend les messages d'échec de connexion PostgreSQL."""
+    lines = [
+        f"ERROR:Connexion PostgreSQL impossible avec le rôle '{user}' sur '{db}@{host}:{port}'.",
+    ]
+    if parse_bool(local_pg, name="local_pg"):
+        lines.append("WARN:Vérifiez pg_hba.conf et le reload PostgreSQL ; l'authentification TCP doit accepter le mot de passe.")
+    else:
+        lines.append("WARN:Créez la base et le rôle côté serveur, puis relancez avec --pg-host/--pg-user/--pg-password.")
+    return "\n".join(lines) + "\n"
+
+
+def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int, alembic_version: str) -> str:
+    """Rend le résumé d'état PostgreSQL affiché avant décision Alembic."""
+    schema_count = parse_non_negative_int(has_schema, name="has_schema")
+    data_count = parse_non_negative_int(has_data, name="has_data")
+    return f"Base '{db}' : tables public={schema_count} | alembic='{alembic_version}' | utilisateurs={data_count}\n"
+
+
+def render_schema_action_log(*, db: str, action: str) -> str:
+    """Rend le message initial associé à une action Alembic."""
+    if action == "keep":
+        return f"OK:La base '{db}' existe déjà avec des données. Conservation.\n"
+    if action == "upgrade-existing":
+        return f"INFO:La base '{db}' a le schéma mais est vide. Application des migrations Alembic…\n"
+    if action == "create":
+        return "INFO:Création du schéma (alembic upgrade head)…\n"
+    raise ValueError(f"action Alembic PostgreSQL inconnue : {action}")
+
+
+def render_pg_hba_rewrite_result(result: str) -> str:
+    """Interprète le résultat de réécriture pg_hba.conf pour le shell."""
+    match = _PG_HBA_REWRITE_RESULT_RE.fullmatch(result.strip())
+    if not match:
+        raise ValueError(f"résultat pg_hba.conf invalide : {result}")
+    changed = int(match.group("count"))
+    if changed == 0:
+        return "ACTION:none\n"
+    return "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
+
+
+def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
+    """Rend les messages de bootstrap PostgreSQL local/distant."""
+    if event == "local-check":
+        return f"INFO:Vérification du rôle '{user}' et de la base '{db}'…\n"
+    if event == "role-error":
+        return "ERROR:Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    if event == "database-fallback":
+        return "WARN:CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…\n"
+    if event == "database-error":
+        return "ERROR:Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    if event == "local-ready":
+        return "OK:Rôle et base PostgreSQL prêts\n"
+    if event == "remote-detected":
+        return f"INFO:PostgreSQL distant détecté ({host}) : rôle/base supposés déjà créés.\n"
+    if event == "connection-ok":
+        return "OK:Connexion PostgreSQL validée\n"
+    if event == "dsn-written":
+        return "OK:DSN PostgreSQL écrit dans .env (chmod 600)\n"
+    raise ValueError(f"événement PostgreSQL inconnu : {event}")
+
+
+def render_alembic_log(*, event: str, action: str = "") -> str:
+    """Rend les messages de résultat Alembic PostgreSQL."""
+    if event == "upgrade-ok":
+        return "OK:Schéma à jour (Alembic)\n"
+    if event == "rebuild-start":
+        return "ERROR:Alembic a échoué. Tentative de reconstruction locale…\n"
+    if event == "rebuild-ok":
+        return "OK:Schéma reconstruit\n"
+    if event == "rebuild-failed":
+        return "ERROR:Alembic a échoué une seconde fois. Arrêt.\n"
+    if event == "remote-upgrade-failed":
+        return "ERROR:Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée.\n"
+    if event == "create-ok":
+        return "OK:Schéma PostgreSQL créé\n"
+    if event == "create-failed":
+        return "ERROR:Échec d'alembic upgrade head\n"
+    if event == "unknown-action":
+        return f"ERROR:Action Alembic PostgreSQL inconnue : {action}\n"
+    raise ValueError(f"événement Alembic PostgreSQL inconnu : {event}")
+
+
+def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "", backup_path: str = "") -> str:
+    """Rend les messages liés à la migration SQLite vers PostgreSQL."""
+    if event == "detected":
+        return f"INFO:Base SQLite détectée : {sqlite_db}\n"
+    if event == "skipped":
+        return "INFO:Migration sautée (--pg-migrate absent)\n"
+    if event == "ignored":
+        return f"INFO:Migration ignorée — PG reste vide, {sqlite_db} conservé\n"
+    if event == "unknown-action":
+        return f"ERROR:Action de migration SQLite inconnue : {action}\n"
+    if event == "backup-error":
+        return f"ERROR:Échec du backup SQLite : {sqlite_db} → {backup_path}\n"
+    if event == "backup-ok":
+        return f"OK:Backup SQLite sauvegardé : {backup_path}\n"
+    if event == "migrate-start":
+        return "INFO:Migration des données SQLite → PostgreSQL…\n"
+    if event == "migrate-ok":
+        return "OK:Données migrées\n"
+    if event == "migrate-failed":
+        return "ERROR:Échec de la migration SQLite → PostgreSQL\n"
+    if event == "migrate-partial":
+        return (
+            "WARN:La base PostgreSQL est peut-être partiellement remplie. "
+            "Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement.\n"
+        )
+    raise ValueError(f"événement de migration SQLite inconnu : {event}")
+
+
+def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str, host: str, port: str) -> str:
+    """Rend le prompt interactif de migration SQLite vers PostgreSQL."""
+    return "\n".join([
+        "",
+        "=== Migration SQLite → PostgreSQL ===",
+        f"  Source : {sqlite_db} ({sqlite_size})",
+        f"  Cible  : {db}@{host}:{port}",
+        "",
+        "Options :",
+        "  1. Migrer les données SQLite (conservation locale + copie PG)",
+        "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)",
+        "  Votre choix [1/2] : ",
+    ])
+
+
+def render_database_setup_log(*, event: str, user: str = "", db: str = "", host: str = "", port: str = "") -> str:
+    """Rend les messages du choix global SQLite/PostgreSQL."""
+    if event == "sqlite-kept":
+        return "OK:Base SQLite conservée (storage.database_url de config.yaml)\n"
+    if event == "psql-missing":
+        return "\n".join([
+            "ERROR:psql introuvable — PostgreSQL n'est pas installé.",
+            "WARN:  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && "
+            "sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql",
+            "WARN:  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql",
+            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+        ]) + "\n"
+    if event == "sudo-missing":
+        return "\n".join([
+            "ERROR:sudo requis pour créer le rôle/la base PostgreSQL (compte postgres).",
+            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+        ]) + "\n"
+    if event == "password-generated":
+        return f"INFO:Mot de passe du rôle '{user}' généré automatiquement.\n"
+    if event == "configured":
+        return f"VALUE:PostgreSQL ({db}@{host}:{port})\n"
+    if event == "config-failed":
+        return "ERROR:PostgreSQL demandé mais la configuration a échoué.\n"
+    raise ValueError(f"événement de choix base de données inconnu : {event}")
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -134,6 +386,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file-size", action="store_true", help="affiche la taille humaine d'un fichier")
     parser.add_argument("--generate-password", action="store_true", help="génère un mot de passe PostgreSQL")
     parser.add_argument("--validate-inputs", action="store_true", help="valide db/user/port PostgreSQL")
+    parser.add_argument("--schema-action", action="store_true", help="décide l'action Alembic depuis has_schema/has_data")
+    parser.add_argument("--sqlite-migration-action", action="store_true", help="décide l'action de migration SQLite vers PostgreSQL")
+    parser.add_argument("--role-sql", action="store_true", help="rend le SQL idempotent du rôle PostgreSQL")
+    parser.add_argument("--database-sql", action="store_true", help="rend le SQL idempotent de création de base PostgreSQL")
+    parser.add_argument("--state-query", choices=sorted(_STATE_QUERIES), default=None, help="rend une requête de lecture d'état PostgreSQL")
+    parser.add_argument("--encoding-warnings", action="store_true", help="rend les avertissements d'encodage PostgreSQL")
+    parser.add_argument("--connection-failure", action="store_true", help="rend les messages d'échec de connexion PostgreSQL")
+    parser.add_argument("--state-summary", action="store_true", help="rend le résumé d'état PostgreSQL")
+    parser.add_argument("--schema-action-log", action="store_true", help="rend le message initial d'une action Alembic")
+    parser.add_argument("--pg-hba-rewrite-result", action="store_true", help="interprète le résultat changed=N de réécriture pg_hba.conf")
+    parser.add_argument("--setup-log", action="store_true", help="rend un message de bootstrap PostgreSQL")
+    parser.add_argument("--alembic-log", action="store_true", help="rend un message de résultat Alembic PostgreSQL")
+    parser.add_argument("--sqlite-migration-log", action="store_true", help="rend un message de migration SQLite vers PostgreSQL")
+    parser.add_argument(
+        "--sqlite-migration-prompt",
+        action="store_true",
+        help="rend le prompt interactif de migration SQLite vers PostgreSQL",
+    )
+    parser.add_argument("--database-setup-log", action="store_true", help="rend un message de choix SQLite/PostgreSQL")
+    parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
     parser.add_argument("--db", default=None)
@@ -142,6 +414,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sqlite-db", default=None)
     parser.add_argument("--backup-dir", default=None)
     parser.add_argument("--suffix", default=None)
+    parser.add_argument("--has-schema", default=None)
+    parser.add_argument("--has-data", default=None)
+    parser.add_argument("--sqlite-present", default=None)
+    parser.add_argument("--non-interactive", default=None)
+    parser.add_argument("--pg-migrate", default=None)
+    parser.add_argument("--encoding", default=None)
+    parser.add_argument("--local-pg", default=None)
+    parser.add_argument("--alembic-version", default="")
+    parser.add_argument("--action", default=None)
+    parser.add_argument("--result", default=None)
+    parser.add_argument("--event", default=None)
+    parser.add_argument("--sqlite-size", default=None)
+    parser.add_argument("--backup-path", default="")
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -194,6 +479,192 @@ def main(argv: list[str] | None = None) -> int:
         for error in errors:
             print(error)
         return 1 if errors else 0
+
+    if args.schema_action:
+        missing = [name for name in ("has_schema", "has_data") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --schema-action: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(decide_schema_action(args.has_schema, args.has_data))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.sqlite_migration_action:
+        missing = [name for name in ("sqlite_present", "has_data", "non_interactive", "pg_migrate") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-action: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(
+                decide_sqlite_migration_action(
+                    sqlite_present=args.sqlite_present,
+                    has_data=args.has_data,
+                    non_interactive=args.non_interactive,
+                    pg_migrate=args.pg_migrate,
+                )
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.role_sql:
+        print(render_role_sql(), end="")
+        return 0
+
+    if args.database_sql:
+        print(render_database_sql(fallback_locale_c=args.fallback_locale_c), end="")
+        return 0
+
+    if args.state_query is not None:
+        print(render_state_query(args.state_query), end="")
+        return 0
+
+    if args.encoding_warnings:
+        missing = [name for name in ("db", "encoding") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --encoding-warnings: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        print(render_encoding_warnings(args.db, args.encoding), end="")
+        return 0
+
+    if args.connection_failure:
+        missing = [name for name in ("db", "user", "host", "port", "local_pg") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --connection-failure: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_connection_failure(db=args.db, user=args.user, host=args.host, port=args.port, local_pg=args.local_pg), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.state_summary:
+        missing = [name for name in ("db", "has_schema", "has_data") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --state-summary: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(
+                render_state_summary(
+                    db=args.db,
+                    has_schema=args.has_schema,
+                    has_data=args.has_data,
+                    alembic_version=args.alembic_version,
+                ),
+                end="",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.schema_action_log:
+        missing = [name for name in ("db", "action") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --schema-action-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_schema_action_log(db=args.db, action=args.action), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.pg_hba_rewrite_result:
+        if args.result is None:
+            print("--result requis avec --pg-hba-rewrite-result", file=sys.stderr)
+            return 2
+        try:
+            print(render_pg_hba_rewrite_result(args.result), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.setup_log:
+        missing = [name for name in ("event", "db", "user", "host") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --setup-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_setup_log(event=args.event, db=args.db, user=args.user, host=args.host), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.alembic_log:
+        if args.event is None:
+            print("--event requis avec --alembic-log", file=sys.stderr)
+            return 2
+        try:
+            print(render_alembic_log(event=args.event, action=args.action or ""), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.sqlite_migration_log:
+        missing = [name for name in ("event", "sqlite_db") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(
+                render_sqlite_migration_log(
+                    event=args.event,
+                    sqlite_db=args.sqlite_db,
+                    action=args.action or "",
+                    backup_path=args.backup_path,
+                ),
+                end="",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.sqlite_migration_prompt:
+        missing = [name for name in ("sqlite_db", "sqlite_size", "db", "host", "port") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-prompt: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        print(
+            render_sqlite_migration_prompt(
+                sqlite_db=args.sqlite_db,
+                sqlite_size=args.sqlite_size,
+                db=args.db,
+                host=args.host,
+                port=args.port,
+            ),
+            end="",
+        )
+        return 0
+
+    if args.database_setup_log:
+        if args.event is None:
+            print("--event requis avec --database-setup-log", file=sys.stderr)
+            return 2
+        try:
+            print(
+                render_database_setup_log(
+                    event=args.event,
+                    user=args.user or "",
+                    db=args.db or "",
+                    host=args.host or "",
+                    port=args.port,
+                ),
+                end="",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
 
     if args.path is None:
         print("path requis hors --dsn/--is-local-host", file=sys.stderr)
