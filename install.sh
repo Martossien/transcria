@@ -245,6 +245,33 @@ eval_prefixed_shell_assignments() {
     fi
 }
 
+eval_named_shell_assignments() {
+    # Évalue uniquement les variables explicitement listées.
+    local content="$1" line key value filtered="" allowed=" " value_pattern
+    shift
+    for key in "$@"; do
+        allowed+="$key "
+    done
+    value_pattern="^(\"[^\"]*\"|'[^']*'|[A-Za-z0-9_./:+,=-]*)$"
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        if [[ "$line" == "$key" || "$allowed" != *" $key "* ]]; then
+            log_warn "Sortie helper ignorée : $line"
+            continue
+        fi
+        if [[ "$value" =~ $value_pattern ]]; then
+            filtered+="$line"$'\n'
+        else
+            log_warn "Valeur helper ignorée ($key)"
+        fi
+    done <<< "$content"
+    if [[ -n "$filtered" ]]; then
+        eval "$filtered"
+    fi
+}
+
 is_local_pg_host() {
     local host="$1"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
@@ -377,13 +404,15 @@ fi
 
 SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
     system-capabilities --format shell)
-eval "$SYSTEM_CAPABILITIES_OUT"
+eval_named_shell_assignments "$SYSTEM_CAPABILITIES_OUT" \
+    HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL
 
 GPU_COUNT=0
 CUDA_VER_FROM_SMI=""
 NVIDIA_WARNING=""
 NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_hardware --format shell)
-eval "$NVIDIA_DETECT_OUT"
+eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
+    GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING
 if [[ -z "$NVIDIA_WARNING" ]]; then
     log_ok "nvidia-smi — $GPU_COUNT GPU(s), CUDA $CUDA_VER_FROM_SMI"
 else
@@ -453,7 +482,7 @@ if [[ "$INSTALL_TORCH" = true ]]; then
         TORCH_TAG_ARGS+=(--force-cuda "$FORCE_CUDA")
     fi
     TORCH_TAG_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch "${TORCH_TAG_ARGS[@]}")
-    eval "$TORCH_TAG_OUT"
+    eval_named_shell_assignments "$TORCH_TAG_OUT" CUDA_TAG CUDA_WARNING
     if [[ -n "${CUDA_WARNING:-}" ]]; then
         log_warn "$CUDA_WARNING"
     fi

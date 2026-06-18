@@ -515,6 +515,9 @@ explicites dans `install.sh`.
 Les sorties shell `LLM_*`, `LLAMA_*` et `FIRST_AVAILABLE_*` des helpers sont filtrées
 par préfixe et format d'affectation avant `eval`, au lieu de passer par `grep -E`
 inline ou une évaluation brute.
+Les sorties shell à variables fixes (`HAVE_*`, `GPU_COUNT`/`CUDA_VER_FROM_SMI`/
+`NVIDIA_WARNING`, `CUDA_TAG`/`CUDA_WARNING`) passent aussi par une liste blanche
+de noms avant évaluation.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

@@ -85,6 +85,18 @@ def test_install_script_filters_first_available_helper_outputs_before_eval():
     assert 'eval "$HF_DL_OUT"' not in content
 
 
+def test_install_script_filters_named_helper_outputs_before_eval():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "eval_named_shell_assignments" in content
+    assert "HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL" in content
+    assert "GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING" in content
+    assert "CUDA_TAG CUDA_WARNING" in content
+    assert 'eval "$SYSTEM_CAPABILITIES_OUT"' not in content
+    assert 'eval "$NVIDIA_DETECT_OUT"' not in content
+    assert 'eval "$TORCH_TAG_OUT"' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
