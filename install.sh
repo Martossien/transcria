@@ -1575,26 +1575,7 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
             --inference-log-dir "$INF_LOG_DIR" \
             > "$TMP_INF"
 
-        if [[ $EUID -eq 0 ]]; then
-            cp "$TMP_INF" "$INFERENCE_DST"
-            chmod 644 "$INFERENCE_DST"
-            systemctl daemon-reload
-            systemctl enable transcria-inference
-            log_ok "Service transcria-inference installé et activé"
-        elif [[ "$HAVE_SUDO" = true ]]; then
-            sudo cp "$TMP_INF" "$INFERENCE_DST"
-            sudo chmod 644 "$INFERENCE_DST"
-            sudo systemctl daemon-reload
-            sudo systemctl enable transcria-inference
-            log_ok "Service transcria-inference installé et activé"
-        else
-            ADAPTED="$INSTALL_DIR/transcria-inference.service.adapted"
-            cp "$TMP_INF" "$ADAPTED"
-            log_warn "sudo indisponible — fichier adapté : $ADAPTED"
-            log_warn "Pour installer :"
-            log_warn "  sudo cp $ADAPTED $INFERENCE_DST"
-            log_warn "  sudo systemctl daemon-reload && sudo systemctl enable transcria-inference"
-        fi
+        install_systemd_unit "$TMP_INF" "$INFERENCE_DST" "transcria-inference" "transcria-inference.service.adapted"
         rm -f "$TMP_INF"
     fi
 fi

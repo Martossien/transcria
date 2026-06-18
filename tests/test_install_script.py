@@ -85,6 +85,14 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
     assert "sed 's/^/  /'" not in content
 
 
+def test_install_script_reuses_systemd_unit_installer_for_inference():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert 'install_systemd_unit "$TMP_INF" "$INFERENCE_DST" "transcria-inference" "transcria-inference.service.adapted"' in content
+    assert 'sudo cp "$TMP_INF" "$INFERENCE_DST"' not in content
+    assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 

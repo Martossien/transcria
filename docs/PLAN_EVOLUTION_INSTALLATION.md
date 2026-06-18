@@ -529,6 +529,9 @@ migration SQLite, opencode, téléchargements, switch LLM) passe par `run_indent
 au lieu de pipelines `2>&1 | sed`.
 Le préfixage des fichiers temporaires de warning passe par `print_indented_file`,
 supprimant aussi les derniers `sed 's/^/  /'` de `install.sh`.
+L'installation de l'unité `transcria-inference.service` réutilise le wrapper commun
+`install_systemd_unit`, supprimant la duplication `cp/chmod/systemctl` dédiée au
+nœud de ressources.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
