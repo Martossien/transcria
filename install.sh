@@ -1429,6 +1429,28 @@ log_config_setup_event env-secured "$SERVICE_USER"
 # ============================================================================
 log_section "opencode (moteur LLM)"
 
+log_opencode_setup_event() {
+    local event="$1" value="${2:-}" profile="${3:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode --setup-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$profile") || {
+        log_error "Impossible de rendre le message opencode : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie opencode ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     # Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
     CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
@@ -1442,24 +1464,27 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
         OPENCODE_VER=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
             --version \
             --bin "$OPENCODE_BIN")
-        log_ok "opencode trouvé : $OPENCODE_BIN ($OPENCODE_VER)"
+        log_opencode_setup_event found "$OPENCODE_BIN ($OPENCODE_VER)"
         yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
     else
-        log_warn "opencode non trouvé"
+        log_opencode_setup_event missing
         echo ""
-        if ask_yn "Installer opencode dans $OPENCODE_HOME/.opencode/bin/ ?"; then
+        OPENCODE_INSTALL_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+            --install-prompt \
+            --opencode-home "$OPENCODE_HOME")
+        if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
             OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
             PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
                 --install-dir "$INSTALL_DIR" \
                 --path "$(dirname "$OPENCODE_DEST")" >/dev/null
-            log_info "Téléchargement opencode (linux-x64)..."
+            log_opencode_setup_event download-start
             if curl -fsSL -o "$OPENCODE_DEST" \
                 "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
                 chmod +x "$OPENCODE_DEST"
                 if id "$SERVICE_USER" &>/dev/null 2>&1; then
                     chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode" 2>/dev/null || true
                 fi
-                log_ok "opencode installé : $OPENCODE_DEST"
+                log_opencode_setup_event installed "$OPENCODE_DEST"
                 OPENCODE_BIN="$OPENCODE_DEST"
                 yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
 
@@ -1472,36 +1497,36 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
                     --rc-file "$HOME/.bashrc" \
                     --rc-file "$HOME/.profile" 2>/dev/null || true)
                 if [[ -n "$UPDATED_RC" ]]; then
-                    log_ok "PATH mis à jour dans $UPDATED_RC"
-                    log_info "Relancez votre shell ou : export PATH=\"$OPENCODE_DIR:\$PATH\""
+                    log_opencode_setup_event path-updated "$UPDATED_RC"
+                    log_opencode_setup_event shell-reload "$OPENCODE_DIR"
                 fi
             else
-                log_error "Téléchargement opencode échoué — vérifiez la connectivité"
-                log_info "Installation manuelle :"
-                log_info "  mkdir -p ~/.opencode/bin"
-                log_info "  curl -fsSL -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"
-                log_info "  chmod +x ~/.opencode/bin/opencode"
+                log_opencode_setup_event download-failed
+                log_opencode_setup_event manual-title
+                log_opencode_setup_event manual-mkdir
+                log_opencode_setup_event manual-curl
+                log_opencode_setup_event manual-chmod
             fi
         else
-            log_info "opencode ignoré — résumé/correction LLM désactivé"
-            log_info "Pour installer plus tard : https://opencode.ai"
+            log_opencode_setup_event ignored
+            log_opencode_setup_event install-later
         fi
     fi
 
     if [[ -n "$OPENCODE_BIN" ]]; then
-        log_info "Configuration du provider opencode local…"
+        log_opencode_setup_event configure-start
         OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
         if run_indented "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH"; then
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
             fi
-            log_ok "opencode provider local configuré"
+            log_opencode_setup_event provider-ok
         else
-            log_warn "Configuration opencode incomplète — relancez : $VENV/bin/python scripts/setup_opencode.py"
+            log_opencode_setup_event provider-incomplete "$VENV/bin/python scripts/setup_opencode.py"
         fi
     fi
 else
-    log_info "Profil $INSTALL_PROFILE : opencode non requis"
+    log_opencode_setup_event profile-skipped "" "$INSTALL_PROFILE"
 fi
 
 # ============================================================================

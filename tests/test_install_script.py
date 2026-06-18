@@ -235,6 +235,31 @@ def test_install_script_delegates_pyannote_setup_logs_and_prompts():
     assert "&& log_ok \"pyannote téléchargé\"" not in content
 
 
+def test_install_script_delegates_opencode_setup_logs_and_prompt():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_opencode --setup-log" in content
+    assert "-m transcria.install_opencode \\\n            --install-prompt" in content
+    assert "log_opencode_setup_event" in content
+    assert "opencode trouvé :" not in content
+    assert "opencode non trouvé" not in content
+    assert "Installer opencode dans $OPENCODE_HOME" not in content
+    assert "Téléchargement opencode (linux-x64)" not in content
+    assert "opencode installé :" not in content
+    assert "PATH mis à jour dans" not in content
+    assert "Relancez votre shell ou" not in content
+    assert "Téléchargement opencode échoué" not in content
+    assert "Installation manuelle :" not in content
+    assert "mkdir -p ~/.opencode/bin" not in content
+    assert "chmod +x ~/.opencode/bin/opencode" not in content
+    assert "opencode ignoré — résumé/correction LLM désactivé" not in content
+    assert "Pour installer plus tard" not in content
+    assert "Configuration du provider opencode local" not in content
+    assert "opencode provider local configuré" not in content
+    assert "Configuration opencode incomplète" not in content
+    assert "opencode non requis" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 

@@ -3,7 +3,16 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from transcria.install_opencode import ensure_shell_path, find_opencode_binary, main, opencode_version
+import pytest
+
+from transcria.install_opencode import (
+    ensure_shell_path,
+    find_opencode_binary,
+    main,
+    opencode_version,
+    render_install_prompt,
+    render_setup_log,
+)
 
 
 def test_opencode_version_returns_first_non_empty_line():
@@ -155,3 +164,53 @@ def test_install_opencode_cli_ensure_path_returns_one_when_unchanged(tmp_path: P
     opencode_dir = tmp_path / ".opencode" / "bin"
 
     assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", str(opencode_dir), "--rc-file", str(rc)]) == 1
+
+
+def test_render_setup_log_for_known_events():
+    assert render_setup_log(event="found", value="/opt/opencode (1.2.3)") == "OK:opencode trouvé : /opt/opencode (1.2.3)\n"
+    assert render_setup_log(event="missing") == "WARN:opencode non trouvé\n"
+    assert render_setup_log(event="download-start") == "INFO:Téléchargement opencode (linux-x64)...\n"
+    assert render_setup_log(event="installed", value="/srv/.opencode/bin/opencode") == (
+        "OK:opencode installé : /srv/.opencode/bin/opencode\n"
+    )
+    assert render_setup_log(event="path-updated", value="/home/app/.bashrc") == "OK:PATH mis à jour dans /home/app/.bashrc\n"
+    assert render_setup_log(event="shell-reload", value="/home/app/.opencode/bin") == (
+        'INFO:Relancez votre shell ou : export PATH="/home/app/.opencode/bin:$PATH"\n'
+    )
+    assert render_setup_log(event="download-failed") == "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
+    assert render_setup_log(event="manual-title") == "INFO:Installation manuelle :\n"
+    assert render_setup_log(event="manual-mkdir") == "INFO:  mkdir -p ~/.opencode/bin\n"
+    assert render_setup_log(event="manual-curl") == (
+        "INFO:  curl -fsSL -o ~/.opencode/bin/opencode "
+        "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64\n"
+    )
+    assert render_setup_log(event="manual-chmod") == "INFO:  chmod +x ~/.opencode/bin/opencode\n"
+    assert render_setup_log(event="ignored") == "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
+    assert render_setup_log(event="install-later") == "INFO:Pour installer plus tard : https://opencode.ai\n"
+    assert render_setup_log(event="configure-start") == "INFO:Configuration du provider opencode local…\n"
+    assert render_setup_log(event="provider-ok") == "OK:opencode provider local configuré\n"
+    assert render_setup_log(event="provider-incomplete", value="venv/bin/python scripts/setup_opencode.py") == (
+        "WARN:Configuration opencode incomplète — relancez : venv/bin/python scripts/setup_opencode.py\n"
+    )
+    assert render_setup_log(event="profile-skipped", profile="web") == "INFO:Profil web : opencode non requis\n"
+
+
+def test_render_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement opencode inconnu : bad"):
+        render_setup_log(event="bad")
+
+
+def test_render_install_prompt_is_stable():
+    assert render_install_prompt(opencode_home=Path("/home/service")) == "Installer opencode dans /home/service/.opencode/bin/ ?"
+
+
+def test_install_opencode_cli_prints_setup_log(capsys):
+    assert main(["--setup-log", "--event", "missing"]) == 0
+
+    assert capsys.readouterr().out == "WARN:opencode non trouvé\n"
+
+
+def test_install_opencode_cli_prints_install_prompt(capsys):
+    assert main(["--install-prompt", "--opencode-home", "/home/service"]) == 0
+
+    assert capsys.readouterr().out == "Installer opencode dans /home/service/.opencode/bin/ ?"

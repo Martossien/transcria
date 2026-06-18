@@ -570,6 +570,9 @@ configuré) passe aussi par `transcria.install_opencode --find` au lieu de
 La mise à jour optionnelle de `.bashrc`/`.profile` pour ajouter le dossier opencode
 au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire les
 `grep`/append shell directs de `install.sh`.
+Les messages et la question d'installation opencode passent par
+`transcria.install_opencode --setup-log` et `--install-prompt`; `install.sh` garde
+uniquement le téléchargement, les permissions et la configuration effective.
 Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
 La même brique fournit `first-available` pour les alternatives `hf`/`huggingface-cli`,
