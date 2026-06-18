@@ -459,6 +459,9 @@ Le rôle runtime applicatif (`runtime.role` / `TRANSCRIA_ROLE`) est maintenant p
 par la même matrice Python : `all-in-one` rend `all`, `web` rend `web`,
 `scheduler` rend `scheduler`, tandis que `resource-node` et `migrate` n'ont pas de
 rôle applicatif à écrire.
+Les textes de résumé final dépendants du profil et les commandes de démarrage
+recommandées sont rendus par `transcria.install_profiles` (`summary` /
+`next-steps`), ce qui retire une nouvelle série de branches profil de `install.sh`.
 La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée dans
 `transcria.install_torch`, avec tests sur les seuils CUDA et le cas CUDA 13+.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,

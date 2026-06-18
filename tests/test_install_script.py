@@ -161,6 +161,14 @@ def test_install_script_filters_profile_plan_output_before_eval():
     assert 'eval "$plan_shell"' not in content
 
 
+def test_install_script_uses_profile_renderer_for_final_text():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "print_profile_text summary" in content
+    assert 'print_profile_text next-steps "$FINAL_LOG_FILE"' in content
+    assert 'echo -e "${BOLD}Lancer le nœud de ressources' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 

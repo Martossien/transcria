@@ -129,6 +129,14 @@ class PlanRenderContext:
     doctor_strict: bool = False
 
 
+@dataclass(frozen=True)
+class SummaryRenderContext:
+    install_dir: str
+    venv: str
+    inference_log_dir: str
+    final_log_file: str
+
+
 def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> str:
     """Rend le plan au format texte stable utilisé par `install.sh --plan`."""
     setup_postgres = "prompt" if plan.setup_postgres is None else str(plan.setup_postgres).lower()
@@ -188,6 +196,72 @@ def render_install_plan_shell(plan: InstallPlan) -> str:
     return "\n".join(f"{key}={value(val)}" for key, val in assignments.items()) + "\n"
 
 
+def render_profile_summary_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
+    """Rend le bloc d'en-tête du résumé final."""
+    lines_by_profile = {
+        "resource-node": [
+            "TranscrIA Inference Service (nœud de ressources GPU)",
+            "  Port  : 8002",
+            "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)",
+        ],
+        "web": [
+            f"TranscrIA tier web installé dans : {context.install_dir}",
+            "  Rôle : web (Gunicorn, sans scheduler)",
+        ],
+        "scheduler": [
+            f"TranscrIA scheduler installé dans : {context.install_dir}",
+            "  Rôle : scheduler (ordonnanceur unique)",
+        ],
+        "migrate": [
+            f"TranscrIA migrations installées dans : {context.install_dir}",
+            "  Rôle : migration Alembic uniquement",
+        ],
+    }
+    return "\n".join(lines_by_profile.get(plan.profile, [f"TranscrIA installé dans : {context.install_dir}"])) + "\n"
+
+
+def render_profile_next_steps_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
+    """Rend les commandes de démarrage adaptées au profil installé."""
+    lines_by_profile = {
+        "resource-node": [
+            "Lancer le nœud de ressources :",
+            "  sudo systemctl start transcria-inference",
+            "  Health    : http://localhost:8002/health",
+            "  Capacités : http://localhost:8002/capabilities",
+            f"  Logs      : tail -f {context.inference_log_dir}/transcria-inference.log",
+        ],
+        "web": [
+            "Lancer la frontale web :",
+            "  sudo systemctl start transcria-migrate",
+            "  sudo systemctl start transcria-web",
+            "  Interface : http://localhost:7870",
+        ],
+        "scheduler": [
+            "Lancer l'ordonnanceur :",
+            "  sudo systemctl start transcria-migrate",
+            "  sudo systemctl start transcria-scheduler",
+        ],
+        "migrate": [
+            "Lancer les migrations :",
+            "  sudo systemctl start transcria-migrate",
+        ],
+    }
+    lines = lines_by_profile.get(
+        plan.profile,
+        [
+            "Lancer TranscrIA :",
+            f"  export VENV=\"{context.venv}\"",
+            f"  {context.install_dir}/start.sh --port 7870",
+            "  # ou : sudo systemctl start transcria",
+            "",
+            "  Interface : http://localhost:7870",
+            f"  Logs      : tail -f {context.final_log_file}",
+            f"  Statut    : {context.install_dir}/status.sh",
+        ],
+    )
+    return "\n".join(lines) + "\n"
+
+
 def get_profile_spec(profile: str) -> ProfileSpec:
     try:
         return _SPECS[profile]
@@ -230,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Résout le plan d'installation TranscrIA pour un profil.")
     parser.add_argument("--profile", required=True)
     parser.add_argument("--no-systemd", action="store_true", help="simule --no-service côté install.sh")
-    parser.add_argument("--format", choices=("json", "text", "shell"), default="json")
+    parser.add_argument("--format", choices=("json", "text", "shell", "summary", "next-steps"), default="json")
     parser.add_argument("--install-dir", default=".")
     parser.add_argument("--service-user", default="")
     parser.add_argument("--no-torch", action="store_true")
@@ -241,6 +315,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pg-migrate", action="store_true")
     parser.add_argument("--skip-doctor", action="store_true")
     parser.add_argument("--strict-doctor", action="store_true")
+    parser.add_argument("--venv", default="venv")
+    parser.add_argument("--inference-log-dir", default="logs")
+    parser.add_argument("--final-log-file", default="/var/log/transcrIA.log")
     pg = parser.add_mutually_exclusive_group()
     pg.add_argument("--postgres", action="store_true", help="force PostgreSQL")
     pg.add_argument("--sqlite-dev", "--allow-sqlite-dev", "--no-postgres", action="store_true", help="force SQLite dev local")
@@ -283,6 +360,32 @@ def main(argv: list[str] | None = None) -> int:
         print(sys_stdout, end="")
     elif args.format == "shell":
         print(render_install_plan_shell(plan), end="")
+    elif args.format == "summary":
+        print(
+            render_profile_summary_text(
+                plan,
+                SummaryRenderContext(
+                    install_dir=args.install_dir,
+                    venv=args.venv,
+                    inference_log_dir=args.inference_log_dir,
+                    final_log_file=args.final_log_file,
+                ),
+            ),
+            end="",
+        )
+    elif args.format == "next-steps":
+        print(
+            render_profile_next_steps_text(
+                plan,
+                SummaryRenderContext(
+                    install_dir=args.install_dir,
+                    venv=args.venv,
+                    inference_log_dir=args.inference_log_dir,
+                    final_log_file=args.final_log_file,
+                ),
+            ),
+            end="",
+        )
     else:
         print(json.dumps(plan.to_dict(), ensure_ascii=False, sort_keys=True))
     return 0

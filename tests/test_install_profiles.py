@@ -6,10 +6,13 @@ import pytest
 
 from transcria.install_profiles import (
     PlanRenderContext,
+    SummaryRenderContext,
     get_profile_spec,
     main,
     render_install_plan_shell,
     render_install_plan_text,
+    render_profile_next_steps_text,
+    render_profile_summary_text,
     resolve_install_plan,
 )
 
@@ -172,6 +175,59 @@ def test_render_install_plan_shell_preserves_prompt_postgres_as_empty_string():
 
     assert "INSTALL_RUNTIME_ROLE=all\n" in rendered
     assert "SETUP_PG=''\n" in rendered
+
+
+def test_render_profile_summary_text_for_resource_node():
+    plan = resolve_install_plan("resource-node")
+    rendered = render_profile_summary_text(
+        plan,
+        SummaryRenderContext(
+            install_dir="/opt/transcria",
+            venv="/opt/transcria/venv",
+            inference_log_dir="/opt/transcria/logs",
+            final_log_file="/opt/transcria/logs/transcrIA.log",
+        ),
+    )
+
+    assert rendered == """TranscrIA Inference Service (nœud de ressources GPU)
+  Port  : 8002
+  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)
+"""
+
+
+def test_render_profile_next_steps_text_for_all_in_one():
+    plan = resolve_install_plan("all-in-one")
+    rendered = render_profile_next_steps_text(
+        plan,
+        SummaryRenderContext(
+            install_dir="/opt/transcria",
+            venv="/opt/transcria/venv",
+            inference_log_dir="/opt/transcria/logs",
+            final_log_file="/opt/transcria/logs/transcrIA.log",
+        ),
+    )
+
+    assert rendered == """Lancer TranscrIA :
+  export VENV="/opt/transcria/venv"
+  /opt/transcria/start.sh --port 7870
+  # ou : sudo systemctl start transcria
+
+  Interface : http://localhost:7870
+  Logs      : tail -f /opt/transcria/logs/transcrIA.log
+  Statut    : /opt/transcria/status.sh
+"""
+
+
+def test_install_profiles_cli_outputs_next_steps(capsys):
+    assert main([
+        "--profile", "web",
+        "--format", "next-steps",
+        "--install-dir", "/opt/transcria",
+    ]) == 0
+
+    rendered = capsys.readouterr().out
+    assert "Lancer la frontale web :" in rendered
+    assert "sudo systemctl start transcria-web" in rendered
 
 
 def test_install_profiles_cli_outputs_json(capsys):

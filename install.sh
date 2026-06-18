@@ -218,6 +218,19 @@ load_install_profile_plan() {
         PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG
 }
 
+print_profile_text() {
+    local format="$1"
+    local final_log_file="${2:-/var/log/transcrIA.log}"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_profiles \
+        --profile "$INSTALL_PROFILE" \
+        --format "$format" \
+        --install-dir "$INSTALL_DIR" \
+        --service-user "$SERVICE_USER" \
+        --venv "$VENV" \
+        --inference-log-dir "$INF_LOG_DIR" \
+        --final-log-file "$final_log_file"
+}
+
 load_install_profile_plan
 
 if [[ "$PLAN_ONLY" = true ]]; then
@@ -1615,22 +1628,7 @@ fi
 log_section "Résumé de l'installation"
 
 echo ""
-if [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA Inference Service (nœud de ressources GPU)${NC}"
-    echo -e "  Port  : 8002"
-    echo -e "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)"
-elif [[ "$INSTALL_PROFILE" = "web" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA tier web installé dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : web (Gunicorn, sans scheduler)"
-elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA scheduler installé dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : scheduler (ordonnanceur unique)"
-elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    echo -e "${BOLD}${GREEN}TranscrIA migrations installées dans : $INSTALL_DIR${NC}"
-    echo -e "  Rôle : migration Alembic uniquement"
-else
-    echo -e "${BOLD}${GREEN}TranscrIA installé dans : $INSTALL_DIR${NC}"
-fi
+print_profile_text summary
 echo ""
 
 # Bilan des modèles
@@ -1676,34 +1674,7 @@ fi
 echo -e "  ${BLUE}[INFO]${NC} doctor.py : $DOCTOR_STATUS"
 
 echo ""
-if [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    echo -e "${BOLD}Lancer le nœud de ressources :${NC}"
-    echo "  sudo systemctl start transcria-inference"
-    echo "  Health    : http://localhost:8002/health"
-    echo "  Capacités : http://localhost:8002/capabilities"
-    echo "  Logs      : tail -f $INF_LOG_DIR/transcria-inference.log"
-elif [[ "$INSTALL_PROFILE" = "web" ]]; then
-    echo -e "${BOLD}Lancer la frontale web :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-    echo "  sudo systemctl start transcria-web"
-    echo "  Interface : http://localhost:7870"
-elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-    echo -e "${BOLD}Lancer l'ordonnanceur :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-    echo "  sudo systemctl start transcria-scheduler"
-elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    echo -e "${BOLD}Lancer les migrations :${NC}"
-    echo "  sudo systemctl start transcria-migrate"
-else
-    echo -e "${BOLD}Lancer TranscrIA :${NC}"
-    echo "  export VENV=\"$VENV\""
-    echo "  $INSTALL_DIR/start.sh --port 7870"
-    echo "  # ou : sudo systemctl start transcria"
-    echo ""
-    echo "  Interface : http://localhost:7870"
-    FINAL_LOG_FILE="/var/log/transcrIA.log"
-    [[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
-    echo "  Logs      : tail -f $FINAL_LOG_FILE"
-    echo "  Statut    : $INSTALL_DIR/status.sh"
-fi
+FINAL_LOG_FILE="/var/log/transcrIA.log"
+[[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
+print_profile_text next-steps "$FINAL_LOG_FILE"
 echo ""
