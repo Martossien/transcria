@@ -504,6 +504,8 @@ configuré) passe aussi par `transcria.install_opencode --find` au lieu de
 La mise à jour optionnelle de `.bashrc`/`.profile` pour ajouter le dossier opencode
 au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire les
 `grep`/append shell directs de `install.sh`.
+Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
+`transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

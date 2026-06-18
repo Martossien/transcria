@@ -136,6 +136,17 @@ def test_install_script_checks_models_through_python_helper():
     assert 'find "$INSTALL_DIR/models"' not in content
 
 
+def test_install_script_checks_runtime_binaries_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_prerequisites" in content
+    assert "--required ffmpeg" in content
+    assert "--required ffprobe" in content
+    assert "--optional lsof" in content
+    assert 'for bin in ffmpeg ffprobe' not in content
+    assert 'command -v lsof' not in content
+
+
 def test_install_script_reads_opencode_version_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 

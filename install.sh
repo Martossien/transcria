@@ -364,19 +364,36 @@ else
     log_warn "nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)"
 fi
 
-for bin in ffmpeg ffprobe; do
-    if command -v "$bin" &>/dev/null; then
-        log_ok "$bin : $(which $bin)"
-    else
-        log_error "$bin manquant. Installer avec: apt install ffmpeg"
-        exit 1
-    fi
-done
-
-if command -v lsof &>/dev/null; then
-    log_ok "lsof : $(which lsof)"
-else
-    log_warn "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof"
+PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+    check-binaries \
+    --required ffmpeg \
+    --required ffprobe \
+    --optional lsof)
+PREREQ_BINARIES_STATUS=$?
+while IFS=$'\t' read -r status name path; do
+    [[ -z "$name" ]] && continue
+    case "$status" in
+        OK)
+            log_ok "$name : $path"
+            ;;
+        MISSING_REQUIRED)
+            if [[ "$name" = "ffmpeg" || "$name" = "ffprobe" ]]; then
+                log_error "$name manquant. Installer avec: apt install ffmpeg"
+            else
+                log_error "$name manquant."
+            fi
+            ;;
+        MISSING_OPTIONAL)
+            if [[ "$name" = "lsof" ]]; then
+                log_warn "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof"
+            else
+                log_warn "$name manquant"
+            fi
+            ;;
+    esac
+done <<< "$PREREQ_BINARIES_OUT"
+if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]]; then
+    exit 1
 fi
 
 # ============================================================================
