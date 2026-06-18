@@ -457,6 +457,9 @@ tests d'idempotence.
 Les messages d'installation systemd (service sauté, installé, sudo absent,
 unités manquantes, avertissement split et nœud inference manquant) passent par
 `transcria.install_systemd --setup-log`; `install.sh` garde les actions privilégiées.
+Les wrappers shell qui dispatchent les sorties `OK:`/`WARN:`/`INFO:`/`ERROR:` des
+renderers Python sont centralisés dans `emit_rendered_log`, ce qui réduit la
+duplication restante de `install.sh` sans changer les modules métier appelés.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.

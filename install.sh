@@ -337,6 +337,41 @@ print_indented_file() {
     done < "$path"
 }
 
+log_prefixed_line() {
+    local context="$1" line="$2" fallback="${3:-warn-prefixed}" message
+    [[ -z "$line" ]] && return 0
+    if [[ "$line" == OK:* ]]; then
+        message="${line#OK:}"
+        log_ok "${message# }"
+    elif [[ "$line" == WARN:* ]]; then
+        message="${line#WARN:}"
+        log_warn "${message# }"
+    elif [[ "$line" == INFO:* ]]; then
+        message="${line#INFO:}"
+        log_info "${message# }"
+    elif [[ "$line" == ERROR:* ]]; then
+        message="${line#ERROR:}"
+        log_error "${message# }"
+    elif [[ "$fallback" == ok ]]; then
+        log_ok "$line"
+    elif [[ "$fallback" == warn ]]; then
+        log_warn "$line"
+    elif [[ "$fallback" != silent ]]; then
+        log_warn "Sortie $context ignorée : $line"
+    fi
+}
+
+emit_rendered_log() {
+    local context="$1"
+    shift
+    local line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "$@") || {
+        log_error "Impossible de rendre le message $context"
+        return 1
+    }
+    log_prefixed_line "$context" "$line"
+}
+
 eval_prefixed_shell_assignments() {
     # Évalue uniquement des affectations shell KEY=VALUE produites par nos helpers.
     local prefix="$1" content="$2" line filtered="" pattern
@@ -474,26 +509,12 @@ secure_env_file() {
 log_section "Vérification des prérequis"
 
 log_prerequisite_event() {
-    local event="$1" name="${2:-}" value="${3:-}" path="${4:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites setup-log \
+    local event="$1" name="${2:-}" value="${3:-}" path="${4:-}"
+    emit_rendered_log "prérequis : $event" -m transcria.install_prerequisites setup-log \
         --event "$event" \
         --name "$name" \
         --value "$value" \
-        --path "$path") || {
-        log_error "Impossible de rendre le message prérequis : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie prérequis ignorée : $line"
-    fi
+        --path "$path"
 }
 
 PYTHON_BIN=""
@@ -508,7 +529,7 @@ for candidate in python3.13 python3.12 python3.11 python3; do
     fi
 done
 if [[ -z "$PYTHON_BIN" ]]; then
-    log_prerequisite_event python-missing
+    log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
     exit 1
 fi
 
@@ -559,26 +580,12 @@ fi
 log_section "Environnement Python"
 
 log_local_setup_event() {
-    local event="$1" value="${2:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_paths \
+    local event="$1" value="${2:-}"
+    emit_rendered_log "locale : $event" -m transcria.install_paths \
         --install-dir "$INSTALL_DIR" \
         --setup-log \
         --event "$event" \
-        --value "$value") || {
-        log_error "Impossible de rendre le message local : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie locale ignorée : $line"
-    fi
+        --value "$value"
 }
 
 if [[ -f "$VENV/bin/activate" ]]; then
@@ -599,24 +606,10 @@ pip install --upgrade pip --quiet
 log_section "PyTorch"
 
 log_torch_event() {
-    local event="$1" value="${2:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch --setup-log \
+    local event="$1" value="${2:-}"
+    emit_rendered_log "PyTorch : $event" -m transcria.install_torch --setup-log \
         --event "$event" \
-        --value "$value") || {
-        log_error "Impossible de rendre le message PyTorch : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie PyTorch ignorée : $line"
-    fi
+        --value "$value"
 }
 
 if [[ "$INSTALL_TORCH" = true ]]; then
@@ -679,22 +672,12 @@ log_local_setup_event runtime-dirs-ready
 log_section "Configuration"
 
 log_config_setup_event() {
-    local event="$1" value="${2:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary setup-log \
+    local event="$1" value="${2:-}"
+    emit_rendered_log "configuration : $event" -m transcria.install_summary setup-log \
         --event "$event" \
         --profile "$INSTALL_PROFILE" \
         --runtime-role "${INSTALL_RUNTIME_ROLE:-}" \
-        --value "$value") || {
-        log_error "Impossible de rendre le message de configuration : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    else
-        log_warn "Sortie configuration ignorée : $line"
-    fi
+        --value "$value"
 }
 
 if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = false ]]; then
@@ -810,64 +793,38 @@ _setup_postgres() {
     is_local_pg_host "$host" && local_pg=true
 
     log_postgres_setup_event() {
-        local event="$1" line
-        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        local event="$1"
+        emit_rendered_log "PostgreSQL : $event" -m transcria.install_postgres \
             --setup-log \
             --event "$event" \
             --db "$db" \
             --user "$user" \
-            --host "$host") || {
-            log_error "Impossible de rendre le message PostgreSQL : $event"
-            return 1
-        }
-        if [[ "$line" == INFO:* ]]; then
-            log_info "${line#INFO:}"
-        elif [[ "$line" == OK:* ]]; then
-            log_ok "${line#OK:}"
-        elif [[ "$line" == WARN:* ]]; then
-            log_warn "${line#WARN:}"
-        elif [[ "$line" == ERROR:* ]]; then
-            log_error "${line#ERROR:}"
-        else
-            log_warn "Sortie PostgreSQL ignorée : $line"
-        fi
+            --host "$host"
     }
 
     log_postgres_alembic_event() {
-        local event="$1" action="${2:-}" line
-        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        local event="$1" action="${2:-}"
+        emit_rendered_log "Alembic PostgreSQL : $event" -m transcria.install_postgres \
             --alembic-log \
             --event "$event" \
-            --action "$action") || {
-            log_error "Impossible de rendre le message Alembic PostgreSQL : $event"
-            return 1
-        }
-        if [[ "$line" == OK:* ]]; then
-            log_ok "${line#OK:}"
-        elif [[ "$line" == ERROR:* ]]; then
-            log_error "${line#ERROR:}"
-        else
-            log_warn "Sortie Alembic PostgreSQL ignorée : $line"
-        fi
+            --action "$action"
+    }
+
+    log_postgres_schema_action_event() {
+        local action="$1"
+        emit_rendered_log "action Alembic PostgreSQL : $action" -m transcria.install_postgres \
+            --schema-action-log \
+            --db "$db" \
+            --action "$action"
     }
 
     log_sqlite_migration_event() {
-        local event="$1" action="${2:-}" line
-        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        local event="$1" action="${2:-}"
+        emit_rendered_log "migration SQLite : $event" -m transcria.install_postgres \
             --sqlite-migration-log \
             --event "$event" \
             --sqlite-db "$sqlite_db" \
-            --action "$action") || {
-            log_error "Impossible de rendre le message de migration SQLite : $event"
-            return 1
-        }
-        if [[ "$line" == INFO:* ]]; then
-            log_info "${line#INFO:}"
-        elif [[ "$line" == ERROR:* ]]; then
-            log_error "${line#ERROR:}"
-        else
-            log_warn "Sortie migration SQLite ignorée : $line"
-        fi
+            --action "$action"
     }
 
     # ── Dossier de backup ─────────────────────────────────────
@@ -964,11 +921,7 @@ _setup_postgres() {
             --port "$port" \
             --local-pg "$local_pg")
         while IFS= read -r line; do
-            if [[ "$line" == ERROR:* ]]; then
-                log_error "${line#ERROR:}"
-            elif [[ "$line" == WARN:* ]]; then
-                log_warn "${line#WARN:}"
-            fi
+            log_prefixed_line "connexion PostgreSQL" "$line" silent
         done <<< "$connection_failure"
         return 1
     fi
@@ -1017,20 +970,12 @@ _setup_postgres() {
         log_error "Impossible de décider l'action Alembic PostgreSQL."
         return 1
     }
-    local schema_action_log=""
-    schema_action_log=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
-        --schema-action-log \
-        --db "$db" \
-        --action "$schema_action") || {
-        log_error "Impossible de rendre le message d'action Alembic PostgreSQL."
-        return 1
-    }
     case "$schema_action" in
         keep)
-            log_ok "${schema_action_log#OK:}"
+            log_postgres_schema_action_event "$schema_action"
             ;;
         upgrade-existing)
-            log_info "${schema_action_log#INFO:}"
+            log_postgres_schema_action_event "$schema_action"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
                 log_postgres_alembic_event upgrade-ok
             else
@@ -1050,7 +995,7 @@ _setup_postgres() {
             fi
             ;;
         create)
-            log_info "${schema_action_log#INFO:}"
+            log_postgres_schema_action_event "$schema_action"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
                 log_postgres_alembic_event create-ok
             else
@@ -1119,26 +1064,12 @@ _setup_postgres() {
 _do_pg_migrate() {
     local dsn="$1" sqlite_db="$2" backup_dir="$3"
     log_sqlite_migrate_event() {
-        local event="$1" backup_path="${2:-}" line
-        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        local event="$1" backup_path="${2:-}"
+        emit_rendered_log "migration SQLite : $event" -m transcria.install_postgres \
             --sqlite-migration-log \
             --event "$event" \
             --sqlite-db "$sqlite_db" \
-            --backup-path "$backup_path") || {
-            log_error "Impossible de rendre le message de migration SQLite : $event"
-            return 1
-        }
-        if [[ "$line" == INFO:* ]]; then
-            log_info "${line#INFO:}"
-        elif [[ "$line" == OK:* ]]; then
-            log_ok "${line#OK:}"
-        elif [[ "$line" == WARN:* ]]; then
-            log_warn "${line#WARN:}"
-        elif [[ "$line" == ERROR:* ]]; then
-            log_error "${line#ERROR:}"
-        else
-            log_warn "Sortie migration SQLite ignorée : $line"
-        fi
+            --backup-path "$backup_path"
     }
 
     local backup_suffix
@@ -1184,17 +1115,7 @@ postgres_database_setup_message() {
 log_database_setup_event() {
     local event="$1" line
     while IFS= read -r line; do
-        if [[ "$line" == OK:* ]]; then
-            log_ok "${line#OK:}"
-        elif [[ "$line" == INFO:* ]]; then
-            log_info "${line#INFO:}"
-        elif [[ "$line" == WARN:* ]]; then
-            log_warn "${line#WARN:}"
-        elif [[ "$line" == ERROR:* ]]; then
-            log_error "${line#ERROR:}"
-        elif [[ -n "$line" ]]; then
-            log_warn "Sortie choix DB ignorée : $line"
-        fi
+        log_prefixed_line "choix DB" "$line"
     done < <(postgres_database_setup_message "$event")
 }
 
@@ -1245,64 +1166,24 @@ fi
 log_section "Vérification des modèles IA"
 
 log_model_status_event() {
-    local event="$1" value="${2:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models status-log \
+    local event="$1" value="${2:-}"
+    emit_rendered_log "modèle : $event" -m transcria.install_models status-log \
         --event "$event" \
         --value "$value" \
-        --profile "$INSTALL_PROFILE") || {
-        log_error "Impossible de rendre le statut modèle : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    else
-        log_warn "Sortie modèle ignorée : $line"
-    fi
+        --profile "$INSTALL_PROFILE"
 }
 
 log_cohere_setup_event() {
-    local event="$1" value="${2:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-log \
+    local event="$1" value="${2:-}"
+    emit_rendered_log "Cohere : $event" -m transcria.install_models cohere-setup-log \
         --event "$event" \
-        --value "$value") || {
-        log_error "Impossible de rendre le message Cohere : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie Cohere ignorée : $line"
-    fi
+        --value "$value"
 }
 
 log_pyannote_setup_event() {
-    local event="$1" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-setup-log \
-        --event "$event") || {
-        log_error "Impossible de rendre le message pyannote : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie pyannote ignorée : $line"
-    fi
+    local event="$1"
+    emit_rendered_log "pyannote : $event" -m transcria.install_models pyannote-setup-log \
+        --event "$event"
 }
 
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
@@ -1489,25 +1370,11 @@ log_config_setup_event env-secured "$SERVICE_USER"
 log_section "opencode (moteur LLM)"
 
 log_opencode_setup_event() {
-    local event="$1" value="${2:-}" profile="${3:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode --setup-log \
+    local event="$1" value="${2:-}" profile="${3:-}"
+    emit_rendered_log "opencode : $event" -m transcria.install_opencode --setup-log \
         --event "$event" \
         --value "$value" \
-        --profile "$profile") || {
-        log_error "Impossible de rendre le message opencode : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie opencode ignorée : $line"
-    fi
+        --profile "$profile"
 }
 
 if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
@@ -1594,29 +1461,15 @@ fi
 log_section "LLM d'arbitrage — sélection selon la VRAM"
 
 log_llm_setup_event() {
-    local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --setup-log \
+    local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}"
+    emit_rendered_log "LLM : $event" -m transcria.install_arbitrage --setup-log \
         --event "$event" \
         --value "$value" \
         --profile "$profile" \
         --gpu-count "$gpu_count" \
         --max-mb "$max_mb" \
         --tier-value "$tier" \
-        --label "$label") || {
-        log_error "Impossible de rendre le message LLM : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie LLM ignorée : $line"
-    fi
+        --label "$label"
 }
 
 if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
@@ -1811,37 +1664,19 @@ log_section "Vérification des imports"
 
 IMPORT_OUTPUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_imports --profile "$INSTALL_PROFILE" 2>&1 || true)
 while IFS= read -r line; do
-    if [[ -z "$line" ]]; then           continue
-    elif [[ "$line" == ERROR:* ]]; then log_error "${line#ERROR: }"
-    elif [[ "$line" == WARN:* ]]; then  log_warn  "${line#WARN: }"
-    else                                log_ok    "$line"
-    fi
+    log_prefixed_line "imports Python" "$line" ok
 done <<< "$IMPORT_OUTPUT"
 
 # ============================================================================
 # SECTION 11 — Services systemd
 # ============================================================================
 log_systemd_event() {
-    local event="$1" unit="${2:-}" adapted="${3:-}" dst="${4:-}" line
-    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_systemd --setup-log \
+    local event="$1" unit="${2:-}" adapted="${3:-}" dst="${4:-}"
+    emit_rendered_log "systemd : $event" -m transcria.install_systemd --setup-log \
         --event "$event" \
         --unit "$unit" \
         --adapted "$adapted" \
-        --dst "$dst") || {
-        log_error "Impossible de rendre le message systemd : $event"
-        return 1
-    }
-    if [[ "$line" == OK:* ]]; then
-        log_ok "${line#OK:}"
-    elif [[ "$line" == WARN:* ]]; then
-        log_warn "${line#WARN:}"
-    elif [[ "$line" == INFO:* ]]; then
-        log_info "${line#INFO:}"
-    elif [[ "$line" == ERROR:* ]]; then
-        log_error "${line#ERROR:}"
-    else
-        log_warn "Sortie systemd ignorée : $line"
-    fi
+        --dst "$dst"
 }
 
 install_systemd_unit() {

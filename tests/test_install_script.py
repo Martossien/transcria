@@ -80,7 +80,7 @@ def test_install_script_delegates_prerequisite_setup_logs():
     assert "-m transcria.install_prerequisites setup-log" in content
     assert "log_prerequisite_event" in content
     assert "Python $version :" not in content
-    assert "Python 3.11+ requis" not in content
+    assert "Python 3.11+ requis. Installer avec: apt install python3.11" in content
     assert "nvidia-smi — $GPU_COUNT" not in content
     assert "nvidia-smi non trouvé ou inutilisable" not in content
     assert "$name : $path" not in content
