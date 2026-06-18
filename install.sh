@@ -731,6 +731,30 @@ _setup_postgres() {
     local local_pg=false
     is_local_pg_host "$host" && local_pg=true
 
+    log_postgres_setup_event() {
+        local event="$1" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --setup-log \
+            --event "$event" \
+            --db "$db" \
+            --user "$user" \
+            --host "$host") || {
+            log_error "Impossible de rendre le message PostgreSQL : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie PostgreSQL ignorée : $line"
+        fi
+    }
+
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
@@ -780,12 +804,12 @@ _setup_postgres() {
         fi
 
         # ── Rôle (idempotent) ─────────────────────────────────────
-        log_info "Vérification du rôle '$user' et de la base '$db'…"
+        log_postgres_setup_event local-check
 
         if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --role-sql \
             | pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass"
         then
-            log_error "Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
+            log_postgres_setup_event role-error
             return 1
         fi
 
@@ -801,18 +825,18 @@ _setup_postgres() {
             then
                 # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
                 # locale C, qui accepte tout encodage (tri linguistique côté Python).
-                log_warn "CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…"
+                log_postgres_setup_event database-fallback
                 if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql --fallback-locale-c \
                     | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
                 then
-                    log_error "Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres."
+                    log_postgres_setup_event database-error
                     return 1
                 fi
             fi
         fi
-        log_ok "Rôle et base PostgreSQL prêts"
+        log_postgres_setup_event local-ready
     else
-        log_info "PostgreSQL distant détecté ($host) : rôle/base supposés déjà créés."
+        log_postgres_setup_event remote-detected
     fi
 
     if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
@@ -833,7 +857,7 @@ _setup_postgres() {
         done <<< "$connection_failure"
         return 1
     fi
-    log_ok "Connexion PostgreSQL validée"
+    log_postgres_setup_event connection-ok
 
     # ── Garde encodage : UTF8 requis (cf. docs/INSTALL.md § Encodage de la base) ──
     local db_encoding=""
@@ -853,7 +877,7 @@ _setup_postgres() {
     # ── Écrire le DSN dans .env ───────────────────────────────
     env_set "TRANSCRIA_DATABASE_URL" "$dsn"
     secure_env_file
-    log_ok "DSN PostgreSQL écrit dans .env (chmod 600)"
+    log_postgres_setup_event dsn-written
 
     # ── Détection état de la base ─────────────────────────────
     local has_schema="" has_data="" alembic_ver=""

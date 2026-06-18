@@ -219,6 +219,27 @@ def render_pg_hba_rewrite_result(result: str) -> str:
     return "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
 
 
+def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
+    """Rend les messages de bootstrap PostgreSQL local/distant."""
+    if event == "local-check":
+        return f"INFO:Vérification du rôle '{user}' et de la base '{db}'…\n"
+    if event == "role-error":
+        return "ERROR:Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    if event == "database-fallback":
+        return "WARN:CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…\n"
+    if event == "database-error":
+        return "ERROR:Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    if event == "local-ready":
+        return "OK:Rôle et base PostgreSQL prêts\n"
+    if event == "remote-detected":
+        return f"INFO:PostgreSQL distant détecté ({host}) : rôle/base supposés déjà créés.\n"
+    if event == "connection-ok":
+        return "OK:Connexion PostgreSQL validée\n"
+    if event == "dsn-written":
+        return "OK:DSN PostgreSQL écrit dans .env (chmod 600)\n"
+    raise ValueError(f"événement PostgreSQL inconnu : {event}")
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -285,6 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--state-summary", action="store_true", help="rend le résumé d'état PostgreSQL")
     parser.add_argument("--schema-action-log", action="store_true", help="rend le message initial d'une action Alembic")
     parser.add_argument("--pg-hba-rewrite-result", action="store_true", help="interprète le résultat changed=N de réécriture pg_hba.conf")
+    parser.add_argument("--setup-log", action="store_true", help="rend un message de bootstrap PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -304,6 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--alembic-version", default="")
     parser.add_argument("--action", default=None)
     parser.add_argument("--result", default=None)
+    parser.add_argument("--event", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -458,6 +481,18 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             print(render_pg_hba_rewrite_result(args.result), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.setup_log:
+        missing = [name for name in ("event", "db", "user", "host") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --setup-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_setup_log(event=args.event, db=args.db, user=args.user, host=args.host), end="")
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

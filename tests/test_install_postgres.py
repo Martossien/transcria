@@ -22,6 +22,7 @@ from transcria.install_postgres import (
     render_pg_hba_rewrite_result,
     render_role_sql,
     render_schema_action_log,
+    render_setup_log,
     render_state_query,
     render_state_summary,
     rewrite_pg_hba_file,
@@ -378,6 +379,43 @@ def test_install_postgres_cli_renders_pg_hba_rewrite_result(capsys):
     assert main(["--pg-hba-rewrite-result", "--result", "changed=1"]) == 0
 
     assert capsys.readouterr().out == "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
+
+
+def test_render_setup_log_for_local_and_remote_postgres_events():
+    assert render_setup_log(event="local-check", db="transcria", user="app", host="127.0.0.1") == (
+        "INFO:Vérification du rôle 'app' et de la base 'transcria'…\n"
+    )
+    assert render_setup_log(event="local-ready", db="transcria", user="app", host="127.0.0.1") == "OK:Rôle et base PostgreSQL prêts\n"
+    assert render_setup_log(event="remote-detected", db="transcria", user="app", host="db.internal") == (
+        "INFO:PostgreSQL distant détecté (db.internal) : rôle/base supposés déjà créés.\n"
+    )
+    assert render_setup_log(event="connection-ok", db="transcria", user="app", host="db.internal") == "OK:Connexion PostgreSQL validée\n"
+    assert render_setup_log(event="dsn-written", db="transcria", user="app", host="db.internal") == (
+        "OK:DSN PostgreSQL écrit dans .env (chmod 600)\n"
+    )
+
+
+def test_render_setup_log_for_postgres_bootstrap_errors():
+    assert render_setup_log(event="role-error", db="transcria", user="app", host="127.0.0.1") == (
+        "ERROR:Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    )
+    assert render_setup_log(event="database-fallback", db="transcria", user="app", host="127.0.0.1") == (
+        "WARN:CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…\n"
+    )
+    assert render_setup_log(event="database-error", db="transcria", user="app", host="127.0.0.1") == (
+        "ERROR:Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+    )
+
+
+def test_render_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement PostgreSQL inconnu : bad"):
+        render_setup_log(event="bad", db="transcria", user="app", host="127.0.0.1")
+
+
+def test_install_postgres_cli_renders_setup_log(capsys):
+    assert main(["--setup-log", "--event", "remote-detected", "--db", "transcria", "--user", "app", "--host", "db.internal"]) == 0
+
+    assert capsys.readouterr().out == "INFO:PostgreSQL distant détecté (db.internal) : rôle/base supposés déjà créés.\n"
 
 
 def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():

@@ -228,6 +228,20 @@ def test_install_script_delegates_postgres_role_and_database_sql_rendering():
     assert "CREATE DATABASE %I OWNER %I" not in content
 
 
+def test_install_script_delegates_postgres_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--setup-log" in content
+    assert "log_postgres_setup_event" in content
+    assert "Vérification du rôle '$user' et de la base '$db'" not in content
+    assert "Échec de la création du rôle PostgreSQL" not in content
+    assert "CREATE DATABASE UTF8 refusé" not in content
+    assert "Rôle et base PostgreSQL prêts" not in content
+    assert "PostgreSQL distant détecté ($host)" not in content
+    assert "Connexion PostgreSQL validée" not in content
+    assert "DSN PostgreSQL écrit dans .env" not in content
+
+
 def test_install_script_delegates_postgres_state_queries():
     content = _INSTALL.read_text(encoding="utf-8")
 
