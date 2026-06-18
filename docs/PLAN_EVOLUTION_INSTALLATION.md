@@ -498,6 +498,9 @@ premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire le
 `python -c pathlib` et `find | head` de `install.sh`.
 La lecture de version opencode passe par `transcria.install_opencode` au lieu d'un
 pipeline shell `--version | head`.
+La recherche du binaire opencode (PATH, home service, home utilisateur, chemin
+configuré) passe aussi par `transcria.install_opencode --find` au lieu de
+`command -v`/`which` dans `install.sh`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

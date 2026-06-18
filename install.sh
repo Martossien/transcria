@@ -1044,18 +1044,12 @@ log_section "opencode (moteur LLM)"
 
 if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     # Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
-    if command -v opencode &>/dev/null; then
-        OPENCODE_BIN=$(which opencode)
-    elif [[ -x "$OPENCODE_HOME/.opencode/bin/opencode" ]]; then
-        OPENCODE_BIN="$OPENCODE_HOME/.opencode/bin/opencode"
-    elif [[ -x "$HOME/.opencode/bin/opencode" ]]; then
-        OPENCODE_BIN="$HOME/.opencode/bin/opencode"
-    else
-        CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
-        if [[ -n "$CFG_BIN" && -x "$CFG_BIN" ]]; then
-            OPENCODE_BIN="$CFG_BIN"
-        fi
-    fi
+    CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
+    OPENCODE_BIN=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+        --find \
+        --opencode-home "$OPENCODE_HOME" \
+        --user-home "$HOME" \
+        --configured-bin "$CFG_BIN" 2>/dev/null || true)
 
     if [[ -n "$OPENCODE_BIN" ]]; then
         OPENCODE_VER=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \

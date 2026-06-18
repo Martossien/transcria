@@ -143,6 +143,15 @@ def test_install_script_reads_opencode_version_through_python_helper():
     assert "head -1" not in content
 
 
+def test_install_script_finds_opencode_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_opencode" in content
+    assert "--find" in content
+    assert "command -v opencode" not in content
+    assert "OPENCODE_BIN=$(which opencode)" not in content
+
+
 def test_install_script_generates_postgres_password_through_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
