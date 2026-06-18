@@ -152,6 +152,14 @@ def test_install_script_finds_opencode_through_python_helper():
     assert "OPENCODE_BIN=$(which opencode)" not in content
 
 
+def test_install_script_updates_opencode_path_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--ensure-path" in content
+    assert 'echo "$PATH" | grep -q "$OPENCODE_DIR"' not in content
+    assert 'echo "export PATH="$OPENCODE_DIR' not in content
+
+
 def test_install_script_generates_postgres_password_through_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 

@@ -1078,14 +1078,14 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
 
                 # Ajouter au PATH dans .bashrc/.profile si nécessaire
                 OPENCODE_DIR="$(dirname "$OPENCODE_DEST")"
-                if ! echo "$PATH" | grep -q "$OPENCODE_DIR"; then
-                    for rc in "$HOME/.bashrc" "$HOME/.profile"; do
-                        if [[ -f "$rc" ]] && ! grep -q "$OPENCODE_DIR" "$rc" 2>/dev/null; then
-                            echo "export PATH=\"$OPENCODE_DIR:\$PATH\"" >> "$rc"
-                            log_ok "PATH mis à jour dans $rc"
-                            break
-                        fi
-                    done
+                UPDATED_RC=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+                    --ensure-path \
+                    --opencode-dir "$OPENCODE_DIR" \
+                    --current-path "$PATH" \
+                    --rc-file "$HOME/.bashrc" \
+                    --rc-file "$HOME/.profile" 2>/dev/null || true)
+                if [[ -n "$UPDATED_RC" ]]; then
+                    log_ok "PATH mis à jour dans $UPDATED_RC"
                     log_info "Relancez votre shell ou : export PATH=\"$OPENCODE_DIR:\$PATH\""
                 fi
             else

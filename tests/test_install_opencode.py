@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from transcria.install_opencode import find_opencode_binary, main, opencode_version
+from transcria.install_opencode import ensure_shell_path, find_opencode_binary, main, opencode_version
 
 
 def test_opencode_version_returns_first_non_empty_line():
@@ -104,3 +104,54 @@ def test_install_opencode_cli_finds_binary(capsys, monkeypatch, tmp_path: Path):
     assert main(["--find", "--opencode-home", str(tmp_path), "--user-home", str(tmp_path)]) == 0
 
     assert capsys.readouterr().out == f"{candidate}\n"
+
+
+def test_ensure_shell_path_skips_when_already_in_current_path(tmp_path: Path):
+    rc = tmp_path / ".bashrc"
+    rc.write_text("# rc\n", encoding="utf-8")
+
+    updated = ensure_shell_path(tmp_path / "bin", [rc], current_path=f"/usr/bin:{tmp_path / 'bin'}")
+
+    assert updated is None
+    assert rc.read_text(encoding="utf-8") == "# rc\n"
+
+
+def test_ensure_shell_path_updates_first_existing_rc(tmp_path: Path):
+    missing = tmp_path / ".missing"
+    rc = tmp_path / ".profile"
+    rc.write_text("# profile", encoding="utf-8")
+
+    updated = ensure_shell_path(tmp_path / ".opencode" / "bin", [missing, rc], current_path="/usr/bin")
+
+    assert updated == rc
+    assert rc.read_text(encoding="utf-8") == f"# profile\nexport PATH=\"{tmp_path / '.opencode' / 'bin'}:$PATH\"\n"
+
+
+def test_ensure_shell_path_does_not_duplicate_existing_rc_entry(tmp_path: Path):
+    opencode_dir = tmp_path / ".opencode" / "bin"
+    rc = tmp_path / ".bashrc"
+    rc.write_text(f"export PATH=\"{opencode_dir}:$PATH\"\n", encoding="utf-8")
+
+    updated = ensure_shell_path(opencode_dir, [rc], current_path="/usr/bin")
+
+    assert updated is None
+    assert rc.read_text(encoding="utf-8") == f"export PATH=\"{opencode_dir}:$PATH\"\n"
+
+
+def test_install_opencode_cli_ensure_path_prints_updated_file(capsys, tmp_path: Path):
+    rc = tmp_path / ".bashrc"
+    rc.write_text("", encoding="utf-8")
+    opencode_dir = tmp_path / ".opencode" / "bin"
+
+    assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", "/usr/bin", "--rc-file", str(rc)]) == 0
+
+    assert capsys.readouterr().out == f"{rc}\n"
+    assert rc.read_text(encoding="utf-8") == f"export PATH=\"{opencode_dir}:$PATH\"\n"
+
+
+def test_install_opencode_cli_ensure_path_returns_one_when_unchanged(tmp_path: Path):
+    rc = tmp_path / ".bashrc"
+    rc.write_text("", encoding="utf-8")
+    opencode_dir = tmp_path / ".opencode" / "bin"
+
+    assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", str(opencode_dir), "--rc-file", str(rc)]) == 1

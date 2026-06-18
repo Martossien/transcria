@@ -501,6 +501,9 @@ pipeline shell `--version | head`.
 La recherche du binaire opencode (PATH, home service, home utilisateur, chemin
 configuré) passe aussi par `transcria.install_opencode --find` au lieu de
 `command -v`/`which` dans `install.sh`.
+La mise à jour optionnelle de `.bashrc`/`.profile` pour ajouter le dossier opencode
+au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire les
+`grep`/append shell directs de `install.sh`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
