@@ -465,6 +465,10 @@ recommandées sont rendus par `transcria.install_profiles` (`summary` /
 Le bilan final des modèles est rendu par `transcria.install_models summary` à partir
 des états détectés par le shell, ce qui laisse `install.sh` orchestrer la détection
 sans porter le texte conditionnel de synthèse.
+Le bilan final base de données / configuration / doctor est rendu par
+`transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
+`install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et
+`DOCTOR_STATUS`.
 La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée dans
 `transcria.install_torch`, avec tests sur les seuils CUDA et le cas CUDA 13+.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,

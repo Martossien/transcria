@@ -242,6 +242,19 @@ print_model_summary() {
         --opencode-bin "${OPENCODE_BIN:-}"
 }
 
+print_database_summary() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary database \
+        --db-backend "$DB_BACKEND"
+}
+
+print_configuration_summary() {
+    local remaining_changes="$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary configuration \
+        --config-path "$CONFIG_PATH" \
+        --remaining-changes "$remaining_changes" \
+        --doctor-status "$DOCTOR_STATUS"
+}
+
 load_install_profile_plan
 
 if [[ "$PLAN_ONLY" = true ]]; then
@@ -1649,22 +1662,10 @@ REMAINING_CHANGES=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHO
     --file "$CONFIG_PATH" \
     --text "CHANGE-ME" 2>/dev/null || echo 0)
 echo ""
-echo -e "${BOLD}Base de données :${NC}"
-if [[ "$DB_BACKEND" == PostgreSQL* ]]; then
-    echo -e "  ${GREEN}[OK]${NC} $DB_BACKEND — DSN dans .env (TRANSCRIA_DATABASE_URL)"
-else
-    echo -e "  ${BLUE}[INFO]${NC} $DB_BACKEND — réservé au dev local ; passez à PostgreSQL hors dev : ./install.sh --postgres"
-fi
+print_database_summary
 
 echo ""
-echo -e "${BOLD}Configuration :${NC}"
-if [[ "$REMAINING_CHANGES" -gt 0 ]]; then
-    echo -e "  ${YELLOW}[WARN]${NC} $CONFIG_PATH contient encore ${REMAINING_CHANGES} valeur(s) 'CHANGE-ME'"
-    echo "         Éditer config.yaml avant le premier démarrage"
-else
-    echo -e "  ${GREEN}[OK]${NC} config.yaml — aucune valeur par défaut restante"
-fi
-echo -e "  ${BLUE}[INFO]${NC} doctor.py : $DOCTOR_STATUS"
+print_configuration_summary "$REMAINING_CHANGES"
 
 echo ""
 FINAL_LOG_FILE="/var/log/transcrIA.log"

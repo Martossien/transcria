@@ -178,6 +178,18 @@ def test_install_script_uses_model_summary_renderer():
     assert '$COHERE_OK  && echo -e' not in content
 
 
+def test_install_script_uses_final_status_renderers():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "print_database_summary" in content
+    assert "print_configuration_summary" in content
+    assert "-m transcria.install_summary database" in content
+    assert "-m transcria.install_summary configuration" in content
+    assert 'echo -e "${BOLD}Base de données' not in content
+    assert 'echo -e "${BOLD}Configuration' not in content
+    assert '[[ "$DB_BACKEND" == PostgreSQL* ]]' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
