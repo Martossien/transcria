@@ -574,6 +574,8 @@ all-in-one|web|scheduler|resource-node|migrate`, charge `.env`, adapte la liste
 des checks au profil, et valide les premiers invariants critiques
 (rôle runtime, PostgreSQL pour `web`/`scheduler`/`migrate`, clé API pour
 `resource-node`, manifeste `resource_node.engines`, conflits systemd connus).
+`install.sh` lance `doctor --profile <profil>` par défaut en post-install ; le saut
+doit être explicite via `--skip-doctor` et apparaît dans `--plan`/le résumé final.
 
 Tâches :
 

@@ -114,6 +114,7 @@ needs_local_models=false
 needs_llm=false
 needs_admin_config=true
 doctor_profile=web
+doctor_enabled=true
 
 systemd_units:
   - transcria-migrate.service
@@ -128,6 +129,18 @@ def test_render_install_plan_text_uses_none_for_empty_systemd_units():
     assert "systemd=false" in rendered
     assert "legacy_service=false" in rendered
     assert "systemd_units:\n  - none\n" in rendered
+
+
+def test_render_install_plan_text_can_disable_doctor():
+    plan = resolve_install_plan("web")
+    rendered = render_install_plan_text(
+        plan,
+        PlanRenderContext(install_dir="/opt/transcria", service_user="transcria", doctor_enabled=False),
+    )
+
+    assert "doctor_profile=web" in rendered
+    assert "doctor_enabled=false" in rendered
+    assert rendered.count("systemd_units:") == 1
 
 
 def test_render_install_plan_shell_outputs_profile_decisions():
@@ -177,7 +190,16 @@ def test_install_profiles_cli_outputs_text_plan(capsys):
     assert "service_user=gpu" in rendered
     assert "install_torch=false" in rendered
     assert "setup_postgres=false" in rendered
+    assert "doctor_enabled=true" in rendered
     assert "  - transcria-inference.service" in rendered
+
+
+def test_install_profiles_cli_text_plan_honors_skip_doctor(capsys):
+    assert main(["--profile", "web", "--format", "text", "--skip-doctor"]) == 0
+
+    rendered = capsys.readouterr().out
+    assert "doctor_profile=web" in rendered
+    assert "doctor_enabled=false" in rendered
 
 
 def test_install_profiles_cli_outputs_shell_plan(capsys):

@@ -16,6 +16,7 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --skip-doctor      Ne pas lancer scripts/doctor.py en fin d'installation
 #   --postgres         Configurer PostgreSQL (local : crée rôle/base ; distant : utilise une base existante)
 #   --sqlite-dev       Utiliser SQLite explicitement (dev local mono-process uniquement)
 #   --allow-sqlite-dev Alias de --sqlite-dev
@@ -58,6 +59,7 @@ FORCE_CUDA=""
 HF_TOKEN=""
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
+SKIP_DOCTOR=false
 PYTHON_BIN=""
 SETUP_PG=""            # "" = à décider (prompt) ; true/false = explicite
 PG_HOST="127.0.0.1"
@@ -95,6 +97,7 @@ while [[ $# -gt 0 ]]; do
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
         --force-config)    FORCE_CONFIG=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
+        --skip-doctor)     SKIP_DOCTOR=true; shift ;;
         --postgres)        SETUP_PG=true; shift ;;
         --sqlite-dev|--allow-sqlite-dev|--no-postgres)
             SETUP_PG=false
@@ -140,6 +143,9 @@ print_install_plan() {
     fi
     if [[ "$PG_MIGRATE" = true ]]; then
         args+=(--pg-migrate)
+    fi
+    if [[ "$SKIP_DOCTOR" = true ]]; then
+        args+=(--skip-doctor)
     fi
     if [[ "$SETUP_PG" = true ]]; then
         args+=(--postgres)
@@ -1586,7 +1592,10 @@ fi
 # ============================================================================
 log_section "Validation post-install"
 
-if [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
+if [[ "$SKIP_DOCTOR" = true ]]; then
+    DOCTOR_STATUS="sauté (--skip-doctor)"
+    log_warn "doctor.py sauté à la demande (--skip-doctor)"
+elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" --config "$CONFIG_PATH" --profile "$INSTALL_PROFILE"; then
         DOCTOR_STATUS="OK"
         log_ok "doctor.py : aucun échec bloquant"

@@ -114,6 +114,7 @@ cd transcria
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
+./install.sh --skip-doctor         # Sauter explicitement la validation post-install doctor
 
 # PostgreSQL
 ./install.sh --postgres             # PostgreSQL local : crée rôle/base, écrit DSN, applique alembic

@@ -116,6 +116,7 @@ class PlanRenderContext:
     postgres_user: str = "transcria"
     postgres_migrate: bool = False
     doctor_profile: str | None = None
+    doctor_enabled: bool = True
 
 
 def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> str:
@@ -141,6 +142,7 @@ def render_install_plan_text(plan: InstallPlan, context: PlanRenderContext) -> s
         f"needs_llm={str(plan.needs_llm).lower()}",
         f"needs_admin_config={str(plan.needs_admin_config).lower()}",
         f"doctor_profile={context.doctor_profile or plan.profile}",
+        f"doctor_enabled={str(context.doctor_enabled).lower()}",
         "",
         "systemd_units:",
     ]
@@ -223,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pg-db", default="transcria")
     parser.add_argument("--pg-user", default="transcria")
     parser.add_argument("--pg-migrate", action="store_true")
+    parser.add_argument("--skip-doctor", action="store_true")
     pg = parser.add_mutually_exclusive_group()
     pg.add_argument("--postgres", action="store_true", help="force PostgreSQL")
     pg.add_argument("--sqlite-dev", "--allow-sqlite-dev", "--no-postgres", action="store_true", help="force SQLite dev local")
@@ -255,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
                 postgres_user=args.pg_user,
                 postgres_migrate=args.pg_migrate,
                 doctor_profile=args.profile,
+                doctor_enabled=not args.skip_doctor,
             ),
         )
         print(sys_stdout, end="")

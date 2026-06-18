@@ -105,6 +105,14 @@ def test_install_script_reuses_split_systemd_unit_installer():
     assert "TMP_SCHEDULER=" not in content
 
 
+def test_install_script_supports_explicit_skip_doctor():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--skip-doctor" in content
+    assert "SKIP_DOCTOR=true" in content
+    assert 'DOCTOR_STATUS="sauté (--skip-doctor)"' in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -354,6 +362,7 @@ def test_plan_web_is_side_effect_free_contract():
     assert "setup_postgres=true" in result.stdout
     assert "needs_local_models=false" in result.stdout
     assert "needs_llm=false" in result.stdout
+    assert "doctor_enabled=true" in result.stdout
     assert "transcria-migrate.service" in result.stdout
     assert "transcria-web.service" in result.stdout
     assert "Vérification des prérequis" not in result.stdout
@@ -390,6 +399,16 @@ def test_plan_all_in_one_honors_no_service_and_no_torch():
     assert "install_torch=false" in result.stdout
     assert "needs_llm=true" in result.stdout
     assert "  - none" in result.stdout
+
+
+def test_plan_honors_skip_doctor():
+    result = _run_install("--profile", "web", "--skip-doctor", "--plan")
+
+    assert result.returncode == 0
+    assert "doctor_profile=web" in result.stdout
+    assert "doctor_enabled=false" in result.stdout
+    assert "needs_llm=false" in result.stdout
+    assert "  - transcria-web.service" in result.stdout
 
 
 def test_invalid_split_sqlite_combination_fails_before_plan():
