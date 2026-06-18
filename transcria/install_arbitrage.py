@@ -201,6 +201,19 @@ def render_setup_log(
     raise ValueError(f"événement LLM inconnu : {event}")
 
 
+def render_prompt(*, prompt: str, label: str = "", repo: str = "") -> str:
+    """Rend les questions interactives du choix de LLM d'arbitrage."""
+    if prompt == "tier":
+        return "Palier LLM à installer"
+    if prompt == "models-dir":
+        return "Répertoire de téléchargement des modèles"
+    if prompt == "llama-server":
+        return "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)"
+    if prompt == "download":
+        return f"Télécharger {label} depuis {repo} ?"
+    raise ValueError(f"prompt LLM inconnu : {prompt}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Génère le wrapper local de LLM d'arbitrage TranscrIA.")
     parser.add_argument("tier", nargs="?", choices=(*TIER_VRAM_MB.keys(), "status"), default="status")
@@ -217,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-mb", default="")
     parser.add_argument("--tier-value", default="")
     parser.add_argument("--label", default="")
+    parser.add_argument("--prompt", default="")
+    parser.add_argument("--repo", default="")
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root)
@@ -238,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 end="",
             )
+            return 0
+        if args.prompt:
+            print(render_prompt(prompt=args.prompt, label=args.label, repo=args.repo), end="")
             return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):

@@ -301,6 +301,19 @@ def test_install_script_delegates_llm_download_and_activation_logs():
     assert "après téléchargement du modèle" not in content
 
 
+def test_install_script_delegates_llm_prompts():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_arbitrage --prompt tier" in content
+    assert "-m transcria.install_arbitrage --prompt models-dir" in content
+    assert "-m transcria.install_arbitrage --prompt llama-server" in content
+    assert "--prompt download" in content
+    assert "Palier LLM à installer" not in content
+    assert "Répertoire de téléchargement des modèles" not in content
+    assert "Chemin du binaire llama-server" not in content
+    assert "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 

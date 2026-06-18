@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from transcria.install_arbitrage import apply_profile, render_setup_log, render_wrapper, status
+from transcria.install_arbitrage import apply_profile, render_prompt, render_setup_log, render_wrapper, status
 
 
 def _make_repo(tmp_path: Path) -> tuple[Path, Path]:
@@ -156,3 +156,15 @@ def test_render_setup_log_for_llm_download_and_activation_events():
 def test_render_setup_log_rejects_unknown_event():
     with pytest.raises(ValueError, match="événement LLM inconnu : bad"):
         render_setup_log(event="bad")
+
+
+def test_render_prompt_for_llm_interactive_questions():
+    assert render_prompt(prompt="tier") == "Palier LLM à installer"
+    assert render_prompt(prompt="models-dir") == "Répertoire de téléchargement des modèles"
+    assert render_prompt(prompt="llama-server") == "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)"
+    assert render_prompt(prompt="download", label="Qwen test", repo="org/model") == "Télécharger Qwen test depuis org/model ?"
+
+
+def test_render_prompt_rejects_unknown_prompt():
+    with pytest.raises(ValueError, match="prompt LLM inconnu : bad"):
+        render_prompt(prompt="bad")

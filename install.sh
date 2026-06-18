@@ -1629,10 +1629,12 @@ else
         log_llm_setup_event recommended-tier "" "" "" "" "$REC_TIER" "${LLM_LABEL[$REC_TIER]}"
     fi
     log_llm_setup_event tiers-info
-    ask LLM_TIER "Palier LLM à installer" "$REC_TIER"
+    LLM_TIER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt tier)
+    ask LLM_TIER "$LLM_TIER_PROMPT" "$REC_TIER"
 
     if [[ -n "${LLM_TIER:-}" && -n "${LLM_REPO[$LLM_TIER]:-}" ]]; then
-        ask MODELS_DIR_CHOICE "Répertoire de téléchargement des modèles" "$HOME/models"
+        LLM_MODELS_DIR_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt models-dir)
+        ask MODELS_DIR_CHOICE "$LLM_MODELS_DIR_PROMPT" "$HOME/models"
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
         PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
             --install-dir "$INSTALL_DIR" \
@@ -1675,14 +1677,19 @@ else
                 if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
             done
         fi
-        ask LLAMA_SRV "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
+        LLAMA_SERVER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt llama-server)
+        ask LLAMA_SRV "$LLAMA_SERVER_PROMPT" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
 
         REPO="${LLM_REPO[$LLM_TIER]}"; GG="${LLM_FILE[$LLM_TIER]}"
         DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"
+        LLM_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage \
+            --prompt download \
+            --label "${LLM_LABEL[$LLM_TIER]}" \
+            --repo "$REPO")
 
         if [[ -f "$DEST/$GG" ]]; then
             log_llm_setup_event model-present "$DEST/$GG"
-        elif ask_yn "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO ?"; then
+        elif ask_yn "$LLM_DOWNLOAD_PROMPT"; then
             HF_DL=""
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \

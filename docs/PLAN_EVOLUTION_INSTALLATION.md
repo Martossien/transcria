@@ -446,6 +446,9 @@ passent aussi par `transcria.install_arbitrage --setup-log`.
 Les messages de qualification `llama-server`, téléchargement GGUF, activation de
 palier et calibration GPU passent par le même renderer ; `install.sh` conserve
 encore les prompts, la table des modèles et les commandes effectives.
+Les prompts interactifs de sélection LLM (palier, répertoire modèles, binaire
+`llama-server`, confirmation de téléchargement) sont rendus par
+`transcria.install_arbitrage --prompt`.
 Le rendu systemd legacy `transcria.service` utilise désormais aussi
 `transcria.install_systemd` au lieu d'un bloc `sed`. L'ajustement local
 `pg_hba.conf` est isolé dans `transcria.install_postgres`, qui transforme uniquement
