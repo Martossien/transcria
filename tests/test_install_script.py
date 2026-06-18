@@ -252,6 +252,20 @@ def test_install_script_delegates_sqlite_migration_logs_and_prompt():
     assert "partiellement remplie" not in content
 
 
+def test_install_script_delegates_database_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--database-setup-log" in content
+    assert "log_database_setup_event" in content
+    assert "Base SQLite conservée (storage.database_url de config.yaml)" not in content
+    assert "psql introuvable" not in content
+    assert "sudo requis pour créer le rôle" not in content
+    assert "arrêt au lieu de poursuivre silencieusement en SQLite" not in content
+    assert "Mot de passe du rôle '$PG_USER' généré automatiquement" not in content
+    assert 'DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"' not in content
+    assert "PostgreSQL demandé mais la configuration a échoué" not in content
+
+
 def test_install_script_delegates_postgres_role_and_database_sql_rendering():
     content = _INSTALL.read_text(encoding="utf-8")
 

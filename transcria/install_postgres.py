@@ -304,6 +304,32 @@ def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str,
     ])
 
 
+def render_database_setup_log(*, event: str, user: str = "", db: str = "", host: str = "", port: str = "") -> str:
+    """Rend les messages du choix global SQLite/PostgreSQL."""
+    if event == "sqlite-kept":
+        return "OK:Base SQLite conservée (storage.database_url de config.yaml)\n"
+    if event == "psql-missing":
+        return "\n".join([
+            "ERROR:psql introuvable — PostgreSQL n'est pas installé.",
+            "WARN:  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && "
+            "sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql",
+            "WARN:  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql",
+            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+        ]) + "\n"
+    if event == "sudo-missing":
+        return "\n".join([
+            "ERROR:sudo requis pour créer le rôle/la base PostgreSQL (compte postgres).",
+            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+        ]) + "\n"
+    if event == "password-generated":
+        return f"INFO:Mot de passe du rôle '{user}' généré automatiquement.\n"
+    if event == "configured":
+        return f"VALUE:PostgreSQL ({db}@{host}:{port})\n"
+    if event == "config-failed":
+        return "ERROR:PostgreSQL demandé mais la configuration a échoué.\n"
+    raise ValueError(f"événement de choix base de données inconnu : {event}")
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -378,6 +404,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="rend le prompt interactif de migration SQLite vers PostgreSQL",
     )
+    parser.add_argument("--database-setup-log", action="store_true", help="rend un message de choix SQLite/PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -617,6 +644,26 @@ def main(argv: list[str] | None = None) -> int:
             ),
             end="",
         )
+        return 0
+
+    if args.database_setup_log:
+        if args.event is None:
+            print("--event requis avec --database-setup-log", file=sys.stderr)
+            return 2
+        try:
+            print(
+                render_database_setup_log(
+                    event=args.event,
+                    user=args.user or "",
+                    db=args.db or "",
+                    host=args.host or "",
+                    port=args.port,
+                ),
+                end="",
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         return 0
 
     if args.path is None:

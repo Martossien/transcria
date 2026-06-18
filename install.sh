@@ -1093,17 +1093,40 @@ if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcr
     PSQL_AVAILABLE=true
 fi
 
+postgres_database_setup_message() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --database-setup-log \
+        --event "$1" \
+        --user "$PG_USER" \
+        --db "$PG_DB" \
+        --host "$PG_HOST" \
+        --port "$PG_PORT"
+}
+
+log_database_setup_event() {
+    local event="$1" line
+    while IFS= read -r line; do
+        if [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == WARN:* ]]; then
+            log_warn "${line#WARN:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        elif [[ -n "$line" ]]; then
+            log_warn "Sortie choix DB ignorée : $line"
+        fi
+    done < <(postgres_database_setup_message "$event")
+}
+
 if [[ "$SETUP_PG" != true ]]; then
-    log_ok "Base SQLite conservée (storage.database_url de config.yaml)"
+    log_database_setup_event sqlite-kept
 elif [[ "$PSQL_AVAILABLE" != true ]]; then
-    log_error "psql introuvable — PostgreSQL n'est pas installé."
-    log_warn  "  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql"
-    log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
-    log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
+    log_database_setup_event psql-missing
     exit 1
 elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
-    log_error "sudo requis pour créer le rôle/la base PostgreSQL (compte postgres)."
-    log_error "PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite."
+    log_database_setup_event sudo-missing
     exit 1
 else
     ask PG_HOST "Hôte PostgreSQL" "$PG_HOST"
@@ -1126,13 +1149,14 @@ else
 
     if [[ -z "$PG_PASSWORD" ]]; then
         PG_PASSWORD=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --generate-password)
-        log_info "Mot de passe du rôle '$PG_USER' généré automatiquement."
+        log_database_setup_event password-generated
     fi
 
     if _setup_postgres "$PG_HOST" "$PG_PORT" "$PG_DB" "$PG_USER" "$PG_PASSWORD"; then
-        DB_BACKEND="PostgreSQL ($PG_DB@$PG_HOST:$PG_PORT)"
+        DB_BACKEND=$(postgres_database_setup_message configured)
+        DB_BACKEND="${DB_BACKEND#VALUE:}"
     else
-        log_error "PostgreSQL demandé mais la configuration a échoué."
+        log_database_setup_event config-failed
         exit 1
     fi
 fi

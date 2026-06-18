@@ -542,6 +542,9 @@ Les messages de résultat Alembic PostgreSQL (succès, reconstruction locale,
 Les logs, le prompt interactif et les messages de backup/exécution de migration
 SQLite vers PostgreSQL sont rendus par `transcria.install_postgres --sqlite-migration-log`
 et `--sqlite-migration-prompt`.
+Les messages de choix global SQLite/PostgreSQL (SQLite conservée, prérequis
+PostgreSQL manquants, mot de passe généré, backend final) sont rendus par
+`transcria.install_postgres --database-setup-log`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

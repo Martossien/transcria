@@ -18,6 +18,7 @@ from transcria.install_postgres import (
     parse_non_negative_int,
     render_alembic_log,
     render_connection_failure,
+    render_database_setup_log,
     render_database_sql,
     render_encoding_warnings,
     render_pg_hba_rewrite_result,
@@ -517,6 +518,40 @@ def test_install_postgres_cli_renders_sqlite_migration_prompt(capsys):
     ]) == 0
 
     assert capsys.readouterr().out.endswith("  Votre choix [1/2] : ")
+
+
+def test_render_database_setup_log_for_sqlite_and_postgres_events():
+    assert render_database_setup_log(event="sqlite-kept") == "OK:Base SQLite conservée (storage.database_url de config.yaml)\n"
+    assert render_database_setup_log(event="password-generated", user="app") == "INFO:Mot de passe du rôle 'app' généré automatiquement.\n"
+    assert render_database_setup_log(event="configured", db="transcria", host="127.0.0.1", port="5432") == (
+        "VALUE:PostgreSQL (transcria@127.0.0.1:5432)\n"
+    )
+    assert render_database_setup_log(event="config-failed") == "ERROR:PostgreSQL demandé mais la configuration a échoué.\n"
+
+
+def test_render_database_setup_log_for_missing_requirements():
+    assert render_database_setup_log(event="psql-missing") == (
+        "ERROR:psql introuvable — PostgreSQL n'est pas installé.\n"
+        "WARN:  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && "
+        "sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql\n"
+        "WARN:  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql\n"
+        "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.\n"
+    )
+    assert render_database_setup_log(event="sudo-missing") == (
+        "ERROR:sudo requis pour créer le rôle/la base PostgreSQL (compte postgres).\n"
+        "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.\n"
+    )
+
+
+def test_render_database_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement de choix base de données inconnu : bad"):
+        render_database_setup_log(event="bad")
+
+
+def test_install_postgres_cli_renders_database_setup_log(capsys):
+    assert main(["--database-setup-log", "--event", "configured", "--db", "transcria", "--host", "db.internal", "--port", "5432"]) == 0
+
+    assert capsys.readouterr().out == "VALUE:PostgreSQL (transcria@db.internal:5432)\n"
 
 
 def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():
