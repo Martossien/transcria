@@ -6,11 +6,14 @@ from pathlib import Path
 import pytest
 
 from transcria.install_opencode import (
+    OpencodeDetection,
+    detect_opencode,
     ensure_shell_path,
     find_opencode_binary,
     main,
     opencode_version,
     render_install_prompt,
+    render_opencode_detection_shell,
     render_setup_log,
 )
 
@@ -113,6 +116,35 @@ def test_install_opencode_cli_finds_binary(capsys, monkeypatch, tmp_path: Path):
     assert main(["--find", "--opencode-home", str(tmp_path), "--user-home", str(tmp_path)]) == 0
 
     assert capsys.readouterr().out == f"{candidate}\n"
+
+
+def test_detect_opencode_returns_binary_and_version(monkeypatch, tmp_path: Path):
+    candidate = tmp_path / "opencode"
+    monkeypatch.setattr("transcria.install_opencode.find_opencode_binary", lambda **_kwargs: candidate)
+    monkeypatch.setattr("transcria.install_opencode.opencode_version", lambda binary: f"{binary.name} 1.0")
+
+    detection = detect_opencode(opencode_home=tmp_path, user_home=tmp_path)
+
+    assert detection == OpencodeDetection(binary=candidate, version="opencode 1.0")
+
+
+def test_render_opencode_detection_shell_is_filterable(tmp_path: Path):
+    rendered = render_opencode_detection_shell(OpencodeDetection(binary=tmp_path / "opencode bin", version="opencode 1.2.3"))
+
+    assert f"OPENCODE_BIN='{tmp_path}/opencode bin'" in rendered
+    assert "OPENCODE_VER='opencode 1.2.3'" in rendered
+
+
+def test_install_opencode_cli_detects_binary(capsys, monkeypatch, tmp_path: Path):
+    candidate = tmp_path / "opencode"
+    monkeypatch.setattr(
+        "transcria.install_opencode.detect_opencode",
+        lambda **_kwargs: OpencodeDetection(binary=candidate, version="opencode 1.2.3"),
+    )
+
+    assert main(["--detect", "--opencode-home", str(tmp_path), "--user-home", str(tmp_path)]) == 0
+
+    assert capsys.readouterr().out == f"OPENCODE_BIN={candidate}\nOPENCODE_VER='opencode 1.2.3'\n"
 
 
 def test_ensure_shell_path_skips_when_already_in_current_path(tmp_path: Path):

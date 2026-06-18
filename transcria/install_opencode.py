@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import shlex
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import which
 from typing import Callable
 
 WhichFn = Callable[[str], str | None]
+
+
+@dataclass(frozen=True)
+class OpencodeDetection:
+    binary: Path | None
+    version: str
 
 
 def opencode_version(binary: Path, run=subprocess.run) -> str:
@@ -45,6 +53,26 @@ def find_opencode_binary(
         if candidate.is_file() and candidate.stat().st_mode & 0o111:
             return candidate
     return None
+
+
+def detect_opencode(
+    *,
+    opencode_home: Path,
+    user_home: Path,
+    configured_bin: str | None = None,
+) -> OpencodeDetection:
+    """Détecte opencode et sa version si le binaire existe."""
+    binary = find_opencode_binary(opencode_home=opencode_home, user_home=user_home, configured_bin=configured_bin)
+    return OpencodeDetection(binary=binary, version=opencode_version(binary) if binary else "")
+
+
+def render_opencode_detection_shell(detection: OpencodeDetection) -> str:
+    """Rend la détection opencode sous forme d'affectations shell filtrables."""
+    values = {
+        "OPENCODE_BIN": str(detection.binary or ""),
+        "OPENCODE_VER": detection.version,
+    }
+    return "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
 
 
 def ensure_shell_path(opencode_dir: Path, rc_files: list[Path], *, current_path: str = "") -> Path | None:
@@ -117,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers d'installation opencode TranscrIA.")
     parser.add_argument("--version", action="store_true", help="affiche la version opencode")
     parser.add_argument("--find", action="store_true", help="cherche le binaire opencode")
+    parser.add_argument("--detect", action="store_true", help="cherche opencode et rend OPENCODE_BIN/OPENCODE_VER")
     parser.add_argument("--ensure-path", action="store_true", help="ajoute le dossier opencode au shell rc si nécessaire")
     parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation opencode")
     parser.add_argument("--install-prompt", action="store_true", help="rend la question d'installation opencode")
@@ -150,6 +179,21 @@ def main(argv: list[str] | None = None) -> int:
         if binary is None:
             return 1
         print(binary)
+        return 0
+    if args.detect:
+        if not args.opencode_home or not args.user_home:
+            print("--opencode-home et --user-home requis avec --detect", file=sys.stderr)
+            return 2
+        print(
+            render_opencode_detection_shell(
+                detect_opencode(
+                    opencode_home=Path(args.opencode_home),
+                    user_home=Path(args.user_home),
+                    configured_bin=args.configured_bin,
+                )
+            ),
+            end="",
+        )
         return 0
     if args.ensure_path:
         if not args.opencode_dir:

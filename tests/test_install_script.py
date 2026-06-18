@@ -300,7 +300,7 @@ def test_install_script_delegates_opencode_setup_logs_and_prompt():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "-m transcria.install_opencode --setup-log" in content
-    assert "-m transcria.install_opencode \\\n            --install-prompt" in content
+    assert "opencode_helper \\\n            --install-prompt" in content
     assert "log_opencode_setup_event" in content
     assert "opencode trouvé :" not in content
     assert "opencode non trouvé" not in content
@@ -663,15 +663,18 @@ def test_install_script_detects_system_capabilities_through_python_helper():
 def test_install_script_reads_opencode_version_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_opencode" in content
+    assert "--detect" in content
+    assert "OPENCODE_VER" in content
+    assert "--version \\\n            --bin \"$OPENCODE_BIN\"" not in content
     assert "head -1" not in content
 
 
 def test_install_script_finds_opencode_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_opencode" in content
-    assert "--find" in content
+    assert "--detect" in content
+    assert "eval_named_shell_assignments \"$OPENCODE_DETECTION\"" in content
+    assert "--find" not in content
     assert "command -v opencode" not in content
     assert "OPENCODE_BIN=$(which opencode)" not in content
 

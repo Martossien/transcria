@@ -470,6 +470,9 @@ et la recommandation par VRAM totale sont sorties de `install.sh` vers
 La détection locale des modèles (Cohere, cache pyannote, SQUIM, premier GGUF)
 est également regroupée dans `transcria.install_models detect-local`; `install.sh`
 ne fait plus que charger les variables filtrées et afficher les statuts rendus.
+La détection opencode et la lecture de version sont regroupées dans
+`transcria.install_opencode --detect`, avec sortie `OPENCODE_*` filtrée ; le shell
+conserve seulement le téléchargement éventuel, les permissions et la configuration.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.

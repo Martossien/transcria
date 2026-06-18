@@ -199,6 +199,8 @@ postgres_helper() { python_module transcria.install_postgres "$@"; }
 
 arbitrage_helper() { python_module transcria.install_arbitrage "$@"; }
 
+opencode_helper() { python_module transcria.install_opencode "$@"; }
+
 install_paths_helper() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths --install-dir "$INSTALL_DIR" "$@"
 }
@@ -1381,22 +1383,20 @@ log_opencode_setup_event() {
 if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     # Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
     CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
-    OPENCODE_BIN=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
-        --find \
+    OPENCODE_DETECTION=$(opencode_helper \
+        --detect \
         --opencode-home "$OPENCODE_HOME" \
         --user-home "$HOME" \
-        --configured-bin "$CFG_BIN" 2>/dev/null || true)
+        --configured-bin "$CFG_BIN")
+    eval_named_shell_assignments "$OPENCODE_DETECTION" OPENCODE_BIN OPENCODE_VER
 
     if [[ -n "$OPENCODE_BIN" ]]; then
-        OPENCODE_VER=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
-            --version \
-            --bin "$OPENCODE_BIN")
         log_opencode_setup_event found "$OPENCODE_BIN ($OPENCODE_VER)"
         yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
     else
         log_opencode_setup_event missing
         echo ""
-        OPENCODE_INSTALL_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+        OPENCODE_INSTALL_PROMPT=$(opencode_helper \
             --install-prompt \
             --opencode-home "$OPENCODE_HOME")
         if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
@@ -1415,7 +1415,7 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
 
                 # Ajouter au PATH dans .bashrc/.profile si nécessaire
                 OPENCODE_DIR="$(dirname "$OPENCODE_DEST")"
-                UPDATED_RC=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+                UPDATED_RC=$(opencode_helper \
                     --ensure-path \
                     --opencode-dir "$OPENCODE_DIR" \
                     --current-path "$PATH" \
