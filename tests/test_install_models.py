@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 from transcria.install_models import (
+    COHERE_MODEL_ID,
     PYANNOTE_MODEL_ID,
+    CohereDownloadPlan,
     detect_local_models,
     download_pyannote_pipeline,
     find_first_gguf,
@@ -13,6 +15,8 @@ from transcria.install_models import (
     is_non_empty_dir,
     main,
     parse_bool,
+    plan_cohere_download,
+    render_cohere_download_plan_shell,
     render_cohere_setup_log,
     render_cohere_setup_prompt,
     render_local_model_detection_shell,
@@ -132,6 +136,36 @@ def test_render_local_model_detection_shell_is_filterable(tmp_path: Path):
     assert "SQUIM_OK=false" in rendered
     assert "QWEN_GGUF=''" in rendered
     assert "QWEN_OK=false" in rendered
+
+
+def test_plan_cohere_download_uses_default_destination_and_first_cli(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(
+        "transcria.install_models.first_available",
+        lambda names: type("Check", (), {"name": names[0], "path": Path("/usr/bin/huggingface-cli")})(),
+    )
+
+    plan = plan_cohere_download(install_dir=tmp_path)
+
+    assert plan == CohereDownloadPlan(
+        destination=tmp_path / "models" / "cohere-asr" / "cohere-transcribe-03-2026",
+        cli_name="huggingface-cli",
+        cli_path=Path("/usr/bin/huggingface-cli"),
+    )
+
+
+def test_render_cohere_download_plan_shell_is_filterable(tmp_path: Path):
+    rendered = render_cohere_download_plan_shell(
+        CohereDownloadPlan(
+            destination=tmp_path / "models with spaces" / "cohere",
+            cli_name="huggingface-cli",
+            cli_path=Path("/usr/bin/huggingface-cli"),
+        )
+    )
+
+    assert f"COHERE_DEST='{tmp_path}/models with spaces/cohere'" in rendered
+    assert "COHERE_CLI=huggingface-cli" in rendered
+    assert "COHERE_CLI_PATH=/usr/bin/huggingface-cli" in rendered
+    assert f"COHERE_MODEL_ID={COHERE_MODEL_ID}" in rendered
 
 
 def test_render_model_summary_for_all_in_one_missing_values():

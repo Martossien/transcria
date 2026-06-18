@@ -8,8 +8,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from transcria.install_prerequisites import first_available
+
 PYANNOTE_MODEL_ID = "pyannote/speaker-diarization-community-1"
 SQUIM_RELATIVE_PATH = Path("hub") / "torchaudio" / "models" / "squim_objective_dns2020.pth"
+COHERE_MODEL_ID = "CohereLabs/cohere-transcribe-03-2026"
+COHERE_DEFAULT_RELATIVE_PATH = Path("models") / "cohere-asr" / "cohere-transcribe-03-2026"
 
 
 @dataclass(frozen=True)
@@ -22,6 +26,13 @@ class LocalModelDetection:
     squim_ok: bool
     qwen_gguf: Path | None
     qwen_ok: bool
+
+
+@dataclass(frozen=True)
+class CohereDownloadPlan:
+    destination: Path
+    cli_name: str
+    cli_path: Path | None
 
 
 def parse_bool(value: str) -> bool:
@@ -104,6 +115,27 @@ def render_local_model_detection_shell(detection: LocalModelDetection) -> str:
         "SQUIM_OK": str(detection.squim_ok).lower(),
         "QWEN_GGUF": str(detection.qwen_gguf or ""),
         "QWEN_OK": str(detection.qwen_ok).lower(),
+    }
+    return "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
+
+
+def plan_cohere_download(*, install_dir: Path) -> CohereDownloadPlan:
+    """Prépare le téléchargement Cohere sans lancer d'action réseau."""
+    cli = first_available(["huggingface-cli"])
+    return CohereDownloadPlan(
+        destination=Path(install_dir) / COHERE_DEFAULT_RELATIVE_PATH,
+        cli_name=cli.name if cli else "",
+        cli_path=cli.path if cli else None,
+    )
+
+
+def render_cohere_download_plan_shell(plan: CohereDownloadPlan) -> str:
+    """Rend le plan de téléchargement Cohere sous forme d'affectations shell filtrables."""
+    values = {
+        "COHERE_DEST": str(plan.destination),
+        "COHERE_CLI": plan.cli_name,
+        "COHERE_CLI_PATH": str(plan.cli_path or ""),
+        "COHERE_MODEL_ID": COHERE_MODEL_ID,
     }
     return "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
 
@@ -361,6 +393,9 @@ def main(argv: list[str] | None = None) -> int:
 
     subparsers.add_parser("cohere-setup-prompt", help="rend le prompt de configuration Cohere")
 
+    cohere_download_plan_parser = subparsers.add_parser("cohere-download-plan", help="prépare le téléchargement Cohere")
+    cohere_download_plan_parser.add_argument("--install-dir", required=True)
+
     pyannote_log_parser = subparsers.add_parser("pyannote-setup-log", help="rend un message de configuration pyannote")
     pyannote_log_parser.add_argument("--event", required=True)
 
@@ -432,6 +467,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "cohere-setup-prompt":
             print(render_cohere_setup_prompt(), end="")
+            return 0
+        if args.command == "cohere-download-plan":
+            print(render_cohere_download_plan_shell(plan_cohere_download(install_dir=Path(args.install_dir))), end="")
             return 0
         if args.command == "pyannote-setup-log":
             print(render_pyannote_setup_log(event=args.event), end="")

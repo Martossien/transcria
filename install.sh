@@ -1293,20 +1293,14 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 fi
                 ;;
             2)
-                DEST="$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
-                install_paths_helper --path "$DEST" >/dev/null
+                COHERE_DOWNLOAD_PLAN=$(python_module transcria.install_models cohere-download-plan --install-dir "$INSTALL_DIR")
+                eval_named_shell_assignments "$COHERE_DOWNLOAD_PLAN" COHERE_DEST COHERE_CLI COHERE_CLI_PATH COHERE_MODEL_ID
+                install_paths_helper --path "$COHERE_DEST" >/dev/null
                 log_cohere_setup_event download-start
-                HF_COHERE_CLI=""
-                FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
-                if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
-                        first-available --name huggingface-cli --format shell 2>/dev/null); then
-                    eval_prefixed_shell_assignments FIRST_AVAILABLE "$HF_COHERE_OUT"
-                    HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
-                fi
-                if [[ -n "$HF_COHERE_CLI" ]]; then
-                    if "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
-                            --local-dir "$DEST" --local-dir-use-symlinks False; then
-                        yaml_set "models.cohere_model_path" "$DEST"
+                if [[ -n "$COHERE_CLI" ]]; then
+                    if "$COHERE_CLI" download "$COHERE_MODEL_ID" \
+                            --local-dir "$COHERE_DEST" --local-dir-use-symlinks False; then
+                        yaml_set "models.cohere_model_path" "$COHERE_DEST"
                         log_cohere_setup_event download-ok
                         COHERE_OK=true
                         CHANGED_CONFIG=true
@@ -1316,7 +1310,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 else
                     log_cohere_setup_event cli-missing
                     log_cohere_setup_event manual-command-title
-                    log_cohere_setup_event manual-command "$DEST"
+                    log_cohere_setup_event manual-command "$COHERE_DEST"
                 fi
                 ;;
             *)
