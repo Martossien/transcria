@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import pwd
 import shlex
 import shutil
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 WhichFn = Callable[[str], str | None]
+UserHomeFn = Callable[[str], str]
 
 
 @dataclass(frozen=True)
@@ -101,6 +103,13 @@ def render_system_capabilities(capabilities: dict[str, bool], *, output_format: 
     raise ValueError(f"format non supporté: {output_format}")
 
 
+def resolve_user_home(user: str, *, get_home: UserHomeFn | None = None) -> str:
+    """Retourne le home d'un utilisateur système."""
+    if get_home is not None:
+        return get_home(user)
+    return pwd.getpwnam(user).pw_dir
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers de prérequis système TranscrIA.")
     subparsers = parser.add_subparsers(dest="command")
@@ -115,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
 
     caps_parser = subparsers.add_parser("system-capabilities", help="détecte les outils système disponibles")
     caps_parser.add_argument("--format", choices=["tsv", "shell"], default="tsv")
+
+    home_parser = subparsers.add_parser("user-home", help="affiche le home d'un utilisateur système")
+    home_parser.add_argument("--user", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "check-binaries":
@@ -131,6 +143,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "system-capabilities":
         print(render_system_capabilities(detect_system_capabilities(), output_format=args.format))
+        return 0
+    if args.command == "user-home":
+        try:
+            print(resolve_user_home(args.user))
+        except KeyError:
+            print(f"utilisateur introuvable: {args.user}", file=sys.stderr)
+            return 1
         return 0
 
     print("commande prérequis inconnue", file=sys.stderr)

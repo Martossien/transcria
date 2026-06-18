@@ -521,6 +521,9 @@ de noms avant évaluation.
 La sortie shell du plan de profil (`install_profiles --format shell`) passe par la
 même liste blanche ; les seuls `eval` restants sont confinés dans les helpers de
 filtrage.
+La résolution du home de l'utilisateur de service passe par
+`transcria.install_prerequisites user-home`, supprimant le dernier `python3 -c`
+inline de `install.sh`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

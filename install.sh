@@ -213,7 +213,7 @@ VENV="$INSTALL_DIR/venv"
 CONFIG_PATH="$INSTALL_DIR/config.yaml"
 ENV_FILE="$INSTALL_DIR/.env"
 resolve_user_home() {
-    python3 -c 'import pwd, sys; print(pwd.getpwnam(sys.argv[1]).pw_dir)' "$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "${PYTHON_BIN:-python3}" -m transcria.install_prerequisites user-home --user "$1"
 }
 if id "$SERVICE_USER" &>/dev/null 2>&1; then
     SERVICE_HOME_GLOBAL=$(resolve_user_home "$SERVICE_USER")

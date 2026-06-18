@@ -66,6 +66,14 @@ def test_install_script_does_not_eval_interactive_answers():
     assert 'printf -v "$varname"' in content
 
 
+def test_install_script_resolves_user_home_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "transcria.install_prerequisites user-home" in content
+    assert "pwd.getpwnam" not in content
+    assert "python3 -c" not in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 
