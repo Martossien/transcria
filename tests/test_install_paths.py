@@ -9,6 +9,7 @@ from transcria.install_paths import (
     inference_service_directory_specs,
     legacy_service_directory_specs,
     main,
+    render_setup_log,
     runtime_directory_specs,
 )
 
@@ -102,3 +103,20 @@ def test_install_paths_cli_creates_explicit_paths(tmp_path: Path, capsys):
     assert str(second) in output
     assert first.is_dir()
     assert second.is_dir()
+
+
+def test_render_setup_log_for_local_install_events():
+    assert render_setup_log(event="venv-existing", value="/opt/transcria/venv") == "OK:Venv existant : /opt/transcria/venv\n"
+    assert render_setup_log(event="venv-create-start") == "INFO:Création du venv...\n"
+    assert render_setup_log(event="venv-created", value="/opt/transcria/venv") == "OK:Venv créé : /opt/transcria/venv\n"
+    assert render_setup_log(event="pip-upgrade") == "INFO:Mise à jour de pip...\n"
+    assert render_setup_log(event="requirements-start") == "INFO:Installation requirements.txt...\n"
+    assert render_setup_log(event="requirements-ok") == "OK:requirements.txt installé\n"
+    assert render_setup_log(event="runtime-dirs-ready") == "OK:jobs/, models/, instance/ prêts\n"
+
+
+def test_install_paths_cli_prints_setup_log(capsys, tmp_path: Path):
+    result = main(["--install-dir", str(tmp_path), "--setup-log", "--event", "requirements-ok"])
+
+    assert result == 0
+    assert capsys.readouterr().out == "OK:requirements.txt installé\n"

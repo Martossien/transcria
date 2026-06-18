@@ -503,6 +503,8 @@ La préparation des répertoires runtime communs (`jobs/`, `models/cohere-asr/`,
 maintenant par `transcria.install_paths`, avec tests unitaires et contrat dans
 `tests/test_install_script.py` pour éviter le retour d'une liste `mkdir -p` fragile
 dans `install.sh`.
+Les messages de préparation locale (venv, pip, `requirements.txt`, répertoires
+runtime prêts) passent par `transcria.install_paths --setup-log`.
 Les répertoires calculés pendant l'installation interactive (backups PostgreSQL,
 téléchargement Cohere, emplacement opencode, répertoire de modèles LLM choisi par
 l'utilisateur) passent aussi par cette CLI via `--path`, ce qui laisse à

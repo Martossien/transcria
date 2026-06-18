@@ -71,6 +71,25 @@ def directory_specs_for_kind(kind: str, install_dir: Path) -> list[DirectorySpec
     raise ValueError(f"kind inconnu: {kind}")
 
 
+def render_setup_log(*, event: str, value: str = "") -> str:
+    """Rend les messages de préparation locale des chemins et dépendances."""
+    if event == "venv-existing":
+        return f"OK:Venv existant : {value}\n"
+    if event == "venv-create-start":
+        return "INFO:Création du venv...\n"
+    if event == "venv-created":
+        return f"OK:Venv créé : {value}\n"
+    if event == "pip-upgrade":
+        return "INFO:Mise à jour de pip...\n"
+    if event == "requirements-start":
+        return "INFO:Installation requirements.txt...\n"
+    if event == "requirements-ok":
+        return "OK:requirements.txt installé\n"
+    if event == "runtime-dirs-ready":
+        return "OK:jobs/, models/, instance/ prêts\n"
+    raise ValueError(f"événement chemins inconnu : {event}")
+
+
 def _print_shell_paths(paths: list[Path]) -> None:
     for index, path in enumerate(paths):
         print(f"INSTALL_PATH_{index}={path}")
@@ -82,7 +101,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kind", choices=("runtime", "legacy-service", "inference-service"), default="runtime")
     parser.add_argument("--path", action="append", default=[], help="répertoire explicite à créer ; peut être répété")
     parser.add_argument("--format", choices=("text", "shell"), default="text")
+    parser.add_argument("--setup-log", action="store_true", help="rend un message de préparation locale")
+    parser.add_argument("--event", default="")
+    parser.add_argument("--value", default="")
     args = parser.parse_args(argv)
+
+    if args.setup_log:
+        if not args.event:
+            print("--event requis avec --setup-log", file=sys.stderr)
+            return 2
+        try:
+            print(render_setup_log(event=args.event, value=args.value), end="")
+            return 0
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     try:
         if args.path:

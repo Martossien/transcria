@@ -558,16 +558,39 @@ fi
 # ============================================================================
 log_section "Environnement Python"
 
+log_local_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_paths \
+        --install-dir "$INSTALL_DIR" \
+        --setup-log \
+        --event "$event" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message local : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie locale ignorée : $line"
+    fi
+}
+
 if [[ -f "$VENV/bin/activate" ]]; then
-    log_ok "Venv existant : $VENV"
+    log_local_setup_event venv-existing "$VENV"
 else
-    log_info "Création du venv..."
+    log_local_setup_event venv-create-start
     "$PYTHON_BIN" -m venv "$VENV"
-    log_ok "Venv créé : $VENV"
+    log_local_setup_event venv-created "$VENV"
 fi
 
 source "$VENV/bin/activate"
-log_info "Mise à jour de pip..."
+log_local_setup_event pip-upgrade
 pip install --upgrade pip --quiet
 
 # ============================================================================
@@ -616,9 +639,9 @@ fi
 # ============================================================================
 log_section "Dépendances Python"
 
-log_info "Installation requirements.txt..."
+log_local_setup_event requirements-start
 pip install -r "$INSTALL_DIR/requirements.txt" --quiet
-log_ok "requirements.txt installé"
+log_local_setup_event requirements-ok
 
 # ============================================================================
 # SECTION 5 — Répertoires
@@ -627,7 +650,7 @@ log_section "Répertoires"
 
 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
     --install-dir "$INSTALL_DIR" >/dev/null
-log_ok "jobs/, models/, instance/ prêts"
+log_local_setup_event runtime-dirs-ready
 
 # ============================================================================
 # SECTION 6 — Configuration (config.yaml)

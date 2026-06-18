@@ -108,6 +108,21 @@ def test_install_script_reuses_systemd_unit_installer_for_inference():
     assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
 
 
+def test_install_script_delegates_local_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_paths" in content
+    assert "--setup-log" in content
+    assert "log_local_setup_event" in content
+    assert "Venv existant :" not in content
+    assert "Création du venv..." not in content
+    assert "Venv créé :" not in content
+    assert "Mise à jour de pip..." not in content
+    assert "Installation requirements.txt..." not in content
+    assert "requirements.txt installé" not in content
+    assert "jobs/, models/, instance/ prêts" not in content
+
+
 def test_install_script_reuses_split_systemd_unit_installer():
     content = _INSTALL.read_text(encoding="utf-8")
 
