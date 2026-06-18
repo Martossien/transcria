@@ -465,6 +465,9 @@ recommandées sont rendus par `transcria.install_profiles` (`summary` /
 Le bilan final des modèles est rendu par `transcria.install_models summary` à partir
 des états détectés par le shell, ce qui laisse `install.sh` orchestrer la détection
 sans porter le texte conditionnel de synthèse.
+Le tableau de vérification locale des modèles est également rendu par
+`transcria.install_models detection-table`, ce qui retire les `printf` de tableau
+du shell tout en conservant la détection existante.
 Le bilan final base de données / configuration / doctor est rendu par
 `transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
 `install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et

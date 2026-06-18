@@ -178,6 +178,15 @@ def test_install_script_uses_model_summary_renderer():
     assert '$COHERE_OK  && echo -e' not in content
 
 
+def test_install_script_uses_model_detection_table_renderer():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "print_model_detection_table" in content
+    assert "-m transcria.install_models detection-table" in content
+    assert "┌─────────────────────────────────" not in content
+    assert 'printf "  │ %-31s' not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 

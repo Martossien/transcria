@@ -106,6 +106,55 @@ def render_model_summary(
     return "\n".join(lines) + "\n"
 
 
+def _basename_or_empty(path: str) -> str:
+    return Path(path).name if path else ""
+
+
+def render_model_detection_table(
+    *,
+    cohere_ok: bool,
+    cohere_path: str,
+    pyannote_ok: bool,
+    pyannote_cache: str,
+    needs_llm: bool,
+    qwen_ok: bool,
+    qwen_gguf: str,
+    squim_ok: bool,
+) -> str:
+    """Rend le tableau de vérification des modèles locaux."""
+    rows = [
+        (
+            "Cohere ASR (STT ~6 Go)",
+            "OK" if cohere_ok else "MANQUANT",
+            _basename_or_empty(cohere_path) if cohere_ok else "huggingface-cli download CohereLabs/...",
+        ),
+        (
+            "pyannote diarization (~2 Go)",
+            "OK" if pyannote_ok else "MANQUANT",
+            _basename_or_empty(pyannote_cache) if pyannote_ok else "HF_TOKEN requis + accepter conditions HF",
+        ),
+    ]
+    if needs_llm:
+        rows.append(
+            (
+                "LLM arbitrage GGUF",
+                "OK" if qwen_ok else "MANQUANT",
+                _basename_or_empty(qwen_gguf) if qwen_ok else "palier configurable via install.sh",
+            )
+        )
+    rows.append(
+        (
+            "SQUIM préflight (~28 Mo)",
+            "OK" if squim_ok else "MANQUANT",
+            "cache torchaudio" if squim_ok else "cf. docs/INSTALL.md § Réseau d'entreprise",
+        )
+    )
+
+    lines = ["Modèles détectés :"]
+    lines.extend(f"  - {name}: {status} — {info}" for name, status, info in rows)
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Détection locale des modèles TranscrIA pour install.sh.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -133,6 +182,16 @@ def main(argv: list[str] | None = None) -> int:
     summary_parser.add_argument("--qwen-ok", required=True)
     summary_parser.add_argument("--opencode-bin", default="")
 
+    table_parser = subparsers.add_parser("detection-table", help="rend le tableau de vérification des modèles locaux")
+    table_parser.add_argument("--cohere-ok", required=True)
+    table_parser.add_argument("--cohere-path", default="")
+    table_parser.add_argument("--pyannote-ok", required=True)
+    table_parser.add_argument("--pyannote-cache", default="")
+    table_parser.add_argument("--needs-llm", required=True)
+    table_parser.add_argument("--qwen-ok", required=True)
+    table_parser.add_argument("--qwen-gguf", default="")
+    table_parser.add_argument("--squim-ok", required=True)
+
     args = parser.parse_args(argv)
     try:
         if args.command == "cohere-ok":
@@ -156,6 +215,21 @@ def main(argv: list[str] | None = None) -> int:
                     pyannote_ok=parse_bool(args.pyannote_ok),
                     qwen_ok=parse_bool(args.qwen_ok),
                     opencode_bin=args.opencode_bin,
+                ),
+                end="",
+            )
+            return 0
+        if args.command == "detection-table":
+            print(
+                render_model_detection_table(
+                    cohere_ok=parse_bool(args.cohere_ok),
+                    cohere_path=args.cohere_path,
+                    pyannote_ok=parse_bool(args.pyannote_ok),
+                    pyannote_cache=args.pyannote_cache,
+                    needs_llm=parse_bool(args.needs_llm),
+                    qwen_ok=parse_bool(args.qwen_ok),
+                    qwen_gguf=args.qwen_gguf,
+                    squim_ok=parse_bool(args.squim_ok),
                 ),
                 end="",
             )

@@ -12,6 +12,7 @@ from transcria.install_models import (
     is_non_empty_dir,
     main,
     parse_bool,
+    render_model_detection_table,
     render_model_summary,
     resolve_repo_relative_path,
 )
@@ -108,6 +109,42 @@ def test_render_model_summary_for_web_profile():
 """
 
 
+def test_render_model_detection_table_with_llm():
+    rendered = render_model_detection_table(
+        cohere_ok=True,
+        cohere_path="/opt/transcria/models/cohere-asr",
+        pyannote_ok=False,
+        pyannote_cache="",
+        needs_llm=True,
+        qwen_ok=True,
+        qwen_gguf="/opt/transcria/models/qwen/model.gguf",
+        squim_ok=False,
+    )
+
+    assert rendered == """Modèles détectés :
+  - Cohere ASR (STT ~6 Go): OK — cohere-asr
+  - pyannote diarization (~2 Go): MANQUANT — HF_TOKEN requis + accepter conditions HF
+  - LLM arbitrage GGUF: OK — model.gguf
+  - SQUIM préflight (~28 Mo): MANQUANT — cf. docs/INSTALL.md § Réseau d'entreprise
+"""
+
+
+def test_render_model_detection_table_without_llm():
+    rendered = render_model_detection_table(
+        cohere_ok=False,
+        cohere_path="",
+        pyannote_ok=False,
+        pyannote_cache="",
+        needs_llm=False,
+        qwen_ok=False,
+        qwen_gguf="",
+        squim_ok=True,
+    )
+
+    assert "LLM arbitrage GGUF" not in rendered
+    assert "SQUIM préflight (~28 Mo): OK — cache torchaudio" in rendered
+
+
 def test_install_models_cli_checks_cohere_non_empty(tmp_path: Path):
     cohere = tmp_path / "models" / "cohere"
     cohere.mkdir(parents=True)
@@ -151,6 +188,22 @@ def test_install_models_cli_prints_summary(capsys):
     rendered = capsys.readouterr().out
     assert "[OK] Cohere ASR" in rendered
     assert "[OK] opencode : /usr/local/bin/opencode" in rendered
+
+
+def test_install_models_cli_prints_detection_table(capsys):
+    assert main([
+        "detection-table",
+        "--cohere-ok", "true",
+        "--cohere-path", "/opt/models/cohere",
+        "--pyannote-ok", "false",
+        "--needs-llm", "false",
+        "--qwen-ok", "false",
+        "--squim-ok", "true",
+    ]) == 0
+
+    rendered = capsys.readouterr().out
+    assert "Modèles détectés :" in rendered
+    assert "LLM arbitrage GGUF" not in rendered
 
 
 def test_download_pyannote_pipeline_uses_token_and_model_id():

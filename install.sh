@@ -242,6 +242,18 @@ print_model_summary() {
         --opencode-bin "${OPENCODE_BIN:-}"
 }
 
+print_model_detection_table() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models detection-table \
+        --cohere-ok "$COHERE_OK" \
+        --cohere-path "${COHERE_PATH:-}" \
+        --pyannote-ok "$PYANNOTE_OK" \
+        --pyannote-cache "${PYANNOTE_CACHE:-}" \
+        --needs-llm "$PROFILE_NEEDS_LLM" \
+        --qwen-ok "$QWEN_OK" \
+        --qwen-gguf "${QWEN_GGUF:-}" \
+        --squim-ok "$SQUIM_OK"
+}
+
 print_database_summary() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary database \
         --db-backend "$DB_BACKEND"
@@ -1030,30 +1042,8 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
         log_info "LLM d'arbitrage : non requis pour le profil $INSTALL_PROFILE"
     fi
 
-    # ── Tableau récap ───────────────────────────────────────────────────────
     echo ""
-    echo "  ┌─────────────────────────────────┬──────────┬─────────────────────────────────────────────────────────────────┐"
-    echo "  │ Modèle                          │  Statut  │ Info                                                            │"
-    echo "  ├─────────────────────────────────┼──────────┼─────────────────────────────────────────────────────────────────┤"
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "Cohere ASR (STT ~6 Go)" \
-        "$( [[ "$COHERE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$COHERE_OK" = true ]] && echo "$(basename "$COHERE_PATH")" || echo "huggingface-cli download CohereLabs/...")"
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "pyannote diarization (~2 Go)" \
-        "$( [[ "$PYANNOTE_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$PYANNOTE_OK" = true ]] && echo "$(basename "$PYANNOTE_CACHE")" || echo "HF_TOKEN requis + accepter conditions HF")"
-    if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-        printf "  │ %-31s │ %s │ %-63s │\n" \
-            "LLM arbitrage GGUF" \
-            "$( [[ "$QWEN_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-            "$( [[ "$QWEN_OK" = true ]] && echo "$(basename "$QWEN_GGUF")" || echo "palier configurable via install.sh")"
-    fi
-    printf "  │ %-31s │ %s │ %-63s │\n" \
-        "SQUIM préflight (~28 Mo)" \
-        "$( [[ "$SQUIM_OK" = true ]] && echo -e "${GREEN}  OK    ${NC}" || echo -e "${YELLOW}MANQUANT${NC}")" \
-        "$( [[ "$SQUIM_OK" = true ]] && echo "cache torchaudio" || echo "cf. docs/INSTALL.md § Réseau d'entreprise")"
-    echo "  └─────────────────────────────────┴──────────┴─────────────────────────────────────────────────────────────────┘"
+    print_model_detection_table
 else
     log_info "Profil $INSTALL_PROFILE : vérification des modèles GPU locaux sautée"
 fi
