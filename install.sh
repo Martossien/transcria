@@ -755,6 +755,24 @@ _setup_postgres() {
         fi
     }
 
+    log_postgres_alembic_event() {
+        local event="$1" action="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --alembic-log \
+            --event "$event" \
+            --action "$action") || {
+            log_error "Impossible de rendre le message Alembic PostgreSQL : $event"
+            return 1
+        }
+        if [[ "$line" == OK:* ]]; then
+            log_ok "${line#OK:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie Alembic PostgreSQL ignorée : $line"
+        fi
+    }
+
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
@@ -917,19 +935,19 @@ _setup_postgres() {
         upgrade-existing)
             log_info "${schema_action_log#INFO:}"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                log_ok "Schéma à jour (Alembic)"
+                log_postgres_alembic_event upgrade-ok
             else
                 if [[ "$local_pg" = true ]]; then
-                    log_error "Alembic a échoué. Tentative de reconstruction locale…"
+                    log_postgres_alembic_event rebuild-start
                     pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
                     if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                        log_ok "Schéma reconstruit"
+                        log_postgres_alembic_event rebuild-ok
                     else
-                        log_error "Alembic a échoué une seconde fois. Arrêt."
+                        log_postgres_alembic_event rebuild-failed
                         return 1
                     fi
                 else
-                    log_error "Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée."
+                    log_postgres_alembic_event remote-upgrade-failed
                     return 1
                 fi
             fi
@@ -937,14 +955,14 @@ _setup_postgres() {
         create)
             log_info "${schema_action_log#INFO:}"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                log_ok "Schéma PostgreSQL créé"
+                log_postgres_alembic_event create-ok
             else
-                log_error "Échec d'alembic upgrade head"
+                log_postgres_alembic_event create-failed
                 return 1
             fi
             ;;
         *)
-            log_error "Action Alembic PostgreSQL inconnue : $schema_action"
+            log_postgres_alembic_event unknown-action "$schema_action"
             return 1
             ;;
     esac

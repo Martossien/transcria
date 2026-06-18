@@ -16,6 +16,7 @@ from transcria.install_postgres import (
     main,
     parse_bool,
     parse_non_negative_int,
+    render_alembic_log,
     render_connection_failure,
     render_database_sql,
     render_encoding_warnings,
@@ -416,6 +417,30 @@ def test_install_postgres_cli_renders_setup_log(capsys):
     assert main(["--setup-log", "--event", "remote-detected", "--db", "transcria", "--user", "app", "--host", "db.internal"]) == 0
 
     assert capsys.readouterr().out == "INFO:PostgreSQL distant détecté (db.internal) : rôle/base supposés déjà créés.\n"
+
+
+def test_render_alembic_log_for_success_and_failure_events():
+    assert render_alembic_log(event="upgrade-ok") == "OK:Schéma à jour (Alembic)\n"
+    assert render_alembic_log(event="rebuild-start") == "ERROR:Alembic a échoué. Tentative de reconstruction locale…\n"
+    assert render_alembic_log(event="rebuild-ok") == "OK:Schéma reconstruit\n"
+    assert render_alembic_log(event="rebuild-failed") == "ERROR:Alembic a échoué une seconde fois. Arrêt.\n"
+    assert render_alembic_log(event="remote-upgrade-failed") == (
+        "ERROR:Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée.\n"
+    )
+    assert render_alembic_log(event="create-ok") == "OK:Schéma PostgreSQL créé\n"
+    assert render_alembic_log(event="create-failed") == "ERROR:Échec d'alembic upgrade head\n"
+    assert render_alembic_log(event="unknown-action", action="bad") == "ERROR:Action Alembic PostgreSQL inconnue : bad\n"
+
+
+def test_render_alembic_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement Alembic PostgreSQL inconnu : bad"):
+        render_alembic_log(event="bad")
+
+
+def test_install_postgres_cli_renders_alembic_log(capsys):
+    assert main(["--alembic-log", "--event", "unknown-action", "--action", "bad"]) == 0
+
+    assert capsys.readouterr().out == "ERROR:Action Alembic PostgreSQL inconnue : bad\n"
 
 
 def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():

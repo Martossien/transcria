@@ -240,6 +240,27 @@ def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
     raise ValueError(f"événement PostgreSQL inconnu : {event}")
 
 
+def render_alembic_log(*, event: str, action: str = "") -> str:
+    """Rend les messages de résultat Alembic PostgreSQL."""
+    if event == "upgrade-ok":
+        return "OK:Schéma à jour (Alembic)\n"
+    if event == "rebuild-start":
+        return "ERROR:Alembic a échoué. Tentative de reconstruction locale…\n"
+    if event == "rebuild-ok":
+        return "OK:Schéma reconstruit\n"
+    if event == "rebuild-failed":
+        return "ERROR:Alembic a échoué une seconde fois. Arrêt.\n"
+    if event == "remote-upgrade-failed":
+        return "ERROR:Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée.\n"
+    if event == "create-ok":
+        return "OK:Schéma PostgreSQL créé\n"
+    if event == "create-failed":
+        return "ERROR:Échec d'alembic upgrade head\n"
+    if event == "unknown-action":
+        return f"ERROR:Action Alembic PostgreSQL inconnue : {action}\n"
+    raise ValueError(f"événement Alembic PostgreSQL inconnu : {event}")
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -307,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema-action-log", action="store_true", help="rend le message initial d'une action Alembic")
     parser.add_argument("--pg-hba-rewrite-result", action="store_true", help="interprète le résultat changed=N de réécriture pg_hba.conf")
     parser.add_argument("--setup-log", action="store_true", help="rend un message de bootstrap PostgreSQL")
+    parser.add_argument("--alembic-log", action="store_true", help="rend un message de résultat Alembic PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -493,6 +515,17 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             print(render_setup_log(event=args.event, db=args.db, user=args.user, host=args.host), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.alembic_log:
+        if args.event is None:
+            print("--event requis avec --alembic-log", file=sys.stderr)
+            return 2
+        try:
+            print(render_alembic_log(event=args.event, action=args.action or ""), end="")
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

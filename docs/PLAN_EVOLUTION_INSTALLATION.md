@@ -537,6 +537,8 @@ L'interprétation du résultat de réécriture `pg_hba.conf` (`changed=N` →
 afin d'éviter une regex de décision côté shell.
 Les messages de bootstrap PostgreSQL local/distant (rôle/base, repli locale C,
 connexion validée, DSN écrit) sont rendus par `transcria.install_postgres --setup-log`.
+Les messages de résultat Alembic PostgreSQL (succès, reconstruction locale,
+échec distant, action inconnue) sont rendus par `transcria.install_postgres --alembic-log`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

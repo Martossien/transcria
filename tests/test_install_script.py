@@ -210,6 +210,20 @@ def test_install_script_delegates_postgres_schema_action_decision():
     assert "Application des migrations Alembic" not in content
 
 
+def test_install_script_delegates_postgres_alembic_result_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--alembic-log" in content
+    assert "log_postgres_alembic_event" in content
+    assert "Schéma à jour (Alembic)" not in content
+    assert "Tentative de reconstruction locale" not in content
+    assert "Schéma reconstruit" not in content
+    assert "Reconstruction automatique refusée" not in content
+    assert "Schéma PostgreSQL créé" not in content
+    assert "Échec d'alembic upgrade head" not in content
+    assert "Action Alembic PostgreSQL inconnue" not in content
+
+
 def test_install_script_delegates_sqlite_migration_action_decision():
     content = _INSTALL.read_text(encoding="utf-8")
 
