@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +41,8 @@ _LABELS = {OK: "OK", WARN: "WARN", FAIL: "FAIL"}
 
 EXIT_OK = 0
 EXIT_FAIL = 1
+
+_VALID_PROFILES = ("all-in-one", "web", "scheduler", "resource-node", "migrate")
 
 # Modules de modèles à importer pour peupler ``db.metadata`` (même liste que le
 # test anti-dérive Alembic). Repris ici pour le diff de schéma à chaud.
@@ -495,6 +499,42 @@ def check_inference_nodes(
                        hint="Démarrer le nœud de ressources, ou activer inference.fallback_local.")
 
 
+def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
+    """Vérifie qu'un STT distant a aussi un nœud de contrôle pour `/engines/ensure`."""
+    name = "Cohérence STT distant / nœud de contrôle"
+    inference = cfg.get("inference", {}) or {}
+    mode = inference.get("mode", "local")
+    stt_cfg = (inference.get("stt") or {}) if isinstance(inference.get("stt"), dict) else {}
+    backends = (stt_cfg.get("backends") or {}) if isinstance(stt_cfg.get("backends"), dict) else {}
+    remote_backends = sorted(
+        name
+        for name, spec in backends.items()
+        if isinstance(spec, dict) and str(spec.get("url") or "").strip()
+    )
+    if not remote_backends:
+        return CheckResult(name, OK, "aucun backend STT distant déclaré")
+    if mode not in ("remote", "hybrid"):
+        return CheckResult(
+            name,
+            WARN,
+            f"backend(s) STT distant(s) déclaré(s) ({', '.join(remote_backends)}) mais inference.mode={mode}",
+            hint="Passer inference.mode à remote/hybrid ou retirer les URLs STT distantes.",
+        )
+
+    nodes = inference.get("nodes") or []
+    urls = [n.get("url", "") for n in nodes if isinstance(n, dict) and n.get("url")] if isinstance(nodes, list) else []
+    if not urls and inference.get("url"):
+        urls = [inference["url"]]
+    if not urls:
+        return CheckResult(
+            name,
+            WARN,
+            f"backend(s) STT distant(s) déclaré(s) ({', '.join(remote_backends)}) sans inference.url / inference.nodes",
+            hint="Déclarer le nœud de contrôle resource-node pour permettre /engines/ensure avant les jobs.",
+        )
+    return CheckResult(name, OK, f"{len(remote_backends)} backend(s) STT distant(s), {len(urls)} nœud(s) de contrôle déclaré(s)")
+
+
 def _caps_reports_gpu(capabilities: dict) -> bool:
     """True si `/capabilities` énumère au moins un GPU avec un `free_mb` lisible."""
     for gpu in capabilities.get("gpus", []) or []:
@@ -725,6 +765,298 @@ def check_shared_storage(
     return CheckResult(name, OK, "tout-en-un (fs) : disque local suffisant")
 
 
+def check_deployment_profile(cfg: dict, *, profile: str | None = None) -> CheckResult:
+    """Valide les invariants de haut niveau du profil d'installation demandé.
+
+    Ce check ne remplace pas les vérifications spécialisées (DB, stockage, nœuds),
+    il vérifie que le rôle runtime et le type de base ne contredisent pas le profil
+    annoncé par l'installateur.
+    """
+    name = "Profil de déploiement"
+    if not profile:
+        role = _effective_runtime_role(cfg)
+        return CheckResult(name, OK, f"aucun profil doctor forcé (runtime.role={role})")
+    if profile not in _VALID_PROFILES:
+        return CheckResult(
+            name, FAIL, f"profil inconnu : {profile}",
+            hint="Profils attendus : " + ", ".join(_VALID_PROFILES),
+        )
+
+    role = _effective_runtime_role(cfg)
+    uri = _resolve_database_uri(cfg)
+    is_postgres = str(uri).startswith("postgresql")
+    expected_role = {
+        "all-in-one": "all",
+        "web": "web",
+        "scheduler": "scheduler",
+    }.get(profile)
+    if expected_role and role != expected_role:
+        return CheckResult(
+            name, FAIL, f"--profile {profile} mais runtime effectif={role} (attendu {expected_role})",
+            hint="Corriger runtime.role dans config.yaml ou TRANSCRIA_ROLE dans .env/environnement.",
+        )
+    if profile in ("web", "scheduler", "migrate") and not is_postgres:
+        return CheckResult(
+            name, FAIL, f"--profile {profile} exige PostgreSQL ({_redact_uri(uri)})",
+            hint="Définir TRANSCRIA_DATABASE_URL ou storage.database_url avec un DSN postgresql+psycopg://...",
+        )
+    if profile == "resource-node":
+        return CheckResult(name, OK, "resource-node : service GPU dédié, base applicative non requise")
+    return CheckResult(name, OK, f"--profile {profile} cohérent (runtime.role={role})")
+
+
+def check_systemd_profile(
+    cfg: dict,
+    *,
+    profile: str | None = None,
+    unit_state: Callable[[str], tuple[bool, bool] | None] | None = None,
+) -> CheckResult:
+    """Signale les conflits de services systemd pour un profil.
+
+    Best-effort : en dev, Docker ou avec `--no-service`, systemd peut être absent.
+    On retourne alors OK avec un détail explicite. Les conflits connus sont des WARN,
+    pas des FAIL, car l'opérateur peut volontairement cohéberger certains rôles.
+    """
+    name = "Services systemd (profil)"
+    if not profile:
+        return CheckResult(name, OK, "aucun profil doctor forcé")
+    probe = unit_state or _systemd_unit_state
+
+    legacy = "transcria.service"
+    split_units = ("transcria-web.service", "transcria-scheduler.service")
+    resource_unit = "transcria-inference.service"
+    conflicts_by_profile = {
+        "all-in-one": split_units,
+        "web": (legacy,),
+        "scheduler": (legacy,),
+        "resource-node": (legacy, "transcria-web.service", "transcria-scheduler.service"),
+        "migrate": (),
+    }
+    conflicts: list[str] = []
+    saw_systemd = False
+    for unit in conflicts_by_profile.get(profile, ()):
+        state = probe(unit)
+        if state is None:
+            continue
+        saw_systemd = True
+        active, enabled = state
+        if active or enabled:
+            detail = []
+            if active:
+                detail.append("actif")
+            if enabled:
+                detail.append("activé")
+            conflicts.append(f"{unit} ({', '.join(detail)})")
+
+    # Sonde une unité attendue pour distinguer systemd absent de "aucun conflit".
+    expected_probe = {
+        "all-in-one": legacy,
+        "web": "transcria-web.service",
+        "scheduler": "transcria-scheduler.service",
+        "resource-node": resource_unit,
+        "migrate": "transcria-migrate.service",
+    }.get(profile)
+    if expected_probe and probe(expected_probe) is not None:
+        saw_systemd = True
+
+    if conflicts:
+        return CheckResult(
+            name,
+            WARN,
+            f"--profile {profile} avec service(s) incompatible(s) détecté(s) : " + "; ".join(conflicts),
+            hint="Désactiver les services incompatibles avant démarrage (ex. `sudo systemctl disable --now transcria.service`).",
+        )
+    if not saw_systemd:
+        return CheckResult(name, OK, "systemd non disponible ou unités absentes — check de conflit sauté")
+    return CheckResult(name, OK, f"--profile {profile} : aucun conflit systemd détecté")
+
+
+def check_resource_node_auth(cfg: dict) -> CheckResult:
+    """Un nœud de ressources exposé doit avoir une clé API configurée.
+
+    L'application autorise le mode ouvert pour le développement local, mais le profil
+    `resource-node` correspond à un service réseau appelé par une frontale distante :
+    le doctor doit rendre l'oubli visible.
+    """
+    name = "Nœud de ressources (auth API)"
+    auth = ((cfg.get("inference") or {}).get("auth") or {})
+    env_name = str(auth.get("api_key_env") or "TRANSCRIA_INFERENCE_API_KEY")
+    env_value = os.environ.get(env_name)
+    direct = auth.get("api_key")
+    if env_value or direct:
+        source = f"env {env_name}" if env_value else "config inference.auth.api_key"
+        return CheckResult(name, OK, f"clé API configurée ({source})")
+    return CheckResult(
+        name,
+        FAIL,
+        f"aucune clé API configurée ({env_name} absent et inference.auth.api_key vide)",
+        hint=f"Ajouter {env_name}=<secret long> dans .env ou renseigner inference.auth.api_key.",
+    )
+
+
+def check_resource_node_engines(
+    cfg: dict,
+    *,
+    is_file: Callable[[str], bool] = os.path.isfile,
+    is_executable: Callable[[str], bool] = lambda p: os.access(p, os.X_OK),
+    reserved_ports: set[int] | None = None,
+) -> CheckResult:
+    """Valide le manifeste `resource_node.engines` sans lancer de moteur.
+
+    Le nœud peut servir la diarisation / empreinte vocale sans moteur STT déclaré :
+    l'absence de moteur est donc un WARN. En revanche, un moteur déclaré doit être
+    cohérent, sinon `/engines/ensure` échouera en production.
+    """
+    name = "Nœud de ressources (moteurs STT)"
+    engines = ((cfg.get("resource_node") or {}).get("engines") or [])
+    if not engines:
+        return CheckResult(
+            name,
+            WARN,
+            "aucun moteur STT déclaré dans resource_node.engines",
+            hint="Déclarer les moteurs STT attendus (ex. cohere/whisper) ou ignorer si ce nœud ne sert que diarize/voice-embed.",
+        )
+    if not isinstance(engines, list):
+        return CheckResult(name, FAIL, "resource_node.engines doit être une liste")
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    seen_names: set[str] = set()
+    seen_ports: set[int] = set()
+    if reserved_ports is None:
+        try:
+            reserved_ports = {int(os.environ.get("INFERENCE_PORT", "8002"))}
+        except ValueError:
+            reserved_ports = {8002}
+
+    for index, raw in enumerate(engines, start=1):
+        if not isinstance(raw, dict):
+            errors.append(f"entrée #{index} invalide (objet attendu)")
+            continue
+        label = str(raw.get("name") or f"#{index}")
+        missing = [key for key in ("name", "script", "gpu", "port") if raw.get(key) in (None, "")]
+        if missing:
+            errors.append(f"{label}: champ(s) requis manquant(s): {', '.join(missing)}")
+            continue
+
+        engine_name = str(raw["name"]).strip()
+        if engine_name in seen_names:
+            errors.append(f"{engine_name}: nom de moteur dupliqué")
+        seen_names.add(engine_name)
+
+        try:
+            port = int(raw["port"])
+            if port < 1 or port > 65535:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(f"{engine_name}: port invalide ({raw.get('port')!r})")
+            continue
+        if port in seen_ports:
+            errors.append(f"{engine_name}: port dupliqué ({port})")
+        seen_ports.add(port)
+        if port in reserved_ports:
+            errors.append(f"{engine_name}: port réservé au service inference_service ({port})")
+
+        try:
+            gpu = int(raw["gpu"])
+            if gpu < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(f"{engine_name}: gpu invalide ({raw.get('gpu')!r})")
+
+        try:
+            gpu_mem = float(raw.get("gpu_mem", 0.85))
+            if gpu_mem <= 0 or gpu_mem > 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(f"{engine_name}: gpu_mem invalide ({raw.get('gpu_mem')!r}, attendu 0 < valeur <= 1)")
+
+        script = _resolve_manifest_path(str(raw["script"]))
+        if not is_file(script):
+            errors.append(f"{engine_name}: script introuvable ({script})")
+        elif not is_executable(script):
+            warnings.append(f"{engine_name}: script présent mais non exécutable ({script})")
+
+    if errors:
+        return CheckResult(
+            name,
+            FAIL,
+            "; ".join(errors),
+            hint="Corriger resource_node.engines dans config.yaml avant d'utiliser /engines/ensure.",
+        )
+    if warnings:
+        return CheckResult(
+            name,
+            WARN,
+            "; ".join(warnings),
+            hint="Rendre les scripts exécutables (`chmod +x scripts/launch_stt_*.sh`) pour garder un manifeste propre.",
+        )
+    return CheckResult(name, OK, f"{len(engines)} moteur(s) STT déclaré(s) cohérent(s)")
+
+
+def _tcp_port_open(port: int, *, host: str = "127.0.0.1", timeout: float = 0.2) -> bool:
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def check_resource_node_ports(
+    cfg: dict,
+    *,
+    port_probe: Callable[[int], bool] = _tcp_port_open,
+    models_probe: Callable[[int], dict | None] | None = None,
+) -> CheckResult:
+    """Vérifie que les ports STT déclarés sont libres ou déjà occupés par un STT sain."""
+    name = "Nœud de ressources (ports STT)"
+    engines = ((cfg.get("resource_node") or {}).get("engines") or [])
+    if not isinstance(engines, list) or not engines:
+        return CheckResult(name, OK, "aucun port STT déclaré à sonder")
+
+    models_probe = models_probe or _probe_openai_models
+    occupied_by_engine: list[str] = []
+    free_ports: list[str] = []
+    conflicts: list[str] = []
+
+    for raw in engines:
+        if not isinstance(raw, dict):
+            continue
+        engine_name = str(raw.get("name") or "?")
+        try:
+            port = int(raw.get("port"))
+            if port < 1 or port > 65535:
+                continue
+        except (TypeError, ValueError):
+            continue
+
+        if not port_probe(port):
+            free_ports.append(f"{engine_name}:{port}")
+            continue
+        models = models_probe(port)
+        if models and models.get("data"):
+            active = str((models.get("data") or [{}])[0].get("id") or "modèle inconnu")
+            occupied_by_engine.append(f"{engine_name}:{port} ({active})")
+        else:
+            conflicts.append(f"{engine_name}:{port}")
+
+    if conflicts:
+        return CheckResult(
+            name,
+            FAIL,
+            "port(s) STT occupé(s) par un service non OpenAI-compatible : " + ", ".join(conflicts),
+            hint="Libérer ces ports ou modifier resource_node.engines avant de démarrer les moteurs STT.",
+        )
+    details = []
+    if free_ports:
+        details.append("libres: " + ", ".join(free_ports))
+    if occupied_by_engine:
+        details.append("déjà actifs: " + ", ".join(occupied_by_engine))
+    return CheckResult(name, OK, "; ".join(details) if details else "ports STT cohérents")
+
+
 # ── Sondes / helpers effectifs (injectables ci-dessus) ────────────────────
 
 
@@ -738,6 +1070,30 @@ def _probe_server_encoding(uri: str) -> str:
             return str(conn.exec_driver_sql("SHOW server_encoding").scalar())
     finally:
         engine.dispose()
+
+
+def _systemd_unit_state(unit: str) -> tuple[bool, bool] | None:
+    """Retourne (active, enabled) ou None si systemd n'est pas utilisable ici."""
+    if not shutil.which("systemctl"):
+        return None
+
+    def _run(*args: str) -> int:
+        try:
+            return subprocess.run(
+                ["systemctl", *args, unit],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+                check=False,
+            ).returncode
+        except (OSError, subprocess.SubprocessError):
+            return 4
+
+    active_rc = _run("is-active", "--quiet")
+    enabled_rc = _run("is-enabled", "--quiet")
+    if active_rc == 4 and enabled_rc == 4:
+        return None
+    return active_rc == 0, enabled_rc == 0
 
 
 def _job_files_table_exists(uri: str) -> bool:
@@ -817,6 +1173,39 @@ def _resolve_database_uri(cfg: dict) -> str:
     )
 
 
+def _load_env_for_doctor(config_path: str | None) -> None:
+    """Charge `.env` comme les services, sans écraser l'environnement courant."""
+    try:
+        from dotenv import load_dotenv
+    except Exception:  # noqa: BLE001 — le doctor doit rester robuste même si dotenv manque
+        return
+    env_file = os.environ.get("ENV_FILE")
+    if env_file:
+        load_dotenv(env_file, override=False)
+        return
+    cfg_path = config_path or os.environ.get("TRANSCRIA_CONFIG") or "config.yaml"
+    try:
+        candidate = Path(cfg_path).resolve().parent / ".env"
+    except Exception:  # noqa: BLE001
+        candidate = Path(".env").resolve()
+    load_dotenv(candidate, override=False)
+
+
+def _resolve_manifest_path(raw_path: str) -> str:
+    path = Path(raw_path).expanduser()
+    if path.is_absolute():
+        return str(path)
+    return str((Path.cwd() / path).resolve())
+
+
+def _effective_runtime_role(cfg: dict) -> str:
+    return (
+        os.environ.get("TRANSCRIA_ROLE")
+        or (cfg.get("runtime") or {}).get("role")
+        or "all"
+    ).strip().lower()
+
+
 def _redact_uri(uri: str) -> str:
     try:
         from sqlalchemy.engine.url import make_url
@@ -836,11 +1225,42 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_opencode,
     check_opencode_model_resolution,
     check_inference_nodes,
+    check_remote_stt_control_plane,
     check_inference_node_gpus,
     check_local_models,
     check_storage,
     check_shared_storage,
 )
+
+_PROFILE_CHECKS: dict[str, tuple[Callable[[dict], CheckResult], ...]] = {
+    "all-in-one": _CHECKS,
+    "web": (
+        check_database,
+        check_database_encoding,
+        check_inference_nodes,
+        check_remote_stt_control_plane,
+        check_inference_node_gpus,
+        check_storage,
+        check_shared_storage,
+    ),
+    "scheduler": _CHECKS,
+    "resource-node": (
+        check_resource_node_auth,
+        check_resource_node_engines,
+        check_resource_node_ports,
+        check_local_models,
+    ),
+    "migrate": (
+        check_database,
+        check_database_encoding,
+    ),
+}
+
+
+def _checks_for_profile(profile: str | None) -> tuple[Callable[[dict], CheckResult], ...]:
+    if not profile:
+        return _CHECKS
+    return _PROFILE_CHECKS.get(profile, ())
 
 
 def run_doctor(
@@ -848,11 +1268,13 @@ def run_doctor(
     *,
     loader: Callable[..., dict] | None = None,
     llm_smoke: bool = False,
+    profile: str | None = None,
 ) -> list[CheckResult]:
     """Charge la config puis exécute toutes les vérifications. La config illisible
     court-circuite (un seul ``fail``, le reste dépend d'elle).
 
     `llm_smoke=True` ajoute le test réel opencode→LLM→texte (opt-in, non GPU-free)."""
+    _load_env_for_doctor(config_path)
     if loader is None:
         from transcria.config.loader import load_config
 
@@ -865,7 +1287,11 @@ def run_doctor(
 
     path_used = config_path or os.environ.get("TRANSCRIA_CONFIG") or "config.yaml"
     results = [CheckResult("Configuration", OK, f"chargée ({path_used})")]
-    checks = (*_CHECKS, check_opencode_smoke) if llm_smoke else _CHECKS
+    if profile:
+        results.append(check_deployment_profile(cfg, profile=profile))
+        results.append(check_systemd_profile(cfg, profile=profile))
+    checks = _checks_for_profile(profile)
+    checks = (*checks, check_opencode_smoke) if llm_smoke else checks
     for check in checks:
         try:
             results.append(check(cfg))
@@ -918,13 +1344,15 @@ def main(argv: list[str] | None = None) -> int:
                     "nœuds distants, dossiers de travail.",
     )
     parser.add_argument("--config", default=None, help="chemin de config.yaml (défaut : TRANSCRIA_CONFIG ou ./config.yaml)")
+    parser.add_argument("--profile", choices=_VALID_PROFILES, default=None,
+                        help="profil de déploiement à valider (all-in-one|web|scheduler|resource-node|migrate)")
     parser.add_argument("--strict", action="store_true", help="traiter les avertissements comme des échecs (code de sortie ≠ 0)")
     parser.add_argument("--json", action="store_true", help="sortie JSON (pour l'outillage / CI)")
     parser.add_argument("--llm-smoke", action="store_true",
                         help="ajoute un test RÉEL opencode→LLM→texte (nécessite la LLM up + VRAM ; non GPU-free)")
     args = parser.parse_args(argv)
 
-    results = run_doctor(config_path=args.config, llm_smoke=args.llm_smoke)
+    results = run_doctor(config_path=args.config, llm_smoke=args.llm_smoke, profile=args.profile)
     if args.json:
         import json
 

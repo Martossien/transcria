@@ -51,11 +51,13 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | NVIDIA Driver | 535+ | `apt install nvidia-driver-535` |
 | ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` |
 | lsof | — | `apt install lsof` |
-| PostgreSQL *(optionnel, recommandé en prod)* | 13+ | `apt install postgresql` — sinon SQLite par défaut (voir §7) |
+| PostgreSQL *(principal hors dev)* | 13+ | `apt install postgresql` — requis en production/split/Docker ; SQLite seulement dev local ou demande explicite |
 
 > Les pilotes Python de base de données (`psycopg`, `alembic`) sont installés par
 > `pip install -r requirements.txt`. Seul le **serveur** PostgreSQL est un paquet
-> système : à installer uniquement si vous optez pour PostgreSQL.
+> système. PostgreSQL est le choix normal pour une installation durable ; SQLite
+> reste un repli de développement local mono-process ou un choix explicite de
+> l'utilisateur.
 
 ### Vérification GPU
 
@@ -92,12 +94,19 @@ cd transcria
 | **LLM d'arbitrage** | **Détecte les GPU, recommande le palier plaçable (12/16/24/32/48/64 Go, placement par carte), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
+| Validation | Lance `venv/bin/python scripts/doctor.py --config config.yaml --profile <profil>` et affiche le résultat dans le résumé |
 | Résumé | Bilan clair OK/MANQUANT pour chaque modèle et les valeurs restantes à corriger |
 
 ### Options
 
 ```bash
 ./install.sh --help                # Afficher toutes les options
+./install.sh --profile all-in-one  # Défaut : app + scheduler + worker sur une machine
+./install.sh --profile web         # Frontale Gunicorn seule (PostgreSQL requis)
+./install.sh --profile scheduler   # Ordonnanceur/worker unique (PostgreSQL requis)
+./install.sh --profile resource-node # Nœud GPU inference_service seul
+./install.sh --profile migrate     # Service one-shot Alembic seul
+./install.sh --profile web --plan  # Afficher le plan sans créer venv/config/.env/service
 ./install.sh --no-service          # Sauter l'installation systemd
 ./install.sh --no-torch            # PyTorch déjà installé (évite la réinstallation)
 ./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126)
@@ -109,13 +118,19 @@ cd transcria
 # PostgreSQL
 ./install.sh --postgres             # PostgreSQL local : crée rôle/base, écrit DSN, applique alembic
 ./install.sh --postgres --pg-migrate # + migre les données SQLite existantes
-./install.sh --no-postgres          # Forcer SQLite (pas de prompt PostgreSQL)
+./install.sh --sqlite-dev           # SQLite explicite, dev local mono-process uniquement
+# --no-postgres reste accepté comme alias historique de --sqlite-dev
 ./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
 # PostgreSQL distant : créer d'abord rôle/base côté serveur, puis fournir --pg-host/--pg-user/--pg-password.
 
 # Nœud de ressources GPU
 ./install.sh --inference-service    # Installer le nœud de ressources GPU seul (ne PAS installer le service web)
 ```
+
+> Si PostgreSQL est demandé explicitement (`--postgres` ou réponse interactive positive),
+> l'installation échoue en cas d'erreur au lieu de poursuivre silencieusement en SQLite.
+> SQLite reste réservé au développement local ou à une demande explicite
+> (`--sqlite-dev` / alias historique `--no-postgres`).
 
 ### Ce que install.sh ne fait pas
 
@@ -170,14 +185,43 @@ Installe uniquement le service `inference_service` (Flask) qui expose :
 Le nœud n'a **pas** de service web TranscrIA.  Il est contrôlé par une frontale distante via `config.yaml` (`inference.nodes[].url`).
 
 ```bash
-./install.sh --inference-service   # Port 8002, n'installe PAS transcria.service
+./install.sh --profile resource-node   # Port 8002, n'installe PAS transcria.service
+# Alias historique équivalent :
+./install.sh --inference-service
 ```
 
 > **Particularités du nœud :**
 > - N'utilise pas PostgreSQL (pas de base locale)
 > - N'installe pas `transcria.service`
 > - Les modèles GPU doivent être téléchargés comme sur une install classique
-> - Le mot de passe `.env` pour la sécurité des endpoints `/infer/*` est lu depuis `.env` (clé `INFERENCE_API_KEY`)
+> - La clé `.env` pour la sécurité des endpoints `/infer/*` et `/engines/*` est
+>   `TRANSCRIA_INFERENCE_API_KEY`. `install.sh --inference-service` la génère si elle
+>   est absente.
+> - Le service systemd charge explicitement `.env` via `EnvironmentFile`.
+> - `venv/bin/python scripts/doctor.py --profile resource-node` vérifie la clé API
+>   et le manifeste `resource_node.engines` (ports, doublons, scripts STT).
+> - Lors de la génération initiale de `config.yaml`, `--profile resource-node`
+>   ajoute un manifeste `resource_node.engines` pour Cohere et Whisper si des GPU
+>   et les scripts `scripts/launch_stt_*.sh` sont détectés. Une config existante
+>   n'est pas modifiée automatiquement.
+> - Smoke de plan de contrôle, sans chargement GPU :
+>   `TRANSCRIA_INFERENCE_API_KEY=... venv/bin/python scripts/smoke_resource_node.py --url http://127.0.0.1:8002 --api-key-env TRANSCRIA_INFERENCE_API_KEY`.
+
+Rotation de la clé API du nœud :
+
+```bash
+# Sur le nœud GPU : écrit .env atomiquement, crée .env.bak, n'affiche pas le secret par défaut
+venv/bin/python scripts/rotate_resource_node_key.py --print-key
+sudo systemctl restart transcria-inference
+
+# Vérification locale du nœud
+venv/bin/python scripts/smoke_resource_node.py \
+  --url http://127.0.0.1:8002 \
+  --api-key-env TRANSCRIA_INFERENCE_API_KEY
+```
+
+Reporter ensuite la nouvelle valeur sur la frontale (`TRANSCRIA_INFERENCE_API_KEY`
+ou `inference.auth.api_key`) puis redémarrer le service web/scheduler concerné.
 
 ---
 
@@ -187,13 +231,41 @@ Pour encaisser plus de trafic web, on sépare le tier HTTP (`role=web`, N worker
 
 ```bash
 # Installer la frontale (sur machine 1, ou sur la même machine que le scheduler)
-./install.sh --postgres
-# puis configurer runtime.role=web dans config.yaml
+./install.sh --profile web --postgres
+# installe transcria-migrate.service + transcria-web.service
 
 # Installer l'ordonnanceur (sur machine 2, ou sur la même machine)
-./install.sh --postgres
-# puis configurer runtime.role=scheduler dans config.yaml
+./install.sh --profile scheduler --postgres
+# installe transcria-migrate.service + transcria-scheduler.service
 ```
+
+`--profile web` et `--profile scheduler` écrivent aussi `runtime.role` dans
+`config.yaml` et `TRANSCRIA_ROLE` dans `.env`. Ils refusent `--no-postgres`, car le
+split de production dépend de PostgreSQL pour les verrous, la queue et le stockage
+partagé éventuel.
+
+Si la frontale utilise un STT distant (`inference.stt.backends.<backend>.url`),
+déclarez aussi le nœud de contrôle (`inference.url` ou `inference.nodes[]`, port
+8002 par défaut). C'est ce nœud qui expose `/capabilities` et `/engines/ensure`
+pour lancer/réutiliser les moteurs avant les jobs.
+
+`doctor --profile ...` signale aussi les conflits systemd connus. Par exemple, en
+profil `web` ou `scheduler`, un `transcria.service` legacy encore actif/activé est
+un avertissement : désactivez-le avant de démarrer les services split.
+
+Les profils sont aussi appliqués aux étapes lourdes de l'installateur :
+- `web` et `migrate` ne vérifient pas les modèles GPU locaux et ne configurent pas
+  opencode / LLM d'arbitrage ; leur vérification d'imports reste centrée sur
+  Flask/Gunicorn, SQLAlchemy/Alembic et PostgreSQL ;
+- `resource-node` vérifie les modèles GPU utiles au nœud, mais ne configure pas
+  opencode / LLM d'arbitrage ; sa vérification d'imports couvre Flask/Gunicorn,
+  torch et la pile audio/diarisation ;
+- `all-in-one` et `scheduler` gardent le chemin complet, car ils peuvent exécuter
+  les phases LLM localement, et conservent donc les contrôles ASR/LLM complets.
+
+Avant d'appliquer une installation, utilisez `--plan` (`--dry-run` est un alias) :
+le script affiche le profil, les services systemd prévus, PostgreSQL, les étapes
+modèles/LLM et le profil doctor, puis sort sans effet de bord.
 
 > ⚠️ **Fichiers de jobs (deux machines)** : la frontale et l'ordonnanceur doivent voir les
 > **mêmes fichiers** (`storage.jobs_dir`) — audio uploadé, contexte, SRT, livrables. Sur
@@ -224,7 +296,7 @@ nvidia-smi
 # Outils système
 sudo apt install -y ffmpeg lsof build-essential git
 
-# Optionnel — PostgreSQL (recommandé en prod ; sinon SQLite par défaut)
+# PostgreSQL — choix principal hors développement local
 sudo apt install -y postgresql && sudo systemctl enable --now postgresql
 ```
 
@@ -352,6 +424,10 @@ LLM, opencode et les dossiers de travail sans toucher au GPU (voir [§12 Dépann
 
 ```bash
 venv/bin/python scripts/doctor.py
+venv/bin/python scripts/doctor.py --profile all-in-one
+venv/bin/python scripts/doctor.py --profile web
+venv/bin/python scripts/doctor.py --profile scheduler
+venv/bin/python scripts/doctor.py --profile resource-node
 ```
 
 ### Pièges connus lors de l'installation
@@ -592,7 +668,7 @@ Les références Qwen ci-dessous correspondent au modèle d'exemple historique d
 
 Pré-requis :
 - **llama.cpp** compilé avec support CUDA (binaire `llama-server`)
-- Modèle GGUF local configuré dans `scripts/launch_arbitrage.sh`
+- Modèle GGUF local configuré via un wrapper généré dans `scripts/generated/`
 - L'API doit être exposée sur `services.arbitrage_llm_port` (défaut 8080 dans `config.yaml`)
 
 #### Installer llama.cpp
@@ -632,7 +708,8 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 
 | Script | Description |
 |---|---|
-| `scripts/launch_arbitrage.sh` | Lance la LLM d'arbitrage via llama-server (configuration locale par défaut) |
+| `scripts/launch_arbitrage.sh` | Exemple historique machine mainteneur, conservé comme compatibilité |
+| `scripts/switch_arbitrage_llm.sh` | Génère `scripts/generated/launch_arbitrage.local.sh` et met `services.arbitrage_script` à jour |
 | `scripts/stop_llm_backend.sh` | Arrêt générique par port, PID file ou pattern explicite |
 | `scripts/stop_arbitrage_llm.sh` | Wrapper configuré pour la LLM d'arbitrage |
 | `scripts/stop_qwen.sh` | Wrapper de compatibilité ancienne version vers `stop_arbitrage_llm.sh` |
@@ -641,18 +718,39 @@ TranscrIA incluye des scripts prêts à l'emploi dans le répertoire `scripts/` 
 > **`launch_arbitrage.sh` est un EXEMPLE, pas un script générique.** Le fichier livré
 > est celui du mainteneur : chemins (`llama-server`, modèle GGUF), `CUDA_HOME`, et
 > tuning matériel (`--threads 44`, `--tensor-split 1,1,1` pour 3 GPUs…) sont **figés
-> pour sa machine**. Il n'y a **pas** de variables d'env ni d'arguments CLI : on
-> n'a pas voulu en faire une usine à gaz, car chaque déploiement est différent
-> (binaires compilés vs paquets, 1 ou N GPUs, quantification, backend…).
+> pour sa machine**. Ne l'éditez pas comme configuration locale durable : il est
+> versionné et peut changer lors d'une mise à jour.
 >
-> **Adaptez ce script directement, ou — mieux — écrivez le vôtre** et pointez
-> `services.arbitrage_script` dessus. **Seul compte le CONTRAT** : exposer une API
+> Utilisez `scripts/switch_arbitrage_llm.sh <palier>` ou écrivez votre propre script
+> local non versionné, puis pointez `services.arbitrage_script` dessus. **Seul compte
+> le CONTRAT** : exposer une API
 > **OpenAI-compatible** sur `services.arbitrage_llm_port` (défaut 8080), servant un
 > modèle dont l'alias = `services.arbitrage_api_model_id`. Le backend peut être
 > llama.cpp, vLLM, SGLang, ik_llama.cpp… (voir « Backends LLM alternatifs » plus bas).
 
-Le script d'exemple lance llama-server avec des paramètres optimisés : contexte 263K,
-tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl. **Options à revoir pour votre machine :**
+`scripts/switch_arbitrage_llm.sh` ne recopie plus de profil dans `scripts/launch_arbitrage.sh`
+et ne modifie plus les profils versionnés. Il génère :
+
+```text
+scripts/generated/launch_arbitrage.local.sh
+```
+
+Ce wrapper local exporte les défauts détectés (`MODELS_DIR`, `LLAMA_SERVER`,
+`ARBITRAGE_GPU`), appelle le profil versionné correspondant dans
+`scripts/arbitrage_profiles/`, met à jour `services.arbitrage_script`, puis calibre
+`gpu.llm_vram_mb`, `gpu.llm_gpu_indices` et `gpu.llm_vram_mb_per_gpu`.
+
+Exemple :
+
+```bash
+MODELS_DIR=/srv/models \
+LLAMA_SERVER=/opt/llama.cpp/build/bin/llama-server \
+./scripts/switch_arbitrage_llm.sh 48gb
+```
+
+Le script d'exemple historique lance llama-server avec des paramètres optimisés :
+contexte 263K, tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl.
+**Options à revoir dans un profil ou script local pour votre machine :**
 > - `--threads` / `--threads-batch` : nombre de cœurs CPU (actuellement 44/88)
 > - `--tensor-split 1,1,1` : répartition entre GPUs (actuellement 33/33/33 pour 3 GPUs identiques ; mettre `1` pour 1 seul GPU)
 > - `--n-gpu-layers all` : conserver `all` pour charger tout le modèle sur GPU, ou un nombre entier si VRAM limitée
@@ -664,7 +762,7 @@ tensor-split 1,1,1 (3 GPUs), flash-attn, cache q8_0, numactl. **Options à revoi
 Configuration dans `config.yaml` :
 ```yaml
 services:
-  arbitrage_script: "./scripts/launch_arbitrage.sh"
+  arbitrage_script: "/chemin/absolu/transcria/scripts/generated/launch_arbitrage.local.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
   arbitrage_llm_port: 8080
   llm_cleanup_ports:

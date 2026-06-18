@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+import os
+import stat
+
+from transcria.install_postgres import (
+    backup_sqlite_database,
+    build_pg_dsn,
+    generate_pg_password,
+    human_file_size,
+    is_local_pg_host,
+    main,
+    rewrite_pg_hba_file,
+    rewrite_pg_hba_for_tcp_password,
+    validate_pg_inputs,
+)
+
+
+def test_is_local_pg_host_accepts_only_loopback_aliases():
+    assert is_local_pg_host("127.0.0.1")
+    assert is_local_pg_host("localhost")
+    assert is_local_pg_host("::1")
+    assert not is_local_pg_host("postgres.internal")
+    assert not is_local_pg_host("10.0.0.5")
+
+
+def test_build_pg_dsn_quotes_credentials_and_database_and_brackets_ipv6():
+    dsn = build_pg_dsn("::1", "5433", "transcria prod", "user/name", "p@ss/word#1")
+
+    assert dsn == "postgresql+psycopg://user%2Fname:p%40ss%2Fword%231@[::1]:5433/transcria%20prod"
+
+
+def test_install_postgres_cli_outputs_dsn(capsys):
+    result = main([
+        "--dsn",
+        "--host", "127.0.0.1",
+        "--port", "5432",
+        "--db", "transcria",
+        "--user", "transcria",
+        "--password", "secret!",
+    ])
+
+    assert result == 0
+    assert capsys.readouterr().out.strip() == "postgresql+psycopg://transcria:secret%21@127.0.0.1:5432/transcria"
+
+
+def test_install_postgres_cli_tests_local_host():
+    assert main(["--is-local-host", "--host", "localhost"]) == 0
+    assert main(["--is-local-host", "--host", "postgres.internal"]) == 1
+
+
+def test_backup_sqlite_database_copies_to_backup_dir_and_preserves_mode(tmp_path):
+    sqlite_db = tmp_path / "transcrIA.db"
+    sqlite_db.write_bytes(b"sqlite-content")
+    sqlite_db.chmod(0o640)
+    backup_dir = tmp_path / "backups"
+
+    backup = backup_sqlite_database(sqlite_db, backup_dir, "20260102_030405")
+
+    assert backup == backup_dir / "transcrIA_20260102_030405.db.bak"
+    assert backup.read_bytes() == b"sqlite-content"
+    assert stat.S_IMODE(os.stat(backup).st_mode) == 0o640
+
+
+def test_install_postgres_cli_backs_up_sqlite_database(tmp_path, capsys):
+    sqlite_db = tmp_path / "transcrIA.db"
+    sqlite_db.write_bytes(b"sqlite-content")
+    backup_dir = tmp_path / "backups"
+
+    result = main([
+        "--backup-sqlite",
+        "--sqlite-db", str(sqlite_db),
+        "--backup-dir", str(backup_dir),
+        "--suffix", "stamp",
+    ])
+
+    backup = backup_dir / "transcrIA_stamp.db.bak"
+    assert result == 0
+    assert capsys.readouterr().out == f"{backup}\n"
+    assert backup.read_bytes() == b"sqlite-content"
+
+
+def test_human_file_size_formats_without_shell_du(tmp_path):
+    tiny = tmp_path / "tiny.db"
+    tiny.write_bytes(b"abc")
+    medium = tmp_path / "medium.db"
+    medium.write_bytes(b"x" * 1536)
+
+    assert human_file_size(tiny) == "3B"
+    assert human_file_size(medium) == "1.5K"
+
+
+def test_install_postgres_cli_outputs_file_size(tmp_path, capsys):
+    sqlite_db = tmp_path / "transcrIA.db"
+    sqlite_db.write_bytes(b"x" * 2048)
+
+    assert main(["--file-size", str(sqlite_db)]) == 0
+
+    assert capsys.readouterr().out == "2.0K\n"
+
+
+def test_generate_pg_password_returns_urlsafe_secret():
+    password = generate_pg_password()
+
+    assert len(password) >= 24
+    assert "\n" not in password
+    assert ":" not in password
+
+
+def test_install_postgres_cli_generates_password(capsys):
+    assert main(["--generate-password"]) == 0
+
+    password = capsys.readouterr().out.strip()
+    assert len(password) >= 24
+
+
+def test_validate_pg_inputs_accepts_valid_values():
+    assert validate_pg_inputs("transcria", "transcria_user", "5432") == []
+    assert validate_pg_inputs("_db", "_user", 1) == []
+    assert validate_pg_inputs("a" * 63, "u" * 63, 65535) == []
+
+
+def test_validate_pg_inputs_rejects_invalid_identifier_and_port():
+    errors = validate_pg_inputs("1bad", "bad-name", "70000")
+
+    assert errors == [
+        "Nom de base invalide : '1bad' (attendu : [a-zA-Z_][a-zA-Z0-9_]{0,62})",
+        "Nom de rôle invalide : 'bad-name' (attendu : [a-zA-Z_][a-zA-Z0-9_]{0,62})",
+        "Port invalide : '70000' (attendu : 1-65535)",
+    ]
+
+
+def test_validate_pg_inputs_rejects_leading_zero_port_to_avoid_ambiguity():
+    assert validate_pg_inputs("transcria", "transcria", "05432") == ["Port invalide : '05432' (attendu : 1-65535)"]
+
+
+def test_install_postgres_cli_validates_inputs(capsys):
+    assert main(["--validate-inputs", "--db", "transcria", "--user", "transcria", "--port", "5432"]) == 0
+    assert capsys.readouterr().out == ""
+
+    assert main(["--validate-inputs", "--db", "bad-name", "--user", "transcria", "--port", "bad"]) == 1
+    out = capsys.readouterr().out
+    assert "Nom de base invalide" in out
+    assert "Port invalide" in out
+
+
+def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():
+    content = """# TYPE DATABASE USER ADDRESS METHOD
+local all all peer
+host all all 127.0.0.1/32 peer
+host all all ::1/128 ident
+host replication all 127.0.0.1/32 peer
+host replication all ::1/128 ident # comment
+host all all 10.0.0.0/8 peer
+host all all 127.0.0.1/32 scram-sha-256
+"""
+
+    updated, changed = rewrite_pg_hba_for_tcp_password(content)
+
+    assert changed == 4
+    assert "local all all peer" in updated
+    assert "host all all 127.0.0.1/32 scram-sha-256\n" in updated
+    assert "host all all ::1/128 scram-sha-256\n" in updated
+    assert "host replication all 127.0.0.1/32 scram-sha-256\n" in updated
+    assert "host replication all ::1/128 scram-sha-256 # comment\n" in updated
+    assert "host all all 10.0.0.0/8 peer" in updated
+    assert updated.count("host all all 127.0.0.1/32 scram-sha-256") == 2
+
+
+def test_rewrite_pg_hba_preserves_crlf():
+    updated, changed = rewrite_pg_hba_for_tcp_password("host all all 127.0.0.1/32 peer\r\n")
+
+    assert changed == 1
+    assert updated == "host all all 127.0.0.1/32 scram-sha-256\r\n"
+
+
+def test_rewrite_pg_hba_file_is_idempotent_and_preserves_mode(tmp_path):
+    pg_hba = tmp_path / "pg_hba.conf"
+    pg_hba.write_text("host all all 127.0.0.1/32 peer\n", encoding="utf-8")
+    pg_hba.chmod(0o640)
+
+    assert rewrite_pg_hba_file(pg_hba) == 1
+    assert pg_hba.read_text(encoding="utf-8") == "host all all 127.0.0.1/32 scram-sha-256\n"
+    assert stat.S_IMODE(os.stat(pg_hba).st_mode) == 0o640
+
+    assert rewrite_pg_hba_file(pg_hba) == 0
+    assert pg_hba.read_text(encoding="utf-8") == "host all all 127.0.0.1/32 scram-sha-256\n"

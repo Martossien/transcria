@@ -8,7 +8,7 @@ ou non exécutable, LLM d'arbitrage injoignable, binaire opencode manquant, nœu
 de ressources distant injoignable, dossiers de travail non inscriptibles.
 
 Usage :
-    venv/bin/python scripts/doctor.py [--config config.yaml] [--strict] [--json]
+    venv/bin/python scripts/doctor.py [--config config.yaml] [--profile all-in-one|web|scheduler|resource-node|migrate] [--strict] [--json]
 
 Code de sortie : 0 si aucun échec bloquant (≠ 0 avec --strict si avertissements),
 1 sinon. La logique réelle est dans transcria/diagnostics/doctor.py (testée).

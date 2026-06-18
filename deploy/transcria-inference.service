@@ -16,6 +16,7 @@ Environment="INFERENCE_HOST=0.0.0.0"
 Environment="INFERENCE_PORT=8002"
 Environment="INFERENCE_LOG_LEVEL=INFO"
 Environment="ENV_FILE=/home/admin_ia/transcria/.env"
+EnvironmentFile=-/home/admin_ia/transcria/.env
 
 # Gunicorn (1 worker = 1 process GPU) :
 # Le moteur charge en VRAM dès le boot ; workers > 1 = VRAM × N.  Restons à 1.

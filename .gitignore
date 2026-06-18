@@ -31,6 +31,10 @@ build/
 venv/
 .venv/
 
+# Local generated install/runtime artifacts
+configs/local/
+scripts/generated/
+
 # Logs
 *.log
 
