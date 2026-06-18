@@ -33,6 +33,13 @@ def get_env_value(path: Path, key: str) -> str | None:
     return _active_env_value(lines, key)
 
 
+def has_any_env_key(path: Path, keys: list[str]) -> bool:
+    """Retourne vrai si au moins une clé active existe dans le fichier `.env`."""
+    path = Path(path)
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    return any(_active_env_value(lines, key) is not None for key in keys)
+
+
 def set_env_value(lines: list[str], key: str, value: str, *, comment: str | None = None) -> list[str]:
     """Retourne des lignes `.env` avec `key=value`, en préservant le reste.
 
@@ -145,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
     get_parser.add_argument("--env-file", required=True)
     get_parser.add_argument("--key", required=True)
 
+    has_any_parser = subparsers.add_parser("has-any", help="teste si au moins une clé active existe")
+    has_any_parser.add_argument("--env-file", required=True)
+    has_any_parser.add_argument("--key", action="append", required=True)
+
     init_parser = subparsers.add_parser("init", help="crée .env depuis un template si absent")
     init_parser.add_argument("--env-file", required=True)
     init_parser.add_argument("--template", required=True)
@@ -163,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
         if value is not None:
             print(value)
         return 0
+    if args.command == "has-any":
+        return 0 if has_any_env_key(Path(args.env_file), args.key) else 1
     if args.command == "set":
         update_env_file(Path(args.env_file), args.key, args.value, backup=args.backup, comment=args.comment)
         return 0

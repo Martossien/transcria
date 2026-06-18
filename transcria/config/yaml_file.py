@@ -97,6 +97,13 @@ def backup_yaml_file(path: Path, suffix: str) -> Path:
     return backup_path
 
 
+def count_text_occurrences(path: Path, needle: str) -> int:
+    """Compte les occurrences textuelles d'une valeur dans un fichier."""
+    if not needle:
+        raise ValueError("texte recherché vide")
+    return Path(path).read_text(encoding="utf-8").count(needle)
+
+
 def set_yaml_file_value(path: Path, key: str, value: str) -> None:
     data = load_yaml_file(path)
     set_yaml_value(data, key, value)
@@ -130,6 +137,10 @@ def main(argv: list[str] | None = None) -> int:
     backup_parser.add_argument("--file", required=True)
     backup_parser.add_argument("--suffix", required=True)
 
+    count_parser = subparsers.add_parser("count-text", help="compte les occurrences textuelles dans un fichier")
+    count_parser.add_argument("--file", required=True)
+    count_parser.add_argument("--text", required=True)
+
     args = parser.parse_args(argv)
     try:
         path = Path(args.file)
@@ -141,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "backup":
             print(backup_yaml_file(path, args.suffix))
+            return 0
+        if args.command == "count-text":
+            print(count_text_occurrences(path, args.text))
             return 0
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

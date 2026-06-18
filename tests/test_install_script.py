@@ -166,6 +166,20 @@ def test_install_script_does_not_prescan_pg_hba_with_shell_grep():
     assert "grep -qE '^host[[:space:]]+(all|replication)" not in content
 
 
+def test_install_script_counts_change_me_through_yaml_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.config.yaml_file count-text" in content
+    assert "grep -c 'CHANGE-ME'" not in content
+
+
+def test_install_script_checks_existing_proxy_through_env_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.config.env_file has-any" in content
+    assert "grep -qE '^https?_proxy='" not in content
+
+
 def test_install_plan_matches_python_profile_matrix_for_main_profiles():
     cases = [
         ("all-in-one", []),

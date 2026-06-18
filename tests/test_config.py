@@ -15,6 +15,7 @@ from transcria.config.resource_node_manifest import (
 )
 from transcria.config.yaml_file import (
     backup_yaml_file,
+    count_text_occurrences,
     get_yaml_value,
     set_yaml_file_value,
     set_yaml_value,
@@ -261,6 +262,20 @@ class TestYamlFileHelpers:
         backup_path = tmp_path / "config.yaml.bak.stamp"
         assert capsys.readouterr().out == f"{backup_path}\n"
         assert backup_path.read_text(encoding="utf-8") == "server:\n  port: 7870\n"
+
+    def test_count_text_occurrences_counts_plain_text(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("a: CHANGE-ME\nb: ok\nc: CHANGE-ME\n", encoding="utf-8")
+
+        assert count_text_occurrences(config_path, "CHANGE-ME") == 2
+
+    def test_yaml_file_cli_count_text_prints_count(self, tmp_path, capsys):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("a: CHANGE-ME\nb: ok\nc: CHANGE-ME\n", encoding="utf-8")
+
+        assert yaml_file_main(["count-text", "--file", str(config_path), "--text", "CHANGE-ME"]) == 0
+
+        assert capsys.readouterr().out == "2\n"
 
     def test_set_yaml_value_rejects_scalar_parent(self):
         data = {"workflow": "invalid"}

@@ -500,6 +500,11 @@ La lecture de version opencode passe par `transcria.install_opencode` au lieu d'
 pipeline shell `--version | head`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
+Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
+count-text` au lieu d'un `grep -c` shell.
+La détection d'un proxy déjà présent dans `.env` passe par
+`transcria.config.env_file has-any` au lieu d'un `grep` shell, en ignorant les lignes
+commentées.
 
 Tâches :
 

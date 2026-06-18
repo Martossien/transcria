@@ -541,7 +541,10 @@ if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; th
     _proxy_https="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
     _proxy_http="${http_proxy:-${HTTP_PROXY:-$_proxy_https}}"
     _proxy_no="${no_proxy:-${NO_PROXY:-127.0.0.1,localhost}}"
-    if grep -qE '^https?_proxy=' "$ENV_FILE" 2>/dev/null; then
+    if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.env_file has-any \
+            --env-file "$ENV_FILE" \
+            --key http_proxy \
+            --key https_proxy; then
         log_ok "Proxy déjà présent dans .env"
     else
         PERSIST_PROXY=true
@@ -1556,7 +1559,9 @@ else
 fi
 
 # Vérifier s'il reste des CHANGE-ME dans config.yaml
-REMAINING_CHANGES=$(grep -c 'CHANGE-ME' "$CONFIG_PATH" 2>/dev/null || true)
+REMAINING_CHANGES=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file count-text \
+    --file "$CONFIG_PATH" \
+    --text "CHANGE-ME" 2>/dev/null || echo 0)
 echo ""
 echo -e "${BOLD}Base de données :${NC}"
 if [[ "$DB_BACKEND" == PostgreSQL* ]]; then

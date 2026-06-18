@@ -6,7 +6,14 @@ import stat
 from pathlib import Path
 
 from transcria.config import env_file as env_cli
-from transcria.config.env_file import ensure_env_secret, get_env_value, init_env_file_from_template, set_env_value, update_env_file
+from transcria.config.env_file import (
+    ensure_env_secret,
+    get_env_value,
+    has_any_env_key,
+    init_env_file_from_template,
+    set_env_value,
+    update_env_file,
+)
 
 _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "rotate_resource_node_key.py"
 _SPEC = importlib.util.spec_from_file_location("rotate_resource_node_key", _SCRIPT)
@@ -58,6 +65,22 @@ def test_env_file_get_reads_only_active_value(tmp_path):
     env_file.write_text("# HF_TOKEN=old\nHF_TOKEN=hf_active\n", encoding="utf-8")
 
     assert get_env_value(env_file, "HF_TOKEN") == "hf_active"
+
+
+def test_has_any_env_key_ignores_commented_values(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("# http_proxy=http://old\nhttps_proxy=http://proxy\n", encoding="utf-8")
+
+    assert has_any_env_key(env_file, ["http_proxy", "https_proxy"])
+    assert not has_any_env_key(env_file, ["http_proxy"])
+
+
+def test_env_file_cli_has_any_uses_exit_status(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("# http_proxy=http://old\nhttps_proxy=http://proxy\n", encoding="utf-8")
+
+    assert env_cli.main(["has-any", "--env-file", str(env_file), "--key", "http_proxy"]) == 1
+    assert env_cli.main(["has-any", "--env-file", str(env_file), "--key", "http_proxy", "--key", "https_proxy"]) == 0
 
 
 def test_env_file_cli_get_prints_active_value(tmp_path, capsys):
