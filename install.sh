@@ -814,9 +814,15 @@ _do_pg_migrate() {
     fi
 }
 
+PSQL_AVAILABLE=false
+if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+        check-binaries --required psql >/dev/null; then
+    PSQL_AVAILABLE=true
+fi
+
 if [[ "$SETUP_PG" != true ]]; then
     log_ok "Base SQLite conservée (storage.database_url de config.yaml)"
-elif ! command -v psql &>/dev/null; then
+elif [[ "$PSQL_AVAILABLE" != true ]]; then
     log_error "psql introuvable — PostgreSQL n'est pas installé."
     log_warn  "  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql"
     log_warn  "  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql"
@@ -998,8 +1004,15 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                     --install-dir "$INSTALL_DIR" \
                     --path "$DEST" >/dev/null
                 log_info "Téléchargement de CohereLabs/cohere-transcribe-03-2026..."
-                if command -v huggingface-cli &>/dev/null; then
-                    huggingface-cli download CohereLabs/cohere-transcribe-03-2026 \
+                HF_COHERE_CLI=""
+                FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
+                if HF_COHERE_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
+                        first-available --name huggingface-cli --format shell 2>/dev/null); then
+                    eval "$HF_COHERE_OUT"
+                    HF_COHERE_CLI="$FIRST_AVAILABLE_NAME"
+                fi
+                if [[ -n "$HF_COHERE_CLI" ]]; then
+                    "$HF_COHERE_CLI" download CohereLabs/cohere-transcribe-03-2026 \
                         --local-dir "$DEST" --local-dir-use-symlinks False && \
                     yaml_set "models.cohere_model_path" "$DEST" && \
                     log_ok "Modèle Cohere téléchargé et configuré" && \
@@ -1245,7 +1258,12 @@ else
             rm -f "$_ll_warn"
         fi
         if [[ -z "$LLAMA_SRV" ]]; then
-            for c in "$(command -v llama-server 2>/dev/null || true)" \
+            FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
+            if LLAMA_FALLBACK_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
+                    first-available --name llama-server --format shell 2>/dev/null); then
+                eval "$LLAMA_FALLBACK_OUT"
+            fi
+            for c in "$FIRST_AVAILABLE_PATH" \
                      "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
                 if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
             done
@@ -1259,8 +1277,12 @@ else
             log_ok "Modèle déjà présent : $DEST/$GG"
         elif ask_yn "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO ?"; then
             HF_DL=""
-            if command -v hf &>/dev/null; then HF_DL="hf"
-            elif command -v huggingface-cli &>/dev/null; then HF_DL="huggingface-cli"; fi
+            FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
+            if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
+                    first-available --name hf --name huggingface-cli --format shell 2>/dev/null); then
+                eval "$HF_DL_OUT"
+                HF_DL="$FIRST_AVAILABLE_NAME"
+            fi
             if [[ -z "$HF_DL" ]]; then
                 log_error "Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub"
             else

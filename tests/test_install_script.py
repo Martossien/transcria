@@ -147,6 +147,19 @@ def test_install_script_checks_runtime_binaries_through_python_helper():
     assert 'command -v lsof' not in content
 
 
+def test_install_script_finds_download_clients_through_python_helper():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "first-available --name hf --name huggingface-cli" in content
+    assert "first-available --name huggingface-cli" in content
+    assert "first-available --name llama-server" in content
+    assert "check-binaries --required psql" in content
+    assert "command -v psql" not in content
+    assert "command -v huggingface-cli" not in content
+    assert "command -v hf" not in content
+    assert "command -v llama-server" not in content
+
+
 def test_install_script_reads_opencode_version_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 

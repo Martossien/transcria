@@ -506,6 +506,8 @@ au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire le
 `grep`/append shell directs de `install.sh`.
 Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
+La même brique fournit `first-available` pour les alternatives `hf`/`huggingface-cli`,
+`psql` et le fallback PATH de `llama-server`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
