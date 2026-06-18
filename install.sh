@@ -1166,6 +1166,26 @@ fi
 # ============================================================================
 log_section "Vérification des modèles IA"
 
+log_model_status_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models status-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$INSTALL_PROFILE") || {
+        log_error "Impossible de rendre le statut modèle : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    else
+        log_warn "Sortie modèle ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
     # ── Cohere ASR ───────────────────────────────────────────────────────────
     COHERE_PATH=$(yaml_get "models.cohere_model_path")
@@ -1177,9 +1197,9 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
             --path "$COHERE_PATH" \
             --install-dir "$INSTALL_DIR"; then
         COHERE_OK=true
-        log_ok "Cohere ASR       : $COHERE_PATH"
+        log_model_status_event cohere-ok "$COHERE_PATH"
     else
-        log_warn "Cohere ASR       : ABSENT  ($COHERE_PATH)"
+        log_model_status_event cohere-missing "$COHERE_PATH"
     fi
 
     # ── pyannote (cache HuggingFace) ─────────────────────────────────────────
@@ -1188,18 +1208,18 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
         --hf-cache "$HF_CACHE" 2>/dev/null || true)
     if [[ -n "$PYANNOTE_CACHE" ]]; then
         PYANNOTE_OK=true
-        log_ok "pyannote cache   : $(basename "$PYANNOTE_CACHE")"
+        log_model_status_event pyannote-ok "$PYANNOTE_CACHE"
     else
-        log_warn "pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)"
+        log_model_status_event pyannote-missing
     fi
 
     # ── SQUIM (préflight qualité, asset torchaudio) ─────────────────────────
     SQUIM_PTH="${TORCH_HOME:-$HOME/.cache/torch}/hub/torchaudio/models/squim_objective_dns2020.pth"
     if [[ -f "$SQUIM_PTH" ]]; then
         SQUIM_OK=true
-        log_ok "SQUIM préflight  : $SQUIM_PTH"
+        log_model_status_event squim-ok "$SQUIM_PTH"
     else
-        log_warn "SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)"
+        log_model_status_event squim-missing
     fi
 
     if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
@@ -1208,18 +1228,18 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
             --models-dir "$INSTALL_DIR/models" 2>/dev/null || true)
         if [[ -n "$QWEN_GGUF" ]]; then
             QWEN_OK=true
-            log_ok "LLM arbitrage    : $QWEN_GGUF"
+            log_model_status_event llm-ok "$QWEN_GGUF"
         else
-            log_warn "LLM arbitrage    : ABSENT  (résumé/correction LLM non disponible)"
+            log_model_status_event llm-missing
         fi
     else
-        log_info "LLM d'arbitrage : non requis pour le profil $INSTALL_PROFILE"
+        log_model_status_event llm-not-required
     fi
 
     echo ""
     print_model_detection_table
 else
-    log_info "Profil $INSTALL_PROFILE : vérification des modèles GPU locaux sautée"
+    log_model_status_event local-models-skipped
 fi
 
 # ============================================================================

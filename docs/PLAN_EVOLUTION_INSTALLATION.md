@@ -548,6 +548,9 @@ PostgreSQL manquants, mot de passe généré, backend final) sont rendus par
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.
+Les lignes de statut individuelles de vérification modèles (Cohere, pyannote,
+SQUIM, LLM, profils sans modèles locaux) sont rendues par
+`transcria.install_models status-log`.
 La lecture de version opencode passe par `transcria.install_opencode` au lieu d'un
 pipeline shell `--version | head`.
 La recherche du binaire opencode (PATH, home service, home utilisateur, chemin

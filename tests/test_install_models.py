@@ -13,6 +13,7 @@ from transcria.install_models import (
     main,
     parse_bool,
     render_model_detection_table,
+    render_model_status_log,
     render_model_summary,
     resolve_repo_relative_path,
 )
@@ -145,6 +146,41 @@ def test_render_model_detection_table_without_llm():
     assert "SQUIM préflight (~28 Mo): OK — cache torchaudio" in rendered
 
 
+def test_render_model_status_log_for_local_model_checks():
+    assert render_model_status_log(event="cohere-ok", value="/opt/models/cohere") == "OK:Cohere ASR       : /opt/models/cohere\n"
+    assert render_model_status_log(event="cohere-missing", value="/opt/models/cohere") == (
+        "WARN:Cohere ASR       : ABSENT  (/opt/models/cohere)\n"
+    )
+    assert render_model_status_log(event="pyannote-ok", value="/home/app/.cache/huggingface/hub/models--pyannote--speaker") == (
+        "OK:pyannote cache   : models--pyannote--speaker\n"
+    )
+    assert render_model_status_log(event="pyannote-missing") == (
+        "WARN:pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)\n"
+    )
+    assert render_model_status_log(event="squim-ok", value="/home/app/.cache/torch/squim.pth") == (
+        "OK:SQUIM préflight  : /home/app/.cache/torch/squim.pth\n"
+    )
+    assert render_model_status_log(event="squim-missing") == (
+        "WARN:SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)\n"
+    )
+
+
+def test_render_model_status_log_for_llm_and_profile_skips():
+    assert render_model_status_log(event="llm-ok", value="/opt/models/arbitrage.gguf") == (
+        "OK:LLM arbitrage    : /opt/models/arbitrage.gguf\n"
+    )
+    assert render_model_status_log(event="llm-missing") == "WARN:LLM arbitrage    : ABSENT  (résumé/correction LLM non disponible)\n"
+    assert render_model_status_log(event="llm-not-required", profile="web") == "INFO:LLM d'arbitrage : non requis pour le profil web\n"
+    assert render_model_status_log(event="local-models-skipped", profile="resource-node") == (
+        "INFO:Profil resource-node : vérification des modèles GPU locaux sautée\n"
+    )
+
+
+def test_render_model_status_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement modèle inconnu : bad"):
+        render_model_status_log(event="bad")
+
+
 def test_install_models_cli_checks_cohere_non_empty(tmp_path: Path):
     cohere = tmp_path / "models" / "cohere"
     cohere.mkdir(parents=True)
@@ -204,6 +240,12 @@ def test_install_models_cli_prints_detection_table(capsys):
     rendered = capsys.readouterr().out
     assert "Modèles détectés :" in rendered
     assert "LLM arbitrage GGUF" not in rendered
+
+
+def test_install_models_cli_prints_status_log(capsys):
+    assert main(["status-log", "--event", "llm-not-required", "--profile", "web"]) == 0
+
+    assert capsys.readouterr().out == "INFO:LLM d'arbitrage : non requis pour le profil web\n"
 
 
 def test_download_pyannote_pipeline_uses_token_and_model_id():

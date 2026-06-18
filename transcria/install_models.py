@@ -155,6 +155,31 @@ def render_model_detection_table(
     return "\n".join(lines) + "\n"
 
 
+def render_model_status_log(*, event: str, value: str = "", profile: str = "") -> str:
+    """Rend une ligne de statut de vérification locale des modèles."""
+    if event == "cohere-ok":
+        return f"OK:Cohere ASR       : {value}\n"
+    if event == "cohere-missing":
+        return f"WARN:Cohere ASR       : ABSENT  ({value})\n"
+    if event == "pyannote-ok":
+        return f"OK:pyannote cache   : {_basename_or_empty(value)}\n"
+    if event == "pyannote-missing":
+        return "WARN:pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)\n"
+    if event == "squim-ok":
+        return f"OK:SQUIM préflight  : {value}\n"
+    if event == "squim-missing":
+        return "WARN:SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)\n"
+    if event == "llm-ok":
+        return f"OK:LLM arbitrage    : {value}\n"
+    if event == "llm-missing":
+        return "WARN:LLM arbitrage    : ABSENT  (résumé/correction LLM non disponible)\n"
+    if event == "llm-not-required":
+        return f"INFO:LLM d'arbitrage : non requis pour le profil {profile}\n"
+    if event == "local-models-skipped":
+        return f"INFO:Profil {profile} : vérification des modèles GPU locaux sautée\n"
+    raise ValueError(f"événement modèle inconnu : {event}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Détection locale des modèles TranscrIA pour install.sh.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -191,6 +216,11 @@ def main(argv: list[str] | None = None) -> int:
     table_parser.add_argument("--qwen-ok", required=True)
     table_parser.add_argument("--qwen-gguf", default="")
     table_parser.add_argument("--squim-ok", required=True)
+
+    status_parser = subparsers.add_parser("status-log", help="rend une ligne de statut modèle")
+    status_parser.add_argument("--event", required=True)
+    status_parser.add_argument("--value", default="")
+    status_parser.add_argument("--profile", default="")
 
     args = parser.parse_args(argv)
     try:
@@ -233,6 +263,9 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 end="",
             )
+            return 0
+        if args.command == "status-log":
+            print(render_model_status_log(event=args.event, value=args.value, profile=args.profile), end="")
             return 0
     except (OSError, ImportError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

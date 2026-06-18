@@ -187,6 +187,18 @@ def test_install_script_uses_model_detection_table_renderer():
     assert 'printf "  │ %-31s' not in content
 
 
+def test_install_script_delegates_model_status_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_models status-log" in content
+    assert "log_model_status_event" in content
+    assert "Cohere ASR       : $COHERE_PATH" not in content
+    assert "pyannote cache   : $(basename" not in content
+    assert "SQUIM préflight  : $SQUIM_PTH" not in content
+    assert "LLM arbitrage    : $QWEN_GGUF" not in content
+    assert "vérification des modèles GPU locaux sautée" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 
