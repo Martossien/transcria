@@ -9,6 +9,16 @@ from typing import Any
 PYANNOTE_MODEL_ID = "pyannote/speaker-diarization-community-1"
 
 
+def parse_bool(value: str) -> bool:
+    """Parse un booléen CLI stable pour les appels depuis install.sh."""
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"booléen invalide: {value}")
+
+
 def resolve_repo_relative_path(path: str, install_dir: Path) -> Path:
     """Résout les chemins `./...` de config.yaml depuis la racine d'installation."""
     if path.startswith("./"):
@@ -59,6 +69,43 @@ def _print_path(path: Path | None) -> int:
     return 0
 
 
+def render_model_summary(
+    *,
+    profile: str,
+    needs_local_models: bool,
+    needs_llm: bool,
+    cohere_ok: bool,
+    pyannote_ok: bool,
+    qwen_ok: bool,
+    opencode_bin: str,
+) -> str:
+    """Rend le bilan final des modèles à partir des états déjà détectés."""
+    lines = ["Modèles IA :"]
+    if needs_local_models:
+        lines.append(
+            "  [OK] Cohere ASR"
+            if cohere_ok
+            else "  [MANQUANT] Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026"
+        )
+        lines.append(
+            "  [OK] pyannote diarization"
+            if pyannote_ok
+            else "  [MANQUANT] pyannote — HF_TOKEN dans .env + accepter conditions HuggingFace"
+        )
+    else:
+        lines.append(f"  [INFO] Modèles GPU locaux non requis pour le profil {profile}")
+
+    if needs_llm:
+        lines.append("  [OK] LLM d'arbitrage GGUF" if qwen_ok else "  [MANQUANT] LLM d'arbitrage GGUF — choisir un palier dans install.sh")
+        if opencode_bin:
+            lines.append(f"  [OK] opencode : {opencode_bin}")
+        else:
+            lines.append("  [MANQUANT] opencode — résumé/correction LLM désactivé")
+    else:
+        lines.append(f"  [INFO] LLM/opencode non requis pour le profil {profile}")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Détection locale des modèles TranscrIA pour install.sh.")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -77,6 +124,15 @@ def main(argv: list[str] | None = None) -> int:
     pyannote_download_parser.add_argument("--hf-token", required=True)
     pyannote_download_parser.add_argument("--model-id", default=PYANNOTE_MODEL_ID)
 
+    summary_parser = subparsers.add_parser("summary", help="rend le bilan final des modèles")
+    summary_parser.add_argument("--profile", required=True)
+    summary_parser.add_argument("--needs-local-models", required=True)
+    summary_parser.add_argument("--needs-llm", required=True)
+    summary_parser.add_argument("--cohere-ok", required=True)
+    summary_parser.add_argument("--pyannote-ok", required=True)
+    summary_parser.add_argument("--qwen-ok", required=True)
+    summary_parser.add_argument("--opencode-bin", default="")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "cohere-ok":
@@ -89,6 +145,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "download-pyannote":
             download_pyannote_pipeline(args.hf_token, model_id=args.model_id)
             print("pyannote téléchargé")
+            return 0
+        if args.command == "summary":
+            print(
+                render_model_summary(
+                    profile=args.profile,
+                    needs_local_models=parse_bool(args.needs_local_models),
+                    needs_llm=parse_bool(args.needs_llm),
+                    cohere_ok=parse_bool(args.cohere_ok),
+                    pyannote_ok=parse_bool(args.pyannote_ok),
+                    qwen_ok=parse_bool(args.qwen_ok),
+                    opencode_bin=args.opencode_bin,
+                ),
+                end="",
+            )
             return 0
     except (OSError, ImportError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

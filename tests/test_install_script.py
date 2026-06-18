@@ -169,6 +169,15 @@ def test_install_script_uses_profile_renderer_for_final_text():
     assert 'echo -e "${BOLD}Lancer le nœud de ressources' not in content
 
 
+def test_install_script_uses_model_summary_renderer():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "print_model_summary" in content
+    assert "-m transcria.install_models summary" in content
+    assert 'echo -e "${BOLD}Modèles IA' not in content
+    assert '$COHERE_OK  && echo -e' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 

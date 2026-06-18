@@ -462,6 +462,9 @@ rôle applicatif à écrire.
 Les textes de résumé final dépendants du profil et les commandes de démarrage
 recommandées sont rendus par `transcria.install_profiles` (`summary` /
 `next-steps`), ce qui retire une nouvelle série de branches profil de `install.sh`.
+Le bilan final des modèles est rendu par `transcria.install_models summary` à partir
+des états détectés par le shell, ce qui laisse `install.sh` orchestrer la détection
+sans porter le texte conditionnel de synthèse.
 La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée dans
 `transcria.install_torch`, avec tests sur les seuils CUDA et le cas CUDA 13+.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,

@@ -231,6 +231,17 @@ print_profile_text() {
         --final-log-file "$final_log_file"
 }
 
+print_model_summary() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models summary \
+        --profile "$INSTALL_PROFILE" \
+        --needs-local-models "$PROFILE_NEEDS_LOCAL_MODELS" \
+        --needs-llm "$PROFILE_NEEDS_LLM" \
+        --cohere-ok "$COHERE_OK" \
+        --pyannote-ok "$PYANNOTE_OK" \
+        --qwen-ok "$QWEN_OK" \
+        --opencode-bin "${OPENCODE_BIN:-}"
+}
+
 load_install_profile_plan
 
 if [[ "$PLAN_ONLY" = true ]]; then
@@ -1631,25 +1642,7 @@ echo ""
 print_profile_text summary
 echo ""
 
-# Bilan des modèles
-echo -e "${BOLD}Modèles IA :${NC}"
-if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
-    $COHERE_OK  && echo -e "  ${GREEN}[OK]${NC} Cohere ASR" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026"
-    $PYANNOTE_OK && echo -e "  ${GREEN}[OK]${NC} pyannote diarization" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} pyannote — HF_TOKEN dans .env + accepter conditions HuggingFace"
-else
-    echo -e "  ${BLUE}[INFO]${NC} Modèles GPU locaux non requis pour le profil $INSTALL_PROFILE"
-fi
-if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-    $QWEN_OK    && echo -e "  ${GREEN}[OK]${NC} LLM d'arbitrage GGUF" \
-                || echo -e "  ${YELLOW}[MANQUANT]${NC} LLM d'arbitrage GGUF — choisir un palier dans install.sh"
-    [[ -n "$OPENCODE_BIN" ]] \
-        && echo -e "  ${GREEN}[OK]${NC} opencode : $OPENCODE_BIN" \
-        || echo -e "  ${YELLOW}[MANQUANT]${NC} opencode — résumé/correction LLM désactivé"
-else
-    echo -e "  ${BLUE}[INFO]${NC} LLM/opencode non requis pour le profil $INSTALL_PROFILE"
-fi
+print_model_summary
 
 # Vérifier s'il reste des CHANGE-ME dans config.yaml
 REMAINING_CHANGES=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file count-text \

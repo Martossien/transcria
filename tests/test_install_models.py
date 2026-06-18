@@ -11,6 +11,8 @@ from transcria.install_models import (
     find_pyannote_cache,
     is_non_empty_dir,
     main,
+    parse_bool,
+    render_model_summary,
     resolve_repo_relative_path,
 )
 
@@ -31,6 +33,18 @@ def test_is_non_empty_dir_requires_directory_with_content(tmp_path: Path):
     assert not is_non_empty_dir(missing)
     assert not is_non_empty_dir(empty)
     assert is_non_empty_dir(non_empty)
+
+
+def test_parse_bool_accepts_shell_values():
+    assert parse_bool("true")
+    assert parse_bool("1")
+    assert not parse_bool("false")
+    assert not parse_bool("0")
+
+
+def test_parse_bool_rejects_invalid_value():
+    with pytest.raises(ValueError, match="booléen invalide"):
+        parse_bool("maybe")
 
 
 def test_find_pyannote_cache_returns_first_matching_directory(tmp_path: Path):
@@ -56,6 +70,42 @@ def test_find_first_gguf_returns_first_file_recursively(tmp_path: Path):
     first.write_text("first", encoding="utf-8")
 
     assert find_first_gguf(models) == first
+
+
+def test_render_model_summary_for_all_in_one_missing_values():
+    rendered = render_model_summary(
+        profile="all-in-one",
+        needs_local_models=True,
+        needs_llm=True,
+        cohere_ok=False,
+        pyannote_ok=True,
+        qwen_ok=False,
+        opencode_bin="",
+    )
+
+    assert rendered == """Modèles IA :
+  [MANQUANT] Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026
+  [OK] pyannote diarization
+  [MANQUANT] LLM d'arbitrage GGUF — choisir un palier dans install.sh
+  [MANQUANT] opencode — résumé/correction LLM désactivé
+"""
+
+
+def test_render_model_summary_for_web_profile():
+    rendered = render_model_summary(
+        profile="web",
+        needs_local_models=False,
+        needs_llm=False,
+        cohere_ok=False,
+        pyannote_ok=False,
+        qwen_ok=False,
+        opencode_bin="",
+    )
+
+    assert rendered == """Modèles IA :
+  [INFO] Modèles GPU locaux non requis pour le profil web
+  [INFO] LLM/opencode non requis pour le profil web
+"""
 
 
 def test_install_models_cli_checks_cohere_non_empty(tmp_path: Path):
@@ -84,6 +134,23 @@ def test_install_models_cli_prints_found_paths(tmp_path: Path, capsys):
 def test_install_models_cli_returns_one_when_missing(tmp_path: Path):
     assert main(["pyannote-cache", "--hf-cache", str(tmp_path / "missing")]) == 1
     assert main(["first-gguf", "--models-dir", str(tmp_path / "missing")]) == 1
+
+
+def test_install_models_cli_prints_summary(capsys):
+    assert main([
+        "summary",
+        "--profile", "scheduler",
+        "--needs-local-models", "true",
+        "--needs-llm", "true",
+        "--cohere-ok", "true",
+        "--pyannote-ok", "true",
+        "--qwen-ok", "true",
+        "--opencode-bin", "/usr/local/bin/opencode",
+    ]) == 0
+
+    rendered = capsys.readouterr().out
+    assert "[OK] Cohere ASR" in rendered
+    assert "[OK] opencode : /usr/local/bin/opencode" in rendered
 
 
 def test_download_pyannote_pipeline_uses_token_and_model_id():
