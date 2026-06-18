@@ -893,15 +893,30 @@ SQL
     esac
 
     # ── Migration SQLite si base vide et SQLite existe ────────
-    if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]; then
-        log_info "Base SQLite détectée : $sqlite_db"
-        if [[ "$NON_INTERACTIVE" = true ]]; then
-            if [[ "$PG_MIGRATE" = true ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
-            else
-                log_info "Migration sautée (--pg-migrate absent)"
-            fi
-        else
+    local sqlite_present=false sqlite_migration_action
+    [[ -s "$sqlite_db" ]] && sqlite_present=true
+    sqlite_migration_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --sqlite-migration-action \
+        --sqlite-present "$sqlite_present" \
+        --has-data "$has_data" \
+        --non-interactive "$NON_INTERACTIVE" \
+        --pg-migrate "$PG_MIGRATE") || {
+        log_error "Impossible de décider la migration SQLite vers PostgreSQL."
+        return 1
+    }
+    case "$sqlite_migration_action" in
+        none)
+            ;;
+        migrate)
+            log_info "Base SQLite détectée : $sqlite_db"
+            _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
+            ;;
+        skip)
+            log_info "Base SQLite détectée : $sqlite_db"
+            log_info "Migration sautée (--pg-migrate absent)"
+            ;;
+        prompt)
+            log_info "Base SQLite détectée : $sqlite_db"
             local sqlite_size
             sqlite_size=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
                 --file-size "$sqlite_db" 2>/dev/null || echo "taille inconnue")
@@ -921,8 +936,12 @@ SQL
             else
                 log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
             fi
-        fi
-    fi
+            ;;
+        *)
+            log_error "Action de migration SQLite inconnue : $sqlite_migration_action"
+            return 1
+            ;;
+    esac
 
     true
 }

@@ -207,6 +207,14 @@ def test_install_script_delegates_postgres_schema_action_decision():
     assert '[[ "$has_schema" -gt 0 && "${has_data:-0}" -gt 0 ]]' not in content
 
 
+def test_install_script_delegates_sqlite_migration_action_decision():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--sqlite-migration-action" in content
+    assert 'case "$sqlite_migration_action" in' in content
+    assert 'if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]' not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 

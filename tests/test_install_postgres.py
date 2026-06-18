@@ -9,10 +9,12 @@ from transcria.install_postgres import (
     backup_sqlite_database,
     build_pg_dsn,
     decide_schema_action,
+    decide_sqlite_migration_action,
     generate_pg_password,
     human_file_size,
     is_local_pg_host,
     main,
+    parse_bool,
     parse_non_negative_int,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
@@ -151,6 +153,18 @@ def test_parse_non_negative_int_rejects_invalid_counts():
         parse_non_negative_int("-1", name="has_data")
 
 
+def test_parse_bool_for_postgres_cli_flags():
+    assert parse_bool("true", name="flag")
+    assert parse_bool("1", name="flag")
+    assert not parse_bool("false", name="flag")
+    assert not parse_bool("0", name="flag")
+
+
+def test_parse_bool_rejects_invalid_value():
+    with pytest.raises(ValueError, match="flag booléen invalide : maybe"):
+        parse_bool("maybe", name="flag")
+
+
 def test_decide_schema_action_from_database_state():
     assert decide_schema_action("5", "2") == "keep"
     assert decide_schema_action("5", "0") == "upgrade-existing"
@@ -167,6 +181,38 @@ def test_install_postgres_cli_rejects_invalid_schema_action_counts(capsys):
     assert main(["--schema-action", "--has-schema", "bad", "--has-data", "0"]) == 2
 
     assert "has_schema invalide : bad" in capsys.readouterr().err
+
+
+def test_decide_sqlite_migration_action():
+    assert decide_sqlite_migration_action(sqlite_present=False, has_data=0, non_interactive=True, pg_migrate=True) == "none"
+    assert decide_sqlite_migration_action(sqlite_present=True, has_data=1, non_interactive=True, pg_migrate=True) == "none"
+    assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=False, pg_migrate=False) == "prompt"
+    assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=True, pg_migrate=True) == "migrate"
+    assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=True, pg_migrate=False) == "skip"
+
+
+def test_install_postgres_cli_decides_sqlite_migration_action(capsys):
+    assert main([
+        "--sqlite-migration-action",
+        "--sqlite-present", "true",
+        "--has-data", "0",
+        "--non-interactive", "true",
+        "--pg-migrate", "false",
+    ]) == 0
+
+    assert capsys.readouterr().out == "skip\n"
+
+
+def test_install_postgres_cli_rejects_invalid_sqlite_migration_flags(capsys):
+    assert main([
+        "--sqlite-migration-action",
+        "--sqlite-present", "maybe",
+        "--has-data", "0",
+        "--non-interactive", "true",
+        "--pg-migrate", "false",
+    ]) == 2
+
+    assert "sqlite_present booléen invalide : maybe" in capsys.readouterr().err
 
 
 def test_install_postgres_cli_validates_inputs(capsys):

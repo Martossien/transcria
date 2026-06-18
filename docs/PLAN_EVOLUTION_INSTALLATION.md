@@ -513,6 +513,9 @@ PostgreSQL seulement si le helper retourne `changed>0`.
 La décision de schéma PostgreSQL (`keep`, `upgrade-existing`, `create`) est rendue
 par `transcria.install_postgres --schema-action` à partir des compteurs `psql`,
 ce qui retire une condition métier supplémentaire de `_setup_postgres`.
+La décision de migration SQLite vers PostgreSQL (`none`, `prompt`, `migrate`,
+`skip`) est également rendue par `transcria.install_postgres`, en gardant seulement
+le prompt utilisateur et l'exécution de migration dans le shell.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

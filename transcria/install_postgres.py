@@ -89,6 +89,18 @@ def parse_non_negative_int(value: str | int, *, name: str) -> int:
     return parsed
 
 
+def parse_bool(value: str | bool, *, name: str) -> bool:
+    """Parse un booléen CLI stable."""
+    if isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} booléen invalide : {value}")
+
+
 def decide_schema_action(has_schema: str | int, has_data: str | int) -> str:
     """Décide l'action Alembic à partir de l'état courant de la base."""
     schema_count = parse_non_negative_int(has_schema, name="has_schema")
@@ -98,6 +110,23 @@ def decide_schema_action(has_schema: str | int, has_data: str | int) -> str:
     if schema_count > 0:
         return "upgrade-existing"
     return "create"
+
+
+def decide_sqlite_migration_action(
+    *,
+    sqlite_present: str | bool,
+    has_data: str | int,
+    non_interactive: str | bool,
+    pg_migrate: str | bool,
+) -> str:
+    """Décide si la migration SQLite doit être lancée, sautée ou demandée."""
+    if not parse_bool(sqlite_present, name="sqlite_present"):
+        return "none"
+    if parse_non_negative_int(has_data, name="has_data") > 0:
+        return "none"
+    if not parse_bool(non_interactive, name="non_interactive"):
+        return "prompt"
+    return "migrate" if parse_bool(pg_migrate, name="pg_migrate") else "skip"
 
 
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
@@ -157,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--generate-password", action="store_true", help="génère un mot de passe PostgreSQL")
     parser.add_argument("--validate-inputs", action="store_true", help="valide db/user/port PostgreSQL")
     parser.add_argument("--schema-action", action="store_true", help="décide l'action Alembic depuis has_schema/has_data")
+    parser.add_argument("--sqlite-migration-action", action="store_true", help="décide l'action de migration SQLite vers PostgreSQL")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
     parser.add_argument("--db", default=None)
@@ -167,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--suffix", default=None)
     parser.add_argument("--has-schema", default=None)
     parser.add_argument("--has-data", default=None)
+    parser.add_argument("--sqlite-present", default=None)
+    parser.add_argument("--non-interactive", default=None)
+    parser.add_argument("--pg-migrate", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -227,6 +260,25 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         try:
             print(decide_schema_action(args.has_schema, args.has_data))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.sqlite_migration_action:
+        missing = [name for name in ("sqlite_present", "has_data", "non_interactive", "pg_migrate") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-action: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(
+                decide_sqlite_migration_action(
+                    sqlite_present=args.sqlite_present,
+                    has_data=args.has_data,
+                    non_interactive=args.non_interactive,
+                    pg_migrate=args.pg_migrate,
+                )
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
