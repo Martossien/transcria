@@ -193,6 +193,14 @@ eval_named_shell_assignments() {
     fi
 }
 
+python_module() { PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"; }
+
+postgres_helper() { python_module transcria.install_postgres "$@"; }
+
+install_paths_helper() {
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths --install-dir "$INSTALL_DIR" "$@"
+}
+
 load_install_profile_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
@@ -255,13 +263,12 @@ print_model_detection_table() {
 }
 
 print_database_summary() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary database \
-        --db-backend "$DB_BACKEND"
+    python_module transcria.install_summary database --db-backend "$DB_BACKEND"
 }
 
 print_configuration_summary() {
     local remaining_changes="$1"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_summary configuration \
+    python_module transcria.install_summary configuration \
         --config-path "$CONFIG_PATH" \
         --remaining-changes "$remaining_changes" \
         --doctor-status "$DOCTOR_STATUS"
@@ -391,7 +398,7 @@ eval_prefixed_shell_assignments() {
 
 is_local_pg_host() {
     local host="$1"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    postgres_helper \
         --is-local-host \
         --host "$host" >/dev/null
 }
@@ -426,7 +433,7 @@ pg_app_psql() {
 
 build_pg_dsn() {
     local host="$1" port="$2" db="$3" user="$4" pass="$5"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    postgres_helper \
         --dsn \
         --host "$host" \
         --port "$port" \
@@ -437,7 +444,7 @@ build_pg_dsn() {
 
 pg_state_query() {
     local name="$1"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --state-query "$name"
+    postgres_helper --state-query "$name"
 }
 
 # Helper YAML — lit une clé dans config.yaml
@@ -662,8 +669,7 @@ log_local_setup_event requirements-ok
 # ============================================================================
 log_section "Répertoires"
 
-PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-    --install-dir "$INSTALL_DIR" >/dev/null
+install_paths_helper >/dev/null
 log_local_setup_event runtime-dirs-ready
 
 # ============================================================================
@@ -829,9 +835,7 @@ _setup_postgres() {
 
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-        --install-dir "$INSTALL_DIR" \
-        --path "$backup_dir" >/dev/null
+    install_paths_helper --path "$backup_dir" >/dev/null
 
     if [[ "$local_pg" = true ]]; then
         # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
@@ -841,7 +845,7 @@ _setup_postgres() {
             local pg_hba_result=""
             if pg_hba_result=$(pg_admin_python_module transcria.install_postgres "$pg_hba"); then
                 local pg_hba_decision="" pg_hba_reload=false
-                pg_hba_decision=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+                pg_hba_decision=$(postgres_helper \
                     --pg-hba-rewrite-result \
                     --result "$pg_hba_result") || {
                     log_warn "Résultat pg_hba.conf invalide : $pg_hba_result"
@@ -878,7 +882,7 @@ _setup_postgres() {
         # ── Rôle (idempotent) ─────────────────────────────────────
         log_postgres_setup_event local-check
 
-        if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --role-sql \
+        if ! postgres_helper --role-sql \
             | pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass"
         then
             log_postgres_setup_event role-error
@@ -892,13 +896,13 @@ _setup_postgres() {
         local db_exists=""
         db_exists=$(pg_admin_psql -At -v dbname="$db" -c "$(pg_state_query database-exists)") || db_exists=""
         if [[ "$db_exists" != "1" ]]; then
-            if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql \
+            if ! postgres_helper --database-sql \
                 | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
             then
                 # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
                 # locale C, qui accepte tout encodage (tri linguistique côté Python).
                 log_postgres_setup_event database-fallback
-                if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql --fallback-locale-c \
+                if ! postgres_helper --database-sql --fallback-locale-c \
                     | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
                 then
                     log_postgres_setup_event database-error
@@ -913,7 +917,7 @@ _setup_postgres() {
 
     if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
         local connection_failure=""
-        connection_failure=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        connection_failure=$(postgres_helper \
             --connection-failure \
             --db "$db" \
             --user "$user" \
@@ -932,7 +936,7 @@ _setup_postgres() {
     db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
         -c "$(pg_state_query encoding)" 2>/dev/null) || db_encoding=""
     local encoding_warnings=""
-    encoding_warnings=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    encoding_warnings=$(postgres_helper \
         --encoding-warnings \
         --db "$db" \
         --encoding "$db_encoding")
@@ -954,7 +958,7 @@ _setup_postgres() {
     alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query alembic-version)" 2>/dev/null) || alembic_ver=""
     [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
     [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
-    log_info "$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    log_info "$(postgres_helper \
         --state-summary \
         --db "$db" \
         --has-schema "$has_schema" \
@@ -963,7 +967,7 @@ _setup_postgres() {
 
     # ── Schéma Alembic : up-to-date, vide, ou créer ────────────
     local schema_action
-    schema_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    schema_action=$(postgres_helper \
         --schema-action \
         --has-schema "$has_schema" \
         --has-data "$has_data") || {
@@ -1012,7 +1016,7 @@ _setup_postgres() {
     # ── Migration SQLite si base vide et SQLite existe ────────
     local sqlite_present=false sqlite_migration_action
     [[ -s "$sqlite_db" ]] && sqlite_present=true
-    sqlite_migration_action=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    sqlite_migration_action=$(postgres_helper \
         --sqlite-migration-action \
         --sqlite-present "$sqlite_present" \
         --has-data "$has_data" \
@@ -1035,9 +1039,9 @@ _setup_postgres() {
         prompt)
             log_sqlite_migration_event detected
             local sqlite_size
-            sqlite_size=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            sqlite_size=$(postgres_helper \
                 --file-size "$sqlite_db" 2>/dev/null || echo "taille inconnue")
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            postgres_helper \
                 --sqlite-migration-prompt \
                 --sqlite-db "$sqlite_db" \
                 --sqlite-size "$sqlite_size" \
@@ -1075,7 +1079,7 @@ _do_pg_migrate() {
     local backup_suffix
     backup_suffix="$(date +%Y%m%d_%H%M%S)"
     local backup
-    if ! backup=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    if ! backup=$(postgres_helper \
             --backup-sqlite \
             --sqlite-db "$sqlite_db" \
             --backup-dir "$backup_dir" \
@@ -1103,7 +1107,7 @@ if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcr
 fi
 
 postgres_database_setup_message() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    postgres_helper \
         --database-setup-log \
         --event "$1" \
         --user "$PG_USER" \
@@ -1134,7 +1138,7 @@ else
     ask PG_USER "Rôle (utilisateur)" "$PG_USER"
 
     # ── Validation des entrées ────────────────────────────────
-    PG_INPUT_ERRORS=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+    PG_INPUT_ERRORS=$(postgres_helper \
         --validate-inputs \
         --db "$PG_DB" \
         --user "$PG_USER" \
@@ -1147,7 +1151,7 @@ else
     fi
 
     if [[ -z "$PG_PASSWORD" ]]; then
-        PG_PASSWORD=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --generate-password)
+        PG_PASSWORD=$(postgres_helper --generate-password)
         log_database_setup_event password-generated
     fi
 
@@ -1289,9 +1293,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 ;;
             2)
                 DEST="$INSTALL_DIR/models/cohere-asr/cohere-transcribe-03-2026"
-                PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-                    --install-dir "$INSTALL_DIR" \
-                    --path "$DEST" >/dev/null
+                install_paths_helper --path "$DEST" >/dev/null
                 log_cohere_setup_event download-start
                 HF_COHERE_CLI=""
                 FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
@@ -1400,9 +1402,7 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
             --opencode-home "$OPENCODE_HOME")
         if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
             OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-                --install-dir "$INSTALL_DIR" \
-                --path "$(dirname "$OPENCODE_DEST")" >/dev/null
+            install_paths_helper --path "$(dirname "$OPENCODE_DEST")" >/dev/null
             log_opencode_setup_event download-start
             if curl -fsSL -o "$OPENCODE_DEST" \
                 "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
@@ -1548,9 +1548,7 @@ else
         LLM_MODELS_DIR_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt models-dir)
         ask MODELS_DIR_CHOICE "$LLM_MODELS_DIR_PROMPT" "$HOME/models"
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
-        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-            --install-dir "$INSTALL_DIR" \
-            --path "$MODELS_DIR_CHOICE" >/dev/null
+        install_paths_helper --path "$MODELS_DIR_CHOICE" >/dev/null
 
         # Détection + QUALIFICATION du binaire llama-server (≥ b9630 requis pour les
         # archis gated-delta/gemma4). Le détecteur fait la recherche élargie (env, PATH,
@@ -1750,9 +1748,7 @@ if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
         if [[ "$SERVICE_USER" != "root" ]]; then
             SERVICE_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
             SERVICE_PID_FILE="$INSTALL_DIR/run/transcrIA.pid"
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-                --install-dir "$INSTALL_DIR" \
-                --kind legacy-service >/dev/null
+            install_paths_helper --kind legacy-service >/dev/null
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$(dirname "$SERVICE_LOG_FILE")" "$(dirname "$SERVICE_PID_FILE")" 2>/dev/null || true
             fi
@@ -1820,9 +1816,7 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
         INF_LOG_DIR="/var/log"
         if [[ "$SERVICE_USER" != "root" ]]; then
             INF_LOG_DIR="$INSTALL_DIR/logs"
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
-                --install-dir "$INSTALL_DIR" \
-                --kind inference-service >/dev/null
+            install_paths_helper --kind inference-service >/dev/null
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$INF_LOG_DIR" 2>/dev/null || true
             fi

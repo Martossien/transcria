@@ -460,6 +460,10 @@ unités manquantes, avertissement split et nœud inference manquant) passent par
 Les wrappers shell qui dispatchent les sorties `OK:`/`WARN:`/`INFO:`/`ERROR:` des
 renderers Python sont centralisés dans `emit_rendered_log`, ce qui réduit la
 duplication restante de `install.sh` sans changer les modules métier appelés.
+Les appels Python répétitifs commencent aussi à passer par des wrappers shell
+nommés (`python_module`, `postgres_helper`, `install_paths_helper`) afin de
+réduire le bruit `PYTHONPATH` et de rendre visibles les frontières restantes
+entre orchestration shell et logique Python testée.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.
