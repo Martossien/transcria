@@ -2,12 +2,26 @@ import importlib.util
 import os
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from transcria.config import _deep_merge, get_config_path, load_config, save_config
 from transcria.config.config_schema import validate_config
 from transcria.config.loader import get_default_config
+from transcria.config.resource_node_manifest import (
+    build_default_resource_node_config,
+    ensure_default_resource_node_config,
+)
+from transcria.config.yaml_file import (
+    backup_yaml_file,
+    get_yaml_value,
+    set_yaml_file_value,
+    set_yaml_value,
+)
+from transcria.config.yaml_file import (
+    main as yaml_file_main,
+)
 
 
 class TestConfigLoading:
@@ -208,6 +222,51 @@ auth:
                 os.environ["TRANSCRIA_CONFIG"] = old
             else:
                 os.environ.pop("TRANSCRIA_CONFIG", None)
+
+
+class TestYamlFileHelpers:
+    def test_set_yaml_value_creates_nested_mapping(self):
+        data = {}
+
+        set_yaml_value(data, "workflow.arbitration_llm.opencode_bin", "/opt/opencode/bin/opencode")
+
+        assert data == {"workflow": {"arbitration_llm": {"opencode_bin": "/opt/opencode/bin/opencode"}}}
+        assert get_yaml_value(data, "workflow.arbitration_llm.opencode_bin") == "/opt/opencode/bin/opencode"
+
+    def test_set_yaml_file_value_preserves_quotes_and_unicode(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("auth:\n  first_admin_password: CHANGE-ME\n", encoding="utf-8")
+
+        set_yaml_file_value(config_path, "auth.first_admin_password", "mot d'été très sûr")
+
+        loaded = load_config(str(config_path))
+        assert loaded["auth"]["first_admin_password"] == "mot d'été très sûr"
+
+    def test_backup_yaml_file_copies_existing_content(self, tmp_path):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("server:\n  port: 7870\n", encoding="utf-8")
+
+        backup_path = backup_yaml_file(config_path, "20260102_030405")
+
+        assert backup_path == tmp_path / "config.yaml.bak.20260102_030405"
+        assert backup_path.read_text(encoding="utf-8") == "server:\n  port: 7870\n"
+        assert config_path.read_text(encoding="utf-8") == "server:\n  port: 7870\n"
+
+    def test_yaml_file_cli_backup_prints_path(self, tmp_path, capsys):
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text("server:\n  port: 7870\n", encoding="utf-8")
+
+        assert yaml_file_main(["backup", "--file", str(config_path), "--suffix", "stamp"]) == 0
+
+        backup_path = tmp_path / "config.yaml.bak.stamp"
+        assert capsys.readouterr().out == f"{backup_path}\n"
+        assert backup_path.read_text(encoding="utf-8") == "server:\n  port: 7870\n"
+
+    def test_set_yaml_value_rejects_scalar_parent(self):
+        data = {"workflow": "invalid"}
+
+        with pytest.raises(ValueError, match="workflow"):
+            set_yaml_value(data, "workflow.arbitration_llm.opencode_bin", "/usr/bin/opencode")
 
 
 class TestAppDebugResolution:
@@ -706,3 +765,99 @@ class TestBootstrapConfig:
         assert merged["storage"]["jobs_dir"].endswith("jobs")
         assert "workflow" in merged
         assert isinstance(messages, list)
+
+    def test_bootstrap_config_resource_node_generates_engine_manifest(self, tmp_path, monkeypatch):
+        module_path = Path(__file__).resolve().parents[1] / "scripts" / "bootstrap_config.py"
+        spec = importlib.util.spec_from_file_location("bootstrap_config", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        scripts_dir = tmp_path / "scripts"
+        scripts_dir.mkdir()
+        (scripts_dir / "launch_stt_cohere.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        (scripts_dir / "launch_stt_whisper.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        monkeypatch.setattr(
+            module.SystemDetector,
+            "detect",
+            lambda: SimpleNamespace(
+                gpus=[SimpleNamespace(index=2), SimpleNamespace(index=4)],
+                binaries=[],
+            ),
+        )
+
+        example_path = Path(__file__).resolve().parents[1] / "config.example.yaml"
+        output_path = tmp_path / "config.generated.yaml"
+
+        merged, _messages = module.bootstrap_config(example_path, output_path, force=True, profile="resource-node")
+
+        engines = merged["resource_node"]["engines"]
+        assert [engine["name"] for engine in engines] == ["cohere", "whisper"]
+        assert [engine["gpu"] for engine in engines] == [2, 4]
+        assert [engine["port"] for engine in engines] == [8003, 8005]
+
+
+class TestResourceNodeManifest:
+    def test_build_default_resource_node_config_assigns_known_engines_to_gpus(self, tmp_path):
+        cfg = build_default_resource_node_config(
+            gpu_indices=[3, 5],
+            repo_root=tmp_path,
+            script_exists=lambda _path: True,
+        )
+
+        assert cfg["vram"] == {"preflight": True, "auto_relocate": False}
+        assert cfg["engines"] == [
+            {
+                "name": "cohere",
+                "script": "scripts/launch_stt_cohere.sh",
+                "gpu": 3,
+                "gpu_mem": 0.85,
+                "port": 8003,
+                "idle_timeout_s": 0,
+            },
+            {
+                "name": "whisper",
+                "script": "scripts/launch_stt_whisper.sh",
+                "gpu": 5,
+                "gpu_mem": 0.85,
+                "port": 8005,
+                "idle_timeout_s": 0,
+            },
+        ]
+
+    def test_build_default_resource_node_config_reuses_single_gpu(self, tmp_path):
+        cfg = build_default_resource_node_config(
+            gpu_indices=[0],
+            repo_root=tmp_path,
+            script_exists=lambda _path: True,
+        )
+
+        assert [engine["gpu"] for engine in cfg["engines"]] == [0, 0]
+
+    def test_build_default_resource_node_config_skips_missing_scripts(self, tmp_path):
+        cfg = build_default_resource_node_config(
+            gpu_indices=[0, 1],
+            repo_root=tmp_path,
+            script_exists=lambda path: path.name == "launch_stt_cohere.sh",
+        )
+
+        assert [engine["name"] for engine in cfg["engines"]] == ["cohere"]
+
+    def test_ensure_default_resource_node_config_preserves_existing_manifest(self, tmp_path):
+        existing = {
+            "resource_node": {
+                "vram": {"preflight": False},
+                "engines": [
+                    {"name": "custom", "script": "scripts/custom.sh", "gpu": 7, "port": 8011},
+                ],
+            }
+        }
+
+        updated = ensure_default_resource_node_config(
+            existing,
+            gpu_indices=[0, 1],
+            repo_root=tmp_path,
+            script_exists=lambda _path: True,
+        )
+
+        assert updated == existing

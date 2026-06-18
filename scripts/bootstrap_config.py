@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import argparse
 import copy
-import os
 from pathlib import Path
 
 import yaml
 
 from transcria.config import _deep_merge, validate_config
+from transcria.config.resource_node_manifest import ensure_default_resource_node_config
 from transcria.config.system_detector import SystemDetector
 
 
@@ -50,13 +50,26 @@ def _detect_defaults(base_dir: Path) -> dict:
     return config
 
 
-def bootstrap_config(example_path: Path, output_path: Path, force: bool = False) -> tuple[dict, list[str]]:
+def bootstrap_config(
+    example_path: Path,
+    output_path: Path,
+    force: bool = False,
+    *,
+    profile: str = "all-in-one",
+) -> tuple[dict, list[str]]:
     if output_path.exists() and not force:
         raise FileExistsError(f"Le fichier existe déjà: {output_path}")
 
     template = _load_yaml(example_path)
     detected = _detect_defaults(output_path.parent)
     merged = _deep_merge(copy.deepcopy(template), detected)
+    if profile == "resource-node":
+        info = SystemDetector.detect()
+        merged = ensure_default_resource_node_config(
+            merged,
+            gpu_indices=[gpu.index for gpu in info.gpus],
+            repo_root=output_path.parent,
+        )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as fh:
@@ -71,14 +84,21 @@ def main() -> int:
     parser.add_argument("--example", default="config.example.yaml", help="Chemin du template YAML")
     parser.add_argument("--output", default="config.yaml", help="Chemin du fichier de sortie")
     parser.add_argument("--force", action="store_true", help="Écraser le fichier de sortie s'il existe")
+    parser.add_argument(
+        "--profile",
+        choices=("all-in-one", "web", "scheduler", "resource-node", "migrate"),
+        default="all-in-one",
+        help="Profil de déploiement utilisé pour les sections optionnelles",
+    )
     args = parser.parse_args()
 
     example_path = Path(args.example).resolve()
     output_path = Path(args.output).resolve()
 
-    merged, messages = bootstrap_config(example_path, output_path, force=args.force)
+    merged, messages = bootstrap_config(example_path, output_path, force=args.force, profile=args.profile)
 
     print(f"Configuration générée: {output_path}")
+    print(f"Profil: {args.profile}")
     print(f"Jobs dir: {merged.get('storage', {}).get('jobs_dir')}")
     print(f"Database URL: {merged.get('storage', {}).get('database_url')}")
     if messages:

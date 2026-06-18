@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 
+from dotenv import load_dotenv
 from flask import Flask, jsonify
 
 from inference_service.diarize_engine import DiarizeEngine
@@ -16,6 +17,15 @@ from inference_service.engine import VoiceEmbedEngine
 from inference_service.errors import InferenceError
 
 logger = logging.getLogger("inference_service")
+
+
+def _load_env_file() -> None:
+    env_file = os.environ.get("ENV_FILE")
+    if env_file:
+        load_dotenv(env_file, override=False)
+        return
+    repo_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(repo_env, override=False)
 
 
 def _configure_logging() -> None:
@@ -41,6 +51,7 @@ def create_app(
         engine: moteur embedding injecté (tests). Sinon construit depuis la config.
         diarize_engine: moteur diarisation injecté (tests). Sinon depuis la config.
     """
+    _load_env_file()
     _configure_logging()
     app = Flask("transcria_inference")
 
