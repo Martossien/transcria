@@ -516,6 +516,9 @@ ce qui retire une condition métier supplémentaire de `_setup_postgres`.
 La décision de migration SQLite vers PostgreSQL (`none`, `prompt`, `migrate`,
 `skip`) est également rendue par `transcria.install_postgres`, en gardant seulement
 le prompt utilisateur et l'exécution de migration dans le shell.
+Les SQL idempotents de création/mise à jour du rôle et de création de base UTF8
+sont rendus par `transcria.install_postgres --role-sql/--database-sql`, ce qui
+retire les heredocs SQL métier de `_setup_postgres`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

@@ -16,6 +16,8 @@ from transcria.install_postgres import (
     main,
     parse_bool,
     parse_non_negative_int,
+    render_database_sql,
+    render_role_sql,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
     validate_pg_inputs,
@@ -189,6 +191,32 @@ def test_decide_sqlite_migration_action():
     assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=False, pg_migrate=False) == "prompt"
     assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=True, pg_migrate=True) == "migrate"
     assert decide_sqlite_migration_action(sqlite_present=True, has_data=0, non_interactive=True, pg_migrate=False) == "skip"
+
+
+def test_render_role_sql_is_stable():
+    assert render_role_sql() == (
+        "SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')\n"
+        "WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \\gexec\n"
+        "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \\gexec\n"
+    )
+
+
+def test_render_database_sql_is_stable():
+    assert render_database_sql() == (
+        "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \\gexec\n"
+    )
+    assert render_database_sql(fallback_locale_c=True) == (
+        "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',\n"
+        "              :'dbname', :'role', 'UTF8', 'C', 'C') \\gexec\n"
+    )
+
+
+def test_install_postgres_cli_renders_role_and_database_sql(capsys):
+    assert main(["--role-sql"]) == 0
+    assert "CREATE ROLE" in capsys.readouterr().out
+
+    assert main(["--database-sql", "--fallback-locale-c"]) == 0
+    assert "LC_COLLATE" in capsys.readouterr().out
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):

@@ -766,11 +766,8 @@ _setup_postgres() {
         # ── Rôle (idempotent) ─────────────────────────────────────
         log_info "Vérification du rôle '$user' et de la base '$db'…"
 
-        if ! pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')
-WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \gexec
-SQL
+        if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --role-sql \
+            | pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass"
         then
             log_error "Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres."
             return 1
@@ -786,17 +783,14 @@ SELECT 1 FROM pg_database WHERE datname = :'dbname';
 SQL
         ) || db_exists=""
         if [[ "$db_exists" != "1" ]]; then
-            if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
-SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \gexec
-SQL
+            if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql \
+                | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
             then
                 # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
                 # locale C, qui accepte tout encodage (tri linguistique côté Python).
                 log_warn "CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…"
-                if ! pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user" <<'SQL'
-SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',
-              :'dbname', :'role', 'UTF8', 'C', 'C') \gexec
-SQL
+                if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql --fallback-locale-c \
+                    | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
                 then
                     log_error "Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres."
                     return 1

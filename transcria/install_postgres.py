@@ -129,6 +129,25 @@ def decide_sqlite_migration_action(
     return "migrate" if parse_bool(pg_migrate, name="pg_migrate") else "skip"
 
 
+def render_role_sql() -> str:
+    """Rend le SQL idempotent de création/mise à jour du rôle applicatif."""
+    return (
+        "SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'pwd')\n"
+        "WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role') \\gexec\n"
+        "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'pwd') \\gexec\n"
+    )
+
+
+def render_database_sql(*, fallback_locale_c: bool = False) -> str:
+    """Rend le SQL idempotent de création de base UTF8."""
+    if fallback_locale_c:
+        return (
+            "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L LC_COLLATE %L LC_CTYPE %L TEMPLATE template0',\n"
+            "              :'dbname', :'role', 'UTF8', 'C', 'C') \\gexec\n"
+        )
+    return "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \\gexec\n"
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -187,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--validate-inputs", action="store_true", help="valide db/user/port PostgreSQL")
     parser.add_argument("--schema-action", action="store_true", help="décide l'action Alembic depuis has_schema/has_data")
     parser.add_argument("--sqlite-migration-action", action="store_true", help="décide l'action de migration SQLite vers PostgreSQL")
+    parser.add_argument("--role-sql", action="store_true", help="rend le SQL idempotent du rôle PostgreSQL")
+    parser.add_argument("--database-sql", action="store_true", help="rend le SQL idempotent de création de base PostgreSQL")
+    parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
     parser.add_argument("--db", default=None)
@@ -282,6 +304,14 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        return 0
+
+    if args.role_sql:
+        print(render_role_sql(), end="")
+        return 0
+
+    if args.database_sql:
+        print(render_database_sql(fallback_locale_c=args.fallback_locale_c), end="")
         return 0
 
     if args.path is None:

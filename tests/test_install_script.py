@@ -215,6 +215,16 @@ def test_install_script_delegates_sqlite_migration_action_decision():
     assert 'if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]' not in content
 
 
+def test_install_script_delegates_postgres_role_and_database_sql_rendering():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--role-sql" in content
+    assert "--database-sql" in content
+    assert "--fallback-locale-c" in content
+    assert "CREATE ROLE %I LOGIN PASSWORD" not in content
+    assert "CREATE DATABASE %I OWNER %I" not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
