@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import stat
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
@@ -25,6 +26,99 @@ TIER_GPU_INDICES: dict[str, list[int]] = {
     "48gb": [0, 1],
     "64gb": [0, 1, 2],
 }
+
+
+@dataclass(frozen=True)
+class LlmTierMetadata:
+    tier: str
+    repo: str
+    file: str
+    directory: str
+    label: str
+
+
+LLM_TIERS: dict[str, LlmTierMetadata] = {
+    "12": LlmTierMetadata(
+        tier="12",
+        repo="unsloth/Qwen3.5-9B-GGUF",
+        file="Qwen3.5-9B-Q5_K_M.gguf",
+        directory="Qwen3.5-9B-Q5_K_M",
+        label="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)",
+    ),
+    "16": LlmTierMetadata(
+        tier="16",
+        repo="unsloth/Qwen3.5-9B-GGUF",
+        file="Qwen3.5-9B-Q6_K.gguf",
+        directory="Qwen3.5-9B-Q6_K",
+        label="Qwen3.5-9B Q6_K (256K, ~7 Go)",
+    ),
+    "24": LlmTierMetadata(
+        tier="24",
+        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
+        file="Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf",
+        directory="Qwen3.6-35B-A3B-UD-IQ4_NL_XL",
+        label="Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, ~19 Go — mono-GPU 24 Go)",
+    ),
+    "32": LlmTierMetadata(
+        tier="32",
+        repo="unsloth/Qwen3.6-27B-GGUF",
+        file="Qwen3.6-27B-Q5_K_M.gguf",
+        directory="Qwen3.6-27B-Q5_K_M",
+        label="Qwen3.6-27B Q5_K_M (192K, ~19 Go)",
+    ),
+    "48": LlmTierMetadata(
+        tier="48",
+        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
+        file="Qwen3.6-35B-A3B-UD-Q6_K.gguf",
+        directory="Qwen3.6-35B-A3B-UD-Q6_K",
+        label="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)",
+    ),
+    "64": LlmTierMetadata(
+        tier="64",
+        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
+        file="Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
+        directory="Qwen3.6-35B-A3B-UD-Q8_K_XL",
+        label="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)",
+    ),
+}
+
+
+def recommend_tier(total_vram_mb: int) -> str:
+    """Recommande un palier LLM depuis la VRAM totale, avec marge de sécurité."""
+    if total_vram_mb >= 60000:
+        return "64"
+    if total_vram_mb >= 46000:
+        return "48"
+    if total_vram_mb >= 31000:
+        return "32"
+    if total_vram_mb >= 23000:
+        return "24"
+    if total_vram_mb >= 15500:
+        return "16"
+    if total_vram_mb >= 11500:
+        return "12"
+    return "0"
+
+
+def get_tier_metadata(tier: str) -> LlmTierMetadata:
+    try:
+        return LLM_TIERS[tier]
+    except KeyError as exc:
+        raise ValueError(f"palier LLM inconnu : {tier}") from exc
+
+
+def render_tier_metadata_shell(tier: str) -> str:
+    """Rend les métadonnées d'un palier sous forme d'affectations shell filtrables."""
+    metadata = get_tier_metadata(tier)
+    return "\n".join(
+        [
+            f"LLM_REPO={_shell_quote(metadata.repo)}",
+            f"LLM_FILE={_shell_quote(metadata.file)}",
+            f"LLM_DIR={_shell_quote(metadata.directory)}",
+            f"LLM_LABEL={_shell_quote(metadata.label)}",
+            "",
+        ]
+    )
 
 
 def _shell_quote(value: str) -> str:
@@ -232,6 +326,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--label", default="")
     parser.add_argument("--prompt", default="")
     parser.add_argument("--repo", default="")
+    parser.add_argument("--recommend-tier", action="store_true", help="recommande un palier depuis --total-vram-mb")
+    parser.add_argument("--tier-info", action="store_true", help="rend les métadonnées shell d'un palier")
+    parser.add_argument("--total-vram-mb", type=int, default=0)
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root)
@@ -256,6 +353,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.prompt:
             print(render_prompt(prompt=args.prompt, label=args.label, repo=args.repo), end="")
+            return 0
+        if args.recommend_tier:
+            print(recommend_tier(args.total_vram_mb))
+            return 0
+        if args.tier_info:
+            if not args.tier_value:
+                print("--tier-value requis avec --tier-info", file=sys.stderr)
+                return 2
+            print(render_tier_metadata_shell(args.tier_value), end="")
             return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):

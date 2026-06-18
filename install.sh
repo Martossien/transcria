@@ -197,6 +197,8 @@ python_module() { PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_
 
 postgres_helper() { python_module transcria.install_postgres "$@"; }
 
+arbitrage_helper() { python_module transcria.install_arbitrage "$@"; }
+
 install_paths_helper() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths --install-dir "$INSTALL_DIR" "$@"
 }
@@ -1472,6 +1474,12 @@ log_llm_setup_event() {
         --label "$label"
 }
 
+load_llm_tier_metadata() {
+    local tier="$1" metadata
+    metadata=$(arbitrage_helper --tier-info --tier-value "$tier") || return 1
+    eval_prefixed_shell_assignments LLM "$metadata"
+}
+
 if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
     log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
 else
@@ -1488,26 +1496,6 @@ if [[ "$GPU_COUNT" -gt 0 && "$HAVE_NVIDIA_SMI" = true ]]; then
         GPU_SIZES_CSV="${GPU_SIZES_CSV:+$GPU_SIZES_CSV,}$_mb"
     done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null || true)
 fi
-
-# Palier recommandé selon la VRAM TOTALE (seuils calés sur les bench — marge ≥1 Go).
-recommend_llm_tier() {
-    local t="$1"
-    if   (( t >= 60000 )); then echo 64
-    elif (( t >= 46000 )); then echo 48
-    elif (( t >= 31000 )); then echo 32
-    elif (( t >= 23000 )); then echo 24
-    elif (( t >= 15500 )); then echo 16
-    elif (( t >= 11500 )); then echo 12
-    else echo 0; fi
-}
-
-# Table des modèles par palier — validée Phase A + Phase B (cf. docs/BENCH_LLM_PALIERS.md).
-# 24 Go : Gemma 4 12B écarté en Phase B (5× plus lent, régressions) → Qwen3.6-35B-A3B en
-# 4-bit i-quant XL (qualité de référence sur 1 carte 24 Go, ~19 Go @256K).
-declare -A LLM_REPO=(  [12]="unsloth/Qwen3.5-9B-GGUF"  [16]="unsloth/Qwen3.5-9B-GGUF"  [24]="unsloth/Qwen3.6-35B-A3B-GGUF"  [32]="unsloth/Qwen3.6-27B-GGUF"  [48]="unsloth/Qwen3.6-35B-A3B-GGUF"  [64]="unsloth/Qwen3.6-35B-A3B-GGUF" )
-declare -A LLM_FILE=(  [12]="Qwen3.5-9B-Q5_K_M.gguf"   [16]="Qwen3.5-9B-Q6_K.gguf"     [24]="Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf"  [32]="Qwen3.6-27B-Q5_K_M.gguf"   [48]="Qwen3.6-35B-A3B-UD-Q6_K.gguf"  [64]="Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf" )
-declare -A LLM_DIR=(   [12]="Qwen3.5-9B-Q5_K_M"        [16]="Qwen3.5-9B-Q6_K"          [24]="Qwen3.6-35B-A3B-UD-IQ4_NL_XL"       [32]="Qwen3.6-27B-Q5_K_M"        [48]="Qwen3.6-35B-A3B-UD-Q6_K"       [64]="Qwen3.6-35B-A3B-UD-Q8_K_XL" )
-declare -A LLM_LABEL=( [12]="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)"  [16]="Qwen3.5-9B Q6_K (256K, ~7 Go)"  [24]="Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, ~19 Go — mono-GPU 24 Go)"  [32]="Qwen3.6-27B Q5_K_M (192K, ~19 Go)"  [48]="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)"  [64]="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)" )
 
 if (( GPU_VRAM_TOTAL_MB < 11500 )); then
     log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
@@ -1531,21 +1519,22 @@ else
         rm -f "$_plan_warn"
     fi
     if [[ -z "$REC_TIER" ]]; then
-        REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
+        REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_TOTAL_MB")
         log_llm_setup_event planner-fallback
     fi
     if [[ "$REC_TIER" == "0" || -z "$REC_TIER" ]]; then
         REC_TIER=""
         log_llm_setup_event no-tier
     else
-        log_llm_setup_event recommended-tier "" "" "" "" "$REC_TIER" "${LLM_LABEL[$REC_TIER]}"
+        load_llm_tier_metadata "$REC_TIER"
+        log_llm_setup_event recommended-tier "" "" "" "" "$REC_TIER" "$LLM_LABEL"
     fi
     log_llm_setup_event tiers-info
-    LLM_TIER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt tier)
+    LLM_TIER_PROMPT=$(arbitrage_helper --prompt tier)
     ask LLM_TIER "$LLM_TIER_PROMPT" "$REC_TIER"
 
-    if [[ -n "${LLM_TIER:-}" && -n "${LLM_REPO[$LLM_TIER]:-}" ]]; then
-        LLM_MODELS_DIR_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt models-dir)
+    if [[ -n "${LLM_TIER:-}" ]] && load_llm_tier_metadata "$LLM_TIER"; then
+        LLM_MODELS_DIR_PROMPT=$(arbitrage_helper --prompt models-dir)
         ask MODELS_DIR_CHOICE "$LLM_MODELS_DIR_PROMPT" "$HOME/models"
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
         install_paths_helper --path "$MODELS_DIR_CHOICE" >/dev/null
@@ -1587,14 +1576,14 @@ else
                 if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
             done
         fi
-        LLAMA_SERVER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt llama-server)
+        LLAMA_SERVER_PROMPT=$(arbitrage_helper --prompt llama-server)
         ask LLAMA_SRV "$LLAMA_SERVER_PROMPT" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
 
-        REPO="${LLM_REPO[$LLM_TIER]}"; GG="${LLM_FILE[$LLM_TIER]}"
-        DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"
-        LLM_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage \
+        REPO="$LLM_REPO"; GG="$LLM_FILE"
+        DEST="$MODELS_DIR_CHOICE/$LLM_DIR"
+        LLM_DOWNLOAD_PROMPT=$(arbitrage_helper \
             --prompt download \
-            --label "${LLM_LABEL[$LLM_TIER]}" \
+            --label "$LLM_LABEL" \
             --repo "$REPO")
 
         if [[ -f "$DEST/$GG" ]]; then

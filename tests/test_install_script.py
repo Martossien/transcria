@@ -325,7 +325,13 @@ def test_install_script_delegates_llm_selection_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "-m transcria.install_arbitrage --setup-log" in content
+    assert "load_llm_tier_metadata" in content
+    assert "--tier-info" in content
+    assert "--recommend-tier" in content
     assert "log_llm_setup_event" in content
+    assert "declare -A LLM_REPO" not in content
+    assert "recommend_llm_tier()" not in content
+    assert "Qwen3.6-35B-A3B-UD-IQ4_NL_XL" not in content
     assert "LLM d'arbitrage locale non requise" not in content
     assert "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go)" not in content
     assert "TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)" not in content
@@ -365,9 +371,9 @@ def test_install_script_delegates_llm_download_and_activation_logs():
 def test_install_script_delegates_llm_prompts():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_arbitrage --prompt tier" in content
-    assert "-m transcria.install_arbitrage --prompt models-dir" in content
-    assert "-m transcria.install_arbitrage --prompt llama-server" in content
+    assert "arbitrage_helper --prompt tier" in content
+    assert "arbitrage_helper --prompt models-dir" in content
+    assert "arbitrage_helper --prompt llama-server" in content
     assert "--prompt download" in content
     assert "Palier LLM à installer" not in content
     assert "Répertoire de téléchargement des modèles" not in content

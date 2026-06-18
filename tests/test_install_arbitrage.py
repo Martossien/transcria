@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 import yaml
 
-from transcria.install_arbitrage import apply_profile, render_prompt, render_setup_log, render_wrapper, status
+from transcria.install_arbitrage import (
+    apply_profile,
+    get_tier_metadata,
+    recommend_tier,
+    render_prompt,
+    render_setup_log,
+    render_tier_metadata_shell,
+    render_wrapper,
+    status,
+)
 
 
 def _make_repo(tmp_path: Path) -> tuple[Path, Path]:
@@ -168,3 +177,36 @@ def test_render_prompt_for_llm_interactive_questions():
 def test_render_prompt_rejects_unknown_prompt():
     with pytest.raises(ValueError, match="prompt LLM inconnu : bad"):
         render_prompt(prompt="bad")
+
+
+def test_recommend_tier_from_total_vram():
+    assert recommend_tier(61000) == "64"
+    assert recommend_tier(46000) == "48"
+    assert recommend_tier(31000) == "32"
+    assert recommend_tier(23000) == "24"
+    assert recommend_tier(15500) == "16"
+    assert recommend_tier(11500) == "12"
+    assert recommend_tier(11499) == "0"
+
+
+def test_get_tier_metadata_for_download_plan():
+    metadata = get_tier_metadata("24")
+
+    assert metadata.repo == "unsloth/Qwen3.6-35B-A3B-GGUF"
+    assert metadata.file == "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf"
+    assert metadata.directory == "Qwen3.6-35B-A3B-UD-IQ4_NL_XL"
+    assert "mono-GPU 24 Go" in metadata.label
+
+
+def test_get_tier_metadata_rejects_unknown_tier():
+    with pytest.raises(ValueError, match="palier LLM inconnu : 18"):
+        get_tier_metadata("18")
+
+
+def test_render_tier_metadata_shell_is_filterable():
+    rendered = render_tier_metadata_shell("48")
+
+    assert "LLM_REPO='unsloth/Qwen3.6-35B-A3B-GGUF'" in rendered
+    assert "LLM_FILE='Qwen3.6-35B-A3B-UD-Q6_K.gguf'" in rendered
+    assert "LLM_DIR='Qwen3.6-35B-A3B-UD-Q6_K'" in rendered
+    assert "LLM_LABEL='Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)'" in rendered
