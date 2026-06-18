@@ -773,6 +773,25 @@ _setup_postgres() {
         fi
     }
 
+    log_sqlite_migration_event() {
+        local event="$1" action="${2:-}" line
+        line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+            --sqlite-migration-log \
+            --event "$event" \
+            --sqlite-db "$sqlite_db" \
+            --action "$action") || {
+            log_error "Impossible de rendre le message de migration SQLite : $event"
+            return 1
+        }
+        if [[ "$line" == INFO:* ]]; then
+            log_info "${line#INFO:}"
+        elif [[ "$line" == ERROR:* ]]; then
+            log_error "${line#ERROR:}"
+        else
+            log_warn "Sortie migration SQLite ignorée : $line"
+        fi
+    }
+
     # ── Dossier de backup ─────────────────────────────────────
     local backup_dir="$INSTALL_DIR/backups"
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
@@ -983,37 +1002,35 @@ _setup_postgres() {
         none)
             ;;
         migrate)
-            log_info "Base SQLite détectée : $sqlite_db"
+            log_sqlite_migration_event detected
             _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
             ;;
         skip)
-            log_info "Base SQLite détectée : $sqlite_db"
-            log_info "Migration sautée (--pg-migrate absent)"
+            log_sqlite_migration_event detected
+            log_sqlite_migration_event skipped
             ;;
         prompt)
-            log_info "Base SQLite détectée : $sqlite_db"
+            log_sqlite_migration_event detected
             local sqlite_size
             sqlite_size=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
                 --file-size "$sqlite_db" 2>/dev/null || echo "taille inconnue")
-            echo ""
-            echo "=== Migration SQLite → PostgreSQL ==="
-            echo "  Source : $sqlite_db ($sqlite_size)"
-            echo "  Cible  : $db@$host:$port"
-            echo ""
-            echo "Options :"
-            echo "  1. Migrer les données SQLite (conservation locale + copie PG)"
-            echo "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)"
-            echo -n "  Votre choix [1/2] : "
+            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+                --sqlite-migration-prompt \
+                --sqlite-db "$sqlite_db" \
+                --sqlite-size "$sqlite_size" \
+                --db "$db" \
+                --host "$host" \
+                --port "$port"
             local mchoice
             read -r mchoice
             if [[ "$mchoice" = "1" ]]; then
                 _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
             else
-                log_info "Migration ignorée — PG reste vide, $sqlite_db conservé"
+                log_sqlite_migration_event ignored
             fi
             ;;
         *)
-            log_error "Action de migration SQLite inconnue : $sqlite_migration_action"
+            log_sqlite_migration_event unknown-action "$sqlite_migration_action"
             return 1
             ;;
     esac

@@ -24,6 +24,8 @@ from transcria.install_postgres import (
     render_role_sql,
     render_schema_action_log,
     render_setup_log,
+    render_sqlite_migration_log,
+    render_sqlite_migration_prompt,
     render_state_query,
     render_state_summary,
     rewrite_pg_hba_file,
@@ -441,6 +443,59 @@ def test_install_postgres_cli_renders_alembic_log(capsys):
     assert main(["--alembic-log", "--event", "unknown-action", "--action", "bad"]) == 0
 
     assert capsys.readouterr().out == "ERROR:Action Alembic PostgreSQL inconnue : bad\n"
+
+
+def test_render_sqlite_migration_log_for_known_events():
+    assert render_sqlite_migration_log(event="detected", sqlite_db="/app/instance/transcrIA.db") == (
+        "INFO:Base SQLite détectée : /app/instance/transcrIA.db\n"
+    )
+    assert render_sqlite_migration_log(event="skipped", sqlite_db="/app/instance/transcrIA.db") == (
+        "INFO:Migration sautée (--pg-migrate absent)\n"
+    )
+    assert render_sqlite_migration_log(event="ignored", sqlite_db="/app/instance/transcrIA.db") == (
+        "INFO:Migration ignorée — PG reste vide, /app/instance/transcrIA.db conservé\n"
+    )
+    assert render_sqlite_migration_log(event="unknown-action", sqlite_db="/app/instance/transcrIA.db", action="bad") == (
+        "ERROR:Action de migration SQLite inconnue : bad\n"
+    )
+
+
+def test_render_sqlite_migration_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement de migration SQLite inconnu : bad"):
+        render_sqlite_migration_log(event="bad", sqlite_db="/app/instance/transcrIA.db")
+
+
+def test_render_sqlite_migration_prompt_is_stable():
+    assert render_sqlite_migration_prompt(
+        sqlite_db="/app/instance/transcrIA.db",
+        sqlite_size="2.0K",
+        db="transcria",
+        host="127.0.0.1",
+        port="5432",
+    ) == (
+        "\n"
+        "=== Migration SQLite → PostgreSQL ===\n"
+        "  Source : /app/instance/transcrIA.db (2.0K)\n"
+        "  Cible  : transcria@127.0.0.1:5432\n"
+        "\n"
+        "Options :\n"
+        "  1. Migrer les données SQLite (conservation locale + copie PG)\n"
+        "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)\n"
+        "  Votre choix [1/2] : "
+    )
+
+
+def test_install_postgres_cli_renders_sqlite_migration_prompt(capsys):
+    assert main([
+        "--sqlite-migration-prompt",
+        "--sqlite-db", "/app/instance/transcrIA.db",
+        "--sqlite-size", "2.0K",
+        "--db", "transcria",
+        "--host", "127.0.0.1",
+        "--port", "5432",
+    ]) == 0
+
+    assert capsys.readouterr().out.endswith("  Votre choix [1/2] : ")
 
 
 def test_rewrite_pg_hba_replaces_only_local_tcp_peer_and_ident():

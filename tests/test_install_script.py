@@ -232,6 +232,19 @@ def test_install_script_delegates_sqlite_migration_action_decision():
     assert 'if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]' not in content
 
 
+def test_install_script_delegates_sqlite_migration_logs_and_prompt():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--sqlite-migration-log" in content
+    assert "--sqlite-migration-prompt" in content
+    assert "log_sqlite_migration_event" in content
+    assert "Base SQLite détectée : $sqlite_db" not in content
+    assert "Migration sautée (--pg-migrate absent)" not in content
+    assert "Migration SQLite → PostgreSQL" not in content
+    assert "  1. Migrer les données SQLite" not in content
+    assert "Action de migration SQLite inconnue" not in content
+
+
 def test_install_script_delegates_postgres_role_and_database_sql_rendering():
     content = _INSTALL.read_text(encoding="utf-8")
 

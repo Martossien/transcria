@@ -261,6 +261,34 @@ def render_alembic_log(*, event: str, action: str = "") -> str:
     raise ValueError(f"événement Alembic PostgreSQL inconnu : {event}")
 
 
+def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "") -> str:
+    """Rend les messages liés à la migration SQLite vers PostgreSQL."""
+    if event == "detected":
+        return f"INFO:Base SQLite détectée : {sqlite_db}\n"
+    if event == "skipped":
+        return "INFO:Migration sautée (--pg-migrate absent)\n"
+    if event == "ignored":
+        return f"INFO:Migration ignorée — PG reste vide, {sqlite_db} conservé\n"
+    if event == "unknown-action":
+        return f"ERROR:Action de migration SQLite inconnue : {action}\n"
+    raise ValueError(f"événement de migration SQLite inconnu : {event}")
+
+
+def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str, host: str, port: str) -> str:
+    """Rend le prompt interactif de migration SQLite vers PostgreSQL."""
+    return "\n".join([
+        "",
+        "=== Migration SQLite → PostgreSQL ===",
+        f"  Source : {sqlite_db} ({sqlite_size})",
+        f"  Cible  : {db}@{host}:{port}",
+        "",
+        "Options :",
+        "  1. Migrer les données SQLite (conservation locale + copie PG)",
+        "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)",
+        "  Votre choix [1/2] : ",
+    ])
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -329,6 +357,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pg-hba-rewrite-result", action="store_true", help="interprète le résultat changed=N de réécriture pg_hba.conf")
     parser.add_argument("--setup-log", action="store_true", help="rend un message de bootstrap PostgreSQL")
     parser.add_argument("--alembic-log", action="store_true", help="rend un message de résultat Alembic PostgreSQL")
+    parser.add_argument("--sqlite-migration-log", action="store_true", help="rend un message de migration SQLite vers PostgreSQL")
+    parser.add_argument(
+        "--sqlite-migration-prompt",
+        action="store_true",
+        help="rend le prompt interactif de migration SQLite vers PostgreSQL",
+    )
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -349,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--action", default=None)
     parser.add_argument("--result", default=None)
     parser.add_argument("--event", default=None)
+    parser.add_argument("--sqlite-size", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -529,6 +564,35 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+        return 0
+
+    if args.sqlite_migration_log:
+        missing = [name for name in ("event", "sqlite_db") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_sqlite_migration_log(event=args.event, sqlite_db=args.sqlite_db, action=args.action or ""), end="")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.sqlite_migration_prompt:
+        missing = [name for name in ("sqlite_db", "sqlite_size", "db", "host", "port") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --sqlite-migration-prompt: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        print(
+            render_sqlite_migration_prompt(
+                sqlite_db=args.sqlite_db,
+                sqlite_size=args.sqlite_size,
+                db=args.db,
+                host=args.host,
+                port=args.port,
+            ),
+            end="",
+        )
         return 0
 
     if args.path is None:
