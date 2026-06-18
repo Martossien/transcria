@@ -454,6 +454,9 @@ Le rendu systemd legacy `transcria.service` utilise désormais aussi
 `pg_hba.conf` est isolé dans `transcria.install_postgres`, qui transforme uniquement
 les lignes TCP localhost `ident|peer` vers `scram-sha-256`, avec écriture atomique et
 tests d'idempotence.
+Les messages d'installation systemd (service sauté, installé, sudo absent,
+unités manquantes, avertissement split et nœud inference manquant) passent par
+`transcria.install_systemd --setup-log`; `install.sh` garde les actions privilégiées.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.

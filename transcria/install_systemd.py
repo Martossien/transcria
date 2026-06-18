@@ -71,18 +71,78 @@ def render_legacy_unit(template: str, context: SystemdRenderContext) -> str:
     return rendered
 
 
+def render_setup_log(*, event: str, unit: str = "", adapted: str = "", dst: str = "") -> str:
+    """Rend les messages d'installation systemd utilisés par install.sh."""
+    if event == "skipped":
+        return f"INFO:Service {unit} non installé (--no-service)\n"
+    if event == "installed":
+        return f"OK:Service {unit} installé et activé\n"
+    if event == "sudo-missing":
+        return f"WARN:sudo indisponible — fichier adapté : {adapted}\n"
+    if event == "manual-title":
+        return "WARN:Pour installer :\n"
+    if event == "manual-copy":
+        return f"WARN:  sudo cp {adapted} {dst}\n"
+    if event == "manual-enable":
+        return f"WARN:  sudo systemctl daemon-reload && sudo systemctl enable {unit}\n"
+    if event == "missing-unit":
+        return f"WARN:{unit}.service introuvable — service non installé\n"
+    if event == "legacy-missing":
+        return "WARN:transcria.service introuvable — service non installé\n"
+    if event == "split-legacy-enabled":
+        return "WARN:transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :\n"
+    if event == "split-legacy-disable-command":
+        return "WARN:  sudo systemctl disable --now transcria.service\n"
+    if event == "inference-missing":
+        return "WARN:transcria-inference.service introuvable — service non installé\n"
+    if event == "inference-missing-hint":
+        return "WARN:  Vérifiez que deploy/transcria-inference.service existe.\n"
+    raise ValueError(f"événement systemd inconnu : {event}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rend une unité systemd TranscrIA depuis un template versionné.")
-    parser.add_argument("--kind", choices=("legacy", "split", "inference"), required=True)
-    parser.add_argument("--template", required=True, help="chemin du template systemd")
-    parser.add_argument("--install-dir", required=True)
-    parser.add_argument("--service-user", required=True)
-    parser.add_argument("--service-home", required=True)
+    parser.add_argument("--kind", choices=("legacy", "split", "inference"), default=None)
+    parser.add_argument("--template", default=None, help="chemin du template systemd")
+    parser.add_argument("--install-dir", default=None)
+    parser.add_argument("--service-user", default=None)
+    parser.add_argument("--service-home", default=None)
     parser.add_argument("--inference-log-dir", default=DEFAULT_LOG_DIR)
     parser.add_argument("--legacy-log-file", default=None)
     parser.add_argument("--legacy-pid-file", default=None)
     parser.add_argument("--venv-dir", default=None)
+    parser.add_argument("--setup-log", action="store_true", help="rend un message systemd")
+    parser.add_argument("--event", default="")
+    parser.add_argument("--unit", default="")
+    parser.add_argument("--adapted", default="")
+    parser.add_argument("--dst", default="")
     args = parser.parse_args(argv)
+
+    if args.setup_log:
+        if not args.event:
+            print("--event requis avec --setup-log", file=sys.stderr)
+            return 2
+        try:
+            print(render_setup_log(event=args.event, unit=args.unit, adapted=args.adapted, dst=args.dst), end="")
+            return 0
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+    missing = [
+        name
+        for name, value in (
+            ("--kind", args.kind),
+            ("--template", args.template),
+            ("--install-dir", args.install_dir),
+            ("--service-user", args.service_user),
+            ("--service-home", args.service_home),
+        )
+        if not value
+    ]
+    if missing:
+        print("arguments requis: " + ", ".join(missing), file=sys.stderr)
+        return 2
 
     template_path = Path(args.template)
     template = template_path.read_text(encoding="utf-8")

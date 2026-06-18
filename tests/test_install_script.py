@@ -105,6 +105,25 @@ def test_install_script_reuses_split_systemd_unit_installer():
     assert "TMP_SCHEDULER=" not in content
 
 
+def test_install_script_delegates_systemd_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_systemd --setup-log" in content
+    assert "log_systemd_event" in content
+    assert "Service $unit non installé (--no-service)" not in content
+    assert "Service $unit installé et activé" not in content
+    assert "sudo indisponible — fichier adapté" not in content
+    assert "Pour installer :" not in content
+    assert "sudo cp $adapted $dst" not in content
+    assert "sudo systemctl daemon-reload && sudo systemctl enable $unit" not in content
+    assert "$unit.service introuvable — service non installé" not in content
+    assert "transcria.service introuvable — service non installé" not in content
+    assert "transcria.service est déjà activé" not in content
+    assert "sudo systemctl disable --now transcria.service" not in content
+    assert "transcria-inference.service introuvable" not in content
+    assert "Vérifiez que deploy/transcria-inference.service existe" not in content
+
+
 def test_install_script_supports_explicit_skip_doctor():
     content = _INSTALL.read_text(encoding="utf-8")
 

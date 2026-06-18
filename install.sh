@@ -1762,10 +1762,33 @@ done <<< "$IMPORT_OUTPUT"
 # ============================================================================
 # SECTION 11 — Services systemd
 # ============================================================================
+log_systemd_event() {
+    local event="$1" unit="${2:-}" adapted="${3:-}" dst="${4:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_systemd --setup-log \
+        --event "$event" \
+        --unit "$unit" \
+        --adapted "$adapted" \
+        --dst "$dst") || {
+        log_error "Impossible de rendre le message systemd : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie systemd ignorée : $line"
+    fi
+}
+
 install_systemd_unit() {
     local rendered="$1" dst="$2" unit="$3" adapted_name="$4"
     if [[ "$INSTALL_SYSTEMD" != true ]]; then
-        log_info "Service $unit non installé (--no-service)"
+        log_systemd_event skipped "$unit"
         return 0
     fi
     if [[ $EUID -eq 0 ]]; then
@@ -1773,20 +1796,20 @@ install_systemd_unit() {
         chmod 644 "$dst"
         systemctl daemon-reload
         systemctl enable "$unit"
-        log_ok "Service $unit installé et activé"
+        log_systemd_event installed "$unit"
     elif [[ "$HAVE_SUDO" = true ]]; then
         sudo cp "$rendered" "$dst"
         sudo chmod 644 "$dst"
         sudo systemctl daemon-reload
         sudo systemctl enable "$unit"
-        log_ok "Service $unit installé et activé"
+        log_systemd_event installed "$unit"
     else
         local adapted="$INSTALL_DIR/$adapted_name"
         cp "$rendered" "$adapted"
-        log_warn "sudo indisponible — fichier adapté : $adapted"
-        log_warn "Pour installer :"
-        log_warn "  sudo cp $adapted $dst"
-        log_warn "  sudo systemctl daemon-reload && sudo systemctl enable $unit"
+        log_systemd_event sudo-missing "$unit" "$adapted"
+        log_systemd_event manual-title
+        log_systemd_event manual-copy "$unit" "$adapted" "$dst"
+        log_systemd_event manual-enable "$unit"
     fi
 }
 
@@ -1804,7 +1827,7 @@ render_deploy_unit() {
 install_deploy_unit() {
     local src="$1" dst="$2" unit="$3" adapted_name="$4"
     if [[ ! -f "$src" ]]; then
-        log_warn "$unit.service introuvable — service non installé"
+        log_systemd_event missing-unit "$unit"
         return 0
     fi
     local tmp_unit
@@ -1821,7 +1844,7 @@ if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     SERVICE_DST="/etc/systemd/system/transcria.service"
 
     if [[ ! -f "$SERVICE_SRC" ]]; then
-        log_warn "transcria.service introuvable — service non installé"
+        log_systemd_event legacy-missing
     else
         if id "$SERVICE_USER" &>/dev/null 2>&1; then
             SERVICE_HOME=$(resolve_user_home "$SERVICE_USER")
@@ -1862,8 +1885,8 @@ if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PRO
     log_section "Services systemd split"
 
     if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
-        log_warn "transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :"
-        log_warn "  sudo systemctl disable --now transcria.service"
+        log_systemd_event split-legacy-enabled
+        log_systemd_event split-legacy-disable-command
     fi
 
     install_deploy_unit \
@@ -1897,8 +1920,8 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     INFERENCE_DST="/etc/systemd/system/transcria-inference.service"
 
     if [[ ! -f "$INFERENCE_SRC" ]]; then
-        log_warn "transcria-inference.service introuvable — service non installé"
-        log_warn "  Vérifiez que deploy/transcria-inference.service existe."
+        log_systemd_event inference-missing
+        log_systemd_event inference-missing-hint
     else
         INF_LOG_DIR="/var/log"
         if [[ "$SERVICE_USER" != "root" ]]; then
