@@ -519,6 +519,9 @@ le prompt utilisateur et l'exécution de migration dans le shell.
 Les SQL idempotents de création/mise à jour du rôle et de création de base UTF8
 sont rendus par `transcria.install_postgres --role-sql/--database-sql`, ce qui
 retire les heredocs SQL métier de `_setup_postgres`.
+Les requêtes de lecture d'état PostgreSQL (existence de base, encodage, compteurs,
+version Alembic) sont centralisées dans `transcria.install_postgres --state-query`
+au lieu d'être dispersées en chaînes `psql -c` dans `install.sh`.
 La vérification locale des modèles (dossier Cohere non vide, cache pyannote,
 premier GGUF d'arbitrage) passe par `transcria.install_models`, ce qui retire les
 `python -c pathlib` et `find | head` de `install.sh`.

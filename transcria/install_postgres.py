@@ -15,6 +15,13 @@ _LOCAL_TCP_PEER_RE = re.compile(
     r"^(?P<prefix>\s*host\s+(?:all|replication)\s+all\s+(?:127\.0\.0\.1/32|::1/128)\s+)(?:ident|peer)(?P<suffix>\s*(?:#.*)?)$"
 )
 _PG_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]{0,62}$")
+_STATE_QUERIES = {
+    "database-exists": "SELECT 1 FROM pg_database WHERE datname = :'dbname';",
+    "encoding": "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();",
+    "public-table-count": "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'",
+    "users-count": "SELECT COUNT(*) FROM users",
+    "alembic-version": "SELECT version_num FROM alembic_version",
+}
 
 
 def is_local_pg_host(host: str) -> bool:
@@ -148,6 +155,15 @@ def render_database_sql(*, fallback_locale_c: bool = False) -> str:
     return "SELECT format('CREATE DATABASE %I OWNER %I ENCODING %L TEMPLATE template0', :'dbname', :'role', 'UTF8') \\gexec\n"
 
 
+def render_state_query(name: str) -> str:
+    """Rend une requête de lecture d'état PostgreSQL utilisée par install.sh."""
+    try:
+        return _STATE_QUERIES[name] + "\n"
+    except KeyError as exc:
+        expected = ", ".join(sorted(_STATE_QUERIES))
+        raise ValueError(f"requête inconnue: {name} (attendues: {expected})") from exc
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -208,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sqlite-migration-action", action="store_true", help="décide l'action de migration SQLite vers PostgreSQL")
     parser.add_argument("--role-sql", action="store_true", help="rend le SQL idempotent du rôle PostgreSQL")
     parser.add_argument("--database-sql", action="store_true", help="rend le SQL idempotent de création de base PostgreSQL")
+    parser.add_argument("--state-query", choices=sorted(_STATE_QUERIES), default=None, help="rend une requête de lecture d'état PostgreSQL")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -312,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.database_sql:
         print(render_database_sql(fallback_locale_c=args.fallback_locale_c), end="")
+        return 0
+
+    if args.state_query is not None:
+        print(render_state_query(args.state_query), end="")
         return 0
 
     if args.path is None:

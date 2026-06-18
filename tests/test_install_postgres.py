@@ -18,6 +18,7 @@ from transcria.install_postgres import (
     parse_non_negative_int,
     render_database_sql,
     render_role_sql,
+    render_state_query,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
     validate_pg_inputs,
@@ -217,6 +218,25 @@ def test_install_postgres_cli_renders_role_and_database_sql(capsys):
 
     assert main(["--database-sql", "--fallback-locale-c"]) == 0
     assert "LC_COLLATE" in capsys.readouterr().out
+
+
+def test_render_state_query_is_stable():
+    assert render_state_query("database-exists") == "SELECT 1 FROM pg_database WHERE datname = :'dbname';\n"
+    assert render_state_query("encoding") == "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();\n"
+    assert render_state_query("public-table-count") == "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'\n"
+    assert render_state_query("users-count") == "SELECT COUNT(*) FROM users\n"
+    assert render_state_query("alembic-version") == "SELECT version_num FROM alembic_version\n"
+
+
+def test_render_state_query_rejects_unknown_name():
+    with pytest.raises(ValueError, match="requête inconnue: bad"):
+        render_state_query("bad")
+
+
+def test_install_postgres_cli_renders_state_query(capsys):
+    assert main(["--state-query", "users-count"]) == 0
+
+    assert capsys.readouterr().out == "SELECT COUNT(*) FROM users\n"
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):

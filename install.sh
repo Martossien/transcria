@@ -400,6 +400,11 @@ build_pg_dsn() {
         --password "$pass"
 }
 
+pg_state_query() {
+    local name="$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --state-query "$name"
+}
+
 # Helper YAML — lit une clé dans config.yaml
 yaml_get() {
     local key="$1"
@@ -778,10 +783,7 @@ _setup_postgres() {
         #    validation, psycopg3 renvoie des bytes). TEMPLATE template0 permet de
         #    fixer l'encodage quelle que soit la base modèle du cluster.
         local db_exists=""
-        db_exists=$(pg_admin_psql -At -v dbname="$db" <<'SQL'
-SELECT 1 FROM pg_database WHERE datname = :'dbname';
-SQL
-        ) || db_exists=""
+        db_exists=$(pg_admin_psql -At -v dbname="$db" -c "$(pg_state_query database-exists)") || db_exists=""
         if [[ "$db_exists" != "1" ]]; then
             if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres --database-sql \
                 | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
@@ -816,7 +818,7 @@ SQL
     # ── Garde encodage : UTF8 requis (cf. docs/INSTALL.md § Encodage de la base) ──
     local db_encoding=""
     db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
-        -c "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = current_database();" 2>/dev/null) || db_encoding=""
+        -c "$(pg_state_query encoding)" 2>/dev/null) || db_encoding=""
     if [[ -n "$db_encoding" && "$db_encoding" != "UTF8" ]]; then
         log_warn "⚠ La base '$db' existe déjà en encodage $db_encoding (UTF8 attendu) :"
         log_warn "  texte stocké SANS validation d'encodage — migrez-la dès que possible"
@@ -831,9 +833,9 @@ SQL
 
     # ── Détection état de la base ─────────────────────────────
     local has_schema="" has_data="" alembic_ver=""
-    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null) || has_schema=0
-    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT COUNT(*) FROM users" 2>/dev/null) || has_data=0
-    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT version_num FROM alembic_version" 2>/dev/null) || alembic_ver=""
+    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query public-table-count)" 2>/dev/null) || has_schema=0
+    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query users-count)" 2>/dev/null) || has_data=0
+    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query alembic-version)" 2>/dev/null) || alembic_ver=""
     [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
     [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
     log_info "Base '$db' : tables public=$has_schema | alembic='$alembic_ver' | utilisateurs=$has_data"

@@ -225,6 +225,16 @@ def test_install_script_delegates_postgres_role_and_database_sql_rendering():
     assert "CREATE DATABASE %I OWNER %I" not in content
 
 
+def test_install_script_delegates_postgres_state_queries():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "pg_state_query" in content
+    assert "--state-query" in content
+    assert "SELECT COUNT(*) FROM users" not in content
+    assert "SELECT version_num FROM alembic_version" not in content
+    assert "pg_encoding_to_char" not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
