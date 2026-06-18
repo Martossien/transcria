@@ -470,6 +470,9 @@ et la recommandation par VRAM totale sont sorties de `install.sh` vers
 La sélection du client de téléchargement LLM (`hf` puis `huggingface-cli`) est
 également rendue par `transcria.install_arbitrage --download-client`; le shell
 conserve seulement l'appel explicite de téléchargement du GGUF.
+Le fallback simple `llama-server` (PATH, `~/llama.cpp/build/bin`, `/usr/local/bin`)
+est rendu par `transcria.install_arbitrage --llama-fallback`; le détecteur avancé
+reste prioritaire et `install.sh` garde seulement le prompt final.
 La détection locale des modèles (Cohere, cache pyannote, SQUIM, premier GGUF)
 est également regroupée dans `transcria.install_models detect-local`; `install.sh`
 ne fait plus que charger les variables filtrées et afficher les statuts rendus.

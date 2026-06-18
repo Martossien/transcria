@@ -9,15 +9,18 @@ import yaml
 
 from transcria.install_arbitrage import (
     DownloadClient,
+    LlamaFallback,
     apply_profile,
     get_tier_metadata,
     recommend_tier,
     render_download_client_shell,
+    render_llama_fallback_shell,
     render_prompt,
     render_setup_log,
     render_tier_metadata_shell,
     render_wrapper,
     select_download_client,
+    select_llama_fallback,
     status,
 )
 
@@ -235,3 +238,25 @@ def test_render_download_client_shell_is_filterable():
 
     assert "LLM_HF_DL='huggingface-cli'" in rendered
     assert "LLM_HF_DL_PATH='/opt/hf cli'" in rendered
+
+
+def test_select_llama_fallback_uses_user_tree_when_path_missing(monkeypatch, tmp_path: Path):
+    server = tmp_path / "llama.cpp" / "build" / "bin" / "llama-server"
+    server.parent.mkdir(parents=True)
+    server.write_text("#!/bin/sh\n", encoding="utf-8")
+    server.chmod(0o755)
+    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+
+    assert select_llama_fallback(user_home=tmp_path) == LlamaFallback(server=server)
+
+
+def test_select_llama_fallback_handles_missing_server(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+
+    assert select_llama_fallback(user_home=tmp_path) == LlamaFallback(server=None)
+
+
+def test_render_llama_fallback_shell_is_filterable():
+    rendered = render_llama_fallback_shell(LlamaFallback(server=Path("/opt/llama server")))
+
+    assert "LLAMA_FALLBACK='/opt/llama server'" in rendered

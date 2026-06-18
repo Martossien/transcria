@@ -1557,15 +1557,9 @@ else
             rm -f "$_ll_warn"
         fi
         if [[ -z "$LLAMA_SRV" ]]; then
-            FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
-            if LLAMA_FALLBACK_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
-                    first-available --name llama-server --format shell 2>/dev/null); then
-                eval_prefixed_shell_assignments FIRST_AVAILABLE "$LLAMA_FALLBACK_OUT"
-            fi
-            for c in "$FIRST_AVAILABLE_PATH" \
-                     "$HOME/llama.cpp/build/bin/llama-server" "/usr/local/bin/llama-server"; do
-                if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
-            done
+            LLAMA_FALLBACK_OUT=$(arbitrage_helper --llama-fallback --user-home "$HOME")
+            eval_named_shell_assignments "$LLAMA_FALLBACK_OUT" LLAMA_FALLBACK
+            LLAMA_SRV="$LLAMA_FALLBACK"
         fi
         LLAMA_SERVER_PROMPT=$(arbitrage_helper --prompt llama-server)
         ask LLAMA_SRV "$LLAMA_SERVER_PROMPT" "${LLAMA_SRV:-/usr/local/bin/llama-server}"

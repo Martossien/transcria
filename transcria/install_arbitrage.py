@@ -44,6 +44,11 @@ class DownloadClient:
     path: Path | None
 
 
+@dataclass(frozen=True)
+class LlamaFallback:
+    server: Path | None
+
+
 LLM_TIERS: dict[str, LlmTierMetadata] = {
     "12": LlmTierMetadata(
         tier="12",
@@ -143,6 +148,25 @@ def render_download_client_shell(client: DownloadClient) -> str:
             "",
         ]
     )
+
+
+def select_llama_fallback(*, user_home: Path) -> LlamaFallback:
+    """Sélectionne un fallback llama-server simple si le détecteur avancé ne trouve rien."""
+    match = first_available(["llama-server"])
+    candidates = [
+        match.path if match else None,
+        Path(user_home) / "llama.cpp" / "build" / "bin" / "llama-server",
+        Path("/usr/local/bin/llama-server"),
+    ]
+    for candidate in candidates:
+        if candidate and candidate.is_file() and candidate.stat().st_mode & 0o111:
+            return LlamaFallback(server=candidate)
+    return LlamaFallback(server=None)
+
+
+def render_llama_fallback_shell(fallback: LlamaFallback) -> str:
+    """Rend le fallback llama-server sous forme d'affectation shell filtrable."""
+    return f"LLAMA_FALLBACK={_shell_quote(str(fallback.server or ''))}\n"
 
 
 def _shell_quote(value: str) -> str:
@@ -353,6 +377,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--recommend-tier", action="store_true", help="recommande un palier depuis --total-vram-mb")
     parser.add_argument("--tier-info", action="store_true", help="rend les métadonnées shell d'un palier")
     parser.add_argument("--download-client", action="store_true", help="rend le client HuggingFace disponible pour télécharger la LLM")
+    parser.add_argument("--llama-fallback", action="store_true", help="rend un fallback llama-server simple")
+    parser.add_argument("--user-home", default="")
     parser.add_argument("--total-vram-mb", type=int, default=0)
     args = parser.parse_args(argv)
 
@@ -390,6 +416,12 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.download_client:
             print(render_download_client_shell(select_download_client()), end="")
+            return 0
+        if args.llama_fallback:
+            if not args.user_home:
+                print("--user-home requis avec --llama-fallback", file=sys.stderr)
+                return 2
+            print(render_llama_fallback_shell(select_llama_fallback(user_home=Path(args.user_home))), end="")
             return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):

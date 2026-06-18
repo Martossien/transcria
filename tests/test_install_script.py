@@ -193,10 +193,9 @@ def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     assert "grep -E '^LLAMA_[A-Z_]+='" not in content
 
 
-def test_install_script_filters_first_available_helper_outputs_before_eval():
+def test_install_script_filters_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "eval_prefixed_shell_assignments FIRST_AVAILABLE" in content
     assert 'eval "$HF_COHERE_OUT"' not in content
     assert 'eval "$LLAMA_FALLBACK_OUT"' not in content
     assert 'eval "$HF_DL_OUT"' not in content
@@ -641,7 +640,8 @@ def test_install_script_finds_download_clients_through_python_helper():
     assert "arbitrage_helper --download-client" in content
     assert "first-available --name hf --name huggingface-cli" not in content
     assert "first-available --name huggingface-cli --format shell" not in content
-    assert "first-available --name llama-server" in content
+    assert "arbitrage_helper --llama-fallback" in content
+    assert "first-available --name llama-server" not in content
     assert "check-binaries --required psql" in content
     assert "command -v psql" not in content
     assert "command -v huggingface-cli" not in content
