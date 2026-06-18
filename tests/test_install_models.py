@@ -6,6 +6,7 @@ import pytest
 
 from transcria.install_models import (
     PYANNOTE_MODEL_ID,
+    detect_local_models,
     download_pyannote_pipeline,
     find_first_gguf,
     find_pyannote_cache,
@@ -14,6 +15,7 @@ from transcria.install_models import (
     parse_bool,
     render_cohere_setup_log,
     render_cohere_setup_prompt,
+    render_local_model_detection_shell,
     render_model_detection_table,
     render_model_status_log,
     render_model_summary,
@@ -77,6 +79,59 @@ def test_find_first_gguf_returns_first_file_recursively(tmp_path: Path):
     first.write_text("first", encoding="utf-8")
 
     assert find_first_gguf(models) == first
+
+
+def test_detect_local_models_returns_shell_ready_state(tmp_path: Path):
+    cohere = tmp_path / "models" / "cohere"
+    cohere.mkdir(parents=True)
+    (cohere / "config.json").write_text("{}", encoding="utf-8")
+    pyannote = tmp_path / "hf" / "models--pyannote--speaker-diarization-community-1"
+    pyannote.mkdir(parents=True)
+    squim = tmp_path / "torch" / "hub" / "torchaudio" / "models" / "squim_objective_dns2020.pth"
+    squim.parent.mkdir(parents=True)
+    squim.write_text("weights", encoding="utf-8")
+    gguf = tmp_path / "models" / "arbitrage" / "model.gguf"
+    gguf.parent.mkdir(parents=True)
+    gguf.write_text("model", encoding="utf-8")
+
+    detection = detect_local_models(
+        cohere_path="./models/cohere",
+        install_dir=tmp_path,
+        hf_cache=tmp_path / "hf",
+        torch_home=tmp_path / "torch",
+        models_dir=tmp_path / "models",
+        needs_llm=True,
+    )
+
+    assert detection.cohere_path == cohere
+    assert detection.cohere_ok
+    assert detection.pyannote_cache == pyannote
+    assert detection.pyannote_ok
+    assert detection.squim_path == squim
+    assert detection.squim_ok
+    assert detection.qwen_gguf == gguf
+    assert detection.qwen_ok
+
+
+def test_render_local_model_detection_shell_is_filterable(tmp_path: Path):
+    detection = detect_local_models(
+        cohere_path="./missing/cohere",
+        install_dir=tmp_path,
+        hf_cache=tmp_path / "hf",
+        torch_home=tmp_path / "torch",
+        models_dir=tmp_path / "models",
+        needs_llm=False,
+    )
+
+    rendered = render_local_model_detection_shell(detection)
+
+    assert f"COHERE_PATH={tmp_path}/missing/cohere" in rendered
+    assert "COHERE_OK=false" in rendered
+    assert "PYANNOTE_CACHE=''" in rendered
+    assert "PYANNOTE_OK=false" in rendered
+    assert "SQUIM_OK=false" in rendered
+    assert "QWEN_GGUF=''" in rendered
+    assert "QWEN_OK=false" in rendered
 
 
 def test_render_model_summary_for_all_in_one_missing_values():

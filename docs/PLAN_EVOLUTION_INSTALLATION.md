@@ -467,6 +467,9 @@ entre orchestration shell et logique Python testée.
 La matrice des paliers LLM d'arbitrage (repo, fichier GGUF, répertoire, libellé)
 et la recommandation par VRAM totale sont sorties de `install.sh` vers
 `transcria.install_arbitrage`, avec CLI shell filtrable et tests unitaires.
+La détection locale des modèles (Cohere, cache pyannote, SQUIM, premier GGUF)
+est également regroupée dans `transcria.install_models detect-local`; `install.sh`
+ne fait plus que charger les variables filtrées et afficher les statuts rendus.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.

@@ -2,11 +2,26 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import shlex
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 PYANNOTE_MODEL_ID = "pyannote/speaker-diarization-community-1"
+SQUIM_RELATIVE_PATH = Path("hub") / "torchaudio" / "models" / "squim_objective_dns2020.pth"
+
+
+@dataclass(frozen=True)
+class LocalModelDetection:
+    cohere_path: Path
+    cohere_ok: bool
+    pyannote_cache: Path | None
+    pyannote_ok: bool
+    squim_path: Path
+    squim_ok: bool
+    qwen_gguf: Path | None
+    qwen_ok: bool
 
 
 def parse_bool(value: str) -> bool:
@@ -50,6 +65,47 @@ def find_first_gguf(models_dir: Path) -> Path | None:
         if match.is_file():
             return match
     return None
+
+
+def detect_local_models(
+    *,
+    cohere_path: str,
+    install_dir: Path,
+    hf_cache: Path,
+    torch_home: Path,
+    models_dir: Path,
+    needs_llm: bool,
+) -> LocalModelDetection:
+    """Détecte les modèles locaux utilisés par l'installateur."""
+    resolved_cohere_path = resolve_repo_relative_path(cohere_path, install_dir)
+    pyannote_cache = find_pyannote_cache(hf_cache)
+    squim_path = torch_home / SQUIM_RELATIVE_PATH
+    qwen_gguf = find_first_gguf(models_dir) if needs_llm else None
+    return LocalModelDetection(
+        cohere_path=resolved_cohere_path,
+        cohere_ok=bool(cohere_path) and is_non_empty_dir(resolved_cohere_path),
+        pyannote_cache=pyannote_cache,
+        pyannote_ok=pyannote_cache is not None,
+        squim_path=squim_path,
+        squim_ok=squim_path.is_file(),
+        qwen_gguf=qwen_gguf,
+        qwen_ok=qwen_gguf is not None,
+    )
+
+
+def render_local_model_detection_shell(detection: LocalModelDetection) -> str:
+    """Rend la détection locale sous forme d'affectations shell filtrables."""
+    values = {
+        "COHERE_PATH": str(detection.cohere_path),
+        "COHERE_OK": str(detection.cohere_ok).lower(),
+        "PYANNOTE_CACHE": str(detection.pyannote_cache or ""),
+        "PYANNOTE_OK": str(detection.pyannote_ok).lower(),
+        "SQUIM_PTH": str(detection.squim_path),
+        "SQUIM_OK": str(detection.squim_ok).lower(),
+        "QWEN_GGUF": str(detection.qwen_gguf or ""),
+        "QWEN_OK": str(detection.qwen_ok).lower(),
+    }
+    return "".join(f"{key}={shlex.quote(value)}\n" for key, value in values.items())
 
 
 def download_pyannote_pipeline(hf_token: str, *, model_id: str = PYANNOTE_MODEL_ID, pipeline_cls: Any | None = None) -> None:
@@ -263,6 +319,14 @@ def main(argv: list[str] | None = None) -> int:
     gguf_parser = subparsers.add_parser("first-gguf", help="trouve le premier modèle GGUF local")
     gguf_parser.add_argument("--models-dir", required=True)
 
+    detect_parser = subparsers.add_parser("detect-local", help="détecte les modèles locaux et rend des variables shell")
+    detect_parser.add_argument("--cohere-path", required=True)
+    detect_parser.add_argument("--install-dir", required=True)
+    detect_parser.add_argument("--hf-cache", required=True)
+    detect_parser.add_argument("--torch-home", required=True)
+    detect_parser.add_argument("--models-dir", required=True)
+    detect_parser.add_argument("--needs-llm", required=True)
+
     pyannote_download_parser = subparsers.add_parser("download-pyannote", help="précharge pyannote dans le cache HuggingFace")
     pyannote_download_parser.add_argument("--hf-token", required=True)
     pyannote_download_parser.add_argument("--model-id", default=PYANNOTE_MODEL_ID)
@@ -312,6 +376,21 @@ def main(argv: list[str] | None = None) -> int:
             return _print_path(find_pyannote_cache(Path(args.hf_cache)))
         if args.command == "first-gguf":
             return _print_path(find_first_gguf(Path(args.models_dir)))
+        if args.command == "detect-local":
+            print(
+                render_local_model_detection_shell(
+                    detect_local_models(
+                        cohere_path=args.cohere_path,
+                        install_dir=Path(args.install_dir),
+                        hf_cache=Path(args.hf_cache),
+                        torch_home=Path(args.torch_home),
+                        models_dir=Path(args.models_dir),
+                        needs_llm=parse_bool(args.needs_llm),
+                    )
+                ),
+                end="",
+            )
+            return 0
         if args.command == "download-pyannote":
             download_pyannote_pipeline(args.hf_token, model_id=args.model_id)
             print("pyannote téléchargé")

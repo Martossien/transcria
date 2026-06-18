@@ -611,9 +611,11 @@ def test_install_script_detects_existing_torch_through_python_helper():
 def test_install_script_checks_models_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_models cohere-ok" in content
-    assert "-m transcria.install_models pyannote-cache" in content
-    assert "-m transcria.install_models first-gguf" in content
+    assert "python_module transcria.install_models detect-local" in content
+    assert "eval_named_shell_assignments \"$MODEL_DETECTION\"" in content
+    assert "-m transcria.install_models cohere-ok" not in content
+    assert "-m transcria.install_models pyannote-cache" not in content
+    assert "-m transcria.install_models first-gguf" not in content
     assert "-m transcria.install_models download-pyannote" in content
     assert "from pathlib import Path; import sys" not in content
     assert "Pipeline.from_pretrained('pyannote/speaker-diarization-community-1'" not in content

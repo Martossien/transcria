@@ -1193,49 +1193,46 @@ log_pyannote_setup_event() {
 }
 
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
-    # ── Cohere ASR ───────────────────────────────────────────────────────────
-    COHERE_PATH=$(yaml_get "models.cohere_model_path")
-    # Résoudre chemin relatif
-    if [[ "$COHERE_PATH" = ./* ]]; then
-        COHERE_PATH="$INSTALL_DIR/${COHERE_PATH#./}"
-    fi
-    if [[ -n "$COHERE_PATH" ]] && PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-ok \
-            --path "$COHERE_PATH" \
-            --install-dir "$INSTALL_DIR"; then
+    MODEL_DETECTION=$(python_module transcria.install_models detect-local \
+        --cohere-path "$(yaml_get "models.cohere_model_path")" \
+        --install-dir "$INSTALL_DIR" \
+        --hf-cache "${HF_HOME:-$HOME/.cache/huggingface}/hub" \
+        --torch-home "${TORCH_HOME:-$HOME/.cache/torch}" \
+        --models-dir "$INSTALL_DIR/models" \
+        --needs-llm "$PROFILE_NEEDS_LLM")
+    eval_named_shell_assignments "$MODEL_DETECTION" \
+        COHERE_PATH COHERE_OK PYANNOTE_CACHE PYANNOTE_OK SQUIM_PTH SQUIM_OK QWEN_GGUF QWEN_OK
+
+    if [[ "$COHERE_OK" = true ]]; then
         COHERE_OK=true
         log_model_status_event cohere-ok "$COHERE_PATH"
     else
+        COHERE_OK=false
         log_model_status_event cohere-missing "$COHERE_PATH"
     fi
 
-    # ── pyannote (cache HuggingFace) ─────────────────────────────────────────
-    HF_CACHE="${HF_HOME:-$HOME/.cache/huggingface}/hub"
-    PYANNOTE_CACHE=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-cache \
-        --hf-cache "$HF_CACHE" 2>/dev/null || true)
-    if [[ -n "$PYANNOTE_CACHE" ]]; then
+    if [[ "$PYANNOTE_OK" = true ]]; then
         PYANNOTE_OK=true
         log_model_status_event pyannote-ok "$PYANNOTE_CACHE"
     else
+        PYANNOTE_OK=false
         log_model_status_event pyannote-missing
     fi
 
-    # ── SQUIM (préflight qualité, asset torchaudio) ─────────────────────────
-    SQUIM_PTH="${TORCH_HOME:-$HOME/.cache/torch}/hub/torchaudio/models/squim_objective_dns2020.pth"
-    if [[ -f "$SQUIM_PTH" ]]; then
+    if [[ "$SQUIM_OK" = true ]]; then
         SQUIM_OK=true
         log_model_status_event squim-ok "$SQUIM_PTH"
     else
+        SQUIM_OK=false
         log_model_status_event squim-missing
     fi
 
     if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-        # ── LLM d'arbitrage GGUF ─────────────────────────────────────────────
-        QWEN_GGUF=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models first-gguf \
-            --models-dir "$INSTALL_DIR/models" 2>/dev/null || true)
-        if [[ -n "$QWEN_GGUF" ]]; then
+        if [[ "$QWEN_OK" = true ]]; then
             QWEN_OK=true
             log_model_status_event llm-ok "$QWEN_GGUF"
         else
+            QWEN_OK=false
             log_model_status_event llm-missing
         fi
     else
