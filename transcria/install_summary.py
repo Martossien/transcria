@@ -81,6 +81,14 @@ def render_setup_log(*, event: str, profile: str = "", runtime_role: str = "", v
         return "OK:config.yaml mis à jour\n"
     if event == "env-secured":
         return f"OK:.env sécurisé pour l'utilisateur de service ({value})\n"
+    if event == "doctor-skipped":
+        return "WARN:doctor.py sauté à la demande (--skip-doctor)\n"
+    if event == "doctor-ok":
+        return "OK:doctor.py : aucun échec bloquant\n"
+    if event == "doctor-warn":
+        return "WARN:doctor.py a détecté des points à corriger avant production\n"
+    if event == "doctor-unavailable":
+        return "WARN:doctor.py non disponible — validation post-install sautée\n"
     raise ValueError(f"événement de configuration inconnu : {event}")
 
 

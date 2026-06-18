@@ -110,6 +110,29 @@ def resolve_user_home(user: str, *, get_home: UserHomeFn | None = None) -> str:
     return pwd.getpwnam(user).pw_dir
 
 
+def render_setup_log(*, event: str, name: str = "", value: str = "", path: str = "") -> str:
+    """Rend les messages de prérequis utilisés par install.sh."""
+    if event == "python-ok":
+        return f"OK:Python {value} : {path}\n"
+    if event == "python-missing":
+        return "ERROR:Python 3.11+ requis. Installer avec: apt install python3.11\n"
+    if event == "nvidia-ok":
+        return f"OK:nvidia-smi — {value} GPU(s), CUDA {path}\n"
+    if event == "nvidia-missing":
+        return "WARN:nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)\n"
+    if event == "binary-ok":
+        return f"OK:{name} : {path}\n"
+    if event == "binary-required-missing":
+        if name in {"ffmpeg", "ffprobe"}:
+            return f"ERROR:{name} manquant. Installer avec: apt install ffmpeg\n"
+        return f"ERROR:{name} manquant.\n"
+    if event == "binary-optional-missing":
+        if name == "lsof":
+            return "WARN:lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof\n"
+        return f"WARN:{name} manquant\n"
+    raise ValueError(f"événement prérequis inconnu : {event}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers de prérequis système TranscrIA.")
     subparsers = parser.add_subparsers(dest="command")
@@ -127,6 +150,12 @@ def main(argv: list[str] | None = None) -> int:
 
     home_parser = subparsers.add_parser("user-home", help="affiche le home d'un utilisateur système")
     home_parser.add_argument("--user", required=True)
+
+    setup_parser = subparsers.add_parser("setup-log", help="rend un message de prérequis install.sh")
+    setup_parser.add_argument("--event", required=True)
+    setup_parser.add_argument("--name", default="")
+    setup_parser.add_argument("--value", default="")
+    setup_parser.add_argument("--path", default="")
 
     args = parser.parse_args(argv)
     if args.command == "check-binaries":
@@ -151,6 +180,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"utilisateur introuvable: {args.user}", file=sys.stderr)
             return 1
         return 0
+    if args.command == "setup-log":
+        try:
+            print(render_setup_log(event=args.event, name=args.name, value=args.value, path=args.path), end="")
+            return 0
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
 
     print("commande prérequis inconnue", file=sys.stderr)
     return 2

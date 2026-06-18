@@ -69,11 +69,57 @@ def ensure_shell_path(opencode_dir: Path, rc_files: list[Path], *, current_path:
     return None
 
 
+def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
+    """Rend les messages d'installation opencode utilisés par install.sh."""
+    if event == "found":
+        return f"OK:opencode trouvé : {value}\n"
+    if event == "missing":
+        return "WARN:opencode non trouvé\n"
+    if event == "download-start":
+        return "INFO:Téléchargement opencode (linux-x64)...\n"
+    if event == "installed":
+        return f"OK:opencode installé : {value}\n"
+    if event == "path-updated":
+        return f"OK:PATH mis à jour dans {value}\n"
+    if event == "shell-reload":
+        return f"INFO:Relancez votre shell ou : export PATH=\"{value}:$PATH\"\n"
+    if event == "download-failed":
+        return "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
+    if event == "manual-title":
+        return "INFO:Installation manuelle :\n"
+    if event == "manual-mkdir":
+        return "INFO:  mkdir -p ~/.opencode/bin\n"
+    if event == "manual-curl":
+        return "INFO:  curl -fsSL -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64\n"
+    if event == "manual-chmod":
+        return "INFO:  chmod +x ~/.opencode/bin/opencode\n"
+    if event == "ignored":
+        return "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
+    if event == "install-later":
+        return "INFO:Pour installer plus tard : https://opencode.ai\n"
+    if event == "configure-start":
+        return "INFO:Configuration du provider opencode local…\n"
+    if event == "provider-ok":
+        return "OK:opencode provider local configuré\n"
+    if event == "provider-incomplete":
+        return f"WARN:Configuration opencode incomplète — relancez : {value}\n"
+    if event == "profile-skipped":
+        return f"INFO:Profil {profile} : opencode non requis\n"
+    raise ValueError(f"événement opencode inconnu : {event}")
+
+
+def render_install_prompt(*, opencode_home: Path) -> str:
+    """Rend la question d'installation interactive opencode."""
+    return f"Installer opencode dans {opencode_home}/.opencode/bin/ ?"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers d'installation opencode TranscrIA.")
     parser.add_argument("--version", action="store_true", help="affiche la version opencode")
     parser.add_argument("--find", action="store_true", help="cherche le binaire opencode")
     parser.add_argument("--ensure-path", action="store_true", help="ajoute le dossier opencode au shell rc si nécessaire")
+    parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation opencode")
+    parser.add_argument("--install-prompt", action="store_true", help="rend la question d'installation opencode")
     parser.add_argument("--bin", default=None, help="chemin du binaire opencode")
     parser.add_argument("--opencode-dir", default=None)
     parser.add_argument("--opencode-home", default=None)
@@ -81,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--configured-bin", default=None)
     parser.add_argument("--current-path", default="")
     parser.add_argument("--rc-file", action="append", default=[])
+    parser.add_argument("--event", default="")
+    parser.add_argument("--value", default="")
+    parser.add_argument("--profile", default="")
     args = parser.parse_args(argv)
 
     if args.version:
@@ -111,6 +160,18 @@ def main(argv: list[str] | None = None) -> int:
         if updated is None:
             return 1
         print(updated)
+        return 0
+    if args.setup_log:
+        if not args.event:
+            print("--event requis avec --setup-log", file=sys.stderr)
+            return 2
+        print(render_setup_log(event=args.event, value=args.value, profile=args.profile), end="")
+        return 0
+    if args.install_prompt:
+        if not args.opencode_home:
+            print("--opencode-home requis avec --install-prompt", file=sys.stderr)
+            return 2
+        print(render_install_prompt(opencode_home=Path(args.opencode_home)), end="")
         return 0
     print("commande opencode inconnue", file=sys.stderr)
     return 2

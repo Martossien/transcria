@@ -8,6 +8,7 @@ from transcria.install_prerequisites import (
     main,
     render_binary_checks,
     render_first_available,
+    render_setup_log,
     render_system_capabilities,
     resolve_user_home,
 )
@@ -145,3 +146,27 @@ def test_install_prerequisites_cli_user_home_missing(capsys, monkeypatch):
     captured = capsys.readouterr()
     assert captured.out == ""
     assert "utilisateur introuvable: missing" in captured.err
+
+
+def test_render_setup_log_for_prerequisite_events():
+    assert render_setup_log(event="python-ok", value="3.12.4", path="/usr/bin/python3.12") == "OK:Python 3.12.4 : /usr/bin/python3.12\n"
+    assert render_setup_log(event="python-missing") == "ERROR:Python 3.11+ requis. Installer avec: apt install python3.11\n"
+    assert render_setup_log(event="nvidia-ok", value="2", path="12.6") == "OK:nvidia-smi — 2 GPU(s), CUDA 12.6\n"
+    assert render_setup_log(event="nvidia-missing") == (
+        "WARN:nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)\n"
+    )
+    assert render_setup_log(event="binary-ok", name="ffmpeg", path="/usr/bin/ffmpeg") == "OK:ffmpeg : /usr/bin/ffmpeg\n"
+    assert render_setup_log(event="binary-required-missing", name="ffmpeg") == (
+        "ERROR:ffmpeg manquant. Installer avec: apt install ffmpeg\n"
+    )
+    assert render_setup_log(event="binary-required-missing", name="psql") == "ERROR:psql manquant.\n"
+    assert render_setup_log(event="binary-optional-missing", name="lsof") == (
+        "WARN:lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof\n"
+    )
+    assert render_setup_log(event="binary-optional-missing", name="rsync") == "WARN:rsync manquant\n"
+
+
+def test_install_prerequisites_cli_setup_log(capsys):
+    assert main(["setup-log", "--event", "binary-ok", "--name", "ffprobe", "--path", "/usr/bin/ffprobe"]) == 0
+
+    assert capsys.readouterr().out == "OK:ffprobe : /usr/bin/ffprobe\n"

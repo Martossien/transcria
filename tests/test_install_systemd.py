@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.install_systemd import SystemdRenderContext, main, render_inference_unit, render_legacy_unit, render_split_unit
+import pytest
+
+from transcria.install_systemd import (
+    SystemdRenderContext,
+    main,
+    render_inference_unit,
+    render_legacy_unit,
+    render_setup_log,
+    render_split_unit,
+)
 
 _ROOT = Path(__file__).resolve().parents[1]
 
@@ -135,3 +144,38 @@ def test_systemd_renderer_cli_outputs_inference_unit(capsys):
     rendered = capsys.readouterr().out
     assert "Group=transcria" in rendered
     assert "ReadWritePaths=/opt/transcria/logs /opt/transcria" in rendered
+
+
+def test_render_setup_log_for_systemd_installation_events():
+    assert render_setup_log(event="skipped", unit="transcria") == "INFO:Service transcria non installé (--no-service)\n"
+    assert render_setup_log(event="installed", unit="transcria") == "OK:Service transcria installé et activé\n"
+    assert render_setup_log(event="sudo-missing", adapted="/repo/transcria.service.adapted") == (
+        "WARN:sudo indisponible — fichier adapté : /repo/transcria.service.adapted\n"
+    )
+    assert render_setup_log(event="manual-title") == "WARN:Pour installer :\n"
+    assert render_setup_log(event="manual-copy", adapted="/repo/unit.service", dst="/etc/systemd/system/unit.service") == (
+        "WARN:  sudo cp /repo/unit.service /etc/systemd/system/unit.service\n"
+    )
+    assert render_setup_log(event="manual-enable", unit="unit") == "WARN:  sudo systemctl daemon-reload && sudo systemctl enable unit\n"
+    assert render_setup_log(event="missing-unit", unit="transcria-web") == (
+        "WARN:transcria-web.service introuvable — service non installé\n"
+    )
+    assert render_setup_log(event="legacy-missing") == "WARN:transcria.service introuvable — service non installé\n"
+    assert render_setup_log(event="split-legacy-enabled") == (
+        "WARN:transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :\n"
+    )
+    assert render_setup_log(event="split-legacy-disable-command") == "WARN:  sudo systemctl disable --now transcria.service\n"
+    assert render_setup_log(event="inference-missing") == "WARN:transcria-inference.service introuvable — service non installé\n"
+    assert render_setup_log(event="inference-missing-hint") == "WARN:  Vérifiez que deploy/transcria-inference.service existe.\n"
+
+
+def test_render_setup_log_rejects_unknown_event():
+    with pytest.raises(ValueError, match="événement systemd inconnu : bad"):
+        render_setup_log(event="bad")
+
+
+def test_systemd_renderer_cli_outputs_setup_log(capsys):
+    result = main(["--setup-log", "--event", "installed", "--unit", "transcria-web"])
+
+    assert result == 0
+    assert capsys.readouterr().out == "OK:Service transcria-web installé et activé\n"

@@ -440,11 +440,23 @@ génère `scripts/generated/launch_arbitrage.local.sh`, pointe
 `services.arbitrage_script` vers ce wrapper local et met à jour la calibration GPU via
 les helpers Python. `scripts/launch_arbitrage.sh` redevient un exemple/compatibilité,
 pas un fichier local à réécrire.
+Les messages de sélection initiale de la LLM d'arbitrage (profil sans LLM, VRAM
+insuffisante, opencode absent, statut VRAM, fallback planner et palier recommandé)
+passent aussi par `transcria.install_arbitrage --setup-log`.
+Les messages de qualification `llama-server`, téléchargement GGUF, activation de
+palier et calibration GPU passent par le même renderer ; `install.sh` conserve
+encore les prompts, la table des modèles et les commandes effectives.
+Les prompts interactifs de sélection LLM (palier, répertoire modèles, binaire
+`llama-server`, confirmation de téléchargement) sont rendus par
+`transcria.install_arbitrage --prompt`.
 Le rendu systemd legacy `transcria.service` utilise désormais aussi
 `transcria.install_systemd` au lieu d'un bloc `sed`. L'ajustement local
 `pg_hba.conf` est isolé dans `transcria.install_postgres`, qui transforme uniquement
 les lignes TCP localhost `ident|peer` vers `scram-sha-256`, avec écriture atomique et
 tests d'idempotence.
+Les messages d'installation systemd (service sauté, installé, sudo absent,
+unités manquantes, avertissement split et nœud inference manquant) passent par
+`transcria.install_systemd --setup-log`; `install.sh` garde les actions privilégiées.
 La construction du DSN PostgreSQL et la détection d'hôte local (`127.0.0.1`,
 `localhost`, `::1`) sont également sorties du shell vers `transcria.install_postgres`,
 avec encodage testé des identifiants et mots de passe.
@@ -472,6 +484,8 @@ Le bilan final base de données / configuration / doctor est rendu par
 `transcria.install_summary`, avec parsing testé des compteurs et messages stables ;
 `install.sh` conserve seulement la collecte de `DB_BACKEND`, `CHANGE-ME` et
 `DOCTOR_STATUS`.
+Les messages de validation post-install `doctor.py` (sauté, OK, avertissements,
+indisponible) passent aussi par `transcria.install_summary setup-log`.
 Les messages de préparation et configuration interactive (`config.yaml`, `.env`,
 secrets, profil runtime, clé inference, proxy, mot de passe admin et sécurisation
 env) sont aussi rendus par
@@ -489,6 +503,8 @@ La préparation des répertoires runtime communs (`jobs/`, `models/cohere-asr/`,
 maintenant par `transcria.install_paths`, avec tests unitaires et contrat dans
 `tests/test_install_script.py` pour éviter le retour d'une liste `mkdir -p` fragile
 dans `install.sh`.
+Les messages de préparation locale (venv, pip, `requirements.txt`, répertoires
+runtime prêts) passent par `transcria.install_paths --setup-log`.
 Les répertoires calculés pendant l'installation interactive (backups PostgreSQL,
 téléchargement Cohere, emplacement opencode, répertoire de modèles LLM choisi par
 l'utilisateur) passent aussi par cette CLI via `--path`, ce qui laisse à
@@ -570,8 +586,13 @@ configuré) passe aussi par `transcria.install_opencode --find` au lieu de
 La mise à jour optionnelle de `.bashrc`/`.profile` pour ajouter le dossier opencode
 au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire les
 `grep`/append shell directs de `install.sh`.
+Les messages et la question d'installation opencode passent par
+`transcria.install_opencode --setup-log` et `--install-prompt`; `install.sh` garde
+uniquement le téléchargement, les permissions et la configuration effective.
 Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
+Les messages de prérequis (Python, nvidia-smi et binaires requis/optionnels)
+passent par `transcria.install_prerequisites setup-log`.
 La même brique fournit `first-available` pour les alternatives `hf`/`huggingface-cli`,
 `psql` et le fallback PATH de `llama-server`.
 Les capacités système (`sudo`, `runuser`, `systemctl`, `service`, `nvidia-smi`) sont

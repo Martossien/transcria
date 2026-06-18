@@ -473,19 +473,42 @@ secure_env_file() {
 # ============================================================================
 log_section "Vérification des prérequis"
 
+log_prerequisite_event() {
+    local event="$1" name="${2:-}" value="${3:-}" path="${4:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites setup-log \
+        --event "$event" \
+        --name "$name" \
+        --value "$value" \
+        --path "$path") || {
+        log_error "Impossible de rendre le message prérequis : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie prérequis ignorée : $line"
+    fi
+}
+
 PYTHON_BIN=""
 for candidate in python3.13 python3.12 python3.11 python3; do
     if command -v "$candidate" &>/dev/null; then
         version=$("$candidate" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true)
         if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
             PYTHON_BIN="$candidate"
-            log_ok "Python $version : $(which $candidate)"
+            log_prerequisite_event python-ok "" "$version" "$(which "$candidate")"
             break
         fi
     fi
 done
 if [[ -z "$PYTHON_BIN" ]]; then
-    log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
+    log_prerequisite_event python-missing
     exit 1
 fi
 
@@ -501,9 +524,9 @@ NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHO
 eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
     GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING
 if [[ -z "$NVIDIA_WARNING" ]]; then
-    log_ok "nvidia-smi — $GPU_COUNT GPU(s), CUDA $CUDA_VER_FROM_SMI"
+    log_prerequisite_event nvidia-ok "" "$GPU_COUNT" "$CUDA_VER_FROM_SMI"
 else
-    log_warn "nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)"
+    log_prerequisite_event nvidia-missing
 fi
 
 PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
@@ -516,21 +539,13 @@ while IFS=$'\t' read -r status name path; do
     [[ -z "$name" ]] && continue
     case "$status" in
         OK)
-            log_ok "$name : $path"
+            log_prerequisite_event binary-ok "$name" "" "$path"
             ;;
         MISSING_REQUIRED)
-            if [[ "$name" = "ffmpeg" || "$name" = "ffprobe" ]]; then
-                log_error "$name manquant. Installer avec: apt install ffmpeg"
-            else
-                log_error "$name manquant."
-            fi
+            log_prerequisite_event binary-required-missing "$name"
             ;;
         MISSING_OPTIONAL)
-            if [[ "$name" = "lsof" ]]; then
-                log_warn "lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof"
-            else
-                log_warn "$name manquant"
-            fi
+            log_prerequisite_event binary-optional-missing "$name"
             ;;
     esac
 done <<< "$PREREQ_BINARIES_OUT"
@@ -543,16 +558,39 @@ fi
 # ============================================================================
 log_section "Environnement Python"
 
+log_local_setup_event() {
+    local event="$1" value="${2:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_paths \
+        --install-dir "$INSTALL_DIR" \
+        --setup-log \
+        --event "$event" \
+        --value "$value") || {
+        log_error "Impossible de rendre le message local : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie locale ignorée : $line"
+    fi
+}
+
 if [[ -f "$VENV/bin/activate" ]]; then
-    log_ok "Venv existant : $VENV"
+    log_local_setup_event venv-existing "$VENV"
 else
-    log_info "Création du venv..."
+    log_local_setup_event venv-create-start
     "$PYTHON_BIN" -m venv "$VENV"
-    log_ok "Venv créé : $VENV"
+    log_local_setup_event venv-created "$VENV"
 fi
 
 source "$VENV/bin/activate"
-log_info "Mise à jour de pip..."
+log_local_setup_event pip-upgrade
 pip install --upgrade pip --quiet
 
 # ============================================================================
@@ -601,9 +639,9 @@ fi
 # ============================================================================
 log_section "Dépendances Python"
 
-log_info "Installation requirements.txt..."
+log_local_setup_event requirements-start
 pip install -r "$INSTALL_DIR/requirements.txt" --quiet
-log_ok "requirements.txt installé"
+log_local_setup_event requirements-ok
 
 # ============================================================================
 # SECTION 5 — Répertoires
@@ -612,7 +650,7 @@ log_section "Répertoires"
 
 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
     --install-dir "$INSTALL_DIR" >/dev/null
-log_ok "jobs/, models/, instance/ prêts"
+log_local_setup_event runtime-dirs-ready
 
 # ============================================================================
 # SECTION 6 — Configuration (config.yaml)
@@ -1429,6 +1467,28 @@ log_config_setup_event env-secured "$SERVICE_USER"
 # ============================================================================
 log_section "opencode (moteur LLM)"
 
+log_opencode_setup_event() {
+    local event="$1" value="${2:-}" profile="${3:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode --setup-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$profile") || {
+        log_error "Impossible de rendre le message opencode : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie opencode ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     # Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
     CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
@@ -1442,24 +1502,27 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
         OPENCODE_VER=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
             --version \
             --bin "$OPENCODE_BIN")
-        log_ok "opencode trouvé : $OPENCODE_BIN ($OPENCODE_VER)"
+        log_opencode_setup_event found "$OPENCODE_BIN ($OPENCODE_VER)"
         yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
     else
-        log_warn "opencode non trouvé"
+        log_opencode_setup_event missing
         echo ""
-        if ask_yn "Installer opencode dans $OPENCODE_HOME/.opencode/bin/ ?"; then
+        OPENCODE_INSTALL_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_opencode \
+            --install-prompt \
+            --opencode-home "$OPENCODE_HOME")
+        if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
             OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
             PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
                 --install-dir "$INSTALL_DIR" \
                 --path "$(dirname "$OPENCODE_DEST")" >/dev/null
-            log_info "Téléchargement opencode (linux-x64)..."
+            log_opencode_setup_event download-start
             if curl -fsSL -o "$OPENCODE_DEST" \
                 "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
                 chmod +x "$OPENCODE_DEST"
                 if id "$SERVICE_USER" &>/dev/null 2>&1; then
                     chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode" 2>/dev/null || true
                 fi
-                log_ok "opencode installé : $OPENCODE_DEST"
+                log_opencode_setup_event installed "$OPENCODE_DEST"
                 OPENCODE_BIN="$OPENCODE_DEST"
                 yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
 
@@ -1472,36 +1535,36 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
                     --rc-file "$HOME/.bashrc" \
                     --rc-file "$HOME/.profile" 2>/dev/null || true)
                 if [[ -n "$UPDATED_RC" ]]; then
-                    log_ok "PATH mis à jour dans $UPDATED_RC"
-                    log_info "Relancez votre shell ou : export PATH=\"$OPENCODE_DIR:\$PATH\""
+                    log_opencode_setup_event path-updated "$UPDATED_RC"
+                    log_opencode_setup_event shell-reload "$OPENCODE_DIR"
                 fi
             else
-                log_error "Téléchargement opencode échoué — vérifiez la connectivité"
-                log_info "Installation manuelle :"
-                log_info "  mkdir -p ~/.opencode/bin"
-                log_info "  curl -fsSL -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"
-                log_info "  chmod +x ~/.opencode/bin/opencode"
+                log_opencode_setup_event download-failed
+                log_opencode_setup_event manual-title
+                log_opencode_setup_event manual-mkdir
+                log_opencode_setup_event manual-curl
+                log_opencode_setup_event manual-chmod
             fi
         else
-            log_info "opencode ignoré — résumé/correction LLM désactivé"
-            log_info "Pour installer plus tard : https://opencode.ai"
+            log_opencode_setup_event ignored
+            log_opencode_setup_event install-later
         fi
     fi
 
     if [[ -n "$OPENCODE_BIN" ]]; then
-        log_info "Configuration du provider opencode local…"
+        log_opencode_setup_event configure-start
         OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
         if run_indented "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH"; then
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
             fi
-            log_ok "opencode provider local configuré"
+            log_opencode_setup_event provider-ok
         else
-            log_warn "Configuration opencode incomplète — relancez : $VENV/bin/python scripts/setup_opencode.py"
+            log_opencode_setup_event provider-incomplete "$VENV/bin/python scripts/setup_opencode.py"
         fi
     fi
 else
-    log_info "Profil $INSTALL_PROFILE : opencode non requis"
+    log_opencode_setup_event profile-skipped "" "$INSTALL_PROFILE"
 fi
 
 # ============================================================================
@@ -1509,8 +1572,34 @@ fi
 # ============================================================================
 log_section "LLM d'arbitrage — sélection selon la VRAM"
 
+log_llm_setup_event() {
+    local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --setup-log \
+        --event "$event" \
+        --value "$value" \
+        --profile "$profile" \
+        --gpu-count "$gpu_count" \
+        --max-mb "$max_mb" \
+        --tier-value "$tier" \
+        --label "$label") || {
+        log_error "Impossible de rendre le message LLM : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie LLM ignorée : $line"
+    fi
+}
+
 if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
-    log_info "Profil $INSTALL_PROFILE : LLM d'arbitrage locale non requise"
+    log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
 else
 
 # Détection de la VRAM (en plus de GPU_COUNT déjà connu plus haut).
@@ -1547,13 +1636,13 @@ declare -A LLM_DIR=(   [12]="Qwen3.5-9B-Q5_K_M"        [16]="Qwen3.5-9B-Q6_K"   
 declare -A LLM_LABEL=( [12]="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)"  [16]="Qwen3.5-9B Q6_K (256K, ~7 Go)"  [24]="Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, ~19 Go — mono-GPU 24 Go)"  [32]="Qwen3.6-27B Q5_K_M (192K, ~19 Go)"  [48]="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)"  [64]="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)" )
 
 if (( GPU_VRAM_TOTAL_MB < 11500 )); then
-    log_warn "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go) — pas de LLM d'arbitrage local."
-    log_info "TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)."
+    log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
+    log_llm_setup_event raw-mode
 elif [[ -z "${OPENCODE_BIN:-}" ]]; then
-    log_warn "opencode absent — LLM d'arbitrage non configurable (transcription brute)."
-    log_info "Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard."
+    log_llm_setup_event opencode-missing
+    log_llm_setup_event opencode-install-later
 else
-    log_ok "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio sur ${GPU_COUNT} GPU (plus grande carte ${GPU_VRAM_MAX_MB} Mio)"
+    log_llm_setup_event vram-status "$GPU_VRAM_TOTAL_MB" "" "$GPU_COUNT" "$GPU_VRAM_MAX_MB"
     # Recommandation par PLACEMENT réel (tient compte du mono/split et de la taille de
     # CHAQUE carte) ; repli défensif sur la table par somme si le planner échoue.
     REC_TIER=""
@@ -1569,19 +1658,21 @@ else
     fi
     if [[ -z "$REC_TIER" ]]; then
         REC_TIER=$(recommend_llm_tier "$GPU_VRAM_TOTAL_MB")
-        log_warn "Planner de placement indisponible — recommandation par VRAM totale (moins fiable)."
+        log_llm_setup_event planner-fallback
     fi
     if [[ "$REC_TIER" == "0" || -z "$REC_TIER" ]]; then
         REC_TIER=""
-        log_warn "Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée."
+        log_llm_setup_event no-tier
     else
-        log_info "Palier recommandé : ${REC_TIER} Go → ${LLM_LABEL[$REC_TIER]}"
+        log_llm_setup_event recommended-tier "" "" "" "" "$REC_TIER" "${LLM_LABEL[$REC_TIER]}"
     fi
-    log_info "Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer."
-    ask LLM_TIER "Palier LLM à installer" "$REC_TIER"
+    log_llm_setup_event tiers-info
+    LLM_TIER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt tier)
+    ask LLM_TIER "$LLM_TIER_PROMPT" "$REC_TIER"
 
     if [[ -n "${LLM_TIER:-}" && -n "${LLM_REPO[$LLM_TIER]:-}" ]]; then
-        ask MODELS_DIR_CHOICE "Répertoire de téléchargement des modèles" "$HOME/models"
+        LLM_MODELS_DIR_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt models-dir)
+        ask MODELS_DIR_CHOICE "$LLM_MODELS_DIR_PROMPT" "$HOME/models"
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
         PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths \
             --install-dir "$INSTALL_DIR" \
@@ -1602,12 +1693,12 @@ else
                 LLAMA_SRV="${LLAMA_SERVER:-}"
                 LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
                 if [[ "${LLAMA_OK:-0}" == "1" ]]; then
-                    log_ok "llama-server qualifié : ${LLAMA_SRV} (build ${LLAMA_BUILD:-?}, source ${LLAMA_BUILD_SOURCE:-?})"
+                    log_llm_setup_event llama-qualified "$LLAMA_SRV" "" "" "" "${LLAMA_BUILD:-?}" "${LLAMA_BUILD_SOURCE:-?}"
                 elif [[ -n "$LLAMA_SRV" ]]; then
-                    log_warn "llama-server trouvé mais NON utilisable (${LLAMA_LEVEL:-?}) : ${LLAMA_SRV}"
+                    log_llm_setup_event llama-unusable "$LLAMA_SRV" "" "" "" "${LLAMA_LEVEL:-?}"
                 fi
                 if [[ -n "$LLAMA_LD_HINT" ]]; then
-                    log_warn "Libs llama hors chemins standard — exportez LLAMA_LD_LIBRARY_PATH=$LLAMA_LD_HINT dans l'environnement du service (les profils l'honorent)."
+                    log_llm_setup_event llama-ld-hint "$LLAMA_LD_HINT"
                 fi
             fi
             print_indented_file "$_ll_warn"
@@ -1624,14 +1715,19 @@ else
                 if [[ -n "$c" && -x "$c" ]]; then LLAMA_SRV="$c"; break; fi
             done
         fi
-        ask LLAMA_SRV "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
+        LLAMA_SERVER_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage --prompt llama-server)
+        ask LLAMA_SRV "$LLAMA_SERVER_PROMPT" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
 
         REPO="${LLM_REPO[$LLM_TIER]}"; GG="${LLM_FILE[$LLM_TIER]}"
         DEST="$MODELS_DIR_CHOICE/${LLM_DIR[$LLM_TIER]}"
+        LLM_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_arbitrage \
+            --prompt download \
+            --label "${LLM_LABEL[$LLM_TIER]}" \
+            --repo "$REPO")
 
         if [[ -f "$DEST/$GG" ]]; then
-            log_ok "Modèle déjà présent : $DEST/$GG"
-        elif ask_yn "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO ?"; then
+            log_llm_setup_event model-present "$DEST/$GG"
+        elif ask_yn "$LLM_DOWNLOAD_PROMPT"; then
             HF_DL=""
             FIRST_AVAILABLE_NAME=""; FIRST_AVAILABLE_PATH=""
             if HF_DL_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_prerequisites \
@@ -1640,25 +1736,25 @@ else
                 HF_DL="$FIRST_AVAILABLE_NAME"
             fi
             if [[ -z "$HF_DL" ]]; then
-                log_error "Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub"
+                log_llm_setup_event hf-cli-missing
             else
                 if [[ -n "${CURRENT_HF_TOKEN:-}" ]]; then export HF_TOKEN="$CURRENT_HF_TOKEN"; fi
-                log_info "Téléchargement ($HF_DL) de $GG → $DEST (peut prendre plusieurs minutes)…"
+                log_llm_setup_event download-start "$GG" "" "" "" "$HF_DL" "$DEST"
                 if run_indented "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST"; then
-                    log_ok "Modèle téléchargé : $DEST/$GG"
+                    log_llm_setup_event model-downloaded "$DEST/$GG"
                 else
-                    log_error "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN."
+                    log_llm_setup_event download-failed
                 fi
             fi
         else
-            log_info "Téléchargement ignoré."
+            log_llm_setup_event download-skipped
         fi
 
         # Générer le wrapper local pour CETTE machine (MODELS_DIR / llama-server),
         # puis basculer sur le palier choisi sans modifier les profils versionnés.
         if [[ -f "$DEST/$GG" ]]; then
             if run_indented env MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb"; then
-                log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
+                log_llm_setup_event tier-activated "" "" "" "" "$LLM_TIER"
                 # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
                 # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.
                 if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
@@ -1666,23 +1762,23 @@ else
                     if "$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" plan \
                          --gpus "$GPU_SIZES_CSV" --tier "$LLM_TIER" \
                          --config "$CONFIG_PATH" --apply --format shell >/dev/null 2>"$_cal_warn"; then
-                        log_ok "Calibration GPU écrite (placement réel par carte)."
+                        log_llm_setup_event calibration-ok
                     else
-                        log_warn "Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh"
+                        log_llm_setup_event calibration-failed
                     fi
                     print_indented_file "$_cal_warn"
                     rm -f "$_cal_warn"
                 fi
-                log_info "Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script."
+                log_llm_setup_event start-managed
             else
-                log_warn "Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh ${LLM_TIER}gb"
+                log_llm_setup_event switch-incomplete "" "" "" "" "$LLM_TIER"
             fi
         else
-            log_info "Modèle absent — palier non activé (transcription brute pour l'instant)."
+            log_llm_setup_event model-absent
         fi
     else
-        log_info "LLM d'arbitrage ignoré — transcription brute. Activable plus tard :"
-        log_info "  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)"
+        log_llm_setup_event ignored
+        log_llm_setup_event manual-switch
     fi
 fi
 fi
@@ -1704,10 +1800,33 @@ done <<< "$IMPORT_OUTPUT"
 # ============================================================================
 # SECTION 11 — Services systemd
 # ============================================================================
+log_systemd_event() {
+    local event="$1" unit="${2:-}" adapted="${3:-}" dst="${4:-}" line
+    line=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_systemd --setup-log \
+        --event "$event" \
+        --unit "$unit" \
+        --adapted "$adapted" \
+        --dst "$dst") || {
+        log_error "Impossible de rendre le message systemd : $event"
+        return 1
+    }
+    if [[ "$line" == OK:* ]]; then
+        log_ok "${line#OK:}"
+    elif [[ "$line" == WARN:* ]]; then
+        log_warn "${line#WARN:}"
+    elif [[ "$line" == INFO:* ]]; then
+        log_info "${line#INFO:}"
+    elif [[ "$line" == ERROR:* ]]; then
+        log_error "${line#ERROR:}"
+    else
+        log_warn "Sortie systemd ignorée : $line"
+    fi
+}
+
 install_systemd_unit() {
     local rendered="$1" dst="$2" unit="$3" adapted_name="$4"
     if [[ "$INSTALL_SYSTEMD" != true ]]; then
-        log_info "Service $unit non installé (--no-service)"
+        log_systemd_event skipped "$unit"
         return 0
     fi
     if [[ $EUID -eq 0 ]]; then
@@ -1715,20 +1834,20 @@ install_systemd_unit() {
         chmod 644 "$dst"
         systemctl daemon-reload
         systemctl enable "$unit"
-        log_ok "Service $unit installé et activé"
+        log_systemd_event installed "$unit"
     elif [[ "$HAVE_SUDO" = true ]]; then
         sudo cp "$rendered" "$dst"
         sudo chmod 644 "$dst"
         sudo systemctl daemon-reload
         sudo systemctl enable "$unit"
-        log_ok "Service $unit installé et activé"
+        log_systemd_event installed "$unit"
     else
         local adapted="$INSTALL_DIR/$adapted_name"
         cp "$rendered" "$adapted"
-        log_warn "sudo indisponible — fichier adapté : $adapted"
-        log_warn "Pour installer :"
-        log_warn "  sudo cp $adapted $dst"
-        log_warn "  sudo systemctl daemon-reload && sudo systemctl enable $unit"
+        log_systemd_event sudo-missing "$unit" "$adapted"
+        log_systemd_event manual-title
+        log_systemd_event manual-copy "$unit" "$adapted" "$dst"
+        log_systemd_event manual-enable "$unit"
     fi
 }
 
@@ -1746,7 +1865,7 @@ render_deploy_unit() {
 install_deploy_unit() {
     local src="$1" dst="$2" unit="$3" adapted_name="$4"
     if [[ ! -f "$src" ]]; then
-        log_warn "$unit.service introuvable — service non installé"
+        log_systemd_event missing-unit "$unit"
         return 0
     fi
     local tmp_unit
@@ -1763,7 +1882,7 @@ if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     SERVICE_DST="/etc/systemd/system/transcria.service"
 
     if [[ ! -f "$SERVICE_SRC" ]]; then
-        log_warn "transcria.service introuvable — service non installé"
+        log_systemd_event legacy-missing
     else
         if id "$SERVICE_USER" &>/dev/null 2>&1; then
             SERVICE_HOME=$(resolve_user_home "$SERVICE_USER")
@@ -1804,8 +1923,8 @@ if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PRO
     log_section "Services systemd split"
 
     if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
-        log_warn "transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :"
-        log_warn "  sudo systemctl disable --now transcria.service"
+        log_systemd_event split-legacy-enabled
+        log_systemd_event split-legacy-disable-command
     fi
 
     install_deploy_unit \
@@ -1839,8 +1958,8 @@ if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
     INFERENCE_DST="/etc/systemd/system/transcria-inference.service"
 
     if [[ ! -f "$INFERENCE_SRC" ]]; then
-        log_warn "transcria-inference.service introuvable — service non installé"
-        log_warn "  Vérifiez que deploy/transcria-inference.service existe."
+        log_systemd_event inference-missing
+        log_systemd_event inference-missing-hint
     else
         INF_LOG_DIR="/var/log"
         if [[ "$SERVICE_USER" != "root" ]]; then
@@ -1874,7 +1993,7 @@ log_section "Validation post-install"
 
 if [[ "$SKIP_DOCTOR" = true ]]; then
     DOCTOR_STATUS="sauté (--skip-doctor)"
-    log_warn "doctor.py sauté à la demande (--skip-doctor)"
+    log_config_setup_event doctor-skipped
 elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     DOCTOR_ARGS=(--config "$CONFIG_PATH" --profile "$INSTALL_PROFILE")
     if [[ "$STRICT_DOCTOR" = true ]]; then
@@ -1882,14 +2001,14 @@ elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     fi
     if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" "${DOCTOR_ARGS[@]}"; then
         DOCTOR_STATUS="OK"
-        log_ok "doctor.py : aucun échec bloquant"
+        log_config_setup_event doctor-ok
     else
         DOCTOR_STATUS="WARN/FAIL"
-        log_warn "doctor.py a détecté des points à corriger avant production"
+        log_config_setup_event doctor-warn
     fi
 else
     DOCTOR_STATUS="non disponible"
-    log_warn "doctor.py non disponible — validation post-install sautée"
+    log_config_setup_event doctor-unavailable
 fi
 
 # ============================================================================

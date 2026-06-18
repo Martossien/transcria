@@ -130,6 +130,90 @@ def status(*, repo_root: Path, config_path: Path) -> list[str]:
     return lines
 
 
+def render_setup_log(
+    *,
+    event: str,
+    value: str = "",
+    profile: str = "",
+    gpu_count: str = "",
+    max_mb: str = "",
+    tier: str = "",
+    label: str = "",
+) -> str:
+    """Rend les messages de sélection de la LLM d'arbitrage locale."""
+    if event == "profile-skipped":
+        return f"INFO:Profil {profile} : LLM d'arbitrage locale non requise\n"
+    if event == "vram-too-low":
+        return f"WARN:VRAM totale {value} Mio (< 12 Go) — pas de LLM d'arbitrage local.\n"
+    if event == "raw-mode":
+        return "INFO:TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés).\n"
+    if event == "opencode-missing":
+        return "WARN:opencode absent — LLM d'arbitrage non configurable (transcription brute).\n"
+    if event == "opencode-install-later":
+        return "INFO:Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard.\n"
+    if event == "vram-status":
+        return f"OK:VRAM : total {value} Mio sur {gpu_count} GPU (plus grande carte {max_mb} Mio)\n"
+    if event == "planner-fallback":
+        return "WARN:Planner de placement indisponible — recommandation par VRAM totale (moins fiable).\n"
+    if event == "no-tier":
+        return "WARN:Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée.\n"
+    if event == "recommended-tier":
+        return f"INFO:Palier recommandé : {tier} Go → {label}\n"
+    if event == "tiers-info":
+        return "INFO:Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer.\n"
+    if event == "llama-qualified":
+        return f"OK:llama-server qualifié : {value} (build {tier}, source {label})\n"
+    if event == "llama-unusable":
+        return f"WARN:llama-server trouvé mais NON utilisable ({tier}) : {value}\n"
+    if event == "llama-ld-hint":
+        return (
+            "WARN:Libs llama hors chemins standard — exportez "
+            f"LLAMA_LD_LIBRARY_PATH={value} dans l'environnement du service (les profils l'honorent).\n"
+        )
+    if event == "model-present":
+        return f"OK:Modèle déjà présent : {value}\n"
+    if event == "hf-cli-missing":
+        return "ERROR:Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub\n"
+    if event == "download-start":
+        return f"INFO:Téléchargement ({tier}) de {value} → {label} (peut prendre plusieurs minutes)…\n"
+    if event == "model-downloaded":
+        return f"OK:Modèle téléchargé : {value}\n"
+    if event == "download-failed":
+        return "ERROR:Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN.\n"
+    if event == "download-skipped":
+        return "INFO:Téléchargement ignoré.\n"
+    if event == "tier-activated":
+        return f"OK:Palier {tier} Go activé (alias générique 'arbitrage').\n"
+    if event == "calibration-ok":
+        return "OK:Calibration GPU écrite (placement réel par carte).\n"
+    if event == "calibration-failed":
+        return "WARN:Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh\n"
+    if event == "start-managed":
+        return "INFO:Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script.\n"
+    if event == "switch-incomplete":
+        return f"WARN:Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh {tier}gb\n"
+    if event == "model-absent":
+        return "INFO:Modèle absent — palier non activé (transcription brute pour l'instant).\n"
+    if event == "ignored":
+        return "INFO:LLM d'arbitrage ignoré — transcription brute. Activable plus tard :\n"
+    if event == "manual-switch":
+        return "INFO:  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)\n"
+    raise ValueError(f"événement LLM inconnu : {event}")
+
+
+def render_prompt(*, prompt: str, label: str = "", repo: str = "") -> str:
+    """Rend les questions interactives du choix de LLM d'arbitrage."""
+    if prompt == "tier":
+        return "Palier LLM à installer"
+    if prompt == "models-dir":
+        return "Répertoire de téléchargement des modèles"
+    if prompt == "llama-server":
+        return "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)"
+    if prompt == "download":
+        return f"Télécharger {label} depuis {repo} ?"
+    raise ValueError(f"prompt LLM inconnu : {prompt}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Génère le wrapper local de LLM d'arbitrage TranscrIA.")
     parser.add_argument("tier", nargs="?", choices=(*TIER_VRAM_MB.keys(), "status"), default="status")
@@ -138,11 +222,41 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models-dir", default=None)
     parser.add_argument("--llama-server", default=None)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--setup-log", action="store_true", help="rend un message de sélection LLM")
+    parser.add_argument("--event", default="")
+    parser.add_argument("--value", default="")
+    parser.add_argument("--profile", default="")
+    parser.add_argument("--gpu-count", default="")
+    parser.add_argument("--max-mb", default="")
+    parser.add_argument("--tier-value", default="")
+    parser.add_argument("--label", default="")
+    parser.add_argument("--prompt", default="")
+    parser.add_argument("--repo", default="")
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root)
     config_path = Path(args.config)
     try:
+        if args.setup_log:
+            if not args.event:
+                print("--event requis avec --setup-log", file=sys.stderr)
+                return 2
+            print(
+                render_setup_log(
+                    event=args.event,
+                    value=args.value,
+                    profile=args.profile,
+                    gpu_count=args.gpu_count,
+                    max_mb=args.max_mb,
+                    tier=args.tier_value,
+                    label=args.label,
+                ),
+                end="",
+            )
+            return 0
+        if args.prompt:
+            print(render_prompt(prompt=args.prompt, label=args.label, repo=args.repo), end="")
+            return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):
                 print(line)

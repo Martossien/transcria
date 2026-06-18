@@ -74,6 +74,21 @@ def test_install_script_resolves_user_home_through_python_helper():
     assert "python3 -c" not in content
 
 
+def test_install_script_delegates_prerequisite_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_prerequisites setup-log" in content
+    assert "log_prerequisite_event" in content
+    assert "Python $version :" not in content
+    assert "Python 3.11+ requis" not in content
+    assert "nvidia-smi — $GPU_COUNT" not in content
+    assert "nvidia-smi non trouvé ou inutilisable" not in content
+    assert "$name : $path" not in content
+    assert "$name manquant. Installer avec: apt install ffmpeg" not in content
+    assert "$name manquant." not in content
+    assert "lsof manquant — requis par start.sh/stop.sh" not in content
+
+
 def test_install_script_uses_run_indented_for_command_output_prefixing():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -93,6 +108,21 @@ def test_install_script_reuses_systemd_unit_installer_for_inference():
     assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
 
 
+def test_install_script_delegates_local_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_paths" in content
+    assert "--setup-log" in content
+    assert "log_local_setup_event" in content
+    assert "Venv existant :" not in content
+    assert "Création du venv..." not in content
+    assert "Venv créé :" not in content
+    assert "Mise à jour de pip..." not in content
+    assert "Installation requirements.txt..." not in content
+    assert "requirements.txt installé" not in content
+    assert "jobs/, models/, instance/ prêts" not in content
+
+
 def test_install_script_reuses_split_systemd_unit_installer():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -103,6 +133,25 @@ def test_install_script_reuses_split_systemd_unit_installer():
     assert "TMP_MIGRATE=" not in content
     assert "TMP_WEB=" not in content
     assert "TMP_SCHEDULER=" not in content
+
+
+def test_install_script_delegates_systemd_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_systemd --setup-log" in content
+    assert "log_systemd_event" in content
+    assert "Service $unit non installé (--no-service)" not in content
+    assert "Service $unit installé et activé" not in content
+    assert "sudo indisponible — fichier adapté" not in content
+    assert "Pour installer :" not in content
+    assert "sudo cp $adapted $dst" not in content
+    assert "sudo systemctl daemon-reload && sudo systemctl enable $unit" not in content
+    assert "$unit.service introuvable — service non installé" not in content
+    assert "transcria.service introuvable — service non installé" not in content
+    assert "transcria.service est déjà activé" not in content
+    assert "sudo systemctl disable --now transcria.service" not in content
+    assert "transcria-inference.service introuvable" not in content
+    assert "Vérifiez que deploy/transcria-inference.service existe" not in content
 
 
 def test_install_script_supports_explicit_skip_doctor():
@@ -235,6 +284,85 @@ def test_install_script_delegates_pyannote_setup_logs_and_prompts():
     assert "&& log_ok \"pyannote téléchargé\"" not in content
 
 
+def test_install_script_delegates_opencode_setup_logs_and_prompt():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_opencode --setup-log" in content
+    assert "-m transcria.install_opencode \\\n            --install-prompt" in content
+    assert "log_opencode_setup_event" in content
+    assert "opencode trouvé :" not in content
+    assert "opencode non trouvé" not in content
+    assert "Installer opencode dans $OPENCODE_HOME" not in content
+    assert "Téléchargement opencode (linux-x64)" not in content
+    assert "opencode installé :" not in content
+    assert "PATH mis à jour dans" not in content
+    assert "Relancez votre shell ou" not in content
+    assert "Téléchargement opencode échoué" not in content
+    assert "Installation manuelle :" not in content
+    assert "mkdir -p ~/.opencode/bin" not in content
+    assert "chmod +x ~/.opencode/bin/opencode" not in content
+    assert "opencode ignoré — résumé/correction LLM désactivé" not in content
+    assert "Pour installer plus tard" not in content
+    assert "Configuration du provider opencode local" not in content
+    assert "opencode provider local configuré" not in content
+    assert "Configuration opencode incomplète" not in content
+    assert "opencode non requis" not in content
+
+
+def test_install_script_delegates_llm_selection_setup_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_arbitrage --setup-log" in content
+    assert "log_llm_setup_event" in content
+    assert "LLM d'arbitrage locale non requise" not in content
+    assert "VRAM totale ${GPU_VRAM_TOTAL_MB} Mio (< 12 Go)" not in content
+    assert "TRANSCRIPTION BRUTE (résumé/correction LLM désactivés)" not in content
+    assert "opencode absent — LLM d'arbitrage non configurable" not in content
+    assert "Installez opencode puis relancez" not in content
+    assert "VRAM : total ${GPU_VRAM_TOTAL_MB} Mio" not in content
+    assert "Planner de placement indisponible" not in content
+    assert "Aucun palier LLM ne tient" not in content
+    assert "Palier recommandé :" not in content
+    assert "Paliers : 12 / 16 / 24 / 32 / 48 / 64" not in content
+
+
+def test_install_script_delegates_llm_download_and_activation_logs():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "log_llm_setup_event llama-qualified" in content
+    assert "log_llm_setup_event model-downloaded" in content
+    assert "llama-server qualifié :" not in content
+    assert "llama-server trouvé mais NON utilisable" not in content
+    assert "Libs llama hors chemins standard" not in content
+    assert "Modèle déjà présent :" not in content
+    assert "Ni 'hf' ni 'huggingface-cli' trouvés" not in content
+    assert "peut prendre plusieurs minutes" not in content
+    assert "Modèle téléchargé :" not in content
+    assert "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN" not in content
+    assert "Téléchargement ignoré." not in content
+    assert "alias générique 'arbitrage'" not in content
+    assert "Calibration GPU écrite" not in content
+    assert "Calibration auto échouée" not in content
+    assert "Démarrage de la LLM" not in content
+    assert "Bascule de palier incomplète" not in content
+    assert "Modèle absent — palier non activé" not in content
+    assert "LLM d'arbitrage ignoré" not in content
+    assert "après téléchargement du modèle" not in content
+
+
+def test_install_script_delegates_llm_prompts():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "-m transcria.install_arbitrage --prompt tier" in content
+    assert "-m transcria.install_arbitrage --prompt models-dir" in content
+    assert "-m transcria.install_arbitrage --prompt llama-server" in content
+    assert "--prompt download" in content
+    assert "Palier LLM à installer" not in content
+    assert "Répertoire de téléchargement des modèles" not in content
+    assert "Chemin du binaire llama-server" not in content
+    assert "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO" not in content
+
+
 def test_install_script_uses_final_status_renderers():
     content = _INSTALL.read_text(encoding="utf-8")
 
@@ -265,6 +393,10 @@ def test_install_script_delegates_configuration_setup_logs():
     assert "Trop court — inchangé" not in content
     assert "config.yaml mis à jour" not in content
     assert ".env sécurisé pour l'utilisateur de service" not in content
+    assert "doctor.py sauté à la demande" not in content
+    assert "doctor.py : aucun échec bloquant" not in content
+    assert "doctor.py a détecté des points à corriger" not in content
+    assert "doctor.py non disponible — validation post-install sautée" not in content
 
 
 def test_install_script_delegates_postgres_schema_action_decision():

@@ -113,6 +113,13 @@ def test_render_setup_log_for_env_and_profile_events():
     assert render_setup_log(event="env-secured", value="transcria") == "OK:.env sécurisé pour l'utilisateur de service (transcria)\n"
 
 
+def test_render_setup_log_for_doctor_events():
+    assert render_setup_log(event="doctor-skipped") == "WARN:doctor.py sauté à la demande (--skip-doctor)\n"
+    assert render_setup_log(event="doctor-ok") == "OK:doctor.py : aucun échec bloquant\n"
+    assert render_setup_log(event="doctor-warn") == "WARN:doctor.py a détecté des points à corriger avant production\n"
+    assert render_setup_log(event="doctor-unavailable") == "WARN:doctor.py non disponible — validation post-install sautée\n"
+
+
 def test_render_setup_log_rejects_unknown_event():
     with pytest.raises(ValueError, match="événement de configuration inconnu : bad"):
         render_setup_log(event="bad")
