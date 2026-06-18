@@ -867,12 +867,20 @@ _setup_postgres() {
         log_error "Impossible de décider l'action Alembic PostgreSQL."
         return 1
     }
+    local schema_action_log=""
+    schema_action_log=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --schema-action-log \
+        --db "$db" \
+        --action "$schema_action") || {
+        log_error "Impossible de rendre le message d'action Alembic PostgreSQL."
+        return 1
+    }
     case "$schema_action" in
         keep)
-            log_ok "La base '$db' existe déjà avec des données. Conservation."
+            log_ok "${schema_action_log#OK:}"
             ;;
         upgrade-existing)
-            log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
+            log_info "${schema_action_log#INFO:}"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
                 log_ok "Schéma à jour (Alembic)"
             else
@@ -892,7 +900,7 @@ _setup_postgres() {
             fi
             ;;
         create)
-            log_info "Création du schéma (alembic upgrade head)…"
+            log_info "${schema_action_log#INFO:}"
             if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
                 log_ok "Schéma PostgreSQL créé"
             else

@@ -196,6 +196,17 @@ def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int,
     return f"Base '{db}' : tables public={schema_count} | alembic='{alembic_version}' | utilisateurs={data_count}\n"
 
 
+def render_schema_action_log(*, db: str, action: str) -> str:
+    """Rend le message initial associé à une action Alembic."""
+    if action == "keep":
+        return f"OK:La base '{db}' existe déjà avec des données. Conservation.\n"
+    if action == "upgrade-existing":
+        return f"INFO:La base '{db}' a le schéma mais est vide. Application des migrations Alembic…\n"
+    if action == "create":
+        return "INFO:Création du schéma (alembic upgrade head)…\n"
+    raise ValueError(f"action Alembic PostgreSQL inconnue : {action}")
+
+
 def rewrite_pg_hba_for_tcp_password(content: str) -> tuple[str, int]:
     """Remplace ident/peer par scram-sha-256 pour les connexions TCP locales."""
     changed = 0
@@ -260,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--encoding-warnings", action="store_true", help="rend les avertissements d'encodage PostgreSQL")
     parser.add_argument("--connection-failure", action="store_true", help="rend les messages d'échec de connexion PostgreSQL")
     parser.add_argument("--state-summary", action="store_true", help="rend le résumé d'état PostgreSQL")
+    parser.add_argument("--schema-action-log", action="store_true", help="rend le message initial d'une action Alembic")
     parser.add_argument("--fallback-locale-c", action="store_true", help="utilise LC_COLLATE/LC_CTYPE C pour --database-sql")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", default="5432")
@@ -277,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--encoding", default=None)
     parser.add_argument("--local-pg", default=None)
     parser.add_argument("--alembic-version", default="")
+    parser.add_argument("--action", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -408,6 +421,18 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 end="",
             )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return 0
+
+    if args.schema_action_log:
+        missing = [name for name in ("db", "action") if getattr(args, name) is None]
+        if missing:
+            print(f"arguments manquants pour --schema-action-log: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        try:
+            print(render_schema_action_log(db=args.db, action=args.action), end="")
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

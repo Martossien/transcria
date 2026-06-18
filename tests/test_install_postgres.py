@@ -20,6 +20,7 @@ from transcria.install_postgres import (
     render_database_sql,
     render_encoding_warnings,
     render_role_sql,
+    render_schema_action_log,
     render_state_query,
     render_state_summary,
     rewrite_pg_hba_file,
@@ -307,6 +308,25 @@ def test_install_postgres_cli_renders_state_summary(capsys):
     ]) == 0
 
     assert capsys.readouterr().out == "Base 'transcria' : tables public=12 | alembic='abc123' | utilisateurs=3\n"
+
+
+def test_render_schema_action_log_for_known_actions():
+    assert render_schema_action_log(db="transcria", action="keep") == "OK:La base 'transcria' existe déjà avec des données. Conservation.\n"
+    assert render_schema_action_log(db="transcria", action="upgrade-existing") == (
+        "INFO:La base 'transcria' a le schéma mais est vide. Application des migrations Alembic…\n"
+    )
+    assert render_schema_action_log(db="transcria", action="create") == "INFO:Création du schéma (alembic upgrade head)…\n"
+
+
+def test_render_schema_action_log_rejects_unknown_action():
+    with pytest.raises(ValueError, match="action Alembic PostgreSQL inconnue : bad"):
+        render_schema_action_log(db="transcria", action="bad")
+
+
+def test_install_postgres_cli_renders_schema_action_log(capsys):
+    assert main(["--schema-action-log", "--db", "transcria", "--action", "upgrade-existing"]) == 0
+
+    assert capsys.readouterr().out == "INFO:La base 'transcria' a le schéma mais est vide. Application des migrations Alembic…\n"
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):
