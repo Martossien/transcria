@@ -106,6 +106,11 @@ def test_render_setup_log_for_env_and_profile_events():
     assert render_setup_log(event="inference-key-created") == "OK:TRANSCRIA_INFERENCE_API_KEY généré dans .env (chmod 600)\n"
     assert render_setup_log(event="proxy-present") == "OK:Proxy déjà présent dans .env\n"
     assert render_setup_log(event="proxy-persisted") == "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
+    assert render_setup_log(event="admin-default-password") == "WARN:Mot de passe admin : valeur par défaut 'CHANGE-ME'\n"
+    assert render_setup_log(event="admin-password-set") == "OK:Mot de passe admin défini\n"
+    assert render_setup_log(event="admin-password-too-short") == "WARN:Trop court — inchangé. Éditez config.yaml manuellement.\n"
+    assert render_setup_log(event="config-updated") == "OK:config.yaml mis à jour\n"
+    assert render_setup_log(event="env-secured", value="transcria") == "OK:.env sécurisé pour l'utilisateur de service (transcria)\n"
 
 
 def test_render_setup_log_rejects_unknown_event():

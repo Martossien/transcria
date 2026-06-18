@@ -224,6 +224,11 @@ def test_install_script_delegates_configuration_setup_logs():
     assert "Profil d'installation : $INSTALL_PROFILE" not in content
     assert "TRANSCRIA_INFERENCE_API_KEY présent" not in content
     assert "Proxy déjà présent dans .env" not in content
+    assert "Mot de passe admin : valeur par défaut" not in content
+    assert "Mot de passe admin défini" not in content
+    assert "Trop court — inchangé" not in content
+    assert "config.yaml mis à jour" not in content
+    assert ".env sécurisé pour l'utilisateur de service" not in content
 
 
 def test_install_script_delegates_postgres_schema_action_decision():

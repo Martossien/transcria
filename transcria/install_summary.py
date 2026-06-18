@@ -71,6 +71,16 @@ def render_setup_log(*, event: str, profile: str = "", runtime_role: str = "", v
         return "OK:Proxy déjà présent dans .env\n"
     if event == "proxy-persisted":
         return "OK:Proxy persisté dans .env (http_proxy/https_proxy/no_proxy)\n"
+    if event == "admin-default-password":
+        return "WARN:Mot de passe admin : valeur par défaut 'CHANGE-ME'\n"
+    if event == "admin-password-set":
+        return "OK:Mot de passe admin défini\n"
+    if event == "admin-password-too-short":
+        return "WARN:Trop court — inchangé. Éditez config.yaml manuellement.\n"
+    if event == "config-updated":
+        return "OK:config.yaml mis à jour\n"
+    if event == "env-secured":
+        return f"OK:.env sécurisé pour l'utilisateur de service ({value})\n"
     raise ValueError(f"événement de configuration inconnu : {event}")
 
 

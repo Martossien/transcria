@@ -1272,16 +1272,16 @@ CHANGED_CONFIG=false
 CURRENT_PWD=$(yaml_get "auth.first_admin_password")
 if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$CURRENT_PWD" = "CHANGE-ME" ]]; then
     echo ""
-    log_warn "Mot de passe admin : valeur par défaut 'CHANGE-ME'"
+    log_config_setup_event admin-default-password
     if ask_yn "Définir le mot de passe admin maintenant ?"; then
         echo -n "  Nouveau mot de passe (min 8 caractères) : "
         read -rs ADMIN_PASS; echo ""
         if [[ ${#ADMIN_PASS} -ge 8 ]]; then
             yaml_set "auth.first_admin_password" "$ADMIN_PASS"
-            log_ok "Mot de passe admin défini"
+            log_config_setup_event admin-password-set
             CHANGED_CONFIG=true
         else
-            log_warn "Trop court — inchangé. Éditez config.yaml manuellement."
+            log_config_setup_event admin-password-too-short
         fi
     fi
 fi
@@ -1377,9 +1377,9 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$PYANNOTE_OK" = false ]]; then
     fi
 fi
 
-[[ "$CHANGED_CONFIG" = true ]] && log_ok "config.yaml mis à jour" || true
+[[ "$CHANGED_CONFIG" = true ]] && log_config_setup_event config-updated || true
 secure_env_file
-log_ok ".env sécurisé pour l'utilisateur de service ($SERVICE_USER)"
+log_config_setup_event env-secured "$SERVICE_USER"
 
 # ============================================================================
 # SECTION 9 — opencode (moteur LLM pour résumé/correction)
