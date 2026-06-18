@@ -257,6 +257,12 @@ ask_yn() {
     [[ "$answer" =~ ^[oOyY]$ ]]
 }
 
+run_indented() {
+    "$@" 2>&1 | while IFS= read -r line; do
+        printf '  %s\n' "$line"
+    done
+}
+
 eval_prefixed_shell_assignments() {
     # Évalue uniquement des affectations shell KEY=VALUE produites par nos helpers.
     local prefix="$1" content="$2" line filtered="" pattern
@@ -546,11 +552,11 @@ else
         log_info "Ancien config.yaml sauvegardé : $BACKUP"
     fi
     log_info "Génération via bootstrap_config.py (auto-détection)..."
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
+    run_indented env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
         --example "$INSTALL_DIR/config.example.yaml" \
         --output "$CONFIG_PATH" \
         --profile "$INSTALL_PROFILE" \
-        --force 2>&1 | sed 's/^/  /'
+        --force
     log_ok "config.yaml généré"
 fi
 
@@ -783,13 +789,13 @@ SQL
         log_ok "La base '$db' existe déjà avec des données. Conservation."
     elif [[ "$has_schema" -gt 0 && "${has_data:-0}" -eq 0 ]]; then
         log_info "La base '$db' a le schéma mais est vide. Application des migrations Alembic…"
-        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
+        if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
             log_ok "Schéma à jour (Alembic)"
         else
             if [[ "$local_pg" = true ]]; then
                 log_error "Alembic a échoué. Tentative de reconstruction locale…"
                 pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
-                if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
+                if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
                     log_ok "Schéma reconstruit"
                 else
                     log_error "Alembic a échoué une seconde fois. Arrêt."
@@ -802,7 +808,7 @@ SQL
         fi
     else
         log_info "Création du schéma (alembic upgrade head)…"
-        if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head 2>&1 | sed 's/^/  /'; then
+        if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
             log_ok "Schéma PostgreSQL créé"
         else
             log_error "Échec d'alembic upgrade head"
@@ -861,8 +867,8 @@ _do_pg_migrate() {
     log_ok "Backup SQLite sauvegardé : $backup"
 
     log_info "Migration des données SQLite → PostgreSQL…"
-    if TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
-            --source "sqlite:///$sqlite_db" 2>&1 | sed 's/^/  /'; then
+    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
+            --source "sqlite:///$sqlite_db"; then
         log_ok "Données migrées"
     else
         log_error "Échec de la migration SQLite → PostgreSQL"
@@ -1191,7 +1197,7 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
     if [[ -n "$OPENCODE_BIN" ]]; then
         log_info "Configuration du provider opencode local…"
         OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
-        if "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH" 2>&1 | sed 's/^/  /'; then
+        if run_indented "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH"; then
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
                 chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
             fi
@@ -1344,7 +1350,7 @@ else
             else
                 if [[ -n "${CURRENT_HF_TOKEN:-}" ]]; then export HF_TOKEN="$CURRENT_HF_TOKEN"; fi
                 log_info "Téléchargement ($HF_DL) de $GG → $DEST (peut prendre plusieurs minutes)…"
-                if "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST" 2>&1 | sed 's/^/  /'; then
+                if run_indented "$HF_DL" download "$REPO" "$GG" --local-dir "$DEST"; then
                     log_ok "Modèle téléchargé : $DEST/$GG"
                 else
                     log_error "Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN."
@@ -1357,7 +1363,7 @@ else
         # Générer le wrapper local pour CETTE machine (MODELS_DIR / llama-server),
         # puis basculer sur le palier choisi sans modifier les profils versionnés.
         if [[ -f "$DEST/$GG" ]]; then
-            if MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb" 2>&1 | sed 's/^/  /'; then
+            if run_indented env MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb"; then
                 log_ok "Palier ${LLM_TIER} Go activé (alias générique 'arbitrage')."
                 # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
                 # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.

@@ -74,6 +74,15 @@ def test_install_script_resolves_user_home_through_python_helper():
     assert "python3 -c" not in content
 
 
+def test_install_script_uses_run_indented_for_command_output_prefixing():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "run_indented()" in content
+    assert "run_indented env TRANSCRIA_DATABASE_URL=" in content
+    assert "run_indented env PYTHONPATH=" in content
+    assert "2>&1 | sed 's/^/  /'" not in content
+
+
 def test_install_script_filters_llm_shell_helper_outputs_before_eval():
     content = _INSTALL.read_text(encoding="utf-8")
 

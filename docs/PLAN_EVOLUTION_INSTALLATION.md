@@ -524,6 +524,9 @@ filtrage.
 La résolution du home de l'utilisateur de service passe par
 `transcria.install_prerequisites user-home`, supprimant le dernier `python3 -c`
 inline de `install.sh`.
+Le préfixage des sorties de commandes longues (`bootstrap_config`, Alembic,
+migration SQLite, opencode, téléchargements, switch LLM) passe par `run_indented`
+au lieu de pipelines `2>&1 | sed`.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file
