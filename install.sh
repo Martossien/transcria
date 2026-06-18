@@ -819,11 +819,15 @@ _setup_postgres() {
     local db_encoding=""
     db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
         -c "$(pg_state_query encoding)" 2>/dev/null) || db_encoding=""
-    if [[ -n "$db_encoding" && "$db_encoding" != "UTF8" ]]; then
-        log_warn "⚠ La base '$db' existe déjà en encodage $db_encoding (UTF8 attendu) :"
-        log_warn "  texte stocké SANS validation d'encodage — migrez-la dès que possible"
-        log_warn "  (procédure : docs/INSTALL.md, section « Encodage de la base »)."
-        log_warn "  L'application force client_encoding=utf8 et reste fonctionnelle en attendant."
+    local encoding_warnings=""
+    encoding_warnings=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_postgres \
+        --encoding-warnings \
+        --db "$db" \
+        --encoding "$db_encoding")
+    if [[ -n "$encoding_warnings" ]]; then
+        while IFS= read -r line; do
+            [[ -n "$line" ]] && log_warn "$line"
+        done <<< "$encoding_warnings"
     fi
 
     # ── Écrire le DSN dans .env ───────────────────────────────

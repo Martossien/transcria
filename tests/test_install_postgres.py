@@ -17,6 +17,7 @@ from transcria.install_postgres import (
     parse_bool,
     parse_non_negative_int,
     render_database_sql,
+    render_encoding_warnings,
     render_role_sql,
     render_state_query,
     rewrite_pg_hba_file,
@@ -237,6 +238,26 @@ def test_install_postgres_cli_renders_state_query(capsys):
     assert main(["--state-query", "users-count"]) == 0
 
     assert capsys.readouterr().out == "SELECT COUNT(*) FROM users\n"
+
+
+def test_render_encoding_warnings_for_non_utf8_database():
+    assert render_encoding_warnings("transcria", "SQL_ASCII") == (
+        "La base 'transcria' existe déjà en encodage SQL_ASCII (UTF8 attendu) :\n"
+        "texte stocké SANS validation d'encodage — migrez-la dès que possible\n"
+        "(procédure : docs/INSTALL.md, section « Encodage de la base »).\n"
+        "L'application force client_encoding=utf8 et reste fonctionnelle en attendant.\n"
+    )
+
+
+def test_render_encoding_warnings_ignores_utf8_or_empty_encoding():
+    assert render_encoding_warnings("transcria", "UTF8") == ""
+    assert render_encoding_warnings("transcria", "") == ""
+
+
+def test_install_postgres_cli_renders_encoding_warnings(capsys):
+    assert main(["--encoding-warnings", "--db", "transcria", "--encoding", "LATIN1"]) == 0
+
+    assert "LATIN1" in capsys.readouterr().out
 
 
 def test_install_postgres_cli_decides_sqlite_migration_action(capsys):

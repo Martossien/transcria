@@ -235,6 +235,14 @@ def test_install_script_delegates_postgres_state_queries():
     assert "pg_encoding_to_char" not in content
 
 
+def test_install_script_delegates_postgres_encoding_warnings():
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert "--encoding-warnings" in content
+    assert "texte stocké SANS validation d'encodage" not in content
+    assert "L'application force client_encoding=utf8" not in content
+
+
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
