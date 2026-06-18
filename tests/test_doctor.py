@@ -81,6 +81,221 @@ def test_check_encoding_fail_on_unreachable():
     assert "secret" not in res.detail
 
 
+# ── check_deployment_profile / check_resource_node_auth ───────────────────
+
+
+def test_profile_web_requires_web_role_and_postgres(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
+    cfg = {
+        "runtime": {"role": "web"},
+        "storage": {"database_url": "postgresql+psycopg://u:p@h/db"},
+    }
+    res = doc.check_deployment_profile(cfg, profile="web")
+    assert res.status == doc.OK
+
+
+def test_profile_web_fails_on_sqlite(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
+    monkeypatch.delenv("TRANSCRIA_DATABASE_URL", raising=False)
+    cfg = {"runtime": {"role": "web"}, "storage": {"database_url": "sqlite:///x.db"}}
+    res = doc.check_deployment_profile(cfg, profile="web")
+    assert res.status == doc.FAIL
+    assert "PostgreSQL" in res.detail
+
+
+def test_profile_scheduler_fails_on_role_mismatch(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
+    cfg = {
+        "runtime": {"role": "web"},
+        "storage": {"database_url": "postgresql+psycopg://u:p@h/db"},
+    }
+    res = doc.check_deployment_profile(cfg, profile="scheduler")
+    assert res.status == doc.FAIL
+    assert "runtime effectif=web" in res.detail
+
+
+def test_profile_migrate_requires_postgres(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
+    monkeypatch.delenv("TRANSCRIA_DATABASE_URL", raising=False)
+    res = doc.check_deployment_profile({"storage": {"database_url": "sqlite:///x.db"}}, profile="migrate")
+    assert res.status == doc.FAIL
+
+
+def test_systemd_profile_warns_when_legacy_active_on_web():
+    states = {
+        "transcria.service": (True, True),
+        "transcria-web.service": (False, False),
+    }
+    res = doc.check_systemd_profile({}, profile="web", unit_state=lambda unit: states.get(unit, (False, False)))
+    assert res.status == doc.WARN
+    assert "transcria.service" in res.detail
+
+
+def test_systemd_profile_warns_when_split_active_on_all_in_one():
+    states = {
+        "transcria-web.service": (False, True),
+        "transcria-scheduler.service": (True, False),
+        "transcria.service": (False, False),
+    }
+    res = doc.check_systemd_profile({}, profile="all-in-one", unit_state=lambda unit: states.get(unit, (False, False)))
+    assert res.status == doc.WARN
+    assert "transcria-web.service" in res.detail
+    assert "transcria-scheduler.service" in res.detail
+
+
+def test_systemd_profile_ok_when_systemd_unavailable():
+    res = doc.check_systemd_profile({}, profile="web", unit_state=lambda unit: None)
+    assert res.status == doc.OK
+    assert "sauté" in res.detail
+
+
+def test_remote_stt_control_plane_ok_when_no_remote_stt():
+    res = doc.check_remote_stt_control_plane({"inference": {"mode": "local"}})
+    assert res.status == doc.OK
+    assert "aucun backend" in res.detail
+
+
+def test_remote_stt_control_plane_warns_without_control_node():
+    cfg = {"inference": {"mode": "remote", "stt": {"backends": {"cohere": {"url": "http://gpu:8003/v1"}}}}}
+    res = doc.check_remote_stt_control_plane(cfg)
+    assert res.status == doc.WARN
+    assert "sans inference.url" in res.detail
+
+
+def test_remote_stt_control_plane_ok_with_control_node():
+    cfg = {
+        "inference": {
+            "mode": "remote",
+            "url": "http://gpu:8002",
+            "stt": {"backends": {"cohere": {"url": "http://gpu:8003/v1"}}},
+        }
+    }
+    res = doc.check_remote_stt_control_plane(cfg)
+    assert res.status == doc.OK
+    assert "1 backend" in res.detail
+
+
+def test_remote_stt_control_plane_warns_when_mode_is_local():
+    cfg = {"inference": {"mode": "local", "stt": {"backends": {"cohere": {"url": "http://gpu:8003/v1"}}}}}
+    res = doc.check_remote_stt_control_plane(cfg)
+    assert res.status == doc.WARN
+    assert "inference.mode=local" in res.detail
+
+
+def test_resource_node_auth_ok_from_env(monkeypatch):
+    monkeypatch.setenv("TRANSCRIA_INFERENCE_API_KEY", "secret")
+    res = doc.check_resource_node_auth({"inference": {"auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY"}}})
+    assert res.status == doc.OK
+
+
+def test_resource_node_auth_fails_when_open(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_INFERENCE_API_KEY", raising=False)
+    res = doc.check_resource_node_auth({"inference": {"auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY"}}})
+    assert res.status == doc.FAIL
+    assert "TRANSCRIA_INFERENCE_API_KEY" in res.detail
+
+
+def test_resource_node_engines_warns_when_empty():
+    res = doc.check_resource_node_engines({})
+    assert res.status == doc.WARN
+    assert "aucun moteur" in res.detail
+
+
+def test_resource_node_engines_ok_when_manifest_valid():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "gpu_mem": 0.85, "port": 8003},
+        {"name": "whisper", "script": "scripts/launch_stt_whisper.sh", "gpu": 5, "port": 8005},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.OK
+    assert "2 moteur" in res.detail
+
+
+def test_resource_node_engines_fails_on_duplicate_port():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
+        {"name": "whisper", "script": "scripts/launch_stt_whisper.sh", "gpu": 5, "port": 8003},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.FAIL
+    assert "port dupliqué" in res.detail
+
+
+def test_resource_node_engines_fails_on_inference_service_port():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8002},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: True, reserved_ports={8002})
+    assert res.status == doc.FAIL
+    assert "port réservé au service inference_service" in res.detail
+
+
+def test_resource_node_engines_uses_inference_port_from_env(monkeypatch):
+    monkeypatch.setenv("INFERENCE_PORT", "8010")
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8010},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.FAIL
+    assert "8010" in res.detail
+
+
+def test_resource_node_engines_fails_on_missing_script():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/missing.sh", "gpu": 3, "port": 8003},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: False, is_executable=lambda p: False)
+    assert res.status == doc.FAIL
+    assert "script introuvable" in res.detail
+
+
+def test_resource_node_engines_warns_on_non_executable_script():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: False)
+    assert res.status == doc.WARN
+    assert "non exécutable" in res.detail
+
+
+def test_resource_node_ports_ok_when_declared_ports_are_free():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
+        {"name": "whisper", "script": "scripts/launch_stt_whisper.sh", "gpu": 5, "port": 8005},
+    ]}}
+    res = doc.check_resource_node_ports(cfg, port_probe=lambda port: False)
+    assert res.status == doc.OK
+    assert "cohere:8003" in res.detail
+    assert "whisper:8005" in res.detail
+
+
+def test_resource_node_ports_ok_when_openai_engine_already_running():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
+    ]}}
+    res = doc.check_resource_node_ports(
+        cfg,
+        port_probe=lambda port: True,
+        models_probe=lambda port: {"data": [{"id": "cohere-transcribe"}]},
+    )
+    assert res.status == doc.OK
+    assert "déjà actifs" in res.detail
+    assert "cohere-transcribe" in res.detail
+
+
+def test_resource_node_ports_fails_when_port_is_used_by_unknown_service():
+    cfg = {"resource_node": {"engines": [
+        {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
+    ]}}
+    res = doc.check_resource_node_ports(
+        cfg,
+        port_probe=lambda port: True,
+        models_probe=lambda port: None,
+    )
+    assert res.status == doc.FAIL
+    assert "non OpenAI-compatible" in res.detail
+
+
 # ── expected_model_assets / check_local_models ────────────────────────────
 
 
@@ -377,6 +592,35 @@ def test_run_doctor_never_crashes_on_check_exception(monkeypatch):
     assert any(r.status == doc.FAIL and "boom" in r.detail for r in results)
 
 
+def test_run_doctor_adds_profile_check(monkeypatch, tmp_path):
+    monkeypatch.delenv("TRANSCRIA_ROLE", raising=False)
+    cfg = {
+        "runtime": {"role": "web"},
+        "storage": {"jobs_dir": str(tmp_path), "database_url": "postgresql+psycopg://u:p@h/db", "shared_backend": "fs"},
+        "inference": {"mode": "local"},
+    }
+    monkeypatch.setattr(doc, "diff_live_schema", lambda uri: [])
+    monkeypatch.setattr(doc, "_probe_server_encoding", lambda uri: "UTF8")
+    results = doc.run_doctor(loader=lambda path: cfg, profile="web")
+    names = [r.name for r in results]
+    assert "Profil de déploiement" in names
+
+
+def test_run_doctor_loads_env_file_for_resource_node(monkeypatch, tmp_path):
+    monkeypatch.delenv("ENV_FILE", raising=False)
+    monkeypatch.delenv("TRANSCRIA_INFERENCE_API_KEY", raising=False)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("inference: {}\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("TRANSCRIA_INFERENCE_API_KEY=secret-from-env-file\n", encoding="utf-8")
+    cfg = {"inference": {"auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY"}}}
+
+    results = doc.run_doctor(config_path=str(config_path), loader=lambda path: cfg, profile="resource-node")
+
+    auth = next(r for r in results if r.name == "Nœud de ressources (auth API)")
+    assert auth.status == doc.OK
+    monkeypatch.delenv("TRANSCRIA_INFERENCE_API_KEY", raising=False)
+
+
 def test_compute_exit_code():
     ok = [doc.CheckResult("a", doc.OK, "")]
     warn = [doc.CheckResult("a", doc.WARN, "")]
@@ -399,7 +643,11 @@ def test_format_report_contains_statuses():
 
 
 def test_main_json_and_exit_code(capsys, monkeypatch):
-    monkeypatch.setattr(doc, "run_doctor", lambda config_path=None, llm_smoke=False: [doc.CheckResult("X", doc.FAIL, "d")])
+    monkeypatch.setattr(
+        doc,
+        "run_doctor",
+        lambda config_path=None, llm_smoke=False, profile=None: [doc.CheckResult("X", doc.FAIL, "d")],
+    )
     code = doc.main(["--json"])
     out = capsys.readouterr().out
     assert code == doc.EXIT_FAIL
