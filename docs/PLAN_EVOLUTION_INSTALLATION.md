@@ -467,12 +467,18 @@ entre orchestration shell et logique Python testée.
 La matrice des paliers LLM d'arbitrage (repo, fichier GGUF, répertoire, libellé)
 et la recommandation par VRAM totale sont sorties de `install.sh` vers
 `transcria.install_arbitrage`, avec CLI shell filtrable et tests unitaires.
+La recommandation topologique par carte et l'écriture de calibration GPU post-switch
+passent aussi par `transcria.install_arbitrage` (`--placement-plan`,
+`--apply-placement-calibration`) au lieu d'appeler `scripts/plan_llm_placement.py`
+depuis le shell ; le repli par VRAM totale n'est utilisé que si la topologie par carte
+est indisponible.
 La sélection du client de téléchargement LLM (`hf` puis `huggingface-cli`) est
 également rendue par `transcria.install_arbitrage --download-client`; le shell
 conserve seulement l'appel explicite de téléchargement du GGUF.
 Le fallback simple `llama-server` (PATH, `~/llama.cpp/build/bin`, `/usr/local/bin`)
 est rendu par `transcria.install_arbitrage --llama-fallback`; le détecteur avancé
-reste prioritaire et `install.sh` garde seulement le prompt final.
+est aussi appelé via `transcria.install_arbitrage --llama-detect`. `install.sh`
+garde seulement l'interprétation des variables filtrées et le prompt final.
 La détection locale des modèles (Cohere, cache pyannote, SQUIM, premier GGUF)
 est également regroupée dans `transcria.install_models detect-local`; `install.sh`
 ne fait plus que charger les variables filtrées et afficher les statuts rendus.

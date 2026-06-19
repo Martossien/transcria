@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,15 +11,21 @@ import yaml
 from transcria.install_arbitrage import (
     DownloadClient,
     LlamaFallback,
+    PlacementRecommendation,
+    apply_placement_calibration,
     apply_profile,
     get_tier_metadata,
+    parse_gpu_sizes_csv,
+    recommend_placement_tier,
     recommend_tier,
     render_download_client_shell,
     render_llama_fallback_shell,
+    render_placement_recommendation_shell,
     render_prompt,
     render_setup_log,
     render_tier_metadata_shell,
     render_wrapper,
+    run_llama_detector,
     select_download_client,
     select_llama_fallback,
     status,
@@ -195,6 +202,59 @@ def test_recommend_tier_from_total_vram():
     assert recommend_tier(11499) == "0"
 
 
+def test_parse_gpu_sizes_csv_accepts_commas_and_spaces():
+    assert parse_gpu_sizes_csv("24576, 49152 65536") == [24576, 49152, 65536]
+
+
+def test_parse_gpu_sizes_csv_rejects_invalid_token():
+    with pytest.raises(ValueError, match="taille GPU invalide : nope"):
+        parse_gpu_sizes_csv("24576,nope")
+
+
+def test_recommend_placement_tier_prefers_topology_planner():
+    recommendation = recommend_placement_tier(gpu_sizes_csv="24576,24576", total_vram_mb=49152)
+
+    assert recommendation.tier == "48"
+    assert recommendation.planner_fallback is False
+    assert recommendation.feasible is True
+
+
+def test_recommend_placement_tier_does_not_fallback_when_topology_has_no_feasible_tier():
+    recommendation = recommend_placement_tier(gpu_sizes_csv="8192,8192", total_vram_mb=16384)
+
+    assert recommendation.tier == ""
+    assert recommendation.planner_fallback is False
+    assert recommendation.feasible is False
+    assert recommendation.warnings
+
+
+def test_recommend_placement_tier_falls_back_only_without_gpu_sizes():
+    recommendation = recommend_placement_tier(gpu_sizes_csv="", total_vram_mb=16384)
+
+    assert recommendation == PlacementRecommendation(tier="16", planner_fallback=True, feasible=True)
+
+
+def test_render_placement_recommendation_shell_is_filterable():
+    rendered = render_placement_recommendation_shell(PlacementRecommendation(tier="48", planner_fallback=False, feasible=True))
+
+    assert "LLM_REC_TIER='48'" in rendered
+    assert "LLM_PLANNER_FALLBACK=0" in rendered
+    assert "LLM_PLACEMENT_FEASIBLE=1" in rendered
+
+
+def test_apply_placement_calibration_writes_topology_plan(tmp_path: Path):
+    config = tmp_path / "config.yaml"
+    config.write_text("gpu:\n  llm_vram_mb: 1\n", encoding="utf-8")
+
+    placement = apply_placement_calibration(gpu_sizes_csv="24576,24576", tier="32", config_path=config)
+
+    cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert placement.feasible is True
+    assert cfg["gpu"]["llm_vram_mb"] == 29200
+    assert cfg["gpu"]["llm_gpu_indices"] == [0, 1]
+    assert cfg["gpu"]["llm_vram_mb_per_gpu"] == [14600, 14600]
+
+
 def test_get_tier_metadata_for_download_plan():
     metadata = get_tier_metadata("24")
 
@@ -260,3 +320,19 @@ def test_render_llama_fallback_shell_is_filterable():
     rendered = render_llama_fallback_shell(LlamaFallback(server=Path("/opt/llama server")))
 
     assert "LLAMA_FALLBACK='/opt/llama server'" in rendered
+
+
+def test_run_llama_detector_is_non_blocking(monkeypatch, tmp_path: Path):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 2, stdout='LLAMA_FOUND=0\nLLAMA_SERVER=""\n', stderr="introuvable\n")
+
+    monkeypatch.setattr("transcria.install_arbitrage.subprocess.run", fake_run)
+
+    stdout, stderr = run_llama_detector(repo_root=tmp_path, python_bin="/venv/bin/python")
+
+    assert calls == [["/venv/bin/python", str(tmp_path / "scripts" / "detect_llama_server.py"), "--format", "shell"]]
+    assert 'LLAMA_SERVER=""' in stdout
+    assert stderr == "introuvable\n"

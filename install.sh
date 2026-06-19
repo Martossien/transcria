@@ -1488,21 +1488,19 @@ elif [[ -z "${OPENCODE_BIN:-}" ]]; then
     log_llm_setup_event opencode-install-later
 else
     log_llm_setup_event vram-status "$GPU_VRAM_TOTAL_MB" "" "$GPU_COUNT" "$GPU_VRAM_MAX_MB"
-    # Recommandation par PLACEMENT réel (tient compte du mono/split et de la taille de
-    # CHAQUE carte) ; repli défensif sur la table par somme si le planner échoue.
-    REC_TIER=""
-    if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
-        _plan_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_plan.$$")
-        if _plan_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" \
-                         plan --gpus "$GPU_SIZES_CSV" --format shell 2>"$_plan_warn"); then
-            eval_prefixed_shell_assignments LLM "$_plan_out"
-            REC_TIER="${LLM_TIER:-}"
-            print_indented_file "$_plan_warn"
-        fi
-        rm -f "$_plan_warn"
-    fi
-    if [[ -z "$REC_TIER" ]]; then
-        REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_TOTAL_MB")
+    # Recommandation par placement réel ; repli par VRAM totale uniquement si la
+    # topologie par carte n'est pas disponible.
+    REC_TIER=""; LLM_PLANNER_FALLBACK=0; LLM_PLACEMENT_FEASIBLE=0
+    _plan_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_plan.$$")
+    _plan_out=$(arbitrage_helper \
+        --placement-plan \
+        --gpu-sizes-csv "$GPU_SIZES_CSV" \
+        --total-vram-mb "$GPU_VRAM_TOTAL_MB" 2>"$_plan_warn")
+    eval_named_shell_assignments "$_plan_out" LLM_REC_TIER LLM_PLANNER_FALLBACK LLM_PLACEMENT_FEASIBLE
+    REC_TIER="${LLM_REC_TIER:-}"
+    print_indented_file "$_plan_warn"
+    rm -f "$_plan_warn"
+    if [[ "$LLM_PLANNER_FALLBACK" = 1 ]]; then
         log_llm_setup_event planner-fallback
     fi
     if [[ "$REC_TIER" == "0" || -z "$REC_TIER" ]]; then
@@ -1522,32 +1520,22 @@ else
         MODELS_DIR_CHOICE="${MODELS_DIR_CHOICE/#\~/$HOME}"
         install_paths_helper --path "$MODELS_DIR_CHOICE" >/dev/null
 
-        # Détection + QUALIFICATION du binaire llama-server (≥ b9630 requis pour les
-        # archis gated-delta/gemma4). Le détecteur fait la recherche élargie (env, PATH,
-        # ~/llama.cpp, ~/ik_llama.cpp, /opt, envs conda), résout la VRAIE version via
-        # l'arbre git (le numéro de --version est NON FIABLE : un vrai b9632 affiche 579)
-        # et vérifie la résolution des .so (RPATH/conda) — un binaire qui ne chargera pas
-        # est signalé ici, pas au premier run. Repli défensif sur l'ancienne boucle.
         LLAMA_SRV=""; LLAMA_LD_HINT=""
-        if [[ -x "$VENV/bin/python" ]]; then
-            _ll_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_llama.$$")
-            if _ll_out=$("$VENV/bin/python" "$INSTALL_DIR/scripts/detect_llama_server.py" \
-                           --format shell 2>"$_ll_warn"); then
-                eval_prefixed_shell_assignments LLAMA "$_ll_out"
-                LLAMA_SRV="${LLAMA_SERVER:-}"
-                LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
-                if [[ "${LLAMA_OK:-0}" == "1" ]]; then
-                    log_llm_setup_event llama-qualified "$LLAMA_SRV" "" "" "" "${LLAMA_BUILD:-?}" "${LLAMA_BUILD_SOURCE:-?}"
-                elif [[ -n "$LLAMA_SRV" ]]; then
-                    log_llm_setup_event llama-unusable "$LLAMA_SRV" "" "" "" "${LLAMA_LEVEL:-?}"
-                fi
-                if [[ -n "$LLAMA_LD_HINT" ]]; then
-                    log_llm_setup_event llama-ld-hint "$LLAMA_LD_HINT"
-                fi
-            fi
-            print_indented_file "$_ll_warn"
-            rm -f "$_ll_warn"
+        _ll_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_llama.$$")
+        _ll_out=$(arbitrage_helper --llama-detect --repo-root "$INSTALL_DIR" 2>"$_ll_warn")
+        eval_prefixed_shell_assignments LLAMA "$_ll_out"
+        LLAMA_SRV="${LLAMA_SERVER:-}"
+        LLAMA_LD_HINT="${LLAMA_LD_LIBRARY_PATH:-}"
+        if [[ "${LLAMA_OK:-0}" == "1" ]]; then
+            log_llm_setup_event llama-qualified "$LLAMA_SRV" "" "" "" "${LLAMA_BUILD:-?}" "${LLAMA_BUILD_SOURCE:-?}"
+        elif [[ -n "$LLAMA_SRV" ]]; then
+            log_llm_setup_event llama-unusable "$LLAMA_SRV" "" "" "" "${LLAMA_LEVEL:-?}"
         fi
+        if [[ -n "$LLAMA_LD_HINT" ]]; then
+            log_llm_setup_event llama-ld-hint "$LLAMA_LD_HINT"
+        fi
+        print_indented_file "$_ll_warn"
+        rm -f "$_ll_warn"
         if [[ -z "$LLAMA_SRV" ]]; then
             LLAMA_FALLBACK_OUT=$(arbitrage_helper --llama-fallback --user-home "$HOME")
             eval_named_shell_assignments "$LLAMA_FALLBACK_OUT" LLAMA_FALLBACK
@@ -1589,13 +1577,15 @@ else
         if [[ -f "$DEST/$GG" ]]; then
             if run_indented env MODELS_DIR="$MODELS_DIR_CHOICE" LLAMA_SERVER="$LLAMA_SRV" bash "$INSTALL_DIR/scripts/switch_arbitrage_llm.sh" "${LLM_TIER}gb"; then
                 log_llm_setup_event tier-activated "" "" "" "" "$LLM_TIER"
-                # switch écrit des valeurs de banc (3090) ; on les remplace par la calibration
-                # RÉELLE de CETTE machine (placement par carte). Idempotent, échec non bloquant.
-                if [[ -n "$GPU_SIZES_CSV" && -x "$VENV/bin/python" ]]; then
+                # switch écrit des valeurs de banc ; on les remplace par la calibration
+                # réelle de CETTE machine. Idempotent, échec non bloquant.
+                if [[ -n "$GPU_SIZES_CSV" ]]; then
                     _cal_warn=$(mktemp 2>/dev/null || echo "/tmp/transcria_cal.$$")
-                    if "$VENV/bin/python" "$INSTALL_DIR/scripts/plan_llm_placement.py" plan \
-                         --gpus "$GPU_SIZES_CSV" --tier "$LLM_TIER" \
-                         --config "$CONFIG_PATH" --apply --format shell >/dev/null 2>"$_cal_warn"; then
+                    if arbitrage_helper \
+                         --apply-placement-calibration \
+                         --gpu-sizes-csv "$GPU_SIZES_CSV" \
+                         --tier-value "$LLM_TIER" \
+                         --config "$CONFIG_PATH" >/dev/null 2>"$_cal_warn"; then
                         log_llm_setup_event calibration-ok
                     else
                         log_llm_setup_event calibration-failed

@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import argparse
 import stat
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
+from transcria.gpu.llm_placement import (
+    DEFAULT_SAFETY_MARGIN_MB,
+    Placement,
+    plan_for_tier,
+    recommend,
+)
 from transcria.install_prerequisites import first_available
 
 TIER_VRAM_MB: dict[str, int] = {
@@ -47,6 +54,14 @@ class DownloadClient:
 @dataclass(frozen=True)
 class LlamaFallback:
     server: Path | None
+
+
+@dataclass(frozen=True)
+class PlacementRecommendation:
+    tier: str
+    planner_fallback: bool
+    feasible: bool
+    warnings: tuple[str, ...] = ()
 
 
 LLM_TIERS: dict[str, LlmTierMetadata] = {
@@ -112,6 +127,71 @@ def recommend_tier(total_vram_mb: int) -> str:
     return "0"
 
 
+def parse_gpu_sizes_csv(value: str) -> list[int]:
+    sizes: list[int] = []
+    for token in value.replace(",", " ").split():
+        if not token.isdigit():
+            raise ValueError(f"taille GPU invalide : {token}")
+        size = int(token)
+        if size <= 0:
+            raise ValueError(f"taille GPU invalide : {token}")
+        sizes.append(size)
+    return sizes
+
+
+def recommend_placement_tier(*, gpu_sizes_csv: str, total_vram_mb: int) -> PlacementRecommendation:
+    """Recommande un palier en privilégiant le placement réel par carte."""
+    sizes = parse_gpu_sizes_csv(gpu_sizes_csv)
+    if sizes:
+        placement = recommend(sizes, safety_margin_mb=DEFAULT_SAFETY_MARGIN_MB)
+        tier = str(placement.tier_gb) if placement.feasible and placement.tier_gb else ""
+        return PlacementRecommendation(
+            tier=tier,
+            planner_fallback=False,
+            feasible=placement.feasible,
+            warnings=tuple(placement.warnings),
+        )
+
+    tier = recommend_tier(total_vram_mb)
+    return PlacementRecommendation(
+        tier="" if tier == "0" else tier,
+        planner_fallback=True,
+        feasible=tier != "0",
+    )
+
+
+def render_placement_recommendation_shell(recommendation: PlacementRecommendation) -> str:
+    return "\n".join(
+        [
+            f"LLM_REC_TIER={_shell_quote(recommendation.tier)}",
+            f"LLM_PLANNER_FALLBACK={1 if recommendation.planner_fallback else 0}",
+            f"LLM_PLACEMENT_FEASIBLE={1 if recommendation.feasible else 0}",
+            "",
+        ]
+    )
+
+
+def emit_placement_warnings(placement: PlacementRecommendation | Placement) -> None:
+    for warning in placement.warnings:
+        print(f"  ⚠ {warning}", file=sys.stderr)
+
+
+def apply_placement_calibration(*, gpu_sizes_csv: str, tier: str, config_path: Path) -> Placement:
+    sizes = parse_gpu_sizes_csv(gpu_sizes_csv)
+    if not sizes:
+        raise ValueError("aucune taille GPU fournie pour la calibration")
+    placement = plan_for_tier(int(tier), sizes, safety_margin_mb=DEFAULT_SAFETY_MARGIN_MB)
+    if not placement.feasible:
+        raise RuntimeError(placement.reason)
+    apply_gpu_calibration(
+        config_path,
+        vram_mb=placement.vram_mb,
+        gpu_indices=placement.gpu_indices,
+        vram_mb_per_gpu=placement.vram_mb_per_gpu,
+    )
+    return placement
+
+
 def get_tier_metadata(tier: str) -> LlmTierMetadata:
     try:
         return LLM_TIERS[tier]
@@ -167,6 +247,21 @@ def select_llama_fallback(*, user_home: Path) -> LlamaFallback:
 def render_llama_fallback_shell(fallback: LlamaFallback) -> str:
     """Rend le fallback llama-server sous forme d'affectation shell filtrable."""
     return f"LLAMA_FALLBACK={_shell_quote(str(fallback.server or ''))}\n"
+
+
+def run_llama_detector(*, repo_root: Path, python_bin: str = sys.executable) -> tuple[str, str]:
+    """Exécute le détecteur avancé llama-server sans rendre l'installation bloquante."""
+    detector = Path(repo_root) / "scripts" / "detect_llama_server.py"
+    try:
+        result = subprocess.run(
+            [python_bin, str(detector), "--format", "shell"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return "", f"{exc}\n"
+    return result.stdout, result.stderr
 
 
 def _shell_quote(value: str) -> str:
@@ -377,7 +472,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--recommend-tier", action="store_true", help="recommande un palier depuis --total-vram-mb")
     parser.add_argument("--tier-info", action="store_true", help="rend les métadonnées shell d'un palier")
     parser.add_argument("--download-client", action="store_true", help="rend le client HuggingFace disponible pour télécharger la LLM")
+    parser.add_argument("--llama-detect", action="store_true", help="lance le détecteur avancé llama-server")
     parser.add_argument("--llama-fallback", action="store_true", help="rend un fallback llama-server simple")
+    parser.add_argument("--placement-plan", action="store_true", help="rend la recommandation de placement LLM")
+    parser.add_argument("--apply-placement-calibration", action="store_true", help="écrit la calibration GPU depuis le placement LLM")
+    parser.add_argument("--gpu-sizes-csv", default="")
     parser.add_argument("--user-home", default="")
     parser.add_argument("--total-vram-mb", type=int, default=0)
     args = parser.parse_args(argv)
@@ -417,11 +516,28 @@ def main(argv: list[str] | None = None) -> int:
         if args.download_client:
             print(render_download_client_shell(select_download_client()), end="")
             return 0
+        if args.llama_detect:
+            stdout, stderr = run_llama_detector(repo_root=repo_root)
+            print(stdout, end="")
+            print(stderr, end="", file=sys.stderr)
+            return 0
         if args.llama_fallback:
             if not args.user_home:
                 print("--user-home requis avec --llama-fallback", file=sys.stderr)
                 return 2
             print(render_llama_fallback_shell(select_llama_fallback(user_home=Path(args.user_home))), end="")
+            return 0
+        if args.placement_plan:
+            recommendation = recommend_placement_tier(gpu_sizes_csv=args.gpu_sizes_csv, total_vram_mb=args.total_vram_mb)
+            print(render_placement_recommendation_shell(recommendation), end="")
+            emit_placement_warnings(recommendation)
+            return 0
+        if args.apply_placement_calibration:
+            if not args.tier_value:
+                print("--tier-value requis avec --apply-placement-calibration", file=sys.stderr)
+                return 2
+            placement = apply_placement_calibration(gpu_sizes_csv=args.gpu_sizes_csv, tier=args.tier_value, config_path=config_path)
+            emit_placement_warnings(placement)
             return 0
         if args.tier == "status":
             for line in status(repo_root=repo_root, config_path=config_path):

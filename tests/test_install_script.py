@@ -325,9 +325,11 @@ def test_install_script_delegates_llm_selection_setup_logs():
 
     assert "-m transcria.install_arbitrage --setup-log" in content
     assert "nvidia-smi --query-gpu=memory.total" not in content
+    assert "scripts/plan_llm_placement.py" not in content
+    assert "--placement-plan" in content
+    assert "--apply-placement-calibration" in content
     assert "load_llm_tier_metadata" in content
     assert "--tier-info" in content
-    assert "--recommend-tier" in content
     assert "log_llm_setup_event" in content
     assert "declare -A LLM_REPO" not in content
     assert "recommend_llm_tier()" not in content
@@ -641,8 +643,10 @@ def test_install_script_finds_download_clients_through_python_helper():
     assert "arbitrage_helper --download-client" in content
     assert "first-available --name hf --name huggingface-cli" not in content
     assert "first-available --name huggingface-cli --format shell" not in content
+    assert "arbitrage_helper --llama-detect" in content
     assert "arbitrage_helper --llama-fallback" in content
     assert "first-available --name llama-server" not in content
+    assert "scripts/detect_llama_server.py" not in content
     assert "check-binaries --required psql" in content
     assert "command -v psql" not in content
     assert "command -v huggingface-cli" not in content
