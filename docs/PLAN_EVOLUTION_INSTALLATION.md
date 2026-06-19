@@ -457,6 +457,9 @@ tests d'idempotence.
 Les messages d'installation systemd (service sauté, installé, sudo absent,
 unités manquantes, avertissement split et nœud inference manquant) passent par
 `transcria.install_systemd --setup-log`; `install.sh` garde les actions privilégiées.
+Le choix des unités systemd à rendre/installer par profil passe maintenant par
+`transcria.install_systemd --unit-plan` : `install.sh` exécute une boucle unique
+pour legacy, split et resource-node au lieu de trois blocs dédiés.
 Les wrappers shell qui dispatchent les sorties `OK:`/`WARN:`/`INFO:`/`ERROR:` des
 renderers Python sont centralisés dans `emit_rendered_log`, ce qui réduit la
 duplication restante de `install.sh` sans changer les modules métier appelés.

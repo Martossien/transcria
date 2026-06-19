@@ -1657,135 +1657,59 @@ install_systemd_unit() {
     fi
 }
 
-render_deploy_unit() {
-    local src="$1" dst_tmp="$2"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_systemd \
-        --kind split \
-        --template "$src" \
-        --install-dir "$INSTALL_DIR" \
-        --service-user "$SERVICE_USER" \
-        --service-home "$SERVICE_HOME_GLOBAL" \
-        > "$dst_tmp"
-}
+SYSTEMD_UNIT_PLAN=$(python_module transcria.install_systemd \
+    --unit-plan \
+    --profile "$INSTALL_PROFILE" \
+    --install-service "$INSTALL_SERVICE" \
+    --install-inference "$INSTALL_INFERENCE" \
+    --install-systemd "$INSTALL_SYSTEMD" \
+    --install-dir "$INSTALL_DIR" \
+    --service-user "$SERVICE_USER")
 
-install_deploy_unit() {
-    local src="$1" dst="$2" unit="$3" adapted_name="$4"
-    if [[ ! -f "$src" ]]; then
-        log_systemd_event missing-unit "$unit"
-        return 0
-    fi
-    local tmp_unit
-    tmp_unit=$(mktemp)
-    render_deploy_unit "$src" "$tmp_unit"
-    install_systemd_unit "$tmp_unit" "$dst" "$unit" "$adapted_name"
-    rm -f "$tmp_unit"
-}
+if [[ -n "$SYSTEMD_UNIT_PLAN" ]]; then
+    log_section "Services systemd"
 
-if [[ "$INSTALL_SERVICE" = true && "$INSTALL_SYSTEMD" = true ]]; then
-    log_section "Service systemd"
-
-    SERVICE_SRC="$INSTALL_DIR/transcria.service"
-    SERVICE_DST="/etc/systemd/system/transcria.service"
-
-    if [[ ! -f "$SERVICE_SRC" ]]; then
-        log_systemd_event legacy-missing
-    else
-        if id "$SERVICE_USER" &>/dev/null 2>&1; then
-            SERVICE_HOME=$(resolve_user_home "$SERVICE_USER")
-        else
-            SERVICE_HOME="/home/$SERVICE_USER"
+    if [[ "$INSTALL_PROFILE" = "web" || "$INSTALL_PROFILE" = "scheduler" || "$INSTALL_PROFILE" = "migrate" ]]; then
+        if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
+            log_systemd_event split-legacy-enabled
+            log_systemd_event split-legacy-disable-command
         fi
-        SERVICE_LOG_FILE="/var/log/transcrIA.log"
-        SERVICE_PID_FILE="/run/transcrIA.pid"
-        if [[ "$SERVICE_USER" != "root" ]]; then
-            SERVICE_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
-            SERVICE_PID_FILE="$INSTALL_DIR/run/transcrIA.pid"
-            install_paths_helper --kind legacy-service >/dev/null
+    fi
+
+    while IFS='|' read -r UNIT_KIND UNIT_SRC UNIT_DST UNIT_NAME UNIT_ADAPTED UNIT_MISSING_EVENT UNIT_MISSING_HINT UNIT_PATH_KIND UNIT_LEGACY_LOG UNIT_LEGACY_PID UNIT_INF_LOG; do
+        [[ -n "$UNIT_KIND" ]] || continue
+        if [[ ! -f "$UNIT_SRC" ]]; then
+            log_systemd_event "$UNIT_MISSING_EVENT" "$UNIT_NAME"
+            [[ -n "$UNIT_MISSING_HINT" ]] && log_systemd_event "$UNIT_MISSING_HINT"
+            continue
+        fi
+
+        if [[ -n "$UNIT_PATH_KIND" ]]; then
+            install_paths_helper --kind "$UNIT_PATH_KIND" >/dev/null
             if id "$SERVICE_USER" &>/dev/null 2>&1; then
-                chown -R "$SERVICE_USER:" "$(dirname "$SERVICE_LOG_FILE")" "$(dirname "$SERVICE_PID_FILE")" 2>/dev/null || true
+                if [[ "$UNIT_PATH_KIND" = "legacy-service" ]]; then
+                    chown -R "$SERVICE_USER:" "$(dirname "$UNIT_LEGACY_LOG")" "$(dirname "$UNIT_LEGACY_PID")" 2>/dev/null || true
+                elif [[ "$UNIT_PATH_KIND" = "inference-service" ]]; then
+                    chown -R "$SERVICE_USER:" "$UNIT_INF_LOG" 2>/dev/null || true
+                fi
             fi
         fi
 
-        TMP_SERVICE=$(mktemp)
-        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_systemd \
-            --kind legacy \
-            --template "$SERVICE_SRC" \
-            --install-dir "$INSTALL_DIR" \
-            --service-user "$SERVICE_USER" \
-            --service-home "$SERVICE_HOME" \
-            --legacy-log-file "$SERVICE_LOG_FILE" \
-            --legacy-pid-file "$SERVICE_PID_FILE" \
-            --venv-dir "$VENV" \
-            > "$TMP_SERVICE"
-
-        install_systemd_unit "$TMP_SERVICE" "$SERVICE_DST" "transcria" "transcria.service.adapted"
-        rm -f "$TMP_SERVICE"
-    fi
-fi
-
-if [[ "$INSTALL_SYSTEMD" = true && ( "$INSTALL_PROFILE" = "web" || "$INSTALL_PROFILE" = "scheduler" || "$INSTALL_PROFILE" = "migrate" ) ]]; then
-    log_section "Services systemd split"
-
-    if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
-        log_systemd_event split-legacy-enabled
-        log_systemd_event split-legacy-disable-command
-    fi
-
-    install_deploy_unit \
-        "$INSTALL_DIR/deploy/transcria-migrate.service" \
-        "/etc/systemd/system/transcria-migrate.service" \
-        "transcria-migrate" \
-        "transcria-migrate.service.adapted"
-
-    if [[ "$INSTALL_PROFILE" = "web" ]]; then
-        install_deploy_unit \
-            "$INSTALL_DIR/deploy/transcria-web.service" \
-            "/etc/systemd/system/transcria-web.service" \
-            "transcria-web" \
-            "transcria-web.service.adapted"
-    elif [[ "$INSTALL_PROFILE" = "scheduler" ]]; then
-        install_deploy_unit \
-            "$INSTALL_DIR/deploy/transcria-scheduler.service" \
-            "/etc/systemd/system/transcria-scheduler.service" \
-            "transcria-scheduler" \
-            "transcria-scheduler.service.adapted"
-    fi
-fi
-
-# ============================================================================
-# SECTION 11.5 — Service systemd inference (nœud de ressources GPU)
-# ============================================================================
-if [[ "$INSTALL_INFERENCE" = true && "$INSTALL_SYSTEMD" = true ]]; then
-    log_section "Service systemd inference"
-
-    INFERENCE_SRC="$INSTALL_DIR/deploy/transcria-inference.service"
-    INFERENCE_DST="/etc/systemd/system/transcria-inference.service"
-
-    if [[ ! -f "$INFERENCE_SRC" ]]; then
-        log_systemd_event inference-missing
-        log_systemd_event inference-missing-hint
-    else
-        INF_LOG_DIR="/var/log"
-        if [[ "$SERVICE_USER" != "root" ]]; then
-            INF_LOG_DIR="$INSTALL_DIR/logs"
-            install_paths_helper --kind inference-service >/dev/null
-            if id "$SERVICE_USER" &>/dev/null 2>&1; then
-                chown -R "$SERVICE_USER:" "$INF_LOG_DIR" 2>/dev/null || true
-            fi
-        fi
-        TMP_INF=$(mktemp)
-        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_systemd \
-            --kind inference \
-            --template "$INFERENCE_SRC" \
+        TMP_UNIT=$(mktemp)
+        python_module transcria.install_systemd \
+            --kind "$UNIT_KIND" \
+            --template "$UNIT_SRC" \
             --install-dir "$INSTALL_DIR" \
             --service-user "$SERVICE_USER" \
             --service-home "$SERVICE_HOME_GLOBAL" \
-            --inference-log-dir "$INF_LOG_DIR" \
-            > "$TMP_INF"
-
-        install_systemd_unit "$TMP_INF" "$INFERENCE_DST" "transcria-inference" "transcria-inference.service.adapted"
-        rm -f "$TMP_INF"
-    fi
+            --legacy-log-file "$UNIT_LEGACY_LOG" \
+            --legacy-pid-file "$UNIT_LEGACY_PID" \
+            --inference-log-dir "$UNIT_INF_LOG" \
+            --venv-dir "$VENV" \
+            > "$TMP_UNIT"
+        install_systemd_unit "$TMP_UNIT" "$UNIT_DST" "$UNIT_NAME" "$UNIT_ADAPTED"
+        rm -f "$TMP_UNIT"
+    done <<< "$SYSTEMD_UNIT_PLAN"
 fi
 
 # ============================================================================

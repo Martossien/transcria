@@ -6,11 +6,13 @@ import pytest
 
 from transcria.install_systemd import (
     SystemdRenderContext,
+    build_unit_plan,
     main,
     render_inference_unit,
     render_legacy_unit,
     render_setup_log,
     render_split_unit,
+    render_unit_plan_lines,
 )
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +98,92 @@ def test_render_inference_unit_replaces_user_group_logs_and_write_paths():
     assert "/home/admin_ia/transcria" not in rendered
 
 
+def test_build_unit_plan_for_legacy_non_root_service():
+    plans = build_unit_plan(
+        profile="all-in-one",
+        install_service=True,
+        install_inference=False,
+        install_systemd=True,
+        install_dir="/opt/transcria",
+        service_user="transcria",
+    )
+
+    assert len(plans) == 1
+    plan = plans[0]
+    assert plan.kind == "legacy"
+    assert plan.source == "/opt/transcria/transcria.service"
+    assert plan.destination == "/etc/systemd/system/transcria.service"
+    assert plan.unit == "transcria"
+    assert plan.path_kind == "legacy-service"
+    assert plan.legacy_log_file == "/opt/transcria/logs/transcrIA.log"
+    assert plan.legacy_pid_file == "/opt/transcria/run/transcrIA.pid"
+
+
+def test_build_unit_plan_for_web_split_profile():
+    plans = build_unit_plan(
+        profile="web",
+        install_service=False,
+        install_inference=False,
+        install_systemd=True,
+        install_dir="/opt/transcria",
+        service_user="transcria",
+    )
+
+    assert [(plan.kind, plan.unit) for plan in plans] == [
+        ("split", "transcria-migrate"),
+        ("split", "transcria-web"),
+    ]
+
+
+def test_build_unit_plan_for_resource_node_inference_service():
+    plans = build_unit_plan(
+        profile="resource-node",
+        install_service=False,
+        install_inference=True,
+        install_systemd=True,
+        install_dir="/opt/transcria",
+        service_user="transcria",
+    )
+
+    assert len(plans) == 1
+    assert plans[0].kind == "inference"
+    assert plans[0].unit == "transcria-inference"
+    assert plans[0].missing_hint_event == "inference-missing-hint"
+    assert plans[0].path_kind == "inference-service"
+    assert plans[0].inference_log_dir == "/opt/transcria/logs"
+
+
+def test_build_unit_plan_returns_empty_without_systemd():
+    assert (
+        build_unit_plan(
+            profile="all-in-one",
+            install_service=True,
+            install_inference=True,
+            install_systemd=False,
+            install_dir="/opt/transcria",
+            service_user="transcria",
+        )
+        == []
+    )
+
+
+def test_render_unit_plan_lines_is_stable():
+    plans = build_unit_plan(
+        profile="resource-node",
+        install_service=False,
+        install_inference=True,
+        install_systemd=True,
+        install_dir="/opt/transcria",
+        service_user="root",
+    )
+
+    assert render_unit_plan_lines(plans) == (
+        "inference|/opt/transcria/deploy/transcria-inference.service|"
+        "/etc/systemd/system/transcria-inference.service|transcria-inference|"
+        "transcria-inference.service.adapted|inference-missing|inference-missing-hint||||/var/log\n"
+    )
+
+
 def test_systemd_renderer_cli_outputs_split_unit(capsys):
     result = main([
         "--kind", "split",
@@ -179,3 +267,18 @@ def test_systemd_renderer_cli_outputs_setup_log(capsys):
 
     assert result == 0
     assert capsys.readouterr().out == "OK:Service transcria-web installé et activé\n"
+
+
+def test_systemd_renderer_cli_outputs_unit_plan(capsys):
+    result = main([
+        "--unit-plan",
+        "--profile", "web",
+        "--install-service", "false",
+        "--install-inference", "false",
+        "--install-systemd", "true",
+        "--install-dir", "/opt/transcria",
+        "--service-user", "transcria",
+    ])
+
+    assert result == 0
+    assert "transcria-migrate" in capsys.readouterr().out

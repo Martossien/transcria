@@ -103,7 +103,8 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
 def test_install_script_reuses_systemd_unit_installer_for_inference():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert 'install_systemd_unit "$TMP_INF" "$INFERENCE_DST" "transcria-inference" "transcria-inference.service.adapted"' in content
+    assert "--unit-plan" in content
+    assert 'install_systemd_unit "$TMP_UNIT" "$UNIT_DST" "$UNIT_NAME" "$UNIT_ADAPTED"' in content
     assert 'sudo cp "$TMP_INF" "$INFERENCE_DST"' not in content
     assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
 
@@ -138,10 +139,10 @@ def test_install_script_delegates_torch_setup_logs():
 def test_install_script_reuses_split_systemd_unit_installer():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "install_deploy_unit()" in content
-    assert '"transcria-migrate.service.adapted"' in content
-    assert '"transcria-web.service.adapted"' in content
-    assert '"transcria-scheduler.service.adapted"' in content
+    assert "--unit-plan" in content
+    assert "install_deploy_unit()" not in content
+    assert "render_deploy_unit()" not in content
+    assert "UNIT_ADAPTED" in content
     assert "TMP_MIGRATE=" not in content
     assert "TMP_WEB=" not in content
     assert "TMP_SCHEDULER=" not in content

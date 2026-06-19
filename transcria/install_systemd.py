@@ -22,6 +22,127 @@ class SystemdRenderContext:
     venv_dir: str | None = None
 
 
+@dataclass(frozen=True)
+class SystemdUnitPlan:
+    kind: str
+    source: str
+    destination: str
+    unit: str
+    adapted_name: str
+    missing_event: str
+    missing_hint_event: str = ""
+    path_kind: str = ""
+    legacy_log_file: str = ""
+    legacy_pid_file: str = ""
+    inference_log_dir: str = DEFAULT_LOG_DIR
+
+
+def build_unit_plan(
+    *,
+    profile: str,
+    install_service: bool,
+    install_inference: bool,
+    install_systemd: bool,
+    install_dir: str,
+    service_user: str,
+) -> list[SystemdUnitPlan]:
+    """Construit le plan d'unités systemd à rendre et installer pour un profil."""
+    if not install_systemd:
+        return []
+
+    plans: list[SystemdUnitPlan] = []
+    if install_service:
+        legacy_log_file = f"{DEFAULT_LOG_DIR}/transcrIA.log"
+        legacy_pid_file = "/run/transcrIA.pid"
+        path_kind = ""
+        if service_user != "root":
+            legacy_log_file = f"{install_dir}/logs/transcrIA.log"
+            legacy_pid_file = f"{install_dir}/run/transcrIA.pid"
+            path_kind = "legacy-service"
+        plans.append(
+            SystemdUnitPlan(
+                kind="legacy",
+                source=f"{install_dir}/transcria.service",
+                destination="/etc/systemd/system/transcria.service",
+                unit="transcria",
+                adapted_name="transcria.service.adapted",
+                missing_event="legacy-missing",
+                path_kind=path_kind,
+                legacy_log_file=legacy_log_file,
+                legacy_pid_file=legacy_pid_file,
+            )
+        )
+
+    if profile in {"web", "scheduler", "migrate"}:
+        plans.append(
+            SystemdUnitPlan(
+                kind="split",
+                source=f"{install_dir}/deploy/transcria-migrate.service",
+                destination="/etc/systemd/system/transcria-migrate.service",
+                unit="transcria-migrate",
+                adapted_name="transcria-migrate.service.adapted",
+                missing_event="missing-unit",
+            )
+        )
+        if profile in {"web", "scheduler"}:
+            unit = f"transcria-{profile}"
+            plans.append(
+                SystemdUnitPlan(
+                    kind="split",
+                    source=f"{install_dir}/deploy/{unit}.service",
+                    destination=f"/etc/systemd/system/{unit}.service",
+                    unit=unit,
+                    adapted_name=f"{unit}.service.adapted",
+                    missing_event="missing-unit",
+                )
+            )
+
+    if install_inference:
+        inference_log_dir = DEFAULT_LOG_DIR
+        path_kind = ""
+        if service_user != "root":
+            inference_log_dir = f"{install_dir}/logs"
+            path_kind = "inference-service"
+        plans.append(
+            SystemdUnitPlan(
+                kind="inference",
+                source=f"{install_dir}/deploy/transcria-inference.service",
+                destination="/etc/systemd/system/transcria-inference.service",
+                unit="transcria-inference",
+                adapted_name="transcria-inference.service.adapted",
+                missing_event="inference-missing",
+                missing_hint_event="inference-missing-hint",
+                path_kind=path_kind,
+                inference_log_dir=inference_log_dir,
+            )
+        )
+
+    return plans
+
+
+def render_unit_plan_lines(plans: list[SystemdUnitPlan]) -> str:
+    """Rend un plan systemd en lignes `|` stables pour orchestration shell filtrée."""
+    rows = [
+        "|".join(
+            [
+                plan.kind,
+                plan.source,
+                plan.destination,
+                plan.unit,
+                plan.adapted_name,
+                plan.missing_event,
+                plan.missing_hint_event,
+                plan.path_kind,
+                plan.legacy_log_file,
+                plan.legacy_pid_file,
+                plan.inference_log_dir,
+            ]
+        )
+        for plan in plans
+    ]
+    return "\n".join(rows) + ("\n" if rows else "")
+
+
 def render_split_unit(template: str, context: SystemdRenderContext) -> str:
     """Rend une unité split web/scheduler/migrate depuis le template versionné."""
     rendered = template.replace(DEFAULT_INSTALL_DIR, context.install_dir)
@@ -112,11 +233,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--legacy-pid-file", default=None)
     parser.add_argument("--venv-dir", default=None)
     parser.add_argument("--setup-log", action="store_true", help="rend un message systemd")
+    parser.add_argument("--unit-plan", action="store_true", help="rend le plan d'unités systemd à installer")
+    parser.add_argument("--profile", default="all-in-one")
+    parser.add_argument("--install-service", default="false")
+    parser.add_argument("--install-inference", default="false")
+    parser.add_argument("--install-systemd", default="true")
     parser.add_argument("--event", default="")
     parser.add_argument("--unit", default="")
     parser.add_argument("--adapted", default="")
     parser.add_argument("--dst", default="")
     args = parser.parse_args(argv)
+
+    if args.unit_plan:
+        if not args.install_dir or not args.service_user:
+            print("arguments requis avec --unit-plan: --install-dir, --service-user", file=sys.stderr)
+            return 2
+        plans = build_unit_plan(
+            profile=args.profile,
+            install_service=args.install_service.lower() == "true",
+            install_inference=args.install_inference.lower() == "true",
+            install_systemd=args.install_systemd.lower() == "true",
+            install_dir=args.install_dir,
+            service_user=args.service_user,
+        )
+        print(render_unit_plan_lines(plans), end="")
+        return 0
 
     if args.setup_log:
         if not args.event:
