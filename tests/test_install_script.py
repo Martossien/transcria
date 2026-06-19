@@ -94,7 +94,6 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
 
     assert "run_indented()" in content
     assert "run_indented env TRANSCRIA_DATABASE_URL=" in content
-    assert "run_indented env PYTHONPATH=" in content
     assert "2>&1 | sed 's/^/  /'" not in content
     assert "print_indented_file" in content
     assert "sed 's/^/  /'" not in content
@@ -588,17 +587,17 @@ def test_install_script_has_no_effective_mkdir_calls():
     assert effective_mkdir == []
 
 
-def test_install_script_initializes_env_file_through_python_helper():
+def test_install_script_delegates_config_phase_to_installer_cli():
+    # SECTION 6 (cœur déterministe : config.yaml, sauvegarde, .env, secrets, rôle)
+    # est orchestrée par l'installateur Python ; le shell ne fait plus l'init/backup.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.config.env_file init" in content
+    assert "transcria.installer.cli config" in content
+    assert "--example-config" in content and "--env-template" in content
+    # Plus aucune mécanique de génération/backup inline dans le shell.
+    assert "-m transcria.config.env_file init" not in content
+    assert "-m transcria.config.yaml_file backup" not in content
     assert 'cp "$INSTALL_DIR/.env.example" "$ENV_FILE"' not in content
-
-
-def test_install_script_backs_up_config_through_yaml_helper():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "-m transcria.config.yaml_file backup" in content
     assert 'cp "$CONFIG_PATH" "$BACKUP"' not in content
 
 

@@ -490,24 +490,6 @@ env_set() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "${args[@]}"
 }
 
-env_ensure_secret() {
-    local key="$1" min_length="$2" generator="$3" placeholder="${4:-}" comment="${5:-}"
-    local args=(
-        -m transcria.config.env_file ensure-secret
-        --env-file "$ENV_FILE"
-        --key "$key"
-        --min-length "$min_length"
-        --generator "$generator"
-    )
-    if [[ -n "$placeholder" ]]; then
-        args+=(--placeholder "$placeholder")
-    fi
-    if [[ -n "$comment" ]]; then
-        args+=(--comment "$comment")
-    fi
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" "${args[@]}"
-}
-
 secure_env_file() {
     if [[ ! -f "$ENV_FILE" ]]; then
         return 0
@@ -645,61 +627,23 @@ log_config_setup_event() {
         --value "$value"
 }
 
-if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = false ]]; then
-    log_config_setup_event config-kept
-    log_config_setup_event force-hint
-else
-    if [[ -f "$CONFIG_PATH" && "$FORCE_CONFIG" = true ]]; then
-        BACKUP_SUFFIX="$(date +%Y%m%d_%H%M%S)"
-        BACKUP=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file backup \
-            --file "$CONFIG_PATH" \
-            --suffix "$BACKUP_SUFFIX")
-        log_config_setup_event config-backup "$BACKUP"
-    fi
-    log_config_setup_event config-generate-start
-    run_indented env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "$INSTALL_DIR/scripts/bootstrap_config.py" \
-        --example "$INSTALL_DIR/config.example.yaml" \
-        --output "$CONFIG_PATH" \
-        --profile "$INSTALL_PROFILE" \
-        --force
-    log_config_setup_event config-generated
-fi
-
-# Créer .env à partir du template si absent
-PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.env_file init \
-    --env-file "$ENV_FILE" \
-    --template "$INSTALL_DIR/.env.example" >/dev/null
-
-# Générer TRANSCRIA_SECRET si absent ou valeur par défaut
-SECRET_STATUS=$(env_ensure_secret "TRANSCRIA_SECRET" 8 "hex" "change-me-to-a-random-secret")
-if [[ "$SECRET_STATUS" = "created" ]]; then
-    log_config_setup_event secret-created
-else
-    log_config_setup_event secret-present
-fi
-
-if [[ -n "${INSTALL_RUNTIME_ROLE:-}" && ( "$INSTALL_PROFILE" != "all-in-one" || "$PROFILE_EXPLICIT" = true ) ]]; then
-    yaml_set "runtime.role" "$INSTALL_RUNTIME_ROLE"
-    env_set "TRANSCRIA_ROLE" "$INSTALL_RUNTIME_ROLE"
-    log_config_setup_event profile-runtime
-elif [[ "$INSTALL_PROFILE" = "all-in-one" ]]; then
-    log_config_setup_event profile-all-default
-elif [[ "$INSTALL_PROFILE" = "resource-node" ]]; then
-    log_config_setup_event profile-resource-node
-elif [[ "$INSTALL_PROFILE" = "migrate" ]]; then
-    log_config_setup_event profile-migrate
-else
-    log_config_setup_event profile-generic
-fi
-
-if [[ "$INSTALL_INFERENCE" = true ]]; then
-    INFERENCE_KEY_STATUS=$(env_ensure_secret "TRANSCRIA_INFERENCE_API_KEY" 16 "urlsafe" "" "Clé API du service inference_service (/infer/* et /engines/*).")
-    if [[ "$INFERENCE_KEY_STATUS" = "present" ]]; then
-        log_config_setup_event inference-key-present
-    else
-        log_config_setup_event inference-key-created
-    fi
-fi
+# Cœur déterministe de la configuration (config.yaml + .env + secrets + rôle runtime)
+# délégué à l'installateur Python. Tourne sous le python du venv (PyYAML, dépendances
+# du projet, bootstrap_config). Le bloc proxy interactif ci-dessous reste en shell.
+CONFIG_CLI_ARGS=(
+    -m transcria.installer.cli config
+    --install-dir "$INSTALL_DIR"
+    --config "$CONFIG_PATH"
+    --env-file "$ENV_FILE"
+    --example-config "$INSTALL_DIR/config.example.yaml"
+    --env-template "$INSTALL_DIR/.env.example"
+    --profile "$INSTALL_PROFILE"
+)
+[[ -n "${INSTALL_RUNTIME_ROLE:-}" ]] && CONFIG_CLI_ARGS+=(--runtime-role "$INSTALL_RUNTIME_ROLE")
+[[ "$PROFILE_EXPLICIT" = true ]] && CONFIG_CLI_ARGS+=(--profile-explicit)
+[[ "$INSTALL_INFERENCE" = true ]] && CONFIG_CLI_ARGS+=(--install-inference)
+[[ "$FORCE_CONFIG" = true ]] && CONFIG_CLI_ARGS+=(--force-config)
+PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${CONFIG_CLI_ARGS[@]}"
 
 # ── Proxy d'entreprise ──────────────────────────────────────────────────────
 # Le service systemd n'hérite PAS de l'environnement du shell : un proxy connu du

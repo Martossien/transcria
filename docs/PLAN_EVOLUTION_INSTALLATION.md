@@ -418,9 +418,13 @@ fidèle au shell) et une première phase migrée — **environnement Python** (v
 + dépendances, ex-SECTIONS 2-4) dans `python_env.py`, à runner de sous-processus
 injectable, comportement préservé à l'identique (création du venv avec l'interpréteur
 système, `pip` ciblant le python du venv), testée sans réseau et gardée E2E. `install.sh`
-y délègue et ne conserve que le bootstrap + l'activation. Les phases suivantes (config,
-PostgreSQL chemin « base existante », opencode, systemd) migreront de la même façon,
-chacune sous la protection du filet E2E.
+y délègue et ne conserve que le bootstrap + l'activation. Deuxième phase fondue :
+**configuration** (`config_phase.py`, cœur déterministe de la SECTION 6 — génération
+`config.yaml`, sauvegarde, init `.env`, `TRANSCRIA_SECRET`, rôle runtime, clé inference),
+lancée sous le python du venv (PyYAML), avec import différé côté `cli` pour ne pas charger
+PyYAML dans la phase pré-venv ; le bloc proxy interactif reste en shell. Les phases
+suivantes (PostgreSQL chemin « base existante », opencode, systemd) migreront de la même
+façon, chacune sous la protection du filet E2E.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles
