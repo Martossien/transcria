@@ -206,7 +206,7 @@ def test_install_script_filters_named_helper_outputs_before_eval():
 
     assert "eval_named_shell_assignments" in content
     assert "HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL" in content
-    assert "GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING" in content
+    assert "GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING GPU_VRAM_TOTAL_MB GPU_VRAM_MAX_MB GPU_SIZES_CSV" in content
     assert "CUDA_TAG CUDA_WARNING" in content
     assert 'eval "$SYSTEM_CAPABILITIES_OUT"' not in content
     assert 'eval "$NVIDIA_DETECT_OUT"' not in content
@@ -324,6 +324,7 @@ def test_install_script_delegates_llm_selection_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "-m transcria.install_arbitrage --setup-log" in content
+    assert "nvidia-smi --query-gpu=memory.total" not in content
     assert "load_llm_tier_metadata" in content
     assert "--tier-info" in content
     assert "--recommend-tier" in content

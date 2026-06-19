@@ -552,9 +552,12 @@ eval_named_shell_assignments "$SYSTEM_CAPABILITIES_OUT" \
 GPU_COUNT=0
 CUDA_VER_FROM_SMI=""
 NVIDIA_WARNING=""
+GPU_VRAM_TOTAL_MB=0
+GPU_VRAM_MAX_MB=0
+GPU_SIZES_CSV=""
 NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_hardware --format shell)
 eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
-    GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING
+    GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING GPU_VRAM_TOTAL_MB GPU_VRAM_MAX_MB GPU_SIZES_CSV
 if [[ -z "$NVIDIA_WARNING" ]]; then
     log_prerequisite_event nvidia-ok "" "$GPU_COUNT" "$CUDA_VER_FROM_SMI"
 else
@@ -1475,19 +1478,8 @@ if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
     log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
 else
 
-# Détection de la VRAM (en plus de GPU_COUNT déjà connu plus haut).
-# GPU_SIZES_CSV = tailles PAR carte (Mio) : c'est ce qui permet de raisonner par
-# PLACEMENT réel (mono/split, plus petite carte) et non sur la simple somme.
-GPU_VRAM_TOTAL_MB=0; GPU_VRAM_MAX_MB=0; GPU_SIZES_CSV=""
-if [[ "$GPU_COUNT" -gt 0 && "$HAVE_NVIDIA_SMI" = true ]]; then
-    while read -r _mb; do
-        [[ "$_mb" =~ ^[0-9]+$ ]] || continue
-        GPU_VRAM_TOTAL_MB=$((GPU_VRAM_TOTAL_MB + _mb))
-        if (( _mb > GPU_VRAM_MAX_MB )); then GPU_VRAM_MAX_MB=$_mb; fi
-        GPU_SIZES_CSV="${GPU_SIZES_CSV:+$GPU_SIZES_CSV,}$_mb"
-    done < <(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null || true)
-fi
-
+# GPU_SIZES_CSV = tailles PAR carte (Mio), calculé par transcria.install_hardware
+# pour raisonner par placement réel et non sur la simple somme.
 if (( GPU_VRAM_TOTAL_MB < 11500 )); then
     log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
     log_llm_setup_event raw-mode

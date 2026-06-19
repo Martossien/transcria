@@ -520,8 +520,9 @@ La sélection du tag PyTorch/CUDA (`cpu`, `cu121`, `cu124`, `cu126`) est isolée
 Les messages d'installation PyTorch (déjà installé, installation CPU/CUDA, succès,
 `--no-torch`) passent aussi par `transcria.install_torch --setup-log`.
 La détection minimale NVIDIA utilisée par l'install (`GPU_COUNT`,
-`CUDA_VER_FROM_SMI`) est isolée dans `transcria.install_hardware`, avec parsing testé
-de `nvidia-smi`.
+`CUDA_VER_FROM_SMI`) et la synthèse VRAM par carte utilisée par le placement LLM
+(`GPU_VRAM_TOTAL_MB`, `GPU_VRAM_MAX_MB`, `GPU_SIZES_CSV`) sont isolées dans
+`transcria.install_hardware`, avec parsing testé de `nvidia-smi`.
 Les installations redondantes de paquets déjà déclarés (`accelerate`,
 `python-dotenv`) ont été retirées de `install.sh` : `requirements.txt` redevient la
 source unique des dépendances runtime.
