@@ -7,7 +7,9 @@ import pytest
 from transcria.install_systemd import (
     SystemdRenderContext,
     build_unit_plan,
+    install_rendered_unit,
     main,
+    parse_bool,
     render_inference_unit,
     render_legacy_unit,
     render_setup_log,
@@ -260,6 +262,87 @@ def test_render_setup_log_for_systemd_installation_events():
 def test_render_setup_log_rejects_unknown_event():
     with pytest.raises(ValueError, match="événement systemd inconnu : bad"):
         render_setup_log(event="bad")
+
+
+def test_parse_bool_for_systemd_cli_flags():
+    assert parse_bool("true", name="have_sudo")
+    assert parse_bool("1", name="have_sudo")
+    assert not parse_bool("false", name="have_sudo")
+    assert not parse_bool("0", name="have_sudo")
+
+
+def test_install_rendered_unit_as_root_copies_and_enables(tmp_path):
+    rendered = tmp_path / "unit.service.rendered"
+    rendered.write_text("[Service]\n", encoding="utf-8")
+    destination = tmp_path / "unit.service"
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append(cmd)
+        assert kwargs["check"] is True
+
+    output = install_rendered_unit(
+        rendered=rendered,
+        destination=destination,
+        unit="unit",
+        adapted=tmp_path / "unit.service.adapted",
+        euid=0,
+        have_sudo=False,
+        run=fake_run,
+    )
+
+    assert destination.read_text(encoding="utf-8") == "[Service]\n"
+    assert oct(destination.stat().st_mode & 0o777) == "0o644"
+    assert calls == [["systemctl", "daemon-reload"], ["systemctl", "enable", "unit"]]
+    assert output == "OK:Service unit installé et activé\n"
+
+
+def test_install_rendered_unit_with_sudo_uses_sudo_commands(tmp_path):
+    rendered = tmp_path / "unit.service.rendered"
+    rendered.write_text("[Service]\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append(cmd)
+        assert kwargs["check"] is True
+
+    output = install_rendered_unit(
+        rendered=rendered,
+        destination=Path("/etc/systemd/system/unit.service"),
+        unit="unit",
+        adapted=tmp_path / "unit.service.adapted",
+        euid=1000,
+        have_sudo=True,
+        run=fake_run,
+    )
+
+    assert calls == [
+        ["sudo", "cp", str(rendered), "/etc/systemd/system/unit.service"],
+        ["sudo", "chmod", "644", "/etc/systemd/system/unit.service"],
+        ["sudo", "systemctl", "daemon-reload"],
+        ["sudo", "systemctl", "enable", "unit"],
+    ]
+    assert output == "OK:Service unit installé et activé\n"
+
+
+def test_install_rendered_unit_without_sudo_writes_adapted_file(tmp_path):
+    rendered = tmp_path / "unit.service.rendered"
+    rendered.write_text("[Service]\n", encoding="utf-8")
+    adapted = tmp_path / "unit.service.adapted"
+
+    output = install_rendered_unit(
+        rendered=rendered,
+        destination=Path("/etc/systemd/system/unit.service"),
+        unit="unit",
+        adapted=adapted,
+        euid=1000,
+        have_sudo=False,
+    )
+
+    assert adapted.read_text(encoding="utf-8") == "[Service]\n"
+    assert "WARN:sudo indisponible" in output
+    assert f"WARN:  sudo cp {adapted} /etc/systemd/system/unit.service" in output
+    assert "WARN:  sudo systemctl daemon-reload && sudo systemctl enable unit" in output
 
 
 def test_systemd_renderer_cli_outputs_setup_log(capsys):

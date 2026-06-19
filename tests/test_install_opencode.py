@@ -10,6 +10,7 @@ from transcria.install_opencode import (
     detect_opencode,
     ensure_shell_path,
     find_opencode_binary,
+    install_opencode_binary,
     main,
     opencode_version,
     render_install_prompt,
@@ -196,6 +197,51 @@ def test_install_opencode_cli_ensure_path_returns_one_when_unchanged(tmp_path: P
     opencode_dir = tmp_path / ".opencode" / "bin"
 
     assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", str(opencode_dir), "--rc-file", str(rc)]) == 1
+
+
+def test_install_opencode_binary_downloads_and_marks_executable(tmp_path: Path):
+    destination = tmp_path / ".opencode" / "bin" / "opencode"
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append(cmd)
+        assert kwargs["check"] is False
+        destination.write_text("#!/bin/sh\n", encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0)
+
+    assert install_opencode_binary(destination=destination, url="https://example.invalid/opencode", run=fake_run)
+
+    assert calls == [["curl", "-fsSL", "-o", str(destination), "https://example.invalid/opencode"]]
+    assert destination.read_text(encoding="utf-8") == "#!/bin/sh\n"
+    assert destination.stat().st_mode & 0o111
+
+
+def test_install_opencode_binary_reports_download_failure(tmp_path: Path):
+    destination = tmp_path / ".opencode" / "bin" / "opencode"
+
+    def fake_run(cmd: list[str], **kwargs):
+        return subprocess.CompletedProcess(cmd, 22)
+
+    assert not install_opencode_binary(destination=destination, url="https://example.invalid/opencode", run=fake_run)
+    assert not destination.exists()
+
+
+def test_install_opencode_cli_installs_binary(capsys, monkeypatch, tmp_path: Path):
+    destination = tmp_path / "opencode"
+    owner_root = tmp_path / ".opencode"
+
+    monkeypatch.setattr(
+        "transcria.install_opencode.install_opencode_binary",
+        lambda **kwargs: kwargs["destination"] == destination and kwargs["owner_root"] == owner_root,
+    )
+
+    assert main([
+        "--install-binary",
+        "--destination", str(destination),
+        "--service-user", "transcria",
+        "--owner-root", str(owner_root),
+    ]) == 0
+    assert capsys.readouterr().out == ""
 
 
 def test_render_setup_log_for_known_events():

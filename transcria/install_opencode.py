@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import pwd
 import shlex
 import subprocess
 import sys
@@ -10,6 +12,7 @@ from shutil import which
 from typing import Callable
 
 WhichFn = Callable[[str], str | None]
+RunFn = Callable[..., subprocess.CompletedProcess[str]]
 
 
 @dataclass(frozen=True)
@@ -141,12 +144,51 @@ def render_install_prompt(*, opencode_home: Path) -> str:
     return f"Installer opencode dans {opencode_home}/.opencode/bin/ ?"
 
 
+def _best_effort_chown_tree(path: Path, service_user: str) -> None:
+    if not service_user:
+        return
+    try:
+        user = pwd.getpwnam(service_user)
+    except KeyError:
+        return
+    for root, dirs, files in os.walk(path):
+        for name in [".", *dirs, *files]:
+            target = Path(root) if name == "." else Path(root) / name
+            try:
+                os.chown(target, user.pw_uid, user.pw_gid)
+            except OSError:
+                pass
+
+
+def install_opencode_binary(
+    *,
+    destination: Path,
+    url: str,
+    service_user: str = "",
+    owner_root: Path | None = None,
+    run: RunFn = subprocess.run,
+) -> bool:
+    """Télécharge le binaire opencode, le rend exécutable et ajuste le propriétaire si possible."""
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    result = run(["curl", "-fsSL", "-o", str(destination), url], check=False)
+    if result.returncode != 0:
+        return False
+
+    mode = destination.stat().st_mode
+    destination.chmod(mode | 0o111)
+    if owner_root is not None:
+        _best_effort_chown_tree(Path(owner_root), service_user)
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers d'installation opencode TranscrIA.")
     parser.add_argument("--version", action="store_true", help="affiche la version opencode")
     parser.add_argument("--find", action="store_true", help="cherche le binaire opencode")
     parser.add_argument("--detect", action="store_true", help="cherche opencode et rend OPENCODE_BIN/OPENCODE_VER")
     parser.add_argument("--ensure-path", action="store_true", help="ajoute le dossier opencode au shell rc si nécessaire")
+    parser.add_argument("--install-binary", action="store_true", help="télécharge et prépare le binaire opencode")
     parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation opencode")
     parser.add_argument("--install-prompt", action="store_true", help="rend la question d'installation opencode")
     parser.add_argument("--bin", default=None, help="chemin du binaire opencode")
@@ -159,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event", default="")
     parser.add_argument("--value", default="")
     parser.add_argument("--profile", default="")
+    parser.add_argument("--destination", default=None)
+    parser.add_argument("--url", default="https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64")
+    parser.add_argument("--service-user", default="")
+    parser.add_argument("--owner-root", default=None)
     args = parser.parse_args(argv)
 
     if args.version:
@@ -205,6 +251,20 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(updated)
         return 0
+    if args.install_binary:
+        if not args.destination:
+            print("--destination requis avec --install-binary", file=sys.stderr)
+            return 2
+        return (
+            0
+            if install_opencode_binary(
+                destination=Path(args.destination),
+                url=args.url,
+                service_user=args.service_user,
+                owner_root=Path(args.owner_root) if args.owner_root else None,
+            )
+            else 1
+        )
     if args.setup_log:
         if not args.event:
             print("--event requis avec --setup-log", file=sys.stderr)

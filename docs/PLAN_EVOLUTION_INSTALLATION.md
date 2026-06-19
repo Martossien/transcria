@@ -633,6 +633,9 @@ au `PATH` passe par `transcria.install_opencode --ensure-path`, ce qui retire le
 Les messages et la question d'installation opencode passent par
 `transcria.install_opencode --setup-log` et `--install-prompt`; `install.sh` garde
 uniquement le téléchargement, les permissions et la configuration effective.
+Le téléchargement/préparation du binaire opencode passe aussi par
+`transcria.install_opencode --install-binary` : création du dossier, `curl -fsSL`,
+bit exécutable et `chown` best-effort sont testés côté Python.
 Les checks runtime `ffmpeg`/`ffprobe`/`lsof` passent par
 `transcria.install_prerequisites check-binaries`, avec une sortie TSV stable et testée.
 Les messages de prérequis (Python, nvidia-smi et binaires requis/optionnels)
@@ -660,12 +663,10 @@ migration SQLite, opencode, téléchargements, switch LLM) passe par `run_indent
 au lieu de pipelines `2>&1 | sed`.
 Le préfixage des fichiers temporaires de warning passe par `print_indented_file`,
 supprimant aussi les derniers `sed 's/^/  /'` de `install.sh`.
-L'installation de l'unité `transcria-inference.service` réutilise le wrapper commun
-`install_systemd_unit`, supprimant la duplication `cp/chmod/systemctl` dédiée au
-nœud de ressources.
-Les unités split `transcria-migrate`, `transcria-web` et `transcria-scheduler`
-passent par `install_deploy_unit`, qui centralise source manquante, rendu temporaire,
-installation et cleanup.
+L'installation effective des unités systemd rendues passe par
+`transcria.install_systemd --install-unit` : copie, `chmod 644`, `daemon-reload`,
+`enable` et fichier `.adapted` sans sudo sont testés côté Python. `install.sh`
+ne garde plus que le rendu temporaire, l'appel au helper et le préfixage des logs.
 Le préchargement optionnel pyannote passe par `transcria.install_models
 download-pyannote`, supprimant le heredoc `python -c` de `install.sh`.
 Le comptage final des placeholders `CHANGE-ME` passe par `transcria.config.yaml_file

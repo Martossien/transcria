@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 DEFAULT_INSTALL_DIR = "/home/admin_ia/transcria"
 DEFAULT_SERVICE_USER = "admin_ia"
@@ -221,6 +224,57 @@ def render_setup_log(*, event: str, unit: str = "", adapted: str = "", dst: str 
     raise ValueError(f"événement systemd inconnu : {event}")
 
 
+def parse_bool(value: str | bool, *, name: str) -> bool:
+    """Parse un booléen CLI stable."""
+    if isinstance(value, bool):
+        return value
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} booléen invalide : {value}")
+
+
+RunFn = Callable[..., subprocess.CompletedProcess[str]]
+
+
+def install_rendered_unit(
+    *,
+    rendered: Path,
+    destination: Path,
+    unit: str,
+    adapted: Path,
+    euid: int,
+    have_sudo: bool,
+    run: RunFn = subprocess.run,
+) -> str:
+    """Installe une unité systemd rendue, ou écrit le fichier adapté si sudo manque."""
+    if euid == 0:
+        shutil.copy2(rendered, destination)
+        destination.chmod(0o644)
+        run(["systemctl", "daemon-reload"], check=True)
+        run(["systemctl", "enable", unit], check=True)
+        return render_setup_log(event="installed", unit=unit)
+
+    if have_sudo:
+        run(["sudo", "cp", str(rendered), str(destination)], check=True)
+        run(["sudo", "chmod", "644", str(destination)], check=True)
+        run(["sudo", "systemctl", "daemon-reload"], check=True)
+        run(["sudo", "systemctl", "enable", unit], check=True)
+        return render_setup_log(event="installed", unit=unit)
+
+    shutil.copy2(rendered, adapted)
+    return "".join(
+        [
+            render_setup_log(event="sudo-missing", unit=unit, adapted=str(adapted)),
+            render_setup_log(event="manual-title"),
+            render_setup_log(event="manual-copy", unit=unit, adapted=str(adapted), dst=str(destination)),
+            render_setup_log(event="manual-enable", unit=unit),
+        ]
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Rend une unité systemd TranscrIA depuis un template versionné.")
     parser.add_argument("--kind", choices=("legacy", "split", "inference"), default=None)
@@ -234,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--venv-dir", default=None)
     parser.add_argument("--setup-log", action="store_true", help="rend un message systemd")
     parser.add_argument("--unit-plan", action="store_true", help="rend le plan d'unités systemd à installer")
+    parser.add_argument("--install-unit", action="store_true", help="installe une unité systemd rendue ou écrit le fichier adapté")
     parser.add_argument("--profile", default="all-in-one")
     parser.add_argument("--install-service", default="false")
     parser.add_argument("--install-inference", default="false")
@@ -242,6 +297,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--unit", default="")
     parser.add_argument("--adapted", default="")
     parser.add_argument("--dst", default="")
+    parser.add_argument("--rendered", default=None)
+    parser.add_argument("--euid", default=None)
+    parser.add_argument("--have-sudo", default="false")
     args = parser.parse_args(argv)
 
     if args.unit_plan:
@@ -269,6 +327,36 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2
+
+    if args.install_unit:
+        missing = [
+            name
+            for name, value in (
+                ("--rendered", args.rendered),
+                ("--dst", args.dst),
+                ("--unit", args.unit),
+                ("--adapted", args.adapted),
+                ("--euid", args.euid),
+            )
+            if not value
+        ]
+        if missing:
+            print("arguments requis avec --install-unit: " + ", ".join(missing), file=sys.stderr)
+            return 2
+        try:
+            output = install_rendered_unit(
+                rendered=Path(args.rendered),
+                destination=Path(args.dst),
+                unit=args.unit,
+                adapted=Path(args.adapted),
+                euid=int(args.euid),
+                have_sudo=parse_bool(args.have_sudo, name="have_sudo"),
+            )
+        except (OSError, ValueError, subprocess.CalledProcessError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
+        print(output, end="")
+        return 0
 
     missing = [
         name

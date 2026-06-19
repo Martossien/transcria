@@ -1381,14 +1381,12 @@ if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
             --opencode-home "$OPENCODE_HOME")
         if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
             OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
-            install_paths_helper --path "$(dirname "$OPENCODE_DEST")" >/dev/null
             log_opencode_setup_event download-start
-            if curl -fsSL -o "$OPENCODE_DEST" \
-                "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"; then
-                chmod +x "$OPENCODE_DEST"
-                if id "$SERVICE_USER" &>/dev/null 2>&1; then
-                    chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode" 2>/dev/null || true
-                fi
+            if opencode_helper \
+                --install-binary \
+                --destination "$OPENCODE_DEST" \
+                --service-user "$SERVICE_USER" \
+                --owner-root "$OPENCODE_HOME/.opencode"; then
                 log_opencode_setup_event installed "$OPENCODE_DEST"
                 OPENCODE_BIN="$OPENCODE_DEST"
                 yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
@@ -1612,34 +1610,6 @@ log_systemd_event() {
         --dst "$dst"
 }
 
-install_systemd_unit() {
-    local rendered="$1" dst="$2" unit="$3" adapted_name="$4"
-    if [[ "$INSTALL_SYSTEMD" != true ]]; then
-        log_systemd_event skipped "$unit"
-        return 0
-    fi
-    if [[ $EUID -eq 0 ]]; then
-        cp "$rendered" "$dst"
-        chmod 644 "$dst"
-        systemctl daemon-reload
-        systemctl enable "$unit"
-        log_systemd_event installed "$unit"
-    elif [[ "$HAVE_SUDO" = true ]]; then
-        sudo cp "$rendered" "$dst"
-        sudo chmod 644 "$dst"
-        sudo systemctl daemon-reload
-        sudo systemctl enable "$unit"
-        log_systemd_event installed "$unit"
-    else
-        local adapted="$INSTALL_DIR/$adapted_name"
-        cp "$rendered" "$adapted"
-        log_systemd_event sudo-missing "$unit" "$adapted"
-        log_systemd_event manual-title
-        log_systemd_event manual-copy "$unit" "$adapted" "$dst"
-        log_systemd_event manual-enable "$unit"
-    fi
-}
-
 SYSTEMD_UNIT_PLAN=$(python_module transcria.install_systemd \
     --unit-plan \
     --profile "$INSTALL_PROFILE" \
@@ -1690,7 +1660,17 @@ if [[ -n "$SYSTEMD_UNIT_PLAN" ]]; then
             --inference-log-dir "$UNIT_INF_LOG" \
             --venv-dir "$VENV" \
             > "$TMP_UNIT"
-        install_systemd_unit "$TMP_UNIT" "$UNIT_DST" "$UNIT_NAME" "$UNIT_ADAPTED"
+        SYSTEMD_INSTALL_OUTPUT=$(python_module transcria.install_systemd \
+            --install-unit \
+            --rendered "$TMP_UNIT" \
+            --dst "$UNIT_DST" \
+            --unit "$UNIT_NAME" \
+            --adapted "$INSTALL_DIR/$UNIT_ADAPTED" \
+            --euid "$EUID" \
+            --have-sudo "$HAVE_SUDO")
+        while IFS= read -r line; do
+            log_prefixed_line "systemd" "$line" ok
+        done <<< "$SYSTEMD_INSTALL_OUTPUT"
         rm -f "$TMP_UNIT"
     done <<< "$SYSTEMD_UNIT_PLAN"
 fi

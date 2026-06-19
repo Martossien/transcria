@@ -104,9 +104,13 @@ def test_install_script_reuses_systemd_unit_installer_for_inference():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "--unit-plan" in content
-    assert 'install_systemd_unit "$TMP_UNIT" "$UNIT_DST" "$UNIT_NAME" "$UNIT_ADAPTED"' in content
+    assert "--install-unit" in content
+    assert "install_systemd_unit()" not in content
     assert 'sudo cp "$TMP_INF" "$INFERENCE_DST"' not in content
     assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
+    assert 'sudo cp "$rendered" "$dst"' not in content
+    assert 'cp "$rendered" "$dst"' not in content
+    assert 'systemctl enable "$unit"' not in content
 
 
 def test_install_script_delegates_local_setup_logs():
@@ -301,6 +305,8 @@ def test_install_script_delegates_opencode_setup_logs_and_prompt():
 
     assert "-m transcria.install_opencode --setup-log" in content
     assert "opencode_helper \\\n            --install-prompt" in content
+    assert "--install-binary" in content
+    assert "--owner-root" in content
     assert "log_opencode_setup_event" in content
     assert "opencode trouvé :" not in content
     assert "opencode non trouvé" not in content
@@ -313,6 +319,9 @@ def test_install_script_delegates_opencode_setup_logs_and_prompt():
     assert "Installation manuelle :" not in content
     assert "mkdir -p ~/.opencode/bin" not in content
     assert "chmod +x ~/.opencode/bin/opencode" not in content
+    assert 'curl -fsSL -o "$OPENCODE_DEST"' not in content
+    assert 'chmod +x "$OPENCODE_DEST"' not in content
+    assert 'chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode"' not in content
     assert "opencode ignoré — résumé/correction LLM désactivé" not in content
     assert "Pour installer plus tard" not in content
     assert "Configuration du provider opencode local" not in content
