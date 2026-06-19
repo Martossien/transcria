@@ -109,6 +109,7 @@ cd transcria
 ./install.sh --profile web --plan  # Afficher le plan sans créer venv/config/.env/service
 ./install.sh --no-service          # Sauter l'installation systemd
 ./install.sh --no-torch            # PyTorch déjà installé (évite la réinstallation)
+./install.sh --skip-deps           # Venv/dépendances déjà fournis (couche build Docker, venv existant) : ne touche pas à pip (implique --no-torch)
 ./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126)
 ./install.sh --user monuser        # Utilisateur pour le service systemd (défaut: $USER)
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
@@ -124,6 +125,7 @@ cd transcria
 # --no-postgres reste accepté comme alias historique de --sqlite-dev
 ./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
 # PostgreSQL distant : créer d'abord rôle/base côté serveur, puis fournir --pg-host/--pg-user/--pg-password.
+./install.sh --postgres --pg-existing --pg-host db --pg-user transcria --pg-password "..."  # Base déjà provisionnée (Docker, base distante, migrate) : écrit DSN + alembic, sans bootstrap privilégié
 
 # Nœud de ressources GPU
 ./install.sh --inference-service    # Installer le nœud de ressources GPU seul (ne PAS installer le service web)
@@ -133,6 +135,15 @@ cd transcria
 > l'installation échoue en cas d'erreur au lieu de poursuivre silencieusement en SQLite.
 > SQLite reste réservé au développement local ou à une demande explicite
 > (`--sqlite-dev` / alias historique `--no-postgres`).
+
+> **Conteneurs / orchestration.** `--skip-deps` et `--pg-existing` sont les primitives
+> prévues pour Docker et les déploiements où l'environnement est provisionné en amont :
+> les dépendances Python sont installées en couche *build* (`--skip-deps` évite tout
+> `pip` à l'exécution), et PostgreSQL est un service/conteneur séparé dont le rôle et la
+> base existent déjà (`--pg-existing` écrit le DSN puis applique Alembic, sans tenter de
+> bootstrap privilégié via `sudo postgres`). C'est aussi le mode naturel du profil
+> `migrate`. Ces deux chemins sont couverts de bout en bout par `tests/test_install_e2e.py`
+> (install réelle des profils `web`/`scheduler` en bac à sable + barrière doctor).
 
 ### Ce que install.sh ne fait pas
 

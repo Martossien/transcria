@@ -883,3 +883,22 @@ def test_inference_alias_conflicts_with_web_profile():
 
     assert result.returncode == 1
     assert "--inference-service est incompatible avec --profile web" in result.stdout
+
+
+def test_plan_accepts_skip_deps_and_implies_no_torch():
+    # --skip-deps suppose un environnement Python déjà provisionné (couche build
+    # Docker, venv existant) ; comme torch est une dépendance, il implique --no-torch.
+    result = _run_install("--profile", "web", "--skip-deps", "--plan")
+
+    assert result.returncode == 0
+    assert "profile=web" in result.stdout
+    assert "install_torch=false" in result.stdout
+
+
+def test_plan_accepts_pg_existing():
+    # --pg-existing (base déjà provisionnée : Docker / base distante / migrate) est
+    # accepté sans erreur et n'altère pas le rendu du plan.
+    result = _run_install("--profile", "web", "--pg-existing", "--plan")
+
+    assert result.returncode == 0
+    assert "profile=web" in result.stdout

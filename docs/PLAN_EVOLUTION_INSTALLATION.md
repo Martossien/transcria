@@ -710,6 +710,16 @@ des checks au profil, et valide les premiers invariants critiques
 doit être explicite via `--skip-doctor` et apparaît dans `--plan`/le résumé final.
 `--strict-doctor` durcit cette barrière pour les installations préproduction/audit en
 promouvant les avertissements doctor en échec.
+La barrière est désormais validée **de bout en bout** : `tests/test_install_e2e.py`
+exécute réellement `install.sh --profile web|scheduler` dans un bac à sable (venv et
+package symlinkés, le reste copié pour interdire toute écriture vers le dépôt) contre une
+PostgreSQL éphémère, puis vérifie `config.yaml`/`.env` générés, DSN écrit, Alembic
+appliqué et `doctor --profile` vert — comblant l'écart entre « briques testées » et
+« install assemblée prouvée ». Ce filet a immédiatement révélé deux manques d'intégration
+alignés Docker, comblés en même temps : `--skip-deps` (environnement Python déjà fourni,
+aucun `pip` à l'exécution) et `--pg-existing` (rôle/base déjà provisionnés : DSN + Alembic
+sans bootstrap privilégié). Le harnais est volontairement paramétré par profil pour servir
+de socle aux futurs smokes de build Docker (P5).
 
 Tâches :
 

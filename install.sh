@@ -10,6 +10,8 @@
 #   --plan             Afficher le plan d'installation puis sortir sans effet de bord
 #   --no-service       Ne pas installer le service systemd
 #   --no-torch         Sauter l'installation de PyTorch (déjà installé)
+#   --skip-deps        Ne pas créer le venv ni installer les dépendances pip
+#                      (venv déjà fourni : couche build Docker, ou environnement existant)
 #   --cuda VERSION     Forcer la version CUDA (ex: cu126, cu124, cu121)
 #   --user USER        Utilisateur pour le service systemd (défaut: $USER)
 #   --install-dir DIR  Répertoire d'installation (défaut: répertoire courant)
@@ -27,6 +29,8 @@
 #   --pg-db NAME       Nom de la base (défaut: transcria)
 #   --pg-user USER     Rôle/utilisateur PostgreSQL (défaut: transcria)
 #   --pg-password PWD  Mot de passe du rôle (défaut: généré aléatoirement)
+#   --pg-existing      Rôle et base déjà provisionnés : écrire le DSN + alembic
+#                      seulement, sans bootstrap privilégié (Docker, base distante, migrate)
 #   --pg-migrate       Migrer les données SQLite existantes vers PostgreSQL
 #   --inference-service  Installer le nœud de ressources GPU (inference_service)
 #                        (n'installe PAS le service web TranscrIA principal)
@@ -70,6 +74,8 @@ PG_DB="transcria"
 PG_USER="transcria"
 PG_PASSWORD=""         # généré si vide
 PG_MIGRATE=false
+PG_EXISTING=false      # --pg-existing : rôle/base déjà provisionnés (Docker, base distante, migrate)
+SKIP_DEPS=false        # --skip-deps : venv et dépendances déjà fournis (couche build Docker, venv existant)
 
 INSTALL_INFERENCE=false   # --inference-service
 INSTALL_PROFILE="all-in-one"
@@ -93,6 +99,7 @@ while [[ $# -gt 0 ]]; do
         --plan|--dry-run)  PLAN_ONLY=true; shift ;;
         --no-service)      INSTALL_SYSTEMD=false; INSTALL_SERVICE=false; shift ;;
         --no-torch)        INSTALL_TORCH=false; shift ;;
+        --skip-deps)       SKIP_DEPS=true; INSTALL_TORCH=false; shift ;;
         --cuda)            FORCE_CUDA="$2"; shift 2 ;;
         --user)            SERVICE_USER="$2"; shift 2 ;;
         --install-dir)     INSTALL_DIR="$2"; shift 2 ;;
@@ -111,6 +118,7 @@ while [[ $# -gt 0 ]]; do
         --pg-user)         PG_USER="$2"; shift 2 ;;
         --pg-password)     PG_PASSWORD="$2"; shift 2 ;;
         --pg-migrate)      PG_MIGRATE=true; shift ;;
+        --pg-existing)     PG_EXISTING=true; shift ;;
         --inference-service)
             if [[ "$PROFILE_EXPLICIT" = true && "$INSTALL_PROFILE" != "resource-node" ]]; then
                 log_error "--inference-service est incompatible avec --profile $INSTALL_PROFILE"
@@ -602,17 +610,26 @@ log_local_setup_event() {
         --value "$value"
 }
 
-if [[ -f "$VENV/bin/activate" ]]; then
-    log_local_setup_event venv-existing "$VENV"
+if [[ "$SKIP_DEPS" = true ]]; then
+    if [[ ! -x "$VENV/bin/python" ]]; then
+        log_error "--skip-deps requiert un environnement Python déjà présent dans $VENV (venv existant ou couche build Docker)"
+        exit 1
+    fi
+    source "$VENV/bin/activate"
+    log_info "Dépendances Python : ignorées (--skip-deps ; venv déjà fourni : $VENV)"
 else
-    log_local_setup_event venv-create-start
-    "$PYTHON_BIN" -m venv "$VENV"
-    log_local_setup_event venv-created "$VENV"
-fi
+    if [[ -f "$VENV/bin/activate" ]]; then
+        log_local_setup_event venv-existing "$VENV"
+    else
+        log_local_setup_event venv-create-start
+        "$PYTHON_BIN" -m venv "$VENV"
+        log_local_setup_event venv-created "$VENV"
+    fi
 
-source "$VENV/bin/activate"
-log_local_setup_event pip-upgrade
-pip install --upgrade pip --quiet
+    source "$VENV/bin/activate"
+    log_local_setup_event pip-upgrade
+    pip install --upgrade pip --quiet
+fi
 
 # ============================================================================
 # SECTION 3 — PyTorch avec CUDA
@@ -662,9 +679,13 @@ esac
 # ============================================================================
 log_section "Dépendances Python"
 
-log_local_setup_event requirements-start
-pip install -r "$INSTALL_DIR/requirements.txt" --quiet
-log_local_setup_event requirements-ok
+if [[ "$SKIP_DEPS" = true ]]; then
+    log_info "requirements.txt : ignoré (--skip-deps)"
+else
+    log_local_setup_event requirements-start
+    pip install -r "$INSTALL_DIR/requirements.txt" --quiet
+    log_local_setup_event requirements-ok
+fi
 
 # ============================================================================
 # SECTION 5 — Répertoires
@@ -797,8 +818,14 @@ _setup_postgres() {
     local dsn
     dsn=$(build_pg_dsn "$host" "$port" "$db" "$user" "$pass")
     local sqlite_db="$INSTALL_DIR/instance/transcrIA.db"
+    # --pg-existing force le chemin « base déjà provisionnée » (Docker / base distante /
+    # profil migrate) : pas de bootstrap rôle/base, pas de pg_hba, juste DSN + alembic.
     local local_pg=false
-    is_local_pg_host "$host" && local_pg=true
+    if [[ "$PG_EXISTING" = true ]]; then
+        local_pg=false
+    elif is_local_pg_host "$host"; then
+        local_pg=true
+    fi
 
     log_postgres_setup_event() {
         local event="$1"
@@ -1119,7 +1146,7 @@ if [[ "$SETUP_PG" != true ]]; then
 elif [[ "$PSQL_AVAILABLE" != true ]]; then
     log_database_setup_event psql-missing
     exit 1
-elif is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
+elif [[ "$PG_EXISTING" != true ]] && is_local_pg_host "$PG_HOST" && [[ $EUID -ne 0 && "$HAVE_SUDO" != true ]]; then
     log_database_setup_event sudo-missing
     exit 1
 else
