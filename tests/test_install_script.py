@@ -128,16 +128,17 @@ def test_install_script_delegates_local_setup_logs():
     assert "jobs/, models/, instance/ prêts" not in content
 
 
-def test_install_script_delegates_torch_setup_logs():
+def test_install_script_delegates_python_env_phase_to_installer_cli():
+    # SECTION 2-4 (venv + PyTorch + dépendances) est orchestrée par l'installateur
+    # Python (transcria.installer.cli) ; aucune mécanique PyTorch ne reste inline.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_torch --setup-log" in content
-    assert "log_torch_event" in content
+    assert "transcria.installer.cli" in content
+    assert "python-env" in content
+    assert "log_torch_event" not in content
+    assert "pip install torch" not in content
+    assert "download.pytorch.org/whl" not in content
     assert "PyTorch déjà installé" not in content
-    assert "Installation PyTorch CPU" not in content
-    assert "Installation PyTorch $CUDA_TAG" not in content
-    assert "PyTorch installé" not in content
-    assert "Skippé (--no-torch)" not in content
 
 
 def test_install_script_reuses_split_systemd_unit_installer():
@@ -212,7 +213,7 @@ def test_install_script_filters_named_helper_outputs_before_eval():
     assert "eval_named_shell_assignments" in content
     assert "HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL" in content
     assert "GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING GPU_VRAM_TOTAL_MB GPU_VRAM_MAX_MB GPU_SIZES_CSV" in content
-    assert "TORCH_ACTION CUDA_TAG CUDA_WARNING INSTALLED_CUDA" in content
+    # (le plan PyTorch n'est plus évalué en shell : orchestré par transcria.installer.cli)
     assert 'eval "$SYSTEM_CAPABILITIES_OUT"' not in content
     assert 'eval "$NVIDIA_DETECT_OUT"' not in content
     assert 'eval "$TORCH_TAG_OUT"' not in content
@@ -560,7 +561,10 @@ def test_install_script_delegates_postgres_connection_failure_messages():
 def test_install_script_uses_requirements_as_runtime_dependency_source():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert 'pip install -r "$INSTALL_DIR/requirements.txt" --quiet' in content
+    # requirements.txt reste la source unique des dépendances runtime, désormais
+    # passée à l'installateur Python plutôt qu'à un pip inline.
+    assert '--requirements "$INSTALL_DIR/requirements.txt"' in content
+    assert 'pip install -r "$INSTALL_DIR/requirements.txt" --quiet' not in content
     assert "pip install accelerate" not in content
     assert "pip install python-dotenv" not in content
 
@@ -614,11 +618,13 @@ def test_install_script_formats_sqlite_size_through_postgres_helper():
     assert "cut -f1" not in content
 
 
-def test_install_script_detects_existing_torch_through_python_helper():
+def test_install_script_delegates_torch_detection_to_installer():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "transcria.install_torch" in content
-    assert "--install-plan" in content
+    # La détection et l'installation de PyTorch ont quitté le shell pour
+    # l'installateur Python (transcria.installer.python_env, via install_torch).
+    assert "transcria.install_torch" not in content
+    assert "--install-plan" not in content
     assert "--installed-cuda" not in content
     assert 'python -c "import torch"' not in content
 

@@ -410,7 +410,18 @@ Preuves attendues :
 
 But : sortir la logique fragile du shell.
 
-Statut courant : démarré. La matrice des profils d'installation est extraite dans
+Statut courant : démarré, avec un **foyer d'orchestration Python** désormais amorcé
+(§3.2). Au-delà des helpers déjà extraits, le package `transcria/installer/` accueille
+l'orchestration des phases que `install.sh` portait encore en shell : `cli.py`
+(`python -m transcria.installer.cli <phase>`), `console.py` (rendu `[OK]/[INFO]/…`
+fidèle au shell) et une première phase migrée — **environnement Python** (venv + PyTorch
++ dépendances, ex-SECTIONS 2-4) dans `python_env.py`, à runner de sous-processus
+injectable, comportement préservé à l'identique (création du venv avec l'interpréteur
+système, `pip` ciblant le python du venv), testée sans réseau et gardée E2E. `install.sh`
+y délègue et ne conserve que le bootstrap + l'activation. Les phases suivantes (config,
+PostgreSQL chemin « base existante », opencode, systemd) migreront de la même façon,
+chacune sous la protection du filet E2E.
+La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles
 locaux, LLM, admin config). `install.sh` reste le point d'entrée effectif ; le

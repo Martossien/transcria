@@ -597,7 +597,7 @@ if [[ "$PREREQ_BINARIES_STATUS" -ne 0 ]]; then
 fi
 
 # ============================================================================
-# SECTION 2 — Environnement Python (venv)
+# SECTION 2 — Environnement Python (venv + PyTorch + dépendances)
 # ============================================================================
 log_section "Environnement Python"
 
@@ -610,82 +610,18 @@ log_local_setup_event() {
         --value "$value"
 }
 
-if [[ "$SKIP_DEPS" = true ]]; then
-    if [[ ! -x "$VENV/bin/python" ]]; then
-        log_error "--skip-deps requiert un environnement Python déjà présent dans $VENV (venv existant ou couche build Docker)"
-        exit 1
-    fi
-    source "$VENV/bin/activate"
-    log_info "Dépendances Python : ignorées (--skip-deps ; venv déjà fourni : $VENV)"
-else
-    if [[ -f "$VENV/bin/activate" ]]; then
-        log_local_setup_event venv-existing "$VENV"
-    else
-        log_local_setup_event venv-create-start
-        "$PYTHON_BIN" -m venv "$VENV"
-        log_local_setup_event venv-created "$VENV"
-    fi
+# Phases venv + PyTorch + dépendances : orchestration déléguée à l'installateur
+# Python (transcria.installer.cli), testé avec runner injecté. install.sh garde le
+# bootstrap minimal : choisir l'interpréteur système (PYTHON_BIN, jamais re-pointé
+# vers le venv) puis activer le venv produit pour les phases suivantes.
+PYENV_ARGS=(python-env --venv "$VENV" --requirements "$INSTALL_DIR/requirements.txt")
+[[ "$SKIP_DEPS" = true ]] && PYENV_ARGS+=(--skip-deps)
+[[ "$INSTALL_TORCH" != true ]] && PYENV_ARGS+=(--no-torch)
+[[ -n "$CUDA_VER_FROM_SMI" ]] && PYENV_ARGS+=(--cuda-version "$CUDA_VER_FROM_SMI")
+[[ -n "$FORCE_CUDA" ]] && PYENV_ARGS+=(--force-cuda "$FORCE_CUDA")
+python_module transcria.installer.cli "${PYENV_ARGS[@]}"
 
-    source "$VENV/bin/activate"
-    log_local_setup_event pip-upgrade
-    pip install --upgrade pip --quiet
-fi
-
-# ============================================================================
-# SECTION 3 — PyTorch avec CUDA
-# ============================================================================
-log_section "PyTorch"
-
-log_torch_event() {
-    local event="$1" value="${2:-}"
-    emit_rendered_log "PyTorch : $event" -m transcria.install_torch --setup-log \
-        --event "$event" \
-        --value "$value"
-}
-
-TORCH_PLAN_ARGS=(--install-plan --install-torch "$INSTALL_TORCH")
-[[ -n "$CUDA_VER_FROM_SMI" ]] && TORCH_PLAN_ARGS+=(--cuda-version "$CUDA_VER_FROM_SMI")
-[[ -n "$FORCE_CUDA" ]] && TORCH_PLAN_ARGS+=(--force-cuda "$FORCE_CUDA")
-TORCH_PLAN=$(python_module transcria.install_torch "${TORCH_PLAN_ARGS[@]}")
-eval_named_shell_assignments "$TORCH_PLAN" TORCH_ACTION CUDA_TAG CUDA_WARNING INSTALLED_CUDA
-[[ -n "${CUDA_WARNING:-}" ]] && log_warn "$CUDA_WARNING"
-
-case "$TORCH_ACTION" in
-    skip)
-        log_torch_event skipped
-        ;;
-    already-installed)
-        log_torch_event installed "$INSTALLED_CUDA"
-        ;;
-    install-cpu)
-        log_torch_event install-cpu
-        pip install torch torchvision torchaudio --quiet
-        log_torch_event install-ok
-        ;;
-    install-cuda)
-        log_torch_event install-cuda "$CUDA_TAG"
-        pip install torch torchvision torchaudio \
-            --index-url "https://download.pytorch.org/whl/${CUDA_TAG}" --quiet
-        log_torch_event install-ok
-        ;;
-    *)
-        log_error "Action PyTorch inconnue : $TORCH_ACTION"
-        exit 1
-        ;;
-esac
-
-# ============================================================================
-# SECTION 4 — Dépendances Python
-# ============================================================================
-log_section "Dépendances Python"
-
-if [[ "$SKIP_DEPS" = true ]]; then
-    log_info "requirements.txt : ignoré (--skip-deps)"
-else
-    log_local_setup_event requirements-start
-    pip install -r "$INSTALL_DIR/requirements.txt" --quiet
-    log_local_setup_event requirements-ok
-fi
+source "$VENV/bin/activate"
 
 # ============================================================================
 # SECTION 5 — Répertoires
