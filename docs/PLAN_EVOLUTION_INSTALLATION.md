@@ -555,9 +555,10 @@ L'initialisation de `.env` depuis `.env.example` passe désormais par
 d'écrasement d'un `.env` existant.
 Le backup de `config.yaml` avant régénération forcée passe par
 `transcria.config.yaml_file backup` au lieu d'un `cp` shell direct.
-Le backup de la base SQLite avant migration PostgreSQL passe par
+La primitive de backup SQLite avant migration PostgreSQL passe par
 `transcria.install_postgres --backup-sqlite`, avec conservation du mode du fichier
-source et tests dédiés.
+source et tests dédiés; le flux d'installation complet utilise désormais
+`--run-sqlite-migration`.
 L'affichage de la taille SQLite avant migration passe par
 `transcria.install_postgres --file-size` au lieu de `du | cut`, pour éviter une
 dépendance shell inutile dans un chemin critique.
@@ -602,6 +603,9 @@ Les messages de résultat Alembic PostgreSQL (succès, reconstruction locale,
 Les logs, le prompt interactif et les messages de backup/exécution de migration
 SQLite vers PostgreSQL sont rendus par `transcria.install_postgres --sqlite-migration-log`
 et `--sqlite-migration-prompt`.
+Le backup et l'exécution non privilégiée de `scripts/migrate_sqlite_to_postgres.py`
+passent aussi par `transcria.install_postgres --run-sqlite-migration`; `install.sh`
+ne fait plus que choisir quand déclencher la migration.
 Les messages de choix global SQLite/PostgreSQL (SQLite conservée, prérequis
 PostgreSQL manquants, mot de passe généré, backend final) sont rendus par
 `transcria.install_postgres --database-setup-log`.

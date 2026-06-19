@@ -6,6 +6,7 @@ import re
 import secrets
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -377,12 +378,56 @@ def rewrite_pg_hba_file(path: Path) -> int:
     return changed
 
 
+def run_sqlite_migration(
+    *,
+    dsn: str,
+    sqlite_db: Path,
+    backup_dir: Path,
+    suffix: str,
+    install_dir: Path,
+    python_bin: str,
+) -> int:
+    """Sauvegarde SQLite puis lance la migration SQLite → PostgreSQL."""
+    try:
+        backup = backup_sqlite_database(sqlite_db, backup_dir, suffix)
+    except OSError as exc:
+        print(render_sqlite_migration_log(event="backup-error", sqlite_db=str(sqlite_db), backup_path=str(exc)), end="")
+        return 1
+
+    print(render_sqlite_migration_log(event="backup-ok", sqlite_db=str(sqlite_db), backup_path=str(backup)), end="")
+    print(render_sqlite_migration_log(event="migrate-start", sqlite_db=str(sqlite_db)), end="")
+    env = os.environ.copy()
+    env["TRANSCRIA_DATABASE_URL"] = dsn
+    result = subprocess.run(
+        [
+            python_bin,
+            str(Path(install_dir) / "scripts" / "migrate_sqlite_to_postgres.py"),
+            "--source",
+            f"sqlite:///{sqlite_db}",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.strip():
+            print(f"INFO:  {line}")
+    if result.returncode == 0:
+        print(render_sqlite_migration_log(event="migrate-ok", sqlite_db=str(sqlite_db)), end="")
+        return 0
+    print(render_sqlite_migration_log(event="migrate-failed", sqlite_db=str(sqlite_db)), end="")
+    print(render_sqlite_migration_log(event="migrate-partial", sqlite_db=str(sqlite_db)), end="")
+    return result.returncode or 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ajuste pg_hba.conf pour l'authentification TCP locale TranscrIA.")
     parser.add_argument("path", nargs="?", help="chemin du pg_hba.conf à ajuster")
     parser.add_argument("--dsn", action="store_true", help="affiche le DSN PostgreSQL SQLAlchemy")
     parser.add_argument("--is-local-host", action="store_true", help="teste si --host est local")
     parser.add_argument("--backup-sqlite", action="store_true", help="copie une base SQLite avant migration PostgreSQL")
+    parser.add_argument("--run-sqlite-migration", action="store_true", help="sauvegarde puis migre SQLite vers PostgreSQL")
     parser.add_argument("--file-size", action="store_true", help="affiche la taille humaine d'un fichier")
     parser.add_argument("--generate-password", action="store_true", help="génère un mot de passe PostgreSQL")
     parser.add_argument("--validate-inputs", action="store_true", help="valide db/user/port PostgreSQL")
@@ -427,6 +472,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event", default=None)
     parser.add_argument("--sqlite-size", default=None)
     parser.add_argument("--backup-path", default="")
+    parser.add_argument("--install-dir", default=None)
+    parser.add_argument("--python-bin", default=sys.executable)
+    parser.add_argument("--database-url", default=None)
     args = parser.parse_args(argv)
 
     if args.is_local_host:
@@ -454,6 +502,24 @@ def main(argv: list[str] | None = None) -> int:
             print(str(exc), file=sys.stderr)
             return 1
         return 0
+
+    if args.run_sqlite_migration:
+        missing = [
+            name
+            for name in ("database_url", "sqlite_db", "backup_dir", "suffix", "install_dir", "python_bin")
+            if getattr(args, name) is None
+        ]
+        if missing:
+            print(f"arguments manquants pour --run-sqlite-migration: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        return run_sqlite_migration(
+            dsn=args.database_url,
+            sqlite_db=Path(args.sqlite_db),
+            backup_dir=Path(args.backup_dir),
+            suffix=args.suffix,
+            install_dir=Path(args.install_dir),
+            python_bin=args.python_bin,
+        )
 
     if args.file_size:
         if args.path is None:

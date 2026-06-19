@@ -1069,35 +1069,24 @@ _setup_postgres() {
 
 _do_pg_migrate() {
     local dsn="$1" sqlite_db="$2" backup_dir="$3"
-    log_sqlite_migrate_event() {
-        local event="$1" backup_path="${2:-}"
-        emit_rendered_log "migration SQLite : $event" -m transcria.install_postgres \
-            --sqlite-migration-log \
-            --event "$event" \
-            --sqlite-db "$sqlite_db" \
-            --backup-path "$backup_path"
-    }
-
     local backup_suffix
     backup_suffix="$(date +%Y%m%d_%H%M%S)"
-    local backup
-    if ! backup=$(postgres_helper \
-            --backup-sqlite \
+    local migration_output
+    if migration_output=$(postgres_helper \
+            --run-sqlite-migration \
+            --database-url "$dsn" \
             --sqlite-db "$sqlite_db" \
             --backup-dir "$backup_dir" \
-            --suffix "$backup_suffix"); then
-        log_sqlite_migrate_event backup-error "$backup"
-        return 1
-    fi
-    log_sqlite_migrate_event backup-ok "$backup"
-
-    log_sqlite_migrate_event migrate-start
-    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/python" "$INSTALL_DIR/scripts/migrate_sqlite_to_postgres.py" \
-            --source "sqlite:///$sqlite_db"; then
-        log_sqlite_migrate_event migrate-ok
+            --suffix "$backup_suffix" \
+            --install-dir "$INSTALL_DIR" \
+            --python-bin "$VENV/bin/python" 2>&1); then
+        while IFS= read -r line; do
+            log_prefixed_line "migration SQLite" "$line" silent
+        done <<< "$migration_output"
     else
-        log_sqlite_migrate_event migrate-failed
-        log_sqlite_migrate_event migrate-partial
+        while IFS= read -r line; do
+            log_prefixed_line "migration SQLite" "$line" silent
+        done <<< "$migration_output"
         return 1
     fi
 }
@@ -1139,7 +1128,6 @@ else
     ask PG_DB   "Base" "$PG_DB"
     ask PG_USER "Rôle (utilisateur)" "$PG_USER"
 
-    # ── Validation des entrées ────────────────────────────────
     PG_INPUT_ERRORS=$(postgres_helper \
         --validate-inputs \
         --db "$PG_DB" \

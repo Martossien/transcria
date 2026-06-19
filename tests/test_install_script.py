@@ -459,12 +459,13 @@ def test_install_script_delegates_sqlite_migration_logs_and_prompt():
     assert "--sqlite-migration-log" in content
     assert "--sqlite-migration-prompt" in content
     assert "log_sqlite_migration_event" in content
+    assert "--run-sqlite-migration" in content
     assert "Base SQLite détectée : $sqlite_db" not in content
     assert "Migration sautée (--pg-migrate absent)" not in content
     assert "Migration SQLite → PostgreSQL" not in content
     assert "  1. Migrer les données SQLite" not in content
     assert "Action de migration SQLite inconnue" not in content
-    assert "log_sqlite_migrate_event" in content
+    assert "log_sqlite_migrate_event" not in content
     assert "Échec du backup SQLite" not in content
     assert "Backup SQLite sauvegardé" not in content
     assert "Migration des données SQLite → PostgreSQL" not in content
@@ -592,7 +593,7 @@ def test_install_script_backs_up_sqlite_through_postgres_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "-m transcria.install_postgres" in content
-    assert "--backup-sqlite" in content
+    assert "--run-sqlite-migration" in content
     assert 'cp "$sqlite_db" "$backup"' not in content
 
 

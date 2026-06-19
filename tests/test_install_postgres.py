@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
+from types import SimpleNamespace
 
 import pytest
 
@@ -31,6 +32,7 @@ from transcria.install_postgres import (
     render_state_summary,
     rewrite_pg_hba_file,
     rewrite_pg_hba_for_tcp_password,
+    run_sqlite_migration,
     validate_pg_inputs,
 )
 
@@ -97,6 +99,68 @@ def test_install_postgres_cli_backs_up_sqlite_database(tmp_path, capsys):
     assert result == 0
     assert capsys.readouterr().out == f"{backup}\n"
     assert backup.read_bytes() == b"sqlite-content"
+
+
+def test_run_sqlite_migration_backs_up_and_runs_script(tmp_path, capsys, monkeypatch):
+    sqlite_db = tmp_path / "transcrIA.db"
+    sqlite_db.write_bytes(b"sqlite-content")
+    backup_dir = tmp_path / "backups"
+    install_dir = tmp_path / "repo"
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(cmd: list[str], **kwargs):
+        calls.append((cmd, kwargs["env"]))
+        return SimpleNamespace(returncode=0, stdout="migrated\n", stderr="")
+
+    monkeypatch.setattr("transcria.install_postgres.subprocess.run", fake_run)
+
+    assert run_sqlite_migration(
+        dsn="postgresql+psycopg://u:p@h/db",
+        sqlite_db=sqlite_db,
+        backup_dir=backup_dir,
+        suffix="stamp",
+        install_dir=install_dir,
+        python_bin="/venv/bin/python",
+    ) == 0
+
+    out = capsys.readouterr().out
+    assert "OK:Backup SQLite sauvegardé" in out
+    assert "INFO:Migration des données SQLite" in out
+    assert "INFO:  migrated" in out
+    assert "OK:Données migrées" in out
+    assert (backup_dir / "transcrIA_stamp.db.bak").read_bytes() == b"sqlite-content"
+    assert calls[0][0] == [
+        "/venv/bin/python",
+        str(install_dir / "scripts" / "migrate_sqlite_to_postgres.py"),
+        "--source",
+        f"sqlite:///{sqlite_db}",
+    ]
+    assert calls[0][1]["TRANSCRIA_DATABASE_URL"] == "postgresql+psycopg://u:p@h/db"
+
+
+def test_run_sqlite_migration_reports_script_failure(tmp_path, capsys, monkeypatch):
+    sqlite_db = tmp_path / "transcrIA.db"
+    sqlite_db.write_bytes(b"sqlite-content")
+
+    def fake_run(cmd: list[str], **kwargs):
+        return SimpleNamespace(returncode=7, stdout="", stderr="migration failed\n")
+
+    monkeypatch.setattr("transcria.install_postgres.subprocess.run", fake_run)
+
+    result = run_sqlite_migration(
+        dsn="postgresql+psycopg://u:p@h/db",
+        sqlite_db=sqlite_db,
+        backup_dir=tmp_path / "backups",
+        suffix="stamp",
+        install_dir=tmp_path / "repo",
+        python_bin="/venv/bin/python",
+    )
+
+    out = capsys.readouterr().out
+    assert result == 7
+    assert "INFO:  migration failed" in out
+    assert "ERROR:Échec de la migration SQLite" in out
+    assert "WARN:La base PostgreSQL est peut-être partiellement remplie" in out
 
 
 def test_human_file_size_formats_without_shell_du(tmp_path):
