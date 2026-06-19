@@ -626,41 +626,36 @@ log_torch_event() {
         --value "$value"
 }
 
-if [[ "$INSTALL_TORCH" = true ]]; then
-    TORCH_TAG_ARGS=(--format shell)
-    if [[ -n "$CUDA_VER_FROM_SMI" ]]; then
-        TORCH_TAG_ARGS+=(--cuda-version "$CUDA_VER_FROM_SMI")
-    fi
-    if [[ -n "$FORCE_CUDA" ]]; then
-        TORCH_TAG_ARGS+=(--force-cuda "$FORCE_CUDA")
-    fi
-    TORCH_TAG_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch "${TORCH_TAG_ARGS[@]}")
-    eval_named_shell_assignments "$TORCH_TAG_OUT" CUDA_TAG CUDA_WARNING
-    if [[ -n "${CUDA_WARNING:-}" ]]; then
-        log_warn "$CUDA_WARNING"
-    fi
+TORCH_PLAN_ARGS=(--install-plan --install-torch "$INSTALL_TORCH")
+[[ -n "$CUDA_VER_FROM_SMI" ]] && TORCH_PLAN_ARGS+=(--cuda-version "$CUDA_VER_FROM_SMI")
+[[ -n "$FORCE_CUDA" ]] && TORCH_PLAN_ARGS+=(--force-cuda "$FORCE_CUDA")
+TORCH_PLAN=$(python_module transcria.install_torch "${TORCH_PLAN_ARGS[@]}")
+eval_named_shell_assignments "$TORCH_PLAN" TORCH_ACTION CUDA_TAG CUDA_WARNING INSTALLED_CUDA
+[[ -n "${CUDA_WARNING:-}" ]] && log_warn "$CUDA_WARNING"
 
-    TORCH_INSTALLED=false
-    INSTALLED_CUDA=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_torch --installed-cuda)
-    if [[ -n "$INSTALLED_CUDA" && "$INSTALLED_CUDA" != "None" ]]; then
+case "$TORCH_ACTION" in
+    skip)
+        log_torch_event skipped
+        ;;
+    already-installed)
         log_torch_event installed "$INSTALLED_CUDA"
-        TORCH_INSTALLED=true
-    fi
-
-    if [[ "$TORCH_INSTALLED" = false ]]; then
-        if [[ "$CUDA_TAG" = "cpu" ]]; then
-            log_torch_event install-cpu
-            pip install torch torchvision torchaudio --quiet
-        else
-            log_torch_event install-cuda "$CUDA_TAG"
-            pip install torch torchvision torchaudio \
-                --index-url "https://download.pytorch.org/whl/${CUDA_TAG}" --quiet
-        fi
+        ;;
+    install-cpu)
+        log_torch_event install-cpu
+        pip install torch torchvision torchaudio --quiet
         log_torch_event install-ok
-    fi
-else
-    log_torch_event skipped
-fi
+        ;;
+    install-cuda)
+        log_torch_event install-cuda "$CUDA_TAG"
+        pip install torch torchvision torchaudio \
+            --index-url "https://download.pytorch.org/whl/${CUDA_TAG}" --quiet
+        log_torch_event install-ok
+        ;;
+    *)
+        log_error "Action PyTorch inconnue : $TORCH_ACTION"
+        exit 1
+        ;;
+esac
 
 # ============================================================================
 # SECTION 4 — Dépendances Python

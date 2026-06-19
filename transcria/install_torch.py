@@ -3,11 +3,21 @@ from __future__ import annotations
 import argparse
 import importlib
 import re
+import subprocess
 import sys
+from dataclasses import dataclass
 from types import ModuleType
 from typing import Any
 
 _CUDA_VERSION_RE = re.compile(r"^\s*(?P<major>\d+)(?:\.(?P<minor>\d+))?")
+
+
+@dataclass(frozen=True)
+class TorchInstallPlan:
+    action: str
+    cuda_tag: str
+    cuda_warning: str
+    installed_cuda: str
 
 
 def select_torch_cuda_tag(cuda_version: str | None = None, *, forced_tag: str | None = None) -> tuple[str, str | None]:
@@ -47,6 +57,67 @@ def installed_torch_cuda_version(import_module: Any = importlib.import_module) -
     return str(cuda or "cpu")
 
 
+def detect_installed_torch_cuda_version(*, timeout_s: int = 20) -> str:
+    """Détecte torch dans un sous-processus pour éviter un teardown CUDA bloquant."""
+    code = (
+        "import os\n"
+        "import torch\n"
+        "print(torch.version.cuda or 'cpu', flush=True)\n"
+        "os._exit(0)\n"
+    )
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def build_install_plan(
+    *,
+    install_torch: bool,
+    cuda_version: str | None = None,
+    forced_tag: str | None = None,
+    installed_detector: Any | None = None,
+) -> TorchInstallPlan:
+    """Décide l'action PyTorch à exécuter sans lancer pip."""
+    tag, warning = select_torch_cuda_tag(cuda_version, forced_tag=forced_tag)
+    if not install_torch:
+        return TorchInstallPlan(action="skip", cuda_tag=tag, cuda_warning=warning or "", installed_cuda="")
+
+    detector = installed_detector or detect_installed_torch_cuda_version
+    installed_cuda = str(detector() or "")
+    if installed_cuda and installed_cuda != "None":
+        return TorchInstallPlan(action="already-installed", cuda_tag=tag, cuda_warning=warning or "", installed_cuda=installed_cuda)
+
+    return TorchInstallPlan(
+        action="install-cpu" if tag == "cpu" else "install-cuda",
+        cuda_tag=tag,
+        cuda_warning=warning or "",
+        installed_cuda="",
+    )
+
+
+def render_install_plan_shell(plan: TorchInstallPlan) -> str:
+    """Rend le plan PyTorch en affectations shell filtrables."""
+    return "\n".join(
+        [
+            f"TORCH_ACTION={plan.action}",
+            f"CUDA_TAG={plan.cuda_tag}",
+            f"CUDA_WARNING={plan.cuda_warning!r}",
+            f"INSTALLED_CUDA={plan.installed_cuda!r}",
+            "",
+        ]
+    )
+
+
 def render_setup_log(*, event: str, value: str = "") -> str:
     """Rend les messages d'installation PyTorch utilisés par install.sh."""
     if event == "installed":
@@ -67,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cuda-version", default=None)
     parser.add_argument("--force-cuda", default=None)
     parser.add_argument("--installed-cuda", action="store_true", help="affiche la version CUDA du torch installé, ou vide si absent")
+    parser.add_argument("--install-plan", action="store_true", help="rend le plan d'installation PyTorch")
+    parser.add_argument("--install-torch", default="true")
     parser.add_argument("--setup-log", action="store_true", help="rend un message d'installation PyTorch")
     parser.add_argument("--event", default="")
     parser.add_argument("--value", default="")
@@ -85,9 +158,18 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     if args.installed_cuda:
-        installed = installed_torch_cuda_version()
+        installed = detect_installed_torch_cuda_version()
         if installed:
             print(installed)
+        return 0
+
+    if args.install_plan:
+        plan = build_install_plan(
+            install_torch=args.install_torch.lower() == "true",
+            cuda_version=args.cuda_version,
+            forced_tag=args.force_cuda,
+        )
+        print(render_install_plan_shell(plan), end="")
         return 0
 
     tag, warning = select_torch_cuda_tag(args.cuda_version, forced_tag=args.force_cuda)

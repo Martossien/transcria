@@ -2,7 +2,16 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from transcria.install_torch import installed_torch_cuda_version, main, render_setup_log, select_torch_cuda_tag
+from transcria.install_torch import (
+    TorchInstallPlan,
+    build_install_plan,
+    detect_installed_torch_cuda_version,
+    installed_torch_cuda_version,
+    main,
+    render_install_plan_shell,
+    render_setup_log,
+    select_torch_cuda_tag,
+)
 
 
 def test_select_torch_cuda_tag_honors_forced_tag():
@@ -67,7 +76,7 @@ def test_install_torch_cli_outputs_warning_in_shell_assignments(capsys):
 
 
 def test_install_torch_cli_outputs_installed_cuda(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_torch.installed_torch_cuda_version", lambda: "12.6")
+    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "12.6")
 
     assert main(["--installed-cuda"]) == 0
 
@@ -75,11 +84,66 @@ def test_install_torch_cli_outputs_installed_cuda(capsys, monkeypatch):
 
 
 def test_install_torch_cli_outputs_nothing_when_torch_missing(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_torch.installed_torch_cuda_version", lambda: "")
+    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "")
 
     assert main(["--installed-cuda"]) == 0
 
     assert capsys.readouterr().out == ""
+
+
+def test_build_install_plan_skips_when_requested():
+    assert build_install_plan(install_torch=False, cuda_version="12.6") == TorchInstallPlan(
+        action="skip",
+        cuda_tag="cu126",
+        cuda_warning="",
+        installed_cuda="",
+    )
+
+
+def test_build_install_plan_reports_installed_torch(monkeypatch):
+    assert build_install_plan(install_torch=True, cuda_version="12.6", installed_detector=lambda: "12.6") == TorchInstallPlan(
+        action="already-installed",
+        cuda_tag="cu126",
+        cuda_warning="",
+        installed_cuda="12.6",
+    )
+
+
+def test_build_install_plan_selects_cpu_install_when_cuda_absent(monkeypatch):
+    assert build_install_plan(install_torch=True, cuda_version=None, installed_detector=lambda: "").action == "install-cpu"
+
+
+def test_detect_installed_torch_cuda_version_uses_subprocess(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **_kwargs):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="12.6\n")
+
+    monkeypatch.setattr("transcria.install_torch.subprocess.run", fake_run)
+
+    assert detect_installed_torch_cuda_version() == "12.6"
+    assert calls[0][1] == "-c"
+    assert "os._exit(0)" in calls[0][2]
+
+
+def test_render_install_plan_shell_is_filterable():
+    rendered = render_install_plan_shell(TorchInstallPlan(action="install-cuda", cuda_tag="cu126", cuda_warning="", installed_cuda=""))
+
+    assert "TORCH_ACTION=install-cuda" in rendered
+    assert "CUDA_TAG=cu126" in rendered
+    assert "CUDA_WARNING=''" in rendered
+    assert "INSTALLED_CUDA=''" in rendered
+
+
+def test_install_torch_cli_outputs_install_plan(capsys, monkeypatch):
+    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "")
+
+    assert main(["--install-plan", "--install-torch", "true", "--cuda-version", "12.4"]) == 0
+
+    out = capsys.readouterr().out
+    assert "TORCH_ACTION=install-cuda\n" in out
+    assert "CUDA_TAG=cu124\n" in out
 
 
 def test_render_setup_log_for_torch_events():

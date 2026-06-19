@@ -208,7 +208,7 @@ def test_install_script_filters_named_helper_outputs_before_eval():
     assert "eval_named_shell_assignments" in content
     assert "HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL" in content
     assert "GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING GPU_VRAM_TOTAL_MB GPU_VRAM_MAX_MB GPU_SIZES_CSV" in content
-    assert "CUDA_TAG CUDA_WARNING" in content
+    assert "TORCH_ACTION CUDA_TAG CUDA_WARNING INSTALLED_CUDA" in content
     assert 'eval "$SYSTEM_CAPABILITIES_OUT"' not in content
     assert 'eval "$NVIDIA_DETECT_OUT"' not in content
     assert 'eval "$TORCH_TAG_OUT"' not in content
@@ -607,7 +607,9 @@ def test_install_script_formats_sqlite_size_through_postgres_helper():
 def test_install_script_detects_existing_torch_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_torch --installed-cuda" in content
+    assert "transcria.install_torch" in content
+    assert "--install-plan" in content
+    assert "--installed-cuda" not in content
     assert 'python -c "import torch"' not in content
 
 
