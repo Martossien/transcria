@@ -107,6 +107,7 @@ def _add_postgres_bootstrap_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--password", required=True)
     p.add_argument("--install-dir", required=True)
     p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", default="5432")
     p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié (ex. 'sudo -u postgres psql') ; vide = indisponible")
     p.add_argument("--admin-python", default="", help="Préfixe python privilégié -m (ex. 'sudo -u postgres env PYTHONPATH=… python -m')")
     p.add_argument("--have-systemctl", action="store_true")
@@ -223,6 +224,7 @@ def _cmd_postgres_bootstrap(args: argparse.Namespace) -> int:
         password=args.password,
         install_dir=Path(args.install_dir),
         host=args.host,
+        port=args.port,
         is_root=os.geteuid() == 0,
         have_systemctl=args.have_systemctl,
         have_service=args.have_service,

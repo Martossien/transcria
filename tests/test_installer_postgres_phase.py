@@ -271,13 +271,48 @@ def _bootstrap_plan(tmp_path: Path, **kw) -> PostgresBootstrapPlan:
     return PostgresBootstrapPlan(**defaults)
 
 
+def _run_bootstrap(*args, **kw):
+    # Hermétique : par défaut la base n'est PAS joignable (app_query→None) → le bootstrap
+    # privilégié s'exécute. Un test peut passer app_query=… pour simuler "déjà provisionné".
+    kw.setdefault("app_query", lambda dsn, sql: None)
+    return apply_postgres_bootstrap(*args, **kw)
+
+
 def _noop_rewrite(_path):
     return (0, "changed=0")
 
 
+def test_bootstrap_skipped_when_base_already_reachable(tmp_path):
+    # Finding 8.2 : base déjà provisionnée + joignable (app_query→"1") → AUCUN appel privilégié
+    # (pg_hba/rôle/base), pas de PermissionError ; court-circuit propre.
+    admin = _AdminPsql()  # ne doit jamais être appelé
+    out = io.StringIO()
+    result = _run_bootstrap(
+        _bootstrap_plan(tmp_path), console=Console(out, color=False),
+        admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+        app_query=lambda dsn, sql: "1",
+    )
+    assert "already-provisioned" in result.actions
+    assert admin.calls == []  # aucun pg_hba / CREATE ROLE / CREATE DATABASE
+    assert "déjà provisionnés" in out.getvalue()
+
+
+def test_bootstrap_runs_when_base_unreachable(tmp_path):
+    # Base non joignable (app_query→None) → le bootstrap privilégié s'exécute (rôle + base).
+    admin = _AdminPsql(db_exists="")
+    result = _run_bootstrap(
+        _bootstrap_plan(tmp_path), console=_console(),
+        admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+        app_query=lambda dsn, sql: None,
+    )
+    assert "local-ready" in result.actions
+    assert "already-provisioned" not in result.actions
+    assert any(stdin and "CREATE ROLE" in stdin for _, stdin in admin.calls)
+
+
 def test_bootstrap_happy_path_creates_role_and_database(tmp_path):
     admin = _AdminPsql(db_exists="")  # base absente → création
-    result = apply_postgres_bootstrap(
+    result = _run_bootstrap(
         _bootstrap_plan(tmp_path), console=_console(),
         admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
     )
@@ -289,7 +324,7 @@ def test_bootstrap_happy_path_creates_role_and_database(tmp_path):
 
 def test_bootstrap_existing_database_is_not_recreated(tmp_path):
     admin = _AdminPsql(db_exists="1")  # base déjà là
-    apply_postgres_bootstrap(
+    _run_bootstrap(
         _bootstrap_plan(tmp_path), console=_console(),
         admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
     )
@@ -300,7 +335,7 @@ def test_bootstrap_role_failure_raises(tmp_path):
     admin = _AdminPsql(role_rc=1)
     out = io.StringIO()
     with pytest.raises(PostgresPhaseError):
-        apply_postgres_bootstrap(
+        _run_bootstrap(
             _bootstrap_plan(tmp_path), console=Console(out, color=False),
             admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
         )
@@ -310,7 +345,7 @@ def test_bootstrap_role_failure_raises(tmp_path):
 def test_bootstrap_database_falls_back_to_locale_c(tmp_path):
     admin = _AdminPsql(db_exists="", db_rcs=(1, 0))  # UTF8 refusé puis repli C accepté
     out = io.StringIO()
-    result = apply_postgres_bootstrap(
+    result = _run_bootstrap(
         _bootstrap_plan(tmp_path), console=Console(out, color=False),
         admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
     )
@@ -323,7 +358,7 @@ def test_bootstrap_database_falls_back_to_locale_c(tmp_path):
 def test_bootstrap_database_double_failure_raises(tmp_path):
     admin = _AdminPsql(db_exists="", db_rcs=(1, 1))
     with pytest.raises(PostgresPhaseError):
-        apply_postgres_bootstrap(
+        _run_bootstrap(
             _bootstrap_plan(tmp_path), console=_console(),
             admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
         )
@@ -334,7 +369,7 @@ def test_bootstrap_pg_hba_change_triggers_reload(tmp_path):
     hba.write_text("host all all 127.0.0.1/32 ident\n", encoding="utf-8")
     admin = _AdminPsql(hba_path=str(hba), db_exists="1")
     reloaded: list[bool] = []
-    result = apply_postgres_bootstrap(
+    result = _run_bootstrap(
         _bootstrap_plan(tmp_path), console=_console(),
         admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "changed=2"),
         reload_service=lambda: reloaded.append(True),
@@ -348,7 +383,7 @@ def test_bootstrap_pg_hba_no_change_no_reload(tmp_path):
     hba.write_text("x\n", encoding="utf-8")
     admin = _AdminPsql(hba_path=str(hba), db_exists="1")
     reloaded: list[bool] = []
-    apply_postgres_bootstrap(
+    _run_bootstrap(
         _bootstrap_plan(tmp_path), console=_console(),
         admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "changed=0"),
         reload_service=lambda: reloaded.append(True),
@@ -361,7 +396,7 @@ def test_bootstrap_pg_hba_invalid_result_raises(tmp_path):
     hba.write_text("x\n", encoding="utf-8")
     admin = _AdminPsql(hba_path=str(hba), db_exists="1")
     with pytest.raises(PostgresPhaseError):
-        apply_postgres_bootstrap(
+        _run_bootstrap(
             _bootstrap_plan(tmp_path), console=_console(),
             admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "garbage"), reload_service=lambda: None,
         )
@@ -373,7 +408,7 @@ def test_bootstrap_pg_hba_rewrite_failure_warns_and_continues(tmp_path):
     admin = _AdminPsql(hba_path=str(hba), db_exists="1")
     out = io.StringIO()
     # rewrite échoue (rc!=0) → avertit, ne lève pas, poursuit rôle/base.
-    result = apply_postgres_bootstrap(
+    result = _run_bootstrap(
         _bootstrap_plan(tmp_path), console=Console(out, color=False),
         admin_psql=admin, admin_pg_hba_rewrite=lambda p: (1, ""), reload_service=lambda: None,
     )
@@ -404,7 +439,7 @@ def test_bootstrap_integration_creates_role_and_db_on_real_cluster(postgresql_pr
 
     plan = _bootstrap_plan(tmp_path, db=db, user=role, password="bootstrap-pw-123")
     try:
-        result = apply_postgres_bootstrap(
+        result = _run_bootstrap(
             plan, console=_console(),
             admin_psql=admin_psql, admin_pg_hba_rewrite=lambda p: (0, "changed=0"), reload_service=lambda: None,
         )

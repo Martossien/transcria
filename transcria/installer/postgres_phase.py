@@ -357,6 +357,7 @@ class PostgresBootstrapPlan:
     password: str
     install_dir: Path
     host: str = "127.0.0.1"
+    port: str = "5432"
     is_root: bool = False
     have_systemctl: bool = False
     have_service: bool = False
@@ -464,9 +465,22 @@ def apply_postgres_bootstrap(
     admin_psql: AdminPsqlIO | None = None,
     admin_pg_hba_rewrite: AdminPgHbaRewrite | None = None,
     reload_service: ReloadService | None = None,
+    app_query: Query = _default_query,
 ) -> PostgresResult:
-    """Provisionne une PostgreSQL locale (pg_hba + rôle + base), via l'identité postgres."""
+    """Provisionne une PostgreSQL locale (pg_hba + rôle + base), via l'identité postgres.
+
+    Court-circuit : si la base est DÉJÀ joignable avec les identifiants applicatifs (rôle +
+    base + pg_hba déjà bons), on saute tout le bootstrap privilégié — évite un échec inutile
+    (PermissionError pg_hba / sudo) quand on relance l'install sur une base déjà provisionnée.
+    """
     result = PostgresResult()
+
+    dsn = build_pg_dsn(plan.host, plan.port, plan.db, plan.user, plan.password)
+    if app_query(dsn, "SELECT 1") == "1":
+        console.ok(f"Rôle et base PostgreSQL déjà provisionnés et joignables ({plan.user}@{plan.db}) — bootstrap local sauté.")
+        result.record("already-provisioned")
+        return result
+
     admin_psql = admin_psql or _default_admin_psql_io(plan)
     admin_pg_hba_rewrite = admin_pg_hba_rewrite or _default_admin_pg_hba_rewrite(plan)
     reload_service = reload_service or _default_reload_service(plan)

@@ -642,7 +642,7 @@ _setup_postgres() {
         local PG_BOOTSTRAP_ARGS=(
             -m transcria.installer.cli postgres-bootstrap
             --db "$db" --user "$user" --password "$pass"
-            --install-dir "$INSTALL_DIR" --host "$host"
+            --install-dir "$INSTALL_DIR" --host "$host" --port "$port"
         )
         [[ "$HAVE_SYSTEMCTL" = true ]] && PG_BOOTSTRAP_ARGS+=(--have-systemctl)
         [[ "$HAVE_SERVICE" = true ]]   && PG_BOOTSTRAP_ARGS+=(--have-service)
