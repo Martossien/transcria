@@ -232,6 +232,12 @@ GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
   un `build:` est défini, Compose **reconstruit le code courant** sous cet ancien tag — faux
   rollback. Garder les images des versions déployées (ou les publier sur un registre, cf.
   backlog 0.x), idéalement référencées par digest en production.
+- **Compatibilité du manifeste** : le rollback réutilise le `docker-compose.yml` et le
+  `config.yaml` du checkout **courant** avec une **ancienne** image. Il suppose donc que les
+  contrats n'ont pas changé entre les versions (noms de rôles, commandes d'entrypoint,
+  variables d'environnement, chemins de volumes, format de `config.yaml`). Pour un rollback
+  pleinement reproductible, versionner **ensemble** : image + `docker-compose.yml` + `config.yaml`
+  + révision Alembic associée (cf. backlog 0.x : images immuables sur registre).
 - **Données de jobs** : les volumes `jobs`/`models` persistent indépendamment des
   conteneurs ; un rollback de code ne les touche pas.
 
