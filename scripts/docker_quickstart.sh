@@ -35,7 +35,9 @@ err()  { printf '\033[0;31m[ERROR]\033[0m %s\n' "$*" >&2; }
 
 ENV_FILE=".env.docker"
 COMPOSE=(docker compose --env-file "$ENV_FILE")
-[[ "$MODE" == "gpu" ]] && COMPOSE+=(--profile gpu)
+# Profils mutuellement exclusifs (web/all-in-one publient tous deux :7870) :
+#   gpu   → all-in-one ; split → web + scheduler. db/migrate sont hors profil.
+if [[ "$MODE" == "gpu" ]]; then COMPOSE+=(--profile gpu); else COMPOSE+=(--profile split); fi
 
 # ── Action down : arrêt propre ────────────────────────────────────────────────
 if [[ "$ACTION" == "down" ]]; then
@@ -87,19 +89,24 @@ if [[ ! -f "config.yaml" ]]; then
     cp config.example.yaml config.yaml
     if [[ -z "${HF_TOKEN:-}" ]]; then
         warn "HF_TOKEN absent → backend STT 'whisper' (non gated, sans token)."
+        warn "  ⚠ La diarisation 'pyannote' est elle AUSSI gated : sans token, la détection des"
+        warn "    locuteurs échouera. Pour un test sans token : transcription seule, ou fournir HF_TOKEN."
         sed -i 's/^\(\s*stt_backend:\s*\).*/\1"whisper"/' config.yaml
     else
-        ok "HF_TOKEN présent → backend STT 'cohere' (qualité de référence)."
+        ok "HF_TOKEN présent → backend STT 'cohere' + diarisation 'pyannote' (qualité de référence)."
     fi
-    # Secret Flask dans .env applicatif (monté), distinct du POSTGRES_PASSWORD.
-    if [[ ! -f ".env" ]] || ! grep -q '^TRANSCRIA_SECRET=' .env 2>/dev/null; then
-        umask 077; echo "TRANSCRIA_SECRET=$(gen_secret 32)" >> .env; chmod 600 .env
-    fi
-    ok "config.yaml + .env applicatif prêts."
+    ok "config.yaml prêt."
 else
     ok "config.yaml existant conservé."
 fi
+
+# Secret Flask dans .env applicatif (monté) — INDÉPENDANT de la (re)génération de config.yaml :
+# garantit qu'un .env existant mais sans secret en reçoit un (sinon session éphémère).
 touch .env  # .env est monté en lecture seule par le compose ; doit exister
+if ! grep -q '^TRANSCRIA_SECRET=' .env 2>/dev/null; then
+    umask 077; echo "TRANSCRIA_SECRET=$(gen_secret 32)" >> .env; chmod 600 .env
+    ok "TRANSCRIA_SECRET généré dans .env."
+fi
 
 # ── 4. Build de l'image (index PyTorch selon GPU/CPU) ─────────────────────────
 if [[ "$MODE" == "gpu" ]]; then
@@ -121,12 +128,10 @@ docker build --build-arg "TORCH_INDEX_URL=$TORCH_INDEX_URL" -t transcria:latest 
 ok "Image construite."
 
 # ── 5. Démarrage + vérification ───────────────────────────────────────────────
+# Le profil (gpu|split) sélectionne les services applicatifs ; db/migrate (hors profil)
+# démarrent toujours. gpu → all-in-one ; split → web + scheduler.
 log "Démarrage de la stack ($MODE)…"
-if [[ "$MODE" == "gpu" ]]; then
-    "${COMPOSE[@]}" up -d db migrate all-in-one
-else
-    "${COMPOSE[@]}" up -d db migrate web scheduler
-fi
+"${COMPOSE[@]}" up -d
 
 log "Attente de /health (boot gunicorn/torch)…"
 url="http://localhost:7870/health"

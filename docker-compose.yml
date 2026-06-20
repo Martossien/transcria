@@ -15,7 +15,8 @@ x-app: &app
   build:
     context: .
     dockerfile: Dockerfile
-  image: transcria:latest
+  # Épinglable pour un rollback : TRANSCRIA_IMAGE=transcria:<tag> docker compose up -d
+  image: ${TRANSCRIA_IMAGE:-transcria:latest}
   environment: &app-env
     TRANSCRIA_CONFIG: /app/config.yaml
     TRANSCRIA_DATABASE_URL: postgresql+psycopg://transcria:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}@db:5432/transcria
@@ -49,14 +50,26 @@ services:
     command: ["migrate"]
     restart: "no"
 
+  # Topologie split (web + scheduler) sous le profil `split` pour ne JAMAIS coexister
+  # avec `all-in-one` (profil `gpu`) — les deux publient :7870. `db`/`migrate` restent
+  # hors profil (toujours démarrés). `docker compose --profile split up`.
   web:
     <<: *app
+    profiles: ["split"]
     command: ["web"]
     environment:
       <<: *app-env
       TRANSCRIA_ROLE: web
       TRANSCRIA_BIND: 0.0.0.0:7870
       TRANSCRIA_WORKERS: "4"
+    # web reçoit les uploads et sert les téléchargements → il DOIT partager le magasin
+    # de jobs avec le scheduler. Volume nommé partagé (mono-hôte) ⇒ storage.shared_backend
+    # 'fs' suffit ; pour un split multi-HÔTES, passer 'pg' (cf. STOCKAGE_PARTAGE_JOBS.md).
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - jobs:/app/jobs
+      - models:/app/models
     ports:
       - "7870:7870"
     depends_on:
@@ -67,6 +80,7 @@ services:
 
   scheduler:
     <<: *app
+    profiles: ["split"]
     command: ["scheduler"]
     environment:
       <<: *app-env

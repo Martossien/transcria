@@ -137,11 +137,14 @@ Build-time (`docker build --build-arg`) :
    ```
    ou générer `config.yaml` via `scripts/bootstrap_config.py --profile web` puis remplir `.env`.
 2. **Exporter le secret de base** : `export POSTGRES_PASSWORD=…`
-3. **Démarrer** :
+3. **Démarrer** (profil `split` = web + scheduler ; `db`/`migrate` sont hors profil) :
    ```bash
-   docker compose up -d --build
+   docker compose --profile split up -d --build
    ```
    `db` → healthy → `migrate` (one-shot) → `web` + `scheduler`.
+
+   > Les profils `split` (web+scheduler) et `gpu` (all-in-one) sont **mutuellement exclusifs** :
+   > les deux publient `:7870`. Ne pas combiner. `db`/`migrate` démarrent dans les deux.
 4. **Vérifier** :
    ```bash
    docker compose ps
