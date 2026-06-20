@@ -135,6 +135,10 @@ suppression du job           → delete_job_files + CASCADE
 
 `shared_backend: pg` avec `role=all` est inoffensif (push/pull idempotents sur le même disque).
 
+> **Docker.** Le `docker-compose.yml` implémente la topologie split (services `web` +
+> `scheduler` + `db`). Pour un split **deux conteneurs/hôtes**, passer `storage.shared_backend: pg`
+> comme ci-dessus (le volume `jobs` local n'est alors plus partagé). Cf. [`DOCKER.md`](DOCKER.md).
+
 ## 7-bis. Conflits hors manifeste (diagnostic et résolution)
 
 **Définition** : au pull, un fichier existe localement, n'est **pas** dans le manifeste

@@ -392,12 +392,14 @@ resource_node:
 
 ---
 
-## 10. Déploiement sur l'autre machine (questions ouvertes)
+## 10. Déploiement sur l'autre machine
 
-- **Installation** : réutiliser l'`install.sh` existant (il détecte déjà les GPU via `nvidia-smi`).
-  **À vérifier/ajouter : un profil « nœud ressources seul »** (sans la frontale web/DB) — l'install
-  actuel suppose le poste complet. Dépendances : `vllm_venv`, `librosa`/`soundfile`, pyannote,
-  ffmpeg, llama.cpp (cf. [`INSTALL.md`](INSTALL.md)).
+- **Installation** : un **profil dédié `resource-node`** existe désormais (nœud ressources
+  seul, sans frontale web ni base applicative) — `./install.sh --profile resource-node`
+  (génère le manifeste `resource_node.engines`, configure la clé API, n'installe pas de
+  base). En conteneur : image GPU + `python -m transcria.deploy.entrypoint resource-node`
+  (cf. [`DOCKER.md`](DOCKER.md)). Dépendances : pyannote, `librosa`/`soundfile`, ffmpeg,
+  llama.cpp (cf. [`INSTALL.md`](INSTALL.md)).
 - **Paramètres** exposés côté nœud (manifeste §8, ports, fractions VRAM, clé API).
 - **Détection ressources** : GPU, VRAM, modèles présents — au démarrage + via `/capabilities`.
 - **Réseau** : bind `0.0.0.0`, ports (service 8002, STT 8003/8005/8007, arbitrage 8080), pare-feu.
