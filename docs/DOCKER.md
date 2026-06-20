@@ -212,19 +212,26 @@ GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
 
 ## Procédure de rollback
 
-- **Code applicatif** : redéployer le tag d'image précédent (réutiliser le **même profil**
-  que le déploiement — `split` ou `gpu` ; un `up`/`down` sans profil ne touche pas les
-  services applicatifs) :
+- **Rollback de code SANS changement de schéma** (les deux versions partagent la même
+  révision Alembic) : redéployer **uniquement les services applicatifs** avec `--no-deps`
+  pour **ne pas rejouer `migrate`** (un `up` normal le relancerait, car `migrate` est hors
+  profil) :
   ```bash
-  docker compose --profile split down
-  TRANSCRIA_IMAGE=transcria:<tag-précédent> docker compose --profile split up -d
-  # (tout-en-one : remplacer --profile split par --profile gpu)
+  docker compose --profile split stop web scheduler
+  TRANSCRIA_IMAGE=transcria:<tag-précédent> \
+    docker compose --profile split up -d --no-deps web scheduler
+  # tout-en-un : --profile gpu … --no-deps all-in-one
   ```
-  Aucune migration n'est jouée par les serveurs : tant que `migrate` n'est pas relancé,
-  le schéma reste celui en place.
-- **Schéma de base** : Alembic est en avant uniquement ; pour revenir en arrière,
-  restaurer une sauvegarde PostgreSQL (`pg_dump`/`pg_restore`) prise avant la montée de
-  version, puis redéployer l'image compatible. Conserver un dump avant chaque `migrate`.
+- **Rollback à travers une migration de schéma** : un `migrate` de l'**ancienne** image
+  échouerait sur une révision inconnue (et les données peuvent être incompatibles).
+  Procédure sûre : **restaurer la sauvegarde PostgreSQL** compatible (`pg_restore`) prise
+  avant la montée de version, *puis* redéployer l'ancienne image. **Conserver un `pg_dump`
+  avant chaque `migrate`.**
+- ⚠️ **L'image cible doit exister.** `TRANSCRIA_IMAGE=transcria:<tag>` ne déclenche un vrai
+  rollback que si cette image est présente localement (ou tirée d'un registre). Sinon, comme
+  un `build:` est défini, Compose **reconstruit le code courant** sous cet ancien tag — faux
+  rollback. Garder les images des versions déployées (ou les publier sur un registre, cf.
+  backlog 0.x), idéalement référencées par digest en production.
 - **Données de jobs** : les volumes `jobs`/`models` persistent indépendamment des
   conteneurs ; un rollback de code ne les touche pas.
 

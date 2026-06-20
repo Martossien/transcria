@@ -108,9 +108,10 @@ fi
 touch .env  # .env est monté en lecture seule par le compose ; doit exister
 # `.+` : une ligne `TRANSCRIA_SECRET=` VIDE ne compte pas comme un secret présent.
 if ! grep -Eq '^TRANSCRIA_SECRET=.+' .env 2>/dev/null; then
-    umask 077; echo "TRANSCRIA_SECRET=$(gen_secret 32)" >> .env; chmod 600 .env
+    umask 077; echo "TRANSCRIA_SECRET=$(gen_secret 32)" >> .env
     ok "TRANSCRIA_SECRET généré dans .env."
 fi
+chmod 600 .env .env.docker 2>/dev/null || true  # secrets : 600 à chaque exécution (même .env préexistant)
 
 # ── 4. Build de l'image (index PyTorch selon GPU/CPU) ─────────────────────────
 if [[ "$MODE" == "gpu" ]]; then
