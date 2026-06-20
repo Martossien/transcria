@@ -446,9 +446,16 @@ lignes `|`), opérations système toutes injectables, section affichée seulemen
 n'est pas vide. Le **bloc proxy** de configuration est aussi fondu (`config_phase.apply_proxy`) : le
 gate lit l'environnement du shell installateur (resté en shell), la décision/persistance
 + chown sont en Python — l'écriture de `.env` est désormais entièrement portée par Python.
-Restent en shell : le **bootstrap PostgreSQL local privilégié** (pg_hba / rôle / base via
-`sudo -u postgres`, non couvert par le filet) et le **résumé final** (glue mince sur des
-renderers Python déjà existants).
+Le **bootstrap PostgreSQL local privilégié** est lui aussi fondu
+(`postgres_phase.apply_postgres_bootstrap` : pg_hba + rôle + base + reload, via l'identité
+`postgres` passée en préfixes injectables) — non exercé par le filet E2E mais couvert par
+des tests unitaires d'orchestration **et un test d'intégration créant réellement rôle+base
+sur le cluster éphémère**. ⇒ **toute la logique métier de `install.sh` est fondue** dans
+`transcria.installer` (7 sous-commandes : python-env, config, config-proxy, opencode,
+postgres, postgres-bootstrap, systemd). Ne restent en shell que le bootstrap minimal
+(prérequis, choix de l'interpréteur, activation venv), les invites interactives et le
+**résumé final** (glue mince sur des renderers Python déjà existants). Prochaine étape du
+plan : Axe B (resource-node guidé) et entrypoints Docker (P5) réutilisant ce `cli.py`.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles

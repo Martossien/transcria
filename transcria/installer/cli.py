@@ -97,6 +97,22 @@ def _add_postgres_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié pour le rebuild local (ex. 'sudo -u postgres psql')")
 
 
+def _add_postgres_bootstrap_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "postgres-bootstrap",
+        help="Provisionne une PostgreSQL locale : pg_hba + rôle + base (SECTION 6.5, privilégié).",
+    )
+    p.add_argument("--db", required=True)
+    p.add_argument("--user", required=True)
+    p.add_argument("--password", required=True)
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié (ex. 'sudo -u postgres psql') ; vide = indisponible")
+    p.add_argument("--admin-python", default="", help="Préfixe python privilégié -m (ex. 'sudo -u postgres env PYTHONPATH=… python -m')")
+    p.add_argument("--have-systemctl", action="store_true")
+    p.add_argument("--have-service", action="store_true")
+
+
 def _add_systemd_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "systemd",
@@ -144,6 +160,32 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
     apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
+
+
+def _cmd_postgres_bootstrap(args: argparse.Namespace) -> int:
+    import os
+    import shlex
+
+    from transcria.installer.postgres_phase import PostgresBootstrapPlan, PostgresPhaseError, apply_postgres_bootstrap
+
+    console = Console()
+    plan = PostgresBootstrapPlan(
+        db=args.db,
+        user=args.user,
+        password=args.password,
+        install_dir=Path(args.install_dir),
+        host=args.host,
+        is_root=os.geteuid() == 0,
+        have_systemctl=args.have_systemctl,
+        have_service=args.have_service,
+        admin_psql_cmd=tuple(shlex.split(args.admin_psql)) if args.admin_psql else (),
+        admin_python_cmd=tuple(shlex.split(args.admin_python)) if args.admin_python else (),
+    )
+    try:
+        apply_postgres_bootstrap(plan, console=console)
+    except PostgresPhaseError:
+        return 1
     return 0
 
 
@@ -271,6 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_config_proxy_parser(sub)
     _add_opencode_parser(sub)
     _add_postgres_parser(sub)
+    _add_postgres_bootstrap_parser(sub)
     _add_systemd_parser(sub)
     args = parser.parse_args(argv)
 
@@ -284,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_opencode(args)
     if args.command == "postgres":
         return _cmd_postgres(args)
+    if args.command == "postgres-bootstrap":
+        return _cmd_postgres_bootstrap(args)
     if args.command == "systemd":
         return _cmd_systemd(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité

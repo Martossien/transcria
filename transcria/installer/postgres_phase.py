@@ -38,7 +38,10 @@ from transcria.install_postgres import (
     parse_non_negative_int,
     render_alembic_log,
     render_connection_failure,
+    render_database_sql,
     render_encoding_warnings,
+    render_pg_hba_rewrite_result,
+    render_role_sql,
     render_schema_action_log,
     render_setup_log,
     render_sqlite_migration_log,
@@ -54,6 +57,10 @@ AdminPsql = Callable[[str], int]
 Migrate = Callable[[str, str], "tuple[int, str]"]
 Confirm = Callable[[], bool]
 Chown = Callable[[Path, str], None]
+# Bootstrap local privilégié : (args, stdin) -> (returncode, stdout).
+AdminPsqlIO = Callable[..., "tuple[int, str]"]
+AdminPgHbaRewrite = Callable[[str], "tuple[int, str]"]
+ReloadService = Callable[[], None]
 
 
 class PostgresPhaseError(RuntimeError):
@@ -329,4 +336,147 @@ def apply_postgres(
     # ── Migration SQLite (si base vide et SQLite présent) ─────
     _maybe_migrate_sqlite(plan, console, dsn, has_data, migrate, confirm, result)
 
+    return result
+
+
+# ── Bootstrap local privilégié (rôle/base/pg_hba) ───────────────────────────
+# Provisionnement d'une PostgreSQL *locale* : réécriture de pg_hba.conf pour
+# l'authentification TCP par mot de passe, création idempotente du rôle et de la base
+# (UTF8 imposé, repli locale C). Tout passe par l'identité système `postgres`
+# (`sudo -u postgres` / `runuser`), d'où des callables privilégiés injectables. Ce
+# chemin n'est PAS couvert par le filet E2E (qui utilise `--pg-existing`) ; le SQL est
+# vérifié par les tests des renderers (`tests/test_install_postgres.py`) et l'orchestration
+# par `tests/test_installer_postgres_phase.py` (séquence + branches, avec un test
+# d'intégration création rôle/base contre le cluster éphémère).
+
+
+@dataclass(frozen=True)
+class PostgresBootstrapPlan:
+    db: str
+    user: str
+    password: str
+    install_dir: Path
+    host: str = "127.0.0.1"
+    is_root: bool = False
+    have_systemctl: bool = False
+    have_service: bool = False
+    admin_psql_cmd: tuple[str, ...] = ()    # ex. ("sudo", "-u", "postgres", "psql")
+    admin_python_cmd: tuple[str, ...] = ()  # ex. ("sudo", "-u", "postgres", "env", "PYTHONPATH=…", "python", "-m")
+
+
+def _default_admin_psql_io(plan: PostgresBootstrapPlan) -> AdminPsqlIO:
+    def run(args: list[str], *, stdin: str | None = None) -> tuple[int, str]:
+        if not plan.admin_psql_cmd:
+            return (127, "")
+        cp = subprocess.run([*plan.admin_psql_cmd, *args], input=stdin, capture_output=True, text=True, check=False)
+        return (cp.returncode, cp.stdout)
+
+    return run
+
+
+def _default_admin_pg_hba_rewrite(plan: PostgresBootstrapPlan) -> AdminPgHbaRewrite:
+    def run(path: str) -> tuple[int, str]:
+        if not plan.admin_python_cmd:
+            return (127, "")
+        cp = subprocess.run([*plan.admin_python_cmd, "transcria.install_postgres", path], capture_output=True, text=True, check=False)
+        return (cp.returncode, cp.stdout)
+
+    return run
+
+
+def _default_reload_service(plan: PostgresBootstrapPlan) -> ReloadService:
+    def reload() -> None:
+        import time
+
+        prefix: list[str] = [] if plan.is_root else ["sudo"]
+        if plan.have_systemctl and subprocess.run(["systemctl", "is-active", "--quiet", "postgresql"], check=False).returncode == 0:
+            subprocess.run([*prefix, "systemctl", "reload", "postgresql"], check=False)
+        elif plan.have_service:
+            subprocess.run([*prefix, "service", "postgresql", "reload"], check=False)
+        time.sleep(1)
+
+    return reload
+
+
+def _bootstrap_pg_hba(
+    plan: PostgresBootstrapPlan, console: _ConsoleLike,
+    admin_psql: AdminPsqlIO, admin_pg_hba_rewrite: AdminPgHbaRewrite, reload_service: ReloadService,
+    result: PostgresResult,
+) -> None:
+    rc, path = admin_psql(["-At", "-c", "SHOW hba_file;"])
+    path = path.strip()
+    if rc != 0 or not path or not Path(path).is_file():
+        return
+
+    hba_rc, raw = admin_pg_hba_rewrite(path)
+    if hba_rc != 0:
+        console.warn("Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL.")
+        return
+
+    try:
+        decision = render_pg_hba_rewrite_result(raw.strip())
+    except ValueError:
+        console.warn(f"Résultat pg_hba.conf invalide : {raw.strip()}")
+        raise PostgresPhaseError("pg_hba result invalid") from None
+
+    should_reload = False
+    for line in decision.splitlines():
+        if line.startswith("INFO:"):
+            console.info(line[len("INFO:"):])
+        elif line == "ACTION:reload":
+            should_reload = True
+    if should_reload:
+        reload_service()
+        result.record("pg_hba-reloaded")
+
+
+def _bootstrap_role(plan: PostgresBootstrapPlan, console: _ConsoleLike, admin_psql: AdminPsqlIO) -> None:
+    rc, _ = admin_psql(
+        ["-v", "ON_ERROR_STOP=1", "-v", f"role={plan.user}", "-v", f"pwd={plan.password}"],
+        stdin=render_role_sql(),
+    )
+    if rc != 0:
+        _emit_text(console, render_setup_log(event="role-error", db=plan.db, user=plan.user, host=plan.host))
+        raise PostgresPhaseError("role creation failed")
+
+
+def _bootstrap_database(plan: PostgresBootstrapPlan, console: _ConsoleLike, admin_psql: AdminPsqlIO) -> None:
+    _, exists = admin_psql(["-At", "-v", f"dbname={plan.db}", "-c", render_state_query("database-exists")])
+    if exists.strip() == "1":
+        return
+
+    db_args = ["-v", "ON_ERROR_STOP=1", "-v", f"dbname={plan.db}", "-v", f"role={plan.user}"]
+    rc, _ = admin_psql(db_args, stdin=render_database_sql())
+    if rc == 0:
+        return
+    # Locale du cluster incompatible UTF8 : repli LC_COLLATE/LC_CTYPE 'C'.
+    _emit_text(console, render_setup_log(event="database-fallback", db=plan.db, user=plan.user, host=plan.host))
+    rc, _ = admin_psql(db_args, stdin=render_database_sql(fallback_locale_c=True))
+    if rc != 0:
+        _emit_text(console, render_setup_log(event="database-error", db=plan.db, user=plan.user, host=plan.host))
+        raise PostgresPhaseError("database creation failed")
+
+
+def apply_postgres_bootstrap(
+    plan: PostgresBootstrapPlan,
+    *,
+    console: _ConsoleLike,
+    admin_psql: AdminPsqlIO | None = None,
+    admin_pg_hba_rewrite: AdminPgHbaRewrite | None = None,
+    reload_service: ReloadService | None = None,
+) -> PostgresResult:
+    """Provisionne une PostgreSQL locale (pg_hba + rôle + base), via l'identité postgres."""
+    result = PostgresResult()
+    admin_psql = admin_psql or _default_admin_psql_io(plan)
+    admin_pg_hba_rewrite = admin_pg_hba_rewrite or _default_admin_pg_hba_rewrite(plan)
+    reload_service = reload_service or _default_reload_service(plan)
+
+    _bootstrap_pg_hba(plan, console, admin_psql, admin_pg_hba_rewrite, reload_service, result)
+
+    _emit_text(console, render_setup_log(event="local-check", db=plan.db, user=plan.user, host=plan.host))
+    _bootstrap_role(plan, console, admin_psql)
+    _bootstrap_database(plan, console, admin_psql)
+
+    _emit_text(console, render_setup_log(event="local-ready", db=plan.db, user=plan.user, host=plan.host))
+    result.record("local-ready")
     return result

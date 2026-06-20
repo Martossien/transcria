@@ -484,12 +484,17 @@ def test_install_script_delegates_database_setup_logs():
     assert "PostgreSQL demandé mais la configuration a échoué" not in content
 
 
-def test_install_script_delegates_postgres_role_and_database_sql_rendering():
+def test_install_script_delegates_postgres_bootstrap_to_installer_cli():
+    # Le bootstrap local privilégié (pg_hba + rôle + base) est orchestré par la phase
+    # Python ; le shell ne fait que câbler l'identité postgres privilégiée.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--role-sql" in content
-    assert "--database-sql" in content
-    assert "--fallback-locale-c" in content
+    assert "transcria.installer.cli postgres-bootstrap" in content
+    assert "--admin-psql" in content and "--admin-python" in content
+    # Plus aucune mécanique SQL/psql/pg_hba inline pour le bootstrap.
+    assert "--role-sql" not in content
+    assert "--database-sql" not in content
+    assert "--fallback-locale-c" not in content
     assert "CREATE ROLE %I LOGIN PASSWORD" not in content
     assert "CREATE DATABASE %I OWNER %I" not in content
 
@@ -508,23 +513,24 @@ def test_install_script_delegates_postgres_setup_logs():
     assert "DSN PostgreSQL écrit dans .env" not in content
 
 
-def test_install_script_delegates_postgres_state_queries():
+def test_install_script_has_no_inline_postgres_state_queries():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    # --state-query reste pour le bootstrap local (database-exists). Le résumé d'état
-    # (--state-summary) est désormais rendu par la phase Python, plus par le shell.
-    assert "pg_state_query" in content
-    assert "--state-query" in content
+    # Toutes les lectures d'état (existence base, comptes, encodage, version Alembic)
+    # sont désormais en process dans les phases Python — plus de psql/SQL inline.
+    assert "pg_state_query" not in content
+    assert "--state-query" not in content
     assert "SELECT COUNT(*) FROM users" not in content
     assert "SELECT version_num FROM alembic_version" not in content
     assert "pg_encoding_to_char" not in content
     assert "tables public=$has_schema" not in content
 
 
-def test_install_script_delegates_pg_hba_rewrite_result_parsing():
+def test_install_script_has_no_inline_pg_hba_rewrite_parsing():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--pg-hba-rewrite-result" in content
+    # La réécriture pg_hba + l'interprétation du résultat sont dans la phase bootstrap Python.
+    assert "--pg-hba-rewrite-result" not in content
     assert '"$pg_hba_result" =~ ^changed=' not in content
     assert '[[ "$pg_hba_result" != "changed=0" ]]' not in content
 
@@ -693,7 +699,9 @@ def test_install_script_validates_postgres_inputs_through_helper():
 def test_install_script_does_not_prescan_pg_hba_with_shell_grep():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "pg_hba_result=$(pg_admin_python_module transcria.install_postgres" in content
+    # pg_hba est lu/réécrit par la phase bootstrap Python (via l'identité postgres),
+    # jamais pré-scanné par un grep shell.
+    assert "pg_admin_python_module" not in content
     assert "grep -qE '^host[[:space:]]+(all|replication)" not in content
 
 

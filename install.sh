@@ -414,33 +414,6 @@ is_local_pg_host() {
         --host "$host" >/dev/null
 }
 
-pg_admin_psql() {
-    # PostgreSQL local uniquement : exécute psql avec l'identité système postgres.
-    if [[ "$HAVE_SUDO" = true ]]; then
-        sudo -u postgres psql "$@"
-    elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
-        runuser -u postgres -- psql "$@"
-    else
-        return 127
-    fi
-}
-
-pg_admin_python_module() {
-    # PostgreSQL local uniquement : exécute un module Python avec l'identité système postgres.
-    if [[ "$HAVE_SUDO" = true ]]; then
-        sudo -u postgres env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"
-    elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
-        runuser -u postgres -- env PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"
-    else
-        return 127
-    fi
-}
-
-pg_state_query() {
-    local name="$1"
-    postgres_helper --state-query "$name"
-}
-
 # Helper YAML — lit une clé dans config.yaml
 yaml_get() {
     local key="$1"
@@ -697,79 +670,27 @@ _setup_postgres() {
     install_paths_helper --path "$backup_dir" >/dev/null
 
     if [[ "$local_pg" = true ]]; then
-        # ── pg_hba.conf : s'assurer que TCP/IP accepte password-auth ──
-        local pg_hba=""
-        pg_hba=$(pg_admin_psql -At -c "SHOW hba_file;" 2>/dev/null) || pg_hba=""
-        if [[ -f "$pg_hba" ]]; then
-            local pg_hba_result=""
-            if pg_hba_result=$(pg_admin_python_module transcria.install_postgres "$pg_hba"); then
-                local pg_hba_decision="" pg_hba_reload=false
-                pg_hba_decision=$(postgres_helper \
-                    --pg-hba-rewrite-result \
-                    --result "$pg_hba_result") || {
-                    log_warn "Résultat pg_hba.conf invalide : $pg_hba_result"
-                    return 1
-                }
-                while IFS= read -r line; do
-                    if [[ "$line" == INFO:* ]]; then
-                        log_info "${line#INFO:}"
-                    elif [[ "$line" == ACTION:reload ]]; then
-                        pg_hba_reload=true
-                    fi
-                done <<< "$pg_hba_decision"
-                if [[ "$pg_hba_reload" = true ]]; then
-                    if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-active --quiet postgresql 2>/dev/null; then
-                        if [[ $EUID -eq 0 ]]; then
-                            systemctl reload postgresql
-                        else
-                            sudo systemctl reload postgresql
-                        fi
-                    elif [[ "$HAVE_SERVICE" = true ]]; then
-                        if [[ $EUID -eq 0 ]]; then
-                            service postgresql reload
-                        else
-                            sudo service postgresql reload
-                        fi
-                    fi
-                    sleep 1
-                fi
-            else
-                log_warn "Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL."
-            fi
+        # ── Bootstrap local privilégié (pg_hba + rôle + base) délégué à l'installateur
+        #    Python. Réécriture pg_hba.conf, création idempotente du rôle et de la base
+        #    (UTF8 imposé, repli locale C), reload du service. Tout via l'identité système
+        #    postgres (sudo/runuser), passée en préfixes. Non couvert par le filet E2E
+        #    (qui utilise --pg-existing) ; logique SQL + orchestration testées à part.
+        local PG_BOOTSTRAP_ARGS=(
+            -m transcria.installer.cli postgres-bootstrap
+            --db "$db" --user "$user" --password "$pass"
+            --install-dir "$INSTALL_DIR" --host "$host"
+        )
+        [[ "$HAVE_SYSTEMCTL" = true ]] && PG_BOOTSTRAP_ARGS+=(--have-systemctl)
+        [[ "$HAVE_SERVICE" = true ]]   && PG_BOOTSTRAP_ARGS+=(--have-service)
+        local _pg_pythonpath="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}"
+        if [[ "$HAVE_SUDO" = true ]]; then
+            PG_BOOTSTRAP_ARGS+=(--admin-psql "sudo -u postgres psql")
+            PG_BOOTSTRAP_ARGS+=(--admin-python "sudo -u postgres env PYTHONPATH=$_pg_pythonpath $PYTHON_BIN -m")
+        elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
+            PG_BOOTSTRAP_ARGS+=(--admin-psql "runuser -u postgres -- psql")
+            PG_BOOTSTRAP_ARGS+=(--admin-python "runuser -u postgres -- env PYTHONPATH=$_pg_pythonpath $PYTHON_BIN -m")
         fi
-
-        # ── Rôle (idempotent) ─────────────────────────────────────
-        log_postgres_setup_event local-check
-
-        if ! postgres_helper --role-sql \
-            | pg_admin_psql -v ON_ERROR_STOP=1 -v role="$user" -v pwd="$pass"
-        then
-            log_postgres_setup_event role-error
-            return 1
-        fi
-
-        # ── Base (idempotent) — encodage UTF8 IMPOSÉ, jamais hérité de template1 :
-        #    un cluster initdb-é sans locale donne du SQL_ASCII (texte stocké sans
-        #    validation, psycopg3 renvoie des bytes). TEMPLATE template0 permet de
-        #    fixer l'encodage quelle que soit la base modèle du cluster.
-        local db_exists=""
-        db_exists=$(pg_admin_psql -At -v dbname="$db" -c "$(pg_state_query database-exists)") || db_exists=""
-        if [[ "$db_exists" != "1" ]]; then
-            if ! postgres_helper --database-sql \
-                | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
-            then
-                # Locale du cluster incompatible avec UTF8 (ex. latin1) : repli en
-                # locale C, qui accepte tout encodage (tri linguistique côté Python).
-                log_postgres_setup_event database-fallback
-                if ! postgres_helper --database-sql --fallback-locale-c \
-                    | pg_admin_psql -v ON_ERROR_STOP=1 -v dbname="$db" -v role="$user"
-                then
-                    log_postgres_setup_event database-error
-                    return 1
-                fi
-            fi
-        fi
-        log_postgres_setup_event local-ready
+        PYTHONPATH="$_pg_pythonpath" "$VENV/bin/python" "${PG_BOOTSTRAP_ARGS[@]}" || return 1
     else
         log_postgres_setup_event remote-detected
     fi

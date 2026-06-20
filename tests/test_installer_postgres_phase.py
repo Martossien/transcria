@@ -8,12 +8,22 @@ prompt) sans base réelle ni alembic. Seule l'écriture du DSN dans `.env` est r
 from __future__ import annotations
 
 import io
+import os
+import shutil
+import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
 
 from transcria.installer.console import Console
-from transcria.installer.postgres_phase import PostgresPhaseError, PostgresPlan, apply_postgres
+from transcria.installer.postgres_phase import (
+    PostgresBootstrapPlan,
+    PostgresPhaseError,
+    PostgresPlan,
+    apply_postgres,
+    apply_postgres_bootstrap,
+)
 
 
 def _console() -> Console:
@@ -226,3 +236,183 @@ def test_dsn_written_with_owner_only_permissions(tmp_path):
     )
     mode = plan.env_file.stat().st_mode & 0o777
     assert mode == 0o600, oct(mode)
+
+
+# ── Bootstrap local privilégié (apply_postgres_bootstrap) ───────────────────
+
+
+class _AdminPsql:
+    """Simule `sudo -u postgres psql` : route par args/stdin et enregistre les appels."""
+
+    def __init__(self, *, hba_path="", db_exists="", role_rc=0, db_rcs=(0,)):
+        self.hba_path = hba_path
+        self.db_exists = db_exists
+        self.role_rc = role_rc
+        self._db_rcs = iter(db_rcs)
+        self.calls: list[tuple[list[str], "str | None"]] = []
+
+    def __call__(self, args, *, stdin=None):
+        self.calls.append((list(args), stdin))
+        joined = " ".join(args)
+        if "SHOW hba_file" in joined:
+            return (0, self.hba_path)
+        if stdin and "CREATE ROLE" in stdin:
+            return (self.role_rc, "")
+        if "pg_database" in joined:
+            return (0, self.db_exists)
+        if stdin and "CREATE DATABASE" in stdin:
+            return (next(self._db_rcs), "")
+        raise AssertionError(f"appel admin_psql inattendu : {args} stdin={stdin!r}")
+
+
+def _bootstrap_plan(tmp_path: Path, **kw) -> PostgresBootstrapPlan:
+    defaults = dict(db="transcria", user="transcria_app", password="s3cr3t", install_dir=tmp_path)
+    defaults.update(kw)
+    return PostgresBootstrapPlan(**defaults)
+
+
+def _noop_rewrite(_path):
+    return (0, "changed=0")
+
+
+def test_bootstrap_happy_path_creates_role_and_database(tmp_path):
+    admin = _AdminPsql(db_exists="")  # base absente → création
+    result = apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=_console(),
+        admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+    )
+    assert "local-ready" in result.actions
+    # le SQL rôle et le SQL base ont bien été pipés via stdin
+    assert any(stdin and "CREATE ROLE" in stdin for _, stdin in admin.calls)
+    assert any(stdin and "CREATE DATABASE" in stdin for _, stdin in admin.calls)
+
+
+def test_bootstrap_existing_database_is_not_recreated(tmp_path):
+    admin = _AdminPsql(db_exists="1")  # base déjà là
+    apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=_console(),
+        admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+    )
+    assert not any(stdin and "CREATE DATABASE" in stdin for _, stdin in admin.calls)
+
+
+def test_bootstrap_role_failure_raises(tmp_path):
+    admin = _AdminPsql(role_rc=1)
+    out = io.StringIO()
+    with pytest.raises(PostgresPhaseError):
+        apply_postgres_bootstrap(
+            _bootstrap_plan(tmp_path), console=Console(out, color=False),
+            admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+        )
+    assert "création du rôle" in out.getvalue().lower()
+
+
+def test_bootstrap_database_falls_back_to_locale_c(tmp_path):
+    admin = _AdminPsql(db_exists="", db_rcs=(1, 0))  # UTF8 refusé puis repli C accepté
+    out = io.StringIO()
+    result = apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=Console(out, color=False),
+        admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+    )
+    assert "local-ready" in result.actions
+    create_calls = [stdin for _, stdin in admin.calls if stdin and "CREATE DATABASE" in stdin]
+    assert len(create_calls) == 2  # tentative UTF8 puis repli
+    assert "LC_COLLATE" in create_calls[1]
+
+
+def test_bootstrap_database_double_failure_raises(tmp_path):
+    admin = _AdminPsql(db_exists="", db_rcs=(1, 1))
+    with pytest.raises(PostgresPhaseError):
+        apply_postgres_bootstrap(
+            _bootstrap_plan(tmp_path), console=_console(),
+            admin_psql=admin, admin_pg_hba_rewrite=_noop_rewrite, reload_service=lambda: None,
+        )
+
+
+def test_bootstrap_pg_hba_change_triggers_reload(tmp_path):
+    hba = tmp_path / "pg_hba.conf"
+    hba.write_text("host all all 127.0.0.1/32 ident\n", encoding="utf-8")
+    admin = _AdminPsql(hba_path=str(hba), db_exists="1")
+    reloaded: list[bool] = []
+    result = apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=_console(),
+        admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "changed=2"),
+        reload_service=lambda: reloaded.append(True),
+    )
+    assert reloaded == [True]
+    assert "pg_hba-reloaded" in result.actions
+
+
+def test_bootstrap_pg_hba_no_change_no_reload(tmp_path):
+    hba = tmp_path / "pg_hba.conf"
+    hba.write_text("x\n", encoding="utf-8")
+    admin = _AdminPsql(hba_path=str(hba), db_exists="1")
+    reloaded: list[bool] = []
+    apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=_console(),
+        admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "changed=0"),
+        reload_service=lambda: reloaded.append(True),
+    )
+    assert reloaded == []
+
+
+def test_bootstrap_pg_hba_invalid_result_raises(tmp_path):
+    hba = tmp_path / "pg_hba.conf"
+    hba.write_text("x\n", encoding="utf-8")
+    admin = _AdminPsql(hba_path=str(hba), db_exists="1")
+    with pytest.raises(PostgresPhaseError):
+        apply_postgres_bootstrap(
+            _bootstrap_plan(tmp_path), console=_console(),
+            admin_psql=admin, admin_pg_hba_rewrite=lambda p: (0, "garbage"), reload_service=lambda: None,
+        )
+
+
+def test_bootstrap_pg_hba_rewrite_failure_warns_and_continues(tmp_path):
+    hba = tmp_path / "pg_hba.conf"
+    hba.write_text("x\n", encoding="utf-8")
+    admin = _AdminPsql(hba_path=str(hba), db_exists="1")
+    out = io.StringIO()
+    # rewrite échoue (rc!=0) → avertit, ne lève pas, poursuit rôle/base.
+    result = apply_postgres_bootstrap(
+        _bootstrap_plan(tmp_path), console=Console(out, color=False),
+        admin_psql=admin, admin_pg_hba_rewrite=lambda p: (1, ""), reload_service=lambda: None,
+    )
+    assert "local-ready" in result.actions
+    assert "pg_hba.conf" in out.getvalue()
+
+
+def test_bootstrap_integration_creates_role_and_db_on_real_cluster(postgresql_proc, tmp_path):
+    """Intégration : crée réellement le rôle + la base sur le cluster PostgreSQL éphémère.
+
+    admin_psql est injecté pour parler au cluster en superuser (la maintenance db
+    `postgres`), exactement comme `sudo -u postgres psql` en prod. Couvre le SQL rôle/base
+    de bout en bout (le seul morceau du bootstrap qui touche une vraie PostgreSQL).
+    """
+    psql = shutil.which("psql")
+    if not psql:
+        pytest.skip("client psql requis pour l'intégration bootstrap")
+
+    role = f"transcria_bs_{uuid.uuid4().hex[:10]}"
+    db = f"transcria_bsdb_{uuid.uuid4().hex[:10]}"
+
+    def admin_psql(args, *, stdin=None):
+        cmd = [psql, "-h", postgresql_proc.host, "-p", str(postgresql_proc.port),
+               "-U", postgresql_proc.user, "-d", "postgres", *args]
+        env = {**os.environ, "PGPASSWORD": postgresql_proc.password or ""}
+        cp = subprocess.run(cmd, input=stdin, capture_output=True, text=True, env=env, check=False)
+        return (cp.returncode, cp.stdout)
+
+    plan = _bootstrap_plan(tmp_path, db=db, user=role, password="bootstrap-pw-123")
+    try:
+        result = apply_postgres_bootstrap(
+            plan, console=_console(),
+            admin_psql=admin_psql, admin_pg_hba_rewrite=lambda p: (0, "changed=0"), reload_service=lambda: None,
+        )
+        assert "local-ready" in result.actions
+        _, has_role = admin_psql(["-At", "-c", f"SELECT 1 FROM pg_roles WHERE rolname = '{role}'"])
+        assert has_role.strip() == "1"
+        _, has_db = admin_psql(["-At", "-c", f"SELECT 1 FROM pg_database WHERE datname = '{db}'"])
+        assert has_db.strip() == "1"
+    finally:
+        admin_psql(["-c", f'DROP DATABASE IF EXISTS "{db}"'])
+        admin_psql(["-c", f'DROP ROLE IF EXISTS "{role}"'])
