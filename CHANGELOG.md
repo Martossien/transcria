@@ -2,9 +2,22 @@
 
 Toutes les évolutions notables de ce dépôt doivent être documentées ici.
 
-Le format suit une logique proche de Keep a Changelog.
+Le format suit une logique proche de Keep a Changelog. Les versions suivent le SemVer ;
+la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
+modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
 ## [Unreleased]
+
+## [0.1.0-beta.1] — 2026-06-20
+
+Première version taguée — **bêta**. Le produit est fonctionnel et couvert par 2 500+ tests
+(CI verte : ruff, mypy, pytest complet sur PostgreSQL, couverture ~80 %), avec trois
+topologies de déploiement (tout-en-un, frontale web + scheduler, nœud de ressources GPU)
+et un déploiement conteneurisé validé de bout en bout sur GPU (cf. `docs/DOCKER.md`).
+Évaluez/pilotez ; ne pariez pas la production sans votre propre validation.
+
+L'ensemble des entrées ci-dessous (jusqu'à la précédente section non taguée) constitue le
+contenu de cette première release.
 
 ### Fixed
 - **Sonde de disponibilité LLM unifiée : « prêt » = modèle CHARGÉ et générant, pas « port ouvert ».** llama.cpp ouvre le port et répond à `/v1/models` **avant** d'avoir fini de charger le modèle (les complétions renvoient alors 503 « loading ») : un modèle volumineux à froid (ex. Q8 64 Go, ~30 s de chargement) pouvait être déclaré « prêt » alors que le 1ᵉʳ appel réel échouait. De plus, **deux sondes divergentes** coexistaient : `_port_utils.is_port_open` (la primitive partagée par `vram_manager` post-lancement / réutilisation et `llm_backend`) testait une complétion avec `max_tokens: 5` **et `text` seul** — le **piège des modèles reasoning** (premiers tokens dans `<think>` → `text` vide → faux négatif jusqu'au timeout, incident du 11/06/2026), alors que `ensure_arbitrage_llm_ready` avait, lui, une sonde correcte mais distincte. Unifié en une **source unique testée** : fonction **pure** `generation_confirmed(body)` (preuve de génération = texte **ou** `reasoning_content` **ou** ≥1 token généré, couvrant complétion/chat et modèles reasoning) ; `is_port_open` l'utilise avec un `max_tokens` sûr et traite un 503 comme « pas encore prêt » ; `ensure_arbitrage_llm_ready` réutilise la même fonction (fin de la divergence). 13 tests (`tests/test_port_utils.py`) dont le cas reasoning-seul et le 503-loading.

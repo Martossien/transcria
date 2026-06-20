@@ -61,7 +61,7 @@ jobs:
           TRANSCRIA_TEST_PG_PORT: 5432
           TRANSCRIA_TEST_PG_USER: postgres
           TRANSCRIA_TEST_PG_PASSWORD: ci_test_pwd
-        run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing --cov-fail-under=65
+        run: python -m pytest tests/ -q --cov=transcria --cov-report=xml --cov-report=term-missing --cov-fail-under=75
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -111,3 +111,31 @@ jobs:
         env:
           TRANSCRIA_DATABASE_URL: postgresql+psycopg://transcria:ci_test_pwd@127.0.0.1:5432/transcria_ci
         run: python -m pytest tests/test_migrate_sqlite_to_postgres.py -v
+
+  security:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks scanne tout l'historique
+
+      - name: Scan de secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # pip-audit est INFORMATIF (continue-on-error) : la pile ML (torch, pyannote…) traîne
+      # régulièrement des CVE transitives non corrigeables côté projet ; on veut la visibilité
+      # sans bloquer la CI. À durcir (gate) une fois la surface de dépendances maîtrisée.
+      - name: Audit des dépendances (pip-audit, informatif)
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit -r requirements.txt --desc

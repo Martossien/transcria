@@ -58,7 +58,7 @@ venv/bin/python -m pytest tests/test_auth.py -v
 # CI (.github/workflows/tests.yml) — 3 gates, reproductibles en local :
 ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
 mypy transcria/ inference_service/ --ignore-missing-imports
-venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=65   # seuil 65 % (actuel ~77 %)
+venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75   # seuil 75 % (actuel ~80 %)
 # Tests réseau (faux serveurs sur vrai socket) : marqueur "integration" → -m integration / -m "not integration"
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
