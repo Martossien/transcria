@@ -8,6 +8,14 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Fixed
+- **Sélection LLM d'arbitrage qui se sautait silencieusement (régression de la fonte d'`install.sh`).** La phase opencode étant un sous-processus, elle persistait `opencode_bin` dans `config.yaml` mais ne pouvait pas réassigner la variable shell `OPENCODE_BIN` — restée vide → la SECTION 9-bis (palier VRAM, téléchargement GGUF, calibration) se croyait « opencode manquant » et se sautait sur toute machine GPU, même opencode installé (le `doctor` le voyait, masquant le bug). `install.sh` récupère désormais `OPENCODE_BIN` depuis `config.yaml` après la phase, avec validation que le binaire résout réellement. Garde structurel ajouté.
+- **Faux « Cohere ASR ABSENT » à l'installation.** La détection ne regardait qu'un répertoire local, alors que `models.cohere_model_path` vaut par défaut un repo id (`CohereLabs/cohere-transcribe-03-2026`) dont les poids vivent dans le cache HF. La détection scrute maintenant aussi le cache HF par repo id (comme pyannote) — fin du faux négatif.
+
+### Changed
+- **`install.sh --non-interactive` installe opencode automatiquement** quand le profil requiert le LLM (auparavant : non installé faute de confirmation possible → phases LLM indisponibles). En interactif, la confirmation reste demandée ; un échec de téléchargement dégrade proprement (instructions manuelles, l'install ne plante pas).
+- **Bootstrap PostgreSQL local idempotent.** Relancer `install.sh --postgres` sur une base déjà provisionnée tentait quand même le bootstrap privilégié (réécriture `pg_hba.conf`) → `PermissionError`. La phase sonde désormais d'abord la connexion applicative : si la base est joignable, tout le bootstrap privilégié est sauté (« déjà provisionnés »), sans appel `sudo`. Sinon, comportement inchangé.
+
 ## [0.1.0-beta.1] — 2026-06-20
 
 Première version taguée — **bêta**. Le produit est fonctionnel et couvert par 2 500+ tests

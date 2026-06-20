@@ -93,9 +93,9 @@ cd transcria
 | Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
 | Répertoires | Crée `jobs/`, `models/`, `instance/` |
 | Config | Génère `config.yaml` via `scripts/bootstrap_config.py` (auto-détection des binaires et chemins) |
-| Modèles IA | Vérifie Cohere ASR, cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
+| Modèles IA | Vérifie Cohere ASR (répertoire local **ou cache HF** par repo id), cache pyannote HF, modèle LLM local configuré — affiche un tableau OK/MANQUANT |
 | Config interactive | Demande mot de passe admin, chemin Cohere si absent (propose téléchargement), HF_TOKEN pour pyannote |
-| opencode | Détecte dans PATH / `~/.opencode/bin/` — propose l'installation + génère `opencode.json` |
+| opencode | Détecte dans PATH / `~/.opencode/bin/` ; sinon **propose l'installation (interactif) ou l'installe automatiquement (`--non-interactive`, profils LLM)** + génère `opencode.json` |
 | **LLM d'arbitrage** | **Détecte les GPU, recommande le palier plaçable (12/16/24/32/48/64 Go, placement par carte), propose de télécharger le GGUF adapté et l'active** (cf. § dédié ci-dessous) |
 | Imports | Vérifie torch, flask, transformers, accelerate, pyannote |
 | Service systemd | Adapte les chemins dans `transcria.service` et installe via sudo |
@@ -119,7 +119,7 @@ cd transcria
 ./install.sh --user monuser        # Utilisateur pour le service systemd (défaut: $USER)
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
-./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts, ignore les valeurs manquantes)
+./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts ; installe opencode automatiquement si le profil requiert le LLM)
 ./install.sh --skip-doctor         # Sauter explicitement la validation post-install doctor
 ./install.sh --strict-doctor       # Validation post-install stricte (warnings doctor = échec)
 
@@ -1004,6 +1004,12 @@ là où SQLite sérialise les écritures.
 > **Sécurité.** Le mot de passe est généré aléatoirement (32 caractères) et stocké dans
 > `.env` avec `chmod 600`. Le rôle est créé/re-créé de manière idempotente (même nom =
 > ALTER ROLE).
+>
+> **Relance idempotente.** Si la base est **déjà provisionnée et joignable** avec les
+> identifiants applicatifs, `install.sh` **saute tout le bootstrap privilégié** (réécriture
+> `pg_hba.conf`, création rôle/base) — relancer l'installation ne déclenche donc plus
+> d'erreur de permission `pg_hba`. `--pg-existing` reste utile pour forcer ce chemin
+> (base distante / conteneur) sans même tenter la détection locale.
 
 **1. Créer le rôle et la base** (PostgreSQL ≥ 13) :
 
