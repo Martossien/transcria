@@ -1025,8 +1025,11 @@ def check_resource_node_ports(
         if not isinstance(raw, dict):
             continue
         engine_name = str(raw.get("name") or "?")
+        port_raw = raw.get("port")
+        if port_raw is None:
+            continue
         try:
-            port = int(raw.get("port"))
+            port = int(port_raw)
             if port < 1 or port > 65535:
                 continue
         except (TypeError, ValueError):

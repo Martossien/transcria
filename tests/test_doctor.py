@@ -211,6 +211,17 @@ def test_resource_node_engines_ok_when_manifest_valid():
     assert "2 moteur" in res.detail
 
 
+def test_resource_node_engines_fails_on_missing_port_field():
+    # Un moteur sans port est rejeté par la validation des champs requis (avant l'analyse
+    # des ports) ; la garde `port is None` avant `int(port)` est donc défensive (mypy).
+    cfg = {"resource_node": {"engines": [
+        {"name": "broken", "script": "scripts/launch_stt_x.sh", "gpu": 5},  # pas de port
+    ]}}
+    res = doc.check_resource_node_engines(cfg, is_file=lambda p: True, is_executable=lambda p: True)
+    assert res.status == doc.FAIL
+    assert "port" in res.detail
+
+
 def test_resource_node_engines_fails_on_duplicate_port():
     cfg = {"resource_node": {"engines": [
         {"name": "cohere", "script": "scripts/launch_stt_cohere.sh", "gpu": 3, "port": 8003},
