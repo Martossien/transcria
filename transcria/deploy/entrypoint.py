@@ -23,8 +23,13 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 # Rôles conteneurisables et ceux qui exigent une base applicative PostgreSQL.
-ROLES = ("web", "scheduler", "resource-node", "migrate")
-_DB_ROLES = ("web", "scheduler", "migrate")  # resource-node = nœud GPU pur, sans base applicative
+#   all          : tout-en-un (UI web + scheduler + inférence GPU in-process) — le plus
+#                  simple pour tester le projet dans un seul conteneur ;
+#   web/scheduler: déploiement distribué (split) ;
+#   resource-node: nœud GPU pur (STT/diarisation), sans base applicative ;
+#   migrate      : job one-shot Alembic.
+ROLES = ("all", "web", "scheduler", "resource-node", "migrate")
+_DB_ROLES = ("all", "web", "scheduler", "migrate")  # resource-node = nœud GPU pur, sans base applicative
 
 ExecFn = Callable[[str, Sequence[str]], None]
 DbProbe = Callable[[str], bool]
@@ -50,8 +55,19 @@ def needs_database(role: str) -> bool:
     return role in _DB_ROLES
 
 
+def _split_bind(bind: str) -> tuple[str, str]:
+    """'host:port' → (host, port). Tolère un bind sans port."""
+    host, _, port = bind.rpartition(":")
+    return (host or "0.0.0.0", port or "7870")
+
+
 def build_role_command(plan: EntrypointPlan) -> list[str]:
     """Commande de lancement du rôle (fidèle aux unités systemd `deploy/`)."""
+    if plan.role == "all":
+        # Tout-en-un : app.py rôle 'all' (UI + scheduler + inférence in-process). Adapté
+        # à un test mono-conteneur ; un GPU est requis pour le traitement réel des jobs.
+        host, port = _split_bind(plan.bind)
+        return [plan.python, plan.app_module, "--role", "all", "--host", host, "--port", port]
     if plan.role == "web":
         return [
             plan.gunicorn,

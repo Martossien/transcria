@@ -91,19 +91,62 @@ Build-time (`docker build --build-arg`) :
    curl -fsS http://localhost:7870/health
    ```
 
-### Nœud de ressources (GPU)
+## GPU (validé)
 
-Image distincte (base CUDA) sur l'hôte GPU :
+Le GPU dans Docker passe par **CDI** (Container Device Interface). Setup hôte, une fois :
 
 ```bash
-docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu124 -t transcria-gpu .
-docker run --gpus all -e TRANSCRIA_ROLE=resource-node \
-    -v $PWD/config.yaml:/app/config.yaml:ro -v $PWD/.env:/app/.env:ro \
-    -p 8002:8002 transcria-gpu
+# 1. Toolkit conteneur NVIDIA (ne touche pas le driver). Fedora :
+sudo dnf install -y nvidia-container-toolkit
+# 2. Générer la spec CDI (réexécuter après changement de driver/GPU) :
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+# 3. Vérifier l'accès GPU depuis un conteneur :
+docker run --rm --device nvidia.com/gpu=0 nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi -L
 ```
 
-`resource-node` n'exige pas de base applicative ; il expose `/capabilities` et
-`/engines/ensure`. Le scheduler le référence via `inference.mode=remote`.
+> ⚠️ Utiliser la **syntaxe CDI** `--device nvidia.com/gpu=<index|all>`. Sur certains hôtes,
+> `--gpus all` échoue (« failed to discover GPU vendor from CDI / AMD CDI spec not found ») ;
+> la forme `--device nvidia.com/gpu=…` est fiable. En compose : `devices: ["nvidia.com/gpu=all"]`.
+
+**Image GPU** (les wheels torch CUDA embarquent le runtime ; le driver vient de l'hôte via CDI) :
+
+```bash
+docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
+```
+
+> L'index `cu130` correspond au driver récent (≥ 580) de cette plateforme ; adapter à votre
+> version de driver/CUDA (`cu124`, `cu126`, …). Vérifié : torch 2.12 + cu130, `torch.cuda.is_available()`
+> True dans le conteneur, RTX 3090 énumérée par `/capabilities`.
+
+### Option simple pour tester le projet — tout-en-un GPU (une commande)
+
+Profil `gpu` du compose : un seul conteneur (UI + scheduler + inférence in-process) + base.
+
+```bash
+docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
+export POSTGRES_PASSWORD=…
+docker compose --profile gpu up -d        # db → migrate → all-in-one (GPU)
+curl -fsS http://localhost:7870/health    # → 200
+```
+
+> Le rôle `all` lance le serveur Flask intégré (comme l'all-in-one natif) : adapté à un
+> **déploiement de test/démo**, pas à une production à fort trafic (préférer alors le split
+> `web` gunicorn + `scheduler`). Un GPU est requis pour le traitement réel des jobs (STT,
+> diarisation) ; le conteneur démarre et sert l'UI même sans modèles (chargés à la demande).
+> La **LLM d'arbitrage** reste une dépendance externe (service OpenAI-compatible) — l'étape
+> de correction peut être désactivée (`arbitration_llm.enabled: false`) pour un test sans LLM.
+
+### Nœud de ressources GPU séparé (déploiement split)
+
+```bash
+docker run -d --device nvidia.com/gpu=0 -e TRANSCRIA_ROLE=resource-node \
+    -v $PWD/config.yaml:/app/config.yaml:ro -v $PWD/.env:/app/.env:ro \
+    -v $PWD/models:/app/models -p 8002:8002 transcria:latest
+```
+
+`resource-node` n'exige pas de base applicative ; il expose `/capabilities` (qui énumère les
+GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
+`inference.mode=remote`.
 
 ## Procédure de rollback
 
@@ -130,9 +173,18 @@ docker run --gpus all -e TRANSCRIA_ROLE=resource-node \
 | `./config.yaml` (bind, ro) | tous | Configuration applicative |
 | `./.env` (bind, ro) | tous | Secrets (clé Flask, clés API…) |
 
-## Limites connues / non couvert ici
+## Statut de validation
 
-- Le `docker build` complet tire PyTorch (lourd) ; le `Dockerfile` et le compose sont
-  fournis comme **référence validée au niveau schéma** (`docker compose config`). Un
-  `docker build` / `compose up` réel sur la cible reste l'étape de validation finale.
+Vérifié réellement (build + run) sur Fedora 42, Docker 29, 8× RTX 3090, driver 580 :
+
+- ✅ **CPU** : `migrate` (3 migrations Alembic en conteneur, exit 0), `web` (gunicorn, `/health` 200).
+- ✅ **GPU** : image CUDA (torch 2.12+cu130), `torch.cuda` + matmul GPU dans le conteneur ;
+  rôle `resource-node` (gunicorn `inference_service`, `/health` 200, `/capabilities` énumère la RTX 3090) ;
+  **tout-en-un `--profile gpu`** (`/health` 200, GPU vu) via CDI.
+
+Non couvert / dépendances externes :
+
+- Traitement d'un **job réel de bout en bout** en conteneur (STT + diarisation + LLM) : non joué
+  ici (nécessite modèles montés + LLM joignable) ; le boot et l'accès GPU sont prouvés.
+- **LLM d'arbitrage** : service externe OpenAI-compatible (non conteneurisé par ce compose).
 - Reverse-proxy TLS (nginx) : voir `deploy/nginx-transcria.conf.example`.

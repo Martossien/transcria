@@ -26,6 +26,20 @@ def _plan(tmp_path: Path, role: str, **kw) -> ep.EntrypointPlan:
 # ── Commandes par rôle ──────────────────────────────────────────────────────
 
 
+def test_all_command_runs_app_role_all_with_host_port(tmp_path):
+    cmd = ep.build_role_command(_plan(tmp_path, "all", bind="0.0.0.0:7870"))
+    assert cmd[1:] == ["app.py", "--role", "all", "--host", "0.0.0.0", "--port", "7870"]
+
+
+def test_all_requires_postgres(tmp_path):
+    errors = ep.preflight(_plan(tmp_path, "all", database_url=""))
+    assert any("TRANSCRIA_DATABASE_URL requis" in e for e in errors)
+
+
+def test_all_preflight_ok_with_postgres(tmp_path):
+    assert ep.preflight(_plan(tmp_path, "all")) == []
+
+
 def test_web_command_is_gunicorn_wsgi(tmp_path):
     cmd = ep.build_role_command(_plan(tmp_path, "web", workers=4, bind="0.0.0.0:7870"))
     assert cmd[0] == "gunicorn" and cmd[-1] == "wsgi:app"

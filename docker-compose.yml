@@ -82,6 +82,35 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Tout-en-un GPU : un seul conteneur (UI + scheduler + inférence) pour TESTER le projet.
+  # Profil opt-in `gpu` → `docker compose --profile gpu up`. Image GPU requise :
+  #   docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
+  # Accès GPU via CDI (nvidia-ctk cdi generate). Monter les modèles dans ./models.
+  all-in-one:
+    <<: *app
+    profiles: ["gpu"]
+    command: ["all"]
+    environment:
+      <<: *app-env
+      TRANSCRIA_ROLE: all
+      TRANSCRIA_BIND: 0.0.0.0:7870
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - jobs:/app/jobs
+      - models:/app/models
+    ports:
+      - "7870:7870"
+    # Réservation GPU par CDI (Docker ≥ 25). `all` = tous les GPU ; restreindre via
+    # device_ids: ["nvidia.com/gpu=0"] pour n'en exposer qu'un.
+    devices:
+      - "nvidia.com/gpu=all"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   pgdata:
   jobs:
