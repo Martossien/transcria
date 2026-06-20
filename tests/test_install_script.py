@@ -99,14 +99,16 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
     assert "sed 's/^/  /'" not in content
 
 
-def test_install_script_reuses_systemd_unit_installer_for_inference():
+def test_install_script_delegates_systemd_phase_to_installer_cli():
+    # SECTION 11 (plan, rendu, copie privilégiée + daemon-reload/enable, repli .adapted)
+    # est orchestrée par l'installateur Python ; le shell ne fait plus que câbler.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--unit-plan" in content
-    assert "--install-unit" in content
+    assert "transcria.installer.cli systemd" in content
+    assert "--have-sudo" in content and "--have-systemctl" in content
+    assert "--service-home" in content and "--venv-dir" in content
+    # Plus aucune mécanique d'installation d'unité inline.
     assert "install_systemd_unit()" not in content
-    assert 'sudo cp "$TMP_INF" "$INFERENCE_DST"' not in content
-    assert 'cp "$TMP_INF" "$INFERENCE_DST"' not in content
     assert 'sudo cp "$rendered" "$dst"' not in content
     assert 'cp "$rendered" "$dst"' not in content
     assert 'systemctl enable "$unit"' not in content
@@ -140,13 +142,16 @@ def test_install_script_delegates_python_env_phase_to_installer_cli():
     assert "PyTorch déjà installé" not in content
 
 
-def test_install_script_reuses_split_systemd_unit_installer():
+def test_install_script_has_no_inline_split_systemd_mechanics():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--unit-plan" in content
+    # Le plan d'unités et le rendu split sont construits en process par la phase Python ;
+    # plus de boucle `--unit-plan`/`--kind` ni de tampons d'unités dans le shell.
+    assert "--unit-plan" not in content
+    assert "--install-unit" not in content
     assert "install_deploy_unit()" not in content
     assert "render_deploy_unit()" not in content
-    assert "UNIT_ADAPTED" in content
+    assert "UNIT_ADAPTED" not in content
     assert "TMP_MIGRATE=" not in content
     assert "TMP_WEB=" not in content
     assert "TMP_SCHEDULER=" not in content
@@ -155,8 +160,10 @@ def test_install_script_reuses_split_systemd_unit_installer():
 def test_install_script_delegates_systemd_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_systemd --setup-log" in content
-    assert "log_systemd_event" in content
+    # Les messages systemd sont désormais rendus par la phase Python (in-process),
+    # plus via `--setup-log` ni un helper shell.
+    assert "-m transcria.install_systemd --setup-log" not in content
+    assert "log_systemd_event" not in content
     assert "Service $unit non installé (--no-service)" not in content
     assert "Service $unit installé et activé" not in content
     assert "sudo indisponible — fichier adapté" not in content

@@ -84,6 +84,23 @@ def _add_postgres_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié pour le rebuild local (ex. 'sudo -u postgres psql')")
 
 
+def _add_systemd_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "systemd",
+        help="Installe les unités systemd du profil (SECTION 11).",
+    )
+    p.add_argument("--profile", required=True)
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--service-user", required=True)
+    p.add_argument("--service-home", required=True)
+    p.add_argument("--venv-dir", required=True)
+    p.add_argument("--no-service", action="store_true", help="N'installe ni le service legacy ni l'orchestration")
+    p.add_argument("--install-inference", action="store_true")
+    p.add_argument("--no-systemd", action="store_true", help="Aucune unité systemd (plan vide)")
+    p.add_argument("--have-sudo", action="store_true")
+    p.add_argument("--have-systemctl", action="store_true")
+
+
 def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
     def confirm(prompt: str) -> bool:
         if not interactive:
@@ -114,6 +131,29 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
     apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
+
+
+def _cmd_systemd(args: argparse.Namespace) -> int:
+    import os
+
+    from transcria.installer.systemd_phase import SystemdPlan, apply_systemd
+
+    console = Console()
+    plan = SystemdPlan(
+        profile=args.profile,
+        install_dir=Path(args.install_dir),
+        service_user=args.service_user,
+        service_home=args.service_home,
+        venv_dir=Path(args.venv_dir),
+        install_service=not args.no_service,
+        install_inference=args.install_inference,
+        install_systemd=not args.no_systemd,
+        euid=os.geteuid(),
+        have_sudo=args.have_sudo,
+        have_systemctl=args.have_systemctl,
+    )
+    apply_systemd(plan, console=console)
     return 0
 
 
@@ -198,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_config_parser(sub)
     _add_opencode_parser(sub)
     _add_postgres_parser(sub)
+    _add_systemd_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -208,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_opencode(args)
     if args.command == "postgres":
         return _cmd_postgres(args)
+    if args.command == "systemd":
+        return _cmd_systemd(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

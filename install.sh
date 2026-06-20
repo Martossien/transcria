@@ -1257,79 +1257,25 @@ done <<< "$IMPORT_OUTPUT"
 # ============================================================================
 # SECTION 11 — Services systemd
 # ============================================================================
-log_systemd_event() {
-    local event="$1" unit="${2:-}" adapted="${3:-}" dst="${4:-}"
-    emit_rendered_log "systemd : $event" -m transcria.install_systemd --setup-log \
-        --event "$event" \
-        --unit "$unit" \
-        --adapted "$adapted" \
-        --dst "$dst"
-}
-
-SYSTEMD_UNIT_PLAN=$(python_module transcria.install_systemd \
-    --unit-plan \
-    --profile "$INSTALL_PROFILE" \
-    --install-service "$INSTALL_SERVICE" \
-    --install-inference "$INSTALL_INFERENCE" \
-    --install-systemd "$INSTALL_SYSTEMD" \
-    --install-dir "$INSTALL_DIR" \
-    --service-user "$SERVICE_USER")
-
-if [[ -n "$SYSTEMD_UNIT_PLAN" ]]; then
-    log_section "Services systemd"
-
-    if [[ "$INSTALL_PROFILE" = "web" || "$INSTALL_PROFILE" = "scheduler" || "$INSTALL_PROFILE" = "migrate" ]]; then
-        if [[ "$HAVE_SYSTEMCTL" = true ]] && systemctl is-enabled --quiet transcria 2>/dev/null; then
-            log_systemd_event split-legacy-enabled
-            log_systemd_event split-legacy-disable-command
-        fi
-    fi
-
-    while IFS='|' read -r UNIT_KIND UNIT_SRC UNIT_DST UNIT_NAME UNIT_ADAPTED UNIT_MISSING_EVENT UNIT_MISSING_HINT UNIT_PATH_KIND UNIT_LEGACY_LOG UNIT_LEGACY_PID UNIT_INF_LOG; do
-        [[ -n "$UNIT_KIND" ]] || continue
-        if [[ ! -f "$UNIT_SRC" ]]; then
-            log_systemd_event "$UNIT_MISSING_EVENT" "$UNIT_NAME"
-            [[ -n "$UNIT_MISSING_HINT" ]] && log_systemd_event "$UNIT_MISSING_HINT"
-            continue
-        fi
-
-        if [[ -n "$UNIT_PATH_KIND" ]]; then
-            install_paths_helper --kind "$UNIT_PATH_KIND" >/dev/null
-            if id "$SERVICE_USER" &>/dev/null 2>&1; then
-                if [[ "$UNIT_PATH_KIND" = "legacy-service" ]]; then
-                    chown -R "$SERVICE_USER:" "$(dirname "$UNIT_LEGACY_LOG")" "$(dirname "$UNIT_LEGACY_PID")" 2>/dev/null || true
-                elif [[ "$UNIT_PATH_KIND" = "inference-service" ]]; then
-                    chown -R "$SERVICE_USER:" "$UNIT_INF_LOG" 2>/dev/null || true
-                fi
-            fi
-        fi
-
-        TMP_UNIT=$(mktemp)
-        python_module transcria.install_systemd \
-            --kind "$UNIT_KIND" \
-            --template "$UNIT_SRC" \
-            --install-dir "$INSTALL_DIR" \
-            --service-user "$SERVICE_USER" \
-            --service-home "$SERVICE_HOME_GLOBAL" \
-            --legacy-log-file "$UNIT_LEGACY_LOG" \
-            --legacy-pid-file "$UNIT_LEGACY_PID" \
-            --inference-log-dir "$UNIT_INF_LOG" \
-            --venv-dir "$VENV" \
-            > "$TMP_UNIT"
-        SYSTEMD_INSTALL_OUTPUT=$(python_module transcria.install_systemd \
-            --install-unit \
-            --rendered "$TMP_UNIT" \
-            --dst "$UNIT_DST" \
-            --unit "$UNIT_NAME" \
-            --adapted "$INSTALL_DIR/$UNIT_ADAPTED" \
-            --euid "$EUID" \
-            --have-sudo "$HAVE_SUDO")
-        while IFS= read -r line; do
-            log_prefixed_line "systemd" "$line" ok
-        done <<< "$SYSTEMD_INSTALL_OUTPUT"
-        rm -f "$TMP_UNIT"
-    done <<< "$SYSTEMD_UNIT_PLAN"
-fi
+# Orchestration d'installation des unités systemd (plan, rendu depuis les templates
+# versionnés, copie privilégiée + daemon-reload/enable, ou fichier .adapted sans sudo)
+# déléguée à l'installateur Python. La section n'est affichée que si le plan n'est pas
+# vide (ex. --no-service → aucune unité). Tourne sous le python du venv ; les opérations
+# système (systemctl/chown/création de répertoires) sont gérées en process par la phase.
+SYSTEMD_CLI_ARGS=(
+    -m transcria.installer.cli systemd
+    --profile "$INSTALL_PROFILE"
+    --install-dir "$INSTALL_DIR"
+    --service-user "$SERVICE_USER"
+    --service-home "$SERVICE_HOME_GLOBAL"
+    --venv-dir "$VENV"
+)
+[[ "$INSTALL_SERVICE" != true ]]  && SYSTEMD_CLI_ARGS+=(--no-service)
+[[ "$INSTALL_SYSTEMD" != true ]]  && SYSTEMD_CLI_ARGS+=(--no-systemd)
+[[ "$INSTALL_INFERENCE" = true ]] && SYSTEMD_CLI_ARGS+=(--install-inference)
+[[ "$HAVE_SUDO" = true ]]         && SYSTEMD_CLI_ARGS+=(--have-sudo)
+[[ "$HAVE_SYSTEMCTL" = true ]]    && SYSTEMD_CLI_ARGS+=(--have-systemctl)
+PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${SYSTEMD_CLI_ARGS[@]}"
 
 # ============================================================================
 # SECTION 11.9 — Validation post-install

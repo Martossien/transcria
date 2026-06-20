@@ -437,8 +437,15 @@ lectures d'état + connexion via **SQLAlchemy/psycopg** plutôt que le client `p
 local privilégié** (réécriture `pg_hba.conf`, création rôle/base via `sudo -u postgres`,
 reload du service) reste volontairement en shell — il change d'identité système et
 n'est pas couvert par le filet E2E, qui exerce en revanche intégralement ce chemin-ci
-via `--pg-existing`. La phase suivante (systemd) migrera de la même façon, sous la
-protection du filet E2E.
+via `--pg-existing`. Cinquième phase fondue : **services systemd**
+(`systemd_phase.py`, SECTION 11 — plan d'unités du profil, avertissement legacy split,
+préparation/chown des répertoires, rendu depuis les templates versionnés, installation
+privilégiée copie+`daemon-reload`+`enable` ou fichier `.adapted` sans sudo) ; appelle
+en process la logique déjà isolée de `transcria.install_systemd` (au lieu de reparser des
+lignes `|`), opérations système toutes injectables, section affichée seulement si le plan
+n'est pas vide. Restent en shell : le **bootstrap PostgreSQL local privilégié** (pg_hba /
+rôle / base via `sudo -u postgres`, non couvert par le filet), le **bloc proxy** de
+configuration et le **résumé final**.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles
