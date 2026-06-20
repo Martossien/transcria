@@ -1,0 +1,88 @@
+# Déploiement TranscrIA conteneurisé (P5) — profils web + scheduler + migrate + PostgreSQL.
+#
+# Le rôle resource-node (GPU) n'est PAS ici : c'est une image/un hôte GPU séparé
+# (cf. docs/DOCKER.md). La LLM d'arbitrage et les moteurs STT sont des services externes.
+#
+# Démarrage :   docker compose up -d
+#   1. `db` démarre et devient « healthy » ;
+#   2. `migrate` (one-shot) applique `alembic upgrade head` puis se termine ;
+#   3. `web` et `scheduler` démarrent une fois la migration réussie.
+#
+# Secrets / config : `config.yaml` et `.env` sont fournis par volumes (jamais bakés dans
+# l'image). Le DSN PostgreSQL est injecté par TRANSCRIA_DATABASE_URL (pointant sur `db`).
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: transcria:latest
+  environment: &app-env
+    TRANSCRIA_CONFIG: /app/config.yaml
+    TRANSCRIA_DATABASE_URL: postgresql+psycopg://transcria:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}@db:5432/transcria
+  volumes:
+    - ./config.yaml:/app/config.yaml:ro
+    - ./.env:/app/.env:ro
+  depends_on:
+    db:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: transcria
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}
+      POSTGRES_DB: transcria
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transcria -d transcria"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Job one-shot : applique les migrations Alembic, puis se termine.
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+
+  web:
+    <<: *app
+    command: ["web"]
+    environment:
+      <<: *app-env
+      TRANSCRIA_ROLE: web
+      TRANSCRIA_BIND: 0.0.0.0:7870
+      TRANSCRIA_WORKERS: "4"
+    ports:
+      - "7870:7870"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  scheduler:
+    <<: *app
+    command: ["scheduler"]
+    environment:
+      <<: *app-env
+      TRANSCRIA_ROLE: scheduler
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - jobs:/app/jobs
+      - models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  jobs:
+  models:

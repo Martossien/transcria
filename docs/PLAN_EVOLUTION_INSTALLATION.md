@@ -857,6 +857,18 @@ Preuves attendues :
 - procédure de démarrage ;
 - procédure de rollback.
 
+Statut courant : **livré (socle).** Entrypoint par rôle `transcria/deploy/entrypoint.py`
+(`python -m transcria.deploy.entrypoint <role>`) — réutilise les invariants des profils
+(web/scheduler/resource-node/migrate) et la sonde DB de la phase PostgreSQL, n'invoque
+jamais `install.sh`, impose PostgreSQL (SQLite refusé), attend la base, `migrate` en
+one-shot, puis `exec` la commande du rôle (PID 1) ; 16 tests unitaires (sonde/exec
+injectés). `Dockerfile` multi-étages (venv builder → runtime mince, `TORCH_INDEX_URL`
+CPU par défaut, GPU pour resource-node), `.dockerignore`, `docker-compose.yml`
+(db healthy → migrate one-shot → web+scheduler ; volumes config/.env/jobs/models ;
+secrets par env), validés au niveau schéma (`docker compose config`). Docs `docs/DOCKER.md`
+(schéma, matrice des variables, démarrage, rollback, nœud GPU, LLM externe). Validation
+finale `docker build`/`compose up` sur la cible = étape opérateur (images PyTorch lourdes).
+
 ---
 
 ## 6. Checklist d'audit

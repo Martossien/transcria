@@ -1,0 +1,34 @@
+# Build context minimal : ni venv, ni artefacts locaux, ni secrets.
+.git
+.github
+venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+coverage.xml
+htmlcov
+
+# Artefacts d'exécution / données locales (montés en volumes, jamais dans l'image)
+jobs
+models
+instance
+backups
+logs
+*.db
+*.sqlite
+
+# Secrets / configuration locale (fournis au runtime par volume ou variables)
+.env
+.env.*
+config.yaml
+scripts/generated
+
+# Tests et docs (inutiles au runtime)
+tests
+docs
+*.md
