@@ -5,6 +5,37 @@
 > `scheduler`, `migrate`) sont construites par le `Dockerfile` à la racine et
 > orchestrées par `docker-compose.yml`.
 
+## Prérequis (ce qu'un utilisateur doit faire)
+
+**1. Accès GPU dans Docker** — n'est PAS géré par `requirements.txt` (dépendances Python)
+ni par `install.sh` (installation native) : c'est une configuration de l'hôte Docker,
+isolée dans un script dédié, idempotent :
+
+```bash
+scripts/setup_docker_gpu.sh          # installe nvidia-container-toolkit + génère la spec CDI + vérifie
+scripts/setup_docker_gpu.sh --check  # vérifie seulement (GPU visible en conteneur ?)
+```
+
+> Prérequis du script : driver NVIDIA (`nvidia-smi`) + Docker déjà installés (il n'y touche pas).
+> Il rend le GPU visible via **CDI** (`--device nvidia.com/gpu=…`).
+
+**2. Modèles STT/diarisation** — deux chemins selon le besoin :
+
+| Besoin | Backend | Token HF |
+|---|---|---|
+| **Test rapide, sans friction** | `models.stt_backend: "whisper"` (openai/whisper-large-v3, non gated) | ❌ aucun |
+| **Qualité de référence (prod)** | `models.stt_backend: "cohere"` (CohereLabs, **gated**) | ✅ requis |
+
+Pour Cohere (gated) : (a) accepter les conditions du modèle sur
+`huggingface.co/CohereLabs/cohere-transcribe-03-2026`, (b) créer un token HF, (c) le
+fournir au conteneur (`HF_TOKEN`, ou dans `.env`). La diarisation `pyannote` est
+également gated → même token. Le cache HF de l'hôte est monté dans le conteneur (volume
+`/hf`) pour éviter de re-télécharger.
+
+> ⚠️ `transcria.stt.cohere_transcriber` force `HF_HUB_OFFLINE=1` par défaut. En conteneur
+> avec un cache fraîchement monté, laisser **`HF_HUB_OFFLINE=0`** (le compose le fait) pour
+> que la 1re résolution du modèle gated aboutisse ; ensuite le cache sert les poids.
+
 ## Principes
 
 - **`install.sh` n'est jamais l'entrypoint applicatif.** L'image est construite une
@@ -60,7 +91,10 @@ Conteneurs **externes** à ce compose :
 | `INFERENCE_BIND` / `INFERENCE_PORT` | resource-node | non (défaut `0.0.0.0:8002`) | Écoute du service d'inférence |
 | `INFERENCE_THREADS` | resource-node | non (défaut `4`) | Threads gunicorn du nœud |
 | `POSTGRES_PASSWORD` | db (+ DSN) | **oui** | Mot de passe du rôle `transcria` (compose) |
-| `TRANSCRIA_SECRET` | web, scheduler | oui (via `.env`) | Clé Flask (dans `.env` monté) |
+| `TRANSCRIA_SECRET` | web, scheduler, all | oui (via `.env`) | Clé Flask (dans `.env` monté) |
+| `HF_TOKEN` | all, resource-node (GPU) | si STT/diar gated (Cohere/pyannote) | Token Hugging Face (modèles gated) |
+| `HF_CACHE_DIR` | all (compose) | non (défaut `~/.cache/huggingface`) | Cache HF de l'hôte monté dans `/hf` |
+| `HF_HUB_OFFLINE` | all, resource-node | non (compose met `0`) | `0` requis pour 1re résolution d'un modèle gated en conteneur |
 
 Build-time (`docker build --build-arg`) :
 
@@ -181,10 +215,13 @@ Vérifié réellement (build + run) sur Fedora 42, Docker 29, 8× RTX 3090, driv
 - ✅ **GPU** : image CUDA (torch 2.12+cu130), `torch.cuda` + matmul GPU dans le conteneur ;
   rôle `resource-node` (gunicorn `inference_service`, `/health` 200, `/capabilities` énumère la RTX 3090) ;
   **tout-en-un `--profile gpu`** (`/health` 200, GPU vu) via CDI.
+- ✅ **E2E réel** (`tests/test_e2e_workflow.py --audio tests/test2.mp3 --mode quality --skip-llm`,
+  HF_TOKEN + cache monté) : STT Cohere + diarisation pyannote **sur GPU en conteneur** →
+  **29 segments, 2 locuteurs, SRT 2630 c., score qualité 97/100**. La transcription et la
+  diarisation du pipeline fonctionnent intégralement en conteneur.
 
 Non couvert / dépendances externes :
 
-- Traitement d'un **job réel de bout en bout** en conteneur (STT + diarisation + LLM) : non joué
-  ici (nécessite modèles montés + LLM joignable) ; le boot et l'accès GPU sont prouvés.
-- **LLM d'arbitrage** : service externe OpenAI-compatible (non conteneurisé par ce compose).
+- **Correction/résumé LLM** : non joués ici (`--skip-llm`) — nécessitent un LLM
+  OpenAI-compatible joignable. **LLM d'arbitrage** = service externe (non conteneurisé par ce compose).
 - Reverse-proxy TLS (nginx) : voir `deploy/nginx-transcria.conf.example`.

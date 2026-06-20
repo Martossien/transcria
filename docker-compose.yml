@@ -94,11 +94,21 @@ services:
       <<: *app-env
       TRANSCRIA_ROLE: all
       TRANSCRIA_BIND: 0.0.0.0:7870
+      # Modèles STT/diarisation chargés depuis le cache HF monté (HF_HOME=/hf).
+      HF_HOME: /hf
+      # Cohere ASR est un modèle GATED : fournir HF_TOKEN (accepter ses conditions sur
+      # huggingface.co) ET laisser l'accès réseau (offline=0) pour la 1re résolution.
+      # Pour un test SANS token : models.stt_backend: "whisper" dans config.yaml.
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./.env:/app/.env:ro
       - jobs:/app/jobs
       - models:/app/models
+      # Cache HF de l'hôte (modèles déjà téléchargés). Adapter le chemin source au besoin.
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf
     ports:
       - "7870:7870"
     # Réservation GPU par CDI (Docker ≥ 25). `all` = tous les GPU ; restreindre via

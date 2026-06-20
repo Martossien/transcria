@@ -53,6 +53,13 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=transcria:transcria . /app
 
+# Répertoires d'exécution inscriptibles par l'utilisateur de service (le rôle écrit
+# les artefacts de jobs, voix, instance). `/app` reste root après WORKDIR : on rend
+# l'arbre et ces dossiers propriété de transcria. Les volumes nommés montés sur
+# jobs/models héritent de cette propriété (sinon écritures refusées en traitement réel).
+RUN mkdir -p /app/jobs /app/models /app/voices /app/instance \
+    && chown -R transcria:transcria /app
+
 USER transcria
 # Le rôle est fourni par TRANSCRIA_ROLE (ou en argument de la commande). L'entrypoint
 # valide les invariants (config, PostgreSQL), attend la base, puis exec le serveur.
