@@ -27,6 +27,11 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 > (web/CPU) d'un **nœud de ressources** GPU distant, lisez d'abord 1→12 puis la
 > **section 13** qui ne décrit que les différences. Conception : `docs/SERVICE_RESSOURCES_GPU.md`.
 
+> **Déploiement Docker.** Ce guide couvre l'installation **native**. Pour un déploiement
+> **conteneurisé** (image, compose, GPU via CDI, quickstart en une commande), voir
+> `docs/DOCKER.md`. Les primitives `--skip-deps` / `--pg-existing` d'`install.sh` (§2)
+> servent aussi aux couches de build et aux bases provisionnées en amont.
+
 ---
 
 ## 1. Prérequis matériels et logiciels

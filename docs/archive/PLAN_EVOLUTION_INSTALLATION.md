@@ -1,6 +1,13 @@
 # TranscrIA — Plan d'évolution de l'installation et des profils de déploiement
 
-> **Statut :** cadrage de travail.
+> **🗄️ ARCHIVÉ — chantier TERMINÉ (juin 2026).** Document de cadrage conservé pour la
+> traçabilité des décisions. Tout est livré : Axe A (filet E2E + primitives
+> `--skip-deps`/`--pg-existing`), Axe 3 (fonte intégrale d'`install.sh` dans
+> `transcria/installer`, 8 phases testées), Axe B (resource-node guidé), P5 (Docker —
+> entrypoint par rôle, image, compose, GPU via CDI, quickstart turnkey, E2E réel validé
+> sur GPU). Référence opérationnelle vivante : **`docs/DOCKER.md`** + `docs/INSTALL.md`.
+>
+> **Statut historique :** cadrage de travail.
 > **Objectif :** transformer l'installation actuelle, historiquement centrée sur le
 > tout-en-un, en une installation robuste, testable et audit-ready couvrant les trois
 > topologies cibles : **all-in-one**, **frontale web + scheduler**, et **serveur de

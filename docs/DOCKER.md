@@ -1,7 +1,7 @@
 # Déploiement Docker (P5)
 
 > Référence du déploiement conteneurisé de TranscrIA. Suit les invariants de
-> `docs/PLAN_EVOLUTION_INSTALLATION.md § P5`. Les images applicatives (`web`,
+> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Les images applicatives (`web`,
 > `scheduler`, `migrate`) sont construites par le `Dockerfile` à la racine et
 > orchestrées par `docker-compose.yml`.
 

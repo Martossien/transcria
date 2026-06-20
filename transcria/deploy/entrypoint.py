@@ -1,6 +1,6 @@
 """Entrypoint Docker par rôle : `python -m transcria.deploy.entrypoint <role>`.
 
-Invariants P5 (cf. docs/PLAN_EVOLUTION_INSTALLATION.md § P5) :
+Invariants P5 (cf. docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5) :
   * mêmes profils que l'install (`web`, `scheduler`, `resource-node`, `migrate`) ;
   * `install.sh` n'est JAMAIS l'entrypoint applicatif — l'image est déjà construite,
     le runtime ne fait que provisionner puis exec la commande du rôle ;

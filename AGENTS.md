@@ -38,6 +38,12 @@ sudo truncate -s 0 /var/log/transcrIA.log  # remet le log à zéro (débogage)
 ./stop.sh
 ./status.sh
 
+# Déploiement conteneurisé (cf. docs/DOCKER.md)
+scripts/setup_docker_gpu.sh          # active l'accès GPU Docker (nvidia-container-toolkit + CDI) ; --check pour vérifier
+scripts/docker_quickstart.sh         # turnkey : prérequis + config/.env + build + compose up + /health (--cpu, --down)
+# Entrypoint conteneur par rôle (jamais install.sh) — web|scheduler|resource-node|migrate|all
+python -m transcria.deploy.entrypoint <role>
+
 # Tests — ⚠️ TOUJOURS via le venv (python système = pas de python-docx → 21 faux échecs)
 venv/bin/python -m pytest tests/ -q              # suite mockée majoritaire, pas de GPU requis
 venv/bin/python -m pytest tests/test_auth.py -v
@@ -83,7 +89,10 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 ```
 transcria/
   app.py                    # create_app() + main()
-  install.sh                # Script d'installation guidée (venv, PyTorch, config, systemd)
+  install.sh                # Bootstrap + câblage d'installation (la logique métier vit dans transcria/installer)
+  Dockerfile                # Image multi-étages (venv builder → runtime) ; ENTRYPOINT = transcria.deploy.entrypoint
+  docker-compose.yml        # db → migrate (one-shot) → web+scheduler ; profil `gpu` = all-in-one (CDI)
+  .dockerignore             # Exclut venv/secrets/artefacts du contexte de build
   config.yaml               # Configuration production (pas dans git)
   config.example.yaml       # Template de configuration
   requirements.txt          # Dépendances runtime
@@ -98,6 +107,12 @@ transcria/
     database.py             # db = SQLAlchemy()
     diagnostics/
       doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers
+    installer/              # Logique métier d'installation fondue depuis install.sh (modules testés, runner injectable)
+      cli.py                # `python -m transcria.installer.cli <phase>` — 8 phases : python-env, config, config-proxy, opencode, postgres, postgres-bootstrap, systemd, summary
+      console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
+      python_env.py / config_phase.py / opencode_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
+    deploy/                 # Déploiement conteneurisé (P5)
+      entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
       models.py             # User, Role, Group, GroupMembership, GroupRole
@@ -238,6 +253,8 @@ transcria/
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
     doctor.py               # Préflight GPU-free (cf. transcria/diagnostics/doctor.py) — wrapper CLI mince
+    setup_docker_gpu.sh     # Active l'accès GPU Docker (nvidia-container-toolkit + spec CDI) ; --check
+    docker_quickstart.sh    # Turnkey : prérequis + génération config/.env + build + compose up + /health
     launch_arbitrage.sh     # Lance le backend LLM local configuré (llama-server par défaut)
     stop_llm_backend.sh     # Arrêt générique par port, PID file ou pattern explicite
     stop_arbitrage_llm.sh   # Wrapper d'arrêt standard de la LLM d'arbitrage
@@ -516,7 +533,10 @@ Les fiches `/admin/lexicons/<id>` affichent les statistiques d'usage et les cont
 `get_config()` retourne un singleton chargé une fois au démarrage. `set_config()` le met à jour en mémoire. `save_config()` écrit sur disque. Les modules qui capturent `get_config()` au démarrage ne voient pas les mises à jour ultérieures.
 
 ### Installation et bootstrap
-`install.sh` orchestre l'installation complète. `scripts/bootstrap_config.py` génère `config.yaml` en fusionnant `config.example.yaml` avec les valeurs auto-détectées (`SystemDetector` : GPUs, binaires, chemins). Le fichier `.env` porte les secrets (`TRANSCRIA_SECRET`, `HF_TOKEN`).
+`install.sh` ne porte plus la logique métier : il fait le **bootstrap** (prérequis, choix de l'interpréteur, activation du venv) puis **délègue** chaque phase à `python -m transcria.installer.cli <phase>` (8 phases testées, à runner sous-processus injectable). Toute évolution de la logique d'installation va dans `transcria/installer/`, pas dans le shell. `scripts/bootstrap_config.py` génère `config.yaml` en fusionnant `config.example.yaml` avec les valeurs auto-détectées (`SystemDetector` : GPUs, binaires, chemins). Le fichier `.env` porte les secrets (`TRANSCRIA_SECRET`, `HF_TOKEN`).
+
+### Déploiement conteneurisé (Docker, P5)
+Un conteneur ne lance **jamais** `install.sh` : l'entrypoint applicatif est `python -m transcria.deploy.entrypoint <role>` (web|scheduler|resource-node|migrate|all) — il valide les invariants (config présente, PostgreSQL obligatoire, SQLite refusé), attend la base, puis `exec` le serveur du rôle. `migrate` est un job one-shot ; `all` = tout-en-un de test. L'accès GPU passe par **CDI** (`--device nvidia.com/gpu=…`, pas `--gpus all`) ; activation hôte via `scripts/setup_docker_gpu.sh`. Détails : `docs/DOCKER.md`.
 
 ## Pièges connus
 
@@ -655,6 +675,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | Fichier | Contenu |
 |---|---|
 | `docs/INSTALL.md` | Guide d'installation complet (install.sh, venv, modèles, service systemd, dépannage) |
+| `docs/DOCKER.md` | Déploiement conteneurisé : quickstart turnkey, image, compose, GPU (CDI), variables, rollback |
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |

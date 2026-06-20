@@ -75,6 +75,19 @@ venv/bin/python scripts/doctor.py --strict   # warnings become failures (for dep
 
 Start the service (`./start.sh` or systemd) and open the web UI. For distributed setups (web frontend + GPU worker, remote inference node), see [docs/INSTALL.md §11–13](docs/INSTALL.md) and [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
 
+### …or run it with Docker (one command)
+
+Prefer containers? A turnkey script takes you from clone to a running stack — host GPU setup, secret/config generation, image build, `docker compose up`, health check — with no manual steps:
+
+```bash
+scripts/docker_quickstart.sh                  # all-in-one GPU → http://localhost:7870 (admin / see config.yaml)
+HF_TOKEN=hf_xxx scripts/docker_quickstart.sh  # with the gated Cohere STT; omit it to use whisper (no token)
+scripts/docker_quickstart.sh --cpu            # no GPU (web + scheduler)
+scripts/docker_quickstart.sh --down           # stop
+```
+
+It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU (real in-container transcription). Full reference — image, compose, GPU enablement, variables, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
+
 ## Tech stack
 
 | Layer | Technology |
@@ -89,7 +102,7 @@ Start the service (`./start.sh` or systemd) and open the web UI. For distributed
 
 ## Project status
 
-⚠️ **Active development — no tagged release yet.** The product is functional and covered by **1,800+ tests (green CI: ruff, mypy, full pytest on PostgreSQL)**, but the API, the configuration schema and the data model may still change without backward-compatibility guarantees. Evaluate it, pilot it — don't bet production on it without your own validation. Docker images are planned once things stabilize.
+⚠️ **Active development — no tagged release yet.** The product is functional and covered by **1,800+ tests (green CI: ruff, mypy, full pytest on PostgreSQL)**, but the API, the configuration schema and the data model may still change without backward-compatibility guarantees. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
 
 **Language**: the UI and the LLM prompts are French-first (the pipeline is tuned for French meetings). Both are centralized/editable, so adding languages is a planned evolution, not a rewrite.
 
@@ -100,6 +113,7 @@ Full documentation lives in [`docs/`](docs/) (currently in French):
 | Document | Content |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Installation, models, systemd, troubleshooting, **distributed deployment** |
+| [docs/DOCKER.md](docs/DOCKER.md) | **Containerized deployment** — turnkey quickstart, image, compose, GPU (CDI), variables, rollback |
 | [docs/TECHNICAL.md](docs/TECHNICAL.md) | Architecture, pipeline, API, GPU orchestration |
 | [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) | Complete `config.yaml` reference |
 | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | DB schema, job states, files per job |
