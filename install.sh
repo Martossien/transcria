@@ -634,28 +634,23 @@ PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${CONFI
 # PEND (job figé). Persister le proxy dans .env le propage au service
 # (EnvironmentFile systemd) ET au mode dev (python-dotenv). Cf. docs/INSTALL.md
 # § « Réseau d'entreprise : proxy et modèles ».
+# Le gate lit l'environnement *du shell installateur* (resté ici) ; la décision
+# (déjà-présent / confirmation / persistance + chown) est déléguée à l'installateur
+# Python, sous le python du venv.
 if [[ -n "${https_proxy:-}${HTTPS_PROXY:-}${http_proxy:-}${HTTP_PROXY:-}" ]]; then
     _proxy_https="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"
     _proxy_http="${http_proxy:-${HTTP_PROXY:-$_proxy_https}}"
     _proxy_no="${no_proxy:-${NO_PROXY:-127.0.0.1,localhost}}"
-    if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.env_file has-any \
-            --env-file "$ENV_FILE" \
-            --key http_proxy \
-            --key https_proxy; then
-        log_config_setup_event proxy-present
-    else
-        PERSIST_PROXY=true
-        if [[ "$NON_INTERACTIVE" != true ]]; then
-            ask_yn "Proxy détecté ($_proxy_https) : le persister dans .env pour le service ?" || PERSIST_PROXY=false
-        fi
-        if [[ "$PERSIST_PROXY" = true ]]; then
-            env_set "http_proxy" "$_proxy_http" "Proxy d'entreprise — requis par le service systemd pour télécharger les modèles (docs/INSTALL.md § Réseau d'entreprise)."
-            env_set "https_proxy" "$_proxy_https"
-            env_set "no_proxy" "$_proxy_no"
-            secure_env_file
-            log_config_setup_event proxy-persisted
-        fi
-    fi
+    PROXY_CLI_ARGS=(
+        -m transcria.installer.cli config-proxy
+        --env-file "$ENV_FILE"
+        --proxy-https "$_proxy_https"
+        --proxy-http "$_proxy_http"
+        --proxy-no "$_proxy_no"
+        --service-user "$SERVICE_USER"
+    )
+    [[ "$NON_INTERACTIVE" = true ]] && PROXY_CLI_ARGS+=(--non-interactive)
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${PROXY_CLI_ARGS[@]}"
 fi
 
 # ============================================================================

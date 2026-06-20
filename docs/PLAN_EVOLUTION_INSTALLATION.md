@@ -443,9 +443,12 @@ préparation/chown des répertoires, rendu depuis les templates versionnés, ins
 privilégiée copie+`daemon-reload`+`enable` ou fichier `.adapted` sans sudo) ; appelle
 en process la logique déjà isolée de `transcria.install_systemd` (au lieu de reparser des
 lignes `|`), opérations système toutes injectables, section affichée seulement si le plan
-n'est pas vide. Restent en shell : le **bootstrap PostgreSQL local privilégié** (pg_hba /
-rôle / base via `sudo -u postgres`, non couvert par le filet), le **bloc proxy** de
-configuration et le **résumé final**.
+n'est pas vide. Le **bloc proxy** de configuration est aussi fondu (`config_phase.apply_proxy`) : le
+gate lit l'environnement du shell installateur (resté en shell), la décision/persistance
++ chown sont en Python — l'écriture de `.env` est désormais entièrement portée par Python.
+Restent en shell : le **bootstrap PostgreSQL local privilégié** (pg_hba / rôle / base via
+`sudo -u postgres`, non couvert par le filet) et le **résumé final** (glue mince sur des
+renderers Python déjà existants).
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles

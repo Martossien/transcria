@@ -129,3 +129,92 @@ def test_inference_profile_generates_api_key(tmp_path):
     assert key and len(key) >= 16
     assert "inference-key-created" in result.actions
     assert "profile-resource-node" in result.actions
+
+
+# ── Bloc proxy (apply_proxy) ────────────────────────────────────────────────
+
+
+def _proxy_plan(tmp_path: Path, **kw):
+    from transcria.installer.config_phase import ProxyPlan
+
+    env_file = tmp_path / ".env"
+    if not env_file.exists():
+        env_file.write_text("TRANSCRIA_SECRET=x\n", encoding="utf-8")
+    defaults = dict(
+        env_file=env_file,
+        proxy_https="https://proxy.corp:8080",
+        proxy_http="http://proxy.corp:8080",
+        proxy_no="127.0.0.1,localhost",
+        service_user="",
+        is_root=False,
+        interactive=True,
+    )
+    defaults.update(kw)
+    return ProxyPlan(**defaults)
+
+
+def test_proxy_non_interactive_persists():
+    import tempfile
+
+    from transcria.installer.config_phase import apply_proxy
+
+    with tempfile.TemporaryDirectory() as d:
+        plan = _proxy_plan(Path(d), interactive=False)
+        result = apply_proxy(plan, console=_silent_console(), confirm=lambda _h: False)
+        assert "proxy-persisted" in result.actions
+        assert get_env_value(plan.env_file, "https_proxy") == "https://proxy.corp:8080"
+        assert get_env_value(plan.env_file, "http_proxy") == "http://proxy.corp:8080"
+        assert get_env_value(plan.env_file, "no_proxy") == "127.0.0.1,localhost"
+
+
+def test_proxy_interactive_declined_writes_nothing():
+    import tempfile
+
+    from transcria.installer.config_phase import apply_proxy
+
+    with tempfile.TemporaryDirectory() as d:
+        plan = _proxy_plan(Path(d), interactive=True)
+        result = apply_proxy(plan, console=_silent_console(), confirm=lambda _h: False)
+        assert "proxy-skipped" in result.actions
+        assert get_env_value(plan.env_file, "https_proxy") is None
+
+
+def test_proxy_interactive_confirmed_persists():
+    import tempfile
+
+    from transcria.installer.config_phase import apply_proxy
+
+    with tempfile.TemporaryDirectory() as d:
+        plan = _proxy_plan(Path(d), interactive=True)
+        confirmed: list[str] = []
+        result = apply_proxy(plan, console=_silent_console(), confirm=lambda h: confirmed.append(h) or True)
+        assert confirmed == ["https://proxy.corp:8080"]  # prompt reçoit le https
+        assert "proxy-persisted" in result.actions
+        assert get_env_value(plan.env_file, "https_proxy") == "https://proxy.corp:8080"
+
+
+def test_proxy_already_present_is_left_untouched():
+    import tempfile
+
+    from transcria.installer.config_phase import apply_proxy
+
+    with tempfile.TemporaryDirectory() as d:
+        env_file = Path(d) / ".env"
+        env_file.write_text("https_proxy=http://existing:3128\n", encoding="utf-8")
+        plan = _proxy_plan(Path(d), env_file=env_file, interactive=False)
+        result = apply_proxy(plan, console=_silent_console(), confirm=lambda _h: True)
+        assert "proxy-present" in result.actions
+        assert get_env_value(plan.env_file, "https_proxy") == "http://existing:3128"  # inchangé
+
+
+def test_proxy_chown_only_when_root():
+    import tempfile
+
+    from transcria.installer.config_phase import apply_proxy
+
+    with tempfile.TemporaryDirectory() as d:
+        chown_calls: list = []
+        plan = _proxy_plan(Path(d), interactive=False, is_root=True, service_user="svc")
+        apply_proxy(plan, console=_silent_console(), confirm=lambda _h: True,
+                    chown=lambda p, u: chown_calls.append((str(p), u)))
+        assert chown_calls and chown_calls[0][1] == "svc"

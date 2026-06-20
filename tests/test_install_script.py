@@ -704,11 +704,17 @@ def test_install_script_counts_change_me_through_yaml_helper():
     assert "grep -c 'CHANGE-ME'" not in content
 
 
-def test_install_script_checks_existing_proxy_through_env_helper():
+def test_install_script_delegates_proxy_persistence_to_installer_cli():
+    # Le gate lit l'environnement du shell installateur (resté en shell) ; la décision
+    # (déjà-présent / confirmation / persistance + chown) est déléguée à la phase Python.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.config.env_file has-any" in content
+    assert "transcria.installer.cli config-proxy" in content
+    assert "--proxy-https" in content and "--proxy-no" in content
+    # Plus de mécanique inline : ni has-any, ni grep, ni env_set/ask_yn pour le proxy.
+    assert "-m transcria.config.env_file has-any" not in content
     assert "grep -qE '^https?_proxy='" not in content
+    assert "PERSIST_PROXY" not in content
 
 
 def test_install_plan_matches_python_profile_matrix_for_main_profiles():

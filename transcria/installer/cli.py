@@ -45,6 +45,19 @@ def _add_config_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--force-config", action="store_true")
 
 
+def _add_config_proxy_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "config-proxy",
+        help="Persiste le proxy d'entreprise dans .env pour le service (bloc proxy de SECTION 6).",
+    )
+    p.add_argument("--env-file", required=True)
+    p.add_argument("--proxy-https", required=True)
+    p.add_argument("--proxy-http", required=True)
+    p.add_argument("--proxy-no", required=True)
+    p.add_argument("--service-user", default="")
+    p.add_argument("--non-interactive", action="store_true")
+
+
 def _add_opencode_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "opencode",
@@ -213,6 +226,25 @@ def _cmd_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_config_proxy(args: argparse.Namespace) -> int:
+    import os
+
+    from transcria.installer.config_phase import ProxyPlan, apply_proxy
+
+    console = Console()
+    plan = ProxyPlan(
+        env_file=Path(args.env_file),
+        proxy_https=args.proxy_https,
+        proxy_http=args.proxy_http,
+        proxy_no=args.proxy_no,
+        service_user=args.service_user,
+        is_root=os.geteuid() == 0,
+        interactive=not args.non_interactive,
+    )
+    apply_proxy(plan, console=console)
+    return 0
+
+
 def _cmd_python_env(args: argparse.Namespace) -> int:
     console = Console()
     plan = PythonEnvPlan(
@@ -236,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     _add_python_env_parser(sub)
     _add_config_parser(sub)
+    _add_config_proxy_parser(sub)
     _add_opencode_parser(sub)
     _add_postgres_parser(sub)
     _add_systemd_parser(sub)
@@ -245,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_python_env(args)
     if args.command == "config":
         return _cmd_config(args)
+    if args.command == "config-proxy":
+        return _cmd_config_proxy(args)
     if args.command == "opencode":
         return _cmd_opencode(args)
     if args.command == "postgres":

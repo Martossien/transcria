@@ -26,12 +26,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from transcria.config.env_file import ensure_env_secret, init_env_file_from_template, update_env_file
+from transcria.config.env_file import (
+    ensure_env_secret,
+    has_any_env_key,
+    init_env_file_from_template,
+    update_env_file,
+)
 from transcria.config.yaml_file import backup_yaml_file, set_yaml_file_value
 from transcria.install_summary import render_setup_log
 
 Runner = Callable[..., Any]
 _INFERENCE_KEY_COMMENT = "Clé API du service inference_service (/infer/* et /engines/*)."
+_PROXY_COMMENT = "Proxy d'entreprise — requis par le service systemd pour télécharger les modèles (docs/INSTALL.md § Réseau d'entreprise)."
+ProxyConfirm = Callable[[str], bool]
+ProxyChown = Callable[[Path, str], None]
 
 
 class _ConsoleLike(Protocol):
@@ -55,6 +63,17 @@ class ConfigPlan:
     force_config: bool = False
     venv_python: Path | None = None
     backup_suffix: str | None = None  # injectable pour des tests déterministes
+
+
+@dataclass(frozen=True)
+class ProxyPlan:
+    env_file: Path
+    proxy_https: str
+    proxy_http: str
+    proxy_no: str
+    service_user: str = ""
+    is_root: bool = False
+    interactive: bool = True
 
 
 @dataclass
@@ -145,4 +164,58 @@ def apply_config(plan: ConfigPlan, *, console: _ConsoleLike, runner: Runner = su
         _emit(console, "inference-key-present" if key_status == "present" else "inference-key-created")
         result.record(f"inference-key-{key_status}")
 
+    return result
+
+
+def _default_proxy_confirm(proxy_https: str) -> bool:
+    """Prompt `ask_yn`-fidèle : seul o/O/y/Y persiste le proxy."""
+    try:
+        answer = input(f"  Proxy détecté ({proxy_https}) : le persister dans .env pour le service ? [o/N] : ")
+    except EOFError:
+        return False
+    return answer.strip() in ("o", "O", "y", "Y")
+
+
+def _best_effort_chown(path: Path, service_user: str) -> None:
+    import shutil
+
+    try:
+        shutil.chown(path, user=service_user)
+    except (LookupError, PermissionError, OSError):
+        pass
+
+
+def apply_proxy(
+    plan: ProxyPlan,
+    *,
+    console: _ConsoleLike,
+    confirm: ProxyConfirm = _default_proxy_confirm,
+    chown: ProxyChown = _best_effort_chown,
+) -> ConfigResult:
+    """Persiste le proxy d'entreprise dans `.env` pour le service systemd.
+
+    Le service n'hérite pas de l'environnement du shell : sans cette persistance, un
+    proxy connu du seul shell fait *pendre* les téléchargements de modèles côté service.
+    Le bloc reste *déclenché* par le shell (qui lit son propre environnement) ; ici on
+    décide, on confirme et on écrit. En non-interactif on persiste (fidèle à `ask_yn`,
+    non appelé dans ce mode).
+    """
+    result = ConfigResult()
+    if has_any_env_key(plan.env_file, ["http_proxy", "https_proxy"]):
+        _emit(console, "proxy-present")
+        result.record("proxy-present")
+        return result
+
+    persist = True if not plan.interactive else confirm(plan.proxy_https)
+    if not persist:
+        result.record("proxy-skipped")
+        return result
+
+    update_env_file(plan.env_file, "http_proxy", plan.proxy_http, backup=False, comment=_PROXY_COMMENT)
+    update_env_file(plan.env_file, "https_proxy", plan.proxy_https, backup=False)
+    update_env_file(plan.env_file, "no_proxy", plan.proxy_no, backup=False)
+    if plan.is_root and plan.service_user:
+        chown(plan.env_file, plan.service_user)
+    _emit(console, "proxy-persisted")
+    result.record("proxy-persisted")
     return result
