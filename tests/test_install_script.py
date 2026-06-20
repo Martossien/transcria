@@ -233,21 +233,23 @@ def test_install_script_filters_profile_plan_output_before_eval():
     assert 'eval "$plan_shell"' not in content
 
 
-def test_install_script_uses_profile_renderer_for_final_text():
+def test_install_script_delegates_final_summary_to_installer_cli():
+    # SECTION 12 (en-tête profil, modèles, base, config restante, démarrage) est rendue
+    # en une invocation par l'installateur Python ; plus de wrappers print_* ni de
+    # sous-processus de rendu enchaînés, et le décompte CHANGE-ME est fait en process.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "print_profile_text summary" in content
-    assert 'print_profile_text next-steps "$FINAL_LOG_FILE"' in content
+    assert "transcria.installer.cli summary" in content
+    assert "--db-backend" in content and "--doctor-status" in content
+    assert "print_profile_text" not in content
+    assert "print_model_summary" not in content
+    assert "print_database_summary" not in content
+    assert "print_configuration_summary" not in content
+    assert "-m transcria.install_models summary" not in content
+    assert "python_module transcria.install_summary database" not in content
+    assert "python_module transcria.install_summary configuration" not in content
     assert 'echo -e "${BOLD}Lancer le nœud de ressources' not in content
-
-
-def test_install_script_uses_model_summary_renderer():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "print_model_summary" in content
-    assert "-m transcria.install_models summary" in content
     assert 'echo -e "${BOLD}Modèles IA' not in content
-    assert '$COHERE_OK  && echo -e' not in content
 
 
 def test_install_script_uses_model_detection_table_renderer():
@@ -392,13 +394,10 @@ def test_install_script_delegates_llm_prompts():
     assert "Télécharger ${LLM_LABEL[$LLM_TIER]} depuis $REPO" not in content
 
 
-def test_install_script_uses_final_status_renderers():
+def test_install_script_has_no_inline_final_status_rendering():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "print_database_summary" in content
-    assert "print_configuration_summary" in content
-    assert "python_module transcria.install_summary database" in content
-    assert "python_module transcria.install_summary configuration" in content
+    # Base + configuration du résumé sont rendues par la phase summary (in-process).
     assert 'echo -e "${BOLD}Base de données' not in content
     assert 'echo -e "${BOLD}Configuration' not in content
     assert '[[ "$DB_BACKEND" == PostgreSQL* ]]' not in content
@@ -705,10 +704,12 @@ def test_install_script_does_not_prescan_pg_hba_with_shell_grep():
     assert "grep -qE '^host[[:space:]]+(all|replication)" not in content
 
 
-def test_install_script_counts_change_me_through_yaml_helper():
+def test_install_script_counts_change_me_in_summary_phase_not_shell():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.config.yaml_file count-text" in content
+    # Le décompte des CHANGE-ME résiduels est fait en process par la phase summary,
+    # plus via un helper appelé du shell ni un grep.
+    assert "-m transcria.config.yaml_file count-text" not in content
     assert "grep -c 'CHANGE-ME'" not in content
 
 

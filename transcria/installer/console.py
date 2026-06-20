@@ -56,3 +56,7 @@ class Console:
         if self._color:
             line = f"{_COLORS['SECTION']}{line}{_RESET}"
         print(f"\n{line}", file=self._stream, flush=True)
+
+    def write(self, text: str = "") -> None:
+        """Émet du texte verbatim (sans tag ni couleur) — pour les blocs de résumé."""
+        print(text, file=self._stream, flush=True)

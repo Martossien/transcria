@@ -451,10 +451,12 @@ Le **bootstrap PostgreSQL local privilégié** est lui aussi fondu
 `postgres` passée en préfixes injectables) — non exercé par le filet E2E mais couvert par
 des tests unitaires d'orchestration **et un test d'intégration créant réellement rôle+base
 sur le cluster éphémère**. ⇒ **toute la logique métier de `install.sh` est fondue** dans
-`transcria.installer` (7 sous-commandes : python-env, config, config-proxy, opencode,
-postgres, postgres-bootstrap, systemd). Ne restent en shell que le bootstrap minimal
-(prérequis, choix de l'interpréteur, activation venv), les invites interactives et le
-**résumé final** (glue mince sur des renderers Python déjà existants). Prochaine étape du
+`transcria.installer` (**8 sous-commandes** : python-env, config, config-proxy, opencode,
+postgres, postgres-bootstrap, systemd, summary). Le **résumé final** (SECTION 12) est lui
+aussi fondu (`summary_phase`, présentation pure en process). `install.sh` est passé de
+~1728 à ~1180 lignes et ne contient plus que : le bootstrap (prérequis, choix de
+l'interpréteur, activation venv), l'orchestration interactive (prompts `ask`, séquençage)
+et les délégations vers `cli.py`. **Chantier de fonte (Axe 3) clos.** Prochaine étape du
 plan : Axe B (resource-node guidé) et entrypoints Docker (P5) réutilisant ce `cli.py`.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`

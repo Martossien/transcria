@@ -130,6 +130,28 @@ def _add_systemd_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--have-systemctl", action="store_true")
 
 
+def _add_summary_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "summary",
+        help="Affiche le résumé final de l'installation (SECTION 12, présentation).",
+    )
+    p.add_argument("--profile", required=True)
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--venv", required=True)
+    p.add_argument("--config", required=True)
+    p.add_argument("--inference-log-dir", required=True)
+    p.add_argument("--final-log-file", required=True)
+    p.add_argument("--db-backend", required=True)
+    p.add_argument("--doctor-status", required=True)
+    p.add_argument("--no-systemd", action="store_true")
+    p.add_argument("--needs-local-models", action="store_true")
+    p.add_argument("--needs-llm", action="store_true")
+    p.add_argument("--cohere-ok", action="store_true")
+    p.add_argument("--pyannote-ok", action="store_true")
+    p.add_argument("--qwen-ok", action="store_true")
+    p.add_argument("--opencode-bin", default="")
+
+
 def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
     def confirm(prompt: str) -> bool:
         if not interactive:
@@ -160,6 +182,31 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
     apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
+
+
+def _cmd_summary(args: argparse.Namespace) -> int:
+    from transcria.installer.summary_phase import SummaryPlan, apply_summary
+
+    console = Console()
+    plan = SummaryPlan(
+        profile=args.profile,
+        install_dir=Path(args.install_dir),
+        venv=Path(args.venv),
+        config_path=Path(args.config),
+        inference_log_dir=args.inference_log_dir,
+        final_log_file=args.final_log_file,
+        db_backend=args.db_backend,
+        doctor_status=args.doctor_status,
+        needs_local_models=args.needs_local_models,
+        needs_llm=args.needs_llm,
+        cohere_ok=args.cohere_ok,
+        pyannote_ok=args.pyannote_ok,
+        qwen_ok=args.qwen_ok,
+        opencode_bin=args.opencode_bin,
+        systemd=not args.no_systemd,
+    )
+    apply_summary(plan, console=console)
     return 0
 
 
@@ -315,6 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_postgres_parser(sub)
     _add_postgres_bootstrap_parser(sub)
     _add_systemd_parser(sub)
+    _add_summary_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -331,6 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_postgres_bootstrap(args)
     if args.command == "systemd":
         return _cmd_systemd(args)
+    if args.command == "summary":
+        return _cmd_summary(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

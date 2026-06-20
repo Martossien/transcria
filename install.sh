@@ -237,30 +237,6 @@ load_install_profile_plan() {
         PROFILE_NEEDS_LOCAL_MODELS PROFILE_NEEDS_LLM PROFILE_NEEDS_ADMIN_CONFIG
 }
 
-print_profile_text() {
-    local format="$1"
-    local final_log_file="${2:-/var/log/transcrIA.log}"
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_profiles \
-        --profile "$INSTALL_PROFILE" \
-        --format "$format" \
-        --install-dir "$INSTALL_DIR" \
-        --service-user "$SERVICE_USER" \
-        --venv "$VENV" \
-        --inference-log-dir "$INF_LOG_DIR" \
-        --final-log-file "$final_log_file"
-}
-
-print_model_summary() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models summary \
-        --profile "$INSTALL_PROFILE" \
-        --needs-local-models "$PROFILE_NEEDS_LOCAL_MODELS" \
-        --needs-llm "$PROFILE_NEEDS_LLM" \
-        --cohere-ok "$COHERE_OK" \
-        --pyannote-ok "$PYANNOTE_OK" \
-        --qwen-ok "$QWEN_OK" \
-        --opencode-bin "${OPENCODE_BIN:-}"
-}
-
 print_model_detection_table() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models detection-table \
         --cohere-ok "$COHERE_OK" \
@@ -271,18 +247,6 @@ print_model_detection_table() {
         --qwen-ok "$QWEN_OK" \
         --qwen-gguf "${QWEN_GGUF:-}" \
         --squim-ok "$SQUIM_OK"
-}
-
-print_database_summary() {
-    python_module transcria.install_summary database --db-backend "$DB_BACKEND"
-}
-
-print_configuration_summary() {
-    local remaining_changes="$1"
-    python_module transcria.install_summary configuration \
-        --config-path "$CONFIG_PATH" \
-        --remaining-changes "$remaining_changes" \
-        --doctor-status "$DOCTOR_STATUS"
 }
 
 load_install_profile_plan
@@ -1221,26 +1185,27 @@ fi
 # ============================================================================
 # SECTION 12 — Résumé final
 # ============================================================================
-log_section "Résumé de l'installation"
-
-echo ""
-print_profile_text summary
-echo ""
-
-print_model_summary
-
-# Vérifier s'il reste des CHANGE-ME dans config.yaml
-REMAINING_CHANGES=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.config.yaml_file count-text \
-    --file "$CONFIG_PATH" \
-    --text "CHANGE-ME" 2>/dev/null || echo 0)
-echo ""
-print_database_summary
-
-echo ""
-print_configuration_summary "$REMAINING_CHANGES"
-
-echo ""
+# Résumé final (en-tête profil, modèles, base, config restante, démarrage) délégué à
+# l'installateur Python : une invocation au lieu des ~6 sous-processus de rendu, le
+# décompte des CHANGE-ME résiduels étant fait en process. Présentation seule.
 FINAL_LOG_FILE="/var/log/transcrIA.log"
 [[ "$SERVICE_USER" != "root" ]] && FINAL_LOG_FILE="$INSTALL_DIR/logs/transcrIA.log"
-print_profile_text next-steps "$FINAL_LOG_FILE"
-echo ""
+SUMMARY_CLI_ARGS=(
+    -m transcria.installer.cli summary
+    --profile "$INSTALL_PROFILE"
+    --install-dir "$INSTALL_DIR"
+    --venv "$VENV"
+    --config "$CONFIG_PATH"
+    --inference-log-dir "$INF_LOG_DIR"
+    --final-log-file "$FINAL_LOG_FILE"
+    --db-backend "$DB_BACKEND"
+    --doctor-status "$DOCTOR_STATUS"
+    --opencode-bin "${OPENCODE_BIN:-}"
+)
+[[ "$INSTALL_SYSTEMD" != true ]]           && SUMMARY_CLI_ARGS+=(--no-systemd)
+[[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]] && SUMMARY_CLI_ARGS+=(--needs-local-models)
+[[ "$PROFILE_NEEDS_LLM" = true ]]          && SUMMARY_CLI_ARGS+=(--needs-llm)
+[[ "$COHERE_OK" = true ]]                  && SUMMARY_CLI_ARGS+=(--cohere-ok)
+[[ "$PYANNOTE_OK" = true ]]                && SUMMARY_CLI_ARGS+=(--pyannote-ok)
+[[ "$QWEN_OK" = true ]]                    && SUMMARY_CLI_ARGS+=(--qwen-ok)
+PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${SUMMARY_CLI_ARGS[@]}"
