@@ -427,8 +427,18 @@ phase fondue : **opencode** (`opencode_phase.py`, SECTION 9 — détection / ins
 interactive / configuration du provider), avec effets réseau/privilégiés/prompt et
 détection tous injectables (la détection injectée rend la phase indépendante du PATH de
 la machine de test) ; le filet E2E force `HOME=<sandbox>` pour rester étanche au
-`~/.config/opencode` réel. Les phases suivantes (PostgreSQL chemin « base existante »,
-systemd) migreront de la même façon, chacune sous la protection du filet E2E.
+`~/.config/opencode` réel. Quatrième phase fondue : **base PostgreSQL — chemin
+post-connexion** (`postgres_phase.py`, SECTION 6.5 `_setup_postgres` : test de connexion,
+garde d'encodage UTF8, écriture du DSN dans `.env`, détection d'état, décision +
+exécution Alembic avec reconstruction locale privilégiée, migration SQLite→PG) ;
+lectures d'état + connexion via **SQLAlchemy/psycopg** plutôt que le client `psql`
+(choix tourné Docker : le chemin « base existante / distante » n'exige plus le binaire
+`psql`), DB/Alembic/psql-privilégié/migration/prompt tous injectables. Le **bootstrap
+local privilégié** (réécriture `pg_hba.conf`, création rôle/base via `sudo -u postgres`,
+reload du service) reste volontairement en shell — il change d'identité système et
+n'est pas couvert par le filet E2E, qui exerce en revanche intégralement ce chemin-ci
+via `--pg-existing`. La phase suivante (systemd) migrera de la même façon, sous la
+protection du filet E2E.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles

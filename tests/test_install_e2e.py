@@ -168,18 +168,34 @@ def pg_params(postgresql_proc):
         )
 
 
-def _repo_status() -> set[str]:
-    """Empreinte de l'état du dépôt versionné (porcelaine).
+# Une fuite de l'install ne peut atteindre le dépôt QUE via les entrées symlinkées :
+# `venv` est .gitignored (invisible à git de toute façon), restent les deux arbres
+# *versionnés* symlinkés. On borne l'empreinte à eux — c'est exactement l'intention du
+# garde-fou (« écriture fuie via les symlinks ») — pour ne pas confondre une vraie fuite
+# avec un fichier transitoire qu'un autre test déposerait ailleurs dans l'arbre pendant
+# la fenêtre du test (la suite tourne avec CWD = racine du dépôt et des threads de fond).
+_LEAK_WATCHED = ("transcria/", "inference_service/")
 
-    On compare *avant/après* l'install plutôt que d'exiger un arbre propre : le
-    chantier en cours dirtie légitimement l'arbre. Seule une entrée *nouvelle*
-    trahit une écriture qui a fui vers le dépôt via les symlinks.
+
+def _repo_status() -> set[str]:
+    """Empreinte porcelaine, bornée aux arbres versionnés symlinkés dans le bac à sable.
+
+    On compare *avant/après* l'install plutôt que d'exiger un arbre propre : le chantier
+    en cours dirtie légitimement l'arbre. Seule une entrée *nouvelle* sous un répertoire
+    symlinké trahit une écriture qui a fui vers le dépôt via ces symlinks.
     """
     out = subprocess.run(
         ["git", "-C", str(_REPO), "status", "--porcelain"],
         capture_output=True, text=True, timeout=30,
     )
-    return {line for line in out.stdout.splitlines() if line.strip()}
+    watched: set[str] = set()
+    for line in out.stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].split(" -> ")[-1].strip().strip('"')  # XY <path> | renommage "a -> b"
+        if path.startswith(_LEAK_WATCHED):
+            watched.add(line)
+    return watched
 
 
 @pytest.mark.parametrize("profile", _PROFILES)

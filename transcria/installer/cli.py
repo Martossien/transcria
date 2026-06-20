@@ -62,6 +62,28 @@ def _add_opencode_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--rc-file", action="append", default=[])
 
 
+def _add_postgres_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "postgres",
+        help="Chemin post-connexion PostgreSQL : DSN, état, Alembic, migration SQLite (SECTION 6.5).",
+    )
+    p.add_argument("--host", required=True)
+    p.add_argument("--port", required=True)
+    p.add_argument("--db", required=True)
+    p.add_argument("--user", required=True)
+    p.add_argument("--password", required=True)
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--venv-python", required=True)
+    p.add_argument("--env-file", required=True)
+    p.add_argument("--sqlite-db", required=True)
+    p.add_argument("--backup-dir", required=True)
+    p.add_argument("--service-user", default="")
+    p.add_argument("--local-pg", action="store_true", help="Base locale (autorise la reconstruction privilégiée)")
+    p.add_argument("--non-interactive", action="store_true")
+    p.add_argument("--pg-migrate", action="store_true", help="Migrer SQLite→PG sans prompt si la base PG est vide")
+    p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié pour le rebuild local (ex. 'sudo -u postgres psql')")
+
+
 def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
     def confirm(prompt: str) -> bool:
         if not interactive:
@@ -92,6 +114,40 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
     apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
+
+
+def _cmd_postgres(args: argparse.Namespace) -> int:
+    # Import différé : cette phase importe SQLAlchemy/psycopg et ne tourne que sous le
+    # python du venv (la phase python-env pré-venv ne doit pas la charger).
+    import os
+    import shlex
+
+    from transcria.installer.postgres_phase import PostgresPhaseError, PostgresPlan, apply_postgres
+
+    console = Console()
+    plan = PostgresPlan(
+        host=args.host,
+        port=args.port,
+        db=args.db,
+        user=args.user,
+        password=args.password,
+        install_dir=Path(args.install_dir),
+        venv_python=Path(args.venv_python),
+        env_file=Path(args.env_file),
+        sqlite_db=Path(args.sqlite_db),
+        backup_dir=Path(args.backup_dir),
+        service_user=args.service_user,
+        local_pg=args.local_pg,
+        non_interactive=args.non_interactive,
+        pg_migrate=args.pg_migrate,
+        is_root=os.geteuid() == 0,
+        admin_psql_cmd=tuple(shlex.split(args.admin_psql)) if args.admin_psql else (),
+    )
+    try:
+        apply_postgres(plan, console=console)
+    except PostgresPhaseError:
+        return 1
     return 0
 
 
@@ -141,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_python_env_parser(sub)
     _add_config_parser(sub)
     _add_opencode_parser(sub)
+    _add_postgres_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -149,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_config(args)
     if args.command == "opencode":
         return _cmd_opencode(args)
+    if args.command == "postgres":
+        return _cmd_postgres(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

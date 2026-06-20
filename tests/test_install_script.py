@@ -93,7 +93,7 @@ def test_install_script_uses_run_indented_for_command_output_prefixing():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "run_indented()" in content
-    assert "run_indented env TRANSCRIA_DATABASE_URL=" in content
+    assert "run_indented env MODELS_DIR=" in content
     assert "2>&1 | sed 's/^/  /'" not in content
     assert "print_indented_file" in content
     assert "sed 's/^/  /'" not in content
@@ -421,58 +421,46 @@ def test_install_script_delegates_configuration_setup_logs():
     assert "doctor.py non disponible — validation post-install sautée" not in content
 
 
-def test_install_script_delegates_postgres_schema_action_decision():
+def test_install_script_delegates_postgres_phase_to_installer_cli():
+    # SECTION 6.5 — chemin post-connexion (connexion, encodage, DSN, état, Alembic,
+    # migration SQLite) fondu dans l'installateur Python. Le shell ne garde que le
+    # bootstrap local privilégié (pg_hba/rôle/base) puis délègue le reste.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--schema-action" in content
-    assert "--schema-action-log" in content
-    assert 'case "$schema_action" in' in content
-    assert '[[ "$has_schema" -gt 0 && "${has_data:-0}" -gt 0 ]]' not in content
-    assert "existe déjà avec des données. Conservation" not in content
-    assert "Application des migrations Alembic" not in content
+    assert "transcria.installer.cli postgres" in content
+    # Câblage attendu vers la phase Python.
+    assert "--venv-python" in content
+    assert "--admin-psql" in content  # identité privilégiée pour le rebuild local
+    assert '--local-pg' in content and '--pg-migrate' in content
+    # La mécanique de décision/exécution n'est plus dans le shell.
+    assert 'case "$schema_action" in' not in content
+    assert 'case "$sqlite_migration_action" in' not in content
+    assert '"$VENV/bin/alembic" upgrade head' not in content
+    assert "_do_pg_migrate" not in content
+    assert "pg_app_psql" not in content
 
 
-def test_install_script_delegates_postgres_alembic_result_logs():
+def test_install_script_no_longer_renders_postgres_tail_logs_inline():
+    # Les sous-commandes de rendu du chemin post-connexion sont appelées en process
+    # par la phase Python, plus jamais depuis le shell.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--alembic-log" in content
-    assert "log_postgres_alembic_event" in content
-    assert "Schéma à jour (Alembic)" not in content
-    assert "Tentative de reconstruction locale" not in content
-    assert "Schéma reconstruit" not in content
-    assert "Reconstruction automatique refusée" not in content
-    assert "Schéma PostgreSQL créé" not in content
-    assert "Échec d'alembic upgrade head" not in content
-    assert "Action Alembic PostgreSQL inconnue" not in content
-
-
-def test_install_script_delegates_sqlite_migration_action_decision():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "--sqlite-migration-action" in content
-    assert 'case "$sqlite_migration_action" in' in content
-    assert 'if [[ -s "$sqlite_db" && ( -z "$has_data" || "$has_data" -eq 0 ) ]]' not in content
-
-
-def test_install_script_delegates_sqlite_migration_logs_and_prompt():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "--sqlite-migration-log" in content
-    assert "--sqlite-migration-prompt" in content
-    assert "log_sqlite_migration_event" in content
-    assert "--run-sqlite-migration" in content
-    assert "Base SQLite détectée : $sqlite_db" not in content
-    assert "Migration sautée (--pg-migrate absent)" not in content
-    assert "Migration SQLite → PostgreSQL" not in content
-    assert "  1. Migrer les données SQLite" not in content
-    assert "Action de migration SQLite inconnue" not in content
-    assert "log_sqlite_migrate_event" not in content
-    assert "Échec du backup SQLite" not in content
-    assert "Backup SQLite sauvegardé" not in content
-    assert "Migration des données SQLite → PostgreSQL" not in content
-    assert "Données migrées" not in content
-    assert "Échec de la migration SQLite" not in content
-    assert "partiellement remplie" not in content
+    for flag in (
+        "--schema-action",
+        "--schema-action-log",
+        "--alembic-log",
+        "--sqlite-migration-action",
+        "--sqlite-migration-log",
+        "--sqlite-migration-prompt",
+        "--run-sqlite-migration",
+        "--state-summary",
+        "--connection-failure",
+        "--encoding-warnings",
+        "--file-size",
+    ):
+        assert flag not in content, flag
+    for func in ("log_postgres_alembic_event", "log_sqlite_migration_event", "log_postgres_schema_action_event"):
+        assert func not in content, func
 
 
 def test_install_script_delegates_database_setup_logs():
@@ -516,9 +504,10 @@ def test_install_script_delegates_postgres_setup_logs():
 def test_install_script_delegates_postgres_state_queries():
     content = _INSTALL.read_text(encoding="utf-8")
 
+    # --state-query reste pour le bootstrap local (database-exists). Le résumé d'état
+    # (--state-summary) est désormais rendu par la phase Python, plus par le shell.
     assert "pg_state_query" in content
     assert "--state-query" in content
-    assert "--state-summary" in content
     assert "SELECT COUNT(*) FROM users" not in content
     assert "SELECT version_num FROM alembic_version" not in content
     assert "pg_encoding_to_char" not in content
@@ -534,17 +523,17 @@ def test_install_script_delegates_pg_hba_rewrite_result_parsing():
 
 
 def test_install_script_delegates_postgres_encoding_warnings():
+    # Garde d'encodage UTF8 désormais portée par la phase Python (in-process).
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--encoding-warnings" in content
     assert "texte stocké SANS validation d'encodage" not in content
     assert "L'application force client_encoding=utf8" not in content
 
 
 def test_install_script_delegates_postgres_connection_failure_messages():
+    # Test de connexion + message d'échec portés par la phase Python.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--connection-failure" in content
     assert "Connexion PostgreSQL impossible avec le rôle" not in content
     assert "Créez la base et le rôle côté serveur" not in content
 
@@ -593,18 +582,19 @@ def test_install_script_delegates_config_phase_to_installer_cli():
     assert 'cp "$CONFIG_PATH" "$BACKUP"' not in content
 
 
-def test_install_script_backs_up_sqlite_through_postgres_helper():
+def test_install_script_backs_up_sqlite_through_python_phase():
+    # La sauvegarde + migration SQLite→PG est exécutée par la phase Python
+    # (run_sqlite_migration), plus par un cp inline ni un helper appelé du shell.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_postgres" in content
-    assert "--run-sqlite-migration" in content
+    assert "-m transcria.install_postgres" in content  # bootstrap local (rôle/base/pg_hba)
     assert 'cp "$sqlite_db" "$backup"' not in content
 
 
-def test_install_script_formats_sqlite_size_through_postgres_helper():
+def test_install_script_formats_sqlite_size_through_python_phase():
+    # Taille SQLite formatée en process (human_file_size) par la phase, plus par du/cut.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "--file-size" in content
     assert 'du -h "$sqlite_db"' not in content
     assert "cut -f1" not in content
 

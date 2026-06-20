@@ -436,23 +436,6 @@ pg_admin_python_module() {
     fi
 }
 
-pg_app_psql() {
-    local host="$1" port="$2" db="$3" user="$4" pass="$5"
-    shift 5
-    PGPASSWORD="$pass" psql -h "$host" -p "$port" -U "$user" -d "$db" "$@"
-}
-
-build_pg_dsn() {
-    local host="$1" port="$2" db="$3" user="$4" pass="$5"
-    postgres_helper \
-        --dsn \
-        --host "$host" \
-        --port "$port" \
-        --db "$db" \
-        --user "$user" \
-        --password "$pass"
-}
-
 pg_state_query() {
     local name="$1"
     postgres_helper --state-query "$name"
@@ -694,8 +677,6 @@ fi
 
 _setup_postgres() {
     local host="$1" port="$2" db="$3" user="$4" pass="$5"
-    local dsn
-    dsn=$(build_pg_dsn "$host" "$port" "$db" "$user" "$pass")
     local sqlite_db="$INSTALL_DIR/instance/transcrIA.db"
     # --pg-existing force le chemin « base déjà provisionnée » (Docker / base distante /
     # profil migrate) : pas de bootstrap rôle/base, pas de pg_hba, juste DSN + alembic.
@@ -714,31 +695,6 @@ _setup_postgres() {
             --db "$db" \
             --user "$user" \
             --host "$host"
-    }
-
-    log_postgres_alembic_event() {
-        local event="$1" action="${2:-}"
-        emit_rendered_log "Alembic PostgreSQL : $event" -m transcria.install_postgres \
-            --alembic-log \
-            --event "$event" \
-            --action "$action"
-    }
-
-    log_postgres_schema_action_event() {
-        local action="$1"
-        emit_rendered_log "action Alembic PostgreSQL : $action" -m transcria.install_postgres \
-            --schema-action-log \
-            --db "$db" \
-            --action "$action"
-    }
-
-    log_sqlite_migration_event() {
-        local event="$1" action="${2:-}"
-        emit_rendered_log "migration SQLite : $event" -m transcria.install_postgres \
-            --sqlite-migration-log \
-            --event "$event" \
-            --sqlite-db "$sqlite_db" \
-            --action "$action"
     }
 
     # ── Dossier de backup ─────────────────────────────────────
@@ -823,178 +779,32 @@ _setup_postgres() {
         log_postgres_setup_event remote-detected
     fi
 
-    if ! pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "SELECT 1" >/dev/null 2>&1; then
-        local connection_failure=""
-        connection_failure=$(postgres_helper \
-            --connection-failure \
-            --db "$db" \
-            --user "$user" \
-            --host "$host" \
-            --port "$port" \
-            --local-pg "$local_pg")
-        while IFS= read -r line; do
-            log_prefixed_line "connexion PostgreSQL" "$line" silent
-        done <<< "$connection_failure"
-        return 1
+    # ── Chemin post-connexion délégué à l'installateur Python ──
+    # Connexion + garde encodage + DSN dans .env + état + Alembic + migration SQLite.
+    # Tourne sous le python du venv (SQLAlchemy/psycopg, alembic) ; le bootstrap local
+    # privilégié ci-dessus (pg_hba/rôle/base) reste en shell. Le filet E2E exerce ce
+    # chemin de bout en bout via --pg-existing.
+    local POSTGRES_CLI_ARGS=(
+        -m transcria.installer.cli postgres
+        --host "$host" --port "$port" --db "$db" --user "$user" --password "$pass"
+        --install-dir "$INSTALL_DIR" --venv-python "$VENV/bin/python"
+        --env-file "$ENV_FILE" --sqlite-db "$sqlite_db" --backup-dir "$backup_dir"
+        --service-user "$SERVICE_USER"
+    )
+    [[ "$local_pg" = true ]]      && POSTGRES_CLI_ARGS+=(--local-pg)
+    [[ "$NON_INTERACTIVE" = true ]] && POSTGRES_CLI_ARGS+=(--non-interactive)
+    [[ "$PG_MIGRATE" = true ]]    && POSTGRES_CLI_ARGS+=(--pg-migrate)
+    # Identité psql privilégiée pour la reconstruction locale (DROP SCHEMA) — distant : aucune.
+    if [[ "$local_pg" = true ]]; then
+        if [[ "$HAVE_SUDO" = true ]]; then
+            POSTGRES_CLI_ARGS+=(--admin-psql "sudo -u postgres psql")
+        elif [[ $EUID -eq 0 && "$HAVE_RUNUSER" = true ]]; then
+            POSTGRES_CLI_ARGS+=(--admin-psql "runuser -u postgres -- psql")
+        fi
     fi
-    log_postgres_setup_event connection-ok
-
-    # ── Garde encodage : UTF8 requis (cf. docs/INSTALL.md § Encodage de la base) ──
-    local db_encoding=""
-    db_encoding=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At \
-        -c "$(pg_state_query encoding)" 2>/dev/null) || db_encoding=""
-    local encoding_warnings=""
-    encoding_warnings=$(postgres_helper \
-        --encoding-warnings \
-        --db "$db" \
-        --encoding "$db_encoding")
-    if [[ -n "$encoding_warnings" ]]; then
-        while IFS= read -r line; do
-            [[ -n "$line" ]] && log_warn "$line"
-        done <<< "$encoding_warnings"
-    fi
-
-    # ── Écrire le DSN dans .env ───────────────────────────────
-    env_set "TRANSCRIA_DATABASE_URL" "$dsn"
-    secure_env_file
-    log_postgres_setup_event dsn-written
-
-    # ── Détection état de la base ─────────────────────────────
-    local has_schema="" has_data="" alembic_ver=""
-    has_schema=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query public-table-count)" 2>/dev/null) || has_schema=0
-    has_data=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query users-count)" 2>/dev/null) || has_data=0
-    alembic_ver=$(pg_app_psql "$host" "$port" "$db" "$user" "$pass" -At -c "$(pg_state_query alembic-version)" 2>/dev/null) || alembic_ver=""
-    [[ "$has_schema" =~ ^[0-9]+$ ]] || has_schema=0
-    [[ "$has_data" =~ ^[0-9]+$ ]] || has_data=0
-    log_info "$(postgres_helper \
-        --state-summary \
-        --db "$db" \
-        --has-schema "$has_schema" \
-        --has-data "$has_data" \
-        --alembic-version "$alembic_ver")"
-
-    # ── Schéma Alembic : up-to-date, vide, ou créer ────────────
-    local schema_action
-    schema_action=$(postgres_helper \
-        --schema-action \
-        --has-schema "$has_schema" \
-        --has-data "$has_data") || {
-        log_error "Impossible de décider l'action Alembic PostgreSQL."
-        return 1
-    }
-    case "$schema_action" in
-        keep)
-            log_postgres_schema_action_event "$schema_action"
-            ;;
-        upgrade-existing)
-            log_postgres_schema_action_event "$schema_action"
-            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                log_postgres_alembic_event upgrade-ok
-            else
-                if [[ "$local_pg" = true ]]; then
-                    log_postgres_alembic_event rebuild-start
-                    pg_admin_psql -d "$db" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" &>/dev/null || true
-                    if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                        log_postgres_alembic_event rebuild-ok
-                    else
-                        log_postgres_alembic_event rebuild-failed
-                        return 1
-                    fi
-                else
-                    log_postgres_alembic_event remote-upgrade-failed
-                    return 1
-                fi
-            fi
-            ;;
-        create)
-            log_postgres_schema_action_event "$schema_action"
-            if run_indented env TRANSCRIA_DATABASE_URL="$dsn" "$VENV/bin/alembic" upgrade head; then
-                log_postgres_alembic_event create-ok
-            else
-                log_postgres_alembic_event create-failed
-                return 1
-            fi
-            ;;
-        *)
-            log_postgres_alembic_event unknown-action "$schema_action"
-            return 1
-            ;;
-    esac
-
-    # ── Migration SQLite si base vide et SQLite existe ────────
-    local sqlite_present=false sqlite_migration_action
-    [[ -s "$sqlite_db" ]] && sqlite_present=true
-    sqlite_migration_action=$(postgres_helper \
-        --sqlite-migration-action \
-        --sqlite-present "$sqlite_present" \
-        --has-data "$has_data" \
-        --non-interactive "$NON_INTERACTIVE" \
-        --pg-migrate "$PG_MIGRATE") || {
-        log_error "Impossible de décider la migration SQLite vers PostgreSQL."
-        return 1
-    }
-    case "$sqlite_migration_action" in
-        none)
-            ;;
-        migrate)
-            log_sqlite_migration_event detected
-            _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
-            ;;
-        skip)
-            log_sqlite_migration_event detected
-            log_sqlite_migration_event skipped
-            ;;
-        prompt)
-            log_sqlite_migration_event detected
-            local sqlite_size
-            sqlite_size=$(postgres_helper \
-                --file-size "$sqlite_db" 2>/dev/null || echo "taille inconnue")
-            postgres_helper \
-                --sqlite-migration-prompt \
-                --sqlite-db "$sqlite_db" \
-                --sqlite-size "$sqlite_size" \
-                --db "$db" \
-                --host "$host" \
-                --port "$port"
-            local mchoice
-            read -r mchoice
-            if [[ "$mchoice" = "1" ]]; then
-                _do_pg_migrate "$dsn" "$sqlite_db" "$backup_dir" || return 1
-            else
-                log_sqlite_migration_event ignored
-            fi
-            ;;
-        *)
-            log_sqlite_migration_event unknown-action "$sqlite_migration_action"
-            return 1
-            ;;
-    esac
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${POSTGRES_CLI_ARGS[@]}" || return 1
 
     true
-}
-
-_do_pg_migrate() {
-    local dsn="$1" sqlite_db="$2" backup_dir="$3"
-    local backup_suffix
-    backup_suffix="$(date +%Y%m%d_%H%M%S)"
-    local migration_output
-    if migration_output=$(postgres_helper \
-            --run-sqlite-migration \
-            --database-url "$dsn" \
-            --sqlite-db "$sqlite_db" \
-            --backup-dir "$backup_dir" \
-            --suffix "$backup_suffix" \
-            --install-dir "$INSTALL_DIR" \
-            --python-bin "$VENV/bin/python" 2>&1); then
-        while IFS= read -r line; do
-            log_prefixed_line "migration SQLite" "$line" silent
-        done <<< "$migration_output"
-    else
-        while IFS= read -r line; do
-            log_prefixed_line "migration SQLite" "$line" silent
-        done <<< "$migration_output"
-        return 1
-    fi
 }
 
 PSQL_AVAILABLE=false
