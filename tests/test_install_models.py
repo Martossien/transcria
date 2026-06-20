@@ -117,6 +117,41 @@ def test_detect_local_models_returns_shell_ready_state(tmp_path: Path):
     assert detection.qwen_ok
 
 
+def test_detect_local_models_finds_cohere_in_hf_cache_by_repo_id(tmp_path: Path):
+    # Régression (finding 8.3) : un cohere_model_path = repo id `org/name` (cas normal) vit
+    # dans le cache HF, pas en répertoire local → doit être détecté comme pyannote, pas
+    # signalé « ABSENT ».
+    hf = tmp_path / "hf"
+    snap = hf / "models--CohereLabs--cohere-transcribe-03-2026" / "snapshots" / "abc123"
+    snap.mkdir(parents=True)
+    (snap / "config.json").write_text("{}", encoding="utf-8")
+
+    detection = detect_local_models(
+        cohere_path="CohereLabs/cohere-transcribe-03-2026",
+        install_dir=tmp_path,
+        hf_cache=hf,
+        torch_home=tmp_path / "torch",
+        models_dir=tmp_path / "models",
+        needs_llm=True,
+    )
+
+    assert detection.cohere_ok
+    assert "models--CohereLabs--cohere-transcribe-03-2026" in str(detection.cohere_path)
+
+
+def test_detect_local_models_cohere_repo_id_absent_from_cache_is_not_ok(tmp_path: Path):
+    # repo id mais rien en cache → ABSENT (vrai négatif, pas de faux positif).
+    detection = detect_local_models(
+        cohere_path="CohereLabs/cohere-transcribe-03-2026",
+        install_dir=tmp_path,
+        hf_cache=tmp_path / "hf",  # vide
+        torch_home=tmp_path / "torch",
+        models_dir=tmp_path / "models",
+        needs_llm=True,
+    )
+    assert not detection.cohere_ok
+
+
 def test_render_local_model_detection_shell_is_filterable(tmp_path: Path):
     detection = detect_local_models(
         cohere_path="./missing/cohere",

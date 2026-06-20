@@ -68,6 +68,22 @@ def find_pyannote_cache(hf_cache: Path) -> Path | None:
     return None
 
 
+def find_hf_cache_model(hf_cache: Path, repo_id: str) -> Path | None:
+    """Retourne le répertoire de cache HF d'un modèle par repo id `org/name`.
+
+    Un `cohere_model_path` comme `CohereLabs/cohere-transcribe-03-2026` n'est PAS un chemin
+    local : le modèle vit dans le cache HF (`hub/models--CohereLabs--…/snapshots/…`). On le
+    détecte comme pyannote, au lieu de chercher (à tort) un répertoire local inexistant.
+    """
+    if not repo_id or "/" not in repo_id or repo_id.startswith((".", "/")):
+        return None  # chemin local, pas un repo id
+    cache_dir = Path(hf_cache) / ("models--" + repo_id.replace("/", "--"))
+    snapshots = cache_dir / "snapshots"
+    if cache_dir.is_dir() and snapshots.is_dir() and any(snapshots.iterdir()):
+        return cache_dir
+    return None
+
+
 def find_first_gguf(models_dir: Path) -> Path | None:
     """Retourne le premier fichier GGUF trouvé dans l'arborescence des modèles."""
     models_dir = Path(models_dir)
@@ -89,12 +105,18 @@ def detect_local_models(
 ) -> LocalModelDetection:
     """Détecte les modèles locaux utilisés par l'installateur."""
     resolved_cohere_path = resolve_repo_relative_path(cohere_path, install_dir)
+    # Cohere présent SOIT en répertoire local (chemin `./…`), SOIT en cache HF (repo id) —
+    # comme pyannote. Sans le 2e cas, un repo id donnait un faux « ABSENT » alors que le
+    # modèle était téléchargé en cache.
+    cohere_local_ok = bool(cohere_path) and is_non_empty_dir(resolved_cohere_path)
+    cohere_cache = None if cohere_local_ok else find_hf_cache_model(hf_cache, cohere_path)
+    cohere_display = resolved_cohere_path if cohere_local_ok else (cohere_cache or resolved_cohere_path)
     pyannote_cache = find_pyannote_cache(hf_cache)
     squim_path = torch_home / SQUIM_RELATIVE_PATH
     qwen_gguf = find_first_gguf(models_dir) if needs_llm else None
     return LocalModelDetection(
-        cohere_path=resolved_cohere_path,
-        cohere_ok=bool(cohere_path) and is_non_empty_dir(resolved_cohere_path),
+        cohere_path=cohere_display,
+        cohere_ok=cohere_local_ok or cohere_cache is not None,
         pyannote_cache=pyannote_cache,
         pyannote_ok=pyannote_cache is not None,
         squim_path=squim_path,
