@@ -1,5 +1,10 @@
 # Granite Speech 4.1 - piste STT expérimentale
 
+> **🗄️ ARCHIVÉ — expérience conclue.** Le backend `granite` a été intégré
+> (`transcria/stt/granite_transcriber.py`, `models.stt_backend: "granite"`) ; ce document
+> de cadrage est conservé pour la traçabilité. Référence vivante du backend : `config.yaml`
+> (section `granite`) et `docs/CONFIG_REFERENCE.md`. Cohere reste le défaut de production.
+
 Date de cadrage : 2026-05-25.
 
 Objectif : étudier l'intégration expérimentale des deux variantes IBM Granite

@@ -270,7 +270,7 @@ transcria/
     stop_stt.sh             # Arrêt par port via ss (groupe de process), liste STT_STOP_PORTS
     test_stt.sh             # Smoke endpoint STT (auto-convertit MP3→WAV)
     smoke_remote_stt.py     # Smoke E2E RemoteTranscriber contre un vrai serveur STT
-  tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires) — 1600+ tests
+  tests/                    # modules test_*.py + E2E (mocks GPU/LLM majoritaires) — 2500+ tests
     conftest.py
     test_e2e_workflow.py    # Test E2E complet avec GPU réels
     test_mailer.py          # 20 tests — EmailConfig, templates, async dispatch, modes SMTP

@@ -102,7 +102,7 @@ It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validat
 
 ## Project status
 
-⚠️ **Active development — no tagged release yet.** The product is functional and covered by **1,800+ tests (green CI: ruff, mypy, full pytest on PostgreSQL)**, but the API, the configuration schema and the data model may still change without backward-compatibility guarantees. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
+⚠️ **Active development — no tagged release yet.** The product is functional and covered by **2,500+ tests (green CI: ruff, mypy, full pytest on PostgreSQL)**, but the API, the configuration schema and the data model may still change without backward-compatibility guarantees. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
 
 **Language**: the UI and the LLM prompts are French-first (the pipeline is tuned for French meetings). Both are centralized/editable, so adding languages is a planned evolution, not a rewrite.
 

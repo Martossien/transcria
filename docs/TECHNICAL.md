@@ -194,7 +194,7 @@ transcria/
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v3.0 (contrat de priorités, SPEAKER_XX(nom) intouchable)
 │       ├── final_review_prompt.txt  # Relecture finale A+C+D+G (synthèse/SRT/données structurées) — v3.0, après correction
 │
-├── tests/                         # suite pytest + E2E (1600+ tests)
+├── tests/                         # suite pytest + E2E (2500+ tests)
 │   ├── conftest.py                # Fixtures (app, client, admin/operator/viewer)
 │   ├── test_audio.py              # 64 tests — Analyse de scène worker, AudioSceneAnalyzer, séparation sources, genre
 │   ├── test_audit.py              # 12 tests — AuditStore, rétention par famille
@@ -1539,7 +1539,7 @@ La suite pytest couvre tous les modules. Lancer avec :
 cd transcria && python -m pytest tests/ -v
 ```
 
-1600+ tests au total (sans les E2E GPU). Organisation :
+2500+ tests au total (sans les E2E GPU). Organisation :
 
 | Fichier | Tests | Couverture |
 |---|---|---|
