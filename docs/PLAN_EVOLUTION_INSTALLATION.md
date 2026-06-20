@@ -422,9 +422,13 @@ y délègue et ne conserve que le bootstrap + l'activation. Deuxième phase fond
 **configuration** (`config_phase.py`, cœur déterministe de la SECTION 6 — génération
 `config.yaml`, sauvegarde, init `.env`, `TRANSCRIA_SECRET`, rôle runtime, clé inference),
 lancée sous le python du venv (PyYAML), avec import différé côté `cli` pour ne pas charger
-PyYAML dans la phase pré-venv ; le bloc proxy interactif reste en shell. Les phases
-suivantes (PostgreSQL chemin « base existante », opencode, systemd) migreront de la même
-façon, chacune sous la protection du filet E2E.
+PyYAML dans la phase pré-venv ; le bloc proxy interactif reste en shell. Troisième
+phase fondue : **opencode** (`opencode_phase.py`, SECTION 9 — détection / installation
+interactive / configuration du provider), avec effets réseau/privilégiés/prompt et
+détection tous injectables (la détection injectée rend la phase indépendante du PATH de
+la machine de test) ; le filet E2E force `HOME=<sandbox>` pour rester étanche au
+`~/.config/opencode` réel. Les phases suivantes (PostgreSQL chemin « base existante »,
+systemd) migreront de la même façon, chacune sous la protection du filet E2E.
 La matrice des profils d'installation est extraite dans
 `transcria.install_profiles` et couverte par `tests/test_install_profiles.py`
 pour verrouiller les décisions actuelles (`systemd_units`, PostgreSQL, modèles

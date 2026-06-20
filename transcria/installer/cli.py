@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from transcria.installer.console import Console
@@ -42,6 +43,56 @@ def _add_config_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--profile-explicit", action="store_true")
     p.add_argument("--install-inference", action="store_true")
     p.add_argument("--force-config", action="store_true")
+
+
+def _add_opencode_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "opencode",
+        help="Détecte/installe/configure opencode (SECTION 9).",
+    )
+    p.add_argument("--install-dir", required=True)
+    p.add_argument("--config", required=True, help="Chemin de config.yaml")
+    p.add_argument("--opencode-home", required=True)
+    p.add_argument("--user-home", required=True)
+    p.add_argument("--service-user", default="")
+    p.add_argument("--profile", default="")
+    p.add_argument("--needs-llm", action="store_true", help="Le profil requiert le LLM (sinon phase sautée)")
+    p.add_argument("--non-interactive", action="store_true")
+    p.add_argument("--current-path", default="")
+    p.add_argument("--rc-file", action="append", default=[])
+
+
+def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
+    def confirm(prompt: str) -> bool:
+        if not interactive:
+            return False
+        try:
+            answer = input(f"  {prompt} [o/N] : ")
+        except EOFError:
+            return False
+        return answer.strip() in ("o", "O", "y", "Y")
+
+    return confirm
+
+
+def _cmd_opencode(args: argparse.Namespace) -> int:
+    from transcria.installer.opencode_phase import OpencodePlan, apply_opencode
+
+    console = Console()
+    plan = OpencodePlan(
+        install_dir=Path(args.install_dir),
+        config_path=Path(args.config),
+        opencode_home=Path(args.opencode_home),
+        user_home=Path(args.user_home),
+        service_user=args.service_user,
+        profile=args.profile,
+        needs_llm=args.needs_llm,
+        interactive=not args.non_interactive,
+        current_path=args.current_path,
+        rc_files=tuple(Path(p) for p in args.rc_file),
+    )
+    apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
@@ -89,12 +140,15 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     _add_python_env_parser(sub)
     _add_config_parser(sub)
+    _add_opencode_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
         return _cmd_python_env(args)
     if args.command == "config":
         return _cmd_config(args)
+    if args.command == "opencode":
+        return _cmd_opencode(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

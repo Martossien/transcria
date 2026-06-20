@@ -207,7 +207,6 @@ postgres_helper() { python_module transcria.install_postgres "$@"; }
 
 arbitrage_helper() { python_module transcria.install_arbitrage "$@"; }
 
-opencode_helper() { python_module transcria.install_opencode "$@"; }
 
 install_paths_helper() {
     PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths --install-dir "$INSTALL_DIR" "$@"
@@ -1259,85 +1258,25 @@ log_config_setup_event env-secured "$SERVICE_USER"
 # ============================================================================
 log_section "opencode (moteur LLM)"
 
-log_opencode_setup_event() {
-    local event="$1" value="${2:-}" profile="${3:-}"
-    emit_rendered_log "opencode : $event" -m transcria.install_opencode --setup-log \
-        --event "$event" \
-        --value "$value" \
-        --profile "$profile"
-}
-
-if [[ "$PROFILE_NEEDS_LLM" = true ]]; then
-    # Chercher opencode : PATH > config.yaml > ~/.opencode/bin/
-    CFG_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
-    OPENCODE_DETECTION=$(opencode_helper \
-        --detect \
-        --opencode-home "$OPENCODE_HOME" \
-        --user-home "$HOME" \
-        --configured-bin "$CFG_BIN")
-    eval_named_shell_assignments "$OPENCODE_DETECTION" OPENCODE_BIN OPENCODE_VER
-
-    if [[ -n "$OPENCODE_BIN" ]]; then
-        log_opencode_setup_event found "$OPENCODE_BIN ($OPENCODE_VER)"
-        yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
-    else
-        log_opencode_setup_event missing
-        echo ""
-        OPENCODE_INSTALL_PROMPT=$(opencode_helper \
-            --install-prompt \
-            --opencode-home "$OPENCODE_HOME")
-        if ask_yn "$OPENCODE_INSTALL_PROMPT"; then
-            OPENCODE_DEST="$OPENCODE_HOME/.opencode/bin/opencode"
-            log_opencode_setup_event download-start
-            if opencode_helper \
-                --install-binary \
-                --destination "$OPENCODE_DEST" \
-                --service-user "$SERVICE_USER" \
-                --owner-root "$OPENCODE_HOME/.opencode"; then
-                log_opencode_setup_event installed "$OPENCODE_DEST"
-                OPENCODE_BIN="$OPENCODE_DEST"
-                yaml_set "workflow.arbitration_llm.opencode_bin" "$OPENCODE_BIN"
-
-                # Ajouter au PATH dans .bashrc/.profile si nécessaire
-                OPENCODE_DIR="$(dirname "$OPENCODE_DEST")"
-                UPDATED_RC=$(opencode_helper \
-                    --ensure-path \
-                    --opencode-dir "$OPENCODE_DIR" \
-                    --current-path "$PATH" \
-                    --rc-file "$HOME/.bashrc" \
-                    --rc-file "$HOME/.profile" 2>/dev/null || true)
-                if [[ -n "$UPDATED_RC" ]]; then
-                    log_opencode_setup_event path-updated "$UPDATED_RC"
-                    log_opencode_setup_event shell-reload "$OPENCODE_DIR"
-                fi
-            else
-                log_opencode_setup_event download-failed
-                log_opencode_setup_event manual-title
-                log_opencode_setup_event manual-mkdir
-                log_opencode_setup_event manual-curl
-                log_opencode_setup_event manual-chmod
-            fi
-        else
-            log_opencode_setup_event ignored
-            log_opencode_setup_event install-later
-        fi
-    fi
-
-    if [[ -n "$OPENCODE_BIN" ]]; then
-        log_opencode_setup_event configure-start
-        OPENCODE_CONFIG_PATH="$OPENCODE_HOME/.config/opencode/opencode.json"
-        if run_indented "$VENV/bin/python" "$INSTALL_DIR/scripts/setup_opencode.py" --config-path "$OPENCODE_CONFIG_PATH"; then
-            if id "$SERVICE_USER" &>/dev/null 2>&1; then
-                chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.config/opencode" 2>/dev/null || true
-            fi
-            log_opencode_setup_event provider-ok
-        else
-            log_opencode_setup_event provider-incomplete "$VENV/bin/python scripts/setup_opencode.py"
-        fi
-    fi
-else
-    log_opencode_setup_event profile-skipped "" "$INSTALL_PROFILE"
-fi
+# Phase opencode (détection / installation interactive / configuration du provider)
+# déléguée à l'installateur Python. Tourne sous le python du venv (PyYAML). Les effets
+# privilégiés (chown vers l'utilisateur de service) et réseau restent encapsulés dans
+# install_opencode, réutilisé en process par la phase.
+OPENCODE_CLI_ARGS=(
+    -m transcria.installer.cli opencode
+    --install-dir "$INSTALL_DIR"
+    --config "$CONFIG_PATH"
+    --opencode-home "$OPENCODE_HOME"
+    --user-home "$HOME"
+    --service-user "$SERVICE_USER"
+    --profile "$INSTALL_PROFILE"
+    --current-path "$PATH"
+    --rc-file "$HOME/.bashrc"
+    --rc-file "$HOME/.profile"
+)
+[[ "$PROFILE_NEEDS_LLM" = true ]] && OPENCODE_CLI_ARGS+=(--needs-llm)
+[[ "$NON_INTERACTIVE" = true ]] && OPENCODE_CLI_ARGS+=(--non-interactive)
+PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${OPENCODE_CLI_ARGS[@]}"
 
 # ============================================================================
 # SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle

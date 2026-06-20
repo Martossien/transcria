@@ -300,34 +300,26 @@ def test_install_script_delegates_pyannote_setup_logs_and_prompts():
     assert "&& log_ok \"pyannote téléchargé\"" not in content
 
 
-def test_install_script_delegates_opencode_setup_logs_and_prompt():
+def test_install_script_delegates_opencode_phase_to_installer_cli():
+    # SECTION 9 (détection / installation / configuration opencode) est orchestrée par
+    # l'installateur Python ; le shell ne fait plus aucune mécanique opencode inline.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_opencode --setup-log" in content
-    assert "opencode_helper \\\n            --install-prompt" in content
-    assert "--install-binary" in content
-    assert "--owner-root" in content
-    assert "log_opencode_setup_event" in content
-    assert "opencode trouvé :" not in content
-    assert "opencode non trouvé" not in content
-    assert "Installer opencode dans $OPENCODE_HOME" not in content
-    assert "Téléchargement opencode (linux-x64)" not in content
-    assert "opencode installé :" not in content
-    assert "PATH mis à jour dans" not in content
-    assert "Relancez votre shell ou" not in content
-    assert "Téléchargement opencode échoué" not in content
-    assert "Installation manuelle :" not in content
-    assert "mkdir -p ~/.opencode/bin" not in content
-    assert "chmod +x ~/.opencode/bin/opencode" not in content
+    assert "transcria.installer.cli opencode" in content
+    assert "--opencode-home" in content
+    assert "--needs-llm" in content
+    # Plus aucune mécanique opencode inline (détection, install, PATH, messages) en shell.
+    assert "opencode_helper" not in content
+    assert "log_opencode_setup_event" not in content
+    assert "--detect" not in content
+    assert "--ensure-path" not in content
+    assert "command -v opencode" not in content
+    assert "OPENCODE_BIN=$(which opencode)" not in content
     assert 'curl -fsSL -o "$OPENCODE_DEST"' not in content
     assert 'chmod +x "$OPENCODE_DEST"' not in content
     assert 'chown -R "$SERVICE_USER:" "$OPENCODE_HOME/.opencode"' not in content
-    assert "opencode ignoré — résumé/correction LLM désactivé" not in content
-    assert "Pour installer plus tard" not in content
     assert "Configuration du provider opencode local" not in content
-    assert "opencode provider local configuré" not in content
-    assert "Configuration opencode incomplète" not in content
-    assert "opencode non requis" not in content
+    assert "Installation manuelle :" not in content
 
 
 def test_install_script_delegates_llm_selection_setup_logs():
@@ -683,33 +675,6 @@ def test_install_script_detects_system_capabilities_through_python_helper():
     assert "command -v systemctl" not in content
     assert "command -v service" not in content
     assert "command -v nvidia-smi" not in content
-
-
-def test_install_script_reads_opencode_version_through_python_helper():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "--detect" in content
-    assert "OPENCODE_VER" in content
-    assert "--version \\\n            --bin \"$OPENCODE_BIN\"" not in content
-    assert "head -1" not in content
-
-
-def test_install_script_finds_opencode_through_python_helper():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "--detect" in content
-    assert "eval_named_shell_assignments \"$OPENCODE_DETECTION\"" in content
-    assert "--find" not in content
-    assert "command -v opencode" not in content
-    assert "OPENCODE_BIN=$(which opencode)" not in content
-
-
-def test_install_script_updates_opencode_path_through_python_helper():
-    content = _INSTALL.read_text(encoding="utf-8")
-
-    assert "--ensure-path" in content
-    assert 'echo "$PATH" | grep -q "$OPENCODE_DIR"' not in content
-    assert 'echo "export PATH="$OPENCODE_DIR' not in content
 
 
 def test_install_script_generates_postgres_password_through_helper():

@@ -106,7 +106,9 @@ def _run_install(sandbox: Path, profile: str, pg: "PgParams", *extra: str) -> su
         "--pg-password", pg.password,
         *extra,
     ]
-    env = {**os.environ, "TRANSCRIA_CONFIG": str(sandbox / "config.yaml")}
+    # HOME pointe vers le bac à sable : la phase opencode (OPENCODE_HOME=$HOME) écrit
+    # alors sa config provider dans le sandbox, jamais dans le ~/.config/opencode réel.
+    env = {**os.environ, "TRANSCRIA_CONFIG": str(sandbox / "config.yaml"), "HOME": str(sandbox)}
     env.pop("TRANSCRIA_DATABASE_URL", None)  # ne pas masquer ce que l'install écrit
     return subprocess.run(cmd, capture_output=True, text=True, timeout=_TIMEOUT_S, cwd=str(sandbox), env=env)
 
