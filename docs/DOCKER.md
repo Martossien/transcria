@@ -143,8 +143,9 @@ Build-time (`docker build --build-arg`) :
    ```
    `db` → healthy → `migrate` (one-shot) → `web` + `scheduler`.
 
-   > Les profils `split` (web+scheduler) et `gpu` (all-in-one) sont **mutuellement exclusifs** :
-   > les deux publient `:7870`. Ne pas combiner. `db`/`migrate` démarrent dans les deux.
+   > Les profils `split` (web+scheduler) et `gpu` (all-in-one) sont **alternatifs — à ne pas
+   > activer ensemble** : les deux publient `:7870` (Compose autorise techniquement les deux,
+   > mais ce serait un conflit de port). `db`/`migrate` démarrent dans les deux cas.
 4. **Vérifier** :
    ```bash
    docker compose ps
@@ -211,10 +212,13 @@ GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
 
 ## Procédure de rollback
 
-- **Code applicatif** : redéployer le tag d'image précédent
+- **Code applicatif** : redéployer le tag d'image précédent (réutiliser le **même profil**
+  que le déploiement — `split` ou `gpu` ; un `up`/`down` sans profil ne touche pas les
+  services applicatifs) :
   ```bash
-  docker compose down
-  TRANSCRIA_IMAGE=transcria:<tag-précédent> docker compose up -d   # (épingler l'image)
+  docker compose --profile split down
+  TRANSCRIA_IMAGE=transcria:<tag-précédent> docker compose --profile split up -d
+  # (tout-en-one : remplacer --profile split par --profile gpu)
   ```
   Aucune migration n'est jouée par les serveurs : tant que `migrate` n'est pas relancé,
   le schéma reste celui en place.
@@ -229,8 +233,8 @@ GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
 | Volume | Monté dans | Contenu |
 |---|---|---|
 | `pgdata` | `db` | Données PostgreSQL |
-| `jobs` | `scheduler` | Espaces de travail des jobs |
-| `models` | `scheduler` | Modèles/caches locaux |
+| `jobs` | `web` + `scheduler` (split), `all-in-one` (gpu) | Espaces de travail des jobs — **volume partagé** entre web et scheduler (mono-hôte → `shared_backend: fs` suffit) |
+| `models` | `web` + `scheduler` (split), `all-in-one` (gpu) | Modèles/caches locaux |
 | `./config.yaml` (bind, ro) | tous | Configuration applicative |
 | `./.env` (bind, ro) | tous | Secrets (clé Flask, clés API…) |
 

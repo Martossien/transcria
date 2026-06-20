@@ -107,17 +107,26 @@ jobs:
       - name: Bash syntax check (install.sh + scripts Docker)
         run: bash -n install.sh && bash -n scripts/docker_quickstart.sh && bash -n scripts/setup_docker_gpu.sh
 
-      # Valide le schéma compose (pas de build d'image — lourd, réservé à un job dédié/nuit).
-      # Les deux profils doivent résoudre et ne pas faire coexister web et all-in-one (:7870).
-      - name: Validate docker-compose (schema + profils)
+      # Valide le schéma compose (pas de build d'image — lourd, réservé à un job dédié/nuit)
+      # ET les services rendus par profil : garantit que web/all-in-one ne coexistent jamais
+      # (:7870) même si quelqu'un retire un `profiles:` par accident (config resterait valide).
+      - name: Validate docker-compose (schema + invariants de profils)
         env:
           POSTGRES_PASSWORD: ci_dummy
           HF_TOKEN: ""
           HF_CACHE_DIR: /tmp/hf
         run: |
-          docker compose --profile split config >/dev/null
-          docker compose --profile gpu config >/dev/null
-          echo "compose split + gpu : OK"
+          set -e
+          split="$(docker compose --profile split config --services | sort | tr '\n' ' ')"
+          gpu="$(docker compose --profile gpu config --services | sort | tr '\n' ' ')"
+          echo "split: $split"; echo "gpu:   $gpu"
+          # split = web + scheduler (+ db/migrate), SANS all-in-one
+          grep -qw web <<<"$split" && grep -qw scheduler <<<"$split"
+          grep -qw all-in-one <<<"$split" && { echo "ERREUR: all-in-one dans le profil split"; exit 1; } || true
+          # gpu = all-in-one (+ db/migrate), SANS web ni scheduler (sinon conflit :7870)
+          grep -qw all-in-one <<<"$gpu"
+          grep -qwE 'web|scheduler' <<<"$gpu" && { echo "ERREUR: web/scheduler dans le profil gpu (conflit :7870)"; exit 1; } || true
+          echo "invariants de profils : OK"
 
       - name: Run migration tests against PostgreSQL
         env:

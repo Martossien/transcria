@@ -35,14 +35,17 @@ err()  { printf '\033[0;31m[ERROR]\033[0m %s\n' "$*" >&2; }
 
 ENV_FILE=".env.docker"
 COMPOSE=(docker compose --env-file "$ENV_FILE")
-# Profils mutuellement exclusifs (web/all-in-one publient tous deux :7870) :
-#   gpu   → all-in-one ; split → web + scheduler. db/migrate sont hors profil.
+# Profils alternatifs (à ne pas activer ensemble : web et all-in-one publient :7870) :
+#   gpu → all-in-one ; split → web + scheduler. db/migrate sont hors profil.
 if [[ "$MODE" == "gpu" ]]; then COMPOSE+=(--profile gpu); else COMPOSE+=(--profile split); fi
 
 # ── Action down : arrêt propre ────────────────────────────────────────────────
 if [[ "$ACTION" == "down" ]]; then
     [[ -f "$ENV_FILE" ]] || { err "$ENV_FILE absent — rien à arrêter."; exit 1; }
-    log "Arrêt de la stack…"; "${COMPOSE[@]}" down
+    # `down` respecte les profils : on les active TOUS pour arrêter la topologie réellement
+    # démarrée (split OU gpu), quel que soit le mode passé à cette invocation.
+    log "Arrêt de la stack…"
+    docker compose --env-file "$ENV_FILE" --profile split --profile gpu down
     ok "Stack arrêtée (volumes conservés ; 'docker compose down -v' pour tout purger)."
     exit 0
 fi
@@ -103,7 +106,8 @@ fi
 # Secret Flask dans .env applicatif (monté) — INDÉPENDANT de la (re)génération de config.yaml :
 # garantit qu'un .env existant mais sans secret en reçoit un (sinon session éphémère).
 touch .env  # .env est monté en lecture seule par le compose ; doit exister
-if ! grep -q '^TRANSCRIA_SECRET=' .env 2>/dev/null; then
+# `.+` : une ligne `TRANSCRIA_SECRET=` VIDE ne compte pas comme un secret présent.
+if ! grep -Eq '^TRANSCRIA_SECRET=.+' .env 2>/dev/null; then
     umask 077; echo "TRANSCRIA_SECRET=$(gen_secret 32)" >> .env; chmod 600 .env
     ok "TRANSCRIA_SECRET généré dans .env."
 fi

@@ -3,10 +3,13 @@
 # Le rôle resource-node (GPU) n'est PAS ici : c'est une image/un hôte GPU séparé
 # (cf. docs/DOCKER.md). La LLM d'arbitrage et les moteurs STT sont des services externes.
 #
-# Démarrage :   docker compose up -d
+# Démarrage (choisir UN profil — db/migrate démarrent dans les deux) :
+#     docker compose --profile split up -d     # web + scheduler (CPU/distribué)
+#     docker compose --profile gpu   up -d     # all-in-one (GPU, un seul conteneur)
 #   1. `db` démarre et devient « healthy » ;
 #   2. `migrate` (one-shot) applique `alembic upgrade head` puis se termine ;
-#   3. `web` et `scheduler` démarrent une fois la migration réussie.
+#   3. les services du profil démarrent une fois la migration réussie.
+# Un `docker compose up -d` sans profil ne démarre que db + migrate (pas de service applicatif).
 #
 # Secrets / config : `config.yaml` et `.env` sont fournis par volumes (jamais bakés dans
 # l'image). Le DSN PostgreSQL est injecté par TRANSCRIA_DATABASE_URL (pointant sur `db`).
