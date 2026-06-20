@@ -5,6 +5,30 @@
 > `scheduler`, `migrate`) sont construites par le `Dockerfile` à la racine et
 > orchestrées par `docker-compose.yml`.
 
+## Démarrage rapide (une commande)
+
+De `git clone` à un conteneur qui tourne, sans étape manuelle — `scripts/docker_quickstart.sh`
+orchestre tout (prérequis GPU, génération `.env`/`config.yaml`, build avec le bon index
+CUDA, `compose up`, vérification `/health`) :
+
+```bash
+# Tout-en-un GPU (recommandé pour tester le projet) :
+scripts/docker_quickstart.sh                  # → http://localhost:7870 (admin / cf. config.yaml)
+
+# Avec le STT de référence (Cohere, gated) — fournir un token HF :
+HF_TOKEN=hf_xxx scripts/docker_quickstart.sh
+
+# Sans GPU (web + scheduler, pas d'inférence locale) :
+scripts/docker_quickstart.sh --cpu
+
+# Arrêt :
+scripts/docker_quickstart.sh --down
+```
+
+Le script est **idempotent** : il ne réécrit pas un `config.yaml`/`.env` existant, génère
+des secrets aléatoires, choisit `whisper` (non gated, sans token) si `HF_TOKEN` est absent.
+Les sections ci-dessous détaillent chaque étape pour un contrôle manuel.
+
 ## Prérequis (ce qu'un utilisateur doit faire)
 
 **1. Accès GPU dans Docker** — n'est PAS géré par `requirements.txt` (dépendances Python)
