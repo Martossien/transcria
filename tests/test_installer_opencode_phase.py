@@ -104,11 +104,45 @@ def test_detected_binary_is_recorded_and_provider_configured(tmp_path):
     assert chown_calls  # chown best-effort tenté après configuration réussie
 
 
-def test_missing_binary_non_interactive_skips_install(tmp_path):
-    plan = _plan(tmp_path, interactive=False)  # confirm par défaut → False
+def test_missing_binary_non_interactive_auto_installs(tmp_path):
+    # En --non-interactive, opencode requis par le profil (needs_llm) est installé
+    # AUTOMATIQUEMENT (personne ne peut confirmer) — pas de « ignored ».
+    home = tmp_path / "home"
+    plan = _plan(tmp_path, opencode_home=home, user_home=home, interactive=False)
+
+    class _InstallRunner:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, cmd, check=False):
+            self.calls.append(list(cmd))
+            if cmd[0] == "curl":
+                dest = Path(cmd[cmd.index("-o") + 1])
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text("#!/bin/sh\n")
+
+            class _CP:
+                returncode = 0
+
+            return _CP()
+
+    runner = _InstallRunner()
+    # confirm non fourni (renverrait False) : ne doit PAS empêcher l'install non-interactive.
+    result = apply_opencode(plan, console=_console(), runner=runner, chown=lambda p, u: None, detect=_detect_none())
+
+    dest = home / ".opencode" / "bin" / "opencode"
+    assert any(c[0] == "curl" for c in runner.calls)
+    assert "installed" in result.actions
+    assert "ignored" not in result.actions
+    assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)
+
+
+def test_missing_binary_interactive_declined_skips_install(tmp_path):
+    # Interactif + refus explicite → opencode N'est PAS installé (branche « ignored »).
+    plan = _plan(tmp_path, interactive=True)
     runner = _Runner()
 
-    result = apply_opencode(plan, console=_console(), runner=runner, detect=_detect_none())
+    result = apply_opencode(plan, console=_console(), runner=runner, confirm=lambda _p: False, detect=_detect_none())
 
     assert runner.calls == []  # ni install ni configure
     assert "missing" in result.actions and "ignored" in result.actions

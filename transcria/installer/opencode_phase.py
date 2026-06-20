@@ -118,7 +118,11 @@ def apply_opencode(
     else:
         _emit(console, "missing")
         result.record("missing")
-        if confirm(render_install_prompt(opencode_home=plan.opencode_home)):
+        # needs_llm est garanti vrai ici (sinon on a déjà retourné). En non-interactif,
+        # opencode est REQUIS par le profil et personne ne peut confirmer → on installe
+        # automatiquement ; en interactif, on demande.
+        do_install = True if not plan.interactive else confirm(render_install_prompt(opencode_home=plan.opencode_home))
+        if do_install:
             destination = plan.opencode_home / ".opencode" / "bin" / "opencode"
             _emit(console, "download-start")
             ok = install_opencode_binary(
