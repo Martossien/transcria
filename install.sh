@@ -881,7 +881,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 log_cohere_setup_event download-start
                 if [[ -n "$COHERE_CLI" ]]; then
                     if "$COHERE_CLI" download "$COHERE_MODEL_ID" \
-                            --local-dir "$COHERE_DEST" --local-dir-use-symlinks False; then
+                            --local-dir "$COHERE_DEST"; then
                         yaml_set "models.cohere_model_path" "$COHERE_DEST"
                         log_cohere_setup_event download-ok
                         COHERE_OK=true

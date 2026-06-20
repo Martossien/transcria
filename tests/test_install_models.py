@@ -173,18 +173,23 @@ def test_render_local_model_detection_shell_is_filterable(tmp_path: Path):
     assert "QWEN_OK=false" in rendered
 
 
-def test_plan_cohere_download_uses_default_destination_and_first_cli(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(
-        "transcria.install_models.first_available",
-        lambda names: type("Check", (), {"name": names[0], "path": Path("/usr/bin/huggingface-cli")})(),
-    )
+def test_plan_cohere_download_prefers_hf_cli(monkeypatch, tmp_path: Path):
+    seen = {}
+
+    def fake_first_available(names):
+        seen["names"] = list(names)
+        return type("Check", (), {"name": names[0], "path": Path(f"/usr/bin/{names[0]}")})()
+
+    monkeypatch.setattr("transcria.install_models.first_available", fake_first_available)
 
     plan = plan_cohere_download(install_dir=tmp_path)
 
+    # `hf` (CLI courant) doit être tenté AVANT `huggingface-cli` (déprécié).
+    assert seen["names"] == ["hf", "huggingface-cli"]
     assert plan == CohereDownloadPlan(
         destination=tmp_path / "models" / "cohere-asr" / "cohere-transcribe-03-2026",
-        cli_name="huggingface-cli",
-        cli_path=Path("/usr/bin/huggingface-cli"),
+        cli_name="hf",
+        cli_path=Path("/usr/bin/hf"),
     )
 
 
@@ -215,7 +220,7 @@ def test_render_model_summary_for_all_in_one_missing_values():
     )
 
     assert rendered == """Modèles IA :
-  [MANQUANT] Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026
+  [MANQUANT] Cohere ASR — hf download CohereLabs/cohere-transcribe-03-2026
   [OK] pyannote diarization
   [MANQUANT] LLM d'arbitrage GGUF — choisir un palier dans install.sh
   [MANQUANT] opencode — résumé/correction LLM désactivé
@@ -320,11 +325,10 @@ def test_render_cohere_setup_log_for_known_events():
     assert render_cohere_setup_log(event="download-start") == "INFO:Téléchargement de CohereLabs/cohere-transcribe-03-2026...\n"
     assert render_cohere_setup_log(event="download-ok") == "OK:Modèle Cohere téléchargé et configuré\n"
     assert render_cohere_setup_log(event="download-failed") == "ERROR:Téléchargement échoué — vérifiez vos accès HuggingFace\n"
-    assert render_cohere_setup_log(event="cli-missing") == "WARN:huggingface-cli non trouvé — installer avec: pip install huggingface_hub\n"
+    assert render_cohere_setup_log(event="cli-missing") == "WARN:hf (ou huggingface-cli) non trouvé — installer avec: pip install huggingface_hub\n"
     assert render_cohere_setup_log(event="manual-command-title") == "INFO:Commande manuelle :\n"
     assert render_cohere_setup_log(event="manual-command", value="/opt/models/cohere") == (
-        "INFO:  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 "
-        "--local-dir /opt/models/cohere --local-dir-use-symlinks False\n"
+        "INFO:  hf download CohereLabs/cohere-transcribe-03-2026 --local-dir /opt/models/cohere\n"
     )
     assert render_cohere_setup_log(event="ignored") == "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
 

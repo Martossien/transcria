@@ -15,6 +15,7 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ### Changed
 - **`install.sh --non-interactive` installe opencode automatiquement** quand le profil requiert le LLM (auparavant : non installé faute de confirmation possible → phases LLM indisponibles). En interactif, la confirmation reste demandée ; un échec de téléchargement dégrade proprement (instructions manuelles, l'install ne plante pas).
 - **Bootstrap PostgreSQL local idempotent.** Relancer `install.sh --postgres` sur une base déjà provisionnée tentait quand même le bootstrap privilégié (réécriture `pg_hba.conf`) → `PermissionError`. La phase sonde désormais d'abord la connexion applicative : si la base est joignable, tout le bootstrap privilégié est sauté (« déjà provisionnés »), sans appel `sudo`. Sinon, comportement inchangé.
+- **Téléchargement Cohere via le CLI `hf` (fin de la dépendance au déprécié `huggingface-cli`).** La détection du CLI de téléchargement Cohere ne cherchait que `huggingface-cli` (déprécié) et utilisait `--local-dir-use-symlinks False` (supprimé des versions récentes / absent de `hf`). Préfère désormais `hf` (repli `huggingface-cli`) et abandonne le flag déprécié ; commandes manuelles d'`INSTALL.md` alignées sur `hf download`.
 
 ## [0.1.0-beta.1] — 2026-06-20
 

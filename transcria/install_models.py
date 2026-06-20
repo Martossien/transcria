@@ -143,7 +143,7 @@ def render_local_model_detection_shell(detection: LocalModelDetection) -> str:
 
 def plan_cohere_download(*, install_dir: Path) -> CohereDownloadPlan:
     """Prépare le téléchargement Cohere sans lancer d'action réseau."""
-    cli = first_available(["huggingface-cli"])
+    cli = first_available(["hf", "huggingface-cli"])  # `hf` = CLI courant ; `huggingface-cli` déprécié (repli)
     return CohereDownloadPlan(
         destination=Path(install_dir) / COHERE_DEFAULT_RELATIVE_PATH,
         cli_name=cli.name if cli else "",
@@ -195,7 +195,7 @@ def render_model_summary(
         lines.append(
             "  [OK] Cohere ASR"
             if cohere_ok
-            else "  [MANQUANT] Cohere ASR — huggingface-cli download CohereLabs/cohere-transcribe-03-2026"
+            else "  [MANQUANT] Cohere ASR — hf download CohereLabs/cohere-transcribe-03-2026"
         )
         lines.append(
             "  [OK] pyannote diarization"
@@ -236,7 +236,7 @@ def render_model_detection_table(
         (
             "Cohere ASR (STT ~6 Go)",
             "OK" if cohere_ok else "MANQUANT",
-            _basename_or_empty(cohere_path) if cohere_ok else "huggingface-cli download CohereLabs/...",
+            _basename_or_empty(cohere_path) if cohere_ok else "hf download CohereLabs/...",
         ),
         (
             "pyannote diarization (~2 Go)",
@@ -307,11 +307,11 @@ def render_cohere_setup_log(*, event: str, value: str = "") -> str:
     if event == "download-failed":
         return "ERROR:Téléchargement échoué — vérifiez vos accès HuggingFace\n"
     if event == "cli-missing":
-        return "WARN:huggingface-cli non trouvé — installer avec: pip install huggingface_hub\n"
+        return "WARN:hf (ou huggingface-cli) non trouvé — installer avec: pip install huggingface_hub\n"
     if event == "manual-command-title":
         return "INFO:Commande manuelle :\n"
     if event == "manual-command":
-        return f"INFO:  huggingface-cli download CohereLabs/cohere-transcribe-03-2026 --local-dir {value} --local-dir-use-symlinks False\n"
+        return f"INFO:  hf download CohereLabs/cohere-transcribe-03-2026 --local-dir {value}\n"
     if event == "ignored":
         return "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
     raise ValueError(f"événement Cohere inconnu : {event}")
@@ -323,7 +323,7 @@ def render_cohere_setup_prompt() -> str:
         "",
         "  Options :",
         "   1. Entrer le chemin où le modèle est déjà téléchargé",
-        "   2. Télécharger maintenant (nécessite huggingface-cli + accès CohereLabs)",
+        "   2. Télécharger maintenant (nécessite hf/huggingface-cli + accès CohereLabs)",
         "   3. Ignorer (pipeline STT non fonctionnel)",
         "",
         "  Votre choix [1/2/3] : ",

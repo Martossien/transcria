@@ -643,9 +643,8 @@ Télécharger le modèle (~6 Go) :
 mkdir -p models/cohere-asr
 
 # Depuis HuggingFace (nécessite accès au modèle CohereLabs)
-huggingface-cli download CohereLabs/cohere-transcribe-03-2026 \
-    --local-dir models/cohere-asr/cohere-transcribe-03-2026 \
-    --local-dir-use-symlinks False
+hf download CohereLabs/cohere-transcribe-03-2026 \
+    --local-dir models/cohere-asr/cohere-transcribe-03-2026
 ```
 
 Source : [huggingface.co/CohereLabs/cohere-transcribe-03-2026](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026)
@@ -710,10 +709,9 @@ Source : [github.com/ggerganov/llama.cpp](https://github.com/ggerganov/llama.cpp
 mkdir -p models/qwen3-35b-arbitrage/UD-Q8_K_XL
 
 # Depuis HuggingFace (bartowski — quantification UD-Q8_K_XL)
-huggingface-cli download bartowski/Qwen3.6-35B-A3B-GGUF \
+hf download bartowski/Qwen3.6-35B-A3B-GGUF \
     UD-Q8_K_XL/Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf \
-    --local-dir models/qwen3-35b-arbitrage \
-    --local-dir-use-symlinks False
+    --local-dir models/qwen3-35b-arbitrage
 ```
 
 Source : [huggingface.co/bartowski/Qwen3.6-35B-A3B-GGUF](https://huggingface.co/bartowski/Qwen3.6-35B-A3B-GGUF)
@@ -828,11 +826,11 @@ exporté), plutôt que de compter sur le téléchargement au premier job :
 
 | Modèle | Cache | Commande |
 |---|---|---|
-| Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `huggingface-cli download <model_id>` |
-| pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `huggingface-cli download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
-| Whisper (faster-whisper) | `$HF_HOME/hub` | `huggingface-cli download Systran/faster-whisper-large-v3` |
+| Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `hf download <model_id>` |
+| pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `hf download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
+| Whisper (faster-whisper) | `$HF_HOME/hub` | `hf download Systran/faster-whisper-large-v3` |
 | SQUIM (préflight) | `~/.cache/torch/hub/torchaudio/models/` | `curl -o ~/.cache/torch/hub/torchaudio/models/squim_objective_dns2020.pth https://download.pytorch.org/torchaudio/models/squim_objective_dns2020.pth` |
-| LLM d'arbitrage (GGUF) | chemin du script de lancement | `huggingface-cli download <repo_gguf>` puis adapter `scripts/launch_arbitrage.sh` |
+| LLM d'arbitrage (GGUF) | chemin du script de lancement | `hf download <repo_gguf>` puis adapter `scripts/launch_arbitrage.sh` |
 
 **3. Vérifier avant le premier job** : `venv/bin/python scripts/doctor.py` comporte
 un check « Modèles locaux (cache) » qui liste, selon la config active, les modèles
