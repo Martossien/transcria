@@ -968,6 +968,17 @@ OPENCODE_CLI_ARGS=(
 [[ "$NON_INTERACTIVE" = true ]] && OPENCODE_CLI_ARGS+=(--non-interactive)
 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${OPENCODE_CLI_ARGS[@]}"
 
+# La phase opencode tourne en sous-processus : elle ne peut pas réassigner la variable
+# shell. On récupère le binaire qu'elle a persisté dans config.yaml — sinon SECTION 9-bis
+# (sélection LLM d'arbitrage : palier VRAM, GGUF, calibration) se croit « opencode manquant »
+# et se saute silencieusement, même opencode installé. On VALIDE que le binaire résout
+# réellement (config.example porte un défaut "opencode") : sinon on retombe sur "" =
+# absent, sémantique d'avant la fonte préservée.
+OPENCODE_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")
+if [[ -n "$OPENCODE_BIN" ]] && ! command -v "$OPENCODE_BIN" >/dev/null 2>&1 && [[ ! -x "$OPENCODE_BIN" ]]; then
+    OPENCODE_BIN=""
+fi
+
 # ============================================================================
 # SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle
 # ============================================================================

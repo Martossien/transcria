@@ -331,6 +331,20 @@ def test_install_script_delegates_opencode_phase_to_installer_cli():
     assert "Installation manuelle :" not in content
 
 
+def test_install_script_recovers_opencode_bin_from_config_after_phase():
+    # Régression (finding 8.4) : la phase opencode est un SOUS-PROCESSUS → elle ne peut pas
+    # réassigner la variable shell OPENCODE_BIN. install.sh doit la RÉCUPÉRER depuis config.yaml
+    # APRÈS la délégation, sinon SECTION 9-bis (sélection LLM d'arbitrage) se croit « opencode
+    # manquant » et se saute silencieusement même opencode installé.
+    content = _INSTALL.read_text(encoding="utf-8")
+
+    assert 'OPENCODE_BIN=$(yaml_get "workflow.arbitration_llm.opencode_bin")' in content
+    recover = content.index('OPENCODE_BIN=$(yaml_get')
+    delegate = content.index("transcria.installer.cli opencode")
+    usage = content.index('[[ -z "${OPENCODE_BIN:-}" ]]')
+    assert delegate < recover < usage, "OPENCODE_BIN doit être récupéré APRÈS la phase opencode et AVANT la sélection LLM"
+
+
 def test_install_script_delegates_llm_selection_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
