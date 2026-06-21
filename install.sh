@@ -654,7 +654,7 @@ _setup_postgres() {
         #    (qui utilise --pg-existing) ; logique SQL + orchestration testées à part.
         local PG_BOOTSTRAP_ARGS=(
             -m transcria.installer.cli postgres-bootstrap
-            --db "$db" --user "$user" --password "$pass"
+            --db "$db" --user "$user" --password="$pass"
             --install-dir "$INSTALL_DIR" --host "$host" --port "$port"
         )
         [[ "$HAVE_SYSTEMCTL" = true ]] && PG_BOOTSTRAP_ARGS+=(--have-systemctl)
@@ -679,7 +679,7 @@ _setup_postgres() {
     # chemin de bout en bout via --pg-existing.
     local POSTGRES_CLI_ARGS=(
         -m transcria.installer.cli postgres
-        --host "$host" --port "$port" --db "$db" --user "$user" --password "$pass"
+        --host "$host" --port "$port" --db "$db" --user "$user" --password="$pass"
         --install-dir "$INSTALL_DIR" --venv-python "$VENV/bin/python"
         --env-file "$ENV_FILE" --sqlite-db "$sqlite_db" --backup-dir "$backup_dir"
         --service-user "$SERVICE_USER"
