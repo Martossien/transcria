@@ -120,7 +120,7 @@ def test_torch_cuda_install_uses_index_url(tmp_path):
     torch_cmd = [c for c in runner.commands if "torch" in c]
     assert torch_cmd
     assert torch_cmd[0] == [
-        venv_py, "-m", "pip", "install", "torch", "torchvision", "torchaudio",
+        venv_py, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec",
         "--index-url", "https://download.pytorch.org/whl/cu124", "--quiet",
     ]
 
@@ -134,6 +134,7 @@ def test_torch_cpu_install_has_no_index_url(tmp_path):
 
     torch_cmd = [c for c in runner.commands if "torch" in c]
     assert torch_cmd and "--index-url" not in torch_cmd[0]
+    assert "torchcodec" in torch_cmd[0]  # décodeur audio pyannote, apparié à torch
     assert "torch-install-cpu" in result.actions
 
 

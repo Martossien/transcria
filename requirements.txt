@@ -30,6 +30,10 @@ nemo_toolkit[asr]>=2.7,<3.0
 
 # Speaker diarization
 pyannote.audio>=4.0,<5.0
+# Décodeur audio requis par pyannote.audio 4.x (AudioDecoder). Couplé à l'ABI de torch
+# (torchcodec 0.12 ↔ torch 2.12) → installé depuis l'index torch par l'install/Docker pour
+# garantir un wheel apparié ; requiert aussi les libs FFmpeg système au runtime (déjà exigées).
+torchcodec>=0.12,<1.0
 
 # Model cache (pin <1.0 : transformers 4.x bloque au import >=1.0)
 huggingface-hub>=0.34,<1.0

@@ -179,6 +179,11 @@ docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 
 > L'index `cu130` correspond au driver récent (≥ 580) de cette plateforme ; adapter à votre
 > version de driver/CUDA (`cu124`, `cu126`, …). Vérifié : torch 2.12 + cu130, `torch.cuda.is_available()`
 > True dans le conteneur, RTX 3090 énumérée par `/capabilities`.
+>
+> `torch`, `torchaudio` **et `torchcodec`** sont installés depuis cet index (et non en transitif
+> via PyPI) : `torchcodec` est le décodeur audio de pyannote.audio 4.x, couplé à l'ABI/CUDA de
+> torch — un wheel non apparié casse l'`AudioDecoder` (diarisation). L'image fournit `ffmpeg`
+> (libs FFmpeg requises au runtime par torchcodec).
 
 ### Option simple pour tester le projet — tout-en-un GPU (une commande)
 

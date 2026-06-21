@@ -128,12 +128,15 @@ def apply_python_env(
         console.ok(f"PyTorch déjà installé (CUDA {torch_plan.installed_cuda})")
     elif torch_plan.action == "install-cpu":
         console.info("Installation PyTorch CPU...")
-        _run(runner, [str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "--quiet"])
+        # torchcodec installé ICI, depuis le même index que torch : c'est le décodeur audio
+        # de pyannote.audio 4.x, couplé à l'ABI/CUDA de torch. Le laisser arriver en transitif
+        # via PyPI tirerait un wheel bâti pour un autre torch → AudioDecoder cassé.
+        _run(runner, [str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec", "--quiet"])
         console.ok("PyTorch installé")
     elif torch_plan.action == "install-cuda":
         console.info(f"Installation PyTorch {torch_plan.cuda_tag}...")
         _run(runner, [
-            str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio",
+            str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec",
             "--index-url", f"https://download.pytorch.org/whl/{torch_plan.cuda_tag}", "--quiet",
         ])
         console.ok("PyTorch installé")

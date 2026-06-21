@@ -32,9 +32,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip
 
 COPY requirements.txt .
-# Torch/torchaudio d'abord depuis l'index choisi (CPU par défaut) pour ne pas tirer les
-# wheels CUDA dans une image CPU ; le reste des dépendances ensuite (torch déjà satisfait).
-RUN pip install --index-url "${TORCH_INDEX_URL}" torch torchaudio \
+# Torch/torchaudio/torchcodec d'abord depuis l'index choisi (CPU par défaut) pour ne pas
+# tirer les wheels CUDA dans une image CPU ; le reste des dépendances ensuite (déjà satisfait).
+# torchcodec (décodeur audio de pyannote.audio 4.x) est installé ICI, depuis le même index
+# que torch : transitif via PyPI, il tirerait un wheel bâti pour un autre torch/CUDA →
+# AudioDecoder indisponible, diarisation cassée. Le runtime fournit aussi ffmpeg (libav*).
+RUN pip install --index-url "${TORCH_INDEX_URL}" torch torchaudio torchcodec \
     && pip install -r requirements.txt
 
 # ── Étage runtime : venv + code, sans toolchain de build ────────────────────
