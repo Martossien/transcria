@@ -453,6 +453,18 @@ if [[ -z "$PYTHON_BIN" ]]; then
     exit 1
 fi
 
+# Le module venv + ensurepip (paquet `python3-venv` sur Debian/Ubuntu) est requis pour
+# créer le venv. Sans lui, `python -m venv` plante avec un message obscur — on vérifie en
+# amont pour émettre un message clair et stopper proprement. Sauté si --skip-deps (venv
+# déjà fourni : couche build Docker / venv existant).
+if [[ "$SKIP_DEPS" != true ]]; then
+    if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" \
+            -m transcria.install_prerequisites check-venv >/dev/null 2>&1; then
+        log_prerequisite_event venv-missing
+        exit 1
+    fi
+fi
+
 SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
     system-capabilities --format shell)
 eval_named_shell_assignments "$SYSTEM_CAPABILITIES_OUT" \
@@ -477,7 +489,8 @@ PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYT
     check-binaries \
     --required ffmpeg \
     --required ffprobe \
-    --optional lsof)
+    --optional lsof \
+    --optional curl)
 PREREQ_BINARIES_STATUS=$?
 while IFS=$'\t' read -r status name path; do
     [[ -z "$name" ]] && continue

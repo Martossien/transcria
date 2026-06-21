@@ -52,11 +52,16 @@ Ce guide détaille l'installation complète de TranscrIA, de la machine nue jusq
 | Logiciel | Version | Installation |
 |---|---|---|
 | Ubuntu / Debian | 22.04+ | — |
+| Python | 3.11+ | `apt install python3.11` |
+| Module venv (`ensurepip`) | — | `apt install python3-venv` — **requis** pour créer le venv ; sur Debian/Ubuntu c'est un paquet séparé de `python3`, sans lui `python -m venv` échoue |
 | CUDA Toolkit | 12.x | Voir [docs.nvidia.com/cuda](https://docs.nvidia.com/cuda) |
 | NVIDIA Driver | 535+ | `apt install nvidia-driver-535` |
 | ffmpeg / ffprobe | 4.4+ | `apt install ffmpeg` |
-| lsof | — | `apt install lsof` |
+| curl | — | `apt install curl` — utilisé pour télécharger opencode (LLM d'arbitrage) ; sinon repli vers une commande manuelle |
+| lsof | — | `apt install lsof` — utilisé par `start.sh` / `stop.sh` |
 | PostgreSQL *(principal hors dev)* | 13+ | `apt install postgresql` — requis en production/split/Docker ; SQLite seulement dev local ou demande explicite |
+
+> `install.sh` **vérifie ces prérequis en amont** et s'arrête avec un message clair si un binaire requis (Python 3.11+, module venv, ffmpeg/ffprobe) manque — pas de plantage silencieux. `curl` et `lsof` sont signalés en avertissement.
 
 > Les pilotes Python de base de données (`psycopg`, `alembic`) sont installés par
 > `pip install -r requirements.txt`. Seul le **serveur** PostgreSQL est un paquet
@@ -87,7 +92,7 @@ cd transcria
 
 | Étape | Action |
 |---|---|
-| Prérequis | Vérifie Python 3.11+, nvidia-smi, ffmpeg/ffprobe, lsof |
+| Prérequis | Vérifie Python 3.11+, module venv (`ensurepip`), nvidia-smi, ffmpeg/ffprobe, curl, lsof |
 | Venv | Crée ou réutilise `venv/`, met pip à jour |
 | PyTorch | Détecte la version CUDA (`nvidia-smi`) et installe le wheel correspondant (`cu121`/`cu124`/`cu126`) |
 | Dépendances | Installe `requirements.txt` + `accelerate` + `python-dotenv` |
@@ -311,8 +316,8 @@ sudo reboot
 # Après redémarrage, vérifier
 nvidia-smi
 
-# Outils système
-sudo apt install -y ffmpeg lsof build-essential git
+# Outils système (python3-venv : module venv/ensurepip requis pour créer le venv)
+sudo apt install -y python3-venv ffmpeg curl lsof build-essential git
 
 # PostgreSQL — choix principal hors développement local
 sudo apt install -y postgresql && sudo systemctl enable --now postgresql
@@ -341,6 +346,7 @@ TranscrIA utilise un **virtualenv Python** (`venv/`) pour isoler toutes les dép
 ### Prérequis
 
 - Python 3.11+ installé sur le système (`python3 --version`)
+- Module venv / `ensurepip` (`apt install python3-venv`) — sur Debian/Ubuntu c'est un paquet séparé de `python3` ; sans lui `python3 -m venv venv` échoue avec « ensurepip is not available »
 - pip à jour (`pip install --upgrade pip`)
 - CUDA Toolkit 12.x installé (`nvidia-smi` doit afficher la version CUDA)
 - ffmpeg installé (`apt install ffmpeg`)

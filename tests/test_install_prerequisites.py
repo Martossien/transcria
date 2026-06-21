@@ -6,6 +6,7 @@ from transcria.install_prerequisites import (
     first_available,
     has_missing_required,
     main,
+    python_venv_supported,
     render_binary_checks,
     render_first_available,
     render_setup_log,
@@ -163,7 +164,39 @@ def test_render_setup_log_for_prerequisite_events():
     assert render_setup_log(event="binary-optional-missing", name="lsof") == (
         "WARN:lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof\n"
     )
+    assert render_setup_log(event="binary-optional-missing", name="curl") == (
+        "WARN:curl manquant — requis pour télécharger opencode (LLM d'arbitrage). Installer: apt install curl\n"
+    )
     assert render_setup_log(event="binary-optional-missing", name="rsync") == "WARN:rsync manquant\n"
+
+
+def test_render_setup_log_venv_missing_points_to_python3_venv():
+    assert render_setup_log(event="venv-missing") == (
+        "ERROR:module venv/ensurepip indisponible — `python -m venv` échouerait. "
+        "Installer avec: apt install python3-venv\n"
+    )
+
+
+def test_python_venv_supported_requires_venv_and_ensurepip():
+    present = {"venv", "ensurepip"}
+    assert python_venv_supported(find_spec=lambda name: object() if name in present else None) is True
+    # `ensurepip` absent (cas Debian sans python3-venv) → non supporté.
+    assert python_venv_supported(find_spec=lambda name: object() if name == "venv" else None) is False
+    assert python_venv_supported(find_spec=lambda name: None) is False
+
+
+def test_python_venv_supported_swallows_find_spec_errors():
+    def boom(name: str):
+        raise ValueError("namespace package without __path__")
+
+    assert python_venv_supported(find_spec=boom) is False
+
+
+def test_install_prerequisites_cli_check_venv(monkeypatch):
+    monkeypatch.setattr("transcria.install_prerequisites.python_venv_supported", lambda: True)
+    assert main(["check-venv"]) == 0
+    monkeypatch.setattr("transcria.install_prerequisites.python_venv_supported", lambda: False)
+    assert main(["check-venv"]) == 1
 
 
 def test_install_prerequisites_cli_setup_log(capsys):

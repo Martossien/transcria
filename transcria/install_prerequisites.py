@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import pwd
 import shlex
 import shutil
@@ -12,6 +13,7 @@ from typing import Callable
 
 WhichFn = Callable[[str], str | None]
 UserHomeFn = Callable[[str], str]
+FindSpecFn = Callable[[str], object | None]
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,21 @@ def render_first_available(check: BinaryCheck, *, output_format: str) -> str:
     raise ValueError(f"format non supporté: {output_format}")
 
 
+def python_venv_supported(*, find_spec: FindSpecFn = importlib.util.find_spec) -> bool:
+    """Vrai si l'interpréteur courant peut créer un venv AVEC pip.
+
+    Sur Debian/Ubuntu, `python3` est présent mais le paquet `python3-venv` (qui fournit
+    `ensurepip`) est séparé : `python -m venv` échoue alors avec un message obscur
+    (« ensurepip is not available »). On vérifie en amont pour émettre un message clair
+    et stopper l'installation AVANT le plantage. Vérifié sur l'interpréteur qui exécute
+    ce module — c'est exactement celui qui créera le venv (PYTHON_BIN dans install.sh).
+    """
+    try:
+        return find_spec("venv") is not None and find_spec("ensurepip") is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def detect_system_capabilities(*, which: WhichFn = shutil.which) -> dict[str, bool]:
     """Détecte les outils système utilisés par les branches privilégiées de l'installateur."""
     binaries = {
@@ -116,6 +133,11 @@ def render_setup_log(*, event: str, name: str = "", value: str = "", path: str =
         return f"OK:Python {value} : {path}\n"
     if event == "python-missing":
         return "ERROR:Python 3.11+ requis. Installer avec: apt install python3.11\n"
+    if event == "venv-missing":
+        return (
+            "ERROR:module venv/ensurepip indisponible — `python -m venv` échouerait. "
+            "Installer avec: apt install python3-venv\n"
+        )
     if event == "nvidia-ok":
         return f"OK:nvidia-smi — {value} GPU(s), CUDA {path}\n"
     if event == "nvidia-missing":
@@ -129,6 +151,8 @@ def render_setup_log(*, event: str, name: str = "", value: str = "", path: str =
     if event == "binary-optional-missing":
         if name == "lsof":
             return "WARN:lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof\n"
+        if name == "curl":
+            return "WARN:curl manquant — requis pour télécharger opencode (LLM d'arbitrage). Installer: apt install curl\n"
         return f"WARN:{name} manquant\n"
     raise ValueError(f"événement prérequis inconnu : {event}")
 
@@ -144,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
     first_parser = subparsers.add_parser("first-available", help="retourne le premier binaire disponible")
     first_parser.add_argument("--name", action="append", required=True)
     first_parser.add_argument("--format", choices=["tsv", "shell", "path", "name"], default="tsv")
+
+    subparsers.add_parser("check-venv", help="vérifie que l'interpréteur peut créer un venv avec pip (ensurepip)")
 
     caps_parser = subparsers.add_parser("system-capabilities", help="détecte les outils système disponibles")
     caps_parser.add_argument("--format", choices=["tsv", "shell"], default="tsv")
@@ -164,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
         if output:
             print(output)
         return 1 if has_missing_required(checks) else 0
+    if args.command == "check-venv":
+        return 0 if python_venv_supported() else 1
     if args.command == "first-available":
         match = first_available(args.name)
         if match is None:
