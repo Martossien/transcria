@@ -8,6 +8,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] — 2026-06-21
+
+Cycle de durcissement de l'installation depuis `beta.1`, **validé de bout en bout sur 4
+distributions Linux (Ubuntu 22.04/24.04, Debian 12, Fedora 42) × 3 versions Python
+(3.11/3.12/3.13)** — apt + dnf, systemd et non-systemd, PostgreSQL 14/15/16 — avec le
+pipeline complet STT (Cohere) + diarisation (pyannote) + LLM (résumé / correction / relecture)
+au banc de référence (97/100). Phase `0.x` : l'API, le schéma de configuration et le modèle de
+données peuvent encore évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`.
+
 ### Fixed
 - **Sélection LLM d'arbitrage qui se sautait silencieusement (régression de la fonte d'`install.sh`).** La phase opencode étant un sous-processus, elle persistait `opencode_bin` dans `config.yaml` mais ne pouvait pas réassigner la variable shell `OPENCODE_BIN` — restée vide → la SECTION 9-bis (palier VRAM, téléchargement GGUF, calibration) se croyait « opencode manquant » et se sautait sur toute machine GPU, même opencode installé (le `doctor` le voyait, masquant le bug). `install.sh` récupère désormais `OPENCODE_BIN` depuis `config.yaml` après la phase, avec validation que le binaire résout réellement. Garde structurel ajouté.
 - **Faux « Cohere ASR ABSENT » à l'installation.** La détection ne regardait qu'un répertoire local, alors que `models.cohere_model_path` vaut par défaut un repo id (`CohereLabs/cohere-transcribe-03-2026`) dont les poids vivent dans le cache HF. La détection scrute maintenant aussi le cache HF par repo id (comme pyannote) — fin du faux négatif.
