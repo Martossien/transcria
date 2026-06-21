@@ -199,47 +199,60 @@ def test_install_opencode_cli_ensure_path_returns_one_when_unchanged(tmp_path: P
     assert main(["--ensure-path", "--opencode-dir", str(opencode_dir), "--current-path", str(opencode_dir), "--rc-file", str(rc)]) == 1
 
 
-def test_install_opencode_binary_downloads_and_marks_executable(tmp_path: Path):
-    destination = tmp_path / ".opencode" / "bin" / "opencode"
+def test_install_opencode_binary_runs_official_installer_under_target_home(tmp_path: Path):
+    home = tmp_path / "home"
+    binary = home / ".opencode" / "bin" / "opencode"
     calls: list[list[str]] = []
+    seen_env: dict[str, str] = {}
 
     def fake_run(cmd: list[str], **kwargs):
         calls.append(cmd)
         assert kwargs["check"] is False
-        destination.write_text("#!/bin/sh\n", encoding="utf-8")
+        seen_env.update(kwargs["env"])
+        # le script officiel pose le binaire sous $HOME/.opencode/bin
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_text("#!/bin/sh\n", encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0)
 
-    assert install_opencode_binary(destination=destination, url="https://example.invalid/opencode", run=fake_run)
+    assert install_opencode_binary(opencode_home=home, install_url="https://opencode.ai/install", run=fake_run)
 
-    assert calls == [["curl", "-fsSL", "-o", str(destination), "https://example.invalid/opencode"]]
-    assert destination.read_text(encoding="utf-8") == "#!/bin/sh\n"
-    assert destination.stat().st_mode & 0o111
+    assert calls == [["bash", "-c", "curl -fsSL https://opencode.ai/install | bash"]]
+    assert seen_env["HOME"] == str(home)  # installé sous le HOME ciblé, pas celui de l'appelant
+    assert binary.is_file()
 
 
-def test_install_opencode_binary_reports_download_failure(tmp_path: Path):
-    destination = tmp_path / ".opencode" / "bin" / "opencode"
+def test_install_opencode_binary_reports_installer_failure(tmp_path: Path):
+    home = tmp_path / "home"
 
     def fake_run(cmd: list[str], **kwargs):
         return subprocess.CompletedProcess(cmd, 22)
 
-    assert not install_opencode_binary(destination=destination, url="https://example.invalid/opencode", run=fake_run)
-    assert not destination.exists()
+    assert not install_opencode_binary(opencode_home=home, run=fake_run)
+    assert not (home / ".opencode" / "bin" / "opencode").exists()
+
+
+def test_install_opencode_binary_fails_when_binary_absent_despite_success(tmp_path: Path):
+    # Le script « réussit » (rc=0) mais ne pose pas le binaire → échec explicite (repli manuel).
+    home = tmp_path / "home"
+
+    def fake_run(cmd: list[str], **kwargs):
+        return subprocess.CompletedProcess(cmd, 0)
+
+    assert not install_opencode_binary(opencode_home=home, run=fake_run)
 
 
 def test_install_opencode_cli_installs_binary(capsys, monkeypatch, tmp_path: Path):
-    destination = tmp_path / "opencode"
-    owner_root = tmp_path / ".opencode"
+    home = tmp_path / "home"
 
     monkeypatch.setattr(
         "transcria.install_opencode.install_opencode_binary",
-        lambda **kwargs: kwargs["destination"] == destination and kwargs["owner_root"] == owner_root,
+        lambda **kwargs: kwargs["opencode_home"] == home and kwargs["service_user"] == "transcria",
     )
 
     assert main([
         "--install-binary",
-        "--destination", str(destination),
+        "--opencode-home", str(home),
         "--service-user", "transcria",
-        "--owner-root", str(owner_root),
     ]) == 0
     assert capsys.readouterr().out == ""
 
@@ -247,7 +260,9 @@ def test_install_opencode_cli_installs_binary(capsys, monkeypatch, tmp_path: Pat
 def test_render_setup_log_for_known_events():
     assert render_setup_log(event="found", value="/opt/opencode (1.2.3)") == "OK:opencode trouvé : /opt/opencode (1.2.3)\n"
     assert render_setup_log(event="missing") == "WARN:opencode non trouvé\n"
-    assert render_setup_log(event="download-start") == "INFO:Téléchargement opencode (linux-x64)...\n"
+    assert render_setup_log(event="download-start") == (
+        "INFO:Installation d'opencode via l'installateur officiel (opencode.ai/install)…\n"
+    )
     assert render_setup_log(event="installed", value="/srv/.opencode/bin/opencode") == (
         "OK:opencode installé : /srv/.opencode/bin/opencode\n"
     )
@@ -256,13 +271,13 @@ def test_render_setup_log_for_known_events():
         'INFO:Relancez votre shell ou : export PATH="/home/app/.opencode/bin:$PATH"\n'
     )
     assert render_setup_log(event="download-failed") == "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
-    assert render_setup_log(event="manual-title") == "INFO:Installation manuelle :\n"
-    assert render_setup_log(event="manual-mkdir") == "INFO:  mkdir -p ~/.opencode/bin\n"
-    assert render_setup_log(event="manual-curl") == (
-        "INFO:  curl -fsSL -o ~/.opencode/bin/opencode "
-        "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64\n"
+    assert render_setup_log(event="manual-title") == (
+        "INFO:Installation manuelle d'opencode (voir https://opencode.ai/download) :\n"
     )
-    assert render_setup_log(event="manual-chmod") == "INFO:  chmod +x ~/.opencode/bin/opencode\n"
+    assert render_setup_log(event="manual-curl") == "INFO:  curl -fsSL https://opencode.ai/install | bash\n"
+    assert render_setup_log(event="manual-alt") == (
+        "INFO:  ou : npm i -g opencode-ai  |  bun add -g opencode-ai  |  brew install anomalyco/tap/opencode\n"
+    )
     assert render_setup_log(event="ignored") == "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
     assert render_setup_log(event="install-later") == "INFO:Pour installer plus tard : https://opencode.ai\n"
     assert render_setup_log(event="configure-start") == "INFO:Configuration du provider opencode local…\n"

@@ -35,7 +35,7 @@ class _Runner:
         self.returncode = returncode
         self.calls: list[list[str]] = []
 
-    def __call__(self, cmd, check=False):
+    def __call__(self, cmd, check=False, env=None):
         self.calls.append(list(cmd))
 
         rc = self.returncode
@@ -114,10 +114,10 @@ def test_missing_binary_non_interactive_auto_installs(tmp_path):
         def __init__(self):
             self.calls = []
 
-        def __call__(self, cmd, check=False):
+        def __call__(self, cmd, check=False, env=None):
             self.calls.append(list(cmd))
-            if cmd[0] == "curl":
-                dest = Path(cmd[cmd.index("-o") + 1])
+            if cmd[0] == "bash":  # installateur officiel : pose le binaire sous $HOME
+                dest = Path(env["HOME"]) / ".opencode" / "bin" / "opencode"
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text("#!/bin/sh\n")
 
@@ -131,7 +131,7 @@ def test_missing_binary_non_interactive_auto_installs(tmp_path):
     result = apply_opencode(plan, console=_console(), runner=runner, chown=lambda p, u: None, detect=_detect_none())
 
     dest = home / ".opencode" / "bin" / "opencode"
-    assert any(c[0] == "curl" for c in runner.calls)
+    assert any(c[0] == "bash" for c in runner.calls)
     assert "installed" in result.actions
     assert "ignored" not in result.actions
     assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)
@@ -152,15 +152,15 @@ def test_missing_binary_confirmed_installs_then_configures(tmp_path):
     home = tmp_path / "home"
     plan = _plan(tmp_path, opencode_home=home, user_home=home, interactive=True)
 
-    # runner sert curl (install-binary) ET setup_opencode ; le curl simulé crée le fichier
+    # runner sert l'installateur officiel (bash -c curl|bash) ET setup_opencode ; le bash simulé crée le fichier
     class _InstallRunner:
         def __init__(self):
             self.calls = []
 
-        def __call__(self, cmd, check=False):
+        def __call__(self, cmd, check=False, env=None):
             self.calls.append(list(cmd))
-            if cmd[0] == "curl":
-                dest = Path(cmd[cmd.index("-o") + 1])
+            if cmd[0] == "bash":  # installateur officiel : pose le binaire sous $HOME
+                dest = Path(env["HOME"]) / ".opencode" / "bin" / "opencode"
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text("#!/bin/sh\n")
 
@@ -177,7 +177,7 @@ def test_missing_binary_confirmed_installs_then_configures(tmp_path):
 
     dest = home / ".opencode" / "bin" / "opencode"
     assert get_yaml_value(load_yaml_file(plan.config_path), _BIN_KEY) == str(dest)
-    assert any(c[0] == "curl" for c in runner.calls)
+    assert any(c[0] == "bash" for c in runner.calls)
     assert any(any("setup_opencode.py" in part for part in c) for c in runner.calls)
     assert "installed" in result.actions and "provider-ok" in result.actions
 

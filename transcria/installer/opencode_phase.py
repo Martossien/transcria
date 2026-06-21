@@ -24,6 +24,7 @@ from typing import Any, Protocol
 
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
 from transcria.install_opencode import (
+    OPENCODE_INSTALL_URL,
     OpencodeDetection,
     _best_effort_chown_tree,
     detect_opencode,
@@ -38,7 +39,6 @@ ConfirmFn = Callable[[str], bool]
 ChownFn = Callable[[Path, str], None]
 DetectFn = Callable[[], OpencodeDetection]
 _OPENCODE_BIN_KEY = "workflow.arbitration_llm.opencode_bin"
-_DOWNLOAD_URL = "https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64"
 
 
 class _ConsoleLike(Protocol):
@@ -61,7 +61,7 @@ class OpencodePlan:
     current_path: str = ""
     rc_files: tuple[Path, ...] = ()
     venv_python: Path | None = None
-    download_url: str = _DOWNLOAD_URL
+    install_url: str = OPENCODE_INSTALL_URL
 
 
 @dataclass
@@ -126,10 +126,9 @@ def apply_opencode(
             destination = plan.opencode_home / ".opencode" / "bin" / "opencode"
             _emit(console, "download-start")
             ok = install_opencode_binary(
-                destination=destination,
-                url=plan.download_url,
+                opencode_home=plan.opencode_home,
+                install_url=plan.install_url,
                 service_user=plan.service_user,
-                owner_root=plan.opencode_home / ".opencode",
                 run=runner,
             )
             if ok:
@@ -142,7 +141,7 @@ def apply_opencode(
                     _emit(console, "path-updated", value=str(updated))
                     _emit(console, "shell-reload", value=str(destination.parent))
             else:
-                for event in ("download-failed", "manual-title", "manual-mkdir", "manual-curl", "manual-chmod"):
+                for event in ("download-failed", "manual-title", "manual-curl", "manual-alt"):
                     _emit(console, event)
                 result.record("download-failed")
         else:

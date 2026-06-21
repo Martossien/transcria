@@ -557,19 +557,23 @@ source venv/bin/activate
 opencode est l'orchestrateur qui pilote la LLM d'arbitrage pour le résumé et la correction SRT. La configuration ci-dessous utilise Qwen comme exemple historique local ; vous pouvez utiliser un autre modèle si le provider expose une API compatible et si `workflow.*.model_id` est aligné.
 
 ```bash
-# Télécharger opencode
-mkdir -p $HOME/.opencode/bin
-curl -L -o $HOME/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64
-chmod +x $HOME/.opencode/bin/opencode
+# Installer opencode via l'installateur officiel (gère arch, libc musl, variante AVX2,
+# extraction et PATH) — installe dans $HOME/.opencode/bin/opencode
+curl -fsSL https://opencode.ai/install | bash
 
 # Vérifier
 $HOME/.opencode/bin/opencode --version
 ```
 
-> opencode peut aussi être installé autrement (`npm i -g opencode-ai`, Homebrew, script
-> officiel). `install.sh` et `scripts/setup_opencode.py` cherchent le binaire dans PATH,
-> `~/.opencode/bin`, les emplacements npm-global et brew — quel que soit le mode d'install.
-> Si introuvable, renseignez `workflow.arbitration_llm.opencode_bin` dans `config.yaml`.
+> opencode peut aussi être installé autrement (`npm i -g opencode-ai`, `bun add -g opencode-ai`,
+> `brew install anomalyco/tap/opencode`, `paru -S opencode`). Voir <https://opencode.ai/download>.
+> `install.sh` et `scripts/setup_opencode.py` cherchent le binaire dans PATH, `~/.opencode/bin`,
+> les emplacements npm-global et brew — quel que soit le mode d'install. Si introuvable,
+> renseignez `workflow.arbitration_llm.opencode_bin` dans `config.yaml`.
+>
+> ⚠️ Ne téléchargez plus un binaire « nu » depuis les *releases* GitHub : l'asset est désormais
+> une archive versionnée par cible (`opencode-linux-x64.tar.gz`, variantes `-musl` / `-baseline`),
+> un lien direct vers `opencode-linux-x64` renvoie 404.
 
 Configurer le provider `local` dans `$HOME/.config/opencode/opencode.json`. **Méthode
 recommandée** (idempotente, ne casse pas une config existante, format correct garanti) :
@@ -1644,10 +1648,8 @@ python -c "from transcria.stt.diarizer_factory import create_diarizer; print(cre
 
 ```bash
 which opencode
-# Si absent :
-mkdir -p ~/.opencode/bin
-curl -L -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64
-chmod +x ~/.opencode/bin/opencode
+# Si absent (installateur officiel — gère arch/musl/AVX2/extraction) :
+curl -fsSL https://opencode.ai/install | bash
 export TRANSCRIA_OPENCODE_BIN=~/.opencode/bin/opencode
 ```
 

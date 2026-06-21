@@ -106,9 +106,23 @@ def _run_install(sandbox: Path, profile: str, pg: "PgParams", *extra: str) -> su
         "--pg-password", pg.password,
         *extra,
     ]
+    # opencode est requis par certains profils (web) : on place un faux binaire sur le PATH
+    # du bac à sable pour que la DÉTECTION court-circuite l'installation. Sans ça, la phase
+    # tenterait l'installateur officiel réseau (`curl … | bash`) → non déterministe en CI.
+    # L'E2E vérifie l'orchestration d'install.sh, pas l'installateur officiel d'opencode.
+    fake_bin = sandbox / "fake-bin"
+    fake_bin.mkdir(parents=True, exist_ok=True)
+    opencode_stub = fake_bin / "opencode"
+    opencode_stub.write_text("#!/bin/sh\necho 'opencode 0.0.0-stub'\n", encoding="utf-8")
+    opencode_stub.chmod(0o755)
     # HOME pointe vers le bac à sable : la phase opencode (OPENCODE_HOME=$HOME) écrit
     # alors sa config provider dans le sandbox, jamais dans le ~/.config/opencode réel.
-    env = {**os.environ, "TRANSCRIA_CONFIG": str(sandbox / "config.yaml"), "HOME": str(sandbox)}
+    env = {
+        **os.environ,
+        "TRANSCRIA_CONFIG": str(sandbox / "config.yaml"),
+        "HOME": str(sandbox),
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
     env.pop("TRANSCRIA_DATABASE_URL", None)  # ne pas masquer ce que l'install écrit
     return subprocess.run(cmd, capture_output=True, text=True, timeout=_TIMEOUT_S, cwd=str(sandbox), env=env)
 

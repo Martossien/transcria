@@ -14,6 +14,12 @@ from typing import Callable
 WhichFn = Callable[[str], str | None]
 RunFn = Callable[..., subprocess.CompletedProcess[str]]
 
+# Installateur officiel (https://opencode.ai/download). On délègue à lui plutôt que de
+# télécharger un binaire « nu » : l'asset GitHub est désormais une archive versionnée par
+# cible (arch x64/arm64, libc musl, variante AVX2 *baseline*), nommage qu'un lien direct
+# ne suit plus (404). Le script gère archive/extraction/arch/musl/baseline/PATH.
+OPENCODE_INSTALL_URL = "https://opencode.ai/install"
+
 
 @dataclass(frozen=True)
 class OpencodeDetection:
@@ -107,7 +113,7 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
     if event == "missing":
         return "WARN:opencode non trouvé\n"
     if event == "download-start":
-        return "INFO:Téléchargement opencode (linux-x64)...\n"
+        return "INFO:Installation d'opencode via l'installateur officiel (opencode.ai/install)…\n"
     if event == "installed":
         return f"OK:opencode installé : {value}\n"
     if event == "path-updated":
@@ -117,13 +123,11 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
     if event == "download-failed":
         return "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
     if event == "manual-title":
-        return "INFO:Installation manuelle :\n"
-    if event == "manual-mkdir":
-        return "INFO:  mkdir -p ~/.opencode/bin\n"
+        return "INFO:Installation manuelle d'opencode (voir https://opencode.ai/download) :\n"
     if event == "manual-curl":
-        return "INFO:  curl -fsSL -o ~/.opencode/bin/opencode https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64\n"
-    if event == "manual-chmod":
-        return "INFO:  chmod +x ~/.opencode/bin/opencode\n"
+        return "INFO:  curl -fsSL https://opencode.ai/install | bash\n"
+    if event == "manual-alt":
+        return "INFO:  ou : npm i -g opencode-ai  |  bun add -g opencode-ai  |  brew install anomalyco/tap/opencode\n"
     if event == "ignored":
         return "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
     if event == "install-later":
@@ -162,23 +166,35 @@ def _best_effort_chown_tree(path: Path, service_user: str) -> None:
 
 def install_opencode_binary(
     *,
-    destination: Path,
-    url: str,
+    opencode_home: Path,
+    install_url: str = OPENCODE_INSTALL_URL,
     service_user: str = "",
-    owner_root: Path | None = None,
     run: RunFn = subprocess.run,
+    env: dict[str, str] | None = None,
 ) -> bool:
-    """Télécharge le binaire opencode, le rend exécutable et ajuste le propriétaire si possible."""
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    result = run(["curl", "-fsSL", "-o", str(destination), url], check=False)
-    if result.returncode != 0:
+    """Installe opencode via l'installateur officiel et ajuste le propriétaire si possible.
+
+    On délègue au script officiel (`curl -fsSL {install_url} | bash`) au lieu de récupérer un
+    binaire « nu » : lui seul choisit le bon asset (archive .tar.gz/.zip), l'architecture
+    (x64/arm64), la libc musl et surtout la variante AVX2 *baseline* — sans elle, le binaire
+    standard plante en « illegal instruction » sur un CPU/VM sans AVX2. Le script installe dans
+    `$HOME/.opencode/bin/opencode` ; on force `HOME=opencode_home` pour cibler le bon répertoire
+    (root ou utilisateur de service), puis chown best-effort vers l'utilisateur de service.
+    """
+    opencode_home = Path(opencode_home)
+    run_env = dict(os.environ if env is None else env)
+    run_env["HOME"] = str(opencode_home)
+    result = run(["bash", "-c", f"curl -fsSL {shlex.quote(install_url)} | bash"], check=False, env=run_env)
+    if getattr(result, "returncode", 1) != 0:
         return False
 
-    mode = destination.stat().st_mode
-    destination.chmod(mode | 0o111)
-    if owner_root is not None:
-        _best_effort_chown_tree(Path(owner_root), service_user)
+    binary = opencode_home / ".opencode" / "bin" / "opencode"
+    if not binary.is_file():
+        # Le script a « réussi » mais le binaire attendu n'est pas là (réseau partiel, cible
+        # inattendue) : on échoue explicitement pour basculer sur les instructions manuelles.
+        return False
+    if service_user:
+        _best_effort_chown_tree(opencode_home / ".opencode", service_user)
     return True
 
 
@@ -201,10 +217,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event", default="")
     parser.add_argument("--value", default="")
     parser.add_argument("--profile", default="")
-    parser.add_argument("--destination", default=None)
-    parser.add_argument("--url", default="https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64")
+    parser.add_argument("--install-url", default=OPENCODE_INSTALL_URL)
     parser.add_argument("--service-user", default="")
-    parser.add_argument("--owner-root", default=None)
     args = parser.parse_args(argv)
 
     if args.version:
@@ -252,16 +266,15 @@ def main(argv: list[str] | None = None) -> int:
         print(updated)
         return 0
     if args.install_binary:
-        if not args.destination:
-            print("--destination requis avec --install-binary", file=sys.stderr)
+        if not args.opencode_home:
+            print("--opencode-home requis avec --install-binary", file=sys.stderr)
             return 2
         return (
             0
             if install_opencode_binary(
-                destination=Path(args.destination),
-                url=args.url,
+                opencode_home=Path(args.opencode_home),
+                install_url=args.install_url,
                 service_user=args.service_user,
-                owner_root=Path(args.owner_root) if args.owner_root else None,
             )
             else 1
         )
