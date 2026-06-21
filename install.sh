@@ -992,6 +992,14 @@ if [[ -n "$OPENCODE_BIN" ]] && ! command -v "$OPENCODE_BIN" >/dev/null 2>&1 && [
     OPENCODE_BIN=""
 fi
 
+# Quand opencode est configuré, on fige le chemin de opencode.json dans .env : le service
+# (start.sh source .env) et doctor honorent OPENCODE_CONFIG, donc la résolution ne dépend
+# plus du HOME du process — fin du décalage HOME service ≠ HOME appelant de doctor.
+if [[ -n "$OPENCODE_BIN" ]]; then
+    env_set "OPENCODE_CONFIG" "$OPENCODE_HOME/.config/opencode/opencode.json" \
+        "Config opencode (provider local) — fixe la résolution indépendamment du HOME"
+fi
+
 # ============================================================================
 # SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle
 # ============================================================================
@@ -1194,7 +1202,12 @@ elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
     if [[ "$STRICT_DOCTOR" = true ]]; then
         DOCTOR_ARGS+=(--strict)
     fi
-    if "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" "${DOCTOR_ARGS[@]}"; then
+    # opencode.json a été écrit dans le HOME du SERVICE (OPENCODE_HOME), pas forcément
+    # celui de l'utilisateur qui lance l'install. doctor résout opencode.json via `~` de
+    # l'appelant → faux négatif quand SERVICE_USER ≠ utilisateur courant. On pointe doctor
+    # sur le fichier réellement écrit (OPENCODE_CONFIG, honoré par opencode ET par doctor).
+    if OPENCODE_CONFIG="$OPENCODE_HOME/.config/opencode/opencode.json" \
+            "$VENV/bin/python" "$INSTALL_DIR/scripts/doctor.py" "${DOCTOR_ARGS[@]}"; then
         DOCTOR_STATUS="OK"
         log_config_setup_event doctor-ok
     else
