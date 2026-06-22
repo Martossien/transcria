@@ -25,6 +25,10 @@ logs
 # Secrets / configuration locale (fournis au runtime par volume ou variables)
 .env
 .env.*
+# … MAIS garder le template versionné `.env.example` : install.sh (exécuté au build des
+# images worker/resource-node) s'en sert pour générer `.env`. L'exclure faisait échouer
+# le build (`FileNotFoundError: .env.example`). C'est un template sans secret.
+!.env.example
 config.yaml
 scripts/generated
 

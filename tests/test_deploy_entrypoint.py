@@ -134,9 +134,64 @@ def test_main_role_from_env(tmp_path):
     env = {"TRANSCRIA_ROLE": "scheduler", "TRANSCRIA_CONFIG": str(_config(tmp_path)),
            "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"}
     ex = _Exec()
-    rc = ep.main([], env=env, exec_fn=ex, db_probe=lambda _d: True)
+    # provisioner injecté (no-op) : évite d'écrire dans le ~/.config réel pendant les tests.
+    rc = ep.main([], env=env, exec_fn=ex, db_probe=lambda _d: True,
+                 opencode_provisioner=lambda _plan, _env: None)
     assert rc == 0
     assert ex.calls[0][1][1:] == ["app.py", "--role", "scheduler"]  # [0] = interpréteur
+
+
+# ── Provisioning opencode (provider local) au démarrage ─────────────────────
+
+
+def test_main_invokes_opencode_provisioner_for_llm_role(tmp_path):
+    env = {"TRANSCRIA_CONFIG": str(_config(tmp_path)), "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"}
+    seen = []
+    ep.main(["scheduler"], env=env, exec_fn=_Exec(), db_probe=lambda _d: True,
+            opencode_provisioner=lambda plan, _env: seen.append(plan.role))
+    assert seen == ["scheduler"]  # appelé avant l'exec, pour un rôle LLM
+
+
+def test_main_invokes_provisioner_for_web_but_it_self_skips(tmp_path):
+    # main() appelle toujours le provisioner ; c'est provision_opencode qui filtre par rôle.
+    env = {"TRANSCRIA_CONFIG": str(_config(tmp_path)), "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"}
+    seen = []
+    ep.main(["web"], env=env, exec_fn=_Exec(), db_probe=lambda _d: True,
+            opencode_provisioner=lambda plan, _env: seen.append(plan.role))
+    assert seen == ["web"]
+
+
+def test_provision_opencode_skips_non_llm_roles(tmp_path):
+    # resource-node / web / migrate : aucun fichier opencode.json écrit (retour anticipé).
+    target = tmp_path / "oc.json"
+    for role in ("web", "resource-node", "migrate"):
+        ep.provision_opencode(_plan(tmp_path, role), {"OPENCODE_CONFIG": str(target)})
+        assert not target.exists()
+
+
+def test_provision_opencode_writes_provider_from_mounted_config(tmp_path, monkeypatch):
+    captured: dict = {}
+    monkeypatch.setattr(
+        "transcria.config.load_config",
+        lambda: {"services": {"arbitrage_llm_host": "vllm-arbitrage", "arbitrage_llm_port": 8080}},
+    )
+    monkeypatch.setattr(
+        "transcria.gpu.opencode_setup.ensure_local_provider",
+        lambda path, base_url, model, **kw: captured.update(path=str(path), base_url=base_url, model=model),
+    )
+    ep.provision_opencode(_plan(tmp_path, "scheduler"), {"OPENCODE_CONFIG": str(tmp_path / "oc.json")})
+    assert captured["base_url"] == "http://vllm-arbitrage:8080/v1"
+    assert captured["model"] == "arbitrage"
+    assert captured["path"].endswith("oc.json")
+
+
+def test_provision_opencode_is_best_effort_on_error(tmp_path, monkeypatch):
+    def _boom() -> dict:
+        raise RuntimeError("config illisible")
+
+    monkeypatch.setattr("transcria.config.load_config", _boom)
+    # Ne doit PAS lever : un échec de provisioning ne bloque jamais le démarrage du rôle.
+    ep.provision_opencode(_plan(tmp_path, "all"), {"OPENCODE_CONFIG": str(tmp_path / "oc.json")})
 
 
 def test_main_refuses_without_postgres(tmp_path):

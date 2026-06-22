@@ -404,10 +404,18 @@ class OpenCodeRunner:
 
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         opencode_path = shutil.which(self.opencode_bin)
-        if not opencode_path and not os.path.isfile(self.opencode_bin):
-            return {"success": False, "error": f"opencode introuvable: {self.opencode_bin}"}
-        if not opencode_path:
+        if not opencode_path and os.path.isfile(self.opencode_bin):
             opencode_path = os.path.abspath(self.opencode_bin)
+        if not opencode_path:
+            # Le binaire configuré ne résout pas (PATH ni chemin direct) → découverte aux
+            # emplacements d'install connus (~/.opencode/bin officiel, npm, brew…). Évite un
+            # échec dur quand opencode EST installé mais que `opencode_bin` est générique
+            # (ex. "opencode" hors PATH) ou pointe un chemin obsolète.
+            from transcria.gpu.opencode_setup import find_opencode_binary
+
+            opencode_path = find_opencode_binary(config_bin=self.opencode_bin)
+        if not opencode_path:
+            return {"success": False, "error": f"opencode introuvable: {self.opencode_bin}"}
 
         prompt_file = os.path.abspath(prompt_file)
         if not os.path.isfile(prompt_file):

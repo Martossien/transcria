@@ -1,0 +1,173 @@
+# Topologie SPLIT GPU (banc de test) — cf. docs/PLAN_TEST_SPLIT_VLLM.md
+# ─────────────────────────────────────────────────────────────────────────────
+#   • FRONTALE (CPU)  : web (UI) + scheduler (orchestration, phases LLM via opencode)
+#   • NŒUD GPU        : resource-node (diarisation pyannote + STT Cohere via vLLM :8003)
+#   • LLM arbitrage   : vllm-arbitrage (Qwen3.6-27B-FP8 via vLLM :8080, TP=4)
+#   • PostgreSQL partagé ; fichiers de job via volume partagé (transport file_ref)
+#
+# Fichier compose DÉDIÉ et isolé : il n'entremêle PAS les profils du docker-compose.yml
+# principal (all-in-one / split CPU) — pour ne rien casser de ce qui fonctionne.
+#
+# PRÉ-REQUIS (opérateur) :
+#   1. Construire les deux images :
+#        docker build -f Dockerfile.worker        -t transcria-worker:latest .
+#        docker build -f Dockerfile.resource-node -t transcria-resource-node:latest .
+#   2. Préparer config.yaml (fusionner config.split.example.yaml dans une config issue de
+#      config.example.yaml) — hôtes = noms de services (resource-node, vllm-arbitrage).
+#   3. Télécharger le modèle d'arbitrage dans ./models ou le cache HF (~27 Go) + HF_TOKEN
+#      (Cohere STT est gaté). GPU exposé via CDI (`nvidia-ctk cdi generate`).
+#   4. Variables d'env (shell ou .env compose) :
+#        POSTGRES_PASSWORD, TRANSCRIA_INFERENCE_API_KEY, HF_TOKEN
+#
+# LANCEMENT :
+#   POSTGRES_PASSWORD=… TRANSCRIA_INFERENCE_API_KEY=… HF_TOKEN=hf_… \
+#     docker compose -f docker-compose.split-gpu.yml up -d
+#   docker compose -f docker-compose.split-gpu.yml run --rm verify   # test son E2E (Phase 3)
+
+# Ancre frontale : web + scheduler partagent image, config et volume de jobs. Les secrets
+# (SECRET_KEY, mot de passe admin) viennent du .env BAKÉ dans l'image worker au build par
+# install.sh (cohérent entre web et scheduler = même image) ; on ne monte PAS le .env hôte
+# (chemins spécifiques à l'hôte). Le DSN et les hôtes distants arrivent par l'environnement.
+x-frontale: &frontale
+  image: transcria-worker:latest
+  environment: &frontale-env
+    TRANSCRIA_CONFIG: /app/config.yaml
+    TRANSCRIA_DATABASE_URL: postgresql+psycopg://transcria:${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}@db:5432/transcria
+    # provider opencode reconfiguré au démarrage (entrypoint) vers vllm-arbitrage:8080 via la config.
+    OPENCODE_CONFIG: /root/.config/opencode/opencode.json
+    # Clé API partagée frontale ↔ nœud de ressources (Authorization: Bearer …).
+    TRANSCRIA_INFERENCE_API_KEY: ${TRANSCRIA_INFERENCE_API_KEY:?définir TRANSCRIA_INFERENCE_API_KEY}
+  volumes:
+    - ./config.yaml:/app/config.yaml:ro
+    - jobs:/app/jobs
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: transcria
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD}
+      POSTGRES_DB: transcria
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transcria -d transcria"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Migrations Alembic (one-shot) — image worker (alembic installé par install.sh).
+  migrate:
+    <<: *frontale
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *frontale
+    command: ["web"]
+    environment:
+      <<: *frontale-env
+      TRANSCRIA_ROLE: web
+      TRANSCRIA_BIND: 0.0.0.0:7870
+    ports:
+      - "7870:7870"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Worker : exécute le pipeline. Délègue STT/diar au nœud (HTTP) et les phases LLM au
+  # vLLM d'arbitrage (via opencode). depends_on resource-node/vllm-arbitrage : ordre de
+  # démarrage seulement (le code tolère un nœud temporairement injoignable : re-queue).
+  scheduler:
+    <<: *frontale
+    command: ["scheduler"]
+    environment:
+      <<: *frontale-env
+      TRANSCRIA_ROLE: scheduler
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - jobs:/app/jobs
+      - models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      resource-node:
+        condition: service_started
+      vllm-arbitrage:
+        condition: service_started
+
+  # Nœud de ressources GPU : Flask :8002 (diar/voice/superviseur). Le STT Cohere (vLLM)
+  # est lancé À LA DEMANDE par /engines/ensure sur :8003 (resource_node.engines). Diar
+  # device: auto → carte la plus libre. GPU : les 8 cartes (CDI) — le code place.
+  resource-node:
+    image: transcria-resource-node:latest
+    command: ["resource-node"]
+    environment:
+      TRANSCRIA_CONFIG: /app/config.yaml
+      INFERENCE_BIND: 0.0.0.0:8002
+      TRANSCRIA_INFERENCE_API_KEY: ${TRANSCRIA_INFERENCE_API_KEY:?définir TRANSCRIA_INFERENCE_API_KEY}
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /hf
+      HF_HUB_OFFLINE: "0"
+      TRANSFORMERS_OFFLINE: "0"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - jobs:/app/jobs            # partagé avec la frontale → transport file_ref
+      - models:/app/models
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf
+    ports:
+      - "8002:8002"               # plan de contrôle (debug/observabilité)
+      - "8003:8003"               # STT (à la demande)
+    devices:
+      - "nvidia.com/gpu=all"
+    restart: unless-stopped
+
+  # Serveur LLM d'arbitrage : Qwen3.6-27B-FP8 via vLLM (TP=4, FP8 Marlin sur Ampere).
+  # Résident, OpenAI-compatible :8080. opencode (côté scheduler) pointe ici.
+  vllm-arbitrage:
+    image: transcria-resource-node:latest
+    entrypoint: ["bash", "/app/scripts/launch_arbitrage_vllm.sh"]
+    environment:
+      ARBITRAGE_MODEL: ${ARBITRAGE_MODEL:-Qwen/Qwen3.6-27B-FP8}
+      ARBITRAGE_ALIAS: arbitrage
+      ARBITRAGE_GPUS: ${ARBITRAGE_GPUS:-0,1,2,3}
+      ARBITRAGE_TP: ${ARBITRAGE_TP:-4}
+      ARBITRAGE_PORT: "8080"
+      ARBITRAGE_MAX_LEN: ${ARBITRAGE_MAX_LEN:-262144}
+      HF_TOKEN: ${HF_TOKEN:-}
+      HF_HOME: /hf
+      HF_HUB_OFFLINE: "0"
+    volumes:
+      - models:/app/models
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf
+    ports:
+      - "8080:8080"
+    devices:
+      - "nvidia.com/gpu=all"
+    restart: unless-stopped
+
+  # Vérification E2E (Phase 3) — profil `verify`, lancé à la demande (run --rm verify).
+  # N'a pas de GPU ; parle aux services par le réseau compose.
+  verify:
+    <<: *frontale
+    profiles: ["verify"]
+    restart: "no"
+    entrypoint: ["/app/venv/bin/python", "/app/scripts/verify_split_topology.py"]
+    command: ["--web", "http://web:7870", "--node", "http://resource-node:8002", "--arbitrage", "http://vllm-arbitrage:8080"]
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:
+  jobs:
+  models:

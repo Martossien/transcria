@@ -306,7 +306,10 @@ def make_script_launcher(
     sleep = sleeper or time.sleep
 
     def launcher(spec: EngineSpec, gpu_index: int) -> bool:
-        env = {"STT_GPU": str(gpu_index), "STT_PORT": str(spec.port)}
+        # STT_GPU_MEM transmis depuis la config (`resource_node.engines[].gpu_mem`) : sans lui,
+        # le lanceur retombait sur son défaut 0.85 → le moteur réservait ~0.85×VRAM quelle que
+        # soit la valeur configurée (l'admission utilisait gpu_mem, mais PAS le lancement réel).
+        env = {"STT_GPU": str(gpu_index), "STT_PORT": str(spec.port), "STT_GPU_MEM": str(spec.gpu_mem)}
         log_path = f"{log_dir}/stt_{spec.name}_{spec.port}.log"
         logger.info("[stt-sup] lancement %s : %s (STT_GPU=%d STT_PORT=%d) → %s",
                     spec.name, spec.script, gpu_index, spec.port, log_path)

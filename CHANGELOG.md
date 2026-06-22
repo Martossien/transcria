@@ -8,6 +8,54 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] — 2026-06-23
+
+**Topologie répartie (frontale + nœud de ressources) entièrement containerisée et validée de bout
+en bout sur fichier son réel.** Banc 8× RTX 3090 : frontale CPU (web + scheduler) → **STT Cohere via
+vLLM** + **diarisation pyannote auto-placée sur une carte libre** + **LLM d'arbitrage Qwen3.6-27B-FP8
+via vLLM** (tensor-parallel 4, FP8 Marlin sur Ampere) — pipeline complet (transcription, diarisation,
+résumé, correction, relecture, exports) produisant SRT/ZIP/DOCX. L'exercice « comme un utilisateur »
+a débusqué et corrigé **14 problèmes** (dont plusieurs vrais bugs de fond, ci-dessous). Phase `0.x` :
+l'API, le schéma de configuration et le modèle de données peuvent encore évoluer jusqu'à `1.0.0`.
+
+### Added
+- **Banc de test « topologie split GPU » entièrement containerisée** (`docker-compose.split-gpu.yml`
+  + `config.split.example.yaml`) : frontale CPU + nœud de ressources GPU (diarisation pyannote +
+  **STT Cohere via vLLM**) + **LLM d'arbitrage Qwen3.6-27B-FP8 via vLLM** (TP=4, FP8 Marlin), PostgreSQL
+  partagé. Images dédiées `Dockerfile.worker` et `Dockerfile.resource-node` construites **en exécutant
+  `install.sh`** (l'install est ainsi testée comme un utilisateur), le nœud ajoutant un venv vLLM isolé
+  du venv projet (torch cu130). Nouveaux : `scripts/launch_arbitrage_vllm.sh` (lanceur arbitrage vLLM
+  portable, flags tool-calling/reasoning Qwen3.6), `scripts/verify_split_topology.py` (vérification E2E :
+  plan de contrôle + job son réel), `docs/PLAN_TEST_SPLIT_VLLM.md`.
+- **Couverture E2E du profil d'install `resource-node`** (`test_install_resource_node_profile_e2e`) :
+  exerce réellement `install.sh --profile resource-node --inference-service` (chemin jusqu'ici non couvert).
+
+### Fixed
+- **`install.sh` : nom d'utilisateur du mainteneur codé en dur comme défaut.** `SERVICE_USER="${USER:-admin_ia}"`
+  ciblait silencieusement `admin_ia`/`/home/admin_ia` (utilisateur étranger) dès que `$USER` est vide
+  (build Docker, cron, certains CI) → opencode et chemins installés au mauvais endroit. Défaut générique
+  désormais : `${USER:-$(id -un … || root)}`.
+- **LLM d'arbitrage distante ni lancée ni gérée localement.** `vram_manager` sondait/arrêtait/relançait
+  la LLM en `127.0.0.1` en **ignorant `services.arbitrage_llm_host`** : en topologie répartie (LLM sur un
+  nœud séparé), le worker la croyait absente, tentait un lancement local (échec) et l'admission du
+  scheduler différait les jobs à l'infini. `vram_manager` honore désormais l'hôte configuré (sonde HTTP
+  distante) et ne gère **pas** le cycle de vie d'une LLM distante (la consomme si saine). All-in-one local
+  inchangé.
+- **Diarisation : placement GPU figé sur `cuda:0`.** Le moteur de diarisation chargeait pyannote sur
+  `cuda:0` (pas de placement « auto »), tombant sur le GPU du LLM en multi-GPU → OOM. Il résout maintenant
+  `auto`/`cuda` générique vers la **carte la plus libre** (≥ VRAM requise) au moment du chargement (mêmes
+  primitives que SQUIM) ; un index explicite reste respecté, repli CPU sinon.
+- **`resource_node.engines[].gpu_mem` ignoré au lancement réel des moteurs STT.** Le superviseur ne
+  transmettait pas `gpu_mem` au lanceur → le moteur réservait ~0.85×VRAM quelle que soit la config
+  (l'admission, elle, utilisait `gpu_mem`). `gpu_mem` est désormais transmis (`STT_GPU_MEM`).
+- **`opencode_runner` : échec dur si `opencode_bin` configuré non résolu.** Ajout d'un repli sur la
+  découverte aux emplacements connus (`find_opencode_binary`) quand le binaire configuré ne résout pas
+  (config générique, binaire déplacé) — opencode étant installé à un emplacement standard.
+- **opencode absent de TOUTES les images Docker → phases LLM impossibles en conteneur** (all-in-one
+  compris). Binaire installé **par `install.sh` au build** (image worker) + provider `local` **reconfiguré
+  au démarrage** depuis la config montée (`transcria.deploy.entrypoint.provision_opencode`, rôles
+  `all`/`scheduler`, best-effort/idempotent). **Corrige aussi l'all-in-one Docker**, sans toucher l'install hôte.
+
 ## [0.1.0-beta.2] — 2026-06-21
 
 Cycle de durcissement de l'installation depuis `beta.1`, **validé de bout en bout sur 4

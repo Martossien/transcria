@@ -242,3 +242,43 @@ def test_install_profile_e2e(profile: str, pg_params: PgParams, tmp_path: Path):
     # Aucune écriture ne doit avoir fui vers le dépôt via les symlinks.
     leaked = _repo_status() - repo_before
     assert not leaked, f"l'install a modifié des fichiers versionnés : {sorted(leaked)}"
+
+
+def test_install_resource_node_profile_e2e(tmp_path: Path):
+    """`install.sh --profile resource-node --inference-service` : nœud GPU pur.
+
+    Couvre un chemin d'install **jamais exercé** jusqu'ici (cf. `_PROFILES`, qui excluait
+    resource-node). Le nœud n'a NI base applicative (`--no-postgres`) NI opencode
+    (`needs_llm=false`) : on n'utilise donc pas la fixture PostgreSQL. `doctor --profile
+    resource-node` exige un GPU/nœud joignable → non rejouable sans GPU (`--skip-doctor`,
+    comme le build Docker) ; on borne aux invariants d'install : chaînage shell→Python OK,
+    `config.yaml`/`.env` générés, et aucune fuite vers le dépôt versionné.
+    """
+    _require_install_prereqs()
+    sandbox = _build_sandbox(tmp_path / "sandbox")
+    repo_before = _repo_status()
+
+    cmd = [
+        "bash", str(_INSTALL),
+        "--install-dir", str(sandbox),
+        "--profile", "resource-node", "--inference-service",
+        "--non-interactive", "--skip-deps", "--no-service",
+        "--no-postgres", "--skip-doctor",
+    ]
+    env = {
+        **os.environ,
+        "TRANSCRIA_CONFIG": str(sandbox / "config.yaml"),
+        "HOME": str(sandbox),  # toute écriture HOME reste dans le bac à sable
+    }
+    env.pop("TRANSCRIA_DATABASE_URL", None)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=_TIMEOUT_S, cwd=str(sandbox), env=env)
+    assert result.returncode == 0, (
+        f"install.sh --profile resource-node a échoué (code {result.returncode})\n"
+        f"--- stdout ---\n{result.stdout[-4000:]}\n--- stderr ---\n{result.stderr[-2000:]}"
+    )
+
+    assert (sandbox / "config.yaml").is_file(), "config.yaml non généré"
+    assert (sandbox / ".env").is_file(), ".env non généré"
+
+    leaked = _repo_status() - repo_before
+    assert not leaked, f"l'install a modifié des fichiers versionnés : {sorted(leaked)}"

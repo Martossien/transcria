@@ -89,3 +89,5 @@ coverage.xml
 # Backups générés par install.sh
 config.yaml.bak.*
 backups/
+.env.split
+docker-compose.split-gpu.dev.yml

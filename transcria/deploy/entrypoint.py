@@ -152,6 +152,44 @@ def wait_for_database(
     return False
 
 
+# Rôles qui exécutent les phases LLM (correction/résumé via opencode) → provisioning opencode.
+_LLM_ROLES = ("all", "scheduler")
+
+
+def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
+    """(Re)configure le provider `local` d'opencode depuis la config MONTÉE au runtime.
+
+    En déploiement Docker, install.sh installe le binaire opencode au BUILD mais fige le
+    `base_url` du provider sur la config de build (souvent 127.0.0.1). En topologie split,
+    l'endpoint LLM est distant : on réécrit `opencode.json` à partir de la config réellement
+    montée (`services.arbitrage_llm_host/port`). Sans ce provider correct, les phases LLM
+    échouent (« opencode introuvable » / mauvais endpoint).
+
+    Best-effort et idempotent : tout échec est journalisé sans bloquer le démarrage (un rôle
+    sans opencode reste légitime). Corrige aussi l'all-in-one Docker, sans toucher l'install
+    hôte. N'agit que pour les rôles `_LLM_ROLES`.
+    """
+    if plan.role not in _LLM_ROLES:
+        return
+    try:
+        from transcria.config import load_config
+        from transcria.gpu.opencode_setup import default_base_url, ensure_local_provider
+
+        cfg = load_config()
+        base_url = default_base_url(cfg)
+        llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
+        model = llm.get("model_id") or "arbitrage"
+        if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"
+            model = model.split("/", 1)[1]
+        config_path = env.get("OPENCODE_CONFIG") or os.path.expanduser(
+            os.path.join("~", ".config", "opencode", "opencode.json")
+        )
+        ensure_local_provider(config_path, base_url, model)
+        print(f"[INFO] opencode provider 'local' → {base_url} ({config_path})", file=sys.stderr, flush=True)
+    except Exception as exc:  # noqa: BLE001 — provisioning best-effort, ne bloque jamais le rôle
+        print(f"[WARN] provisioning opencode ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+
+
 def _plan_from_env(role: str, env: dict[str, str]) -> EntrypointPlan:
     config_path = Path(env.get("TRANSCRIA_CONFIG", "/app/config.yaml"))
     return EntrypointPlan(
@@ -174,6 +212,7 @@ def main(
     wait_attempts: int = 30,
     wait_delay: float = 1.0,
     sleep_fn: Callable[[float], None] = time.sleep,
+    opencode_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_opencode,
 ) -> int:
     env = dict(os.environ if env is None else env)
     probe = db_probe or _default_db_probe
@@ -208,6 +247,9 @@ def main(
                 file=sys.stderr,
             )
             return 1
+
+    # Provisionne opencode (provider local) pour les rôles LLM, depuis la config montée.
+    opencode_provisioner(plan, env)
 
     cmd = build_role_command(plan)
     print(f"[INFO] Démarrage du rôle {plan.role} : {' '.join(cmd)}", file=sys.stderr, flush=True)

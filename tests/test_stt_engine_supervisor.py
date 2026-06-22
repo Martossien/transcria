@@ -206,7 +206,9 @@ def test_launcher_runs_script_with_overridden_env_and_waits_ready():
     ok = launcher(_SPEC, 5)
     assert ok is True
     assert runs[0][0] == "scripts/launch_stt_cohere.sh"
-    assert runs[0][1] == {"STT_GPU": "5", "STT_PORT": "8003"}   # GPU relocalisé surchargé
+    # GPU relocalisé surchargé + gpu_mem transmis depuis la config (cf. fix F12b : le lanceur
+    # ne doit plus retomber sur son défaut 0.85, mais utiliser le gpu_mem du moteur déclaré).
+    assert runs[0][1] == {"STT_GPU": "5", "STT_PORT": "8003", "STT_GPU_MEM": "0.85"}
     assert sleeps == [2.0]                                       # un poll d'attente
 
 

@@ -215,6 +215,45 @@ docker run -d --device nvidia.com/gpu=0 -e TRANSCRIA_ROLE=resource-node \
 GPU vus par le conteneur) et `/engines/ensure`. Le scheduler le référence via
 `inference.mode=remote`.
 
+### Banc split GPU complet avec vLLM (STT Cohere + LLM d'arbitrage)
+
+Pour un déploiement split **entièrement containerisé** où le nœud GPU sert AUSSI le STT et
+le LLM d'arbitrage via **vLLM** (au lieu de services externes), un banc dédié est fourni :
+`docker-compose.split-gpu.yml` + `config.split.example.yaml`. Référence détaillée (décisions,
+risques, placement VRAM, FP8 sur Ampere) : **[docs/PLAN_TEST_SPLIT_VLLM.md](PLAN_TEST_SPLIT_VLLM.md)**.
+
+Particularités vs le `docker run` minimal ci-dessus :
+
+- **Images construites via `install.sh`** (on teste l'install comme un utilisateur) :
+  ```bash
+  docker build -f Dockerfile.worker        -t transcria-worker:latest .
+  docker build -f Dockerfile.resource-node -t transcria-resource-node:latest .   # base CUDA + venv vLLM
+  ```
+  Le worker embarque opencode (installé par `install.sh`, profil `scheduler`) ; le nœud ajoute
+  un **venv vLLM isolé** (`/opt/vllm-venv`) à côté du venv projet (torch cu130) — les deux piles
+  torch ne se mélangent pas.
+- **opencode** est installé au build, et son `provider.local` est **reconfiguré au démarrage**
+  (entrypoint) depuis la config montée → il pointe sur le vLLM d'arbitrage du nœud. *(Ceci corrige
+  aussi l'all-in-one : opencode n'était présent dans aucune image avant.)*
+- **STT Cohere** servi par vLLM dans le nœud (`/engines/ensure` lance `launch_stt_cohere.sh`,
+  `STT_BIN` = venv vLLM) ; **LLM d'arbitrage** = service `vllm-arbitrage` (Qwen3.6-27B-FP8, TP=4,
+  FP8 Marlin sur Ampere) via `scripts/launch_arbitrage_vllm.sh`.
+- Les **8 GPU** sont exposés (`nvidia.com/gpu=all`) : le code d'autonomie VRAM place arbitrage
+  (TP=4) + STT + diarisation (`device: auto`).
+
+```bash
+# 1. Préparer config.yaml (fusionner config.split.example.yaml) ; télécharger le modèle FP8 (~27 Go)
+#    dans ./models ou le cache HF ; accepter les conditions Cohere (modèle gaté).
+# 2. Lancer le banc :
+POSTGRES_PASSWORD=… TRANSCRIA_INFERENCE_API_KEY=… HF_TOKEN=hf_… \
+  docker compose -f docker-compose.split-gpu.yml up -d
+# 3. Vérifier de bout en bout (plan de contrôle + job son réel). Le service `verify` a pour
+#    entrypoint verify_split_topology.py ; on lui passe les URLs (réseau compose) + l'audio :
+docker compose -f docker-compose.split-gpu.yml run --rm verify \
+  --web http://web:7870 --node http://resource-node:8002 --arbitrage http://vllm-arbitrage:8080 \
+  --audio /app/tests/test2.mp3 --password "$ADMIN_PASSWORD"
+```
+
 ## Procédure de rollback
 
 - **Rollback de code SANS changement de schéma** (les deux versions partagent la même

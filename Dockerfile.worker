@@ -1,0 +1,70 @@
+# syntax=docker/dockerfile:1
+#
+# Image FRONTALE / WORKER (CPU) — rôles `web` (UI) et `scheduler` (orchestration du
+# pipeline, phases LLM via opencode). Cf. docs/PLAN_TEST_SPLIT_VLLM.md.
+#
+# OBJECTIF DE TEST (cf. plan §0) : installer **comme un utilisateur**, en lançant
+# `install.sh --profile scheduler` AU BUILD. Le profil `scheduler` est `needs_llm=true` →
+# install.sh **télécharge opencode** (installateur officiel) et **configure `provider.local`**.
+# Cela couvre le trou R9 (opencode absent des images Docker) par le bon bout : c'est
+# install.sh — celui qu'on teste — qui installe opencode. Une image construite `--profile
+# scheduler` sert les DEUX rôles au runtime (web n'utilise pas opencode, c'est inoffensif).
+# P5 respecté : install.sh au BUILD, `transcria.deploy.entrypoint` au RUNTIME.
+#
+# ⚠ FINDING F3 — base requise au build. Un profil de rôle applicatif (`scheduler`, DB role)
+#   EXIGE un PostgreSQL joignable à l'install (il refuse SQLite, et la phase postgres se
+#   connecte pour écrire le DSN). `docker build` n'a pas de base live → on builde contre un
+#   **PostgreSQL JETABLE** atteint via `--network=host` (cf. scripts d'orchestration du banc).
+#   On n'utilise PAS `--pg-migrate` : le schéma est appliqué au runtime par le job `migrate`.
+#   Le DSN baké (vers le PG jetable) est SANS effet au runtime : `resolve_database_uri()`
+#   donne priorité à `TRANSCRIA_DATABASE_URL` (injecté par compose → service `db`).
+#   Build : `docker build --network=host -f Dockerfile.worker -t transcria-worker:latest .`
+#   (un PG jetable doit écouter sur PG_BUILD_HOST:PG_BUILD_PORT pendant le build).
+#
+# Le service tourne en **root** (fidèle à la prod). Pas de --cuda : torch CPU suffit (le
+# worker délègue STT/diar au nœud GPU et l'arbitrage au vLLM distant ; il n'inférence pas).
+# config.yaml/.env fournis au RUNTIME (volume), jamais bakés.
+#
+# ⚠ provider.local d'opencode : install.sh l'écrit au build depuis la config (par défaut
+#   127.0.0.1). En split, l'endpoint LLM est sur le nœud → le **base_url est reconfiguré au
+#   démarrage** par l'entrypoint (provision_opencode sur la config MONTÉE). Voir entrypoint.
+
+ARG PYTHON_VERSION=3.12
+
+FROM python:${PYTHON_VERSION}-slim
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TRANSCRIA_CONFIG=/app/config.yaml
+
+# Prérequis système d'install.sh : build tools, libpq (psycopg + client psql), ffmpeg
+# (probe audio), iproute2 (ss), git/curl/ca-certificates (installateur opencode = curl | bash).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libpq-dev postgresql-client \
+        ffmpeg iproute2 procps git curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+
+# Coordonnées du PostgreSQL JETABLE atteint au build (via --network=host). Le schéma N'EST
+# PAS migré ici (pas de --pg-migrate) : le job `migrate` s'en charge au runtime.
+ARG PG_BUILD_HOST=127.0.0.1
+ARG PG_BUILD_PORT=55432
+ARG PG_BUILD_DB=transcria
+ARG PG_BUILD_USER=transcria
+ARG PG_BUILD_PASSWORD=buildpw
+
+# Install « utilisateur » du worker (teste install.sh + télécharge/configure opencode).
+#   --no-service  : pas de systemd en conteneur ; --skip-doctor : doctor exige base/LLM
+#                   joignables (le test runtime/Phase 5 fait tourner doctor) ;
+#   --postgres --pg-existing : DSN écrit, pas de bootstrap privilégié, schéma déféré (migrate).
+RUN ./install.sh --profile scheduler \
+        --non-interactive --no-service --skip-doctor \
+        --postgres --pg-existing \
+        --pg-host "${PG_BUILD_HOST}" --pg-port "${PG_BUILD_PORT}" \
+        --pg-db "${PG_BUILD_DB}" --pg-user "${PG_BUILD_USER}" --pg-password "${PG_BUILD_PASSWORD}"
+
+# PATH = venv créé par install.sh. Le rôle (web|scheduler) est fourni par TRANSCRIA_ROLE.
+ENV PATH="/app/venv/bin:$PATH"
+ENTRYPOINT ["/app/venv/bin/python", "-m", "transcria.deploy.entrypoint"]

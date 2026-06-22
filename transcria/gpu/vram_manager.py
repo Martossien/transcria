@@ -28,6 +28,14 @@ class VRAMManager:
             "arbitrage_llm_port",
             services.get("qwen_port", 8080),
         )
+        # Hôte de la LLM d'arbitrage. 127.0.0.1 = LLM locale (le service gère son cycle de
+        # vie : sonde, arrêt, lancement via arbitrage_script). Un hôte DISTANT (topologie
+        # split : la LLM tourne sur un nœud/conteneur séparé) signifie que CE process ne
+        # doit PAS tenter de la lancer/arrêter localement — seulement la consommer.
+        self.arbitrage_llm_host: str = os.environ.get(
+            "TRANSCRIA_ARBITRAGE_LLM_HOST",
+            services.get("arbitrage_llm_host", "127.0.0.1"),
+        )
         self.llm_cleanup_ports: list[int] = list(
             services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
         )
@@ -292,6 +300,20 @@ class VRAMManager:
         `lsof` peut être indisponible ou incomplet selon le contexte systemd/sandbox.
         L'autorité fonctionnelle est donc l'API OpenAI-compatible elle-même.
         """
+        # LLM DISTANTE (topologie split) : pas de port local — l'autorité est l'API sur
+        # l'hôte configuré. Sans ça, l'admission du scheduler la croit éteinte et exige la
+        # VRAM locale pour la (re)lancer → job différé à l'infini alors qu'elle tourne.
+        if self._is_remote_arbitrage():
+            import requests
+
+            try:
+                r = requests.get(
+                    f"http://{self.arbitrage_llm_host}:{self.arbitrage_llm_port}/v1/models",
+                    timeout=5,
+                )
+                return r.status_code == 200
+            except Exception:
+                return False
         if VRAMManager.is_port_open(self.arbitrage_llm_port):
             return True
         try:
@@ -452,6 +474,10 @@ class VRAMManager:
                 except OSError:
                     pass
 
+    def _is_remote_arbitrage(self) -> bool:
+        """La LLM d'arbitrage tourne-t-elle sur un hôte distant (≠ ce process) ?"""
+        return self.arbitrage_llm_host not in ("", "127.0.0.1", "localhost", "::1")
+
     def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
         """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
 
@@ -464,17 +490,18 @@ class VRAMManager:
 
         active_model_id: str | None = None
         server_healthy = False
+        base = f"http://{self.arbitrage_llm_host}:{self.arbitrage_llm_port}"
 
         try:
             r = requests.get(
-                f"http://127.0.0.1:{self.arbitrage_llm_port}/v1/models", timeout=5
+                f"{base}/v1/models", timeout=5
             )
             if r.status_code == 200:
                 data = r.json().get("data", [])
                 if data:
                     active_model_id = data[0].get("id", "")
                     r2 = requests.post(
-                        f"http://127.0.0.1:{self.arbitrage_llm_port}/v1/completions",
+                        f"{base}/v1/completions",
                         json={
                             "model": active_model_id,
                             "prompt": "Bonjour",
@@ -505,6 +532,26 @@ class VRAMManager:
                 self.arbitrage_llm_port, pid_info, active_model_id,
             )
             return True
+
+        # LLM DISTANTE (topologie split) : ce process ne gère pas son cycle de vie.
+        # On ne tente NI arrêt NI lancement local — on la consomme si elle répond.
+        if self._is_remote_arbitrage():
+            if server_healthy:
+                if expected_model_id and active_model_id != expected_model_id:
+                    logger.warning(
+                        "[arbitrage_llm] LLM distante %s saine mais modèle « %s » ≠ attendu "
+                        "« %s » — utilisée telle quelle (pas de redémarrage d'une LLM distante).",
+                        base, active_model_id, expected_model_id,
+                    )
+                else:
+                    logger.info("[arbitrage_llm] LLM distante saine sur %s (model: %s) — réutilisation.",
+                                base, active_model_id)
+                return True
+            logger.error(
+                "[arbitrage_llm] LLM distante injoignable sur %s — démarrer le service "
+                "d'arbitrage côté nœud (ce process ne lance pas une LLM distante).", base,
+            )
+            return False
 
         # Cas B : saine mais mauvais modèle → redémarrage avec warning
         if server_healthy and expected_model_id and active_model_id != expected_model_id:

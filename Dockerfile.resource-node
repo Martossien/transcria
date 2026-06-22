@@ -1,0 +1,84 @@
+# syntax=docker/dockerfile:1
+#
+# Image NŒUD DE RESSOURCES GPU — diarisation (pyannote) + STT (Cohere via vLLM).
+# Cf. docs/PLAN_TEST_SPLIT_VLLM.md et docs/SERVICE_RESSOURCES_GPU.md.
+#
+# OBJECTIF DE TEST (cf. plan §0) : on installe **comme un utilisateur**, en lançant
+# `install.sh --profile resource-node --inference-service` AU BUILD. Le build qui passe
+# = preuve que ce chemin d'install (jamais couvert jusqu'ici) fonctionne ; tout échec est
+# un *finding* à corriger dans le code/install, pas à contourner. P5 reste respecté :
+# install.sh au BUILD, `transcria.deploy.entrypoint` au RUNTIME (l'entrypoint ≠ install.sh).
+#
+# DEUX PILES TORCH ISOLÉES (conflit d'ABI vLLM ↔ torch projet) :
+#   - /app/venv      : venv PROJET créé par install.sh (torch cu130 + pyannote + torchcodec +
+#                      inference_service). `--cuda cu130` force l'index CUDA même SANS GPU au
+#                      build (sinon install.sh choisirait le torch CPU).
+#   - /opt/vllm-venv : venv vLLM isolé (sa propre pile torch/CUDA), ajouté par-dessus car
+#                      install.sh ne gère pas vLLM. Utilisé via VLLM_BIN/STT_BIN.
+# Base CUDA **devel** : nvcc requis au runtime par le JIT de vLLM (FlashInfer/Marlin).
+#
+# Le service tourne en **root** (fidèle à la prod, cf. transcria.service User=root) → pas
+# d'utilisateur applicatif dédié. config.yaml/.env fournis au RUNTIME (volume), jamais bakés.
+#
+# ⚠ Alignement driver/CUDA (opérateur) : CUDA_IMAGE dont la version est supportée par vLLM
+#   0.23 ET le driver NVIDIA de l'hôte (qui doit couvrir aussi cu130 du venv projet). GPU
+#   exposé via CDI ; le test ouvre les **8 GPU** (`nvidia.com/gpu=all`) — le code d'autonomie
+#   VRAM place arbitrage (TP=4) + STT/diar sur les cartes (c'est l'objet du test).
+#
+# Build (lourd) :
+#   docker build -f Dockerfile.resource-node -t transcria-resource-node:latest .
+
+ARG CUDA_IMAGE=nvidia/cuda:12.8.1-devel-ubuntu24.04
+ARG TORCH_CUDA_TAG=cu130
+ARG VLLM_VERSION=0.23.0
+
+FROM ${CUDA_IMAGE}
+ARG TORCH_CUDA_TAG
+ARG VLLM_VERSION
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TRANSCRIA_CONFIG=/app/config.yaml \
+    CUDA_HOME=/usr/local/cuda
+
+# Prérequis système d'install.sh (cf. transcria/install_prerequisites.py) : python3.12+venv,
+# ffmpeg (+ libav* pour torchcodec), iproute2 (ss : vérifs de port des lanceurs), build tools,
+# git/curl/sudo (détection llama, installateur opencode — non utilisé ici mais inoffensif).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+        build-essential libpq-dev \
+        ffmpeg iproute2 procps git curl sudo ca-certificates \
+        ninja-build \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+# ninja-build : requis par le JIT torch.compile/Inductor de vLLM au RUNTIME (compilation
+# des CUDA graphs). Sans lui, le worker vLLM meurt (« No such file or directory: 'ninja' »)
+# et le serveur d'arbitrage entre en crash-loop (cf. PLAN_TEST_SPLIT_VLLM.md, finding F6).
+
+WORKDIR /app
+COPY . /app
+
+# ── Install « utilisateur » du nœud de ressources (teste install.sh) ────────────
+#   --no-postgres : le nœud n'a PAS de base applicative (resource-node) ;
+#   --no-service  : pas de systemd en conteneur ; --skip-doctor : doctor exige GPU/réseau,
+#                   absents au build (le test runtime/Phase 5 fait tourner doctor) ;
+#   --cuda cu130  : force l'index torch CUDA sans GPU au build.
+RUN ./install.sh --profile resource-node --inference-service \
+        --non-interactive --no-service --no-postgres --skip-doctor \
+        --cuda "${TORCH_CUDA_TAG}"
+
+# ── venv vLLM isolé (STT Cohere + arbitrage) ────────────────────────────────────
+RUN python3.12 -m venv /opt/vllm-venv \
+    && /opt/vllm-venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/vllm-venv/bin/pip install --no-cache-dir "vllm==${VLLM_VERSION}" librosa soundfile
+
+# PATH = venv PROJET (gunicorn inference_service, diarisation). Le venv vLLM N'EST PAS sur
+# le PATH : les lanceurs l'atteignent via VLLM_BIN/STT_BIN (hérités par le superviseur STT).
+ENV PATH="/app/venv/bin:$PATH" \
+    VLLM_BIN=/opt/vllm-venv/bin/vllm \
+    STT_BIN=/opt/vllm-venv/bin/vllm \
+    TRANSCRIA_ROLE=resource-node
+
+# Flask :8002 (diar/voice/superviseur). Le STT vLLM (:8003) est lancé À LA DEMANDE par
+# /engines/ensure (resource_node.engines). L'arbitrage vLLM (:8080) est un service séparé.
+ENTRYPOINT ["/app/venv/bin/python", "-m", "transcria.deploy.entrypoint"]

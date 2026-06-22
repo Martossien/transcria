@@ -1,0 +1,61 @@
+# Overlay de configuration — topologie SPLIT GPU (cf. docs/PLAN_TEST_SPLIT_VLLM.md).
+# ─────────────────────────────────────────────────────────────────────────────
+# Ce fichier n'est PAS une config complète : ce sont les clés à FUSIONNER dans un
+# config.yaml dérivé de config.example.yaml (les autres sections restent par défaut).
+# Les hôtes sont les NOMS DE SERVICES de docker-compose.split-gpu.yml (DNS interne Docker).
+# Une seule config.yaml est partagée par tous les rôles : chaque rôle ne lit que sa
+# section (la frontale ignore `resource_node`, le nœud ignore `inference.mode`, etc.).
+
+# ── FRONTALE : déporter la diarisation au nœud (servie par inference.url /diarize) ──
+# REQUIS pour le split : sans `diarization_backend: remote`, la diarisation est considérée
+# LOCALE (besoin GPU) et le scheduler d'une frontale CPU ne peut jamais l'admettre. NB :
+# voice_embed est déporté automatiquement par `inference.mode: remote` + `inference.url`,
+# mais la diarisation exige ce drapeau explicite (cf. remote_requirements).
+models:
+  diarization_backend: "remote"
+
+# ── NŒUD : diarisation en placement AUTO (carte la plus libre) ───────────────
+# `auto` = le code choisit la carte la plus libre ≥ vram_mb (comme SQUIM), au lieu du
+# `cuda:0` codé en dur qui tombait sur l'arbitrage → OOM (finding F13). C'est l'autonomie
+# VRAM qu'on VEUT tester : aucune carte imposée.
+diarization:
+  device: "auto"
+
+# ── FRONTALE : déléguer la charge GPU au nœud distant ────────────────────────
+inference:
+  mode: "remote"                 # tout le GPU part sur le nœud (diar/voice/STT)
+  url: "http://resource-node:8002"
+  fallback_local: false          # vrai distant : pas de repli local (frontale CPU)
+  transport:
+    audio: "file_ref"            # volume `jobs` partagé entre frontale et nœud (FS commun)
+  auth:
+    api_key_env: "TRANSCRIA_INFERENCE_API_KEY"   # clé partagée (injectée par compose)
+  stt:
+    fallback_local: false
+    backends:
+      # STT Cohere servi par le vLLM du nœud (lancé à la demande sur :8003).
+      # base_url DOIT finir par /v1 (AsrClient poste {url}/audio/transcriptions) — sans /v1 → 404.
+      cohere: { url: "http://resource-node:8003/v1", model: "cohere-transcribe", response_format: "json" }
+
+# ── LLM d'arbitrage : pointer opencode sur le vLLM du nœud ────────────────────
+# `entrypoint.provision_opencode()` lit ces clés au démarrage du scheduler et écrit
+# provider.local.baseURL = http://vllm-arbitrage:8080/v1 dans opencode.json.
+services:
+  arbitrage_llm_host: "vllm-arbitrage"
+  arbitrage_llm_port: 8080
+  arbitrage_api_model_id: "arbitrage"   # = --served-model-name de launch_arbitrage_vllm.sh
+
+# ── Fichiers de job partagés (split multi-process) ───────────────────────────
+storage:
+  shared_backend: "fs"           # volume nommé `jobs` partagé (mono-hôte) ; "pg" si multi-HÔTES
+
+# ── NŒUD DE RESSOURCES : moteurs STT gérés par le superviseur ────────────────
+# Placement par carte sur 8 GPU : arbitrage (vLLM) prend 0-3 (TP=4) ; STT Cohere = 4 ;
+# la diarisation est en `device: auto` (carte la plus libre → 5-7). Le code d'autonomie
+# VRAM (planner/superviseur/admission) gère le placement — c'est l'objet du test.
+resource_node:
+  vram:
+    preflight: true              # refuse proprement plutôt qu'un OOM
+    auto_relocate: false
+  engines:
+    - { name: cohere, script: scripts/launch_stt_cohere.sh, gpu: 4, gpu_mem: 0.50, port: 8003, idle_timeout_s: 0 }

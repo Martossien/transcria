@@ -797,6 +797,7 @@ n'ont pas changé.
 | `min_speakers` | int \| null | `2` | Nombre minimal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `max_speakers` | int \| null | `20` | Nombre maximal de locuteurs transmis à pyannote si `num_speakers` est absent |
 | `num_speakers` | int \| null | `null` | Nombre exact de locuteurs, prioritaire sur `min_speakers`/`max_speakers` |
+| `device` | string | `"cuda:0"` | GPU de chargement pyannote. **`"auto"`/`"cuda"`** → carte la **plus libre** ≥ VRAM requise (`gpu.pyannote_vram_mb`, défaut 3000), résolue au chargement (contourne le GPU du LLM/STT en multi-GPU) ; un index explicite (`cuda:2`) est respecté ; repli CPU si rien d'éligible. **Recommandé `auto` en multi-GPU / nœud de ressources** (sinon `cuda:0` peut tomber sur le GPU du LLM d'arbitrage → OOM). |
 
 **Override par job (fourchette UI) :** ces valeurs globales peuvent être surchargées par job. L'étape Résumé du wizard propose un champ optionnel min/max locuteurs, stocké dans `jobs.extra_data_json["speaker_hint"]`. À la diarisation, `diarizer_factory.apply_speaker_hint()` écrit `min_speakers`/`max_speakers` (et `num_speakers` si min == max) depuis ce hint, et bascule `models.diarization_backend` de `sortformer` vers `pyannote` si la borne haute saisie dépasse 4 (capacité Sortformer). Le hint ne s'applique qu'au job concerné ; la config globale reste inchangée.
 
@@ -1076,7 +1077,7 @@ Un endpoint par moteur logique (`cohere`, `whisper`). **`url` vide = ce moteur r
 
 | Paramètre | Type | Défaut (cohere / whisper) | Description |
 |---|---|---|---|
-| `url` | string | `""` / `""` | Racine OpenAI, ex. `http://127.0.0.1:8003/v1`. Vide = local |
+| `url` | string | `""` / `""` | Racine OpenAI, ex. `http://127.0.0.1:8003/v1`. **DOIT finir par `/v1`** (l'`AsrClient` poste `{url}/audio/transcriptions` → sans `/v1` = `404` silencieux ⇒ transcript vide). Vide = local |
 | `model` | string | `cohere-transcribe` / `whisper-large-v3` | `served-model-name` attendu par le serveur |
 | `response_format` | string | `json` / `verbose_json` | Cohere Transcribe (vLLM) refuse `verbose_json` (400) → `json` |
 
@@ -1088,7 +1089,7 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 |---|---|---|---|
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
-| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `idle_timeout_s > 0` active l'idle-stop opportuniste de ce moteur (défaut `0` = résident) |
+| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
 
 `./install.sh --profile resource-node` génère ce manifeste pour Cohere et Whisper
 lors de la création initiale de `config.yaml`, si des GPU et les scripts

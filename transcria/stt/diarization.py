@@ -200,6 +200,21 @@ class DiarizerService(BaseDiarizer):
 
             total_t0 = time.monotonic()
             hf_token = os.environ.get("HF_TOKEN") or None
+            # Autonomie VRAM : un device "auto"/"cuda" générique est résolu ICI (au chargement)
+            # vers la carte la PLUS LIBRE ≥ VRAM requise — donc en CONTOURNANT les cartes déjà
+            # prises par l'arbitrage/le STT — au lieu du défaut `cuda:0` qui tombait sur le GPU
+            # du LLM → OOM (finding F13). Un index explicite (`cuda:N`) est respecté tel quel ;
+            # repli CPU propre si rien d'éligible. Lecture seule, ne tue/évince aucun process.
+            from transcria.audio.squim_scorer import pick_device
+
+            required_mb = float((self.config.get("gpu", {}) or {}).get("pyannote_vram_mb", 3000) or 3000)
+            resolved = pick_device(self.device, required_mb=required_mb)
+            if resolved != self.device:
+                logger.info(
+                    "Diarization: device '%s' → '%s' (carte la plus libre ≥ %.0f Mo)",
+                    self.device, resolved, required_mb,
+                )
+                self.device = resolved
             logger.info("Chargement pyannote sur %s (token=%s)...", self.device, "oui" if hf_token else "non")
             load_t0 = time.monotonic()
             pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)

@@ -56,7 +56,11 @@ log_section() { echo -e "\n${BOLD}${BLUE}═══ $* ═══${NC}"; }
 
 # ── Defaults ─────────────────────────────────────────────────────────────────
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SERVICE_USER="${USER:-admin_ia}"
+# Utilisateur de service : $USER si défini, sinon l'utilisateur effectif courant (root en
+# conteneur), JAMAIS un nom personnel hardcodé. Avant : défaut `admin_ia` (nom du mainteneur)
+# → quand $USER est vide (docker build, cron, certains CI), l'install ciblait silencieusement
+# /home/admin_ia (utilisateur étranger) — opencode et chemins atterrissaient au mauvais endroit.
+SERVICE_USER="${USER:-$(id -un 2>/dev/null || echo root)}"
 INSTALL_SYSTEMD=true
 INSTALL_SERVICE=true
 INSTALL_TORCH=true
