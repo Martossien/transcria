@@ -8,6 +8,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] — 2026-06-23
+
+**Durcissement de la concurrence + validation all-in-one Docker.** Re-test des trois topologies
+Docker sur installation neuve, puis **campagne de tests de charge (concurrence)** : robustesse validée
+(all-in-one 3 jobs ; split jusqu'à 8 jobs, 0 échec serveur, débit qui scale jusqu'au sweet spot ≈ 4 sur
+8×RTX 3090). **7 vrais bugs débusqués et corrigés** « comme un utilisateur » (4 de concurrence + 3 du
+chemin all-in-one Docker, ci-dessous). Gate : ruff + mypy (arbre), **2 563 tests** verts (~80 %
+couverture). Phase `0.x` : l'API, le schéma de configuration et le modèle de données peuvent encore
+évoluer jusqu'à `1.0.0`.
+
 **Tests de charge (concurrence) des topologies — `docs/PLAN_TEST_CHARGE.md`.** Campagne de stress
 (rafales `test2.mp3`) : all-in-one robuste à 3 jobs ; split robuste **jusqu'à 8 jobs** (0 échec serveur),
 débit qui scale 1→4 puis le LLM 27B sature (sweet spot ≈ 4 sur 8×RTX 3090). **4 vrais bugs de
