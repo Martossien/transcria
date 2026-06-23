@@ -7,6 +7,7 @@ from typing import Any, Callable
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+from transcria.gpu.model_load_lock import model_load_lock
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.stt.base_diarizer import BaseDiarizer
@@ -216,22 +217,26 @@ class DiarizerService(BaseDiarizer):
                 )
                 self.device = resolved
             logger.info("Chargement pyannote sur %s (token=%s)...", self.device, "oui" if hf_token else "non")
-            load_t0 = time.monotonic()
-            pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
-            logger.info("Pyannote: modèle chargé en %.1fs", time.monotonic() - load_t0)
-            pipeline_params = self._effective_pipeline_params()
-            if pipeline_params:
-                logger.info("Diarization: paramètres pipeline pyannote = %s", pipeline_params)
-                try:
-                    instantiate_t0 = time.monotonic()
-                    pipeline.instantiate(pipeline_params)
-                    logger.info("Pyannote: paramètres pipeline appliqués en %.1fs", time.monotonic() - instantiate_t0)
-                except ValueError as exc:
-                    logger.warning("Paramètres pipeline pyannote ignorés: %s", exc)
-            self._apply_runtime_pipeline_settings(pipeline)
-            move_t0 = time.monotonic()
-            pipeline.to(torch.device(self.device))
-            logger.info("pyannote chargé sur %s en %.1fs", self.device, time.monotonic() - move_t0)
+            # Verrou d'instanciation : sérialise la construction + le `.to(device)` pour ne PAS
+            # chevaucher un chargement `device_map` concurrent (accelerate init_empty_weights →
+            # device meta global non thread-safe) qui ferait échouer le move ici. Cf. model_load_lock.
+            with model_load_lock():
+                load_t0 = time.monotonic()
+                pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
+                logger.info("Pyannote: modèle chargé en %.1fs", time.monotonic() - load_t0)
+                pipeline_params = self._effective_pipeline_params()
+                if pipeline_params:
+                    logger.info("Diarization: paramètres pipeline pyannote = %s", pipeline_params)
+                    try:
+                        instantiate_t0 = time.monotonic()
+                        pipeline.instantiate(pipeline_params)
+                        logger.info("Pyannote: paramètres pipeline appliqués en %.1fs", time.monotonic() - instantiate_t0)
+                    except ValueError as exc:
+                        logger.warning("Paramètres pipeline pyannote ignorés: %s", exc)
+                self._apply_runtime_pipeline_settings(pipeline)
+                move_t0 = time.monotonic()
+                pipeline.to(torch.device(self.device))
+                logger.info("pyannote chargé sur %s en %.1fs", self.device, time.monotonic() - move_t0)
 
             # Contrainte par appel (hint distant) prioritaire sur la config statique.
             source = speaker_params if speaker_params is not None else self.config.get("diarization", {})

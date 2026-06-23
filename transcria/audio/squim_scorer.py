@@ -130,19 +130,26 @@ def _get_model() -> Any:
     if _MODEL is None:
         import socket
 
-        previous_timeout = socket.getdefaulttimeout()
-        try:
-            from torchaudio.pipelines import SQUIM_OBJECTIVE
+        from transcria.gpu.model_load_lock import model_load_lock
 
-            socket.setdefaulttimeout(_DOWNLOAD_TIMEOUT_S)
-            _MODEL = SQUIM_OBJECTIVE.get_model()
-            _MODEL.eval()
-            logger.info("[squim] modèle SquimObjective chargé (CC-BY-4.0, ~28 Mo)")
-        except Exception as exc:  # noqa: BLE001 — best effort, jamais bloquant
-            logger.warning("[squim] modèle indisponible : %s", exc)
-            return None
-        finally:
-            socket.setdefaulttimeout(previous_timeout)
+        # Verrou d'instanciation + double-check : sérialise le chargement torch (victime
+        # potentielle d'un init_empty_weights concurrent → device meta). Cf. model_load_lock.
+        with model_load_lock():
+            if _MODEL is not None:
+                return _MODEL
+            previous_timeout = socket.getdefaulttimeout()
+            try:
+                from torchaudio.pipelines import SQUIM_OBJECTIVE
+
+                socket.setdefaulttimeout(_DOWNLOAD_TIMEOUT_S)
+                _MODEL = SQUIM_OBJECTIVE.get_model()
+                _MODEL.eval()
+                logger.info("[squim] modèle SquimObjective chargé (CC-BY-4.0, ~28 Mo)")
+            except Exception as exc:  # noqa: BLE001 — best effort, jamais bloquant
+                logger.warning("[squim] modèle indisponible : %s", exc)
+                return None
+            finally:
+                socket.setdefaulttimeout(previous_timeout)
     return _MODEL
 
 

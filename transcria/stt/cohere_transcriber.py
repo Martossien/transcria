@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from transcria.gpu.model_load_lock import model_load_lock
 from transcria.stt.base_transcriber import BaseTranscriber
 
 if TYPE_CHECKING:
@@ -109,18 +110,22 @@ class CohereTranscriber(BaseTranscriber):
                 ):
                     model_id = abs_path
 
-            self._processor = AutoProcessor.from_pretrained(
-                model_id,
-                revision=self.model_revision,
-                trust_remote_code=True,
-            )
-            self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
-                model_id,
-                revision=self.model_revision,
-                torch_dtype=torch.bfloat16,
-                device_map=self.device,
-                trust_remote_code=True,
-            )
+            # Verrou d'instanciation : `device_map=` déclenche accelerate.init_empty_weights()
+            # (monkeypatch meta GLOBAL non thread-safe) — sérialisé pour ne pas corrompre un
+            # chargement de modèle concurrent (ex. pyannote). Cf. transcria.gpu.model_load_lock.
+            with model_load_lock():
+                self._processor = AutoProcessor.from_pretrained(
+                    model_id,
+                    revision=self.model_revision,
+                    trust_remote_code=True,
+                )
+                self._model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                    model_id,
+                    revision=self.model_revision,
+                    torch_dtype=torch.bfloat16,
+                    device_map=self.device,
+                    trust_remote_code=True,
+                )
             revision = f"@{self.model_revision}" if self.model_revision else ""
             logger.info("Cohere ASR chargé sur %s depuis %s%s", self.device, model_id, revision)
             return True

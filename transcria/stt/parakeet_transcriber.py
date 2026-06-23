@@ -124,7 +124,10 @@ class ParakeetTranscriber(BaseTranscriber):
                 logger.info("Parakeet STT: CUDA device force sur %s", self.device)
 
             load_t0 = _time.time()
-            self._model = ASRModel.from_pretrained(self.model_path)
+            from transcria.gpu.model_load_lock import model_load_lock
+
+            with model_load_lock():  # sérialise l'instanciation (cf. model_load_lock)
+                self._model = ASRModel.from_pretrained(self.model_path)
 
             desired = self.decoding_strategy
             current = str(self._model.cfg.decoding.strategy)

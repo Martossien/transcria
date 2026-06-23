@@ -138,33 +138,39 @@ class GraniteTranscriber(BaseTranscriber):
             }
             if self.fix_mistral_regex:
                 processor_kwargs["fix_mistral_regex"] = True
-            try:
-                self._processor = AutoProcessor.from_pretrained(self.model_path, **processor_kwargs)
-            except TypeError as exc:
-                if "fix_mistral_regex" not in str(exc):
-                    raise
-                processor_kwargs.pop("fix_mistral_regex", None)
-                self._processor = AutoProcessor.from_pretrained(self.model_path, **processor_kwargs)
-                self._metadata["fix_mistral_regex"] = False
-                logger.warning("Granite STT: fix_mistral_regex non supporté par cette version de transformers")
+            # Verrou d'instanciation : `device_map=` déclenche accelerate.init_empty_weights()
+            # (monkeypatch meta GLOBAL non thread-safe) — sérialisé pour ne pas corrompre un
+            # chargement de modèle concurrent (ex. pyannote). Cf. transcria.gpu.model_load_lock.
+            from transcria.gpu.model_load_lock import model_load_lock
 
-            self._tokenizer = self._processor.tokenizer
-            model_kwargs = {
-                "device_map": self.device,
-                "dtype": dtype,
-                "trust_remote_code": True,
-                "local_files_only": self._is_local_model_path(self.model_path),
-            }
-            try:
-                self._model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_path, **model_kwargs)
-                self._metadata["dtype_arg"] = "dtype"
-            except TypeError as exc:
-                if "dtype" not in str(exc):
-                    raise
-                model_kwargs["torch_dtype"] = model_kwargs.pop("dtype")
-                self._model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_path, **model_kwargs)
-                self._metadata["dtype_arg"] = "torch_dtype"
-                logger.warning("Granite STT: fallback torch_dtype utilisé pour cette version de transformers")
+            with model_load_lock():
+                try:
+                    self._processor = AutoProcessor.from_pretrained(self.model_path, **processor_kwargs)
+                except TypeError as exc:
+                    if "fix_mistral_regex" not in str(exc):
+                        raise
+                    processor_kwargs.pop("fix_mistral_regex", None)
+                    self._processor = AutoProcessor.from_pretrained(self.model_path, **processor_kwargs)
+                    self._metadata["fix_mistral_regex"] = False
+                    logger.warning("Granite STT: fix_mistral_regex non supporté par cette version de transformers")
+
+                self._tokenizer = self._processor.tokenizer
+                model_kwargs = {
+                    "device_map": self.device,
+                    "dtype": dtype,
+                    "trust_remote_code": True,
+                    "local_files_only": self._is_local_model_path(self.model_path),
+                }
+                try:
+                    self._model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_path, **model_kwargs)
+                    self._metadata["dtype_arg"] = "dtype"
+                except TypeError as exc:
+                    if "dtype" not in str(exc):
+                        raise
+                    model_kwargs["torch_dtype"] = model_kwargs.pop("dtype")
+                    self._model = AutoModelForSpeechSeq2Seq.from_pretrained(self.model_path, **model_kwargs)
+                    self._metadata["dtype_arg"] = "torch_dtype"
+                    logger.warning("Granite STT: fallback torch_dtype utilisé pour cette version de transformers")
             elapsed = _time.time() - load_t0
             self._metadata.update({
                 "model_path": self.model_path,

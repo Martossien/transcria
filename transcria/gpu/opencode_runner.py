@@ -451,13 +451,23 @@ class OpenCodeRunner:
             # dans /tmp, qui est « external_directory » et rejeté en mode headless
             # (le rejet avorte le run en silence). Ceinture+bretelles avec le scratch
             # hors dépôt qui rend déjà les chemins relatifs fiables.
+            #
+            # XDG_DATA_HOME = un répertoire de données opencode PROPRE à cette invocation.
+            # opencode stocke son état dans une base SQLite ($XDG_DATA_HOME/opencode/opencode.db) :
+            # par défaut partagée (~/.local/share/opencode), deux `opencode run` concurrents
+            # (ex. résumé synchrone + correction du pool) se bloquent sur le verrou writer SQLite
+            # → opencode FIGE après la réponse LLM. Une db par run (dans le scratch de la phase)
+            # supprime cette contention. Le CONFIG reste partagé (XDG_CONFIG_HOME inchangé) : le
+            # provider `local` (opencode.json) doit rester résolu.
+            data_home = self.work_dir / ".opencode-data"
+            data_home.mkdir(parents=True, exist_ok=True)
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=str(self.work_dir),
-                env={**os.environ, "TMPDIR": str(self.work_dir)},
+                env={**os.environ, "TMPDIR": str(self.work_dir), "XDG_DATA_HOME": str(data_home)},
             )
             pid_file.write_text(str(proc.pid))
             logger.info("opencode démarré PID=%d (job_dir=%s)", proc.pid, self.work_dir.name)
