@@ -12,6 +12,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -24,18 +25,13 @@ class VRAMManager:
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
         scheduling_cfg = config.get("workflow", {}).get("scheduling", {}) or {}
-        self.arbitrage_llm_port: int = services.get(
-            "arbitrage_llm_port",
-            services.get("qwen_port", 8080),
-        )
-        # Hôte de la LLM d'arbitrage. 127.0.0.1 = LLM locale (le service gère son cycle de
-        # vie : sonde, arrêt, lancement via arbitrage_script). Un hôte DISTANT (topologie
-        # split : la LLM tourne sur un nœud/conteneur séparé) signifie que CE process ne
-        # doit PAS tenter de la lancer/arrêter localement — seulement la consommer.
-        self.arbitrage_llm_host: str = os.environ.get(
-            "TRANSCRIA_ARBITRAGE_LLM_HOST",
-            services.get("arbitrage_llm_host", "127.0.0.1"),
-        )
+        # Endpoint de la LLM d'arbitrage via la source UNIQUE de résolution (partagée avec
+        # provision_opencode). 127.0.0.1 = LLM locale (le service gère son cycle de vie :
+        # sonde, arrêt, lancement via arbitrage_script). Un hôte DISTANT (topologie split :
+        # la LLM tourne sur un nœud/conteneur séparé, ou override TRANSCRIA_ARBITRAGE_LLM_HOST)
+        # signifie que CE process ne doit PAS tenter de la lancer/arrêter localement —
+        # seulement la consommer.
+        self.arbitrage_llm_host, self.arbitrage_llm_port = resolve_arbitrage_endpoint(config)
         self.llm_cleanup_ports: list[int] = list(
             services.get("llm_cleanup_ports", [services.get("vllm_port", 8000)])
         )

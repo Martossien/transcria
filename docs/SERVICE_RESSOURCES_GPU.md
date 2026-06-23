@@ -34,7 +34,7 @@
 | Idle-stop moteurs externes (v1.2) | `SttEngineSupervisor.reap_idle` (opportuniste via `/capabilities`) | ✅ (minimal) |
 | Admission VRAM distante (backpressure) | `remote_vram_admits` — données GPU manquantes ⇒ `None` (déférer au pré-vol, pas de famine) + log throttlé scheduler | ✅ |
 | Check d'install GPU du nœud | `doctor.check_inference_node_gpus` (nœud joignable doit énumérer ses GPU via `/capabilities`) | ✅ |
-| **LLM d'arbitrage DISTANTE** (cycle de vie non géré localement) | `vram_manager._is_remote_arbitrage()` honore `services.arbitrage_llm_host` (sondes + admission), ne lance/arrête jamais une LLM distante | ✅ (2026-06-23) |
+| **LLM d'arbitrage DISTANTE** (cycle de vie non géré localement) | `vram_manager._is_remote_arbitrage()` honore l'endpoint résolu par `opencode_setup.resolve_arbitrage_endpoint` (env `TRANSCRIA_ARBITRAGE_LLM_HOST` > `services.arbitrage_llm_host` > `127.0.0.1`), **source unique partagée avec le provider opencode** ; sondes + admission, ne lance/arrête jamais une LLM distante | ✅ (2026-06-23) |
 | **Diarisation : placement auto** (carte la plus libre, plus de `cuda:0` figé) | `diarization.py` → `squim_scorer.pick_device` au chargement (`diarization.device: auto`) | ✅ (2026-06-23) |
 | **`resource_node.engines[].gpu_mem` appliqué au lancement** (pas seulement à l'admission) | `make_script_launcher` transmet `STT_GPU_MEM` | ✅ (2026-06-23) |
 | **Banc split entièrement containerisé (vLLM) — validé E2E fichier son réel** | `docker-compose.split-gpu.yml`, `Dockerfile.{worker,resource-node}`, `scripts/launch_arbitrage_vllm.sh`, `scripts/verify_split_topology.py` — cf. `PLAN_TEST_SPLIT_VLLM.md` | ✅ (2026-06-23) |

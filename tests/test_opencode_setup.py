@@ -8,6 +8,7 @@ from transcria.gpu.opencode_setup import (
     ensure_local_provider,
     find_opencode_binary,
     local_provider_block,
+    resolve_arbitrage_endpoint,
 )
 
 
@@ -149,3 +150,34 @@ def test_default_base_url_legacy_qwen_port_and_host():
 
 def test_default_base_url_fallback_8080():
     assert default_base_url({}) == "http://127.0.0.1:8080/v1"
+
+
+# ── resolve_arbitrage_endpoint (source unique partagée vram_manager / provision_opencode) ──
+
+def test_resolve_endpoint_default_is_local():
+    # all-in-one / install par défaut : LLM locale.
+    assert resolve_arbitrage_endpoint({}) == ("127.0.0.1", 8080)
+
+
+def test_resolve_endpoint_from_config_host_port():
+    # frontale + nœud GPU : l'hôte distant vient de la config.
+    cfg = {"services": {"arbitrage_llm_host": "vllm-arbitrage", "arbitrage_llm_port": 8090}}
+    assert resolve_arbitrage_endpoint(cfg) == ("vllm-arbitrage", 8090)
+
+
+def test_resolve_endpoint_env_overrides_config(monkeypatch):
+    # L'override d'env l'emporte sur la config — et c'est CE chemin que provision_opencode
+    # doit honorer comme vram_manager (sinon opencode et la sonde divergent).
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_LLM_HOST", "host.docker.internal")
+    cfg = {"services": {"arbitrage_llm_host": "ignored", "arbitrage_llm_port": 8080}}
+    assert resolve_arbitrage_endpoint(cfg) == ("host.docker.internal", 8080)
+
+
+def test_resolve_endpoint_env_propagates_to_base_url(monkeypatch):
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_LLM_HOST", "host.docker.internal")
+    assert default_base_url({}) == "http://host.docker.internal:8080/v1"
+
+
+def test_resolve_endpoint_legacy_qwen_port(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    assert resolve_arbitrage_endpoint({"services": {"qwen_port": 8081}}) == ("127.0.0.1", 8081)

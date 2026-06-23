@@ -101,7 +101,10 @@ Conteneurs **externes** à ce compose :
   ci-dessous), déployée sur l'hôte GPU ; déclarée côté scheduler via
   `inference.mode=remote` + URLs des nœuds.
 - **LLM d'arbitrage** — service externe OpenAI-compatible (recommandé) ou conteneur
-  dédié ; jamais embarqué dans l'image applicative.
+  dédié ; jamais embarqué dans l'image applicative. Hôte/port résolus de façon unique
+  (`services.arbitrage_llm_host`/`arbitrage_llm_port`, surchargeables par
+  `TRANSCRIA_ARBITRAGE_LLM_HOST`) — pour l'all-in-one, pointer une LLM sur l'hôte se fait via
+  `host.docker.internal` (+ `extra_hosts: host-gateway`).
 
 ## Matrice des variables
 
@@ -119,6 +122,7 @@ Conteneurs **externes** à ce compose :
 | `HF_TOKEN` | all, resource-node (GPU) | si STT/diar gated (Cohere/pyannote) | Token Hugging Face (modèles gated) |
 | `HF_CACHE_DIR` | all (compose) | non (défaut `~/.cache/huggingface`) | Cache HF de l'hôte monté dans `/hf` |
 | `HF_HUB_OFFLINE` | all, resource-node | non (compose met `0`) | `0` requis pour 1re résolution d'un modèle gated en conteneur |
+| `TRANSCRIA_ARBITRAGE_LLM_HOST` | scheduler, all | non (défaut `services.arbitrage_llm_host` ou `127.0.0.1`) | Hôte de la LLM d'arbitrage. Override commun à la sonde `vram_manager` ET au provider opencode (résolution unique) — utile quand la LLM tourne sur l'hôte/un nœud (ex. `host.docker.internal`) |
 
 Build-time (`docker build --build-arg`) :
 
@@ -233,8 +237,10 @@ Particularités vs le `docker run` minimal ci-dessus :
   un **venv vLLM isolé** (`/opt/vllm-venv`) à côté du venv projet (torch cu130) — les deux piles
   torch ne se mélangent pas.
 - **opencode** est installé au build, et son `provider.local` est **reconfiguré au démarrage**
-  (entrypoint) depuis la config montée → il pointe sur le vLLM d'arbitrage du nœud. *(Ceci corrige
-  aussi l'all-in-one : opencode n'était présent dans aucune image avant.)*
+  (entrypoint) depuis la config montée → il pointe sur le vLLM d'arbitrage du nœud. L'**image de
+  base** (`Dockerfile`, profils `scheduler`/all-in-one) installe désormais elle aussi opencode via
+  l'installateur officiel (elle est construite par `pip install`, pas par `install.sh`) : les rôles
+  qui exécutent les phases LLM en disposent quelle que soit la topologie.
 - **STT Cohere** servi par vLLM dans le nœud (`/engines/ensure` lance `launch_stt_cohere.sh`,
   `STT_BIN` = venv vLLM) ; **LLM d'arbitrage** = service `vllm-arbitrage` (Qwen3.6-27B-FP8, TP=4,
   FP8 Marlin sur Ampere) via `scripts/launch_arbitrage_vllm.sh`.

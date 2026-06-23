@@ -8,6 +8,31 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+**Re-test de la topologie all-in-one Docker de bout en bout (mêmes correctifs « comme un
+utilisateur »).** Le pipeline complet a été rejoué dans le conteneur all-in-one (STT Cohere +
+diarisation pyannote auto-placée dans le conteneur, LLM d'arbitrage servie hors image) →
+**qualité 97/100, identique au banc de référence**, livrables SRT/ZIP/DOCX. Trois correctifs de
+fond pour que les **trois** topologies (all-in-one, frontale, nœud de ressources GPU) fonctionnent
+sans bricolage.
+
+### Fixed
+- **opencode absent de l'image Docker de base (`transcria:latest`).** Cette image est construite par
+  `pip install` (et non par `install.sh`) ; le correctif R9 de beta.3 ne couvrait que les images
+  `Dockerfile.worker`/`Dockerfile.resource-node`. Les rôles `scheduler` (compose de base) et `all`
+  (all-in-one) exécutent pourtant les phases LLM via opencode → elles échouaient faute de binaire.
+  L'image de base installe désormais opencode via l'installateur officiel (comme `install.sh`),
+  avec `HOME`/`PATH` du compte de service.
+- **`provision_opencode` ignorait `TRANSCRIA_ARBITRAGE_LLM_HOST`.** `vram_manager` (sonde/cycle de vie)
+  honore cette variable, mais `opencode_setup.default_base_url` (URL du provider opencode) lisait
+  seulement `services.arbitrage_llm_host` → les deux **divergeaient** quand l'hôte d'arbitrage était
+  fixé par l'environnement (opencode pointait dans le vide). Résolution désormais **unique et partagée**
+  (`opencode_setup.resolve_arbitrage_endpoint` : env > config > `127.0.0.1`), utilisée par les deux.
+- **`scripts/verify_split_topology.py` : applicable aux trois topologies.** Les appels `/summary` et
+  `/process` sont **synchrones** en rôle `all` (réponse en fin de phase LLM) et enfilés (202) en split :
+  le timeout fixe de 60 s (calibré pour l'async) provoquait un faux échec en all-in-one → timeout aligné
+  sur le plafond du job. Le plan de contrôle (`--node`/`--arbitrage`) est désormais sautable (vide) pour
+  l'all-in-one, qui n'a pas de nœud `:8002`.
+
 ## [0.1.0-beta.3] — 2026-06-23
 
 **Topologie répartie (frontale + nœud de ressources) entièrement containerisée et validée de bout

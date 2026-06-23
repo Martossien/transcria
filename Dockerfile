@@ -46,9 +46,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PATH="/opt/venv/bin:$PATH" \
     TRANSCRIA_CONFIG=/app/config.yaml
-# ffmpeg : décodage audio ; libpq5 : client PostgreSQL runtime (psycopg).
+# ffmpeg : décodage audio ; libpq5 : client PostgreSQL runtime (psycopg) ;
+# curl/unzip/ca-certificates : installateur officiel opencode (ci-dessous).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ffmpeg libpq5 \
+        ffmpeg libpq5 curl unzip ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1000 transcria
 
@@ -64,6 +65,14 @@ RUN mkdir -p /app/jobs /app/models /app/voices /app/instance \
     && chown -R transcria:transcria /app
 
 USER transcria
+ENV HOME=/home/transcria
+ENV PATH="/home/transcria/.opencode/bin:$PATH"
+# opencode : agent LLM requis par les rôles qui exécutent les phases LLM (scheduler, all).
+# Ce n'est pas un paquet pip ⇒ installé via l'installateur officiel, comme install.sh
+# (cf. transcria.install_opencode). Le binaire atterrit dans $HOME/.opencode/bin/opencode et
+# est résolu au runtime ; l'entrypoint (provision_opencode) réécrit ensuite opencode.json vers
+# l'endpoint LLM configuré. Les rôles web/migrate l'embarquent aussi (sans surcoût notable).
+RUN curl -fsSL https://opencode.ai/install | bash
 # Le rôle est fourni par TRANSCRIA_ROLE (ou en argument de la commande). L'entrypoint
 # valide les invariants (config, PostgreSQL), attend la base, puis exec le serveur.
 ENTRYPOINT ["python", "-m", "transcria.deploy.entrypoint"]

@@ -155,10 +155,27 @@ def ensure_local_provider(
     return data
 
 
-def default_base_url(config: dict) -> str:
-    """URL OpenAI de la LLM d'arbitrage depuis la config (port + host éventuel)."""
+def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
+    """(host, port) de la LLM d'arbitrage — SOURCE UNIQUE de résolution.
+
+    Priorité de l'hôte : variable d'environnement ``TRANSCRIA_ARBITRAGE_LLM_HOST`` >
+    ``services.arbitrage_llm_host`` > ``127.0.0.1`` (LLM locale). Le port suit
+    ``services.arbitrage_llm_port`` (``qwen_port`` lu par compat), défaut ``8080``.
+
+    Utilisée à la fois par ``VRAMManager`` (sonde / cycle de vie de la LLM) et par
+    ``provision_opencode`` (URL du provider opencode), pour qu'ils ne divergent JAMAIS
+    sur l'endpoint — quel que soit le mode de déploiement (all-in-one, frontale, nœud GPU).
+    """
     services = config.get("services", {}) or {}
-    # arbitrage_llm_port est le nom courant ; qwen_port reste lu par compat.
-    port = services.get("arbitrage_llm_port") or services.get("qwen_port") or 8080
-    host = services.get("arbitrage_llm_host", "127.0.0.1")
+    host = os.environ.get(
+        "TRANSCRIA_ARBITRAGE_LLM_HOST",
+        services.get("arbitrage_llm_host", "127.0.0.1"),
+    )
+    port = int(services.get("arbitrage_llm_port") or services.get("qwen_port") or 8080)
+    return host, port
+
+
+def default_base_url(config: dict) -> str:
+    """URL OpenAI de la LLM d'arbitrage (cf. :func:`resolve_arbitrage_endpoint`)."""
+    host, port = resolve_arbitrage_endpoint(config)
     return f"http://{host}:{port}/v1"

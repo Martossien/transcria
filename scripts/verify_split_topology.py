@@ -126,12 +126,15 @@ def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
     r = s.post(f"{web_url}/api/jobs/{job_id}/analyze", timeout=600)
     _log("job", f"analyse → HTTP {r.status_code}")
 
-    # 5) Résumé rapide. En rôle `web`, il est ENFILÉ sur le worker (async) : exerce DÉJÀ
-    #    le STT distant + la diarisation + le LLM. On poll jusqu'à `summary_done`.
-    r = s.post(f"{web_url}/api/jobs/{job_id}/summary", timeout=60)
-    if r.status_code not in (200, 202):  # 202 = enfilé sur le worker (split)
+    # 5) Résumé rapide. Selon le mode, la réponse est SYNCHRONE ou ENFILÉE :
+    #    - rôle `web`/split : enfilé sur le worker → 202 immédiat, on poll `summary_done` ;
+    #    - rôle `all`/all-in-one : traité en ligne → la réponse n'arrive qu'à la FIN du STT
+    #      + diarisation + LLM (plusieurs minutes avec une LLM lente). D'où `timeout=timeout_s`
+    #      (et non une valeur fixe trop courte) : c'est le plafond du job, pas une attente fixe.
+    r = s.post(f"{web_url}/api/jobs/{job_id}/summary", timeout=timeout_s)
+    if r.status_code not in (200, 202):  # 200 = synchrone (all-in-one), 202 = enfilé (split)
         _fail("job", f"summary : HTTP {r.status_code} — {r.text[:200]}")
-    _log("job", "résumé enfilé sur le worker — polling jusqu'à summary_done…")
+    _log("job", f"résumé → HTTP {r.status_code} — polling jusqu'à summary_done…")
     _poll_for(s, web_url, job_id, want={"summary_done"}, timeout_s=timeout_s, poll_s=poll_s, label="summary")
 
     # 6) Étapes wizard minimales (frontale-local) → état processable. `context` exige
@@ -142,9 +145,10 @@ def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
             _fail("job", f"{step} : HTTP {r.status_code} — {r.text[:200]}")
         _log("job", f"{step} OK")
 
-    # 7) Traitement complet (pipeline distant : STT + diar + correction/relecture LLM).
-    r = s.post(f"{web_url}/api/jobs/{job_id}/process", json={"mode": mode}, timeout=60)
-    if r.status_code not in (200, 202):  # 202 = accepté/enfilé sur le worker GPU (split)
+    # 7) Traitement complet (STT + diar + correction/relecture/qualité LLM). Synchrone en
+    #    all-in-one, enfilé en split → même garde de timeout que le résumé (cf. étape 5).
+    r = s.post(f"{web_url}/api/jobs/{job_id}/process", json={"mode": mode}, timeout=timeout_s)
+    if r.status_code not in (200, 202):  # 200 = synchrone (all-in-one), 202 = enfilé (split)
         _fail("job", f"process(mode={mode}) : HTTP {r.status_code} — {r.text[:300]}")
     _log("job", f"traitement {mode} accepté (HTTP {r.status_code}) — polling…")
     final = _poll_for(s, web_url, job_id, want=_SUCCESS_STATES, timeout_s=timeout_s, poll_s=poll_s, label="process")
@@ -201,8 +205,18 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     _log("plan", "── Niveau 1 : plan de contrôle ──")
-    check_resource_node(args.node.rstrip("/"), args.api_key or None)
-    check_arbitrage(args.arbitrage.rstrip("/"), args.arbitrage_alias)
+    # Les sondes de plan de contrôle sont propres à la topologie SPLIT. En all-in-one,
+    # il n'y a pas de nœud de ressources distinct (:8002) ni forcément de LLM exposée à
+    # cette adresse → passer `--node ""` / `--arbitrage ""` les saute proprement et le
+    # script se réduit au job E2E (le même script valide donc les trois topologies).
+    if args.node:
+        check_resource_node(args.node.rstrip("/"), args.api_key or None)
+    else:
+        _log("plan", "Niveau 1 (nœud de ressources) ignoré — all-in-one (pas de :8002).")
+    if args.arbitrage:
+        check_arbitrage(args.arbitrage.rstrip("/"), args.arbitrage_alias)
+    else:
+        _log("plan", "Niveau 1 (LLM d'arbitrage) ignoré — endpoint non sondé en direct.")
 
     if not args.audio:
         _log("plan", "Niveau 2 (job son) ignoré — fournir --audio pour le test E2E complet.")
@@ -217,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     _log("job", "── Niveau 2 : job son E2E via la frontale ──")
     run_job(args.web.rstrip("/"), args.audio, args.username, args.password,
             args.mode, args.timeout, args.poll_interval)
-    _log("plan", "✅ topologie split validée de bout en bout.")
+    _log("plan", "✅ topologie validée de bout en bout.")
     return 0
 
 
