@@ -123,4 +123,9 @@ Full documentation lives in [`docs/`](docs/) (currently in French):
 
 ## License
 
-TranscrIA is released under the [Apache License 2.0](LICENSE).
+TranscrIA is released under the [Apache License 2.0](LICENSE). Third-party components
+(bundled libraries and binaries, and runtime-downloaded models) and their licenses /
+attributions are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — including the
+CC-BY-4.0 attribution for the DNSMOS/SQUIM quality models, and the licenses of components
+shipped in the Docker images (opencode — MIT, ffmpeg — GPL/LGPL via Debian, etc.). No
+GPL/AGPL (strong copyleft) dependency is present at runtime.

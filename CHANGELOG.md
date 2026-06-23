@@ -8,6 +8,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Changed
+- **Audit licences / mentions tierces (préalable à une éventuelle image publique).**
+  `THIRD_PARTY_NOTICES.md` complété : composants embarqués dans les images Docker (opencode — MIT ;
+  ffmpeg — GPL/LGPL via Debian, redistribué inchangé, sources Debian disponibles), copyleft faible
+  runtime explicité (`lameenc` LGPLv3, `certifi` MPL-2.0, `text-unidecode` Artistic), lot Apache-2.0
+  (transformers/vLLM/NeMo/HF — NOTICE conservé), et modèles téléchargés au runtime (Cohere/pyannote/
+  whisper/Qwen — non redistribués, *gated*). **Aucune dépendance GPL/AGPL au runtime** (le code reste
+  Apache-2.0 sans contamination ; `pytest-postgresql` LGPLv3 est dev-only, hors images). Pointeur
+  ajouté dans la section *License* du README.
+
 ## [0.1.0-beta.4] — 2026-06-23
 
 **Durcissement de la concurrence + validation all-in-one Docker.** Re-test des trois topologies

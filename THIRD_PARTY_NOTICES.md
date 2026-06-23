@@ -33,15 +33,62 @@ d'**attribution** des licences Creative Commons (CC-BY-4.0).
 
 ---
 
-## Bibliothèques
+## Bibliothèques Python (venv embarqué dans les images)
 
-| Bibliothèque | Licence | Usage |
+La majorité des dépendances sont sous licences **permissives** (MIT, BSD, ISC, Apache-2.0).
+Les composants à **attribution renforcée ou copyleft faible** présents au runtime sont listés
+explicitement ci-dessous ; aucune dépendance runtime n'est sous **GPL/AGPL** (copyleft fort) —
+le code de TranscrIA reste sous Apache-2.0 sans contamination.
+
+| Bibliothèque | Licence | Usage / note |
 |---|---|---|
 | `onnxruntime` | MIT | Inférence du modèle DNSMOS ONNX |
 | `torchaudio` | BSD-2-Clause | Chargement / inférence SQUIM, ré-échantillonnage |
-| `scipy` | BSD-3-Clause | Ré-échantillonnage, métriques acoustiques |
-| `numpy` | BSD-3-Clause | Calculs numériques |
+| `torch`, `torchcodec` | BSD-3-Clause | Inférence GPU, décodage audio |
+| `scipy`, `numpy`, `pandas` | BSD-3-Clause | Calcul numérique / acoustique |
 | `librosa` | ISC | Analyse audio |
+| `transformers`, `accelerate`, `huggingface_hub`, `datasets`, `vllm`, `nemo_toolkit`, `pyannote.audio` | **Apache-2.0** | STT/diarisation/serving — leur fichier `NOTICE` est conservé dans le venv (`site-packages`) ; obligation Apache-2.0 §4 respectée |
+| `faster-whisper`, `demucs`, `pyannote.*` | MIT | STT de repli, débruitage, diarisation |
+| `lameenc` | **LGPL-3.0** | Encodeur MP3 (via `demucs`) — lié dynamiquement, redistribué tel quel (le code appelant n'est pas dérivé) |
+| `certifi` | **MPL-2.0** | Bundle d'autorités de certification (copyleft *au fichier*, redistribué tel quel) |
+| `text-unidecode` | Artistic-1.0 | Translittération (via `inflect`) |
 
-Les autres dépendances Python sont déclarées dans `requirements.txt` et
-conservent leur licence respective.
+> Dépendances **de développement uniquement** (`requirements-dev.txt`, **absentes des images
+> runtime**) : `pytest-postgresql` (LGPLv3+), `pathspec`/outils de lint, etc. — non redistribuées.
+
+Toutes les autres dépendances sont déclarées dans `requirements.txt` / `requirements-freeze.txt`
+et conservent leur licence respective.
+
+---
+
+## Composants embarqués dans les images Docker
+
+Au-delà du venv Python, les images applicatives embarquent :
+
+- **opencode** (agent LLM des phases résumé/correction/relecture) — installé via l'installateur
+  officiel SST. Licence **MIT** (projet `sst/opencode`) ; embarque ses propres modules npm, eux-mêmes
+  sous licences permissives (MIT/ISC/BSD), avec leurs fichiers `LICENSE` conservés dans `node_modules`.
+- **ffmpeg** (décodage audio, paquet Debian `ffmpeg` installé par `apt`) — **GPL-2.0+ / LGPL-2.1+**
+  selon les composants (build Debian). TranscrIA **invoque** ffmpeg en sous-processus (aucune liaison
+  de code) ; le binaire est redistribué **inchangé** tel que packagé par Debian, dont les **sources
+  sont publiquement disponibles** (https://www.debian.org/distrib/packages). `libpq5` (client
+  PostgreSQL) est sous la licence PostgreSQL (type BSD/MIT).
+
+---
+
+## Modèles téléchargés au runtime (NON redistribués dans le dépôt ni les images)
+
+Ces poids ne sont **ni versionnés ni bakés dans les images** : ils sont téléchargés depuis Hugging Face
+au premier usage (cache `HF_HOME` monté), sous le `HF_TOKEN` de l'utilisateur. La licence et les
+**conditions d'accès (modèles *gated*)** sont celles de chaque carte de modèle ; à l'utilisateur de les
+accepter avant usage :
+
+| Modèle | Rôle | Accès / licence |
+|---|---|---|
+| CohereLabs `cohere-transcribe-03-2026` | STT principal | *gated* — licence de la carte de modèle Cohere (acceptation requise) |
+| `pyannote/speaker-diarization-community-1` (+ segmentation/embeddings) | Diarisation | *gated* — MIT, conditions d'accès pyannote |
+| `faster-whisper large-v3` | STT de repli | MIT |
+| Qwen3.6 (LLM d'arbitrage, ex. `Qwen/Qwen3.6-27B-FP8`) | Résumé/correction LLM | licence de la carte de modèle Qwen (cf. Hugging Face) — servie hors image (endpoint externe) |
+
+> TranscrIA ne distribue aucun de ces poids : il s'interface avec eux. Vérifiez et acceptez la
+> licence de chaque modèle que vous déployez.
