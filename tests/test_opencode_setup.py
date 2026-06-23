@@ -7,6 +7,7 @@ from transcria.gpu.opencode_setup import (
     default_base_url,
     ensure_local_provider,
     find_opencode_binary,
+    is_remote_arbitrage,
     local_provider_block,
     resolve_arbitrage_endpoint,
 )
@@ -181,3 +182,22 @@ def test_resolve_endpoint_env_propagates_to_base_url(monkeypatch):
 def test_resolve_endpoint_legacy_qwen_port(monkeypatch):
     monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
     assert resolve_arbitrage_endpoint({"services": {"qwen_port": 8081}}) == ("127.0.0.1", 8081)
+
+
+# ── is_remote_arbitrage (verrou LLM no-op + pas d'arrêt local en distant) ──
+
+def test_is_remote_arbitrage_local_by_default(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    assert is_remote_arbitrage({}) is False
+    assert is_remote_arbitrage({"services": {"arbitrage_llm_host": "localhost"}}) is False
+    assert is_remote_arbitrage({"services": {"arbitrage_llm_host": "127.0.0.1"}}) is False
+
+
+def test_is_remote_arbitrage_true_for_remote_host(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    assert is_remote_arbitrage({"services": {"arbitrage_llm_host": "vllm-arbitrage"}}) is True
+
+
+def test_is_remote_arbitrage_honors_env_override(monkeypatch):
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_LLM_HOST", "host.docker.internal")
+    assert is_remote_arbitrage({}) is True

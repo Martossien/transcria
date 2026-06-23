@@ -12,7 +12,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
-from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
+from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -472,7 +472,7 @@ class VRAMManager:
 
     def _is_remote_arbitrage(self) -> bool:
         """La LLM d'arbitrage tourne-t-elle sur un hôte distant (≠ ce process) ?"""
-        return self.arbitrage_llm_host not in ("", "127.0.0.1", "localhost", "::1")
+        return is_remote_arbitrage(self.config)
 
     def ensure_arbitrage_llm_ready(self, expected_model_id: str | None = None) -> bool:
         """S'assure que la LLM d'arbitrage est opérationnelle et utilise le bon modèle.
@@ -570,6 +570,11 @@ class VRAMManager:
 
     def stop_arbitrage_llm(self) -> bool:
         """Arrête la LLM d'arbitrage via le script d'arrêt, puis kill port en fallback."""
+        # LLM DISTANTE : ce process ne gère pas son cycle de vie — on ne l'arrête JAMAIS
+        # (l'arrêt local taperait dans le vide : script/port inexistants ici → bruit lsof).
+        if self._is_remote_arbitrage():
+            logger.debug("Arrêt LLM d'arbitrage ignoré — LLM distante (%s)", self.arbitrage_llm_host)
+            return True
         logger.info("Arrêt LLM d'arbitrage port %d...", self.arbitrage_llm_port)
         if os.path.isfile(self.stop_script):
             try:

@@ -16,6 +16,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.opencode_setup import is_remote_arbitrage
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,11 @@ class GPUAllocator:
         self._llm_lock = threading.Lock()
         self._llm_owner: str | None = None
         self._llm_owner_lock = threading.Lock()
+        # LLM d'arbitrage DISTANTE (vLLM sur un nœud) : elle batche les requêtes concurrentes —
+        # le verrou LLM local (hérité du modèle « une LLM locale mono-GPU ») la sérialiserait à
+        # tort et étranglerait le débit. On le neutralise alors (acquire/release no-op). En LOCAL
+        # le verrou reste actif (coordination VRAM/préemption). Cf. opencode_setup.is_remote_arbitrage.
+        self._arbitrage_remote = is_remote_arbitrage(config)
         self._tracked_pids: dict[int, str] = {}
         self._pid_lock = threading.Lock()
         self.reload_pids()
@@ -453,6 +459,9 @@ class GPUAllocator:
             pass
 
     def try_acquire_llm(self, job_id: str = "", timeout_s: float = 0) -> bool:
+        # LLM distante (vLLM batché) : aucune sérialisation locale — toujours « acquis ».
+        if self._arbitrage_remote:
+            return True
         acquired = self._llm_lock.acquire(timeout=timeout_s) if timeout_s else self._llm_lock.acquire(blocking=False)
         if acquired:
             with self._llm_owner_lock:
@@ -461,6 +470,8 @@ class GPUAllocator:
         return acquired
 
     def release_llm(self, job_id: str | None = None) -> None:
+        if self._arbitrage_remote:
+            return
         with self._llm_owner_lock:
             if job_id and self._llm_owner and self._llm_owner != job_id:
                 return

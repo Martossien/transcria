@@ -179,3 +179,16 @@ def default_base_url(config: dict) -> str:
     """URL OpenAI de la LLM d'arbitrage (cf. :func:`resolve_arbitrage_endpoint`)."""
     host, port = resolve_arbitrage_endpoint(config)
     return f"http://{host}:{port}/v1"
+
+
+_LOCAL_ARBITRAGE_HOSTS = ("", "127.0.0.1", "localhost", "::1")
+
+
+def is_remote_arbitrage(config: dict) -> bool:
+    """La LLM d'arbitrage tourne-t-elle sur un hôte DISTANT (≠ ce process) ?
+
+    Source unique partagée par `VRAMManager` (cycle de vie : ni lancement ni arrêt local d'une
+    LLM distante) et `GPUAllocator` (le verrou LLM ne sérialise PAS une LLM distante qui batche).
+    """
+    host, _ = resolve_arbitrage_endpoint(config)
+    return host not in _LOCAL_ARBITRAGE_HOSTS

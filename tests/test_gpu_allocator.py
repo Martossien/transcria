@@ -199,6 +199,23 @@ def test_llm_lock_is_exclusive(tmp_path):
     assert alloc.try_acquire_llm("job-b") is True
 
 
+def test_llm_lock_is_noop_for_remote_arbitrage(tmp_path):
+    # LLM distante (vLLM batché) : le verrou ne sérialise PAS — plusieurs jobs « acquièrent »
+    # concurremment (ils sont batchés côté vLLM), sinon la correction timeout/échoue à tort.
+    cfg = {
+        "gpu": {"min_free_vram_mb": 1000},
+        "services": {"arbitrage_llm_host": "vllm-arbitrage", "arbitrage_llm_port": 8080},
+        "workflow": {"scheduling": {"pid_file": str(tmp_path / "pids.json")}},
+    }
+    alloc = GPUAllocator(cfg)
+    assert alloc._arbitrage_remote is True
+    assert alloc.try_acquire_llm("job-a") is True
+    assert alloc.try_acquire_llm("job-b") is True   # pas de sérialisation en distant
+    assert alloc.try_acquire_llm("job-c") is True
+    alloc.release_llm("job-a")  # no-op, ne lève pas
+    assert alloc.try_acquire_llm("job-d") is True
+
+
 def test_pid_tracking_persists_and_reloads_alive_process(tmp_path):
     alloc = _allocator(tmp_path)
     alloc.register_pid(os.getpid(), "test-process")
