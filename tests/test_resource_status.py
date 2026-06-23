@@ -158,7 +158,10 @@ def test_available_remote_slots_limits_cold_or_starting_stt_engine():
     assert available_remote_slots(cfg, {"stt_engines": [{"name": "cohere", "up": False, "ensure_in_progress": True}]}) == 0
 
 
-def test_available_remote_slots_takes_minimum_required_inprocess_capacity():
+def test_available_remote_slots_ignores_serialized_inprocess_engines():
+    # Les moteurs in-process sérialisés (diarize/voice-embed) NE plafonnent PLUS l'admission :
+    # un diarize en cours (inflight/queued) ne doit pas faire tomber les slots à 0 — il
+    # s'auto-sérialise via son verrou moteur. Sans capacité d'admission annoncée, on suit le STT.
     cfg = {
         "models": {"stt_backend": "cohere", "diarization_backend": "remote"},
         "inference": {
@@ -170,12 +173,43 @@ def test_available_remote_slots_takes_minimum_required_inprocess_capacity():
     caps = {
         "stt_engines": [{"name": "cohere", "up": True}],
         "inprocess": [
-            {"name": "diarize", "capacity": 1, "inflight": 1, "queued": 0},
-            {"name": "voice-embed", "capacity": 2, "inflight": 0, "queued": 0},
+            {"name": "diarize", "capacity": 1, "inflight": 1, "queued": 3},
+            {"name": "voice-embed", "capacity": 1, "inflight": 1, "queued": 0},
         ],
     }
 
-    assert available_remote_slots(cfg, caps) == 0
+    assert available_remote_slots(cfg, caps) == 4
+
+
+def test_available_remote_slots_bounded_by_node_max_concurrent_jobs():
+    # Le nœud annonce une capacité d'admission (resource_node.max_concurrent_jobs) → elle borne
+    # le dispatch même si le STT autorise plus et qu'une diarisation tourne.
+    cfg = {
+        "models": {"stt_backend": "cohere", "diarization_backend": "remote"},
+        "inference": {
+            "mode": "remote",
+            "url": "http://node:8002",
+            "stt": {"concurrency": 8, "backends": {"cohere": {"url": "http://h/v1"}}},
+        },
+    }
+    caps = {
+        "max_concurrent_jobs": 3,
+        "stt_engines": [{"name": "cohere", "up": True}],
+        "inprocess": [{"name": "diarize", "capacity": 1, "inflight": 1, "queued": 0}],
+    }
+
+    assert available_remote_slots(cfg, caps) == 3
+
+
+def test_available_remote_slots_default_node_capacity_is_sequential():
+    # Capacité d'admission annoncée à 1 (défaut) → séquentiel, même si le STT autorise 8.
+    cfg = {
+        "models": {"stt_backend": "cohere"},
+        "inference": {"mode": "remote", "stt": {"concurrency": 8, "backends": {"cohere": {"url": "http://h/v1"}}}},
+    }
+    caps = {"max_concurrent_jobs": 1, "stt_engines": [{"name": "cohere", "up": True}]}
+
+    assert available_remote_slots(cfg, caps) == 1
 
 
 def test_remote_vram_admits_remote_phase_when_gpu_has_headroom():

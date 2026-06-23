@@ -52,6 +52,25 @@ def test_build_capabilities_default_mode_all_in_one():
                              health_prober=lambda u: False)
     assert cap["deployment_mode"] == "all_in_one"
     assert cap["gpus"] == [] and cap["stt_engines"] == []
+    # Capacité d'admission par défaut = 1 (séquentiel, rétro-compatible).
+    assert cap["max_concurrent_jobs"] == 1
+
+
+def test_build_capabilities_advertises_node_max_concurrent_jobs():
+    cap = build_capabilities(
+        {"resource_node": {"max_concurrent_jobs": 4}},
+        gpu_states=[], inprocess_statuses=[], stt_specs=[], health_prober=lambda u: False,
+    )
+    assert cap["max_concurrent_jobs"] == 4
+
+
+def test_build_capabilities_clamps_invalid_node_max_concurrent_jobs():
+    for bad, expected in ((0, 1), (99, 8), ("x", 1)):
+        cap = build_capabilities(
+            {"resource_node": {"max_concurrent_jobs": bad}},
+            gpu_states=[], inprocess_statuses=[], stt_specs=[], health_prober=lambda u: False,
+        )
+        assert cap["max_concurrent_jobs"] == expected
 
 
 # ── Route Flask ───────────────────────────────────────────────────────────────

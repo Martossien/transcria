@@ -54,6 +54,13 @@ storage:
 # la diarisation est en `device: auto` (carte la plus libre → 5-7). Le code d'autonomie
 # VRAM (planner/superviseur/admission) gère le placement — c'est l'objet du test.
 resource_node:
+  # Capacité d'ADMISSION du nœud : nombre de pipelines de jobs que la frontale peut lancer
+  # concurremment contre ce nœud (annoncé dans /capabilities). Défaut 1 = séquentiel. Le STT
+  # et la LLM d'arbitrage (vLLM) batchent les requêtes concurrentes ; la diarisation pyannote
+  # reste sérialisée par son verrou moteur (les jobs en surplus y font la queue, pas de refus).
+  # Monter ce nombre (≤ 8) pour exploiter le batching vLLM ; l'aligner avec
+  # workflow.execution.max_concurrent_jobs côté frontale et la VRAM disponible.
+  max_concurrent_jobs: 1
   vram:
     preflight: true              # refuse proprement plutôt qu'un OOM
     auto_relocate: false

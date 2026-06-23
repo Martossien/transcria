@@ -129,15 +129,21 @@ def available_remote_slots(config: dict, capabilities: dict | None) -> int | Non
         return None
 
     slots: list[int] = []
+    # Capacité d'ADMISSION du nœud (resource_node.max_concurrent_jobs, défaut 1 = séquentiel) :
+    # borne supérieure du nombre de pipelines concurrents lancés contre ce nœud.
+    node_max = capabilities.get("max_concurrent_jobs")
+    if isinstance(node_max, int) and node_max >= 0:
+        slots.append(node_max)
     if "stt" in reqs:
         stt_slots = _stt_slots(config, capabilities)
         if stt_slots is not None:
             slots.append(stt_slots)
-    for requirement, engine_name in (("diarize", "diarize"), ("voice_embed", "voice-embed")):
-        if requirement in reqs:
-            engine_slots = _inprocess_slots(capabilities, engine_name)
-            if engine_slots is not None:
-                slots.append(engine_slots)
+    # Les moteurs in-process sérialisés (diarize/voice-embed) NE bornent PLUS l'admission : ils
+    # s'auto-sérialisent via leur verrou moteur (les jobs en surplus y font la queue, comptés
+    # `queued`), tandis que STT/LLM (vLLM) batchent. Leur mono-capacité (1) plafonnait à tort le
+    # dispatch à 1 dès qu'UNE diarisation tournait (capacity−inflight−queued → 0). Le plafond
+    # réel d'admission est désormais `max_concurrent_jobs`. Le pré-vol resource_gate reste l'autorité
+    # (nœud joignable, ensure STT, mode dégradé).
 
     return min(slots) if slots else None
 
@@ -235,22 +241,6 @@ def _stt_slots(config: dict, capabilities: dict) -> int | None:
     # Moteur éteint mais déclaré : le premier job peut déclencher ensure(CAS C),
     # les autres attendront un tick suivant au lieu de se bousculer sur ensure.
     return configured if engine.get("up") else 1
-
-
-def _inprocess_slots(capabilities: dict, engine_name: str) -> int | None:
-    engine = next(
-        (item for item in capabilities.get("inprocess", []) or [] if item.get("name") == engine_name),
-        None,
-    )
-    if not engine:
-        return None
-    try:
-        capacity = int(engine.get("capacity", 1))
-        inflight = int(engine.get("inflight", 0))
-        queued = int(engine.get("queued", 0))
-    except (TypeError, ValueError):
-        return None
-    return max(0, capacity - inflight - queued)
 
 
 def _positive_int(value) -> int:

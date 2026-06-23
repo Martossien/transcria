@@ -50,6 +50,12 @@ def build_capabilities(
     return {
         "service": "transcria-inference",
         "deployment_mode": (config.get("deployment", {}) or {}).get("mode", "all_in_one"),
+        # Capacité d'ADMISSION du nœud : combien de pipelines de jobs la frontale peut lancer
+        # concurremment contre ce nœud. DÉCOUPLÉ de la mono-capacité des moteurs in-process
+        # (diarize/voice-embed restent sérialisés par leur verrou — les jobs en surplus y font
+        # la queue, sans refus d'admission). STT/LLM (vLLM) batchent. Défaut 1 = séquentiel
+        # (rétro-compatible) ; l'opérateur l'ouvre pour exploiter le batching vLLM.
+        "max_concurrent_jobs": _node_max_concurrent_jobs(config),
         "gpus": [
             {"index": g.index, "free_mb": g.free_mb, "total_mb": g.total_mb}
             for g in gpu_states
@@ -57,3 +63,13 @@ def build_capabilities(
         "inprocess": inprocess_statuses,     # voice-embed, diarize (CAS A/B in-process)
         "stt_engines": stt_engines,          # moteurs vLLM déclarés + santé
     }
+
+
+def _node_max_concurrent_jobs(config: dict) -> int:
+    """Capacité d'admission du nœud (`resource_node.max_concurrent_jobs`, défaut 1, borne 1-8)."""
+    raw = (config.get("resource_node", {}) or {}).get("max_concurrent_jobs", 1)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, min(value, 8))
