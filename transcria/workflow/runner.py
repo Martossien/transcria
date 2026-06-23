@@ -4,6 +4,7 @@ import time
 from types import SimpleNamespace
 
 from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+from transcria.gpu.opencode_setup import is_remote_arbitrage
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
@@ -1677,6 +1678,16 @@ class WorkflowRunner:
 
             launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
             if not launched:
+                # LLM DISTANTE indisponible = transitoire (saturée : health-check lent sous
+                # forte charge alors qu'elle répond encore). On NE marque PAS FAILED : `vram_wait`
+                # → re-queue + reprise (STT/diar déjà sur disque) jusqu'à ce qu'elle se libère —
+                # dégradation gracieuse, pas un crash. La résilience/admission (resource_gate)
+                # traite une indisponibilité DURABLE. En LOCAL, un échec ensure = vrai problème de
+                # lancement → on conserve l'échec dur.
+                if is_remote_arbitrage(config):
+                    msg = "LLM d'arbitrage distante transitoirement indisponible (saturée) — relançable"
+                    logger.warning("[correction] %s", msg)
+                    return {"vram_wait": True, "required_mb": 0, "phase": "llm_arbitration", "reason": msg}
                 return {"success": False, "error": "LLM d'arbitrage non disponible"}
 
             # Isolation : l'agent travaille dans un scratch avec des COPIES — jamais dans

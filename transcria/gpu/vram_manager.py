@@ -496,23 +496,31 @@ class VRAMManager:
                 data = r.json().get("data", [])
                 if data:
                     active_model_id = data[0].get("id", "")
-                    r2 = requests.post(
-                        f"{base}/v1/completions",
-                        json={
-                            "model": active_model_id,
-                            "prompt": "Bonjour",
-                            "max_tokens": 64,
-                            "temperature": 0,
-                        },
-                        timeout=60,
-                    )
-                    if r2.status_code == 200:
-                        # Preuve de génération unifiée (texte / raisonnement / tokens
-                        # générés) — même définition que la sonde partagée `is_port_open`,
-                        # source unique et testée. Un modèle « reasoning » dépense ses
-                        # premiers tokens dans <think> (→ reasoning_content) : une sonde
-                        # `text`-only détruisait un serveur sain (incident du 11/06/2026).
-                        server_healthy = generation_confirmed(r2.json())
+                    if self._is_remote_arbitrage():
+                        # LLM DISTANTE (vLLM) : `/v1/models` qui répond = preuve de vie suffisante.
+                        # PAS de test-inférence : sous forte charge elle se met en file derrière les
+                        # requêtes réelles et timeout → faux « non disponible » + charge inutile
+                        # (qui aggrave la saturation). Le test-inférence reste RÉSERVÉ au LOCAL
+                        # (llama.cpp : détecter un serveur chargé mais muet, incident 11/06/2026).
+                        server_healthy = True
+                    else:
+                        r2 = requests.post(
+                            f"{base}/v1/completions",
+                            json={
+                                "model": active_model_id,
+                                "prompt": "Bonjour",
+                                "max_tokens": 64,
+                                "temperature": 0,
+                            },
+                            timeout=60,
+                        )
+                        if r2.status_code == 200:
+                            # Preuve de génération unifiée (texte / raisonnement / tokens
+                            # générés) — même définition que la sonde partagée `is_port_open`,
+                            # source unique et testée. Un modèle « reasoning » dépense ses
+                            # premiers tokens dans <think> (→ reasoning_content) : une sonde
+                            # `text`-only détruisait un serveur sain (incident du 11/06/2026).
+                            server_healthy = generation_confirmed(r2.json())
         except Exception as exc:
             logger.debug("Sondage LLM d'arbitrage port %d: %s", self.arbitrage_llm_port, exc)
 
