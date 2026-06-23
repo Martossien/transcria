@@ -150,6 +150,14 @@ for i in $(seq 1 60); do
         echo
         ok "TranscrIA est prêt → http://localhost:7870  (login : admin / mot de passe défini dans config.yaml)"
         ok "Logs : ${COMPOSE[*]} logs -f   |   Arrêt : scripts/docker_quickstart.sh --down"
+        if [[ "$MODE" == "gpu" ]]; then
+            warn "STT + diarisation tournent DANS le conteneur. La LLM d'arbitrage (résumé/correction/"
+            warn "  relecture) est un service OpenAI-compatible EXTERNE — l'image n'en embarque pas."
+            warn "  → LLM sur l'hôte : lancer un serveur sur :8080 puis régler dans config.yaml"
+            warn "    services.arbitrage_llm_host (ou env TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal"
+            warn "    + extra_hosts host-gateway). Sans LLM : workflow.arbitration_llm.enabled=false"
+            warn "    (transcription + diarisation seules). Détails : docs/DOCKER.md."
+        fi
         exit 0
     fi
     sleep 3

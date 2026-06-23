@@ -1,6 +1,10 @@
 # Plan — Tests de charge (concurrence) des topologies TranscrIA
 
-> **Statut global :** 🟢 **VALIDÉ — exécution en cours (2026-06-23).** Cadrage et design verrouillés.
+> **Statut global :** 🟢 **CAMPAGNE TERMINÉE (2026-06-23).** Robustesse sous concurrence validée
+> sur les 2 modes ; **4 vrais bugs de concurrence débusqués et corrigés** (meta-tensor pyannote,
+> db opencode partagée, verrou LLM sérialisant le distant, health-check saturé). All-in-one robuste
+> à 3 jobs ; split robuste **jusqu'à 8** (0 échec serveur), débit qui scale 1→4, **sweet spot ≈ 4**
+> sur 8×RTX 3090. Résultats détaillés en §8.
 > **Auteur :** Claude (Opus 4.8) + Martossien · **Démarré :** 2026-06-23
 > **Pré-requis acquis :** les 3 topologies Docker (all-in-one, frontale, nœud de ressources) sont
 > validées E2E **en séquentiel** (1 job à la fois, qualité 97/100) — cf. `docs/PLAN_TEST_SPLIT_VLLM.md`
@@ -145,6 +149,47 @@ venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75
 | **P1** | backpressure en file/re-queue, VRAM bornée, batch vLLM utilisé | erreur au lieu de file, OOM sous admission, thrash LLM |
 | **P2** | débit > baseline, courbe de montée documentée | (non bloquant — mesure) |
 
+### 8.1 Résultats (2026-06-23, banc 8× RTX 3090)
+
+**All-in-one** (`test2.mp3`, LLM hôte llama.cpp `--parallel 1`) : rafale **3 jobs ⇒ 3/3 OK**, qualité
+97/100, placement VRAM réparti, aucun job coincé. Débit non scalable (un seul moteur LLM local
+sérialisé, ~730 s/3 jobs) — **attendu** ; objectif = robustesse, atteinte. Run 10 jobs non exécuté
+(décision : robustesse jugée prouvée à 3 ; le 10 n'ajoutait que de la file).
+
+**Split** (`test2.mp3`, STT Cohere vLLM + LLM Qwen3.6-27B-FP8 vLLM TP=4) :
+
+| Concurrence | Succès **serveur** | Débit (jobs/min) | Latence p95 | Observation |
+|---|---|---|---|---|
+| 1 | 1/1 | 0,08 | 744 s | baseline (chaud) |
+| 2 | 2/2 | 0,10 | 1147 s | batch vLLM = 2 |
+| 4 | **4/4** | **0,13** | 1863 s | **optimum** — débit max |
+| 8 | **8/8** | sature | > 1800 s | vLLM compute-bound (GPU 0-3 à 100 %) |
+
+- **P0 (ne plante pas)** : ✅ tenu **jusqu'à 8** — **0 échec serveur**, aucun job perdu (les « échecs »
+  vus à 8 étaient des **timeouts du client de test** à 1800 s ; le serveur a fini les 8 lentement).
+- **P1 (ressources)** : ✅ batching vLLM réel (`num_requests_running` 2→10), VRAM bornée, dégradation
+  gracieuse (saturé = lent, pas de crash).
+- **P2 (débit)** : monte 1→4 (0,08→**0,13** jobs/min) ; au-delà, le **seul LLM 27B est le goulot
+  compute** → la sur-souscription augmente la latence sans gagner en débit. **Sweet spot ≈ 4** ici.
+- **tok/s** (batching) : génération ~50 tok/s à 1 req → ~8 tok/s/req à 8 (mais ~64 tok/s **agrégés**) ;
+  prefill 780→460 tok/s. Comportement de batching normal : débit agrégé en hausse, latence/req en hausse.
+
+**Recommandation opérationnelle** : régler `workflow.execution.max_concurrent_jobs` **et**
+`resource_node.max_concurrent_jobs` au sweet spot matériel (**≈ 4** sur 4×3090 pour la 27B) → les jobs
+en excès **attendent en file** (admis par vagues : claim atomique, aucun perdu) plutôt que de tous
+tourner et thrasher la LLM — meilleure latence **et** meilleur débit qu'en sur-souscription.
+
+### 8.2 Bugs de concurrence corrigés (commits)
+1. **`Cannot copy out of meta tensor`** (diarisation, all-in-one) — `accelerate.init_empty_weights()`
+   (device_map Cohere) monkeypatch meta global non thread-safe → **`model_load_lock`** (verrou
+   d'instanciation). Commit `c83a8f6`.
+2. **opencode FIGE** (all-in-one) — SQLite `opencode.db` partagée entre invocations → **`XDG_DATA_HOME`
+   par run**. Commit `c83a8f6`.
+3. **Verrou LLM sérialisant le distant** (split) — `correction` échec dur `LLM occupée` → **verrou LLM
+   no-op si distant** (vLLM batche) + capacité d'admission nœud configurable. Commits `1b4b22f`, `793f6bb`.
+4. **Health-check saturé** (split, 8 jobs) — test-inférence du probe timeout sous charge → **probe léger
+   pour LLM distante** + `correction` **gracieuse** (`vram_wait`) si distante indisponible. Commit `6df1b66`.
+
 ## 9. Risques & vigilance
 - **Sur-souscription VRAM** si l'admission n'anticipe pas N pyannote/Cohere concurrents (all-in-one) →
   on garde le mode bas (2-3) et on s'appuie sur `pick_device` + admission.
@@ -162,6 +207,8 @@ venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75
 | 2026-06-23 | **Phase 1 (all-in-one) — robustesse OK à 3 jobs**, **2 vrais bugs de concurrence débusqués et corrigés** (commit `c83a8f6`) : (1) `Cannot copy out of meta tensor` à la diarisation — `accelerate.init_empty_weights()` (device_map Cohere) monkeypatch meta GLOBAL non thread-safe contamine pyannote → **verrou global d'instanciation** (`model_load_lock`) ; (2) **opencode FIGE** sous concurrence — SQLite `opencode.db` partagée → **`XDG_DATA_HOME` par invocation**. Après fix : **3/3 jobs OK, 0 régression, 0 skip**. Run 10 jobs **skippé par décision** (LLM hôte sérialisée `--parallel 1` ⇒ débit non scalable en all-in-one, ~730 s/3 jobs ; robustesse jugée prouvée à 3). Constat : l'all-in-one est **LLM-bound** (un seul moteur local). |
 | 2026-06-23 | **Phase 2** — refactor capacité d'admission : le nœud plafonnait le split à **1 job** (`_inprocess_slots = capacity−inflight−queued` → 0 dès qu'une diar tourne). Fix : le nœud annonce `resource_node.max_concurrent_jobs` (défaut 1) dans `/capabilities` ; `available_remote_slots = min(node_max, stt_slots)` ; les moteurs sérialisés (diar/voice-embed) ne plafonnent **plus** l'admission (ils s'auto-sérialisent). `--max-num-seqs` vLLM laissé au défaut (256, largement suffisant à ≤8). Tests unitaires ajoutés. Gate vert. |
 | 2026-06-23 | **Phase 3 — 1ère montée → finding P0 à concurrence ≥2.** Palier 1 OK (1104 s, cold start STT). Palier 2 : **1/2 échec**. Cause (logs) : le **verrou LLM de l'allocator** (`_llm_lock`, hérité du modèle « LLM locale mono-GPU ») **sérialisait l'accès même à une LLM distante qui batche** → la phase `correction` timeout 300 s sur le verrou → **échec DUR** (`LLM d'arbitrage occupée`), alors que résumé/relecture gèrent ça gracieusement. Mineur : `vram_manager.stop_arbitrage_llm` sans garde distante (tentait d'arrêter la LLM distante, bruit `lsof`). **Bon point** : batching vLLM réel (`num_requests_running=2`, GPU 0-3 à 100 %). **Fix** (local inchangé) : helper DRY `opencode_setup.is_remote_arbitrage` ; verrou LLM **no-op si distant** (`allocator`) ; `stop_arbitrage_llm` **no-op si distant**. Tests ajoutés ; rebuild images + re-montée. |
+| 2026-06-23 | **Re-montée 1→4** : ✅ propre (1/1, 2/2, 4/4), débit 0,08→0,10→**0,13** jobs/min. **Palier 8** : nouvel échec dur `correction` = `LLM non disponible` (health-check test-inférence timeout 60 s sous saturation vLLM). **Fix (commit `6df1b66`)** : probe léger (`/v1/models`) pour LLM distante (plus de test-inférence qui sature) + `correction` gracieuse (`vram_wait`) si distante indispo. |
+| 2026-06-23 | **Palier 8 re-rejoué (fix gracieux)** : **0 échec serveur**, 8/8 finis côté serveur (lentement — LLM 27B compute-bound à 8). Les « 7 échecs » du client = timeouts 1800 s (artefact harnais). **Campagne close** : robustesse jusqu'à 8, sweet spot ≈ 4. Cf. §8.1/§8.2. |
 
 ## 11. Versions suivantes (hors périmètre immédiat — décidé 2026-06-23)
 - **Paralléliser la diarisation** (dernier point sérialisé) : pyannote multi-cartes, ou pool de N

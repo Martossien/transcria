@@ -8,6 +8,34 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+**Tests de charge (concurrence) des topologies — `docs/PLAN_TEST_CHARGE.md`.** Campagne de stress
+(rafales `test2.mp3`) : all-in-one robuste à 3 jobs ; split robuste **jusqu'à 8 jobs** (0 échec serveur),
+débit qui scale 1→4 puis le LLM 27B sature (sweet spot ≈ 4 sur 8×RTX 3090). **4 vrais bugs de
+concurrence corrigés** :
+
+### Added
+- `scripts/load_test.py` (générateur de charge : N clients en rafale, récap débit/p50/p95) et
+  `scripts/load_sampler.py` (échantillonneur GPU / `/capabilities` / métriques vLLM).
+- **Capacité d'admission du nœud configurable** : `resource_node.max_concurrent_jobs` (défaut 1),
+  annoncée dans `/capabilities`, exploitée par le scheduler — lève le plafond « 1 job » du split.
+
+### Fixed
+- **Diarisation : `Cannot copy out of meta tensor` sous concurrence.** `transformers
+  from_pretrained(device_map=…)` déclenche `accelerate.init_empty_weights()` (monkeypatch meta GLOBAL
+  non thread-safe) qui contamine l'instanciation concurrente de pyannote. → **verrou global
+  d'instanciation** `transcria.gpu.model_load_lock` autour des chargements de modèles.
+- **opencode se fige sous concurrence.** Base SQLite `opencode.db` partagée entre invocations
+  concurrentes → contention du writer. → **`XDG_DATA_HOME` par invocation** (une db par run).
+- **LLM d'arbitrage distante sérialisée à tort.** Le verrou LLM de l'allocator (modèle « LLM locale
+  mono-GPU ») sérialisait l'accès même à un vLLM distant qui batche → `correction` échouait. → **verrou
+  LLM no-op si distant** ; `vram_manager.stop_arbitrage_llm` **no-op si distant** ; admission découplée
+  des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission).
+- **Health-check de la LLM distante faux-négatif sous saturation.** Le probe faisait un test-inférence
+  (`/v1/completions`, 60 s) qui se met en file derrière les requêtes réelles et timeout → faux « LLM non
+  disponible » + échec dur de `correction`. → pour une LLM **distante**, `/v1/models` = preuve de vie
+  suffisante (plus de test-inférence) ; `correction` **gracieuse** (`vram_wait`/re-queue) si la LLM
+  distante est transitoirement indisponible (dégradation, pas crash). Local inchangé.
+
 **Re-test de la topologie all-in-one Docker de bout en bout (mêmes correctifs « comme un
 utilisateur »).** Le pipeline complet a été rejoué dans le conteneur all-in-one (STT Cohere +
 diarisation pyannote auto-placée dans le conteneur, LLM d'arbitrage servie hors image) →

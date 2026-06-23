@@ -58,9 +58,12 @@ resource_node:
   # concurremment contre ce nœud (annoncé dans /capabilities). Défaut 1 = séquentiel. Le STT
   # et la LLM d'arbitrage (vLLM) batchent les requêtes concurrentes ; la diarisation pyannote
   # reste sérialisée par son verrou moteur (les jobs en surplus y font la queue, pas de refus).
-  # Monter ce nombre (≤ 8) pour exploiter le batching vLLM ; l'aligner avec
-  # workflow.execution.max_concurrent_jobs côté frontale et la VRAM disponible.
-  max_concurrent_jobs: 1
+  # L'ALIGNER avec workflow.execution.max_concurrent_jobs côté frontale.
+  # Test de charge (docs/PLAN_TEST_CHARGE.md, 8×RTX 3090, Qwen3.6-27B-FP8 TP=4) : débit qui scale
+  # jusqu'à ~4, puis le LLM 27B sature (compute-bound) → SWEET SPOT ≈ 4 sur ce matériel. Au-delà,
+  # la latence monte sans gain de débit ; mieux vaut laisser les jobs en excès EN FILE (vagues de 4).
+  # Régler selon VOTRE VRAM/modèle. Au-delà de la capacité, le surplus attend (claim atomique, rien perdu).
+  max_concurrent_jobs: 4
   vram:
     preflight: true              # refuse proprement plutôt qu'un OOM
     auto_relocate: false

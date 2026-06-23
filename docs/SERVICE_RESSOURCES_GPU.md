@@ -38,6 +38,7 @@
 | **Diarisation : placement auto** (carte la plus libre, plus de `cuda:0` figé) | `diarization.py` → `squim_scorer.pick_device` au chargement (`diarization.device: auto`) | ✅ (2026-06-23) |
 | **`resource_node.engines[].gpu_mem` appliqué au lancement** (pas seulement à l'admission) | `make_script_launcher` transmet `STT_GPU_MEM` | ✅ (2026-06-23) |
 | **Banc split entièrement containerisé (vLLM) — validé E2E fichier son réel** | `docker-compose.split-gpu.yml`, `Dockerfile.{worker,resource-node}`, `scripts/launch_arbitrage_vllm.sh`, `scripts/verify_split_topology.py` — cf. `PLAN_TEST_SPLIT_VLLM.md` | ✅ (2026-06-23) |
+| **Capacité d'admission du nœud configurable + concurrence validée sous charge** | `resource_node.max_concurrent_jobs` annoncé dans `/capabilities` ; `available_remote_slots = min(node_max, stt_slots)` (moteurs sérialisés exclus) ; verrou LLM no-op si distant. Split robuste jusqu'à 8 jobs, sweet spot ≈4 — cf. `PLAN_TEST_CHARGE.md` | ✅ (2026-06-23) |
 
 > **Validation E2E (2026-06-23, 8× RTX 3090) :** frontale CPU → STT Cohere (vLLM) + diarisation
 > (pyannote, auto-placée) + LLM Qwen3.6-27B-FP8 (vLLM, TP=4, FP8 Marlin) tout en distant, pipeline
@@ -168,19 +169,27 @@ Conséquences :
 
 ---
 
-## 5. Concurrence : une optimisation que l'on n'exploite pas encore
+## 5. Concurrence — implémentée et validée sous charge (2026-06-23)
 
-**Constat (vérifié dans le code, `transcria/stt/transcription.py:501`)** : en mode quality, le STT
-par tour de parole est **séquentiel** — un upload HTTP par tour, l'un après l'autre (observé : 29
-uploads séquentiels sur `tests/test2.mp3`).
+Deux axes de concurrence, tous deux exploitant le batching continu de vLLM :
 
-Or vLLM (grâce à la VRAM réservée) sait servir **plusieurs requêtes en parallèle**. **Optimisation
-future** (hors v1) : envoyer les requêtes par tour avec une **concurrence bornée** (ex. 4–8 en vol)
-pour exploiter le batching continu et réduire fortement la latence du chemin par tour.
+**Inter-jobs (admission)** — le scheduler lance jusqu'à `workflow.execution.max_concurrent_jobs`
+pipelines en parallèle (pool borné 1-8), plafonné par la **capacité d'admission du nœud**
+`resource_node.max_concurrent_jobs` (annoncée dans `/capabilities`, défaut 1). Les moteurs in-process
+sérialisés (diarisation/voice-embed) **ne bornent plus l'admission** : ils s'auto-sérialisent via leur
+verrou moteur (les jobs en surplus y font la queue), tandis que STT et LLM d'arbitrage (vLLM) **batchent**
+les requêtes concurrentes. Le **verrou LLM de l'allocator est no-op pour une LLM distante** (elle batche
+seule ; le sérialiser l'étranglerait).
 
-> **Priorité v1.1** (pas « hors scope ») : c'est probablement le gain de latence **le plus visible
-> pour l'utilisateur**. Workstream distinct (côté frontale, `transcription.py`, pas le service
-> ressources), à enchaîner juste après le cœur du service (§12, étapes 1-4).
+**Intra-job (STT par tour)** — `inference.stt.concurrency` (>1) transcrit les tours de parole d'un
+même job en parallèle (`ThreadPoolExecutor`, backends `concurrent_safe`).
+
+**Validation (test de charge, `docs/PLAN_TEST_CHARGE.md`, 8×RTX 3090)** : split **robuste jusqu'à 8 jobs
+concurrents** (0 échec serveur), débit qui scale 1→4 puis le **LLM 27B sature** (compute-bound, GPU à
+100 %). **Sweet spot ≈ 4** sur ce matériel : régler `max_concurrent_jobs` (frontale **et** nœud) au sweet
+spot ⇒ le surplus **attend en file** (claim atomique, aucun perdu) plutôt que de thrasher la LLM —
+meilleure latence ET débit qu'en sur-souscription. La sur-charge **dégrade en douceur** (ralentit), ne
+plante pas.
 
 ---
 

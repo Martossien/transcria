@@ -828,7 +828,7 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne |
+| `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne (borné 1-8). En split, le dispatch est en plus plafonné par `resource_node.max_concurrent_jobs` (annoncé par le nœud). Le surplus **attend en file** (claim atomique, rien perdu). Test de charge (`docs/PLAN_TEST_CHARGE.md`) : sweet spot ≈ 4 sur 4×3090 pour une LLM 27B (au-delà, le LLM sature → latence sans gain de débit). All-in-one : laisser à 1 (LLM locale sérialisée). |
 
 **Redémarrage requis :** oui — le worker est instancié au démarrage de l’application.
 
@@ -1087,6 +1087,7 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
+| `max_concurrent_jobs` | int | `1` | **Capacité d'admission** du nœud : nb de pipelines de jobs que la frontale peut lancer concurremment contre ce nœud (annoncé dans `/capabilities`, borné 1-8). Découplé de la mono-capacité des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission) ; STT/LLM vLLM batchent. Défaut 1 = séquentiel. À aligner avec `workflow.execution.max_concurrent_jobs`. Sweet spot ≈ 4 (cf. `docs/PLAN_TEST_CHARGE.md`). |
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
 | `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
