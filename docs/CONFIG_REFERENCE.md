@@ -1210,6 +1210,7 @@ Limites :
 | `services.stop_script` | `./scripts/stop_arbitrage_llm.sh` | Script bash d'arrêt de la LLM d'arbitrage |
 | `services.arbitrage_log_path` | `""` | Fichier de capture de la sortie (stdout+stderr) du script de lancement. Vide ⇒ `/tmp/arbitrage_llm_<port>.log` |
 | `services.arbitrage_llm_port` | `8080` | Port du serveur LLM d'arbitrage |
+| `services.arbitrage_llm_host` | `127.0.0.1` | Hôte de la LLM d'arbitrage. `127.0.0.1`/`localhost` = LLM **locale** (le service gère son cycle de vie : sonde, lancement via `arbitrage_script`, arrêt). Un hôte **distant** (topologie split, ou LLM hôte depuis un conteneur via `host.docker.internal`) ⇒ le service la **consomme seulement** (jamais de launch/stop local). Surchargeable par `TRANSCRIA_ARBITRAGE_LLM_HOST`. Résolu (avec le port) par `opencode_setup.resolve_arbitrage_endpoint` — **source unique** partagée par `vram_manager` (sonde) et `provision_opencode` (provider opencode) |
 | `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
 | `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
@@ -1231,6 +1232,7 @@ Limites :
 Overrides environnement :
 - `TRANSCRIA_ARBITRAGE_SCRIPT`
 - `TRANSCRIA_STOP_SCRIPT`
+- `TRANSCRIA_ARBITRAGE_LLM_HOST` (override de `services.arbitrage_llm_host` ; honoré à la fois par la sonde `vram_manager` et le provider opencode — utile pour pointer une LLM hôte depuis un conteneur all-in-one : `host.docker.internal`)
 
 Note d'exploitation :
 - **Diagnostic d'un démarrage LLM raté.** `launch_arbitrage_llm()` redirige la sortie du script vers `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`). Si le serveur sort avant d'ouvrir le port (binaire introuvable, OOM GPU, `--tensor-split` incompatible avec le nombre de GPUs…), le runtime n'attend plus tout le timeout : il détecte la mort précoce du process et loggue en `ERROR` le code de sortie **et les dernières lignes de ce fichier**. Si la LLM reste « down » après lancement, consulter ce log (et `./scripts/check_arbitrage_llm.sh`).

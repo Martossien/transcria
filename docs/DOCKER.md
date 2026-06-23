@@ -1,9 +1,13 @@
 # Déploiement Docker (P5)
 
 > Référence du déploiement conteneurisé de TranscrIA. Suit les invariants de
-> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Les images applicatives (`web`,
-> `scheduler`, `migrate`) sont construites par le `Dockerfile` à la racine et
-> orchestrées par `docker-compose.yml`.
+> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Les rôles applicatifs (`web`,
+> `scheduler`, `migrate` et l'all-in-one `all`) partagent une **seule image** construite par
+> le `Dockerfile` à la racine (CPU par défaut ; CUDA via `--build-arg TORCH_INDEX_URL=…cu130`
+> pour l'all-in-one GPU) et orchestrée par `docker-compose.yml`. Cette image embarque opencode
+> (agent des phases LLM). Le nœud de ressources GPU utilise une image distincte à base CUDA
+> (`Dockerfile.resource-node`) ; le banc split bâtit `Dockerfile.worker`/`Dockerfile.resource-node`
+> en exécutant `install.sh`.
 
 ## Démarrage rapide (une commande)
 
@@ -110,7 +114,7 @@ Conteneurs **externes** à ce compose :
 
 | Variable | Rôles | Obligatoire | Description |
 |---|---|---|---|
-| `TRANSCRIA_ROLE` | tous | oui (ou argument) | `web` \| `scheduler` \| `resource-node` \| `migrate` |
+| `TRANSCRIA_ROLE` | tous | oui (ou argument) | `web` \| `scheduler` \| `resource-node` \| `migrate` \| `all` (all-in-one) |
 | `TRANSCRIA_DATABASE_URL` | web, scheduler, migrate | **oui** | DSN PostgreSQL (`postgresql+psycopg://…`). SQLite refusé. |
 | `TRANSCRIA_CONFIG` | tous | non (défaut `/app/config.yaml`) | Chemin du `config.yaml` monté |
 | `TRANSCRIA_BIND` | web | non (défaut `0.0.0.0:7870`) | Adresse d'écoute gunicorn |
@@ -202,10 +206,25 @@ curl -fsS http://localhost:7870/health    # → 200
 
 > Le rôle `all` lance le serveur Flask intégré (comme l'all-in-one natif) : adapté à un
 > **déploiement de test/démo**, pas à une production à fort trafic (préférer alors le split
-> `web` gunicorn + `scheduler`). Un GPU est requis pour le traitement réel des jobs (STT,
-> diarisation) ; le conteneur démarre et sert l'UI même sans modèles (chargés à la demande).
-> La **LLM d'arbitrage** reste une dépendance externe (service OpenAI-compatible) — l'étape
-> de correction peut être désactivée (`arbitration_llm.enabled: false`) pour un test sans LLM.
+> `web` gunicorn + `scheduler`). Un GPU est requis pour le traitement réel des jobs ; le STT
+> (Cohere) et la diarisation (pyannote) tournent **dans le conteneur** (placement VRAM
+> automatique), modèles chargés à la demande depuis le cache HF monté (`/hf`).
+>
+> **La LLM d'arbitrage n'est PAS embarquée** (aucune image applicative n'embarque de LLM) :
+> c'est un service OpenAI-compatible externe. Trois options :
+> - **LLM sur l'hôte** (le plus simple en test) : lancer un serveur (ex. `scripts/launch_arbitrage.sh`,
+>   llama.cpp) sur l'hôte en `:8080`, puis pour le conteneur ajouter
+>   `TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal` **et**
+>   `extra_hosts: ["host.docker.internal:host-gateway"]` (le `provider.local` d'opencode est
+>   reconfiguré au démarrage vers cet hôte — résolution unique, cf. matrice).
+> - **LLM dans un conteneur** dédié (cf. banc split ci-dessous, service `vllm-arbitrage`).
+> - **Sans LLM** : désactiver la correction (`arbitration_llm.enabled: false`) pour un test STT+diar seuls.
+>
+> opencode (agent qui pilote la LLM pour résumé/correction/relecture) **est inclus dans l'image** :
+> les phases LLM fonctionnent dès qu'un endpoint d'arbitrage est joignable.
+>
+> *Validé E2E (2026-06-23, 8× RTX 3090) : pipeline complet, qualité 97/100, livrables SRT/ZIP/DOCX,
+> LLM d'arbitrage = llama.cpp sur l'hôte.*
 
 ### Nœud de ressources GPU séparé (déploiement split)
 

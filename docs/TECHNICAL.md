@@ -1016,6 +1016,7 @@ Les valeurs clés sont lues depuis `config.yaml` :
 - `services.stop_script` (défaut `./scripts/stop_arbitrage_llm.sh`)
 - `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`) — capture stdout+stderr du lancement
 - `services.arbitrage_llm_port` (8080), `services.llm_cleanup_ports` (`[8000]`)
+- **endpoint d'arbitrage** (hôte + port) résolu par `opencode_setup.resolve_arbitrage_endpoint` — **source unique** partagée avec `provision_opencode` (env `TRANSCRIA_ARBITRAGE_LLM_HOST` > `services.arbitrage_llm_host` > `127.0.0.1`). Un hôte **distant** (`_is_remote_arbitrage()`) ⇒ la LLM est **consommée seulement** : sonde HTTP `/v1/models`, jamais de launch/stop local (CAS C désactivé).
 - `gpu.cohere_vram_mb`, `gpu.pyannote_vram_mb`, `gpu.llm_vram_mb`, `gpu.min_free_vram_mb`
 
 | Méthode | Description |
