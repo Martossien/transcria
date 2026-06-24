@@ -748,49 +748,53 @@
   {% if lex_status == 'done' or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
   <div class="step-section {% if proc_status == 'todo' or proc_status == 'in_progress' %}current-step{% endif %}">
     <h3><i class="bi bi-7-circle-fill step-icon"></i> Choix du traitement</h3>
-    <div class="alert alert-light border">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <div>
-          <strong>Réglages recommandés</strong>
-          <div class="small text-muted">
-            {% if audio_diagnostic and audio_diagnostic.level in ['suspect', 'degrade'] %}
-            Le diagnostic audio demande une vérification renforcée. Le workflow choisira le backend adapté automatiquement.
-            {% else %}
-            Adapté à ce fichier et au contexte saisi. Le workflow garde la décision backend automatique.
-            {% endif %}
-          </div>
-        </div>
-        <button class="btn btn-success" onclick="TranscrIA.startProcessing('{{ audio_diagnostic.recommended_mode if audio_diagnostic else 'quality' }}')">
-          Continuer avec les réglages recommandés
+    <p class="text-muted">
+      Choisissez le niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet
+      possible sur cette installation) est présélectionné — déplacez le curseur vers la gauche
+      pour aller plus vite, vers la droite pour un livrable plus riche.
+    </p>
+
+    <div id="profile-selector"
+         class="profile-selector mb-3"
+         data-recommended="{{ processing_profiles.recommended or '' }}">
+      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="Profil de traitement">
+        {% for p in processing_profiles.profiles %}
+        <button type="button"
+                class="profile-pill btn flex-fill {% if p.id == processing_profiles.recommended %}btn-success active{% else %}btn-outline-secondary{% endif %}"
+                data-profile-id="{{ p.id }}"
+                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"{% endif %}
+                onclick="TranscrIA.selectProfile('{{ p.id }}')">
+          <span class="d-block fw-semibold">{{ p.label }}</span>
+          <span class="d-block small opacity-75">
+            {% if not p.available %}<i class="bi bi-slash-circle"></i> indisponible{% else %}niveau {{ p.level }}{% endif %}
+          </span>
         </button>
+        {% endfor %}
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
+        <span><i class="bi bi-lightning-charge"></i> Rapide</span>
+        <span>Complet <i class="bi bi-stars"></i></span>
       </div>
     </div>
-    <details class="mb-3">
-      <summary class="text-muted">Options de traitement</summary>
-      <div class="row mt-3">
-        <div class="col-md-6">
-          <div class="card border-primary h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title"><i class="bi bi-lightning-fill text-warning"></i> Traitement rapide</h5>
-              <p class="card-text small">Produit rapidement un SRT exploitable. Le backend peut rester automatique selon le diagnostic.</p>
-              <button class="btn btn-primary" onclick="TranscrIA.startProcessing('fast')">Choisir rapide</button>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-6">
-          <div class="card h-100">
-            <div class="card-body text-center">
-              <h5 class="card-title"><i class="bi bi-star-fill text-success"></i> Traitement qualité</h5>
-              <p class="card-text small">Active le workflow complet avec contexte, locuteurs, lexique et contrôles qualité renforcés.</p>
-              <button class="btn btn-success" onclick="TranscrIA.startProcessing('quality')">Choisir qualité</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <p class="small text-muted mt-3 mb-0">
-        Les options avancées comme le débruitage restent désactivées par défaut et se règlent côté configuration.
-      </p>
-    </details>
+
+    <div id="profile-detail" class="card border-success mb-3">
+      <div class="card-body"><span class="text-muted">Sélectionnez un profil…</span></div>
+    </div>
+
+    {% if not processing_profiles.recommended %}
+    <div class="alert alert-warning">
+      Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée
+      ou mode qualité désactivé). Voir la configuration.
+    </div>
+    {% endif %}
+
+    <button id="profile-launch-btn" class="btn btn-success btn-lg"
+            {% if not processing_profiles.recommended %}disabled{% endif %}
+            onclick="TranscrIA.startSelectedProfile()">
+      <i class="bi bi-play-fill"></i> Lancer le traitement
+    </button>
+
+    <script type="application/json" id="profiles-data">{{ processing_profiles|tojson }}</script>
     <div id="processing-result" class="mt-3"></div>
   </div>
   {% endif %}

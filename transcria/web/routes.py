@@ -1051,6 +1051,8 @@ def create_job():
 @web_bp.route("/jobs/<job_id>")
 @login_required
 def job_wizard(job_id: str):
+    from transcria.workflow.profile_availability import compute_profiles_view
+
     cfg = get_config()
     job = JobStore.get_by_id(job_id)
     _require_job_access(job, current_user)
@@ -1135,6 +1137,7 @@ def job_wizard(job_id: str):
         audio_analysis=audio_analysis,
         audio_preflight=audio_preflight,
         audio_diagnostic=_audio_diagnostic_view(audio_preflight, audio_scene),
+        processing_profiles=compute_profiles_view(cfg),
         audio_scene=audio_scene,
         processing_diagnostic=_processing_diagnostic_view(transcription_metadata, transcription_segments),
         quality_report=quality_report,
@@ -1934,6 +1937,15 @@ def api_job_status(job_id: str):
         "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
         "progress": get_workflow_progress(job),
     })
+
+
+@web_bp.route("/api/profiles/availability", methods=["GET"])
+@login_required
+def api_profiles_availability():
+    """Profils de traitement disponibles + profil recommandé (source unique pour le wizard)."""
+    from transcria.workflow.profile_availability import compute_profiles_view
+
+    return jsonify(compute_profiles_view(get_config()))
 
 
 _REPROCESSABLE_STATES = {

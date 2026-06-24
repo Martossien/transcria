@@ -122,6 +122,30 @@ def test_process_profil_inconnu_rejete(admin_client, app):
     assert "invalide" in r.get_json()["error"]
 
 
+def test_endpoint_disponibilite_profils(admin_client):
+    r = admin_client.get("/api/profiles/availability")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert len(body["profiles"]) == 6
+    ids = {p["id"] for p in body["profiles"]}
+    assert "dossier_qualite" in ids and "srt_express" in ids
+    for p in body["profiles"]:
+        assert set(p) >= {"id", "label", "status", "available", "deliverables", "validations"}
+    assert body["recommended"] in ids or body["recommended"] is None
+
+
+def test_wizard_rend_le_selecteur_de_profils(admin_client, app):
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.LEXICON_DONE)
+    r = admin_client.get(f"/jobs/{jid}")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'id="profile-selector"' in html
+    assert 'id="profiles-data"' in html
+    assert "Lancer le traitement" in html
+
+
 def test_reprocess_profil_explicite_threade(admin_client, app, monkeypatch):
     jid = _uploaded_job(admin_client)
     with app.app_context():

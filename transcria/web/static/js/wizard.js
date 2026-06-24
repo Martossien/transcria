@@ -975,7 +975,9 @@ var TranscrIA = window.TranscrIA || {};
         var poller = _buildProcessingPoller(div, startTime);
 
         poller.setInfo('Soumission du traitement…');
-        W.api('/api/jobs/' + JOB_ID + '/process', 'POST', { mode: mode }).then(function (r) {
+        // `mode` porte un id de profil (sélecteur) ou rien (relance d'un job échoué → fast).
+        var body = mode ? { processing_profile_id: mode } : { mode: 'fast' };
+        W.api('/api/jobs/' + JOB_ID + '/process', 'POST', body).then(function (r) {
             if (r.status === 409 && _REPROCESSABLE_STATES.indexOf(r.data.current_state) !== -1) {
                 // Job déjà terminé — proposer de relancer
                 div.innerHTML =
@@ -1002,7 +1004,8 @@ var TranscrIA = window.TranscrIA || {};
         var poller = _buildProcessingPoller(div, startTime);
 
         poller.setInfo('Relancement du traitement…');
-        W.api('/api/jobs/' + JOB_ID + '/reprocess', 'POST', { mode: mode || 'fast' }).then(function (r) {
+        var body = mode ? { processing_profile_id: mode } : { mode: 'fast' };
+        W.api('/api/jobs/' + JOB_ID + '/reprocess', 'POST', body).then(function (r) {
             if (r.data.error) {
                 div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
             } else {
@@ -1010,6 +1013,81 @@ var TranscrIA = window.TranscrIA || {};
                 setTimeout(poller.poll, 4000);
             }
         });
+    };
+
+    // ── Sélecteur de profil de traitement (Phase 6) ─────────────────────────
+    // Les données viennent du backend (source unique : /api/profiles/availability,
+    // injectées dans #profiles-data). Le JS ne fait que rendre et sélectionner.
+    W._profilesData = null;
+    W._selectedProfile = null;
+
+    function _profilesData() {
+        if (W._profilesData === null) {
+            var el = document.getElementById('profiles-data');
+            try { W._profilesData = el ? JSON.parse(el.textContent) : { profiles: [] }; }
+            catch (e) { W._profilesData = { profiles: [] }; }
+        }
+        return W._profilesData;
+    }
+
+    function _esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function _renderProfileDetail(p) {
+        var chips = function (items, cls) {
+            if (!items || !items.length) { return '<span class="text-muted">—</span>'; }
+            return items.map(function (i) {
+                return '<span class="badge rounded-pill bg-' + cls + ' me-1 mb-1">' + _esc(i) + '</span>';
+            }).join('');
+        };
+        return '' +
+            '<div class="card-body">' +
+            '<h5 class="card-title mb-1">' + _esc(p.label) + '</h5>' +
+            '<p class="text-muted mb-3">' + _esc(p.description) + '</p>' +
+            '<div class="row g-3">' +
+            '<div class="col-md-6"><div class="small text-uppercase text-muted mb-1">' +
+            '<i class="bi bi-box-seam"></i> Produit</div>' + chips(p.deliverables, 'success') + '</div>' +
+            '<div class="col-md-6"><div class="small text-uppercase text-muted mb-1">' +
+            '<i class="bi bi-check2-square"></i> À valider</div>' + chips(p.validations, 'primary') + '</div>' +
+            '</div>' +
+            (p.available ? '' :
+                '<div class="alert alert-warning mt-3 mb-0 py-2 small">' +
+                '<i class="bi bi-exclamation-triangle"></i> ' + _esc((p.reasons || []).join(' · ')) + '</div>') +
+            '</div>';
+    }
+
+    W.selectProfile = function (profileId) {
+        var data = _profilesData();
+        var p = (data.profiles || []).filter(function (x) { return x.id === profileId; })[0];
+        if (!p || !p.available) { return; }
+        W._selectedProfile = profileId;
+        // Pastilles : surligner la sélection.
+        var pills = document.querySelectorAll('#profile-selector .profile-pill');
+        Array.prototype.forEach.call(pills, function (btn) {
+            var active = btn.dataset.profileId === profileId;
+            btn.classList.toggle('btn-success', active);
+            btn.classList.toggle('active', active);
+            if (!btn.disabled) { btn.classList.toggle('btn-outline-secondary', !active); }
+        });
+        var detail = document.getElementById('profile-detail');
+        if (detail) { detail.innerHTML = _renderProfileDetail(p); }
+        var btn = document.getElementById('profile-launch-btn');
+        if (btn) { btn.disabled = false; }
+    };
+
+    W.startSelectedProfile = function () {
+        if (!W._selectedProfile) { return; }
+        W.startProcessing(W._selectedProfile);
+    };
+
+    W.initProfileSelector = function () {
+        var selector = document.getElementById('profile-selector');
+        if (!selector) { return; }
+        var recommended = selector.dataset.recommended;
+        if (recommended) { W.selectProfile(recommended); }
     };
 
     W.pushToEditor = function () {
@@ -1032,4 +1110,5 @@ var TranscrIA = window.TranscrIA || {};
 
 window.TranscrIA = TranscrIA;
 TranscrIA.initWorkflowStatusBanner();
+TranscrIA.initProfileSelector();
 console.log('[TranscrIA] wizard.js loaded, functions: ' + Object.keys(TranscrIA).join(', '));

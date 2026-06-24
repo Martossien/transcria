@@ -454,6 +454,24 @@ def profile_phase_classes(profile: ProcessingProfile) -> dict[str, PhaseConcurre
     return {phase: nominal[phase] for phase in profile_active_phases(profile)}
 
 
+def profile_validations(profile: ProcessingProfile) -> list[str]:
+    """Libellés FR des étapes humaines demandées par le profil (pour l'UI)."""
+    items: list[str] = []
+    if profile.requires_summary:
+        items.append("Résumé de contrôle")
+    if profile.requires_context in ("minimal", "required"):
+        items.append("Contexte de réunion")
+    if profile.requires_participants == "required":
+        items.append("Participants")
+    if profile.requires_speaker_validation == "required":
+        items.append("Validation des locuteurs")
+    if profile.requires_lexicon in ("required", "required_or_empty"):
+        items.append("Lexique de session")
+    elif profile.requires_lexicon == "optional":
+        items.append("Lexique (optionnel)")
+    return items
+
+
 def profile_deliverables(profile: ProcessingProfile) -> list[str]:
     """Libellés FR des livrables garantis par le profil, pour l'UI."""
     items: list[str] = []
