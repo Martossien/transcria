@@ -1872,7 +1872,7 @@ def api_process(job_id: str):
 
     from transcria.services.pipeline_service import PipelineService
 
-    vram_profile = PipelineService.estimate_job_vram(cfg, mode)
+    vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
     try:
         result = executor.submit_process(
             job.id,
@@ -1987,12 +1987,15 @@ def api_reprocess(job_id: str):
 
     reset_resume_state(JobStore, job.id)
 
+    from transcria.services.pipeline_service import PipelineService
+
+    vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
     try:
         result = executor.submit_process(
-            job.id, str(audio_path), mode, processing_profile_id=profile.id
+            job.id, str(audio_path), mode, vram_profile=vram_profile, processing_profile_id=profile.id
         )
     except TypeError as exc:
-        # Compat (skew de version de l'exécuteur) : signature sans le kwargs profil.
+        # Compat (skew de version de l'exécuteur) : signature sans les kwargs récents.
         if "unexpected keyword argument" not in str(exc):
             raise
         result = executor.submit_process(job.id, str(audio_path), mode)

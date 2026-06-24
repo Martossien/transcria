@@ -595,3 +595,57 @@ class TestStepProgressConsistency:
         svc._progress.update = lambda job_id, **kw: captured.setdefault(kw.get("phase"), []).append(kw.get("percent"))
         svc._publish_step_progress(_job(), "inconnue", starting=True)
         assert captured["inconnue"] == [None]
+
+
+# ---------------------------------------------------------------------------
+# estimate_profile_resources — profil VRAM d'admission par profil (Phase 3)
+# ---------------------------------------------------------------------------
+
+
+class TestEstimateProfileResources:
+    """Le profil VRAM ne réserve QUE les phases réellement exécutées par le profil."""
+
+    _CFG = {
+        "models": {"stt_backend": "cohere", "diarization_backend": "pyannote"},
+        "gpu": {"llm_vram_mb": 60000},
+        "workflow": {"arbitration_llm": {"enabled": True}},
+    }
+
+    def _estimate(self, profile_id, cfg=None):
+        from transcria.services.pipeline_service import PipelineService
+        from transcria.workflow.profiles import get_profile
+        return PipelineService.estimate_profile_resources(cfg or self._CFG, get_profile(profile_id))
+
+    def test_srt_express_stt_seul_aucune_llm_ni_diarisation(self):
+        res = self._estimate("srt_express")
+        assert set(res["phases"]) == {"stt"}
+        assert res["llm_shared"] is False
+        assert res["processing_profile_id"] == "srt_express"
+        assert res["mode"] == "fast"
+
+    def test_srt_locuteurs_pas_de_phase_diarisation(self):
+        # Spike : les locuteurs viennent de la détection wizard, pas de la phase diarisation.
+        res = self._estimate("srt_locuteurs")
+        assert set(res["phases"]) == {"stt"}
+
+    def test_word_rapide_llm_sans_diarisation(self):
+        res = self._estimate("word_rapide")
+        assert set(res["phases"]) == {"stt", "llm_arbitration"}
+        assert res["llm_shared"] is True
+
+    def test_dossier_qualite_les_trois_phases(self):
+        res = self._estimate("dossier_qualite")
+        assert set(res["phases"]) == {"stt", "diarization", "llm_arbitration"}
+        assert res["mode"] == "quality"
+
+    def test_llm_non_reservee_si_arbitrage_desactive(self):
+        cfg = {**self._CFG, "workflow": {"arbitration_llm": {"enabled": False}}}
+        res = self._estimate("word_rapide", cfg)
+        assert "llm_arbitration" not in res["phases"]
+
+    def test_estimate_job_vram_delegue_compat_fast_quality(self):
+        from transcria.services.pipeline_service import PipelineService
+        fast = PipelineService.estimate_job_vram(self._CFG, "fast")
+        assert "diarization" not in fast["phases"]
+        quality = PipelineService.estimate_job_vram(self._CFG, "quality")
+        assert "diarization" in quality["phases"]

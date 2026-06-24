@@ -182,3 +182,50 @@ class TestSchedulerLlmAdmission:
         sched = self._scheduler(app, tmp_path)
         profile = {"phases": {"stt": 6000, "diarization": 2000, "llm_arbitration": 60000}}
         assert sched._local_required_mb(profile, set()) == 6000
+
+
+class TestProfileVramProfileAdmission:
+    """Phase 3 : le vram_profile produit PAR PROFIL pilote l'admission sans toucher au scheduler.
+
+    Invariant clé : un profil sans LLM/diarisation n'est jamais bloqué par ces ressources,
+    car son vram_profile n'expose simplement pas la phase correspondante.
+    """
+
+    _EST_CFG = {
+        "models": {"stt_backend": "cohere", "diarization_backend": "pyannote"},
+        "gpu": {"llm_vram_mb": 60000},
+        "workflow": {"arbitration_llm": {"enabled": True}},
+    }
+
+    def _scheduler(self, app, tmp_path):
+        from transcria.queue.scheduler import QueueScheduler
+        cfg = {
+            "storage": {"jobs_dir": str(tmp_path)},
+            "gpu": {"min_free_vram_mb": 1000},
+            "workflow": {"queue": {"enabled": True, "poll_interval_s": 300},
+                         "scheduling": {"pid_file": str(tmp_path / "pids.json")}},
+        }
+        return QueueScheduler(app, cfg, lambda *a: None)
+
+    def _vram_profile(self, profile_id):
+        from transcria.services.pipeline_service import PipelineService
+        from transcria.workflow.profiles import get_profile
+        return PipelineService.estimate_profile_resources(self._EST_CFG, get_profile(profile_id))
+
+    def test_profil_sans_llm_jamais_bloque_derriere_la_llm(self, app, tmp_path, monkeypatch):
+        sched = self._scheduler(app, tmp_path)
+        # LLM éteinte ET incapable d'héberger : un profil avec LLM serait refusé…
+        monkeypatch.setattr(sched, "_vram_manager",
+                            lambda: type("V", (), {"is_arbitrage_llm_running": lambda self: False})())
+        monkeypatch.setattr(sched.allocator, "can_host_llm", lambda mb: False)
+        # … mais srt_express n'a pas de phase LLM → admissible.
+        assert sched._llm_admissible(self._vram_profile("srt_express"), set()) is True
+        # word_rapide a une phase LLM (résumé) → reste gouverné par la capacité LLM.
+        assert sched._llm_admissible(self._vram_profile("word_rapide"), set()) is False
+
+    def test_profil_sans_diarisation_ne_reserve_pas_la_vram_diarisation(self, app, tmp_path):
+        sched = self._scheduler(app, tmp_path)
+        # srt_express : seul le STT compte dans le max mono-GPU.
+        assert sched._local_required_mb(self._vram_profile("srt_express"), set()) == 6000
+        # srt_locuteurs : pas de phase diarisation (locuteurs via wizard) → STT seul aussi.
+        assert sched._local_required_mb(self._vram_profile("srt_locuteurs"), set()) == 6000
