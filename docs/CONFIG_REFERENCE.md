@@ -348,6 +348,23 @@ Paramètres contrôlant les fonctionnalités du workflow.
 | `enable_external_srt_editor_link` | bool | `true` | Affiche le bouton "Ouvrir dans SRT Editor EASY" |
 | `enable_vad` | bool | `true` | Ancien interrupteur global VAD, conservé pour compatibilité |
 
+#### `workflow.profiles`
+
+Profils de traitement présentés à l'utilisateur après l'upload (remplacent le binaire
+`fast`/`quality`). Les 6 profils sont **codés en dur** (contrat stable) ; la config ne fait
+qu'activer/restreindre et n'altère jamais leur sémantique. Voir
+`docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | list[str] | *(tous)* | Liste blanche d'ids de profils proposés (`srt_express`, `srt_locuteurs`, `word_rapide`, `word_structure`, `word_corrige`, `dossier_qualite`). Absente ⇒ tous. Un profil hors liste apparaît `disabled_by_config`. |
+| `default` | str | `word_structure` | Profil par défaut configuré (informationnel). NB : le wizard **présélectionne le profil disponible de plus haut niveau** que la config/le matériel valident — le « maximum qui passe ». |
+
+La disponibilité réelle est calculée côté backend (`GET /api/profiles/availability`) : un profil
+qui exige la LLM d'arbitrage est `unavailable` si `workflow.arbitration_llm.enabled=false` ; un
+profil qui diarise est `disabled_by_config` si `enable_quality_mode=false`. L'UI grise ces profils
+avec la raison. Aucune règle de disponibilité n'est dupliquée en JavaScript.
+
 #### `workflow.quality_transcription`
 
 Contrôle un éventuel forçage du backend STT. Par défaut, Cohere reste le backend
@@ -392,7 +409,7 @@ sont enregistrés pour audit mais ne modifient pas le score.
 **Impact si modifié :**
 - `enable_quick_summary=false` : l'étape Résumé est sautée. Le job passe directement d'ANALYZED à... rien (pas de transition prévue dans `compute_statuses`). **Casserait le workflow** car les étapes suivantes (Contexte, Participants) dépendent du résumé pour pré-remplir les suggestions.
 - `enable_speaker_detection=false` : `SpeakerDetector.detect()` n'est pas appelé dans `run_summary()`. L'étape Participants n'aura pas de locuteurs pyannote, seulement les suggestions LLM (moins précises).
-- `enable_quality_mode=false` : le mode "Qualité" n'est pas proposé dans le formulaire de traitement. Seul le mode "Rapide" est disponible.
+- `enable_quality_mode=false` : les profils qui diarisent (`word_structure`, `word_corrige`, `dossier_qualite`) apparaissent `disabled_by_config` dans le wizard ; restent disponibles les profils sans diarisation (`srt_express`, `srt_locuteurs`, `word_rapide`). Un lancement direct d'un profil qualité est refusé (400).
 - `enable_external_srt_editor_link=false` : le bouton SRT Editor est masqué dans le template.
 
 #### `workflow.vad`

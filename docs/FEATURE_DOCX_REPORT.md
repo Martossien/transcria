@@ -18,6 +18,13 @@ La feature consiste à générer automatiquement un rapport `.docx` de haute qua
 
 **Objectif vitrine :** ce document est la première chose qu'un décideur voit quand on lui présente TranscrIA. Il doit avoir un **effet "wahou"** — mise en page professionnelle, structure claire, données riches.
 
+> **Profils de traitement** (cf. `docs/PROFILS_TRAITEMENT_WORKFLOW.md`) : la **génération** du DOCX
+> est conditionnée au `docx_level` du profil. Aujourd'hui binaire dans `PackageBuilder` — *aucun*
+> DOCX pour les profils SRT (`docx_level == "none"`), DOCX généré pour les profils Word et
+> `dossier_qualite`. La **granularité du contenu** par niveau (`basic`/`structured`/`enriched`/`full`)
+> est prévue mais pas encore appliquée dans `docx_report.py` : le contenu reste celui produit à
+> partir des données disponibles. À implémenter (cf. plan d'action du cadrage, phase exports).
+
 ---
 
 ## 2. Sources de données disponibles (job complet)

@@ -51,7 +51,7 @@
 | `owner_id` | String(36) | FK → users.id, NOT NULL, INDEX | Propriétaire |
 | `title` | String(255) | NOT NULL, default="Réunion sans titre" | Titre du traitement |
 | `state` | String(40) | NOT NULL, default="created" | État courant (enum JobState) |
-| `processing_mode` | String(20) | nullable | "fast" ou "quality" |
+| `processing_mode` | String(20) | nullable | Unité d'exécution legacy : "fast" ou "quality". Le **contrat produit** est le profil de traitement (`processing_profile_id`), stocké dans `extra_data.execution` (pas de colonne dédiée — choix transitoire, cf. `docs/PROFILS_TRAITEMENT_WORKFLOW.md`). |
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
 | `updated_at` | DateTime | NOT NULL, default=utcnow, onupdate=utcnow | Dernière modification |
 | `extra_data_json` | Text | nullable | JSON libre (métadonnées étendues) |
@@ -68,7 +68,7 @@
 
 | Clé | Écrite par | Contenu |
 |---|---|---|
-| `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`, plus `waiting_vram` non terminal en cas de VRAM insuffisante transitoire), `mode`, timestamps, `cancel_requested`, `required_vram_mb`/`phase` (si `waiting_vram`) |
+| `execution` | `QueueScheduler` / `JobExecutorService` | `status` (`queued→running→completed\|failed\|cancelled`, plus `waiting_vram` non terminal en cas de VRAM insuffisante transitoire), `mode`, **`processing_profile_id`** (profil de traitement choisi, posé au 1ᵉʳ enfilage et jamais écrasé par un re-queue automatique), timestamps, `cancel_requested`, `required_vram_mb`/`phase` (si `waiting_vram`) |
 | `vram_alert_sent` | `mark_execution_waiting_vram` | Drapeau anti-spam de l'alerte admin VRAM. Levé à la 1ʳᵉ entrée en attente, réarmé seulement aux transitions terminales (`completed`/`failed`/`cancelled`). |
 | `pipeline` | `transcria/workflow/resume.py` (via `PipelineService`) | État de **reprise** du pipeline : `completed_phases` (phases réussies, écrites atomiquement après succès) ; `phase_inputs` (empreintes sha256 des entrées de chaque phase au checkpoint = provenance v2 : un skip n'est légitime que si les entrées n'ont pas bougé) ; `audio_path` (chemin audio final après transforms pré-STT) ; `skipped_phases` (phases best-effort sautées pour cause **transitoire** — ex. relecture finale, LLM occupée — `{phase: raison}` : enregistrées **sans** être marquées faites → rejouées à un re-traitement, et auditables au lieu d'un silence). Permet de **sauter les phases déjà faites** au re-dispatch. Vidé par `reset_resume_state` à une re-soumission utilisateur ; **préservé** sur les re-queues automatiques. Cf. `docs/PIPELINE_REPRISE.md`. |
 | `workflow_progress` | `WorkflowProgressReporter` | Progression UI courte : `step`, `phase`, `message`, `percent` optionnel, `updated_at`. Exposée par `/api/jobs/<id>/status`; messages non confidentiels et écritures throttlées |
@@ -331,9 +331,11 @@ TRANSCRIBING → DIARIZING → QUALITY_CHECKING → ...
 
 `POST /api/jobs/<id>/process` écrit :
 
-- `jobs.processing_mode` (`fast` ou `quality`) ;
-- `jobs.extra_data_json["execution"]` avec `status="queued"`, `mode`, timestamps et éventuel `cancel_requested` ;
+- `jobs.processing_mode` (`fast` ou `quality`, mode de routage dérivé du profil) ;
+- `jobs.extra_data_json["execution"]` avec `status="queued"`, `mode`, `processing_profile_id` (le profil choisi : `srt_express`…`dossier_qualite`), timestamps et éventuel `cancel_requested` ;
 - une entrée `job_queue` si `workflow.queue.enabled=true`.
+
+Le corps accepte `processing_profile_id` (prioritaire) ou le `mode` legacy. Le scheduler n'admet que les ressources réellement requises par le profil (`estimate_profile_resources`), et le pipeline n'exécute que ses phases.
 
 Le scheduler marque ensuite `execution.status="running"` au démarrage. En fin de pipeline via file persistante, `JobExecutorService` publie d'abord `job_queue.status` (`done`, `failed` ou `cancelled`), puis `extra_data.execution.status` (`completed`, `failed` ou `cancelled`), puis `jobs.state`. Cet ordre évite une fenêtre où l'API verrait `jobs.state="completed"` alors que la file serait encore `running`.
 

@@ -8,6 +8,23 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Profils de traitement** (remplacent le binaire `fast`/`quality`) — jalon vers la 1.0, sur
+  retour utilisateurs (le choix binaire bloquait l'adoption). 6 profils nommés (`srt_express`,
+  `srt_locuteurs`, `word_rapide`, `word_structure`, `word_corrige`, `dossier_qualite`) + `legacy_fast`
+  transitoire. Après l'upload, l'utilisateur choisit un *livrable* sur un curseur ; le portail grise
+  les profils non lançables (raison affichée) et présélectionne le plus complet que la config/le
+  matériel valident. Implémenté de bout en bout : modèle central (`transcria/workflow/profiles.py`),
+  disponibilité backend (`profile_availability.py` + `GET /api/profiles/availability`), circulation
+  de `processing_profile_id` (API/exécution via `extra_data.execution`, sans migration), estimation
+  VRAM par profil (`estimate_profile_resources` → un profil léger n'est pas bloqué par les ressources
+  qu'il n'utilise pas), pipeline piloté par le profil (parité stricte : `dossier_qualite` == ancien
+  `quality`, `legacy_fast` == ancien `fast`), exports/qualité gradués (`zip_level`/`docx_level`,
+  contrôle qualité léger `quality/light_report.py`). Compatibilité ascendante : un job sans profil
+  retombe sur le comportement complet. Cadrage : `docs/PROFILS_TRAITEMENT_WORKFLOW.md`. Restent la
+  validation de charge mixte par profil, la granularité du *contenu* DOCX par niveau, la politique
+  `api_quality` et des notifications profile-aware.
+
 ### Changed
 - **Audit licences / mentions tierces (préalable à une éventuelle image publique).**
   `THIRD_PARTY_NOTICES.md` complété : composants embarqués dans les images Docker (opencode — MIT ;

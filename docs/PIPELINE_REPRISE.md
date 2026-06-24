@@ -211,3 +211,16 @@ transparent.
 - [ ] (Optionnel, différé) Garde d'admission : faire profiter `_done_profile_phases`
       d'une validation de provenance côté scheduler (aujourd'hui : l'unmark au dispatch
       suffit, le vram_wait couvre le créneau).
+
+## 11. Reprise et profils de traitement
+
+Depuis l'introduction des profils (`docs/PROFILS_TRAITEMENT_WORKFLOW.md`), la liste des phases
+machine est **sélectionnée par le profil** (`PipelineService._define_pipeline_steps_for_profile`)
+et non plus par `mode == "quality"`. Le mécanisme de reprise est inchangé et **agnostique au
+profil** : il opère sur la liste de phases effectivement produite, quelle qu'elle soit. Un profil
+qui ne lance pas une phase (ex. `srt_express` sans correction) n'a simplement jamais cette phase
+dans `completed_phases`, donc rien à reprendre ni à invalider la concernant.
+
+Note : ce mécanisme couvre les **phases machine** du pipeline. L'« enrichissement » d'un job vers
+un profil supérieur (rouvrir résumé/contexte/participants/lexique) relève des **étapes wizard**,
+hors périmètre de ce document (cf. cadrage profils, section enrichissement progressif).

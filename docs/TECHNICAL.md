@@ -580,12 +580,12 @@ pendant les phases longues. Les écritures non forcées sont throttlées par
 | `run_diarization(job, audio_path, config)` | pyannote speaker mapping via GPUSession. Applique aussi `apply_speaker_hint()` (même hint déterministe → checkpoint cohérent entre phases) | GPUSession auto |
 | `run_correction(job, config)` | opencode + LLM d'arbitrage : correction speakers + application du lexique validé en contexte + orthographe (prompt v3.0, @general obligatoire) | LLM arbitrage |
 | `run_final_review(job, config)` | **Phase de relecture finale (A+C+D+G)** après correction, avant qualité : harmonise la synthèse, rend cohérents noms/termes du SRT, résout les variantes, audite les données structurées (corrige nom/chiffre/date, marque `[À VÉRIFIER]`). Réutilise la LLM chargée. `_apply_final_review()` applique les sorties avec garde-fous (SRT relu si ratio 0.9–1.1, `summary_harmonized`, `structured_data` si JSON valide). **Best-effort** : renvoie toujours `success=True` | LLM arbitrage |
-| `run_quality_checks(job, config)` | 16 contrôles qualité | — |
-| `build_export(job, config)` | Package ZIP | — |
+| `run_quality_checks(job, config)` | Contrôle qualité **selon le profil** : complet (16 contrôles, `QualityReporter`) ou **léger** (`quality/light_report.py` : invariants SRT, schéma compatible) si `profile.run_quality == "light"` | — |
+| `build_export(job, config)` | Package ZIP **gradué selon le profil** (`zip_level` minimal/standard/full, DOCX gaté par `docx_level`) | — |
 
-Pipeline de traitement complet (`api_process`) :
+Pipeline de traitement complet (`api_process`) — étapes **sélectionnées par le profil** :
 ```
-run_transcription → cleanup_transcription → run_diarization (si quality) → run_correction → run_quality_checks → build_export
+run_transcription → cleanup_transcription → run_diarization (si profile.run_diarization) → run_correction (si profile.run_llm_correction) → run_final_review → run_quality_checks → build_export
 ```
 
 Avec les 7 pré-traitements audio exécutés dans `_run_pipeline_steps()` avant `run_transcription()` :
@@ -616,6 +616,41 @@ ensure_arbitrage_llm_ready(api_model_id) → opencode run
 ```
 
 L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` via `finally` en fin de pipeline.
+
+**`profiles.py` — profils de traitement** (remplacent le binaire `fast`/`quality`)
+Contrat produit central et immuable : 6 profils nommés (`srt_express`, `srt_locuteurs`,
+`word_rapide`, `word_structure`, `word_corrige`, `dossier_qualite`) + `legacy_fast` transitoire.
+Chaque `ProcessingProfile` (frozen) déclare ses étapes humaines (`requires_*`), ses phases
+machine (`run_diarization`, `run_llm_correction`, `run_quality`…), ses livrables
+(`docx_level`, `zip_level`) et ses ressources (`ResourceRequirements`). Fonctions pures :
+`get_profile`, `resolve_legacy_mode` (`fast→legacy_fast`, `quality→dossier_qualite`),
+`resolve_request(profile_id|mode)`, `profile_for_job(job)` (lit le profil persisté dans
+`extra_data.execution.processing_profile_id`), `profile_deliverables`, `profile_validations`.
+Le cadrage complet et le plan en phases : `docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
+
+**`profile_availability.py`** — source unique de disponibilité pour le wizard :
+`compute_profiles_view(config)` retourne, par profil, un statut structurel
+(`available` / `available_remote` / `unavailable` / `disabled_by_config`) + raisons, livrables,
+validations, et le **profil recommandé** (le plus élevé que la config/le matériel valide).
+Exposé par `GET /api/profiles/availability` et injecté au rendu du wizard.
+
+**Comment le profil traverse le système** (mode reste l'unité d'exécution legacy, le profil le
+contrat produit) :
+- *Routes* (`api_process`/`api_reprocess`) : `resolve_request()` → profil + mode de routage ;
+  `processing_profile_id` persisté dans `extra_data.execution` (pas de colonne DB — choix
+  transitoire réversible), audité (`processing_profile_id`/`queue_mode`/`legacy_mode`).
+- *Scheduler/admission* : `PipelineService.estimate_profile_resources(config, profile)` construit
+  le `vram_profile` à partir des phases réelles du profil → un profil sans LLM/diarisation n'expose
+  pas la phase correspondante, donc l'admission ne le bloque jamais derrière (le scheduler durci
+  est inchangé : il lit le `vram_profile` par job).
+- *Pipeline* : `_resolve_profile(job, mode)` + `_define_pipeline_steps_for_profile()` sélectionnent
+  les phases (parité stricte : `dossier_qualite` == ancien `quality`, `legacy_fast` == ancien `fast`).
+- *Qualité/exports* : `run_quality_checks` et `PackageBuilder` lisent `profile_for_job(job)` ;
+  job legacy / sans profil → comportement **complet** (compatibilité ascendante garantie).
+
+> État : Phases 1-4, 6, 7 livrées. Restent la validation de charge mixte par profil (banc GPU),
+> la granularité du *contenu* DOCX par niveau, la politique `api_quality` et des notifications
+> profile-aware (cf. plan d'action du cadrage).
 
 ---
 

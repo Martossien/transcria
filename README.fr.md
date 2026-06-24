@@ -33,6 +33,7 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
 ## Fonctionnalités
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
+- **Profils de traitement** (après l'upload) : l'utilisateur choisit un *livrable* sur un curseur — du `SRT express` rapide au `dossier qualité` complet — au lieu d'un interrupteur rapide/qualité opaque. Le portail grise les profils que le matériel ne permet pas, présélectionne le plus complet qui passe, puis n'exécute que les phases du pipeline (et ne réserve que le GPU/la LLM) réellement nécessaires au profil choisi. Cf. `docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
 - **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés. Parakeet TDT 0.6B v3 (NVIDIA NeMo) en backend expérimental.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.

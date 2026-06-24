@@ -54,6 +54,7 @@ upload ─► audio diagnosis ─► quick summary (STT + LLM) ─► context, p
 - **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 / faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (experimental) — served locally or by a remote OpenAI-compatible server (vLLM, SGLang…).
 - **Diarization backends**: pyannote.audio (default) or NVIDIA Sortformer via NeMo.
 - **Word minutes adapted to 18 meeting types** (works council, executive committee, project review, crisis…): LLM-extracted decisions/actions/votes, type-specific fields and visual themes, graceful degradation if extraction fails.
+- **Processing profiles** (after upload): pick a *deliverable* on a single slider — from a quick `SRT express` to a full `dossier qualité` — instead of an opaque fast/quality switch. The portal greys out profiles your hardware can't run, pre-selects the most complete one that fits, and then only executes the pipeline phases (and only reserves the GPU/LLM) that the chosen profile actually needs.
 - Every phase is **checkpointed**: a re-dispatched job resumes at the first incomplete phase, even on a different worker.
 
 ## Quickstart
