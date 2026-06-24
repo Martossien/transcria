@@ -199,6 +199,37 @@
 - [ ] **5.5 (reste)** Valider sur les **images bakées** (sans l'override dev `transcria/` monté) : rebuild
       worker+resource-node avec tous les fixes code, puis re-run sans `-f docker-compose.split-gpu.dev.yml`.
 
+### Phase 5-bis — E2E par PROFIL (profils de traitement, à relancer sur le banc)
+
+`verify_split_topology.py` est désormais **profile-aware** : `--profiles a,b` lance un job E2E par
+profil et vérifie le **contrat de livrables** (SRT + package toujours ; DOCX présent ssi le profil
+le promet — absent pour les profils SRT = preuve de non-sur-livraison). Source unique du contrat :
+le modèle `transcria.workflow.profiles`.
+
+Couverture recommandée = un profil léger + un profil complet (les deux extrêmes du curseur) :
+
+```bash
+# All-in-one (rôle `all`) — 2 E2E, plan de contrôle distant sauté :
+venv/bin/python scripts/verify_split_topology.py \
+  --node "" --arbitrage "" \
+  --audio tests/test2.mp3 --profiles srt_express,dossier_qualite \
+  --password "$TRANSCRIA_ADMIN_PASSWORD"
+
+# Frontale + serveur de ressources (split) — 2 E2E, plan de contrôle distant actif :
+venv/bin/python scripts/verify_split_topology.py \
+  --web http://localhost:7870 --node http://localhost:8002 --arbitrage http://localhost:8080 \
+  --audio tests/test2.mp3 --profiles srt_express,dossier_qualite \
+  --password "$TRANSCRIA_ADMIN_PASSWORD"
+```
+
+Attendu : `srt_express` → SRT + ZIP minimal, **pas de DOCX** ; `dossier_qualite` → SRT corrigé +
+ZIP complet + DOCX. Note : sous l'implémentation actuelle, les étapes wizard
+(résumé/contexte/participants/lexique) restent jouées pour atteindre l'état lançable quel que soit
+le profil (les prérequis profile-aware côté transitions ne sont pas encore branchés).
+
+> Étape opérateur (banc GPU). Le harnais code + le contrat sont en place ; le run réel `test2.mp3`
+> (2 E2E all-in-one + 2 E2E split) reste à exécuter sur le matériel.
+
 ---
 
 ## 6. Fichiers concernés

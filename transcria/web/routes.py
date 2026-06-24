@@ -2138,6 +2138,14 @@ def api_download_docx(job_id: str):
         return error_response
 
     from transcria.exports.docx_report import generate_docx_report
+    from transcria.workflow.profiles import profile_for_job
+
+    # Le DOCX n'est un livrable que si le profil le promet (docx_level != none). Un profil SRT
+    # (srt_express/srt_locuteurs) ne doit pas voir un DOCX généré à la demande → 404 propre.
+    # Job legacy / sans profil → comportement complet (DOCX disponible).
+    profile = profile_for_job(job)
+    if profile is not None and profile.docx_level == "none":
+        abort(404)
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]

@@ -91,9 +91,27 @@ def check_arbitrage(arbitrage_url: str, expected_alias: str) -> None:
 # ── Niveau 2 : job son E2E via la frontale ───────────────────────────────────
 
 
+def _expected_docx(profile_id: str | None) -> bool:
+    """Le profil doit-il produire un DOCX ? Source unique = le modèle de profils.
+
+    Profil absent (legacy `--mode`) → comportement complet ⇒ DOCX attendu.
+    Import paresseux et tolérant : si `transcria` n'est pas importable (script lancé hors
+    venv applicatif), on retombe sur « DOCX attendu » (comportement historique).
+    """
+    if not profile_id:
+        return True
+    try:
+        from transcria.workflow.profiles import get_profile
+
+        return get_profile(profile_id).docx_level != "none"
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
-            timeout_s: float, poll_s: float) -> None:
+            timeout_s: float, poll_s: float, profile: str | None = None) -> None:
     s = requests.Session()
+    launch = f"profil {profile}" if profile else f"mode {mode}"
 
     # 1) Login (CSRF neutralisé côté serveur sur les routes mutantes). Un login réussi
     #    REDIRIGE (302/303) et pose un cookie de session ; un 200 = page de login re-rendue.
@@ -147,13 +165,14 @@ def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
 
     # 7) Traitement complet (STT + diar + correction/relecture/qualité LLM). Synchrone en
     #    all-in-one, enfilé en split → même garde de timeout que le résumé (cf. étape 5).
-    r = s.post(f"{web_url}/api/jobs/{job_id}/process", json={"mode": mode}, timeout=timeout_s)
+    payload = {"processing_profile_id": profile} if profile else {"mode": mode}
+    r = s.post(f"{web_url}/api/jobs/{job_id}/process", json=payload, timeout=timeout_s)
     if r.status_code not in (200, 202):  # 200 = synchrone (all-in-one), 202 = enfilé (split)
-        _fail("job", f"process(mode={mode}) : HTTP {r.status_code} — {r.text[:300]}")
-    _log("job", f"traitement {mode} accepté (HTTP {r.status_code}) — polling…")
+        _fail("job", f"process({launch}) : HTTP {r.status_code} — {r.text[:300]}")
+    _log("job", f"traitement {launch} accepté (HTTP {r.status_code}) — polling…")
     final = _poll_for(s, web_url, job_id, want=_SUCCESS_STATES, timeout_s=timeout_s, poll_s=poll_s, label="process")
     _log("job", f"✅ traitement terminé (état={final})")
-    _check_deliverables(s, web_url, job_id)
+    _check_deliverables(s, web_url, job_id, expect_docx=_expected_docx(profile))
 
 
 def _poll_for(s: requests.Session, web_url: str, job_id: str, *, want: set[str],
@@ -180,13 +199,25 @@ def _poll_for(s: requests.Session, web_url: str, job_id: str, *, want: set[str],
     _fail("job", f"[{label}] timeout après {timeout_s:.0f}s (dernier état={last})")
 
 
-def _check_deliverables(s: requests.Session, web_url: str, job_id: str) -> None:
-    for kind in ("srt", "package", "docx"):
+def _check_deliverables(s: requests.Session, web_url: str, job_id: str, *, expect_docx: bool) -> None:
+    """Vérifie le CONTRAT de livrables du profil : SRT + package toujours présents ; DOCX
+    présent ssi le profil le promet (absent pour les profils SRT → preuve de non-sur-livraison)."""
+    for kind in ("srt", "package"):
         r = s.get(f"{web_url}/api/jobs/{job_id}/download/{kind}", timeout=60)
         if r.status_code != 200 or not r.content:
             _fail("job", f"livrable '{kind}' indisponible (HTTP {r.status_code}, {len(r.content)} octets)")
         _log("job", f"livrable '{kind}' OK ({len(r.content)} octets)")
-    _log("job", "✅ tous les livrables présents (SRT, package, DOCX)")
+
+    r = s.get(f"{web_url}/api/jobs/{job_id}/download/docx", timeout=60)
+    if expect_docx:
+        if r.status_code != 200 or not r.content:
+            _fail("job", f"DOCX attendu mais indisponible (HTTP {r.status_code}, {len(r.content)} octets)")
+        _log("job", f"livrable 'docx' OK ({len(r.content)} octets)")
+    else:
+        if r.status_code == 200 and r.content:
+            _fail("job", "DOCX présent alors que le profil ne le promet pas (sur-livraison)")
+        _log("job", f"DOCX absent comme attendu pour ce profil (HTTP {r.status_code})")
+    _log("job", "✅ contrat de livrables respecté")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -196,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--arbitrage", default="http://localhost:8080", help="URL du vLLM d'arbitrage")
     p.add_argument("--arbitrage-alias", default="arbitrage", help="alias attendu dans /v1/models")
     p.add_argument("--audio", type=Path, default=None, help="fichier son → déclenche le job E2E complet")
-    p.add_argument("--mode", default="quality", choices=("fast", "quality"), help="mode de traitement")
+    p.add_argument("--mode", default="quality", choices=("fast", "quality"), help="mode de traitement (legacy)")
+    p.add_argument("--profiles", default="",
+                   help="profils de traitement à tester en E2E, séparés par des virgules "
+                        "(ex. 'srt_express,dossier_qualite'). Un job E2E par profil. "
+                        "Vide ⇒ un seul run avec --mode (legacy).")
     p.add_argument("--username", default=os.environ.get("TRANSCRIA_ADMIN_USER", "admin"))
     p.add_argument("--password", default=os.environ.get("TRANSCRIA_ADMIN_PASSWORD", ""))
     p.add_argument("--api-key", default=os.environ.get("TRANSCRIA_INFERENCE_API_KEY", ""))
@@ -228,9 +263,17 @@ def main(argv: list[str] | None = None) -> int:
     if not args.password:
         _fail("job", "mot de passe admin requis (--password ou $TRANSCRIA_ADMIN_PASSWORD)")
 
-    _log("job", "── Niveau 2 : job son E2E via la frontale ──")
-    run_job(args.web.rstrip("/"), args.audio, args.username, args.password,
-            args.mode, args.timeout, args.poll_interval)
+    profiles = [p.strip() for p in args.profiles.split(",") if p.strip()]
+    if profiles:
+        _log("job", f"── Niveau 2 : {len(profiles)} job(s) son E2E par profil : {', '.join(profiles)} ──")
+        for i, profile in enumerate(profiles, 1):
+            _log("job", f"── E2E {i}/{len(profiles)} — profil {profile} ──")
+            run_job(args.web.rstrip("/"), args.audio, args.username, args.password,
+                    args.mode, args.timeout, args.poll_interval, profile=profile)
+    else:
+        _log("job", "── Niveau 2 : job son E2E via la frontale (mode legacy) ──")
+        run_job(args.web.rstrip("/"), args.audio, args.username, args.password,
+                args.mode, args.timeout, args.poll_interval)
     _log("plan", "✅ topologie validée de bout en bout.")
     return 0
 

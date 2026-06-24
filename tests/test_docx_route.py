@@ -112,6 +112,28 @@ class TestDocxAuth:
         r = admin_client.get("/api/jobs/nonexistent-uuid-docx/download/docx")
         assert r.status_code == 404
 
+    def test_download_docx_404_pour_profil_sans_docx(self, admin_client, app, job_with_docx_data):
+        # Profil SRT (docx_level == none) : le DOCX n'est pas un livrable → 404, pas de génération.
+        from transcria.jobs.store import JobStore
+        with app.app_context():
+            JobStore.update_extra_data(
+                job_with_docx_data,
+                lambda d: {**d, "execution": {"processing_profile_id": "srt_express"}},
+            )
+        r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
+        assert r.status_code == 404
+
+    def test_download_docx_200_pour_profil_word(self, admin_client, app, job_with_docx_data):
+        # Profil Word (docx_level != none) : le DOCX reste un livrable.
+        from transcria.jobs.store import JobStore
+        with app.app_context():
+            JobStore.update_extra_data(
+                job_with_docx_data,
+                lambda d: {**d, "execution": {"processing_profile_id": "dossier_qualite"}},
+            )
+        r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
+        assert r.status_code == 200
+
 
 # ── Tests génération et contenu ───────────────────────────────────────────────
 
