@@ -1559,10 +1559,19 @@ class WorkflowRunner:
         )
         self._enrich_stt_corpus_quality(job, config)
         try:
-            from transcria.quality.quality_report import QualityReporter
+            from transcria.workflow.profiles import profile_for_job
 
-            reporter = QualityReporter(config)
-            result = reporter.run_all_checks(job)
+            profile = profile_for_job(job)
+            if profile is not None and profile.run_quality == "light":
+                # Profil léger : contrôle minimal (invariants SRT), pas le rapport complet.
+                from transcria.quality.light_report import run_light_quality
+
+                result = run_light_quality(job, config)
+            else:
+                # Profil complet OU job legacy (profil absent) → rapport complet (inchangé).
+                from transcria.quality.quality_report import QualityReporter
+
+                result = QualityReporter(config).run_all_checks(job)
             self.store.update_state(job.id, JobState.QUALITY_CHECKED)
             self.progress.update(
                 job.id,

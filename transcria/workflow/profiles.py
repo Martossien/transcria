@@ -454,6 +454,22 @@ def profile_phase_classes(profile: ProcessingProfile) -> dict[str, PhaseConcurre
     return {phase: nominal[phase] for phase in profile_active_phases(profile)}
 
 
+def profile_for_job(job) -> ProcessingProfile | None:
+    """Profil persisté sur le job (`extra_data.execution.processing_profile_id`, cf. Phase 2).
+
+    Retourne None pour un job legacy/sans profil : les appelants RETOMBENT alors sur le
+    comportement complet (full), garantissant la compatibilité ascendante (aucun job existant
+    ne perd de livrable). `job` est un `transcria.jobs.models.Job` (ou compatible `get_extra_data`).
+    """
+    try:
+        pid = (job.get_extra_data().get("execution", {}) or {}).get("processing_profile_id")
+    except Exception:  # noqa: BLE001 — job non-DB / extra_data absent
+        return None
+    if pid and is_profile(pid):
+        return get_profile(pid)
+    return None
+
+
 def profile_validations(profile: ProcessingProfile) -> list[str]:
     """Libellés FR des étapes humaines demandées par le profil (pour l'UI)."""
     items: list[str] = []

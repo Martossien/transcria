@@ -20,26 +20,40 @@ class PackageBuilder:
         zip_name = f"transcrIA_job_{job.id}.zip"
         zip_path = export_dir / zip_name
 
+        # Niveaux selon le profil (Phase 7). Job legacy / sans profil → comportement complet
+        # (full), strictement identique à l'historique : aucune régression de livrable.
+        from transcria.workflow.profiles import profile_for_job
+
+        profile = profile_for_job(job)
+        zip_level = profile.zip_level if profile is not None else "full"
+        docx_level = profile.docx_level if profile is not None else "full"
+
         try:
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                # — Minimal (tous niveaux) : audio + sous-titres + segments —
                 self._add_file(zf, fs, "input", "audio/")
                 self._add_if_exists(zf, fs, "metadata/transcription_corrigee.srt", "subtitles/transcription.srt")
                 if not (fs.job_dir / "metadata" / "transcription_corrigee.srt").is_file():
                     self._add_if_exists(zf, fs, "metadata/transcription.srt", "subtitles/transcription.srt")
                 self._add_if_exists(zf, fs, "metadata/transcription_segments.json", "subtitles/transcription_segments.json")
-                self._add_if_exists(zf, fs, "context/job_context.yaml", "context/job_context.yaml")
-                self._add_if_exists(zf, fs, "context/meeting_context.json", "context/meeting_context.json")
-                self._add_if_exists(zf, fs, "context/participants.json", "context/participants.json")
-                self._add_if_exists(zf, fs, "context/session_lexicon.json", "context/session_lexicon.json")
-                self._add_if_exists(zf, fs, "speakers/speaker_mapping.json", "context/speaker_mapping.json")
-                self._add_if_exists(zf, fs, "speakers/speaker_stats.json", "context/speaker_stats.json")
-                self._add_if_exists(zf, fs, "summary/summary.md", "summary/summary.md")
-                self._add_if_exists(zf, fs, "quality/quality_report.md", "quality/quality_report.md")
-                self._add_if_exists(zf, fs, "quality/quality_report.json", "quality/quality_report.json")
-                self._add_if_exists(zf, fs, "quality/review_points.json", "quality/review_points.json")
-                self._add_if_exists(zf, fs, "metadata/correction_report.md", "quality/correction_report.md")
-                self._add_if_exists(zf, fs, "metadata/final_review_report.md", "quality/final_review_report.md")
-                self._add_docx_report(zf, fs, job)
+                # — Standard et + : contexte, participants, locuteurs, résumé —
+                if zip_level in ("standard", "full"):
+                    self._add_if_exists(zf, fs, "context/job_context.yaml", "context/job_context.yaml")
+                    self._add_if_exists(zf, fs, "context/meeting_context.json", "context/meeting_context.json")
+                    self._add_if_exists(zf, fs, "context/participants.json", "context/participants.json")
+                    self._add_if_exists(zf, fs, "context/session_lexicon.json", "context/session_lexicon.json")
+                    self._add_if_exists(zf, fs, "speakers/speaker_mapping.json", "context/speaker_mapping.json")
+                    self._add_if_exists(zf, fs, "speakers/speaker_stats.json", "context/speaker_stats.json")
+                    self._add_if_exists(zf, fs, "summary/summary.md", "summary/summary.md")
+                # — Full uniquement : rapports qualité / correction / relecture —
+                if zip_level == "full":
+                    self._add_if_exists(zf, fs, "quality/quality_report.md", "quality/quality_report.md")
+                    self._add_if_exists(zf, fs, "quality/quality_report.json", "quality/quality_report.json")
+                    self._add_if_exists(zf, fs, "quality/review_points.json", "quality/review_points.json")
+                    self._add_if_exists(zf, fs, "metadata/correction_report.md", "quality/correction_report.md")
+                    self._add_if_exists(zf, fs, "metadata/final_review_report.md", "quality/final_review_report.md")
+                if docx_level != "none":
+                    self._add_docx_report(zf, fs, job)
         except Exception as exc:
             logger.exception("Échec création package ZIP")
             return {"error": str(exc), "zip_path": str(zip_path), "zip_name": zip_name, "size_mb": 0}

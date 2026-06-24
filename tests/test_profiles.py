@@ -18,6 +18,7 @@ from transcria.workflow.profiles import (
     profile_active_phases,
     profile_deliverables,
     profile_phase_classes,
+    profile_for_job,
     profile_required_remote_phases,
     profile_to_legacy_mode,
     resolve_legacy_mode,
@@ -222,6 +223,27 @@ def test_resolve_request_invalides():
         resolve_request("inexistant", None)
     with pytest.raises(ValueError):
         resolve_request(None, "summary")  # mode de file, pas un profil
+
+
+# ── profile_for_job (résolveur depuis le job persisté) ───────────────────────--
+
+class _FakeJob:
+    def __init__(self, extra):
+        self._extra = extra
+
+    def get_extra_data(self):
+        return self._extra
+
+
+def test_profile_for_job_lit_le_profil_persiste():
+    job = _FakeJob({"execution": {"processing_profile_id": "word_corrige"}})
+    assert profile_for_job(job).id == "word_corrige"
+
+
+def test_profile_for_job_none_si_absent_ou_inconnu():
+    assert profile_for_job(_FakeJob({})) is None
+    assert profile_for_job(_FakeJob({"execution": {"processing_profile_id": "inexistant"}})) is None
+    assert profile_for_job(_FakeJob({"execution": {}})) is None
 
 
 # ── Cohérence transverse du contrat ──────────────────────────────────────────-
