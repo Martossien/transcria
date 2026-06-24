@@ -1155,21 +1155,45 @@ class PipelineService:
         except Exception:
             return None
 
-    def _define_pipeline_steps(
-        self, job: Job, audio_path: str, mode: str
+    def _resolve_profile(self, job: Job, mode: str):
+        """Profil de traitement effectif du job.
+
+        Priorité au profil persisté à l'enfilage (`extra_data.execution.processing_profile_id`,
+        cf. Phase 2) ; à défaut, dérivé du `mode` legacy (fast/quality). Repli ultime sur le
+        profil de `fast` pour un mode/étape inconnu (jamais d'exception ici).
+        """
+        from transcria.workflow import profiles
+
+        try:
+            pid = (job.get_extra_data().get("execution", {}) or {}).get("processing_profile_id")
+        except Exception:  # noqa: BLE001 — job non-DB en test : on retombe sur le mode
+            pid = None
+        if pid and profiles.is_profile(pid):
+            return profiles.get_profile(pid)
+        try:
+            return profiles.get_profile(profiles.resolve_legacy_mode(mode))
+        except (KeyError, ValueError):
+            return profiles.get_profile(profiles.resolve_legacy_mode("fast"))
+
+    def _define_pipeline_steps_for_profile(
+        self, job: Job, audio_path: str, profile
     ) -> list[dict]:
+        """Étapes machine du pipeline À PARTIR DU PROFIL (gating par flags du profil).
+
+        Parité stricte avec l'ancien gating mode-based (golden) : la diarisation reste aussi
+        conditionnée à `enable_quality_mode`, la correction au flag global `arbitration_llm.enabled`.
+        Ainsi `dossier_qualite` reproduit l'ancien `quality` et `legacy_fast` l'ancien `fast`.
+        """
+        wf = self.config.get("workflow", {})
         steps = []
 
-        if mode == "quality" and self.config.get("workflow", {}).get(
-            "enable_quality_mode", True
-        ):
+        if profile.run_diarization and wf.get("enable_quality_mode", True):
             steps.append({
                 "name": "diarization",
                 "method": partial(self.runner.run_diarization, job, audio_path, self.config),
             })
 
-        llm_cfg = self.config.get("workflow", {}).get("arbitration_llm", {})
-        if llm_cfg.get("enabled") is not False:
+        if profile.run_llm_correction and wf.get("arbitration_llm", {}).get("enabled") is not False:
             steps.append({
                 "name": "correction",
                 "method": partial(self.runner.run_correction, job, self.config),
@@ -1178,17 +1202,26 @@ class PipelineService:
             # du SRT corrigé, audit des données structurées. Après correction (besoin
             # du SRT corrigé complet) et avant la qualité (pour que le score reflète le
             # SRT relu). Best-effort : n'interrompt pas le pipeline.
+            if profile.run_final_review:
+                steps.append({
+                    "name": "final_review",
+                    "method": partial(self.runner.run_final_review, job, self.config),
+                })
+        if profile.run_quality != "none":
             steps.append({
-                "name": "final_review",
-                "method": partial(self.runner.run_final_review, job, self.config),
+                "name": "quality",
+                "method": partial(self.runner.run_quality_checks, job, self.config),
             })
-        steps.append({
-            "name": "quality",
-            "method": partial(self.runner.run_quality_checks, job, self.config),
-        })
-        steps.append({
-            "name": "export",
-            "method": partial(self.runner.build_export, job, self.config),
-        })
+        if profile.docx_level != "none" or profile.zip_level != "none":
+            steps.append({
+                "name": "export",
+                "method": partial(self.runner.build_export, job, self.config),
+            })
 
         return steps
+
+    def _define_pipeline_steps(
+        self, job: Job, audio_path: str, mode: str
+    ) -> list[dict]:
+        """Entrée legacy mode-based : résout le profil et délègue (source unique du gating)."""
+        return self._define_pipeline_steps_for_profile(job, audio_path, self._resolve_profile(job, mode))

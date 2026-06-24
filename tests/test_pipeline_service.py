@@ -570,6 +570,66 @@ class TestPipelineSteps:
         assert names == ["quality", "export"]
 
 
+class TestPipelineStepsByProfile:
+    """Phase 4 : sélection des étapes machine pilotée par le profil de traitement."""
+
+    def _names(self, profile_id, config=None):
+        from transcria.workflow.profiles import get_profile
+        svc = _make_svc(config or {"workflow": {"enable_quality_mode": True}})
+        return [s["name"] for s in svc._define_pipeline_steps_for_profile(_job(), "a.wav", get_profile(profile_id))]
+
+    def test_srt_express_ni_diarisation_ni_correction(self):
+        assert self._names("srt_express") == ["quality", "export"]
+
+    def test_srt_locuteurs_pas_de_phase_diarisation(self):
+        # Spike : locuteurs via détection wizard, pas la phase diarisation du pipeline.
+        assert self._names("srt_locuteurs") == ["quality", "export"]
+
+    def test_word_structure_diarise_sans_corriger(self):
+        assert self._names("word_structure") == ["diarization", "quality", "export"]
+
+    def test_word_corrige_chaine_complete_de_correction(self):
+        assert self._names("word_corrige") == ["diarization", "correction", "final_review", "quality", "export"]
+
+    def test_dossier_qualite_reproduit_le_workflow_quality(self):
+        # Golden : doit être identique à l'ancien mode `quality`.
+        assert self._names("dossier_qualite") == ["diarization", "correction", "final_review", "quality", "export"]
+
+    def test_legacy_fast_reproduit_le_workflow_fast(self):
+        # Golden : ancien `fast` = correction + relecture, SANS diarisation.
+        assert self._names("legacy_fast") == ["correction", "final_review", "quality", "export"]
+
+    def test_diarisation_respecte_enable_quality_mode(self):
+        # Parité : enable_quality_mode=False supprime la diarisation même pour un profil qui diarise.
+        assert self._names("word_structure", {"workflow": {"enable_quality_mode": False}}) == ["quality", "export"]
+
+
+class TestResolveProfile:
+    """Phase 4 : le profil persisté (Phase 2) prime sur le mode legacy."""
+
+    def _job_with_profile(self, pid):
+        from unittest.mock import MagicMock
+        j = MagicMock()
+        j.get_extra_data.return_value = {"execution": {"processing_profile_id": pid}}
+        return j
+
+    def test_profil_persiste_prioritaire(self):
+        svc = _make_svc({})
+        # mode legacy "fast" mais profil persisté word_corrige → word_corrige gagne.
+        profile = svc._resolve_profile(self._job_with_profile("word_corrige"), "fast")
+        assert profile.id == "word_corrige"
+
+    def test_repli_sur_mode_si_pas_de_profil_persiste(self):
+        svc = _make_svc({})
+        profile = svc._resolve_profile(self._job_with_profile(None), "quality")
+        assert profile.id == "dossier_qualite"
+
+    def test_profil_persiste_inconnu_ignore(self):
+        svc = _make_svc({})
+        profile = svc._resolve_profile(self._job_with_profile("inexistant"), "fast")
+        assert profile.id == "legacy_fast"
+
+
 class TestStepProgressConsistency:
     """Les % du wrapper _publish_step_progress concordent avec ceux des méthodes."""
 
