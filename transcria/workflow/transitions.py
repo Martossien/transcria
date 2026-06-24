@@ -37,6 +37,27 @@ def can_start_processing(job_state: str) -> bool:
     return job_state in PROCESSING_RETRY_STATES
 
 
+def can_start_profile(job_state: str, profile) -> bool:
+    """Lancement autorisé pour ce profil ? Profile-aware, RÉTRO-COMPATIBLE.
+
+    - États de re-lancement/reprise (`PROCESSING_RETRY_STATES` : ready/lexicon_done/failed/
+      cancelled/phases en cours) → toujours autorisés, comme `can_start_processing` ;
+    - sinon, autorisé ssi fichier + analyse faits ET toutes les étapes wizard EXIGÉES par le
+      profil sont validées (réutilise `WorkflowState.compute_statuses`, source unique du
+      mapping état→étapes). Un profil léger (`srt_express`, sans exigence) est donc lançable
+      dès l'état `analyzed`, sans passer par résumé/contexte/participants/lexique.
+    """
+    if job_state in PROCESSING_RETRY_STATES:
+        return True
+    from transcria.workflow.profiles import profile_required_steps
+    from transcria.workflow.states import StepStatus, WorkflowState
+
+    statuses = WorkflowState.compute_statuses(job_state)
+    if statuses.get("file") != StepStatus.DONE or statuses.get("analyze") != StepStatus.DONE:
+        return False
+    return all(statuses.get(step) == StepStatus.DONE for step in profile_required_steps(profile))
+
+
 def next_preprocessing_state(current_state: str) -> JobState | None:
     if current_state in PREPROCESSING_READY_STATES:
         return JobState.READY_TO_PROCESS

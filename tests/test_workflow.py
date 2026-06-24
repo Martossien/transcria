@@ -122,6 +122,40 @@ class TestWorkflowTransitions:
         assert next_preprocessing_state(JobState.UPLOADED.value) is None
 
 
+class TestCanStartProfile:
+    """Lancement profile-aware (le code reflété par l'E2E)."""
+
+    def _p(self, pid):
+        from transcria.workflow.profiles import get_profile
+        return get_profile(pid)
+
+    def test_srt_express_lancable_des_analyzed(self):
+        from transcria.workflow.transitions import can_start_profile
+        # Profil léger : aucune validation humaine requise → lançable juste après l'analyse.
+        assert can_start_profile(JobState.ANALYZED.value, self._p("srt_express")) is True
+
+    def test_dossier_qualite_refuse_des_analyzed(self):
+        from transcria.workflow.transitions import can_start_profile
+        # Profil complet : exige résumé/contexte/participants/lexique → refusé si trop tôt.
+        assert can_start_profile(JobState.ANALYZED.value, self._p("dossier_qualite")) is False
+
+    def test_word_rapide_lancable_des_context_done(self):
+        from transcria.workflow.transitions import can_start_profile
+        assert can_start_profile(JobState.CONTEXT_DONE.value, self._p("word_rapide")) is True
+        # mais pas avant le contexte
+        assert can_start_profile(JobState.SUMMARY_DONE.value, self._p("word_rapide")) is False
+
+    def test_etats_de_retry_toujours_autorises(self):
+        from transcria.workflow.transitions import can_start_profile
+        # Rétro-compatibilité : un état de re-lancement reste autorisé pour tout profil.
+        assert can_start_profile(JobState.LEXICON_DONE.value, self._p("dossier_qualite")) is True
+        assert can_start_profile(JobState.FAILED.value, self._p("srt_express")) is True
+
+    def test_avant_analyse_refuse(self):
+        from transcria.workflow.transitions import can_start_profile
+        assert can_start_profile(JobState.UPLOADED.value, self._p("srt_express")) is False
+
+
 class TestWorkflowRunner:
     def test_job_store_persists_last_non_terminal_state_before_failure(self, app, owner_id):
         with app.app_context():

@@ -454,6 +454,45 @@ def profile_phase_classes(profile: ProcessingProfile) -> dict[str, PhaseConcurre
     return {phase: nominal[phase] for phase in profile_active_phases(profile)}
 
 
+# Étapes wizard (ids de `WORKFLOW_STEPS`) dans leur ordre linéaire de validation.
+_WIZARD_STEP_ORDER = ("summary", "context", "participants", "lexicon")
+
+
+def profile_required_steps(profile: ProcessingProfile) -> set[str]:
+    """Étapes wizard (ids) que le profil EXIGE avant le lancement du pipeline.
+
+    Mappe les `requires_*` du profil vers les ids d'étapes du wizard. La détection des
+    locuteurs et la validation des participants partagent l'étape « participants ». Le wizard
+    étant linéaire, atteindre une étape implique les précédentes (cf. `compute_statuses`), donc
+    ce SET suffit au gating de lancement. Un profil sans exigence (`srt_express`) est lançable
+    dès l'analyse, sans aucune validation humaine.
+    """
+    steps: set[str] = set()
+    if profile.requires_summary:
+        steps.add("summary")
+    if profile.requires_context in ("minimal", "required"):
+        steps.add("context")
+    if profile.requires_participants == "required" or profile.requires_speaker_validation == "required":
+        steps.add("participants")
+    if profile.requires_lexicon in ("required", "required_or_empty"):
+        steps.add("lexicon")
+    return steps
+
+
+def profile_required_steps_ordered(profile: ProcessingProfile) -> list[str]:
+    """Préfixe LINÉAIRE des étapes wizard à exécuter pour un profil (pour pilotes E2E/UI).
+
+    Comme le wizard est séquentiel, on exécute toutes les étapes jusqu'à la plus profonde
+    requise (ex. `srt_locuteurs` exige « participants », ce qui implique de jouer
+    summary→context→participants). Vide pour un profil sans exigence.
+    """
+    required = profile_required_steps(profile)
+    if not required:
+        return []
+    deepest = max(_WIZARD_STEP_ORDER.index(s) for s in required)
+    return list(_WIZARD_STEP_ORDER[: deepest + 1])
+
+
 def profile_for_job(job) -> ProcessingProfile | None:
     """Profil persisté sur le job (`extra_data.execution.processing_profile_id`, cf. Phase 2).
 

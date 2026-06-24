@@ -111,6 +111,33 @@ def test_process_legacy_fast_mappe_vers_legacy_fast(admin_client, app, monkeypat
     assert captured["processing_profile_id"] == "legacy_fast"
 
 
+def test_srt_express_lancable_des_analyzed(admin_client, app, monkeypatch):
+    # Reflet du code : srt_express n'exige aucune validation humaine → lançable après l'analyse,
+    # sans résumé/contexte/participants/lexique.
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.ANALYZED)
+    captured = _capture_submit(monkeypatch)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"processing_profile_id": "srt_express"})
+
+    assert r.status_code == 202
+    assert captured["processing_profile_id"] == "srt_express"
+
+
+def test_word_rapide_refuse_des_analyzed(admin_client, app):
+    # word_rapide route en `fast` (passe le gate qualité) mais exige résumé+contexte
+    # → 409 tant que ces étapes ne sont pas validées.
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.ANALYZED)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"processing_profile_id": "word_rapide"})
+
+    assert r.status_code == 409
+    assert r.get_json()["processing_profile_id"] == "word_rapide"
+
+
 def test_process_profil_inconnu_rejete(admin_client, app):
     jid = _uploaded_job(admin_client)
     with app.app_context():

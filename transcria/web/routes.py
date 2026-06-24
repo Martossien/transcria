@@ -60,7 +60,7 @@ from transcria.web.ui_labels import state_badge, state_label
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
-    can_start_processing,
+    can_start_profile,
     get_execution_status,
     is_execution_active,
     mark_execution_cancelled,
@@ -1837,11 +1837,12 @@ def api_process(job_id: str):
     if mode == "quality" and not cfg.get("workflow", {}).get("enable_quality_mode", True):
         return jsonify({"error": "Le mode qualité est désactivé par la configuration"}), 400
 
-    if not can_start_processing(job.state):
+    if not can_start_profile(job.state, profile):
         return jsonify(
             {
-                "error": "Le job n'est pas prêt pour le traitement",
+                "error": "Le job n'est pas prêt pour ce profil de traitement",
                 "current_state": job.state,
+                "processing_profile_id": profile.id,
             }
         ), 409
 

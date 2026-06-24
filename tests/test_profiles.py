@@ -20,6 +20,8 @@ from transcria.workflow.profiles import (
     profile_phase_classes,
     profile_for_job,
     profile_required_remote_phases,
+    profile_required_steps,
+    profile_required_steps_ordered,
     profile_to_legacy_mode,
     resolve_legacy_mode,
     resolve_request,
@@ -223,6 +225,36 @@ def test_resolve_request_invalides():
         resolve_request("inexistant", None)
     with pytest.raises(ValueError):
         resolve_request(None, "summary")  # mode de file, pas un profil
+
+
+# ── profile_required_steps (prérequis wizard par profil) ─────────────────────--
+
+def test_srt_express_n_exige_aucune_etape_wizard():
+    assert profile_required_steps(get_profile("srt_express")) == set()
+    assert profile_required_steps_ordered(get_profile("srt_express")) == []
+
+
+def test_srt_locuteurs_exige_participants():
+    # Validation des locuteurs = étape « participants » du wizard.
+    assert profile_required_steps(get_profile("srt_locuteurs")) == {"participants"}
+    # Wizard linéaire → préfixe summary→context→participants.
+    assert profile_required_steps_ordered(get_profile("srt_locuteurs")) == ["summary", "context", "participants"]
+
+
+def test_word_rapide_exige_summary_context():
+    assert profile_required_steps(get_profile("word_rapide")) == {"summary", "context"}
+    assert profile_required_steps_ordered(get_profile("word_rapide")) == ["summary", "context"]
+
+
+def test_dossier_qualite_exige_tout_dont_lexique():
+    assert profile_required_steps(get_profile("dossier_qualite")) == {"summary", "context", "participants", "lexicon"}
+    assert profile_required_steps_ordered(get_profile("dossier_qualite")) == [
+        "summary", "context", "participants", "lexicon"
+    ]
+
+
+def test_word_corrige_lexique_optionnel_non_exige():
+    assert "lexicon" not in profile_required_steps(get_profile("word_corrige"))
 
 
 # ── profile_for_job (résolveur depuis le job persisté) ───────────────────────--

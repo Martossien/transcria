@@ -108,6 +108,22 @@ def _expected_docx(profile_id: str | None) -> bool:
         return True
 
 
+def _prereq_steps(profile_id: str | None) -> list[str]:
+    """Étapes wizard à jouer avant le lancement, pour refléter le code.
+
+    Profil → préfixe linéaire des étapes EXIGÉES (`profile_required_steps_ordered`). Un profil
+    léger (srt_express) n'en exige aucune. Legacy `--mode` (profil absent) ou import indisponible
+    → wizard complet (comportement historique)."""
+    if not profile_id:
+        return ["summary", "context", "participants", "lexicon"]
+    try:
+        from transcria.workflow.profiles import get_profile, profile_required_steps_ordered
+
+        return profile_required_steps_ordered(get_profile(profile_id))
+    except Exception:  # noqa: BLE001
+        return ["summary", "context", "participants", "lexicon"]
+
+
 def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
             timeout_s: float, poll_s: float, profile: str | None = None) -> None:
     s = requests.Session()
@@ -144,24 +160,25 @@ def run_job(web_url: str, audio: Path, username: str, password: str, mode: str,
     r = s.post(f"{web_url}/api/jobs/{job_id}/analyze", timeout=600)
     _log("job", f"analyse → HTTP {r.status_code}")
 
-    # 5) Résumé rapide. Selon le mode, la réponse est SYNCHRONE ou ENFILÉE :
-    #    - rôle `web`/split : enfilé sur le worker → 202 immédiat, on poll `summary_done` ;
-    #    - rôle `all`/all-in-one : traité en ligne → la réponse n'arrive qu'à la FIN du STT
-    #      + diarisation + LLM (plusieurs minutes avec une LLM lente). D'où `timeout=timeout_s`
-    #      (et non une valeur fixe trop courte) : c'est le plafond du job, pas une attente fixe.
-    r = s.post(f"{web_url}/api/jobs/{job_id}/summary", timeout=timeout_s)
-    if r.status_code not in (200, 202):  # 200 = synchrone (all-in-one), 202 = enfilé (split)
-        _fail("job", f"summary : HTTP {r.status_code} — {r.text[:200]}")
-    _log("job", f"résumé → HTTP {r.status_code} — polling jusqu'à summary_done…")
-    _poll_for(s, web_url, job_id, want={"summary_done"}, timeout_s=timeout_s, poll_s=poll_s, label="summary")
-
-    # 6) Étapes wizard minimales (frontale-local) → état processable. `context` exige
-    #    SUMMARY_DONE ; `lexicon` fait avancer PARTICIPANTS_DONE → READY_TO_PROCESS.
-    for step, payload in (("context", {}), ("participants", []), ("lexicon", [])):
-        r = s.post(f"{web_url}/api/jobs/{job_id}/{step}", json=payload, timeout=60)
-        if r.status_code != 200:
-            _fail("job", f"{step} : HTTP {r.status_code} — {r.text[:200]}")
-        _log("job", f"{step} OK")
+    # 5-6) Étapes wizard EXIGÉES par le profil (reflet du code : un profil léger les saute).
+    #    Préfixe linéaire ; legacy `--mode` → wizard complet. `summary` est SYNCHRONE en
+    #    all-in-one (réponse en fin de STT+LLM) ou ENFILÉE en split → garde `timeout_s` (plafond
+    #    du job). `context` exige SUMMARY_DONE ; `lexicon` fait avancer vers READY_TO_PROCESS.
+    steps_to_run = _prereq_steps(profile)
+    _log("job", f"étapes wizard requises par le profil : {steps_to_run or '(aucune)'}")
+    for step in steps_to_run:
+        if step == "summary":
+            r = s.post(f"{web_url}/api/jobs/{job_id}/summary", timeout=timeout_s)
+            if r.status_code not in (200, 202):
+                _fail("job", f"summary : HTTP {r.status_code} — {r.text[:200]}")
+            _log("job", f"résumé → HTTP {r.status_code} — polling jusqu'à summary_done…")
+            _poll_for(s, web_url, job_id, want={"summary_done"}, timeout_s=timeout_s, poll_s=poll_s, label="summary")
+        else:
+            payload = {} if step == "context" else []
+            r = s.post(f"{web_url}/api/jobs/{job_id}/{step}", json=payload, timeout=60)
+            if r.status_code != 200:
+                _fail("job", f"{step} : HTTP {r.status_code} — {r.text[:200]}")
+            _log("job", f"{step} OK")
 
     # 7) Traitement complet (STT + diar + correction/relecture/qualité LLM). Synchrone en
     #    all-in-one, enfilé en split → même garde de timeout que le résumé (cf. étape 5).
