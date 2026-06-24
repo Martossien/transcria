@@ -21,6 +21,7 @@ from transcria.workflow.profiles import (
     profile_required_remote_phases,
     profile_to_legacy_mode,
     resolve_legacy_mode,
+    resolve_request,
 )
 
 _USER_FACING_IDS = [
@@ -178,6 +179,49 @@ def test_deliverables_dossier_qualite_inclut_qualite_et_zip():
     items = profile_deliverables(get_profile("dossier_qualite"))
     assert "Rapport qualité complet" in items
     assert "Archive ZIP complète" in items
+
+
+# ── resolve_request (résolution requête de lancement → profil + mode routage) ─--
+
+def test_resolve_request_profil_explicite_prioritaire():
+    profile, mode = resolve_request("word_corrige", "fast")
+    assert profile.id == "word_corrige"
+    assert mode == "quality"  # word_corrige diarise → routage quality
+
+
+def test_resolve_request_legacy_fast_et_quality():
+    profile, mode = resolve_request(None, "fast")
+    assert profile.id == "legacy_fast"
+    assert mode == "fast"
+    profile, mode = resolve_request(None, "quality")
+    assert profile.id == "dossier_qualite"
+    assert mode == "quality"
+
+
+def test_resolve_request_defaut_sur_fast_si_rien():
+    profile, mode = resolve_request(None, None)
+    assert profile.id == "legacy_fast"
+    assert mode == "fast"
+
+
+def test_resolve_request_srt_express_route_en_fast():
+    profile, mode = resolve_request("srt_express", None)
+    assert profile.id == "srt_express"
+    assert mode == "fast"  # pas de diarisation → routage fast
+
+
+def test_resolve_request_mode_routage_derive_toujours_du_profil():
+    # un id de profil passé dans le champ mode ne fuit pas comme mode d'exécution
+    profile, mode = resolve_request(None, "srt_locuteurs")
+    assert profile.id == "srt_locuteurs"
+    assert mode in ("fast", "quality")
+
+
+def test_resolve_request_invalides():
+    with pytest.raises(KeyError):
+        resolve_request("inexistant", None)
+    with pytest.raises(ValueError):
+        resolve_request(None, "summary")  # mode de file, pas un profil
 
 
 # ── Cohérence transverse du contrat ──────────────────────────────────────────-

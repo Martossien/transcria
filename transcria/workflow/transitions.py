@@ -58,19 +58,22 @@ def is_execution_active(job) -> bool:
     return get_execution_status(job) in EXECUTION_ACTIVE_STATUSES
 
 
-def mark_execution_queued(job_id: str, mode: str) -> None:
-    _merge_execution(
-        job_id,
-        {
-            "status": "queued",
-            "mode": mode,
-            "queued_at": utcnow_iso(),
-            "started_at": None,
-            "finished_at": None,
-            "last_error": None,
-            "cancel_requested": False,
-        },
-    )
+def mark_execution_queued(job_id: str, mode: str, processing_profile_id: str | None = None) -> None:
+    updates = {
+        "status": "queued",
+        "mode": mode,
+        "queued_at": utcnow_iso(),
+        "started_at": None,
+        "finished_at": None,
+        "last_error": None,
+        "cancel_requested": False,
+    }
+    # `mode` est l'unité d'exécution (fast/quality/summary/speakers) ; `processing_profile_id`
+    # est le contrat produit. On ne l'écrase JAMAIS avec None : un re-queue automatique
+    # (vram_wait/deferred) ne repasse pas le profil, mais celui posé au 1er enfilage doit survivre.
+    if processing_profile_id is not None:
+        updates["processing_profile_id"] = processing_profile_id
+    _merge_execution(job_id, updates)
 
 
 def mark_execution_started(job_id: str) -> None:

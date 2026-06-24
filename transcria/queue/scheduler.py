@@ -132,6 +132,7 @@ class QueueScheduler:
         priority: int | None = None,
         scheduled_at: datetime | None = None,
         vram_profile: dict | None = None,
+        processing_profile_id: str | None = None,
     ) -> dict:
         queue_cfg = self.config.get("workflow", {}).get("queue", {}) or {}
         entry = QueueStore.enqueue(
@@ -141,7 +142,7 @@ class QueueScheduler:
             vram_profile=vram_profile,
             mode=mode,
         )
-        mark_execution_queued(job_id, mode)
+        mark_execution_queued(job_id, mode, processing_profile_id)
         self.wake()  # réveil intra-process (rôle 'all')
         if self.use_listen_notify:
             # Réveil cross-process (rôle 'web' → process 'scheduler') ; best-effort.

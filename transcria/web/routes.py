@@ -1821,8 +1821,15 @@ def api_process(job_id: str):
             return jsonify({"status": "cancelled"})
         return jsonify({"status": "cancel_requested"})
 
-    if mode not in ("fast", "quality"):
-        return jsonify({"error": f"Mode de traitement invalide: {mode}"}), 400
+    from transcria.workflow import profiles
+
+    processing_profile_id = payload.get("processing_profile_id") or request.args.get("processing_profile_id")
+    try:
+        # `mode` (legacy fast/quality) reste accepté ; un `processing_profile_id` explicite a
+        # priorité. Le 2e membre est le mode d'exécution legacy de routage (Phase 4 le supprimera).
+        profile, mode = profiles.resolve_request(processing_profile_id, mode)
+    except (KeyError, ValueError):
+        return jsonify({"error": f"Profil/mode de traitement invalide: {processing_profile_id or mode}"}), 400
 
     if mode == "quality" and not cfg.get("workflow", {}).get("enable_quality_mode", True):
         return jsonify({"error": "Le mode qualité est désactivé par la configuration"}), 400
@@ -1874,6 +1881,7 @@ def api_process(job_id: str):
             priority=priority,
             scheduled_at=scheduled_at,
             vram_profile=vram_profile,
+            processing_profile_id=profile.id,
         )
     except TypeError as exc:
         if "unexpected keyword argument" not in str(exc):
@@ -1890,6 +1898,11 @@ def api_process(job_id: str):
         target_id=job.id,
         target_label=job.title,
         details={
+            # `processing_profile_id` = contrat produit ; `queue_mode`/`legacy_mode` = unité
+            # d'exécution. On garde `mode` (= legacy) pour la compatibilité des consommateurs d'audit.
+            "processing_profile_id": profile.id,
+            "queue_mode": mode,
+            "legacy_mode": mode,
             "mode": mode,
             "priority": result.get("priority"),
             "position": result.get("position"),
@@ -1900,6 +1913,7 @@ def api_process(job_id: str):
         "status": "queued",
         "job_id": job.id,
         "mode": mode,
+        "processing_profile_id": profile.id,
         "state": JobState.READY_TO_PROCESS.value,
         "execution_status": "queued",
         "queue_position": result.get("position"),
@@ -1954,9 +1968,14 @@ def api_reprocess(job_id: str):
     if audio_path is None:
         return jsonify({"error": "Fichier audio introuvable"}), 400
 
-    mode = (request.get_json(silent=True) or {}).get("mode", "fast")
-    if mode not in ("fast", "quality"):
-        return jsonify({"error": f"Mode invalide: {mode}"}), 400
+    from transcria.workflow import profiles
+
+    payload = request.get_json(silent=True) or {}
+    processing_profile_id = payload.get("processing_profile_id")
+    try:
+        profile, mode = profiles.resolve_request(processing_profile_id, payload.get("mode", "fast"))
+    except (KeyError, ValueError):
+        return jsonify({"error": f"Profil/mode invalide: {processing_profile_id or payload.get('mode')}"}), 400
 
     executor = get_job_executor()
     if executor is None:
@@ -1968,7 +1987,15 @@ def api_reprocess(job_id: str):
 
     reset_resume_state(JobStore, job.id)
 
-    result = executor.submit_process(job.id, str(audio_path), mode)
+    try:
+        result = executor.submit_process(
+            job.id, str(audio_path), mode, processing_profile_id=profile.id
+        )
+    except TypeError as exc:
+        # Compat (skew de version de l'exécuteur) : signature sans le kwargs profil.
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        result = executor.submit_process(job.id, str(audio_path), mode)
     if not result.get("accepted"):
         return jsonify({"error": "Un traitement est déjà en cours"}), 409
     JobStore.update(job.id, processing_mode=mode)
@@ -1978,6 +2005,7 @@ def api_reprocess(job_id: str):
         "status": "queued",
         "job_id": job.id,
         "mode": mode,
+        "processing_profile_id": profile.id,
         "reprocess": True,
     }), 202
 

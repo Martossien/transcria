@@ -105,6 +105,7 @@ class JobExecutorService:
         priority: int | None = None,
         scheduled_at=None,
         vram_profile: dict | None = None,
+        processing_profile_id: str | None = None,
     ) -> dict:
         if self.queue_enabled and self._scheduler is not None:
             existing_entry = QueueStore.get_entry(job_id)
@@ -120,6 +121,7 @@ class JobExecutorService:
                 priority=priority,
                 scheduled_at=scheduled_at,
                 vram_profile=vram_profile,
+                processing_profile_id=processing_profile_id,
             )
 
         with self._lock:
@@ -127,7 +129,7 @@ class JobExecutorService:
                 return {"accepted": False, "reason": "already_active"}
             self._queued_job_ids.add(job_id)
 
-        mark_execution_queued(job_id, mode)
+        mark_execution_queued(job_id, mode, processing_profile_id)
         future = self._executor.submit(self._run_process, job_id, audio_path, mode)
         future.add_done_callback(lambda _: self._finalize_tracking(job_id))
         return {"accepted": True, "status": "queued", "mode": mode}

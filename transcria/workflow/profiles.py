@@ -380,6 +380,28 @@ def profile_to_legacy_mode(profile: ProcessingProfile) -> str:
     return "quality" if profile.run_diarization else "fast"
 
 
+def resolve_request(
+    processing_profile_id: str | None,
+    legacy_mode: str | None,
+) -> tuple[ProcessingProfile, str]:
+    """Résout une requête de lancement vers ``(profil, mode legacy de routage)``.
+
+    Priorité au profil explicite (`processing_profile_id`) ; à défaut, le mode legacy
+    (`fast`/`quality`) est mappé vers un profil. Le second membre du tuple est le **mode
+    d'exécution** transmis a la file et au pipeline (encore mode-based jusqu'a la Phase 4) :
+    `quality` pour les profils qui diarisent, `fast` sinon.
+
+    Lève `KeyError` (profil inconnu) ou `ValueError` (mode inconnu) — l'appelant traduit en 400.
+    """
+    if processing_profile_id:
+        profile = get_profile(processing_profile_id)
+    else:
+        profile = get_profile(resolve_legacy_mode(legacy_mode or "fast"))
+    # Le mode de routage dérive TOUJOURS du profil (jamais de l'entrée brute) : un id de
+    # profil passé dans le champ `mode` ne doit pas fuir comme mode d'exécution.
+    return profile, profile_to_legacy_mode(profile)
+
+
 # ── Fonctions pures de présentation / ressources ─────────────────────────────--
 
 def profile_active_phases(profile: ProcessingProfile) -> list[str]:

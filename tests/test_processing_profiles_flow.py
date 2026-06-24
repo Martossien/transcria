@@ -1,0 +1,137 @@
+"""Phase 2 — circulation de `processing_profile_id` (API + exécution).
+
+Vérifie que le profil de traitement circule sans casser `mode` (unité d'exécution) :
+persistance dans `extra_data.execution`, préservation au re-queue, et résolution dans les
+routes `api_process`/`api_reprocess` (legacy `fast`/`quality` + profil explicite).
+"""
+from __future__ import annotations
+
+import io
+
+from transcria.jobs.models import JobState
+from transcria.jobs.store import JobStore
+from transcria.services.job_executor import get_job_executor
+from transcria.workflow.transitions import mark_execution_queued
+
+
+def _uploaded_job(admin_client) -> str:
+    r = admin_client.post("/jobs/new", data={"title": "Profil"}, follow_redirects=True)
+    jid = r.request.path.rstrip("/").split("/")[-1]
+    r = admin_client.post(
+        f"/api/jobs/{jid}/upload",
+        data={"file": (io.BytesIO(b"fake audio"), "audio.mp3")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+    return jid
+
+
+# ── Niveau exécution : persistance + préservation au re-queue ────────────────--
+
+def test_mark_execution_queued_persiste_le_profil(app, owner_id):
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Exec profil")
+        mark_execution_queued(job.id, "quality", "word_corrige")
+        execution = JobStore.get_by_id(job.id).get_extra_data()["execution"]
+        assert execution["mode"] == "quality"
+        assert execution["processing_profile_id"] == "word_corrige"
+
+
+def test_requeue_sans_profil_ne_lecrase_pas(app, owner_id):
+    # Un re-queue automatique (vram_wait/deferred) ne repasse pas le profil : il doit survivre.
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Re-queue")
+        mark_execution_queued(job.id, "quality", "dossier_qualite")
+        mark_execution_queued(job.id, "quality")  # re-queue, sans profil
+        execution = JobStore.get_by_id(job.id).get_extra_data()["execution"]
+        assert execution["processing_profile_id"] == "dossier_qualite"
+
+
+# ── Routes : résolution profil/legacy + threading vers submit_process ────────--
+
+def _capture_submit(monkeypatch):
+    captured: dict = {}
+    executor = get_job_executor()
+
+    def fake_submit(job_id, audio_path, mode, **kwargs):
+        captured["mode"] = mode
+        captured["processing_profile_id"] = kwargs.get("processing_profile_id")
+        return {"accepted": True, "status": "queued", "mode": mode}
+
+    monkeypatch.setattr(executor, "submit_process", fake_submit)
+    return captured
+
+
+def test_process_profil_explicite_threade(admin_client, app, monkeypatch):
+    # srt_locuteurs route en `fast` (ne diarise pas) → évite le gate quality (désactivé en test).
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+    captured = _capture_submit(monkeypatch)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"processing_profile_id": "srt_locuteurs"})
+
+    assert r.status_code == 202
+    body = r.get_json()
+    assert body["processing_profile_id"] == "srt_locuteurs"
+    assert body["mode"] == "fast"
+    assert captured["processing_profile_id"] == "srt_locuteurs"
+    assert captured["mode"] == "fast"
+
+
+def test_process_profil_quality_bloque_si_quality_desactive(admin_client, app, monkeypatch):
+    # Le gate `enable_quality_mode` doit s'appliquer au mode DÉRIVÉ du profil : word_corrige
+    # diarise → routage quality → refus propre. On force l'état dans la config vivante (singleton
+    # process, mutable par d'autres tests) pour être indépendant de l'ordre d'exécution.
+    from transcria.config import get_config
+
+    monkeypatch.setitem(get_config()["workflow"], "enable_quality_mode", False)
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"processing_profile_id": "word_corrige"})
+
+    assert r.status_code == 400
+    assert "qualité" in r.get_json()["error"]
+
+
+def test_process_legacy_fast_mappe_vers_legacy_fast(admin_client, app, monkeypatch):
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+    captured = _capture_submit(monkeypatch)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"mode": "fast"})
+
+    assert r.status_code == 202
+    body = r.get_json()
+    assert body["processing_profile_id"] == "legacy_fast"
+    assert body["mode"] == "fast"
+    assert captured["processing_profile_id"] == "legacy_fast"
+
+
+def test_process_profil_inconnu_rejete(admin_client, app):
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.READY_TO_PROCESS)
+
+    r = admin_client.post(f"/api/jobs/{jid}/process", json={"processing_profile_id": "inexistant"})
+
+    assert r.status_code == 400
+    assert "invalide" in r.get_json()["error"]
+
+
+def test_reprocess_profil_explicite_threade(admin_client, app, monkeypatch):
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.COMPLETED)
+    captured = _capture_submit(monkeypatch)
+
+    r = admin_client.post(f"/api/jobs/{jid}/reprocess", json={"processing_profile_id": "dossier_qualite"})
+
+    assert r.status_code == 202
+    body = r.get_json()
+    assert body["processing_profile_id"] == "dossier_qualite"
+    assert body["reprocess"] is True
+    assert captured["processing_profile_id"] == "dossier_qualite"
