@@ -75,3 +75,64 @@ def test_aucun_profil_lancable_recommande_none():
     # srt_express/srt_locuteurs ne dépendent ni de LLM ni de diarisation → toujours dispo.
     assert profiles["srt_express"]["available"] is True
     assert view["recommended"] in ("srt_express", "srt_locuteurs")
+
+
+# ── Disposition du wizard pilotée par le profil (choix à l'étape 1) ──────────--
+
+from transcria.jobs.models import JobState  # noqa: E402
+from transcria.workflow.profile_availability import compute_wizard_layout  # noqa: E402
+from transcria.workflow.profiles import get_profile  # noqa: E402
+from transcria.workflow.states import WorkflowState  # noqa: E402
+
+
+def _layout(profile_id, job_state):
+    profile = get_profile(profile_id) if profile_id else None
+    statuses = WorkflowState.compute_statuses(job_state)
+    return compute_wizard_layout(profile, statuses)
+
+
+def test_layout_srt_express_masque_toute_la_preparation():
+    # Le cas qui motive la refonte : un profil léger ne demande AUCUNE préparation humaine.
+    lay = _layout("srt_express", JobState.ANALYZED.value)
+    assert lay["required_prep"] == []
+    assert lay["optional_prep"] == ["summary", "context", "participants", "lexicon"]
+    assert lay["first_optional"] == "summary"
+    # Renumérotation : seules les étapes visibles sont numérotées, sans trou.
+    assert lay["step_num"] == {"file": 1, "analyze": 2, "processing": 3, "quality": 4, "export": 5}
+    assert [s["id"] for s in lay["display_steps"]] == ["file", "analyze", "processing", "quality", "export"]
+    # Aucune préparation requise → lançable dès l'analyse.
+    assert lay["launch_ready"] is True
+
+
+def test_layout_dossier_qualite_affiche_tout():
+    lay = _layout("dossier_qualite", JobState.ANALYZED.value)
+    assert lay["required_prep"] == ["summary", "context", "participants", "lexicon"]
+    assert lay["optional_prep"] == []
+    assert lay["first_optional"] is None
+    assert lay["step_num"]["export"] == 9
+    # Préparation incomplète à l'état ANALYZED → pas encore lançable.
+    assert lay["launch_ready"] is False
+
+
+def test_layout_dossier_qualite_lancable_quand_prepare():
+    lay = _layout("dossier_qualite", JobState.LEXICON_DONE.value)
+    assert lay["launch_ready"] is True
+
+
+def test_layout_word_rapide_prefixe_visible_suffixe_optionnel():
+    # word_rapide exige résumé+contexte → préfixe visible ; participants+lexique en repli.
+    lay = _layout("word_rapide", JobState.ANALYZED.value)
+    assert lay["required_prep"] == ["summary", "context"]
+    assert lay["optional_prep"] == ["participants", "lexicon"]
+    assert lay["first_optional"] == "participants"
+    assert lay["step_num"] == {
+        "file": 1, "analyze": 2, "summary": 3, "context": 4,
+        "processing": 5, "quality": 6, "export": 7,
+    }
+
+
+def test_layout_sans_profil_comportement_complet():
+    # Job legacy / aucun profil : toutes les étapes restent requises (rétro-compatibilité).
+    lay = _layout(None, JobState.ANALYZED.value)
+    assert lay["required_prep"] == ["summary", "context", "participants", "lexicon"]
+    assert lay["optional_prep"] == []

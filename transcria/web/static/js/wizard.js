@@ -1083,11 +1083,36 @@ var TranscrIA = window.TranscrIA || {};
         W.startProcessing(W._selectedProfile);
     };
 
+    // Choix du profil à l'étape 1 : on PERSISTE le choix puis on recharge, pour que le serveur
+    // (source unique des règles) recalcule les étapes du wizard adaptées au profil. Aucune
+    // logique de masquage d'étapes n'est dupliquée côté client.
+    W.chooseProfile = function (profileId) {
+        var data = _profilesData();
+        var p = (data.profiles || []).filter(function (x) { return x.id === profileId; })[0];
+        if (!p || !p.available) { return; }
+        if (profileId === document.getElementById('profile-selector').dataset.selected) {
+            return;  // déjà sélectionné : rien à refaire
+        }
+        W.selectProfile(profileId);  // retour visuel immédiat avant le rechargement
+        W.api('/api/jobs/' + JOB_ID + '/profile', 'POST', { processing_profile_id: profileId })
+            .then(function (r) {
+                if (r.data && r.data.error) {
+                    var detail = document.getElementById('profile-detail');
+                    if (detail) {
+                        detail.innerHTML = '<div class="card-body"><div class="alert alert-danger mb-0">' +
+                            _esc(r.data.error) + '</div></div>';
+                    }
+                    return;
+                }
+                window.location.reload();
+            });
+    };
+
     W.initProfileSelector = function () {
         var selector = document.getElementById('profile-selector');
         if (!selector) { return; }
-        var recommended = selector.dataset.recommended;
-        if (recommended) { W.selectProfile(recommended); }
+        var selected = selector.dataset.selected;
+        if (selected) { W.selectProfile(selected); }
     };
 
     W.pushToEditor = function () {

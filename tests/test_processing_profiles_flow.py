@@ -186,3 +186,57 @@ def test_reprocess_profil_explicite_threade(admin_client, app, monkeypatch):
     assert body["processing_profile_id"] == "dossier_qualite"
     assert body["reprocess"] is True
     assert captured["processing_profile_id"] == "dossier_qualite"
+
+
+# ── Choix du profil à l'étape 1 : persistance sans lancement ─────────────────--
+
+def test_set_profile_persiste_sans_lancer(admin_client, app):
+    # Choisir le profil à l'étape 1 le mémorise dans extra_data SANS enfiler le job.
+    jid = _uploaded_job(admin_client)
+
+    r = admin_client.post(f"/api/jobs/{jid}/profile", json={"processing_profile_id": "srt_express"})
+
+    assert r.status_code == 200
+    assert r.get_json()["processing_profile_id"] == "srt_express"
+    with app.app_context():
+        extra = JobStore.get_by_id(jid).get_extra_data()
+        assert extra["execution"]["processing_profile_id"] == "srt_express"
+        # Pas de lancement : aucun statut d'exécution actif posé.
+        assert extra["execution"].get("status") is None
+
+
+def test_set_profile_invalide_rejete(admin_client, app):
+    jid = _uploaded_job(admin_client)
+
+    r = admin_client.post(f"/api/jobs/{jid}/profile", json={"processing_profile_id": "inexistant"})
+
+    assert r.status_code == 400
+    assert "invalide" in r.get_json()["error"]
+
+
+def test_set_profile_indisponible_refuse(admin_client, app, monkeypatch):
+    # Un profil structurellement indisponible (mode qualité coupé) ne peut être retenu.
+    from transcria.config import get_config
+
+    monkeypatch.setitem(get_config()["workflow"], "enable_quality_mode", False)
+    jid = _uploaded_job(admin_client)
+
+    r = admin_client.post(f"/api/jobs/{jid}/profile", json={"processing_profile_id": "dossier_qualite"})
+
+    assert r.status_code == 409
+    assert r.get_json()["processing_profile_id"] == "dossier_qualite"
+
+
+def test_wizard_rend_avec_srt_express_persiste(admin_client, app):
+    # Rendu réel : profil léger persisté → page affiche le bouton de lancement, pas d'erreur Jinja.
+    jid = _uploaded_job(admin_client)
+    with app.app_context():
+        JobStore.update_state(jid, JobState.ANALYZED)
+    admin_client.post(f"/api/jobs/{jid}/profile", json={"processing_profile_id": "srt_express"})
+
+    r = admin_client.get(f"/jobs/{jid}")
+
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Lancer le traitement" in html
+    assert "Fichier audio &amp; profil de traitement" in html

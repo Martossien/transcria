@@ -97,6 +97,17 @@ def mark_execution_queued(job_id: str, mode: str, processing_profile_id: str | N
     _merge_execution(job_id, updates)
 
 
+def set_processing_profile(job_id: str, processing_profile_id: str) -> None:
+    """Pose le profil de traitement choisi SANS toucher au statut d'exécution.
+
+    Appelé quand l'utilisateur choisit son profil à l'étape 1 du wizard (bien AVANT le
+    lancement) : le wizard doit alors adapter ses étapes au profil. On écrit uniquement
+    `processing_profile_id` dans `extra_data.execution` ; le job reste inactif (pas de
+    `status` posé) jusqu'au lancement effectif (`mark_execution_queued`).
+    """
+    _merge_execution(job_id, {"processing_profile_id": processing_profile_id})
+
+
 def mark_execution_started(job_id: str) -> None:
     _merge_execution(
         job_id,

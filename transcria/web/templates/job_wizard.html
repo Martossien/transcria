@@ -38,9 +38,9 @@
   </div>
   {% endif %}
 
-  <!-- Étapes du parcours (libellés complets, largeurs égales — docs/REFONTE_UI.md) -->
+  <!-- Étapes du parcours : pilotées par le profil (étapes masquées non listées) — docs/REFONTE_UI.md -->
   <div class="progress-container mb-4">
-    {% for step in steps %}
+    {% for step in wizard_layout.display_steps %}
       {% set sid = step.id %}
       {% set status = statuses.get(sid, 'todo') %}
       <div class="progress-step {% if status == 'done' %}done{% elif status == 'in_progress' %}current{% elif status == 'error' %}error{% endif %}"
@@ -54,12 +54,12 @@
       </div>
     {% endfor %}
   </div>
-  <!-- Step 1: File upload -->
+  <!-- Step 1: File upload + choix du profil (le profil pilote la suite du parcours) -->
   {% set file_status = statuses.get('file', 'todo') %}
   <div class="step-section {% if file_status == 'todo' or file_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-1-circle-fill step-icon"></i> Fichier audio</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.file }}-circle-fill step-icon"></i> Fichier audio &amp; profil de traitement</h3>
     {% if file_status == 'done' %}
-      <div class="alert alert-success mb-0">
+      <div class="alert alert-success">
         <i class="bi bi-check-circle"></i> Fichier reçu.
         {% if audio_analysis %}
           <strong>{{ audio_analysis.get('format', '') }}</strong> —
@@ -77,13 +77,54 @@
       </button>
       <div id="upload-result" class="mt-2"></div>
     {% endif %}
+
+    <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent. -->
+    <hr class="my-3">
+    <p class="text-muted mb-2">
+      <strong>Profil de traitement</strong> — choisissez votre niveau de livrable.
+      Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est
+      présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite =
+      livrable plus riche. Les étapes inutiles à votre profil seront masquées.
+    </p>
+    <div id="profile-selector"
+         class="profile-selector mb-3"
+         data-selected="{{ selected_profile_id }}">
+      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="Profil de traitement">
+        {% for p in processing_profiles.profiles %}
+        <button type="button"
+                class="profile-pill btn flex-fill {% if p.id == selected_profile_id %}btn-success active{% else %}btn-outline-secondary{% endif %}"
+                data-profile-id="{{ p.id }}"
+                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"{% endif %}
+                onclick="TranscrIA.chooseProfile('{{ p.id }}')">
+          <span class="d-block fw-semibold">{{ p.label }}</span>
+          <span class="d-block small opacity-75">
+            {% if not p.available %}<i class="bi bi-slash-circle"></i> indisponible{% else %}niveau {{ p.level }}{% endif %}
+          </span>
+        </button>
+        {% endfor %}
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
+        <span><i class="bi bi-lightning-charge"></i> Rapide</span>
+        <span>Complet <i class="bi bi-stars"></i></span>
+      </div>
+    </div>
+    <div id="profile-detail" class="card border-success mb-1">
+      <div class="card-body"><span class="text-muted">Sélectionnez un profil…</span></div>
+    </div>
+    {% if not processing_profiles.recommended %}
+    <div class="alert alert-warning mt-2 mb-0">
+      Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée
+      ou mode qualité désactivé). Voir la configuration.
+    </div>
+    {% endif %}
+    <script type="application/json" id="profiles-data">{{ processing_profiles|tojson }}</script>
   </div>
 
   <!-- Step 2: Audio analysis -->
   {% set analyze_status = statuses.get('analyze', 'todo') %}
   {% if file_status == 'done' %}
   <div class="step-section {% if analyze_status == 'todo' or analyze_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-2-circle-fill step-icon"></i> Analyse audio</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.analyze }}-circle-fill step-icon"></i> Analyse audio</h3>
     {% if audio_analysis and audio_analysis.get('duration_seconds') %}
       {% if audio_diagnostic %}
       <div class="alert alert-{{ audio_diagnostic.class }} mb-3">
@@ -194,11 +235,16 @@
   </div>
   {% endif %}
 
+  {% if wizard_layout.first_optional == 'summary' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+  {% endif %}
   <!-- Step 3: Quick summary -->
   {% set summary_status = statuses.get('summary', 'todo') %}
   {% if file_status == 'done' and audio_analysis %}
+  {% set _n = wizard_layout.step_num.get('summary') %}
   <div class="step-section {% if summary_status == 'todo' or summary_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-3-circle-fill step-icon"></i> Résumé de contrôle</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Résumé de contrôle</h3>
     <div id="workflow-status-banner" class="alert alert-info workflow-status-banner mb-3" data-initial-state="{{ job.state }}" role="status" aria-live="polite"></div>
     {% if summary and summary.get('summary_text') and summary.summary_text not in ['Résumé de contrôle indisponible (LLM non configurée).', 'Résumé indisponible.'] %}
       <div class="card bg-light mb-3">
@@ -279,11 +325,16 @@
   </div>
   {% endif %}
 
+  {% if wizard_layout.first_optional == 'context' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+  {% endif %}
   <!-- Step 4: Meeting Context -->
   {% set ctx_status = statuses.get('context', 'todo') %}
   {% if summary_status == 'done' %}
+  {% set _n = wizard_layout.step_num.get('context') %}
   <div class="step-section {% if ctx_status == 'todo' or ctx_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-4-circle-fill step-icon"></i> Contexte de la réunion</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Contexte de la réunion</h3>
 
     {% if meeting.get('title_suggere') or meeting.get('type_suggere') %}
     <div class="alert alert-info mb-3 small">
@@ -454,13 +505,18 @@
   </div>
   {% endif %}
 
+  {% if wizard_layout.first_optional == 'participants' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+  {% endif %}
   <!-- Step 5: Participants & Locuteurs (merged) -->
   {% set part_status = statuses.get('participants', 'todo') %}
   {% set spk_status = statuses.get('speakers', 'todo') %}
   {% if ctx_status == 'done' %}
   {% set merged_ready = (part_status == 'todo' or part_status == 'in_progress' or spk_status == 'todo' or spk_status == 'in_progress' or spk_status == 'done') %}
+  {% set _n = wizard_layout.step_num.get('participants') %}
   <div class="step-section {% if part_status in ('todo','in_progress') or spk_status in ('todo','in_progress') %}current-step{% endif %}">
-    <h3><i class="bi bi-5-circle-fill step-icon"></i> Participants &amp; Locuteurs</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Participants &amp; Locuteurs</h3>
     <p class="text-muted small mb-2">Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.</p>
 
     {% if not speakers.get('speakers') %}
@@ -598,11 +654,16 @@
   </div>
   {% endif %}
 
+  {% if wizard_layout.first_optional == 'lexicon' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+  {% endif %}
   <!-- Step 6: Lexicon -->
   {% set lex_status = statuses.get('lexicon', 'todo') %}
   {% if part_status == 'done' or spk_status == 'done' %}
+  {% set _n = wizard_layout.step_num.get('lexicon') %}
   <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-6-circle-fill step-icon"></i> Lexique de session</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Lexique de session</h3>
     <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
     {% if central_lexicons %}
     <div class="alert alert-light border small">
@@ -743,45 +804,21 @@
   </div>
   {% endif %}
 
-  <!-- Step 7: Processing choice -->
+  {% if wizard_layout.optional_prep and file_status == 'done' %}
+  </details>
+  {% endif %}
+
+  <!-- Step 7: Launch — le profil a été choisi à l'étape 1 ; ici on récapitule et on lance. -->
   {% set proc_status = statuses.get('processing', 'todo') %}
-  {% if lex_status == 'done' or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
+  {% if wizard_layout.launch_ready or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
   <div class="step-section {% if proc_status == 'todo' or proc_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-7-circle-fill step-icon"></i> Choix du traitement</h3>
-    <p class="text-muted">
-      Choisissez le niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet
-      possible sur cette installation) est présélectionné — déplacez le curseur vers la gauche
-      pour aller plus vite, vers la droite pour un livrable plus riche.
+    <h3><i class="bi bi-{{ wizard_layout.step_num.processing }}-circle-fill step-icon"></i> Lancer le traitement</h3>
+    {% if selected_profile_id %}
+    <p class="text-muted mb-3">
+      Profil retenu : <strong>{{ (processing_profiles.profiles | selectattr('id', 'equalto', selected_profile_id) | first).label }}</strong>.
+      Pour en changer, revenez à l'étape 1.
     </p>
-
-    <div id="profile-selector"
-         class="profile-selector mb-3"
-         data-recommended="{{ processing_profiles.recommended or '' }}">
-      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="Profil de traitement">
-        {% for p in processing_profiles.profiles %}
-        <button type="button"
-                class="profile-pill btn flex-fill {% if p.id == processing_profiles.recommended %}btn-success active{% else %}btn-outline-secondary{% endif %}"
-                data-profile-id="{{ p.id }}"
-                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"{% endif %}
-                onclick="TranscrIA.selectProfile('{{ p.id }}')">
-          <span class="d-block fw-semibold">{{ p.label }}</span>
-          <span class="d-block small opacity-75">
-            {% if not p.available %}<i class="bi bi-slash-circle"></i> indisponible{% else %}niveau {{ p.level }}{% endif %}
-          </span>
-        </button>
-        {% endfor %}
-      </div>
-      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
-        <span><i class="bi bi-lightning-charge"></i> Rapide</span>
-        <span>Complet <i class="bi bi-stars"></i></span>
-      </div>
-    </div>
-
-    <div id="profile-detail" class="card border-success mb-3">
-      <div class="card-body"><span class="text-muted">Sélectionnez un profil…</span></div>
-    </div>
-
-    {% if not processing_profiles.recommended %}
+    {% else %}
     <div class="alert alert-warning">
       Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée
       ou mode qualité désactivé). Voir la configuration.
@@ -789,12 +826,10 @@
     {% endif %}
 
     <button id="profile-launch-btn" class="btn btn-success btn-lg"
-            {% if not processing_profiles.recommended %}disabled{% endif %}
+            {% if not selected_profile_id %}disabled{% endif %}
             onclick="TranscrIA.startSelectedProfile()">
       <i class="bi bi-play-fill"></i> Lancer le traitement
     </button>
-
-    <script type="application/json" id="profiles-data">{{ processing_profiles|tojson }}</script>
     <div id="processing-result" class="mt-3"></div>
   </div>
   {% endif %}
@@ -803,7 +838,7 @@
   {% set qual_status = statuses.get('quality', 'todo') %}
   {% if proc_status == 'done' %}
   <div class="step-section {% if qual_status == 'todo' %}current-step{% endif %}">
-    <h3><i class="bi bi-8-circle-fill step-icon"></i> Contrôle qualité</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.quality }}-circle-fill step-icon"></i> Contrôle qualité</h3>
     {% if processing_diagnostic and processing_diagnostic.backend %}
     <div class="alert alert-light border small">
       <strong>Traitement réalisé :</strong>
@@ -865,7 +900,7 @@
   {% set exp_status = statuses.get('export', 'todo') %}
   {% if qual_status == 'done' %}
   <div class="step-section {% if exp_status == 'todo' %}current-step{% endif %}">
-    <h3><i class="bi bi-9-circle-fill step-icon"></i> Export et résultats</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.export }}-circle-fill step-icon"></i> Export et résultats</h3>
     {% if srt_content %}
       <details class="mb-3">
         <summary class="text-muted">Aperçu du SRT généré</summary>

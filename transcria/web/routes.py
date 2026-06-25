@@ -1051,7 +1051,8 @@ def create_job():
 @web_bp.route("/jobs/<job_id>")
 @login_required
 def job_wizard(job_id: str):
-    from transcria.workflow.profile_availability import compute_profiles_view
+    from transcria.workflow.profile_availability import compute_profiles_view, compute_wizard_layout
+    from transcria.workflow.profiles import get_profile, profile_for_job
 
     cfg = get_config()
     job = JobStore.get_by_id(job_id)
@@ -1064,6 +1065,16 @@ def job_wizard(job_id: str):
     )
     steps = WorkflowState.get_steps()
     next_step = WorkflowState.get_next_step(statuses)
+
+    # Le profil pilote la disposition du wizard (étapes affichées/masquées, numérotation).
+    # Profil sélectionné = celui persisté sur le job, sinon le recommandé (présélection du
+    # curseur) ; None ⇒ comportement complet (legacy/aucun profil dispo).
+    profiles_view = compute_profiles_view(cfg)
+    selected_profile = profile_for_job(job)
+    if selected_profile is None and profiles_view.get("recommended"):
+        selected_profile = get_profile(profiles_view["recommended"])
+    wizard_layout = compute_wizard_layout(selected_profile, statuses)
+    selected_profile_id = selected_profile.id if selected_profile else ""
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     summary_data = fs.load_json("summary/summary.json") or {}
@@ -1137,7 +1148,9 @@ def job_wizard(job_id: str):
         audio_analysis=audio_analysis,
         audio_preflight=audio_preflight,
         audio_diagnostic=_audio_diagnostic_view(audio_preflight, audio_scene),
-        processing_profiles=compute_profiles_view(cfg),
+        processing_profiles=profiles_view,
+        wizard_layout=wizard_layout,
+        selected_profile_id=selected_profile_id,
         audio_scene=audio_scene,
         processing_diagnostic=_processing_diagnostic_view(transcription_metadata, transcription_segments),
         quality_report=quality_report,
@@ -1947,6 +1960,36 @@ def api_profiles_availability():
     from transcria.workflow.profile_availability import compute_profiles_view
 
     return jsonify(compute_profiles_view(get_config()))
+
+
+@web_bp.route("/api/jobs/<job_id>/profile", methods=["POST"])
+@login_required
+def api_set_profile(job_id: str):
+    """Persiste le profil choisi à l'étape 1 (le wizard adapte alors ses étapes au profil).
+
+    Distinct du lancement (`/process`) : ici on ne fait QUE mémoriser le contrat produit, sans
+    enfiler le job. Le profil doit être valide ET réellement disponible sur cette installation.
+    """
+    from transcria.workflow import profiles
+    from transcria.workflow.profile_availability import compute_profiles_view
+    from transcria.workflow.transitions import set_processing_profile
+
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    payload = request.get_json(silent=True) or {} if request.is_json else {}
+    profile_id = payload.get("processing_profile_id") or request.form.get("processing_profile_id")
+    if not profile_id or not profiles.is_profile(profile_id):
+        return jsonify({"error": f"Profil de traitement invalide: {profile_id}"}), 400
+
+    view = compute_profiles_view(get_config())
+    available = {p["id"] for p in view["profiles"] if p["available"]}
+    if profile_id not in available:
+        return jsonify({"error": "Profil indisponible sur cette installation", "processing_profile_id": profile_id}), 409
+
+    set_processing_profile(job.id, profile_id)
+    return jsonify({"status": "ok", "processing_profile_id": profile_id})
 
 
 _REPROCESSABLE_STATES = {

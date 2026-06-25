@@ -105,3 +105,61 @@ def compute_profiles_view(config: dict) -> dict:
     )
 
     return {"profiles": items, "recommended": recommended, "default": configured_default}
+
+
+# Étapes de PRÉPARATION humaine, dans l'ordre linéaire du wizard. Un profil n'en exige qu'un
+# PRÉFIXE (cf. `profile_required_steps_ordered`) ; le reste est un SUFFIXE optionnel, qu'on
+# regroupe sous un repli « Étapes optionnelles pour ce profil ». La propriété préfixe/suffixe
+# garantit que la chaîne de révélation progressive du wizard reste continue.
+PREP_STEPS: tuple[str, ...] = ("summary", "context", "participants", "lexicon")
+_CORE_HEAD: tuple[str, ...] = ("file", "analyze")
+_CORE_TAIL: tuple[str, ...] = ("processing", "quality", "export")
+
+
+def compute_wizard_layout(profile: ProcessingProfile | None, statuses: dict) -> dict:
+    """Disposition du wizard PILOTÉE PAR LE PROFIL (choisi à l'étape 1).
+
+    Le moteur d'états (`WORKFLOW_STEPS`, `compute_statuses`) reste inchangé : on ne touche QUE
+    la présentation. À partir des exigences du profil :
+
+    - ``required_prep`` : préfixe d'étapes de préparation à afficher dans le flux principal ;
+    - ``optional_prep`` : suffixe à masquer sous un repli (l'utilisateur peut quand même les
+      renseigner) ;
+    - ``first_optional`` : 1re étape du repli (pour ouvrir le ``<details>`` au bon endroit) ;
+    - ``step_num`` : numéro d'affichage 1..N des seules étapes VISIBLES (renumérotation) ;
+    - ``display_steps`` : étapes de la barre de progression (visibles, renumérotées) ;
+    - ``launch_ready`` : le profil peut-il être lancé maintenant (analyse + préfixe validés).
+
+    ``profile`` à None (job legacy/sans profil) ⇒ comportement complet : toutes les étapes de
+    préparation sont requises (rétro-compatibilité, aucun parcours existant n'est raccourci).
+    """
+    from transcria.workflow.profiles import profile_required_steps_ordered
+    from transcria.workflow.states import StepStatus
+    from transcria.workflow.steps import WorkflowSteps
+
+    if profile is None:
+        required_prep = list(PREP_STEPS)
+    else:
+        ordered = set(profile_required_steps_ordered(profile))
+        required_prep = [s for s in PREP_STEPS if s in ordered]
+    optional_prep = [s for s in PREP_STEPS if s not in required_prep]
+
+    visible = list(_CORE_HEAD) + required_prep + list(_CORE_TAIL)
+    step_num = {sid: i + 1 for i, sid in enumerate(visible)}
+
+    labels = {sid: (WorkflowSteps.get_step(sid) or {}).get("label", sid) for sid in visible}
+    display_steps = [{"id": sid, "label": labels[sid], "order": step_num[sid]} for sid in visible]
+
+    def _done(step_id: str) -> bool:
+        return statuses.get(step_id) == StepStatus.DONE
+
+    launch_ready = _done("analyze") and all(_done(s) for s in required_prep)
+
+    return {
+        "required_prep": required_prep,
+        "optional_prep": optional_prep,
+        "first_optional": optional_prep[0] if optional_prep else None,
+        "step_num": step_num,
+        "display_steps": display_steps,
+        "launch_ready": launch_ready,
+    }
