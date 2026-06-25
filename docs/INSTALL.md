@@ -587,6 +587,13 @@ venv/bin/python scripts/setup_opencode.py --base-url http://NODE_IP:8080/v1
 
 > Sans le provider `local`, opencode ne résout pas `local/<model>` et le résumé/
 > correction échouent **silencieusement** (`summary.md` garde le placeholder).
+>
+> `scripts/setup_opencode.py` écrit AUSSI une politique de permission `external_directory`
+> déterministe (`allow` sur l'arbre de travail des agents, `deny` ailleurs). En mode **headless**
+> (`opencode run`), toute permission qui se résout en `ask` SUSPEND le run (personne pour
+> répondre) : un agent qui explore son scratch via `glob`/`grep` déclencherait sinon le défaut
+> `external_directory: ask` → sortie jamais écrite. **Si vous écrivez `opencode.json` à la main**,
+> ajoutez ce bloc `permission` (préférez `setup_opencode.py`, qui le pose pour vous).
 
 Pour référence, le fichier produit (équivalent à une écriture manuelle dans
 `$HOME/.config/opencode/opencode.json`) :

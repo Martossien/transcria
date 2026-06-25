@@ -8,6 +8,8 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.5] — 2026-06-26
+
 ### Added
 - **Profils de traitement** (remplacent le binaire `fast`/`quality`) — jalon vers la 1.0, sur
   retour utilisateurs (le choix binaire bloquait l'adoption). 6 profils nommés (`srt_express`,

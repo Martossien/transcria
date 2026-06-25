@@ -13,9 +13,9 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 
 ## Statut du projet
 
-⚠️ **Développement actif — pas encore de version taguée.** TranscrIA est fonctionnel et couvert par une large suite de tests (1600+, CI verte), mais l'API, le schéma de configuration (`config.yaml`) et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante. À considérer pour de l'évaluation ou un pilote, pas encore comme une release stable à déployer sans validation de votre côté.
+⚠️ **Beta — dernière release : [`v0.1.0-beta.5`](https://github.com/Martossien/transcria/releases/tag/v0.1.0-beta.5).** Le produit est fonctionnel et couvert par **2 668 tests (CI verte : ruff, mypy, pytest complet sur PostgreSQL, ~80 % de couverture)**. L'installeur est validé de bout en bout sur **4 distributions Linux (Ubuntu 22.04/24.04, Debian 12, Fedora 42) × Python 3.11–3.13** (apt + dnf, systemd et non-systemd, PostgreSQL 14/15/16), pipeline complet STT + diarisation + LLM. La **topologie distribuée** (frontale CPU + nœud de ressources GPU) est validée **de bout en bout sur audio réel** : STT (Cohere) + diarisation déportés et une LLM d'arbitrage vLLM (Qwen3.6-27B-FP8, tensor-parallel), placement VRAM automatique sur 8 GPU — voir [docs/DOCKER.md](docs/DOCKER.md) et [docs/PLAN_TEST_SPLIT_VLLM.md](docs/PLAN_TEST_SPLIT_VLLM.md). Selon le SemVer, la **série `0.x` est une phase de stabilisation** : l'API, le schéma de configuration et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante jusqu'à `1.0.0`. À évaluer, à piloter — pas à mettre en production sans votre propre validation.
 
-- **Installation** : aujourd'hui via `./install.sh` (venv, dépendances, service systemd). Des **images Docker sont prévues une fois les tests et le développement stabilisés** — elles ne sont pas encore publiées.
+- **Installation** : via `./install.sh` (venv, dépendances, service systemd) **ou un déploiement conteneurisé** (Dockerfile, compose, support GPU, quickstart en une commande — voir [docs/DOCKER.md](docs/DOCKER.md)).
 - **Modèles** : Cohere ASR, pyannote, faster-whisper et la LLM d'arbitrage sont à fournir et configurer localement (voir [docs/INSTALL.md](docs/INSTALL.md)).
 - **Retours bienvenus** : issues et pull requests via GitHub — voir [CONTRIBUTING.md](CONTRIBUTING.md) et [SECURITY.md](SECURITY.md).
 
@@ -34,6 +34,8 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
 
 - **Workflow web guidé** : 9 étapes de l'upload à l'export, avec reprise possible et états persistants.
 - **Profils de traitement** (après l'upload) : l'utilisateur choisit un *livrable* sur un curseur — du `SRT express` rapide au `dossier qualité` complet — au lieu d'un interrupteur rapide/qualité opaque. Le portail grise les profils que le matériel ne permet pas, présélectionne le plus complet qui passe, puis n'exécute que les phases du pipeline (et ne réserve que le GPU/la LLM) réellement nécessaires au profil choisi. Cf. `docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
+
+  ![Sélecteur de profil de traitement, juste après l'upload](docs/screenshots/07-profile.png)
 - **Transcription multi-backend** : Cohere Transcribe par défaut ; Whisper large-v3/faster-whisper et IBM Granite Speech 4.1 2B restent disponibles pour les tests, fallbacks et usages ciblés. Parakeet TDT 0.6B v3 (NVIDIA NeMo) en backend expérimental.
 - **Diagnostic audio avant transcription** : ffprobe, préflight acoustique, analyse de scène speech/music/noise, ratios non vocaux, estimation de genre vocal H/F quand disponible.
 - **Prétraitements contrôlés** : séparation de sources Demucs optionnelle, filtrage scène, normalisation, auto-loudnorm sur voix très faible, denoise expérimental désactivé par défaut.
@@ -57,7 +59,7 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
   - **Extraction structurée par la LLM** : décisions prises, actions à réaliser, points bloquants, points reportés, votes, résolutions, ordre du jour et prochaine date sont extraits du résumé via un prompt universel et un parseur tolérant (3 niveaux de repli `ok`/`partiel`/`échec`, dégradation gracieuse vers le rapport standard si l'extraction échoue). Affichés dans le document selon le type.
   - **Champs spécifiques au type** : 18 types de réunion (CSE, CSE extraordinaire, CODIR/COMEX, Point projet, Réunion client, Réunion de crise, Entretien individuel, Formation, Séminaire, Négociation…). Chaque type affiche dans l'interface des champs dédiés (président/secrétaire/quorum CSE, nom de projet/sprint, client/contrat…) repris dans le document et injectés dans le contexte LLM de correction.
   - **Thèmes visuels par type** : page de garde, titres de section, tableaux et pied de page adoptent une identité de couleur cohérente selon le type (bleu marine institutionnel CSE, teal projet, rouge crise, violet confidentiel…), avec bannière dédiée, badge confidentiel/crise et calcul automatique du quorum CSE.
-- **Tests et benchmarks** : suite pytest mockée (1600+ tests), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
+- **Tests et benchmarks** : suite pytest mockée (2 668 tests, CI verte), E2E GPU réel, E2E automatisés sans GPU pour le pipeline DOCX, runner benchmark multi-combinaisons pour comparer Cohere/Whisper/Granite et les options audio.
 
 ## Stack technique
 

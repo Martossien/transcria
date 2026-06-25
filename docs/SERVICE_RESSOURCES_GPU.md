@@ -27,7 +27,7 @@
 | Superviseur cycle de vie A/B/C | `transcria/gpu/stt_engine_supervisor.py` | ✅ |
 | Détection ressources + inventaire | `GET /capabilities` (`inference_service`) | ✅ |
 | Auto-lancement STT à la demande | `POST /engines/ensure` | ✅ |
-| Admission §7.2 + pré-vol | `transcria/inference/resource_gate.py`, branché dans `PipelineService.run_process` | ✅ |
+| Admission §7.2 + pré-vol | `transcria/inference/resource_gate.py`, branché dans `PipelineService.run_process` **ET** dans la transcription rapide du résumé (`runner._preflight_remote_stt`) — sinon, sur un nœud frais, le résumé tourne hors pipeline et le moteur STT n'est jamais lancé (« connection refused ») | ✅ |
 | Panneau d'état frontale | `GET /api/resources/status` + `dashboard_status.html` | ✅ |
 | Concurrence STT par tour (v1.1) | `inference.stt.concurrency` (`transcria/stt/transcription.py`) | ✅ |
 | Re-queue différé avec backoff (§7.2) | `QueueStore.requeue_later` + `job_executor` (`scheduled_at`) | ✅ |

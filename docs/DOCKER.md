@@ -161,6 +161,23 @@ Build-time (`docker build --build-arg`) :
    curl -fsS http://localhost:7870/health
    ```
 
+### Dépannage — `migrate` échoue alors que `db` est *healthy*
+
+`POSTGRES_PASSWORD` n'est appliqué qu'à l'**initialisation du volume** PostgreSQL. Si un volume
+de données **préexistant** a été créé avec un autre mot de passe, la base conserve l'ancien et
+l'authentification TCP échoue — même si le service répond. `migrate` affiche désormais la **vraie
+cause** au lieu d'un « injoignable » trompeur :
+
+```
+[ERROR] base PostgreSQL inaccessible après 30 tentatives — AUTHENTIFICATION refusée (mot de passe)…
+```
+
+Trois remédiations, selon que vous voulez garder les données :
+- **réutiliser** le mot de passe d'origine dans `POSTGRES_PASSWORD` ; ou
+- **réinitialiser** le volume (⚠ efface les données) : `docker compose down -v` puis relancer ; ou
+- **changer** le mot de passe du rôle sans perdre les données :
+  `docker compose exec db psql -U transcria -d transcria -c "ALTER USER transcria WITH PASSWORD '<nouveau>';"`.
+
 ## GPU (validé)
 
 Le GPU dans Docker passe par **CDI** (Container Device Interface). Setup hôte, une fois :

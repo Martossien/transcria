@@ -28,6 +28,10 @@ Plenty of scripts wrap Whisper. TranscrIA is built as a **service** for teams th
 
 ![Home — job list](docs/screenshots/01-home.png)
 
+**Processing profiles — pick your deliverable on a single slider right after upload; the portal pre-selects the most complete profile your hardware can run and hides the steps it doesn't need**
+
+![Processing profile selector](docs/screenshots/07-profile.png)
+
 **Speaker validation — listen to excerpts, name speakers, acoustic gender hints**
 
 ![Speaker validation step](docs/screenshots/06-speakers.png)
@@ -103,7 +107,7 @@ It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validat
 
 ## Project status
 
-⚠️ **Beta — latest release: [`v0.1.0-beta.4`](https://github.com/Martossien/transcria/releases/tag/v0.1.0-beta.4).** The product is functional and covered by **2,563 tests (green CI: ruff, mypy, full pytest on PostgreSQL, ~80 % coverage)**. The installer is validated end-to-end on **4 Linux distributions (Ubuntu 22.04/24.04, Debian 12, Fedora 42) × Python 3.11–3.13** (apt + dnf, systemd and non-systemd, PostgreSQL 14/15/16), full pipeline STT + diarization + LLM. The **distributed topology** (CPU frontend + GPU resource node) is validated **end-to-end on real audio**: STT (Cohere) + diarization served remotely and a vLLM arbitration LLM (Qwen3.6-27B-FP8, tensor-parallel), with automatic VRAM placement across 8 GPUs — see [docs/DOCKER.md](docs/DOCKER.md) and [docs/PLAN_TEST_SPLIT_VLLM.md](docs/PLAN_TEST_SPLIT_VLLM.md). **Concurrency hardened under load**: the split topology is robust up to 8 concurrent jobs (graceful degradation, no crash), throughput scaling to a hardware sweet spot, with the vLLM engines batching concurrent requests — see [docs/PLAN_TEST_CHARGE.md](docs/PLAN_TEST_CHARGE.md). Following SemVer, the **`0.x` series is a stabilization phase**: the API, the configuration schema and the data model may still change without backward-compatibility guarantees until `1.0.0`. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
+⚠️ **Beta — latest release: [`v0.1.0-beta.5`](https://github.com/Martossien/transcria/releases/tag/v0.1.0-beta.5).** The product is functional and covered by **2,668 tests (green CI: ruff, mypy, full pytest on PostgreSQL, ~80 % coverage)**. The installer is validated end-to-end on **4 Linux distributions (Ubuntu 22.04/24.04, Debian 12, Fedora 42) × Python 3.11–3.13** (apt + dnf, systemd and non-systemd, PostgreSQL 14/15/16), full pipeline STT + diarization + LLM. The **distributed topology** (CPU frontend + GPU resource node) is validated **end-to-end on real audio**: STT (Cohere) + diarization served remotely and a vLLM arbitration LLM (Qwen3.6-27B-FP8, tensor-parallel), with automatic VRAM placement across 8 GPUs — see [docs/DOCKER.md](docs/DOCKER.md) and [docs/PLAN_TEST_SPLIT_VLLM.md](docs/PLAN_TEST_SPLIT_VLLM.md). **Concurrency hardened under load**: the split topology is robust up to 8 concurrent jobs (graceful degradation, no crash), throughput scaling to a hardware sweet spot, with the vLLM engines batching concurrent requests — see [docs/PLAN_TEST_CHARGE.md](docs/PLAN_TEST_CHARGE.md). Following SemVer, the **`0.x` series is a stabilization phase**: the API, the configuration schema and the data model may still change without backward-compatibility guarantees until `1.0.0`. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
 
 **Language**: the UI and the LLM prompts are French-first (the pipeline is tuned for French meetings). Both are centralized/editable, so adding languages is a planned evolution, not a rewrite.
 
