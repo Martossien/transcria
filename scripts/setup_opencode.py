@@ -20,9 +20,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from transcria.gpu.opencode_setup import (  # noqa: E402
     default_base_url,
+    ensure_agent_permissions,
     ensure_local_provider,
     find_opencode_binary,
 )
+from transcria.workflow.agent_workspace import resolve_agent_work_root  # noqa: E402
 
 
 def main() -> int:
@@ -55,10 +57,16 @@ def main() -> int:
     path = Path(args.config_path).expanduser()
     data = ensure_local_provider(path, base_url, model, context=args.context, output=args.output)
     limit = data["provider"]["local"]["models"][model].get("limit", {})
+    # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch des
+    # agents, deny ailleurs). Sans ça, le défaut opencode `ask` suspend `opencode run` dès
+    # qu'un agent (correction/relecture) explore son scratch via glob/grep.
+    work_root = resolve_agent_work_root(cfg)
+    ensure_agent_permissions(path, work_root)
     print(f"provider 'local' écrit dans {path}")
     print(f"  baseURL = {base_url}")
     print(f"  model   = {model}")
     print(f"  limit   = context {limit.get('context')} / output {limit.get('output')}")
+    print(f"  external_directory allow = {work_root}/** (deny ailleurs)")
     print("✅ opencode configuré. Vérifiez la LLM avec scripts/check_arbitrage_llm.sh.")
     return 0
 

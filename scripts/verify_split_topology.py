@@ -35,7 +35,12 @@ from typing import NoReturn
 import requests
 
 # États terminaux du pipeline (cf. JobState / _REPROCESSABLE_STATES).
-_SUCCESS_STATES = {"completed", "quality_checked", "export_ready"}
+# IMPORTANT : on attend que l'EXPORT soit fait (`export_ready`/`completed`) AVANT de télécharger
+# les livrables. `quality_checked` est trop tôt — le package ZIP / DOCX sont bâtis par l'étape
+# export qui SUIT le contrôle qualité. En all-in-one `/process` est synchrone (l'export est déjà
+# fait au retour) ; en split il est asynchrone (202 + polling), donc accepter `quality_checked`
+# faisait télécharger le package avant qu'il existe (404) sur les profils rapides.
+_SUCCESS_STATES = {"completed", "export_ready"}
 _FAILURE_STATES = {"failed", "cancelled"}
 
 

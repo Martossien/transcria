@@ -5,6 +5,7 @@ import json
 
 from transcria.gpu.opencode_setup import (
     default_base_url,
+    ensure_agent_permissions,
     ensure_local_provider,
     find_opencode_binary,
     is_remote_arbitrage,
@@ -137,6 +138,56 @@ def test_ensure_recovers_from_corrupt_json(tmp_path):
     cfg.write_text("{ this is not json")
     ensure_local_provider(cfg, "http://127.0.0.1:8080/v1", "m")  # ne lève pas
     assert json.loads(cfg.read_text())["provider"]["local"]["options"]["baseURL"].endswith(":8080/v1")
+
+
+# ── ensure_agent_permissions (politique headless `external_directory`) ─────────
+
+def test_agent_permissions_writes_deterministic_external_directory(tmp_path):
+    # Cœur du correctif : allow ciblé sur l'arbre de scratch, deny ailleurs, JAMAIS `ask`
+    # (sinon `opencode run` headless se suspend sur la demande de permission).
+    cfg = tmp_path / "opencode.json"
+    data = ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    ext = data["permission"]["external_directory"]
+    assert ext == {"/tmp/transcria-agent-work/**": "allow", "*": "deny"}
+    assert "ask" not in ext.values()
+    assert json.loads(cfg.read_text())["permission"]["external_directory"] == ext
+
+
+def test_agent_permissions_normalizes_trailing_slash(tmp_path):
+    cfg = tmp_path / "opencode.json"
+    data = ensure_agent_permissions(cfg, "/srv/agent-work/")
+    assert "/srv/agent-work/**" in data["permission"]["external_directory"]
+
+
+def test_agent_permissions_preserves_provider_and_other_permissions(tmp_path):
+    # Doit cohabiter avec le provider et ne pas écraser d'autres clés de permission.
+    cfg = tmp_path / "opencode.json"
+    ensure_local_provider(cfg, "http://vllm:8080/v1", "arbitrage")
+    cfg_data = json.loads(cfg.read_text())
+    cfg_data["permission"] = {"bash": "allow"}
+    cfg.write_text(json.dumps(cfg_data))
+
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    d = json.loads(cfg.read_text())
+    assert d["provider"]["local"]["options"]["baseURL"] == "http://vllm:8080/v1"  # provider intact
+    assert d["permission"]["bash"] == "allow"                                     # autre permission intacte
+    assert d["permission"]["external_directory"]["/tmp/transcria-agent-work/**"] == "allow"
+    assert d["$schema"] == "https://opencode.ai/config.json"
+
+
+def test_agent_permissions_idempotent(tmp_path):
+    cfg = tmp_path / "opencode.json"
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    first = cfg.read_text()
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")
+    assert cfg.read_text() == first
+
+
+def test_agent_permissions_recovers_from_corrupt_json(tmp_path):
+    cfg = tmp_path / "opencode.json"
+    cfg.write_text("{ broken")
+    ensure_agent_permissions(cfg, "/tmp/transcria-agent-work")  # ne lève pas
+    assert json.loads(cfg.read_text())["permission"]["external_directory"]["*"] == "deny"
 
 
 # ── default_base_url ──────────────────────────────────────────────────────────

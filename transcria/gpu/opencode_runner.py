@@ -428,8 +428,15 @@ class OpenCodeRunner:
         # simple Popen(cwd=…) est ignoré (vérifié : la session restait ancrée sur le
         # dépôt). Avec le scratch hors dépôt + --dir, opencode (a) ne remonte vers aucun
         # AGENTS.md, (b) ancre bash/read/write sur le scratch (chemins relatifs fiables),
-        # (c) considère les entrées stagées « in-project » → lues/écrites sans la
-        # permission external_directory qui, en headless, ne peut qu'avorter le run.
+        # (c) considère les entrées stagées « in-project » → LUES sans demande de permission.
+        #
+        # MAIS --dir ne suffit pas pour les outils de RECHERCHE (glob/grep) : ils remontent
+        # au dossier PARENT du scratch, qu'opencode classe `external_directory` (défaut `ask`)
+        # → en headless, un `ask` sans répondeur SUSPEND le run (sortie jamais écrite, échec
+        # « sans production »). La parade complémentaire est la politique de permissions posée
+        # dans opencode.json par `opencode_setup.ensure_agent_permissions` : external_directory
+        # = allow sur l'arbre de scratch, deny ailleurs (jamais `ask`). Les deux ensemble (dir
+        # hors dépôt + permission déterministe) rendent l'agent fiable en non-interactif.
         cmd = [
             opencode_path, "run", "--format", "json",
             "--dir", str(self.work_dir),

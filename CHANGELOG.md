@@ -25,6 +25,17 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   validation de charge mixte par profil, la granularité du *contenu* DOCX par niveau, la politique
   `api_quality` et des notifications profile-aware.
 
+### Fixed
+- **Phases LLM (correction / relecture / résumé) suspendues en mode headless.** `opencode run`
+  est non-interactif : la permission `external_directory` (défaut opencode `ask`) se déclenchait
+  quand un agent explorait son scratch via `glob`/`grep` (ces outils remontent au dossier parent du
+  scratch) ; sans répondeur, l'`ask` suspendait le run → sortie jamais écrite, échec « sans production »
+  intermittent (observé sur la phase correction en topologie split). Correctif : `ensure_agent_permissions`
+  pose dans `opencode.json` une politique `external_directory` déterministe (`allow` sur l'arbre de
+  travail des agents `resolve_agent_work_root`, `deny` ailleurs, jamais `ask`), appliquée aux deux sites
+  de provisioning (hôte `scripts/setup_opencode.py`, Docker `deploy/entrypoint.provision_opencode`).
+  Règle : en headless, aucune permission opencode ne doit valoir `ask`. Cf. AGENTS.md (AgentWorkspace).
+
 ### Changed
 - **Audit licences / mentions tierces (préalable à une éventuelle image publique).**
   `THIRD_PARTY_NOTICES.md` complété : composants embarqués dans les images Docker (opencode — MIT ;

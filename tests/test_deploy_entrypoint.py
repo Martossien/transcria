@@ -179,10 +179,19 @@ def test_provision_opencode_writes_provider_from_mounted_config(tmp_path, monkey
         "transcria.gpu.opencode_setup.ensure_local_provider",
         lambda path, base_url, model, **kw: captured.update(path=str(path), base_url=base_url, model=model),
     )
-    ep.provision_opencode(_plan(tmp_path, "scheduler"), {"OPENCODE_CONFIG": str(tmp_path / "oc.json")})
+    oc = tmp_path / "oc.json"
+    ep.provision_opencode(_plan(tmp_path, "scheduler"), {"OPENCODE_CONFIG": str(oc)})
     assert captured["base_url"] == "http://vllm-arbitrage:8080/v1"
     assert captured["model"] == "arbitrage"
     assert captured["path"].endswith("oc.json")
+    # La politique headless `external_directory` doit aussi être écrite (correctif du blocage
+    # `ask` qui suspendait `opencode run` en split). ensure_local_provider est mocké ; c'est
+    # ensure_agent_permissions (réel) qui écrit oc.json ici.
+    import json as _json
+
+    from transcria.workflow.agent_workspace import resolve_agent_work_root
+    perm = _json.loads(oc.read_text())["permission"]["external_directory"]
+    assert perm == {f"{resolve_agent_work_root({})}/**": "allow", "*": "deny"}
 
 
 def test_provision_opencode_is_best_effort_on_error(tmp_path, monkeypatch):

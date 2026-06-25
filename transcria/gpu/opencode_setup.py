@@ -107,6 +107,25 @@ def _existing_local_limit(provider: dict) -> dict | None:
     return None
 
 
+def _load_opencode_config(path: Path) -> dict:
+    """Charge `opencode.json` en dict (base saine si absent/illisible), `$schema` garanti."""
+    data: dict = {}
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8")) or {}
+        except (json.JSONDecodeError, OSError):
+            data = {}  # config illisible : on repart d'une base saine
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("$schema", "https://opencode.ai/config.json")
+    return data
+
+
+def _dump_opencode_config(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
 def ensure_local_provider(
     config_path: str | Path,
     base_url: str,
@@ -127,17 +146,7 @@ def ensure_local_provider(
     perd jamais la fenêtre de contexte en relançant le setup.
     """
     path = Path(config_path)
-
-    data: dict = {}
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8")) or {}
-        except (json.JSONDecodeError, OSError):
-            data = {}  # config illisible : on repart d'une base saine
-
-    if not isinstance(data, dict):
-        data = {}
-    data.setdefault("$schema", "https://opencode.ai/config.json")
+    data = _load_opencode_config(path)
     provider = data.setdefault("provider", {})
     if not isinstance(provider, dict):
         provider = {}
@@ -150,8 +159,38 @@ def ensure_local_provider(
         base_url, model_id, display_name=display_name, context=ctx, output=out
     )
 
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    _dump_opencode_config(path, data)
+    return data
+
+
+def ensure_agent_permissions(config_path: str | Path, agent_work_root: str) -> dict:
+    """Politique de permissions opencode pour le mode HEADLESS (`opencode run`).
+
+    `opencode run` est non-interactif : une permission qui se résout en ``ask`` SUSPEND le run
+    (aucun humain pour répondre) → l'agent n'écrit jamais sa sortie, et la phase échoue « sans
+    production ». Les agents LLM (résumé, correction, relecture finale) tournent dans un scratch
+    isolé ``<work_root>/<job>/<phase>`` (cf. `AgentWorkspace`) ; leurs outils glob/grep/bash
+    atteignent l'ARBRE de scratch (le dossier parent du projet opencode `--dir`) → opencode
+    déclenche la permission ``external_directory``, dont le défaut **est** ``ask`` → blocage
+    silencieux. C'est la cause racine de l'échec intermittent de la phase correction.
+
+    On rend ``external_directory`` DÉTERMINISTE et de moindre privilège :
+    ``allow`` sur l'arbre de travail des agents, ``deny`` partout ailleurs (un accès externe
+    parasite échoue proprement au lieu de suspendre — jamais ``ask`` en headless). Schéma
+    confirmé par opencode (``permission.external_directory`` = objet glob→action, cf.
+    https://opencode.ai/docs/permissions). Idempotent ; préserve provider, ``$schema`` et les
+    autres clés de permission. `agent_work_root` doit venir de
+    `transcria.workflow.agent_workspace.resolve_agent_work_root` (source unique du chemin).
+    """
+    root = str(agent_work_root).rstrip("/")
+    path = Path(config_path)
+    data = _load_opencode_config(path)
+    permission = data.setdefault("permission", {})
+    if not isinstance(permission, dict):
+        permission = {}
+        data["permission"] = permission
+    permission["external_directory"] = {f"{root}/**": "allow", "*": "deny"}
+    _dump_opencode_config(path, data)
     return data
 
 

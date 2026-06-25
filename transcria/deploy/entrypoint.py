@@ -173,7 +173,12 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         return
     try:
         from transcria.config import load_config
-        from transcria.gpu.opencode_setup import default_base_url, ensure_local_provider
+        from transcria.gpu.opencode_setup import (
+            default_base_url,
+            ensure_agent_permissions,
+            ensure_local_provider,
+        )
+        from transcria.workflow.agent_workspace import resolve_agent_work_root
 
         cfg = load_config()
         base_url = default_base_url(cfg)
@@ -185,7 +190,12 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
             os.path.join("~", ".config", "opencode", "opencode.json")
         )
         ensure_local_provider(config_path, base_url, model)
-        print(f"[INFO] opencode provider 'local' → {base_url} ({config_path})", file=sys.stderr, flush=True)
+        # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch
+        # des agents, deny ailleurs) — sinon le défaut opencode `ask` suspend `opencode run`.
+        work_root = resolve_agent_work_root(cfg)
+        ensure_agent_permissions(config_path, work_root)
+        print(f"[INFO] opencode provider 'local' → {base_url} ({config_path}) "
+              f"| external_directory allow={work_root}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort, ne bloque jamais le rôle
         print(f"[WARN] provisioning opencode ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
 
