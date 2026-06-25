@@ -152,6 +152,49 @@ def wait_for_database(
     return False
 
 
+def classify_db_unreachable(database_url: str) -> str:
+    """Message ACTIONNABLE quand la base reste inaccessible — distingue AUTH de réseau.
+
+    `wait_for_database` ne renvoie qu'un booléen (la sonde avale l'exception), donc une
+    authentification refusée ressemblait à tort à « injoignable ». À l'échec, on rejoue UNE
+    connexion pour capturer la cause et guider l'opérateur — en particulier le piège fréquent :
+    un VOLUME PostgreSQL PRÉEXISTANT créé avec un autre `POSTGRES_PASSWORD` (la base garde le
+    mot de passe d'INITIALISATION du volume, pas celui de l'environnement courant) → l'auth TCP
+    échoue alors que le service répond. Retourne "" si la base est en fait joignable (course).
+    """
+    try:
+        from sqlalchemy import create_engine, text
+
+        engine = create_engine(database_url)
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return ""
+        finally:
+            engine.dispose()
+    except Exception as exc:  # noqa: BLE001 — on classe le message, on ne propage pas
+        msg = str(exc).lower()
+        if "password authentication failed" in msg or "authentification" in msg:
+            return (
+                "AUTHENTIFICATION refusée (mot de passe). Cause la plus fréquente : un VOLUME "
+                "PostgreSQL PRÉEXISTANT a été initialisé avec un autre POSTGRES_PASSWORD — la base "
+                "conserve le mot de passe de CRÉATION du volume, pas celui de l'environnement actuel. "
+                "Corriger par l'une des options : (a) remettre le mot de passe d'origine dans "
+                "POSTGRES_PASSWORD ; (b) réinitialiser le volume — `docker compose down -v` "
+                "(⚠ EFFACE les données) puis relancer ; (c) changer le mot de passe du rôle sans "
+                "perdre les données : `docker compose exec db psql -U <user> -d <db> -c "
+                "\"ALTER USER <user> WITH PASSWORD '<nouveau>';\"`."
+            )
+        if "could not translate host" in msg or "name or service not known" in msg or "nodename nor servname" in msg:
+            return (
+                "HÔTE introuvable (DNS). Vérifier l'hôte dans TRANSCRIA_DATABASE_URL : en compose "
+                "c'est le nom du service (`db`), pas `127.0.0.1` (qui désigne le conteneur lui-même)."
+            )
+        if "connection refused" in msg:
+            return "connexion REFUSÉE — PostgreSQL n'écoute pas encore (service non démarré ou mauvais port)."
+        return f"erreur de connexion : {exc}"
+
+
 # Rôles qui exécutent les phases LLM (correction/résumé via opencode) → provisioning opencode.
 _LLM_ROLES = ("all", "scheduler")
 
@@ -219,6 +262,7 @@ def main(
     env: dict[str, str] | None = None,
     exec_fn: ExecFn = _default_exec,
     db_probe: DbProbe | None = None,
+    db_diagnoser: Callable[[str], str] | None = None,
     wait_attempts: int = 30,
     wait_delay: float = 1.0,
     sleep_fn: Callable[[float], None] = time.sleep,
@@ -226,6 +270,7 @@ def main(
 ) -> int:
     env = dict(os.environ if env is None else env)
     probe = db_probe or _default_db_probe
+    diagnoser = db_diagnoser or classify_db_unreachable
 
     parser = argparse.ArgumentParser(
         prog="transcria-entrypoint",
@@ -251,9 +296,9 @@ def main(
     if needs_database(plan.role) and not args.no_wait_db:
         print(f"[INFO] Attente de la base PostgreSQL (rôle {plan.role})…", file=sys.stderr, flush=True)
         if not wait_for_database(plan.database_url, probe=probe, attempts=wait_attempts, delay=wait_delay, sleep_fn=sleep_fn):
+            detail = diagnoser(plan.database_url) or "vérifier TRANSCRIA_DATABASE_URL et le service de base."
             print(
-                f"[ERROR] base PostgreSQL injoignable après {wait_attempts} tentatives — "
-                "vérifier TRANSCRIA_DATABASE_URL et le service de base.",
+                f"[ERROR] base PostgreSQL inaccessible après {wait_attempts} tentatives — {detail}",
                 file=sys.stderr,
             )
             return 1

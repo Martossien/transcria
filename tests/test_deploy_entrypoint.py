@@ -110,6 +110,65 @@ def test_wait_for_database_gives_up():
     assert ep.wait_for_database("dsn", probe=lambda _d: False, attempts=4, delay=0, sleep_fn=lambda _d: None) is False
 
 
+# ── classify_db_unreachable : message actionnable (auth vs réseau) ───────────
+
+
+def _diag_with_error(monkeypatch, exc):
+    # Simule l'échec de connexion SQLAlchemy avec une exception donnée.
+    import transcria.deploy.entrypoint as mod
+
+    class _Engine:
+        def connect(self):
+            raise exc
+
+        def dispose(self):
+            pass
+
+    monkeypatch.setattr(mod, "create_engine", lambda url: _Engine(), raising=False)
+    import sqlalchemy
+    monkeypatch.setattr(sqlalchemy, "create_engine", lambda url: _Engine())
+    return mod.classify_db_unreachable("postgresql+psycopg://u:p@db/x")
+
+
+def test_classify_auth_failure_explains_stale_volume(monkeypatch):
+    msg = _diag_with_error(monkeypatch, Exception('FATAL: password authentication failed for user "transcria"'))
+    assert "AUTHENTIFICATION" in msg
+    assert "POSTGRES_PASSWORD" in msg and "down -v" in msg  # piège volume + remédiation
+
+
+def test_classify_dns_failure(monkeypatch):
+    msg = _diag_with_error(monkeypatch, Exception("could not translate host name \"db\" to address"))
+    assert "DNS" in msg or "HÔTE" in msg
+
+
+def test_classify_connection_refused(monkeypatch):
+    msg = _diag_with_error(monkeypatch, Exception("connection refused"))
+    assert "REFUSÉE" in msg
+
+
+def test_main_migrate_failure_reports_actionable_cause(tmp_path):
+    # La cause classée doit remonter dans le message d'erreur du rôle (pas un « injoignable » sec).
+    env = {"TRANSCRIA_ROLE": "migrate", "TRANSCRIA_CONFIG": str(_config(tmp_path)),
+           "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"}
+    captured: dict = {}
+    import io
+    import sys as _sys
+    buf = io.StringIO()
+    old = _sys.stderr
+    _sys.stderr = buf
+    try:
+        rc = ep.main(["migrate"], env=env, exec_fn=_Exec(), db_probe=lambda _d: False,
+                     db_diagnoser=lambda _url: "AUTHENTIFICATION refusée (volume préexistant)",
+                     wait_attempts=2, wait_delay=0, sleep_fn=lambda _d: None,
+                     opencode_provisioner=lambda _p, _e: None)
+    finally:
+        _sys.stderr = old
+        captured["err"] = buf.getvalue()
+    assert rc == 1
+    assert "AUTHENTIFICATION refusée" in captured["err"]
+    assert "inaccessible" in captured["err"]
+
+
 # ── main : orchestration + exec ─────────────────────────────────────────────
 
 

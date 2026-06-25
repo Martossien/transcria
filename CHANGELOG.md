@@ -35,6 +35,20 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   travail des agents `resolve_agent_work_root`, `deny` ailleurs, jamais `ask`), appliquée aux deux sites
   de provisioning (hôte `scripts/setup_opencode.py`, Docker `deploy/entrypoint.provision_opencode`).
   Règle : en headless, aucune permission opencode ne doit valoir `ask`. Cf. AGENTS.md (AgentWorkspace).
+- **STT distant : la transcription rapide du résumé ne lançait pas le moteur à la demande.** Le
+  pipeline principal demande au nœud d'assurer le moteur STT (`/engines/ensure`), mais la
+  transcription rapide du **résumé** tourne hors de ce pipeline → sur un nœud de ressources frais,
+  le moteur cohere n'était jamais lancé et le STT échouait en « connection refused » sans fallback
+  (l'utilisateur restait bloqué). `runner._preflight_remote_stt` exécute désormais le même pré-vol
+  (admission + `/engines/ensure`, qui attend que le moteur soit sain) avant la transcription rapide
+  distante ; un moteur en préparation diffère le job (re-queue), un nœud durablement indisponible
+  échoue proprement.
+- **Démarrage migrate : « base injoignable » masquait une erreur d'AUTHENTIFICATION.** Quand un
+  volume PostgreSQL préexistant a été initialisé avec un autre `POSTGRES_PASSWORD`, l'auth TCP
+  échoue alors que le service répond — l'ancien message générique « injoignable » envoyait
+  l'opérateur sur une fausse piste réseau. `entrypoint.classify_db_unreachable` rejoue une
+  connexion à l'échec et distingue auth / DNS / connexion refusée, avec une remédiation explicite
+  (réutiliser le mot de passe d'origine, `down -v`, ou `ALTER USER … PASSWORD`).
 
 ### Changed
 - **Audit licences / mentions tierces (préalable à une éventuelle image publique).**

@@ -372,6 +372,44 @@ class WorkflowRunner:
             sl.warning("[summary] Analyse de scène ignorée", error=str(exc))
             return {}
 
+    def _preflight_remote_stt(self, config: dict, sl) -> dict | None:
+        """Pré-vol STT distant pour le RÉSUMÉ (exécuté HORS du pipeline principal).
+
+        Le pipeline principal (`PipelineService._remote_resource_gate`) demande au nœud
+        d'ASSURER le moteur STT distant avant de transcrire. La transcription rapide du
+        résumé tourne en dehors de ce pipeline (`job_executor` → `runner.run_summary`) :
+        sans ce pré-vol, **rien ne déclenche `/engines/ensure`** → sur un nœud frais, le
+        moteur cohere n'est jamais lancé et le STT échoue en « connection refused » sans
+        fallback (l'utilisateur ne s'en sort pas). On réutilise le MÊME gate (admission §7.2
+        + auto-lancement STT, qui BLOQUE jusqu'à ce que le moteur soit sain). Retourne None
+        si on peut transcrire ; sinon un signal au contrat déjà géré par `run_summary` :
+        `vram_wait` (transitoire → re-queue) pour un `defer`, `error` pour un `fail`.
+        """
+        from transcria.inference.resource_gate import prepare_remote_resources
+
+        verdict = prepare_remote_resources(config)
+        if verdict.action == "proceed":
+            return None
+        if verdict.action == "defer":
+            sl.warning("Pré-vol STT distant : moteur en préparation — résumé différé (%s)",
+                       verdict.reason)
+            return {
+                "vram_wait": True,
+                "required_mb": 0,
+                "phase": "summary_stt",
+                "reason": verdict.reason,
+                "retry_after_s": verdict.retry_after_s or 30,
+                "error": verdict.reason,
+                "transcript_text": "",
+                "summary_text": "Résumé indisponible.",
+            }
+        sl.error("Pré-vol STT distant : nœud de ressources indisponible — %s", verdict.reason)
+        return {
+            "error": f"ressources_distantes_indisponibles: {verdict.reason}",
+            "transcript_text": "",
+            "summary_text": "Résumé indisponible.",
+        }
+
     def _run_quick_transcription(
         self, job: Job, audio_path: str, config: dict, sl
     ) -> dict:
@@ -395,6 +433,14 @@ class WorkflowRunner:
         # de `summary_stt` localement → fausse contention / attente VRAM à tort sur un tier
         # sans GPU). Cf. docs/SERVICE_RESSOURCES_GPU.md §9 et §7.2-bis.
         runs_remote = self._phase_runs_remotely("summary_stt")
+
+        # En distant : ASSURER le moteur STT (lance cohere à la demande, attend qu'il soit
+        # sain) AVANT de transcrire. Sans ça, un nœud frais refuse la connexion (cf.
+        # _preflight_remote_stt). En local, le GPUSession ci-dessous gère la VRAM.
+        if runs_remote:
+            preflight = self._preflight_remote_stt(config, sl)
+            if preflight is not None:
+                return preflight
 
         def _attempt() -> dict:
             generator = SummaryGenerator(config)
