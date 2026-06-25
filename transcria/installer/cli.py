@@ -94,6 +94,8 @@ def _add_postgres_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--local-pg", action="store_true", help="Base locale (autorise la reconstruction privilégiée)")
     p.add_argument("--non-interactive", action="store_true")
     p.add_argument("--pg-migrate", action="store_true", help="Migrer SQLite→PG sans prompt si la base PG est vide")
+    p.add_argument("--defer", action="store_true",
+                   help="Écrire le DSN SANS se connecter ni migrer (schéma déféré au runtime) — build d'image hermétique")
     p.add_argument("--admin-psql", default="", help="Préfixe psql privilégié pour le rebuild local (ex. 'sudo -u postgres psql')")
 
 
@@ -285,6 +287,7 @@ def _cmd_postgres(args: argparse.Namespace) -> int:
         local_pg=args.local_pg,
         non_interactive=args.non_interactive,
         pg_migrate=args.pg_migrate,
+        pg_defer=args.defer,
         is_root=os.geteuid() == 0,
         admin_psql_cmd=tuple(shlex.split(args.admin_psql)) if args.admin_psql else (),
     )

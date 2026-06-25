@@ -90,6 +90,11 @@ class PostgresPlan:
     local_pg: bool = False
     non_interactive: bool = True
     pg_migrate: bool = False
+    # `pg_defer` : écrire le DSN SANS se connecter ni migrer (schéma déféré au runtime, job
+    # `migrate`). Indispensable pour un BUILD D'IMAGE HERMÉTIQUE : `docker build` n'a pas de
+    # base live, et un build d'image ne doit jamais dépendre d'un service externe. Le DSN baké
+    # est sans effet au runtime (`resolve_database_uri` priorise `TRANSCRIA_DATABASE_URL`).
+    pg_defer: bool = False
     is_root: bool = False
     admin_psql_cmd: tuple[str, ...] = ()  # préfixe psql privilégié (rebuild local) ; vide = indisponible
     backup_suffix: str | None = None  # injectable pour des tests déterministes
@@ -303,6 +308,16 @@ def apply_postgres(
     migrate = migrate or _default_migrate(plan)
 
     dsn = build_pg_dsn(plan.host, plan.port, plan.db, plan.user, plan.password)
+
+    # ── Mode différé (build d'image hermétique) ───────────────
+    # On écrit le DSN et on s'arrête : aucune connexion, aucun schéma, aucune migration.
+    # Le job `migrate` (runtime) appliquera `alembic upgrade head` contre la VRAIE base.
+    if plan.pg_defer:
+        _emit_text(console, "INFO:PostgreSQL : DSN écrit, schéma DÉFÉRÉ au runtime (--pg-defer) — "
+                            "pas de connexion ni d'Alembic au build.")
+        _write_dsn(plan, console, dsn, chown, result)
+        result.record("deferred")
+        return result
 
     # ── Test de connexion ─────────────────────────────────────
     if query(dsn, "SELECT 1") != "1":

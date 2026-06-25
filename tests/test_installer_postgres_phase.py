@@ -96,6 +96,23 @@ def test_connection_failure_raises_and_renders(tmp_path):
     assert not plan.env_file.exists()
 
 
+def test_defer_writes_dsn_without_connecting(tmp_path):
+    # --pg-defer (build d'image hermétique) : DSN écrit, AUCUNE connexion, AUCUN Alembic.
+    plan = _plan(tmp_path, pg_defer=True)
+    alembic = _Recorder()
+
+    def _no_query(dsn, sql):
+        raise AssertionError("pg_defer ne doit interroger la base à AUCUN moment")
+
+    result = apply_postgres(plan, console=_console(), query=_no_query, alembic_upgrade=alembic)
+
+    assert "deferred" in result.actions
+    assert "connection-ok" not in result.actions       # jamais connecté
+    assert alembic.calls == []                          # schéma déféré au runtime
+    content = plan.env_file.read_text()
+    assert "TRANSCRIA_DATABASE_URL=" in content and "postgresql" in content
+
+
 def test_create_path_writes_dsn_and_runs_alembic(tmp_path):
     plan = _plan(tmp_path)
     alembic = _Recorder(returncode=0)

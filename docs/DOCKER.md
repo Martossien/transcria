@@ -140,8 +140,10 @@ Build-time (`docker build --build-arg`) :
 1. **Préparer la configuration** (non versionnée, montée au runtime) :
    ```bash
    ./install.sh --profile web --non-interactive --skip-deps --no-service \
-       --postgres --pg-existing --pg-host db --pg-user transcria --pg-db transcria --pg-password "$POSTGRES_PASSWORD"
-   # ⇒ produit config.yaml + .env localement (à monter)
+       --postgres --pg-defer --pg-host db --pg-user transcria --pg-db transcria --pg-password "$POSTGRES_PASSWORD"
+   # ⇒ produit config.yaml + .env localement (à monter). `--pg-defer` écrit le DSN SANS se
+   #    connecter : `db` n'est pas résoluble depuis l'hôte et la base n'est pas encore démarrée ;
+   #    le schéma est appliqué au runtime par le job `migrate`.
    ```
    ou générer `config.yaml` via `scripts/bootstrap_config.py --profile web` puis remplir `.env`.
 2. **Exporter le secret de base** : `export POSTGRES_PASSWORD=…`
@@ -264,7 +266,9 @@ risques, placement VRAM, FP8 sur Ampere) : **[docs/PLAN_TEST_SPLIT_VLLM.md](PLAN
 
 Particularités vs le `docker run` minimal ci-dessus :
 
-- **Images construites via `install.sh`** (on teste l'install comme un utilisateur) :
+- **Images construites via `install.sh`** (on teste l'install comme un utilisateur), **builds
+  hermétiques — aucune base PostgreSQL requise** : le worker passe par `install.sh --pg-defer`
+  (écrit le DSN sans se connecter ; le schéma est appliqué au runtime par le job `migrate`).
   ```bash
   docker build -f Dockerfile.worker        -t transcria-worker:latest .
   docker build -f Dockerfile.resource-node -t transcria-resource-node:latest .   # base CUDA + venv vLLM

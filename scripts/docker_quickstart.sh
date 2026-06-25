@@ -98,6 +98,20 @@ if [[ ! -f "config.yaml" ]]; then
     else
         ok "HF_TOKEN présent → backend STT 'cohere' + diarisation 'pyannote' (qualité de référence)."
     fi
+    # LLM d'arbitrage : l'image n'en embarque PAS. Sans endpoint externe (TRANSCRIA_ARBITRAGE_LLM_HOST),
+    # on DÉSACTIVE l'étape — sinon les profils qui résument/corrigent échoueraient à l'exécution.
+    # Désactivée, l'UI grise proprement ces profils (transcription + diarisation marchent). L'awk
+    # ne touche QUE workflow.arbitration_llm.enabled (1er `enabled:` après le bloc).
+    if [[ -z "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
+        warn "Aucune LLM d'arbitrage externe (TRANSCRIA_ARBITRAGE_LLM_HOST absent) →"
+        warn "  arbitration_llm.enabled=false : profils résumé/correction grisés dans l'UI."
+        warn "  Pour l'activer : lancer une LLM OpenAI-compatible (:8080) et régler arbitration_llm"
+        warn "  (ou TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal). Détails : docs/DOCKER.md."
+        awk '/^[[:space:]]*arbitration_llm:/{f=1} f && /^[[:space:]]*enabled:[[:space:]]*true/{sub(/true/,"false"); f=0} {print}' \
+            config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
+    else
+        ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."
+    fi
     ok "config.yaml prêt."
 else
     ok "config.yaml existant conservé."

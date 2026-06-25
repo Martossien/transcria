@@ -31,6 +31,8 @@
 #   --pg-password PWD  Mot de passe du rôle (défaut: généré aléatoirement)
 #   --pg-existing      Rôle et base déjà provisionnés : écrire le DSN + alembic
 #                      seulement, sans bootstrap privilégié (Docker, base distante, migrate)
+#   --pg-defer         Écrire le DSN SANS se connecter ni migrer (schéma déféré au runtime,
+#                      job migrate). Pour un BUILD D'IMAGE HERMÉTIQUE : pas de base live requise.
 #   --pg-migrate       Migrer les données SQLite existantes vers PostgreSQL
 #   --inference-service  Installer le nœud de ressources GPU (inference_service)
 #                        (n'installe PAS le service web TranscrIA principal)
@@ -79,6 +81,7 @@ PG_USER="transcria"
 PG_PASSWORD=""         # généré si vide
 PG_MIGRATE=false
 PG_EXISTING=false      # --pg-existing : rôle/base déjà provisionnés (Docker, base distante, migrate)
+PG_DEFER=false         # --pg-defer : DSN écrit sans connexion (schéma déféré au runtime ; build hermétique)
 SKIP_DEPS=false        # --skip-deps : venv et dépendances déjà fournis (couche build Docker, venv existant)
 
 INSTALL_INFERENCE=false   # --inference-service
@@ -123,6 +126,9 @@ while [[ $# -gt 0 ]]; do
         --pg-password)     PG_PASSWORD="$2"; shift 2 ;;
         --pg-migrate)      PG_MIGRATE=true; shift ;;
         --pg-existing)     PG_EXISTING=true; shift ;;
+        # --pg-defer implique le chemin « base existante » (pas de bootstrap privilégié) ET
+        # diffère connexion/Alembic au runtime → build d'image sans base live.
+        --pg-defer)        PG_DEFER=true; PG_EXISTING=true; shift ;;
         --inference-service)
             if [[ "$PROFILE_EXPLICIT" = true && "$INSTALL_PROFILE" != "resource-node" ]]; then
                 log_error "--inference-service est incompatible avec --profile $INSTALL_PROFILE"
@@ -689,6 +695,7 @@ _setup_postgres() {
         --service-user "$SERVICE_USER"
     )
     [[ "$local_pg" = true ]]      && POSTGRES_CLI_ARGS+=(--local-pg)
+    [[ "$PG_DEFER" = true ]]      && POSTGRES_CLI_ARGS+=(--defer)
     [[ "$NON_INTERACTIVE" = true ]] && POSTGRES_CLI_ARGS+=(--non-interactive)
     [[ "$PG_MIGRATE" = true ]]    && POSTGRES_CLI_ARGS+=(--pg-migrate)
     # Identité psql privilégiée pour la reconstruction locale (DROP SCHEMA) — distant : aucune.
