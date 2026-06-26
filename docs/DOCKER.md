@@ -69,6 +69,13 @@ de référence : (a) accepter les conditions des **DEUX** modèles sur
 fournir au conteneur (`HF_TOKEN`, ou dans `.env`). Le cache HF de l'hôte est monté dans le conteneur (volume
 `/hf`) pour éviter de re-télécharger.
 
+> ⚠️ **Cache hôte pré-rempli par un AUTRE utilisateur.** Le conteneur tourne en **root** ; si
+> `HF_CACHE_DIR` pointe sur un cache déjà peuplé par un utilisateur non-root (symlinks/permissions),
+> le chargement de **faster-whisper** peut échouer (`[Errno 17] File exists`) → transcription vide.
+> Pour un utilisateur **neuf** (cache vide), whisper et Sortformer se téléchargent proprement **sans
+> token** (validé E2E). En cas de souci, pointer `HF_CACHE_DIR` sur un **cache dédié au conteneur**
+> (répertoire vide) plutôt que de réutiliser un cache hôte hétérogène.
+
 > ⚠️ `transcria.stt.cohere_transcriber` force `HF_HUB_OFFLINE=1` par défaut. En conteneur
 > avec un cache fraîchement monté, laisser **`HF_HUB_OFFLINE=0`** (le compose le fait) pour
 > que la 1re résolution du modèle gated aboutisse ; ensuite le cache sert les poids.

@@ -24,6 +24,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   `--provision-only` pour pré-fetch) ; lancement LLM in-container via l'autonomie VRAM existante
   (`TRANSCRIA_ARBITRAGE_SCRIPT` déduit du palier). Compose : service `migrate-gpu` (même image GPU).
   Détails : `docs/DOCKER.md` § All-in-one GPU / Publication.
+  **Validé E2E réel sur `test2.mp3`** (8× RTX 3090) : (a) qualité de référence cohere+pyannote
+  → 98/100 ; (b) **chemin zéro-token** whisper + Sortformer (téléchargés sans token) + LLM
+  embarquée (llama-server lancé, opencode exit 0, corrections réelles) → 74/100, livrables
+  SRT/ZIP/DOCX. Piège documenté : un cache HF hôte pré-rempli par un autre utilisateur peut
+  casser faster-whisper (`File exists`) — cache vierge OK.
 
 ## [0.1.0-beta.5] — 2026-06-26
 
