@@ -8,6 +8,23 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Image Docker all-in-one GPU — workflow complet en une commande, sans token** (+ publiable).
+  Nouvelle image dédiée `Dockerfile.allinone-gpu` (base **CUDA 12.6** ; cu128 impossible car le
+  projet épingle `torchcodec>=0.12`, publié sur cu126/cu130 seulement) qui **compile `llama-server`
+  CUDA** (llama.cpp ne publie pas de binaire CUDA Linux) → **LLM d'arbitrage embarquée**. Les
+  défauts zéro-friction du quickstart sans `HF_TOKEN` deviennent **non gated** : STT `whisper` +
+  diarisation **`sortformer`** (NVIDIA, ≤4 locuteurs) + petit GGUF d'arbitrage (palier 12 Go,
+  `unsloth/Qwen3.5-9B-GGUF`, non gated, téléchargé au runtime dans le volume `models`) → les 6
+  profils tournent sans aucun token ; un token HF gratuit (+ conditions Cohere **et** pyannote)
+  bascule sur la qualité de référence (locuteurs illimités). **Aucun poids n'est baké** (build
+  hermétique) ⇒ image **publiable** : workflow `.github/workflows/publish-image.yml` (GHCR,
+  CUDA 12.6 figée, driver ≥ 535), et `TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/…` fait un `pull`
+  au lieu d'un build. Entrypoint : `provision_arbitrage_model` (téléchargement idempotent + mode
+  `--provision-only` pour pré-fetch) ; lancement LLM in-container via l'autonomie VRAM existante
+  (`TRANSCRIA_ARBITRAGE_SCRIPT` déduit du palier). Compose : service `migrate-gpu` (même image GPU).
+  Détails : `docs/DOCKER.md` § All-in-one GPU / Publication.
+
 ## [0.1.0-beta.5] — 2026-06-26
 
 ### Added

@@ -1,13 +1,19 @@
 # Déploiement Docker (P5)
 
 > Référence du déploiement conteneurisé de TranscrIA. Suit les invariants de
-> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Les rôles applicatifs (`web`,
-> `scheduler`, `migrate` et l'all-in-one `all`) partagent une **seule image** construite par
-> le `Dockerfile` à la racine (CPU par défaut ; CUDA via `--build-arg TORCH_INDEX_URL=…cu130`
-> pour l'all-in-one GPU) et orchestrée par `docker-compose.yml`. Cette image embarque opencode
-> (agent des phases LLM). Le nœud de ressources GPU utilise une image distincte à base CUDA
-> (`Dockerfile.resource-node`) ; le banc split bâtit `Dockerfile.worker`/`Dockerfile.resource-node`
-> en exécutant `install.sh`.
+> `docs/archive/PLAN_EVOLUTION_INSTALLATION.md § P5`. Deux familles d'images :
+>
+> - **Rôles CPU distribués** (`web`, `scheduler`, `migrate`) : une seule image légère construite
+>   par le `Dockerfile` racine (torch CPU) et orchestrée par `docker-compose.yml` (profil `split`).
+> - **All-in-one GPU** (`all`) : image **dédiée** `Dockerfile.allinone-gpu` (base CUDA 12.6,
+>   **llama.cpp compilé** = LLM d'arbitrage embarquée, **NeMo/Sortformer** pour la diarisation
+>   non gated), profil `gpu`. Elle livre le **workflow complet GPU en une commande, sans token**
+>   — voir « All-in-one GPU » ci-dessous.
+>
+> Les deux embarquent opencode (agent des phases LLM). Le nœud de ressources GPU du banc split
+> utilise `Dockerfile.resource-node` ; le banc split bâtit `Dockerfile.worker`/`Dockerfile.resource-node`
+> en exécutant `install.sh`. **Aucune image n'embarque de poids de modèle** (téléchargés au
+> runtime) → l'image all-in-one GPU est **publiable** (cf. § Publication).
 
 ## Démarrage rapide (une commande)
 
@@ -47,17 +53,20 @@ scripts/setup_docker_gpu.sh --check  # vérifie seulement (GPU visible en conten
 > Prérequis du script : driver NVIDIA (`nvidia-smi`) + Docker déjà installés (il n'y touche pas).
 > Il rend le GPU visible via **CDI** (`--device nvidia.com/gpu=…`).
 
-**2. Modèles STT/diarisation** — deux chemins selon le besoin :
+**2. Modèles STT/diarisation** — deux chemins selon le besoin. **Sans token, TOUT marche**
+(transcription + locuteurs + résumé/correction) avec des modèles **non gated** ; le token HF
+ne sert qu'à la **qualité de référence** :
 
-| Besoin | Backend | Token HF |
-|---|---|---|
-| **Test rapide, sans friction** | `models.stt_backend: "whisper"` (openai/whisper-large-v3, non gated) | ❌ aucun |
-| **Qualité de référence (prod)** | `models.stt_backend: "cohere"` (CohereLabs, **gated**) | ✅ requis |
+| Besoin | STT | Diarisation | Token HF |
+|---|---|---|---|
+| **Test rapide, zéro friction** | `whisper` (openai/whisper-large-v3, non gated) | `sortformer` (NVIDIA, non gated, **≤4 locuteurs**, expérimental) | ❌ aucun |
+| **Qualité de référence (prod)** | `cohere` (CohereLabs, **gated**) | `pyannote` (**gated**, locuteurs illimités) | ✅ requis |
 
-Pour Cohere (gated) : (a) accepter les conditions du modèle sur
-`huggingface.co/CohereLabs/cohere-transcribe-03-2026`, (b) créer un token HF, (c) le
-fournir au conteneur (`HF_TOKEN`, ou dans `.env`). La diarisation `pyannote` est
-également gated → même token. Le cache HF de l'hôte est monté dans le conteneur (volume
+Le quickstart choisit automatiquement la 1re ligne sans `HF_TOKEN`, la 2e avec. Pour la qualité
+de référence : (a) accepter les conditions des **DEUX** modèles sur
+`huggingface.co/CohereLabs/cohere-transcribe-03-2026` **et**
+`huggingface.co/pyannote/speaker-diarization-community-1`, (b) créer un token HF, (c) le
+fournir au conteneur (`HF_TOKEN`, ou dans `.env`). Le cache HF de l'hôte est monté dans le conteneur (volume
 `/hf`) pour éviter de re-télécharger.
 
 > ⚠️ `transcria.stt.cohere_transcriber` force `HF_HUB_OFFLINE=1` par défaut. En conteneur
@@ -104,11 +113,12 @@ Conteneurs **externes** à ce compose :
 - **resource-node** (GPU) — STT/diarisation/voix locales. Image à base CUDA (cf.
   ci-dessous), déployée sur l'hôte GPU ; déclarée côté scheduler via
   `inference.mode=remote` + URLs des nœuds.
-- **LLM d'arbitrage** — service externe OpenAI-compatible (recommandé) ou conteneur
-  dédié ; jamais embarqué dans l'image applicative. Hôte/port résolus de façon unique
+- **LLM d'arbitrage** — **embarquée dans l'all-in-one GPU** (`Dockerfile.allinone-gpu` :
+  llama.cpp compilé + petit GGUF tiré au runtime), lancée à la demande par l'autonomie VRAM.
+  Pour les **rôles CPU/split** (`web`/`scheduler`), elle reste **externe** : service
+  OpenAI-compatible ou conteneur dédié, hôte/port résolus de façon unique
   (`services.arbitrage_llm_host`/`arbitrage_llm_port`, surchargeables par
-  `TRANSCRIA_ARBITRAGE_LLM_HOST`) — pour l'all-in-one, pointer une LLM sur l'hôte se fait via
-  `host.docker.internal` (+ `extra_hosts: host-gateway`).
+  `TRANSCRIA_ARBITRAGE_LLM_HOST` — ex. `host.docker.internal` + `extra_hosts: host-gateway`).
 
 ## Matrice des variables
 
@@ -127,6 +137,10 @@ Conteneurs **externes** à ce compose :
 | `HF_CACHE_DIR` | all (compose) | non (défaut `~/.cache/huggingface`) | Cache HF de l'hôte monté dans `/hf` |
 | `HF_HUB_OFFLINE` | all, resource-node | non (compose met `0`) | `0` requis pour 1re résolution d'un modèle gated en conteneur |
 | `TRANSCRIA_ARBITRAGE_LLM_HOST` | scheduler, all | non (défaut `services.arbitrage_llm_host` ou `127.0.0.1`) | Hôte de la LLM d'arbitrage. Override commun à la sonde `vram_manager` ET au provider opencode (résolution unique) — utile quand la LLM tourne sur l'hôte/un nœud (ex. `host.docker.internal`) |
+| `TRANSCRIA_LLM_TIER` | all | non (défaut `12`) | Palier VRAM de la LLM embarquée (12/16/24/32/48/64). Pilote le GGUF téléchargé ET le script de lancement du palier (`scripts/arbitrage_profiles/<tier>gb_*.sh`) |
+| `MODELS_DIR` | all | non (défaut `/app/models`) | Répertoire (volume `models`, persistant) où le GGUF d'arbitrage est téléchargé au runtime |
+| `TRANSCRIA_ARBITRAGE_SCRIPT` | all | non (déduit du palier) | Override explicite du script de lancement de la LLM (sinon résolu depuis `TRANSCRIA_LLM_TIER`) |
+| `TRANSCRIA_ALLINONE_IMAGE` | all (compose) | non (défaut `transcria-allinone:latest`) | Réf. de l'image GPU. Pointer un tag de registre (ex. `ghcr.io/<owner>/transcria-allinone:vX`) → le quickstart fait un `pull` au lieu d'un build |
 
 Build-time (`docker build --build-arg`) :
 
@@ -197,53 +211,79 @@ docker run --rm --device nvidia.com/gpu=0 nvidia/cuda:12.4.0-base-ubuntu22.04 nv
 > `--gpus all` échoue (« failed to discover GPU vendor from CDI / AMD CDI spec not found ») ;
 > la forme `--device nvidia.com/gpu=…` est fiable. En compose : `devices: ["nvidia.com/gpu=all"]`.
 
-**Image GPU** (les wheels torch CUDA embarquent le runtime ; le driver vient de l'hôte via CDI) :
+**Image GPU all-in-one** (`Dockerfile.allinone-gpu`, CUDA 12.6 ; les wheels torch CUDA embarquent
+le runtime, le driver vient de l'hôte via CDI) — préférer le quickstart, qui gère build/pull :
 
 ```bash
-docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
+docker compose --profile gpu build       # → transcria-allinone:latest (CUDA 12.6, cu126)
+# ou directement : docker build -f Dockerfile.allinone-gpu -t transcria-allinone:latest .
 ```
 
-> L'index `cu130` correspond au driver récent (≥ 580) de cette plateforme ; adapter à votre
-> version de driver/CUDA (`cu124`, `cu126`, …). Vérifié : torch 2.12 + cu130, `torch.cuda.is_available()`
-> True dans le conteneur, RTX 3090 énumérée par `/capabilities`.
->
-> `torch`, `torchaudio` **et `torchcodec`** sont installés depuis cet index (et non en transitif
-> via PyPI) : `torchcodec` est le décodeur audio de pyannote.audio 4.x, couplé à l'ABI/CUDA de
-> torch — un wheel non apparié casse l'`AudioDecoder` (diarisation). L'image fournit `ffmpeg`
-> (libs FFmpeg requises au runtime par torchcodec).
+> Base CUDA **12.6** (driver ≥ 535, largement répandu). `torch`, `torchaudio` **et `torchcodec`**
+> sont installés depuis l'index **cu126** (et non en transitif via PyPI) : `torchcodec` est le
+> décodeur audio de pyannote.audio 4.x, couplé à l'ABI/CUDA de torch — un wheel non apparié casse
+> l'`AudioDecoder` (diarisation). C'est précisément le pin `torchcodec>=0.12` qui impose cu126/cu130
+> (cu128 ne le publie pas). L'image fournit `ffmpeg` (libs FFmpeg requises au runtime par torchcodec).
+> Le `Dockerfile` racine reste **CPU** (rôles web/scheduler/migrate).
 
-### Option simple pour tester le projet — tout-en-un GPU (une commande)
+### All-in-one GPU — tester le projet COMPLET en une commande, sans token
 
-Profil `gpu` du compose : un seul conteneur (UI + scheduler + inférence in-process) + base.
+Profil `gpu` du compose : un seul conteneur (UI + scheduler + inférence in-process + **LLM
+d'arbitrage embarquée**) + base. Image dédiée `Dockerfile.allinone-gpu`.
 
 ```bash
-docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
+scripts/docker_quickstart.sh               # build/pull + modèles + up + /health (recommandé)
+# … ou manuellement :
 export POSTGRES_PASSWORD=…
-docker compose --profile gpu up -d        # db → migrate → all-in-one (GPU)
-curl -fsS http://localhost:7870/health    # → 200
+docker compose --profile gpu build         # construit transcria-allinone (CUDA 12.6, llama.cpp)
+docker compose --profile gpu run --rm --no-deps all-in-one --provision-only   # tire le GGUF (~6 Go)
+docker compose --profile gpu up -d         # db → migrate-gpu → all-in-one
+curl -fsS http://localhost:7870/health     # → 200
 ```
 
-> Le rôle `all` lance le serveur Flask intégré (comme l'all-in-one natif) : adapté à un
-> **déploiement de test/démo**, pas à une production à fort trafic (préférer alors le split
-> `web` gunicorn + `scheduler`). Un GPU est requis pour le traitement réel des jobs ; le STT
-> (Cohere) et la diarisation (pyannote) tournent **dans le conteneur** (placement VRAM
-> automatique), modèles chargés à la demande depuis le cache HF monté (`/hf`).
+**Ce qui tourne dans le conteneur, sur le GPU** (séquencé par l'autonomie VRAM) :
+
+- **STT** : `whisper` (sans token) ou `cohere` (avec token, qualité de référence) ;
+- **Diarisation** : `sortformer` (NVIDIA, sans token, ≤4 locuteurs, expérimental) ou `pyannote`
+  (avec token, locuteurs illimités) ;
+- **LLM d'arbitrage** (résumé / correction / relecture) : **`llama-server` compilé dans l'image**,
+  servant un petit GGUF (palier `TRANSCRIA_LLM_TIER`, défaut 12 Go = Qwen3.5-9B Q5_K_M, **non
+  gated**) téléchargé au runtime dans le volume `models`. opencode (agent) est inclus ; son
+  `provider.local` est pointé sur `127.0.0.1:8080` au démarrage.
+
+→ **Sans aucun token**, les 6 profils fonctionnent (locuteurs via Sortformer ≤4). Un **token HF
+gratuit** (+ conditions des deux modèles) bascule sur la **qualité de référence** (Cohere +
+pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétique).
+
+> Le rôle `all` lance le serveur Flask intégré : adapté au **test/démo**, pas à une production à
+> fort trafic (préférer alors le split `web` gunicorn + `scheduler`, où la LLM d'arbitrage reste
+> un service externe — cf. matrice `TRANSCRIA_ARBITRAGE_LLM_HOST`).
 >
-> **La LLM d'arbitrage n'est PAS embarquée** (aucune image applicative n'embarque de LLM) :
-> c'est un service OpenAI-compatible externe. Trois options :
-> - **LLM sur l'hôte** (le plus simple en test) : lancer un serveur (ex. `scripts/launch_arbitrage.sh`,
->   llama.cpp) sur l'hôte en `:8080`, puis pour le conteneur ajouter
->   `TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal` **et**
->   `extra_hosts: ["host.docker.internal:host-gateway"]` (le `provider.local` d'opencode est
->   reconfiguré au démarrage vers cet hôte — résolution unique, cf. matrice).
-> - **LLM dans un conteneur** dédié (cf. banc split ci-dessous, service `vllm-arbitrage`).
-> - **Sans LLM** : désactiver la correction (`arbitration_llm.enabled: false`) pour un test STT+diar seuls.
+> **Pourquoi CUDA 12.6** : le projet épingle `torchcodec>=0.12` (pyannote 4.x), publié sur les
+> index torch **cu126** et cu130 (pas cu128). cu126 a le **driver requis le plus répandu (~535+)**.
+> **Pourquoi llama.cpp compilé** : llama.cpp ne publie pas de binaire CUDA Linux → on le compile
+> dans un étage builder (binaire canonique des paliers).
+
+### Publication d'une image publique (GHCR)
+
+L'image all-in-one GPU est **publiable** : licences permissives (projet Apache-2.0, llama.cpp
+MIT, NeMo Apache-2.0, opencode MIT, torch BSD, base CUDA redistribuable) et **aucun poids
+embarqué**. Le workflow `.github/workflows/publish-image.yml` construit et pousse
+`ghcr.io/<owner>/transcria-allinone:<tag>` (+ `:latest`) sur push d'un tag `v*` ou via
+`workflow_dispatch`.
+
+Côté testeur, pointer le quickstart sur l'image publiée fait un **`pull`** (pas de build) :
+
+```bash
+TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX.Y.Z scripts/docker_quickstart.sh
+```
+
+> **Driver minimum** : CUDA 12.6 → driver NVIDIA **≥ 535** (Linux). Si le driver est plus ancien,
+> le quickstart retombe sur un **build local**. L'image est volumineuse (**~19 Go** : base CUDA
+> devel + torch + NeMo) ; le build CI est lourd, le workflow
+> libère l'espace disque du runner ; sinon builder/pousser depuis une machine GPU locale.
 >
-> opencode (agent qui pilote la LLM pour résumé/correction/relecture) **est inclus dans l'image** :
-> les phases LLM fonctionnent dès qu'un endpoint d'arbitrage est joignable.
->
-> *Validé E2E (2026-06-23, 8× RTX 3090) : pipeline complet, qualité 97/100, livrables SRT/ZIP/DOCX,
-> LLM d'arbitrage = llama.cpp sur l'hôte.*
+> *Validé E2E (2026-06-23, 8× RTX 3090) : pipeline complet, qualité 97/100, livrables SRT/ZIP/DOCX.*
 
 ### Nœud de ressources GPU séparé (déploiement split)
 

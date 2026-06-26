@@ -1,0 +1,130 @@
+# syntax=docker/dockerfile:1
+#
+# Image ALL-IN-ONE GPU — UI + scheduler + inférence GPU in-process + LLM d'arbitrage
+# embarquée (llama.cpp CUDA compilé). Objectif : « tester le projet COMPLET en une commande,
+# GPU-accéléré, sans token » (cf. docs/DOCKER.md § all-in-one GPU). Publiable (GHCR).
+#
+# POURQUOI CUDA 12.6 (et pas 12.8) : le projet épingle `torchcodec>=0.12` (pyannote.audio 4.x).
+#   torchcodec 0.12.0 + torch 2.12.0 ne sont publiés que sur les index PyTorch **cu126** et
+#   cu130 — PAS cu128. cu126 (CUDA 12.6) a le driver requis le plus répandu (~535+) → meilleure
+#   compat pour un test public. La base CUDA et l'index torch sont donc alignés sur 12.6.
+#
+# POURQUOI COMPILER llama.cpp : llama.cpp ne publie AUCUN binaire CUDA pour Linux (assets
+#   Linux = CPU/Vulkan/ROCm/SYCL ; CUDA = Windows seulement, vérifié via l'API GitHub). On
+#   compile donc `llama-server` dans un étage builder sur la base CUDA — install propre, sans
+#   RPATH machine-spécifique. C'est le binaire canonique que les 6 paliers + le wrapper attendent.
+#
+# AUCUN MODÈLE BAKÉ (poids, gating, build hermétique) : le GGUF d'arbitrage (palier 12 Go,
+#   unsloth/Qwen3.5-9B-GGUF, NON gated), whisper et Sortformer (NVIDIA, NON gated) sont
+#   téléchargés AU RUNTIME dans le cache HF monté (cf. scripts/docker_quickstart.sh). C'est ce
+#   qui rend l'image publiable : rien de gated ni de proprio embarqué.
+#
+# P5 : install.sh au BUILD (teste le chemin d'install all-in-one), transcria.deploy.entrypoint
+#   au RUNTIME. Le service tourne en root (fidèle à la prod). config.yaml/.env au RUNTIME (volume).
+#
+# Build (lourd, aucune base requise — DSN déféré via --pg-defer) :
+#   docker build -f Dockerfile.allinone-gpu -t transcria-allinone:latest .
+
+ARG CUDA_IMAGE=nvidia/cuda:12.6.3-devel-ubuntu24.04
+ARG TORCH_CUDA_TAG=cu126
+# Tag llama.cpp ≥ b9630 (archi gated-delta requise par les paliers, cf. scripts/arbitrage_profiles/).
+ARG LLAMA_CPP_REF=b9816
+
+# ── Étage builder-llama : compile llama-server (CUDA) ───────────────────────────
+FROM ${CUDA_IMAGE} AS llama-builder
+ARG LLAMA_CPP_REF
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+# CMAKE_CUDA_ARCHITECTURES couvre Turing→Hopper (75=T4/2080, 80=A100, 86=30xx/A6000,
+# 89=40xx/L4, 90=H100). LLAMA_CURL=OFF : pas de dépendance libcurl (on ne télécharge pas
+# de modèle depuis llama-server). Sortie : /opt/llama/bin/llama-server.
+# ggml-cuda lie la **CUDA Driver API** (libcuda : cuMemCreate, cuMemMap… = VMM). Dans une image
+# `devel` SANS driver, le stub `libcuda.so` (SONAME libcuda.so.1) est dans .../cuda/lib64/stubs.
+# On force son link (exe + shared) : sans `-lcuda` explicite, le link de llama-server échoue
+# (« undefined reference to cuMemCreate »). Le DT_NEEDED `libcuda.so.1` est résolu au RUNTIME par
+# le vrai driver injecté via CDI (jamais embarqué). `--allow-shlib-undefined` tolère les symboles
+# driver dans les .so intermédiaires.
+RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/llama.cpp /tmp/llama.cpp \
+    && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
+        -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=ON \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_EXE_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda -Wl,--allow-shlib-undefined" \
+    && cmake --build /tmp/llama.cpp/build --config Release --target llama-server -j "$(nproc)" \
+    && mkdir -p /opt/llama/bin \
+    && cp -a /tmp/llama.cpp/build/bin/. /opt/llama/bin/ \
+    && rm -rf /tmp/llama.cpp
+# llama.cpp moderne = exe `llama-server` FIN + bibliothèques partagées (libllama-server-impl.so,
+# libggml-cuda.so, libggml-base.so, libllama.so…). On copie TOUT le dossier bin (exe + .so),
+# sinon le serveur ne démarre pas au runtime (.so introuvables).
+
+# ── Étage final : venv projet (install.sh) + llama-server + opencode ────────────
+FROM ${CUDA_IMAGE}
+ARG TORCH_CUDA_TAG
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TRANSCRIA_CONFIG=/app/config.yaml \
+    CUDA_HOME=/usr/local/cuda
+
+# Prérequis système d'install.sh (cf. transcria/install_prerequisites.py) : python3.12+venv,
+# ffmpeg (+ libav* pour torchcodec), libpq (psycopg), build tools (wheels), iproute2 (ss : vérifs
+# de port des lanceurs LLM), git/curl/sudo/ca-certificates (détection llama, installateur opencode).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+        build-essential libpq-dev postgresql-client \
+        ffmpeg iproute2 procps lsof git curl sudo ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+
+# llama-server CUDA compilé à l'étage précédent : exe FIN + ses bibliothèques (.so) ⇒ on copie
+# tout le dossier, et on déclare /opt/llama/bin au loader (ldconfig) pour que l'exe trouve ses .so.
+# libcuda.so.1 (driver) reste résolu au RUNTIME via CDI. Symlink dans le PATH pour commodité.
+COPY --from=llama-builder /opt/llama/bin /opt/llama/bin
+RUN echo /opt/llama/bin > /etc/ld.so.conf.d/llama.conf && ldconfig \
+    && ln -sf /opt/llama/bin/llama-server /usr/local/bin/llama-server
+
+WORKDIR /app
+COPY . /app
+
+# DSN baké : pointe sur le service compose `db`, sans effet au runtime (override par
+# TRANSCRIA_DATABASE_URL). Surchargeable au build (--build-arg PG_DSN_*).
+ARG PG_DSN_HOST=db
+ARG PG_DSN_PORT=5432
+ARG PG_DSN_DB=transcria
+ARG PG_DSN_USER=transcria
+
+# ── Install « utilisateur » de l'all-in-one (teste install.sh + opencode) ───────
+#   --cuda cu126   : index torch CUDA 12.6 (aligné sur la base ; sans GPU au build) ;
+#   --no-service   : pas de systemd en conteneur ; --skip-doctor : doctor exige GPU/base/LLM ;
+#   --postgres --pg-defer : DSN écrit, AUCUNE connexion au build, schéma déféré au job migrate.
+# Au build (sans GPU) la sélection de palier LLM passe en « raw-mode » → AUCUN modèle téléchargé
+# (build hermétique préservé). install.sh installe tout requirements.txt (dont nemo_toolkit[asr]
+# → Sortformer) + opencode (profil all-in-one = needs_llm). Le mot de passe baké = placeholder.
+RUN ./install.sh --profile all-in-one \
+        --non-interactive --no-service --skip-doctor \
+        --cuda "${TORCH_CUDA_TAG}" \
+        --postgres --pg-defer \
+        --pg-host "${PG_DSN_HOST}" --pg-port "${PG_DSN_PORT}" \
+        --pg-db "${PG_DSN_DB}" --pg-user "${PG_DSN_USER}" --pg-password placeholder
+
+# Qualification au build (sans GPU) : on EXIGE que les libs partagées du llama-server compilé se
+# résolvent dans l'image (CUDA runtime + cuBLAS). EXCEPTION : `libcuda.so.1` (CUDA Driver API)
+# n'est JAMAIS dans l'image — elle est injectée au RUNTIME par le driver hôte via CDI ; un
+# « not found » sur libcuda est donc attendu et ignoré. Toute AUTRE lib manquante = image dont
+# l'arbitrage casserait → on échoue le build (le vrai mode de panne, ex-finding F3).
+# `detect_llama_server.py` complète en informatif (verdict version/ldd), non bloquant.
+RUN if ldd /usr/local/bin/llama-server | grep "not found" | grep -v "libcuda\.so"; then \
+        echo "ERREUR : libs partagées non résolues pour llama-server (hors libcuda, injectée au runtime)." >&2; \
+        exit 1; \
+    fi \
+    && /app/venv/bin/python scripts/detect_llama_server.py --bin /usr/local/bin/llama-server || true
+
+# PATH = venv PROJET (gunicorn, inférence in-process). Le rôle est fourni par TRANSCRIA_ROLE.
+# LLAMA_SERVER : chemin canonique pour la génération du wrapper d'arbitrage (quickstart/entrypoint).
+ENV PATH="/app/venv/bin:$PATH" \
+    LLAMA_SERVER=/usr/local/bin/llama-server \
+    TRANSCRIA_ROLE=all
+ENTRYPOINT ["/app/venv/bin/python", "-m", "transcria.deploy.entrypoint"]

@@ -6,6 +6,7 @@ remplacement de process — sans conteneur, sans base, sans serveur réel.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from transcria.deploy import entrypoint as ep
@@ -209,6 +210,87 @@ def test_main_invokes_opencode_provisioner_for_llm_role(tmp_path):
     ep.main(["scheduler"], env=env, exec_fn=_Exec(), db_probe=lambda _d: True,
             opencode_provisioner=lambda plan, _env: seen.append(plan.role))
     assert seen == ["scheduler"]  # appelé avant l'exec, pour un rôle LLM
+
+
+# ── Provisioning du modèle d'arbitrage (rôle all) ───────────────────────────
+
+
+def _patch_config(monkeypatch, *, enabled=True):
+    import transcria.config as cfgmod
+    monkeypatch.setattr(cfgmod, "load_config",
+                        lambda *a, **k: {"workflow": {"arbitration_llm": {"enabled": enabled}}})
+
+
+def test_provision_model_downloads_when_missing(tmp_path, monkeypatch):
+    _patch_config(monkeypatch)
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_SCRIPT", raising=False)
+    calls = []
+
+    def dl(repo, filename, local_dir):
+        calls.append((repo, filename, local_dir))
+        Path(local_dir).mkdir(parents=True, exist_ok=True)
+        (Path(local_dir) / filename).write_text("gguf", encoding="utf-8")
+
+    try:
+        ok = ep.provision_arbitrage_model(
+            _plan(tmp_path, "all"),
+            {"MODELS_DIR": str(tmp_path / "models"), "TRANSCRIA_LLM_TIER": "12"},
+            downloader=dl,
+        )
+        assert ok is True
+        assert calls and calls[0][0] == "unsloth/Qwen3.5-9B-GGUF"
+        assert calls[0][1] == "Qwen3.5-9B-Q5_K_M.gguf"
+        # Palier → script de lancement paramétrique résolu (le profil existe dans le dépôt).
+        assert os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT", "").endswith("12gb_qwen3.5-9b-q5km.sh")
+    finally:
+        os.environ.pop("TRANSCRIA_ARBITRAGE_SCRIPT", None)
+
+
+def test_provision_model_skips_when_present(tmp_path, monkeypatch):
+    _patch_config(monkeypatch)
+    monkeypatch.setenv("TRANSCRIA_ARBITRAGE_SCRIPT", "/x.sh")  # déjà fourni → pas de résolution
+    dest = tmp_path / "models" / "Qwen3.5-9B-Q5_K_M"
+    dest.mkdir(parents=True)
+    (dest / "Qwen3.5-9B-Q5_K_M.gguf").write_text("gguf", encoding="utf-8")
+    calls = []
+    ok = ep.provision_arbitrage_model(_plan(tmp_path, "all"),
+                                      {"MODELS_DIR": str(tmp_path / "models"),
+                                       "TRANSCRIA_ARBITRAGE_SCRIPT": "/x.sh"},
+                                      downloader=lambda *a: calls.append(a))
+    assert ok is True and calls == []
+
+
+def test_provision_model_skips_when_disabled(tmp_path, monkeypatch):
+    _patch_config(monkeypatch, enabled=False)
+    calls = []
+    ok = ep.provision_arbitrage_model(_plan(tmp_path, "all"),
+                                      {"MODELS_DIR": str(tmp_path / "models")},
+                                      downloader=lambda *a: calls.append(a))
+    assert ok is True and calls == []
+
+
+def test_provision_model_noop_for_non_all_role(tmp_path):
+    calls = []
+    ok = ep.provision_arbitrage_model(_plan(tmp_path, "scheduler"), {},
+                                      downloader=lambda *a: calls.append(a))
+    assert ok is True and calls == []
+
+
+def test_provision_only_mode_returns_without_db_or_exec(tmp_path):
+    env = {"TRANSCRIA_CONFIG": str(_config(tmp_path)),
+           "TRANSCRIA_DATABASE_URL": "postgresql+psycopg://u:p@db/x"}
+    ex = _Exec()
+    seen = []
+
+    def _no_db(_d):
+        raise AssertionError("la base ne doit pas être sondée en --provision-only")
+
+    rc = ep.main(["all", "--provision-only"], env=env, exec_fn=ex, db_probe=_no_db,
+                 opencode_provisioner=lambda *a: None,
+                 model_provisioner=lambda plan, _e: bool(seen.append(plan.role)) or True)
+    assert rc == 0
+    assert seen == ["all"]
+    assert ex.calls == []  # aucun exec en mode provision-only
 
 
 def test_main_invokes_provisioner_for_web_but_it_self_skips(tmp_path):

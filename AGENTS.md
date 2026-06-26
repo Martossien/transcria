@@ -90,8 +90,9 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 transcria/
   app.py                    # create_app() + main()
   install.sh                # Bootstrap + câblage d'installation (la logique métier vit dans transcria/installer)
-  Dockerfile                # Image multi-étages (venv builder → runtime) ; ENTRYPOINT = transcria.deploy.entrypoint
-  docker-compose.yml        # db → migrate (one-shot) → web+scheduler ; profil `gpu` = all-in-one (CDI)
+  Dockerfile                # Image CPU multi-étages (web/scheduler/migrate) ; ENTRYPOINT = transcria.deploy.entrypoint
+  Dockerfile.allinone-gpu   # Image all-in-one GPU (CUDA 12.6 ; compile llama.cpp = LLM embarquée ; NeMo/Sortformer). AUCUN poids baké → publiable (GHCR)
+  docker-compose.yml        # split: db→migrate→web+scheduler ; gpu: db→migrate-gpu→all-in-one (image GPU, CDI)
   .dockerignore             # Exclut venv/secrets/artefacts du contexte de build
   config.yaml               # Configuration production (pas dans git)
   config.example.yaml       # Template de configuration

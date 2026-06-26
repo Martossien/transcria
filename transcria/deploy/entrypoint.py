@@ -243,6 +243,87 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         print(f"[WARN] provisioning opencode ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
 
 
+ModelDownloader = Callable[[str, str, str], None]  # (repo, filename, local_dir)
+
+
+def _default_model_downloader(repo: str, filename: str, local_dir: str) -> None:
+    from huggingface_hub import hf_hub_download  # import paresseux : seulement au runtime conteneur
+
+    hf_hub_download(repo_id=repo, filename=filename, local_dir=local_dir)
+
+
+def provision_arbitrage_model(
+    plan: EntrypointPlan,
+    env: dict[str, str],
+    *,
+    downloader: ModelDownloader = _default_model_downloader,
+) -> bool:
+    """Garantit la présence du GGUF d'arbitrage et résout le script de lancement (rôle `all`).
+
+    L'all-in-one embarque la LLM (llama-server compilé) mais PAS les poids (build hermétique,
+    gating). Au runtime on télécharge le GGUF du palier (`TRANSCRIA_LLM_TIER`, défaut « 12 » =
+    Qwen3.5-9B Q5_K_M, NON gated) dans `MODELS_DIR` (volume monté → persistant), et on pointe
+    `TRANSCRIA_ARBITRAGE_SCRIPT` sur le profil de palier correspondant (paramétrique via
+    `LLAMA_SERVER`/`MODELS_DIR`). Idempotent.
+
+    N'agit que pour le rôle `all` et si l'arbitrage n'est pas désactivé. Best-effort : tout échec
+    est journalisé et renvoie False (le lancement LLM échouera plus tard avec un message clair) ;
+    ne bloque jamais le démarrage. Renvoie True si le modèle est présent/prêt.
+    """
+    if plan.role != "all":
+        return True
+    try:
+        from transcria.config import load_config
+        from transcria.install_arbitrage import get_tier_metadata
+    except Exception as exc:  # noqa: BLE001 — provisioning best-effort
+        print(f"[WARN] provisioning modèle d'arbitrage ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+        return False
+
+    cfg = load_config()
+    llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
+    if llm.get("enabled") is False:
+        print("[INFO] arbitration_llm désactivée — aucun modèle d'arbitrage à provisionner.", file=sys.stderr, flush=True)
+        return True
+
+    tier = env.get("TRANSCRIA_LLM_TIER", "12")
+    try:
+        meta = get_tier_metadata(tier)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] palier LLM '{tier}' inconnu ({exc}) — provisioning modèle ignoré.", file=sys.stderr, flush=True)
+        return False
+
+    # Résout le script de lancement du palier (paramétrique) si non fourni explicitement — un
+    # seul bouton (TRANSCRIA_LLM_TIER) pilote modèle ET script. Profils relatifs au dépôt
+    # (transcria/deploy/entrypoint.py → racine), donc corrects hors /app aussi (tests).
+    if not env.get("TRANSCRIA_ARBITRAGE_SCRIPT"):
+        profiles_dir = Path(__file__).resolve().parents[2] / "scripts" / "arbitrage_profiles"
+        matches = sorted(profiles_dir.glob(f"{tier}gb_*.sh"))
+        if matches:
+            os.environ["TRANSCRIA_ARBITRAGE_SCRIPT"] = str(matches[0])
+            print(f"[INFO] script d'arbitrage (palier {tier}) → {matches[0]}", file=sys.stderr, flush=True)
+
+    dest_dir = Path(env.get("MODELS_DIR", "/app/models")) / meta.directory
+    target = dest_dir / meta.file
+    if target.is_file():
+        print(f"[INFO] modèle d'arbitrage déjà présent : {target}", file=sys.stderr, flush=True)
+        return True
+
+    print(f"[INFO] téléchargement du modèle d'arbitrage {meta.label} → {dest_dir} "
+          f"(une fois ; {meta.repo}, non gated)…", file=sys.stderr, flush=True)
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        downloader(meta.repo, meta.file, str(dest_dir))
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] téléchargement du modèle d'arbitrage échoué ({type(exc).__name__}: {exc}) — "
+              "résumé/correction LLM indisponibles tant que le modèle est absent.", file=sys.stderr, flush=True)
+        return False
+    if target.is_file():
+        print(f"[INFO] modèle d'arbitrage prêt : {target}", file=sys.stderr, flush=True)
+        return True
+    print(f"[WARN] modèle d'arbitrage introuvable après téléchargement : {target}", file=sys.stderr, flush=True)
+    return False
+
+
 def _plan_from_env(role: str, env: dict[str, str]) -> EntrypointPlan:
     config_path = Path(env.get("TRANSCRIA_CONFIG", "/app/config.yaml"))
     return EntrypointPlan(
@@ -267,6 +348,7 @@ def main(
     wait_delay: float = 1.0,
     sleep_fn: Callable[[float], None] = time.sleep,
     opencode_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_opencode,
+    model_provisioner: Callable[[EntrypointPlan, dict[str, str]], bool] = provision_arbitrage_model,
 ) -> int:
     env = dict(os.environ if env is None else env)
     probe = db_probe or _default_db_probe
@@ -279,6 +361,9 @@ def main(
     parser.add_argument("role", nargs="?", default=env.get("TRANSCRIA_ROLE"), choices=ROLES,
                         help="Rôle du conteneur (défaut : $TRANSCRIA_ROLE)")
     parser.add_argument("--no-wait-db", action="store_true", help="Ne pas attendre la base (debug)")
+    parser.add_argument("--provision-only", action="store_true",
+                        help="Provisionne le modèle d'arbitrage (téléchargement) puis sort, sans démarrer "
+                             "le rôle ni attendre la base (pré-téléchargement par le quickstart).")
     args = parser.parse_args(argv)
 
     if not args.role:
@@ -293,6 +378,11 @@ def main(
             print(f"[ERROR] {err}", file=sys.stderr)
         return 1
 
+    # Pré-téléchargement seul : on ne touche ni la base ni le serveur (le gros GGUF est tiré
+    # par le quickstart AVANT `up`, pour un démarrage rapide et une progression visible).
+    if args.provision_only:
+        return 0 if model_provisioner(plan, env) else 1
+
     if needs_database(plan.role) and not args.no_wait_db:
         print(f"[INFO] Attente de la base PostgreSQL (rôle {plan.role})…", file=sys.stderr, flush=True)
         if not wait_for_database(plan.database_url, probe=probe, attempts=wait_attempts, delay=wait_delay, sleep_fn=sleep_fn):
@@ -305,6 +395,9 @@ def main(
 
     # Provisionne opencode (provider local) pour les rôles LLM, depuis la config montée.
     opencode_provisioner(plan, env)
+    # Provisionne le modèle d'arbitrage (rôle all : télécharge le GGUF si absent, résout le
+    # script de palier). Best-effort — la valeur de retour n'interrompt pas le démarrage.
+    model_provisioner(plan, env)
 
     cmd = build_role_command(plan)
     print(f"[INFO] Démarrage du rôle {plan.role} : {' '.join(cmd)}", file=sys.stderr, flush=True)

@@ -91,3 +91,4 @@ config.yaml.bak.*
 backups/
 .env.split
 docker-compose.split-gpu.dev.yml
+.env.docker

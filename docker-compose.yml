@@ -47,11 +47,33 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Job one-shot : applique les migrations Alembic, puis se termine.
+  # Job one-shot : applique les migrations Alembic, puis se termine (topologie split,
+  # image CPU). L'all-in-one GPU utilise `migrate-gpu` (même image GPU) pour ne pas
+  # imposer au testeur GPU un 2e build/pull de l'image CPU.
   migrate:
     <<: *app
+    profiles: ["split"]
     command: ["migrate"]
     restart: "no"
+
+  # Migration pour la topologie all-in-one GPU : réutilise l'image GPU (transcria-allinone)
+  # plutôt que l'image CPU, pour un seul build/pull côté testeur. Hors profil gpu, inactif.
+  migrate-gpu:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone-gpu
+    image: ${TRANSCRIA_ALLINONE_IMAGE:-transcria-allinone:latest}
+    command: ["migrate"]
+    restart: "no"
+    environment:
+      <<: *app-env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./.env:/app/.env:ro
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Topologie split (web + scheduler) sous le profil `split` pour ne JAMAIS coexister
   # avec `all-in-one` (profil `gpu`) — les deux publient :7870. `db`/`migrate` restent
@@ -99,13 +121,18 @@ services:
       migrate:
         condition: service_completed_successfully
 
-  # Tout-en-un GPU : un seul conteneur (UI + scheduler + inférence) pour TESTER le projet.
-  # Profil opt-in `gpu` → `docker compose --profile gpu up`. Image GPU requise :
-  #   docker build --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130 -t transcria:latest .
-  # Accès GPU via CDI (nvidia-ctk cdi generate). Monter les modèles dans ./models.
+  # Tout-en-un GPU : un seul conteneur (UI + scheduler + inférence GPU in-process + LLM
+  # d'arbitrage embarquée). Profil opt-in `gpu` → `docker compose --profile gpu up`.
+  # Image GPU dédiée (CUDA 12.6, llama.cpp compilé, NeMo/Sortformer) construite via
+  # Dockerfile.allinone-gpu — voir scripts/docker_quickstart.sh (build/pull + modèles).
+  # Accès GPU via CDI (nvidia-ctk cdi generate). Cache modèles monté dans /hf.
   all-in-one:
     <<: *app
     profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone-gpu
+    image: ${TRANSCRIA_ALLINONE_IMAGE:-transcria-allinone:latest}
     command: ["all"]
     environment:
       <<: *app-env
@@ -119,6 +146,11 @@ services:
       HF_TOKEN: ${HF_TOKEN:-}
       HF_HUB_OFFLINE: "0"
       TRANSFORMERS_OFFLINE: "0"
+      # LLM d'arbitrage embarquée : palier (défaut 12 Go = Qwen3.5-9B Q5_K_M, non gated). Le GGUF
+      # est téléchargé dans MODELS_DIR (volume `models`, persistant) par l'entrypoint/quickstart ;
+      # l'entrypoint en déduit aussi TRANSCRIA_ARBITRAGE_SCRIPT (profil de palier paramétrique).
+      TRANSCRIA_LLM_TIER: ${TRANSCRIA_LLM_TIER:-12}
+      MODELS_DIR: /app/models
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./.env:/app/.env:ro
@@ -135,7 +167,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
+      migrate-gpu:
         condition: service_completed_successfully
 
 volumes:

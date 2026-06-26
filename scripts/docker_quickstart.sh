@@ -33,6 +33,15 @@ ok()   { printf '\033[0;32m[OK]\033[0m   %s\n' "$*"; }
 warn() { printf '\033[1;33m[WARN]\033[0m %s\n' "$*"; }
 err()  { printf '\033[0;31m[ERROR]\033[0m %s\n' "$*" >&2; }
 
+# Désactive un bloc LLM (workflow.<name>.enabled: true → false) dans config.yaml — utilisé en
+# mode CPU sans LLM externe (l'UI grise alors proprement résumé/correction).
+disable_llm_block() {
+    awk -v blk="$1" '
+        $0 ~ "^[[:space:]]*"blk":" {f=1}
+        f && /^[[:space:]]*enabled:[[:space:]]*true/ {sub(/true/,"false"); f=0}
+        {print}' config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
+}
+
 ENV_FILE=".env.docker"
 COMPOSE=(docker compose --env-file "$ENV_FILE")
 # Profils alternatifs (à ne pas activer ensemble : web et all-in-one publient :7870) :
@@ -90,27 +99,30 @@ set -a; . "./$ENV_FILE"; set +a
 if [[ ! -f "config.yaml" ]]; then
     log "Génération de config.yaml depuis config.example.yaml…"
     cp config.example.yaml config.yaml
+    # STT + diarisation : sans token, défauts NON gated (whisper + Sortformer) → zéro friction.
     if [[ -z "${HF_TOKEN:-}" ]]; then
-        warn "HF_TOKEN absent → backend STT 'whisper' (non gated, sans token)."
-        warn "  ⚠ La diarisation 'pyannote' est elle AUSSI gated : sans token, la détection des"
-        warn "    locuteurs échouera. Pour un test sans token : transcription seule, ou fournir HF_TOKEN."
+        warn "HF_TOKEN absent → STT 'whisper' + diarisation 'sortformer' (NON gated, sans token)."
+        warn "  Sortformer (NVIDIA) est plafonné à 4 locuteurs et expérimental. Pour la qualité de"
+        warn "  référence (Cohere + pyannote, locuteurs ILLIMITÉS) : fournir HF_TOKEN ET accepter les"
+        warn "  conditions des DEUX modèles sur huggingface.co."
         sed -i 's/^\(\s*stt_backend:\s*\).*/\1"whisper"/' config.yaml
+        sed -i 's/^\(\s*diarization_backend:\s*\).*/\1"sortformer"/' config.yaml
     else
-        ok "HF_TOKEN présent → backend STT 'cohere' + diarisation 'pyannote' (qualité de référence)."
+        ok "HF_TOKEN présent → STT 'cohere' + diarisation 'pyannote' (qualité de référence, locuteurs illimités)."
     fi
-    # LLM d'arbitrage : l'image n'en embarque PAS. Sans endpoint externe (TRANSCRIA_ARBITRAGE_LLM_HOST),
-    # on DÉSACTIVE l'étape — sinon les profils qui résument/corrigent échoueraient à l'exécution.
-    # Désactivée, l'UI grise proprement ces profils (transcription + diarisation marchent). L'awk
-    # ne touche QUE workflow.arbitration_llm.enabled (1er `enabled:` après le bloc).
-    if [[ -z "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
-        warn "Aucune LLM d'arbitrage externe (TRANSCRIA_ARBITRAGE_LLM_HOST absent) →"
-        warn "  arbitration_llm.enabled=false : profils résumé/correction grisés dans l'UI."
-        warn "  Pour l'activer : lancer une LLM OpenAI-compatible (:8080) et régler arbitration_llm"
-        warn "  (ou TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal). Détails : docs/DOCKER.md."
-        awk '/^[[:space:]]*arbitration_llm:/{f=1} f && /^[[:space:]]*enabled:[[:space:]]*true/{sub(/true/,"false"); f=0} {print}' \
-            config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
-    else
+    # LLM d'arbitrage : l'image GPU (mode gpu) l'EMBARQUE (llama.cpp + petit GGUF tiré au runtime).
+    # En mode cpu/split, l'image n'en embarque pas → sans endpoint externe on désactive résumé +
+    # correction (l'UI grise alors proprement ces profils ; transcription + diarisation marchent).
+    if [[ "$MODE" == "gpu" ]]; then
+        ok "LLM d'arbitrage embarquée (palier ${TRANSCRIA_LLM_TIER:-12} Go) → résumé/correction/qualité actifs."
+    elif [[ -n "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
         ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."
+    else
+        warn "Mode CPU sans LLM d'arbitrage externe → résumé + correction désactivés (profils grisés)."
+        warn "  Pour les activer : LLM OpenAI-compatible (:8080) + TRANSCRIA_ARBITRAGE_LLM_HOST"
+        warn "  (ou host.docker.internal). Détails : docs/DOCKER.md."
+        disable_llm_block summary_llm
+        disable_llm_block arbitration_llm
     fi
     ok "config.yaml prêt."
 else
@@ -132,28 +144,42 @@ if ! chmod 600 .env "$ENV_FILE" 2>/dev/null; then
     warn "  droits de ces fichiers (secret Flask, mot de passe PostgreSQL, token HF)."
 fi
 
-# ── 4. Build de l'image (index PyTorch selon GPU/CPU) ─────────────────────────
+# ── 4. Image : pull (si publiée) ou build ─────────────────────────────────────
 if [[ "$MODE" == "gpu" ]]; then
-    # Index torch dérivé de la version CUDA du driver (override : TORCH_INDEX_URL).
-    cuda_ver=$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9]\+\)\.\([0-9]\+\).*/\1\2/p' | head -1)
-    case "${cuda_ver:-}" in
-        13*|130) idx_default="cu130" ;;
-        128|129) idx_default="cu128" ;;
-        126|127) idx_default="cu126" ;;
-        12[0-5]) idx_default="cu124" ;;
-        *)       idx_default="cu124" ;;  # repli large
-    esac
-    TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/${idx_default}}"
+    # Image GPU dédiée (CUDA 12.6 figée, llama.cpp compilé, NeMo/Sortformer) via
+    # Dockerfile.allinone-gpu. Si TRANSCRIA_ALLINONE_IMAGE pointe sur un registre (ex. GHCR
+    # publiée) et répond → pull ; sinon build local (logique pull-or-build).
+    ALLINONE_IMAGE="${TRANSCRIA_ALLINONE_IMAGE:-transcria-allinone:latest}"
+    export TRANSCRIA_ALLINONE_IMAGE="$ALLINONE_IMAGE"
+    if [[ "$ALLINONE_IMAGE" == *"/"*"/"* || "$ALLINONE_IMAGE" == *.*/* ]] && docker pull "$ALLINONE_IMAGE" 2>/dev/null; then
+        ok "Image GPU récupérée : $ALLINONE_IMAGE (pull)."
+    else
+        log "Build local de l'image GPU (CUDA 12.6, compilation llama.cpp + venv) — peut être long…"
+        "${COMPOSE[@]}" build
+        ok "Image GPU construite."
+    fi
 else
+    # Image CPU (web+scheduler) : index torch CPU (override : TORCH_INDEX_URL).
     TORCH_INDEX_URL="${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}"
+    log "Build de l'image transcria:latest (CPU, TORCH_INDEX_URL=$TORCH_INDEX_URL)…"
+    docker build --build-arg "TORCH_INDEX_URL=$TORCH_INDEX_URL" -t transcria:latest .
+    ok "Image construite."
 fi
-log "Build de l'image transcria:latest (TORCH_INDEX_URL=$TORCH_INDEX_URL)…"
-docker build --build-arg "TORCH_INDEX_URL=$TORCH_INDEX_URL" -t transcria:latest .
-ok "Image construite."
+
+# ── 4-bis. Pré-téléchargement du modèle d'arbitrage (mode gpu, une fois) ───────
+# Le GGUF (~6 Go, palier ${TRANSCRIA_LLM_TIER:-12} Go) n'est PAS dans l'image (build hermétique).
+# On le tire AVANT `up`, dans le volume `models` (persistant), pour un démarrage rapide et une
+# progression visible. Idempotent (l'entrypoint --provision-only saute si déjà présent).
+if [[ "$MODE" == "gpu" ]]; then
+    log "Pré-téléchargement du modèle LLM d'arbitrage (une fois, ~6 Go)…"
+    if ! "${COMPOSE[@]}" run --rm --no-deps all-in-one --provision-only; then
+        warn "Pré-téléchargement du modèle échoué — nouvel essai au premier démarrage du conteneur."
+    fi
+fi
 
 # ── 5. Démarrage + vérification ───────────────────────────────────────────────
-# Le profil (gpu|split) sélectionne les services applicatifs ; db/migrate (hors profil)
-# démarrent toujours. gpu → all-in-one ; split → web + scheduler.
+# Le profil (gpu|split) sélectionne les services applicatifs ; db/migrate démarrent selon
+# le profil. gpu → all-in-one (+ migrate-gpu) ; split → web + scheduler (+ migrate).
 log "Démarrage de la stack ($MODE)…"
 "${COMPOSE[@]}" up -d
 
@@ -165,12 +191,12 @@ for i in $(seq 1 60); do
         ok "TranscrIA est prêt → http://localhost:7870  (login : admin / mot de passe défini dans config.yaml)"
         ok "Logs : ${COMPOSE[*]} logs -f   |   Arrêt : scripts/docker_quickstart.sh --down"
         if [[ "$MODE" == "gpu" ]]; then
-            warn "STT + diarisation tournent DANS le conteneur. La LLM d'arbitrage (résumé/correction/"
-            warn "  relecture) est un service OpenAI-compatible EXTERNE — l'image n'en embarque pas."
-            warn "  → LLM sur l'hôte : lancer un serveur sur :8080 puis régler dans config.yaml"
-            warn "    services.arbitrage_llm_host (ou env TRANSCRIA_ARBITRAGE_LLM_HOST=host.docker.internal"
-            warn "    + extra_hosts host-gateway). Sans LLM : workflow.arbitration_llm.enabled=false"
-            warn "    (transcription + diarisation seules). Détails : docs/DOCKER.md."
+            ok "Tout-en-un : STT + diarisation + LLM d'arbitrage (résumé/correction/relecture) tournent"
+            ok "  DANS le conteneur, sur le GPU (séquencés par l'autonomie VRAM). Workflow complet."
+            if [[ -z "${HF_TOKEN:-}" ]]; then
+                warn "Mode sans token : diarisation = Sortformer (≤4 locuteurs, expérimental). Pour la"
+                warn "  qualité de référence (Cohere + pyannote, illimité) : HF_TOKEN + conditions HF des 2 modèles."
+            fi
         fi
         exit 0
     fi

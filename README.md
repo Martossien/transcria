@@ -86,12 +86,12 @@ Prefer containers? A turnkey script takes you from clone to a running stack — 
 
 ```bash
 scripts/docker_quickstart.sh                  # all-in-one GPU → http://localhost:7870 (admin / see config.yaml)
-HF_TOKEN=hf_xxx scripts/docker_quickstart.sh  # with the gated Cohere STT; omit it to use whisper (no token)
+HF_TOKEN=hf_xxx scripts/docker_quickstart.sh  # reference quality (gated Cohere STT + pyannote); omit for the no-token path
 scripts/docker_quickstart.sh --cpu            # no GPU (web + scheduler)
 scripts/docker_quickstart.sh --down           # stop
 ```
 
-It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU (real in-container transcription). Full reference — image, compose, GPU enablement, variables, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
+The **all-in-one GPU** image (CUDA 12.6) bundles the whole pipeline — STT, diarization **and** the arbitration LLM (a compiled `llama-server` serving a small non-gated GGUF, downloaded at runtime). **With no token at all**, the full 6-profile workflow runs (speaker labels via NVIDIA Sortformer, ≤4 speakers); a free HF token (plus accepting both model conditions) switches to reference quality (Cohere + pyannote, unlimited speakers). No model weights are baked in, so the image is publishable — point the quickstart at a published image (`TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX`) to `pull` instead of build. It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU. Full reference — image, compose, GPU enablement, variables, publishing, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Tech stack
 
