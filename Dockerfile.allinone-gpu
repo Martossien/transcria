@@ -37,9 +37,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential libgomp1 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-# CMAKE_CUDA_ARCHITECTURES couvre Turing→Hopper (75=T4/2080, 80=A100, 86=30xx/A6000,
-# 89=40xx/L4, 90=H100). LLAMA_CURL=OFF : pas de dépendance libcurl (on ne télécharge pas
-# de modèle depuis llama-server). Sortie : /opt/llama/bin/llama-server.
+# CMAKE_CUDA_ARCHITECTURES = SASS Turing→Hopper (75=T4/20xx, 80=A100, 86=30xx/A6000, 89=40xx/L4,
+# 90=H100). La forme « nombre nu » émet AUSSI le **PTX** de chaque archi (vérifié : cuobjdump liste
+# sm_90.ptx) → le PTX du plus haut (compute_90) donne la **compat ASCENDANTE** par JIT vers les
+# cartes > sm_90 (Blackwell : RTX 50xx, B100/B200, sm ≥ 10.0) — 1er lancement plus lent, puis caché.
+# Cartes < sm_75 (Pascal 10xx, Volta V100 7.0) NON supportées. LLAMA_CURL=OFF : pas de libcurl.
 # ggml-cuda lie la **CUDA Driver API** (libcuda : cuMemCreate, cuMemMap… = VMM). Dans une image
 # `devel` SANS driver, le stub `libcuda.so` (SONAME libcuda.so.1) est dans .../cuda/lib64/stubs.
 # On force son link (exe + shared) : sans `-lcuda` explicite, le link de llama-server échoue

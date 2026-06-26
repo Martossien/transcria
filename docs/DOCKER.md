@@ -273,10 +273,26 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 
 #### Prérequis GPU / VRAM
 
-**GPU minimum** : NVIDIA **compute capability 7.5 (Turing)** ou plus récent — `llama-server` est
-compilé pour `sm_75;80;86;89;90`. Couvre RTX 20xx/16xx, T4, A2/A10/A100, RTX 30xx/40xx, L4/L40,
-H100… **PAS** Pascal (GTX 10xx, sm 6.1) ni antérieur (aucun kernel compilé). **Driver NVIDIA ≥ 525**
-(CUDA 12.x ; **535+ recommandé**). Les modèles STT/diarisation (torch cu126) tournent dès cette base.
+**GPU compatibles** : il faut **compute capability ≥ 7.5** **ET ≥ 12 Go** de VRAM (le 9B par défaut
+fait ~10,6 Go, cf. table VRAM ci-dessous). `llama-server` embarque le SASS `sm_75→sm_90` + le **PTX
+`sm_90`** (vérifié `cuobjdump`) qui JIT vers les archis plus récentes. **Driver NVIDIA ≥ 525**
+(CUDA 12.x ; **535+ recommandé** ; Blackwell exige un driver récent). torch cu126 couvre le STT/diar.
+
+| Génération (compute) | Statut | Cartes **≥ 12 Go** (exemples) |
+|---|---|---|
+| Pascal — GTX 10xx, P40/P100 (6.x) | ❌ non supporté | — |
+| Volta — V100, TITAN V (7.0) | ❌ non supporté (`< 7.5`) | — |
+| **Turing** (7.5) | ✅ natif | RTX 2060 12G, TITAN RTX 24G, T4 16G, Quadro RTX 6000/8000 |
+| **Ampere** (8.0 / 8.6) | ✅ natif | RTX 3060 12G, 3080 12G / 3080 Ti, 3090(Ti) 24G, A10/A40/A100, A5000/A6000 |
+| **Ada** (8.9) | ✅ natif | RTX 4070(Ti/Super) 12-16G, 4080 16G, 4090 24G, L4/L40(S), RTX 5000/6000 Ada |
+| **Hopper** (9.0) | ✅ natif | H100 80G, H200 141G |
+| **Blackwell** (≥ 10.0) | ✅ via **PTX JIT** ¹ | RTX 5070 12G, 5080 16G, 5090 32G, B100/B200 |
+
+> ¹ Blackwell (RTX 50xx, B100/B200) : pas de SASS dédié → JIT du PTX `sm_90` au **1er lancement**
+> (plus lent une fois, puis caché). Pour du natif Blackwell, rebâtir l'image avec CUDA 12.8+ et `sm_120`.
+> Attention : la plupart des **consumer < 12 Go** (RTX 2070/2080, 3060 Ti, 3070, 4060(Ti), 5060…) sont
+> compute-compatibles mais **trop justes en VRAM** pour le 9B — choisir un palier LLM plus petit serait
+> nécessaire (non couvert par le défaut).
 
 **VRAM — NON additive** (vérifié sur les logs E2E) : l'autonomie VRAM charge/décharge les modèles
 **séquentiellement** — chaque phase réserve puis **libère** le GPU avant la suivante (STT → libéré →

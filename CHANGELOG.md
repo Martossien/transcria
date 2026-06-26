@@ -29,8 +29,10 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   embarquée (llama-server lancé, opencode exit 0, corrections réelles) → 74/100, livrables
   SRT/ZIP/DOCX. Piège documenté : un cache HF hôte pré-rempli par un autre utilisateur peut
   casser faster-whisper (`File exists`) — cache vierge OK.
-  **Prérequis GPU/VRAM documentés** (`docs/DOCKER.md`) : GPU ≥ Turing (compute 7.5 ; archi
-  compilées sm_75/80/86/89/90), driver ≥ 525 ; VRAM **non additive** (autonomie load/unload) →
+  **Prérequis GPU/VRAM documentés** (`docs/DOCKER.md`, table de compatibilité par génération) :
+  GPU compute ≥ 7.5 (Turing) **et ≥ 12 Go** ; SASS sm_75→90 + **PTX sm_90 → JIT** vers Blackwell
+  (RTX 50xx/B100/B200, 1er run plus lent) ; Pascal/Volta (< 7.5) exclus ; driver ≥ 525.
+  VRAM **non additive** (autonomie load/unload) →
   un seul GPU **~12 Go** suffit (pic = LLM 9B ~10,6 Go ; whisper < 5 Go, sortformer ~3,5 Go,
   séquencés). Le quickstart **aligne `gpu.llm_vram_mb` sur le palier** (12 → 12000) — sinon le
   défaut 60000 (palier 64 Go) faisait refuser l'admission du 9B sur une carte 12-24 Go.
