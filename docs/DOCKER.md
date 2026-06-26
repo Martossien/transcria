@@ -271,6 +271,33 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 > **Pourquoi llama.cpp compilé** : llama.cpp ne publie pas de binaire CUDA Linux → on le compile
 > dans un étage builder (binaire canonique des paliers).
 
+#### Prérequis GPU / VRAM
+
+**GPU minimum** : NVIDIA **compute capability 7.5 (Turing)** ou plus récent — `llama-server` est
+compilé pour `sm_75;80;86;89;90`. Couvre RTX 20xx/16xx, T4, A2/A10/A100, RTX 30xx/40xx, L4/L40,
+H100… **PAS** Pascal (GTX 10xx, sm 6.1) ni antérieur (aucun kernel compilé). **Driver NVIDIA ≥ 525**
+(CUDA 12.x ; **535+ recommandé**). Les modèles STT/diarisation (torch cu126) tournent dès cette base.
+
+**VRAM — NON additive** (vérifié sur les logs E2E) : l'autonomie VRAM charge/décharge les modèles
+**séquentiellement** — chaque phase réserve puis **libère** le GPU avant la suivante (STT → libéré →
+diarisation → libéré → LLM lancée → libérée). Le **pic ≈ la plus grosse phase**, pas la somme.
+Empreintes réelles (chemin zéro-token mesuré) :
+
+| Phase | VRAM réelle | Rôle |
+|---|---|---|
+| **LLM 9B** (palier 12 Go, Q5_K_M) | **~10,6 Go** | maillon dimensionnant |
+| Whisper large-v3 (fp16) | < 5 Go | STT |
+| Sortformer | ~3,5 Go | diarisation |
+| pyannote (référence) | ~2 Go | diarisation (avec token) |
+
+→ **Un seul GPU ~12 Go** (Turing 7.5+) suffit pour le workflow complet : le 9B (phase la plus
+lourde) est chargé **après** libération du STT/diar. Le prix du non-additif : recharger les modèles
+entre phases est **plus lent** (pas de co-résidence). **16 Go+ confortable** ; un palier LLM
+supérieur ou la qualité de référence (cohere ~6 Go + pyannote) demandent davantage / multi-GPU.
+
+> Le quickstart **aligne automatiquement** `gpu.llm_vram_mb` sur le palier (12 Go → `12000`) — sinon
+> le défaut `60000` (palier 64 Go) ferait **refuser l'admission** du 9B sur une carte 12-24 Go.
+
 ### Publication d'une image publique (GHCR)
 
 L'image all-in-one GPU est **publiable** : licences permissives (projet Apache-2.0, llama.cpp

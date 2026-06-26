@@ -114,7 +114,16 @@ if [[ ! -f "config.yaml" ]]; then
     # En mode cpu/split, l'image n'en embarque pas → sans endpoint externe on désactive résumé +
     # correction (l'UI grise alors proprement ces profils ; transcription + diarisation marchent).
     if [[ "$MODE" == "gpu" ]]; then
-        ok "LLM d'arbitrage embarquée (palier ${TRANSCRIA_LLM_TIER:-12} Go) → résumé/correction/qualité actifs."
+        # Aligner la réservation VRAM de la LLM sur le palier embarqué (l'exemple vaut 60000 =
+        # palier 64 Go multi-GPU). SANS ça, l'admission GPU refuserait le 9B (~10,6 Go) sur une
+        # carte 12-24 Go (60000 > VRAM). Mapping palier→budget (cf. install_arbitrage.TIER_VRAM_MB).
+        case "${TRANSCRIA_LLM_TIER:-12}" in
+            12) _llm_vram=12000 ;; 16) _llm_vram=16000 ;; 24) _llm_vram=24000 ;;
+            32) _llm_vram=32000 ;; 48) _llm_vram=48000 ;; 64) _llm_vram=60000 ;;
+            *)  _llm_vram=12000 ;;
+        esac
+        sed -i "s/^\(\s*llm_vram_mb:\s*\).*/\1${_llm_vram}/" config.yaml
+        ok "LLM d'arbitrage embarquée (palier ${TRANSCRIA_LLM_TIER:-12} Go, llm_vram_mb=${_llm_vram}) → résumé/correction/qualité actifs."
     elif [[ -n "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
         ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."
     else
