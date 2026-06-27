@@ -281,6 +281,18 @@ class QualityReporter:
             )
             warnings += unresolved_count
 
+        # 7ter-0. SRT rendu structurellement bien formé (numérotation/timing/ordre) : valide
+        # le LIVRABLE (≠ check ordre des segments JSON), capte une divergence d'export.
+        total_checks += 1
+        malformed = SRTChecker.validate_srt(corrected_srt)
+        if malformed:
+            checks.append({"type": "malformed_srt", "count": len(malformed), "severity": "warning"})
+            review_points.append(
+                f"SRT mal formé : {len(malformed)} anomalie(s) de structure "
+                "(numérotation/timing/ordre) — vérifier l'export."
+            )
+            warnings += len(malformed)
+
         # 7ter. Garde-fous déterministes sur le SRT corrigé
         total_checks += 1
         speaker_mapping = fs.load_json("speakers/speaker_mapping.json") or {}

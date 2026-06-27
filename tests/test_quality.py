@@ -54,6 +54,40 @@ class TestSRTChecker:
         segments = [{"start": 0.0, "end": 2.0}, {"start": 1.0, "end": 3.0}]
         assert SRTChecker.find_out_of_order(segments) == []
 
+    def test_validate_srt_well_formed(self):
+        srt = (
+            "1\n00:00:00,000 --> 00:00:02,500\n[Marie] Bonjour.\n\n"
+            "2\n00:00:02,500 --> 00:00:05,000\n[Julien] Avec plaisir.\n"
+        )
+        assert SRTChecker.validate_srt(srt) == []
+
+    def test_validate_srt_empty_is_valid(self):
+        assert SRTChecker.validate_srt("") == []
+        assert SRTChecker.validate_srt("   \n  ") == []
+
+    def test_validate_srt_detects_bad_numbering(self):
+        srt = "1\n00:00:00,000 --> 00:00:01,000\nA\n\n3\n00:00:01,000 --> 00:00:02,000\nB\n"
+        issues = SRTChecker.validate_srt(srt)
+        assert any("numérotation" in i["issue"] for i in issues)
+
+    def test_validate_srt_detects_malformed_timing(self):
+        srt = "1\n00:00:00 -> 00:00:01\nA\n"
+        issues = SRTChecker.validate_srt(srt)
+        assert any("timing" in i["issue"] for i in issues)
+
+    def test_validate_srt_detects_start_after_end(self):
+        srt = "1\n00:00:05,000 --> 00:00:02,000\nA\n"
+        issues = SRTChecker.validate_srt(srt)
+        assert any("start" in i["issue"].lower() for i in issues)
+
+    def test_validate_srt_detects_non_chronological_cue(self):
+        srt = (
+            "1\n00:00:05,000 --> 00:00:06,000\nA\n\n"
+            "2\n00:00:01,000 --> 00:00:02,000\nB\n"
+        )
+        issues = SRTChecker.validate_srt(srt)
+        assert any("chronolog" in i["issue"].lower() for i in issues)
+
 
 class TestLexiconChecker:
     def test_finds_present_terms(self):
@@ -128,6 +162,12 @@ class TestReviewPoints:
         points = ReviewPoints.generate(report)
         assert len(points) == 1
         assert "hors ordre" in points[0].lower()
+
+    def test_handles_malformed_srt(self):
+        report = {"checks": [{"type": "malformed_srt", "count": 2, "severity": "warning"}]}
+        points = ReviewPoints.generate(report)
+        assert len(points) == 1
+        assert "mal formé" in points[0].lower()
 
     def test_handles_low_coverage(self):
         report = {"checks": [{"type": "low_coverage", "ratio": 0.5, "severity": "error"}]}

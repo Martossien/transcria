@@ -148,8 +148,14 @@ que de dupliquer.
   pénalise le score) cf. [[speaker_name_srt_guard]].
 - ✅ **termes du glossaire appliqués** — *déjà* couvert (`missing_lexicon_terms` +
   `unresolved_lexicon_variants`) cf. [[final_review_glossary_scope]].
-- ⏳ nb locuteurs détectés ≤ max du profil
-- ⏳ SRT bien formé (parse strict), DOCX/ZIP ouvrables, longueur de résumé dans des bornes
+- ✅ **SRT bien formé (parse strict)** — **ajouté** : `SRTChecker.validate_srt` (numérotation
+  séquentielle, timing `HH:MM:SS,mmm`, `start ≤ end`, ordre chronologique) + check
+  `malformed_srt` dans `run_all_checks` (sur le SRT **corrigé livré**) + mapper. 7 tests.
+- ⏳ **nb locuteurs ≤ max du profil** — *reporté* : le `max_speakers` effectif n'est **pas
+  persisté par job** (hint par appel > config) et n'est **pas un champ de profil** ; un check
+  basé sur la config par défaut (20) serait faible/trompeur. À reprendre si on persiste le max
+  effectif par job, ou via le modèle de diarisation actif (Sortformer = 4 loc.).
+- ⏳ DOCX/ZIP réellement ouvrables, longueur de résumé dans des bornes
 
 ### 5.3 Déterminisme
 - [ ] 2× le même audio → diff ; toute non-reproductibilité = anomalie à expliquer.

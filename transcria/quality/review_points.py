@@ -21,6 +21,11 @@ class ReviewPoints:
                     f"Segments hors ordre temporel : {count} — l'ordre des segments "
                     "n'est pas croissant (vérifier la fusion/diarisation)."
                 )
+            elif ctype == "malformed_srt":
+                points.append(
+                    f"SRT mal formé : {count} anomalie(s) de structure "
+                    "(numérotation/timing/ordre) — vérifier l'export."
+                )
             elif ctype == "unmapped_speakers":
                 points.append(f"Locuteurs non mappés : {count} segments — associer aux participants.")
             elif ctype == "missing_lexicon_terms":
