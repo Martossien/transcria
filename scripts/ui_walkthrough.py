@@ -66,12 +66,6 @@ class Walkthrough:
     def shot(self, name: str) -> None:
         self.page.screenshot(path=str(self.out / f"{name}.png"), full_page=True)
 
-    def goto(self, path: str, name: str) -> None:
-        resp = self.page.goto(f"{self.base}{path}", wait_until="networkidle")
-        self.shot(name)
-        status = resp.status if resp else 0
-        self.check(f"GET {path} → {status}", bool(resp and resp.status < 400), f"status={status}")
-
     # ── Étapes ──────────────────────────────────────────────────────────────
 
     def login(self, user: str, password: str) -> None:
@@ -94,6 +88,17 @@ class Walkthrough:
             self.page.wait_for_load_state("networkidle")
             self.shot("03_wizard")
             self.check("wizard ouvert après création", "/jobs/" in self.page.url, self.page.url)
+            # Exigence ferme : le choix du profil est posé DÈS l'étape 1 (upload), car il
+            # pilote quelles étapes suivent (cf. docs/RELEASE_0.2.0.md — profil à l'étape 1).
+            first_section = self.page.locator(".step-section").first
+            self.check(
+                "profil de traitement dans la 1ʳᵉ étape du wizard",
+                first_section.locator("#profile-selector").count() > 0,
+            )
+            self.check(
+                "au moins un profil proposé à l'étape 1",
+                self.page.locator(".profile-pill").count() > 0,
+            )
         except Exception as exc:  # noqa: BLE001
             self.check("création de job", False, str(exc)[:120])
 
@@ -118,17 +123,28 @@ class Walkthrough:
             self.check("sauvegarde formulaire config", False, str(exc)[:120])
 
     def admin_pages(self) -> None:
-        for path, name in [
-            ("/admin/users", "06_users"),
-            ("/admin/groups", "07_groups"),
-            ("/admin/queue", "08_queue"),
-            ("/admin/lexicons", "09_lexicons"),
-            ("/admin/voices", "10_voices"),
-            ("/admin/audit", "11_audit"),
-            ("/admin/schedule", "12_schedule"),
-            ("/system", "13_system"),
+        # Chaque onglet est vérifié sur son CONTENU attendu (un marqueur stable du
+        # template), pas seulement sur un « 200 OK » — cf. docs/RELEASE_0.2.0.md §3.2.
+        for path, name, marker in [
+            ("/admin/users", "06_users", "Gestion des utilisateurs"),
+            ("/admin/groups", "07_groups", "Groupes"),
+            ("/admin/queue", "08_queue", "File d'attente"),
+            ("/admin/lexicons", "09_lexicons", "Lexiques centralisés"),
+            ("/admin/voices", "10_voices", "Voix enregistrées"),
+            ("/admin/audit", "11_audit", "Audit de sécurité"),
+            ("/admin/schedule", "12_schedule", "Planification"),
+            ("/system", "13_system", "État technique du système"),
         ]:
-            self.goto(path, name)
+            resp = self.page.goto(f"{self.base}{path}", wait_until="networkidle")
+            self.shot(name)
+            status = resp.status if resp else 0
+            has_marker = marker in self.page.content()
+            ok = bool(resp and resp.status < 400) and has_marker
+            self.check(
+                f"{path} : contenu attendu (« {marker} »)",
+                ok,
+                f"status={status}, marqueur={'présent' if has_marker else 'ABSENT'}",
+            )
 
     def report(self) -> bool:
         failed = [c for c in self.checks if not c[1]]
