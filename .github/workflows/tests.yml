@@ -160,3 +160,69 @@ jobs:
         run: |
           python -m pip install --upgrade pip pip-audit
           pip-audit -r requirements.txt --desc
+
+  ui-walkthrough:
+    # Parcours UI réel piloté par navigateur (Playwright, sans GPU) : login, accueil,
+    # création de job + wizard, éditeur de config (onglets form/YAML + sauvegarde) et
+    # toutes les pages admin. Échoue (exit≠0) sur une erreur serveur 5xx, une assertion
+    # perdue ou une erreur console JS. Instance web JETABLE (rôle web, SQLite temp) :
+    # aucune étape pipeline déclenchée → pas de GPU requis.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Instance web jetable + walkthrough Playwright
+        env:
+          TRANSCRIA_SECRET: walk-ci-secret
+        run: |
+          set -e
+          WORK="${RUNNER_TEMP}/ui_walk"
+          mkdir -p "$WORK/jobs" "$WORK/shots"
+          printf 'runtime: {role: web}\nauth: {first_admin_username: admin, first_admin_password: walkthrough-admin-pw}\nstorage: {jobs_dir: %s/jobs}\nnotifications: {email: {enabled: false}}\n' "$WORK" > "$WORK/config.yaml"
+
+          TRANSCRIA_CONFIG="$WORK/config.yaml" \
+          TRANSCRIA_DATABASE_URL="sqlite:///$WORK/app.db" \
+          python app.py --port 7899 --host 127.0.0.1 --no-debug > "$WORK/server.log" 2>&1 &
+          SERVER_PID=$!
+
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:7899/ready; then echo "Serveur prêt (${i}s)"; break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then echo "::error::le serveur web s'est arrêté avant d'être prêt"; cat "$WORK/server.log"; exit 1; fi
+            sleep 1
+          done
+
+          set +e
+          python scripts/ui_walkthrough.py --base-url http://127.0.0.1:7899 \
+            --user admin --password walkthrough-admin-pw --out "$WORK/shots"
+          STATUS=$?
+          set -e
+          kill "$SERVER_PID" 2>/dev/null || true
+          if [ "$STATUS" -ne 0 ]; then echo "::error::échec du walkthrough UI (voir les captures en artefact)"; cat "$WORK/server.log"; fi
+          exit "$STATUS"
+
+      - name: Upload des captures (diagnostic)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-walkthrough-shots
+          path: ${{ runner.temp }}/ui_walk/shots
