@@ -8,6 +8,8 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.6] — 2026-06-27
+
 ### Added
 - **Image Docker all-in-one GPU — workflow complet en une commande, sans token** (+ publiable).
   Nouvelle image dédiée `Dockerfile.allinone-gpu` (base **CUDA 12.6** ; cu128 impossible car le
