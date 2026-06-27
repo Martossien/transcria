@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.document import Document as DocumentT  # type pour annotations (docx.Document est une fabrique)
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -433,7 +434,7 @@ class DocxReport:
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
-    def build(self) -> Document:
+    def build(self) -> DocumentT:
         doc = Document()
         self._setup_document(doc)
         self._cover_page(doc)
@@ -448,7 +449,7 @@ class DocxReport:
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
-    def _setup_document(self, doc: Document) -> None:
+    def _setup_document(self, doc: DocumentT) -> None:
         for section in doc.sections:
             section.top_margin    = Cm(2.0)
             section.bottom_margin = Cm(2.0)
@@ -457,7 +458,7 @@ class DocxReport:
 
     # ── Page de garde ─────────────────────────────────────────────────────────
 
-    def _cover_page(self, doc: Document) -> None:  # noqa: C901
+    def _cover_page(self, doc: DocumentT) -> None:  # noqa: C901
         ctx    = self.ctx
         theme  = self.theme
         title  = ctx.get("title") or "Sans titre"
@@ -665,7 +666,7 @@ class DocxReport:
 
     # ── Helpers section ───────────────────────────────────────────────────────
 
-    def _section_heading(self, doc: Document, number: str, label: str) -> None:
+    def _section_heading(self, doc: DocumentT, number: str, label: str) -> None:
         theme = self.theme
         doc.add_paragraph()
         p = doc.add_paragraph()
@@ -685,7 +686,7 @@ class DocxReport:
         _para_bottom_border(p, theme.accent, sz=6)
 
     @staticmethod
-    def _meta_row(doc: Document, label: str, value: str) -> None:
+    def _meta_row(doc: DocumentT, label: str, value: str) -> None:
         p = doc.add_paragraph()
         r_lbl = p.add_run(f"{label} : ")
         r_lbl.font.size = Pt(10)
@@ -698,12 +699,12 @@ class DocxReport:
         p.paragraph_format.space_after = Pt(2)
 
     @staticmethod
-    def _page_break(doc: Document) -> None:
+    def _page_break(doc: DocumentT) -> None:
         doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
     # ── Section 1 : Contexte ──────────────────────────────────────────────────
 
-    def _section_context(self, doc: Document) -> None:
+    def _section_context(self, doc: DocumentT) -> None:
         ctx = self.ctx
         self._section_heading(doc, "1.", "Contexte de la réunion")
 
@@ -771,7 +772,7 @@ class DocxReport:
 
     # ── Section 1b : Données type-spécifiques (champs utilisateur) ──────────────
 
-    def _section_type_specific(self, doc: Document) -> None:
+    def _section_type_specific(self, doc: DocumentT) -> None:
         """Affiche les champs saisis par l'utilisateur pour ce type de réunion.
 
         Absent si aucun champ n'a été rempli.
@@ -870,7 +871,7 @@ class DocxReport:
 
     # ── Section 1c : Données enrichies LLM (décisions, actions, votes…) ─────────
 
-    def _section_enriched(self, doc: Document) -> int:
+    def _section_enriched(self, doc: DocumentT) -> int:
         """Sections issues de l'extraction LLM structurée.
 
         Principe : **une donnée extraite n'est jamais cachée**. Toute section
@@ -943,7 +944,7 @@ class DocxReport:
 
     # ── Section N : Participants ──────────────────────────────────────────────
 
-    def _section_participants(self, doc: Document, base: int = 2) -> None:
+    def _section_participants(self, doc: DocumentT, base: int = 2) -> None:
         self._section_heading(doc, f"{base}.", "Participants & Locuteurs")
 
         if not self.merged:
@@ -1019,7 +1020,7 @@ class DocxReport:
 
     # ── Section 3 : Transcription ─────────────────────────────────────────────
 
-    def _section_transcript(self, doc: Document, base: int = 3) -> None:
+    def _section_transcript(self, doc: DocumentT, base: int = 3) -> None:
         self._section_heading(doc, f"{base}.", "Transcription")
 
         if not self.srt_entries:
@@ -1079,7 +1080,7 @@ class DocxReport:
         "suspicious_short_segments": "Segments courts suspects",
     }
 
-    def _section_quality(self, doc: Document, base: int = 4) -> None:
+    def _section_quality(self, doc: DocumentT, base: int = 4) -> None:
         checks = self.quality.get("checks", [])
         points: list[tuple[str, str]] = []  # (emoji_label, description)
 
@@ -1169,7 +1170,7 @@ class DocxReport:
 
     # ── Pied de page ──────────────────────────────────────────────────────────
 
-    def _setup_footer(self, doc: Document) -> None:
+    def _setup_footer(self, doc: DocumentT) -> None:
         theme  = self.theme
         title  = (self.ctx.get("title") or "TranscrIA")[:40]
         date   = _fmt_date(self.ctx.get("date", ""))

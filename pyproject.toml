@@ -27,13 +27,6 @@ module = [
 ]
 ignore_errors = true
 
-[[tool.mypy.overrides]]
-module = [
-    "transcria.stt.contextual_biasing",
-    "transcria.exports.docx_report",
-]
-ignore_errors = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["backup", ".git", "__pycache__", ".venv", "node_modules"]

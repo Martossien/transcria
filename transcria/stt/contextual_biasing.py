@@ -37,7 +37,7 @@ def select_lexicon_bias_terms(
     cibles validées. Booster les variantes fautives augmenterait le risque de
     conserver précisément les erreurs que la correction LLM doit éliminer.
     """
-    stats = {
+    stats: dict[str, Any] = {
         "enabled": bool(enabled),
         "candidate_terms": 0,
         "injected_terms": 0,
@@ -124,7 +124,7 @@ def _tokenize_term(tokenizer: Any, term: str) -> list[list[int]]:
 def build_token_trie(terms: list[str], tokenizer: Any) -> tuple[TrieNode, dict]:
     """Construit un Trie de tokens depuis les termes cibles."""
     root = TrieNode()
-    stats = {
+    stats: dict[str, Any] = {
         "terms": [],
         "token_sequences": 0,
         "max_sequence_tokens": 0,
@@ -214,7 +214,7 @@ def build_cohere_lexicon_processor(
     max_prefix_tokens: int = 20,
 ) -> tuple[Any | None, dict]:
     """Construit un LogitsProcessorList compatible transformers pour Cohere."""
-    stats = {
+    stats: dict[str, Any] = {
         "enabled": bool(enabled),
         "terms": [],
         "token_sequences": 0,
