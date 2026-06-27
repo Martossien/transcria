@@ -2,6 +2,7 @@ import enum
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import cast
 
 from transcria.database import db
 
@@ -126,7 +127,7 @@ def get_step_for_state(state: JobState | str) -> dict | None:
 
     state_val = state.value if isinstance(state, JobState) else state
     for step in WORKFLOW_STEPS:
-        for s in step["states"]:
+        for s in cast("list[JobState]", step["states"]):
             if s.value == state_val:
                 return step
     return None

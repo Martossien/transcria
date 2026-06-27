@@ -25,7 +25,10 @@ module = [
     "transcria.queue.models",
     "transcria.context.central_lexicon_models",
 ]
-ignore_errors = true
+# Flask-SQLAlchemy : `class X(db.Model)` n'est pas reconnu par mypy comme base de classe
+# (attribut d'instance, pas un nom typable). On suppresse UNIQUEMENT ce faux positif —
+# le reste de ces modules est typé normalement (≠ ignore_errors en bloc).
+disable_error_code = ["name-defined"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -93,9 +93,13 @@ upload → profil → STT → diarisation → arbitrage LLM → relecture finale
 
 - **Bloc A** (`ignore_errors=true`) — 6 modèles SQLAlchemy : `auth.models`, `audit.models`,
   `jobs.models`, `voice.models`, `queue.models`, `context.central_lexicon_models`.
-  → **Correctif visé** : activer le plugin `sqlalchemy.ext.mypy.plugin` ou typage `Mapped[]`
-  (SQLAlchemy 2.0), pas un ignore en bloc.
-  - [ ] traité
+  - [x] **traité** — le blanket `ignore_errors` est remplacé par `disable_error_code =
+    ["name-defined"]` : Flask-SQLAlchemy `class X(db.Model)` n'est pas typable par mypy
+    (attribut d'instance, pas un nom) ; on suppresse **uniquement** ce faux positif, le
+    reste des modèles est désormais typé. Les 2 vraies erreurs ainsi exposées (`step["states"]`
+    et relation `entries` non itérables) sont corrigées par `cast` localisé. (Le plugin
+    `sqlalchemy.ext.mypy.plugin` testé = sans effet ; migration `Mapped[]` complète = chantier
+    séparé, faible valeur vs risque.)
 - **Bloc B** (`ignore_errors=true`) — 9 backends : `stt.whisper_transcriber`,
   `stt.granite_transcriber`, `stt.parakeet_transcriber`, `stt.cohere_transcriber`,
   `stt.sortformer_diarizer`, `stt.diarization`, `voice.embedding`,

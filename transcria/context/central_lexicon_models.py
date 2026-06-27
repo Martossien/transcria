@@ -1,6 +1,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
+from typing import cast
 
 from transcria.database import db
 
@@ -44,7 +45,7 @@ class GroupLexicon(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
         if include_entries:
-            data["entries"] = [entry.to_dict() for entry in self.entries]
+            data["entries"] = [entry.to_dict() for entry in cast("list[GroupLexiconEntry]", self.entries)]
         return data
 
 
