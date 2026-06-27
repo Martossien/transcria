@@ -91,9 +91,11 @@ transcria/
   app.py                    # create_app() + main()
   install.sh                # Bootstrap + câblage d'installation (la logique métier vit dans transcria/installer)
   Dockerfile                # Image CPU multi-étages (web/scheduler/migrate) ; ENTRYPOINT = transcria.deploy.entrypoint
-  Dockerfile.allinone-gpu   # Image all-in-one GPU (CUDA 12.6 ; compile llama.cpp = LLM embarquée ; NeMo/Sortformer). AUCUN poids baké → publiable (GHCR)
-  docker-compose.yml        # split: db→migrate→web+scheduler ; gpu: db→migrate-gpu→all-in-one (image GPU, CDI)
-  .dockerignore             # Exclut venv/secrets/artefacts du contexte de build
+  Dockerfile.allinone-gpu   # Image all-in-one GPU SLIM (CUDA 12.6 ; compile llama.cpp = LLM embarquée ; NeMo/Sortformer). AUCUN poids baké → publiable (GHCR)
+  Dockerfile.allinone-bundled # Idem + 3 modèles NON gated BAKÉS (whisper+Sortformer+Qwen-9B) → zéro-download/hors-ligne ; build local (~31 Go) ; /licenses/ (attributions)
+  docker-compose.yml        # split: db→migrate→web+scheduler ; gpu: db→migrate-gpu→all-in-one (image GPU, CDI). TRANSCRIA_HF_SOURCE=hfcache → cache HF en volume nommé (mode bundled)
+  licenses/                 # Attributions des modèles embarqués (image :bundled) : NOTICE.md + NVIDIA Open Model License + MIT faster-whisper
+  .dockerignore             # Exclut venv/secrets/artefacts du contexte de build (ré-inclut licenses/)
   config.yaml               # Configuration production (pas dans git)
   config.example.yaml       # Template de configuration
   requirements.txt          # Dépendances runtime

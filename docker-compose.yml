@@ -156,8 +156,12 @@ services:
       - ./.env:/app/.env:ro
       - jobs:/app/jobs
       - models:/app/models
-      # Cache HF de l'hôte (modèles déjà téléchargés). Adapter le chemin source au besoin.
-      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/hf
+      # Cache HF. Source paramétrable :
+      #   * SLIM (défaut) → bind du cache HÔTE (modèles téléchargés au runtime, réutilisables) ;
+      #   * BUNDLED → volume nommé `hfcache` (TRANSCRIA_HF_SOURCE=hfcache, posé par le quickstart)
+      #     SEEDÉ depuis l'image (modèles bakés) au 1er `up` → zéro-download, pas de cache hôte
+      #     (supprime le piège « File exists » des symlinks du cache hôte).
+      - ${TRANSCRIA_HF_SOURCE:-${HF_CACHE_DIR:-~/.cache/huggingface}}:/hf
     ports:
       - "7870:7870"
     # Réservation GPU par CDI (Docker ≥ 25). `all` = tous les GPU ; restreindre via
@@ -174,3 +178,6 @@ volumes:
   pgdata:
   jobs:
   models:
+  # Cache HF du mode BUNDLED (image à modèles embarqués) : seedé depuis l'image au 1er `up`
+  # quand TRANSCRIA_HF_SOURCE=hfcache. Inutilisé en mode slim (bind du cache hôte).
+  hfcache:

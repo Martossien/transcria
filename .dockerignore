@@ -36,3 +36,8 @@ scripts/generated
 tests
 docs
 *.md
+
+# Licences des modèles embarqués (image :bundled) : à GARDER dans le contexte malgré `*.md`
+# ci-dessus (NOTICE.md) — obligation d'attribution (NVIDIA Open Model License notamment).
+!licenses
+!licenses/**

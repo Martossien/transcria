@@ -1,0 +1,128 @@
+# syntax=docker/dockerfile:1
+#
+# Image ALL-IN-ONE GPU « BUNDLED » — identique à Dockerfile.allinone-gpu, MAIS avec les
+# modèles par défaut NON gated EMBARQUÉS (whisper + Sortformer + LLM d'arbitrage Qwen3.5-9B).
+# Objectif : « pull & run » DÉTERMINISTE et HORS-LIGNE — aucun téléchargement au runtime,
+# et plus aucun contact avec le cache HF de l'hôte (⇒ supprime le piège « File exists »).
+#
+# CE N'EST PAS « full » : pyannote/Cohere (gated) et les paliers LLM > 12 Go ne sont PAS
+# embarqués — ils restent en opt-in via HF_TOKEN / TRANSCRIA_LLM_TIER (cf. docs/DOCKER.md).
+#
+# LICENCES (redistribution vérifiée OK) : Qwen3.5-9B-GGUF = Apache-2.0, faster-whisper-large-v3
+#   = MIT, Sortformer = NVIDIA Open Model License (redistribution + commercial autorisés sous
+#   attribution + Trustworthy AI + guardrails intacts). Les textes/attributions sont bakés dans
+#   /licenses/ (cf. répertoire licenses/ du dépôt) — obligation contractuelle NVIDIA respectée.
+#
+# CUDA 12.6 / compilation llama.cpp : voir l'en-tête de Dockerfile.allinone-gpu (mêmes raisons).
+#
+# Build (lourd, ~31 Go, télécharge ~12 Go de poids NON gated au build — réseau requis, AUCUN
+# token). PUBLICATION = build LOCAL + push manuel (trop gros pour un runner CI GitHub) :
+#   docker build -f Dockerfile.allinone-bundled -t ghcr.io/<owner>/transcria-allinone:bundled .
+#   docker push  ghcr.io/<owner>/transcria-allinone:bundled
+
+ARG CUDA_IMAGE=nvidia/cuda:12.6.3-devel-ubuntu24.04
+ARG TORCH_CUDA_TAG=cu126
+ARG LLAMA_CPP_REF=b9816
+
+# ── Étage builder-llama : compile llama-server (CUDA) — identique à allinone-gpu ─────────────
+FROM ${CUDA_IMAGE} AS llama-builder
+ARG LLAMA_CPP_REF
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential libgomp1 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/llama.cpp /tmp/llama.cpp \
+    && cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
+        -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=ON \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_EXE_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-L/usr/local/cuda/lib64/stubs -lcuda -Wl,--allow-shlib-undefined" \
+    && cmake --build /tmp/llama.cpp/build --config Release --target llama-server -j "$(nproc)" \
+    && mkdir -p /opt/llama/bin \
+    && cp -a /tmp/llama.cpp/build/bin/. /opt/llama/bin/ \
+    && rm -rf /tmp/llama.cpp
+
+# ── Étage model-fetch : télécharge les 3 modèles NON gated (aucun token) ────────────────────
+# Léger (python slim) : seul huggingface_hub est requis. HF_HOME=/baked/hf reproduit la structure
+# `hub/models--…` que faster_whisper et NeMo (from_pretrained) lisent au runtime ; le GGUF va
+# dans /baked/models/<dir>/<file> (mêmes repo/fichier/dir que transcria/install_arbitrage.py).
+FROM python:3.12-slim AS model-fetch
+ENV HF_HOME=/baked/hf \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+RUN pip install --no-cache-dir "huggingface_hub>=0.24"
+RUN python - <<'PY'
+from huggingface_hub import snapshot_download, hf_hub_download
+# STT (MIT) et diarisation (NVIDIA Open Model License) → cache HF baké (HF_HOME=/baked/hf).
+snapshot_download("Systran/faster-whisper-large-v3")
+snapshot_download("nvidia/diar_streaming_sortformer_4spk-v2.1")
+# LLM d'arbitrage (Apache-2.0), palier 12 Go — chemin attendu par l'entrypoint/les profils.
+hf_hub_download("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q5_K_M.gguf",
+                local_dir="/baked/models/Qwen3.5-9B-Q5_K_M")
+print("modèles bakés OK")
+PY
+
+# ── Étage final ─────────────────────────────────────────────────────────────────────────────
+FROM ${CUDA_IMAGE}
+ARG TORCH_CUDA_TAG
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    TRANSCRIA_CONFIG=/app/config.yaml \
+    CUDA_HOME=/usr/local/cuda
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.12 python3.12-venv python3.12-dev \
+        build-essential libpq-dev postgresql-client \
+        ffmpeg iproute2 procps lsof git curl sudo ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/local/bin/python3
+
+# llama-server CUDA compilé + ses .so.
+COPY --from=llama-builder /opt/llama/bin /opt/llama/bin
+RUN echo /opt/llama/bin > /etc/ld.so.conf.d/llama.conf && ldconfig \
+    && ln -sf /opt/llama/bin/llama-server /usr/local/bin/llama-server
+
+# Couches MODÈLES + LICENCES placées AVANT `COPY . /app` et l'install : un patch de code
+# n'invalide donc PAS ces couches (12,5 Go) → pas de re-pull côté testeur sur une MAJ de code.
+# `/app/models` n'est PAS écrasé par `COPY . /app` (le dossier `models` est exclu par
+# .dockerignore ⇒ absent du contexte). HF_HOME=/hf et MODELS_DIR=/app/models sont montés en
+# VOLUMES NOMMÉS au runtime (seedés depuis l'image au 1er `up`).
+COPY --from=model-fetch /baked/hf /hf
+COPY --from=model-fetch /baked/models /app/models
+COPY licenses/ /licenses/
+
+WORKDIR /app
+COPY . /app
+
+ARG PG_DSN_HOST=db
+ARG PG_DSN_PORT=5432
+ARG PG_DSN_DB=transcria
+ARG PG_DSN_USER=transcria
+
+# Install all-in-one (identique à allinone-gpu) : DSN déféré (--pg-defer), pas de service.
+RUN ./install.sh --profile all-in-one \
+        --non-interactive --no-service --skip-doctor \
+        --cuda "${TORCH_CUDA_TAG}" \
+        --postgres --pg-defer \
+        --pg-host "${PG_DSN_HOST}" --pg-port "${PG_DSN_PORT}" \
+        --pg-db "${PG_DSN_DB}" --pg-user "${PG_DSN_USER}" --pg-password placeholder
+
+# Qualification au build (libcuda.so.1 injectée au runtime, donc tolérée — cf. allinone-gpu).
+RUN if ldd /usr/local/bin/llama-server | grep "not found" | grep -v "libcuda\.so"; then \
+        echo "ERREUR : libs partagées non résolues pour llama-server (hors libcuda)." >&2; \
+        exit 1; \
+    fi \
+    && /app/venv/bin/python scripts/detect_llama_server.py --bin /usr/local/bin/llama-server || true
+
+# Modèle de qualification audio SQUIM (torchaudio, ~29 Mo) — le SEUL modèle que le pipeline
+# télécharge encore au runtime (cf. transcria/audio/squim_scorer.py : SQUIM_OBJECTIVE.get_model()).
+# On le bake dans le cache torch hub (HOME=/root, identique au runtime) pour un image VRAIMENT
+# hors-ligne (DNSMOS est déjà un .onnx versionné dans le dépôt). Réseau requis au build.
+RUN HOME=/root /app/venv/bin/python -c "from torchaudio.pipelines import SQUIM_OBJECTIVE; SQUIM_OBJECTIVE.get_model(); print('SQUIM baked')"
+
+# HF_HOME/MODELS_DIR pointent sur les modèles bakés (montés en volumes nommés au runtime).
+ENV PATH="/app/venv/bin:$PATH" \
+    LLAMA_SERVER=/usr/local/bin/llama-server \
+    TRANSCRIA_ROLE=all \
+    HF_HOME=/hf \
+    MODELS_DIR=/app/models
+ENTRYPOINT ["/app/venv/bin/python", "-m", "transcria.deploy.entrypoint"]

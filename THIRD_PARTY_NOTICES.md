@@ -92,3 +92,20 @@ accepter avant usage :
 
 > TranscrIA ne distribue aucun de ces poids : il s'interface avec eux. Vérifiez et acceptez la
 > licence de chaque modèle que vous déployez.
+
+## Modèles BAKÉS dans l'image Docker `:bundled` (redistribués)
+
+L'image `transcria-allinone:bundled` (cf. `Dockerfile.allinone-bundled`) **embarque** les 3 modèles
+par défaut **non gated** pour un usage « pull & run » hors-ligne. Leurs licences **autorisent la
+redistribution** ; les textes/attributions sont bakés dans **`/licenses/`** de l'image (et versionnés
+dans `licenses/` du dépôt). Les modèles *gated* (Cohere, pyannote) ne sont **PAS** embarqués.
+
+| Modèle (dépôt) | Rôle | Licence | Attribution embarquée |
+|---|---|---|---|
+| `unsloth/Qwen3.5-9B-GGUF` (`Qwen3.5-9B-Q5_K_M.gguf`) | LLM d'arbitrage | **Apache-2.0** | `LICENSE` (Apache-2.0) |
+| `Systran/faster-whisper-large-v3` | STT | **MIT** | `licenses/MIT-faster-whisper.txt` |
+| `nvidia/diar_streaming_sortformer_4spk-v2.1` | Diarisation | **NVIDIA Open Model License** | `licenses/NVIDIA-Open-Model-License.txt` + notice « Licensed by NVIDIA Corporation under the NVIDIA Open Model License » |
+
+> Conformément à la NVIDIA Open Model License (section *Redistribution*), une copie de l'accord et la
+> notice d'attribution sont jointes dans `/licenses/` ; l'usage doit rester conforme aux *Trustworthy
+> AI terms* de NVIDIA et les mécanismes de sûreté du modèle ne sont pas modifiés.
