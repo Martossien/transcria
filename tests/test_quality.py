@@ -1,5 +1,6 @@
 
 from transcria.quality.lexicon_checks import LexiconChecker
+from transcria.quality.quality_report import _summary_too_short
 from transcria.quality.review_points import ReviewPoints
 from transcria.quality.srt_checks import SRTChecker
 
@@ -168,6 +169,28 @@ class TestReviewPoints:
         points = ReviewPoints.generate(report)
         assert len(points) == 1
         assert "mal formé" in points[0].lower()
+
+    def test_handles_summary_too_short(self):
+        report = {"checks": [{"type": "summary_too_short", "summary_chars": 40, "severity": "warning"}]}
+        points = ReviewPoints.generate(report)
+        assert len(points) == 1
+        assert "résumé" in points[0].lower()
+
+
+class TestSummaryTooShort:
+    def test_none_summary_not_flagged(self):
+        # Profil sans résumé → pas de signalement.
+        assert _summary_too_short(None, "x" * 5000, 250, 3000) is False
+
+    def test_short_meeting_not_flagged(self):
+        # Transcription courte → un résumé court est normal.
+        assert _summary_too_short("ok", "x" * 500, 250, 3000) is False
+
+    def test_substantial_meeting_with_tiny_summary_flagged(self):
+        assert _summary_too_short("Trop court.", "x" * 5000, 250, 3000) is True
+
+    def test_substantial_meeting_with_adequate_summary_ok(self):
+        assert _summary_too_short("y" * 400, "x" * 5000, 250, 3000) is False
 
     def test_handles_low_coverage(self):
         report = {"checks": [{"type": "low_coverage", "ratio": 0.5, "severity": "error"}]}

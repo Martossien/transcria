@@ -159,7 +159,10 @@ que de dupliquer.
   lisible + CRC `testzip` ; DOCX = conteneur OOXML valide avec `[Content_Types].xml`) appelé
   à la fin de `build_package`, remonté dans `integrity_issues` (détection loggée, non-fatale).
   5 tests.
-- ⏳ longueur de résumé dans des bornes (cf. A4 du catalogue)
+- ✅ **longueur de résumé dans des bornes** — **ajouté** : `_summary_too_short` + check
+  `summary_too_short` dans `run_all_checks` (ne flague que si transcription substantielle ET
+  résumé < plancher, seuils configurables → pas de faux positif sur réunions courtes) + mapper.
+  5 tests. Signale l'anomalie A4. **Série invariants GPU-free §5.2 : complète.**
 
 ### 5.3 Déterminisme
 - [ ] 2× le même audio → diff ; toute non-reproductibilité = anomalie à expliquer.
@@ -171,7 +174,7 @@ que de dupliquer.
 | A1 | Glossaire non appliqué aux mots ordinaires hors-glossaire (ex. émental/Emental) | [[final_review_glossary_scope]] | ouverte |
 | A2 | Rôles attribués par le LLM douteux | [[drite_saas_comparison]] | ouverte |
 | A3 | Faux positif « musique » | [[drite_saas_comparison]] | ouverte |
-| A4 | Résumé trop court | [[drite_saas_comparison]] | ouverte |
+| A4 | Résumé trop court | [[drite_saas_comparison]] | **signalée** (check `summary_too_short` → review point) |
 | A5 | Lexique non appliqué (vs SaaS) | [[drite_saas_comparison]] | ouverte |
 | A6 | Garde nom locuteur SRT (solution B différée) | [[speaker_name_srt_guard]] | différée — à décider |
 | A7 | Support pptx/pdf non ingéré (biasing + résumé) | [[drite_saas_comparison]] | hors-périmètre ? |

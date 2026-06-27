@@ -26,6 +26,11 @@ class ReviewPoints:
                     f"SRT mal formé : {count} anomalie(s) de structure "
                     "(numérotation/timing/ordre) — vérifier l'export."
                 )
+            elif ctype == "summary_too_short":
+                points.append(
+                    f"Résumé anormalement court ({check.get('summary_chars', 0)} car.) "
+                    "— vérifier la génération du résumé."
+                )
             elif ctype == "unmapped_speakers":
                 points.append(f"Locuteurs non mappés : {count} segments — associer aux participants.")
             elif ctype == "missing_lexicon_terms":

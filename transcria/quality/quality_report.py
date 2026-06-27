@@ -93,6 +93,18 @@ def _segment_overlaps_zones(start: float, end: float, zones: list[dict]) -> bool
     return False
 
 
+def _summary_too_short(summary_text: str | None, transcript_text: str, min_chars: int, substantial_chars: int) -> bool:
+    """Vrai si le résumé est anormalement court POUR une réunion substantielle (A4).
+
+    `None`/absent (profil sans résumé) → False. On ne flague que si le transcript dépasse
+    `substantial_chars` ET le résumé (sans espaces de bord) tombe sous `min_chars` — évite
+    les faux positifs sur les réunions réellement courtes.
+    """
+    if summary_text is None:
+        return False
+    return len(transcript_text) >= substantial_chars and len(summary_text.strip()) < min_chars
+
+
 class QualityReporter:
     def __init__(self, config: dict):
         self.config = config
@@ -118,6 +130,11 @@ class QualityReporter:
             "no_speech_prob_threshold": t.get("no_speech_prob_threshold", 0.5),
             "low_word_confidence_ratio": t.get("low_word_confidence_ratio", 0.5),
             "low_word_confidence_min": t.get("low_word_confidence_min", 0.4),
+            # Résumé anormalement court (A4) : ne flague QUE si la réunion a de la substance
+            # (transcript long) ET le résumé tombe sous un plancher → évite les faux positifs
+            # sur les réunions réellement courtes.
+            "summary_min_chars": t.get("summary_min_chars", 250),
+            "substantial_transcript_chars": t.get("substantial_transcript_chars", 3000),
         }
 
     def run_all_checks(self, job: Job) -> dict:
@@ -570,6 +587,24 @@ class QualityReporter:
             if words_per_second > thresholds["high_word_rate"]:
                 checks.append({"type": "high_word_rate", "rate": round(words_per_second, 2), "severity": "warning"})
                 review_points.append(f"Débit de mots élevé : {words_per_second:.1f} mots/s — possible erreur.")
+
+        # 14. Résumé anormalement court (A4) : réunion substantielle mais résumé quasi vide
+        # → génération tronquée/échouée. Le SRT sert de proxy de substance (toujours chargé).
+        total_checks += 1
+        summary_md = fs.load_text("summary/summary.md")
+        if _summary_too_short(summary_md, srt_content, thresholds["summary_min_chars"], thresholds["substantial_transcript_chars"]):
+            summary_len = len((summary_md or "").strip())
+            checks.append({
+                "type": "summary_too_short",
+                "summary_chars": summary_len,
+                "transcript_chars": len(srt_content),
+                "severity": "warning",
+            })
+            review_points.append(
+                f"Résumé anormalement court ({summary_len} car. pour une transcription de "
+                f"{len(srt_content)} car.) — vérifier la génération du résumé."
+            )
+            warnings += 1
 
         error_signals = {
             "speaker_name_violations": len(speaker_violations),
