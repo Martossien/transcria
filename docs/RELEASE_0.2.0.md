@@ -155,7 +155,11 @@ que de dupliquer.
   persisté par job** (hint par appel > config) et n'est **pas un champ de profil** ; un check
   basé sur la config par défaut (20) serait faible/trompeur. À reprendre si on persiste le max
   effectif par job, ou via le modèle de diarisation actif (Sortformer = 4 loc.).
-- ⏳ DOCX/ZIP réellement ouvrables, longueur de résumé dans des bornes
+- ✅ **DOCX/ZIP réellement ouvrables** — **ajouté** : `PackageBuilder.verify_package` (ZIP
+  lisible + CRC `testzip` ; DOCX = conteneur OOXML valide avec `[Content_Types].xml`) appelé
+  à la fin de `build_package`, remonté dans `integrity_issues` (détection loggée, non-fatale).
+  5 tests.
+- ⏳ longueur de résumé dans des bornes (cf. A4 du catalogue)
 
 ### 5.3 Déterminisme
 - [ ] 2× le même audio → diff ; toute non-reproductibilité = anomalie à expliquer.

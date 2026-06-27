@@ -1,6 +1,7 @@
 import logging
 import re
 import zipfile
+from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -58,12 +59,47 @@ class PackageBuilder:
             logger.exception("Échec création package ZIP")
             return {"error": str(exc), "zip_path": str(zip_path), "zip_name": zip_name, "size_mb": 0}
 
+        docx_path: Path | None = None
+        if docx_level != "none":
+            safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
+            docx_path = export_dir / f"rapport_{safe_title}.docx"
+        integrity_issues = self.verify_package(zip_path, docx_path)
+        if integrity_issues:
+            logger.warning("Intégrité des livrables job %s : %s", job.id, "; ".join(integrity_issues))
+
         size_mb = round(zip_path.stat().st_size / (1024 * 1024), 2)
         return {
             "zip_path": str(zip_path),
             "zip_name": zip_name,
             "size_mb": size_mb,
+            "integrity_issues": integrity_issues,
         }
+
+    @staticmethod
+    def verify_package(zip_path: Path, docx_path: Path | None = None) -> list[str]:
+        """Garde-fou export : les livrables produits sont-ils réellement OUVRABLES ?
+
+        ZIP : conteneur lisible + intégrité CRC (`testzip`). DOCX : conteneur OOXML valide
+        (lisible comme zip + `[Content_Types].xml` présent). Retourne la liste des anomalies
+        (vide = livrables sains). Détection, pas d'échec dur — un export corrompu est loggé
+        et remonté dans `integrity_issues`.
+        """
+        issues: list[str] = []
+        if not zipfile.is_zipfile(zip_path):
+            issues.append("ZIP illisible ou corrompu")
+        else:
+            with zipfile.ZipFile(zip_path) as zf:
+                bad = zf.testzip()
+                if bad is not None:
+                    issues.append(f"ZIP corrompu (CRC invalide) : {bad}")
+        if docx_path is not None and docx_path.is_file():
+            if not zipfile.is_zipfile(docx_path):
+                issues.append("DOCX illisible (conteneur OOXML invalide)")
+            else:
+                with zipfile.ZipFile(docx_path) as zf:
+                    if "[Content_Types].xml" not in zf.namelist():
+                        issues.append("DOCX invalide ([Content_Types].xml absent)")
+        return issues
 
     def _add_file(self, zf: zipfile.ZipFile, fs: JobFilesystem, rel_dir: str, zip_prefix: str) -> None:
         src_dir = fs.job_dir / rel_dir

@@ -110,3 +110,47 @@ class TestPackageBuilder:
             names = zf.namelist()
             assert "summary/summary.md" in names
             assert "quality/final_review_report.md" in names
+
+
+class TestVerifyPackage:
+    """Garde-fou d'ouvrabilité des livrables (PackageBuilder.verify_package)."""
+
+    def test_valid_zip_no_issues(self, tmp_path):
+        z = tmp_path / "ok.zip"
+        with zipfile.ZipFile(z, "w") as zf:
+            zf.writestr("a.txt", "hello")
+        assert PackageBuilder.verify_package(z) == []
+
+    def test_corrupt_zip_detected(self, tmp_path):
+        z = tmp_path / "bad.zip"
+        z.write_bytes(b"ceci n'est pas un zip")
+        issues = PackageBuilder.verify_package(z)
+        assert any("ZIP" in i for i in issues)
+
+    def test_valid_docx_no_issues(self, tmp_path):
+        z = tmp_path / "ok.zip"
+        with zipfile.ZipFile(z, "w") as zf:
+            zf.writestr("x", "1")
+        d = tmp_path / "rapport.docx"
+        with zipfile.ZipFile(d, "w") as zf:
+            zf.writestr("[Content_Types].xml", "<xml/>")
+        assert PackageBuilder.verify_package(z, d) == []
+
+    def test_unreadable_docx_detected(self, tmp_path):
+        z = tmp_path / "ok.zip"
+        with zipfile.ZipFile(z, "w") as zf:
+            zf.writestr("x", "1")
+        d = tmp_path / "rapport.docx"
+        d.write_bytes(b"PK\x03\x04 placeholder non ouvrable")
+        issues = PackageBuilder.verify_package(z, d)
+        assert any("DOCX" in i for i in issues)
+
+    def test_docx_zip_without_content_types_detected(self, tmp_path):
+        z = tmp_path / "ok.zip"
+        with zipfile.ZipFile(z, "w") as zf:
+            zf.writestr("x", "1")
+        d = tmp_path / "rapport.docx"
+        with zipfile.ZipFile(d, "w") as zf:  # zip valide mais pas un conteneur OOXML
+            zf.writestr("word/document.xml", "<xml/>")
+        issues = PackageBuilder.verify_package(z, d)
+        assert any("Content_Types" in i for i in issues)
