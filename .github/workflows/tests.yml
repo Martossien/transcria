@@ -198,7 +198,7 @@ jobs:
           set -e
           WORK="${RUNNER_TEMP}/ui_walk"
           mkdir -p "$WORK/jobs" "$WORK/shots"
-          printf 'runtime: {role: web}\nauth: {first_admin_username: admin, first_admin_password: walkthrough-admin-pw}\nstorage: {jobs_dir: %s/jobs}\nnotifications: {email: {enabled: false}}\n' "$WORK" > "$WORK/config.yaml"
+          printf 'runtime: {role: web}\nauth: {first_admin_username: admin, first_admin_password: walkthrough-admin-pw}\nstorage: {jobs_dir: %s/jobs}\nnotifications: {email: {enabled: false}}\nvoice_enrollment: {allow_global_profiles: true}\n' "$WORK" > "$WORK/config.yaml"
 
           export TRANSCRIA_CONFIG="$WORK/config.yaml"
           export TRANSCRIA_DATABASE_URL="sqlite:///$WORK/app.db"

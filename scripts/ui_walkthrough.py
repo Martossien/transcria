@@ -224,6 +224,23 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("CRUD lexique", False, str(exc)[:120])
 
+    def voice_crud(self) -> None:
+        # Enrôlement d'un sujet voix = métadonnées seules (l'embedding, qui exige
+        # audio + modèle, est une étape /generate séparée) → testable sans GPU.
+        # group_id laissé sur « Global » (config jetable : allow_global_profiles=true).
+        try:
+            vname = f"Voix Walk {int(time.time())}"
+            self.page.goto(f"{self.base}/admin/voices/new", wait_until="networkidle")
+            self.page.fill('input[name="display_name"]', vname)
+            self.page.select_option('select[name="gender"]', "female")
+            self.page.get_by_role("button", name="Créer").click()
+            self.page.wait_for_load_state("networkidle")
+            self.shot("19_voice_created")
+            ok = vname in self.page.content() and "/admin/voices/" in self.page.url
+            self.check("CRUD voix : sujet créé et ouvert", ok, self.page.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("CRUD voix", False, str(exc)[:120])
+
     def auth_flows(self) -> None:
         # Sécurité : login invalide rejeté, RBAC (un opérateur n'accède pas à l'admin),
         # et self-service mot de passe. Sessions isolées dans des contextes dédiés pour
@@ -342,6 +359,7 @@ def main() -> int:
             wt.config_editor()
             wt.admin_pages()
             wt.admin_crud()
+            wt.voice_crud()
             wt.auth_flows()
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)

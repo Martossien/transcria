@@ -72,7 +72,7 @@ Couverts par `scripts/ui_walkthrough.py` (✅ = assertion active, pas un simple 
 - ✅ `job_wizard` — **profil à l'étape 1** vérifié par assertion DOM + **bascule de profil persistée** (POST + reload) (cf. [[profile_choice_step1]]) — ⏳ upload réel, hints locuteurs
 - ✅ `job_result` — job terminé **seedé** (`scripts/seed_completed_job.py`, sans GPU) : badge « Terminé », aperçu SRT, liens téléchargement srt/docx/zip — ⏳ clips locuteurs / extraits audio (audio réel)
 - ✅ `queue` / ✅ `schedule` (marqueur de contenu)
-- ✅ `voices` (marqueur de contenu) — ⏳ CRUD voix (enrôlement = audio)
+- ✅ `voices` + **CRUD création sujet** (métadonnées seules ; l'embedding `/generate` = audio réel ⏳)
 - ✅ `central_lexicons` + **CRUD création** (`central_lexicon_detail`)
 - ✅ `users` + **CRUD création** / ✅ `groups` + **CRUD création**
 - ✅ `audit` (marqueur de contenu)
