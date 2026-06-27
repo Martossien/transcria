@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -237,7 +238,7 @@ class SortformerDiarizer(BaseDiarizer):
             avec speaker normalisé en SPEAKER_0N (compatible pipeline aval).
             Les segments de durée nulle sont ignorés.
         """
-        turns = []
+        turns: list[dict[str, Any]] = []
         for line in lines:
             line = line.strip()
             if not line:

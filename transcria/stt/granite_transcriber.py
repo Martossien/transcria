@@ -2,6 +2,7 @@ import logging
 import time as _time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from typing import Any
 
 from transcria.stt.base_transcriber import BaseTranscriber
 
@@ -78,9 +79,9 @@ class GraniteTranscriber(BaseTranscriber):
         self.repetition_loop_min_repeats = repetition_loop_min_repeats
         self.repetition_loop_max_phrase_words = repetition_loop_max_phrase_words
         self.repetition_loop_keep_repeats = repetition_loop_keep_repeats
-        self._model = None
-        self._processor = None
-        self._tokenizer = None
+        self._model: Any = None  # transformers model (non typé) chargé paresseusement
+        self._processor: Any = None
+        self._tokenizer: Any = None
         self._metadata: dict = {
             "backend": "granite",
             "model_path": self.model_path,
@@ -217,7 +218,8 @@ class GraniteTranscriber(BaseTranscriber):
             if audio_path is None:
                 return [{"error": "Granite STT: audio_path ou audio_array requis"}]
             source = str(audio_path)
-            audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            audio, _sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            sr = int(_sr)
 
         total_samples = len(audio)
         if total_samples == 0:
@@ -271,7 +273,7 @@ class GraniteTranscriber(BaseTranscriber):
                 add_special_tokens=False,
                 skip_special_tokens=True,
             )[0].strip()
-            loops = []
+            loops: list = []
             if text and self.collapse_repetition_loops:
                 text, loops = self._apply_loop_collapse(text)
             item = {
@@ -388,4 +390,4 @@ class GraniteTranscriber(BaseTranscriber):
             parts.append(int(digits or 0))
         while len(parts) < 3:
             parts.append(0)
-        return tuple(parts)
+        return (parts[0], parts[1], parts[2])

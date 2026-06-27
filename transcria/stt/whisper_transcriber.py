@@ -118,7 +118,7 @@ class WhisperTranscriber(BaseTranscriber):
         self._runtime_model_size: str | None = None
 
     @property
-    def vram_mb(self) -> int:
+    def vram_mb(self) -> int:  # type: ignore[override]  # surcharge dynamique (dépend de model_size) de l'attribut int de la base
         return _MODEL_VRAM.get(self.model_size, 2000)
 
     @staticmethod
@@ -180,6 +180,7 @@ class WhisperTranscriber(BaseTranscriber):
     ) -> list[dict]:
         if not self.load():
             return [{"error": "Faster-Whisper non disponible"}]
+        assert self._model is not None  # load() == True garantit le modèle chargé
 
         _t0 = _time.time()
         ch_len = self.chunk_length_s if chunk_length_s is None else chunk_length_s
@@ -222,7 +223,7 @@ class WhisperTranscriber(BaseTranscriber):
 
         for seg in gen_segments:
             text = seg.text.strip()
-            loops = []
+            loops: list = []
             if self.collapse_repetition_loops and text:
                 from transcria.stt.anti_hallucination import collapse_repetition_loops
 

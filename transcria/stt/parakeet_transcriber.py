@@ -2,7 +2,7 @@ import logging
 import os
 import time as _time
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from transcria.stt.base_transcriber import BaseTranscriber
 
@@ -70,7 +70,7 @@ class ParakeetTranscriber(BaseTranscriber):
         self.repetition_loop_min_repeats = repetition_loop_min_repeats
         self.repetition_loop_max_phrase_words = repetition_loop_max_phrase_words
         self.repetition_loop_keep_repeats = repetition_loop_keep_repeats
-        self._model = None
+        self._model: Any = None  # nemo ASRModel (non typé) chargé paresseusement
         self._metadata: dict = {
             "backend": "parakeet",
             "model_path": self.model_path,
@@ -201,12 +201,13 @@ class ParakeetTranscriber(BaseTranscriber):
             if audio_path is None:
                 return [{"error": "Parakeet STT: audio_path ou audio_array requis"}]
             source = str(audio_path)
-            audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            audio, _sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            sr = int(_sr)
 
         total_samples = len(audio)
         if total_samples == 0:
             return []
-        total_duration = total_samples / sr
+        total_duration: float = total_samples / sr
         logger.info(
             "Transcription Parakeet: source=%s duree=%.1fs",
             source,
@@ -312,7 +313,7 @@ class ParakeetTranscriber(BaseTranscriber):
                 ]
                 if words_in_seg:
                     item["words"] = words_in_seg
-                loops = []
+                loops: list = []
                 if seg_text and self.collapse_repetition_loops:
                     cleaned, loops = self._apply_loop_collapse(seg_text)
                     if loops:
@@ -320,7 +321,7 @@ class ParakeetTranscriber(BaseTranscriber):
                         item["hallucination_loops"] = loops
                 segments.append(item)
         elif full_text:
-            item: dict = {
+            item = {
                 "start": round(offset, 3),
                 "end": round(offset + chunk_duration, 3),
                 "text": full_text,

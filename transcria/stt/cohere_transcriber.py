@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from transcria.gpu.model_load_lock import model_load_lock
 from transcria.stt.base_transcriber import BaseTranscriber
@@ -66,9 +66,9 @@ class CohereTranscriber(BaseTranscriber):
         self.lexicon_biasing_boost = lexicon_biasing_boost
         self.lexicon_biasing_start_boost = lexicon_biasing_start_boost
         self.lexicon_biasing_max_prefix_tokens = lexicon_biasing_max_prefix_tokens
-        self._model = None
-        self._processor = None
-        self._lexicon_logits_processor = None
+        self._model: Any = None  # transformers model (non typé) chargé paresseusement
+        self._processor: Any = None
+        self._lexicon_logits_processor: Any = None
         self._lexicon_biasing_stats: dict = {}
         self._last_transcribe_metadata: dict = {}
 
@@ -171,7 +171,8 @@ class CohereTranscriber(BaseTranscriber):
             logger.debug("Transcription Cohere: audio fourni en mémoire (%d échantillons)", len(audio))
         else:
             logger.info("Transcription Cohere: chargement audio %s", audio_path)
-            audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            audio, _sr = librosa.load(str(audio_path), sr=16000, mono=True)
+            sr = int(_sr)
 
         total_samples = len(audio)
         chunk_samples = ch_len * sr

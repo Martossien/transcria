@@ -29,11 +29,6 @@ ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [
-    "transcria.stt.whisper_transcriber",
-    "transcria.stt.granite_transcriber",
-    "transcria.stt.parakeet_transcriber",
-    "transcria.stt.cohere_transcriber",
-    "transcria.stt.sortformer_diarizer",
     "transcria.stt.contextual_biasing",
     "transcria.exports.docx_report",
 ]
