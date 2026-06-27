@@ -15,7 +15,7 @@ Le projet cible un usage opérationnel : dépôt du fichier, diagnostic audio li
 
 ⚠️ **Beta — dernière release : [`v0.1.0-beta.5`](https://github.com/Martossien/transcria/releases/tag/v0.1.0-beta.5).** Le produit est fonctionnel et couvert par **2 668 tests (CI verte : ruff, mypy, pytest complet sur PostgreSQL, ~80 % de couverture)**. L'installeur est validé de bout en bout sur **4 distributions Linux (Ubuntu 22.04/24.04, Debian 12, Fedora 42) × Python 3.11–3.13** (apt + dnf, systemd et non-systemd, PostgreSQL 14/15/16), pipeline complet STT + diarisation + LLM. La **topologie distribuée** (frontale CPU + nœud de ressources GPU) est validée **de bout en bout sur audio réel** : STT (Cohere) + diarisation déportés et une LLM d'arbitrage vLLM (Qwen3.6-27B-FP8, tensor-parallel), placement VRAM automatique sur 8 GPU — voir [docs/DOCKER.md](docs/DOCKER.md) et [docs/PLAN_TEST_SPLIT_VLLM.md](docs/PLAN_TEST_SPLIT_VLLM.md). Selon le SemVer, la **série `0.x` est une phase de stabilisation** : l'API, le schéma de configuration et le modèle de données peuvent encore évoluer sans garantie de compatibilité ascendante jusqu'à `1.0.0`. À évaluer, à piloter — pas à mettre en production sans votre propre validation.
 
-- **Installation** : via `./install.sh` (venv, dépendances, service systemd) **ou un déploiement conteneurisé** (Dockerfile, compose, support GPU, quickstart en une commande — voir [docs/DOCKER.md](docs/DOCKER.md)). L'image **all-in-one GPU** (CUDA 12.6) embarque tout le pipeline — STT, diarisation **et** la LLM d'arbitrage (`llama-server` compilé servant un petit GGUF non gated, téléchargé au runtime) : **sans aucun token**, les 6 profils tournent (locuteurs via NVIDIA Sortformer, ≤4) ; un token HF gratuit (+ conditions des deux modèles) bascule sur la qualité de référence (Cohere + pyannote, illimité). Aucun poids n'étant baké, l'image est **publiable** (GHCR). **Prérequis GPU** : NVIDIA compute capability ≥ 7.5 (Turing ou plus récent — RTX 20xx→50xx, séries A/L/H ; Blackwell via JIT PTX) **et ≥ 12 Go de VRAM** (le 9B par défaut culmine à ~10,6 Go ; les phases sont séquencées, non additives). Table de compatibilité détaillée dans [docs/DOCKER.md](docs/DOCKER.md).
+- **Installation** : via `./install.sh` (venv, dépendances, service systemd) **ou un déploiement conteneurisé** (Dockerfile, compose, support GPU, quickstart en une commande — voir [docs/DOCKER.md](docs/DOCKER.md)). L'image **all-in-one GPU** (CUDA 12.6) embarque tout le pipeline — STT, diarisation **et** la LLM d'arbitrage (`llama-server` compilé servant un petit GGUF non gated, téléchargé au runtime) : **sans aucun token**, les 6 profils tournent (locuteurs via NVIDIA Sortformer, ≤4) ; un token HF gratuit (+ conditions des deux modèles) bascule sur la qualité de référence (Cohere + pyannote, illimité). Aucun poids n'étant baké, l'image slim est **publiable** (GHCR) ; une variante **`:bundled`** embarque les modèles par défaut pour un test « pull & run » sans téléchargement (cf. *Installation rapide*). **Prérequis GPU** : NVIDIA compute capability ≥ 7.5 (Turing ou plus récent — RTX 20xx→50xx, séries A/L/H ; Blackwell via JIT PTX) **et ≥ 12 Go de VRAM** (le 9B par défaut culmine à ~10,6 Go ; les phases sont séquencées, non additives). Table de compatibilité détaillée dans [docs/DOCKER.md](docs/DOCKER.md).
 - **Modèles** : Cohere ASR, pyannote, faster-whisper et la LLM d'arbitrage sont à fournir et configurer localement (voir [docs/INSTALL.md](docs/INSTALL.md)).
 - **Retours bienvenus** : issues et pull requests via GitHub — voir [CONTRIBUTING.md](CONTRIBUTING.md) et [SECURITY.md](SECURITY.md).
 
@@ -119,6 +119,37 @@ Options utiles :
 ```
 
 Guide complet : [docs/INSTALL.md](docs/INSTALL.md).
+
+### Juste tester ? Une commande, sans token (Docker `--bundled`)
+
+Le moyen le plus simple d'**évaluer le projet**, sans rien installer en natif :
+
+```bash
+git clone https://github.com/Martossien/transcria.git && cd transcria
+scripts/docker_quickstart.sh --bundled        # → http://localhost:7870
+scripts/docker_quickstart.sh --down           # arrêt
+```
+
+> **Connexion par défaut :** ouvrir `http://localhost:7870` et se connecter avec **`admin`** /
+> **`CHANGE-ME`** (identifiants initiaux du `config.yaml` généré, clé `auth.first_admin_password`).
+> **Changer le mot de passe avant tout usage réel** — c'est un placeholder, et un avertissement est
+> logué tant qu'il reste à sa valeur par défaut.
+
+`--bundled` tire (ou construit) l'image **`:bundled`** où les modèles par défaut sont **déjà
+embarqués** : **aucun token Hugging Face, aucun téléchargement, fonctionne même hors-ligne**. Il
+suffit d'un **GPU NVIDIA (compute capability ≥ 7.5 — RTX 20xx ou plus récent — ET ≥ 12 Go de
+VRAM)** avec l'accès GPU Docker ; le script le **vérifie d'emblée** et s'arrête avec un message
+clair si la carte est trop juste.
+
+> ⚠️ **C'est une image de test, pas le projet complet.** Pour rester sans token, elle utilise les
+> moteurs *d'entrée de gamme* : transcription **Whisper**, diarisation **NVIDIA Sortformer
+> (≤ 4 locuteurs, expérimental)** et la **plus petite LLM d'arbitrage (9B)**. Le workflow complet
+> des 6 profils tourne (résumé / correction / relecture inclus), mais **pas** la qualité de
+> référence. Pour celle-ci — **Cohere STT + pyannote (locuteurs illimités)** et paliers LLM plus
+> gros — fournir un `HF_TOKEN` gratuit (après acceptation des conditions des deux modèles) ou
+> définir `TRANSCRIA_LLM_TIER` : la **même commande** les prend en compte, sans rien reconfigurer.
+
+Détails (image slim vs bundled, table de compatibilité GPU/VRAM, publication) : [docs/DOCKER.md](docs/DOCKER.md).
 
 Après avoir rempli `config.yaml`, un **préflight de diagnostic** (sans GPU, sans effet de bord) valide l'installation et signale les pannes classiques avant de lancer un job :
 

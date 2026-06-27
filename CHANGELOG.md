@@ -36,6 +36,21 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   un seul GPU **~12 Go** suffit (pic = LLM 9B ~10,6 Go ; whisper < 5 Go, sortformer ~3,5 Go,
   séquencés). Le quickstart **aligne `gpu.llm_vram_mb` sur le palier** (12 → 12000) — sinon le
   défaut 60000 (palier 64 Go) faisait refuser l'admission du 9B sur une carte 12-24 Go.
+- **Image Docker `:bundled` — modèles embarqués (zéro-download, hors-ligne).** Nouvelle image
+  `Dockerfile.allinone-bundled` (variante de l'all-in-one GPU) qui **bake les modèles par défaut
+  NON gated** : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Qwen3.5-9B
+  Q5_K_M (Apache-2.0) **et** le modèle de qualité audio SQUIM (torchaudio, ~29 Mo, seul modèle
+  encore téléchargé au runtime — désormais baké ⇒ **aucun download au 1ᵉ run**, validé E2E). Couche modèles **avant `COPY . /app`** (un patch de code ne réinvalide pas
+  les 12,5 Go). Le mode `--bundled` du quickstart monte le cache HF en **volume nommé `hfcache`
+  seedé depuis l'image** (`TRANSCRIA_HF_SOURCE=hfcache`) au lieu du bind du cache hôte → **supprime
+  le piège `[Errno 17] File exists`**. Licences de redistribution **vérifiées** ; attributions
+  bakées dans **`/licenses/`** (NOTICE + texte intégral de la NVIDIA Open Model License + MIT). Ce
+  n'est **pas** « full » : pyannote/Cohere et les paliers LLM > 12 Go restent en opt-in
+  (`HF_TOKEN` / `TRANSCRIA_LLM_TIER`). Publication = **build local + push manuel** (~31 Go > disque
+  runner CI). Détails : `docs/DOCKER.md` § Image `:bundled`.
+- **Preflight GPU du quickstart** (`transcria.deploy.gpu_preflight`) : vérifie **compute capability
+  ≥ 7.5 ET VRAM ≥ ~12 Go** via `nvidia-smi` AVANT le build/pull → échec tôt avec message
+  actionnable (carte non supportée / VRAM insuffisante) au lieu d'un crash CUDA au 1ᵉ job.
 
 ## [0.1.0-beta.5] — 2026-06-26
 

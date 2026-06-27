@@ -85,13 +85,35 @@ Start the service (`./start.sh` or systemd) and open the web UI. For distributed
 Prefer containers? A turnkey script takes you from clone to a running stack — host GPU setup, secret/config generation, image build, `docker compose up`, health check — with no manual steps:
 
 ```bash
-scripts/docker_quickstart.sh                  # all-in-one GPU → http://localhost:7870 (admin / see config.yaml)
+scripts/docker_quickstart.sh --bundled        # EASIEST: try it — models baked in, no token, no download
+scripts/docker_quickstart.sh                  # all-in-one GPU → http://localhost:7870
 HF_TOKEN=hf_xxx scripts/docker_quickstart.sh  # reference quality (gated Cohere STT + pyannote); omit for the no-token path
 scripts/docker_quickstart.sh --cpu            # no GPU (web + scheduler)
 scripts/docker_quickstart.sh --down           # stop
 ```
 
-The **all-in-one GPU** image (CUDA 12.6) bundles the whole pipeline — STT, diarization **and** the arbitration LLM (a compiled `llama-server` serving a small non-gated GGUF, downloaded at runtime). **With no token at all**, the full 6-profile workflow runs (speaker labels via NVIDIA Sortformer, ≤4 speakers); a free HF token (plus accepting both model conditions) switches to reference quality (Cohere + pyannote, unlimited speakers). No model weights are baked in, so the image is publishable — point the quickstart at a published image (`TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX`) to `pull` instead of build. It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU. **GPU requirement:** NVIDIA compute capability ≥ 7.5 (Turing or newer — RTX 20xx→50xx, A/L/H-series; Blackwell via PTX JIT) **and ≥ 12 GB VRAM** (the default 9B LLM peaks ~10.6 GB; phases are sequenced, not additive). Full reference — image, compose, **GPU/VRAM compatibility table**, variables, publishing, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
+> **Default login:** open `http://localhost:7870` and sign in with **`admin`** / **`CHANGE-ME`**
+> (the initial credentials in the generated `config.yaml`, key `auth.first_admin_password`).
+> **Change the password before any real use** — it's a placeholder, and a warning is logged while
+> it stays at its default.
+
+#### Just want to try it? One command, no token (`--bundled`)
+
+`scripts/docker_quickstart.sh --bundled` is the **friendliest way to evaluate the project**: it
+pulls (or builds) the **`:bundled`** image with the default models **already baked in** — so there's
+**no Hugging Face token, no download, and it even works offline**. You only need an NVIDIA GPU
+(**compute capability ≥ 7.5** — RTX 20xx or newer — **and ≥ 12 GB VRAM**) with Docker GPU access;
+the script checks this up front and stops with a clear message if your card is too small.
+
+> ⚠️ **This is a quick-test image, not the complete project.** To keep it token-free it uses the
+> *entry-level* engines: transcription via **Whisper**, diarization via **NVIDIA Sortformer
+> (≤ 4 speakers, experimental)**, and the **smallest 9B arbitration LLM**. It exercises the full
+> 6-profile workflow (summary / correction / review all run), but **not** the reference quality.
+> For that — **Cohere STT + pyannote (unlimited speakers)** and larger LLM tiers — provide a free
+> `HF_TOKEN` (after accepting both models' conditions) or set `TRANSCRIA_LLM_TIER`. Nothing to
+> reconfigure: the same command picks them up.
+
+The **all-in-one GPU** image (CUDA 12.6) bundles the whole pipeline — STT, diarization **and** the arbitration LLM (a compiled `llama-server` serving a small non-gated GGUF). The default **`:latest`** (slim) image downloads those models at first run; **`:bundled`** bakes them in (zero download, no host-cache pitfalls — see the slim-vs-bundled table in the docs). **With no token at all**, the full 6-profile workflow runs (speaker labels via NVIDIA Sortformer, ≤4 speakers); a free HF token (plus accepting both model conditions) switches to reference quality (Cohere + pyannote, unlimited speakers). The slim image bakes no weights and is publishable — point the quickstart at a published image (`TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX`) to `pull` instead of build. It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU. **GPU requirement:** NVIDIA compute capability ≥ 7.5 (Turing or newer — RTX 20xx→50xx, A/L/H-series; Blackwell via PTX JIT) **and ≥ 12 GB VRAM** (the default 9B LLM peaks ~10.6 GB; phases are sequenced, not additive). Full reference — image, compose, **GPU/VRAM compatibility table**, variables, publishing, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Tech stack
 

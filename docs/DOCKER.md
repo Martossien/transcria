@@ -23,7 +23,10 @@ CUDA, `compose up`, vérification `/health`) :
 
 ```bash
 # Tout-en-un GPU (recommandé pour tester le projet) :
-scripts/docker_quickstart.sh                  # → http://localhost:7870 (admin / cf. config.yaml)
+scripts/docker_quickstart.sh                  # → http://localhost:7870
+
+# Image à modèles EMBARQUÉS (zéro-download, hors-ligne, sans le piège du cache hôte) :
+scripts/docker_quickstart.sh --bundled        # pull ghcr.io/…:bundled si publiée, sinon build local
 
 # Avec le STT de référence (Cohere, gated) — fournir un token HF :
 HF_TOKEN=hf_xxx scripts/docker_quickstart.sh
@@ -34,6 +37,21 @@ scripts/docker_quickstart.sh --cpu
 # Arrêt :
 scripts/docker_quickstart.sh --down
 ```
+
+> **Deux images GPU.** `:latest` (**slim**) télécharge les modèles au 1ᵉ run dans le cache HF
+> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + la LLM 9B → aucun
+> téléchargement, cache HF en **volume nommé** seedé depuis l'image (élimine le `[Errno 17]
+> File exists` ci-dessous). Dans les deux cas, pyannote/Cohere restent en opt-in `HF_TOKEN`.
+
+> Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 **et** VRAM ≥ ~12 Go,
+> cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
+> un crash CUDA survenir au 1ᵉ job.
+
+> **Connexion par défaut** : ouvrir `http://localhost:7870` et se connecter avec **`admin`** /
+> **`CHANGE-ME`** (identifiants initiaux du `config.yaml` généré, clé `auth.first_admin_password`,
+> appliqués **au tout premier démarrage** = bootstrap de la base). **Changer ce mot de passe avant
+> tout usage réel** ; le modifier dans `config.yaml` **après** le bootstrap ne change PAS le mot de
+> passe d'un compte déjà créé (le faire alors via l'UI / la gestion des utilisateurs).
 
 Le script est **idempotent** : il ne réécrit pas un `config.yaml`/`.env` existant, génère
 des secrets aléatoires, choisit `whisper` (non gated, sans token) si `HF_TOKEN` est absent.
@@ -75,6 +93,8 @@ fournir au conteneur (`HF_TOKEN`, ou dans `.env`). Le cache HF de l'hôte est mo
 > Pour un utilisateur **neuf** (cache vide), whisper et Sortformer se téléchargent proprement **sans
 > token** (validé E2E). En cas de souci, pointer `HF_CACHE_DIR` sur un **cache dédié au conteneur**
 > (répertoire vide) plutôt que de réutiliser un cache hôte hétérogène.
+> **L'image `:bundled` (`--bundled`) supprime ce piège** : elle n'utilise pas le cache hôte (cache
+> HF en volume nommé `hfcache`, seedé depuis les modèles bakés).
 
 > ⚠️ `transcria.stt.cohere_transcriber` force `HF_HUB_OFFLINE=1` par défaut. En conteneur
 > avec un cache fraîchement monté, laisser **`HF_HUB_OFFLINE=0`** (le compose le fait) pour
@@ -271,6 +291,34 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 > **Pourquoi llama.cpp compilé** : llama.cpp ne publie pas de binaire CUDA Linux → on le compile
 > dans un étage builder (binaire canonique des paliers).
 
+#### Image `:bundled` — modèles embarqués (zéro-download, hors-ligne)
+
+Variante de l'all-in-one GPU qui **embarque les modèles par défaut non gated** au lieu de les
+télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), la
+LLM d'arbitrage Qwen3.5-9B Q5_K_M (Apache-2.0) **et** le modèle de qualification audio **SQUIM**
+(torchaudio, ~29 Mo) — seul modèle que le pipeline téléchargeait encore au runtime (DNSMOS est déjà
+un `.onnx` versionné dans le dépôt). Résultat : **aucun téléchargement au 1ᵉ run** (validé E2E).
+Image `Dockerfile.allinone-bundled` ; tag `ghcr.io/<owner>/transcria-allinone:bundled`.
+
+```bash
+scripts/docker_quickstart.sh --bundled        # pull :bundled si publiée, sinon build local
+```
+
+| | `:latest` (slim) | `:bundled` |
+|---|---|---|
+| Modèles par défaut | téléchargés au 1ᵉ run | **bakés dans l'image** |
+| Cache HF | bind du cache **hôte** | **volume nommé** `hfcache` (seedé) |
+| 1ᵉ démarrage | réseau requis (~12 Go) | **hors-ligne, instantané** |
+| Piège `[Errno 17] File exists` | possible (cache hôte) | **supprimé** |
+| Taille image | ~19 Go | ~31 Go |
+| `/licenses/` (attributions) | n/a (rien de baké) | **inclus** (NOTICE + NVIDIA OML + MIT) |
+
+Ce n'est **pas** une image « full » : pyannote/Cohere (gated) et les paliers LLM > 12 Go ne sont
+**pas** embarqués — ils restent en opt-in (`HF_TOKEN` → cohere+pyannote ; `TRANSCRIA_LLM_TIER` →
+GGUF plus gros, téléchargé dans le volume). Les licences de redistribution des 3 modèles bakés ont
+été vérifiées (la NVIDIA Open Model License exige de joindre l'accord + l'attribution « Licensed by
+NVIDIA Corporation under the NVIDIA Open Model License » : c'est fait dans `/licenses/`).
+
 #### Prérequis GPU / VRAM
 
 **GPU compatibles** : il faut **compute capability ≥ 7.5** **ET ≥ 12 Go** de VRAM (le 9B par défaut
@@ -334,6 +382,23 @@ TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX.Y.Z scripts/docke
 > libère l'espace disque du runner ; sinon builder/pousser depuis une machine GPU locale.
 >
 > *Validé E2E (2026-06-23, 8× RTX 3090) : pipeline complet, qualité 97/100, livrables SRT/ZIP/DOCX.*
+
+#### Publication de l'image `:bundled` (build local + push manuel)
+
+L'image `:bundled` (~31 Go avec les poids) **dépasse le disque d'un runner GitHub standard** → elle
+n'est **pas** construite en CI (le workflow `publish-image.yml` ne publie que le slim). On la
+construit et la pousse **depuis une machine GPU** :
+
+```bash
+# 1. Construire (télécharge ~12 Go de poids NON gated au build — réseau requis, aucun token) :
+docker build -f Dockerfile.allinone-bundled -t ghcr.io/<owner>/transcria-allinone:bundled .
+# 2. S'authentifier sur GHCR (token avec scope write:packages) puis pousser :
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <owner> --password-stdin
+docker push ghcr.io/<owner>/transcria-allinone:bundled
+# 3. Rendre le package PUBLIC une fois (Settings → Packages → Change visibility).
+```
+
+Côté testeur ensuite : `scripts/docker_quickstart.sh --bundled` fait un simple **`pull`**.
 
 ### Nœud de ressources GPU séparé (déploiement split)
 
@@ -428,6 +493,7 @@ docker compose -f docker-compose.split-gpu.yml run --rm verify \
 | `pgdata` | `db` | Données PostgreSQL |
 | `jobs` | `web` + `scheduler` (split), `all-in-one` (gpu) | Espaces de travail des jobs — **volume partagé** entre web et scheduler (mono-hôte → `shared_backend: fs` suffit) |
 | `models` | `web` + `scheduler` (split), `all-in-one` (gpu) | Modèles/caches locaux |
+| `hfcache` | `all-in-one` (gpu, **mode `:bundled`** uniquement) | Cache HF seedé depuis l'image (`TRANSCRIA_HF_SOURCE=hfcache`) ; remplace le bind du cache hôte |
 | `./config.yaml` (bind, ro) | tous | Configuration applicative |
 | `./.env` (bind, ro) | tous | Secrets (clé Flask, clés API…) |
 
