@@ -102,7 +102,11 @@ upload → profil → STT → diarisation → arbitrage LLM → relecture finale
   `stt.contextual_biasing`, `exports.docx_report`.
   → **Zone à anomalies** (STT/diarisation/export) : couper mypy ici retire le filet là où
   le risque est maximal. Résorber module par module (réactiver, typer, corriger).
-  - [ ] traité (suivi par module dans un sous-chantier)
+  - [x] **traité** — les **9 backends typés**, bloc `ignore_errors` **entièrement supprimé**
+    de `pyproject.toml`. Correctifs : modèles ML lazy annotés `Any`, **gardes None sur
+    `pyannote.from_pretrained`** (robustesse : AttributeError cryptique → erreur claire),
+    `int(sr)` librosa, type `docx.document.Document` pour les annotations, dicts `stats`
+    typés. mypy + ruff verts, tests STT/docx/biasing/web OK.
 
 ### 4.2 Provenance / SBOM désactivés (`.github/workflows/publish-image.yml:72`)
 
