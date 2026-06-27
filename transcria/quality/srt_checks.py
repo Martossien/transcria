@@ -17,6 +17,21 @@ class SRTChecker:
         return issues
 
     @staticmethod
+    def find_out_of_order(segments: list[dict], tolerance: float = 0.001) -> list[int]:
+        """Indices i où segment[i+1] DÉBUTE avant segment[i] (ordre temporel non croissant).
+
+        Invariant structurel : les segments doivent être triés par `start` croissant. Un
+        `start` qui recule (≠ simple chevauchement, où c'est `end` qui dépasse) casse
+        l'hypothèse d'ordre des contrôles trous/chevauchements et signale un défaut de
+        fusion (hybride par segment) ou de diarisation.
+        """
+        out: list[int] = []
+        for i in range(len(segments) - 1):
+            if segments[i + 1].get("start", 0.0) < segments[i].get("start", 0.0) - tolerance:
+                out.append(i)
+        return out
+
+    @staticmethod
     def check_segments(segments: list[dict]) -> dict:
         result: dict[str, Any] = {"total": len(segments), "issues": [], "clean_count": 0}
         for i, seg in enumerate(segments):

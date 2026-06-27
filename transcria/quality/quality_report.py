@@ -5,6 +5,7 @@ from typing import Any
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.quality.lexicon_checks import LexiconChecker
+from transcria.quality.srt_checks import SRTChecker
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,20 @@ class QualityReporter:
                     f" ≥ {thresholds['significant_overlap_s']}s — vérifier les timestamps."
                 )
                 warnings += len(significant_overlaps)
+
+        # 5bis. Segments hors ordre temporel (start non monotone croissant) : invariant
+        # structurel — un segment qui débute avant le précédent casse l'hypothèse d'ordre
+        # des contrôles ci-dessus et signale un défaut de fusion (hybride par segment) /
+        # diarisation. Distinct du chevauchement (check 5, qui porte sur `end`).
+        total_checks += 1
+        out_of_order = SRTChecker.find_out_of_order(segments)
+        if out_of_order:
+            checks.append({"type": "out_of_order_segments", "count": len(out_of_order), "severity": "warning"})
+            review_points.append(
+                f"Segments hors ordre temporel : {len(out_of_order)} — l'ordre des segments "
+                "n'est pas croissant (vérifier la fusion/diarisation)."
+            )
+            warnings += len(out_of_order)
 
         # 6. Locuteurs non mappés
         total_checks += 1

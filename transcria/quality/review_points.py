@@ -16,6 +16,11 @@ class ReviewPoints:
                 points.append(f"Trous temporels : {count} — vérifier la couverture audio.")
             elif ctype == "overlaps":
                 points.append(f"Chevauchements : {count} — vérifier les timestamps.")
+            elif ctype == "out_of_order_segments":
+                points.append(
+                    f"Segments hors ordre temporel : {count} — l'ordre des segments "
+                    "n'est pas croissant (vérifier la fusion/diarisation)."
+                )
             elif ctype == "unmapped_speakers":
                 points.append(f"Locuteurs non mappés : {count} segments — associer aux participants.")
             elif ctype == "missing_lexicon_terms":

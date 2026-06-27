@@ -1,8 +1,7 @@
-import pytest
 
-from transcria.quality.srt_checks import SRTChecker
 from transcria.quality.lexicon_checks import LexiconChecker
 from transcria.quality.review_points import ReviewPoints
+from transcria.quality.srt_checks import SRTChecker
 
 
 class TestSRTChecker:
@@ -36,6 +35,24 @@ class TestSRTChecker:
         assert result["total"] == 3
         assert result["clean_count"] == 1
         assert len(result["issues"]) == 2
+
+    def test_find_out_of_order_detects_backward_start(self):
+        # Le 3ᵉ segment débute (1.5) avant le 2ᵉ (2.0) → index 1 hors ordre.
+        segments = [
+            {"start": 0.0, "end": 1.0},
+            {"start": 2.0, "end": 3.0},
+            {"start": 1.5, "end": 2.5},
+        ]
+        assert SRTChecker.find_out_of_order(segments) == [1]
+
+    def test_find_out_of_order_clean_when_sorted(self):
+        segments = [{"start": 0.0, "end": 1.0}, {"start": 1.0, "end": 2.0}, {"start": 2.0, "end": 3.0}]
+        assert SRTChecker.find_out_of_order(segments) == []
+
+    def test_find_out_of_order_ignores_overlap_with_increasing_start(self):
+        # Chevauchement (start 1.0 < end 2.0 du précédent) mais start croissant → PAS hors ordre.
+        segments = [{"start": 0.0, "end": 2.0}, {"start": 1.0, "end": 3.0}]
+        assert SRTChecker.find_out_of_order(segments) == []
 
 
 class TestLexiconChecker:
@@ -105,6 +122,12 @@ class TestReviewPoints:
         points = ReviewPoints.generate(report)
         assert len(points) == 1
         assert "Chevauchement" in points[0]
+
+    def test_handles_out_of_order_segments(self):
+        report = {"checks": [{"type": "out_of_order_segments", "count": 3, "severity": "warning"}]}
+        points = ReviewPoints.generate(report)
+        assert len(points) == 1
+        assert "hors ordre" in points[0].lower()
 
     def test_handles_low_coverage(self):
         report = {"checks": [{"type": "low_coverage", "ratio": 0.5, "severity": "error"}]}

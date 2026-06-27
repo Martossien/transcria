@@ -135,11 +135,21 @@ Méthode : on ne « voit » pas, on **asserte**. Quatre leviers.
   régressions subtiles). Réutiliser `verify_split_topology.py` comme harnais d'exécution.
 
 ### 5.2 Invariants / propriétés (vérifiés à chaque run)
-- [ ] nb locuteurs détectés ≤ max du profil
-- [ ] termes du glossaire validé effectivement appliqués (cf. [[final_review_glossary_scope]])
-- [ ] **aucun nom de locuteur validé altéré** dans le SRT (cf. [[speaker_name_srt_guard]])
-- [ ] timestamps monotones, SRT bien formé, DOCX/ZIP ouvrables
-- [ ] longueur de résumé dans des bornes
+
+Infra existante : `transcria/quality/` (`SRTChecker`, `QualityReportGenerator.run_all_checks`,
+`LexiconChecker`, `ReviewPoints`) produit déjà beaucoup d'invariants → on **étend** plutôt
+que de dupliquer.
+
+- ✅ **timestamps monotones (ordre des segments)** — **ajouté** : `SRTChecker.find_out_of_order`
+  + check `out_of_order_segments` dans `run_all_checks` + mapper `ReviewPoints` (distinct du
+  chevauchement, qui porte sur `end`). 4 tests. C'était un **vrai manque** (seul `end<start`
+  par segment était vérifié).
+- ✅ **noms de locuteurs validés non altérés** — *déjà* couvert (`_find_speaker_name_violations`,
+  pénalise le score) cf. [[speaker_name_srt_guard]].
+- ✅ **termes du glossaire appliqués** — *déjà* couvert (`missing_lexicon_terms` +
+  `unresolved_lexicon_variants`) cf. [[final_review_glossary_scope]].
+- ⏳ nb locuteurs détectés ≤ max du profil
+- ⏳ SRT bien formé (parse strict), DOCX/ZIP ouvrables, longueur de résumé dans des bornes
 
 ### 5.3 Déterminisme
 - [ ] 2× le même audio → diff ; toute non-reproductibilité = anomalie à expliquer.
