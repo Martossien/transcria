@@ -66,7 +66,8 @@ Distros cibles (figées) : **Ubuntu 22.04, Ubuntu 24.04, Debian 12, Fedora 41, +
 
 Couverts par `scripts/ui_walkthrough.py` (✅ = assertion active, pas un simple 200) :
 
-- ✅ `login` (connexion + déconnexion visible) — ⏳ `change_password`
+- ✅ `login` (connexion + déconnexion) + ✅ **login invalide rejeté** (401, reste sur `/login`)
+- ✅ `change_password` (self-service opérateur) + ✅ **RBAC** : opérateur bloqué (403) sur `/admin/users`
 - ✅ `index` (accueil + création de job)
 - ✅ `job_wizard` — **profil à l'étape 1** vérifié par assertion DOM + **bascule de profil persistée** (POST + reload) (cf. [[profile_choice_step1]]) — ⏳ upload réel, hints locuteurs
 - ⏳ `job_result` — SRT/DOCX/ZIP, extraits audio, clips locuteurs, diagnostic qualité (nécessite un job réellement traité → piste avec artefacts seedés ou job GPU)

@@ -224,6 +224,72 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("CRUD lexique", False, str(exc)[:120])
 
+    def auth_flows(self) -> None:
+        # Sécurité : login invalide rejeté, RBAC (un opérateur n'accède pas à l'admin),
+        # et self-service mot de passe. Sessions isolées dans des contextes dédiés pour
+        # ne pas perturber la session admin de self.page.
+        browser = self.page.context.browser
+
+        # 1) Login invalide → reste sur /login avec message d'erreur (pas de redirection).
+        ctx = browser.new_context()
+        try:
+            p2 = ctx.new_page()
+            p2.goto(f"{self.base}/login", wait_until="networkidle")
+            p2.fill('input[name="username"]', "admin")
+            p2.fill('input[name="password"]', "mauvais-mot-de-passe")
+            p2.click('button[type="submit"], input[type="submit"]')
+            p2.wait_for_load_state("networkidle")
+            ok = p2.url.rstrip("/").endswith("/login") and "incorrect" in p2.content().lower()
+            self.check("login invalide rejeté (reste sur /login + erreur)", ok, p2.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("login invalide", False, str(exc)[:120])
+        finally:
+            ctx.close()
+
+        # 2) Créer un opérateur (rôle explicite, l'enum Role commence par ADMIN).
+        op_user = f"walk_op_{int(time.time())}"
+        op_pw = "operatorpass1"
+        try:
+            self.page.goto(f"{self.base}/admin/users/new", wait_until="networkidle")
+            self.page.fill('input[name="username"]', op_user)
+            self.page.select_option('select[name="role"]', "operator")
+            self.page.fill('input[name="password"]', op_pw)
+            self.page.fill('input[name="password_confirm"]', op_pw)
+            self.page.get_by_role("button", name="Créer").click()
+            self.page.wait_for_load_state("networkidle")
+            self.check("opérateur créé (rôle operator) pour test RBAC", op_user in self.page.content())
+        except Exception as exc:  # noqa: BLE001
+            self.check("création opérateur (RBAC)", False, str(exc)[:120])
+            return
+
+        # 3) Session opérateur : RBAC (bloqué sur /admin) + changement de son mot de passe.
+        ctx = browser.new_context()
+        try:
+            op = ctx.new_page()
+            op.goto(f"{self.base}/login", wait_until="networkidle")
+            op.fill('input[name="username"]', op_user)
+            op.fill('input[name="password"]', op_pw)
+            op.click('button[type="submit"], input[type="submit"]')
+            op.wait_for_load_state("networkidle")
+
+            resp = op.goto(f"{self.base}/admin/users", wait_until="networkidle")
+            status = resp.status if resp else 0
+            denied = status == 403 or "Gestion des utilisateurs" not in op.content()
+            self.check("RBAC : opérateur bloqué sur /admin/users", denied, f"status={status}")
+
+            op.goto(f"{self.base}/account/password", wait_until="networkidle")
+            op.fill('input[name="current_password"]', op_pw)
+            op.fill('input[name="new_password"]', "operatorpass2")
+            op.fill('input[name="confirm_password"]', "operatorpass2")
+            op.get_by_role("button", name="Mettre à jour").click()
+            op.wait_for_load_state("networkidle")
+            self.shot("17_password_changed")
+            self.check("changement de mot de passe (self-service)", "mis à jour" in op.content().lower())
+        except Exception as exc:  # noqa: BLE001
+            self.check("RBAC / self-service mot de passe", False, str(exc)[:120])
+        finally:
+            ctx.close()
+
     def report(self) -> bool:
         failed = [c for c in self.checks if not c[1]]
         print("\n── Résumé ──")
@@ -257,6 +323,7 @@ def main() -> int:
             wt.config_editor()
             wt.admin_pages()
             wt.admin_crud()
+            wt.auth_flows()
         finally:
             browser.close()
         ok = wt.report()
