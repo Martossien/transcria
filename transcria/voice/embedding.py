@@ -91,6 +91,9 @@ class PyannoteVoiceEmbeddingBackend:
         logger.info("Chargement pyannote pour empreinte vocale: model=%s device=%s token=%s",
                     self.model_id, self.device, "oui" if hf_token else "non")
         pipeline = Pipeline.from_pretrained(self.model_id, token=hf_token)
+        if pipeline is None:
+            # from_pretrained renvoie None si le modèle est introuvable/gated sans token.
+            raise VoiceEmbeddingError("pyannote_pipeline_indisponible")
         try:
             pipeline.to(torch.device(self.device))
         except Exception as exc:

@@ -223,6 +223,9 @@ class DiarizerService(BaseDiarizer):
             with model_load_lock():
                 load_t0 = time.monotonic()
                 pipeline = Pipeline.from_pretrained(self.model_name, token=hf_token)
+                if pipeline is None:
+                    # from_pretrained renvoie None si le modèle est introuvable/gated sans token.
+                    raise RuntimeError(f"pyannote: impossible de charger le pipeline '{self.model_name}' (modèle gated sans HF_TOKEN ?)")
                 logger.info("Pyannote: modèle chargé en %.1fs", time.monotonic() - load_t0)
                 pipeline_params = self._effective_pipeline_params()
                 if pipeline_params:

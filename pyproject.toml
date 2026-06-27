@@ -34,8 +34,6 @@ module = [
     "transcria.stt.parakeet_transcriber",
     "transcria.stt.cohere_transcriber",
     "transcria.stt.sortformer_diarizer",
-    "transcria.stt.diarization",
-    "transcria.voice.embedding",
     "transcria.stt.contextual_biasing",
     "transcria.exports.docx_report",
 ]
