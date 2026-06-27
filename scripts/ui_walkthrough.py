@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
@@ -99,6 +100,22 @@ class Walkthrough:
                 "au moins un profil proposé à l'étape 1",
                 self.page.locator(".profile-pill").count() > 0,
             )
+            # Interaction réelle : choisir un autre profil disponible doit persister
+            # (chooseProfile POST /api/jobs/<id>/profile puis reload → data-selected MAJ).
+            alt = self.page.locator(".profile-pill:not([disabled]):not(.active)")
+            if alt.count() > 0:
+                target_id = alt.first.get_attribute("data-profile-id")
+                alt.first.click()
+                self.page.wait_for_load_state("networkidle")
+                self.shot("03b_profile_switched")
+                new_sel = self.page.locator("#profile-selector").get_attribute("data-selected")
+                self.check(
+                    "changement de profil persisté (POST + reload)",
+                    new_sel == target_id,
+                    f"attendu={target_id}, obtenu={new_sel}",
+                )
+            else:
+                print("  [skip] interaction profil : <2 profils disponibles sur cette instance")
         except Exception as exc:  # noqa: BLE001
             self.check("création de job", False, str(exc)[:120])
 
@@ -146,6 +163,67 @@ class Walkthrough:
                 f"status={status}, marqueur={'présent' if has_marker else 'ABSENT'}",
             )
 
+    def admin_crud(self) -> None:
+        # Au-delà du rendu : on CRÉE réellement une entité par onglet et on vérifie sa
+        # persistance (la page de destination doit contenir ce qu'on vient de créer).
+        # Instance jetable → écritures sans impact. Suffixe horodaté = pas de collision.
+        suffix = str(int(time.time()))
+
+        # ── Utilisateur ──
+        try:
+            uname = f"walk_user_{suffix}"
+            self.page.goto(f"{self.base}/admin/users/new", wait_until="networkidle")
+            self.page.fill('input[name="username"]', uname)
+            self.page.fill('input[name="display_name"]', "Walkthrough User")
+            self.page.fill('input[name="password"]', "walkpass1234")
+            self.page.fill('input[name="password_confirm"]', "walkpass1234")
+            # Cibler le bouton « Créer » par son libellé : base.html expose aussi un
+            # bouton submit « Déconnexion » dans la navbar (un sélecteur générique
+            # button[type=submit] matcherait les deux).
+            self.page.get_by_role("button", name="Créer").click()
+            self.page.wait_for_load_state("networkidle")
+            self.shot("14_user_created")
+            ok = uname in self.page.content() and self.page.url.rstrip("/").endswith("/admin/users")
+            self.check("CRUD utilisateur : créé et listé", ok, self.page.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("CRUD utilisateur", False, str(exc)[:120])
+
+        # ── Groupe ──
+        try:
+            gname = f"Walk Group {suffix}"
+            self.page.goto(f"{self.base}/admin/groups/new", wait_until="networkidle")
+            self.page.fill('input[name="name"]', gname)
+            self.page.fill('input[name="description"]', "Groupe créé par le walkthrough")
+            # Cibler le bouton « Créer » par son libellé : base.html expose aussi un
+            # bouton submit « Déconnexion » dans la navbar (un sélecteur générique
+            # button[type=submit] matcherait les deux).
+            self.page.get_by_role("button", name="Créer").click()
+            self.page.wait_for_load_state("networkidle")
+            self.shot("15_group_created")
+            ok = gname in self.page.content() and "/admin/groups/" in self.page.url
+            self.check("CRUD groupe : créé et ouvert", ok, self.page.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("CRUD groupe", False, str(exc)[:120])
+
+        # ── Lexique centralisé ──
+        try:
+            lname = f"Walk Lexicon {suffix}"
+            self.page.goto(f"{self.base}/admin/lexicons/new", wait_until="networkidle")
+            self.page.fill('input[name="name"]', lname)
+            desc = self.page.locator('[name="description"]')
+            if desc.count() > 0:
+                desc.first.fill("Lexique walkthrough")
+            # Cibler le bouton « Créer » par son libellé : base.html expose aussi un
+            # bouton submit « Déconnexion » dans la navbar (un sélecteur générique
+            # button[type=submit] matcherait les deux).
+            self.page.get_by_role("button", name="Créer").click()
+            self.page.wait_for_load_state("networkidle")
+            self.shot("16_lexicon_created")
+            ok = lname in self.page.content() and "/admin/lexicons/" in self.page.url
+            self.check("CRUD lexique : créé et ouvert", ok, self.page.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("CRUD lexique", False, str(exc)[:120])
+
     def report(self) -> bool:
         failed = [c for c in self.checks if not c[1]]
         print("\n── Résumé ──")
@@ -178,6 +256,7 @@ def main() -> int:
             wt.create_job_and_open_wizard()
             wt.config_editor()
             wt.admin_pages()
+            wt.admin_crud()
         finally:
             browser.close()
         ok = wt.report()

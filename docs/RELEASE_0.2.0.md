@@ -64,19 +64,19 @@ Distros cibles (figées) : **Ubuntu 22.04, Ubuntu 24.04, Debian 12, Fedora 41, +
 
 ### 3.2 Inventaire des onglets / pages (templates `transcria/web/templates/`)
 
-À couvrir un par un, avec assertions de contenu, pas seulement « 200 OK » :
+Couverts par `scripts/ui_walkthrough.py` (✅ = assertion active, pas un simple 200) :
 
-- [ ] `login` / `change_password`
-- [ ] `index` (accueil / liste jobs)
-- [ ] `job_wizard` — **sélection profil à l'étape 1** (cf. [[profile_choice_step1]]), upload, hints locuteurs, lexiques
-- [ ] `job_result` — SRT/DOCX/ZIP, extraits audio, clips locuteurs, diagnostic qualité
-- [ ] `queue` / `schedule`
-- [ ] `voices` / `voice_form` / `voice_detail`
-- [ ] `central_lexicons` / `central_lexicon_detail`
-- [ ] `users` / `user_form` / `groups` / `group_form`
-- [ ] `audit`
-- [ ] `admin_config` (onglets formulaires + YAML, aller-retour sauvegarde)
-- [ ] `dashboard_status` / `system`
+- ✅ `login` (connexion + déconnexion visible) — ⏳ `change_password`
+- ✅ `index` (accueil + création de job)
+- ✅ `job_wizard` — **profil à l'étape 1** vérifié par assertion DOM + **bascule de profil persistée** (POST + reload) (cf. [[profile_choice_step1]]) — ⏳ upload réel, hints locuteurs
+- ⏳ `job_result` — SRT/DOCX/ZIP, extraits audio, clips locuteurs, diagnostic qualité (nécessite un job réellement traité → piste avec artefacts seedés ou job GPU)
+- ✅ `queue` / ✅ `schedule` (marqueur de contenu)
+- ✅ `voices` (marqueur de contenu) — ⏳ CRUD voix (enrôlement = audio)
+- ✅ `central_lexicons` + **CRUD création** (`central_lexicon_detail`)
+- ✅ `users` + **CRUD création** / ✅ `groups` + **CRUD création**
+- ✅ `audit` (marqueur de contenu)
+- ✅ `admin_config` (onglets form + YAML, aller-retour sauvegarde persistée)
+- ✅ `dashboard_status` / `system` (marqueur de contenu)
 
 ### 3.3 Chasse aux bugs par section (backend)
 
