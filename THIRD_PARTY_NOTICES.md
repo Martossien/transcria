@@ -24,8 +24,9 @@ d'**attribution** des licences Creative Commons (CC-BY-4.0).
 
 ### Poids d'évaluation de qualité non-intrusive — SQUIM Objective
 
-- **Téléchargé au runtime** (non redistribué dans ce dépôt) par `torchaudio`,
-  via `torchaudio.pipelines.SQUIM_OBJECTIVE`.
+- **Téléchargé au runtime** (non versionné dans ce dépôt) par `torchaudio`,
+  via `torchaudio.pipelines.SQUIM_OBJECTIVE`. **Baké** dans l'image `:bundled` (cf. section
+  « Modèles BAKÉS » plus bas) — la licence CC-BY-4.0 autorise cette redistribution avec attribution.
 - **Licence des poids** : Creative Commons Attribution 4.0 International
   (**CC-BY-4.0**). Entraînés sur le *DNS 2020 Dataset* (Microsoft DNS-Challenge).
 - **Référence** : Kumar et al., « TorchAudio-Squim: Reference-less Speech Quality
@@ -95,7 +96,7 @@ accepter avant usage :
 
 ## Modèles BAKÉS dans l'image Docker `:bundled` (redistribués)
 
-L'image `transcria-allinone:bundled` (cf. `Dockerfile.allinone-bundled`) **embarque** les 3 modèles
+L'image `transcria-allinone:bundled` (cf. `Dockerfile.allinone-bundled`) **embarque** les modèles
 par défaut **non gated** pour un usage « pull & run » hors-ligne. Leurs licences **autorisent la
 redistribution** ; les textes/attributions sont bakés dans **`/licenses/`** de l'image (et versionnés
 dans `licenses/` du dépôt). Les modèles *gated* (Cohere, pyannote) ne sont **PAS** embarqués.
@@ -105,6 +106,7 @@ dans `licenses/` du dépôt). Les modèles *gated* (Cohere, pyannote) ne sont **
 | `unsloth/Qwen3.5-9B-GGUF` (`Qwen3.5-9B-Q5_K_M.gguf`) | LLM d'arbitrage | **Apache-2.0** | `LICENSE` (Apache-2.0) |
 | `Systran/faster-whisper-large-v3` | STT | **MIT** | `licenses/MIT-faster-whisper.txt` |
 | `nvidia/diar_streaming_sortformer_4spk-v2.1` | Diarisation | **NVIDIA Open Model License** | `licenses/NVIDIA-Open-Model-License.txt` + notice « Licensed by NVIDIA Corporation under the NVIDIA Open Model License » |
+| SQUIM Objective (`torchaudio.pipelines.SQUIM_OBJECTIVE`) | Qualité audio | **CC-BY-4.0** | attribution + référence ci-dessus (§ SQUIM Objective) |
 
 > Conformément à la NVIDIA Open Model License (section *Redistribution*), une copie de l'accord et la
 > notice d'attribution sont jointes dans `/licenses/` ; l'usage doit rester conforme aux *Trustworthy

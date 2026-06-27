@@ -315,9 +315,10 @@ scripts/docker_quickstart.sh --bundled        # pull :bundled si publiée, sinon
 
 Ce n'est **pas** une image « full » : pyannote/Cohere (gated) et les paliers LLM > 12 Go ne sont
 **pas** embarqués — ils restent en opt-in (`HF_TOKEN` → cohere+pyannote ; `TRANSCRIA_LLM_TIER` →
-GGUF plus gros, téléchargé dans le volume). Les licences de redistribution des 3 modèles bakés ont
-été vérifiées (la NVIDIA Open Model License exige de joindre l'accord + l'attribution « Licensed by
-NVIDIA Corporation under the NVIDIA Open Model License » : c'est fait dans `/licenses/`).
+GGUF plus gros, téléchargé dans le volume). Les licences de redistribution des modèles bakés ont
+été vérifiées (Qwen Apache-2.0, whisper MIT, Sortformer NVIDIA Open Model License, SQUIM CC-BY-4.0 ;
+la NVIDIA OML exige de joindre l'accord + l'attribution « Licensed by NVIDIA Corporation under the
+NVIDIA Open Model License » : c'est fait dans `/licenses/`).
 
 #### Prérequis GPU / VRAM
 
