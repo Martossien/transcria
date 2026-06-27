@@ -10,6 +10,7 @@
 #
 # Usage :
 #   scripts/docker_quickstart.sh                 # GPU, tout-en-one (défaut)
+#   scripts/docker_quickstart.sh --bundled       # GPU, image à modèles EMBARQUÉS (zéro-download)
 #   scripts/docker_quickstart.sh --cpu           # sans GPU (web+scheduler, pas d'inférence locale)
 #   scripts/docker_quickstart.sh --down          # arrête et nettoie la stack
 #   HF_TOKEN=hf_xxx scripts/docker_quickstart.sh # avec modèle gated (Cohere) ; sinon whisper
@@ -18,10 +19,12 @@ cd "$(dirname "$0")/.."
 
 MODE="gpu"
 ACTION="up"
+BUNDLED=0
 for arg in "$@"; do
     case "$arg" in
         --cpu) MODE="cpu" ;;
         --gpu) MODE="gpu" ;;
+        --bundled) MODE="gpu"; BUNDLED=1 ;;
         --down) ACTION="down" ;;
         -h|--help) grep -E '^#( |$)' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "Argument inconnu : $arg" >&2; exit 2 ;;
@@ -65,6 +68,16 @@ docker compose version >/dev/null 2>&1 || { err "'docker compose' (v2) requis.";
 
 if [[ "$MODE" == "gpu" ]]; then
     command -v nvidia-smi >/dev/null || { err "GPU demandé mais nvidia-smi introuvable (driver NVIDIA requis). Sinon : --cpu."; exit 1; }
+    # Preflight : compute capability ≥ 7.5 ET VRAM ≥ ~12 Go (cf. docs/DOCKER.md). Échoue ICI avec
+    # un message clair plutôt que de laisser un crash CUDA cryptique survenir au 1er job. Module
+    # stdlib pur (pas de venv requis côté hôte).
+    if command -v python3 >/dev/null; then
+        if ! python3 -m transcria.deploy.gpu_preflight; then
+            err "GPU incompatible (voir ci-dessus). Cartes supportées : compute ≥ 7.5 (Turing/RTX 20xx"
+            err "  et plus récent) avec ≥ 12 Go de VRAM — table complète dans docs/DOCKER.md."
+            exit 1
+        fi
+    fi
     if ! scripts/setup_docker_gpu.sh --check >/dev/null 2>&1; then
         warn "Accès GPU Docker non configuré — activation via scripts/setup_docker_gpu.sh…"
         scripts/setup_docker_gpu.sh
@@ -91,6 +104,15 @@ else
 fi
 # shellcheck disable=SC1090
 set -a; . "./$ENV_FILE"; set +a
+
+# Mode BUNDLED : image à modèles EMBARQUÉS + cache HF en VOLUME NOMMÉ (`hfcache`, seedé depuis
+# l'image au 1er `up`) au lieu du bind du cache hôte. Zéro-download, supprime le piège « File
+# exists ». L'image GHCR `:bundled` est tirée si publiée, sinon construite localement (pull-or-build).
+if [[ "$BUNDLED" == "1" ]]; then
+    export TRANSCRIA_ALLINONE_IMAGE="${TRANSCRIA_ALLINONE_IMAGE:-ghcr.io/martossien/transcria-allinone:bundled}"
+    export TRANSCRIA_HF_SOURCE="hfcache"
+    ok "Mode BUNDLED : modèles embarqués (whisper + Sortformer + LLM), zéro-download, cache HF = volume nommé."
+fi
 
 # ── 3. config.yaml (généré depuis l'exemple si absent) ────────────────────────
 # config.example.yaml est une config all-in-one valide ; le DSN PostgreSQL est fourni
@@ -162,6 +184,13 @@ if [[ "$MODE" == "gpu" ]]; then
     export TRANSCRIA_ALLINONE_IMAGE="$ALLINONE_IMAGE"
     if [[ "$ALLINONE_IMAGE" == *"/"*"/"* || "$ALLINONE_IMAGE" == *.*/* ]] && docker pull "$ALLINONE_IMAGE" 2>/dev/null; then
         ok "Image GPU récupérée : $ALLINONE_IMAGE (pull)."
+    elif [[ "$BUNDLED" == "1" ]]; then
+        # Repli build BUNDLED : compose pointe sur Dockerfile.allinone-gpu (slim) → on construit
+        # explicitement Dockerfile.allinone-bundled et on le tague comme l'image attendue (utilisée
+        # aussi par migrate-gpu). `up` réutilisera l'image présente sans reconstruire le slim.
+        log "Build local de l'image BUNDLED (CUDA 12.6 + llama.cpp + modèles embarqués) — long…"
+        docker build -f Dockerfile.allinone-bundled -t "$ALLINONE_IMAGE" .
+        ok "Image BUNDLED construite : $ALLINONE_IMAGE."
     else
         log "Build local de l'image GPU (CUDA 12.6, compilation llama.cpp + venv) — peut être long…"
         "${COMPOSE[@]}" build
@@ -202,6 +231,9 @@ for i in $(seq 1 60); do
         if [[ "$MODE" == "gpu" ]]; then
             ok "Tout-en-un : STT + diarisation + LLM d'arbitrage (résumé/correction/relecture) tournent"
             ok "  DANS le conteneur, sur le GPU (séquencés par l'autonomie VRAM). Workflow complet."
+            if [[ "$BUNDLED" == "1" ]]; then
+                ok "Image BUNDLED : modèles embarqués → aucun téléchargement, cache HF en volume nommé."
+            fi
             if [[ -z "${HF_TOKEN:-}" ]]; then
                 warn "Mode sans token : diarisation = Sortformer (≤4 locuteurs, expérimental). Pour la"
                 warn "  qualité de référence (Cohere + pyannote, illimité) : HF_TOKEN + conditions HF des 2 modèles."
