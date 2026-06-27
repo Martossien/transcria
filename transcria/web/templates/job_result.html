@@ -8,7 +8,7 @@
     <div class="card text-center">
       <div class="card-body">
         <h5 class="text-muted">Score qualité</h5>
-        <span class="display-4 {{ 'text-success' if quality_report.quality_score >= 80 else 'text-warning' if quality_report.quality_score >= 50 else 'text-danger' }}">
+        <span class="display-4 {{ 'text-success' if (quality_report.quality_score or 0) >= 80 else 'text-warning' if (quality_report.quality_score or 0) >= 50 else 'text-danger' }}">
           {{ quality_report.quality_score or '—' }}<small style="font-size:0.4em">/100</small>
         </span>
       </div>

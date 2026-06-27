@@ -853,3 +853,26 @@ class TestApiLexiconDebug:
         """L'endpoint est protégé par login_required."""
         r = client.get("/api/jobs/any-id/lexicon/debug")
         assert r.status_code in (302, 401, 403)
+
+
+class TestJobResultRobustness:
+    def test_result_page_completed_job_without_quality_report(self, app, admin_client):
+        """Un job TERMINÉ sans rapport qualité doit rendre la page (200), pas 500.
+
+        Régression : job_result.html comparait `quality_report.quality_score >= 80`
+        sans valeur par défaut → en Jinja strict, un quality_report vide (profil sans
+        phase qualité, fichier absent/corrompu) levait UndefinedError → 500.
+        """
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            job = JobStore.create_job(admin.id, "Job terminé sans qualité")
+            JobStore.update_state(job.id, JobState.COMPLETED)
+            job_id = job.id
+
+        r = admin_client.get(f"/jobs/{job_id}/result")
+        assert r.status_code == 200
+        assert "Terminé" in r.data.decode("utf-8")
