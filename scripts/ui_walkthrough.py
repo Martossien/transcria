@@ -290,6 +290,24 @@ class Walkthrough:
         finally:
             ctx.close()
 
+    def job_result_page(self, job_id: str) -> None:
+        # Page de livrables d'un job TERMINÉ (seedé hors-ligne, sans GPU) : badge
+        # « Terminé », aperçu SRT, et les trois liens de téléchargement (srt/docx/zip).
+        try:
+            self.page.goto(f"{self.base}/jobs/{job_id}/result", wait_until="networkidle")
+            self.shot("18_job_result")
+            body = self.page.content()
+            ok = (
+                'badge bg-success">Terminé' in body
+                and "srt-preview" in body
+                and f"/api/jobs/{job_id}/download/srt" in body
+                and f"/api/jobs/{job_id}/download/docx" in body
+                and f"/api/jobs/{job_id}/download/package" in body
+            )
+            self.check("page /result : job terminé, SRT + liens téléchargement", ok, self.page.url)
+        except Exception as exc:  # noqa: BLE001
+            self.check("page /result", False, str(exc)[:120])
+
     def report(self) -> bool:
         failed = [c for c in self.checks if not c[1]]
         print("\n── Résumé ──")
@@ -308,6 +326,7 @@ def main() -> int:
     parser.add_argument("--user", default="admin")
     parser.add_argument("--password", required=True)
     parser.add_argument("--out", default="/tmp/ui_walkthrough")
+    parser.add_argument("--result-job-id", default=None, help="id d'un job terminé seedé → couvre /jobs/<id>/result")
     args = parser.parse_args()
 
     out = Path(args.out)
@@ -324,6 +343,8 @@ def main() -> int:
             wt.admin_pages()
             wt.admin_crud()
             wt.auth_flows()
+            if args.result_job_id:
+                wt.job_result_page(args.result_job_id)
         finally:
             browser.close()
         ok = wt.report()

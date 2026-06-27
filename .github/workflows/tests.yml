@@ -200,8 +200,15 @@ jobs:
           mkdir -p "$WORK/jobs" "$WORK/shots"
           printf 'runtime: {role: web}\nauth: {first_admin_username: admin, first_admin_password: walkthrough-admin-pw}\nstorage: {jobs_dir: %s/jobs}\nnotifications: {email: {enabled: false}}\n' "$WORK" > "$WORK/config.yaml"
 
-          TRANSCRIA_CONFIG="$WORK/config.yaml" \
-          TRANSCRIA_DATABASE_URL="sqlite:///$WORK/app.db" \
+          export TRANSCRIA_CONFIG="$WORK/config.yaml"
+          export TRANSCRIA_DATABASE_URL="sqlite:///$WORK/app.db"
+
+          # Seed un job terminé AVANT le serveur (pas d'accès SQLite concurrent) pour
+          # couvrir la page /result sans GPU.
+          python scripts/seed_completed_job.py --id-file "$WORK/job_id.txt"
+          JOB_ID="$(cat "$WORK/job_id.txt")"
+          echo "Job terminé seedé : $JOB_ID"
+
           python app.py --port 7899 --host 127.0.0.1 --no-debug > "$WORK/server.log" 2>&1 &
           SERVER_PID=$!
 
@@ -213,7 +220,8 @@ jobs:
 
           set +e
           python scripts/ui_walkthrough.py --base-url http://127.0.0.1:7899 \
-            --user admin --password walkthrough-admin-pw --out "$WORK/shots"
+            --user admin --password walkthrough-admin-pw --out "$WORK/shots" \
+            --result-job-id "$JOB_ID"
           STATUS=$?
           set -e
           kill "$SERVER_PID" 2>/dev/null || true

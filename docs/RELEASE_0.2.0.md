@@ -70,7 +70,7 @@ Couverts par `scripts/ui_walkthrough.py` (✅ = assertion active, pas un simple 
 - ✅ `change_password` (self-service opérateur) + ✅ **RBAC** : opérateur bloqué (403) sur `/admin/users`
 - ✅ `index` (accueil + création de job)
 - ✅ `job_wizard` — **profil à l'étape 1** vérifié par assertion DOM + **bascule de profil persistée** (POST + reload) (cf. [[profile_choice_step1]]) — ⏳ upload réel, hints locuteurs
-- ⏳ `job_result` — SRT/DOCX/ZIP, extraits audio, clips locuteurs, diagnostic qualité (nécessite un job réellement traité → piste avec artefacts seedés ou job GPU)
+- ✅ `job_result` — job terminé **seedé** (`scripts/seed_completed_job.py`, sans GPU) : badge « Terminé », aperçu SRT, liens téléchargement srt/docx/zip — ⏳ clips locuteurs / extraits audio (audio réel)
 - ✅ `queue` / ✅ `schedule` (marqueur de contenu)
 - ✅ `voices` (marqueur de contenu) — ⏳ CRUD voix (enrôlement = audio)
 - ✅ `central_lexicons` + **CRUD création** (`central_lexicon_detail`)
@@ -144,6 +144,7 @@ Méthode : on ne « voit » pas, on **asserte**. Quatre leviers.
 | A5 | Lexique non appliqué (vs SaaS) | [[drite_saas_comparison]] | ouverte |
 | A6 | Garde nom locuteur SRT (solution B différée) | [[speaker_name_srt_guard]] | différée — à décider |
 | A7 | Support pptx/pdf non ingéré (biasing + résumé) | [[drite_saas_comparison]] | hors-périmètre ? |
+| A8 | `/result` 500 sur un job terminé sans rapport qualité (Jinja strict, `quality_score` comparé sans défaut) | trouvé en seedant `/result` | **corrigée** (template durci + test régression `test_web_api`) |
 
 > Chaque ligne doit finir *corrigée* ou *limitation assumée documentée* avant 0.2.0.
 
