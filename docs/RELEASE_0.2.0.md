@@ -116,8 +116,11 @@ upload → profil → STT → diarisation → arbitrage LLM → relecture finale
 
 - `provenance: false` sur `docker/build-push-action@v6` → pas d'attestation SLSA ni SBOM.
 - Pour un projet qu'on **promeut**, l'attestation supply-chain est un signal de sérieux.
-  - [ ] **Réactiver provenance + SBOM**, en vérifiant que le `docker pull` GHCR n'en souffre
-    pas (l'index multi-arch « unknown/unknown » était la raison probable du `false`).
+  - [x] **activé** : `provenance: mode=max` + `sbom: true` sur `build-push-action@v6`
+    (YAML validé). GHCR publiera un index OCI (image amd64 + manifestes d'attestation) ;
+    `docker pull <tag>` résout toujours l'image, seules des entrées « unknown/unknown »
+    apparaissent dans l'UI. **À confirmer sur un vrai run** (workflow déclenché par tag/dispatch,
+    non exécutable en local — build ~19 Go) : vérifier que le push GHCR + pull anonyme passent.
   - Périmètre : image **slim** (CI). Le **bundled** est buildé en local → non concerné.
 
 ---

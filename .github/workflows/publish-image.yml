@@ -69,4 +69,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
+          # Attestation supply-chain (signal de sérieux pour un projet promu) : provenance
+          # SLSA (mode=max = inclut les étapes de build + source) + SBOM. GHCR publie alors
+          # un index OCI (image amd64 + manifestes d'attestation) ; `docker pull <tag>` résout
+          # toujours l'image — seules des entrées « unknown/unknown » apparaissent dans l'UI.
+          provenance: mode=max
+          sbom: true
