@@ -79,6 +79,23 @@ Couverts par `scripts/ui_walkthrough.py` (✅ = assertion active, pas un simple 
 - ✅ `admin_config` (onglets form + YAML, aller-retour sauvegarde persistée)
 - ✅ `dashboard_status` / `system` (marqueur de contenu)
 
+### 3.2bis Convivialité (« user-friendly / easy ») — invariants assertables
+
+Oracle = propriété testée, jamais « ça a l'air clair ». Suite `tests/test_ux_friendliness.py`
+(client Flask, dans le gate de couverture) + volet live `ui_walkthrough.ux_friendliness` :
+
+- ✅ **Pages d'erreur localisées** : `register_error_handler` (403/404/405/500) → `error.html`
+  français + lien « Retour à l'accueil ». **Vrai correctif** : avant, un 404/403 rendait la
+  page Werkzeug brute (anglais, technique). Les routes `/api/` gardent un JSON `{error, code}`
+  (le front ne parse jamais de HTML). Live : 404 cliquable ramène à `/`.
+- ✅ **Langue déclarée** (`<html lang="fr">`) sur chaque page.
+- ✅ **Titres d'onglet distincts et signifiants** (pas le défaut nu « TranscrIA »).
+- ✅ **Navigation sans cul-de-sac** : tous les liens de la navbar admin résolvent (< 400).
+- ✅ **États vides guidés** : accueil sans job → invite « créez votre premier traitement ».
+- ✅ **Formulaires étiquetés** : chaque champ saisissable a un `<label for>` (login, mot de
+  passe, création utilisateur, création voix).
+- ✅ **Aucun marqueur de dev** (TODO/FIXME/lorem) dans le rendu.
+
 ### 3.3 Chasse aux bugs par section (backend)
 
 Découpage qui a déjà marché, contrat explicite + happy + cas-bords par section :

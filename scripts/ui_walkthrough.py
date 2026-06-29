@@ -325,6 +325,28 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("page /result", False, str(exc)[:120])
 
+    def ux_friendliness(self) -> None:
+        # Convivialité « live » : une URL inexistante rend une page d'erreur FRANÇAISE
+        # (pas la page Werkzeug brute en anglais) AVEC un chemin de sortie cliquable qui
+        # ramène à l'accueil — un cul-de-sac frustrerait l'utilisateur.
+        try:
+            resp = self.page.goto(f"{self.base}/page-qui-nexiste-pas-xyz", wait_until="networkidle")
+            self.shot("20_error_404")
+            body = self.page.content()
+            status = resp.status if resp else 0
+            localized = "introuvable" in body.lower() and "Not Found" not in body
+            self.check("404 convivial (français, pas de page brute Werkzeug)", status == 404 and localized, f"status={status}")
+            # Le lien « Retour à l'accueil » fonctionne réellement.
+            back = self.page.locator('a[href="/"]').first
+            if back.count() > 0:
+                back.click()
+                self.page.wait_for_load_state("networkidle")
+                self.check("404 : lien de retour ramène à l'accueil", self.page.url.rstrip("/") == self.base)
+            else:
+                self.check("404 : lien de retour présent", False, "aucun lien href=/")
+        except Exception as exc:  # noqa: BLE001
+            self.check("page 404 conviviale", False, str(exc)[:120])
+
     def report(self) -> bool:
         failed = [c for c in self.checks if not c[1]]
         print("\n── Résumé ──")
@@ -361,6 +383,7 @@ def main() -> int:
             wt.admin_crud()
             wt.voice_crud()
             wt.auth_flows()
+            wt.ux_friendliness()
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)
         finally:

@@ -204,6 +204,26 @@ def create_app(config_path: str | None = None) -> Flask:
     def _assign_correlation_id() -> None:
         inject_correlation_id()
 
+    # Pages d'erreur conviviales (français + lien retour) au lieu des pages brutes
+    # Werkzeug (anglais, techniques). Les routes /api/ gardent un JSON explicite pour
+    # que le front ne tente pas de parser du HTML (cf. le handler 401 ci-dessus).
+    _ERROR_COPY = {
+        403: ("Accès refusé", "Vous n'avez pas les droits nécessaires pour accéder à cette page."),
+        404: ("Page introuvable", "La page demandée n'existe pas ou a été déplacée."),
+        405: ("Action non autorisée", "Cette action n'est pas permise sur cette page."),
+        500: ("Erreur interne", "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."),
+    }
+
+    def _render_error(code: int):
+        from flask import jsonify, render_template, request
+        heading, message = _ERROR_COPY[code]
+        if request.path.startswith("/api/"):
+            return jsonify({"error": message, "code": code}), code
+        return render_template("error.html", code=code, heading=heading, message=message), code
+
+    for _code in _ERROR_COPY:
+        app.register_error_handler(_code, lambda _exc, c=_code: _render_error(c))
+
     role = resolve_role(env_role=os.environ.get(_ROLE_ENV), config_role=cfg.get("runtime", {}).get("role"))
     app.config["TRANSCRIA_ROLE"] = role
 
