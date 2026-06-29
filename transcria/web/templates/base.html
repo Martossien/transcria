@@ -104,6 +104,16 @@
       {% endfor %}
     {% endwith %}
 
+    {% if using_default_password %}
+      <div class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-shield-exclamation me-2"></i>
+        <div>
+          Vous utilisez encore le <strong>mot de passe par défaut</strong>.
+          <a href="/account/password" class="alert-link">Changez-le maintenant</a> pour sécuriser votre compte.
+        </div>
+      </div>
+    {% endif %}
+
     {% if vram_waiting_count and vram_waiting_count > 0 %}
       <div class="alert alert-warning d-flex align-items-center" role="alert">
         <i class="bi bi-gpu-card me-2"></i>

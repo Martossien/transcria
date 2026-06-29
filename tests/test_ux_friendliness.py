@@ -164,3 +164,93 @@ class TestFormsAreLabeled:
             field_ids, label_for = self._labeled_field_ids(body)
             unlabeled = field_ids - label_for
             assert not unlabeled, f"{path} : champs sans <label for> : {unlabeled}"
+
+
+class TestFormValidationFeedback:
+    """« Easy » = quand l'utilisateur se trompe, l'app le GUIDE (message français,
+    re-rendu du formulaire, statut clair) au lieu de planter ou de rester muette."""
+
+    def test_missing_required_fields_are_explained(self, admin_client):
+        r = admin_client.post("/admin/users/new", data={"username": "x_no_pwd"}, follow_redirects=True)
+        body = r.get_data(as_text=True)
+        assert r.status_code == 200  # re-rendu du formulaire, pas une 500
+        assert "obligatoires" in body.lower()
+
+    def test_duplicate_username_is_explained(self, admin_client):
+        import uuid
+
+        uname = f"dup_{uuid.uuid4().hex[:8]}"
+        data = {"username": uname, "password": "strongpass1", "password_confirm": "strongpass1", "role": "operator"}
+        admin_client.post("/admin/users/new", data=data, follow_redirects=True)
+        r = admin_client.post("/admin/users/new", data=data, follow_redirects=True)
+        assert "existe déjà" in r.get_data(as_text=True).lower()
+
+    def test_password_mismatch_is_explained(self, admin_client):
+        import uuid
+
+        data = {
+            "username": f"mm_{uuid.uuid4().hex[:8]}",
+            "password": "strongpass1",
+            "password_confirm": "different99",
+            "role": "operator",
+        }
+        r = admin_client.post("/admin/users/new", data=data, follow_redirects=True)
+        assert "ne correspond pas" in r.get_data(as_text=True).lower()
+
+    def test_too_short_password_is_explained(self, admin_client):
+        import uuid
+
+        data = {
+            "username": f"sh_{uuid.uuid4().hex[:8]}",
+            "password": "x",
+            "password_confirm": "x",
+            "role": "operator",
+        }
+        r = admin_client.post("/admin/users/new", data=data, follow_redirects=True)
+        assert "caractères" in r.get_data(as_text=True).lower()
+
+    def test_group_empty_name_is_explained(self, admin_client):
+        r = admin_client.post("/admin/groups/new", data={"name": ""}, follow_redirects=True)
+        assert "obligatoire" in r.get_data(as_text=True).lower()
+
+
+class TestDefaultPasswordOnboarding:
+    """Premier run : un compte encore sur le mot de passe par défaut doit être
+    invité à le changer (sécurité + clarté), et le bandeau disparaît une fois fait."""
+
+    def _fresh_user(self, app, password):
+        import uuid
+
+        uname = f"onboard_{uuid.uuid4().hex[:8]}"
+        with app.app_context():
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
+            UserStore.create_user(username=uname, password=password, role=Role.OPERATOR)
+        return uname
+
+    def test_default_password_triggers_banner(self, app):
+        uname = self._fresh_user(app, "admin-change-me")  # ∈ DEFAULT_ADMIN_PASSWORDS
+        c = app.test_client()
+        c.post("/login", data={"username": uname, "password": "admin-change-me"})
+        body = c.get("/").get_data(as_text=True)
+        assert "mot de passe par défaut" in body
+        assert "/account/password" in body
+
+    def test_strong_password_no_banner(self, app):
+        uname = self._fresh_user(app, "verystrongpass1")
+        c = app.test_client()
+        c.post("/login", data={"username": uname, "password": "verystrongpass1"})
+        body = c.get("/").get_data(as_text=True)
+        assert "mot de passe par défaut" not in body
+
+    def test_banner_cleared_after_password_change(self, app):
+        uname = self._fresh_user(app, "admin-change-me")
+        c = app.test_client()
+        c.post("/login", data={"username": uname, "password": "admin-change-me"})
+        assert "mot de passe par défaut" in c.get("/").get_data(as_text=True)
+        c.post(
+            "/account/password",
+            data={"current_password": "admin-change-me", "new_password": "newstrong99", "confirm_password": "newstrong99"},
+            follow_redirects=True,
+        )
+        assert "mot de passe par défaut" not in c.get("/").get_data(as_text=True)

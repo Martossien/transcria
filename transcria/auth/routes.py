@@ -1,6 +1,6 @@
 import logging
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from transcria.audit.decorator import audit_log
@@ -8,7 +8,7 @@ from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
-from transcria.auth.store import UserStore
+from transcria.auth.store import DEFAULT_ADMIN_PASSWORDS, UserStore
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
@@ -68,6 +68,13 @@ def login():
             UserStore.record_login(user)
             login_user(user)
             audit_log(AuditAction.LOGIN)
+            # Premier run convivial : si l'admin se connecte encore avec un mot de
+            # passe par défaut, on déclenche un bandeau l'invitant à le changer (le
+            # mot de passe en clair est dispo ici → pas de hachage supplémentaire).
+            if password in DEFAULT_ADMIN_PASSWORDS:
+                session["default_password_warning"] = True
+            else:
+                session.pop("default_password_warning", None)
             next_url = request.args.get("next")
             if _is_safe_next_url(next_url):
                 return redirect(next_url)
@@ -105,6 +112,7 @@ def change_own_password():
             return render_template("change_password.html"), 400
 
         UserStore.change_password(current_user.id, new_password)
+        session.pop("default_password_warning", None)
         flash("Mot de passe mis à jour.", "success")
         return redirect(url_for("web.index"))
 
@@ -366,5 +374,6 @@ def inject_user_context():
             "user_permissions": get_user_permissions(current_user),
             "can_manage_groups": GroupStore.is_group_admin(current_user),
             "config": cfg,
+            "using_default_password": bool(session.get("default_password_warning")),
         }
-    return {"current_user": None, "user_permissions": set(), "config": cfg}
+    return {"current_user": None, "user_permissions": set(), "config": cfg, "using_default_password": False}

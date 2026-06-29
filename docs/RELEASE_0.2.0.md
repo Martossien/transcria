@@ -95,6 +95,14 @@ Oracle = propriété testée, jamais « ça a l'air clair ». Suite `tests/test_
 - ✅ **Formulaires étiquetés** : chaque champ saisissable a un `<label for>` (login, mot de
   passe, création utilisateur, création voix).
 - ✅ **Aucun marqueur de dev** (TODO/FIXME/lorem) dans le rendu.
+- ✅ **Retour d'erreur des formulaires** : un formulaire invalide GUIDE l'utilisateur
+  (message français + re-rendu, jamais de 500) — champs requis manquants, doublon de
+  nom d'utilisateur, confirmation de mot de passe divergente, mot de passe trop court,
+  nom de groupe vide.
+- ✅ **Onboarding premier-run** : un compte encore sur le **mot de passe par défaut**
+  voit un bandeau « Changez-le maintenant » (détection au login, sans hachage
+  supplémentaire ; effacé dès le changement). **Vrai correctif** : avant, l'alerte
+  n'existait qu'en log de bootstrap, invisible dans l'UI.
 
 ### 3.3 Chasse aux bugs par section (backend)
 
