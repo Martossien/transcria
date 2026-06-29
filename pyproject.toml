@@ -37,4 +37,7 @@ markers = [
     # Tests réseau sur un vrai socket TCP (faux serveurs en thread, sans GPU).
     # Cibler : pytest -m integration   |   exclure : pytest -m "not integration"
     "integration: test réseau sur un vrai socket TCP",
+    # E2E réel exigeant Docker + GPU NVIDIA (install.sh en distro vierge → livrables).
+    # Collecté partout, mais SKIPPÉ sauf TRANSCRIA_GPU_E2E=1 (machine GPU de l'opérateur).
+    "gpu_e2e: E2E réel Docker+GPU (skip hors machine GPU)",
 ]

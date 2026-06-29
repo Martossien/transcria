@@ -47,6 +47,42 @@ Distros cibles (figées) : **Ubuntu 22.04, Ubuntu 24.04, Debian 12, Fedora 41, +
 - **VM QEMU / passthrough GPU (VFIO)** : *hors périmètre 0.2.0 par défaut* (lourd, fragile). L'isolation runtime est déjà fournie par le conteneur ; les VM ne servent qu'au chemin install/CPU. À rouvrir comme mini-chantier séparé si besoin explicite.
 - Réutiliser/étendre : `tests/test_install_e2e.py`, `tests/test_install_prerequisites.py`, `tests/E2E_README.md`.
 
+### 2.1 LIVRÉ — harnais matrice `install.sh` × topologies + E2E GPU/LLM
+
+Le chantier teste l'**install NATIVE** (`install.sh`) dans des **conteneurs vierges** de
+plusieurs distributions, AVEC accès GPU NVIDIA (CDI), jusqu'à un **E2E son complet**
+(STT + diarisation + arbitrage LLM + export). Deux topologies :
+- **all-in-one** — 1 conteneur GPU : `install.sh --profile all-in-one` → E2E local.
+- **frontale-split** — frontale CPU (`--profile web`) + nœud GPU (`--profile resource-node`),
+  la frontale délègue STT/diar/voix + arbitrage au nœud (config `inference.mode=remote`).
+  Le nœud charge 2 moteurs (whisper/cohere sur GPU 0/1) → **multi-GPU naturel**.
+
+Composants :
+- **`transcria/deploy/distro_bootstrap.py`** (gated, testé) — prérequis OS par distro
+  (apt vs dnf ; pièges réels : ffmpeg via RPM Fusion/EPEL sur Fedora/Rocky).
+- **`transcria/deploy/gpu_probe.py`** (gated, testé) — assertion que le conteneur **voit ET
+  utilise** le GPU (`nvidia-smi -L` + `torch.cuda.is_available()`) → **interdit le repli CPU
+  silencieux** : si CUDA est indispo, l'E2E ÉCHOUE (exigence ferme).
+- **`scripts/verify_install_matrix.py`** (operator-run) — orchestrateur : conteneur vierge GPU
+  → bootstrap OS → `install.sh` (VRAI install : torch CUDA + modèles ; `--non-interactive
+  --no-service` ; `--pg-existing` + conteneur PostgreSQL jetable, comme le service `db` Docker)
+  → `/health` → assertion GPU → **E2E son** (réutilise `verify_split_topology.run_job`) → démontage.
+  Secrets (`HF_TOKEN`…) passés **par référence** (`-e NAME`, jamais dans l'argv).
+- Tests CI GPU-free : `tests/test_distro_bootstrap.py`, `tests/test_gpu_probe.py`,
+  `tests/test_verify_install_matrix.py` (specs/argv/config) + un test **gated**
+  `@pytest.mark.gpu_e2e` (skip sauf `TRANSCRIA_GPU_E2E=1`) qui lance le harnais réel.
+
+**Exécution sur la machine GPU** (prérequis : `scripts/setup_docker_gpu.sh` une fois) :
+```bash
+export TRANSCRIA_INFERENCE_API_KEY=…   # + HF_TOKEN si modèles gated (Cohere/pyannote)
+python scripts/verify_install_matrix.py --distro ubuntu2404 --topology all-in-one \
+    --audio tests/test2.mp3 --profile word_corrige
+python scripts/verify_install_matrix.py --distro debian12 --topology frontale-split
+# ou via pytest : TRANSCRIA_GPU_E2E=1 pytest tests/test_verify_install_matrix.py -m gpu_e2e
+```
+> Le run matériel (Docker + GPU) n'est pas exécutable en CI (pas de GPU) ni par l'assistant :
+> il est **operator-run** sur la machine GPU. La logique de décision est, elle, couverte en CI.
+
 ---
 
 ## 3. Axe 2 — Couverture fonctionnelle : chaque onglet UI + chaque section backend
