@@ -588,7 +588,8 @@
         <div class="speaker-item" id="spk-{{ s.speaker_id }}">
           <strong>{{ s.speaker_id }}</strong>
           <span class="text-muted small">{{ s.speaking_time_seconds|round(0) }}s, {{ s.turn_count }} interventions</span>
-          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="TranscrIA.loadClips('{{ s.speaker_id }}')"><i class="bi bi-play-fill"></i></button>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="TranscrIA.loadClips('{{ s.speaker_id }}')"
+                  aria-label="Écouter des extraits de ce locuteur" title="Écouter des extraits de ce locuteur"><i class="bi bi-play-fill"></i></button>
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle dans la réunion" value="{{ s.mapped_role or '' }}" style="max-width:150px;">

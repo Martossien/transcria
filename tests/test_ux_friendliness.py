@@ -10,6 +10,9 @@ Tout passe par le client de test Flask (déterministe, rapide, dans le gate de c
 Le volet « live » (navigateur réel, 404 cliquable, console JS) est dans scripts/ui_walkthrough.py.
 """
 import re
+from pathlib import Path
+
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "transcria" / "web" / "templates"
 
 # Pages authentifiées « admin » couvertes par les invariants transverses.
 ADMIN_PAGES = [
@@ -212,6 +215,69 @@ class TestFormValidationFeedback:
     def test_group_empty_name_is_explained(self, admin_client):
         r = admin_client.post("/admin/groups/new", data={"name": ""}, follow_redirects=True)
         assert "obligatoire" in r.get_data(as_text=True).lower()
+
+
+class TestTemplateAccessibility:
+    """Garde statique (analyse des templates, sans app) : aucun contrôle interactif
+    icône-seule ne doit être privé de nom accessible (lecteur d'écran). Un nom =
+    `aria-label`, `title`, du texte visible, ou une expression Jinja qui rend du texte."""
+
+    _CONTROL = re.compile(r'<(a|button)\b([^>]*)>(.*?)</\1>', re.DOTALL | re.IGNORECASE)
+
+    @staticmethod
+    def _has_accessible_name(attrs: str, inner: str) -> bool:
+        if "aria-label" in attrs or "title=" in attrs:
+            return True
+        # Texte humain restant une fois les balises retirées.
+        if re.sub(r"<[^>]+>", "", inner).strip():
+            return True
+        # Une expression Jinja {{ ... }} (hors url_for/tojson) rend du texte à l'exécution.
+        for expr in re.findall(r"\{\{(.*?)\}\}", inner, re.DOTALL):
+            if "url_for" not in expr and "tojson" not in expr:
+                return True
+        return False
+
+    def test_no_unnamed_icon_only_controls(self):
+        offenders = []
+        for f in sorted(TEMPLATES_DIR.glob("*.html")):
+            for m in self._CONTROL.finditer(f.read_text()):
+                attrs, inner = m.group(2), m.group(3)
+                is_icon_only = ("bi-" in inner or 'class="bi' in inner)
+                if is_icon_only and not self._has_accessible_name(attrs, inner):
+                    offenders.append(f"{f.name}: {m.group(0)[:80]}")
+        assert not offenders, "contrôles icône-seule sans nom accessible :\n" + "\n".join(offenders)
+
+
+class TestFrenchConsistency:
+    """Garde statique : pas de libellé anglais résiduel dans le TEXTE visible des
+    templates (l'UI est intégralement en français). Borné à un jeu de mots courants
+    d'UI pour rester déterministe et sans faux positif (classes/attributs ignorés)."""
+
+    LEFTOVER_EN = [
+        "Loading", "Submit", "Cancel", "Delete", "Please", "Error", "Success",
+        "Warning", "Failed", "Settings", "Username", "Password", "Logout", "Login",
+        "Confirm", "Remove", "Back", "Next", "Close", "Save",
+    ]
+
+    @staticmethod
+    def _visible_segments(html: str) -> list[str]:
+        html = re.sub(r"<(script|style)\b.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+        segs = []
+        for raw in re.findall(r">([^<>]+)<", html):
+            seg = re.sub(r"\{[%{].*?[%}]\}", "", raw, flags=re.DOTALL).strip()
+            if seg:
+                segs.append(seg)
+        return segs
+
+    def test_no_residual_english_in_visible_text(self):
+        offenders = []
+        for f in sorted(TEMPLATES_DIR.glob("*.html")):
+            for seg in self._visible_segments(f.read_text()):
+                for word in self.LEFTOVER_EN:
+                    if re.search(rf"\b{word}\b", seg):
+                        offenders.append(f"{f.name}: « {seg[:60]} » ({word})")
+                        break
+        assert not offenders, "anglais résiduel dans le texte visible :\n" + "\n".join(offenders)
 
 
 class TestDefaultPasswordOnboarding:

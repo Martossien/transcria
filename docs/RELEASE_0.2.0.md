@@ -103,6 +103,10 @@ Oracle = propriété testée, jamais « ça a l'air clair ». Suite `tests/test_
   voit un bandeau « Changez-le maintenant » (détection au login, sans hachage
   supplémentaire ; effacé dès le changement). **Vrai correctif** : avant, l'alerte
   n'existait qu'en log de bootstrap, invisible dans l'UI.
+- ✅ **Accessibilité des contrôles** (garde statique sur les templates) : aucun bouton/lien
+  icône-seule sans nom accessible (`aria-label`/`title`/texte). **Vrai correctif** : le
+  bouton « écouter les extraits d'un locuteur » du wizard était muet pour un lecteur d'écran.
+- ✅ **Cohérence FR** (garde statique) : aucun libellé anglais résiduel dans le texte visible.
 
 ### 3.3 Chasse aux bugs par section (backend)
 
