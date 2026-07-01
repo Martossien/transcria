@@ -466,7 +466,11 @@ class VRAMManager:
         if self._backend_is_ollama():
             # Ollama : pas de script à lancer — le démon est persistant. « Lancer » =
             # s'assurer que le modèle est chargé en VRAM (délégué au backend).
-            return self._arbitrage_backend().ensure_available()
+            ready = self._arbitrage_backend().ensure_available()
+            if ready:
+                # Modèle résident → recalage VRAM sur la mesure réelle (vérif au 1ᵉʳ load).
+                self.recalibrate_llm_vram_from_measurement()
+            return ready
         if not os.path.isfile(self.arbitrage_script):
             logger.error("Script d'arbitrage introuvable: %s", self.arbitrage_script)
             return False

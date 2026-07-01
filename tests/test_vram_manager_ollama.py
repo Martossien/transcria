@@ -71,6 +71,15 @@ def test_launch_delegates_to_ensure_available_no_script():
     assert "ensure_available" in fake.calls
 
 
+def test_launch_triggers_vram_recalibration():
+    # « Vérif au 1ᵉʳ load » : le chargement via launch_arbitrage_llm doit recaler la VRAM.
+    vm, fake = _ollama_vm()
+    fake._measured = 28000
+    vm.llm_vram_mb = 60000
+    vm.launch_arbitrage_llm()
+    assert "measured_vram_mb" in fake.calls and vm.llm_vram_mb == 28000
+
+
 def test_ensure_ready_delegates_to_ensure_available():
     vm, fake = _ollama_vm()
     assert vm.ensure_arbitrage_llm_ready() is True
