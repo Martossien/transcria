@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,8 @@ from transcria.config.yaml_file import set_yaml_file_value
 Runner = Callable[..., Any]
 ConfirmFn = Callable[[str], bool]
 HasCommandFn = Callable[[str], bool]
+ProbeFn = Callable[[], bool]
+ServeFn = Callable[[], Any]
 
 OLLAMA_INSTALL_URL = "https://ollama.com/install.sh"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
@@ -51,6 +54,33 @@ def ollama_model_for_tier(tier: str | None) -> str:
     if not tier:
         return DEFAULT_OLLAMA_MODEL
     return _TIER_MODELS.get(str(tier).strip().lower(), DEFAULT_OLLAMA_MODEL)
+
+
+def _default_daemon_probe(url: str) -> ProbeFn:
+    """Sonde HTTP par défaut : le démon Ollama répond-il sur /api/tags ?"""
+    def probe() -> bool:
+        import urllib.request
+
+        try:
+            with urllib.request.urlopen(f"{url.rstrip('/')}/api/tags", timeout=3):
+                return True
+        except Exception:
+            return False
+
+    return probe
+
+
+def _default_serve() -> None:
+    """Démarre `ollama serve` détaché (hôte sans systemd, conteneur). No-op si le binaire
+    manque — l'appelant a déjà tranché l'installation."""
+    try:
+        subprocess.Popen(  # noqa: S603,S607 — commande fixe, démon local
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
 
 
 class _ConsoleLike(Protocol):
@@ -100,11 +130,15 @@ def apply_ollama(
     runner: Runner = subprocess.run,
     has_command: HasCommandFn | None = None,
     confirm: ConfirmFn | None = None,
+    is_daemon_up: ProbeFn | None = None,
+    serve: ServeFn | None = None,
 ) -> OllamaResult:
     """Installe/configure le backend Ollama (cœur de la nouvelle SECTION install)."""
     result = OllamaResult()
     has_command = has_command or (lambda name: shutil.which(name) is not None)
     confirm = confirm if confirm is not None else (lambda _prompt: False)
+    is_daemon_up = is_daemon_up or _default_daemon_probe(plan.ollama_url)
+    serve = serve or _default_serve
 
     # 1. Garde GPU : Ollama a besoin d'un driver NVIDIA déjà présent. On ne l'installe pas
     #    à sa place (le script Ollama tenterait sinon un cuda-drivers + reboot invasif).
@@ -135,7 +169,25 @@ def apply_ollama(
         console.ok("Ollama installé.")
         result.record("installed")
 
-    # 3. Tirer le modèle du palier (registre Ollama).
+    # 3. S'assurer que le démon tourne AVANT le pull. Sur hôte systemd, le script Ollama
+    #    l'a démarré ; en conteneur/sans systemd il faut le lancer nous-mêmes (sinon
+    #    'ollama pull' échoue avec « connection refused »). C'est aussi la bonne behavior Docker.
+    if is_daemon_up():
+        result.record("daemon-present")
+    else:
+        console.info("Démarrage du démon Ollama (ollama serve)…")
+        serve()
+        deadline = time.time() + 30
+        while time.time() < deadline and not is_daemon_up():
+            time.sleep(1)
+        if is_daemon_up():
+            console.ok("Démon Ollama prêt.")
+            result.record("daemon-started")
+        else:
+            console.warn("Démon Ollama injoignable après démarrage — 'ollama pull' peut échouer.")
+            result.record("daemon-unreachable")
+
+    # 4. Tirer le modèle du palier (registre Ollama).
     console.info(f"Téléchargement du modèle Ollama « {plan.model} »…")
     proc = runner(["ollama", "pull", plan.model], check=False)
     if getattr(proc, "returncode", 1) != 0:
@@ -145,7 +197,7 @@ def apply_ollama(
         console.ok(f"Modèle « {plan.model} » disponible.")
         result.record("pulled")
 
-    # 4. Écrire la config backend (même en cas d'échec de pull : l'opérateur peut retirer
+    # 5. Écrire la config backend (même en cas d'échec de pull : l'opérateur peut retirer
     #    le modèle plus tard ; la config reste cohérente et pointe le bon endpoint).
     _write_backend_config(plan)
     console.ok(f"Config backend Ollama écrite (endpoint {plan.ollama_url}, modèle local/{plan.model}).")

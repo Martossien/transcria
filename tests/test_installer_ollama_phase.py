@@ -1,8 +1,8 @@
 """Tests unitaires de la phase « Ollama » de l'installateur.
 
-Réseau (curl|sh), sous-processus (ollama pull), détection binaire et prompt interactif
-sont injectés : on vérifie l'orchestration (garde GPU / présent / absent+refus /
-absent+install / pull ok|ko / écriture config) sans aucun effet réel.
+Réseau (curl|sh), sous-processus (ollama pull), détection binaire, démarrage du démon
+et prompt interactif sont injectés : on vérifie l'orchestration (garde GPU / présent /
+absent+refus / absent+install / démon démarré / pull ok|ko / écriture config) sans effet réel.
 """
 from __future__ import annotations
 
@@ -49,6 +49,15 @@ def _plan(tmp_path: Path, **kw) -> OllamaPlan:
     return OllamaPlan(**defaults)
 
 
+def _apply(plan, *, runner, has_command, confirm=None, is_daemon_up=None, serve=None):
+    # Démon considéré « déjà là » par défaut → pas de démarrage réel dans les tests.
+    return apply_ollama(
+        plan, console=_console(), runner=runner, has_command=has_command, confirm=confirm,
+        is_daemon_up=is_daemon_up if is_daemon_up is not None else (lambda: True),
+        serve=serve if serve is not None else (lambda: None),
+    )
+
+
 def _config(tmp_path: Path) -> dict:
     return load_yaml_file(tmp_path / "config.yaml")
 
@@ -66,8 +75,7 @@ class TestTierMapping:
 class TestGpuGuard:
     def test_skips_when_no_gpu(self, tmp_path):
         runner = _Runner()
-        res = apply_ollama(_plan(tmp_path, gpu_present=False), console=_console(), runner=runner,
-                           has_command=lambda n: False)
+        res = _apply(_plan(tmp_path, gpu_present=False), runner=runner, has_command=lambda n: False)
         assert res.actions == ["gpu-absent"]
         assert runner.calls == []  # rien d'installé/tiré
         assert not (tmp_path / "config.yaml").exists()  # aucune config écrite
@@ -76,15 +84,14 @@ class TestGpuGuard:
 class TestInstallBranch:
     def test_reuses_existing_ollama(self, tmp_path):
         runner = _Runner()
-        res = apply_ollama(_plan(tmp_path), console=_console(), runner=runner, has_command=lambda n: True)
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: True)
         assert "ollama-present" in res.actions
         assert not runner.ran("install.sh")  # pas de réinstallation
 
     def test_installs_when_absent_noninteractive(self, tmp_path):
         runner = _Runner()
         present = {"ollama": False, "zstd": True}
-        res = apply_ollama(_plan(tmp_path), console=_console(), runner=runner,
-                           has_command=lambda n: present.get(n, False))
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: present.get(n, False))
         assert "installed" in res.actions
         assert runner.ran("ollama.com/install.sh")
 
@@ -100,28 +107,55 @@ class TestInstallBranch:
 
             return _CP()
 
-        apply_ollama(_plan(tmp_path, pin_version="0.5.7"), console=_console(), runner=runner,
-                     has_command=lambda n: n != "ollama")
+        _apply(_plan(tmp_path, pin_version="0.5.7"), runner=runner, has_command=lambda n: n != "ollama")
         assert captured["env"] == {"OLLAMA_VERSION": "0.5.7"}
 
     def test_interactive_decline_stops(self, tmp_path):
         runner = _Runner()
-        res = apply_ollama(_plan(tmp_path, interactive=True), console=_console(), runner=runner,
-                           has_command=lambda n: False, confirm=lambda _p: False)
+        res = _apply(_plan(tmp_path, interactive=True), runner=runner, has_command=lambda n: False,
+                     confirm=lambda _p: False)
         assert res.actions == ["install-declined"]
         assert not (tmp_path / "config.yaml").exists()
 
     def test_install_failure_aborts_before_config(self, tmp_path):
         runner = _Runner(codes={"install": 1})
-        res = apply_ollama(_plan(tmp_path), console=_console(), runner=runner, has_command=lambda n: n == "zstd")
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: n == "zstd")
         assert res.actions[-1] == "install-failed"
         assert not (tmp_path / "config.yaml").exists()
+
+
+class TestDaemon:
+    def test_starts_daemon_when_down_then_pulls(self, tmp_path):
+        runner = _Runner()
+        started = {"n": 0}
+        # Démon injoignable d'abord, puis joignable après serve() (comme en conteneur).
+        states = iter([False, True, True, True])
+
+        def is_up():
+            try:
+                return next(states)
+            except StopIteration:
+                return True
+
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: True,
+                     is_daemon_up=is_up, serve=lambda: started.__setitem__("n", started["n"] + 1))
+        assert started["n"] == 1              # démon démarré une fois
+        assert "daemon-started" in res.actions
+        assert runner.ran("ollama pull qwen3:8b")  # pull APRÈS démarrage
+
+    def test_reuses_running_daemon(self, tmp_path):
+        runner = _Runner()
+        served = {"n": 0}
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: True,
+                     is_daemon_up=lambda: True, serve=lambda: served.__setitem__("n", served["n"] + 1))
+        assert served["n"] == 0               # démon déjà là → pas de démarrage
+        assert "daemon-present" in res.actions
 
 
 class TestConfigWriting:
     def test_writes_backend_keys(self, tmp_path):
         runner = _Runner()
-        apply_ollama(_plan(tmp_path, model="qwen3:8b"), console=_console(), runner=runner, has_command=lambda n: True)
+        _apply(_plan(tmp_path, model="qwen3:8b"), runner=runner, has_command=lambda n: True)
         cfg = _config(tmp_path)
         assert get_yaml_value(cfg, "services.backend") == "ollama"
         assert get_yaml_value(cfg, "services.ollama_url") == "http://127.0.0.1:11434"
@@ -132,13 +166,13 @@ class TestConfigWriting:
 
     def test_pull_runs_and_config_written(self, tmp_path):
         runner = _Runner()
-        res = apply_ollama(_plan(tmp_path), console=_console(), runner=runner, has_command=lambda n: True)
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: True)
         assert runner.ran("ollama pull qwen3:8b")
         assert res.actions[-1] == "configured"
 
     def test_config_still_written_when_pull_fails(self, tmp_path):
         runner = _Runner(codes={"pull": 1})
-        res = apply_ollama(_plan(tmp_path), console=_console(), runner=runner, has_command=lambda n: True)
+        res = _apply(_plan(tmp_path), runner=runner, has_command=lambda n: True)
         assert "pull-failed" in res.actions
         assert res.actions[-1] == "configured"  # config cohérente malgré l'échec de pull
         assert get_yaml_value(_config(tmp_path), "services.backend") == "ollama"

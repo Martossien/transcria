@@ -67,6 +67,7 @@ class TestDockerRunArgv:
         return vim.ContainerSpec(
             name="c1", install_profile="all-in-one", config_example="config.example.yaml",
             gpu=gpu, launch=["x"], published={7870: 7870}, health_internal_port=7870, needs_db=True,
+            runtime_role="all",
         )
 
     def test_gpu_container_requests_cdi_device(self):
@@ -118,6 +119,12 @@ class TestInstallCommand:
     def test_no_cuda_flag_when_absent(self):
         assert "--cuda" not in vim.install_command("all-in-one", None, pg_existing=True)
 
+    def test_llm_backend_flag_appended_when_given(self):
+        assert "--llm-backend ollama" in vim.install_command("all-in-one", None, pg_existing=True, llm_backend="ollama")
+
+    def test_no_llm_backend_flag_when_absent(self):
+        assert "--llm-backend" not in vim.install_command("all-in-one", None, pg_existing=True)
+
 
 class TestConfigSetupCommand:
     def test_copies_example_and_substitutes_node_ip(self):
@@ -134,6 +141,38 @@ class TestConfigSetupCommand:
     def test_no_dsn_substitution_when_absent(self):
         cmd = vim.config_setup_command("config.resource-node.example.yaml", "n")
         assert "database_url" not in cmd
+
+    def test_injects_deterministic_admin_password(self):
+        # Sinon l'admin reste « CHANGE-ME » de l'exemple → login E2E en 401.
+        cmd = vim.config_setup_command("config.example.yaml", "n", admin_password="pw123")
+        assert 'first_admin_password: "pw123"' in cmd
+
+    def test_no_admin_password_substitution_when_absent(self):
+        cmd = vim.config_setup_command("config.example.yaml", "n")
+        assert "first_admin_password" not in cmd
+
+    def test_switches_to_non_gated_stt_and_diarization(self):
+        # Voie « facile » : whisper + sortformer (non gated) → E2E sans token HF.
+        cmd = vim.config_setup_command("config.example.yaml", "n",
+                                       stt_backend="whisper", diarization_backend="sortformer")
+        assert 'stt_backend: "whisper"' in cmd
+        assert 'diarization_backend: "sortformer"' in cmd
+
+    def test_no_stt_substitution_when_absent(self):
+        cmd = vim.config_setup_command("config.example.yaml", "n")
+        assert "stt_backend" not in cmd
+        assert "diarization_backend" not in cmd
+
+
+class TestCachePersistence:
+    def test_run_mounts_persistent_cache_volume(self):
+        spec = vim.ContainerSpec(
+            name="c", install_profile="all-in-one", config_example="config.example.yaml",
+            gpu=True, launch=["x"], published={7870: 7870}, health_internal_port=7870,
+            needs_db=True, runtime_role="all",
+        )
+        argv = vim.docker_run_argv(spec, "ubuntu:24.04", _REPO)
+        assert f"{vim.CACHE_VOLUME}:/root/.cache" in argv  # modèles persistés entre runs
 
     def test_node_name_is_the_network_container_name(self):
         # La frontale joint le nœud par son nom DNS sur le réseau Docker.

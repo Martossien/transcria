@@ -49,6 +49,7 @@ NODE_NAME = "transcria-matrix-node"
 APP_NAME = "transcria-matrix-app"
 PG_NAME = "transcria-matrix-pg"
 PG_IMAGE = "postgres:16"
+CACHE_VOLUME = "transcria-matrix-cache"  # cache HF/torch persistant entre runs
 CONTAINER_PYTHON = "/app/venv/bin/python"
 
 # Secrets passés AU CONTENEUR par référence (`-e NAME`, sans valeur dans l'argv → jamais
@@ -71,6 +72,7 @@ class ContainerSpec:
     published: dict[int, int]     # port_conteneur -> port_hôte
     health_internal_port: int     # port interrogé pour /health (côté conteneur)
     needs_db: bool                # rôle à base applicative PostgreSQL (web/all) ?
+    runtime_role: str | None      # TRANSCRIA_ROLE pour app.py (None = pas app.py)
 
 
 @dataclass(frozen=True)
@@ -102,7 +104,7 @@ def topologies() -> dict[str, TopologySpec]:
                 name=APP_NAME, install_profile="all-in-one",
                 config_example="config.example.yaml", gpu=True,
                 launch=_app_launch(), published={7870: 7870}, health_internal_port=7870,
-                needs_db=True,
+                needs_db=True, runtime_role="all",
             ),
         ),
         web_host_port=7870, gpu_container=APP_NAME,
@@ -115,13 +117,13 @@ def topologies() -> dict[str, TopologySpec]:
                 name=NODE_NAME, install_profile="resource-node",
                 config_example="config.resource-node.example.yaml", gpu=True,
                 launch=_node_launch(), published={8002: 8002}, health_internal_port=8002,
-                needs_db=False,  # nœud GPU pur, sans base applicative
+                needs_db=False, runtime_role=None,  # nœud GPU pur (inference_service), sans base
             ),
             ContainerSpec(
                 name=APP_NAME, install_profile="web",
                 config_example="config.frontale.example.yaml", gpu=False,
                 launch=_app_launch(), published={7870: 7870}, health_internal_port=7870,
-                needs_db=True,
+                needs_db=True, runtime_role="all",  # web+scheduler ; inférence déportée (config remote)
             ),
         ),
         web_host_port=7870, gpu_container=NODE_NAME,
@@ -155,11 +157,14 @@ def docker_run_argv(
         argv += ["-e", f"{name}={value}"]
     for name in env_passthrough:
         argv += ["-e", name]  # passe la valeur de l'hôte sans l'exposer dans l'argv
+    # Cache HF/torch persistant (volume nommé) : les modèles survivent aux runs → itération
+    # rapide et fidèle à la prod (pas de re-téléchargement à chaque exécution).
+    argv += ["-v", f"{CACHE_VOLUME}:/root/.cache"]
     argv += ["-v", f"{repo_dir}:/src:ro", "-w", "/app", base_image, "sleep", "infinity"]
     return argv
 
 
-def install_command(profile: str, cuda: str | None, pg_existing: bool) -> str:
+def install_command(profile: str, cuda: str | None, pg_existing: bool, llm_backend: str | None = None) -> str:
     """Commande shell d'installation NATIVE dans le conteneur (depuis /app).
 
     On exerce le VRAI install (torch CUDA + modèles) : surtout PAS ``--skip-deps``.
@@ -167,21 +172,31 @@ def install_command(profile: str, cuda: str | None, pg_existing: bool) -> str:
     Les rôles à base applicative utilisent ``--pg-existing`` : la base est fournie par un
     conteneur PostgreSQL dédié (comme le service ``db`` du déploiement Docker) → install
     écrit le DSN et joue ``alembic upgrade`` (chemin d'install réellement supporté).
+    ``llm_backend`` (ollama|llamacpp) force le backend LLM en non-interactif (sinon défaut).
     """
     cmd = "cd /app && ./install.sh --profile " + profile + " --no-service --non-interactive"
     if pg_existing:
         cmd += " --pg-existing"
     if cuda:
         cmd += f" --cuda {cuda}"
+    if llm_backend:
+        cmd += f" --llm-backend {llm_backend}"
     return cmd
 
 
-def config_setup_command(config_example: str, node_name: str, dsn: str | None = None) -> str:
-    """Commande shell : config exemple → config.yaml, substitution NODE_IP, et DSN PostgreSQL.
+def config_setup_command(
+    config_example: str, node_name: str, dsn: str | None = None, admin_password: str | None = None,
+    stt_backend: str | None = None, diarization_backend: str | None = None,
+) -> str:
+    """Commande shell : config exemple → config.yaml, substitution NODE_IP, DSN, mot de passe admin.
 
     ``NODE_IP`` (placeholder des configs frontale) → nom du conteneur nœud (DNS interne du
     réseau Docker). Pour l'all-in-one (config locale sans NODE_IP), le sed est un no-op.
     ``dsn`` (rôles à base) remplace ``storage.database_url`` par la base de test externe.
+    ``admin_password`` fixe ``auth.first_admin_password`` à une valeur connue → l'admin seedé
+    par install.sh/ensure_admin est déterministe (sinon il reste « CHANGE-ME » de l'exemple).
+    ``stt_backend``/``diarization_backend`` basculent la reconnaissance vers la voie NON gated
+    (whisper + sortformer) → E2E « facile » sans token HF, cohérent avec le backend Ollama.
     """
     cmd = (
         f"cp /app/{config_example} /app/config.yaml && "
@@ -190,6 +205,12 @@ def config_setup_command(config_example: str, node_name: str, dsn: str | None = 
     if dsn:
         # `|` comme délimiteur sed : le DSN contient des `/` mais pas de `|`.
         cmd += f" && sed -i 's|database_url:.*|database_url: \"{dsn}\"|' /app/config.yaml"
+    if admin_password:
+        cmd += f" && sed -i 's|first_admin_password:.*|first_admin_password: \"{admin_password}\"|' /app/config.yaml"
+    if stt_backend:
+        cmd += f" && sed -i 's|stt_backend:.*|stt_backend: \"{stt_backend}\"|' /app/config.yaml"
+    if diarization_backend:
+        cmd += f" && sed -i 's|diarization_backend:.*|diarization_backend: \"{diarization_backend}\"|' /app/config.yaml"
     return cmd
 
 
@@ -285,7 +306,9 @@ def start_postgres(password: str) -> None:
 
 
 def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str | None,
-                 username: str, password: str, cuda: str | None, keep_up: bool) -> None:
+                 username: str, password: str, cuda: str | None, keep_up: bool,
+                 llm_backend: str | None = None, stt_backend: str | None = None,
+                 diarization_backend: str | None = None) -> None:
     import secrets
 
     spec_distro = get_distro(distro_id)
@@ -307,21 +330,44 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
 
         for c in topo.containers:
             _log("up", f"démarrage conteneur {c.name} (gpu={c.gpu})")
-            env_set = {"TRANSCRIA_DATABASE_URL": dsn, "TRANSCRIA_SECRET": session_secret} if c.needs_db else {}
+            env_set: dict[str, str] = {}
+            if c.needs_db:
+                env_set["TRANSCRIA_DATABASE_URL"] = dsn
+                env_set["TRANSCRIA_SECRET"] = session_secret
+            if c.runtime_role:
+                env_set["TRANSCRIA_ROLE"] = c.runtime_role
+            # Voie NON gated (whisper/sortformer) : autoriser le téléchargement HF au 1ᵉʳ run
+            # (app.py fixe HF_HUB_OFFLINE=1 par setdefault → on l'écrase à 0 côté conteneur).
+            if stt_backend or diarization_backend:
+                env_set["HF_HUB_OFFLINE"] = "0"
             _run(docker_run_argv(c, spec_distro.base_image, _REPO,
                                  env_set=env_set, env_passthrough=SECRET_ENV_PASSTHROUGH), capture=True)
 
             # 1) Amorçage OS (apt/dnf + pièges ffmpeg) puis copie du dépôt en zone inscriptible.
+            #    On EXCLUT venv/.git/backup/node_modules : le venv hôte n'est pas valide dans le
+            #    conteneur (install.sh recrée le sien) et alourdirait inutilement la copie.
             for cmd in bootstrap_commands(distro_id):
                 _docker_exec(c.name, cmd)
-            _docker_exec(c.name, "cp -a /src /app && chmod -R u+w /app")
+            _docker_exec(
+                c.name,
+                "mkdir -p /app && tar -C /src "
+                "--exclude=./venv --exclude=./.git --exclude=./backup --exclude=./node_modules "
+                "--exclude='*/__pycache__' -cf - . | tar -C /app -xf - && chmod -R u+w /app",
+            )
 
-            # 2) Config exemple → config.yaml (substitution NODE_IP + DSN pour les rôles à base).
-            _docker_exec(c.name, config_setup_command(c.config_example, NODE_NAME, dsn if c.needs_db else None))
+            # 2) Config exemple → config.yaml (NODE_IP + DSN + mot de passe admin déterministe).
+            _docker_exec(c.name, config_setup_command(
+                c.config_example, NODE_NAME,
+                dsn=dsn if c.needs_db else None,
+                admin_password=password if c.needs_db else None,
+                stt_backend=stt_backend, diarization_backend=diarization_backend,
+            ))
 
-            # 3) install.sh NATIF (torch CUDA + modèles ; --pg-existing pour les rôles à base).
+            # 3) install.sh NATIF (torch CUDA + modèles ; --pg-existing pour les rôles à base ;
+            #    --llm-backend force le moteur LLM en non-interactif — ollama pour la voie facile).
             _log("install", f"{c.name} : install.sh --profile {c.install_profile} (peut être long)")
-            _docker_exec(c.name, install_command(c.install_profile, cuda, pg_existing=c.needs_db))
+            _docker_exec(c.name, install_command(c.install_profile, cuda, pg_existing=c.needs_db,
+                                                 llm_backend=llm_backend))
 
             # 4) Lancement du service en arrière-plan.
             launch = " ".join(c.launch)
@@ -358,8 +404,13 @@ def main() -> int:
     ap.add_argument("--audio", type=Path, default=_REPO / "tests" / "test2.mp3")
     ap.add_argument("--profile", default=None, help="profil de traitement (ex. word_corrige)")
     ap.add_argument("--username", default="admin")
-    ap.add_argument("--password", default="admin-change-me")
+    ap.add_argument("--password", default="matrix-admin-pw",
+                    help="mot de passe admin injecté dans la config + utilisé pour l'E2E")
     ap.add_argument("--cuda", default=None, help="forcer l'index torch CUDA (ex. cu126)")
+    ap.add_argument("--llm-backend", default=None, choices=("ollama", "llamacpp"),
+                    help="forcer le backend LLM (ollama = voie facile sans compilation)")
+    ap.add_argument("--stt-backend", default=None, help="forcer le backend STT (ex. whisper, non gated)")
+    ap.add_argument("--diarization-backend", default=None, help="forcer la diarisation (ex. sortformer, non gated)")
     ap.add_argument("--keep-up", action="store_true", help="ne pas démonter (debug)")
     ap.add_argument("--no-preflight", action="store_true", help="sauter le preflight GPU hôte")
     args = ap.parse_args()
@@ -371,7 +422,9 @@ def main() -> int:
 
     topo = topologies()[args.topology]
     run_topology(topo, args.distro, args.audio, args.profile,
-                 args.username, args.password, args.cuda, args.keep_up)
+                 args.username, args.password, args.cuda, args.keep_up,
+                 llm_backend=args.llm_backend, stt_backend=args.stt_backend,
+                 diarization_backend=args.diarization_backend)
     return 0
 
 
