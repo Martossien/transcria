@@ -36,18 +36,19 @@ ServeFn = Callable[[], Any]
 OLLAMA_INSTALL_URL = "https://ollama.com/install.sh"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 
-# Modèles du registre Ollama par palier VRAM. On reprend les CHOIX du projet côté llama.cpp
-# (transcria.install_arbitrage.LLM_TIERS : 12/16 = Qwen3.5-9B ; 24 = Qwen3.6-35B-A3B ;
-# 32 = Qwen3.6-27B ; 48/64 = Qwen3.6-35B-A3B) et on prend le tag Ollama LE PLUS PROCHE qui
-# TIENT dans le palier — Ollama n'expose qu'un quant par tag (pas de IQ4/Q6/Q8 au choix).
+# Modèles du registre Ollama par palier VRAM PAR-GPU. Différence clé avec la voie llama.cpp
+# (transcria.install_arbitrage.LLM_TIERS, qui tensor-split sur plusieurs cartes) : Ollama
+# place le modèle sur UNE SEULE carte par défaut → on dimensionne par VRAM par-GPU et on
+# reste CONSERVATEUR (poids + KV-cache d'un contexte 256K doivent tenir sur une carte : un
+# 35B/24 Go ne rentre pas sur 24 Go). Famille Qwen3.5/Qwen3.6 (cohérente avec le projet).
 # Tags VÉRIFIÉS à la source (ollama.com/library, 2026-07-01) : qwen3.5:9b≈6.6 Go,
-# qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go (= 35B-A3B). NE PAS écrire un tag de mémoire
+# qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go. NE PAS écrire un tag de mémoire
 # (cf. mémoire « verify-tech-versions-at-source »). Indicatif et surchargeable.
 _TIER_MODELS: dict[str, str] = {
     "12gb": "qwen3.5:9b",
     "16gb": "qwen3.5:9b",
-    "24gb": "qwen3.6:27b",   # 17 Go — tient sur 24 Go (le tag 35b fait 24 Go = trop juste)
-    "32gb": "qwen3.6:27b",   # choix projet 32 Go = Qwen3.6-27B
+    "24gb": "qwen3.5:9b",    # 9b + contexte 256K ≈ 15 Go : tient sur 24 Go (27b y OOM)
+    "32gb": "qwen3.6:27b",   # 17 Go + contexte : tient sur 32 Go
     "48gb": "qwen3.6:35b",   # 24 Go — Qwen3.6-35B-A3B
     "64gb": "qwen3.6:35b",
 }
@@ -55,10 +56,17 @@ DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"
 
 
 def ollama_model_for_tier(tier: str | None) -> str:
-    """Modèle Ollama recommandé pour un palier VRAM (défaut : le plus léger)."""
+    """Modèle Ollama recommandé pour un palier VRAM (défaut : le plus léger).
+
+    Accepte le palier sous forme ``"24"`` (ce que rend ``install_arbitrage --recommend-tier``)
+    ou ``"24gb"`` : sans normalisation, un nombre nu ne matcherait aucune clé et tomberait
+    toujours au défaut."""
     if not tier:
         return DEFAULT_OLLAMA_MODEL
-    return _TIER_MODELS.get(str(tier).strip().lower(), DEFAULT_OLLAMA_MODEL)
+    key = str(tier).strip().lower()
+    if key.isdigit():
+        key = f"{key}gb"
+    return _TIER_MODELS.get(key, DEFAULT_OLLAMA_MODEL)
 
 
 def _default_daemon_probe(url: str) -> ProbeFn:
@@ -118,14 +126,18 @@ class OllamaResult:
 def _write_backend_config(plan: OllamaPlan) -> None:
     """Écrit la config backend Ollama — source unique consommée au runtime.
 
-    ``services.ollama_model`` = nom NATIF Ollama (``qwen3:8b``) ;
-    ``workflow.arbitration_llm.model_id`` = ``local/<modèle>`` (format opencode : le runner
-    splitte sur le 1ᵉʳ ``/`` et envoie le nom nu au backend)."""
+    ``services.ollama_model`` = nom NATIF Ollama (``qwen3.5:9b``) ;
+    ``model_id`` = ``local/<modèle>`` (format opencode : le runner splitte sur le 1ᵉʳ ``/``
+    et envoie le nom nu au backend). Le projet a DEUX endpoints LLM opencode distincts —
+    ``workflow.summary_llm`` (étape résumé) ET ``workflow.arbitration_llm`` (correction) —
+    on pointe LES DEUX sur Ollama, sinon le résumé lit l'endpoint llama.cpp par défaut (8080)."""
+    api_base = f"{plan.ollama_url.rstrip('/')}/v1"
     set_yaml_file_value(plan.config_path, "services.backend", "ollama")
     set_yaml_file_value(plan.config_path, "services.ollama_url", plan.ollama_url)
     set_yaml_file_value(plan.config_path, "services.ollama_model", plan.model)
-    set_yaml_file_value(plan.config_path, "workflow.arbitration_llm.model_id", f"local/{plan.model}")
-    set_yaml_file_value(plan.config_path, "workflow.arbitration_llm.api_base", f"{plan.ollama_url.rstrip('/')}/v1")
+    for block in ("summary_llm", "arbitration_llm"):
+        set_yaml_file_value(plan.config_path, f"workflow.{block}.model_id", f"local/{plan.model}")
+        set_yaml_file_value(plan.config_path, f"workflow.{block}.api_base", api_base)
 
 
 def apply_ollama(

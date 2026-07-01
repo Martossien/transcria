@@ -231,13 +231,15 @@ def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
     """
     services = config.get("services", {}) or {}
     if is_ollama_backend(config):
+        # `ollama_url` est LA source de l'endpoint Ollama (host+port). On n'utilise PAS
+        # `arbitrage_llm_port` : l'exemple le fixe toujours à 8080 (port llama.cpp/vLLM) et
+        # il écraserait le 11434 d'Ollama. Un port Ollama custom se met dans `ollama_url`.
         o_host, o_port = _parse_host_port(services.get("ollama_url") or "http://127.0.0.1:11434", 11434)
         host = os.environ.get(
             "TRANSCRIA_ARBITRAGE_LLM_HOST",
             services.get("arbitrage_llm_host", o_host),
         )
-        port = int(services.get("arbitrage_llm_port") or o_port)
-        return host, port
+        return host, o_port
     host = os.environ.get(
         "TRANSCRIA_ARBITRAGE_LLM_HOST",
         services.get("arbitrage_llm_host", "127.0.0.1"),

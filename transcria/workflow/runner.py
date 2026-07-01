@@ -4,7 +4,7 @@ import time
 from types import SimpleNamespace
 
 from transcria.gpu.gpu_session import GPUSession, GPUSessionError
-from transcria.gpu.opencode_setup import is_remote_arbitrage
+from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
@@ -553,7 +553,7 @@ class WorkflowRunner:
         fs = self._get_fs(config, job.id)
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
+        arbitrage_port = resolve_arbitrage_endpoint(config)[1]  # backend-aware (Ollama=11434, llama.cpp=8080)
         sl.info(
             "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",
@@ -1696,7 +1696,7 @@ class WorkflowRunner:
                 logger.warning("Lexique de session ignoré avant correction: format inattendu job=%s", job.id)
 
         api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        arbitrage_port = config.get("services", {}).get("arbitrage_llm_port", 8080)
+        arbitrage_port = resolve_arbitrage_endpoint(config)[1]  # backend-aware (Ollama=11434, llama.cpp=8080)
         logger.info(
             "Phase 3: correction SRT — vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
             api_model_id or "non contraint",

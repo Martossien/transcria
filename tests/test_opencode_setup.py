@@ -255,9 +255,18 @@ def test_resolve_endpoint_ollama_base_url(monkeypatch):
     assert default_base_url(cfg) == "http://127.0.0.1:11434/v1"
 
 
-def test_resolve_endpoint_explicit_arbitrage_port_overrides_ollama(monkeypatch):
+def test_resolve_endpoint_ollama_ignores_arbitrage_llm_port(monkeypatch):
+    # arbitrage_llm_port (fixé à 8080 dans l'exemple, port llama.cpp/vLLM) NE doit PAS
+    # écraser le port Ollama : l'endpoint suit ollama_url.
     monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
-    cfg = {"services": {"backend": "ollama", "ollama_url": "http://127.0.0.1:11434", "arbitrage_llm_port": 12000}}
+    cfg = {"services": {"backend": "ollama", "ollama_url": "http://127.0.0.1:11434", "arbitrage_llm_port": 8080}}
+    assert resolve_arbitrage_endpoint(cfg) == ("127.0.0.1", 11434)
+
+
+def test_resolve_endpoint_ollama_custom_port_via_url(monkeypatch):
+    # Un port Ollama custom se déclare dans ollama_url.
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    cfg = {"services": {"backend": "ollama", "ollama_url": "http://127.0.0.1:12000"}}
     assert resolve_arbitrage_endpoint(cfg) == ("127.0.0.1", 12000)
 
 

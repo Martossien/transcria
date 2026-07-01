@@ -1067,7 +1067,10 @@ else
     fi
 
     if [[ "$LLM_BACKEND" == "ollama" ]]; then
-        OLLAMA_REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_TOTAL_MB" 2>/dev/null || echo "")
+        # Ollama place le modèle sur UNE carte (pas de tensor-split par défaut) → on
+        # dimensionne par la VRAM PAR-GPU (max), pas la VRAM totale (qui choisirait un
+        # modèle trop gros pour une seule carte sur une machine multi-GPU).
+        OLLAMA_REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_MAX_MB" 2>/dev/null || echo "")
         OLLAMA_CLI_ARGS=(ollama --config "$CONFIG_PATH" --gpu-present --tier "$OLLAMA_REC_TIER")
         [[ "$NON_INTERACTIVE" = true ]] && OLLAMA_CLI_ARGS+=(--non-interactive)
         python_module transcria.installer.cli "${OLLAMA_CLI_ARGS[@]}"
