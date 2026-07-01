@@ -116,6 +116,19 @@ class TestOllamaLifecycle:
         # Le démon est persistant/partagé : shutdown() est un no-op qui réussit.
         assert OllamaLLMBackend(_ollama_config()).shutdown() is True
 
+    def test_measured_vram_mb_from_api_ps(self, monkeypatch):
+        b = OllamaLLMBackend(_ollama_config())
+        monkeypatch.setattr(
+            requests, "get",
+            lambda url, timeout=5: _FakeResp(200, {"models": [{"name": "qwen3:8b", "size_vram": 15_000_000_000}]}),
+        )
+        assert b.measured_vram_mb() == 15_000_000_000 // (1024 * 1024)   # ≈ 14305 Mo
+
+    def test_measured_vram_mb_none_when_unloaded(self, monkeypatch):
+        b = OllamaLLMBackend(_ollama_config())
+        monkeypatch.setattr(requests, "get", lambda url, timeout=5: _FakeResp(200, {"models": []}))
+        assert b.measured_vram_mb() is None
+
     def test_ensure_available_refuses_when_not_pulled(self, monkeypatch):
         b = OllamaLLMBackend(_ollama_config())
         monkeypatch.setattr(requests, "get", lambda url, timeout=5: _FakeResp(200, {"models": []}))

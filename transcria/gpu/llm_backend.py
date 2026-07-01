@@ -61,6 +61,13 @@ class LLMBackend(ABC):
         service (le démon n'est pas « à nous » — cf. garde dans VRAMManager)."""
         return self.shutdown()
 
+    def measured_vram_mb(self) -> int | None:
+        """VRAM RÉELLE occupée par le modèle chargé (Mo), ou None si non mesurable.
+
+        Sert à RECALER l'empreinte calculée au 1ᵉʳ load (la mesure prime). Défaut : None
+        (moteur sans API d'introspection VRAM) ; Ollama surcharge via /api/ps."""
+        return None
+
     @staticmethod
     def _http_get_json(url: str, timeout: int = 5) -> dict | None:
         try:
@@ -385,6 +392,18 @@ class OllamaLLMBackend(LLMBackend):
         except Exception as exc:
             logger.warning("Ollama : échec chargement %s : %s", self.model_id, exc)
             return False
+
+    def measured_vram_mb(self) -> int | None:
+        # /api/ps donne la VRAM RÉELLE (size_vram) du modèle résident → recalage au 1ᵉʳ load.
+        data = self._http_get_json(f"{self.ollama_url}/api/ps")
+        if not data:
+            return None
+        total = sum(
+            int(m.get("size_vram", 0) or 0)
+            for m in data.get("models", [])
+            if self._name_matches(m.get("name", ""), self.model_id)
+        )
+        return int(total // (1024 * 1024)) if total > 0 else None
 
     def unload(self) -> bool:
         # Décharge le modèle SANS tuer le démon : requête vide + keep_alive=0

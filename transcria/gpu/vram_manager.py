@@ -17,6 +17,18 @@ from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_
 logger = logging.getLogger(__name__)
 
 
+def should_recalibrate(current_mb: int, measured_mb: int, *, threshold_pct: float = 0.15) -> bool:
+    """Recaler la réservation VRAM si la mesure s'écarte nettement du calcul.
+
+    La mesure au 1ᵉʳ load PRIME sur l'empreinte calculée (poids + KV) : si elle diffère de
+    plus de `threshold_pct`, on adopte la valeur mesurée (évite sur/sous-réservation)."""
+    if measured_mb <= 0:
+        return False
+    if current_mb <= 0:
+        return True
+    return abs(measured_mb - current_mb) / current_mb > threshold_pct
+
+
 class VRAMManager:
     """Cycle de vie GPU : libère, lance, utilise, arrête les modèles."""
 
@@ -78,6 +90,7 @@ class VRAMManager:
         # dont la sémantique diffère de « lancer/tuer un process » (Ollama = démon persistant,
         # on décharge le modèle via HTTP). llama.cpp/vLLM gardent le chemin script/PID ci-dessous.
         self._backend = None
+        self._llm_vram_recalibrated = False   # « vérif au 1ᵉʳ load » : recalage VRAM mesuré, une fois
 
     def _arbitrage_backend(self):
         if self._backend is None:
@@ -91,6 +104,43 @@ class VRAMManager:
             return getattr(self._arbitrage_backend(), "backend_type", "") == "ollama"
         except Exception:
             return False
+
+    def recalibrate_llm_vram_from_measurement(self) -> None:
+        """« Vérif au 1ᵉʳ load » : recale la réservation VRAM sur la MESURE réelle.
+
+        L'empreinte posée à l'install est CALCULÉE (poids + KV) ; au premier chargement on
+        mesure la VRAM réellement occupée (Ollama /api/ps ; None sinon) et, si elle s'écarte
+        nettement, on l'adopte — en mémoire (admission de CETTE session) et, best-effort, en
+        config (RO en conteneur → échec ignoré). Idempotent (une fois par process)."""
+        if self._llm_vram_recalibrated or self._is_remote_arbitrage():
+            return
+        self._llm_vram_recalibrated = True
+        try:
+            measured = self._arbitrage_backend().measured_vram_mb()
+        except Exception:
+            measured = None
+        if not measured or not should_recalibrate(self.llm_vram_mb, measured):
+            return
+        logger.info(
+            "Recalibrage VRAM LLM (vérif au 1ᵉʳ load) : %d Mo calculé → %d Mo mesuré",
+            self.llm_vram_mb, measured,
+        )
+        self.llm_vram_mb = measured
+        self._persist_llm_vram_mb(measured)
+
+    def _persist_llm_vram_mb(self, vram_mb: int) -> None:
+        """Persiste gpu.llm_vram_mb en config (best-effort : config souvent RO en conteneur)."""
+        config_path = os.environ.get("TRANSCRIA_CONFIG")
+        if not config_path or not os.access(config_path, os.W_OK):
+            return
+        indices = list((self.config.get("gpu", {}) or {}).get("llm_gpu_indices") or [0])
+        per_gpu = [vram_mb // len(indices)] * len(indices)
+        try:
+            from transcria.config.gpu_calibration import apply_gpu_calibration
+
+            apply_gpu_calibration(config_path, vram_mb=vram_mb, gpu_indices=indices, vram_mb_per_gpu=per_gpu)
+        except Exception:
+            logger.debug("Persistance gpu.llm_vram_mb ignorée", exc_info=True)
 
     # ── GPU Info ──────────────────────────────────────────
 
@@ -518,7 +568,11 @@ class VRAMManager:
             # Ollama gère lui-même le (dé)chargement et le choix de modèle : « prêt » =
             # modèle tiré + chargé en VRAM. Pas de test-inférence ni de redémarrage
             # (sémantique llama.cpp/vLLM), pas de libération GPU forcée.
-            return self._arbitrage_backend().ensure_available()
+            ready = self._arbitrage_backend().ensure_available()
+            if ready:
+                # Modèle résident → on recale la réservation VRAM sur la mesure réelle (/api/ps).
+                self.recalibrate_llm_vram_from_measurement()
+            return ready
 
         import requests
 

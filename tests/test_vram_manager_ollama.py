@@ -4,15 +4,16 @@ On injecte un faux backend : le VRAMManager ne doit ni lancer de script, ni tuer
 process pour Ollama — il DÉLÈGUE (charger/décharger/sonder) au backend, et n'arrête
 jamais le démon persistant.
 """
-from transcria.gpu.vram_manager import VRAMManager
+from transcria.gpu.vram_manager import VRAMManager, should_recalibrate
 
 
 class _FakeOllamaBackend:
     backend_type = "ollama"
 
-    def __init__(self):
+    def __init__(self, measured=None):
         self.calls = []
         self._loaded = True
+        self._measured = measured
 
     def is_loaded(self):
         self.calls.append("is_loaded")
@@ -27,6 +28,10 @@ class _FakeOllamaBackend:
         self.calls.append("ensure_available")
         self._loaded = True
         return True
+
+    def measured_vram_mb(self):
+        self.calls.append("measured_vram_mb")
+        return self._measured
 
 
 def _ollama_vm():
@@ -70,6 +75,37 @@ def test_ensure_ready_delegates_to_ensure_available():
     vm, fake = _ollama_vm()
     assert vm.ensure_arbitrage_llm_ready() is True
     assert "ensure_available" in fake.calls
+
+
+class TestRecalibration:
+    def test_should_recalibrate_threshold(self):
+        assert should_recalibrate(24000, 14700) is True        # écart net → recaler
+        assert should_recalibrate(14700, 15000) is False        # ~2 % → non
+        assert should_recalibrate(0, 14700) is True             # pas de valeur courante
+        assert should_recalibrate(14700, 0) is False            # mesure absente → garder
+
+    def test_first_load_adopts_measured(self):
+        vm, fake = _ollama_vm()
+        fake._measured = 14700
+        vm.llm_vram_mb = 60000            # empreinte calculée grossière
+        vm.recalibrate_llm_vram_from_measurement()
+        assert vm.llm_vram_mb == 14700    # la mesure prime
+        assert "measured_vram_mb" in fake.calls
+
+    def test_recalibration_is_once(self):
+        vm, fake = _ollama_vm()
+        fake._measured = 14700
+        vm.recalibrate_llm_vram_from_measurement()
+        fake.calls.clear()
+        vm.recalibrate_llm_vram_from_measurement()   # 2ᵉ appel = no-op (déjà recalé)
+        assert fake.calls == []
+
+    def test_no_change_when_measurement_absent(self):
+        vm, fake = _ollama_vm()
+        fake._measured = None
+        vm.llm_vram_mb = 60000
+        vm.recalibrate_llm_vram_from_measurement()
+        assert vm.llm_vram_mb == 60000    # rien à recaler → inchangé
 
 
 def test_daemon_never_a_kill_target_even_if_pattern_configured():
