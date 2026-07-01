@@ -1,0 +1,129 @@
+# Catalogue des profils LLM d'arbitrage — SOURCE DE VÉRITÉ UNIQUE (données, pas de hardcode).
+# ─────────────────────────────────────────────────────────────────────────────
+# Un « palier » = « faire au mieux avec le matériel physiquement présent ». La sélection
+# est pilotée par le matériel (transcria/config/llm_profiles.select_profile) :
+#   - mono-GPU  → meilleur modèle qui tient sur UNE carte ;
+#   - multi-GPU → on ACTIVE le multi-GPU (llama.cpp tensor-split, Ollama spread, vLLM TP).
+# Le contexte est VARIABLE par palier (plus de VRAM ⇒ plus de contexte).
+#
+# Modèles ANCRÉS sur le bench llama.cpp (famille Qwen3.5-9B / Qwen3.6-27B / Qwen3.6-35B-A3B) ;
+# tags/fichiers VÉRIFIÉS à la source (registre Ollama / HF) — ne PAS écrire de mémoire.
+#
+# `footprint.source` : bench (llama.cpp, éprouvé) | measured (mesuré sur GPU, /api/ps ou
+# nvidia-smi) | estimated (À MESURER — Lot 4, ne pas considérer comme qualifié).
+# Surchargeable : `workflow.arbitration_llm.profiles_file` dans config.yaml pointe un autre fichier.
+
+schema_version: 1
+
+engines:
+
+  # ── llama.cpp ──────────────────────────────────────────────────────────────
+  # Palier choisi par VRAM TOTALE (tensor-split sur `gpus` cartes). Quant fin + KV q8_0.
+  # Valeurs transcrites du bench (install_arbitrage.LLM_TIERS / TIER_VRAM_MB / TIER_GPU_INDICES).
+  llamacpp:
+    select_by: total_vram_mb
+    kv_cache_type: q8_0
+    tiers:
+      - id: "12"
+        min_vram_mb: 11500
+        gpus: 1
+        context: 196608
+        model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q5_K_M.gguf", dir: "Qwen3.5-9B-Q5_K_M"}
+        label: "Qwen3.5-9B Q5_K_M (192K)"
+        footprint: {value_mb: 6200, basis: weights, source: bench}
+      - id: "16"
+        min_vram_mb: 15500
+        gpus: 1
+        context: 262144
+        model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q6_K.gguf", dir: "Qwen3.5-9B-Q6_K"}
+        label: "Qwen3.5-9B Q6_K (256K)"
+        footprint: {value_mb: 7000, basis: weights, source: bench}
+      - id: "24"
+        min_vram_mb: 23000
+        gpus: 1
+        context: 262144
+        model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf", dir: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL"}
+        label: "Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, mono-GPU 24 Go)"
+        footprint: {value_mb: 19000, basis: weights, source: bench}
+      - id: "32"
+        min_vram_mb: 31000
+        gpus: 2
+        context: 196608
+        model: {repo: "unsloth/Qwen3.6-27B-GGUF", file: "Qwen3.6-27B-Q5_K_M.gguf", dir: "Qwen3.6-27B-Q5_K_M"}
+        label: "Qwen3.6-27B Q5_K_M (192K)"
+        footprint: {value_mb: 19000, basis: weights, source: bench}
+      - id: "48"
+        min_vram_mb: 46000
+        gpus: 2
+        context: 262144
+        model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-Q6_K.gguf", dir: "Qwen3.6-35B-A3B-UD-Q6_K"}
+        label: "Qwen3.6-35B-A3B UD-Q6_K (256K)"
+        footprint: {value_mb: 28000, basis: weights, source: bench}
+      - id: "64"
+        min_vram_mb: 60000
+        gpus: 3
+        context: 262144
+        model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf", dir: "Qwen3.6-35B-A3B-UD-Q8_K_XL"}
+        label: "Qwen3.6-35B-A3B UD-Q8_K_XL (256K)"
+        footprint: {value_mb: 38500, basis: weights, source: bench}
+
+  # ── Ollama ─────────────────────────────────────────────────────────────────
+  # mono-GPU → palier par VRAM PAR-CARTE ; multi-GPU (≥2 cartes) → spread + palier par
+  # VRAM TOTALE (modèle plus gros). Un quant par tag registre (~Q4_K_M) + KV plein.
+  # ⚠ footprints estimated = À MESURER (Lot 4) sauf 9b (measured). num_ctx à confirmer par mesure.
+  ollama:
+    select_by: per_card_then_total
+    multi_gpu: {enable_when_gpus_gte: 2, env: {OLLAMA_SCHED_SPREAD: "1"}}
+    tiers:
+      - id: "12"
+        min_vram_mb: 11500
+        context: 131072
+        model: "qwen3.5:4b"
+        footprint: {value_mb: 8000, basis: weights+kv, source: estimated}
+      - id: "16"
+        min_vram_mb: 15500
+        context: 262144
+        model: "qwen3.5:9b"
+        footprint: {value_mb: 14700, basis: weights+kv, source: measured}   # /api/ps, 8×3090, ctx 262144
+      - id: "24"
+        min_vram_mb: 23000
+        context: 262144
+        model: "qwen3.5:9b"
+        footprint: {value_mb: 14700, basis: weights+kv, source: measured}
+      - id: "32"
+        min_vram_mb: 31000
+        context: 196608
+        model: "qwen3.6:27b"
+        footprint: {value_mb: 25000, basis: weights+kv, source: estimated}
+      - id: "48"
+        min_vram_mb: 46000
+        context: 262144
+        model: "qwen3.6:35b"
+        footprint: {value_mb: 32000, basis: weights+kv, source: estimated}
+      - id: "64"
+        min_vram_mb: 60000
+        context: 262144
+        model: "qwen3.6:35b"
+        footprint: {value_mb: 32000, basis: weights+kv, source: estimated}
+
+  # ── vLLM ───────────────────────────────────────────────────────────────────
+  # Palier par VRAM TOTALE ÷ TP. TP auto = nb de GPU visibles, borné aux valeurs valides
+  # (divisibilité des têtes d'attention). Poids FP8 ; max_model_len borne la KV-cache.
+  # ⚠ footprints/valid_tp estimated = À MESURER/VÉRIFIER (Lot 4).
+  vllm:
+    select_by: total_vram_mb
+    tp: {auto_from_gpu_count: true, valid: [1, 2, 4, 8]}
+    tiers:
+      - id: "48"
+        min_vram_mb: 46000
+        tp: 2
+        context: 131072
+        model: "Qwen/Qwen3.6-27B-FP8"
+        footprint: {per_card_mb: 20000, source: estimated}
+      - id: "96"
+        min_vram_mb: 92000
+        tp: 4
+        context: 262144
+        model: "Qwen/Qwen3.6-27B-FP8"
+        label: "réf. bench split (27B-FP8, TP=4 sur 4×24 Go)"
+        footprint: {per_card_mb: 15000, source: estimated}
