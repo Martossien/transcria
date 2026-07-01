@@ -308,7 +308,7 @@ def start_postgres(password: str) -> None:
 def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str | None,
                  username: str, password: str, cuda: str | None, keep_up: bool,
                  llm_backend: str | None = None, stt_backend: str | None = None,
-                 diarization_backend: str | None = None) -> None:
+                 diarization_backend: str | None = None, hf_online: bool = False) -> None:
     import secrets
 
     spec_distro = get_distro(distro_id)
@@ -336,9 +336,10 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
                 env_set["TRANSCRIA_SECRET"] = session_secret
             if c.runtime_role:
                 env_set["TRANSCRIA_ROLE"] = c.runtime_role
-            # Voie NON gated (whisper/sortformer) : autoriser le téléchargement HF au 1ᵉʳ run
-            # (app.py fixe HF_HUB_OFFLINE=1 par setdefault → on l'écrase à 0 côté conteneur).
-            if stt_backend or diarization_backend:
+            # Autoriser le téléchargement HF au 1ᵉʳ run (app.py fixe HF_HUB_OFFLINE=1 par
+            # setdefault → on l'écrase à 0). Requis pour les modèles GATED par défaut
+            # (cohere + pyannote, --hf-online + HF_TOKEN) comme pour la voie non gated.
+            if stt_backend or diarization_backend or hf_online:
                 env_set["HF_HUB_OFFLINE"] = "0"
             _run(docker_run_argv(c, spec_distro.base_image, _REPO,
                                  env_set=env_set, env_passthrough=SECRET_ENV_PASSTHROUGH), capture=True)
@@ -411,6 +412,8 @@ def main() -> int:
                     help="forcer le backend LLM (ollama = voie facile sans compilation)")
     ap.add_argument("--stt-backend", default=None, help="forcer le backend STT (ex. whisper, non gated)")
     ap.add_argument("--diarization-backend", default=None, help="forcer la diarisation (ex. sortformer, non gated)")
+    ap.add_argument("--hf-online", action="store_true",
+                    help="autoriser le téléchargement HF dans le conteneur (modèles gated par défaut : cohere+pyannote, requiert HF_TOKEN)")
     ap.add_argument("--keep-up", action="store_true", help="ne pas démonter (debug)")
     ap.add_argument("--no-preflight", action="store_true", help="sauter le preflight GPU hôte")
     args = ap.parse_args()
@@ -424,7 +427,7 @@ def main() -> int:
     run_topology(topo, args.distro, args.audio, args.profile,
                  args.username, args.password, args.cuda, args.keep_up,
                  llm_backend=args.llm_backend, stt_backend=args.stt_backend,
-                 diarization_backend=args.diarization_backend)
+                 diarization_backend=args.diarization_backend, hf_online=args.hf_online)
     return 0
 
 
