@@ -44,6 +44,8 @@ DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 # Tags VÉRIFIÉS à la source (ollama.com/library, 2026-07-01) : qwen3.5:9b≈6.6 Go,
 # qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go. NE PAS écrire un tag de mémoire
 # (cf. mémoire « verify-tech-versions-at-source »). Indicatif et surchargeable.
+# Modèle VRAM des 3 moteurs (llama.cpp / Ollama / vLLM) : docs/LLM_BACKENDS.md.
+# Empreintes : 9b = 14,7 Go MESURÉ (poids + KV 256K) ; 27b/35b = estimés (à mesurer).
 # Empreinte RÉELLE par-carte = poids + KV-cache du contexte 256K (Ollama charge le contexte
 # plein sur UNE carte, -c 262144). MESURÉ : qwen3.5:9b ≈ 14,7 Go résident (poids 6,6 Go +
 # KV ~8 Go) → tient « juste » sur 16 Go, PAS sur 12 Go. D'où le palier 12 Go = 4b.

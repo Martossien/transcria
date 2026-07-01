@@ -47,7 +47,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3.12 python3.12-venv python3.12-dev \
         build-essential libpq-dev \
-        ffmpeg iproute2 procps git curl sudo ca-certificates \
+        ffmpeg iproute2 procps lsof git curl sudo ca-certificates \
         ninja-build \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.12 /usr/local/bin/python3

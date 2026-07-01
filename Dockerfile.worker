@@ -39,7 +39,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # (probe audio), iproute2 (ss), git/curl/ca-certificates (installateur opencode = curl | bash).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential libpq-dev postgresql-client \
-        ffmpeg iproute2 procps git curl ca-certificates \
+        ffmpeg iproute2 procps lsof git curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

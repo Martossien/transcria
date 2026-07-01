@@ -162,7 +162,15 @@ services:
     profiles: ["verify"]
     restart: "no"
     entrypoint: ["/app/venv/bin/python", "/app/scripts/verify_split_topology.py"]
-    command: ["--web", "http://web:7870", "--node", "http://resource-node:8002", "--arbitrage", "http://vllm-arbitrage:8080"]
+    # L'audio de test est monté (l'image worker n'embarque pas `tests/` — exclu par
+    # .dockerignore) → `docker compose run --rm verify` marche sans montage manuel. Le
+    # montage persiste même si l'opérateur surcharge la commande (ex. pour passer --password).
+    command: ["--web", "http://web:7870", "--node", "http://resource-node:8002",
+              "--arbitrage", "http://vllm-arbitrage:8080", "--audio", "/app/tests/test2.mp3"]
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - jobs:/app/jobs
+      - ./tests/test2.mp3:/app/tests/test2.mp3:ro
     depends_on:
       web:
         condition: service_started

@@ -54,24 +54,56 @@ opencode) renvoie l'endpoint adéquat par backend (Ollama ⇒ 11434). Le `model_
 est `local/<modèle>` ; `opencode_runner` splitte sur le premier `/` et envoie le nom nu au
 backend (`qwen3.5:9b`), ce que `OllamaLLMBackend.model_id` reconstitue pour l'API native.
 
-## VRAM par carte (Ollama) et paliers
+## VRAM : le modèle commun, et pourquoi les paliers diffèrent par moteur
 
-Ollama charge le modèle **et le KV-cache du contexte plein (256K) sur UNE seule carte**
-(pas de tensor-split par défaut). L'empreinte réelle est donc « poids + KV-cache », bien
-plus grosse que les seuls poids. Mesure sur `qwen3.5:9b` (Q4_K_M) : **≈ 14,7 Go résident**
-(6,6 Go de poids + ~8 Go de KV) → il tient **juste** sur 16 Go, **pas** sur 12 Go.
+**L'empreinte VRAM = poids + KV-cache + overhead**, jamais « juste les poids ». À contexte
+256K, le **KV-cache domine** pour les petits modèles (mesuré : `qwen3.5:9b` Ollama = 6,6 Go
+de poids + ~8 Go de KV = **14,7 Go**). Trois leviers font qu'un même palier VRAM n'accueille
+PAS le même modèle selon le moteur — ce n'est pas une incohérence, c'est le compromis assumé :
 
-Paliers (dimensionnés par VRAM **par-carte**, `install.sh` prend `GPU_VRAM_MAX_MB`) :
+| Levier | llama.cpp | Ollama | vLLM |
+|---|---|---|---|
+| Granularité de quant | fine (IQ4_NL/Q5/Q6/Q8, au choix) | 1 quant/tag (~Q4_K_M) | FP8 (poids) |
+| Quant du KV-cache | oui (`cache-type q8_0`) | non (défaut) | non (borné par `max-model-len`) |
+| Répartition multi-carte | tensor-split (`--tensor-split`) | mono-carte (défaut) | tensor-parallel (`TP`) |
+| Dimensionnement palier | **VRAM par-carte** (place sur 1–N cartes) | **VRAM par-carte** | **TP × VRAM par-carte** |
+
+Conséquence : llama.cpp est le plus dense (IQ4 + KV q8 ⇒ un **35B-A3B tient sur une seule
+24 Go**), Ollama le plus conservateur (mono-carte, KV plein), vLLM vise le débit multi-carte.
+
+### llama.cpp — `transcria.install_arbitrage.LLM_TIERS` (bench Phase A/B)
+Palier = VRAM/carte ; placement `TIER_GPU_INDICES` (12/16/24 = 1 carte ; 32/48 = 2 ; 64 = 3).
+KV quantifié q8_0, `--fit-target` par carte.
+
+| Palier | Modèle (quant GGUF) | Empreinte ≈ | Cartes |
+|---|---|---|---|
+| 12 Go | Qwen3.5-9B Q5_K_M | ~6,2 Go poids + KV q8 | 1 |
+| 16 Go | Qwen3.5-9B Q6_K | ~7 Go poids + KV q8 | 1 |
+| 24 Go | Qwen3.6-35B-A3B UD-IQ4_NL | ~19 Go + KV q8 | 1 |
+| 32 Go | Qwen3.6-27B Q5_K_M | ~19 Go + KV q8 | 2 |
+| 48 Go | Qwen3.6-35B-A3B UD-Q6_K | ~28 Go | 2 |
+| 64 Go | Qwen3.6-35B-A3B UD-Q8_K_XL | ~38,5 Go | 3 |
+
+### Ollama — `transcria.installer.ollama_phase._TIER_MODELS` (mono-carte, conservateur)
+Palier = VRAM **par-carte** (`install.sh` prend `GPU_VRAM_MAX_MB`). Registre = 1 quant/tag,
+KV plein 256K → plus conservateur que llama.cpp.
 
 | VRAM/carte | Modèle Ollama | Empreinte ≈ |
 |---|---|---|
 | 12 Go | `qwen3.5:4b` | ~8 Go |
-| 16–24 Go | `qwen3.5:9b` | ~14,7 Go (mesuré) |
-| 32 Go | `qwen3.6:27b` | ~25 Go |
-| 48–64 Go | `qwen3.6:35b` | ~32 Go |
+| 16–24 Go | `qwen3.5:9b` | **~14,7 Go (mesuré)** |
+| 32 Go | `qwen3.6:27b` | ~25 Go (estimé) |
+| 48–64 Go | `qwen3.6:35b` | ~32 Go (estimé) |
 
-C'est **plus conservateur que la voie llama.cpp** (qui tensor-split un gros modèle sur
-plusieurs cartes) : un 35B ne rentre pas sur une carte de 24 Go avec un contexte 256K.
+### vLLM — `scripts/launch_arbitrage_vllm.sh` (tensor-parallel, débit)
+Palier = `TP` × VRAM/carte. Poids FP8, `--gpu-memory-utilization 0.90`, `--max-model-len`
+borne la KV-cache (↓ si OOM). Référence bench : **Qwen3.6-27B-FP8, TP=4 sur 4×24 Go** (~27 Go
+÷ 4 ≈ 6,8 Go/carte de poids + large marge KV).
+
+### Réduire l'empreinte (lever la contrainte du KV 256K)
+Le KV-cache est proportionnel au contexte. Pour tenir un modèle plus gros sur une carte plus
+petite : **baisser le contexte** — llama.cpp `--ctx-size`, vLLM `ARBITRAGE_MAX_LEN`, Ollama
+`num_ctx`/`OLLAMA_CONTEXT_LENGTH`. Compromis à trancher selon la longueur des réunions.
 
 ## Un seul modèle pour résumé ET correction
 
