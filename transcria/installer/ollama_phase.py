@@ -44,12 +44,15 @@ DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 # Tags VÉRIFIÉS à la source (ollama.com/library, 2026-07-01) : qwen3.5:9b≈6.6 Go,
 # qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go. NE PAS écrire un tag de mémoire
 # (cf. mémoire « verify-tech-versions-at-source »). Indicatif et surchargeable.
+# Empreinte RÉELLE par-carte = poids + KV-cache du contexte 256K (Ollama charge le contexte
+# plein sur UNE carte, -c 262144). MESURÉ : qwen3.5:9b ≈ 14,7 Go résident (poids 6,6 Go +
+# KV ~8 Go) → tient « juste » sur 16 Go, PAS sur 12 Go. D'où le palier 12 Go = 4b.
 _TIER_MODELS: dict[str, str] = {
-    "12gb": "qwen3.5:9b",
-    "16gb": "qwen3.5:9b",
-    "24gb": "qwen3.5:9b",    # 9b + contexte 256K ≈ 15 Go : tient sur 24 Go (27b y OOM)
-    "32gb": "qwen3.6:27b",   # 17 Go + contexte : tient sur 32 Go
-    "48gb": "qwen3.6:35b",   # 24 Go — Qwen3.6-35B-A3B
+    "12gb": "qwen3.5:4b",    # 9b (~14,7 Go) ne tient pas sur 12 Go → 4b (~3,4 Go + KV)
+    "16gb": "qwen3.5:9b",    # ≈14,7 Go mesuré — tient (juste) sur 16 Go
+    "24gb": "qwen3.5:9b",    # confortable sur 24 Go (27b ~25 Go n'y tiendrait pas)
+    "32gb": "qwen3.6:27b",   # ~17 Go poids + KV → ~25 Go, tient sur 32 Go
+    "48gb": "qwen3.6:35b",   # ~24 Go poids + KV — Qwen3.6-35B-A3B, tient sur 48 Go
     "64gb": "qwen3.6:35b",
 }
 DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"

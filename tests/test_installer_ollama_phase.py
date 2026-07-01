@@ -64,7 +64,10 @@ def _config(tmp_path: Path) -> dict:
 
 class TestTierMapping:
     def test_known_tier(self):
-        # Conservateur (Ollama = mono-carte + contexte 256K) : 24 Go/carte reste sur le 9b.
+        # Conservateur (Ollama = mono-carte + contexte 256K, 9b mesuré ~14,7 Go) :
+        # 12 Go ne peut pas tenir le 9b → 4b ; 9b à partir de 16 Go ; gros modèles au-delà.
+        assert ollama_model_for_tier("12gb") == "qwen3.5:4b"
+        assert ollama_model_for_tier("16gb") == "qwen3.5:9b"
         assert ollama_model_for_tier("24gb") == "qwen3.5:9b"
         assert ollama_model_for_tier("32gb") == "qwen3.6:27b"
         assert ollama_model_for_tier("64gb") == "qwen3.6:35b"

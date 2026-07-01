@@ -54,6 +54,33 @@ opencode) renvoie l'endpoint adéquat par backend (Ollama ⇒ 11434). Le `model_
 est `local/<modèle>` ; `opencode_runner` splitte sur le premier `/` et envoie le nom nu au
 backend (`qwen3.5:9b`), ce que `OllamaLLMBackend.model_id` reconstitue pour l'API native.
 
+## VRAM par carte (Ollama) et paliers
+
+Ollama charge le modèle **et le KV-cache du contexte plein (256K) sur UNE seule carte**
+(pas de tensor-split par défaut). L'empreinte réelle est donc « poids + KV-cache », bien
+plus grosse que les seuls poids. Mesure sur `qwen3.5:9b` (Q4_K_M) : **≈ 14,7 Go résident**
+(6,6 Go de poids + ~8 Go de KV) → il tient **juste** sur 16 Go, **pas** sur 12 Go.
+
+Paliers (dimensionnés par VRAM **par-carte**, `install.sh` prend `GPU_VRAM_MAX_MB`) :
+
+| VRAM/carte | Modèle Ollama | Empreinte ≈ |
+|---|---|---|
+| 12 Go | `qwen3.5:4b` | ~8 Go |
+| 16–24 Go | `qwen3.5:9b` | ~14,7 Go (mesuré) |
+| 32 Go | `qwen3.6:27b` | ~25 Go |
+| 48–64 Go | `qwen3.6:35b` | ~32 Go |
+
+C'est **plus conservateur que la voie llama.cpp** (qui tensor-split un gros modèle sur
+plusieurs cartes) : un 35B ne rentre pas sur une carte de 24 Go avec un contexte 256K.
+
+## Un seul modèle pour résumé ET correction
+
+Le résumé (`workflow.summary_llm`) et la correction (`workflow.arbitration_llm`) pointent
+sur **le même modèle Ollama** (l'installateur écrit les deux blocs à l'identique). Le démon
+Ollama garde **une seule instance résidente** (keep-alive) réutilisée par les deux phases :
+pas de double chargement VRAM. Vérifiable via `curl http://127.0.0.1:11434/api/ps` (un seul
+modèle listé).
+
 ## Portée v1
 Ollama est câblé pour l'**all-in-one** (LLM et STT co-résidents — là où l'arbitrage VRAM
 compte le plus). Le resource-node ne sert **jamais** de LLM (STT / diarize / voice-embed
