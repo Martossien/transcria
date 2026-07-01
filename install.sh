@@ -13,6 +13,8 @@
 #   --skip-deps        Ne pas créer le venv ni installer les dépendances pip
 #                      (venv déjà fourni : couche build Docker, ou environnement existant)
 #   --cuda VERSION     Forcer la version CUDA (ex: cu126, cu124, cu121)
+#   --llm-backend B    Forcer le backend LLM d'arbitrage : ollama | llamacpp
+#                      (all-in-one ; utile en non-interactif/CI. Défaut interactif : demandé)
 #   --user USER        Utilisateur pour le service systemd (défaut: $USER)
 #   --install-dir DIR  Répertoire d'installation (défaut: répertoire courant)
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
@@ -87,6 +89,7 @@ SKIP_DEPS=false        # --skip-deps : venv et dépendances déjà fournis (couc
 INSTALL_INFERENCE=false   # --inference-service
 INSTALL_PROFILE="all-in-one"
 PROFILE_EXPLICIT=false
+LLM_BACKEND_FORCED=""     # --llm-backend {ollama|llamacpp} : force le backend (utile en non-interactif/CI)
 PLAN_ONLY=false
 DOCTOR_STATUS="non exécuté"
 INF_LOG_DIR="/var/log"
@@ -108,6 +111,7 @@ while [[ $# -gt 0 ]]; do
         --no-torch)        INSTALL_TORCH=false; shift ;;
         --skip-deps)       SKIP_DEPS=true; INSTALL_TORCH=false; shift ;;
         --cuda)            FORCE_CUDA="$2"; shift 2 ;;
+        --llm-backend)     LLM_BACKEND_FORCED="$2"; shift 2 ;;
         --user)            SERVICE_USER="$2"; shift 2 ;;
         --install-dir)     INSTALL_DIR="$2"; shift 2 ;;
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
@@ -1048,6 +1052,34 @@ elif [[ -z "${OPENCODE_BIN:-}" ]]; then
     log_llm_setup_event opencode-install-later
 else
     log_llm_setup_event vram-status "$GPU_VRAM_TOTAL_MB" "" "$GPU_COUNT" "$GPU_VRAM_MAX_MB"
+
+    # ── Choix du backend LLM d'arbitrage ────────────────────────────────────
+    # Ollama = défaut « facile » (aucune compilation, aucun nvcc, aucun token HF) ;
+    # llama.cpp = voie « contrôle / multi-GPU avancée ». Scope Ollama v1 = all-in-one.
+    # En non-interactif on conserve llama.cpp (défaut historique, strictement non régressif).
+    LLM_BACKEND="llamacpp"
+    if [[ -n "$LLM_BACKEND_FORCED" ]]; then
+        LLM_BACKEND="$LLM_BACKEND_FORCED"   # forcé en ligne de commande (non-interactif/CI/E2E)
+    elif [[ "$NON_INTERACTIVE" = false && "$INSTALL_PROFILE" == "all-in-one" ]]; then
+        if ask_yn "Backend LLM : utiliser Ollama (recommandé — simple, sans compilation) ? (non = llama.cpp avancé)"; then
+            LLM_BACKEND="ollama"
+        fi
+    fi
+
+    if [[ "$LLM_BACKEND" == "ollama" ]]; then
+        OLLAMA_REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_TOTAL_MB" 2>/dev/null || echo "")
+        OLLAMA_CLI_ARGS=(ollama --config "$CONFIG_PATH" --gpu-present --tier "$OLLAMA_REC_TIER")
+        [[ "$NON_INTERACTIVE" = true ]] && OLLAMA_CLI_ARGS+=(--non-interactive)
+        python_module transcria.installer.cli "${OLLAMA_CLI_ARGS[@]}"
+        # opencode a été configuré en SECTION 9 AVANT ce choix (il pointait 8080/llama.cpp) :
+        # on le réaligne sur l'endpoint Ollama que la config vient d'écrire — la source unique
+        # resolve_arbitrage_endpoint renvoie désormais 11434. Échec non bloquant.
+        if [[ -n "${OPENCODE_BIN:-}" ]]; then
+            OPENCODE_CONFIG="$OPENCODE_HOME/.config/opencode/opencode.json" \
+                run_indented "$PYTHON_BIN" "$INSTALL_DIR/scripts/setup_opencode.py" \
+                --config-path "$OPENCODE_HOME/.config/opencode/opencode.json" || true
+        fi
+    else
     # Recommandation par placement réel ; repli par VRAM totale uniquement si la
     # topologie par carte n'est pas disponible.
     REC_TIER=""; LLM_PLANNER_FALLBACK=0; LLM_PLACEMENT_FEASIBLE=0
@@ -1164,6 +1196,7 @@ else
         log_llm_setup_event ignored
         log_llm_setup_event manual-switch
     fi
+    fi   # ← ferme le choix de backend (ollama | llama.cpp)
 fi
 fi
 

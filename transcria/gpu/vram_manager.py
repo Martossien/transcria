@@ -74,6 +74,23 @@ class VRAMManager:
         self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
         self._arbitrage_llm_pid: int | None = None
+        # Backend LLM construit à la demande : sert à DÉLÉGUER le cycle de vie des moteurs
+        # dont la sémantique diffère de « lancer/tuer un process » (Ollama = démon persistant,
+        # on décharge le modèle via HTTP). llama.cpp/vLLM gardent le chemin script/PID ci-dessous.
+        self._backend = None
+
+    def _arbitrage_backend(self):
+        if self._backend is None:
+            from transcria.gpu.llm_backend import create_llm_backend
+            self._backend = create_llm_backend(self.config)
+        return self._backend
+
+    def _backend_is_ollama(self) -> bool:
+        """Le backend d'arbitrage est-il le démon Ollama (cycle de vie ≠ process local) ?"""
+        try:
+            return getattr(self._arbitrage_backend(), "backend_type", "") == "ollama"
+        except Exception:
+            return False
 
     # ── GPU Info ──────────────────────────────────────────
 
@@ -265,8 +282,15 @@ class VRAMManager:
         except Exception:
             pass
 
+    # Démon(s) persistants qu'on ne SIGKILL JAMAIS, même si un pattern les recouvrait :
+    # tuer le démon Ollama est vain (systemd le relance) et destructeur (il peut servir
+    # d'autres modèles) — la VRAM se libère par déchargement HTTP (unload()), pas par kill.
+    _NEVER_KILL = ("ollama",)
+
     def _matches_kill_pattern(self, process_name: str) -> bool:
         lower = process_name.lower()
+        if any(protected in lower for protected in self._NEVER_KILL):
+            return False
         return any(pattern in lower for pattern in self._kill_patterns)
 
     # ── Model tracking ────────────────────────────────────
@@ -310,6 +334,10 @@ class VRAMManager:
                 return r.status_code == 200
             except Exception:
                 return False
+        if self._backend_is_ollama():
+            # Démon persistant : le port 11434 est toujours ouvert. L'autorité « occupe la
+            # VRAM » est /api/ps (is_loaded), sinon la préemption ne libèrerait jamais la carte.
+            return self._arbitrage_backend().is_loaded()
         if VRAMManager.is_port_open(self.arbitrage_llm_port):
             return True
         try:
@@ -385,6 +413,10 @@ class VRAMManager:
 
     def launch_arbitrage_llm(self) -> bool:
         """Lance la LLM d'arbitrage via le script configuré."""
+        if self._backend_is_ollama():
+            # Ollama : pas de script à lancer — le démon est persistant. « Lancer » =
+            # s'assurer que le modèle est chargé en VRAM (délégué au backend).
+            return self._arbitrage_backend().ensure_available()
         if not os.path.isfile(self.arbitrage_script):
             logger.error("Script d'arbitrage introuvable: %s", self.arbitrage_script)
             return False
@@ -482,6 +514,12 @@ class VRAMManager:
           B — LLM saine + mauvais modèle → redémarrage (warning logué)
           C — LLM absente ou non saine → libération GPU + lancement depuis zéro
         """
+        if self._backend_is_ollama():
+            # Ollama gère lui-même le (dé)chargement et le choix de modèle : « prêt » =
+            # modèle tiré + chargé en VRAM. Pas de test-inférence ni de redémarrage
+            # (sémantique llama.cpp/vLLM), pas de libération GPU forcée.
+            return self._arbitrage_backend().ensure_available()
+
         import requests
 
         active_model_id: str | None = None
@@ -583,6 +621,18 @@ class VRAMManager:
         if self._is_remote_arbitrage():
             logger.debug("Arrêt LLM d'arbitrage ignoré — LLM distante (%s)", self.arbitrage_llm_host)
             return True
+        if self._backend_is_ollama():
+            # Ollama : on DÉCHARGE le modèle (VRAM libérée) sans jamais tuer le démon
+            # persistant/partagé. Puis on aide le GC/CUDA comme pour les autres backends.
+            logger.info("Arrêt LLM d'arbitrage — backend Ollama : déchargement du modèle (démon conservé)")
+            ok = self._arbitrage_backend().unload()
+            gc.collect()
+            try:
+                import torch
+                torch.cuda.empty_cache()
+            except ImportError:
+                pass
+            return ok
         logger.info("Arrêt LLM d'arbitrage port %d...", self.arbitrage_llm_port)
         if os.path.isfile(self.stop_script):
             try:

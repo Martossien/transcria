@@ -113,7 +113,7 @@ transcria/
     installer/              # Logique métier d'installation fondue depuis install.sh (modules testés, runner injectable)
       cli.py                # `python -m transcria.installer.cli <phase>` — 8 phases : python-env, config, config-proxy, opencode, postgres, postgres-bootstrap, systemd, summary
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
-      python_env.py / config_phase.py / opencode_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
+      python_env.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
     deploy/                 # Déploiement conteneurisé (P5)
       entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
@@ -204,7 +204,7 @@ transcria/
     gpu/
       vram_manager.py       # VRAMManager — orchestration cycle GPU
       gpu_session.py        # GPUSession — context manager
-      llm_backend.py        # LLMBackend (script/ollama/http)
+      llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded() ; cf. docs/LLM_BACKENDS.md
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend

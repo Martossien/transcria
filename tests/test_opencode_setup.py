@@ -235,6 +235,37 @@ def test_resolve_endpoint_legacy_qwen_port(monkeypatch):
     assert resolve_arbitrage_endpoint({"services": {"qwen_port": 8081}}) == ("127.0.0.1", 8081)
 
 
+# ── résolution backend-aware Ollama (le démon écoute 11434, pas 8080) ──
+
+def test_resolve_endpoint_ollama_follows_ollama_url(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    cfg = {"services": {"backend": "ollama", "ollama_url": "http://127.0.0.1:11434"}}
+    assert resolve_arbitrage_endpoint(cfg) == ("127.0.0.1", 11434)
+
+
+def test_resolve_endpoint_ollama_default_port_when_url_absent(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    # backend explicite ollama sans ollama_url → défaut 11434 (pas 8080 llama.cpp).
+    assert resolve_arbitrage_endpoint({"services": {"backend": "ollama"}}) == ("127.0.0.1", 11434)
+
+
+def test_resolve_endpoint_ollama_base_url(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    cfg = {"services": {"backend": "ollama"}}
+    assert default_base_url(cfg) == "http://127.0.0.1:11434/v1"
+
+
+def test_resolve_endpoint_explicit_arbitrage_port_overrides_ollama(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    cfg = {"services": {"backend": "ollama", "ollama_url": "http://127.0.0.1:11434", "arbitrage_llm_port": 12000}}
+    assert resolve_arbitrage_endpoint(cfg) == ("127.0.0.1", 12000)
+
+
+def test_ollama_backend_is_local_not_remote(monkeypatch):
+    monkeypatch.delenv("TRANSCRIA_ARBITRAGE_LLM_HOST", raising=False)
+    assert is_remote_arbitrage({"services": {"backend": "ollama"}}) is False
+
+
 # ── is_remote_arbitrage (verrou LLM no-op + pas d'arrêt local en distant) ──
 
 def test_is_remote_arbitrage_local_by_default(monkeypatch):

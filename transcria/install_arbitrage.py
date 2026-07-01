@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import re
 import stat
 import subprocess
 import sys
@@ -249,6 +251,140 @@ def render_llama_fallback_shell(fallback: LlamaFallback) -> str:
     return f"LLAMA_FALLBACK={_shell_quote(str(fallback.server or ''))}\n"
 
 
+# ── Niveau 2 : binaire llama.cpp CUDA précompilé (ai-dock/llama.cpp-cuda) ──────
+#
+# Upstream ggml-org ne publie AUCUN binaire llama-server CUDA pour Linux (vérifié :
+# le CUDA n'est publié qu'en Windows). ai-dock/llama.cpp-cuda comble ce manque en suivant
+# les releases upstream (artefacts `llama.cpp-b<ID>-cuda-<CUDA>-<arch>.tar.gz`). C'est une
+# source TIERCE : on l'utilise en OPT-IN, sur un build ÉPINGLÉ, et avec checksum VÉRIFIÉ.
+# Elle évite la compilation (donc `nvcc`) sur distro vierge — son intérêt principal.
+
+AIDOCK_REPO = "ai-dock/llama.cpp-cuda"
+AIDOCK_DEFAULT_CUDA = "12.8"
+_ARCH_MAP = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}
+_PREBUILT_RE = re.compile(r"llama\.cpp-b(\d+)-cuda-([0-9.]+)-([a-z0-9]+)\.tar\.gz$")
+
+
+def normalize_arch(machine: str) -> str:
+    """Mappe `uname -m` (x86_64/aarch64) vers la nomenclature ai-dock (amd64/arm64)."""
+    return _ARCH_MAP.get(machine.strip().lower(), "amd64")
+
+
+def prebuilt_artifact_name(build_id: int, *, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64") -> str:
+    return f"llama.cpp-b{build_id}-cuda-{cuda}-{arch}.tar.gz"
+
+
+def parse_prebuilt_artifact(name: str) -> tuple[int, str, str] | None:
+    """(build_id, cuda, arch) depuis un nom d'artefact, ou None si non conforme."""
+    m = _PREBUILT_RE.search(name.strip())
+    if not m:
+        return None
+    return int(m.group(1)), m.group(2), m.group(3)
+
+
+def select_prebuilt_artifact(
+    available: list[str], *, wanted_build: int, cuda: str = AIDOCK_DEFAULT_CUDA, arch: str = "amd64"
+) -> str | None:
+    """Choisit l'artefact CUDA le plus adapté (politique « nearest »).
+
+    Priorité : build EXACT demandé > plus proche build SUPÉRIEUR (nearest newer) > à défaut
+    le plus récent disponible inférieur. Filtre d'abord sur (cuda, arch) — on ne mélange
+    JAMAIS les versions CUDA ni les architectures.
+    """
+    by_build: dict[int, str] = {}
+    for name in available:
+        parsed = parse_prebuilt_artifact(name)
+        if parsed and parsed[1] == cuda and parsed[2] == arch:
+            by_build[parsed[0]] = name
+    if not by_build:
+        return None
+    if wanted_build in by_build:
+        return by_build[wanted_build]
+    newer = sorted(b for b in by_build if b > wanted_build)
+    if newer:
+        return by_build[newer[0]]
+    older = sorted((b for b in by_build if b < wanted_build), reverse=True)
+    return by_build[older[0]] if older else None
+
+
+def sha256_of_file(path: Path, *, chunk: int = 1 << 20) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def verify_sha256(path: Path, expected: str) -> bool:
+    """Compare le sha256 du fichier à la valeur attendue (insensible à la casse).
+
+    Un expected vide échoue volontairement : pas de vérification = pas de confiance
+    (on refuse d'exécuter un binaire tiers non vérifié)."""
+    if not expected or not expected.strip():
+        return False
+    return sha256_of_file(path).lower() == expected.strip().lower()
+
+
+def install_prebuilt_llama(
+    *,
+    build_id: int,
+    dest_dir: Path,
+    expected_sha256: str,
+    cuda: str = AIDOCK_DEFAULT_CUDA,
+    arch: str | None = None,
+) -> Path | None:
+    """Télécharge + vérifie + extrait un `llama-server` CUDA précompilé (ai-dock).
+
+    I/O réseau (non couvert par les tests unitaires — la logique de sélection/checksum,
+    elle, l'est). Retourne le chemin du binaire `llama-server`, ou None en cas d'échec.
+    REFUSE d'installer sans checksum vérifié (source tierce)."""
+    import json
+    import platform
+    import tarfile
+    import tempfile
+    import urllib.request
+
+    if not expected_sha256 or not expected_sha256.strip():
+        print("Refus : binaire tiers sans checksum sha256 à vérifier.", file=sys.stderr)
+        return None
+    resolved_arch = arch or normalize_arch(platform.machine())
+    tag = f"b{build_id}"
+    api = f"https://api.github.com/repos/{AIDOCK_REPO}/releases/tags/{tag}"
+    try:
+        with urllib.request.urlopen(api, timeout=30) as resp:  # noqa: S310 — URL constante (GitHub API)
+            release = json.load(resp)
+        names = [a.get("name", "") for a in release.get("assets", [])]
+        chosen = select_prebuilt_artifact(names, wanted_build=build_id, cuda=cuda, arch=resolved_arch)
+        if not chosen:
+            print(f"Aucun artefact CUDA {cuda}/{resolved_arch} dans la release {tag}.", file=sys.stderr)
+            return None
+        url = next(a["browser_download_url"] for a in release["assets"] if a.get("name") == chosen)
+    except Exception as exc:  # noqa: BLE001 — best-effort réseau
+        print(f"Échec récupération release ai-dock {tag} : {exc}", file=sys.stderr)
+        return None
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / chosen
+        try:
+            urllib.request.urlretrieve(url, archive)  # noqa: S310 — URL de release GitHub
+        except Exception as exc:  # noqa: BLE001
+            print(f"Échec téléchargement {chosen} : {exc}", file=sys.stderr)
+            return None
+        if not verify_sha256(archive, expected_sha256):
+            print(f"Checksum sha256 INVALIDE pour {chosen} — binaire rejeté.", file=sys.stderr)
+            return None
+        with tarfile.open(archive, "r:gz") as tf:
+            tf.extractall(dest_dir)  # noqa: S202 — archive vérifiée par checksum
+
+    for candidate in dest_dir.rglob("llama-server"):
+        if candidate.is_file():
+            candidate.chmod(candidate.stat().st_mode | 0o111)
+            return candidate
+    print(f"llama-server introuvable après extraction dans {dest_dir}.", file=sys.stderr)
+    return None
+
+
 def run_llama_detector(*, repo_root: Path, python_bin: str = sys.executable) -> tuple[str, str]:
     """Exécute le détecteur avancé llama-server sans rendre l'installation bloquante."""
     detector = Path(repo_root) / "scripts" / "detect_llama_server.py"
@@ -479,6 +615,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gpu-sizes-csv", default="")
     parser.add_argument("--user-home", default="")
     parser.add_argument("--total-vram-mb", type=int, default=0)
+    parser.add_argument("--install-llama-prebuilt", action="store_true",
+                        help="télécharge un llama-server CUDA précompilé (ai-dock), vérifie le checksum, extrait")
+    parser.add_argument("--llama-build", type=int, default=0, help="build upstream épinglé (bXXXX) pour --install-llama-prebuilt")
+    parser.add_argument("--dest", default="", help="dossier vendor de destination du binaire précompilé")
+    parser.add_argument("--sha256", default="", help="checksum sha256 attendu de l'archive précompilée")
+    parser.add_argument("--cuda", default=AIDOCK_DEFAULT_CUDA, help="version CUDA de l'artefact précompilé")
     args = parser.parse_args(argv)
 
     repo_root = Path(args.repo_root)
@@ -526,6 +668,20 @@ def main(argv: list[str] | None = None) -> int:
                 print("--user-home requis avec --llama-fallback", file=sys.stderr)
                 return 2
             print(render_llama_fallback_shell(select_llama_fallback(user_home=Path(args.user_home))), end="")
+            return 0
+        if args.install_llama_prebuilt:
+            if not args.llama_build or not args.dest or not args.sha256:
+                print("--llama-build, --dest et --sha256 requis avec --install-llama-prebuilt", file=sys.stderr)
+                return 2
+            server = install_prebuilt_llama(
+                build_id=args.llama_build,
+                dest_dir=Path(args.dest),
+                expected_sha256=args.sha256,
+                cuda=args.cuda,
+            )
+            if not server:
+                return 1
+            print(f"LLAMA_PREBUILT={_shell_quote(str(server))}\n", end="")
             return 0
         if args.placement_plan:
             recommendation = recommend_placement_tier(gpu_sizes_csv=args.gpu_sizes_csv, total_vram_mb=args.total_vram_mb)

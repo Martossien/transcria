@@ -47,6 +47,13 @@ class TestPrerequisitesCoverage:
         assert "ffmpeg" in DISTROS[distro_id].packages
 
     @pytest.mark.parametrize("distro_id", ALL)
+    @pytest.mark.parametrize("tool", ["numactl", "lsof", "zstd"])
+    def test_runtime_tools_present(self, distro_id, tool):
+        # numactl (lanceur LLM llama.cpp), lsof (ports LLM), zstd (tarballs Ollama +
+        # binaires llama.cpp précompilés) : lacunes réelles rencontrées en distro vierge.
+        assert tool in DISTROS[distro_id].packages
+
+    @pytest.mark.parametrize("distro_id", ALL)
     def test_postgres_server_present(self, distro_id):
         pkgs = " ".join(DISTROS[distro_id].packages)
         assert "postgresql" in pkgs

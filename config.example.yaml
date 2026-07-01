@@ -79,6 +79,17 @@ auth:
 services:
   dashboard_llm_url: "http://127.0.0.1:5001"
   srt_editor_easy_url: "http://127.0.0.1:7861"
+  # Backend de la LLM d'arbitrage. Absent/omis = auto-détection rétro-compatible
+  # (ollama_url ⇒ ollama, arbitrage_script ⇒ llama.cpp/vLLM, sinon http distant).
+  #   - "script"  : llama.cpp / vLLM lancés par arbitrage_script (contrôle/multi-GPU).
+  #   - "ollama"  : démon Ollama (facile, sans compilation) ; voir ollama_url / ollama_model.
+  #   - "http"    : serveur OpenAI externe déjà en place (api_base ci-dessous).
+  # backend: "script"
+  # Backend Ollama (scope all-in-one) : le cycle de vie = charger/décharger le modèle en
+  # VRAM (jamais tuer le démon). ollama_model = nom NATIF du registre (le model_id opencode
+  # reste "local/<modèle>"). L'endpoint suit ollama_url (défaut 11434) via la source unique.
+  # ollama_url: "http://127.0.0.1:11434"
+  # ollama_model: "qwen3:8b"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
   # Fichier où est capturée la sortie du script de lancement (stdout+stderr).

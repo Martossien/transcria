@@ -44,6 +44,23 @@ class LLMBackend(ABC):
     def shutdown(self) -> bool:
         return True
 
+    def is_loaded(self) -> bool:
+        """Le modèle occupe-t-il la VRAM *maintenant* ?
+
+        Distinct de :meth:`is_available` : pour un serveur mono-modèle (llama.cpp, vLLM),
+        « joignable » ⇔ « chargé », donc le défaut délègue à ``is_available``. Un démon
+        multi-modèle persistant (Ollama) reste joignable modèle DÉCHARGÉ → il surcharge
+        cette méthode pour distinguer les deux (sinon la préemption VRAM le croit toujours
+        résident et ne libère jamais la carte pour le STT)."""
+        return self.is_available()
+
+    def unload(self) -> bool:
+        """Libère la VRAM du modèle. Défaut : arrêt complet du serveur (``shutdown``).
+
+        Un démon persistant (Ollama) surcharge : il décharge le modèle SANS tuer le
+        service (le démon n'est pas « à nous » — cf. garde dans VRAMManager)."""
+        return self.shutdown()
+
     @staticmethod
     def _http_get_json(url: str, timeout: int = 5) -> dict | None:
         try:
@@ -136,6 +153,11 @@ def create_llm_backend(config: dict, backend_type: str | None = None) -> LLMBack
 
 def _detect_backend_type(config: dict) -> str:
     services = config.get("services", {})
+    # `services.backend` explicite fait autorité (ollama|script|http) ; sinon auto-détection
+    # rétro-compatible : ollama_url ⇒ ollama, arbitrage_script ⇒ script, défaut ⇒ http.
+    explicit = str(services.get("backend", "") or "").strip().lower()
+    if explicit in ("ollama", "script", "http"):
+        return explicit
     if services.get("ollama_url"):
         return "ollama"
     if services.get("arbitrage_script") and services["arbitrage_script"].strip():
@@ -299,31 +321,93 @@ class OllamaLLMBackend(LLMBackend):
 
     @property
     def model_id(self) -> str:
-        return self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
+        # Nom de modèle Ollama NATIF (ex. "qwen3:8b") pour l'API /api/*. `services.ollama_model`
+        # fait autorité ; sinon on retire le préfixe provider opencode ("local/…") du model_id
+        # d'arbitrage (opencode, lui, consomme "local/qwen3:8b" ; Ollama attend "qwen3:8b").
+        svc = self.config.get("services", {}) or {}
+        explicit = svc.get("ollama_model")
+        if explicit:
+            return str(explicit)
+        raw = self.config.get("workflow", {}).get("arbitration_llm", {}).get("model_id") or ""
+        return raw[len("local/"):] if raw.startswith("local/") else raw
+
+    @staticmethod
+    def _name_matches(candidate: str, wanted: str) -> bool:
+        # Ollama nomme "qwen3:8b" ; on tolère l'absence de tag (":latest" implicite).
+        base = wanted.split(":")[0] if ":" in wanted else wanted
+        return bool(candidate) and bool(base) and candidate.startswith(base)
+
+    def _pulled(self) -> bool:
+        """Le modèle est-il téléchargé (présent dans /api/tags) ?"""
+        data = self._http_get_json(f"{self.ollama_url}/api/tags")
+        if not data:
+            return False
+        return any(self._name_matches(m.get("name", ""), self.model_id) for m in data.get("models", []))
 
     def is_available(self) -> bool:
-        try:
-            import requests
-            r = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
-            if r.status_code != 200:
-                return False
-            models = [m.get("name", "") for m in r.json().get("models", [])]
-            base_model = self.model_id.split(":")[0] if ":" in self.model_id else self.model_id
-            for m in models:
-                if m.startswith(base_model):
-                    return True
-            return False
-        except Exception:
-            return False
+        # « Disponible » = démon joignable ET modèle déjà tiré (le pull est fait à l'install).
+        return self._pulled()
 
-    def ensure_available(self) -> bool:
-        if self.is_available():
-            logger.debug("Ollama disponible, modèle %s trouvé", self.model_id)
-            return True
-        logger.warning("Ollama: modèle %s non trouvé. Lancez 'ollama pull %s'", self.model_id, self.model_id)
+    def is_loaded(self) -> bool:
+        # /api/ps liste les modèles RÉSIDENTS en mémoire avec leur empreinte VRAM. C'est
+        # l'autorité pour la préemption : le port 11434 reste ouvert modèle déchargé, donc
+        # is_port_open serait un faux positif « résident ».
+        data = self._http_get_json(f"{self.ollama_url}/api/ps")
+        if not data:
+            return False
+        for m in data.get("models", []):
+            if self._name_matches(m.get("name", ""), self.model_id) and int(m.get("size_vram", 0) or 0) > 0:
+                return True
         return False
 
+    def ensure_available(self) -> bool:
+        # On ne PULL jamais au runtime (plusieurs Go pendant un job) : le pull est fait à
+        # l'install. Ici on garantit seulement que le modèle est chargé en VRAM via une
+        # requête vide (Ollama charge alors le modèle, keep_alive par défaut = 5 min).
+        if not self._pulled():
+            logger.warning("Ollama : modèle %s non tiré. Lancez 'ollama pull %s'", self.model_id, self.model_id)
+            return False
+        if self.is_loaded():
+            logger.debug("Ollama : modèle %s déjà résident", self.model_id)
+            return True
+        try:
+            import requests
+            r = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={"model": self.model_id, "prompt": ""},
+                timeout=300,
+            )
+            if r.status_code == 200:
+                logger.info("Ollama : modèle %s chargé en VRAM", self.model_id)
+                return True
+            logger.warning("Ollama : échec chargement %s (HTTP %s)", self.model_id, r.status_code)
+            return False
+        except Exception as exc:
+            logger.warning("Ollama : échec chargement %s : %s", self.model_id, exc)
+            return False
+
+    def unload(self) -> bool:
+        # Décharge le modèle SANS tuer le démon : requête vide + keep_alive=0
+        # (Ollama répond done_reason:"unload"). Idempotent si déjà déchargé.
+        try:
+            import requests
+            r = requests.post(
+                f"{self.ollama_url}/api/generate",
+                json={"model": self.model_id, "prompt": "", "keep_alive": 0},
+                timeout=30,
+            )
+            if r.status_code == 200:
+                logger.info("Ollama : modèle %s déchargé (VRAM libérée)", self.model_id)
+                return True
+            logger.warning("Ollama : échec déchargement %s (HTTP %s)", self.model_id, r.status_code)
+            return False
+        except Exception as exc:
+            logger.warning("Ollama : échec déchargement %s : %s", self.model_id, exc)
+            return False
+
     def shutdown(self) -> bool:
+        # Le démon Ollama est persistant et partagé : on ne l'arrête jamais. Pour libérer
+        # la VRAM, utiliser unload().
         return True
 
 

@@ -36,6 +36,9 @@ _DEBIAN_LIKE_PACKAGES = (
     "python3", "python3-venv", "python3-pip", "python3-dev",
     "ffmpeg", "git", "build-essential", "curl", "ca-certificates",
     "postgresql", "postgresql-client", "sudo",
+    # Outils runtime : numactl (lanceur LLM llama.cpp NUMA), lsof (gestion de ports LLM),
+    # zstd (extraction des tarballs Ollama et des binaires llama.cpp précompilés).
+    "numactl", "lsof", "zstd",
 )
 
 # Sur RHEL/Fedora, ffmpeg n'est PAS dans les dépôts de base : Fedora l'a via RPM Fusion,
@@ -44,11 +47,13 @@ _RHEL_LIKE_PACKAGES = (
     "python3.11", "python3.11-pip", "python3.11-devel",
     "ffmpeg", "git", "gcc", "gcc-c++", "make", "curl", "ca-certificates",
     "postgresql-server", "postgresql", "sudo",
+    "numactl", "lsof", "zstd",
 )
 _FEDORA_PACKAGES = (
     "python3", "python3-pip", "python3-devel",
     "ffmpeg", "git", "gcc", "gcc-c++", "make", "curl", "ca-certificates",
     "postgresql-server", "postgresql", "sudo",
+    "numactl", "lsof", "zstd",
 )
 
 DISTROS: dict[str, DistroSpec] = {

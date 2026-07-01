@@ -194,6 +194,26 @@ def ensure_agent_permissions(config_path: str | Path, agent_work_root: str) -> d
     return data
 
 
+def is_ollama_backend(config: dict) -> bool:
+    """Le backend d'arbitrage est-il Ollama ? (``services.backend`` explicite > ``ollama_url``).
+
+    Défini ici — dans la source unique de résolution d'endpoint — pour que
+    ``VRAMManager``, ``provision_opencode`` et le port par défaut restent cohérents,
+    sans dépendre du module ``llm_backend`` (évite un import circulaire)."""
+    services = config.get("services", {}) or {}
+    explicit = str(services.get("backend", "") or "").strip().lower()
+    if explicit in ("ollama", "script", "http"):
+        return explicit == "ollama"
+    return bool(services.get("ollama_url"))
+
+
+def _parse_host_port(url: str, default_port: int) -> tuple[str, int]:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url if "://" in url else f"http://{url}")
+    return parsed.hostname or "127.0.0.1", parsed.port or default_port
+
+
 def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
     """(host, port) de la LLM d'arbitrage — SOURCE UNIQUE de résolution.
 
@@ -201,11 +221,23 @@ def resolve_arbitrage_endpoint(config: dict) -> tuple[str, int]:
     ``services.arbitrage_llm_host`` > ``127.0.0.1`` (LLM locale). Le port suit
     ``services.arbitrage_llm_port`` (``qwen_port`` lu par compat), défaut ``8080``.
 
+    Backend **Ollama** : l'endpoint suit ``services.ollama_url`` (démon sur ``11434`` par
+    défaut) sauf hôte/port d'arbitrage explicitement fixés — sinon ``VRAMManager`` et le
+    provider opencode sonderaient le mauvais port (8080) alors que le démon écoute 11434.
+
     Utilisée à la fois par ``VRAMManager`` (sonde / cycle de vie de la LLM) et par
     ``provision_opencode`` (URL du provider opencode), pour qu'ils ne divergent JAMAIS
     sur l'endpoint — quel que soit le mode de déploiement (all-in-one, frontale, nœud GPU).
     """
     services = config.get("services", {}) or {}
+    if is_ollama_backend(config):
+        o_host, o_port = _parse_host_port(services.get("ollama_url") or "http://127.0.0.1:11434", 11434)
+        host = os.environ.get(
+            "TRANSCRIA_ARBITRAGE_LLM_HOST",
+            services.get("arbitrage_llm_host", o_host),
+        )
+        port = int(services.get("arbitrage_llm_port") or o_port)
+        return host, port
     host = os.environ.get(
         "TRANSCRIA_ARBITRAGE_LLM_HOST",
         services.get("arbitrage_llm_host", "127.0.0.1"),

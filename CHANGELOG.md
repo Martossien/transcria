@@ -8,6 +8,30 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Backend LLM Ollama (défaut « facile » en all-in-one)** : `curl … | sh` auto-suffisant
+  (runtime CUDA embarqué → aucune compilation, aucun `nvcc`, aucun token HF), modèle du
+  registre par palier VRAM (`ollama pull`). Nouvelle phase d'installateur testée
+  `transcria/installer/ollama_phase.py` + sous-commande `installer.cli ollama` ;
+  `install.sh` propose le choix de backend en all-in-one (interactif ; llama.cpp reste le
+  défaut non-interactif, non régressif). Garde : proposé seulement si `nvidia-smi` répond,
+  jamais d'installation de driver déléguée.
+- **Voie llama.cpp CUDA à 3 niveaux** : détecter → **binaire précompilé ai-dock** (opt-in,
+  build épinglé, **sha256 vérifié**) → compiler si `nvcc` présent → échec propre. Fonctions
+  pures testées (`select_prebuilt_artifact` politique « nearest », `verify_sha256`) +
+  sous-commande `install_arbitrage --install-llama-prebuilt`.
+- **`docs/LLM_BACKENDS.md`** : les trois paradigmes de cycle de vie et le choix de backend.
+
+### Changed
+- **Cycle de vie LLM unifié derrière `LLMBackend`** (`unload()` / `is_loaded()`) : `VRAMManager`
+  **délègue** au backend au lieu de supposer « tuer un process ». Pour Ollama, la préemption
+  VRAM STT↔LLM **décharge le modèle** (`/api/ps` + `keep_alive:0`) sans jamais tuer le démon
+  persistant (exclu des kills agressifs). llama.cpp/vLLM : comportement inchangé.
+- **`resolve_arbitrage_endpoint` backend-aware** : source unique (VRAMManager + provider
+  opencode) suit `ollama_url`/11434 pour Ollama. `services.backend`/`ollama_url`/`ollama_model`
+  documentés ; auto-détection rétro-compatible si absents.
+- **`distro_bootstrap`** : ajout de `numactl`, `lsof`, `zstd` aux prérequis (lacunes réelles).
+
 ## [0.1.0-beta.6] — 2026-06-27
 
 ### Added

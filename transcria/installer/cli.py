@@ -75,6 +75,20 @@ def _add_opencode_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--rc-file", action="append", default=[])
 
 
+def _add_ollama_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "ollama",
+        help="Installe/configure le backend LLM Ollama (scope all-in-one).",
+    )
+    p.add_argument("--config", required=True, help="Chemin de config.yaml")
+    p.add_argument("--model", default="", help="Modèle Ollama à tirer (défaut : dérivé de --tier)")
+    p.add_argument("--tier", default="", help="Palier VRAM (12gb…64gb) → modèle recommandé si --model absent")
+    p.add_argument("--ollama-url", default="http://127.0.0.1:11434")
+    p.add_argument("--gpu-present", action="store_true", help="Un GPU NVIDIA est détecté (prérequis)")
+    p.add_argument("--pin-version", default="", help="OLLAMA_VERSION épinglé (reproductibilité)")
+    p.add_argument("--non-interactive", action="store_true")
+
+
 def _add_postgres_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "postgres",
@@ -185,6 +199,23 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
     apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    return 0
+
+
+def _cmd_ollama(args: argparse.Namespace) -> int:
+    from transcria.installer.ollama_phase import OllamaPlan, apply_ollama, ollama_model_for_tier
+
+    console = Console()
+    model = args.model or ollama_model_for_tier(args.tier)
+    plan = OllamaPlan(
+        config_path=Path(args.config),
+        model=model,
+        ollama_url=args.ollama_url,
+        gpu_present=args.gpu_present,
+        interactive=not args.non_interactive,
+        pin_version=args.pin_version,
+    )
+    apply_ollama(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0
 
 
@@ -364,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_config_parser(sub)
     _add_config_proxy_parser(sub)
     _add_opencode_parser(sub)
+    _add_ollama_parser(sub)
     _add_postgres_parser(sub)
     _add_postgres_bootstrap_parser(sub)
     _add_systemd_parser(sub)
@@ -378,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_config_proxy(args)
     if args.command == "opencode":
         return _cmd_opencode(args)
+    if args.command == "ollama":
+        return _cmd_ollama(args)
     if args.command == "postgres":
         return _cmd_postgres(args)
     if args.command == "postgres-bootstrap":
