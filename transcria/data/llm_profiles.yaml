@@ -23,22 +23,25 @@ engines:
   # ── llama.cpp ──────────────────────────────────────────────────────────────
   # Palier par VRAM TOTALE (tensor-split sur `gpus` cartes). Quant fin + KV q8_0.
   # `min_vram_mb`/`gpus` = calibration bench (placement) ; les MODÈLES = bench llama.cpp.
+  # `vram_budget_mb` = budget de placement (tensor-split ; ex-TIER_VRAM_MB), DISTINCT de
+  # `min_vram_mb` (seuil de sélection). La réservation runtime `gpu.llm_vram_mb`, elle, est
+  # DÉRIVÉE (poids GGUF réels + KV) — pas ce budget.
   llamacpp:
     select_by: total_vram_mb
     kv_dtype_bytes: 1              # cache-type q8_0 ≈ 1 octet/élément (KV calculé)
     download: hf                   # hf download <repo> <file>  (le NOM suffit, pas d'URL)
     tiers:
-      - {id: "12", min_vram_mb: 11500, gpus: 1, context: 196608,
+      - {id: "12", min_vram_mb: 11500, vram_budget_mb: 12000, gpus: 1, context: 196608,
          model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q5_K_M.gguf", dir: "Qwen3.5-9B-Q5_K_M"}}
-      - {id: "16", min_vram_mb: 15500, gpus: 1, context: 262144,
+      - {id: "16", min_vram_mb: 15500, vram_budget_mb: 16000, gpus: 1, context: 262144,
          model: {repo: "unsloth/Qwen3.5-9B-GGUF", file: "Qwen3.5-9B-Q6_K.gguf", dir: "Qwen3.5-9B-Q6_K"}}
-      - {id: "24", min_vram_mb: 23000, gpus: 1, context: 262144,
+      - {id: "24", min_vram_mb: 23000, vram_budget_mb: 24000, gpus: 1, context: 262144,
          model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf", dir: "Qwen3.6-35B-A3B-UD-IQ4_NL_XL"}}
-      - {id: "32", min_vram_mb: 31000, gpus: 2, context: 196608,
+      - {id: "32", min_vram_mb: 31000, vram_budget_mb: 32000, gpus: 2, context: 196608,
          model: {repo: "unsloth/Qwen3.6-27B-GGUF", file: "Qwen3.6-27B-Q5_K_M.gguf", dir: "Qwen3.6-27B-Q5_K_M"}}
-      - {id: "48", min_vram_mb: 46000, gpus: 2, context: 262144,
+      - {id: "48", min_vram_mb: 46000, vram_budget_mb: 48000, gpus: 2, context: 262144,
          model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-Q6_K.gguf", dir: "Qwen3.6-35B-A3B-UD-Q6_K"}}
-      - {id: "64", min_vram_mb: 60000, gpus: 3, context: 262144,
+      - {id: "64", min_vram_mb: 60000, vram_budget_mb: 60000, gpus: 3, context: 262144,
          model: {repo: "unsloth/Qwen3.6-35B-A3B-GGUF", file: "Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf", dir: "Qwen3.6-35B-A3B-UD-Q8_K_XL"}}
 
   # ── Ollama ─────────────────────────────────────────────────────────────────

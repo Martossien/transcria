@@ -261,7 +261,9 @@ def test_get_tier_metadata_for_download_plan():
     assert metadata.repo == "unsloth/Qwen3.6-35B-A3B-GGUF"
     assert metadata.file == "Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf"
     assert metadata.directory == "Qwen3.6-35B-A3B-UD-IQ4_NL_XL"
-    assert "mono-GPU 24 Go" in metadata.label
+    assert metadata.context == 262144
+    # Libellé généré SANS taille en dur (l'empreinte est dérivée) : nom du modèle + contexte.
+    assert "Qwen3.6-35B-A3B-UD-IQ4_NL_XL" in metadata.label and "Go" not in metadata.label
 
 
 def test_get_tier_metadata_rejects_unknown_tier():
@@ -275,7 +277,8 @@ def test_render_tier_metadata_shell_is_filterable():
     assert "LLM_REPO='unsloth/Qwen3.6-35B-A3B-GGUF'" in rendered
     assert "LLM_FILE='Qwen3.6-35B-A3B-UD-Q6_K.gguf'" in rendered
     assert "LLM_DIR='Qwen3.6-35B-A3B-UD-Q6_K'" in rendered
-    assert "LLM_LABEL='Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)'" in rendered
+    assert "LLM_LABEL='Qwen3.6-35B-A3B-UD-Q6_K (256K ctx)'" in rendered
+    assert "LLM_CONTEXT=262144" in rendered
 
 
 def test_select_download_client_prefers_hf(monkeypatch):

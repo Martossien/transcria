@@ -108,3 +108,19 @@ class TestSelectVllm:
 def test_unknown_engine_raises():
     with pytest.raises(KeyError):
         select_profile(_P, "sglang", gpu_count=1, per_card_vram_mb=24000, total_vram_mb=24000)
+
+
+class TestVllmEnvResolver:
+    def test_renders_env_from_choice(self):
+        from transcria.install_arbitrage import render_vllm_env_shell
+
+        c = select_profile(_P, "vllm", gpu_count=4, per_card_vram_mb=24000, total_vram_mb=96000)
+        rendered = render_vllm_env_shell(c)
+        assert "ARBITRAGE_MODEL='Qwen/Qwen3.6-27B-FP8'" in rendered
+        assert "ARBITRAGE_TP=4" in rendered
+        assert "ARBITRAGE_MAX_LEN=262144" in rendered
+
+    def test_none_renders_empty(self):
+        from transcria.install_arbitrage import render_vllm_env_shell
+
+        assert render_vllm_env_shell(None).count("=\n") == 3   # 3 clés vides, sûr pour eval shell

@@ -19,24 +19,6 @@ from transcria.gpu.llm_placement import (
 )
 from transcria.install_prerequisites import first_available
 
-TIER_VRAM_MB: dict[str, int] = {
-    "12gb": 12000,
-    "16gb": 16000,
-    "24gb": 24000,
-    "32gb": 32000,
-    "48gb": 48000,
-    "64gb": 60000,
-}
-
-TIER_GPU_INDICES: dict[str, list[int]] = {
-    "12gb": [0],
-    "16gb": [0],
-    "24gb": [0],
-    "32gb": [0, 1],
-    "48gb": [0, 1],
-    "64gb": [0, 1, 2],
-}
-
 
 @dataclass(frozen=True)
 class LlmTierMetadata:
@@ -45,6 +27,7 @@ class LlmTierMetadata:
     file: str
     directory: str
     label: str
+    context: int = 0
 
 
 @dataclass(frozen=True)
@@ -66,50 +49,38 @@ class PlacementRecommendation:
     warnings: tuple[str, ...] = ()
 
 
-LLM_TIERS: dict[str, LlmTierMetadata] = {
-    "12": LlmTierMetadata(
-        tier="12",
-        repo="unsloth/Qwen3.5-9B-GGUF",
-        file="Qwen3.5-9B-Q5_K_M.gguf",
-        directory="Qwen3.5-9B-Q5_K_M",
-        label="Qwen3.5-9B Q5_K_M (192K, ~6,2 Go)",
-    ),
-    "16": LlmTierMetadata(
-        tier="16",
-        repo="unsloth/Qwen3.5-9B-GGUF",
-        file="Qwen3.5-9B-Q6_K.gguf",
-        directory="Qwen3.5-9B-Q6_K",
-        label="Qwen3.5-9B Q6_K (256K, ~7 Go)",
-    ),
-    "24": LlmTierMetadata(
-        tier="24",
-        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
-        file="Qwen3.6-35B-A3B-UD-IQ4_NL_XL.gguf",
-        directory="Qwen3.6-35B-A3B-UD-IQ4_NL_XL",
-        label="Qwen3.6-35B-A3B UD-IQ4_NL_XL (256K, ~19 Go — mono-GPU 24 Go)",
-    ),
-    "32": LlmTierMetadata(
-        tier="32",
-        repo="unsloth/Qwen3.6-27B-GGUF",
-        file="Qwen3.6-27B-Q5_K_M.gguf",
-        directory="Qwen3.6-27B-Q5_K_M",
-        label="Qwen3.6-27B Q5_K_M (192K, ~19 Go)",
-    ),
-    "48": LlmTierMetadata(
-        tier="48",
-        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
-        file="Qwen3.6-35B-A3B-UD-Q6_K.gguf",
-        directory="Qwen3.6-35B-A3B-UD-Q6_K",
-        label="Qwen3.6-35B-A3B UD-Q6_K (256K, ~28 Go)",
-    ),
-    "64": LlmTierMetadata(
-        tier="64",
-        repo="unsloth/Qwen3.6-35B-A3B-GGUF",
-        file="Qwen3.6-35B-A3B-UD-Q8_K_XL.gguf",
-        directory="Qwen3.6-35B-A3B-UD-Q8_K_XL",
-        label="Qwen3.6-35B-A3B UD-Q8_K_XL (256K, ~38,5 Go)",
-    ),
-}
+# Les paliers llama.cpp viennent du CATALOGUE DE DONNÉES (plus de littéraux hardcodés) :
+# transcria/data/llm_profiles.yaml (engine=llamacpp). On reconstruit les 3 tables héritées
+# en préservant leurs conventions de clés : LLM_TIERS = "12".."64" ; TIER_VRAM_MB /
+# TIER_GPU_INDICES = "12gb".."64gb". Le libellé est généré SANS taille (dérivée ailleurs).
+def _llamacpp_engine() -> dict:
+    from transcria.config.llm_profiles import load_llm_profiles
+
+    return load_llm_profiles()["engines"]["llamacpp"]
+
+
+def _build_llamacpp_tables() -> tuple[dict[str, int], dict[str, list[int]], dict[str, LlmTierMetadata]]:
+    vram: dict[str, int] = {}
+    gpu_idx: dict[str, list[int]] = {}
+    meta: dict[str, LlmTierMetadata] = {}
+    for t in _llamacpp_engine()["tiers"]:
+        tid = str(t["id"])
+        key = f"{tid}gb"
+        vram[key] = int(t["vram_budget_mb"])
+        gpu_idx[key] = list(range(int(t.get("gpus", 1))))
+        m = t["model"]
+        ctx = int(t.get("context", 0))
+        meta[tid] = LlmTierMetadata(
+            tier=tid, repo=m["repo"], file=m["file"], directory=m["dir"],
+            label=f"{Path(m['file']).stem} ({ctx // 1024}K ctx)", context=ctx,
+        )
+    return vram, gpu_idx, meta
+
+
+TIER_VRAM_MB, TIER_GPU_INDICES, LLM_TIERS = _build_llamacpp_tables()
+
+# Octets/élément du KV llama.cpp (cache-type q8_0) — pour la dérivation d'empreinte.
+_LLAMACPP_KV_BYTES: int = int(_llamacpp_engine().get("kv_dtype_bytes", 1))
 
 
 def recommend_tier(total_vram_mb: int) -> str:
@@ -210,6 +181,7 @@ def render_tier_metadata_shell(tier: str) -> str:
             f"LLM_FILE={_shell_quote(metadata.file)}",
             f"LLM_DIR={_shell_quote(metadata.directory)}",
             f"LLM_LABEL={_shell_quote(metadata.label)}",
+            f"LLM_CONTEXT={metadata.context}",
             "",
         ]
     )
@@ -249,6 +221,22 @@ def select_llama_fallback(*, user_home: Path) -> LlamaFallback:
 def render_llama_fallback_shell(fallback: LlamaFallback) -> str:
     """Rend le fallback llama-server sous forme d'affectation shell filtrable."""
     return f"LLAMA_FALLBACK={_shell_quote(str(fallback.server or ''))}\n"
+
+
+def render_vllm_env_shell(choice: object | None) -> str:
+    """Rend l'env vLLM (modèle/TP/contexte) résolu depuis le catalogue, filtrable.
+
+    `choice` = ProfileChoice de select_profile('vllm', …) ou None (aucun palier ne tient)."""
+    if choice is None:
+        return "ARBITRAGE_MODEL=\nARBITRAGE_TP=\nARBITRAGE_MAX_LEN=\n"
+    return "\n".join(
+        [
+            f"ARBITRAGE_MODEL={_shell_quote(str(choice.model))}",       # type: ignore[attr-defined]
+            f"ARBITRAGE_TP={choice.tp or 1}",                            # type: ignore[attr-defined]
+            f"ARBITRAGE_MAX_LEN={choice.context}",                       # type: ignore[attr-defined]
+            "",
+        ]
+    )
 
 
 # ── Niveau 2 : binaire llama.cpp CUDA précompilé (ai-dock/llama.cpp-cuda) ──────
@@ -480,13 +468,37 @@ def apply_profile(
         ),
     )
     set_yaml_file_value(config_path, "services.arbitrage_script", str(output_path))
+    # Réservation VRAM = empreinte DÉRIVÉE (poids GGUF réels + KV du contexte) si le modèle
+    # est déjà téléchargé ; sinon repli sur le budget de palier. JAMAIS une taille en dur.
+    vram_mb = _derive_llamacpp_vram_mb(tier, models_dir) or TIER_VRAM_MB[tier]
     apply_gpu_calibration(
         config_path,
-        vram_mb=TIER_VRAM_MB[tier],
+        vram_mb=vram_mb,
         gpu_indices=gpu_indices,
-        vram_mb_per_gpu=_default_per_gpu(TIER_VRAM_MB[tier], gpu_indices),
+        vram_mb_per_gpu=_default_per_gpu(vram_mb, gpu_indices),
     )
     return output_path
+
+
+def _derive_llamacpp_vram_mb(tier: str, models_dir: str | None) -> int | None:
+    """Empreinte VRAM dérivée du GGUF réel (poids + KV calculé). None si absent/illisible.
+
+    ``tier`` peut être ``"24"`` ou ``"24gb"`` (LLM_TIERS est clé sans suffixe)."""
+    if not models_dir:
+        return None
+    from transcria.gpu.llm_footprint import derive_footprint_mb, read_gguf_arch
+
+    tid = tier[:-2] if tier.endswith("gb") else tier
+    meta = LLM_TIERS.get(tid)
+    if meta is None:
+        return None
+    gguf = Path(models_dir).expanduser() / meta.directory / meta.file
+    if not gguf.is_file():
+        return None
+    return derive_footprint_mb(
+        model_path=gguf, arch=read_gguf_arch(gguf),
+        context=meta.context, kv_dtype_bytes=_LLAMACPP_KV_BYTES,
+    )
 
 
 def status(*, repo_root: Path, config_path: Path) -> list[str]:
@@ -615,6 +627,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gpu-sizes-csv", default="")
     parser.add_argument("--user-home", default="")
     parser.add_argument("--total-vram-mb", type=int, default=0)
+    parser.add_argument("--vllm-env", action="store_true",
+                        help="rend l'env vLLM (modèle/TP/max_len) résolu depuis le catalogue selon le matériel")
     parser.add_argument("--install-llama-prebuilt", action="store_true",
                         help="télécharge un llama-server CUDA précompilé (ai-dock), vérifie le checksum, extrait")
     parser.add_argument("--llama-build", type=int, default=0, help="build upstream épinglé (bXXXX) pour --install-llama-prebuilt")
@@ -663,6 +677,16 @@ def main(argv: list[str] | None = None) -> int:
             print(stdout, end="")
             print(stderr, end="", file=sys.stderr)
             return 0
+        if args.vllm_env:
+            from transcria.config.llm_profiles import load_llm_profiles, select_profile
+
+            gpu_count = int(args.gpu_count) if str(args.gpu_count).isdigit() else 1
+            choice = select_profile(
+                load_llm_profiles(), "vllm",
+                gpu_count=gpu_count, per_card_vram_mb=0, total_vram_mb=args.total_vram_mb,
+            )
+            print(render_vllm_env_shell(choice), end="")
+            return 0
         if args.llama_fallback:
             if not args.user_home:
                 print("--user-home requis avec --llama-fallback", file=sys.stderr)
@@ -709,7 +733,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"wrapper généré: {output}")
         print(f"config.yaml: services.arbitrage_script={output}")
-        print(f"config.yaml: gpu.llm_vram_mb={TIER_VRAM_MB[args.tier]} ; gpu.llm_gpu_indices={TIER_GPU_INDICES[args.tier]}")
+        print(f"config.yaml: gpu.llm_vram_mb calibré (empreinte dérivée si GGUF présent, sinon budget {TIER_VRAM_MB[args.tier]}) ; "
+              f"gpu.llm_gpu_indices={TIER_GPU_INDICES[args.tier]}")
         return 0
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
