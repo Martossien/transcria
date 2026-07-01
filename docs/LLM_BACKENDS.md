@@ -44,7 +44,7 @@ d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
 services:
   # backend: "ollama"                 # auto-détecté si omis (ollama_url ⇒ ollama, …)
   # ollama_url: "http://127.0.0.1:11434"
-  # ollama_model: "qwen3:8b"          # nom NATIF registre ; opencode voit "local/qwen3:8b"
+  # ollama_model: "qwen3.5:9b"        # nom NATIF registre ; opencode voit "local/qwen3.5:9b"
   arbitrage_script: "./scripts/launch_arbitrage.sh"   # voie llama.cpp/vLLM
   stop_script: "./scripts/stop_arbitrage_llm.sh"
 ```
@@ -52,7 +52,7 @@ services:
 `resolve_arbitrage_endpoint()` (source **unique** partagée par `VRAMManager` et le provider
 opencode) renvoie l'endpoint adéquat par backend (Ollama ⇒ 11434). Le `model_id` opencode
 est `local/<modèle>` ; `opencode_runner` splitte sur le premier `/` et envoie le nom nu au
-backend (`qwen3:8b`), ce que `OllamaLLMBackend.model_id` reconstitue pour l'API native.
+backend (`qwen3.5:9b`), ce que `OllamaLLMBackend.model_id` reconstitue pour l'API native.
 
 ## Portée v1
 Ollama est câblé pour l'**all-in-one** (LLM et STT co-résidents — là où l'arbitrage VRAM

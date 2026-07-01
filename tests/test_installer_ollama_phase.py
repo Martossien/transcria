@@ -64,12 +64,14 @@ def _config(tmp_path: Path) -> dict:
 
 class TestTierMapping:
     def test_known_tier(self):
-        assert ollama_model_for_tier("12gb") == "qwen3:8b"
-        assert ollama_model_for_tier("32gb") == "qwen3:32b"
+        # Reprend les choix projet (Qwen3.5-9B / Qwen3.6) mappés sur les tags Ollama réels.
+        assert ollama_model_for_tier("12gb") == "qwen3.5:9b"
+        assert ollama_model_for_tier("32gb") == "qwen3.6:27b"
+        assert ollama_model_for_tier("64gb") == "qwen3.6:35b"
 
     def test_unknown_or_empty_falls_back(self):
-        assert ollama_model_for_tier(None) == "qwen3:8b"
-        assert ollama_model_for_tier("999gb") == "qwen3:8b"
+        assert ollama_model_for_tier(None) == "qwen3.5:9b"
+        assert ollama_model_for_tier("999gb") == "qwen3.5:9b"
 
 
 class TestGpuGuard:

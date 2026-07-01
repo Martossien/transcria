@@ -36,17 +36,22 @@ ServeFn = Callable[[], Any]
 OLLAMA_INSTALL_URL = "https://ollama.com/install.sh"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 
-# Modèles du registre Ollama par palier VRAM (indicatifs, surchargeables). On reste sur
-# la famille Qwen3 (cohérente avec la voie llama.cpp) via des tags publics du registre.
+# Modèles du registre Ollama par palier VRAM. On reprend les CHOIX du projet côté llama.cpp
+# (transcria.install_arbitrage.LLM_TIERS : 12/16 = Qwen3.5-9B ; 24 = Qwen3.6-35B-A3B ;
+# 32 = Qwen3.6-27B ; 48/64 = Qwen3.6-35B-A3B) et on prend le tag Ollama LE PLUS PROCHE qui
+# TIENT dans le palier — Ollama n'expose qu'un quant par tag (pas de IQ4/Q6/Q8 au choix).
+# Tags VÉRIFIÉS à la source (ollama.com/library, 2026-07-01) : qwen3.5:9b≈6.6 Go,
+# qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go (= 35B-A3B). NE PAS écrire un tag de mémoire
+# (cf. mémoire « verify-tech-versions-at-source »). Indicatif et surchargeable.
 _TIER_MODELS: dict[str, str] = {
-    "12gb": "qwen3:8b",
-    "16gb": "qwen3:14b",
-    "24gb": "qwen3:14b",
-    "32gb": "qwen3:32b",
-    "48gb": "qwen3:32b",
-    "64gb": "qwen3:32b",
+    "12gb": "qwen3.5:9b",
+    "16gb": "qwen3.5:9b",
+    "24gb": "qwen3.6:27b",   # 17 Go — tient sur 24 Go (le tag 35b fait 24 Go = trop juste)
+    "32gb": "qwen3.6:27b",   # choix projet 32 Go = Qwen3.6-27B
+    "48gb": "qwen3.6:35b",   # 24 Go — Qwen3.6-35B-A3B
+    "64gb": "qwen3.6:35b",
 }
-DEFAULT_OLLAMA_MODEL = "qwen3:8b"
+DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"
 
 
 def ollama_model_for_tier(tier: str | None) -> str:

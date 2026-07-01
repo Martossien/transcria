@@ -89,7 +89,7 @@ services:
   # VRAM (jamais tuer le démon). ollama_model = nom NATIF du registre (le model_id opencode
   # reste "local/<modèle>"). L'endpoint suit ollama_url (défaut 11434) via la source unique.
   # ollama_url: "http://127.0.0.1:11434"
-  # ollama_model: "qwen3:8b"
+  # ollama_model: "qwen3.5:9b"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
   # Fichier où est capturée la sortie du script de lancement (stdout+stderr).
