@@ -25,7 +25,9 @@ dur, sélection pilotée par le matériel**. Commits `905281d` → `b44ed9b`.
   résout ses défauts depuis le catalogue en best-effort).
 - Doc de référence : `docs/LLM_BACKENDS.md`. Tests GPU-free : `test_llm_profiles`,
   `test_llm_footprint`, `test_installer_ollama_phase`, `test_vram_manager_ollama`,
-  `test_llm_backend_lifecycle` (suite complète verte : 2922, couverture 80 %).
+  `test_llm_backend_lifecycle`, **`test_llm_paliers_simules`** (54 tests : sélection par palier
+  sur tout l'univers de cartes 8→80 Go, mono/multi/hétérogène, cohérence catalogue↔placement,
+  chemin transcription brute, aucune taille en dur). Suite complète verte (~2976, couverture 80 %).
 
 ## 2. Matrice de validation E2E
 
@@ -38,6 +40,13 @@ dur, sélection pilotée par le matériel**. Commits `905281d` → `b44ed9b`.
 | 5 | all-in-one | Ollama | cohere / pyannote (**gated**, `--hf-online`) | fedora41 (dnf) | chemin gated + dnf, data-driven | ⬜ à faire |
 
 ## 3. Comment lancer chaque test
+
+> **PRINCIPE (impératif) :** toute la validation tourne dans des **conteneurs Docker VIERGES**
+> (jamais l'installation locale de la machine). **`install.sh` EST sous test** : il est exécuté
+> DANS le conteneur — en DIRECT par le harnais `verify_install_matrix` (all-in-one), ou AU BUILD
+> pour les images du split (`Dockerfile.worker` / `Dockerfile.resource-node` lancent `install.sh`).
+> Tout échec de `install.sh` est un **finding à corriger dans le code/install**, jamais à
+> contourner. Le harnais recopie le dépôt courant dans le conteneur → c'est le code de `main`.
 
 **Prérequis** : `cd /home/admin_ia/transcria && source venv/bin/activate`. GPU/CDI OK
 (`nvidia-smi`, `/etc/cdi/nvidia.yaml`). Pour les tests gated : `HF_TOKEN` dans l'env.
