@@ -81,8 +81,10 @@ def _add_ollama_parser(sub: argparse._SubParsersAction) -> None:
         help="Installe/configure le backend LLM Ollama (scope all-in-one).",
     )
     p.add_argument("--config", required=True, help="Chemin de config.yaml")
-    p.add_argument("--model", default="", help="Modèle Ollama à tirer (défaut : dérivé de --tier)")
-    p.add_argument("--tier", default="", help="Palier VRAM (12gb…64gb) → modèle recommandé si --model absent")
+    p.add_argument("--model", default="", help="Forcer le modèle Ollama (sinon résolu depuis le catalogue de profils selon le matériel)")
+    p.add_argument("--gpu-count", type=int, default=1, help="Nb de GPU visibles (mono vs multi → spread)")
+    p.add_argument("--per-card-vram-mb", type=int, default=0, help="VRAM de la carte la plus grande (Mio)")
+    p.add_argument("--total-vram-mb", type=int, default=0, help="VRAM cumulée (Mio)")
     p.add_argument("--ollama-url", default="http://127.0.0.1:11434")
     p.add_argument("--gpu-present", action="store_true", help="Un GPU NVIDIA est détecté (prérequis)")
     p.add_argument("--pin-version", default="", help="OLLAMA_VERSION épinglé (reproductibilité)")
@@ -203,13 +205,28 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
 
 
 def _cmd_ollama(args: argparse.Namespace) -> int:
-    from transcria.installer.ollama_phase import OllamaPlan, apply_ollama, ollama_model_for_tier
+    from transcria.config.llm_profiles import load_llm_profiles, select_profile
+    from transcria.installer.ollama_phase import OllamaPlan, apply_ollama
 
     console = Console()
-    model = args.model or ollama_model_for_tier(args.tier)
+    # Modèle/contexte/spread résolus depuis le catalogue de données selon le MATÉRIEL
+    # (mono vs multi-GPU) — plus aucun mapping hardcodé. --model force le choix si fourni.
+    model, context, spread = args.model, 0, False
+    if not model:
+        choice = select_profile(
+            load_llm_profiles(_load_config_safe(args.config)), "ollama",
+            gpu_count=args.gpu_count, per_card_vram_mb=args.per_card_vram_mb,
+            total_vram_mb=args.total_vram_mb,
+        )
+        if choice is None:
+            console.warn("Aucun palier Ollama ne tient dans la VRAM détectée — backend Ollama ignoré.")
+            return 0
+        model, context, spread = str(choice.model), choice.context, bool(choice.engine_env.get("OLLAMA_SCHED_SPREAD"))
     plan = OllamaPlan(
         config_path=Path(args.config),
         model=model,
+        context=context,
+        sched_spread=spread,
         ollama_url=args.ollama_url,
         gpu_present=args.gpu_present,
         interactive=not args.non_interactive,
@@ -217,6 +234,16 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
     )
     apply_ollama(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0
+
+
+def _load_config_safe(path: str) -> dict:
+    """Charge config.yaml pour l'override éventuel du catalogue de profils (best-effort)."""
+    from transcria.config.yaml_file import load_yaml_file
+
+    try:
+        return load_yaml_file(Path(path))
+    except Exception:
+        return {}
 
 
 def _cmd_summary(args: argparse.Namespace) -> int:

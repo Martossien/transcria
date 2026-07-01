@@ -21,11 +21,12 @@ class TestCatalogue:
     def test_three_engines_present(self):
         assert set(_P["engines"]) == {"llamacpp", "ollama", "vllm"}
 
-    def test_every_tier_has_model_context_footprint_source(self):
+    def test_every_tier_has_model_and_context_no_hardcoded_size(self):
         for eng, spec in _P["engines"].items():
             for t in spec["tiers"]:
-                assert t.get("model") and t.get("context") and t.get("footprint"), (eng, t.get("id"))
-                assert t["footprint"]["source"] in {"bench", "measured", "estimated"}, (eng, t.get("id"))
+                assert t.get("model") and t.get("context"), (eng, t.get("id"))
+                # AUCUNE taille de modèle en dur : l'empreinte est dérivée (llm_footprint).
+                assert "footprint" not in t and "value_mb" not in t, (eng, t.get("id"))
 
     def test_llamacpp_anchored_on_bench_models(self):
         models = [t["model"]["file"] for t in _P["engines"]["llamacpp"]["tiers"]]

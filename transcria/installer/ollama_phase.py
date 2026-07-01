@@ -36,42 +36,10 @@ ServeFn = Callable[[], Any]
 OLLAMA_INSTALL_URL = "https://ollama.com/install.sh"
 DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434"
 
-# Modèles du registre Ollama par palier VRAM PAR-GPU. Différence clé avec la voie llama.cpp
-# (transcria.install_arbitrage.LLM_TIERS, qui tensor-split sur plusieurs cartes) : Ollama
-# place le modèle sur UNE SEULE carte par défaut → on dimensionne par VRAM par-GPU et on
-# reste CONSERVATEUR (poids + KV-cache d'un contexte 256K doivent tenir sur une carte : un
-# 35B/24 Go ne rentre pas sur 24 Go). Famille Qwen3.5/Qwen3.6 (cohérente avec le projet).
-# Tags VÉRIFIÉS à la source (ollama.com/library, 2026-07-01) : qwen3.5:9b≈6.6 Go,
-# qwen3.6:27b≈17 Go, qwen3.6:35b≈24 Go. NE PAS écrire un tag de mémoire
-# (cf. mémoire « verify-tech-versions-at-source »). Indicatif et surchargeable.
-# Modèle VRAM des 3 moteurs (llama.cpp / Ollama / vLLM) : docs/LLM_BACKENDS.md.
-# Empreintes : 9b = 14,7 Go MESURÉ (poids + KV 256K) ; 27b/35b = estimés (à mesurer).
-# Empreinte RÉELLE par-carte = poids + KV-cache du contexte 256K (Ollama charge le contexte
-# plein sur UNE carte, -c 262144). MESURÉ : qwen3.5:9b ≈ 14,7 Go résident (poids 6,6 Go +
-# KV ~8 Go) → tient « juste » sur 16 Go, PAS sur 12 Go. D'où le palier 12 Go = 4b.
-_TIER_MODELS: dict[str, str] = {
-    "12gb": "qwen3.5:4b",    # 9b (~14,7 Go) ne tient pas sur 12 Go → 4b (~3,4 Go + KV)
-    "16gb": "qwen3.5:9b",    # ≈14,7 Go mesuré — tient (juste) sur 16 Go
-    "24gb": "qwen3.5:9b",    # confortable sur 24 Go (27b ~25 Go n'y tiendrait pas)
-    "32gb": "qwen3.6:27b",   # ~17 Go poids + KV → ~25 Go, tient sur 32 Go
-    "48gb": "qwen3.6:35b",   # ~24 Go poids + KV — Qwen3.6-35B-A3B, tient sur 48 Go
-    "64gb": "qwen3.6:35b",
-}
-DEFAULT_OLLAMA_MODEL = "qwen3.5:9b"
-
-
-def ollama_model_for_tier(tier: str | None) -> str:
-    """Modèle Ollama recommandé pour un palier VRAM (défaut : le plus léger).
-
-    Accepte le palier sous forme ``"24"`` (ce que rend ``install_arbitrage --recommend-tier``)
-    ou ``"24gb"`` : sans normalisation, un nombre nu ne matcherait aucune clé et tomberait
-    toujours au défaut."""
-    if not tier:
-        return DEFAULT_OLLAMA_MODEL
-    key = str(tier).strip().lower()
-    if key.isdigit():
-        key = f"{key}gb"
-    return _TIER_MODELS.get(key, DEFAULT_OLLAMA_MODEL)
+# Le MODÈLE et le CONTEXTE par palier ne sont PLUS ici : ils viennent du catalogue de
+# données `transcria/data/llm_profiles.yaml` via `transcria.config.llm_profiles.select_profile`
+# (piloté par le matériel : mono-carte vs multi-GPU spread). Cette phase INSTALLE le modèle
+# déjà résolu par l'appelant — aucune donnée modèle hardcodée. Cf. docs/LLM_BACKENDS.md.
 
 
 def _default_daemon_probe(url: str) -> ProbeFn:
@@ -88,17 +56,34 @@ def _default_daemon_probe(url: str) -> ProbeFn:
     return probe
 
 
-def _default_serve() -> None:
-    """Démarre `ollama serve` détaché (hôte sans systemd, conteneur). No-op si le binaire
-    manque — l'appelant a déjà tranché l'installation."""
-    try:
-        subprocess.Popen(  # noqa: S603,S607 — commande fixe, démon local
-            ["ollama", "serve"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-    except OSError:
-        pass
+def _daemon_env(plan: "OllamaPlan") -> dict[str, str]:
+    """Env du démon Ollama pour ce palier : contexte (KV) + spread multi-GPU.
+
+    `OLLAMA_CONTEXT_LENGTH` fixe le contexte par palier (variable selon la VRAM) ;
+    `OLLAMA_SCHED_SPREAD=1` répartit un gros modèle sur plusieurs cartes (multi-GPU)."""
+    import os
+
+    env = dict(os.environ)
+    if plan.context:
+        env["OLLAMA_CONTEXT_LENGTH"] = str(plan.context)
+    if plan.sched_spread:
+        env["OLLAMA_SCHED_SPREAD"] = "1"
+    return env
+
+
+def _make_default_serve(env: dict[str, str]) -> ServeFn:
+    """Fabrique un lanceur `ollama serve` détaché avec l'env du palier (contexte/spread)."""
+    def serve() -> None:
+        try:
+            subprocess.Popen(  # noqa: S603,S607 — commande fixe, démon local
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                start_new_session=True, env=env,
+            )
+        except OSError:
+            pass
+
+    return serve
 
 
 class _ConsoleLike(Protocol):
@@ -111,7 +96,9 @@ class _ConsoleLike(Protocol):
 @dataclass(frozen=True)
 class OllamaPlan:
     config_path: Path
-    model: str = DEFAULT_OLLAMA_MODEL
+    model: str = ""                # résolu par select_profile (catalogue de données)
+    context: int = 0               # contexte du palier (OLLAMA_CONTEXT_LENGTH) ; 0 = défaut Ollama
+    sched_spread: bool = False      # multi-GPU : répartir le modèle (OLLAMA_SCHED_SPREAD)
     ollama_url: str = DEFAULT_OLLAMA_URL
     gpu_present: bool = False
     interactive: bool = True
@@ -140,6 +127,9 @@ def _write_backend_config(plan: OllamaPlan) -> None:
     set_yaml_file_value(plan.config_path, "services.backend", "ollama")
     set_yaml_file_value(plan.config_path, "services.ollama_url", plan.ollama_url)
     set_yaml_file_value(plan.config_path, "services.ollama_model", plan.model)
+    if plan.context:
+        set_yaml_file_value(plan.config_path, "services.ollama_num_ctx", plan.context)
+    set_yaml_file_value(plan.config_path, "services.ollama_sched_spread", plan.sched_spread)
     for block in ("summary_llm", "arbitration_llm"):
         set_yaml_file_value(plan.config_path, f"workflow.{block}.model_id", f"local/{plan.model}")
         set_yaml_file_value(plan.config_path, f"workflow.{block}.api_base", api_base)
@@ -160,7 +150,7 @@ def apply_ollama(
     has_command = has_command or (lambda name: shutil.which(name) is not None)
     confirm = confirm if confirm is not None else (lambda _prompt: False)
     is_daemon_up = is_daemon_up or _default_daemon_probe(plan.ollama_url)
-    serve = serve or _default_serve
+    serve = serve or _make_default_serve(_daemon_env(plan))
 
     # 1. Garde GPU : Ollama a besoin d'un driver NVIDIA déjà présent. On ne l'installe pas
     #    à sa place (le script Ollama tenterait sinon un cuda-drivers + reboot invasif).

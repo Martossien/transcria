@@ -37,7 +37,7 @@ def get_yaml_value(data: dict[str, Any], key: str) -> Any:
     return node
 
 
-def set_yaml_value(data: dict[str, Any], key: str, value: str) -> dict[str, Any]:
+def set_yaml_value(data: dict[str, Any], key: str, value: Any) -> dict[str, Any]:
     node: dict[str, Any] = data
     parts = _split_key_path(key)
     for part in parts[:-1]:
@@ -104,7 +104,7 @@ def count_text_occurrences(path: Path, needle: str) -> int:
     return Path(path).read_text(encoding="utf-8").count(needle)
 
 
-def set_yaml_file_value(path: Path, key: str, value: str) -> None:
+def set_yaml_file_value(path: Path, key: str, value: Any) -> None:
     data = load_yaml_file(path)
     set_yaml_value(data, key, value)
     atomic_write_yaml(path, data)

@@ -1067,11 +1067,13 @@ else
     fi
 
     if [[ "$LLM_BACKEND" == "ollama" ]]; then
-        # Ollama place le modèle sur UNE carte (pas de tensor-split par défaut) → on
-        # dimensionne par la VRAM PAR-GPU (max), pas la VRAM totale (qui choisirait un
-        # modèle trop gros pour une seule carte sur une machine multi-GPU).
-        OLLAMA_REC_TIER=$(arbitrage_helper --recommend-tier --total-vram-mb "$GPU_VRAM_MAX_MB" 2>/dev/null || echo "")
-        OLLAMA_CLI_ARGS=(ollama --config "$CONFIG_PATH" --gpu-present --tier "$OLLAMA_REC_TIER")
+        # Sélection pilotée par le MATÉRIEL (catalogue de profils, pas de tier hardcodé) :
+        # mono-GPU → meilleur modèle qui tient sur 1 carte ; multi-GPU → spread + modèle plus
+        # gros. On passe count + VRAM par-carte + VRAM totale ; select_profile tranche.
+        OLLAMA_CLI_ARGS=(ollama --config "$CONFIG_PATH" --gpu-present
+                         --gpu-count "$GPU_COUNT"
+                         --per-card-vram-mb "$GPU_VRAM_MAX_MB"
+                         --total-vram-mb "$GPU_VRAM_TOTAL_MB")
         [[ "$NON_INTERACTIVE" = true ]] && OLLAMA_CLI_ARGS+=(--non-interactive)
         python_module transcria.installer.cli "${OLLAMA_CLI_ARGS[@]}"
         # opencode a été configuré en SECTION 9 AVANT ce choix (il pointait 8080/llama.cpp) :

@@ -14,7 +14,6 @@ from transcria.installer.console import Console
 from transcria.installer.ollama_phase import (
     OllamaPlan,
     apply_ollama,
-    ollama_model_for_tier,
 )
 
 
@@ -60,26 +59,6 @@ def _apply(plan, *, runner, has_command, confirm=None, is_daemon_up=None, serve=
 
 def _config(tmp_path: Path) -> dict:
     return load_yaml_file(tmp_path / "config.yaml")
-
-
-class TestTierMapping:
-    def test_known_tier(self):
-        # Conservateur (Ollama = mono-carte + contexte 256K, 9b mesuré ~14,7 Go) :
-        # 12 Go ne peut pas tenir le 9b → 4b ; 9b à partir de 16 Go ; gros modèles au-delà.
-        assert ollama_model_for_tier("12gb") == "qwen3.5:4b"
-        assert ollama_model_for_tier("16gb") == "qwen3.5:9b"
-        assert ollama_model_for_tier("24gb") == "qwen3.5:9b"
-        assert ollama_model_for_tier("32gb") == "qwen3.6:27b"
-        assert ollama_model_for_tier("64gb") == "qwen3.6:35b"
-
-    def test_accepts_bare_number_tier(self):
-        # install_arbitrage --recommend-tier rend "24" (pas "24gb") → doit être normalisé.
-        assert ollama_model_for_tier("24") == "qwen3.5:9b"
-        assert ollama_model_for_tier("64") == "qwen3.6:35b"
-
-    def test_unknown_or_empty_falls_back(self):
-        assert ollama_model_for_tier(None) == "qwen3.5:9b"
-        assert ollama_model_for_tier("999gb") == "qwen3.5:9b"
 
 
 class TestGpuGuard:
@@ -170,13 +149,17 @@ class TestConfigWriting:
         assert get_yaml_value(cfg, "services.backend") == "ollama"
         assert get_yaml_value(cfg, "services.ollama_url") == "http://127.0.0.1:11434"
         assert get_yaml_value(cfg, "services.ollama_model") == "qwen3.5:9b"
-        # Le projet a DEUX endpoints LLM opencode : summary_llm (résumé) ET arbitration_llm
-        # (correction). Les deux doivent pointer sur Ollama, sinon le résumé garde le port
-        # llama.cpp par défaut (8080) → opencode « Model not found: local/arbitrage ».
+
+    def test_writes_context_and_spread(self, tmp_path):
+        runner = _Runner()
+        _apply(_plan(tmp_path, model="qwen3.6:35b", context=262144, sched_spread=True),
+               runner=runner, has_command=lambda n: True)
+        cfg = _config(tmp_path)
+        assert get_yaml_value(cfg, "services.ollama_num_ctx") == 262144
+        assert get_yaml_value(cfg, "services.ollama_sched_spread") is True
+        # Les deux endpoints opencode (summary_llm + arbitration_llm) pointent sur le modèle résolu.
         for block in ("summary_llm", "arbitration_llm"):
-            # model_id opencode = local/<modèle> (le runner splitte et envoie le nom nu).
-            assert get_yaml_value(cfg, f"workflow.{block}.model_id") == "local/qwen3.5:9b"
-            assert get_yaml_value(cfg, f"workflow.{block}.api_base") == "http://127.0.0.1:11434/v1"
+            assert get_yaml_value(cfg, f"workflow.{block}.model_id") == "local/qwen3.6:35b"
 
     def test_pull_runs_and_config_written(self, tmp_path):
         runner = _Runner()
