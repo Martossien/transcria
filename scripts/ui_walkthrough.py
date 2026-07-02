@@ -37,9 +37,19 @@ import argparse
 import json
 import sys
 import time
+import wave
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
+
+
+def _write_tiny_wav(path: Path) -> None:
+    """WAV d'une seconde de silence : suffit à l'upload (aucune étape GPU déclenchée)."""
+    with wave.open(str(path), "w") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\x00\x00" * 8000)
 
 
 class Walkthrough:
@@ -100,6 +110,24 @@ class Walkthrough:
             self.check(
                 "au moins un profil proposé à l'étape 1",
                 self.page.locator(".profile-pill").count() > 0,
+            )
+            # Le profil se choisit APRÈS le téléversement : tant qu'aucun fichier
+            # n'est reçu, toutes les pastilles sont verrouillées (désactivées).
+            self.check(
+                "profils verrouillés avant téléversement",
+                self.page.locator(".profile-pill:not([disabled])").count() == 0,
+            )
+            # Téléverser un WAV minimal (l'upload ne déclenche aucune étape GPU)
+            # pour déverrouiller le choix du profil.
+            wav_path = self.out / "walkthrough_upload.wav"
+            _write_tiny_wav(wav_path)
+            self.page.set_input_files("#file-upload", str(wav_path))
+            self.page.click('button:has-text("Téléverser")')
+            self.page.wait_for_selector(".profile-pill:not([disabled])", timeout=20000)
+            self.shot("03a_after_upload")
+            self.check(
+                "profils déverrouillés après téléversement",
+                self.page.locator(".profile-pill:not([disabled])").count() > 0,
             )
             # Interaction réelle : choisir un autre profil disponible doit persister
             # (chooseProfile POST /api/jobs/<id>/profile puis reload → data-selected MAJ).
@@ -331,6 +359,13 @@ class Walkthrough:
         # est présent sur /result, l'endpoint de polling répond, et les options de
         # rendu DIRECTES (sans assistant) sont acceptées puis reflétées par le GET.
         try:
+            # La page résultats doit être ATTEIGNABLE depuis l'accueil (bouton
+            # « Résultats » sur la carte du job terminé) — pas seulement par URL directe.
+            self.page.goto(f"{self.base}/", wait_until="networkidle")
+            self.check(
+                "affinage : l'accueil relie la page résultats du job terminé",
+                self.page.locator(f'a[href="/jobs/{job_id}/result"]').count() > 0,
+            )
             self.page.goto(f"{self.base}/jobs/{job_id}/result", wait_until="networkidle")
             ok_panel = self.page.locator("#refine-chat").count() == 1
             resp = self.page.request.get(f"{self.base}/api/jobs/{job_id}/refine/chat")

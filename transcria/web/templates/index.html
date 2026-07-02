@@ -26,6 +26,7 @@
         <div class="mt-2 d-flex gap-1 flex-wrap">
           <a href="/jobs/{{ job.id }}" class="btn btn-sm btn-outline-primary">Ouvrir</a>
           {% if job.state == 'completed' or job.state == 'export_ready' %}
+          <a href="/jobs/{{ job.id }}/result" class="btn btn-sm btn-primary"><i class="bi bi-stars"></i> Résultats</a>
           <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-sm btn-outline-success">SRT</a>
           <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-sm btn-outline-secondary">Package</a>
           {% endif %}

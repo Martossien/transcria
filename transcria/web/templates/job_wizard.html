@@ -78,7 +78,9 @@
       <div id="upload-result" class="mt-2"></div>
     {% endif %}
 
-    <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent. -->
+    <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent.
+         Verrouillé tant que le fichier n'est pas téléversé : on choisit le profil APRÈS l'upload. -->
+    {% set profile_locked = file_status != 'done' %}
     <hr class="my-3">
     <p class="text-muted mb-2">
       <strong>Profil de traitement</strong> — choisissez votre niveau de livrable.
@@ -86,15 +88,21 @@
       présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite =
       livrable plus riche. Les étapes inutiles à votre profil seront masquées.
     </p>
+    {% if profile_locked %}
+    <div class="alert alert-secondary py-2 small mb-2">
+      <i class="bi bi-lock"></i> Téléversez d'abord votre fichier — le choix du profil s'activera ensuite.
+    </div>
+    {% endif %}
     <div id="profile-selector"
-         class="profile-selector mb-3"
+         class="profile-selector mb-3{% if profile_locked %} opacity-50{% endif %}"
          data-selected="{{ selected_profile_id }}">
       <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="Profil de traitement">
         {% for p in processing_profiles.profiles %}
         <button type="button"
                 class="profile-pill btn flex-fill {% if p.id == selected_profile_id %}btn-success active{% else %}btn-outline-secondary{% endif %}"
                 data-profile-id="{{ p.id }}"
-                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"{% endif %}
+                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"
+                {% elif profile_locked %}disabled aria-disabled="true" title="Téléversez d'abord le fichier audio"{% endif %}
                 onclick="TranscrIA.chooseProfile('{{ p.id }}')">
           <span class="d-block fw-semibold">{{ p.label }}</span>
           <span class="d-block small opacity-75">
@@ -902,6 +910,18 @@
   {% if qual_status == 'done' %}
   <div class="step-section {% if exp_status == 'todo' %}current-step{% endif %}">
     <h3><i class="bi bi-{{ wizard_layout.step_num.export }}-circle-fill step-icon"></i> Export et résultats</h3>
+    {% if job.state in ('completed', 'export_ready') %}
+    <!-- Porte d'entrée vers la page de résultats : lecture des livrables + chat d'affinage. -->
+    <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+      <span>
+        <i class="bi bi-chat-dots"></i> Relisez vos livrables et <strong>affinez-les avec
+        l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats.
+      </span>
+      <a href="/jobs/{{ job.id }}/result" class="btn btn-primary">
+        <i class="bi bi-stars"></i> Résultats &amp; affinage
+      </a>
+    </div>
+    {% endif %}
     {% if srt_content %}
       <details class="mb-3">
         <summary class="text-muted">Aperçu du SRT généré</summary>

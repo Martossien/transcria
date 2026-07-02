@@ -173,6 +173,23 @@ def test_wizard_rend_le_selecteur_de_profils(admin_client, app):
     assert "Lancer le traitement" in html
 
 
+def test_wizard_profil_verrouille_avant_upload(admin_client):
+    # Le profil se choisit APRÈS le téléversement : avant, toutes les pastilles
+    # sont désactivées et une note explique le verrou.
+    r = admin_client.post("/jobs/new", data={"title": "Sans fichier"}, follow_redirects=True)
+    jid = r.request.path.rstrip("/").split("/")[-1]
+    html = admin_client.get(f"/jobs/{jid}").data.decode()
+    assert "Téléversez d'abord votre fichier" in html
+    # Chaque pastille rendue est désactivée (verrou upload ou indisponibilité).
+    assert html.count("data-profile-id=") == html.count('disabled aria-disabled="true"')
+
+
+def test_wizard_profil_actif_apres_upload(admin_client):
+    jid = _uploaded_job(admin_client)
+    html = admin_client.get(f"/jobs/{jid}").data.decode()
+    assert "Téléversez d'abord votre fichier" not in html
+
+
 def test_reprocess_profil_explicite_threade(admin_client, app, monkeypatch):
     jid = _uploaded_job(admin_client)
     with app.app_context():
