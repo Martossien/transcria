@@ -163,9 +163,29 @@ cd transcria
 
 Ces étapes sont documentées dans les sections suivantes.
 
-### Sélection automatique de la LLM d'arbitrage selon la VRAM
+### Choix du backend LLM (Ollama / llama.cpp / vLLM)
 
-À l'installation (après opencode), install.sh **détecte les GPU** (`nvidia-smi`) et **recommande le plus grand palier réellement plaçable** sur la topologie — par **placement réel carte par carte** (module `transcria/gpu/llm_placement.py`), et non sur la simple VRAM totale. Il propose de **télécharger le GGUF** correspondant (client `hf`, repli `huggingface-cli`) puis de **basculer** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
+Depuis la v0.1.0-beta.7, la LLM d'arbitrage est **multi-backend**, et le choix « palier VRAM →
+modèle » vit dans un **catalogue de données unique** `transcria/data/llm_profiles.yaml` (aucune
+taille en dur ; surchargeable via `workflow.arbitration_llm.profiles_file`). En all-in-one,
+`install.sh` **propose le backend** (flag `--llm-backend {ollama|llamacpp}` en non-interactif) :
+
+- **Ollama** — voie « facile » : `curl … | sh` auto-suffisant (runtime CUDA embarqué, **aucune
+  compilation, aucun `nvcc`, aucun token HF**), modèle tiré par `ollama pull` selon le matériel.
+  Sur multi-GPU, `OLLAMA_SCHED_SPREAD` répartit un gros modèle.
+- **llama.cpp** — voie « contrôle » (quantifications fines, KV `q8_0`, tensor-split) ; **recommandé
+  pour les petits paliers (12/16/24 Go)**. Le binaire CUDA suit une échelle : détecter un
+  `llama-server` existant → **binaire précompilé ai-dock** (opt-in, build épinglé, sha256 vérifié —
+  auto-téléchargé en non-interactif si absent) → compiler si `nvcc` présent → échec propre.
+- **vLLM** — topologie split (frontale + nœud), FP8, tensor-parallel.
+
+La **réservation VRAM** (`gpu.llm_vram_mb`) est **dérivée de la taille RÉELLE du modèle** (poids +
+KV calculé) puis **recalée par la mesure au 1ᵉʳ chargement**. Détails et recommandation par palier :
+**[docs/LLM_BACKENDS.md](LLM_BACKENDS.md)** ; validation E2E : **[docs/LLM_PROFILS_VALIDATION.md](LLM_PROFILS_VALIDATION.md)**.
+
+### Sélection automatique du palier llama.cpp selon la VRAM
+
+Pour le backend **llama.cpp**, install.sh **détecte les GPU** (`nvidia-smi`) et **recommande le plus grand palier réellement plaçable** sur la topologie — par **placement réel carte par carte** (module `transcria/gpu/llm_placement.py`), et non sur la simple VRAM totale. Il **télécharge le GGUF** correspondant (client `hf`, repli `huggingface-cli` ; **automatique en non-interactif**) puis **bascule** dessus automatiquement. On peut choisir un autre palier, et le répertoire de téléchargement (défaut `~/models`) est demandé.
 
 | Seuil¹ | Palier | Modèle (validé en Phase A/B) | Repo HF | Contexte |
 |---|---|---|---|---|

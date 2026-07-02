@@ -1232,12 +1232,18 @@ Limites :
 | `services.qwen_port` | `8080` | Ancien nom compatible, à ne plus utiliser dans les nouvelles configs |
 | `services.llm_cleanup_ports` | `[8000]` | Ports de backends LLM concurrents à libérer avant lancement |
 | `services.vllm_port` | `8000` | Ancien nom compatible, converti en `llm_cleanup_ports` |
+| `services.backend` | absent (auto) | Backend de la LLM d'arbitrage : `script` (llama.cpp/vLLM via `arbitrage_script`), `ollama` (démon), `http` (serveur OpenAI externe). Absent ⇒ auto-détection (`ollama_url` ⇒ ollama ; `arbitrage_script` ⇒ script ; sinon http). Cf. [LLM_BACKENDS.md](LLM_BACKENDS.md) |
+| `services.ollama_url` | `http://127.0.0.1:11434` | Endpoint du démon Ollama (source unique de l'endpoint pour ce backend ; port custom via cette URL, PAS via `arbitrage_llm_port`) |
+| `services.ollama_model` | absent | Nom NATIF du modèle Ollama (ex. `qwen3.6:35b`) ; opencode le voit `local/<modèle>`. Écrit par la phase d'install selon le matériel (catalogue de profils) |
+| `services.ollama_num_ctx` | absent | Contexte du palier appliqué au démon (`OLLAMA_CONTEXT_LENGTH`) — variable par palier |
+| `services.ollama_sched_spread` | `false` | Multi-GPU : répartit le modèle sur plusieurs cartes (`OLLAMA_SCHED_SPREAD`) |
+| `workflow.arbitration_llm.profiles_file` | absent (= `transcria/data/llm_profiles.yaml`) | Surcharge le catalogue de profils LLM (paliers × moteurs × modèle/contexte/placement). **Aucune taille en dur** : l'empreinte VRAM est dérivée (cf. `gpu.llm_vram_mb`) |
 | `gpu.cohere_vram_mb` | `6000` | VRAM estimée Cohere |
 | `gpu.pyannote_vram_mb` | `2000` | VRAM estimée pyannote |
 | `gpu.sortformer_vram_mb` | `3500` | VRAM estimée Sortformer (NeMo) — lue par `get_diarizer_vram_mb("sortformer", config)` |
 | `gpu.granite_vram_mb` | `6000` | VRAM estimée Granite |
 | `gpu.parakeet_vram_mb` | `8000` | VRAM estimée Parakeet (NeMo + buffers) |
-| `gpu.llm_vram_mb` | `60000` | Empreinte **TOTALE** de la LLM d'arbitrage, tous GPU confondus. La LLM est un moteur **multi-GPU** à placement contrôlé par son script de lancement : la vérification/réservation se fait **par carte** (total ÷ nb de cartes de `llm_gpu_indices`), jamais en mono-GPU. **À recalibrer à chaque changement de modèle** (35B Q8 ≈ 60000 ; 14B Q8 ≈ 16000 hors KV étendu) |
+| `gpu.llm_vram_mb` | `60000` | Empreinte **TOTALE** de la LLM d'arbitrage, tous GPU confondus. Depuis la beta.7, elle est **DÉRIVÉE automatiquement** de la taille RÉELLE du modèle (poids du fichier + KV calculé au contexte du palier, `transcria/gpu/llm_footprint`) à l'install, puis **recalée par la mesure au 1ᵉʳ chargement** (Ollama `/api/ps`) — plus besoin de la recalibrer à la main. La vérification/réservation se fait **par carte** (total ÷ nb de cartes de `llm_gpu_indices`) |
 | `gpu.llm_gpu_indices` | absent (= tous) | Index (visibles) des GPU que le script LLM utilise (`CUDA_VISIBLE_DEVICES` + `--tensor-split`). Doit refléter le script — l'allocateur vérifie la place sur **ces** cartes-là. Ex. `[0, 1, 2]`. Les petites phases (STT, diarisation) **préfèrent les cartes hors placement** quand elles conviennent (préserve la relance de la LLM) |
 | `gpu.llm_vram_mb_per_gpu` | absent (= parts égales) | Cartes **hétérogènes** (8/12/16/24/48 Go…) ou `--tensor-split` inégal : part réelle de la LLM **par carte**, liste alignée sur `llm_gpu_indices` (ex. `[18000, 6000]` pour 24+8 Go) |
 
@@ -1254,7 +1260,7 @@ Overrides environnement :
 
 Note d'exploitation :
 - **Diagnostic d'un démarrage LLM raté.** `launch_arbitrage_llm()` redirige la sortie du script vers `services.arbitrage_log_path` (défaut `/tmp/arbitrage_llm_<port>.log`). Si le serveur sort avant d'ouvrir le port (binaire introuvable, OOM GPU, `--tensor-split` incompatible avec le nombre de GPUs…), le runtime n'attend plus tout le timeout : il détecte la mort précoce du process et loggue en `ERROR` le code de sortie **et les dernières lignes de ce fichier**. Si la LLM reste « down » après lancement, consulter ce log (et `./scripts/check_arbitrage_llm.sh`).
-- Le script livré `services.arbitrage_script` lance actuellement `llama.cpp` (`llama-server`) avec le modèle local configuré sur cette machine.
+- Le backend est **sélectionnable** (`services.backend`) : `script` (le `arbitrage_script` livré lance `llama.cpp`/`llama-server`, ou vLLM), `ollama` (démon persistant, cf. `services.ollama_*`), ou `http` (serveur OpenAI externe). Le modèle par palier vient du catalogue de données (`workflow.arbitration_llm.profiles_file`). Cf. [LLM_BACKENDS.md](LLM_BACKENDS.md).
 - `services.llm_cleanup_ports` est volontairement générique : il peut contenir des ports vLLM, SGLang, llama.cpp, ik_llama.cpp ou tout autre serveur OpenAI-compatible concurrent.
 - La clé `qwen_port` reste acceptée en lecture par `_normalize_config` (alias de `arbitrage_llm_port`). Les méthodes `launch_qwen_35b()` et `stop_qwen_35b()` ont été supprimées — utiliser `launch_arbitrage_llm()` et `stop_arbitrage_llm()`.
 - Le nombre de GPUs et la VRAM réellement consommée ne sont pas figés : ils dépendent du script (ex: `--tensor-split`), du modèle GGUF, du contexte et de la machine.

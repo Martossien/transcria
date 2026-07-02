@@ -106,6 +106,7 @@ transcria/
     config/
       loader.py             # load_config(), get_config(), save_config(), _deep_merge()
       config_schema.py      # validate_config(), ValidationResult
+      llm_profiles.py       # catalogue de profils LLM (data/llm_profiles.yaml) + select_profile piloté matériel (mono/multi) ; cf. docs/LLM_BACKENDS.md
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque
     database.py             # db = SQLAlchemy()
     diagnostics/
@@ -202,9 +203,10 @@ transcria/
       dashboard_client.py   # DashboardClient (port 5001)
       srt_editor_link.py    # SrtEditorLink (port 7861)
     gpu/
-      vram_manager.py       # VRAMManager — orchestration cycle GPU
+      vram_manager.py       # VRAMManager — orchestration cycle GPU + recalage VRAM mesuré au 1er load (Ollama /api/ps)
       gpu_session.py        # GPUSession — context manager
-      llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded() ; cf. docs/LLM_BACKENDS.md
+      llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded()/measured_vram_mb() ; cf. docs/LLM_BACKENDS.md
+      llm_footprint.py      # empreinte VRAM DÉRIVÉE (poids réel du fichier + KV calculé archi×contexte) — jamais de taille en dur
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend

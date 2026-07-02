@@ -8,19 +8,46 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.7] — 2026-07-02
+
+> **Feature phare : gestion multi-backend de la LLM d'arbitrage (Ollama / llama.cpp / vLLM),
+> pilotée par un catalogue de données unique et par le matériel.** Ollama devient le backend
+> « facile » (installation `curl | sh`, sans compilation ni token) ; le choix « palier VRAM →
+> modèle » sort du code vers `transcria/data/llm_profiles.yaml` (aucune taille en dur) ; la
+> réservation VRAM est **dérivée de la taille réelle du modèle** puis recalée par la mesure au
+> 1ᵉʳ load. Validé E2E réel sur 8× RTX 3090 (all-in-one Ollama mono/multi-GPU, llama.cpp, split
+> vLLM) sur ubuntu2404/debian12/fedora41 — voir `docs/LLM_PROFILS_VALIDATION.md`.
+
 ### Added
 - **Backend LLM Ollama (défaut « facile » en all-in-one)** : `curl … | sh` auto-suffisant
   (runtime CUDA embarqué → aucune compilation, aucun `nvcc`, aucun token HF), modèle du
-  registre par palier VRAM (`ollama pull`). Nouvelle phase d'installateur testée
-  `transcria/installer/ollama_phase.py` + sous-commande `installer.cli ollama` ;
-  `install.sh` propose le choix de backend en all-in-one (interactif ; llama.cpp reste le
-  défaut non-interactif, non régressif). Garde : proposé seulement si `nvidia-smi` répond,
-  jamais d'installation de driver déléguée.
+  registre tiré par `ollama pull`. Phase d'installateur testée `installer/ollama_phase.py` +
+  sous-commande `installer.cli ollama` ; `install.sh` propose le choix de backend en all-in-one
+  (interactif ; llama.cpp reste le défaut non-interactif, non régressif ; flag `--llm-backend`).
+  Garde : proposé seulement si `nvidia-smi` répond, jamais d'installation de driver déléguée.
+- **Catalogue de profils LLM en DONNÉES** (`transcria/data/llm_profiles.yaml`) : source unique
+  par moteur (llama.cpp / Ollama / vLLM) et par palier → identifiant du modèle + contexte
+  variable + placement + dtype KV, **aucune taille en dur**. Sélection pilotée par le matériel
+  `transcria/config/llm_profiles.select_profile` (mono → 1 carte ; multi ≥2 → multi-GPU activé :
+  llama.cpp tensor-split, Ollama `OLLAMA_SCHED_SPREAD`, vLLM `TP` auto). Surchargeable.
+- **Empreinte VRAM dérivée** (`transcria/gpu/llm_footprint.py`) : poids = taille RÉELLE du
+  fichier + KV **calculé** (archi × contexte) ; **recalée par la mesure au 1ᵉʳ load** (Ollama
+  `/api/ps`, `VRAMManager.recalibrate_llm_vram_from_measurement`) → `gpu.llm_vram_mb` correct.
 - **Voie llama.cpp CUDA à 3 niveaux** : détecter → **binaire précompilé ai-dock** (opt-in,
-  build épinglé, **sha256 vérifié**) → compiler si `nvcc` présent → échec propre. Fonctions
-  pures testées (`select_prebuilt_artifact` politique « nearest », `verify_sha256`) +
-  sous-commande `install_arbitrage --install-llama-prebuilt`.
-- **`docs/LLM_BACKENDS.md`** : les trois paradigmes de cycle de vie et le choix de backend.
+  build épinglé, **sha256 vérifié**) → compiler si `nvcc` présent → échec propre. Le binaire
+  ai-dock (b9851, CUDA 12.8) est **auto-téléchargé en non-interactif** si `llama-server` absent
+  (validé E2E : install sur distro vierge sans compilation).
+- **Résolveur vLLM data-driven** (`install_arbitrage --vllm-env`) : modèle/TP/max_len depuis le
+  catalogue selon le matériel ; `launch_arbitrage_vllm.sh` résout ses défauts en best-effort.
+- **Tests de paliers VRAM simulés (54 tests GPU-free)** : `tests/test_llm_paliers_simules.py`
+  couvre `select_profile` × `recommend` sur tout l'univers de cartes NVIDIA (8→80 Go),
+  mono/multi/hétérogène, cohérence catalogue↔placement, chemin transcription brute,
+  empreinte dérivée, non-régression du catalogue. Reproductible en CI.
+- **Option `--gpu-count N`** du harnais `verify_install_matrix.py` : limite les GPU via CDI
+  (un `--device` par GPU) → simule un mono-GPU ou un petit multi-GPU sans toucher l'hôte.
+- **Docs** : `docs/LLM_BACKENDS.md` (3 paradigmes de cycle de vie, VRAM dérivée, **recommandation
+  backend par palier** : llama.cpp pour 12/16/24, Ollama/llama.cpp pour 48/64, vLLM pour le split),
+  `docs/LLM_PROFILS_VALIDATION.md` (matrice + journal de validation E2E).
 
 ### Changed
 - **Cycle de vie LLM unifié derrière `LLMBackend`** (`unload()` / `is_loaded()`) : `VRAMManager`
@@ -31,6 +58,21 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   opencode) suit `ollama_url`/11434 pour Ollama. `services.backend`/`ollama_url`/`ollama_model`
   documentés ; auto-détection rétro-compatible si absents.
 - **`distro_bootstrap`** : ajout de `numactl`, `lsof`, `zstd` aux prérequis (lacunes réelles).
+
+### Fixed
+- **Calibration VRAM Ollama non dérivée** : `ollama_phase` n'écrivait pas `gpu.llm_vram_mb`
+  → blocage `waiting_vram`. Correctif : `_measure_ollama_vram()` dérive l'empreinte de la
+  taille réelle via `/api/tags`.
+- **`detect_llama_server.py` SyntaxError** : f-string apostrophes imbriquées → guillemets doubles.
+- **`install.sh` non-interactif** : GGUF + binaire ai-dock non téléchargés (`ask_yn` = false)
+  → téléchargement automatique + binaire ai-dock b9851 (sha256 vérifié).
+- **Profil `64gb` en conteneur** : `numactl` interdit par seccomp → conditionnel ;
+  `CUDA_HOME` hardcodé → conditionnel ; `LD_LIBRARY_PATH` libs nvidia du venv torch ajoutées.
+- **`distro_bootstrap.py`** : `DEBIAN_FRONTEND` non propagé → prefixé dans `install_template` ;
+  ubuntu2204 Python 3.10 → PPA deadsnakes `python3.11` ; rocky9 conflit `curl-minimal` → `--allowerasing`.
+- **`install.sh` détection `PYTHON_BIN` trop tardive** → déplacée avant les appels aux modules
+  Python 3.11+ (Rocky 9 a `python3` = 3.9 système).
+- **CDI multi-GPU** : `nvidia.com/gpu=0,1` non supporté par Docker 29 → un `--device` par GPU.
 
 ## [0.1.0-beta.6] — 2026-06-27
 
