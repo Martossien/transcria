@@ -113,3 +113,19 @@ class TestVersions:
 
     def test_restore_unknown_version_returns_empty(self, tmp_path):
         assert _store(tmp_path).restore_version(99) == []
+
+    def test_restore_deletes_file_absent_at_snapshot(self, tmp_path):
+        """render_options.json créé PAR l'apply : le revert doit le SUPPRIMER (retour
+        exact à l'état d'avant — cas réel observé en E2E GPU 2026-07-02)."""
+        s = _store(tmp_path)
+        srt = self._seed_srt(tmp_path)
+        options = tmp_path / "j1" / "context" / "render_options.json"
+        assert not options.is_file()
+        s.snapshot_artifacts([srt, options])       # options ABSENT au snapshot
+        options.parent.mkdir(parents=True, exist_ok=True)
+        options.write_text('{"sections": {"transcript": false}}', encoding="utf-8")
+
+        restored = s.restore_version(1)
+
+        assert "render_options.json" in restored
+        assert not options.is_file()                # supprimé = état d'avant restauré

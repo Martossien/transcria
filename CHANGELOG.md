@@ -31,6 +31,20 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   Nouveaux prompts `configs/prompts/refine_{discuss,apply}_prompt.txt` (placeholders
   abstraits) ; config `workflow.refine_chat.*` ; actions d'audit dédiées ; préfixe `refine/`
   synchronisé (topologie split). Oracle UI Playwright : 2 checks GPU-free (31/31 en réel).
+  **Validé E2E GPU réel** (8×3090, LLM 35B llama.cpp, job test2.mp3 complet) : discuss
+  factuellement exact, apply (synthèse réduite de moitié + transcription masquée dans le
+  DOCX réel, faits conservés), revert au fichier près.
+
+### Fixed
+- **Réservation VRAM mono-GPU dans `run_final_review` (latente) et `run_refine`** : le
+  `try_reserve` mono-GPU exigeait UNE carte contenant tout `gpu.llm_vram_mb` (60 Go sur des
+  cartes 24 Go = échec systématique). Jamais déclenché en relecture finale (la LLM y est déjà
+  chargée par la correction) mais systématique pour l'affinage (la LLM est déchargée en fin de
+  job par le reclaim). Corrigé : `try_reserve_llm` (réparti multi-GPU, tout-ou-rien) — comme la
+  correction. Mis au jour par l'E2E GPU réel de la feature.
+- **Revert d'un fichier créé par l'application** : le snapshot mémorise aussi les fichiers
+  ABSENTS (manifeste `{path, absent}`) et la restauration les SUPPRIME — l'état restauré est
+  exactement l'état d'avant (cas réel : `render_options.json` créé par le 1ᵉʳ apply).
 
 ## [0.1.0-beta.7] — 2026-07-02
 

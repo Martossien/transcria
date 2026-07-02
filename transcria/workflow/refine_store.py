@@ -108,37 +108,52 @@ class RefineStore:
         return sorted(out)
 
     def snapshot_artifacts(self, paths: list[Path]) -> int:
-        """Copie les fichiers existants sous ``versions/v<N>/`` et retourne N.
+        """Snapshot de l'état AVANT modification sous ``versions/v<N>/`` ; retourne N.
 
-        Le ``manifest.json`` mémorise le chemin d'origine (relatif au job) de chaque
-        fichier pour la restauration.
+        Le ``manifest.json`` mémorise, par fichier, le chemin d'origine (relatif au job)
+        et son existence : un fichier ABSENT au moment du snapshot est aussi enregistré —
+        la restauration le SUPPRIME (revenir à « pas de fichier » fait partie de l'état).
         """
         n = (self.list_versions() or [0])[-1] + 1
         vdir = self._versions_dir / f"v{n}"
         vdir.mkdir(parents=True, exist_ok=True)
-        manifest: dict[str, str] = {}
+        manifest: dict[str, dict] = {}
         for p in paths:
             p = Path(p)
-            if not p.is_file():
-                continue
-            shutil.copy2(p, vdir / p.name)
             try:
-                manifest[p.name] = str(p.relative_to(self.job_dir))
+                rel = str(p.relative_to(self.job_dir))
             except ValueError:
-                manifest[p.name] = str(p)  # hors job_dir (ne devrait pas arriver)
+                rel = str(p)  # hors job_dir (ne devrait pas arriver)
+            if p.is_file():
+                shutil.copy2(p, vdir / p.name)
+                manifest[p.name] = {"path": rel, "absent": False}
+            else:
+                manifest[p.name] = {"path": rel, "absent": True}
         self._fs.save_json(f"refine/versions/v{n}/manifest.json", manifest)
         return n
 
     def restore_version(self, version: int) -> list[str]:
-        """Restaure les fichiers du snapshot ``v<version>`` ; retourne les noms restaurés."""
+        """Restaure l'état du snapshot ``v<version>`` ; retourne les noms traités.
+
+        Fichier présent au snapshot → recopié ; fichier absent au snapshot → supprimé
+        (l'état restauré est EXACTEMENT l'état d'avant l'application).
+        """
         vdir = self._versions_dir / f"v{version}"
         manifest = self._fs.load_json(f"refine/versions/v{version}/manifest.json")
         if not vdir.is_dir() or not isinstance(manifest, dict):
             return []
         restored: list[str] = []
-        for name, rel in manifest.items():
-            src = vdir / name
+        for name, entry in manifest.items():
+            if isinstance(entry, str):  # ancien format (chemin nu) = fichier présent
+                entry = {"path": entry, "absent": False}
+            rel = entry.get("path", "")
             dest = self.job_dir / rel if not Path(rel).is_absolute() else Path(rel)
+            if entry.get("absent"):
+                if dest.is_file():
+                    dest.unlink()
+                restored.append(name)
+                continue
+            src = vdir / name
             if src.is_file():
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dest)

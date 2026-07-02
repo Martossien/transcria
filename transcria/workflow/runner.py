@@ -1913,8 +1913,10 @@ class WorkflowRunner:
         try:
             if self._should_reserve_llm_vram() and not llm_was_already_running:
                 llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-                reservation = self.allocator.try_reserve(job.id, llm_vram_mb, "final_review")
-                if reservation is None:
+                # Réservation MULTI-GPU (cf. correction) : le try_reserve mono-GPU était un
+                # piège LATENT ici (jamais déclenché car la LLM est déjà chargée par la
+                # correction) — mis au jour par la phase d'affinage, corrigé partout.
+                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "final_review"):
                     logger.warning("Relecture finale sautée — VRAM insuffisante (job=%s)", job.id)
                     return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
                 llm_phase_reserved = True
@@ -2093,7 +2095,10 @@ class WorkflowRunner:
         try:
             if self._should_reserve_llm_vram() and not llm_was_already_running:
                 llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-                if self.allocator.try_reserve(job.id, llm_vram_mb, "refine") is None:
+                # Réservation MULTI-GPU (total ÷ GPU du placement, tout-ou-rien) — comme la
+                # correction. Le try_reserve mono-GPU échouerait TOUJOURS ici : la LLM est
+                # déchargée en fin de job (reclaim), donc l'affinage doit pouvoir la relancer.
+                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine"):
                     store.append_turn(
                         role="assistant", kind=kind, max_turns=max_turns,
                         text="VRAM insuffisante pour charger l'assistant (un traitement occupe les GPU). Réessayez plus tard.",

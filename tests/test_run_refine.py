@@ -38,6 +38,9 @@ class _FakeAllocator:
     def try_reserve(self, job_id, mb, phase):
         return SimpleNamespace(gpu_index=0)
 
+    def try_reserve_llm(self, job_id, total_mb, phase):
+        return True
+
     def release_phase(self, job_id, phase):
         self.released.append(("phase", phase))
 
