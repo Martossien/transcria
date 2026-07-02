@@ -194,3 +194,28 @@ class TestResultPagePanel:
         assert "refine-thread" in body         # fil de discussion
         assert "refine-apply" in body          # bouton Appliquer
         assert f'data-job-id="{refine_job}"' in body  # endpoint câblé sur le job
+        assert "refine-fresh-note" in body     # note « documents à jour » (post-apply)
+
+    def test_result_page_previews_corrected_srt(self, admin_client, app, refine_job):
+        # L'aperçu à l'écran montre le SRT CORRIGÉ (ce que /download/srt sert) — pas le
+        # brut : sinon les corrections (LLM/affinage) semblent « ne pas être appliquées ».
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], refine_job)
+            fs.save_text("metadata/transcription.srt",
+                         "1\n00:00:00,000 --> 00:00:01,000\nVERSION BRUTE NON CORRIGÉE\n")
+        html = admin_client.get(f"/jobs/{refine_job}/result").data.decode()
+        assert "VERSION BRUTE NON CORRIGÉE" not in html
+        assert "Bonjour à tous, on commence la réunion." in html   # SRT corrigé affiché
+
+    def test_wizard_links_to_result_page(self, admin_client, refine_job):
+        # La page résultats (qui porte le chat d'affinage) doit être atteignable
+        # depuis le wizard une fois le traitement terminé (étape Export).
+        html = admin_client.get(f"/jobs/{refine_job}").data.decode()
+        assert f"/jobs/{refine_job}/result" in html
+
+    def test_home_links_to_result_page(self, admin_client, refine_job):
+        # ... et depuis la liste des traitements de l'accueil (job terminé).
+        html = admin_client.get("/").data.decode()
+        assert f"/jobs/{refine_job}/result" in html

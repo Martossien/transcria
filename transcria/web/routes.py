@@ -108,6 +108,15 @@ _SUMMARY_LLM_UNREACHABLE_MESSAGE = (
 )
 
 
+def _effective_srt(fs) -> str | None:
+    """SRT « livrable » : la version corrigée (correction LLM, affinage) prime sur le brut.
+
+    Même préférence que ``/download/srt`` — les aperçus à l'écran et l'éditeur SRT
+    doivent montrer ce que l'utilisateur téléchargera, pas la transcription brute.
+    """
+    return fs.load_text("metadata/transcription_corrigee.srt") or fs.load_text("metadata/transcription.srt")
+
+
 def _speaker_vram_profile(cfg: dict) -> dict:
     """Profil VRAM d'une détection de locuteurs (pyannote) routée vers le worker."""
     pyannote = int(cfg.get("gpu", {}).get("pyannote_vram_mb", 2000))
@@ -1127,7 +1136,7 @@ def job_wizard(job_id: str):
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     quality_report = fs.load_json("quality/quality_report.json") or {}
-    srt_content = fs.load_text("metadata/transcription.srt") or ""
+    srt_content = _effective_srt(fs) or ""
 
     return render_template(
         "job_wizard.html",
@@ -1178,7 +1187,7 @@ def job_result(job_id: str):
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     quality_report = fs.load_json("quality/quality_report.json") or {}
     review_points = fs.load_json("quality/review_points.json") or []
-    srt_content = fs.load_text("metadata/transcription.srt") or ""
+    srt_content = _effective_srt(fs) or ""
     has_package = (fs.job_dir / "exports" / f"transcrIA_job_{job.id}.zip").is_file()
     safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
     has_docx = (fs.job_dir / "exports" / f"rapport_{safe_title}.docx").is_file()
@@ -2518,7 +2527,7 @@ def api_push_to_editor(job_id: str):
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     audio_path = fs.get_original_audio_path()
-    srt_content = fs.load_text("metadata/transcription.srt")
+    srt_content = _effective_srt(fs)
 
     if audio_path is None or srt_content is None:
         return jsonify({"error": "Audio ou SRT manquant"}), 400

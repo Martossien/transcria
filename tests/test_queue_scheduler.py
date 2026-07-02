@@ -70,6 +70,43 @@ def test_scheduler_dispatches_waiting_candidate(app, owner_id, tmp_path):
         assert QueueStore.get_entry(job.id).status == QUEUE_RUNNING
 
 
+def test_scheduler_dispatches_refine_without_audio(app, owner_id, tmp_path):
+    # Un tour d'affinage (job TERMINÉ) n'utilise pas l'audio : il doit être dispatché
+    # même si l'audio n'est plus matérialisable (blobs d'entrée purgés à la complétion).
+    # Régression : il était retiré de la file en `failed`, SILENCIEUSEMENT.
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = JobStore.create_job(owner_id, "Refine sans audio")   # aucun fichier audio
+        JobStore.update_state(job.id, JobState.COMPLETED)
+        QueueStore.enqueue(job.id, mode="refine")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append((job_id, mode)))
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 1
+        assert launched == [(job.id, "refine")]
+
+
+def test_scheduler_fails_non_refine_without_audio(app, owner_id, tmp_path):
+    # Les autres modes exigent toujours l'audio : entrée retirée en `failed` (et loggée).
+    with app.app_context():
+        _clear_queue()
+        cfg = _config(tmp_path)
+        launched = []
+        job = JobStore.create_job(owner_id, "Fast sans audio")
+        QueueStore.enqueue(job.id, mode="fast")
+
+        scheduler = QueueScheduler(app, cfg, lambda job_id, audio_path, mode: launched.append(job_id))
+        dispatched = scheduler._dispatch_iteration()
+        scheduler._executor.shutdown(wait=True)
+
+        assert dispatched == 0 and launched == []
+        assert QueueStore.get_entry(job.id).status == "failed"
+
+
 def test_scheduler_skips_future_scheduled_candidate(app, owner_id, tmp_path):
     with app.app_context():
         _clear_queue()

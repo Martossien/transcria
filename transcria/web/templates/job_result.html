@@ -62,6 +62,11 @@
     <i class="bi bi-pencil-square"></i> SRT Editor EASY
   </a>
 </div>
+{# Visible dès qu'un affinage a été appliqué (rempli par le JS du panneau) : rassure
+   l'utilisateur — les boutons ci-dessus servent TOUJOURS la dernière version. #}
+<div id="refine-fresh-note" class="alert alert-success py-1 px-2 small mb-4 d-none">
+  <i class="bi bi-check-circle"></i> <span></span>
+</div>
 
 {% if srt_content %}
 <details>
@@ -146,6 +151,7 @@
   const el = (id) => document.getElementById(id);
   const thread = el("refine-thread"), input = el("refine-input");
   let busy = false, pollTimer = null;
+  let lastProposal = null;   // dernière « Proposition d'application » du fil
 
   function showError(msg) {
     const box = el("refine-error");
@@ -156,7 +162,9 @@
   function renderTurns(turns) {
     thread.style.display = turns.length ? "block" : "none";
     thread.innerHTML = "";
+    lastProposal = null;
     for (const t of turns) {
+      if (t.role === "assistant" && t.proposal) lastProposal = t.proposal;
       const div = document.createElement("div");
       if (t.role === "user") {
         div.className = "text-end mb-2";
@@ -201,6 +209,17 @@
     btn.classList.toggle("d-none", !versions.length);
     sel.innerHTML = versions.map(v => `<option value="${v}">Version v${v}</option>`).join("");
     sel.selectedIndex = sel.options.length - 1;
+    // Note près des boutons de téléchargement : après un affinage, ils servent
+    // toujours la dernière version (les documents sont régénérés à chaque clic).
+    const note = el("refine-fresh-note");
+    if (note) {
+      note.classList.toggle("d-none", !versions.length);
+      if (versions.length) {
+        note.querySelector("span").textContent =
+          "Affinage appliqué (version v" + versions[versions.length - 1] +
+          ") — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications.";
+      }
+    }
   }
 
   function renderOptions(data) {
@@ -235,8 +254,18 @@
 
   async function submit(kind, messageOverride) {
     const fromInput = messageOverride == null;
-    const message = (fromInput ? input.value : messageOverride).trim();
-    if (!message) { showError("Écrivez d'abord votre demande."); return; }
+    let message = (fromInput ? input.value : messageOverride).trim();
+    if (!message && kind === "apply" && lastProposal) {
+      // Zone vide mais une proposition existe dans le fil : on applique CELLE-LÀ
+      // (le confirm ci-dessous la montre en toutes lettres avant d'agir).
+      message = lastProposal;
+    }
+    if (!message) {
+      showError(kind === "apply"
+        ? "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
+        : "Écrivez d'abord votre demande.");
+      return;
+    }
     if (kind === "apply") {
       // Confirmation EXPLICITE : l'utilisateur relit la demande exacte qui sera appliquée.
       const preview = message.length > 240 ? message.slice(0, 240) + "…" : message;

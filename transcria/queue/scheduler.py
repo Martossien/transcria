@@ -232,12 +232,20 @@ class QueueScheduler:
                 # n'est peut-être pas encore matérialisé sur CE disque (worker neuf, cache
                 # vidé). On le matérialise AVANT de conclure « audio introuvable ».
                 audio_path = self._materialize_job_inputs(entry.job_id)
-            if audio_path is None:
+            if audio_path is None and entry.mode != "refine":
+                # Un tour d'affinage (job TERMINÉ) n'utilise pas l'audio : il ne doit pas
+                # échouer si l'audio n'est plus matérialisable (blobs d'entrée purgés à la
+                # complétion). Tous les autres modes l'exigent.
+                logger.warning(
+                    "Entrée retirée de la file : audio original introuvable (job=%s, mode=%s)",
+                    entry.job_id, entry.mode,
+                )
                 QueueStore.dequeue(entry.job_id, status="failed")
                 continue
             if not self._resources_available(entry, remote_state.capabilities):
                 continue
-            if self._launch(entry.job_id, str(Path(audio_path)), entry.mode):
+            audio_arg = str(Path(audio_path)) if audio_path is not None else ""
+            if self._launch(entry.job_id, audio_arg, entry.mode):
                 dispatched += 1
         return dispatched
 

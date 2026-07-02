@@ -9,6 +9,40 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Added
+- **Affinage : une correction couvre par défaut TOUS les livrables** (retour utilisateur :
+  la synthèse fait partie du produit final) — les prompts discuss/apply cadrent désormais que
+  la demande définit le CHANGEMENT, pas un fichier : un terme corrigé l'est dans la synthèse,
+  la transcription ET les données structurées (sauf restriction explicite). **Validé E2E réel
+  piloté par l'UI** (Playwright + LLM réelle, 15/15 checks) : question → proposition couvrant
+  les 3 artefacts → « Appliquer cette proposition » → synthèse + SRT + structured + DOCX
+  téléchargé tous corrigés, structure SRT intacte, version v1 restaurable.
+- **Affinage : note « documents à jour »** sous les boutons de téléchargement dès qu'une
+  version d'affinage existe (« Affinage appliqué (version vN) — les documents ci-dessus sont
+  régénérés à chaque téléchargement et incluent vos modifications »).
+- **Affinage : mode discuss ~5× plus rapide** (retour de tests réels : ~45-55 s/tour) —
+  le tour « Discuter » est en lecture seule : il n'a plus besoin de la boucle agentique
+  opencode et passe par un **appel direct** `/v1/chat/completions` (une seule génération,
+  API OpenAI-compatible des trois backends llama-server/Ollama/vLLM ; thinking désactivé via
+  `chat_template_kwargs`, retry sans l'option si le backend la rejette ; blocs `<think>`
+  filtrés). Mesuré en réel : **~1,6 s** sur le 35B déjà chargé. L'historique est rejoué en
+  vrais tours user/assistant ; la transcription est inline (tronquée au-delà de
+  `max_transcript_chars`, signalé). « Appliquer » garde opencode (édition sous garde-fous).
+  Config : `workflow.refine_chat.{max_transcript_chars,max_answer_tokens}`.
+- **Affinage : points qualité en contexte** — les points signalés par le contrôle qualité
+  (`quality/review_points.json`, dont « Variantes lexique non résolues après correction »)
+  sont fournis à la LLM en discuss (section dédiée du message système) ET en apply
+  (`review_points.md`, lecture seule) : l'assistant peut les passer en revue et proposer de
+  les traiter.
+- **Affinage : bouton « Appliquer » sans saisie** — zone vide + une proposition présente
+  dans le fil ⇒ le bouton applique la **dernière proposition** (montrée en toutes lettres
+  dans la confirmation) au lieu de bloquer sur « Écrivez d'abord votre demande » ; message
+  d'aide explicite s'il n'y a aucune proposition.
+- **Accès à la page résultats** : bouton « Résultats & affinage » à l'étape Export du wizard
+  (job terminé) + bouton « Résultats » sur les cartes de l'accueil — la page (et son panneau
+  d'affinage) n'était atteignable qu'en tapant l'URL. Le sélecteur de profil (étape 1) est
+  **verrouillé tant que le fichier n'est pas téléversé** (note explicative, pastilles
+  désactivées). Oracle Playwright : 35/35 checks (verrou avant upload, déverrouillage après
+  un vrai téléversement, lien accueil → résultats).
 - **Chat d'affinage des livrables** (demande utilisateurs) : sur la page résultats d'un job
   **terminé** (tous profils), un panneau de conversation avec la LLM locale — **Discuter**
   (question/vérification/proposition, aucun fichier modifié) puis **Appliquer** (la LLM édite
@@ -36,6 +70,20 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   DOCX réel, faits conservés), revert au fichier près.
 
 ### Fixed
+- **File : un tour d'affinage sans audio matérialisable était retiré en `failed` SANS log**
+  (l'ordonnanceur exigeait l'audio original avant tout dispatch). Le mode `refine` n'utilise
+  pas l'audio → dispatché sans lui ; les autres modes loggent désormais un warning explicite
+  (« audio original introuvable ») au lieu d'échouer en silence.
+- **Aperçu SRT à l'écran = SRT corrigé** : les pages wizard/résultats (et l'envoi vers SRT
+  Editor) prévisualisaient `metadata/transcription.srt` (brut) alors que `/download/srt` sert
+  la version corrigée — après une correction LLM ou un affinage, l'écran semblait « sans les
+  nouveaux fichiers ». Helper `_effective_srt` (corrigé → brut) partagé par les trois usages.
+  Le tour de rapport d'application invite désormais à retélécharger les documents (le DOCX
+  est régénéré à CHAQUE téléchargement, il n'y a pas de fichier « v1 » séparé).
+- **Extraction de la « Proposition d'application » tolérante** : le modèle omet parfois la
+  ligne `---` avant le label (observé en réel après un tableau Markdown) → la proposition
+  était perdue (pas de bouton « Appliquer cette proposition »). Le label posé sur la
+  dernière ligne est désormais accepté (`extract_proposal`, chemin contractuel inchangé).
 - **Réservation VRAM mono-GPU dans `run_final_review` (latente) et `run_refine`** : le
   `try_reserve` mono-GPU exigeait UNE carte contenant tout `gpu.llm_vram_mb` (60 Go sur des
   cartes 24 Go = échec systématique). Jamais déclenché en relecture finale (la LLM y est déjà
