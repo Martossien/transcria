@@ -365,6 +365,31 @@ def _fmt_duration(seconds: int) -> str:
     return f"{max(m, 1)} min"
 
 
+# ── Options de rendu (data-driven : context/render_options.json) ─────────────
+
+_RENDER_SECTIONS = ("participants", "transcript", "quality")
+
+
+def _sanitize_render_options(raw: object) -> dict:
+    """Valide ``context/render_options.json`` — tout invalide est ignoré (le rendu ne casse jamais).
+
+    Options v1 : ``theme`` (clé de ``_THEMES``, prime sur le meeting_type) et
+    ``sections`` (booléens ``participants``/``transcript``/``quality``).
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    theme = raw.get("theme")
+    if isinstance(theme, str) and theme in _THEMES:
+        out["theme"] = theme
+    sections = raw.get("sections")
+    if isinstance(sections, dict):
+        cleaned = {k: bool(v) for k, v in sections.items() if k in _RENDER_SECTIONS and isinstance(v, bool)}
+        if cleaned:
+            out["sections"] = cleaned
+    return out
+
+
 # ── Classe principale ─────────────────────────────────────────────────────────
 
 class DocxReport:
@@ -376,6 +401,7 @@ class DocxReport:
         quality: dict,
         srt_text: str,
         structured_data: dict | None = None,
+        render_options: dict | None = None,
     ):
         self.ctx = ctx
         self.participants: list[dict] = participants if isinstance(participants, list) else []
@@ -387,7 +413,9 @@ class DocxReport:
         self.structured_data: dict = structured_data if isinstance(structured_data, dict) else {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
         self.type_specific_data: dict = ctx.get("type_specific_data") or {}
-        self.theme: _DocxTheme = _get_theme(self.meeting_type)
+        self.render_options: dict = _sanitize_render_options(render_options)
+        theme_key = self.render_options.get("theme")
+        self.theme: _DocxTheme = _THEMES[theme_key] if theme_key else _get_theme(self.meeting_type)
         # Auto-confidentialité pour certains types
         if self.meeting_type in _AUTO_CONFIDENTIEL and not ctx.get("sensitivity"):
             self.ctx = dict(ctx)
@@ -434,6 +462,9 @@ class DocxReport:
 
     # ── Build ─────────────────────────────────────────────────────────────────
 
+    def _section_enabled(self, key: str) -> bool:
+        return self.render_options.get("sections", {}).get(key, True)
+
     def build(self) -> DocumentT:
         doc = Document()
         self._setup_document(doc)
@@ -441,9 +472,16 @@ class DocxReport:
         self._page_break(doc)
         self._section_context(doc)
         offset = self._section_enriched(doc)
-        self._section_participants(doc, base=2 + offset)
-        self._section_transcript(doc, base=3 + offset)
-        self._section_quality(doc, base=4 + offset)
+        # Sections désactivables (options de rendu) — la numérotation reste séquentielle.
+        num = 2 + offset
+        for key, render in (
+            ("participants", self._section_participants),
+            ("transcript", self._section_transcript),
+            ("quality", self._section_quality),
+        ):
+            if self._section_enabled(key):
+                render(doc, base=num)
+                num += 1
         self._setup_footer(doc)
         return doc
 
@@ -1291,7 +1329,13 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
     if not srt_text:
         srt_text = fs.load_text("metadata/transcription.srt") or ""
 
-    report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data)
+    try:
+        render_options = fs.load_json("context/render_options.json") or {}
+    except Exception:  # JSON corrompu = options par défaut, le rendu ne casse jamais
+        render_options = {}
+
+    report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
+                        render_options=render_options)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
