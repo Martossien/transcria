@@ -975,6 +975,26 @@ Configuration du LLM d'arbitrage/correction SRT.
 
 **État actuel :** la correction SRT utilise `OpenCodeRunner.run_correction()` et lit `model_id`, `timeout_seconds` et `opencode_bin` depuis cette section.
 
+#### `workflow.refine_chat`
+
+Chat d'affinage des livrables (page résultats d'un job **terminé**, tous profils) : l'utilisateur
+discute avec la LLM locale (`discuss` — aucun fichier modifié) puis **applique** une demande
+validée (`apply` — la LLM édite les artefacts texte sous garde-fous : intégrité SRT, JSON
+normalisé, options de rendu filtrées). Chaque application crée une **version restaurable**
+(`refine/versions/v<N>/`) ; les documents (DOCX/ZIP) sont régénérés. Chaque tour transite par
+la **file** (mode `refine`) : même admission VRAM/verrou LLM que les jobs. Les options de rendu
+seules disposent d'une route directe **sans LLM** (`POST /api/jobs/<id>/refine/render-options`).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `true` | Active le panneau et l'API du chat d'affinage |
+| `max_message_chars` | int | `4000` | Taille max d'un message utilisateur |
+| `timeout_seconds` | int | `900` | Timeout d'un tour (un run opencode complet) |
+| `max_turns_kept` | int | `200` | Tours conservés dans l'historique (`refine/chat.json`) |
+| `context_turns` | int | `12` | Tours rejoués à la LLM à chaque tour (contexte conversationnel) |
+
+**Redémarrage requis :** non. **Prérequis :** `arbitration_llm.enabled: true` (sinon tours « assistant indisponible »).
+
 ---
 
 ### `security`

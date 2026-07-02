@@ -596,6 +596,21 @@ workflow:
     timeout_seconds: 7200
     opencode_bin: "opencode"
 
+  # Chat d'affinage des livrables (page résultats d'un job terminé) : discuter avec la
+  # LLM locale puis APPLIQUER une demande validée — les artefacts texte sont édités sous
+  # garde-fous, chaque application crée une version restaurable, les documents (DOCX/ZIP)
+  # sont régénérés. Nécessite la LLM d'arbitrage (arbitration_llm.enabled: true).
+  refine_chat:
+    enabled: true
+    # Taille max d'un message utilisateur (caractères).
+    max_message_chars: 4000
+    # Timeout d'un tour (secondes) — un tour = un run opencode complet.
+    timeout_seconds: 900
+    # Nb de tours conservés dans l'historique (refine/chat.json).
+    max_turns_kept: 200
+    # Nb de tours rejoués à la LLM à chaque tour (contexte conversationnel).
+    context_turns: 12
+
 quality:
   # Phrases détectées dans les segments courts (< 1 s) → signalées dans le rapport qualité.
   # Aucun segment n'est supprimé automatiquement ; l'opérateur décide.

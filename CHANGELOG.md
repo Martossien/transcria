@@ -8,6 +8,30 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Chat d'affinage des livrables** (demande utilisateurs) : sur la page résultats d'un job
+  **terminé** (tous profils), un panneau de conversation avec la LLM locale — **Discuter**
+  (question/vérification/proposition, aucun fichier modifié) puis **Appliquer** (la LLM édite
+  les artefacts TEXTE — synthèse, SRT, données structurées, options de rendu — dans un
+  `AgentWorkspace` isolé, sous garde-fous déterministes : intégrité SRT réutilisée, JSON
+  normalisé, options filtrées). Chaque application crée une **version restaurable**
+  (`refine/versions/v<N>/`, bouton Restaurer) ; les documents (DOCX/ZIP) sont régénérés.
+  La conversation a du **contexte** (les derniers tours sont rejoués à la LLM). Chaque tour
+  transite par la **file** (mode d'étape `refine` → même admission VRAM/verrou LLM que les
+  jobs ; occupé ⇒ tour assistant explicite, jamais d'attente bloquante). Le DOCX n'est JAMAIS
+  édité en binaire : il reste un rendu déterministe des artefacts texte.
+- **Options de rendu du DOCX pilotables** (`context/render_options.json`) : thème (clés de
+  `_THEMES`, prime sur le type de réunion) + sections on/off (participants / transcription /
+  points à vérifier) avec renumérotation séquentielle — modifiables par la LLM (mode apply)
+  OU directement depuis l'UI **sans LLM** (`POST /api/jobs/<id>/refine/render-options`,
+  effet immédiat, versionné). Tout invalide est ignoré : le rendu ne casse jamais.
+- **API** : `POST /api/jobs/<id>/refine` (kind discuss/apply, RBAC propriétaire/admin, 409 si
+  demande active, 202 accepté), `GET /api/jobs/<id>/refine/chat` (polling unique : tours,
+  busy, versions, options), `POST /api/jobs/<id>/refine/revert` (restauration de version).
+  Nouveaux prompts `configs/prompts/refine_{discuss,apply}_prompt.txt` (placeholders
+  abstraits) ; config `workflow.refine_chat.*` ; actions d'audit dédiées ; préfixe `refine/`
+  synchronisé (topologie split). Oracle UI Playwright : 2 checks GPU-free (31/31 en réel).
+
 ## [0.1.0-beta.7] — 2026-07-02
 
 > **Feature phare : gestion multi-backend de la LLM d'arbitrage (Ollama / llama.cpp / vLLM),

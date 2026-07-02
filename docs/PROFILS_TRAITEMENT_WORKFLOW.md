@@ -33,6 +33,12 @@ Ce document propose une evolution structuree :
 
 ## Resume executif
 
+> **Post-workflow (tous profils)** : une fois le job termine, la page resultats offre un
+> **chat d'affinage** avec la LLM locale (discuter puis appliquer : artefacts texte edites
+> sous garde-fous, versions restaurables, DOCX/ZIP regeneres). Le profil pilote le
+> TRAITEMENT ; le chat affine le RESULTAT — il est disponible quel que soit le profil
+> (cf. `workflow.refine_chat`, docs/CONFIG_REFERENCE.md).
+
 Le bon modele n'est pas un curseur continu. Il faut des crans nommes, visibles et explicables. Le curseur peut etre une representation graphique, mais le systeme doit manipuler des profils stables.
 
 Profils proposes :

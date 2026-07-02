@@ -138,7 +138,8 @@ transcria/
       states.py             # WorkflowState.compute_statuses()
       steps.py              # WORKFLOW_STEPS (9 étapes)
       progress.py           # WorkflowProgressReporter — progression UI persistée dans jobs.extra_data_json["workflow_progress"]
-      runner.py             # WorkflowRunner — exécution des étapes
+      runner.py             # WorkflowRunner — exécution des étapes (dont run_refine : chat d'affinage post-workflow)
+      refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
