@@ -104,6 +104,12 @@ class TestRefinePromptsContract:
         p = _read("refine_discuss_prompt.txt")
         assert "NE MODIFIER AUCUN FICHIER" in p
 
+    def test_discuss_label_proposition_aligne_sur_extracteur(self):
+        # extract_proposal() parse ce label littéral — le prompt doit l'imposer tel quel.
+        p = _read("refine_discuss_prompt.txt")
+        assert "Proposition d'application :" in p
+        assert "aucune" in p
+
     def test_apply_fichiers_de_sortie(self):
         p = _read("refine_apply_prompt.txt")
         for name in ("summary_refined.md", "transcription_refined.srt",

@@ -16,6 +16,7 @@ Pur filesystem (aucune dépendance web/GPU) — réutilise l'écriture atomique 
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,37 @@ logger = logging.getLogger(__name__)
 _CHAT = "refine/chat.json"
 _REQUEST = "refine/request.json"
 _DEFAULT_MAX_TURNS = 200
+
+# « --- » sur sa propre ligne (séparateur du bloc proposition, contrat du prompt discuss).
+_PROPOSAL_SEP = re.compile(r"\n-{3,}\s*\n")
+# Label littéral (apostrophe droite ou typographique, gras Markdown toléré).
+_PROPOSAL_LABEL = re.compile(r"(?is)^\*{0,2}proposition\s+d[’']application\*{0,2}\s*:?\s*(.+)$")
+
+
+def extract_proposal(text: str) -> tuple[str, str | None]:
+    """Sépare une réponse discuss de sa « Proposition d'application » finale.
+
+    Contrat du prompt discuss : la réponse se termine par une ligne ``---`` suivie de
+    « Proposition d'application : … ». Retourne ``(texte, proposition)`` :
+
+    - proposition trouvée → le bloc est retiré du texte (l'UI l'affiche à part, avec le
+      bouton « Appliquer cette proposition ») ;
+    - « aucune » ou format non conforme → ``(texte intact, None)`` — jamais d'erreur.
+    """
+    if not text:
+        return text, None
+    matches = list(_PROPOSAL_SEP.finditer(text))
+    if not matches:
+        return text, None
+    sep = matches[-1]
+    tail = text[sep.end():].strip()
+    m = _PROPOSAL_LABEL.match(tail)
+    if not m:
+        return text, None
+    proposal = m.group(1).strip().strip("*_").strip()
+    if not proposal or re.match(r"(?i)^aucune\b", proposal):
+        return text, None  # bloc informatif (« aucune — … ») : conservé tel quel
+    return text[: sep.start()].rstrip(), proposal
 
 
 class RefineStore:
@@ -40,14 +72,22 @@ class RefineStore:
         data = self._fs.load_json(_CHAT)
         return data if isinstance(data, list) else []
 
-    def append_turn(self, *, role: str, kind: str, text: str, max_turns: int = _DEFAULT_MAX_TURNS) -> None:
+    def append_turn(
+        self, *, role: str, kind: str, text: str,
+        max_turns: int = _DEFAULT_MAX_TURNS, proposal: str | None = None,
+    ) -> None:
         turns = self.load_turns()
-        turns.append({
+        turn: dict = {
             "role": role,
             "kind": kind,
             "text": text,
             "ts": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        if proposal:
+            # Proposition d'application extraite d'un tour discuss : l'UI l'affiche à
+            # part avec le bouton « Appliquer cette proposition » (consentement explicite).
+            turn["proposal"] = proposal
+        turns.append(turn)
         if len(turns) > max_turns:
             turns = turns[-max_turns:]
         self._fs.save_json(_CHAT, turns)

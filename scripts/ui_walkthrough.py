@@ -352,6 +352,14 @@ class Walkthrough:
                 r2.ok and opts.get("sections", {}).get("transcript") is False,
                 f"post={r2.status} opts={opts}",
             )
+            # Le fil rend l'historique seedé ET le bouton « Appliquer cette proposition »
+            # (consentement explicite : la proposition est affichée avant application).
+            self.page.reload(wait_until="networkidle")
+            btn = self.page.locator(".refine-proposal-btn")
+            self.check(
+                "affinage : proposition affichée + bouton « Appliquer cette proposition »",
+                btn.count() == 1 and "condensée" in self.page.locator("#refine-thread").inner_text(),
+            )
             self.shot("19_refine_chat")
         except Exception as exc:  # noqa: BLE001
             self.check("panneau d'affinage", False, str(exc)[:120])

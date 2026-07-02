@@ -143,6 +143,19 @@ class TestRunRefineDiscuss:
         assert _srt_of(env) == before                      # aucun artefact modifié
         assert env.store.has_active_request() is False     # demande consommée
 
+    def test_discuss_proposal_extracted_into_turn(self, env):
+        env.store.write_request(kind="discuss", message="Peut-on raccourcir ?")
+        _FakeOpenCode.outputs = {"refine_answer.md": (
+            "Oui, la synthèse peut être condensée.\n\n---\n"
+            "Proposition d'application : raccourcir la synthèse de moitié."
+        )}
+
+        env.runner.run_refine(env.job, env.config)
+
+        turn = env.store.load_turns()[-1]
+        assert turn["proposal"] == "raccourcir la synthèse de moitié."
+        assert "Proposition" not in turn["text"]     # bloc retiré du texte affiché
+
     def test_conversation_context_is_fed_to_agent(self, env):
         # Un tour précédent existe → le fichier conversation transmis à l'agent le contient.
         env.store.append_turn(role="user", kind="discuss", text="Premier échange ?")

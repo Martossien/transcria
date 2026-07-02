@@ -6,7 +6,7 @@ des artefacts avant chaque application).
 """
 from pathlib import Path
 
-from transcria.workflow.refine_store import RefineStore
+from transcria.workflow.refine_store import RefineStore, extract_proposal
 
 
 def _store(tmp_path) -> RefineStore:
@@ -49,6 +49,58 @@ class TestChatHistory:
 
     def test_conversation_context_empty(self, tmp_path):
         assert _store(tmp_path).conversation_context() == ""
+
+
+class TestExtractProposal:
+    """La réponse discuss se termine par « --- / Proposition d'application : … » (contrat
+    du prompt). L'extraction est SERVEUR (testée ici) — l'UI ne parse rien."""
+
+    def test_extracts_proposal_and_strips_block(self):
+        answer = (
+            "La réunion compte 2 locuteurs : une cliente et un fromager.\n\n"
+            "---\n"
+            "Proposition d'application : mettre en avant les deux intervenants dans la synthèse."
+        )
+        text, proposal = extract_proposal(answer)
+        assert proposal == "mettre en avant les deux intervenants dans la synthèse."
+        assert "---" not in text and "Proposition" not in text
+        assert text.startswith("La réunion compte 2 locuteurs")
+
+    def test_aucune_means_no_proposal_text_kept(self):
+        answer = "Réponse.\n\n---\nProposition d'application : aucune — la synthèse est fidèle."
+        text, proposal = extract_proposal(answer)
+        assert proposal is None
+        assert text == answer   # bloc informatif conservé tel quel
+
+    def test_no_separator_no_proposal(self):
+        text, proposal = extract_proposal("Réponse simple sans proposition.")
+        assert proposal is None and text == "Réponse simple sans proposition."
+
+    def test_tail_without_label_untouched(self):
+        answer = "Réponse.\n\n---\nNote finale sans le label attendu."
+        text, proposal = extract_proposal(answer)
+        assert proposal is None and text == answer
+
+    def test_apostrophe_typographique_et_gras(self):
+        answer = "Réponse.\n\n---\n**Proposition d’application** : raccourcir la synthèse."
+        _, proposal = extract_proposal(answer)
+        assert proposal == "raccourcir la synthèse."
+
+    def test_empty_input(self):
+        assert extract_proposal("") == ("", None)
+
+
+class TestTurnProposal:
+    def test_append_turn_stores_proposal(self, tmp_path):
+        s = _store(tmp_path)
+        s.append_turn(role="assistant", kind="discuss", text="Réponse.", proposal="raccourcir la synthèse")
+        turn = s.load_turns()[-1]
+        assert turn["proposal"] == "raccourcir la synthèse"
+
+    def test_append_turn_without_proposal_has_no_key(self, tmp_path):
+        s = _store(tmp_path)
+        s.append_turn(role="assistant", kind="discuss", text="Réponse.")
+        assert "proposal" not in s.load_turns()[-1]
 
 
 class TestPendingRequest:

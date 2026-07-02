@@ -170,6 +170,20 @@
       }
       div.firstChild.textContent = t.text;   // textContent : jamais d'injection HTML
       thread.appendChild(div);
+      if (t.role === "assistant" && t.proposal) {
+        // Proposition d'application (extraite côté serveur) : consentement explicite —
+        // l'utilisateur voit EXACTEMENT ce qui sera appliqué avant de cliquer.
+        const card = document.createElement("div");
+        card.className = "text-start mb-2 ms-3";
+        card.innerHTML =
+          '<div class="border border-primary-subtle rounded p-2 d-inline-block" style="max-width:85%;background:var(--bs-primary-bg-subtle);">' +
+          '<div class="small mb-1"><i class="bi bi-lightbulb"></i> <strong>Proposition</strong> : <span class="prop-text"></span></div>' +
+          '<button type="button" class="btn btn-primary btn-sm refine-proposal-btn">' +
+          '<i class="bi bi-magic"></i> Appliquer cette proposition</button></div>';
+        card.querySelector(".prop-text").textContent = t.proposal;
+        card.querySelector(".refine-proposal-btn").addEventListener("click", () => submit("apply", t.proposal));
+        thread.appendChild(card);
+      }
     }
     thread.scrollTop = thread.scrollHeight;
   }
@@ -219,10 +233,16 @@
     } catch (e) { /* réseau : on retentera au prochain poll */ }
   }
 
-  async function submit(kind) {
-    const message = input.value.trim();
+  async function submit(kind, messageOverride) {
+    const fromInput = messageOverride == null;
+    const message = (fromInput ? input.value : messageOverride).trim();
     if (!message) { showError("Écrivez d'abord votre demande."); return; }
-    if (kind === "apply" && !confirm("Appliquer cette demande aux documents ? (une version restaurable sera créée)")) return;
+    if (kind === "apply") {
+      // Confirmation EXPLICITE : l'utilisateur relit la demande exacte qui sera appliquée.
+      const preview = message.length > 240 ? message.slice(0, 240) + "…" : message;
+      if (!confirm("Appliquer aux documents :\n\n« " + preview + " »\n\n" +
+                   "Une version restaurable sera créée (retour arrière possible).")) return;
+    }
     setBusy(true);
     try {
       const r = await fetch(api(""), {
@@ -231,7 +251,7 @@
       });
       const data = await r.json();
       if (!r.ok) { setBusy(false); showError(data.error || "Erreur"); return; }
-      input.value = "";
+      if (fromInput) input.value = "";
       if (!pollTimer) pollTimer = setInterval(refresh, 4000);
       refresh();
     } catch (e) { setBusy(false); showError("Erreur réseau — réessayez."); }

@@ -45,5 +45,7 @@ les chemins de tous les fichiers ci-dessous.
 
 ## 3. Sortie
 Écris ta réponse (Markdown, en français) dans `refine_answer.md` — UNIQUEMENT ce
-fichier. Termine par une ligne `---` suivie, si pertinent, d'une **proposition
-d'application** en une phrase (ce qui sera fait si l'utilisateur clique « Appliquer »).
+fichier. Termine TOUJOURS par une ligne `---` suivie d'une ligne au format EXACT :
+`Proposition d'application : <une phrase actionnable>` — ce qui sera fait si
+l'utilisateur clique « Appliquer » (le système lui propose ce texte tel quel) ; ou
+`Proposition d'application : aucune` s'il n'y a rien à appliquer.

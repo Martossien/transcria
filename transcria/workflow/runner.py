@@ -2160,9 +2160,15 @@ class WorkflowRunner:
             workspace.verify_and_restore_sources()
 
             if kind == "discuss":
+                from transcria.workflow.refine_store import extract_proposal
+
                 answer = workspace.read_output("refine_answer.md") \
                     or "(l'assistant n'a pas produit de réponse — réessayez)"
-                store.append_turn(role="assistant", kind=kind, text=answer, max_turns=max_turns)
+                # La « Proposition d'application » finale est extraite CÔTÉ SERVEUR :
+                # l'UI l'affiche à part avec le bouton « Appliquer cette proposition ».
+                answer, proposal = extract_proposal(answer)
+                store.append_turn(role="assistant", kind=kind, text=answer,
+                                  max_turns=max_turns, proposal=proposal)
                 workspace.cleanup(success=True)
                 return {"success": True, "kind": "discuss"}
 

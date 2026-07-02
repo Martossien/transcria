@@ -61,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
         fs.save_text("metadata/transcription.srt", _SRT)
         fs.save_json("quality/quality_report.json", {"quality_score": 92, "total_checks": 8})
         fs.save_json("quality/review_points.json", ["Vérifier la cohérence d'un terme technique."])
+        # Historique du chat d'affinage avec une « Proposition d'application » : permet au
+        # walkthrough de vérifier SANS GPU que le panneau rend le fil + le bouton
+        # « Appliquer cette proposition » (le tour vient normalement de run_refine).
+        fs.save_json("refine/chat.json", [
+            {"role": "user", "kind": "discuss", "text": "Peut-on condenser la synthèse ?",
+             "ts": "2026-07-02T12:00:00+00:00"},
+            {"role": "assistant", "kind": "discuss",
+             "text": "Oui, la synthèse peut être condensée sans perte des faits.",
+             "proposal": "raccourcir la synthèse de moitié en conservant les faits essentiels",
+             "ts": "2026-07-02T12:01:00+00:00"},
+        ])
 
         safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
         exports = fs.job_dir / "exports"
