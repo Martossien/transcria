@@ -39,7 +39,8 @@ from transcria.workflow.transitions import (
 # file (pas de COMPLETED/FAILED de pipeline, pas d'e-mail propriétaire).
 SUMMARY_MODE = "summary"
 SPEAKER_MODE = "speakers"
-STEP_MODES = (SUMMARY_MODE, SPEAKER_MODE)
+REFINE_MODE = "refine"
+STEP_MODES = (SUMMARY_MODE, SPEAKER_MODE, REFINE_MODE)
 
 
 def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
@@ -189,6 +190,10 @@ class JobExecutorService:
                     runner = WorkflowRunner(JobStore, self.config)  # type: ignore[arg-type]
                     if mode == SUMMARY_MODE:
                         result = runner.run_summary(job, audio_path, self.config)
+                    elif mode == REFINE_MODE:
+                        # Tour du chat d'affinage (job terminé) : la demande vit dans
+                        # refine/request.json, le runner gère tout (best-effort).
+                        result = runner.run_refine(job, self.config)
                     else:  # SPEAKER_MODE
                         result = runner.run_speaker_detection(job, audio_path, self.config, update_state=True)
                 else:

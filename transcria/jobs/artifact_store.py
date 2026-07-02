@@ -42,7 +42,7 @@ CHUNK_SIZE = 8 * 1024 * 1024
 # Préfixes synchronisés entre tiers. Exclus volontairement : `exports/` (zip/docx
 # reconstruits localement à la demande), `audio/` (intermédiaires du préprocess,
 # locaux au worker), et les caches générés à la demande (voir EXCLUDED_PREFIXES).
-SYNCED_PREFIXES: tuple[str, ...] = ("input/", "context/", "metadata/", "speakers/", "quality/", "summary/")
+SYNCED_PREFIXES: tuple[str, ...] = ("input/", "context/", "metadata/", "speakers/", "quality/", "summary/", "refine/")
 EXCLUDED_PREFIXES: tuple[str, ...] = ("metadata/audio_excerpts/",)
 
 # Intermédiaires audio dérivés du préprocess, écrits SOUS `input/` (Path(audio).parent) :
@@ -59,8 +59,9 @@ _EXCLUDED_AUDIO_INTERMEDIATES: frozenset[str] = frozenset({
     "input/normalized.wav",
 })
 
-# Préfixes que la frontale pousse à l'enfilage (entrées du worker).
-INPUT_PREFIXES: tuple[str, ...] = ("input/", "context/", "speakers/")
+# Préfixes que la frontale pousse à l'enfilage (entrées du worker). `refine/` porte la
+# demande du chat d'affinage (request.json + historique) — le worker doit la voir.
+INPUT_PREFIXES: tuple[str, ...] = ("input/", "context/", "speakers/", "refine/")
 
 # Préfixes poussés par le hook d'écriture web (`after_app_request`) : tout SAUF `input/`.
 # L'audio est poussé explicitement (upload, enfilage) ; le re-pousser ici annulerait la

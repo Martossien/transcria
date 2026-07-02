@@ -20,6 +20,8 @@ class AuditAction(str, enum.Enum):
     JOB_EXTERNAL_PUSH = "job_external_push"
     JOB_ENQUEUE = "job_enqueue"
     JOB_DEQUEUE = "job_dequeue"
+    JOB_REFINE_REQUEST = "job_refine_request"
+    JOB_REFINE_REVERT = "job_refine_revert"
     JOB_PRIORITIZE = "job_prioritize"
     JOB_REORDER = "job_reorder"
     JOB_TEST_PURGE = "job_test_purge"

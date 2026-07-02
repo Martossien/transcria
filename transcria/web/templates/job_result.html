@@ -70,8 +70,215 @@
 </details>
 {% endif %}
 
+{# ── Chat d'affinage des livrables (LLM locale) ─────────────────────────── #}
+<div class="card mb-4 mt-4" id="refine-chat" data-job-id="{{ job.id }}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-chat-dots"></i> Affiner les livrables avec l'assistant</span>
+    <span id="refine-busy" class="text-muted small d-none">
+      <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+      L'assistant travaille (30&nbsp;s à 2&nbsp;min)…
+    </span>
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-2">
+      Discutez du résultat (question, vérification, demande de reformulation), puis
+      <strong>appliquez</strong> quand la proposition vous convient : les documents sont
+      régénérés et chaque application crée une <strong>version restaurable</strong>.
+    </p>
+    <div id="refine-thread" class="border rounded p-2 mb-2 bg-body-tertiary"
+         style="max-height: 340px; overflow-y: auto; display: none;"></div>
+    <div class="input-group mb-2">
+      <textarea id="refine-input" class="form-control" rows="2" maxlength="4000"
+        placeholder="Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"></textarea>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button id="refine-discuss" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-chat"></i> Discuter
+      </button>
+      <button id="refine-apply" class="btn btn-primary btn-sm">
+        <i class="bi bi-magic"></i> Appliquer les modifications
+      </button>
+      <span class="ms-auto"></span>
+      <select id="refine-versions" class="form-select form-select-sm d-none" style="width:auto"></select>
+      <button id="refine-revert" class="btn btn-outline-danger btn-sm d-none">
+        <i class="bi bi-arrow-counterclockwise"></i> Restaurer
+      </button>
+    </div>
+
+    <details class="mt-3">
+      <summary class="text-muted small">Options du document (sans assistant — immédiat)</summary>
+      <div class="d-flex flex-wrap gap-3 align-items-end mt-2">
+        <div>
+          <label class="form-label small mb-1" for="refine-theme">Thème du rapport</label>
+          <select id="refine-theme" class="form-select form-select-sm"><option value="">(selon le type)</option></select>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="refine-sec-participants" checked>
+          <label class="form-check-label small" for="refine-sec-participants">Participants</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="refine-sec-transcript" checked>
+          <label class="form-check-label small" for="refine-sec-transcript">Transcription</label>
+        </div>
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="refine-sec-quality" checked>
+          <label class="form-check-label small" for="refine-sec-quality">Points à vérifier</label>
+        </div>
+        <button id="refine-options-apply" class="btn btn-outline-secondary btn-sm">Appliquer les options</button>
+      </div>
+    </details>
+    <div id="refine-error" class="alert alert-warning py-1 px-2 small mt-2 d-none"></div>
+  </div>
+</div>
+
 <div class="mt-3">
   <a href="/jobs/{{ job.id }}" class="btn btn-outline-primary btn-sm">Retour au traitement</a>
   <a href="/" class="btn btn-outline-secondary btn-sm">Accueil</a>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  "use strict";
+  const jobId = document.getElementById("refine-chat").dataset.jobId;
+  const api = (p) => `/api/jobs/${jobId}/refine${p}`;
+  const el = (id) => document.getElementById(id);
+  const thread = el("refine-thread"), input = el("refine-input");
+  let busy = false, pollTimer = null;
+
+  function showError(msg) {
+    const box = el("refine-error");
+    box.textContent = msg; box.classList.remove("d-none");
+    setTimeout(() => box.classList.add("d-none"), 8000);
+  }
+
+  function renderTurns(turns) {
+    thread.style.display = turns.length ? "block" : "none";
+    thread.innerHTML = "";
+    for (const t of turns) {
+      const div = document.createElement("div");
+      if (t.role === "user") {
+        div.className = "text-end mb-2";
+        div.innerHTML = '<span class="badge bg-primary-subtle text-primary-emphasis" style="white-space:pre-wrap;text-align:left;max-width:85%;display:inline-block;font-weight:normal;font-size:0.875rem;"></span>';
+      } else if (t.role === "system") {
+        div.className = "text-center mb-2";
+        div.innerHTML = '<span class="text-muted fst-italic small"></span>';
+      } else {
+        div.className = "text-start mb-2";
+        div.innerHTML = '<span class="badge bg-secondary-subtle text-body" style="white-space:pre-wrap;text-align:left;max-width:85%;display:inline-block;font-weight:normal;font-size:0.875rem;"></span>';
+      }
+      div.firstChild.textContent = t.text;   // textContent : jamais d'injection HTML
+      thread.appendChild(div);
+    }
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  function setBusy(b) {
+    busy = b;
+    el("refine-busy").classList.toggle("d-none", !b);
+    el("refine-discuss").disabled = b;
+    el("refine-apply").disabled = b;
+  }
+
+  function renderVersions(versions) {
+    const sel = el("refine-versions"), btn = el("refine-revert");
+    sel.classList.toggle("d-none", !versions.length);
+    btn.classList.toggle("d-none", !versions.length);
+    sel.innerHTML = versions.map(v => `<option value="${v}">Version v${v}</option>`).join("");
+    sel.selectedIndex = sel.options.length - 1;
+  }
+
+  function renderOptions(data) {
+    const themeSel = el("refine-theme");
+    if (themeSel.options.length <= 1 && data.themes) {
+      for (const t of data.themes) {
+        const o = document.createElement("option"); o.value = t; o.textContent = t;
+        themeSel.appendChild(o);
+      }
+    }
+    const opts = data.render_options || {};
+    if (opts.theme) themeSel.value = opts.theme;
+    const sections = opts.sections || {};
+    for (const key of ["participants", "transcript", "quality"]) {
+      if (key in sections) el(`refine-sec-${key}`).checked = sections[key];
+    }
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch(api("/chat"));
+      if (!r.ok) return;
+      const data = await r.json();
+      renderTurns(data.turns || []);
+      renderVersions(data.versions || []);
+      renderOptions(data);
+      setBusy(!!data.busy);
+      if (data.busy && !pollTimer) pollTimer = setInterval(refresh, 4000);
+      if (!data.busy && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    } catch (e) { /* réseau : on retentera au prochain poll */ }
+  }
+
+  async function submit(kind) {
+    const message = input.value.trim();
+    if (!message) { showError("Écrivez d'abord votre demande."); return; }
+    if (kind === "apply" && !confirm("Appliquer cette demande aux documents ? (une version restaurable sera créée)")) return;
+    setBusy(true);
+    try {
+      const r = await fetch(api(""), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, message }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setBusy(false); showError(data.error || "Erreur"); return; }
+      input.value = "";
+      if (!pollTimer) pollTimer = setInterval(refresh, 4000);
+      refresh();
+    } catch (e) { setBusy(false); showError("Erreur réseau — réessayez."); }
+  }
+
+  el("refine-discuss").addEventListener("click", () => submit("discuss"));
+  el("refine-apply").addEventListener("click", () => submit("apply"));
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); submit("discuss"); }
+  });
+
+  el("refine-options-apply").addEventListener("click", async () => {
+    const payload = {
+      sections: {
+        participants: el("refine-sec-participants").checked,
+        transcript: el("refine-sec-transcript").checked,
+        quality: el("refine-sec-quality").checked,
+      },
+    };
+    const theme = el("refine-theme").value;
+    if (theme) payload.theme = theme;
+    try {
+      const r = await fetch(api("/render-options"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json();
+      if (!r.ok) { showError(data.error || "Options invalides"); return; }
+      refresh();
+    } catch (e) { showError("Erreur réseau — réessayez."); }
+  });
+
+  el("refine-revert").addEventListener("click", async () => {
+    const v = parseInt(el("refine-versions").value, 10);
+    if (!v || !confirm(`Restaurer la version v${v} ? Les documents reviendront à cet état.`)) return;
+    try {
+      const r = await fetch(api("/revert"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: v }),
+      });
+      const data = await r.json();
+      if (!r.ok) { showError(data.error || "Restauration impossible"); return; }
+      refresh();
+    } catch (e) { showError("Erreur réseau — réessayez."); }
+  });
+
+  refresh();
+})();
+</script>
 {% endblock %}

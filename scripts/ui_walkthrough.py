@@ -34,6 +34,7 @@ Lancé via le helper de cycle de vie serveur (instance contrôlée, DB SQLite te
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -325,6 +326,36 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("page /result", False, str(exc)[:120])
 
+    def refine_chat_panel(self, job_id: str) -> None:
+        # Chat d'affinage des livrables (GPU-free : AUCUN appel LLM ici) : le panneau
+        # est présent sur /result, l'endpoint de polling répond, et les options de
+        # rendu DIRECTES (sans assistant) sont acceptées puis reflétées par le GET.
+        try:
+            self.page.goto(f"{self.base}/jobs/{job_id}/result", wait_until="networkidle")
+            ok_panel = self.page.locator("#refine-chat").count() == 1
+            resp = self.page.request.get(f"{self.base}/api/jobs/{job_id}/refine/chat")
+            data = resp.json() if resp.ok else {}
+            self.check(
+                "affinage : panneau présent + endpoint chat répond",
+                ok_panel and resp.ok and "turns" in data and "themes" in data,
+                f"status={resp.status}",
+            )
+            r2 = self.page.request.post(
+                f"{self.base}/api/jobs/{job_id}/refine/render-options",
+                data=json.dumps({"sections": {"transcript": False}}),
+                headers={"Content-Type": "application/json"},
+            )
+            r3 = self.page.request.get(f"{self.base}/api/jobs/{job_id}/refine/chat")
+            opts = (r3.json() if r3.ok else {}).get("render_options", {})
+            self.check(
+                "affinage : options de rendu directes (sans LLM) écrites et relues",
+                r2.ok and opts.get("sections", {}).get("transcript") is False,
+                f"post={r2.status} opts={opts}",
+            )
+            self.shot("19_refine_chat")
+        except Exception as exc:  # noqa: BLE001
+            self.check("panneau d'affinage", False, str(exc)[:120])
+
     def ux_friendliness(self) -> None:
         # Convivialité « live » : une URL inexistante rend une page d'erreur FRANÇAISE
         # (pas la page Werkzeug brute en anglais) AVEC un chemin de sortie cliquable qui
@@ -386,6 +417,7 @@ def main() -> int:
             wt.ux_friendliness()
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)
+                wt.refine_chat_panel(args.result_job_id)
         finally:
             browser.close()
         ok = wt.report()
