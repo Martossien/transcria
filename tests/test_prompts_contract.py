@@ -97,12 +97,12 @@ class TestRefinePromptsContract:
     """Chat d'affinage : les noms de fichiers de sortie et le vocabulaire des options
     de rendu doivent rester alignés sur ``run_refine`` / ``_apply_refine``."""
 
-    def test_discuss_fichier_de_sortie(self):
-        assert "refine_answer.md" in _read("refine_discuss_prompt.txt")
-
-    def test_discuss_lecture_seule(self):
+    def test_discuss_est_un_message_systeme_direct(self):
+        # Le discuss est un appel LLM DIRECT (refine_llm) : pas d'agent, pas de fichier
+        # de sortie — le template ne doit plus parler de refine_answer.md.
         p = _read("refine_discuss_prompt.txt")
-        assert "NE MODIFIER AUCUN FICHIER" in p
+        assert "refine_answer.md" not in p
+        assert "TU NE MODIFIES RIEN ICI" in p
 
     def test_discuss_label_proposition_aligne_sur_extracteur(self):
         # extract_proposal() parse ce label littéral — le prompt doit l'imposer tel quel.
@@ -119,6 +119,12 @@ class TestRefinePromptsContract:
 
     def test_apply_prefixe_locuteur_intouchable(self):
         assert "SPEAKER_XX" in _read("refine_apply_prompt.txt")
+
+    def test_coherence_multi_artefacts_par_defaut(self):
+        # Retour utilisateur : une correction de terme doit couvrir par défaut TOUS les
+        # livrables (la synthèse fait partie du produit final), pas le seul SRT.
+        assert "TOUS de façon cohérente" in _read("refine_apply_prompt.txt")
+        assert "TOUS les livrables" in _read("refine_discuss_prompt.txt")
 
     def test_apply_sections_de_rendu_alignees_sur_le_code(self):
         from transcria.exports.docx_report import _RENDER_SECTIONS

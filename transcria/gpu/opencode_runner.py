@@ -1068,33 +1068,35 @@ class OpenCodeRunner:
         structured_path: str,
         options_path: str,
         user_message: str,
+        review_path: str | None = None,
     ) -> dict:
-        """Tour du chat d'affinage des livrables (post-workflow).
+        """Tour « apply » du chat d'affinage des livrables (post-workflow).
 
-        ``kind="discuss"`` : répond sans modifier — écrit ``refine_answer.md``.
-        ``kind="apply"``   : applique la demande sur les copies de travail — écrit
-        ``summary_refined.md`` / ``transcription_refined.srt`` /
-        ``structured_data_refined.json`` / ``render_options_refined.json`` +
-        ``refine_report.md``. Les sorties sont relues par l'appelant (workspace) et
-        passées aux garde-fous déterministes AVANT tout write-back.
+        Applique la demande sur les copies de travail — écrit ``summary_refined.md`` /
+        ``transcription_refined.srt`` / ``structured_data_refined.json`` /
+        ``render_options_refined.json`` + ``refine_report.md``. Les sorties sont
+        relues par l'appelant (workspace) et passées aux garde-fous déterministes
+        AVANT tout write-back.
+
+        Le mode « discuss » ne passe PAS par opencode : lecture seule → complétion
+        directe sur la LLM d'arbitrage (cf. ``transcria.workflow.refine_llm``).
         """
-        prompt_name = "refine_apply_prompt.txt" if kind == "apply" else "refine_discuss_prompt.txt"
-        prompt_file = os.path.abspath(os.path.join(_get_prompts_dir(self._config), prompt_name))
-
-        if kind == "apply":
-            expected = (
-                "écris UNIQUEMENT les fichiers que la demande modifie parmi : "
-                "summary_refined.md, transcription_refined.srt (TOTALITÉ des segments), "
-                "structured_data_refined.json, render_options_refined.json — plus "
-                "refine_report.md (OBLIGATOIRE)"
-            )
-        else:
-            expected = "écris UNIQUEMENT ta réponse dans refine_answer.md, sans modifier aucun autre fichier"
+        prompt_file = os.path.abspath(
+            os.path.join(_get_prompts_dir(self._config), "refine_apply_prompt.txt")
+        )
+        expected = (
+            "écris UNIQUEMENT les fichiers que la demande modifie parmi : "
+            "summary_refined.md, transcription_refined.srt (TOTALITÉ des segments), "
+            "structured_data_refined.json, render_options_refined.json — plus "
+            "refine_report.md (OBLIGATOIRE)"
+        )
+        review_part = f"Points à vérifier (contrôle qualité) : {review_path}. " if review_path else ""
         instruction = (
             f"Tu travailles dans le répertoire {self.work_dir}. "
             f"Conversation précédente : {conversation_path}. Demande courante : {request_path}. "
             f"Synthèse actuelle : {summary_path}. Transcription corrigée : {srt_path}. "
             f"Données structurées : {structured_path}. Options de rendu : {options_path}. "
+            f"{review_part}"
             f"Demande de l'utilisateur : {user_message} "
             f"— {expected}, dans ce répertoire."
         )

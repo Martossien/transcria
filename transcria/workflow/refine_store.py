@@ -44,21 +44,43 @@ def extract_proposal(text: str) -> tuple[str, str | None]:
     - proposition trouvée → le bloc est retiré du texte (l'UI l'affiche à part, avec le
       bouton « Appliquer cette proposition ») ;
     - « aucune » ou format non conforme → ``(texte intact, None)`` — jamais d'erreur.
+
+    Tolérance (observé en réel) : le modèle omet parfois la ligne ``---`` (p. ex. en
+    enchaînant après un tableau Markdown) — le label posé sur la DERNIÈRE ligne de la
+    réponse est alors accepté, pour ne pas perdre la proposition.
     """
     if not text:
         return text, None
+    # 1) Chemin contractuel : dernier séparateur « --- » puis label.
     matches = list(_PROPOSAL_SEP.finditer(text))
-    if not matches:
-        return text, None
-    sep = matches[-1]
-    tail = text[sep.end():].strip()
-    m = _PROPOSAL_LABEL.match(tail)
-    if not m:
-        return text, None
-    proposal = m.group(1).strip().strip("*_").strip()
+    if matches:
+        sep = matches[-1]
+        tail = text[sep.end():].strip()
+        m = _PROPOSAL_LABEL.match(tail)
+        if m:
+            proposal = _clean_proposal(m.group(1))
+            if proposal is None:
+                return text, None  # bloc informatif (« aucune — … ») : conservé tel quel
+            return text[: sep.start()].rstrip(), proposal
+    # 2) Tolérance : label sur la dernière ligne non vide, séparateur omis.
+    lines = text.rstrip().splitlines()
+    if lines:
+        m = _PROPOSAL_LABEL.match(lines[-1].strip())
+        if m:
+            proposal = _clean_proposal(m.group(1))
+            if proposal is None:
+                return text, None
+            rest = "\n".join(lines[:-1]).rstrip()
+            rest = re.sub(r"\n-{3,}\s*$", "", rest).rstrip()  # séparateur orphelin éventuel
+            return rest, proposal
+    return text, None
+
+
+def _clean_proposal(raw: str) -> str | None:
+    proposal = raw.strip().strip("*_").strip()
     if not proposal or re.match(r"(?i)^aucune\b", proposal):
-        return text, None  # bloc informatif (« aucune — … ») : conservé tel quel
-    return text[: sep.start()].rstrip(), proposal
+        return None
+    return proposal
 
 
 class RefineStore:

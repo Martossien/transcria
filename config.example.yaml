@@ -604,12 +604,16 @@ workflow:
     enabled: true
     # Taille max d'un message utilisateur (caractères).
     max_message_chars: 4000
-    # Timeout d'un tour (secondes) — un tour = un run opencode complet.
+    # Timeout d'un tour (secondes) — discuss = un appel LLM direct ; apply = un run opencode.
     timeout_seconds: 900
     # Nb de tours conservés dans l'historique (refine/chat.json).
     max_turns_kept: 200
     # Nb de tours rejoués à la LLM à chaque tour (contexte conversationnel).
     context_turns: 12
+    # Mode discuss (appel LLM direct) : taille max de la transcription inline (caractères,
+    # troncature signalée au-delà) et longueur max de la réponse (tokens).
+    max_transcript_chars: 60000
+    max_answer_tokens: 2000
 
 quality:
   # Phrases détectées dans les segments courts (< 1 s) → signalées dans le rapport qualité.

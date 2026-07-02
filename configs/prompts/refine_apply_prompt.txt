@@ -17,7 +17,11 @@ les chemins de tous les fichiers ci-dessous.
 1. **NE JAMAIS INVENTER** une information, un chiffre, une date, une décision, un nom :
    tout contenu ajouté ou reformulé doit être étayé par la transcription fournie.
 2. **PÉRIMÈTRE STRICT** : applique LA demande de l'utilisateur, rien d'autre. Pas de
-   corrections opportunistes, pas de réécriture non demandée.
+   corrections opportunistes, pas de réécriture non demandée. La demande définit le
+   **CHANGEMENT**, pas un fichier unique : si le terme, le nom ou le contenu visé
+   apparaît dans PLUSIEURS artefacts (synthèse, transcription, données structurées),
+   corrige-les TOUS de façon cohérente — le document final est produit à partir de
+   l'ensemble — sauf si l'utilisateur restreint explicitement à un seul artefact.
 3. **TRANSCRIPTION (SRT) — structure INTANGIBLE** : même nombre de segments, mêmes
    timecodes, préfixes `SPEAKER_XX(nom)` intouchables. Seul le TEXTE parlé peut être
    retouché si la demande le vise explicitement. Si la demande implique de supprimer,
@@ -33,6 +37,8 @@ les chemins de tous les fichiers ci-dessous.
 3. La **transcription corrigée** (copie de travail — à éditer SEULEMENT si demandé).
 4. Les **données structurées** JSON (copie de travail à éditer si demandé).
 5. Les **options de rendu** actuelles (`render_options.json` — copie de travail).
+6. Les **points à vérifier** du contrôle qualité (`review_points.md`, lecture seule) —
+   dont les variantes de lexique non résolues ; utile si la demande vise à les traiter.
 
 ## 2. Ce que tu peux modifier (copies de travail UNIQUEMENT)
 - **La synthèse** : ton, longueur, structure des paragraphes, mise en avant de points

@@ -2048,10 +2048,12 @@ class WorkflowRunner:
         ``refine/chat.json``. Deux sous-modes :
 
         - ``discuss`` : la LLM répond (conseil, vérification, proposition) sans
-          modifier AUCUN fichier ;
-        - ``apply``   : la LLM édite les copies de travail des artefacts texte ; les
-          garde-fous déterministes valident ; un snapshot de version est pris AVANT
-          tout write-back (restauration possible) ; le package est reconstruit.
+          modifier AUCUN fichier — appel DIRECT ``/v1/chat/completions`` (une seule
+          génération, ~5× plus rapide que la boucle agentique opencode) ;
+        - ``apply``   : la LLM édite les copies de travail des artefacts texte via
+          opencode ; les garde-fous déterministes valident ; un snapshot de version
+          est pris AVANT tout write-back (restauration possible) ; le package est
+          reconstruit.
 
         Best-effort intégral : tout échec produit un tour assistant explicatif — les
         livrables existants ne sont JAMAIS abîmés.
@@ -2075,6 +2077,8 @@ class WorkflowRunner:
         kind = str(request.get("kind") or "")
         kind = kind if kind in ("discuss", "apply") else "discuss"
         max_turns = int(refine_cfg.get("max_turns_kept", 200))
+        # Historique AVANT le tour courant (rejoué à la LLM en vrais tours de chat).
+        history = store.load_turns()[-int(refine_cfg.get("context_turns", 12)):]
         store.append_turn(role="user", kind=kind, text=message, max_turns=max_turns)
 
         self.progress.update(
@@ -2113,36 +2117,81 @@ class WorkflowRunner:
                 )
                 return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
 
-            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
-
-            workspace = AgentWorkspace(fs, "refine", work_root=resolve_agent_work_root(config))
-            staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
             meeting_ctx = fs.load_json("context/meeting_context.json") or {}
             effective_summary = (
                 meeting_ctx.get("summary") or meeting_ctx.get("summary_harmonized")
                 or meeting_ctx.get("summary_llm") or ""
             ).strip()
+            structured_json = json.dumps(
+                meeting_ctx.get("structured_data") or {}, ensure_ascii=False, indent=2,
+            )
+            from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES
+
+            current_options = fs.load_json("context/render_options.json") or {}
+            options_json = json.dumps({
+                "theme": current_options.get("theme", ""),
+                "sections": current_options.get("sections", {}),
+                "themes_disponibles": sorted(_THEMES),
+                "sections_disponibles": list(_RENDER_SECTIONS),
+            }, ensure_ascii=False, indent=2)
+            # Points signalés par le contrôle qualité (dont « Variantes lexique non
+            # résolues ») : donnés en contexte pour que l'assistant puisse les traiter.
+            raw_points = fs.load_json("quality/review_points.json") or []
+            review_points = [str(p) for p in raw_points if str(p).strip()] if isinstance(raw_points, list) else []
+
+            if kind == "discuss":
+                # Lecture seule → complétion DIRECTE (pas d'opencode, pas de workspace).
+                import os as _os
+
+                from transcria.gpu.opencode_runner import _get_prompts_dir
+                from transcria.workflow.refine_llm import build_discuss_messages, chat_completion
+                from transcria.workflow.refine_store import extract_proposal
+
+                prompt_path = _os.path.join(_get_prompts_dir(config), "refine_discuss_prompt.txt")
+                with open(prompt_path, encoding="utf-8") as fh:
+                    system_prompt = fh.read()
+                srt_text = (
+                    fs.load_text("metadata/transcription_corrigee.srt")
+                    or fs.load_text("metadata/transcription.srt") or ""
+                )
+                messages = build_discuss_messages(
+                    system_prompt=system_prompt,
+                    summary=effective_summary,
+                    srt_text=srt_text,
+                    structured_json=structured_json,
+                    render_options_json=options_json,
+                    review_points=review_points,
+                    history=history,
+                    user_message=message,
+                    max_transcript_chars=int(refine_cfg.get("max_transcript_chars", 60000)),
+                )
+                answer = chat_completion(
+                    config, messages,
+                    timeout_s=int(refine_cfg.get("timeout_seconds", 900)),
+                    max_tokens=int(refine_cfg.get("max_answer_tokens", 2000)),
+                ) or "(l'assistant n'a pas produit de réponse — réessayez)"
+                # La « Proposition d'application » finale est extraite CÔTÉ SERVEUR :
+                # l'UI l'affiche à part avec le bouton « Appliquer cette proposition ».
+                answer, proposal = extract_proposal(answer)
+                store.append_turn(role="assistant", kind=kind, text=answer,
+                                  max_turns=max_turns, proposal=proposal)
+                return {"success": True, "kind": "discuss"}
+
+            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+
+            workspace = AgentWorkspace(fs, "refine", work_root=resolve_agent_work_root(config))
+            staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
             conversation_file = workspace.write_input(
                 "conversation.md",
                 store.conversation_context(max_turns=int(refine_cfg.get("context_turns", 12))),
             )
             request_file = workspace.write_input("user_request.md", message)
             summary_file = workspace.write_input("summary.md", effective_summary)
-            structured_file = workspace.write_input(
-                "structured_data.json",
-                json.dumps(meeting_ctx.get("structured_data") or {}, ensure_ascii=False, indent=2),
-            )
-            from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES
-
-            current_options = fs.load_json("context/render_options.json") or {}
-            options_file = workspace.write_input(
-                "render_options.json",
-                json.dumps({
-                    "theme": current_options.get("theme", ""),
-                    "sections": current_options.get("sections", {}),
-                    "themes_disponibles": sorted(_THEMES),
-                    "sections_disponibles": list(_RENDER_SECTIONS),
-                }, ensure_ascii=False, indent=2),
+            structured_file = workspace.write_input("structured_data.json", structured_json)
+            options_file = workspace.write_input("render_options.json", options_json)
+            review_file = workspace.write_input(
+                "review_points.md",
+                "\n".join(f"- {p}" for p in review_points) or "(aucun point signalé)",
             )
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
@@ -2155,22 +2204,10 @@ class WorkflowRunner:
                 srt_path=str(staged_srt),
                 structured_path=str(structured_file),
                 options_path=str(options_file),
+                review_path=str(review_file),
                 user_message=message,
             )
             workspace.verify_and_restore_sources()
-
-            if kind == "discuss":
-                from transcria.workflow.refine_store import extract_proposal
-
-                answer = workspace.read_output("refine_answer.md") \
-                    or "(l'assistant n'a pas produit de réponse — réessayez)"
-                # La « Proposition d'application » finale est extraite CÔTÉ SERVEUR :
-                # l'UI l'affiche à part avec le bouton « Appliquer cette proposition ».
-                answer, proposal = extract_proposal(answer)
-                store.append_turn(role="assistant", kind=kind, text=answer,
-                                  max_turns=max_turns, proposal=proposal)
-                workspace.cleanup(success=True)
-                return {"success": True, "kind": "discuss"}
 
             applied = self._apply_refine(fs, store, workspace, job, config, kind=kind, max_turns=max_turns)
             workspace.cleanup(success=True)
@@ -2281,7 +2318,10 @@ class WorkflowRunner:
             notes.append("Le paquet ZIP n'a pas pu être reconstruit immédiatement.")
 
         text = report or "Modifications appliquées."
-        text += f"\n\n(version v{version} enregistrée — restauration possible depuis la page)"
+        text += (
+            f"\n\n(version v{version} enregistrée — restauration possible depuis la page. "
+            "Retéléchargez les documents — Word, SRT, paquet — pour obtenir la version à jour.)"
+        )
         if notes:
             text += "\n\n" + "\n".join(f"⚠ {n}" for n in notes)
         store.append_turn(role="assistant", kind=kind, text=text, max_turns=max_turns)

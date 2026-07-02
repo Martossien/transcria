@@ -1,9 +1,10 @@
-"""Phase ``refine`` (chat d'affinage des livrables) — GPU-free, opencode mocké.
+"""Phase ``refine`` (chat d'affinage des livrables) — GPU-free, LLM/opencode mockés.
 
-Contrat (calqué sur ``run_final_review``) : best-effort intégral, verrou LLM +
-réservation VRAM, ``AgentWorkspace`` isolé, garde-fous déterministes en sortie
-(intégrité SRT, JSON valides, options de rendu filtrées), snapshot de version AVANT
-tout write-back, conversation persistée dans ``refine/chat.json``.
+Contrat : best-effort intégral, verrou LLM + réservation VRAM, conversation persistée
+dans ``refine/chat.json``. Le mode ``discuss`` est un appel LLM DIRECT
+(``refine_llm.chat_completion`` mocké) ; le mode ``apply`` passe par opencode
+(``AgentWorkspace`` isolé, garde-fous déterministes en sortie — intégrité SRT, JSON
+valides, options de rendu filtrées — snapshot de version AVANT tout write-back).
 """
 from __future__ import annotations
 
@@ -89,6 +90,18 @@ class _FakeOpenCode:
         return {"success": True}
 
 
+class _FakeChat:
+    """Simule refine_llm.chat_completion (appel direct du mode discuss)."""
+
+    answer: str = ""
+    seen: dict = {}
+
+    @classmethod
+    def call(cls, config, messages, **kwargs):
+        cls.seen = {"messages": messages, **kwargs}
+        return cls.answer
+
+
 # ── Environnement de test ─────────────────────────────────────────────────────
 
 @pytest.fixture()
@@ -107,6 +120,7 @@ def env(tmp_path, monkeypatch):
         "structured_data": {"decisions": ["Décision A"]},
     })
     fs.save_text("metadata/transcription_corrigee.srt", _SRT)
+    fs.save_json("quality/review_points.json", ["Variantes lexique non résolues : Téhou / TU."])
 
     runner = WorkflowRunner(object, config)
     runner.allocator = _FakeAllocator()
@@ -116,6 +130,10 @@ def env(tmp_path, monkeypatch):
     import transcria.gpu.opencode_runner as ocr
     monkeypatch.setattr(ocr, "OpenCodeRunner", _FakeOpenCode)
     _FakeOpenCode.outputs, _FakeOpenCode.seen = {}, {}
+
+    import transcria.workflow.refine_llm as rllm
+    monkeypatch.setattr(rllm, "chat_completion", _FakeChat.call)
+    _FakeChat.answer, _FakeChat.seen = "", {}
 
     job = SimpleNamespace(id="j1", title="Réunion test")
     store = RefineStore(jobs_dir=str(jobs_dir), job_id="j1")
@@ -131,7 +149,7 @@ def _srt_of(env) -> str:
 class TestRunRefineDiscuss:
     def test_discuss_appends_answer_no_file_change(self, env):
         env.store.write_request(kind="discuss", message="De quoi parle la réunion ?")
-        _FakeOpenCode.outputs = {"refine_answer.md": "La réunion porte sur…\n---\nProposition : rien."}
+        _FakeChat.answer = "La réunion porte sur…\n---\nProposition d'application : aucune"
         before = _srt_of(env)
 
         result = env.runner.run_refine(env.job, env.config)
@@ -142,13 +160,14 @@ class TestRunRefineDiscuss:
         assert "porte sur" in turns[1]["text"]
         assert _srt_of(env) == before                      # aucun artefact modifié
         assert env.store.has_active_request() is False     # demande consommée
+        assert _FakeOpenCode.seen == {}                    # AUCUN run opencode (appel direct)
 
     def test_discuss_proposal_extracted_into_turn(self, env):
         env.store.write_request(kind="discuss", message="Peut-on raccourcir ?")
-        _FakeOpenCode.outputs = {"refine_answer.md": (
+        _FakeChat.answer = (
             "Oui, la synthèse peut être condensée.\n\n---\n"
             "Proposition d'application : raccourcir la synthèse de moitié."
-        )}
+        )
 
         env.runner.run_refine(env.job, env.config)
 
@@ -156,16 +175,33 @@ class TestRunRefineDiscuss:
         assert turn["proposal"] == "raccourcir la synthèse de moitié."
         assert "Proposition" not in turn["text"]     # bloc retiré du texte affiché
 
-    def test_conversation_context_is_fed_to_agent(self, env):
-        # Un tour précédent existe → le fichier conversation transmis à l'agent le contient.
+    def test_discuss_history_replayed_as_chat_turns(self, env):
+        # Les tours précédents sont rejoués en VRAIS messages user/assistant,
+        # la demande courante en dernier.
         env.store.append_turn(role="user", kind="discuss", text="Premier échange ?")
         env.store.append_turn(role="assistant", kind="discuss", text="Réponse initiale mémorable.")
         env.store.write_request(kind="discuss", message="Et ensuite ?")
-        _FakeOpenCode.outputs = {"refine_answer.md": "Suite."}
+        _FakeChat.answer = "Suite."
 
         env.runner.run_refine(env.job, env.config)
 
-        assert "mémorable" in _FakeOpenCode.seen.get("conversation_text", "")
+        messages = _FakeChat.seen["messages"]
+        assert messages[0]["role"] == "system"
+        assert [m["role"] for m in messages[1:]] == ["user", "assistant", "user"]
+        assert "mémorable" in messages[2]["content"]
+        assert messages[-1]["content"] == "Et ensuite ?"
+
+    def test_discuss_context_includes_srt_and_review_points(self, env):
+        # Le message système embarque la transcription ET les points du contrôle
+        # qualité (dont « Variantes lexique non résolues »).
+        env.store.write_request(kind="discuss", message="Des points à corriger ?")
+        _FakeChat.answer = "Oui."
+
+        env.runner.run_refine(env.job, env.config)
+
+        system = _FakeChat.seen["messages"][0]["content"]
+        assert "Segment numéro 1" in system                       # SRT inline
+        assert "Variantes lexique non résolues" in system         # points qualité
 
     def test_no_request_is_noop(self, env):
         result = env.runner.run_refine(env.job, env.config)
@@ -189,8 +225,21 @@ class TestRunRefineDiscuss:
         result = env.runner.run_refine(env.job, env.config)
         assert result.get("skipped") is True
 
-    def test_opencode_failure_gives_feedback_turn(self, env):
+    def test_llm_call_failure_gives_feedback_turn(self, env, monkeypatch):
         env.store.write_request(kind="discuss", message="?")
+
+        import transcria.workflow.refine_llm as rllm
+
+        def _boom(config, messages, **kwargs):
+            raise RuntimeError("LLM injoignable")
+
+        monkeypatch.setattr(rllm, "chat_completion", _boom)
+        result = env.runner.run_refine(env.job, env.config)
+        assert result["success"] is True                   # best-effort
+        assert env.store.load_turns()[-1]["role"] == "assistant"
+
+    def test_apply_opencode_failure_gives_feedback_turn(self, env):
+        env.store.write_request(kind="apply", message="Fais X")
 
         class _Boom(_FakeOpenCode):
             def run_refine(self, **kwargs):
@@ -228,6 +277,7 @@ class TestRunRefineApply:
         assert env.store.list_versions() == [1]                  # snapshot AVANT write-back
         assert rebuilt == ["j1"]                                 # package reconstruit
         assert "raccourcie" in env.store.load_turns()[-1]["text"]
+        assert _FakeOpenCode.seen.get("review_path")             # points qualité fournis à l'agent
 
     def test_srt_guard_rejects_truncated_srt(self, env, monkeypatch):
         import transcria.exports.package_builder as pb

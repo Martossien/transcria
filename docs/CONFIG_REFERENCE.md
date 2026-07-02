@@ -978,20 +978,25 @@ Configuration du LLM d'arbitrage/correction SRT.
 #### `workflow.refine_chat`
 
 Chat d'affinage des livrables (page résultats d'un job **terminé**, tous profils) : l'utilisateur
-discute avec la LLM locale (`discuss` — aucun fichier modifié) puis **applique** une demande
-validée (`apply` — la LLM édite les artefacts texte sous garde-fous : intégrité SRT, JSON
-normalisé, options de rendu filtrées). Chaque application crée une **version restaurable**
-(`refine/versions/v<N>/`) ; les documents (DOCX/ZIP) sont régénérés. Chaque tour transite par
-la **file** (mode `refine`) : même admission VRAM/verrou LLM que les jobs. Les options de rendu
-seules disposent d'une route directe **sans LLM** (`POST /api/jobs/<id>/refine/render-options`).
+discute avec la LLM locale (`discuss` — aucun fichier modifié, **appel direct**
+`/v1/chat/completions`, une seule génération) puis **applique** une demande validée (`apply` —
+la LLM édite les artefacts texte via opencode, sous garde-fous : intégrité SRT, JSON normalisé,
+options de rendu filtrées). Les points signalés par le contrôle qualité (dont « Variantes lexique
+non résolues ») sont fournis en contexte des deux modes. Chaque application crée une **version
+restaurable** (`refine/versions/v<N>/`) ; les documents (DOCX/ZIP) sont régénérés. Chaque tour
+transite par la **file** (mode `refine`) : même admission VRAM/verrou LLM que les jobs. Les
+options de rendu seules disposent d'une route directe **sans LLM**
+(`POST /api/jobs/<id>/refine/render-options`).
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active le panneau et l'API du chat d'affinage |
 | `max_message_chars` | int | `4000` | Taille max d'un message utilisateur |
-| `timeout_seconds` | int | `900` | Timeout d'un tour (un run opencode complet) |
+| `timeout_seconds` | int | `900` | Timeout d'un tour (discuss = appel LLM direct ; apply = run opencode) |
 | `max_turns_kept` | int | `200` | Tours conservés dans l'historique (`refine/chat.json`) |
 | `context_turns` | int | `12` | Tours rejoués à la LLM à chaque tour (contexte conversationnel) |
+| `max_transcript_chars` | int | `60000` | Mode discuss : taille max de la transcription inline (troncature signalée au-delà) |
+| `max_answer_tokens` | int | `2000` | Mode discuss : longueur max de la réponse (tokens) |
 
 **Redémarrage requis :** non. **Prérequis :** `arbitration_llm.enabled: true` (sinon tours « assistant indisponible »).
 

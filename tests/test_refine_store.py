@@ -89,6 +89,34 @@ class TestExtractProposal:
     def test_empty_input(self):
         assert extract_proposal("") == ("", None)
 
+    def test_label_sans_separateur_derniere_ligne(self):
+        # Cas RÉEL observé : le modèle enchaîne après un tableau Markdown sans la
+        # ligne « --- » — la proposition sur la dernière ligne doit être récupérée.
+        answer = (
+            "Récapitulatif :\n\n"
+            "| Fichier | Occurrences |\n"
+            "|---------|-------------|\n"
+            "| resume.md | 3 |\n\n"
+            "Proposition d'application : Appliquer les corrections listées ci-dessus."
+        )
+        text, proposal = extract_proposal(answer)
+        assert proposal == "Appliquer les corrections listées ci-dessus."
+        assert text.rstrip().endswith("| resume.md | 3 |")   # tableau conservé, label retiré
+
+    def test_label_sans_separateur_aucune(self):
+        answer = "Réponse complète.\nProposition d'application : aucune"
+        text, proposal = extract_proposal(answer)
+        assert proposal is None and text == answer
+
+    def test_separateur_orphelin_avant_label_nettoye(self):
+        # « --- » collé au label (sans ligne vide après) : séparateur non matché par le
+        # chemin contractuel, mais le label en dernière ligne est accepté et le « --- »
+        # résiduel est retiré du texte affiché.
+        answer = "Réponse.\n---\nProposition d'application : corriger le titre."
+        text, proposal = extract_proposal(answer)
+        assert proposal == "corriger le titre."
+        assert text == "Réponse."
+
 
 class TestTurnProposal:
     def test_append_turn_stores_proposal(self, tmp_path):
