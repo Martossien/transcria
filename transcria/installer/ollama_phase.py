@@ -104,6 +104,8 @@ class OllamaPlan:
     interactive: bool = True
     pin_version: str = ""          # OLLAMA_VERSION épinglé (vide = version courante amont)
     install_url: str = OLLAMA_INSTALL_URL
+    llm_vram_mb: int = 0           # empreinte VRAM estimée (poids modèle + KV) ; 0 = pas de calibration
+    gpu_indices: tuple[int, ...] = ()  # cartes GPU visées (ex. (0,) en mono, (0,1) en split)
 
 
 @dataclass
@@ -122,7 +124,13 @@ def _write_backend_config(plan: OllamaPlan) -> None:
     ``model_id`` = ``local/<modèle>`` (format opencode : le runner splitte sur le 1ᵉʳ ``/``
     et envoie le nom nu au backend). Le projet a DEUX endpoints LLM opencode distincts —
     ``workflow.summary_llm`` (étape résumé) ET ``workflow.arbitration_llm`` (correction) —
-    on pointe LES DEUX sur Ollama, sinon le résumé lit l'endpoint llama.cpp par défaut (8080)."""
+    on pointe LES DEUX sur Ollama, sinon le résumé lit l'endpoint llama.cpp par défaut (8080).
+
+    Calibration VRAM : si ``llm_vram_mb`` est fourni (> 0), on l'écrit directement (estimation
+    depuis la taille du modèle Ollama + KV). Sinon on ne touche pas à la calibration (repli —
+    le recalage au 1er load gérera l'écart). Important : les empreintes ``TIERS_BY_GB`` de
+    ``llm_placement`` sont spécifiques à llama.cpp (GGUF quantizés) et ne correspondent PAS aux
+    modèles Ollama (qui ont leurs propres quantizations). On ne les utilise PAS pour Ollama."""
     api_base = f"{plan.ollama_url.rstrip('/')}/v1"
     set_yaml_file_value(plan.config_path, "services.backend", "ollama")
     set_yaml_file_value(plan.config_path, "services.ollama_url", plan.ollama_url)
@@ -133,6 +141,51 @@ def _write_backend_config(plan: OllamaPlan) -> None:
     for block in ("summary_llm", "arbitration_llm"):
         set_yaml_file_value(plan.config_path, f"workflow.{block}.model_id", f"local/{plan.model}")
         set_yaml_file_value(plan.config_path, f"workflow.{block}.api_base", api_base)
+    # Calibration VRAM : empreinte fournie par l'appelant (dérivée de la taille Ollama).
+    if plan.llm_vram_mb > 0:
+        from transcria.config.gpu_calibration import apply_gpu_calibration
+
+        indices = list(plan.gpu_indices) if plan.gpu_indices else [0]
+        per_gpu = [plan.llm_vram_mb // len(indices)] * len(indices)
+        per_gpu[-1] += plan.llm_vram_mb - sum(per_gpu)
+        apply_gpu_calibration(
+            plan.config_path,
+            vram_mb=plan.llm_vram_mb,
+            gpu_indices=indices,
+            vram_mb_per_gpu=per_gpu,
+        )
+
+
+def _measure_ollama_vram(plan: "OllamaPlan") -> int:
+    """Mesure la taille du modèle Ollama via /api/tags et dérive l'empreinte VRAM.
+
+    Retourne poids (Mo) + KV estimé (contexte du palier, fp16 = 2 octets) + marge 12%.
+    Retourne 0 si la mesure échoue (l'appelant garde la calibration existante)."""
+    import json
+    import urllib.request
+
+    try:
+        url = f"{plan.ollama_url.rstrip('/')}/api/tags"
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.load(resp)
+        for m in data.get("models", []):
+            if m.get("name") == plan.model or m.get("model") == plan.model:
+                weights_mb = int(m["size"]) // (1024 * 1024)
+                # KV : on ne connaît pas l'archi exacte via /api/tags, mais on a
+                # context_length et quantization_level. Le KV fp16 à 2 octets est
+                # une borne supérieure prudente (Ollama utilise fp16 par défaut).
+                # On estime grossièrement : 10% du poids par 64K de contexte (empirique
+                # Qwen3.5-9B : ~6,3 Go poids, KV@256K ≈ 2-3 Go → ~40% pour 256K).
+                # Formule simple : KV ≈ poids × (contexte / 65536) × 0.1
+                # (calibré sur Qwen3.5-9B Q4_K_M : 6288 × (262144/65536) × 0.1 ≈ 2515 Mo)
+                ctx = plan.context or int(m.get("details", {}).get("context_length", 32768))
+                kv_mb = int(weights_mb * (ctx / 65536) * 0.1)
+                total = weights_mb + kv_mb
+                # Marge 12% (activations, fragmentation) — cohérent avec llm_footprint.
+                return int(total * 1.12)
+    except Exception:
+        return 0
+    return 0
 
 
 def apply_ollama(
@@ -208,6 +261,17 @@ def apply_ollama(
     else:
         console.ok(f"Modèle « {plan.model} » disponible.")
         result.record("pulled")
+
+    # 4bis. Mesurer la taille du modèle pour dériver l'empreinte VRAM (poids + KV).
+    #      Les empreintes TIERS_BY_GB de llm_placement sont spécifiques à llama.cpp (GGUF
+    #      quantizés) et ne correspondent PAS aux modèles Ollama. On mesure la taille réelle
+    #      via /api/tags et on ajoute le KV calculé au contexte du palier.
+    measured_vram_mb = _measure_ollama_vram(plan)
+    if measured_vram_mb and measured_vram_mb > 0:
+        from dataclasses import replace as _dc_replace
+        plan = _dc_replace(plan, llm_vram_mb=measured_vram_mb)
+        console.ok(f"Empreinte VRAM Ollama dérivée : {measured_vram_mb} Mo (poids + KV @{plan.context // 1024}K).")
+        result.record("vram-calibrated")
 
     # 5. Écrire la config backend (même en cas d'échec de pull : l'opérateur peut retirer
     #    le modèle plus tard ; la config reste cohérente et pointe le bon endpoint).

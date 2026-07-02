@@ -137,6 +137,7 @@ def docker_run_argv(
     repo_dir: Path,
     env_set: dict[str, str] | None = None,
     env_passthrough: tuple[str, ...] = (),
+    gpu_count: int | None = None,
 ) -> list[str]:
     """argv de ``docker run`` pour démarrer un conteneur vierge persistant.
 
@@ -144,13 +145,24 @@ def docker_run_argv(
     ensuite par ``docker exec``. Le dépôt est monté en LECTURE SEULE sous /src (copié en
     /app, inscriptible, à l'install). Accès GPU via CDI seulement si ``spec.gpu``.
 
+    ``gpu_count`` (optionnel) limite le nombre de GPU exposés au conteneur via CDI
+    (``nvidia.com/gpu=0`` pour 1, ``nvidia.com/gpu=0,1`` pour 2, etc.). Sans limite →
+    ``nvidia.com/gpu=all`` (tous les GPU de l'hôte). C'est ce qui permet de simuler
+    un mono-GPU ou un petit multi-GPU pour valider la sélection de palier LLM.
+
     ``env_set`` = variables avec valeur (DSN de test, secret de session jetable) ;
     ``env_passthrough`` = noms de secrets passés PAR RÉFÉRENCE (``-e NAME`` sans valeur →
     la valeur n'apparaît jamais dans l'argv, donc ni dans les logs ni dans ``ps``).
     """
     argv = ["docker", "run", "-d", "--name", spec.name, "--network", NETWORK]
     if spec.gpu:
-        argv += ["--device", "nvidia.com/gpu=all"]
+        if gpu_count is not None and gpu_count > 0:
+            # CDI : un --device par GPU (Docker n'accepte pas nvidia.com/gpu=0,1 —
+            # il faut répéter --device nvidia.com/gpu=0 --device nvidia.com/gpu=1).
+            for i in range(gpu_count):
+                argv += ["--device", f"nvidia.com/gpu={i}"]
+        else:
+            argv += ["--device", "nvidia.com/gpu=all"]
     for cport, hport in sorted(spec.published.items()):
         argv += ["-p", f"{hport}:{cport}"]
     for name, value in (env_set or {}).items():
@@ -308,7 +320,8 @@ def start_postgres(password: str) -> None:
 def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str | None,
                  username: str, password: str, cuda: str | None, keep_up: bool,
                  llm_backend: str | None = None, stt_backend: str | None = None,
-                 diarization_backend: str | None = None, hf_online: bool = False) -> None:
+                 diarization_backend: str | None = None, hf_online: bool = False,
+                 gpu_count: int | None = None) -> None:
     import secrets
 
     spec_distro = get_distro(distro_id)
@@ -342,7 +355,8 @@ def run_topology(topo: TopologySpec, distro_id: str, audio: Path, profile: str |
             if stt_backend or diarization_backend or hf_online:
                 env_set["HF_HUB_OFFLINE"] = "0"
             _run(docker_run_argv(c, spec_distro.base_image, _REPO,
-                                 env_set=env_set, env_passthrough=SECRET_ENV_PASSTHROUGH), capture=True)
+                                 env_set=env_set, env_passthrough=SECRET_ENV_PASSTHROUGH,
+                                 gpu_count=gpu_count), capture=True)
 
             # 1) Amorçage OS (apt/dnf + pièges ffmpeg) puis copie du dépôt en zone inscriptible.
             #    On EXCLUT venv/.git/backup/node_modules : le venv hôte n'est pas valide dans le
@@ -414,6 +428,8 @@ def main() -> int:
     ap.add_argument("--diarization-backend", default=None, help="forcer la diarisation (ex. sortformer, non gated)")
     ap.add_argument("--hf-online", action="store_true",
                     help="autoriser le téléchargement HF dans le conteneur (modèles gated par défaut : cohere+pyannote, requiert HF_TOKEN)")
+    ap.add_argument("--gpu-count", type=int, default=None,
+                    help="limiter le nombre de GPU exposés au conteneur (CDI par indice, ex. 1=mono-GPU)")
     ap.add_argument("--keep-up", action="store_true", help="ne pas démonter (debug)")
     ap.add_argument("--no-preflight", action="store_true", help="sauter le preflight GPU hôte")
     args = ap.parse_args()
@@ -427,7 +443,8 @@ def main() -> int:
     run_topology(topo, args.distro, args.audio, args.profile,
                  args.username, args.password, args.cuda, args.keep_up,
                  llm_backend=args.llm_backend, stt_backend=args.stt_backend,
-                 diarization_backend=args.diarization_backend, hf_online=args.hf_online)
+                 diarization_backend=args.diarization_backend, hf_online=args.hf_online,
+                 gpu_count=args.gpu_count)
     return 0
 
 

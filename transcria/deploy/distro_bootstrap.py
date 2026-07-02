@@ -59,21 +59,33 @@ _FEDORA_PACKAGES = (
 DISTROS: dict[str, DistroSpec] = {
     "ubuntu2204": DistroSpec(
         distro_id="ubuntu2204", base_image="ubuntu:22.04", package_manager="apt",
-        packages=_DEBIAN_LIKE_PACKAGES,
-        pre_commands=("export DEBIAN_FRONTEND=noninteractive", "apt-get update -y"),
-        install_template="apt-get install -y --no-install-recommends {pkgs}",
+        # Ubuntu 22.04 a Python 3.10 par défaut — TranscrIA exige 3.11+.
+        # On installe python3.11 via le PPA deadsnakes (méthode officielle Ubuntu).
+        # add-apt-repository peut échouer dans un conteneur minimal (launchpadlib lourd) →
+        # on ajoute le dépôt manuellement (echo + apt-key), méthode robuste sans dépendance.
+        packages=_DEBIAN_LIKE_PACKAGES + ("python3.11", "python3.11-venv", "python3.11-dev"),
+        pre_commands=(
+            "export DEBIAN_FRONTEND=noninteractive",
+            "apt-get update -y",
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg ca-certificates",
+            # PPA deadsnakes manuel (clé GPG + sources.list) — robuste, sans launchpadlib.
+            "echo 'deb http://ppa.launchpad.net/deadsnakes/ppa/ubuntu jammy main' > /etc/apt/sources.list.d/deadsnakes.list",
+            "apt-key adv --keyserver keyserver.ubuntu.com --recv-keys F23C5A6CF475977595C89F51BA6932366A755776",
+            "apt-get update -y",
+        ),
+        install_template="DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {pkgs}",
     ),
     "ubuntu2404": DistroSpec(
         distro_id="ubuntu2404", base_image="ubuntu:24.04", package_manager="apt",
         packages=_DEBIAN_LIKE_PACKAGES,
         pre_commands=("export DEBIAN_FRONTEND=noninteractive", "apt-get update -y"),
-        install_template="apt-get install -y --no-install-recommends {pkgs}",
+        install_template="DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {pkgs}",
     ),
     "debian12": DistroSpec(
         distro_id="debian12", base_image="debian:12", package_manager="apt",
         packages=_DEBIAN_LIKE_PACKAGES,
         pre_commands=("export DEBIAN_FRONTEND=noninteractive", "apt-get update -y"),
-        install_template="apt-get install -y --no-install-recommends {pkgs}",
+        install_template="DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends {pkgs}",
     ),
     "fedora41": DistroSpec(
         distro_id="fedora41", base_image="fedora:41", package_manager="dnf",
@@ -97,7 +109,7 @@ DISTROS: dict[str, DistroSpec] = {
             "https://download1.rpmfusion.org/free/el/rpmfusion-free-release-9.noarch.rpm",
             "dnf -y makecache",
         ),
-        install_template="dnf install -y {pkgs}",
+        install_template="dnf install -y --allowerasing {pkgs}",
     ),
 }
 

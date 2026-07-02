@@ -198,7 +198,7 @@ def _print_shell(report: RuntimeReport, hint: str | None) -> None:
     print(f"LLAMA_BUILD={report.resolved_build if report.resolved_build is not None else ''}")
     print(f"LLAMA_BUILD_SOURCE={report.build_source}")
     print(f"LLAMA_HAS_CUDA={1 if report.has_cuda else 0}")
-    print(f'LLAMA_LD_LIBRARY_PATH="{hint or ''}"')
+    print(f'LLAMA_LD_LIBRARY_PATH="{hint or ""}"')
 
 
 def _report_to_dict(report: RuntimeReport, hint: str | None) -> dict:

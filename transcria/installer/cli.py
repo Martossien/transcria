@@ -212,6 +212,7 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
     # Modèle/contexte/spread résolus depuis le catalogue de données selon le MATÉRIEL
     # (mono vs multi-GPU) — plus aucun mapping hardcodé. --model force le choix si fourni.
     model, context, spread = args.model, 0, False
+    gpu_indices: tuple[int, ...] = ()
     if not model:
         choice = select_profile(
             load_llm_profiles(_load_config_safe(args.config)), "ollama",
@@ -222,6 +223,11 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
             console.warn("Aucun palier Ollama ne tient dans la VRAM détectée — backend Ollama ignoré.")
             return 0
         model, context, spread = str(choice.model), choice.context, bool(choice.engine_env.get("OLLAMA_SCHED_SPREAD"))
+        # gpu_indices : en mono-GPU [0], en multi-GPU spread [0, 1, ..., gpu_count-1].
+        if choice.multi_gpu:
+            gpu_indices = tuple(range(args.gpu_count))
+        else:
+            gpu_indices = (0,)
     plan = OllamaPlan(
         config_path=Path(args.config),
         model=model,
@@ -231,6 +237,7 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
         gpu_present=args.gpu_present,
         interactive=not args.non_interactive,
         pin_version=args.pin_version,
+        gpu_indices=gpu_indices,
     )
     apply_ollama(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0

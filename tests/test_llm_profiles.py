@@ -76,7 +76,7 @@ class TestSelectOllama:
     def test_mono_gpu_uses_per_card(self):
         # 1 carte 24 Go → palier 24 (9b), pas de spread.
         c = select_profile(_P, "ollama", gpu_count=1, per_card_vram_mb=24000, total_vram_mb=24000)
-        assert c.tier_id == "24" and c.model == "qwen3.5:9b"
+        assert c.tier_id == "24" and c.model == "gemma4:12b"
         assert c.engine_env == {} and c.multi_gpu is False
 
     def test_multi_gpu_uses_total_and_enables_spread(self):

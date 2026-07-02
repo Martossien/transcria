@@ -47,6 +47,15 @@ engines:
   # ── Ollama ─────────────────────────────────────────────────────────────────
   # mono-GPU → palier par VRAM PAR-CARTE ; multi-GPU (≥2) → spread + palier par VRAM TOTALE.
   # Empreinte MESURÉE via /api/ps au 1ᵉʳ load (pas de littéral). Téléchargement = ollama pull.
+  #
+  # ⚠ RECOMMANDATION : pour les petits paliers (12/16/24), **llama.cpp est préférable** :
+  #   - Quantizations plus fines (Q5_K_M / Q6_K / IQ4_NL) vs Q4_K_M Ollama par défaut
+  #   - KV cache q8_0 (1 octet) vs fp16 (2 octets) → 2× moins de VRAM KV → tient sur de plus petites cartes
+  #   - Modèles ancrés sur le bench (BENCH_LLM_PALIERS.md, lecture humaine)
+  #   - Déterministe (Ollama gemma4:12b mode thinking = 0 production 2/3 runs, Tests 6/7)
+  # Ollama reste le backend « facile » (aucune compilation, aucun nvcc, curl|sh) — à utiliser
+  # si llama.cpp n'est pas disponible ou pour les gros paliers (48/64) où la différence de
+  # quantization est moins critique (35b Q4_K_M validé Tests 1/5/8).
   ollama:
     select_by: per_card_then_total
     kv_dtype_bytes: 2             # KV fp16 par défaut (Ollama)
@@ -54,8 +63,8 @@ engines:
     multi_gpu: {enable_when_gpus_gte: 2, env: {OLLAMA_SCHED_SPREAD: "1"}}
     tiers:
       - {id: "12", min_vram_mb: 11500, context: 131072, model: "qwen3.5:4b"}
-      - {id: "16", min_vram_mb: 15500, context: 262144, model: "qwen3.5:9b"}
-      - {id: "24", min_vram_mb: 23000, context: 262144, model: "qwen3.5:9b"}
+      - {id: "16", min_vram_mb: 15500, context: 262144, model: "gemma4:12b"}
+      - {id: "24", min_vram_mb: 23000, context: 262144, model: "gemma4:12b"}
       - {id: "32", min_vram_mb: 31000, context: 196608, model: "qwen3.6:27b"}
       - {id: "48", min_vram_mb: 46000, context: 262144, model: "qwen3.6:35b"}
       - {id: "64", min_vram_mb: 60000, context: 262144, model: "qwen3.6:35b"}

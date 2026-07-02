@@ -25,18 +25,36 @@ d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
 
 ## Choisir un backend
 
-- **Ollama** — *défaut « facile » recommandé* en all-in-one. `curl … | sh` auto-suffisant
-  (runtime CUDA embarqué : aucune compilation, aucun `nvcc`, aucun token HF), modèles via
-  `ollama pull`. Contrôle GPU plus grossier (`CUDA_VISIBLE_DEVICES` global au démon).
+- **Ollama** — *défaut « facile »* en all-in-one. `curl … | sh` auto-suffisant (runtime CUDA
+  embarqué : aucune compilation, aucun `nvcc`, aucun token HF), modèles via `ollama pull`.
+  Contrôle GPU plus grossier (`CUDA_VISIBLE_DEVICES` global au démon).
+  **⚠ Pour les petits paliers (12/16/24 Go), llama.cpp est préférable** (voir ci-dessous).
 - **llama.cpp** — voie *contrôle / multi-GPU avancée* : `--tensor-split`, `--fit-target`,
-  quantifications exactes, budget de raisonnement. Échelle d'obtention du binaire CUDA :
+  quantifications exactes, budget de raisonnement. **Recommandé pour les petits paliers**
+  (12/16/24) car :
+  1. **Quantizations plus fines** (Q5_K_M / Q6_K / IQ4_NL) vs Q4_K_M Ollama par défaut →
+     meilleure qualité de correction SRT (Qwen3.5-9B Q5 validé au bench, Q4 Ollama échec).
+  2. **KV cache q8_0** (1 octet) vs fp16 Ollama (2 octets) → **2× moins de VRAM KV** →
+     tient sur de plus petites cartes (9B Q5 sur 12 Go vs 9B Q4 Ollama qui dépasse).
+  3. **Déterministe** — Ollama `gemma4:12b` mode thinking = 0 production 2/3 runs (Tests 6/7).
+  4. **Ancré sur le bench** (`docs/BENCH_LLM_PALIERS.md`, lecture humaine).
+  Échelle d'obtention du binaire CUDA :
   1. détecter un `llama-server` existant ;
   2. binaire **précompilé** ai-dock (opt-in, build épinglé, **sha256 vérifié** — source
      tierce assumée) — évite `nvcc` sur distro vierge ;
   3. compiler depuis les sources **si le toolkit CUDA (`nvcc`) est présent** ;
   4. sinon échec propre → basculer sur Ollama.
 - **vLLM** — moteur portable (`launch_arbitrage_vllm.sh`), notamment pour la topologie split.
+  FP8 natif, tensor-parallel, batching concurrent — qualité 100/100 mesurée (Test 4).
 - **http** — serveur OpenAI externe déjà en place (`workflow.arbitration_llm.api_base`).
+
+### Recommandation par palier
+
+| Palier | Backend recommandé | Raison |
+|--------|-------------------|--------|
+| 12-24 Go (mono-GPU) | **llama.cpp** | Q5/Q6 + KV q8_0 = meilleure qualité + tient sur petite carte |
+| 32-64 Go (multi-GPU) | Ollama ou llama.cpp | 35b Q4_K_M Ollama validé (Tests 1/5/8, 98/100) ; llama.cpp Q8 = 97/100 |
+| Split (frontale + nœud) | **vLLM** | TP auto, FP8, batching, 100/100 (Test 4) |
 
 ## Configuration (`services`)
 

@@ -152,6 +152,26 @@ if [[ "$SKIP_DOCTOR" = true && "$STRICT_DOCTOR" = true ]]; then
     exit 1
 fi
 
+# ── Détection de l'interpréteur Python 3.11+ ──────────────────────────────────
+# Doit se faire AVANT toute utilisation de python_module()/PYTHON_BIN — les modules
+# TranscrIA utilisent la syntaxe `str | None` (3.10+) et les dataclasses frozen (3.11+).
+# Sur Rocky 9 / RHEL 9, python3 = 3.9 (système) mais python3.11 est installé par le bootstrap.
+PYTHON_BIN=""
+for candidate in python3.13 python3.12 python3.11 python3; do
+    if command -v "$candidate" &>/dev/null; then
+        version=$("$candidate" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true)
+        if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+            PYTHON_BIN="$candidate"
+            log_ok "Python $version trouvé ($(command -v "$candidate"))"
+            break
+        fi
+    fi
+done
+if [[ -z "$PYTHON_BIN" ]]; then
+    log_error "Python 3.11+ requis. Installer avec: apt install python3.11 (ou dnf install python3.11 sur RHEL)"
+    exit 1
+fi
+
 print_install_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
@@ -451,21 +471,8 @@ log_prerequisite_event() {
         --path "$path"
 }
 
-PYTHON_BIN=""
-for candidate in python3.13 python3.12 python3.11 python3; do
-    if command -v "$candidate" &>/dev/null; then
-        version=$("$candidate" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true)
-        if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
-            PYTHON_BIN="$candidate"
-            log_prerequisite_event python-ok "" "$version" "$(which "$candidate")"
-            break
-        fi
-    fi
-done
-if [[ -z "$PYTHON_BIN" ]]; then
-    log_error "Python 3.11+ requis. Installer avec: apt install python3.11"
-    exit 1
-fi
+# ── Pré-vol : venv, GPU, modèles, capabilities ──────────────────────────────
+# (PYTHON_BIN déjà détecté plus haut)
 
 # Le module venv + ensurepip (paquet `python3-venv` sur Debian/Ubuntu) est requis pour
 # créer le venv. Sans lui, `python -m venv` plante avec un message obscur — on vérifie en
@@ -1138,6 +1145,44 @@ else
             eval_named_shell_assignments "$LLAMA_FALLBACK_OUT" LLAMA_FALLBACK
             LLAMA_SRV="$LLAMA_FALLBACK"
         fi
+
+        # ── Binaire précompilé ai-dock (CUDA) si llama-server absent ──────────────
+        # En non-interactif, si aucun llama-server n'est trouvé, on télécharge
+        # automatiquement le binaire précompilé ai-dock/llama.cpp-cuda (build épinglé
+        # ≥ b9630, CUDA 12.8, amd64) — évite d'exiger nvcc sur une distro vierge.
+        # En interactif, on propose le téléchargement si aucun binaire n'est trouvé.
+        if [[ -z "$LLAMA_SRV" ]]; then
+            _AIDOCK_BUILD=9851
+            _AIDOCK_CUDA="12.8"
+            _AIDOCK_SHA256="a96fed6b2462cad53cb63f4446ae640824ba4c87f960975bbf07850628715f58"
+            _AIDOCK_DEST="$INSTALL_DIR/vendor/llama"
+            _DO_PREBUILT=false
+            if [[ "$NON_INTERACTIVE" = true ]]; then
+                _DO_PREBUILT=true
+            elif ask_yn "Aucun llama-server trouvé. Télécharger le binaire précompilé ai-dock (build b$_AIDOCK_BUILD, CUDA $_AIDOCK_CUDA, ~157 Mo) ?"; then
+                _DO_PREBUILT=true
+            fi
+            if [[ "$_DO_PREBUILT" = true ]]; then
+                log_llm_setup_event download-start "llama-server (ai-dock b$_AIDOCK_BUILD)" "" "" "" "install_arbitrage" "$_AIDOCK_DEST"
+                _PREBUILT_ERR=$(mktemp 2>/dev/null || echo "/tmp/transcria_prebuilt.$$")
+                _PREBUILT_OUT=$(arbitrage_helper --install-llama-prebuilt \
+                    --llama-build "$_AIDOCK_BUILD" \
+                    --dest "$_AIDOCK_DEST" \
+                    --sha256 "$_AIDOCK_SHA256" \
+                    --cuda "$_AIDOCK_CUDA" 2>"$_PREBUILT_ERR")
+                eval_named_shell_assignments "$_PREBUILT_OUT" LLAMA_PREBUILT
+                _PREBUILT_BIN="${LLAMA_PREBUILT:-}"
+                if [[ -n "$_PREBUILT_BIN" && -x "$_PREBUILT_BIN" ]]; then
+                    LLAMA_SRV="$_PREBUILT_BIN"
+                    log_llm_setup_event model-downloaded "$_PREBUILT_BIN"
+                else
+                    print_indented_file "$_PREBUILT_ERR"
+                    log_llm_setup_event download-failed
+                fi
+                rm -f "$_PREBUILT_ERR"
+            fi
+        fi
+
         LLAMA_SERVER_PROMPT=$(arbitrage_helper --prompt llama-server)
         ask LLAMA_SRV "$LLAMA_SERVER_PROMPT" "${LLAMA_SRV:-/usr/local/bin/llama-server}"
 
@@ -1150,7 +1195,9 @@ else
 
         if [[ -f "$DEST/$GG" ]]; then
             log_llm_setup_event model-present "$DEST/$GG"
-        elif ask_yn "$LLM_DOWNLOAD_PROMPT"; then
+        elif [[ "$NON_INTERACTIVE" = true ]] || ask_yn "$LLM_DOWNLOAD_PROMPT"; then
+            # En non-interactif, on télécharge automatiquement le GGUF (contrat install.sh
+            # de bout en bout sans intervention). En interactif, on demande confirmation.
             LLM_DOWNLOAD_CLIENT=$(arbitrage_helper --download-client)
             eval_named_shell_assignments "$LLM_DOWNLOAD_CLIENT" LLM_HF_DL LLM_HF_DL_PATH
             HF_DL="$LLM_HF_DL"
