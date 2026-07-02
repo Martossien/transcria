@@ -2037,6 +2037,246 @@ class WorkflowRunner:
             logger.info("Relecture finale appliquée intégralement: %s", applied)
         return {"review_applied": True, **applied}
 
+    def run_refine(self, job: Job, config: dict) -> dict:
+        """Tour du chat d'affinage des livrables (post-workflow, job terminé).
+
+        L'utilisateur discute avec la LLM locale depuis la page résultats. Chaque tour
+        est une entrée de file (mode ``refine``) : la demande vit dans
+        ``refine/request.json`` (écrite par le web), l'historique dans
+        ``refine/chat.json``. Deux sous-modes :
+
+        - ``discuss`` : la LLM répond (conseil, vérification, proposition) sans
+          modifier AUCUN fichier ;
+        - ``apply``   : la LLM édite les copies de travail des artefacts texte ; les
+          garde-fous déterministes valident ; un snapshot de version est pris AVANT
+          tout write-back (restauration possible) ; le package est reconstruit.
+
+        Best-effort intégral : tout échec produit un tour assistant explicatif — les
+        livrables existants ne sont JAMAIS abîmés.
+        """
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.refine_store import RefineStore
+
+        refine_cfg = config.get("workflow", {}).get("refine_chat", {}) or {}
+        if refine_cfg.get("enabled", True) is False:
+            return {"success": True, "skipped": True, "reason": "refine_chat.enabled=false"}
+        if config.get("workflow", {}).get("arbitration_llm", {}).get("enabled") is False:
+            return {"success": True, "skipped": True, "reason": "arbitration_llm.enabled=false"}
+
+        jobs_dir = config.get("storage", {}).get("jobs_dir", "./jobs")
+        store = RefineStore(jobs_dir=jobs_dir, job_id=job.id)
+        request = store.consume_request() or {}
+        message = str(request.get("message") or "").strip()
+        if not message:
+            return {"success": True, "skipped": True, "reason": "no_request"}
+        kind = str(request.get("kind") or "")
+        kind = kind if kind in ("discuss", "apply") else "discuss"
+        max_turns = int(refine_cfg.get("max_turns_kept", 200))
+        store.append_turn(role="user", kind=kind, text=message, max_turns=max_turns)
+
+        self.progress.update(
+            job.id, step="processing", phase="refine",
+            message="Affinage : l'assistant travaille", percent=97, force=True,
+        )
+
+        if not self.allocator.try_acquire_llm(job.id, timeout_s=int(refine_cfg.get("llm_lock_timeout_s", 120))):
+            store.append_turn(
+                role="assistant", kind=kind, max_turns=max_turns,
+                text="L'assistant est occupé (la LLM sert un autre traitement). Réessayez dans quelques minutes.",
+            )
+            return {"success": True, "skipped": True, "retryable": True, "reason": "llm_busy"}
+
+        fs = JobFilesystem(jobs_dir, job.id)
+        llm_phase_reserved = False
+        llm_was_already_running = self.vram.is_arbitrage_llm_running()
+        try:
+            if self._should_reserve_llm_vram() and not llm_was_already_running:
+                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+                if self.allocator.try_reserve(job.id, llm_vram_mb, "refine") is None:
+                    store.append_turn(
+                        role="assistant", kind=kind, max_turns=max_turns,
+                        text="VRAM insuffisante pour charger l'assistant (un traitement occupe les GPU). Réessayez plus tard.",
+                    )
+                    return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
+                llm_phase_reserved = True
+            api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+            if not self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+                store.append_turn(
+                    role="assistant", kind=kind, max_turns=max_turns,
+                    text="L'assistant n'a pas pu démarrer (LLM d'arbitrage indisponible). Réessayez plus tard.",
+                )
+                return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
+
+            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+
+            workspace = AgentWorkspace(fs, "refine", work_root=resolve_agent_work_root(config))
+            staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
+            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+            effective_summary = (
+                meeting_ctx.get("summary") or meeting_ctx.get("summary_harmonized")
+                or meeting_ctx.get("summary_llm") or ""
+            ).strip()
+            conversation_file = workspace.write_input(
+                "conversation.md",
+                store.conversation_context(max_turns=int(refine_cfg.get("context_turns", 12))),
+            )
+            request_file = workspace.write_input("user_request.md", message)
+            summary_file = workspace.write_input("summary.md", effective_summary)
+            structured_file = workspace.write_input(
+                "structured_data.json",
+                json.dumps(meeting_ctx.get("structured_data") or {}, ensure_ascii=False, indent=2),
+            )
+            from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES
+
+            current_options = fs.load_json("context/render_options.json") or {}
+            options_file = workspace.write_input(
+                "render_options.json",
+                json.dumps({
+                    "theme": current_options.get("theme", ""),
+                    "sections": current_options.get("sections", {}),
+                    "themes_disponibles": sorted(_THEMES),
+                    "sections_disponibles": list(_RENDER_SECTIONS),
+                }, ensure_ascii=False, indent=2),
+            )
+
+            opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
+            runner = OpenCodeRunner(str(workspace.scratch_dir), opencode_bin=opencode_bin, config=config)
+            runner.run_refine(
+                kind=kind,
+                conversation_path=str(conversation_file),
+                request_path=str(request_file),
+                summary_path=str(summary_file),
+                srt_path=str(staged_srt),
+                structured_path=str(structured_file),
+                options_path=str(options_file),
+                user_message=message,
+            )
+            workspace.verify_and_restore_sources()
+
+            if kind == "discuss":
+                answer = workspace.read_output("refine_answer.md") \
+                    or "(l'assistant n'a pas produit de réponse — réessayez)"
+                store.append_turn(role="assistant", kind=kind, text=answer, max_turns=max_turns)
+                workspace.cleanup(success=True)
+                return {"success": True, "kind": "discuss"}
+
+            applied = self._apply_refine(fs, store, workspace, job, config, kind=kind, max_turns=max_turns)
+            workspace.cleanup(success=True)
+            return {"success": True, "kind": "apply", **applied}
+        except Exception as exc:
+            logger.exception("Échec affinage (best-effort, livrables intacts): job=%s", job.id)
+            store.append_turn(
+                role="assistant", kind=kind, max_turns=max_turns,
+                text=f"Échec de l'affinage ({exc}) — les livrables n'ont pas été modifiés. Réessayez.",
+            )
+            if not llm_was_already_running:
+                self.vram.stop_arbitrage_llm()
+            return {"success": True, "error": str(exc)}
+        finally:
+            if llm_phase_reserved:
+                self.allocator.release_phase(job.id, "refine")
+            self.allocator.release_llm(job.id)
+            self.progress.update(
+                job.id, step="processing", phase="refine",
+                message="Affinage terminé", percent=100, force=True,
+            )
+
+    def _apply_refine(self, fs, store, workspace, job: Job, config: dict, *, kind: str, max_turns: int) -> dict:
+        """Valide les sorties de l'agent (garde-fous) puis write-back versionné + rebuild.
+
+        Ordre strict : 1) tout VALIDER sans rien écrire ; 2) si rien de valide →
+        tour assistant explicatif, zéro effet ; 3) snapshot de version (état AVANT) ;
+        4) write-back ; 5) reconstruction du package (best-effort) ; 6) tour assistant.
+        """
+        from transcria.exports.docx_report import _sanitize_render_options
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+
+        report = workspace.read_output("refine_report.md")
+        notes: list[str] = []
+
+        summary_out = workspace.read_output("summary_refined.md")
+
+        srt_out = workspace.read_output("transcription_refined.srt")
+        if srt_out:
+            source_srt = fs.load_text("metadata/transcription_corrigee.srt") or ""
+            err = self._corrected_srt_integrity_error(source_srt, srt_out)
+            if err:
+                notes.append(err)
+                srt_out = ""
+
+        structured_norm: dict | None = None
+        structured_out = workspace.read_output("structured_data_refined.json")
+        if structured_out:
+            try:
+                parsed = json.loads(structured_out)
+                if isinstance(parsed, dict):
+                    structured_norm = OpenCodeRunner._normalize_structured_data(parsed)
+                else:
+                    notes.append("Données structurées relues invalides (pas un objet JSON) — conservées en l'état.")
+            except (ValueError, TypeError):
+                notes.append("Données structurées relues non JSON — conservées en l'état.")
+
+        options_clean: dict = {}
+        options_out = workspace.read_output("render_options_refined.json")
+        if options_out:
+            try:
+                options_clean = _sanitize_render_options(json.loads(options_out))
+            except (ValueError, TypeError):
+                notes.append("Options de rendu relues non JSON — conservées en l'état.")
+
+        applied = {
+            "summary_updated": False, "srt_updated": False,
+            "structured_data_updated": False, "render_options_updated": False,
+        }
+        if not (summary_out or srt_out or structured_norm is not None or options_clean):
+            text = report or "Aucune modification applicable n'a été produite."
+            if notes:
+                text += "\n\n" + "\n".join(f"⚠ {n}" for n in notes)
+            store.append_turn(role="assistant", kind=kind, text=text, max_turns=max_turns)
+            return {**applied, "version": None}
+
+        # Snapshot de l'état AVANT (restauration possible depuis l'UI).
+        version = store.snapshot_artifacts([
+            fs.job_dir / "context" / "meeting_context.json",
+            fs.job_dir / "metadata" / "transcription_corrigee.srt",
+            fs.job_dir / "context" / "render_options.json",
+        ])
+
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+        if summary_out:
+            # ``summary`` = champ prioritaire du DOCX (édition validée par l'utilisateur).
+            meeting_ctx["summary"] = summary_out
+            applied["summary_updated"] = True
+        if structured_norm is not None:
+            meeting_ctx["structured_data"] = structured_norm
+            applied["structured_data_updated"] = True
+        if applied["summary_updated"] or applied["structured_data_updated"]:
+            fs.save_json("context/meeting_context.json", meeting_ctx)
+        if srt_out:
+            fs.save_text("metadata/transcription_corrigee.srt", srt_out)
+            applied["srt_updated"] = True
+        if options_clean:
+            fs.save_json("context/render_options.json", options_clean)
+            applied["render_options_updated"] = True
+
+        try:
+            from transcria.exports.package_builder import PackageBuilder
+
+            PackageBuilder(config).build_package(job)
+        except Exception:
+            logger.warning("Affinage : reconstruction du package échouée (le DOCX est "
+                           "régénéré au téléchargement) — job=%s", job.id, exc_info=True)
+            notes.append("Le paquet ZIP n'a pas pu être reconstruit immédiatement.")
+
+        text = report or "Modifications appliquées."
+        text += f"\n\n(version v{version} enregistrée — restauration possible depuis la page)"
+        if notes:
+            text += "\n\n" + "\n".join(f"⚠ {n}" for n in notes)
+        store.append_turn(role="assistant", kind=kind, text=text, max_turns=max_turns)
+        logger.info("Affinage appliqué (job=%s, version=v%s): %s", job.id, version, applied)
+        return {**applied, "version": version}
+
     def build_export(self, job: Job, config: dict) -> dict:
         self.progress.update(
             job.id,

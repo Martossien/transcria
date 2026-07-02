@@ -91,3 +91,38 @@ class TestFinalReviewPromptContract:
 
     def test_prefixe_locuteur_intouchable(self):
         assert "SPEAKER_XX" in _read("final_review_prompt.txt")
+
+
+class TestRefinePromptsContract:
+    """Chat d'affinage : les noms de fichiers de sortie et le vocabulaire des options
+    de rendu doivent rester alignés sur ``run_refine`` / ``_apply_refine``."""
+
+    def test_discuss_fichier_de_sortie(self):
+        assert "refine_answer.md" in _read("refine_discuss_prompt.txt")
+
+    def test_discuss_lecture_seule(self):
+        p = _read("refine_discuss_prompt.txt")
+        assert "NE MODIFIER AUCUN FICHIER" in p
+
+    def test_apply_fichiers_de_sortie(self):
+        p = _read("refine_apply_prompt.txt")
+        for name in ("summary_refined.md", "transcription_refined.srt",
+                     "structured_data_refined.json", "render_options_refined.json",
+                     "refine_report.md"):
+            assert name in p, name
+
+    def test_apply_prefixe_locuteur_intouchable(self):
+        assert "SPEAKER_XX" in _read("refine_apply_prompt.txt")
+
+    def test_apply_sections_de_rendu_alignees_sur_le_code(self):
+        from transcria.exports.docx_report import _RENDER_SECTIONS
+
+        p = _read("refine_apply_prompt.txt")
+        for key in _RENDER_SECTIONS:
+            assert f"`{key}`" in p, key
+
+    def test_aucun_extrait_reel_de_transcription(self):
+        # Contrainte projet : placeholders abstraits uniquement dans les templates.
+        for name in ("refine_discuss_prompt.txt", "refine_apply_prompt.txt"):
+            p = _read(name)
+            assert "SPEAKER_00(" not in p and "SPEAKER_01(" not in p, name

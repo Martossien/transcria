@@ -1049,3 +1049,53 @@ class OpenCodeRunner:
             "report": report,
             "error": "" if produced else result.get("error", ""),
         }
+
+    def _get_refine_timeout(self) -> int:
+        cfg = (self._config or {}).get("workflow", {}).get("refine_chat", {})
+        try:
+            return int(cfg.get("timeout_seconds", 900))
+        except (TypeError, ValueError):
+            return 900
+
+    def run_refine(
+        self,
+        *,
+        kind: str,
+        conversation_path: str,
+        request_path: str,
+        summary_path: str,
+        srt_path: str,
+        structured_path: str,
+        options_path: str,
+        user_message: str,
+    ) -> dict:
+        """Tour du chat d'affinage des livrables (post-workflow).
+
+        ``kind="discuss"`` : répond sans modifier — écrit ``refine_answer.md``.
+        ``kind="apply"``   : applique la demande sur les copies de travail — écrit
+        ``summary_refined.md`` / ``transcription_refined.srt`` /
+        ``structured_data_refined.json`` / ``render_options_refined.json`` +
+        ``refine_report.md``. Les sorties sont relues par l'appelant (workspace) et
+        passées aux garde-fous déterministes AVANT tout write-back.
+        """
+        prompt_name = "refine_apply_prompt.txt" if kind == "apply" else "refine_discuss_prompt.txt"
+        prompt_file = os.path.abspath(os.path.join(_get_prompts_dir(self._config), prompt_name))
+
+        if kind == "apply":
+            expected = (
+                "écris UNIQUEMENT les fichiers que la demande modifie parmi : "
+                "summary_refined.md, transcription_refined.srt (TOTALITÉ des segments), "
+                "structured_data_refined.json, render_options_refined.json — plus "
+                "refine_report.md (OBLIGATOIRE)"
+            )
+        else:
+            expected = "écris UNIQUEMENT ta réponse dans refine_answer.md, sans modifier aucun autre fichier"
+        instruction = (
+            f"Tu travailles dans le répertoire {self.work_dir}. "
+            f"Conversation précédente : {conversation_path}. Demande courante : {request_path}. "
+            f"Synthèse actuelle : {summary_path}. Transcription corrigée : {srt_path}. "
+            f"Données structurées : {structured_path}. Options de rendu : {options_path}. "
+            f"Demande de l'utilisateur : {user_message} "
+            f"— {expected}, dans ce répertoire."
+        )
+        return self.run(instruction, prompt_file, timeout=self._get_refine_timeout())
