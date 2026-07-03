@@ -8,7 +8,25 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.8] — 2026-07-03
+
+Deux fonctionnalités issues des retours utilisateurs : **discuter avec le document**
+(chat d'affinage des livrables sur la page résultats) et **types de réunion
+personnalisés** (créer, partager et échanger ses propres modèles de compte-rendu).
+
 ### Added
+- **Types de réunion personnalisés** (demande utilisateurs) : les 18 types du rapport
+  Word sortent du code vers un catalogue en données (`transcria/data/meeting_types.yaml`)
+  et deviennent duplicables — page « Types de réunion » (tous utilisateurs) avec galerie,
+  éditeur dupliquer-d'abord, aperçu vivant de la page de garde et exemple Word
+  téléchargeable AVANT enregistrement ; partage par les admins (groupe/global, décalqué
+  des lexiques centralisés) ; palette/bannière/badge/champs/sections réordonnables
+  (« synthèse exécutive en premier »), logo et pied de page ; la LLM peut SUGGÉRER un
+  type personnalisé (indices de détection) et RELEVER des extractions supplémentaires
+  déclarées par le type (bornées, zéro invention) ; export/import
+  `.transcria-type.json` + répertoire communautaire `community/meeting-types/`
+  (3 exemples, README de contribution, format validé par la CI). La fiche du type est
+  matérialisée dans chaque job : supprimer un type ne casse aucun traitement passé.
 - **Affinage : une correction couvre par défaut TOUS les livrables** (retour utilisateur :
   la synthèse fait partie du produit final) — les prompts discuss/apply cadrent désormais que
   la demande définit le CHANGEMENT, pas un fichier : un terme corrigé l'est dans la synthèse,
