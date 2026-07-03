@@ -744,19 +744,19 @@ class QualityReporter:
                 lowered = word.lower()   # la casse pure ne compte pas comme incohérence
                 groups[folded][lowered] = groups[folded].get(lowered, 0) + 1
 
-        found = []
+        scored: list[tuple[int, dict]] = []
         for folded, forms in groups.items():
             if len(forms) < 2:
                 continue
             total = sum(forms.values())
             if total < 2:
                 continue
-            found.append({
+            scored.append((total, {
                 "forms": sorted(forms, key=lambda f: -forms[f]),
                 "occurrences": total,
-            })
-        found.sort(key=lambda g: -int(g["occurrences"]))
-        return found[:10]
+            }))
+        scored.sort(key=lambda item: -item[0])
+        return [group for _, group in scored[:10]]
 
     @classmethod
     def _format_audio_problem_segment(cls, segment: dict) -> dict:
