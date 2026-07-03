@@ -613,6 +613,40 @@ def check_storage(
     return CheckResult(name, OK, ", ".join(f"{label}={path}" for label, path in targets) + " inscriptibles")
 
 
+def check_disk_space(
+    cfg: dict,
+    *,
+    usage_fn: Callable[[str], tuple[int, int]] | None = None,
+) -> CheckResult:
+    """Espace disque du dossier des jobs — un disque plein fait échouer les traitements
+    de façon cryptique (C1.3). Seuils : < 2 Go = fail, < 10 Go = warn."""
+    name = "Espace disque (dossier des jobs)"
+    jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
+
+    def _usage(path: str) -> tuple[int, int]:
+        import shutil as _sh
+
+        probe = path
+        while probe and not os.path.exists(probe):
+            probe = os.path.dirname(probe.rstrip("/")) or "/"
+        total, _used, free = _sh.disk_usage(probe or "/")
+        return free, total
+
+    usage_fn = usage_fn or _usage
+    try:
+        free_bytes, _total = usage_fn(jobs_dir)
+    except OSError as exc:
+        return CheckResult(name, WARN, f"espace disque illisible ({exc})")
+    free_gb = free_bytes / (1024 ** 3)
+    if free_gb < 2:
+        return CheckResult(name, FAIL, f"{free_gb:.1f} Go libres sur {jobs_dir}",
+                          hint="Libérez de l'espace (purge des vieux jobs) ou déplacez storage.jobs_dir.")
+    if free_gb < 10:
+        return CheckResult(name, WARN, f"{free_gb:.1f} Go libres sur {jobs_dir} — surveiller",
+                          hint="Prévoyez une purge/rotation ; une réunion longue peut consommer plusieurs Go.")
+    return CheckResult(name, OK, f"{free_gb:.0f} Go libres sur {jobs_dir}")
+
+
 def expected_model_assets(cfg: dict) -> list[tuple[str, str, str]]:
     """Modèles que CETTE machine doit avoir en cache local, d'après la config.
 
@@ -1232,6 +1266,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_inference_node_gpus,
     check_local_models,
     check_storage,
+    check_disk_space,
     check_shared_storage,
 )
 

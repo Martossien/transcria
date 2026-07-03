@@ -793,3 +793,24 @@ def test_resolution_warn_on_missing_model_id():
     cfg = {"workflow": {"summary_llm": {"enabled": True}, "arbitration_llm": {}}}
     res = doc.check_opencode_model_resolution(cfg, reader=lambda p: {})
     assert res.status == doc.WARN
+
+
+# ── check_disk_space (C1.3) ────────────────────────────────────────────────
+def test_check_disk_space_ok():
+    cfg = {"storage": {"jobs_dir": "/data/jobs"}}
+    res = doc.check_disk_space(cfg, usage_fn=lambda p: (50 * 1024**3, 100 * 1024**3))
+    assert res.status == doc.OK
+    assert "50 Go" in res.detail
+
+
+def test_check_disk_space_warn():
+    cfg = {"storage": {"jobs_dir": "/data/jobs"}}
+    res = doc.check_disk_space(cfg, usage_fn=lambda p: (5 * 1024**3, 100 * 1024**3))
+    assert res.status == doc.WARN
+
+
+def test_check_disk_space_fail():
+    cfg = {"storage": {"jobs_dir": "/data/jobs"}}
+    res = doc.check_disk_space(cfg, usage_fn=lambda p: (1 * 1024**3, 100 * 1024**3))
+    assert res.status == doc.FAIL
+    assert res.hint
