@@ -8,6 +8,30 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added — stabilisation 0.2.0 (vagues 0-1)
+- **Sauvegarde / restauration locale** (`python -m transcria.maintenance.cli`) :
+  `backup` (pg_dump ou SQLite à chaud → tar.gz horodaté, manifeste avec sha256,
+  rotation, `--exclude-audio`), `backup-verify` (intégrité gzip + empreintes),
+  `restore` (garde-fous : base vide sauf `--force`, `--dry-run`, même type de base) —
+  couvre base + `jobs/` + `voices/` + `config.yaml` + prompts (le `.env` n'est jamais
+  embarqué, seule son empreinte figure au manifeste). Validé E2E sur SQLite ET
+  PostgreSQL. Voir `docs/UPGRADE.md`.
+- **Mise à niveau outillée** (`… cli upgrade`) : sauvegarde de sécurité → bascule du
+  code → migration Alembic → redémarrage → contrôle `/ready`, séquencés ; `--check`
+  pour prévisualiser. Rollback = restauration de la sauvegarde initiale.
+- **Diagnostic** : `doctor` gagne un contrôle d'espace disque du dossier des jobs
+  (< 2 Go = échec, < 10 Go = alerte) avec action recommandée.
+- **Outillage qualité** : jeu de démonstration (`scripts/seed_demo_dataset.py`) et
+  walkthrough Playwright étendu (41 → 57 checks : assertions de fond par état + parcours
+  par rôle) ; banc « fuzz formulaire » (`scripts/form_fuzz.py`, 410 soumissions aux
+  limites, oracle « jamais de 500 ») — tous deux en CI.
+
+### Fixed
+- **API JSON robustes** : un corps JSON de mauvais type racine (ex. une chaîne au lieu
+  d'un objet) renvoyait un 500 ; un corps mal formé renvoyait une page HTML au lieu de
+  JSON. Helper `_json_body` typé et tolérant appliqué aux 7 routes concernées (trouvé
+  par le banc fuzz).
+
 ## [0.1.0-beta.9] — 2026-07-03
 
 L'**éditeur de transcription intégré** : la troisième et dernière grande fonctionnalité
