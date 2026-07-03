@@ -1155,6 +1155,10 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/lexicon/debug` | GET | login_required + owner check | Diagnostic détaillé du lexique : `audio_available`, timecodes bruts/normalisés, notes de réparation par contexte |
 | `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON (polling) |
 | `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
+| `/api/jobs/<id>/refine` | POST | login_required + owner check | Soumet un tour du chat d'affinage (`kind` ∈ `discuss`/`apply`) : écrit `refine/request.json` puis enfile en mode `refine` (202 ; 409 si occupé ou job non terminé) |
+| `/api/jobs/<id>/refine/chat` | GET | login_required + owner check | Endpoint de polling unique du panneau : tours, `busy`, versions, options de rendu et thèmes |
+| `/api/jobs/<id>/refine/render-options` | POST | login_required + owner check | Options de rendu du rapport (thème, sections) — déterministe, SANS LLM, instantané |
+| `/api/jobs/<id>/refine/revert` | POST | login_required + owner check | Restaure un snapshot `refine/versions/v<N>/` (les fichiers créés par l'apply sont supprimés) |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 | `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
 | `/api/queue/<id>/move-up` | POST | admin global ou admin de groupe sur périmètre | Remonte un job dans la file |
@@ -1175,7 +1179,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `change_password.html` | Formulaire changement de mot de passe utilisateur |
 | `index.html` | Accueil : liste des traitements + bouton nouveau |
 | `job_wizard.html` | Assistant 9 étapes avec formulaires interactifs (JS fetch API) |
-| `job_result.html` | Résultat : SRT, qualité, exports, lien SRT Editor |
+| `job_result.html` | Résultats & affinage : SRT (aperçu = version corrigée), qualité, exports, lien SRT Editor, **panneau du chat d'affinage** (fil de discussion, propositions applicables en un clic, versions restaurables, options de rendu, note « documents à jour ») — atteignable depuis l'étape Export du wizard et l'accueil |
 | `admin_config.html` | Éditeur YAML de configuration admin |
 | `users.html` | Liste des utilisateurs (admin) |
 | `user_form.html` | Formulaire création/édition utilisateur |

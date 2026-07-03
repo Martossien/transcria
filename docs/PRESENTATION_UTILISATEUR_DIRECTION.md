@@ -68,11 +68,13 @@ Pour une direction, TranscrIA apporte un cadre :
 | **Rapport Word (.docx)** | **Document professionnel prêt à distribuer : page de garde, contexte validé, tableau participants avec temps de parole, transcription formatée, points à vérifier. Téléchargeable directement ou inclus dans le ZIP.** |
 | Package ZIP | Ensemble des fichiers utiles pour archivage, relecture ou transmission (inclut le rapport Word) |
 
+Après le traitement, la page **Résultats & affinage** permet en outre de **dialoguer avec l'IA locale sur ces livrables** et d'appliquer des corrections versionnées et restaurables (cf. étape 10 du parcours ci-dessous).
+
 ---
 
 ## Parcours Utilisateur Dans La WebUI
 
-La WebUI guide l'utilisateur en 9 étapes. Chaque étape correspond à une action claire, avec un état visible du traitement.
+La WebUI guide l'utilisateur en 9 étapes, complétées après traitement par une page **Résultats & affinage**. Chaque étape correspond à une action claire, avec un état visible du traitement.
 
 ### 1. Connexion
 
@@ -174,6 +176,10 @@ Cette étape est essentielle pour les environnements métiers où un nom ou un a
 Le traitement final produit la transcription complète, applique les locuteurs, lance la correction IA, exécute les contrôles qualité et construit le package ZIP.
 
 Selon le mode choisi, le pipeline peut inclure une diarisation supplémentaire et une correction plus approfondie. Le résultat final est téléchargeable depuis l'interface.
+
+### 10. Résultats et affinage (après traitement)
+
+Une fois le traitement terminé, la page **Résultats & affinage** rassemble les livrables et permet de **discuter du document avec l'IA locale** : poser des questions sur le contenu, demander une reformulation de la synthèse, corriger un nom ou un terme. La discussion ne modifie rien ; chaque réponse se conclut par une proposition d'application que l'utilisateur peut **appliquer en un clic** — la correction est alors reportée de façon cohérente dans **tous** les livrables (synthèse, transcription, données du rapport). Chaque application crée une **version restaurable** : on peut toujours revenir en arrière. Les options de présentation du rapport Word (thème, sections) se règlent depuis la même page, instantanément. Les documents téléchargés (Word, SRT, ZIP) intègrent toujours les derniers affinages.
 
 ---
 

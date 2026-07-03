@@ -18,6 +18,7 @@ Plenty of scripts wrap Whisper. TranscrIA is built as a **service** for teams th
 - **A real audio module, not an `ffmpeg` wrapper.** Acoustic preflight (SNR, clipping, bandwidth, risk flags), speech/music/noise scene analysis, a **per-window difficulty timeline** shown to the user *before* transcription, optional Demucs source separation, loudness normalization, Silero VAD — all coordinated with GPU/VRAM management.
 - **Human-in-the-loop where it matters.** Detected speakers come with playable audio excerpts, talk time and an acoustic gender hint; users validate names, participants and a domain lexicon before the final pass. Known-voice matching is consent-based (signed form, hashed proof, source audio deleted by default).
 - **LLM arbitration with guardrails.** A local OpenAI-compatible LLM (e.g. llama.cpp) produces the structured summary, corrects the SRT using the validated lexicon and context, and a final review pass harmonizes the deliverables — with anti-hallucination cleanup, retry-then-fail-loud semantics, and **prompts editable in the admin UI**.
+- **Chat with the finished deliverables.** On the results page of a completed job, discuss the transcript, summary and quality findings with the local LLM (fast read-only answers — nothing is modified), then **apply** a change in one click: a corrected term is fixed **coherently across every deliverable** (summary, SRT, structured data). Each apply snapshots a **restorable version**, and the Word/SRT/ZIP exports are regenerated at download so they always include the refinements.
 - **Production-grade orchestration.** Persistent GPU job queue (priorities, anti-starvation aging, pause/resume, scheduled starts), **VRAM-aware admission** per remaining pipeline phase, calendar-based GPU scheduling, a **resumable pipeline** (checkpoint/resume — a re-queued job never redoes finished work), and "waiting for VRAM" as a first-class, admin-alerted state instead of a silent failure.
 - **Three deployment topologies.** All-in-one box; **CPU-only web frontend + GPU worker** (shared PostgreSQL, job files replicated **through the database** — no NFS to operate, sha256-verified integrity); and a remote **inference node** serving STT/diarization/voice-embedding over HTTP with VRAM autonomy (reuse → launch on demand → explicit 503).
 - **Compliance by design.** Multi-user RBAC (roles, groups), full **GDPR audit trail** (actor, IP, timestamp, filterable, exportable), consent-gated voice profiles, secrets kept out of the versioned config.
@@ -53,6 +54,7 @@ upload ─► audio diagnosis ─► quick summary (STT + LLM) ─► context, p
    lexicon (human validation) ─► final pipeline:
    preprocess → transcription → diarization → LLM correction → final review
    → quality scoring → exports (SRT, segments, quality report, DOCX minutes, ZIP)
+   ─► results page: refine chat (discuss / apply, versioned & restorable)
 ```
 
 - **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 / faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (experimental) — served locally or by a remote OpenAI-compatible server (vLLM, SGLang…).

@@ -139,7 +139,8 @@ transcria/
       steps.py              # WORKFLOW_STEPS (9 étapes)
       progress.py           # WorkflowProgressReporter — progression UI persistée dans jobs.extra_data_json["workflow_progress"]
       runner.py             # WorkflowRunner — exécution des étapes (dont run_refine : chat d'affinage post-workflow)
-      refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables)
+      refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables), extract_proposal (label contractuel tolérant)
+      refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
@@ -254,7 +255,7 @@ transcria/
     routes/                 # health, capabilities, engines (/engines/ensure), voice_embed, diarize
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
-    prompts/                # Prompts LLM (summary_prompt.txt, correction_prompt.txt)
+    prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription
     lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
@@ -471,6 +472,13 @@ Le wizard guide l'utilisateur de l'upload au package ZIP. Chaque étape correspo
 **Échec silencieux LLM (résumé) = retry ≤ 3 puis blocage relançable :** opencode peut « réussir » (exit 0) sans rien produire (0 texte, `summary.md` non réécrit). `OpenCodeRunner.run_summary` le détecte par le **mtime de `summary.md` avant/après** le run (jamais par matching de chaîne, fragile) et expose `_summary_produced`. `_run_llm_summary` retente la **seule** phase LLM jusqu'à 3 fois (pas de re-STT). Après 3 échecs : `meeting_context` non corrompu, job **non** `SUMMARY_DONE` (drapeau `extra_data.summary_llm_failed`), wizard affiche un bandeau, résumé **relançable** — la relance réutilise le transcript en cache (`_load_cached_quick_summary`, pas de STT GPU). Le placeholder de `SummaryGenerator` n'est **jamais** stocké comme résumé. Diagnostic a priori : `transcria doctor --llm-smoke`.
 
 **Garde anti-concurrence des phases synchrones :** `api_summary` et `api_speakers_detect` exécutent leur pipeline dans le thread HTTP et publient un état `RUNNING` pour toute leur durée. Ils renvoient `409` si le job est déjà `SUMMARY_RUNNING` / `SPEAKER_DETECTION_RUNNING` (anti double-lancement GPU et course sur `meeting_context.json`). `api_process` garde déjà la file via `can_start_processing` + `is_execution_active`.
+
+### Chat d'affinage des livrables (mode de file `refine`)
+Post-workflow, sur la page **`/jobs/<id>/result`** d'un job TERMINÉ (tous profils) — atteignable depuis l'étape Export du wizard et les cartes de l'accueil. L'utilisateur discute des livrables avec la LLM locale puis applique des modifications. Deux modes, contrat asymétrique :
+- **`discuss` = appel LLM DIRECT, lecture seule** (`workflow/refine_llm.py`) : un seul `/v1/chat/completions` (~1,6 s mesuré vs 45-55 s en boucle agentique opencode). Le system message inline les livrables (synthèse, SRT tronqué à `max_transcript_chars`, données structurées, options de rendu, points qualité `quality/review_points.json` dont variantes lexique) ; l'historique (`context_turns` derniers tours) est rejoué en VRAIS tours user/assistant. **Piège modèles thinking (Qwen3.x)** : tout le budget `max_tokens` part dans `reasoning_content`, `content` vide → payload `chat_template_kwargs: {enable_thinking: false}` (retry sans le champ si le backend le rejette) + filtre `<think>`. Chaque réponse se termine par le label CONTRACTUEL « Proposition d'application : … » (ou « aucune »), extrait côté serveur (`refine_store.extract_proposal`, tolérant label-sans-`---`) → carte + bouton « Appliquer cette proposition ».
+- **`apply` = opencode dans un `AgentWorkspace`** (édition de fichiers sous garde-fous) : `_corrected_srt_integrity_error` réutilisé, JSON normalisé, `_sanitize_render_options`, **snapshot de version AVANT write-back** (`refine/versions/v<N>/` + manifeste mémorisant aussi les fichiers ABSENTS — le revert supprime les créés), restauration via API. **Périmètre par défaut = TOUS les livrables** : les prompts cadrent « la demande définit le CHANGEMENT, pas un fichier » — un terme corrigé l'est dans synthèse + SRT + structured de façon cohérente sauf restriction explicite. Best-effort intégral : tout échec = tour assistant explicatif, livrables intacts.
+
+Règles/pièges spécifiques : (1) chaque tour transite par la **file** (mode `refine` de `STEP_MODES`) — le job étant terminé, ses blobs `input/` sont purgés : le scheduler **dispatche `refine` SANS audio** (`_dispatch_iteration`, `audio_arg=""`) alors que tous les autres modes l'exigent (warning explicite sinon) ; (2) toute phase LLM réserve via **`try_reserve_llm`** (réparti multi-GPU), jamais `try_reserve` mono-GPU ; (3) le DOCX est régénéré à CHAQUE téléchargement et le ZIP rebuilt → le write-back suffit, mais l'UI doit le dire (note `#refine-fresh-note`, message de fin d'apply) sinon l'utilisateur croit ses fichiers périmés ; (4) les aperçus SRT à l'écran passent par `_effective_srt(fs)` (corrigé sinon brut — même préférence que `/download/srt`) ; (5) les **options de rendu** (`context/render_options.json` : thème, sections) ont une route directe SANS LLM (`POST /refine/render-options`, instantané). Réf. : `docs/TECHNICAL.md` (run_refine), `docs/CONFIG_REFERENCE.md` (`workflow.refine_chat`).
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.

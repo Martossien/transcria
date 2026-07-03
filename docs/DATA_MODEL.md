@@ -100,7 +100,7 @@ File persistante utilisée par `QueueScheduler` quand `workflow.queue.enabled=tr
 | `gpu_index` | Integer | nullable | GPU affecté à la phase courante |
 | `last_aging_at` | DateTime | nullable | Dernière application du bonus d'attente |
 | `paused_by` | String(36) | FK → users.id, nullable | Utilisateur ayant mis en pause |
-| `mode` | String(20) | NOT NULL, default="fast" | Mode `fast` ou `quality` |
+| `mode` | String(20) | NOT NULL, default="fast" | Mode `fast` ou `quality` (pipeline complet), ou un mode d'étape de `STEP_MODES` : `summary` (reprise du résumé), `speakers` (détection locuteurs enfilée), `refine` (tour du chat d'affinage — job déjà terminé, dispatché **sans audio**) |
 
 `job_queue.status` est distinct de `jobs.state`. Le workflow utilisateur reste porté par `JobState`; l'état de file est un état d'exécution runtime. `extra_data.execution.status` garde aussi la trace `queued → running → completed|failed|cancelled` pour la reprise et les APIs de polling. Un statut **`waiting_vram`** (non terminal) signale une VRAM locale momentanément insuffisante : le job re-queue et reprend automatiquement, sans passer par `failed` (cf. `mark_execution_waiting_vram`, `docs/SERVICE_RESSOURCES_GPU.md` §7.2-bis).
 
@@ -416,6 +416,7 @@ jobs/<job_id>/
 │   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, source, central_entry_id, ...}]
 │   ├── session_lexicon_filtered.json # Lexique réduit transmis à la correction LLM
 │   ├── session_lexicon.txt        # Lexique en texte (pour correction LLM)
+│   ├── render_options.json        # Options de rendu du rapport (thème, sections on/off, renumérotation) — chat d'affinage ou route directe sans LLM
 │   ├── job_context.yaml           # Contexte complet assemblé par JobContextBuilder
 │   └── job_context.json           # Même contexte en JSON
 │
@@ -438,6 +439,12 @@ jobs/<job_id>/
 │   ├── quality_report.json        # Score /100 + checks + review_points
 │   ├── quality_report.md          # Rapport markdown
 │   └── review_points.json         # Points à vérifier (liste de strings)
+│
+├── refine/                         # Chat d'affinage des livrables (post-workflow, job terminé)
+│   ├── chat.json                  # Historique append-only des tours {role, kind, text, ts} (+ proposal extraite côté serveur)
+│   ├── request.json               # Demande en attente (écrite par le web, consommée UNE fois par le worker mode refine)
+│   └── versions/v<N>/             # Snapshot des artefacts AVANT chaque application (restaurable via API)
+│       └── manifest.json          # nom de fichier → {path relatif au job, absent} (mémorise aussi les fichiers créés par l'apply, supprimés au revert)
 │
 ├── exports/
 │   ├── transcrIA_job_<id>.zip       # Package final (SRT, contexte, qualité, audio, rapport DOCX)
@@ -498,6 +505,8 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
+| Affinage (post-workflow, job terminé) | `refine/chat.json`, `refine/request.json` (consommé), `refine/versions/v<N>/` + `manifest.json` ; en `apply` : artefacts texte réécrits (`context/meeting_context.json`, `metadata/transcription_corrigee.srt`, `context/render_options.json`), ZIP rebuild best-effort | `WorkflowRunner.run_refine()` — `discuss` = `refine_llm.chat_completion()` (appel direct, lecture seule) ; `apply` = `OpenCodeRunner.run_refine()` (AgentWorkspace, snapshot AVANT write-back) ; entrée de file mode `refine` |
+| Affinage (options de rendu, sans LLM) | `context/render_options.json` | `POST /api/jobs/<id>/refine/render-options` (déterministe, instantané) |
 
 `speakers/diarization_checkpoint.json` ne dépend pas seulement de l'audio et du
 modèle. Il contient aussi les contraintes locuteurs effectives
