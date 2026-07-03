@@ -1,4 +1,4 @@
-"""Refonte de l'interface web (docs/REFONTE_UI.md).
+"""Refonte de l'interface web (docs/archive/REFONTE_UI.md).
 
 Couvre : libellés français des états (plus d'état brut à l'écran), stepper du wizard
 sans troncature, bandeau d'échec avec error_message + relance, onglets Prompts LLM

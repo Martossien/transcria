@@ -1,4 +1,4 @@
-"""Édition web des prompts LLM + lecture seule des scripts (docs/REFONTE_UI.md).
+"""Édition web des prompts LLM + lecture seule des scripts (docs/archive/REFONTE_UI.md).
 
 Sécurité :
 - liste **fermée** de fichiers connus — aucun chemin fourni par le client (pas de

@@ -2564,7 +2564,7 @@ def system_status():
     dashboard_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
     client = DashboardClient(dashboard_url)
     status = client.get_system_status()
-    # Page consciente du RÔLE (docs/REFONTE_UI.md lot D) : une frontale CPU-only
+    # Page consciente du RÔLE (docs/archive/REFONTE_UI.md lot D) : une frontale CPU-only
     # n'affiche pas de panneaux GPU locaux trompeurs ; le backend de stockage des
     # fichiers de jobs et sa volumétrie sont visibles ici.
     runtime_role = current_app.config.get("TRANSCRIA_ROLE", "all")
@@ -2630,7 +2630,7 @@ def admin_config():
 
     elif request.method == "POST" and request.form.get("_mode") == "prompts":
         # Édition des prompts LLM : liste FERMÉE de fichiers connus (prompt_files),
-        # garde non-vide + backup .bak — voir docs/REFONTE_UI.md.
+        # garde non-vide + backup .bak — voir docs/archive/REFONTE_UI.md.
         from transcria.web import prompt_files
 
         saved = 0

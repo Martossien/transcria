@@ -1,4 +1,4 @@
-"""Libellés français des états de job pour l'interface (docs/REFONTE_UI.md).
+"""Libellés français des états de job pour l'interface (docs/archive/REFONTE_UI.md).
 
 Source unique : aucun template ne doit afficher un état brut (`ready_to_process`…).
 Exposé aux templates via les filtres Jinja `state_label` et `state_badge`

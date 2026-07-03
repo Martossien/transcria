@@ -6,7 +6,7 @@ Lance les combinaisons d'options de prétraitement sur un ou plusieurs
 fichiers audio, en parallèle sur plusieurs GPUs.  Chaque combinaison appelle
 test_e2e_workflow.py en sous-processus isolé.
 
-Voir docs/BENCHMARK.md pour la description complète des résultats et recommandations.
+Voir docs/archive/BENCHMARK.md pour la description complète des résultats et recommandations.
 
 Matrices disponibles (--matrix) :
   base     : 24 combos standard (5 dimensions : scene/sep/norm/filter/stt)

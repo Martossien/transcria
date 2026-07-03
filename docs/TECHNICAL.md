@@ -169,7 +169,7 @@ transcria/
 │       ├── routes.py              # Routes Flask (pages + API REST)
 │       ├── ui_labels.py           # Libellés FR des états de job (filtres Jinja state_label/state_badge)
 │       ├── prompt_files.py        # Édition web des prompts LLM (liste fermée, .bak, atomique) + scripts lecture seule
-│       ├── static/css/transcria.css  # Feuille de style applicative (tokens — docs/REFONTE_UI.md)
+│       ├── static/css/transcria.css  # Feuille de style applicative (tokens — docs/archive/REFONTE_UI.md)
 │       └── templates/             # Templates Jinja2 (Bootstrap 5)
 │           ├── base.html
 │           ├── login.html
@@ -1014,7 +1014,7 @@ Génère un rapport Word professionnel **adapté au type de réunion** à partir
 2. **Affichage des sections enrichies** : règle « une donnée extraite n'est jamais cachée ». Toute section (`points_odj`, `decisions`, `votes`, `resolutions`, `actions`, `blocages`, `reports`) s'affiche dès qu'elle est non vide, **quel que soit le type** — le type ne filtre pas la rétention du contenu. Ordre fixe type-PV (agenda → décisions → votes → résolutions → actions → blocages → reports). Numérotation dynamique des sections. *(Décision validée par un run réel sur conseil municipal : des votes extraits ne doivent pas être jetés faute de type CSE.)*
 3. **Thèmes visuels** : `_DocxTheme` (dataclass) + `_THEMES` dict associent une palette (primary/accent/light), une bannière et un badge à chaque type. `_get_theme(meeting_type)` retourne le thème ou `_THEME_DEFAULT`. `_CSE_TYPES` pilote le quorum + sous-titre objet de séance sur la page de garde ; `_AUTO_CONFIDENTIEL` (Entretien individuel/RH/Médical) force la confidentialité.
 
-Spec détaillée : [docs/FEATURE_DOCX_REPORT.md](FEATURE_DOCX_REPORT.md).
+Spec détaillée : `docs/archive/FEATURE_DOCX_REPORT.md` (archive locale, non publiée).
 
 **Logique de priorité SRT** : `transcription_corrigee.srt` est servi en priorité. Si absent, `transcription.srt` est servi.
 

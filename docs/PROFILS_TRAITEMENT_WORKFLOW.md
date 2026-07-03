@@ -1552,7 +1552,7 @@ Documents impactes :
   - enrichissement progressif ;
   - phases requises selon profil ;
   - invalidation par changement de profil.
-- `docs/FEATURE_DOCX_REPORT.md`
+- `docs/archive/FEATURE_DOCX_REPORT.md`
   - niveaux DOCX.
 - `docs/SERVICE_RESSOURCES_GPU.md`
   - disponibilite des profils selon local/remote/hybrid.
@@ -1560,7 +1560,7 @@ Documents impactes :
   - profils en roles Docker.
 - `docs/INSTALL.md`
   - installer/doctor et profils disponibles.
-- `docs/REFONTE_UI.md`
+- `docs/archive/REFONTE_UI.md`
   - composant de selection profil.
 
 ## Decisions produit retenues et points a trancher

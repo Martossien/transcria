@@ -217,7 +217,7 @@ transcria/services/pipeline_service.py    # orchestration 2 passes (axe 2.b)
 transcria/stt/transcription.py            # re-transcription ciblée par segments
 scripts/arbitrate_hybrid_llm.py           # → à intégrer dans le pipeline (axe 2.c)
 scripts/compare_stt_segments.py           # alignement temporel des sorties
-docs/BENCHMARK.md                         # protocole de calibration (axe 1.a)
+docs/archive/BENCHMARK.md                         # protocole de calibration (axe 1.a)
 ```
 
 Aucune modification de modèle de données bloquante : `difficulty_map` et les marqueurs d'arbitrage s'ajoutent aux JSON metadata existants. Le résumé compact par job est déjà persisté en base (`extra_data.audio_summary`) ; l'instrumentation manquante pour le corpus est le **résultat STT par segment** (à logger pendant la transcription, pas dans le préflight).

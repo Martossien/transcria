@@ -245,7 +245,7 @@ transcria/
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran
       prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité)
       templates/            # base.html (navbar à menus déroulants) + templates par étape
-      static/css/           # transcria.css (tokens + composants — docs/REFONTE_UI.md ; pas de styles inline)
+      static/css/           # transcria.css (tokens + composants — docs/archive/REFONTE_UI.md ; pas de styles inline)
       static/js/            # wizard.js, wizard-api.js
   inference_service/        # Service Flask « nœud de ressources » (diarize/voice-embed in-process A/B/C)
     app.py                  # create_app() + garde clé API sur /infer/* et /engines/*
