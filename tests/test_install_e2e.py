@@ -115,6 +115,14 @@ def _run_install(sandbox: Path, profile: str, pg: "PgParams", *extra: str) -> su
     opencode_stub = fake_bin / "opencode"
     opencode_stub.write_text("#!/bin/sh\necho 'opencode 0.0.0-stub'\n", encoding="utf-8")
     opencode_stub.chmod(0o755)
+    # nvidia-smi est MASQUÉ (stub en échec → 0 GPU détecté) : en non-interactif, install.sh
+    # télécharge automatiquement le GGUF du palier recommandé — sur une machine GPU au cache
+    # froid c'est des dizaines de Go, donc un timeout dépendant de la bande passante.
+    # L'E2E vérifie l'orchestration d'install.sh, pas le téléchargement de modèle ; sans GPU
+    # visible, la phase LLM est sautée — exactement le chemin exercé en CI (runner sans GPU).
+    nvidia_stub = fake_bin / "nvidia-smi"
+    nvidia_stub.write_text("#!/bin/sh\necho 'stub E2E : aucun GPU dans le bac à sable' >&2\nexit 1\n", encoding="utf-8")
+    nvidia_stub.chmod(0o755)
     # HOME pointe vers le bac à sable : la phase opencode (OPENCODE_HOME=$HOME) écrit
     # alors sa config provider dans le sandbox, jamais dans le ~/.config/opencode réel.
     env = {
