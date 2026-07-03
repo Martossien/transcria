@@ -3,6 +3,7 @@ import re
 import zipfile
 from pathlib import Path
 
+from transcria.context.meeting_context import MeetingContextManager
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 
@@ -45,7 +46,15 @@ class PackageBuilder:
                     self._add_if_exists(zf, fs, "context/session_lexicon.json", "context/session_lexicon.json")
                     self._add_if_exists(zf, fs, "speakers/speaker_mapping.json", "context/speaker_mapping.json")
                     self._add_if_exists(zf, fs, "speakers/speaker_stats.json", "context/speaker_stats.json")
-                    self._add_if_exists(zf, fs, "summary/summary.md", "summary/summary.md")
+                    # summary.md du LIVRABLE = résumé EFFECTIF : l'édition manuelle de
+                    # l'étape 4 (ou l'harmonisation) remplace la section Synthèse — le
+                    # fichier interne summary/summary.md reste le brut LLM (référence
+                    # des phases aval). Bug réel : l'édition n'atteignait que le DOCX.
+                    raw_summary = fs.load_text("summary/summary.md")
+                    if raw_summary is not None:
+                        meeting_ctx_pkg = fs.load_json("context/meeting_context.json") or {}
+                        zf.writestr("summary/summary.md",
+                                    MeetingContextManager.effective_summary_markdown(meeting_ctx_pkg, raw_summary))
                 # — Full uniquement : rapports qualité / correction / relecture —
                 if zip_level == "full":
                     self._add_if_exists(zf, fs, "quality/quality_report.md", "quality/quality_report.md")

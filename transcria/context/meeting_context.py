@@ -44,6 +44,29 @@ class MeetingContextManager:
         return merged
 
     @staticmethod
+    def effective_summary_markdown(meeting_ctx: dict, raw_md: str) -> str:
+        """Le summary.md EFFECTIF d'un livrable : la synthèse éditée (étape 4) ou
+        harmonisée (relecture finale) remplace la section « ## Synthèse » du markdown
+        brut de la LLM — même priorité que le DOCX (summary > harmonized > brut).
+
+        Miroir de l'extraction du wizard (job_wizard.html, textarea de l'étape 4) :
+        si le brut n'a pas de section « ## Synthèse », l'édition remplace tout.
+        """
+        effective = str(meeting_ctx.get("summary") or meeting_ctx.get("summary_harmonized") or "").strip()
+        raw = raw_md or ""
+        if not effective:
+            return raw
+        marker = "## Synthèse"
+        if marker not in raw:
+            return effective + "\n"
+        head, _, tail = raw.partition(marker)
+        rest = tail.split("\n##", 1)
+        replaced = head + marker + "\n\n" + effective + "\n"
+        if len(rest) > 1:
+            replaced += "\n##" + rest[1]
+        return replaced
+
+    @staticmethod
     def auto_suggest(job: Job, jobs_dir: str) -> dict:
         fs = JobFilesystem(jobs_dir, job.id)
         summary_text = ""

@@ -154,3 +154,49 @@ class TestVerifyPackage:
             zf.writestr("word/document.xml", "<xml/>")
         issues = PackageBuilder.verify_package(z, d)
         assert any("Content_Types" in i for i in issues)
+
+
+class TestEffectiveSummaryMarkdown:
+    """Le summary.md du PACKAGE reflète l'édition manuelle de l'étape 4 (bug réel :
+    l'édition n'atteignait que le DOCX, le ZIP embarquait le brut LLM)."""
+
+    RAW = "# Résumé\n\n## Synthèse\n\nTexte GÉNÉRÉ par la LLM.\n\n## Points clés\n- a\n- b\n"
+
+    def test_sans_edition_le_brut_est_conserve(self):
+        from transcria.context.meeting_context import MeetingContextManager
+        assert MeetingContextManager.effective_summary_markdown({}, self.RAW) == self.RAW
+
+    def test_edition_manuelle_remplace_la_section_synthese(self):
+        from transcria.context.meeting_context import MeetingContextManager
+        out = MeetingContextManager.effective_summary_markdown({"summary": "Texte ÉDITÉ main."}, self.RAW)
+        assert "Texte ÉDITÉ main." in out
+        assert "Texte GÉNÉRÉ par la LLM." not in out
+        assert "## Points clés" in out          # le reste de la structure survit
+        assert out.startswith("# Résumé")
+
+    def test_harmonise_utilise_apres_manuel(self):
+        from transcria.context.meeting_context import MeetingContextManager
+        ctx = {"summary": "MANUEL.", "summary_harmonized": "HARMONISÉ."}
+        assert "MANUEL." in MeetingContextManager.effective_summary_markdown(ctx, self.RAW)
+        ctx = {"summary_harmonized": "HARMONISÉ."}
+        assert "HARMONISÉ." in MeetingContextManager.effective_summary_markdown(ctx, self.RAW)
+
+    def test_brut_sans_section_synthese_remplace_tout(self):
+        from transcria.context.meeting_context import MeetingContextManager
+        out = MeetingContextManager.effective_summary_markdown({"summary": "ÉDITÉ."}, "Texte brut sans section.")
+        assert out == "ÉDITÉ.\n"
+
+    def test_package_zip_embarque_le_resume_effectif(self, tmp_path):
+        from transcria.context.meeting_context import MeetingContextManager
+        job_id = "job-summary-eff"
+        jobs_dir = str(tmp_path)
+        fs = JobFilesystem(jobs_dir, job_id)
+        fs.save_text("metadata/transcription.srt", "1\n00:00:01,000 --> 00:00:04,000\nBonjour\n")
+        fs.save_text("summary/summary.md", self.RAW)
+        job = Job(id=job_id, owner_id="u1", title="Résumé", state=JobState.CREATED.value)
+        MeetingContextManager.save(job, jobs_dir, {"summary": "Synthèse CORRIGÉE par la secrétaire."})
+        result = PackageBuilder({"storage": {"jobs_dir": jobs_dir}}).build_package(job)
+        with zipfile.ZipFile(result["zip_path"]) as z:
+            md = z.read("summary/summary.md").decode("utf-8")
+        assert "Synthèse CORRIGÉE par la secrétaire." in md
+        assert "Texte GÉNÉRÉ par la LLM." not in md
