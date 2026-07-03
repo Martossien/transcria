@@ -637,6 +637,8 @@ class QualityReporter:
         md = self._format_markdown(report)
         fs.save_text("quality/quality_report.md", md)
         fs.save_json("quality/review_points.json", review_points)
+        from transcria.quality.review_points import ReviewPoints as _RP
+        fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report))
 
         return report
 

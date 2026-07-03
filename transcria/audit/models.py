@@ -14,6 +14,7 @@ class AuditAction(str, enum.Enum):
     JOB_DOWNLOAD = "job_download"
     JOB_DELETE = "job_delete"
     JOB_SPEAKER_MAP = "job_speaker_map"
+    JOB_SRT_EDIT_SAVE = "job_srt_edit_save"
     JOB_LEXICON_SAVE = "job_lexicon_save"
     JOB_CONTEXT_SAVE = "job_context_save"
     JOB_PARTICIPANTS_SAVE = "job_participants_save"

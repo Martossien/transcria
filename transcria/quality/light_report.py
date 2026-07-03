@@ -95,6 +95,8 @@ def run_light_quality(job: Job, config: dict) -> dict:
     fs.save_json("quality/quality_report.json", report)
     fs.save_text("quality/quality_report.md", _format_markdown(report))
     fs.save_json("quality/review_points.json", review_points)
+    from transcria.quality.review_points import ReviewPoints as _RP
+    fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report))
     logger.info("Rapport qualité LÉGER job %s: score %d/100, %d checks, %d warnings",
                 job.id, quality_score, total_checks, warnings)
     return report

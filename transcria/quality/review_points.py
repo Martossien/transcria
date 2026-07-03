@@ -56,3 +56,42 @@ class ReviewPoints:
                 points.append(f"Zones audio problématiques : {count}{suffix}")
 
         return points
+
+    @staticmethod
+    def generate_anchors(quality_report: dict) -> list[dict]:
+        """Ancres CLIQUABLES pour l'éditeur de transcription (cadrage éditeur §3.6).
+
+        Fichier JUMEAU de ``review_points.json`` (compat totale : la liste de strings
+        ne change pas). Deux sortes d'ancres :
+        - ``kind="time"``   : zone datée → l'éditeur cale l'audio dessus ;
+        - ``kind="search"`` : terme suspect → l'éditeur lance la recherche.
+        """
+        anchors: list[dict] = []
+        for check in quality_report.get("checks", []):
+            ctype = check.get("type", "")
+            if ctype == "audio_problem_segments":
+                for item in check.get("examples", [])[:10]:
+                    try:
+                        start_ms = int(float(item.get("start", 0)) * 1000)
+                        end_ms = int(float(item.get("end", 0)) * 1000)
+                    except (TypeError, ValueError):
+                        continue
+                    anchors.append({
+                        "kind": "time",
+                        "text": f"Zone audio : {item.get('label', '?')} "
+                                f"{item.get('start_label', '')}→{item.get('end_label', '')}",
+                        "start_ms": start_ms,
+                        "end_ms": end_ms,
+                    })
+            elif ctype == "unresolved_lexicon_variants":
+                for item in check.get("exact_variants", [])[:10]:
+                    variant = str(item.get("variant") or "").strip()
+                    if variant:
+                        anchors.append({"kind": "search", "text": f"Variante à corriger : {variant} → {item.get('term')}",
+                                        "query": variant})
+                for item in check.get("close_forms", [])[:10]:
+                    form = str(item.get("form") or "").strip()
+                    if form:
+                        anchors.append({"kind": "search", "text": f"Forme proche : {form} (≈ {item.get('term')})",
+                                        "query": form})
+        return anchors
