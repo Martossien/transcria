@@ -58,8 +58,8 @@
   <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary">
     <i class="bi bi-download"></i> Télécharger l'audio
   </a>
-  <a href="{{ srt_editor_url }}" target="_blank" class="btn btn-outline-info">
-    <i class="bi bi-pencil-square"></i> SRT Editor EASY
+  <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-primary">
+    <i class="bi bi-pencil-square"></i> Éditer la transcription
   </a>
 </div>
 {# Visible dès qu'un affinage a été appliqué (rempli par le JS du panneau) : rassure

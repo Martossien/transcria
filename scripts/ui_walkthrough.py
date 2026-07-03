@@ -383,6 +383,39 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("types de réunion", False, str(exc)[:120])
 
+    def srt_editor_workshop(self, job_id: str) -> None:
+        # Éditeur de transcription intégré (GPU-free) : atelier chargé, édition d'un
+        # texte, version enregistrée dans le pool commun — sur le job seedé SANS audio
+        # (le mode dégradé A1 est donc AUSSI couvert : bandeau + éditions possibles).
+        try:
+            self.page.goto(f"{self.base}/jobs/{job_id}/editor", wait_until="networkidle")
+            self.page.wait_for_selector("#se-main:not(.d-none) .se-card, #se-resume:not(.d-none)", timeout=8000)
+            if self.page.locator("#se-resume:not(.d-none)").count():
+                self.page.click("#se-resume-no")
+                self.page.wait_for_selector(".se-card", timeout=8000)
+            self.shot("23_editeur_atelier")
+            cards = self.page.locator(".se-card").count()
+            body = self.page.content()
+            self.check("éditeur : atelier chargé (cartes + bandeau sans-audio)",
+                       cards >= 1 and "Audio non disponible" in body, f"{cards} segments")
+
+            text_el = self.page.locator(".se-card .se-text").first
+            text_el.click()
+            self.page.keyboard.press("Control+a")
+            self.page.keyboard.type("Texte edite par le walkthrough CI.")
+            self.page.keyboard.press("Enter")
+            self.page.wait_for_timeout(300)
+            edited = "Texte edite par le walkthrough CI." in self.page.locator(".se-card .se-text").first.inner_text()
+            self.check("éditeur : le texte est le champ (édition sur place)", edited)
+
+            self.page.click("#se-save")
+            self.page.wait_for_timeout(1200)
+            state_txt = self.page.locator("#se-save-state").inner_text()
+            self.check("éditeur : version enregistrée (pool commun)", "version v" in state_txt, state_txt)
+            self.shot("24_editeur_version")
+        except Exception as exc:  # noqa: BLE001
+            self.check("éditeur de transcription", False, str(exc)[:120])
+
     def refine_chat_panel(self, job_id: str) -> None:
         # Chat d'affinage des livrables (GPU-free : AUCUN appel LLM ici) : le panneau
         # est présent sur /result, l'endpoint de polling répond, et les options de
@@ -491,6 +524,7 @@ def main() -> int:
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)
                 wt.refine_chat_panel(args.result_job_id)
+                wt.srt_editor_workshop(args.result_job_id)
         finally:
             browser.close()
         ok = wt.report()

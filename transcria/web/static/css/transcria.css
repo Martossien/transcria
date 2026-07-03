@@ -156,3 +156,121 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
   position: absolute; bottom: 3%; left: 0; right: 0; text-align: center;
   color: var(--text-muted); font-size: 0.52rem;
 }
+
+/* ── Atelier d'édition de transcription (lot B — EDITEUR_SRT_INTEGRE.md §7) ──
+   Un atelier, pas un formulaire : fond assombri d'un cran (les couleurs de
+   locuteurs portent l'information), cartes calmes au repos, zéro modale. */
+.se-workshop { background: #eef2f7; margin: -1.5rem -12px 0; padding: 12px 16px 32px; min-height: calc(100vh - 70px); }
+.se-topbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 14px; margin-bottom: 10px; position: sticky; top: 8px; z-index: 40;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+.se-title { font-weight: 700; }
+.se-save-state { font-size: 0.8rem; color: var(--text-muted); }
+.se-save-state.saving { color: var(--warning); }
+.se-save-state.error { color: var(--danger); }
+
+.se-player {
+  display: flex; align-items: center; gap: 10px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; margin-bottom: 10px;
+}
+.se-player .se-time { font-variant-numeric: tabular-nums; font-size: 0.85rem; min-width: 132px; }
+
+/* Lecteur + fresque collants : toujours visibles pendant l'édition (retour test) */
+.se-sticky { position: sticky; top: 58px; z-index: 30; padding-top: 2px;
+             background: linear-gradient(#eef2f7 85%, rgba(238, 242, 247, 0)); }
+
+/* Fresque globale : canvas plein largeur, blocs par locuteur */
+.se-fresque-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px 10px; margin-bottom: 10px; }
+.se-fresque { width: 100%; height: 34px; display: block; cursor: pointer; }
+
+/* Timeline lot C : lanes + bande zoomée + repères */
+.se-lanes { width: 100%; display: block; cursor: pointer; }
+.se-zoomband { width: 100%; display: block; cursor: crosshair; margin-top: 4px;
+               border-top: 1px solid var(--border); }
+.se-zoomband.dragging { cursor: ew-resize; }
+.se-marker-chip {
+  font-size: 0.72rem; background: var(--info-bg); color: var(--primary);
+  border-radius: 999px; padding: 1px 8px; cursor: pointer; white-space: nowrap;
+}
+.se-marker-chip .se-marker-x { margin-left: 4px; opacity: 0.6; }
+.se-marker-chip .se-marker-x:hover { opacity: 1; color: var(--danger); }
+.se-overlap-pill {
+  font-size: 0.68rem; background: repeating-linear-gradient(45deg, #fef3c7, #fef3c7 3px, #fde68a 3px, #fde68a 6px);
+  color: #92400e; border-radius: 999px; padding: 0 7px;
+}
+
+/* Liste des chunks — rendu paresseux NATIF (virtualisation sans JS) */
+.se-list { max-width: 980px; margin: 0 auto; }
+.se-card {
+  content-visibility: auto; contain-intrinsic-size: auto 92px;
+  background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--border);
+  border-radius: 10px; padding: 8px 12px 6px; margin-bottom: 8px;
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.se-card.active { border-left-color: var(--se-color, var(--primary)); box-shadow: 0 3px 14px rgba(15, 23, 42, 0.10); background: #fdfdff; }
+.se-card.dirty .se-dirty-dot { display: inline-block; }
+.se-dirty-dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: var(--warning); }
+.se-card-head { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--text-muted); }
+.se-speaker-chip {
+  display: inline-flex; align-items: center; gap: 5px; font-weight: 600; color: var(--text);
+  cursor: pointer; border-radius: 6px; padding: 1px 6px;
+}
+.se-speaker-chip:hover { background: var(--bg); }
+.se-speaker-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--se-color, #64748b); }
+.se-times { font-variant-numeric: tabular-nums; cursor: pointer; }
+.se-times:hover { color: var(--primary); }
+.se-text {
+  font-size: 0.95rem; line-height: 1.45; padding: 4px 2px; border-radius: 6px;
+  outline: none; white-space: pre-wrap; cursor: text;
+}
+.se-text:focus { background: #fffef2; box-shadow: inset 0 0 0 1px var(--warning); }
+/* Icônes : présentes mais discrètes, révélées au survol/focus de la carte */
+.se-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s ease; padding-top: 2px; }
+.se-card:hover .se-actions, .se-card:focus-within .se-actions { opacity: 1; }
+.se-actions .btn { padding: 1px 7px; font-size: 0.76rem; }
+
+/* Tiroir timing */
+.se-timing { display: none; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0 2px; font-size: 0.8rem; }
+.se-card.timing-open .se-timing { display: flex; }
+.se-timing input { width: 110px; font-variant-numeric: tabular-nums; }
+
+/* Menu locuteur (popover léger, pas de modale) */
+.se-speaker-menu {
+  position: absolute; z-index: 60; background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); padding: 6px; min-width: 240px;
+}
+.se-speaker-menu button[data-sid] { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: none; text-align: left; padding: 5px 8px; border-radius: 6px; font-size: 0.86rem; }
+.se-speaker-menu button[data-sid]:hover { background: var(--bg); }
+.se-speaker-menu input { flex: 1 1 120px; min-width: 0; width: auto; }
+.se-speaker-menu .btn { flex: 0 0 auto; }
+
+/* Lot D : sélection multiple, recherche, solo */
+.se-card.selected { outline: 2px solid var(--primary); outline-offset: -2px; background: #f0f6ff; }
+.se-card.hit { outline: 2px dashed var(--warning); outline-offset: -2px; }
+.se-selection-bar {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 70;
+  background: #1e293b; color: #fff; border-radius: 999px; padding: 8px 16px;
+  display: flex; gap: 8px; align-items: center; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+}
+.se-selection-bar .btn-outline-light { border-color: rgba(255, 255, 255, 0.4); color: #fff; }
+#se-solo-chip { cursor: pointer; }
+.se-gauge { min-width: 90px; }
+
+.se-review-menu { min-width: 380px; max-width: 520px; max-height: 60vh; overflow-y: auto; padding: 8px; }
+.se-review-item { display: flex; gap: 8px; align-items: baseline; padding: 4px 6px; border-radius: 6px; font-size: 0.84rem; }
+.se-review-item.anchored { cursor: pointer; }
+.se-review-item.anchored:hover { background: var(--info-bg); }
+.se-review-item.done { opacity: 0.5; text-decoration: line-through; }
+.se-review-item input { margin-top: 2px; }
+
+/* Bandeaux d'état (sans audio / lecture seule / reprise) */
+.se-banner { border-radius: 10px; padding: 8px 14px; margin-bottom: 10px; font-size: 0.88rem; }
+.se-banner.warn { background: var(--warning-bg); color: var(--warning); }
+.se-banner.info { background: var(--info-bg); color: var(--primary); }
+.se-resume-card {
+  max-width: 560px; margin: 40px auto; background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; text-align: center; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.10);
+}
