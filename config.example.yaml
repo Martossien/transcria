@@ -78,7 +78,6 @@ auth:
 
 services:
   dashboard_llm_url: "http://127.0.0.1:5001"
-  srt_editor_easy_url: "http://127.0.0.1:7861"
   # Backend de la LLM d'arbitrage. Absent/omis = auto-détection rétro-compatible
   # (ollama_url ⇒ ollama, arbitrage_script ⇒ llama.cpp/vLLM, sinon http distant).
   #   - "script"  : llama.cpp / vLLM lancés par arbitrage_script (contrôle/multi-GPU).
@@ -282,7 +281,6 @@ workflow:
   enable_quick_summary: true
   enable_speaker_detection: true
   enable_quality_mode: true
-  enable_external_srt_editor_link: true
   enable_vad: true
   progress:
     enabled: true

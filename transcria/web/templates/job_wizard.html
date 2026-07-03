@@ -9,7 +9,6 @@
      data-sujet-suggere="{{ meeting.sujet_suggere or '' }}"
      data-objectif-suggere="{{ meeting.objectif_suggere or '' }}"
      data-notes-suggeres="{{ meeting.notes_suggeres or '' }}"
-     data-editor-url="{{ srt_editor_url }}"
      data-llm-timeout="{{ llm_timeout }}">
 
   <div class="d-flex justify-content-between align-items-center mb-4">
@@ -945,13 +944,11 @@
         <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> Télécharger le SRT</a>
         <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> Package complet</a>
         <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Télécharger l'audio</a>
-        <a href="{{ srt_editor_url }}" target="_blank" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> Ouvrir SRT Editor EASY</a>
-        <button class="btn btn-outline-info btn-sm" onclick="TranscrIA.pushToEditor()">
-          <span id="push-spinner" class="spinner d-none"></span> Envoyer vers SRT Editor
-        </button>
+        <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> Éditer la transcription</a>
       </div>
       <p class="text-muted small mt-2">
-        Pour corriger le SRT, ouvrez <a href="{{ srt_editor_url }}" target="_blank">SRT Editor EASY</a> puis importez le fichier audio et le fichier SRT générés.
+        L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en
+        écoutant l'audio — vos modifications sont versionnées et les documents régénérés.
       </p>
     {% else %}
       <p class="text-muted">Le package final sera disponible après le traitement complet.</p>

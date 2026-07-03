@@ -43,7 +43,6 @@ from transcria.context.meeting_context import MeetingContextManager
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
-from transcria.integrations.srt_editor_link import SrtEditorLink
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
@@ -1185,7 +1184,6 @@ def job_wizard(job_id: str):
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
         voice_enrollment_enabled=bool(cfg.get("voice_enrollment", {}).get("enabled", False)),
-        srt_editor_url=SrtEditorLink.resolve_public_url(cfg, request.host),
         llm_timeout=int(
             cfg.get("workflow", {}).get("arbitration_llm", {}).get("timeout_seconds", 7200)
         ),
@@ -1216,7 +1214,6 @@ def job_result(job_id: str):
         srt_content=srt_content,
         has_package=has_package,
         has_docx=has_docx,
-        srt_editor_url=SrtEditorLink.resolve_public_url(cfg, request.host),
     )
 
 
@@ -2561,44 +2558,6 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
     )
     return send_file(clip_path, mimetype="audio/wav")
 
-
-@web_bp.route("/api/jobs/<job_id>/push-to-editor", methods=["POST"])
-@login_required
-def api_push_to_editor(job_id: str):
-    cfg = get_config()
-    job, error_response = _get_job_for_api(job_id)
-    if error_response:
-        return error_response
-
-    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
-    audio_path = fs.get_original_audio_path()
-    srt_content = _effective_srt(fs)
-
-    if audio_path is None or srt_content is None:
-        return jsonify({"error": "Audio ou SRT manquant"}), 400
-
-    editor_url = SrtEditorLink.get_server_url(cfg)
-    editor = SrtEditorLink(editor_url)
-    audio_result = editor.push_audio(str(audio_path))
-    if "error" in audio_result:
-        return jsonify({"error": "Échec envoi audio", "detail": audio_result}), 500
-
-    project_id = audio_result.get("project_id", "")
-    srt_result = editor.push_srt(project_id, srt_content) if project_id else {"error": "pas de project_id"}
-    audit_log(
-        AuditAction.JOB_EXTERNAL_PUSH,
-        target_type="job",
-        target_id=job.id,
-        target_label=job.title,
-        details={
-            "destination": "srt_editor",
-            "destination_origin": _audit_origin_from_url(editor_url),
-            "audio_sent": "error" not in audio_result,
-            "srt_sent": "error" not in srt_result,
-            "project_id_present": bool(project_id),
-        },
-    )
-    return jsonify({"audio": audio_result, "srt": srt_result, "editor_url": SrtEditorLink.resolve_public_url(cfg, request.host)})
 
 
 @web_bp.route("/system")

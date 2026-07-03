@@ -1115,21 +1115,6 @@ var TranscrIA = window.TranscrIA || {};
         if (selected) { W.selectProfile(selected); }
     };
 
-    W.pushToEditor = function () {
-        console.log('[TranscrIA] pushToEditor()');
-        W.showSpinner('push-spinner');
-        W.api('/api/jobs/' + JOB_ID + '/push-to-editor').then(function (r) {
-            W.hideSpinner('push-spinner');
-            var ediv = document.getElementById('export-result');
-            if (r.data.error) {
-                ediv.innerHTML = '<div class="alert alert-danger">' + r.data.error + '</div>';
-            } else {
-                var url = r.data.editor_url || document.getElementById('wizard-root').dataset.editorUrl || '';
-                ediv.innerHTML = '<div class="alert alert-success">Fichiers envoyés. ' +
-                    '<a href="' + url + '" target="_blank">Ouvrir SRT Editor</a></div>';
-            }
-        });
-    };
 
 })();
 

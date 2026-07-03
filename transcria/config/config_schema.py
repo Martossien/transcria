@@ -186,7 +186,6 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
 
 def _check_services(svc: dict, r: ValidationResult) -> None:
     _check_str(svc, "dashboard_llm_url", "services.dashboard_llm_url", r)
-    _check_str(svc, "srt_editor_easy_url", "services.srt_editor_easy_url", r)
     if "arbitrage_llm_port" in svc:
         _check_int_range(svc, "arbitrage_llm_port", "services.arbitrage_llm_port", 1, 65535, r)
     else:
@@ -239,7 +238,6 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_quick_summary", "workflow.enable_quick_summary", r)
     _check_bool(wf, "enable_speaker_detection", "workflow.enable_speaker_detection", r)
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
-    _check_bool(wf, "enable_external_srt_editor_link", "workflow.enable_external_srt_editor_link", r)
     _check_progress_section(wf.get("progress", {}), r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
     _check_queue_section(wf.get("queue", {}), r)

@@ -296,7 +296,6 @@ class TestJobAccessControl:
             ("post", f"/api/jobs/{foreign_job_id}/process", {"json": {"mode": "fast"}}),
             ("post", f"/api/jobs/{foreign_job_id}/quality", {}),
             ("post", f"/api/jobs/{foreign_job_id}/export", {}),
-            ("post", f"/api/jobs/{foreign_job_id}/push-to-editor", {}),
             ("get", f"/api/jobs/{foreign_job_id}/audio/excerpt?timecode=5s%E2%86%9210s", {}),
             ("get", f"/api/jobs/{foreign_job_id}/speakers/clips", {}),
         ]

@@ -75,7 +75,6 @@ _DEFAULT_CONFIG = {
     },
     "services": {
         "dashboard_llm_url": "http://127.0.0.1:5001",
-        "srt_editor_easy_url": "http://127.0.0.1:7861",
         "arbitrage_script": "./scripts/launch_arbitrage.sh",
         "stop_script": "./scripts/stop_arbitrage_llm.sh",
         "arbitrage_log_path": "",
@@ -208,7 +207,6 @@ _DEFAULT_CONFIG = {
         "enable_quick_summary": True,
         "enable_speaker_detection": True,
         "enable_quality_mode": True,
-        "enable_external_srt_editor_link": True,
         "enable_vad": True,
         "progress": {
             "enabled": True,
@@ -721,6 +719,25 @@ def _normalize_legacy_user_config(user_cfg: dict) -> dict:
     return normalized
 
 
+def _warn_removed_keys(user_cfg: dict) -> None:
+    """Clés retirées, IGNORÉES avec avertissement (dépréciation douce, une version).
+
+    L'éditeur de transcription est désormais intégré (docs/EDITEUR_SRT_INTEGRE.md §8) :
+    le lien vers le fork externe « SRT Editor EASY » n'existe plus. Warning retiré à la 0.2.0.
+    """
+    import logging
+
+    removed = []
+    if isinstance(user_cfg.get("services"), dict) and "srt_editor_easy_url" in user_cfg["services"]:
+        removed.append("services.srt_editor_easy_url")
+    if isinstance(user_cfg.get("workflow"), dict) and "enable_external_srt_editor_link" in user_cfg["workflow"]:
+        removed.append("workflow.enable_external_srt_editor_link")
+    for key in removed:
+        logging.getLogger(__name__).warning(
+            "Clé de configuration obsolète ignorée : %s — l'éditeur de transcription est "
+            "désormais intégré (page /jobs/<id>/editor). Retirez cette clé de config.yaml.", key)
+
+
 def load_config(config_path: str | None = None) -> dict:
     cfg = copy.deepcopy(_DEFAULT_CONFIG)
 
@@ -732,6 +749,7 @@ def load_config(config_path: str | None = None) -> dict:
             user_cfg = yaml.safe_load(fh)
         if user_cfg:
             user_cfg = _normalize_legacy_user_config(user_cfg)
+            _warn_removed_keys(user_cfg)
             cfg = _deep_merge(cfg, user_cfg)
 
     return _normalize_config(cfg)
