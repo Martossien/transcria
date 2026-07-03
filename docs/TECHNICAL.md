@@ -921,6 +921,22 @@ Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sa
 | `meeting_type_routes.py` | Page `/meeting-types` + API `/api/meeting-types*` (CRUD, scope, logo, `preview.docx` sur données factices, export/import) |
 | `meeting_type_prompts.py` | Placeholders du prompt de résumé (`{{TYPES_REUNION}}`, `{{INDICES_TYPES}}`, `{{CHAMPS_EXTRACTION_TYPE}}`) — substitués à la construction de l'instruction, no-op strict sans placeholder |
 
+**Éditeur de transcription intégré** (`docs/EDITEUR_SRT_INTEGRE.md`)
+| Module | Description |
+|---|---|
+| `workflow/srt_editor.py` | Modèle PUR : parse tolérant du format réel (`SPEAKER_XX(Nom): …`), sérialisation canonique (round-trip à l'octet, hors normalisation unique du saut final), avertissements NON bloquants (chevauchements autorisés — D6), recalcul des stats locuteurs (A2 : le tableau du DOCX suit les réattributions) |
+| `workflow/waveform_peaks.py` | Pics de forme d'onde CÔTÉ SERVEUR (ffmpeg → PCM 8 kHz → max/50 ms → Int8, ~324 Ko pour 4 h 30), cache `metadata/waveform_peaks.{bin,json}`, best-effort |
+| `web/editor_routes.py` | Page atelier `/jobs/<id>/editor` + API : `state` (tout en un appel), `draft` (verrou optimiste 409, conflit par `base_srt_sha256`), `save` (garde de forme, snapshot POOL COMMUN avec l'affinage : SRT + stats + mapping, purge du brouillon, audit `job_srt_edit_save`), `audio/stream` (Range 206), `peaks` (202→200) |
+| `quality/review_points.py` | + `generate_anchors` → `quality/review_points_anchors.json` (ancres 🎧 temps / 🔎 recherche pour le tiroir « À vérifier ») |
+
+**Trois filets de sauvegarde** (leçon du fork : une session perdue au crash) : undo/redo
+par deltas (navigateur) → brouillon SERVEUR debounce ~5 s (`metadata/srt_editor_draft.json`,
+« Reprendre où vous en étiez », survit au crash/changement de machine) → « Enregistrer une
+version » (restaurable depuis la page résultats, pool commun avec le chat d'affinage).
+Lecture seule pendant un traitement ou un tour d'affinage ; mode dégradé SANS audio =
+état de première classe (toutes les éditions restent possibles). Le fork externe
+« SRT Editor EASY » est retiré (clés de config obsolètes ignorées avec warning).
+
 **Principe structurant** : la fiche du type choisi à l'étape 4 est **MATÉRIALISÉE dans le
 job** (`meeting_context["custom_type"]`, + `context/type_logo.png`) — le rendu DOCX et le
 worker ne résolvent jamais un template en base (pas d'ambiguïté entre deux privés
@@ -1185,6 +1201,12 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/meeting-types/<id>/preview.docx` | GET | type visible/géré | Word d'exemple d'un type enregistré (avec son logo) |
 | `/api/meeting-types/<id>/export` | GET | type visible/géré | Fichier d'échange `.transcria-type.json` (sans branding), audité |
 | `/api/meeting-types/import` | POST | login_required | Import → type privé INACTIF « à relire » (refus explicites : enveloppe/version/branding) |
+| `/jobs/<id>/editor` | GET | owner/admin, SRT requis | Atelier d'édition de la transcription (plein écran) |
+| `/api/jobs/<id>/editor/state` | GET | owner/admin | Chunks + locuteurs + brouillon (conflit) + points qualité ancrés + audio + lecture seule — UN appel |
+| `/api/jobs/<id>/editor/draft` | GET, PUT, DELETE | owner/admin | Brouillon anti-crash (PUT : 409 si `revision` périmée — un autre onglet a la main) |
+| `/api/jobs/<id>/editor/save` | POST | owner/admin | « Enregistrer une version » : snapshot pool commun + write-back + recalcul stats + audit (422 = forme invalide) |
+| `/api/jobs/<id>/audio/stream` | GET | owner/admin | Audio original inline avec Range (seek) ; 404 propre si non matérialisable |
+| `/api/jobs/<id>/editor/peaks` | GET | owner/admin | Pics de waveform (binaire + méta en en-tête ; 202 pendant la génération) |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 | `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
 | `/api/queue/<id>/move-up` | POST | admin global ou admin de groupe sur périmètre | Remonte un job dans la file |
@@ -1206,6 +1228,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `index.html` | Accueil : liste des traitements + bouton nouveau |
 | `job_wizard.html` | Assistant 9 étapes avec formulaires interactifs (JS fetch API) |
 | `meeting_types.html` | « Mes types de réunion » : galerie de cartes (bandeau réel, pastilles de palette, portée), éditeur dupliquer-d'abord avec aperçu vivant de la page de garde (mini-A4, contraste vérifié), palettes dérivées des thèmes intégrés, sections réordonnables, partage, import/export — JS `static/js/meeting_types.js` |
+| `srt_editor.html` | Atelier d'édition : liste de cartes (le texte EST le champ, icônes au survol), lecteur synchronisé (pause auto à la frappe), fresque ↔ lanes par locuteur (bascule), bande zoomée waveform avec poignées de retiming, repères, recherche, sélection multiple (barre flottante : fusionner/attribuer/supprimer), solo locuteur, tiroir « À vérifier » ancré, jauge de relecture — JS `static/js/srt_editor.js` |
 | `job_result.html` | Résultats & affinage : SRT (aperçu = version corrigée), qualité, exports, lien SRT Editor, **panneau du chat d'affinage** (fil de discussion, propositions applicables en un clic, versions restaurables, options de rendu, note « documents à jour ») — atteignable depuis l'étape Export du wizard et l'accueil |
 | `admin_config.html` | Éditeur YAML de configuration admin |
 | `users.html` | Liste des utilisateurs (admin) |

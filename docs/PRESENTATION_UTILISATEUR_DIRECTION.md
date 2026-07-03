@@ -70,6 +70,8 @@ Pour une direction, TranscrIA apporte un cadre :
 
 Après le traitement, la page **Résultats & affinage** permet en outre de **dialoguer avec l'IA locale sur ces livrables** et d'appliquer des corrections versionnées et restaurables (cf. étape 10 du parcours ci-dessous).
 
+La transcription se corrige **directement dans le portail** : l'atelier d'édition affiche le texte segment par segment, synchronisé avec l'écoute (pause automatique pendant la frappe), avec une frise par intervenant pour naviguer, l'écoute d'un seul locuteur pour vérifier une prise de parole, et les points à vérifier du contrôle qualité en liste cliquable. Le travail est protégé par un brouillon automatique côté serveur (une coupure ne fait rien perdre) et chaque enregistrement crée une version restaurable — le document Word intègre les corrections au téléchargement suivant.
+
 Le rapport Word s'adapte à **18 types de réunion intégrés** (CSE, CODIR, point projet, crise…) — et chaque utilisateur peut **créer les siens** depuis le menu « Types de réunion » : partir d'un type existant, ajuster couleurs, bannière, champs et ordre des sections, poser le logo de sa structure, vérifier le rendu sur un exemple Word avant d'enregistrer. Un administrateur partage ensuite le type à son équipe ; les types s'échangent aussi entre installations par fichier.
 
 ---

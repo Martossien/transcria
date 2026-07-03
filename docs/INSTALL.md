@@ -917,7 +917,6 @@ auth:
 
 services:
   dashboard_llm_url: "http://127.0.0.1:5001"
-  srt_editor_easy_url: "http://127.0.0.1:7861"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
   arbitrage_llm_port: 8080
@@ -1175,7 +1174,6 @@ Le menu **Voix enregistrées** est réservé aux admins globaux et admins de gro
 
 TranscrIA utilise le Dashboard LLM pour vérifier la disponibilité des GPUs. Si le dashboard n'est pas disponible, le fallback utilise `nvidia-smi`.
 
-### SRT Editor EASY (port 7861, optionnel)
 
 Éditeur SRT externe pour la correction manuelle des transcriptions. Optionnel, TranscrIA fonctionne sans.
 

@@ -480,6 +480,28 @@ Post-workflow, sur la page **`/jobs/<id>/result`** d'un job TERMINÉ (tous profi
 
 Règles/pièges spécifiques : (1) chaque tour transite par la **file** (mode `refine` de `STEP_MODES`) — le job étant terminé, ses blobs `input/` sont purgés : le scheduler **dispatche `refine` SANS audio** (`_dispatch_iteration`, `audio_arg=""`) alors que tous les autres modes l'exigent (warning explicite sinon) ; (2) toute phase LLM réserve via **`try_reserve_llm`** (réparti multi-GPU), jamais `try_reserve` mono-GPU ; (3) le DOCX est régénéré à CHAQUE téléchargement et le ZIP rebuilt → le write-back suffit, mais l'UI doit le dire (note `#refine-fresh-note`, message de fin d'apply) sinon l'utilisateur croit ses fichiers périmés ; (4) les aperçus SRT à l'écran passent par `_effective_srt(fs)` (corrigé sinon brut — même préférence que `/download/srt`) ; (5) les **options de rendu** (`context/render_options.json` : thème, sections) ont une route directe SANS LLM (`POST /refine/render-options`, instantané). Réf. : `docs/TECHNICAL.md` (run_refine), `docs/CONFIG_REFERENCE.md` (`workflow.refine_chat`).
 
+### Éditeur de transcription intégré (atelier /jobs/<id>/editor)
+Cf. `docs/EDITEUR_SRT_INTEGRE.md` (cadrage + lots + retours utilisateur tracés). Règles :
+1. **Le SRT effectif se lit corrigé-sinon-brut et s'écrit TOUJOURS en corrigé** —
+   `workflow/srt_editor.py` est le SEUL parseur/sérialiseur (round-trip à l'octet,
+   préfixe locuteur textuel `SPEAKER_XX(Nom):` tolérant). Jamais de garde de volume
+   sur une édition HUMAINE (contrairement à la correction LLM) — garde de FORME seule.
+2. **À la sauvegarde, stats et mapping locuteurs se recalculent et se versionnent AVEC
+   le SRT** (`compute_speaker_stats`, snapshot RefineStore = pool COMMUN avec le chat
+   d'affinage) — sinon le tableau des participants du DOCX ment (A2).
+3. **Brouillon serveur** `metadata/srt_editor_draft.json` : verrou optimiste par
+   `revision` (409), conflit détecté par `base_srt_sha256` si un affinage/une
+   correction est passé — jamais de fusion silencieuse.
+4. **Pics de waveform côté serveur** (`waveform_peaks.py`, ffmpeg+numpy) — ne JAMAIS
+   décoder l'audio dans le navigateur (leçon du fork, mort à 3 h 30).
+5. Chevauchements de timestamps AUTORISÉS à l'édition (signalés, jamais bloquants) ;
+   lecture seule pendant un traitement/tour d'affinage ; sans audio = mode dégradé
+   complet (tout reste éditable).
+6. Le fork « SRT Editor EASY » est RETIRÉ (clés de config ignorées avec warning) —
+   ne pas réintroduire de lien externe.
+7. Statiques applicatifs : TOUJOURS via `asset_url()` (cache-busting mtime) — un
+   `src="/static/…"` nu ressert les vieux fichiers aux navigateurs après mise à jour.
+
 ### Types de réunion personnalisés (catalogue en données)
 Cf. `docs/TYPES_REUNION_PERSONNALISES.md` (cadrage + suivi des lots). Les 18 types du
 rapport Word sont de la **DONNÉE** (`transcria/data/meeting_types.yaml` — noms, champs,

@@ -415,6 +415,8 @@ jobs/<job_id>/
   │   ├── granite.json               # Métadonnées backend Granite si utilisé
   │   ├── parakeet.json              # Métadonnées backend Parakeet si utilisé
   │   ├── speakers_map.json          # Mapping speaker sauvegardé pendant la transcription
+│   ├── srt_editor_draft.json      # Brouillon anti-crash de l'éditeur (revision, chunks, repères, progression) — purgé à « Enregistrer une version »
+│   ├── waveform_peaks.bin         # Pics de forme d'onde Int8 (20/s) + waveform_peaks.json (méta) — cache best-effort de l'éditeur
 │   ├── correction_report.md       # Rapport de correction opencode si disponible
 │   └── final_review_report.md     # Rapport de la relecture finale (A+C+D+G) si exécutée
 │
@@ -525,7 +527,8 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Traitement (cleanup) | `metadata/transcription.srt` (écrasé) | `Transcriber._cleanup_transcription_segments()` — suppression artefacts (patterns récurrents, variantes tronquées), fusion micro-segments (`merge_short_segments`, défaut `true`) |
 | Traitement (quality) | `context/session_lexicon_filtered.json`, `metadata/transcription_corrigee.srt` | `WorkflowRunner.run_correction()` + `OpenCodeRunner.run_correction()` |
 | Relecture finale (quality) | `metadata/transcription_corrigee.srt` (réécrit si ratio ok), `meeting_context["summary_harmonized"]` + `["structured_data"]`, `metadata/final_review_report.md` | `WorkflowRunner.run_final_review()` + `OpenCodeRunner.run_final_review()` — A+C+D+G, best-effort |
-| Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json` | `QualityReporter.run_all_checks()` |
+| Qualité | `quality/quality_report.json`, `quality/quality_report.md`, `quality/review_points.json`, `quality/review_points_anchors.json` (ancres cliquables de l'éditeur) | `QualityReporter.run_all_checks()` |
+| Édition manuelle (post-traitement) | `metadata/transcription_corrigee.srt` (réécrit), `speakers/speaker_stats.json` (recalculées), `speakers/speaker_mapping.json` (locuteurs créés), snapshot `refine/versions/v<N>/` AVANT write-back | `web/editor_routes.editor_save` — atelier `/jobs/<id>/editor` |
 | Export | `exports/transcrIA_job_<id>.zip` | `PackageBuilder.build_package()` (inclut le rapport DOCX) |
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
 | Affinage (post-workflow, job terminé) | `refine/chat.json`, `refine/request.json` (consommé), `refine/versions/v<N>/` + `manifest.json` ; en `apply` : artefacts texte réécrits (`context/meeting_context.json`, `metadata/transcription_corrigee.srt`, `context/render_options.json`), ZIP rebuild best-effort | `WorkflowRunner.run_refine()` — `discuss` = `refine_llm.chat_completion()` (appel direct, lecture seule) ; `apply` = `OpenCodeRunner.run_refine()` (AgentWorkspace, snapshot AVANT write-back) ; entrée de file mode `refine` |

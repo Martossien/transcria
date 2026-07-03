@@ -8,6 +8,36 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.1.0-beta.9] — 2026-07-03
+
+L'**éditeur de transcription intégré** : la troisième et dernière grande fonctionnalité
+issue des retours utilisateurs avant la stabilisation 0.2.0 — corriger le texte, les
+locuteurs, le découpage et les timings sans quitter TranscrIA, avec la boucle complète
+que l'outil externe ne fermait jamais : les corrections alimentent directement les
+livrables.
+
+### Added
+- **Éditeur de transcription intégré** (`/jobs/<id>/editor`, cadrage
+  `docs/EDITEUR_SRT_INTEGRE.md`) : correction du texte, des locuteurs, du découpage et
+  des timings SANS quitter TranscrIA — le SRT édité alimente directement les livrables
+  (Word/ZIP régénérés). Le texte est le champ (pause auto de l'audio à la frappe),
+  fresque ↔ timeline par locuteur, forme d'onde zoomable (pics serveur, fluide à 4 h 30),
+  couper au curseur, fusion/attribution/suppression en sélection multiple, écoute SOLO
+  d'un locuteur (réparation de diarisation), repères, recherche, décalage en cascade,
+  points qualité ancrés cliquables (`review_points_anchors.json`), jauge de relecture.
+  **Trois filets** : undo/redo, brouillon serveur ~5 s avec reprise après crash (verrou
+  optimiste multi-onglets), versions restaurables dans le POOL COMMUN du chat d'affinage
+  (stats locuteurs et mapping recalculés et versionnés ensemble — le tableau des
+  participants du Word reste juste). Mode dégradé sans audio de première classe.
+  Statiques servis avec cache-busting (fini les CSS/JS périmés après mise à jour).
+
+### Removed
+- **Lien vers le fork externe « SRT Editor EASY »** (bouton, envoi de fichiers, route
+  `push-to-editor`, module d'intégration) — remplacé par l'éditeur intégré, qui fait le
+  chemin inverse : les corrections REVIENNENT dans le job. Les clés de configuration
+  `services.srt_editor_easy_url` et `workflow.enable_external_srt_editor_link` sont
+  obsolètes et ignorées avec un avertissement (retrait définitif à la 0.2.0).
+
 ## [0.1.0-beta.8] — 2026-07-03
 
 Deux fonctionnalités issues des retours utilisateurs : **discuter avec le document**

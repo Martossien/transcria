@@ -114,14 +114,12 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `dashboard_llm_url` | string | `"http://127.0.0.1:5001"` | URL du dashboard LLM (monitoring GPU) |
-| `srt_editor_easy_url` | string | `"http://127.0.0.1:7861"` | URL de SRT Editor EASY |
 | `arbitrage_api_model_id` | string | — | Model ID rapporté par `/v1/models` (alias `--alias` du script llama-server). Doit correspondre exactement pour activer la réutilisation sans redémarrage (CAS A). Lancer `scripts/check_arbitrage_llm.sh` pour obtenir la valeur. |
 
 **Redémarrage requis :** non — ces URLs sont lues dynamiquement par `VRAMManager.__init__()` et les templates.
 
 **Impact si modifié :**
 - `dashboard_llm_url` : utilisé par `VRAMManager` pour interroger l'API GPU (`/api/v1/gpus`). Si le dashboard est indisponible, `VRAMManager` bascule sur `torch.cuda.mem_get_info()`.
-- `srt_editor_easy_url` : utilisé pour le bouton "Ouvrir dans SRT Editor" et l'API `push-to-editor`. Si l'URL est incorrecte, le bouton apparaît mais la redirection échoue.
 
 ---
 
@@ -345,7 +343,6 @@ Paramètres contrôlant les fonctionnalités du workflow.
 | `enable_quick_summary` | bool | `true` | Active l'étape Résumé (transcription Cohere rapide + LLM) |
 | `enable_speaker_detection` | bool | `true` | Active la détection pyannote des locuteurs |
 | `enable_quality_mode` | bool | `true` | Active le mode "Qualité" (diarization finale + correction SRT) |
-| `enable_external_srt_editor_link` | bool | `true` | Affiche le bouton "Ouvrir dans SRT Editor EASY" |
 | `enable_vad` | bool | `true` | Ancien interrupteur global VAD, conservé pour compatibilité |
 
 #### `workflow.profiles`
@@ -410,7 +407,6 @@ sont enregistrés pour audit mais ne modifient pas le score.
 - `enable_quick_summary=false` : l'étape Résumé est sautée. Le job passe directement d'ANALYZED à... rien (pas de transition prévue dans `compute_statuses`). **Casserait le workflow** car les étapes suivantes (Contexte, Participants) dépendent du résumé pour pré-remplir les suggestions.
 - `enable_speaker_detection=false` : `SpeakerDetector.detect()` n'est pas appelé dans `run_summary()`. L'étape Participants n'aura pas de locuteurs pyannote, seulement les suggestions LLM (moins précises).
 - `enable_quality_mode=false` : les profils qui diarisent (`word_structure`, `word_corrige`, `dossier_qualite`) apparaissent `disabled_by_config` dans le wizard ; restent disponibles les profils sans diarisation (`srt_express`, `srt_locuteurs`, `word_rapide`). Un lancement direct d'un profil qualité est refusé (400).
-- `enable_external_srt_editor_link=false` : le bouton SRT Editor est masqué dans le template.
 
 #### `workflow.vad`
 
@@ -1349,7 +1345,6 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `auth.enabled` | Non (normalisé à true) | Oui (load/save) |
 | `auth.first_admin_*` | Non (une seule fois) | Non |
 | `services.dashboard_llm_url` | Non (VRAMManager) | Oui (instancié) |
-| `services.srt_editor_easy_url` | Non | Oui (template) |
 | `models.cohere_model_path` | Non | Oui (CohereTranscriber) |
 | `models.pyannote_model` | Non | Oui (DiarizerService) |
 | `models.default_stt_model` | Non | Oui (chargé à la création des services STT) |
