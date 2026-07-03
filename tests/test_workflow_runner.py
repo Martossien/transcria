@@ -360,7 +360,7 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             result = {"transcript_text": "Bonjour", "transcript_short": "Bonjour"}
             captured = {}
 
-            def fake_run_summary(self, transcript_path, context_path=None, diarization_context_path=None, invite_path=None):
+            def fake_run_summary(self, transcript_path, context_path=None, diarization_context_path=None, invite_path=None, **kwargs):
                 captured["model_ref"] = self.model_ref
                 captured["summary_timeout"] = self._get_summary_timeout()
                 return {"summary_text": "Résumé", "title_suggere": "Titre"}
@@ -784,7 +784,7 @@ class TestWorkflowRunnerRunSummary:
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
 
-            def fake_run_summary(self_runner, transcript_path, context_path=None, diarization_context_path=None, invite_path=None):
+            def fake_run_summary(self_runner, transcript_path, context_path=None, diarization_context_path=None, invite_path=None, **kwargs):
                 fs_dir = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
                 fs_dir.save_text("summary/summary.md", "# Résumé\n\n**Titre suggéré :** Budget Q1\n")
                 return {

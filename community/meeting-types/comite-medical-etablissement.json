@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "type": {
+    "name": "Comité médical d'établissement",
+    "badge": "CONFIDENTIEL",
+    "banner_text": "COMPTE-RENDU — COMITÉ MÉDICAL D'ÉTABLISSEMENT",
+    "palette": {"primary": "006064", "accent": "00838A", "light": "E0F7FA"},
+    "behavior": {"confidential": true},
+    "fields": [
+      {"key": "president_seance", "label": "Président(e) du comité", "type": "text"},
+      {"key": "etablissement", "label": "Établissement / service", "type": "text"}
+    ],
+    "detection_hints": ["comité médical", "commission médicale", "chef de service", "praticiens"],
+    "extract_fields": [
+      {"key": "avis_rendus", "label": "Avis rendus", "instruction": "avis formels rendus par le comité, avec leur objet"}
+    ],
+    "sections": {"enabled": {"transcript": false}}
+  }
+}

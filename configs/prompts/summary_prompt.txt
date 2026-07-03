@@ -332,7 +332,7 @@ le gabarit au caractère près :
 
 ## Informations sur la réunion
 - **Titre suggéré :** [titre court et descriptif]
-- **Type suggéré :** [Réunion interne | Réunion projet | Réunion technique | Formation | Réunion médicale / santé | RH | Entretien | CSE | CSE extraordinaire | CODIR / COMEX | Réunion client | Point projet | Réunion de crise | Séminaire / atelier | Négociation | Entretien individuel | Podcast / média | Autre]
+- **Type suggéré :** [{{TYPES_REUNION}}]
 - **Langue :** [fr | en | autre]
 - **Sujet principal :** [1 à 2 phrases]
 - **Objectif probable :** [1 phrase]
@@ -379,13 +379,7 @@ Si aucun terme suspect n'est détecté, écrire sous `## Termes douteux à valid
 
 - **Titre suggéré** : court, descriptif, fondé sur le contenu réel.
 - **Type suggéré** : choisi dans la liste du gabarit. Indices de sélection :
-  `CSE` ou `CSE extraordinaire` si on entend "comité social", "élus", "ordre du jour", votes formels, résolutions ;
-  `CODIR / COMEX` si on entend "direction", "indicateurs", "stratégie", "comité de direction" ;
-  `Point projet` si on entend avancement, tâches, jalons, blocages, retard ;
-  `Réunion client` si on entend client externe, offre, contrat, livraison ;
-  `Réunion de crise` si on entend incident, panne, alerte, urgence, plan de reprise ;
-  `Entretien individuel` si un seul locuteur est évalué par un autre (entretien annuel, recrutement) ;
-  `Podcast / média` si c'est un enregistrement public sans réunion professionnelle structurée.
+{{INDICES_TYPES}}
 - **Langue** : la langue principale de la transcription.
 - **Sujet principal** : le thème réel, pas une hypothèse externe.
 - **Objectif probable** : peut être déduit, mais doit rester prudent.
@@ -428,6 +422,8 @@ Règles strictes :
 - `points_odj` est réservé aux réunions avec un ordre du jour numéroté ;
 - si aucun élément d'un champ n'est détectable, utiliser `[]` ;
 - JSON valide : pas de virgule finale, pas de commentaire, guillemets doubles.
+
+{{CHAMPS_EXTRACTION_TYPE}}
 
 ---
 

@@ -18,15 +18,56 @@ def _read(name: str) -> str:
 
 
 class TestSummaryPromptContract:
-    def test_les_18_types_de_reunion_du_code_sont_dans_le_prompt(self):
-        """La liste des types est dupliquée prompt/code : toute dérive est silencieuse
-        (le type suggéré par la LLM ne matcherait plus le menu du wizard ni les thèmes
-        DOCX)."""
-        from transcria.context.meeting_context import MEETING_TYPES
-
+    def test_placeholders_types_presents_dans_le_prompt(self):
+        """Lot D : la liste des types n'est PLUS écrite en dur dans le prompt — trois
+        placeholders substitués à la construction de l'instruction (types visibles du
+        propriétaire + indices + champs d'extraction du type choisi)."""
         text = _read("summary_prompt.txt")
+        assert "{{TYPES_REUNION}}" in text
+        assert "{{INDICES_TYPES}}" in text
+        assert "{{CHAMPS_EXTRACTION_TYPE}}" in text
+        # Plus aucun indice de sélection en dur (déplacés vers le catalogue).
+        assert '"comité social"' not in text
+
+    def test_substitution_injecte_les_18_types_et_les_indices(self):
+        """Le contrat historique (tous les types dans le prompt) tient APRÈS
+        substitution — c'est le texte réellement envoyé à la LLM qui compte."""
+        from transcria.context.meeting_context import MEETING_TYPES
+        from transcria.context.meeting_type_prompts import (
+            build_prompt_substitutions,
+            substitute_placeholders,
+        )
+
+        resolved = substitute_placeholders(_read("summary_prompt.txt"),
+                                           build_prompt_substitutions(None, None))
+        assert "{{TYPES_REUNION}}" not in resolved and "{{INDICES_TYPES}}" not in resolved
         for mtype in MEETING_TYPES:
-            assert mtype in text, f"type absent du prompt résumé : {mtype}"
+            assert mtype in resolved, f"type absent du prompt résolu : {mtype}"
+        assert '`CSE` si on entend "comité social"' in resolved   # indices du catalogue
+
+    def test_substitution_no_op_sans_placeholder(self):
+        """Un prompt personnalisé par un admin SANS placeholder reste intact."""
+        from transcria.context.meeting_type_prompts import (
+            build_prompt_substitutions,
+            substitute_placeholders,
+        )
+
+        custom = "Mon prompt maison sans placeholder."
+        assert substitute_placeholders(custom, build_prompt_substitutions(None, None)) == custom
+
+    def test_bloc_extraction_du_type_choisi(self):
+        """Les extract_fields de la fiche matérialisée produisent le bloc § 9 ;
+        sans type choisi (1ᵉʳ résumé), le bloc est VIDE (P1 tranché)."""
+        from transcria.context.meeting_type_prompts import build_prompt_substitutions
+
+        fiche = {"extract_fields": [
+            {"key": "budgets_evoques", "label": "Budgets évoqués",
+             "instruction": "montants budgétaires explicitement cités"},
+        ]}
+        subs = build_prompt_substitutions(None, fiche)
+        block = subs["{{CHAMPS_EXTRACTION_TYPE}}"]
+        assert '"budgets_evoques"' in block and "ZÉRO INVENTION" in block
+        assert build_prompt_substitutions(None, None)["{{CHAMPS_EXTRACTION_TYPE}}"] == ""
 
     def test_sections_parsees_par_le_code_presentes(self):
         """`_parse_structured_summary` lit ces titres au caractère près."""

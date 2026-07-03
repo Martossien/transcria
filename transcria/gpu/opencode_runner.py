@@ -554,12 +554,36 @@ class OpenCodeRunner:
             "tool_calls": total_tools,
         }
 
+    def _materialize_prompt(self, prompt_file: str, substitutions: dict[str, str]) -> str:
+        """Copie du prompt avec les placeholders substitués, DANS le scratch de l'agent.
+
+        Sans placeholder dans le fichier (prompt personnalisé par un admin), la copie
+        est identique — comportement historique garanti (lot D, cadrage §4.2). Toute
+        erreur de lecture rend le fichier d'origine : la substitution n'est jamais
+        une cause d'échec du résumé.
+        """
+        from transcria.context.meeting_type_prompts import substitute_placeholders
+
+        try:
+            text = Path(prompt_file).read_text(encoding="utf-8")
+            resolved = substitute_placeholders(text, substitutions)
+            if resolved == text:
+                return prompt_file
+            target = self.work_dir / "summary_prompt.resolved.txt"
+            target.write_text(resolved, encoding="utf-8")
+            return str(target)
+        except OSError:
+            logger.warning("Substitution des placeholders du prompt impossible — prompt original utilisé")
+            return prompt_file
+
     def run_summary(
         self,
         transcript_path: str,
         context_path: str | None = None,
         diarization_context_path: str | None = None,
         invite_path: str | None = None,
+        prompt_substitutions: dict[str, str] | None = None,
+        extra_structured_keys: tuple[str, ...] = (),
     ) -> dict:
         """Génère un résumé structuré via opencode.
 
@@ -570,6 +594,8 @@ class OpenCodeRunner:
         """
         prompt_file = os.path.join(_get_prompts_dir(self._config), "summary_prompt.txt")
         prompt_file = os.path.abspath(prompt_file)
+        if prompt_substitutions:
+            prompt_file = self._materialize_prompt(prompt_file, prompt_substitutions)
 
         instruction = (
             f"Tu travailles dans le répertoire {self.work_dir}. "
@@ -628,7 +654,7 @@ class OpenCodeRunner:
                 produced = bool(summary_text)
 
         if produced:
-            parsed = self._parse_structured_summary(summary_text)
+            parsed = self._parse_structured_summary(summary_text, extra_structured_keys)
         else:
             # opencode terminé mais SANS production (n'a ni réécrit summary.md ni émis de
             # texte) : le summary.md présent est le placeholder → on ne le parse PAS et on
@@ -722,10 +748,15 @@ class OpenCodeRunner:
         return lowered.startswith("non identifiable")
 
     @staticmethod
-    def _normalize_structured_data(raw: dict) -> dict:
-        """Normalise le dict brut extrait du JSON LLM en structure canonique."""
+    def _normalize_structured_data(raw: dict, extra_keys: tuple[str, ...] = ()) -> dict:
+        """Normalise le dict brut extrait du JSON LLM en structure canonique.
+
+        ``extra_keys`` = clés d'extraction déclarées par le type de réunion choisi
+        (fiche personnalisée) — normalisées comme les listes universelles, jamais
+        conservées brutes (contrat « listes de chaînes » du DOCX et de l'UI).
+        """
         result = dict(_STRUCTURED_DATA_EMPTY)
-        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj"):
+        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj", *extra_keys):
             val = raw.get(field)
             if isinstance(val, list):
                 result[field] = [str(item).strip() for item in val if str(item).strip()]
@@ -736,7 +767,7 @@ class OpenCodeRunner:
         return result
 
     @staticmethod
-    def _parse_structured_data(text: str) -> tuple[dict, str, str]:
+    def _parse_structured_data(text: str, extra_keys: tuple[str, ...] = ()) -> tuple[dict, str, str]:
         """Extrait la section ## Données structurées du markdown LLM.
 
         Trois niveaux de fallback :
@@ -765,7 +796,7 @@ class OpenCodeRunner:
         try:
             raw = json.loads(json_text)
             if isinstance(raw, dict):
-                data = OpenCodeRunner._normalize_structured_data(raw)
+                data = OpenCodeRunner._normalize_structured_data(raw, extra_keys)
                 non_empty = sum(1 for v in data.values() if v)
                 logger.debug("_parse_structured_data: ok — %d champs non vides", non_empty)
                 return data, "ok", ""
@@ -777,7 +808,7 @@ class OpenCodeRunner:
         failed_fields: list[str] = []
         extracted_any = False
 
-        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj"):
+        for field in ("decisions", "actions", "blocages", "reports", "votes", "resolutions", "points_odj", *extra_keys):
             m = _re.search(rf'"{field}"\s*:\s*\[([^\]]*)\]', json_text, _re.DOTALL)
             if m:
                 items = _re.findall(r'"([^"]{2,})"', m.group(1))
@@ -805,7 +836,7 @@ class OpenCodeRunner:
         return EMPTY, "failed", warning
 
     @staticmethod
-    def _parse_structured_summary(text: str) -> dict:
+    def _parse_structured_summary(text: str, extra_structured_keys: tuple[str, ...] = ()) -> dict:
         """Parse le markdown structuré en dictionnaire de champs."""
         import re
         fields = {
@@ -907,7 +938,7 @@ class OpenCodeRunner:
         fields["termes_suspects_parse_status"] = parse_status
         fields["termes_suspects_parse_warning"] = parse_warning
 
-        sd, sd_status, sd_warning = OpenCodeRunner._parse_structured_data(text)
+        sd, sd_status, sd_warning = OpenCodeRunner._parse_structured_data(text, extra_structured_keys)
         fields["structured_data"] = sd
         fields["structured_data_parse_status"] = sd_status
         fields["structured_data_parse_warning"] = sd_warning

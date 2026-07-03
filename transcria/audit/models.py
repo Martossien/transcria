@@ -57,6 +57,13 @@ class AuditAction(str, enum.Enum):
     LEXICON_SCOPE_CHANGE = "lexicon_scope_change"
     LEXICON_JOB_ASSIGN = "lexicon_job_assign"
 
+    MEETING_TYPE_CREATE = "meeting_type_create"
+    MEETING_TYPE_MODIFY = "meeting_type_modify"
+    MEETING_TYPE_DELETE = "meeting_type_delete"
+    MEETING_TYPE_SCOPE_CHANGE = "meeting_type_scope_change"
+    MEETING_TYPE_IMPORT = "meeting_type_import"
+    MEETING_TYPE_EXPORT = "meeting_type_export"
+
     VOICE_CREATE = "voice_create"
     VOICE_MODIFY = "voice_modify"
     VOICE_DELETE = "voice_delete"

@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "type": {
+    "name": "Conseil municipal",
+    "badge": "CONSEIL",
+    "banner_text": "PROCÈS-VERBAL DU CONSEIL MUNICIPAL",
+    "palette": {"primary": "263238", "accent": "546E7A", "light": "ECEFF1"},
+    "behavior": {"quorum": true},
+    "fields": [
+      {"key": "president_seance", "label": "Maire / Président(e) de séance", "type": "text"},
+      {"key": "secretaire_seance", "label": "Secrétaire de séance", "type": "text"},
+      {"key": "membres_presents", "label": "Conseillers présents", "short_label": "Présents", "type": "number"},
+      {"key": "membres_total", "label": "Conseillers en exercice", "short_label": "En exercice", "type": "number"},
+      {"key": "pouvoirs", "label": "Pouvoirs (procurations)", "type": "number"}
+    ],
+    "detection_hints": ["conseil municipal", "délibération", "monsieur le maire", "madame le maire", "conseillers municipaux"],
+    "extract_fields": [
+      {"key": "deliberations", "label": "Délibérations", "instruction": "délibérations formellement mises au vote, avec leur numéro si cité"}
+    ],
+    "sections": {"order": ["contexte", "pv", "participants", "transcript", "quality"]}
+  }
+}

@@ -1,0 +1,161 @@
+# Catalogue des types de réunion INTÉGRÉS — SOURCE UNIQUE (cf. docs/TYPES_REUNION_PERSONNALISES.md).
+#
+# Transcription fidèle des anciennes constantes de code (lot A) :
+#   - MEETING_TYPES               (transcria/context/meeting_context.py) → l'ordre des
+#     entrées ci-dessous EST l'ordre du menu de l'étape 4 du wizard ;
+#   - TYPE_SPECIFIC_FIELDS        (idem) → `fields` ;
+#   - _THEMES                     (transcria/exports/docx_report.py) → `palette`,
+#     `banner_text`, `badge` (un type sans `palette` utilise le thème par défaut) ;
+#   - _CSE_TYPES / _AUTO_CONFIDENTIEL (idem) → `behavior.quorum` / `behavior.confidential` ;
+#   - indices de sélection du § 8 de configs/prompts/summary_prompt.txt → `detection_hints`
+#     (le prompt garde sa copie jusqu'au lot D, gardée synchrone par test).
+#
+# Règles du format (validées par transcria/context/meeting_type_catalog.py) :
+#   - `name` unique, non vide ; `badge` ≤ 16 caractères ; `banner_text` ≤ 80 ;
+#   - `palette` : 3 couleurs hex 6 chiffres SANS `#` (primary/accent/light) ;
+#   - `fields[].type` ∈ text | number | textarea ;
+#   - `detection_hints` : chaînes courtes (≤ 200), descriptives, JAMAIS d'extrait réel
+#     de transcription (règle des prompts, étendue au catalogue).
+#
+# Les types personnalisés (base de données, lot B) suivent le même schéma.
+
+schema_version: 1
+
+types:
+  # ── Types v1 — comportement historique (thème par défaut pour Réunion interne) ──
+  - name: "Réunion interne"
+
+  - name: "Réunion projet"
+    badge: "PROJET"
+    banner_text: "COMPTE-RENDU DE RÉUNION PROJET"
+    palette: {primary: "004D40", accent: "00795F", light: "E0F2F1"}
+
+  - name: "Réunion technique"
+    badge: "TECHNIQUE"
+    banner_text: "COMPTE-RENDU DE RÉUNION TECHNIQUE"
+    palette: {primary: "1F3864", accent: "29639A", light: "E3EEF8"}
+
+  - name: "Formation"
+    badge: "FORMATION"
+    banner_text: "COMPTE-RENDU DE FORMATION"
+    palette: {primary: "BF3600", accent: "F57C00", light: "FFF3E0"}
+    fields:
+      - {key: "formateur", label: "Formateur / Organisme", short_label: "Formateur", type: "text"}
+      - {key: "nb_participants_formation", label: "Nombre de participants", short_label: "Nb participants", type: "number"}
+      - {key: "lieu_formation", label: "Lieu / distanciel", short_label: "Lieu", type: "text"}
+
+  - name: "Réunion médicale / santé"
+    badge: "CONFIDENTIEL"
+    banner_text: "COMPTE-RENDU MÉDICAL"
+    palette: {primary: "006064", accent: "00838A", light: "E0F7FA"}
+    behavior: {confidential: true}
+
+  - name: "RH"
+    badge: "RH"
+    banner_text: "COMPTE-RENDU — RESSOURCES HUMAINES"
+    palette: {primary: "1B5E20", accent: "438B29", light: "F1F8E9"}
+    behavior: {confidential: true}
+
+  - name: "Entretien"
+    badge: "ENTRETIEN"
+    banner_text: "COMPTE-RENDU D'ENTRETIEN"
+    palette: {primary: "1F3864", accent: "2E74B5", light: "D6E4F0"}
+
+  # ── Types v2 — sections enrichies selon les données extraites ──────────────────
+  - name: "CSE"
+    badge: "CSE"
+    banner_text: "PROCÈS-VERBAL DU COMITÉ SOCIAL ET ÉCONOMIQUE"
+    palette: {primary: "1A237E", accent: "303F9F", light: "E8EAF6"}
+    behavior: {quorum: true}
+    fields:
+      - {key: "president_seance", label: "Président de séance", type: "text"}
+      - {key: "secretaire_seance", label: "Secrétaire de séance", type: "text"}
+      - {key: "membres_presents", label: "Membres titulaires présents", short_label: "Membres présents", type: "number"}
+      - {key: "membres_total", label: "Membres titulaires (total)", short_label: "Membres total", type: "number"}
+      - {key: "ref_pv_precedent", label: "Réf. PV précédent", type: "text"}
+    detection_hints: ["comité social", "élus", "ordre du jour", "votes formels", "résolutions"]
+
+  - name: "CSE extraordinaire"
+    badge: "CSE EXTRA"
+    banner_text: "PROCÈS-VERBAL DU CSE — SÉANCE EXTRAORDINAIRE"
+    palette: {primary: "1A237E", accent: "303F9F", light: "E8EAF6"}
+    behavior: {quorum: true}
+    fields:
+      - {key: "president_seance", label: "Président de séance", type: "text"}
+      - {key: "secretaire_seance", label: "Secrétaire de séance", type: "text"}
+      - {key: "membres_presents", label: "Membres titulaires présents", short_label: "Membres présents", type: "number"}
+      - {key: "membres_total", label: "Membres titulaires (total)", short_label: "Membres total", type: "number"}
+      - {key: "objet_seance", label: "Objet de la séance extraordinaire", short_label: "Objet de la séance", type: "textarea"}
+    detection_hints: ["comité social", "élus", "ordre du jour", "votes formels", "résolutions"]
+
+  - name: "CODIR / COMEX"
+    badge: "CODIR"
+    banner_text: "COMPTE-RENDU — COMITÉ DE DIRECTION"
+    palette: {primary: "1C1C1C", accent: "424242", light: "F5F5F5"}
+    fields:
+      - {key: "ordre_du_jour_items", label: "Ordre du jour (un point par ligne)", short_label: "Ordre du jour", type: "textarea"}
+    detection_hints: ["direction", "indicateurs", "stratégie", "comité de direction"]
+
+  - name: "Réunion client"
+    badge: "CLIENT"
+    banner_text: "COMPTE-RENDU DE RÉUNION CLIENT"
+    palette: {primary: "014B7E", accent: "0277BD", light: "E1F5FE"}
+    fields:
+      - {key: "nom_client", label: "Nom du client", short_label: "Client", type: "text"}
+      - {key: "ref_contrat", label: "Référence contrat / offre", short_label: "Référence contrat", type: "text"}
+    detection_hints: ["client externe", "offre", "contrat", "livraison"]
+
+  - name: "Point projet"
+    badge: "PROJET"
+    banner_text: "COMPTE-RENDU DE RÉUNION PROJET"
+    palette: {primary: "004D40", accent: "00795F", light: "E0F2F1"}
+    fields:
+      - {key: "nom_projet", label: "Nom du projet", short_label: "Projet", type: "text"}
+      - {key: "phase_jalon", label: "Phase / Jalon", type: "text"}
+      - {key: "chef_de_projet", label: "Chef de projet", type: "text"}
+      - {key: "sprint", label: "Sprint n°", short_label: "Sprint", type: "text"}
+    detection_hints: ["avancement", "tâches", "jalons", "blocages", "retard"]
+
+  - name: "Réunion de crise"
+    badge: "CRISE"
+    banner_text: "COMPTE-RENDU — RÉUNION DE CRISE"
+    palette: {primary: "B71C1C", accent: "E53935", light: "FFEBEE"}
+    fields:
+      - {key: "nature_incident", label: "Nature de l'incident", short_label: "Nature incident", type: "text"}
+      - {key: "responsable_crise", label: "Responsable de crise", short_label: "Responsable crise", type: "text"}
+    detection_hints: ["incident", "panne", "alerte", "urgence", "plan de reprise"]
+
+  - name: "Séminaire / atelier"
+    badge: "SÉMINAIRE"
+    banner_text: "COMPTE-RENDU DE SÉMINAIRE / ATELIER"
+    palette: {primary: "005747", accent: "00795F", light: "E0F7F2"}
+    fields:
+      - {key: "thematique", label: "Thématique principale", short_label: "Thématique", type: "text"}
+      - {key: "nb_groupes", label: "Nombre de groupes de travail", short_label: "Groupes de travail", type: "number"}
+
+  - name: "Négociation"
+    badge: "NÉGOCIATION"
+    banner_text: "COMPTE-RENDU DE NÉGOCIATION"
+    palette: {primary: "3E2723", accent: "6D4C41", light: "EFEBE9"}
+    fields:
+      - {key: "objet_negociation", label: "Objet de la négociation", short_label: "Objet", type: "text"}
+      - {key: "parties", label: "Parties prenantes", type: "text"}
+
+  - name: "Entretien individuel"
+    badge: "CONFIDENTIEL"
+    banner_text: "ENTRETIEN INDIVIDUEL"
+    palette: {primary: "4A148C", accent: "6A1B9A", light: "F3E5F5"}
+    behavior: {confidential: true}
+    fields:
+      - {key: "periode_evaluee", label: "Période d'évaluation", short_label: "Période évaluée", type: "text"}
+      - {key: "poste_evalue", label: "Poste de l'évalué(e)", short_label: "Poste évalué", type: "text"}
+      - {key: "evaluateur", label: "Évaluateur(trice)", short_label: "Évaluateur", type: "text"}
+    detection_hints: ["un seul locuteur est évalué par un autre (entretien annuel, recrutement)"]
+
+  - name: "Podcast / média"
+    badge: "MÉDIA"
+    banner_text: "TRANSCRIPTION"
+    palette: {primary: "220057", accent: "5E35B1", light: "EDE7F6"}
+    detection_hints: ["enregistrement public sans réunion professionnelle structurée"]
+
+  - name: "Autre"

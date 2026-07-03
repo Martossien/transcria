@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Types de réunion — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-1">
+  <h4 class="mb-0"><i class="bi bi-easel2 me-2"></i>Mes types de réunion</h4>
+  <div class="d-flex gap-2 align-items-center">
+    <span class="text-muted small" id="mt-quota"></span>
+    <label class="btn btn-sm btn-outline-primary mb-0" title="Importer un fichier .transcria-type.json">
+      <i class="bi bi-box-arrow-in-down"></i> Importer
+      <input type="file" accept="application/json,.json" class="d-none"
+             onchange="if (this.files[0]) { MT.importFile(this.files[0]); this.value=''; }">
+    </label>
+  </div>
+</div>
+<p class="text-muted small mb-3">
+  Chaque type définit l'apparence et les champs du compte-rendu Word.
+  Partez d'un type existant — « <strong>Créer le mien</strong> » — puis ajustez couleurs, bannière et sections.
+</p>
+
+<!-- ══ Galerie ══════════════════════════════════════════════════════════════ -->
+<div id="mt-gallery">
+  <div class="mt-grid" id="mt-cards"></div>
+</div>
+
+<!-- ══ Éditeur (masqué tant qu'aucun type n'est en cours d'édition) ════════ -->
+<div id="mt-editor" class="d-none">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0" id="mt-editor-title">Créer mon type</h5>
+    <button class="btn btn-sm btn-outline-secondary" onclick="MT.closeEditor()">
+      <i class="bi bi-arrow-left"></i> Retour à la galerie</button>
+  </div>
+  <div class="row g-4">
+    <!-- ── Formulaire ─────────────────────────────────────────────────── -->
+    <div class="col-lg-7">
+      <div class="card mb-3">
+        <div class="card-header py-2">Identité</div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-7">
+              <label class="form-label small">Nom du type <span class="text-danger">*</span></label>
+              <input class="form-control form-control-sm" id="mt-name" maxlength="80"
+                     placeholder="ex. COMEX Société X" oninput="MT.refreshPreview()">
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small">Badge de couverture</label>
+              <input class="form-control form-control-sm" id="mt-badge" maxlength="16"
+                     placeholder="ex. COMEX" oninput="MT.refreshPreview()">
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Bandeau de couverture</label>
+              <input class="form-control form-control-sm" id="mt-banner" maxlength="80"
+                     placeholder="ex. COMPTE-RENDU — COMITÉ EXÉCUTIF" oninput="MT.refreshPreview()">
+            </div>
+            <div class="col-12">
+              <label class="form-label small">Description (pour vos collègues)</label>
+              <input class="form-control form-control-sm" id="mt-description" maxlength="200">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2">Apparence</div>
+        <div class="card-body">
+          <label class="form-label small mb-1">Palette</label>
+          <div class="mt-palettes mb-2" id="mt-palettes"></div>
+          <details>
+            <summary class="small text-muted">Couleurs exactes (charte d'entreprise)</summary>
+            <div class="row g-2 mt-1">
+              <div class="col-4"><label class="form-label small">Principale</label>
+                <input type="color" class="form-control form-control-color" id="mt-primary" value="#1f3864" oninput="MT.refreshPreview()"></div>
+              <div class="col-4"><label class="form-label small">Accent</label>
+                <input type="color" class="form-control form-control-color" id="mt-accent" value="#2e74b5" oninput="MT.refreshPreview()"></div>
+              <div class="col-4"><label class="form-label small">Fond clair</label>
+                <input type="color" class="form-control form-control-color" id="mt-light" value="#d6e4f0" oninput="MT.refreshPreview()"></div>
+            </div>
+          </details>
+          <div id="mt-contrast-warning" class="alert alert-warning py-1 px-2 small mt-2 d-none">
+            <i class="bi bi-exclamation-triangle"></i> Couleur principale trop claire : le texte blanc
+            du bandeau sera difficile à lire.
+          </div>
+          <div class="row g-2 mt-2">
+            <div class="col-md-8">
+              <label class="form-label small">Pied de page (chaque page du document)</label>
+              <input class="form-control form-control-sm" id="mt-footer" maxlength="120"
+                     placeholder="ex. Société X — diffusion restreinte" oninput="MT.refreshPreview()">
+            </div>
+            <div class="col-md-4 form-check mt-4 ms-2">
+              <input type="checkbox" class="form-check-input" id="mt-confidential" onchange="MT.refreshPreview()">
+              <label class="form-check-label small" for="mt-confidential">Document confidentiel</label>
+            </div>
+          </div>
+          <div class="mt-2" id="mt-logo-block">
+            <label class="form-label small">Logo (page de garde — PNG/JPEG, 500 Ko max)</label>
+            <div class="d-flex gap-2 align-items-center">
+              <input type="file" class="form-control form-control-sm" id="mt-logo" accept="image/png,image/jpeg" style="max-width: 340px">
+              <button class="btn btn-sm btn-outline-danger d-none" id="mt-logo-clear" onclick="MT.clearLogo()">
+                <i class="bi bi-x"></i> Retirer</button>
+            </div>
+            <div class="form-text" id="mt-logo-hint">Le logo s'ajoute après le premier enregistrement.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2">Champs de saisie (étape « Contexte » du traitement)</div>
+        <div class="card-body">
+          <div id="mt-fields"></div>
+          <button class="btn btn-sm btn-outline-primary mt-1" onclick="MT.addField()">
+            <i class="bi bi-plus"></i> Ajouter un champ</button>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2">Sections du document</div>
+        <div class="card-body">
+          <p class="small text-muted mb-2">Réordonnez avec les flèches. La page de garde est toujours
+            première ; le contenu extrait (décisions, votes…) peut être déplacé, jamais retiré.</p>
+          <ul class="list-group list-group-sm" id="mt-sections"></ul>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header py-2">
+          <a class="text-decoration-none" data-bs-toggle="collapse" href="#mt-advanced">
+            Avancé — suggestion automatique &amp; extraction <i class="bi bi-chevron-down small"></i></a>
+        </div>
+        <div class="collapse" id="mt-advanced">
+          <div class="card-body">
+            <label class="form-label small">Indices de détection (un par ligne) — aident l'IA à
+              <em>suggérer</em> ce type à l'étape Résumé quand ces expressions apparaissent</label>
+            <textarea class="form-control form-control-sm mb-2" id="mt-hints" rows="3"
+                      placeholder="ex. comité exécutif&#10;revue des indicateurs"></textarea>
+            <label class="form-label small">Extractions supplémentaires — éléments que l'IA doit
+              relever dans la réunion (ajoutés au compte-rendu, jamais inventés)</label>
+            <div id="mt-extracts"></div>
+            <button class="btn btn-sm btn-outline-primary mt-1" onclick="MT.addExtract()">
+              <i class="bi bi-plus"></i> Ajouter une extraction</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 mb-4">
+        <button class="btn btn-primary" id="mt-save" onclick="MT.save()">
+          <i class="bi bi-check-lg"></i> Enregistrer</button>
+        <button class="btn btn-outline-secondary" onclick="MT.closeEditor()">Annuler</button>
+        <span class="text-danger small align-self-center" id="mt-error"></span>
+      </div>
+    </div>
+
+    <!-- ── Aperçu vivant de la page de garde ──────────────────────────── -->
+    <div class="col-lg-5">
+      <div class="mt-preview-wrap">
+        <div class="mt-cover" id="mt-cover">
+          <div class="mt-cover-logo d-none" id="mt-cover-logo"><i class="bi bi-image"></i> logo</div>
+          <div class="mt-cover-banner" id="mt-cover-banner">COMPTE-RENDU DE TRANSCRIPTION</div>
+          <div class="mt-cover-accent" id="mt-cover-accent"></div>
+          <div class="mt-cover-confidential d-none" id="mt-cover-confidential">▪ DOCUMENT CONFIDENTIEL ▪</div>
+          <div class="mt-cover-title">Réunion d'exemple</div>
+          <div class="mt-cover-badge d-none" id="mt-cover-badge"></div>
+          <div class="mt-cover-meta">
+            <span>15 janvier 2026</span><span>·</span><span>Direction Exemple</span>
+          </div>
+          <div class="mt-cover-rows">
+            <div class="mt-cover-row" id="mt-cover-row1"><b>Sujet :</b> Sujet d'illustration de l'aperçu</div>
+            <div class="mt-cover-row" id="mt-cover-row2"><b>Objectif :</b> Visualiser le rendu du type</div>
+          </div>
+          <div class="mt-cover-footer" id="mt-cover-footer">TranscrIA · Réunion d'exemple · Page 1/4</div>
+        </div>
+        <div class="text-center mt-2">
+          <button class="btn btn-sm btn-outline-primary" id="mt-preview-docx" onclick="MT.downloadPreview()">
+            <i class="bi bi-file-earmark-word"></i> Télécharger un exemple (.docx)</button>
+        </div>
+        <p class="text-muted text-center mt-1" style="font-size: 0.72rem">
+          Aperçu indicatif de la page de garde — l'exemple Word est fidèle au rendu final.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/meeting_types.js"></script>
+{% endblock %}

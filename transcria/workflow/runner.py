@@ -619,6 +619,30 @@ class WorkflowRunner:
                 opencode_bin=opencode_bin,
                 config=config,
             )
+            # Variables de prompts des types de réunion (lot D) : liste + indices des
+            # types visibles du PROPRIÉTAIRE, et champs d'extraction du type CHOISI
+            # (fiche matérialisée — présent aux RELANCES seulement, P1). Best-effort :
+            # toute erreur ⇒ catalogue intégré seul, jamais un échec du résumé.
+            prompt_subs: dict[str, str] = {}
+            extract_keys: tuple[str, ...] = ()
+            try:
+                from transcria.auth.store import UserStore
+                from transcria.context.meeting_type_prompts import build_prompt_substitutions
+
+                meeting_ctx_now = fs.load_json("context/meeting_context.json") or {}
+                chosen_type = meeting_ctx_now.get("custom_type")
+                chosen_type = chosen_type if isinstance(chosen_type, dict) else None
+                prompt_subs = build_prompt_substitutions(
+                    UserStore.get_by_id(job.owner_id), chosen_type
+                )
+                extract_keys = tuple(
+                    f["key"] for f in (chosen_type or {}).get("extract_fields") or []
+                    if isinstance(f, dict) and f.get("key")
+                )
+            except Exception:  # noqa: BLE001 — repli : placeholders depuis le catalogue intégré
+                from transcria.context.meeting_type_prompts import build_prompt_substitutions
+
+                prompt_subs = build_prompt_substitutions(None, None)
             # La LLM peut « réussir » (opencode exit 0) sans rien produire (0 texte,
             # summary.md non réécrit — typiquement contexte trop long). On retente la
             # SEULE sous-étape LLM jusqu'à 3 fois (LLM déjà chargée : pas de re-STT, pas
@@ -632,6 +656,8 @@ class WorkflowRunner:
                     str(staged_context),
                     str(staged_diar_ctx),
                     staged_invite,
+                    prompt_substitutions=prompt_subs,
+                    extra_structured_keys=extract_keys,
                 )
                 if parsed.get("_summary_produced"):
                     if attempt > 1:
@@ -2016,7 +2042,14 @@ class WorkflowRunner:
                     # dévier (items dicts, scalaires) — stocké brut, il faisait planter la
                     # génération du rapport DOCX (add_run sur un non-texte).
                     from transcria.gpu.opencode_runner import OpenCodeRunner
-                    meeting_ctx["structured_data"] = OpenCodeRunner._normalize_structured_data(parsed)
+                    custom_type = meeting_ctx.get("custom_type")
+                    review_extra_keys = tuple(
+                        f["key"] for f in ((custom_type or {}).get("extract_fields") or [])
+                        if isinstance(f, dict) and f.get("key")
+                    )
+                    meeting_ctx["structured_data"] = OpenCodeRunner._normalize_structured_data(
+                        parsed, review_extra_keys
+                    )
                     applied["structured_data_updated"] = True
             except (ValueError, TypeError):
                 logger.warning("Relecture finale : structured_data relu non JSON — ancien conservé")

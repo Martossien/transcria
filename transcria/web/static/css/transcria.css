@@ -105,3 +105,54 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
 }
 .prompt-editor { font-family: monospace; font-size: 0.85rem; }
 .script-view { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; font-family: monospace; max-height: 480px; overflow-y: auto; white-space: pre-wrap; font-size: 0.8rem; }
+
+/* ── Types de réunion personnalisés (lot E — TYPES_REUNION_PERSONNALISES.md §7) ── */
+.mt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.mt-card { overflow: hidden; transition: transform 0.12s ease, box-shadow 0.12s ease; }
+.mt-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
+.mt-card-banner {
+  color: #fff; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em;
+  padding: 10px 12px; text-transform: uppercase; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.mt-card-name { font-size: 0.92rem; }
+.mt-dots { display: inline-flex; gap: 3px; }
+.mt-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border); display: inline-block; }
+
+.mt-palettes { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-palette {
+  display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden; padding: 0; background: var(--card); cursor: pointer;
+}
+.mt-palette span { width: 22px; height: 22px; display: block; }
+.mt-palette:hover { border-color: var(--primary); box-shadow: 0 0 0 2px var(--info-bg); }
+
+/* Aperçu vivant : mini page A4 (le document est le héros de l'écran) */
+.mt-preview-wrap { position: sticky; top: 16px; }
+.mt-cover {
+  --mt-light: #d6e4f0;
+  aspect-ratio: 210 / 260; background: #fff; border: 1px solid var(--border);
+  border-radius: 6px; box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+  padding: 8% 9% 5%; display: flex; flex-direction: column; gap: 8px;
+  font-family: Calibri, Carlito, system-ui, sans-serif; position: relative;
+}
+.mt-cover-logo { text-align: center; color: var(--text-muted); font-size: 0.7rem; }
+.mt-cover-banner {
+  color: #fff; text-align: center; font-weight: 700; font-size: 0.66rem;
+  letter-spacing: 0.05em; padding: 10px 8px; text-transform: uppercase;
+}
+.mt-cover-accent { height: 4px; margin-top: -6px; }
+.mt-cover-confidential {
+  text-align: center; color: #6a1b9a; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em;
+}
+.mt-cover-title { text-align: center; font-size: 1.05rem; font-weight: 700; margin-top: 10%; color: #1e293b; }
+.mt-cover-badge { text-align: center; font-size: 0.62rem; font-weight: 700; }
+.mt-cover-meta {
+  display: flex; justify-content: center; gap: 6px; color: var(--text-muted); font-size: 0.62rem;
+}
+.mt-cover-rows { margin-top: auto; background: var(--mt-light); border-radius: 4px; padding: 8px 10px; }
+.mt-cover-row { font-size: 0.6rem; color: #334155; }
+.mt-cover-footer {
+  position: absolute; bottom: 3%; left: 0; right: 0; text-align: center;
+  color: var(--text-muted); font-size: 0.52rem;
+}

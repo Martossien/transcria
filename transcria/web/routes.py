@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 import math
 import re
@@ -38,7 +39,7 @@ from transcria.context.invite_parser import sanitize_invite
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
 from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexicon_text_audit_summary
-from transcria.context.meeting_context import MEETING_TYPES, TYPE_SPECIFIC_FIELDS, MeetingContextManager
+from transcria.context.meeting_context import MeetingContextManager
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
 from transcria.integrations.dashboard_client import DashboardClient
@@ -205,8 +206,6 @@ def _push_job_files_after_write(response):
     return response
 
 
-MEETING_TYPES_LIST = MEETING_TYPES
-TYPE_SPECIFIC_FIELDS_JSON = __import__("json").dumps(TYPE_SPECIFIC_FIELDS, ensure_ascii=False)
 DEFAULT_JOB_TITLE = "Réunion sans titre"
 CONFIG_SECRET_SENTINEL = "********"
 PROCESS_START_TIME = time.time()
@@ -1080,6 +1079,22 @@ def job_wizard(job_id: str):
     # curseur) ; None ⇒ comportement complet (legacy/aucun profil dispo).
     profiles_view = compute_profiles_view(cfg)
     selected_profile = profile_for_job(job)
+
+    # Types de réunion : intégrés + personnalisés VISIBLES DU PROPRIÉTAIRE du job
+    # (même règle que les lexiques : un admin qui consulte voit le catalogue du
+    # propriétaire, pas le sien). Champs spécifiques fusionnés pour le JS étape 4.
+    from transcria.auth.store import UserStore as _UserStore
+    from transcria.context.meeting_type_store import MeetingTypeStore
+    _owner = _UserStore.get_by_id(job.owner_id)
+    if _owner is not None:
+        builtin_meeting_types, custom_meeting_types, merged_type_fields = (
+            MeetingTypeStore.merged_catalog_for_user(_owner)
+        )
+    else:  # propriétaire supprimé : catalogue intégré seul (le wizard reste servable)
+        from transcria.context.meeting_type_catalog import meeting_type_names, type_specific_fields
+        builtin_meeting_types = meeting_type_names()
+        custom_meeting_types = []
+        merged_type_fields = type_specific_fields()
     if selected_profile is None and profiles_view.get("recommended"):
         selected_profile = get_profile(profiles_view["recommended"])
     wizard_layout = compute_wizard_layout(selected_profile, statuses)
@@ -1164,8 +1179,9 @@ def job_wizard(job_id: str):
         processing_diagnostic=_processing_diagnostic_view(transcription_metadata, transcription_segments),
         quality_report=quality_report,
         srt_content=srt_content,
-        meeting_types=MEETING_TYPES_LIST,
-        type_specific_fields_json=TYPE_SPECIFIC_FIELDS_JSON,
+        meeting_types=builtin_meeting_types,
+        custom_meeting_types=custom_meeting_types,
+        type_specific_fields_json=json.dumps(merged_type_fields, ensure_ascii=False),
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
         voice_enrollment_enabled=bool(cfg.get("voice_enrollment", {}).get("enabled", False)),
@@ -1455,6 +1471,35 @@ def api_context(job_id: str):
         return error_response
 
     data = request.get_json() or {}
+    # Type de réunion : validé contre le catalogue visible du PROPRIÉTAIRE (intégrés +
+    # personnalisés). Un type personnalisé est MATÉRIALISÉ dans le job (sa fiche complète,
+    # sans binaire) : le rendu et le worker n'ont jamais à résoudre un template en base —
+    # robuste en topologie split, et la suppression du template ne casse aucun job.
+    if data.get("meeting_type"):
+        from transcria.context.meeting_type_catalog import meeting_type_names
+        from transcria.context.meeting_type_store import MeetingTypeStore
+
+        chosen = str(data["meeting_type"])
+        if chosen in meeting_type_names():
+            data["custom_type"] = None
+            stale_logo = JobFilesystem(cfg["storage"]["jobs_dir"], job.id).job_dir / "context" / "type_logo.png"
+            if stale_logo.exists():
+                stale_logo.unlink()
+        else:
+            from transcria.auth.store import UserStore as _UserStore
+            _owner = _UserStore.get_by_id(job.owner_id)
+            template = MeetingTypeStore.resolve_for_user(_owner, chosen) if _owner else None
+            if template is None:
+                return jsonify({"error": f"Type de réunion inconnu : {chosen}"}), 400
+            data["custom_type"] = {**template.definition, "template_id": template.id}
+            # Le logo (binaire, hors fiche) est matérialisé lui aussi : le rendu DOCX
+            # le lit dans le job (context/ est un préfixe synchronisé en topologie pg).
+            fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+            logo_target = fs.job_dir / "context" / "type_logo.png"
+            if template.logo_blob:
+                logo_target.write_bytes(template.logo_blob)
+            elif logo_target.exists():
+                logo_target.unlink()
     MeetingContextManager.save(job, cfg["storage"]["jobs_dir"], data)
     audit_log(AuditAction.JOB_CONTEXT_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     if job.state == JobState.SUMMARY_DONE.value:

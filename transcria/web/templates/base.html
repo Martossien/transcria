@@ -25,6 +25,10 @@
             <a class="nav-link {% if path == '/' or path.startswith('/jobs') %}active{% endif %}" href="/">
               <i class="bi bi-collection-play"></i> Traitements</a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link {% if path.startswith('/meeting-types') %}active{% endif %}" href="/meeting-types">
+              <i class="bi bi-easel2"></i> Types de réunion</a>
+          </li>
           {% if can_manage_groups %}
           <li class="nav-item">
             <a class="nav-link {% if path.startswith('/admin/queue') %}active{% endif %}" href="/admin/queue">

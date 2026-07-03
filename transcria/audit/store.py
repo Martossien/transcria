@@ -16,7 +16,7 @@ class AuditStore:
         "job": ("job_", "queue_", "schedule_"),
         "lexicon": ("lexicon_",),
         "voice": ("voice_",),
-        "config": ("config_", "user_", "group_", "audit_"),
+        "config": ("config_", "user_", "group_", "audit_", "meeting_type_"),
     }
 
 

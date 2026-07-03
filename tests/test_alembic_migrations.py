@@ -15,6 +15,7 @@ from sqlalchemy import create_engine
 import transcria.audit.models  # noqa: F401
 import transcria.auth.models  # noqa: F401
 import transcria.context.central_lexicon_models  # noqa: F401
+import transcria.context.meeting_type_models  # noqa: F401
 import transcria.jobs.models  # noqa: F401
 import transcria.queue.models  # noqa: F401
 import transcria.voice.models  # noqa: F401

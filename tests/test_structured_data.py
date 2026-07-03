@@ -297,3 +297,50 @@ def test_docx_entretien_individuel_auto_confidentiel():
     loaded = Document(buf)
     tables_text = " ".join(c.text for t in loaded.tables for r in t.rows for c in r.cells)
     assert "CONFIDENTIEL" in tables_text.upper()
+
+
+class TestClesExtractionPersonnalisees:
+    """Lot D : les extract_fields d'un type personnalisé traversent le parseur."""
+
+    def test_niveau_1_conserve_les_cles_du_type(self):
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+        text = ('## Données structurées\n```json\n'
+                '{"decisions": ["D1"], "budgets_evoques": ["10 k€ pour le projet A"]}\n```')
+        sd, status, _ = OpenCodeRunner._parse_structured_data(text, ("budgets_evoques",))
+        assert status == "ok" and sd["budgets_evoques"] == ["10 k€ pour le projet A"]
+        # Sans la clé déclarée, elle est filtrée (liste blanche inchangée par défaut).
+        sd2, _, _ = OpenCodeRunner._parse_structured_data(text)
+        assert "budgets_evoques" not in sd2
+
+    def test_niveau_2_regex_couvre_les_cles_du_type(self):
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+        text = ('## Données structurées\n```json\n'
+                '{"decisions": ["D1"], "budgets_evoques": ["10 k€"],}\n```')  # virgule finale → json.loads échoue
+        sd, status, _ = OpenCodeRunner._parse_structured_data(text, ("budgets_evoques",))
+        assert status == "partial" and sd["budgets_evoques"] == ["10 k€"]
+
+
+class TestMaterialisationPrompt:
+    """Lot D : le prompt résolu (placeholders substitués) est écrit dans le scratch."""
+
+    def test_substitue_et_ecrit_dans_le_scratch(self, tmp_path):
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+        prompt = tmp_path / "summary_prompt.txt"
+        prompt.write_text("Types : [{{TYPES_REUNION}}]\n{{INDICES_TYPES}}\n{{CHAMPS_EXTRACTION_TYPE}}",
+                          encoding="utf-8")
+        runner = OpenCodeRunner(str(tmp_path), model="local/fake-model")
+        resolved = runner._materialize_prompt(str(prompt), {
+            "{{TYPES_REUNION}}": "CSE | COMEX Société X",
+            "{{INDICES_TYPES}}": '  `COMEX Société X` si on entend "comité exécutif" ;',
+            "{{CHAMPS_EXTRACTION_TYPE}}": "",
+        })
+        assert resolved != str(prompt)
+        text = open(resolved, encoding="utf-8").read()
+        assert "COMEX Société X" in text and "{{" not in text
+
+    def test_sans_placeholder_fichier_original(self, tmp_path):
+        from transcria.gpu.opencode_runner import OpenCodeRunner
+        prompt = tmp_path / "summary_prompt.txt"
+        prompt.write_text("Prompt maison sans placeholder.", encoding="utf-8")
+        runner = OpenCodeRunner(str(tmp_path), model="local/fake-model")
+        assert runner._materialize_prompt(str(prompt), {"{{TYPES_REUNION}}": "X"}) == str(prompt)

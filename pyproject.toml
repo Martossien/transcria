@@ -24,6 +24,7 @@ module = [
     "transcria.voice.models",
     "transcria.queue.models",
     "transcria.context.central_lexicon_models",
+    "transcria.context.meeting_type_models",
 ]
 # Flask-SQLAlchemy : `class X(db.Model)` n'est pas reconnu par mypy comme base de classe
 # (attribut d'instance, pas un nom typable). On suppresse UNIQUEMENT ce faux positif —

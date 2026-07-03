@@ -176,11 +176,13 @@ def create_app(config_path: str | None = None) -> Flask:
 
     import transcria.audit.models  # noqa: F401 — enregistre les tables SQLAlchemy
     import transcria.context.central_lexicon_models  # noqa: F401 — enregistre les tables SQLAlchemy
+    import transcria.context.meeting_type_models  # noqa: F401 — enregistre les tables SQLAlchemy
     import transcria.queue.models  # noqa: F401 — enregistre les tables SQLAlchemy
     import transcria.voice.models  # noqa: F401 — enregistre les tables SQLAlchemy
     from transcria.audit.routes import audit_bp
     from transcria.auth.routes import auth_bp, inject_user_context
     from transcria.context.central_lexicon_routes import central_lexicon_bp
+    from transcria.context.meeting_type_routes import meeting_type_bp
     from transcria.queue.routes import queue_api_bp, queue_pages_bp
     from transcria.services.job_executor import init_job_executor
     from transcria.voice.routes import voice_bp
@@ -189,6 +191,7 @@ def create_app(config_path: str | None = None) -> Flask:
     app.register_blueprint(auth_bp)
     app.register_blueprint(audit_bp)
     app.register_blueprint(central_lexicon_bp)
+    app.register_blueprint(meeting_type_bp)
     app.register_blueprint(queue_pages_bp)
     app.register_blueprint(queue_api_bp)
     app.register_blueprint(voice_bp)

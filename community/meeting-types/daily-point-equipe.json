@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "type": {
+    "name": "Daily / point d'équipe",
+    "badge": "DAILY",
+    "banner_text": "POINT D'ÉQUIPE — RELEVÉ RAPIDE",
+    "palette": {"primary": "004D40", "accent": "00795F", "light": "E0F2F1"},
+    "fields": [
+      {"key": "equipe", "label": "Équipe / squad", "type": "text"},
+      {"key": "sprint", "label": "Sprint / itération", "type": "text"}
+    ],
+    "detection_hints": ["daily", "stand-up", "point d'équipe", "hier j'ai", "aujourd'hui je"],
+    "extract_fields": [
+      {"key": "avancements", "label": "Avancements annoncés", "instruction": "ce que chaque personne annonce avoir terminé ou avancé"},
+      {"key": "obstacles", "label": "Obstacles signalés", "instruction": "points de blocage ou demandes d'aide explicitement signalés"}
+    ],
+    "sections": {
+      "order": ["synthese", "contexte", "pv", "participants"],
+      "enabled": {"transcript": false, "quality": false}
+    }
+  }
+}

@@ -14,6 +14,13 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
+from transcria.context.meeting_type_catalog import (
+    ORDERABLE_SECTIONS,
+    confidential_types,
+    field_short_labels,
+    quorum_types,
+    theme_specs,
+)
 from transcria.jobs.filesystem import JobFilesystem
 
 # ── Palette ──────────────────────────────────────────────────────────────────
@@ -174,116 +181,25 @@ class _DocxTheme:
     cover_badge: str        # badge type affiché sous le titre (ex: "RÉUNION PROJET")
 
 
-def _rgb(r: int, g: int, b: int) -> RGBColor:
-    return RGBColor(r, g, b)
+def _hex_rgb(value: str) -> RGBColor:
+    """Couleur du catalogue (hex 6 chiffres, validé au chargement) → RGBColor."""
+    return RGBColor(int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16))
 
 
+# SOURCE UNIQUE : transcria/data/meeting_types.yaml (via meeting_type_catalog) — plus
+# aucun thème en dur ici (cf. docs/TYPES_REUNION_PERSONNALISES.md, lot A). Un type sans
+# palette dans le catalogue (Réunion interne, Autre) retombe sur _THEME_DEFAULT.
 _THEMES: dict[str, _DocxTheme] = {
-    # ── Institutionnel / légal ──────────────────────────────────────────────
-    "CSE": _DocxTheme(
-        primary=_rgb(0x1A, 0x23, 0x7E), accent=_rgb(0x30, 0x3F, 0x9F),
-        light=_rgb(0xE8, 0xEA, 0xF6),
-        banner_text="PROCÈS-VERBAL DU COMITÉ SOCIAL ET ÉCONOMIQUE",
-        cover_badge="CSE",
-    ),
-    "CSE extraordinaire": _DocxTheme(
-        primary=_rgb(0x1A, 0x23, 0x7E), accent=_rgb(0x30, 0x3F, 0x9F),
-        light=_rgb(0xE8, 0xEA, 0xF6),
-        banner_text="PROCÈS-VERBAL DU CSE — SÉANCE EXTRAORDINAIRE",
-        cover_badge="CSE EXTRA",
-    ),
-    # ── Direction / stratégie ───────────────────────────────────────────────
-    "CODIR / COMEX": _DocxTheme(
-        primary=_rgb(0x1C, 0x1C, 0x1C), accent=_rgb(0x42, 0x42, 0x42),
-        light=_rgb(0xF5, 0xF5, 0xF5),
-        banner_text="COMPTE-RENDU — COMITÉ DE DIRECTION",
-        cover_badge="CODIR",
-    ),
-    # ── Projet ─────────────────────────────────────────────────────────────
-    "Point projet": _DocxTheme(
-        primary=_rgb(0x00, 0x4D, 0x40), accent=_rgb(0x00, 0x79, 0x5F),
-        light=_rgb(0xE0, 0xF2, 0xF1),
-        banner_text="COMPTE-RENDU DE RÉUNION PROJET",
-        cover_badge="PROJET",
-    ),
-    "Réunion projet": _DocxTheme(
-        primary=_rgb(0x00, 0x4D, 0x40), accent=_rgb(0x00, 0x79, 0x5F),
-        light=_rgb(0xE0, 0xF2, 0xF1),
-        banner_text="COMPTE-RENDU DE RÉUNION PROJET",
-        cover_badge="PROJET",
-    ),
-    # ── Client / commercial ─────────────────────────────────────────────────
-    "Réunion client": _DocxTheme(
-        primary=_rgb(0x01, 0x4B, 0x7E), accent=_rgb(0x02, 0x77, 0xBD),
-        light=_rgb(0xE1, 0xF5, 0xFE),
-        banner_text="COMPTE-RENDU DE RÉUNION CLIENT",
-        cover_badge="CLIENT",
-    ),
-    "Négociation": _DocxTheme(
-        primary=_rgb(0x3E, 0x27, 0x23), accent=_rgb(0x6D, 0x4C, 0x41),
-        light=_rgb(0xEF, 0xEB, 0xE9),
-        banner_text="COMPTE-RENDU DE NÉGOCIATION",
-        cover_badge="NÉGOCIATION",
-    ),
-    # ── RH / personnes ─────────────────────────────────────────────────────
-    "RH": _DocxTheme(
-        primary=_rgb(0x1B, 0x5E, 0x20), accent=_rgb(0x43, 0x8B, 0x29),
-        light=_rgb(0xF1, 0xF8, 0xE9),
-        banner_text="COMPTE-RENDU — RESSOURCES HUMAINES",
-        cover_badge="RH",
-    ),
-    "Entretien individuel": _DocxTheme(
-        primary=_rgb(0x4A, 0x14, 0x8C), accent=_rgb(0x6A, 0x1B, 0x9A),
-        light=_rgb(0xF3, 0xE5, 0xF5),
-        banner_text="ENTRETIEN INDIVIDUEL",
-        cover_badge="CONFIDENTIEL",
-    ),
-    "Entretien": _DocxTheme(
-        primary=_rgb(0x1F, 0x38, 0x64), accent=_rgb(0x2E, 0x74, 0xB5),
-        light=_rgb(0xD6, 0xE4, 0xF0),
-        banner_text="COMPTE-RENDU D'ENTRETIEN",
-        cover_badge="ENTRETIEN",
-    ),
-    # ── Formation / pédagogie ───────────────────────────────────────────────
-    "Formation": _DocxTheme(
-        primary=_rgb(0xBF, 0x36, 0x00), accent=_rgb(0xF5, 0x7C, 0x00),
-        light=_rgb(0xFF, 0xF3, 0xE0),
-        banner_text="COMPTE-RENDU DE FORMATION",
-        cover_badge="FORMATION",
-    ),
-    "Séminaire / atelier": _DocxTheme(
-        primary=_rgb(0x00, 0x57, 0x47), accent=_rgb(0x00, 0x79, 0x5F),
-        light=_rgb(0xE0, 0xF7, 0xF2),
-        banner_text="COMPTE-RENDU DE SÉMINAIRE / ATELIER",
-        cover_badge="SÉMINAIRE",
-    ),
-    # ── Urgence / médical ───────────────────────────────────────────────────
-    "Réunion de crise": _DocxTheme(
-        primary=_rgb(0xB7, 0x1C, 0x1C), accent=_rgb(0xE5, 0x39, 0x35),
-        light=_rgb(0xFF, 0xEB, 0xEE),
-        banner_text="COMPTE-RENDU — RÉUNION DE CRISE",
-        cover_badge="CRISE",
-    ),
-    "Réunion médicale / santé": _DocxTheme(
-        primary=_rgb(0x00, 0x60, 0x64), accent=_rgb(0x00, 0x83, 0x8A),
-        light=_rgb(0xE0, 0xF7, 0xFA),
-        banner_text="COMPTE-RENDU MÉDICAL",
-        cover_badge="CONFIDENTIEL",
-    ),
-    # ── Technique ───────────────────────────────────────────────────────────
-    "Réunion technique": _DocxTheme(
-        primary=_rgb(0x1F, 0x38, 0x64), accent=_rgb(0x29, 0x63, 0x9A),
-        light=_rgb(0xE3, 0xEE, 0xF8),
-        banner_text="COMPTE-RENDU DE RÉUNION TECHNIQUE",
-        cover_badge="TECHNIQUE",
-    ),
-    "Podcast / média": _DocxTheme(
-        primary=_rgb(0x22, 0x00, 0x57), accent=_rgb(0x5E, 0x35, 0xB1),
-        light=_rgb(0xED, 0xE7, 0xF6),
-        banner_text="TRANSCRIPTION",
-        cover_badge="MÉDIA",
-    ),
+    name: _DocxTheme(
+        primary=_hex_rgb(spec["palette"]["primary"]),
+        accent=_hex_rgb(spec["palette"]["accent"]),
+        light=_hex_rgb(spec["palette"]["light"]),
+        banner_text=spec["banner_text"],
+        cover_badge=spec["badge"],
+    )
+    for name, spec in theme_specs().items()
 }
+
 
 _THEME_DEFAULT = _DocxTheme(
     primary=_BLUE_DARK, accent=_BLUE_MID, light=_BLUE_LIGHT,
@@ -296,16 +212,32 @@ def _get_theme(meeting_type: str) -> _DocxTheme:
     return _THEMES.get(meeting_type, _THEME_DEFAULT)
 
 
+def _theme_from_definition(definition: dict) -> _DocxTheme:
+    """Thème d'une fiche de type personnalisé (palette validée au catalogue)."""
+    palette = definition.get("palette") or {}
+    try:
+        return _DocxTheme(
+            primary=_hex_rgb(palette["primary"]),
+            accent=_hex_rgb(palette["accent"]),
+            light=_hex_rgb(palette["light"]),
+            banner_text=str(definition.get("banner_text") or _THEME_DEFAULT.banner_text),
+            cover_badge=str(definition.get("badge") or ""),
+        )
+    except (KeyError, TypeError, ValueError):
+        # Fiche altérée (édition manuelle du JSON du job) : un livrable ne plante jamais.
+        return _THEME_DEFAULT
+
+
 # ── Routing par type de réunion ──────────────────────────────────────────────
 
 # Les sections enrichies (décisions, votes, ODJ…) ne sont PAS filtrées par type :
 # toute donnée extraite par le LLM s'affiche si elle est non vide (cf. _section_enriched).
 # Le type ne pilote que le thème visuel, les champs de saisie et la page de garde.
 
-# Types CSE — quorum + sous-titre objet de séance sur la page de garde
-_CSE_TYPES: frozenset[str] = frozenset({"CSE", "CSE extraordinaire"})
-# Types auto-confidentiels
-_AUTO_CONFIDENTIEL: frozenset[str] = frozenset({"Entretien individuel", "RH", "Réunion médicale / santé"})
+# Types à quorum (+ sous-titre objet de séance) et types auto-confidentiels —
+# drapeaux `behavior` du catalogue, plus de noms de types en dur ici.
+_CSE_TYPES: frozenset[str] = quorum_types()
+_AUTO_CONFIDENTIEL: frozenset[str] = confidential_types()
 
 # ── Parsing SRT ───────────────────────────────────────────────────────────────
 
@@ -369,12 +301,21 @@ def _fmt_duration(seconds: int) -> str:
 
 _RENDER_SECTIONS = ("participants", "transcript", "quality")
 
+# Unités ordonnables du registre de sections (lot C). « couverture » est fixe ;
+# « contexte » et « pv » sont déplaçables mais JAMAIS désactivables (règle : une
+# donnée extraite n'est jamais cachée). « synthese »/« champs_type » ne deviennent
+# des sections autonomes que si un ordre les cite — sinon ils restent DANS le
+# contexte (rendu historique, non-régression au pixel).
+_ORDERABLE_SECTIONS = ORDERABLE_SECTIONS
+_SECTION_ORDER_DEFAULT = ("contexte", "pv", "participants", "transcript", "quality")
+
 
 def _sanitize_render_options(raw: object) -> dict:
     """Valide ``context/render_options.json`` — tout invalide est ignoré (le rendu ne casse jamais).
 
-    Options v1 : ``theme`` (clé de ``_THEMES``, prime sur le meeting_type) et
-    ``sections`` (booléens ``participants``/``transcript``/``quality``).
+    Options v1 : ``theme`` (clé de ``_THEMES``, prime sur le meeting_type),
+    ``sections`` (booléens ``participants``/``transcript``/``quality``) et
+    ``order`` (liste d'unités de ``_ORDERABLE_SECTIONS``, clés inconnues ignorées).
     """
     if not isinstance(raw, dict):
         return {}
@@ -387,6 +328,14 @@ def _sanitize_render_options(raw: object) -> dict:
         cleaned = {k: bool(v) for k, v in sections.items() if k in _RENDER_SECTIONS and isinstance(v, bool)}
         if cleaned:
             out["sections"] = cleaned
+    order = raw.get("order")
+    if isinstance(order, list):
+        cleaned_order: list[str] = []
+        for key in order:
+            if isinstance(key, str) and key in _ORDERABLE_SECTIONS and key not in cleaned_order:
+                cleaned_order.append(key)
+        if cleaned_order:
+            out["order"] = cleaned_order
     return out
 
 
@@ -402,7 +351,9 @@ class DocxReport:
         srt_text: str,
         structured_data: dict | None = None,
         render_options: dict | None = None,
+        logo_bytes: bytes | None = None,
     ):
+        self.logo_bytes = logo_bytes
         self.ctx = ctx
         self.participants: list[dict] = participants if isinstance(participants, list) else []
         self.speakers: list[dict] = (speaker_stats or {}).get("speakers", [])
@@ -413,11 +364,26 @@ class DocxReport:
         self.structured_data: dict = structured_data if isinstance(structured_data, dict) else {}
         self.meeting_type: str = ctx.get("meeting_type", "") if ctx else ""
         self.type_specific_data: dict = ctx.get("type_specific_data") or {}
+        # Fiche MATÉRIALISÉE d'un type personnalisé (posée par l'étape 4 dans
+        # meeting_context["custom_type"]) : le rendu ne résout jamais un template en
+        # base — la fiche du job fait foi, même si le template a été supprimé.
+        raw_custom = ctx.get("custom_type") if ctx else None
+        self.custom_type: dict = raw_custom if isinstance(raw_custom, dict) else {}
+        custom_behavior = self.custom_type.get("behavior") or {}
+        self.has_quorum: bool = self.meeting_type in _CSE_TYPES or bool(custom_behavior.get("quorum"))
+        self.auto_confidential: bool = (
+            self.meeting_type in _AUTO_CONFIDENTIEL or bool(custom_behavior.get("confidential"))
+        )
         self.render_options: dict = _sanitize_render_options(render_options)
         theme_key = self.render_options.get("theme")
-        self.theme: _DocxTheme = _THEMES[theme_key] if theme_key else _get_theme(self.meeting_type)
+        if theme_key:
+            self.theme: _DocxTheme = _THEMES[theme_key]
+        elif self.custom_type.get("palette"):
+            self.theme = _theme_from_definition(self.custom_type)
+        else:
+            self.theme = _get_theme(self.meeting_type)
         # Auto-confidentialité pour certains types
-        if self.meeting_type in _AUTO_CONFIDENTIEL and not ctx.get("sensitivity"):
+        if self.auto_confidential and not ctx.get("sensitivity"):
             self.ctx = dict(ctx)
             self.ctx["sensitivity"] = "high"
 
@@ -463,23 +429,62 @@ class DocxReport:
     # ── Build ─────────────────────────────────────────────────────────────────
 
     def _section_enabled(self, key: str) -> bool:
-        return self.render_options.get("sections", {}).get(key, True)
+        # Surcharge par job (render_options) > défauts de la fiche du type > actif.
+        job_sections = self.render_options.get("sections", {})
+        if key in job_sections:
+            return bool(job_sections[key])
+        type_sections = (self.custom_type.get("sections") or {}).get("enabled") or {}
+        if key in type_sections:
+            return bool(type_sections[key])
+        return True
+
+    def _resolve_section_order(self) -> list[str]:
+        """Ordre effectif des unités : job (render_options.order) > fiche du type >
+        défaut historique. « contexte » et « pv » sont réinjectés s'ils manquent —
+        déplaçables, jamais supprimables ; les unités par défaut omises sont
+        rendues À LA SUITE (dans l'ordre historique)."""
+        raw = self.render_options.get("order")
+        if raw is None:
+            raw = (self.custom_type.get("sections") or {}).get("order")
+        if not isinstance(raw, list) or not raw:
+            return list(_SECTION_ORDER_DEFAULT)
+        order: list[str] = []
+        for key in raw:
+            if isinstance(key, str) and key in _ORDERABLE_SECTIONS and key not in order:
+                order.append(key)
+        for key in _SECTION_ORDER_DEFAULT:
+            if key not in order:
+                order.append(key)
+        return order
 
     def build(self) -> DocumentT:
         doc = Document()
         self._setup_document(doc)
         self._cover_page(doc)
         self._page_break(doc)
-        self._section_context(doc)
-        offset = self._section_enriched(doc)
-        # Sections désactivables (options de rendu) — la numérotation reste séquentielle.
-        num = 2 + offset
-        for key, render in (
-            ("participants", self._section_participants),
-            ("transcript", self._section_transcript),
-            ("quality", self._section_quality),
-        ):
-            if self._section_enabled(key):
+        order = self._resolve_section_order()
+        standalone = {"synthese", "champs_type"} & set(order)
+        num = 1
+        for key in order:
+            if key == "contexte":
+                self._section_context(
+                    doc, number=f"{num}.",
+                    include_synthese="synthese" not in standalone,
+                    include_champs="champs_type" not in standalone,
+                )
+                num += 1
+            elif key == "synthese":
+                if self._section_synthese(doc, number=f"{num}."):
+                    num += 1
+            elif key == "champs_type":
+                if self._section_champs_type(doc, number=f"{num}."):
+                    num += 1
+            elif key == "pv":
+                num += self._section_enriched(doc, start=num)
+            elif self._section_enabled(key):
+                render = {"participants": self._section_participants,
+                          "transcript": self._section_transcript,
+                          "quality": self._section_quality}[key]
                 render(doc, base=num)
                 num += 1
         self._setup_footer(doc)
@@ -508,6 +513,18 @@ class DocxReport:
         score  = self.quality.get("quality_score")
         ts     = self.type_specific_data
 
+        # ── 0. Logo de l'installation/du type (fiche personnalisée, lot C) ────
+        if self.logo_bytes:
+            try:
+                import io
+                p_logo = doc.add_paragraph()
+                p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                p_logo.add_run().add_picture(io.BytesIO(self.logo_bytes), height=Cm(1.8))
+                p_logo.paragraph_format.space_after = Pt(6)
+            except Exception:
+                # Logo illisible (fichier altéré) : la couverture se rend sans lui —
+                # un livrable final ne plante jamais pour un élément décoratif.
+                pass
         # ── 1. Bandeau principal (couleur signature du type) ─────────────────
         hdr = doc.add_table(rows=1, cols=1)
         _table_full_width(hdr)
@@ -533,7 +550,7 @@ class DocxReport:
         acc_cell.paragraphs[0].add_run("")
 
         # ── 3. Badge CONFIDENTIEL / CRISE (si applicable) ────────────────────
-        is_confidentiel = (sensitivity == "high") or (mtype in _AUTO_CONFIDENTIEL)
+        is_confidentiel = (sensitivity == "high") or self.auto_confidential
         is_crise = mtype == "Réunion de crise"
         if is_confidentiel or is_crise:
             badge_color = _RED if is_crise else RGBColor(0x6A, 0x1B, 0x9A)
@@ -571,7 +588,7 @@ class DocxReport:
             subtitle_parts.append(ts["nom_projet"])
             if ts.get("phase_jalon"):
                 subtitle_parts.append(ts["phase_jalon"])
-        elif mtype in _CSE_TYPES and ts.get("objet_seance"):
+        elif self.has_quorum and ts.get("objet_seance"):
             subtitle_parts.append(ts["objet_seance"])
         elif mtype == "Réunion client" and ts.get("nom_client"):
             subtitle_parts.append(ts["nom_client"])
@@ -605,7 +622,7 @@ class DocxReport:
         if lang:
             meta_rows.append(("Langue", lang))
         # Champs type-spécifiques clés sur la couverture
-        if mtype in _CSE_TYPES:
+        if self.has_quorum:
             if ts.get("president_seance"):
                 meta_rows.append(("Président de séance", ts["president_seance"]))
             if ts.get("secretaire_seance"):
@@ -647,7 +664,7 @@ class DocxReport:
                 r_v.font.name = "Calibri"
 
         # ── 7. Quorum CSE (encadré visuel fort) ──────────────────────────────
-        if mtype in _CSE_TYPES:
+        if self.has_quorum:
             try:
                 presents = int(ts.get("membres_presents") or 0)
                 total    = int(ts.get("membres_total") or 0)
@@ -662,7 +679,7 @@ class DocxReport:
                     _table_full_width(q_t)
                     _table_no_borders(q_t)
                     q_cell = q_t.cell(0, 0)
-                    _cell_bg(q_cell, _GREEN if quorum_ok else _rgb(0xFF, 0xEB, 0xEE))
+                    _cell_bg(q_cell, _GREEN if quorum_ok else RGBColor(0xFF, 0xEB, 0xEE))
                     _cell_margins(q_cell, top=120, bottom=120, left=200, right=200)
                     p_q = q_cell.paragraphs[0]
                     p_q.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -742,9 +759,20 @@ class DocxReport:
 
     # ── Section 1 : Contexte ──────────────────────────────────────────────────
 
-    def _section_context(self, doc: DocumentT) -> None:
+    def _summary_text(self) -> str:
+        # Priorité : édition manuelle (étape 4) > synthèse harmonisée sur le glossaire
+        # validé (post-correction) > synthèse brute de la LLM (pré-correction).
+        return (
+            self.ctx.get("summary")
+            or self.ctx.get("summary_harmonized")
+            or self.ctx.get("summary_llm")
+            or ""
+        ).strip()
+
+    def _section_context(self, doc: DocumentT, number: str = "1.",
+                         include_synthese: bool = True, include_champs: bool = True) -> None:
         ctx = self.ctx
-        self._section_heading(doc, "1.", "Contexte de la réunion")
+        self._section_heading(doc, number, "Contexte de la réunion")
 
         # `or ""` AVANT .strip() : une clé présente à `null` renvoie None (le défaut de
         # .get ne couvre que les clés ABSENTES) → None.strip() planterait tout le rapport.
@@ -753,14 +781,7 @@ class DocxReport:
         topic = str(ctx.get("topic") or "").strip()
         objective = str(ctx.get("objective") or "").strip()
         notes = str(ctx.get("notes") or "").strip()
-        # Priorité : édition manuelle (étape 4) > synthèse harmonisée sur le glossaire
-        # validé (post-correction) > synthèse brute de la LLM (pré-correction).
-        summary = (
-            ctx.get("summary")
-            or ctx.get("summary_harmonized")
-            or ctx.get("summary_llm")
-            or ""
-        ).strip()
+        summary = self._summary_text() if include_synthese else ""
 
         if topic:
             self._meta_row(doc, "Sujet", topic)
@@ -771,8 +792,6 @@ class DocxReport:
 
         if summary:
             doc.add_paragraph()
-            # Extraire juste le paragraphe "Synthèse" si présent dans un markdown
-            synth = _extract_synthese(summary)
             p_head = doc.add_paragraph()
             r = p_head.add_run("Synthèse")
             r.font.size = Pt(11)
@@ -780,33 +799,60 @@ class DocxReport:
             r.font.color.rgb = self.theme.primary
             r.font.name = "Calibri"
             p_head.paragraph_format.space_after = Pt(4)
+            self._render_synthese_body(doc, summary)
 
-            for raw in synth.splitlines():
-                line = raw.strip()
-                if not line:
-                    continue
-                # Intertitre markdown (## …) → ligne en gras, légèrement détachée.
-                heading = re.match(r"^#{1,6}\s+(.*)$", line)
-                if heading:
-                    p = doc.add_paragraph()
-                    _add_markdown_runs(p, heading.group(1).strip(), size=10.5, bold_all=True)
-                    p.paragraph_format.space_before = Pt(6)
-                    p.paragraph_format.space_after = Pt(2)
-                    continue
-                # Puce markdown (- … ou * …).
-                bullet = re.match(r"^[-*]\s+(.*)$", line)
+        if include_champs:
+            # Champs utilisateur spécifiques au type (président CSE, nom projet, etc.)
+            self._section_type_specific(doc)
+
+    def _render_synthese_body(self, doc: DocumentT, summary: str) -> None:
+        # Extraire juste le paragraphe "Synthèse" si présent dans un markdown
+        synth = _extract_synthese(summary)
+        for raw in synth.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            # Intertitre markdown (## …) → ligne en gras, légèrement détachée.
+            heading = re.match(r"^#{1,6}\s+(.*)$", line)
+            if heading:
                 p = doc.add_paragraph()
-                if bullet:
-                    _add_markdown_runs(p, "•  " + bullet.group(1).strip(), size=10)
-                    p.paragraph_format.left_indent = Cm(0.5)
-                else:
-                    # Paragraphe de prose : le gras **…** (intertitres en début de
-                    # paragraphe) est rendu en gras réel au lieu d'être supprimé.
-                    _add_markdown_runs(p, line, size=10)
-                p.paragraph_format.space_after = Pt(4)
+                _add_markdown_runs(p, heading.group(1).strip(), size=10.5, bold_all=True)
+                p.paragraph_format.space_before = Pt(6)
+                p.paragraph_format.space_after = Pt(2)
+                continue
+            # Puce markdown (- … ou * …).
+            bullet = re.match(r"^[-*]\s+(.*)$", line)
+            p = doc.add_paragraph()
+            if bullet:
+                _add_markdown_runs(p, "•  " + bullet.group(1).strip(), size=10)
+                p.paragraph_format.left_indent = Cm(0.5)
+            else:
+                # Paragraphe de prose : le gras **…** (intertitres en début de
+                # paragraphe) est rendu en gras réel au lieu d'être supprimé.
+                _add_markdown_runs(p, line, size=10)
+            p.paragraph_format.space_after = Pt(4)
 
-        # Champs utilisateur spécifiques au type (président CSE, nom projet, etc.)
+    def _section_synthese(self, doc: DocumentT, number: str) -> bool:
+        """Synthèse en SECTION AUTONOME (« résumé exécutif en premier ») — rendue
+        seulement si un ordre personnalisé la cite ET qu'une synthèse existe."""
+        summary = self._summary_text()
+        if not summary:
+            return False
+        self._section_heading(doc, number, "Synthèse")
+        self._render_synthese_body(doc, summary)
+        return True
+
+    def _section_champs_type(self, doc: DocumentT, number: str) -> bool:
+        """Champs du type en section autonome (ordre personnalisé)."""
+        if not self._has_type_specific_rows():
+            return False
+        self._section_heading(doc, number, "Informations spécifiques")
         self._section_type_specific(doc)
+        return True
+
+    def _has_type_specific_rows(self) -> bool:
+        ts = self.type_specific_data
+        return bool(ts) and any(v is not None and str(v).strip() for v in ts.values())
 
     # ── Section 1b : Données type-spécifiques (champs utilisateur) ──────────────
 
@@ -817,7 +863,6 @@ class DocxReport:
         Pour CSE : indicateur de quorum calculé automatiquement.
         """
         ts = self.type_specific_data
-        mt = self.meeting_type
         if not ts:
             return
 
@@ -826,42 +871,20 @@ class DocxReport:
         if not non_empty:
             return
 
-        # Labels par clé
-        LABELS: dict[str, str] = {
-            "president_seance": "Président de séance",
-            "secretaire_seance": "Secrétaire de séance",
-            "membres_presents": "Membres présents",
-            "membres_total": "Membres total",
-            "ref_pv_precedent": "Réf. PV précédent",
-            "objet_seance": "Objet de la séance",
-            "nom_projet": "Projet",
-            "phase_jalon": "Phase / Jalon",
-            "chef_de_projet": "Chef de projet",
-            "sprint": "Sprint",
-            "ordre_du_jour_items": "Ordre du jour",
-            "kpis": "KPIs présentés",
-            "nom_client": "Client",
-            "ref_contrat": "Référence contrat",
-            "periode_evaluee": "Période évaluée",
-            "poste_evalue": "Poste évalué",
-            "evaluateur": "Évaluateur",
-            "formateur": "Formateur",
-            "nb_participants_formation": "Nb participants",
-            "lieu_formation": "Lieu",
-            "nature_incident": "Nature incident",
-            "responsable_crise": "Responsable crise",
-            "thematique": "Thématique",
-            "nb_groupes": "Groupes de travail",
-            "objet_negociation": "Objet",
-            "parties": "Parties prenantes",
-        }
+        # Libellés courts par clé — depuis le catalogue (`short_label` sinon `label`),
+        # complétés par la fiche du type personnalisé du job le cas échéant ; une clé
+        # inconnue (donnée ancienne, type supprimé) garde le repli générique.
+        labels_by_key = dict(field_short_labels())
+        for field in self.custom_type.get("fields") or []:
+            if isinstance(field, dict) and field.get("key"):
+                labels_by_key[field["key"]] = str(field.get("short_label") or field.get("label") or field["key"])
 
         doc.add_paragraph()
         # Tableau compact sans bordures extérieures
         rows_data: list[tuple[str, str]] = []
 
         for key, val in non_empty.items():
-            label = LABELS.get(key, key.replace("_", " ").capitalize())
+            label = labels_by_key.get(key, key.replace("_", " ").capitalize())
             # Ordre du jour : chaque ligne → item
             if key == "ordre_du_jour_items":
                 for i, line in enumerate(str(val).splitlines()):
@@ -871,8 +894,8 @@ class DocxReport:
                 continue
             rows_data.append((label, str(val).strip()))
 
-        # Quorum CSE calculé
-        if mt in ("CSE", "CSE extraordinaire"):
+        # Quorum calculé (types à drapeau behavior.quorum)
+        if self.has_quorum:
             try:
                 presents = int(non_empty.get("membres_presents", 0))
                 total    = int(non_empty.get("membres_total", 0))
@@ -909,7 +932,7 @@ class DocxReport:
 
     # ── Section 1c : Données enrichies LLM (décisions, actions, votes…) ─────────
 
-    def _section_enriched(self, doc: DocumentT) -> int:
+    def _section_enriched(self, doc: DocumentT, start: int = 2) -> int:
         """Sections issues de l'extraction LLM structurée.
 
         Principe : **une donnée extraite n'est jamais cachée**. Toute section
@@ -922,7 +945,7 @@ class DocxReport:
         silencieuse (aucun placeholder).
         """
         sd = self.structured_data
-        section_num = 2  # numéro de section courant avant Participants
+        section_num = start  # numéro de la première section PV rendue
 
         def _as_str_items(val: Any) -> list[str]:
             # Défense : la structure canonique est une liste de chaînes, mais le JSON
@@ -944,6 +967,12 @@ class DocxReport:
             ("Points bloquants",     _as_str_items(sd.get("blocages"))),
             ("Points reportés",      _as_str_items(sd.get("reports"))),
         ]
+        # Champs d'extraction du type personnalisé (fiche matérialisée, lot D) —
+        # rendus APRÈS les blocs PV universels, même règle « non vide ⇒ affiché ».
+        for field in self.custom_type.get("extract_fields") or []:
+            if isinstance(field, dict) and field.get("key"):
+                label = str(field.get("label") or field["key"])
+                ordered.append((label, _as_str_items(sd.get(field["key"]))))
         shown: list[tuple[str, list[str]]] = [
             (label, items) for label, items in ordered if items
         ]
@@ -1238,7 +1267,9 @@ class DocxReport:
         r_accent.font.color.rgb = theme.accent
         r_accent.font.name = "Calibri"
 
-        r_info = p.add_run(f"TranscrIA  ·  {title}  ·  {date}  ·  Page ")
+        footer_text = str((self.custom_type.get("branding") or {}).get("footer_text") or "").strip()
+        prefix = f"{footer_text}  ·  " if footer_text else ""
+        r_info = p.add_run(f"{prefix}TranscrIA  ·  {title}  ·  {date}  ·  Page ")
         r_info.font.size = Pt(7.5)
         r_info.font.color.rgb = _GREY_DARK
         r_info.font.name = "Calibri"
@@ -1334,8 +1365,17 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
     except Exception:  # JSON corrompu = options par défaut, le rendu ne casse jamais
         render_options = {}
 
+    # Logo du type personnalisé, matérialisé dans le job à l'étape 4 (comme la fiche).
+    logo_bytes: bytes | None = None
+    logo_path = fs.job_dir / "context" / "type_logo.png"
+    if logo_path.is_file():
+        try:
+            logo_bytes = logo_path.read_bytes()
+        except OSError:
+            logo_bytes = None
+
     report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
-                        render_options=render_options)
+                        render_options=render_options, logo_bytes=logo_bytes)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

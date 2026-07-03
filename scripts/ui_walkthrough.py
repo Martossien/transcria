@@ -354,6 +354,35 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("page /result", False, str(exc)[:120])
 
+    def meeting_types_page(self) -> None:
+        # Types de réunion personnalisés (lot E) : galerie des 18 intégrés, éditeur
+        # duplicate-first, création réelle d'un type, retour en galerie. GPU-free.
+        try:
+            self.page.goto(f"{self.base}/meeting-types", wait_until="networkidle")
+            self.page.wait_for_selector(".mt-card", timeout=8000)
+            self.shot("20_meeting_types_galerie")
+            cards = self.page.locator(".mt-card").count()
+            self.check("types de réunion : galerie affichée (≥ 18 cartes)", cards >= 18, f"{cards} cartes")
+
+            # Dupliquer un intégré → l'éditeur s'ouvre avec l'aperçu vivant.
+            self.page.locator('[data-action="duplicate"]', has_text="Créer le mien").first.click()
+            self.page.wait_for_selector("#mt-editor:not(.d-none)", timeout=5000)
+            self.shot("21_meeting_types_editeur")
+            preview_ok = self.page.locator("#mt-cover-banner").is_visible()
+            self.check("types de réunion : éditeur + aperçu de couverture", preview_ok, self.page.url)
+
+            # Créer un type réel (nom unique) et le retrouver en galerie.
+            name = f"Walkthrough {int(time.time())}"
+            self.page.fill("#mt-name", name)
+            self.page.fill("#mt-banner", "COMPTE-RENDU — WALKTHROUGH")
+            self.page.click("#mt-save")
+            self.page.wait_for_selector("#mt-gallery:not(.d-none)", timeout=8000)
+            created = name in self.page.content()
+            self.check("types de réunion : création puis visible en galerie", created, name)
+            self.shot("22_meeting_types_cree")
+        except Exception as exc:  # noqa: BLE001
+            self.check("types de réunion", False, str(exc)[:120])
+
     def refine_chat_panel(self, job_id: str) -> None:
         # Chat d'affinage des livrables (GPU-free : AUCUN appel LLM ici) : le panneau
         # est présent sur /result, l'endpoint de polling répond, et les options de
@@ -458,6 +487,7 @@ def main() -> int:
             wt.voice_crud()
             wt.auth_flows()
             wt.ux_friendliness()
+            wt.meeting_types_page()
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)
                 wt.refine_chat_panel(args.result_job_id)
