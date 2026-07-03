@@ -845,3 +845,59 @@ class TestJobResultRobustness:
         r = admin_client.get(f"/jobs/{job_id}/result")
         assert r.status_code == 200
         assert "Terminé" in r.data.decode("utf-8")
+
+
+class TestLexiconPromote:
+    """Étape 6 : pousser une forme validée vers un lexique central (existant ou créé)."""
+
+    def _job(self, client):
+        r = client.post("/jobs/new", data={"title": "Promo lexique"})
+        return r.headers["Location"].rstrip("/").split("/")[-1]
+
+    def test_membre_simple_403(self, operator_client):
+        job_id = self._job(operator_client)
+        r = operator_client.post(f"/api/jobs/{job_id}/lexicon/promote", json={"term": "Emmental"})
+        assert r.status_code == 403
+
+    def test_creation_nouveau_lexique_et_entree(self, admin_client, app):
+        job_id = self._job(admin_client)
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            group_id = GroupStore.create_group("Fromagers", "").id
+        r = admin_client.post(f"/api/jobs/{job_id}/lexicon/promote", json={
+            "term": "Emmental", "variants": ["émental", "emental"],
+            "category": "mot suspect", "priority": "critique",
+            "new_lexicon_name": "Vocabulaire fromagerie", "group_id": group_id,
+        })
+        assert r.status_code == 200, r.get_json()
+        data = r.get_json()
+        assert data["created_lexicon"] is True
+        assert data["lexicon"]["name"] == "Vocabulaire fromagerie"
+        # l'entrée est bien dans le lexique central
+        with app.app_context():
+            from transcria.context.central_lexicon_models import GroupLexiconEntry
+            from transcria.database import db
+            entry = db.session.get(GroupLexiconEntry, data["entry_id"])
+            assert entry is not None and entry.term == "Emmental"
+            assert "émental" in entry.variants
+
+    def test_ajout_lexique_existant(self, admin_client, app):
+        job_id = self._job(admin_client)
+        with app.app_context():
+            from transcria.auth.groups import GroupStore
+            from transcria.auth.store import UserStore
+            from transcria.context.central_lexicon_store import CentralLexiconStore
+            group = GroupStore.create_group("Juristes", "")
+            actor = UserStore.get_by_username("admin")
+            lexicon = CentralLexiconStore.create_lexicon(actor, name="Termes juridiques", group_id=group.id)
+            lexicon_id = lexicon.id
+        r = admin_client.post(f"/api/jobs/{job_id}/lexicon/promote", json={
+            "term": "Jurisprudence", "lexicon_id": lexicon_id,
+        })
+        assert r.status_code == 200, r.get_json()
+        assert r.get_json()["created_lexicon"] is False
+
+    def test_terme_vide_400(self, admin_client):
+        job_id = self._job(admin_client)
+        r = admin_client.post(f"/api/jobs/{job_id}/lexicon/promote", json={"term": "  "})
+        assert r.status_code == 400

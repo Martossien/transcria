@@ -811,6 +811,10 @@
           </div>
         </details>
         {% endif %}
+        {% if promote_allowed %}
+        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme à un lexique central"
+                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i></button>
+        {% endif %}
         <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
       </div>
       {% endfor %}
@@ -1042,4 +1046,42 @@ window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meet
 })();
 </script>
 
+{% if promote_allowed %}
+<div class="modal fade" id="lex-promote-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title">Ajouter au lexique central</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2">Forme : <strong id="lex-promote-term"></strong></p>
+        {% if promote_lexicons %}
+        <label class="form-label small mb-1">Lexique existant</label>
+        <select class="form-select form-select-sm mb-2" id="lex-promote-select">
+          {% for lx in promote_lexicons %}
+          <option value="{{ lx.id }}">{{ lx.name }} ({{ lx.group_name }})</option>
+          {% endfor %}
+          <option value="">— Nouveau lexique… —</option>
+        </select>
+        {% endif %}
+        <div id="lex-promote-new" {% if promote_lexicons %}class="d-none"{% endif %}>
+          <label class="form-label small mb-1">Nom du nouveau lexique</label>
+          <input type="text" class="form-control form-control-sm mb-2" id="lex-promote-name" placeholder="Ex : Vocabulaire fromagerie">
+          {% if promote_groups|length > 1 %}
+          <label class="form-label small mb-1">Groupe</label>
+          <select class="form-select form-select-sm mb-2" id="lex-promote-group">
+            {% for g in promote_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        <div class="small text-danger d-none" id="lex-promote-error"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-sm btn-primary" onclick="TranscrIA.confirmPromoteLexicon()">Ajouter</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

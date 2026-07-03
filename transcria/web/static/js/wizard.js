@@ -192,6 +192,64 @@ var TranscrIA = window.TranscrIA || {};
         }
     };
 
+    var promoteRow = null;
+
+    W.openPromoteLexicon = function (btn) {
+        promoteRow = btn.closest('.lexicon-row');
+        var term = (promoteRow.querySelector('.lex-term') || {}).value || '';
+        if (!term.trim()) { alert('Renseignez d\'abord la forme validée.'); return; }
+        document.getElementById('lex-promote-term').textContent = term.trim();
+        document.getElementById('lex-promote-error').classList.add('d-none');
+        var sel = document.getElementById('lex-promote-select');
+        var newBox = document.getElementById('lex-promote-new');
+        if (sel) {
+            sel.onchange = function () { newBox.classList.toggle('d-none', sel.value !== ''); };
+            newBox.classList.toggle('d-none', sel.value !== '');
+        }
+        new bootstrap.Modal(document.getElementById('lex-promote-modal')).show();
+    };
+
+    W.confirmPromoteLexicon = function () {
+        if (!promoteRow) { return; }
+        var sel = document.getElementById('lex-promote-select');
+        var payload = {
+            term: (promoteRow.querySelector('.lex-term') || {}).value || '',
+            variants: ((promoteRow.querySelector('.lex-variants') || {}).value || '')
+                .split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+            category: (promoteRow.querySelector('.lex-cat') || {}).value || '',
+            priority: (promoteRow.querySelector('.lex-prio') || {}).value || 'normale'
+        };
+        if (sel && sel.value) {
+            payload.lexicon_id = sel.value;
+        } else {
+            payload.new_lexicon_name = (document.getElementById('lex-promote-name') || {}).value || '';
+            var grp = document.getElementById('lex-promote-group');
+            if (grp) { payload.group_id = grp.value; }
+        }
+        W.api('/api/jobs/' + JOB_ID + '/lexicon/promote', 'POST', payload).then(function (r) {
+            var err = document.getElementById('lex-promote-error');
+            if (r.status !== 200) {
+                err.textContent = (r.data && r.data.error) || 'Échec de l\'ajout.';
+                err.classList.remove('d-none');
+                return;
+            }
+            bootstrap.Modal.getInstance(document.getElementById('lex-promote-modal')).hide();
+            var badge = document.createElement('span');
+            badge.className = 'badge text-bg-success ms-1';
+            badge.textContent = '→ ' + r.data.lexicon.name + (r.data.created_lexicon ? ' (créé)' : '');
+            var btn = promoteRow.querySelector('.lex-promote');
+            if (btn) { btn.replaceWith(badge); } else { promoteRow.appendChild(badge); }
+            if (r.data.created_lexicon && document.getElementById('lex-promote-select')) {
+                var opt = document.createElement('option');
+                opt.value = r.data.lexicon.id;
+                opt.textContent = r.data.lexicon.name;
+                document.getElementById('lex-promote-select').insertBefore(
+                    opt, document.getElementById('lex-promote-select').lastElementChild);
+            }
+            promoteRow = null;
+        });
+    };
+
     W.saveContext = function () {
         console.log('[TranscrIA] saveContext()');
         var form = document.getElementById('context-form');
@@ -660,6 +718,9 @@ var TranscrIA = window.TranscrIA || {};
             '<script type="application/json" class="lex-contexts-json">[]</script>' +
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
             W.renderLexiconContexts(t.contexts || []) +
+            (document.getElementById('lex-promote-modal')
+                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme à un lexique central" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i></button>'
+                : '') +
             '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>';
         container.appendChild(row);
 

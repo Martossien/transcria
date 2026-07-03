@@ -1183,6 +1183,9 @@ def job_wizard(job_id: str):
         type_specific_fields_json=json.dumps(merged_type_fields, ensure_ascii=False),
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
+        promote_lexicons=_promote_lexicons_view(),
+        promote_groups=_promote_groups_view(),
+        promote_allowed=_promote_allowed(),
         voice_enrollment_enabled=bool(cfg.get("voice_enrollment", {}).get("enabled", False)),
         llm_timeout=int(
             cfg.get("workflow", {}).get("arbitration_llm", {}).get("timeout_seconds", 7200)
@@ -1518,6 +1521,90 @@ def api_participants(job_id: str):
     if job.state in (JobState.CONTEXT_DONE.value, JobState.SUMMARY_DONE.value):
         JobStore.update_state(job.id, JobState.PARTICIPANTS_DONE)
     return jsonify({"status": "ok"})
+
+
+def _promote_allowed() -> bool:
+    from transcria.context.central_lexicon_store import CentralLexiconStore
+    return CentralLexiconStore.can_manage_lexicons(current_user)
+
+
+def _promote_lexicons_view() -> list[dict]:
+    """Lexiques centraux que l'utilisateur courant peut ALIMENTER depuis l'étape 6."""
+    from transcria.context.central_lexicon_store import CentralLexiconStore
+    if not CentralLexiconStore.can_manage_lexicons(current_user):
+        return []
+    return [{"id": lx.id, "name": lx.name, "group_name": lx.group.name if lx.group else "global"}
+            for lx in CentralLexiconStore.list_manageable_lexicons(current_user)]
+
+
+def _promote_groups_view() -> list[dict]:
+    from transcria.auth.groups import GroupStore
+    from transcria.context.central_lexicon_store import CentralLexiconStore
+    if not CentralLexiconStore.can_manage_lexicons(current_user):
+        return []
+    return [{"id": g.id, "name": g.name} for g in GroupStore.list_for_admin(current_user)]
+
+
+@web_bp.route("/api/jobs/<job_id>/lexicon/promote", methods=["POST"])
+@login_required
+def api_lexicon_promote(job_id: str):
+    """Étape 6 : pousser une forme validée du lexique de SESSION vers un lexique
+    CENTRAL (existant ou créé à la volée) — même périmètre de droits que la gestion
+    des lexiques (admin de groupe / admin)."""
+    from transcria.context.central_lexicon_store import (
+        CentralLexiconAccessError,
+        CentralLexiconStore,
+        CentralLexiconValidationError,
+    )
+
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+    if not CentralLexiconStore.can_manage_lexicons(current_user):
+        return jsonify({"error": "Réservé aux administrateurs de lexiques."}), 403
+
+    data = request.get_json() or {}
+    term = str(data.get("term") or "").strip()
+    if not term:
+        return jsonify({"error": "La forme validée est vide."}), 400
+
+    created = False
+    try:
+        if data.get("lexicon_id"):
+            lexicon = CentralLexiconStore.get_manageable_lexicon(str(data["lexicon_id"]), current_user)
+            if lexicon is None:
+                return jsonify({"error": "Lexique introuvable ou non géré."}), 404
+        else:
+            name = str(data.get("new_lexicon_name") or "").strip()
+            if not name:
+                return jsonify({"error": "Choisissez un lexique existant ou nommez le nouveau."}), 400
+            groups = _promote_groups_view()
+            group_id = str(data.get("group_id") or "") or (groups[0]["id"] if len(groups) == 1 else "")
+            allow_global = current_user.has_role(Role.ADMIN)
+            if not group_id and not allow_global:
+                return jsonify({"error": "Précisez le groupe du nouveau lexique."}), 400
+            lexicon = CentralLexiconStore.create_lexicon(
+                current_user, name=name, group_id=group_id or None, allow_global=allow_global)
+            created = True
+            audit_log(AuditAction.LEXICON_CREATE, target_type="lexicon", target_id=lexicon.id, target_label=name)
+
+        entry = CentralLexiconStore.add_or_update_entry(
+            lexicon, current_user,
+            term=term,
+            variants=data.get("variants") or [],
+            category=str(data.get("category") or "mot suspect"),
+            priority=str(data.get("priority") or "normale"),
+            source="session_promote",
+        )
+    except CentralLexiconValidationError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except CentralLexiconAccessError as exc:
+        return jsonify({"error": str(exc)}), 403
+
+    audit_log(AuditAction.LEXICON_TERM_ADD, target_type="lexicon", target_id=lexicon.id,
+              target_label=lexicon.name, details={"term": term, "from_job": job.id})
+    return jsonify({"status": "ok", "lexicon": {"id": lexicon.id, "name": lexicon.name},
+                    "created_lexicon": created, "entry_id": entry.id})
 
 
 @web_bp.route("/api/jobs/<job_id>/lexicon", methods=["POST"])
