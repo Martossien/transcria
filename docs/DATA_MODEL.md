@@ -164,6 +164,28 @@ Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'or
 
 `voice_profiles.status` suit le cycle `processing → active → stale|disabled|archived|deleted`. Un profil `active` nécessite un consentement `active`. Les profils `archived` ne conservent pas `embedding_blob`.
 
+### Table `meeting_type_templates`
+
+Types de réunion personnalisés (cf. `docs/TYPES_REUNION_PERSONNALISES.md`). Les 18
+types intégrés vivent dans `transcria/data/meeting_types.yaml` (pas en base).
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK | UUID |
+| `slug` | String(80) | NOT NULL, index | Identité d'échange (dérivé du nom, jamais en collision avec un intégré) |
+| `name` | String(80) | NOT NULL, index | Libellé affiché (étape 4, DOCX) |
+| `definition_json` | Text | NOT NULL | La fiche complète (schéma du catalogue, validée) — SANS binaire |
+| `logo_blob` / `logo_mime` | LargeBinary / String(40) | nullable / NOT NULL | Logo re-encodé Pillow (branding local, jamais exporté) |
+| `scope` | String(10) | NOT NULL, index | `private` \| `group` \| `global` |
+| `group_id` | String(36) | FK groups, nullable | Groupe de partage (portée `group`) |
+| `created_by` | String(36) | FK users, NOT NULL | Créateur (quota `workflow.meeting_types.max_per_user`) |
+| `is_active` | Boolean | NOT NULL | `false` = importé « à relire » (galerie seulement, pas l'étape 4) |
+| `created_at` / `updated_at` | DateTime | NOT NULL | Horodatage |
+
+**La fiche du type choisi est MATÉRIALISÉE dans le job** (`meeting_context["custom_type"]`
++ `context/type_logo.png`) : le rendu ne résout jamais cette table — supprimer un type ne
+casse aucun traitement passé.
+
 ### Tables lexiques centralisés
 
 | Table | Rôle | Données sensibles |
@@ -416,7 +438,8 @@ jobs/<job_id>/
 │   ├── session_lexicon.json       # Lexique de session [{id, term, category, priority, replace_by, source, central_entry_id, ...}]
 │   ├── session_lexicon_filtered.json # Lexique réduit transmis à la correction LLM
 │   ├── session_lexicon.txt        # Lexique en texte (pour correction LLM)
-│   ├── render_options.json        # Options de rendu du rapport (thème, sections on/off, renumérotation) — chat d'affinage ou route directe sans LLM
+│   ├── render_options.json        # Options de rendu du rapport (thème, sections on/off + ORDRE) — chat d'affinage ou route directe sans LLM
+│   ├── type_logo.png               # Logo du type personnalisé, matérialisé à l'étape 4 (purgé au retour à un type intégré)
 │   ├── job_context.yaml           # Contexte complet assemblé par JobContextBuilder
 │   └── job_context.json           # Même contexte en JSON
 │
@@ -507,6 +530,7 @@ Le formulaire vierge de consentement est servi en PDF par `/admin/voices/consent
 | Export DOCX | `exports/rapport_<titre>.docx` | `DocxReport.build()` via `generate_docx_report()` — endpoint `GET /api/jobs/<id>/download/docx` |
 | Affinage (post-workflow, job terminé) | `refine/chat.json`, `refine/request.json` (consommé), `refine/versions/v<N>/` + `manifest.json` ; en `apply` : artefacts texte réécrits (`context/meeting_context.json`, `metadata/transcription_corrigee.srt`, `context/render_options.json`), ZIP rebuild best-effort | `WorkflowRunner.run_refine()` — `discuss` = `refine_llm.chat_completion()` (appel direct, lecture seule) ; `apply` = `OpenCodeRunner.run_refine()` (AgentWorkspace, snapshot AVANT write-back) ; entrée de file mode `refine` |
 | Affinage (options de rendu, sans LLM) | `context/render_options.json` | `POST /api/jobs/<id>/refine/render-options` (déterministe, instantané) |
+| Contexte (type personnalisé) | `meeting_context["custom_type"]` (fiche matérialisée) + `context/type_logo.png` | `POST /api/jobs/<id>/context` — validation contre le catalogue visible du propriétaire |
 
 `speakers/diarization_checkpoint.json` ne dépend pas seulement de l'audio et du
 modèle. Il contient aussi les contraintes locuteurs effectives

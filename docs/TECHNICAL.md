@@ -912,6 +912,23 @@ Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sa
 | `central_lexicon_routes.py` | Interface `/admin/lexicons`, stats, signaux RGPD/PSSI, import/export CSV et alertes qualité |
 | `lexicon_audit.py` | Résumés d'audit sans contenu brut : compteurs, catégories, priorités, sources et noms propres probables |
 
+**Types de réunion personnalisés** (`docs/TYPES_REUNION_PERSONNALISES.md`)
+| Module | Description |
+|---|---|
+| `meeting_type_catalog.py` | SOURCE UNIQUE en données : charge `transcria/data/meeting_types.yaml` (18 intégrés, fail-loud) et porte `validate_type_definition` — le contrat d'entrée des types personnalisés ET de l'import communautaire (bornes anti-injection : hex stricts, badge ≤ 16, ≤ 6 `extract_fields` avec instructions ≤ 200 sans guillemets/backticks/accolades) |
+| `meeting_type_models.py` | Table `meeting_type_templates` : fiche `definition_json` + portée `private/group/global` + logo binaire (colonnes séparées, jamais dans la fiche) |
+| `meeting_type_store.py` | RBAC (tout utilisateur crée en privé ; un admin de groupe liste et partage les privés de ses membres ; global = admin), quotas, collisions nom/slug interdites avec les intégrés, logo re-encodé Pillow, export/import (§8 du cadrage : import → privé + inactif « à relire », activé par édition-enregistrement) |
+| `meeting_type_routes.py` | Page `/meeting-types` + API `/api/meeting-types*` (CRUD, scope, logo, `preview.docx` sur données factices, export/import) |
+| `meeting_type_prompts.py` | Placeholders du prompt de résumé (`{{TYPES_REUNION}}`, `{{INDICES_TYPES}}`, `{{CHAMPS_EXTRACTION_TYPE}}`) — substitués à la construction de l'instruction, no-op strict sans placeholder |
+
+**Principe structurant** : la fiche du type choisi à l'étape 4 est **MATÉRIALISÉE dans le
+job** (`meeting_context["custom_type"]`, + `context/type_logo.png`) — le rendu DOCX et le
+worker ne résolvent jamais un template en base (pas d'ambiguïté entre deux privés
+homonymes, robuste en topologie split, suppression du template sans casse). Le rendu est
+un **registre de sections ordonnées** : `render_options.order` (par job, chat d'affinage)
+> `sections.order` de la fiche > ordre historique ; `contexte`/`pv` sont déplaçables mais
+jamais supprimables (« une donnée extraite n'est jamais cachée »).
+
 Le pré-remplissage de l'étape 6 utilise les lexiques globaux et les lexiques des groupes du propriétaire du job. `context/selected_lexicons.json` mémorise les lexiques cochés pour le job ; absent, tous les lexiques accessibles sont sélectionnés. `prefilter_lexicon_entries_for_display()` masque avant affichage les entrées centrales normales sans occurrence dans le transcript/résumé, tout en conservant les priorités `critique`/`importante`. Il ajoute `_display_reason` (`term_presence`, `variant_presence`, `priority`) pour expliquer dans l'UI pourquoi un terme est proposé. Une session déjà sauvegardée reste prioritaire et n'est pas écrasée. Avant correction, `WorkflowRunner.run_correction()` écrit `context/session_lexicon_filtered.json` : termes présents dans le SRT par forme ou variante, plus entrées `critique`/`importante` conservées en préservation.
 
 Traçabilité RGPD/PSSI : les routes lexiques journalisent création, modification, suppression, ajout/modification/suppression d'entrée, import, export CSV, changement de périmètre et rattachement au job. L'export CSV est volontairement déclenché en `POST` et peut être réservé aux admins globaux avec `security.lexicon_export_admin_only=true`. `details_json` ne contient jamais les termes, variantes ou commentaires en clair ; il contient uniquement volumes, catégories, priorités, sources, groupe/job et signaux `contains_probable_person_names`.
@@ -1159,6 +1176,15 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `/api/jobs/<id>/refine/chat` | GET | login_required + owner check | Endpoint de polling unique du panneau : tours, `busy`, versions, options de rendu et thèmes |
 | `/api/jobs/<id>/refine/render-options` | POST | login_required + owner check | Options de rendu du rapport (thème, sections) — déterministe, SANS LLM, instantané |
 | `/api/jobs/<id>/refine/revert` | POST | login_required + owner check | Restaure un snapshot `refine/versions/v<N>/` (les fichiers créés par l'apply sont supprimés) |
+| `/meeting-types` | GET | login_required | Page « Types de réunion » (galerie + éditeur) |
+| `/api/meeting-types` | GET, POST | login_required | Catalogue (intégrés + personnalisés visibles) / création d'un type PRIVÉ |
+| `/api/meeting-types/<id>` | PUT, DELETE | créateur ou admin de portée | Édition (active un import « à relire ») / suppression (les jobs passés gardent leur fiche matérialisée) |
+| `/api/meeting-types/<id>/scope` | POST | admin de groupe (ses groupes) / admin global | Partage : `private` ↔ `group` ↔ `global`, audité |
+| `/api/meeting-types/<id>/logo` | POST, DELETE | créateur ou admin de portée | Logo PNG/JPEG ≤ 500 Ko, re-encodé Pillow (600×200, EXIF supprimé) |
+| `/api/meeting-types/preview.docx` | POST | login_required | Word d'exemple de la fiche EN COURS D'ÉDITION (données factices, zéro GPU) |
+| `/api/meeting-types/<id>/preview.docx` | GET | type visible/géré | Word d'exemple d'un type enregistré (avec son logo) |
+| `/api/meeting-types/<id>/export` | GET | type visible/géré | Fichier d'échange `.transcria-type.json` (sans branding), audité |
+| `/api/meeting-types/import` | POST | login_required | Import → type privé INACTIF « à relire » (refus explicites : enveloppe/version/branding) |
 | `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
 | `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
 | `/api/queue/<id>/move-up` | POST | admin global ou admin de groupe sur périmètre | Remonte un job dans la file |
@@ -1179,6 +1205,7 @@ Le fichier contient les routes pages + API. Les routes liées aux jobs passent p
 | `change_password.html` | Formulaire changement de mot de passe utilisateur |
 | `index.html` | Accueil : liste des traitements + bouton nouveau |
 | `job_wizard.html` | Assistant 9 étapes avec formulaires interactifs (JS fetch API) |
+| `meeting_types.html` | « Mes types de réunion » : galerie de cartes (bandeau réel, pastilles de palette, portée), éditeur dupliquer-d'abord avec aperçu vivant de la page de garde (mini-A4, contraste vérifié), palettes dérivées des thèmes intégrés, sections réordonnables, partage, import/export — JS `static/js/meeting_types.js` |
 | `job_result.html` | Résultats & affinage : SRT (aperçu = version corrigée), qualité, exports, lien SRT Editor, **panneau du chat d'affinage** (fil de discussion, propositions applicables en un clic, versions restaurables, options de rendu, note « documents à jour ») — atteignable depuis l'étape Export du wizard et l'accueil |
 | `admin_config.html` | Éditeur YAML de configuration admin |
 | `users.html` | Liste des utilisateurs (admin) |

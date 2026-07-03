@@ -70,6 +70,8 @@ Pour une direction, TranscrIA apporte un cadre :
 
 Après le traitement, la page **Résultats & affinage** permet en outre de **dialoguer avec l'IA locale sur ces livrables** et d'appliquer des corrections versionnées et restaurables (cf. étape 10 du parcours ci-dessous).
 
+Le rapport Word s'adapte à **18 types de réunion intégrés** (CSE, CODIR, point projet, crise…) — et chaque utilisateur peut **créer les siens** depuis le menu « Types de réunion » : partir d'un type existant, ajuster couleurs, bannière, champs et ordre des sections, poser le logo de sa structure, vérifier le rendu sur un exemple Word avant d'enregistrer. Un administrateur partage ensuite le type à son équipe ; les types s'échangent aussi entre installations par fichier.
+
 ---
 
 ## Parcours Utilisateur Dans La WebUI

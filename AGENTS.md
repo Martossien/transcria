@@ -255,7 +255,7 @@ transcria/
     routes/                 # health, capabilities, engines (/engines/ensure), voice_embed, diarize
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
-    prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription
+    prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription ; summary porte {{TYPES_REUNION}}/{{INDICES_TYPES}}/{{CHAMPS_EXTRACTION_TYPE}} substitués à l'exécution
     lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
@@ -479,6 +479,35 @@ Post-workflow, sur la page **`/jobs/<id>/result`** d'un job TERMINÉ (tous profi
 - **`apply` = opencode dans un `AgentWorkspace`** (édition de fichiers sous garde-fous) : `_corrected_srt_integrity_error` réutilisé, JSON normalisé, `_sanitize_render_options`, **snapshot de version AVANT write-back** (`refine/versions/v<N>/` + manifeste mémorisant aussi les fichiers ABSENTS — le revert supprime les créés), restauration via API. **Périmètre par défaut = TOUS les livrables** : les prompts cadrent « la demande définit le CHANGEMENT, pas un fichier » — un terme corrigé l'est dans synthèse + SRT + structured de façon cohérente sauf restriction explicite. Best-effort intégral : tout échec = tour assistant explicatif, livrables intacts.
 
 Règles/pièges spécifiques : (1) chaque tour transite par la **file** (mode `refine` de `STEP_MODES`) — le job étant terminé, ses blobs `input/` sont purgés : le scheduler **dispatche `refine` SANS audio** (`_dispatch_iteration`, `audio_arg=""`) alors que tous les autres modes l'exigent (warning explicite sinon) ; (2) toute phase LLM réserve via **`try_reserve_llm`** (réparti multi-GPU), jamais `try_reserve` mono-GPU ; (3) le DOCX est régénéré à CHAQUE téléchargement et le ZIP rebuilt → le write-back suffit, mais l'UI doit le dire (note `#refine-fresh-note`, message de fin d'apply) sinon l'utilisateur croit ses fichiers périmés ; (4) les aperçus SRT à l'écran passent par `_effective_srt(fs)` (corrigé sinon brut — même préférence que `/download/srt`) ; (5) les **options de rendu** (`context/render_options.json` : thème, sections) ont une route directe SANS LLM (`POST /refine/render-options`, instantané). Réf. : `docs/TECHNICAL.md` (run_refine), `docs/CONFIG_REFERENCE.md` (`workflow.refine_chat`).
+
+### Types de réunion personnalisés (catalogue en données)
+Cf. `docs/TYPES_REUNION_PERSONNALISES.md` (cadrage + suivi des lots). Les 18 types du
+rapport Word sont de la **DONNÉE** (`transcria/data/meeting_types.yaml` — noms, champs,
+thèmes, drapeaux quorum/confidentiel, indices de détection, libellés courts DOCX), plus
+des types **personnalisés** en base (`meeting_type_templates`, modules
+`context/meeting_type_{catalog,models,store,routes,prompts}.py`) : tout utilisateur crée
+(privé), les **admins partagent** (groupe/global — décalque RBAC des lexiques
+centralisés). Règles pour tout agent de codage :
+1. **Aucun nom/thème/champ de type en dur** dans `meeting_context.py`/`docx_report.py`
+   (garde de test sur le source) — passer par `meeting_type_catalog` ; le validateur
+   `validate_type_definition` est le contrat d'entrée UNIQUE (création, import).
+2. **La fiche du type choisi est MATÉRIALISÉE dans le job** à l'étape 4
+   (`meeting_context["custom_type"]` + `context/type_logo.png`) : rendu/worker ne
+   résolvent JAMAIS un template en base (deux privés homonymes ne sont pas ambigus,
+   split-safe, suppression sans casse). Type inconnu au POST contexte → 400.
+3. **Rendu DOCX = registre de sections ordonnées** : `render_options.order` (job) >
+   `sections.order` (fiche) > ordre historique ; `contexte`/`pv` déplaçables, jamais
+   supprimables (« une donnée extraite n'est jamais cachée ») ; défaut = rendu
+   historique au pixel (fixtures de non-régression dans `test_docx_section_registry.py`).
+4. **Prompt de résumé** : la liste des types et les indices ne sont PLUS en dur — trois
+   placeholders substitués par `OpenCodeRunner._materialize_prompt` (copie résolue dans
+   le scratch ; prompt admin sans placeholder = no-op). Les `extract_fields` d'un type
+   (bornés, anti-injection) s'injectent aux RELANCES + relecture finale et traversent
+   le parseur via `extra_keys` (niveaux 1 ET 2) — la normalisation par liste blanche
+   les filtrerait sinon.
+5. **Échange** : export sans branding (logo/pied de page = local) ; import → privé
+   INACTIF « à relire » (activé par édition-enregistrement) ; `community/meeting-types/`
+   = contributions par PR, chaque fichier validé par un test CI.
 
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.

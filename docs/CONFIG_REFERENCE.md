@@ -1000,6 +1000,19 @@ options de rendu seules disposent d'une route directe **sans LLM**
 
 **Redémarrage requis :** non. **Prérequis :** `arbitration_llm.enabled: true` (sinon tours « assistant indisponible »).
 
+#### `workflow.meeting_types`
+
+Types de réunion personnalisés (cf. `docs/TYPES_REUNION_PERSONNALISES.md`) : tout
+utilisateur crée des types privés depuis la page « Types de réunion » ; les admins les
+partagent (groupe/global). Les 18 types intégrés vivent dans
+`transcria/data/meeting_types.yaml` (non modifiables, duplicables).
+
+| Clé | Type | Défaut | Description |
+|---|---|---|---|
+| `max_per_user` | int | `20` | Nombre max de types créés par utilisateur (toutes portées confondues) |
+
+**Redémarrage requis :** non.
+
 ---
 
 ### `security`
