@@ -17,6 +17,17 @@ que l'outil externe ne fermait jamais : les corrections alimentent directement l
 livrables.
 
 ### Added
+- **Ajout au lexique central depuis l'étape 6** : chaque forme validée du lexique de
+  session porte un bouton « Ajouter à un lexique central » (existant ou créé à la
+  volée, groupe choisi si nécessaire) — réservé aux gestionnaires de lexiques ;
+  l'admin global peut créer un lexique global. Le vocabulaire validé en réunion
+  alimente ainsi le patrimoine du groupe sans ressaisie.
+- **« Signaler sans corriger »** : le rapport qualité détecte les formes incohérentes
+  HORS glossaire (ex. émental/emental — accents/orthographe, la casse de début de
+  phrase est ignorée) et les remonte en points à vérifier **ancrés** : un clic dans
+  l'éditeur lance la recherche sur la forme à trancher. Détection déterministe,
+  aucune correction automatique — le périmètre de la relecture finale reste le
+  glossaire validé.
 - **Éditeur de transcription intégré** (`/jobs/<id>/editor`, cadrage
   `docs/EDITEUR_SRT_INTEGRE.md`) : correction du texte, des locuteurs, du découpage et
   des timings SANS quitter TranscrIA — le SRT édité alimente directement les livrables
@@ -30,6 +41,13 @@ livrables.
   (stats locuteurs et mapping recalculés et versionnés ensemble — le tableau des
   participants du Word reste juste). Mode dégradé sans audio de première classe.
   Statiques servis avec cache-busting (fini les CSS/JS périmés après mise à jour).
+
+### Fixed
+- **Le résumé édité à l'étape 4 n'atteignait que le rapport Word** : le
+  `summary/summary.md` du package ZIP restait la sortie LLM brute. Le package embarque
+  désormais le résumé EFFECTIF (édition manuelle, sinon synthèse harmonisée, greffée
+  dans la structure markdown) — le fichier interne reste la référence brute des
+  phases aval.
 
 ### Removed
 - **Lien vers le fork externe « SRT Editor EASY »** (bouton, envoi de fichiers, route

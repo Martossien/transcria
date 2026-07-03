@@ -43,6 +43,12 @@ class ReviewPoints:
                 for item in check.get("close_forms", [])[:5]:
                     detail_items.append(f"{item.get('form')} proche de {item.get('term')}")
                 points.append(f"Variantes lexique non résolues : {', '.join(detail_items)}")
+            elif ctype == "inconsistent_word_forms":
+                examples = ", ".join("/".join(g.get("forms", [])) for g in check.get("groups", [])[:5])
+                points.append(
+                    f"Formes incohérentes hors glossaire : {count} — signalées sans correction "
+                    f"automatique ({examples})."
+                )
             elif ctype == "low_coverage":
                 ratio = check.get("ratio", 0)
                 points.append(f"Couverture faible : {ratio:.0%} — possible perte de transcription.")
@@ -83,6 +89,20 @@ class ReviewPoints:
                         "start_ms": start_ms,
                         "end_ms": end_ms,
                     })
+            elif ctype == "inconsistent_word_forms":
+                for group in check.get("groups", [])[:10]:
+                    forms = group.get("forms", [])
+                    if len(forms) >= 2:
+                        anchors.append({"kind": "search",
+                                        "text": f"Forme incohérente : {' / '.join(forms)} (à trancher)",
+                                        "query": forms[1]})
+            elif ctype == "inconsistent_word_forms":
+                for group in check.get("groups", [])[:10]:
+                    forms = group.get("forms", [])
+                    if len(forms) >= 2:
+                        anchors.append({"kind": "search",
+                                        "text": f"Forme incohérente : {' / '.join(forms)} (à trancher)",
+                                        "query": forms[1]})
             elif ctype == "unresolved_lexicon_variants":
                 for item in check.get("exact_variants", [])[:10]:
                     variant = str(item.get("variant") or "").strip()

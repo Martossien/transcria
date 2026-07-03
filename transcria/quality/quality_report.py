@@ -270,6 +270,25 @@ class QualityReporter:
             )
             warnings += len(missing_corrected)
 
+        # 7ter. Formes incohérentes HORS glossaire — SIGNALÉES sans correction
+        # (périmètre tranché : la relecture finale ne corrige que le glossaire validé ;
+        # les mots ordinaires écrits de plusieurs façons — ex. émental/emental — sont
+        # remontés à l'humain, jamais touchés). Détection déterministe, zéro LLM.
+        total_checks += 1
+        inconsistent = self._find_inconsistent_word_forms(corrected_srt, lexicon)
+        if inconsistent:
+            checks.append({
+                "type": "inconsistent_word_forms",
+                "count": len(inconsistent),
+                "groups": inconsistent,
+                "severity": "info",
+            })
+            detail = ", ".join("/".join(g["forms"]) for g in inconsistent[:5])
+            review_points.append(
+                f"Formes incohérentes hors glossaire : {len(inconsistent)} — signalées sans "
+                f"correction automatique ({detail})."
+            )
+
         # 7bis. Variantes lexique non résolues après correction
         total_checks += 1
         unresolved = LexiconChecker.find_unresolved_terms(corrected_srt, lexicon)
@@ -693,6 +712,51 @@ class QualityReporter:
             if check.get("type") == check_type:
                 return check
         return None
+
+    @staticmethod
+    def _find_inconsistent_word_forms(srt_text: str, lexicon: list) -> list[dict]:
+        """Groupes de formes d'un MÊME mot qui coexistent dans le SRT final
+        (différence d'accent/orthographe, pas de casse pure — la majuscule de début
+        de phrase n'est pas une incohérence). Les termes du glossaire validé sont
+        exclus : eux ont déjà leur circuit de correction."""
+        import re as _re
+        import unicodedata
+
+        def _fold(word: str) -> str:
+            return "".join(ch for ch in unicodedata.normalize("NFD", word.lower())
+                           if unicodedata.category(ch) != "Mn")
+
+        glossary_folded: set[str] = set()
+        for t in lexicon or []:
+            for value in [t.get("term", ""), t.get("replace_by", ""), *(t.get("variants") or [])]:
+                if value and isinstance(value, str):
+                    glossary_folded.add(_fold(value.strip()))
+
+        text_lines = [line for line in srt_text.splitlines()
+                      if line and "-->" not in line and not line.strip().isdigit()]
+        groups: dict[str, dict[str, int]] = {}
+        for line in text_lines:
+            for word in _re.findall(r"[A-Za-zÀ-ÿ][a-zà-ÿA-Z\-]{3,}", line):
+                folded = _fold(word)
+                if folded in glossary_folded:
+                    continue
+                groups.setdefault(folded, {})
+                lowered = word.lower()   # la casse pure ne compte pas comme incohérence
+                groups[folded][lowered] = groups[folded].get(lowered, 0) + 1
+
+        found = []
+        for folded, forms in groups.items():
+            if len(forms) < 2:
+                continue
+            total = sum(forms.values())
+            if total < 2:
+                continue
+            found.append({
+                "forms": sorted(forms, key=lambda f: -forms[f]),
+                "occurrences": total,
+            })
+        found.sort(key=lambda g: -int(g["occurrences"]))
+        return found[:10]
 
     @classmethod
     def _format_audio_problem_segment(cls, segment: dict) -> dict:
