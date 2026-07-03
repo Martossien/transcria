@@ -203,11 +203,12 @@ jobs:
           export TRANSCRIA_CONFIG="$WORK/config.yaml"
           export TRANSCRIA_DATABASE_URL="sqlite:///$WORK/app.db"
 
-          # Seed un job terminé AVANT le serveur (pas d'accès SQLite concurrent) pour
-          # couvrir la page /result sans GPU.
-          python scripts/seed_completed_job.py --id-file "$WORK/job_id.txt"
-          JOB_ID="$(cat "$WORK/job_id.txt")"
-          echo "Job terminé seedé : $JOB_ID"
+          # Seed le JEU DE DÉMONSTRATION complet AVANT le serveur (pas d'accès SQLite
+          # concurrent) : job terminé pour /result + comptes/groupes/lexiques/jobs
+          # multi-états → plongée par ÉTATS + parcours par RÔLE (C0.1, RELEASE_0.2.0).
+          python scripts/seed_demo_dataset.py --ids-file "$WORK/demo_ids.json"
+          JOB_ID="$(python -c "import json; print(json.load(open('$WORK/demo_ids.json'))['result_job_id'])")"
+          echo "Jeu de démo seedé (job résultat : $JOB_ID)"
 
           python app.py --port 7899 --host 127.0.0.1 --no-debug > "$WORK/server.log" 2>&1 &
           SERVER_PID=$!
@@ -221,8 +222,16 @@ jobs:
           set +e
           python scripts/ui_walkthrough.py --base-url http://127.0.0.1:7899 \
             --user admin --password walkthrough-admin-pw --out "$WORK/shots" \
-            --result-job-id "$JOB_ID"
+            --result-job-id "$JOB_ID" --demo-ids "$WORK/demo_ids.json"
           STATUS=$?
+
+          # Banc fuzz formulaires (C0.2) : valeurs aux limites sur chaque formulaire/API —
+          # oracle : jamais de 500, rejets 4xx JSON propres, serveur vivant après chaque salve.
+          if [ "$STATUS" -eq 0 ]; then
+            python scripts/form_fuzz.py --base-url http://127.0.0.1:7899 \
+              --user admin --password walkthrough-admin-pw --demo-ids "$WORK/demo_ids.json"
+            STATUS=$?
+          fi
           set -e
           kill "$SERVER_PID" 2>/dev/null || true
           if [ "$STATUS" -ne 0 ]; then echo "::error::échec du walkthrough UI (voir les captures en artefact)"; cat "$WORK/server.log"; fi

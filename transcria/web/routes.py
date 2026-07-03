@@ -1436,7 +1436,10 @@ def api_speaker_hint(job_id: str):
     if error_response:
         return error_response
 
-    hint = _normalize_speaker_hint(request.get_json() or {})
+    body, err = _json_body(dict)
+    if err:
+        return err
+    hint = _normalize_speaker_hint(body)
     JobStore.update_extra_data(job.id, lambda extra: {**extra, "speaker_hint": hint})
     return jsonify({"status": "ok", "speaker_hint": hint})
 
@@ -1456,7 +1459,10 @@ def api_meeting_invite(job_id: str):
     if error_response:
         return error_response
 
-    raw = (request.get_json() or {}).get("text", "")
+    body, err = _json_body(dict)
+    if err:
+        return err
+    raw = body.get("text", "")
     invite = sanitize_invite(raw if isinstance(raw, str) else "")
     JobStore.update_extra_data(job.id, lambda extra: {**extra, "meeting_invite": invite})
     return jsonify({"status": "ok", "names": invite["names"]})
@@ -1470,7 +1476,9 @@ def api_context(job_id: str):
     if error_response:
         return error_response
 
-    data = request.get_json() or {}
+    data, _json_err = _json_body(dict)
+    if _json_err:
+        return _json_err
     # Type de réunion : validé contre le catalogue visible du PROPRIÉTAIRE (intégrés +
     # personnalisés). Un type personnalisé est MATÉRIALISÉ dans le job (sa fiche complète,
     # sans binaire) : le rendu et le worker n'ont jamais à résoudre un template en base —
@@ -1515,12 +1523,31 @@ def api_participants(job_id: str):
     if error_response:
         return error_response
 
-    data = request.get_json() or []
+    data, _json_err = _json_body(list)
+    if _json_err:
+        return _json_err
     ParticipantsManager.save(job, cfg["storage"]["jobs_dir"], data)
     audit_log(AuditAction.JOB_PARTICIPANTS_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     if job.state in (JobState.CONTEXT_DONE.value, JobState.SUMMARY_DONE.value):
         JobStore.update_state(job.id, JobState.PARTICIPANTS_DONE)
     return jsonify({"status": "ok"})
+
+
+def _json_body(expected: type):
+    """Corps JSON d'une API, TYPÉ et tolérant (banc fuzz C0.2).
+
+    - corps absent / null / JSON invalide → valeur vide du type attendu (comportement
+      historique de ``request.get_json() or {}``), jamais de page HTML 400 ;
+    - corps du MAUVAIS type racine (ex. une chaîne) → (None, 400 JSON propre) au lieu
+      d'un AttributeError 500 sur ``data.get``.
+    """
+    data = request.get_json(silent=True)
+    if data is None:
+        return (expected(), None)
+    if not isinstance(data, expected):
+        attendu = "objet" if expected is dict else "liste"
+        return (None, (jsonify({"error": f"Corps JSON invalide : {attendu} attendu."}), 400))
+    return (data, None)
 
 
 def _promote_allowed() -> bool:
@@ -1563,7 +1590,9 @@ def api_lexicon_promote(job_id: str):
     if not CentralLexiconStore.can_manage_lexicons(current_user):
         return jsonify({"error": "Réservé aux administrateurs de lexiques."}), 403
 
-    data = request.get_json() or {}
+    data, _json_err = _json_body(dict)
+    if _json_err:
+        return _json_err
     term = str(data.get("term") or "").strip()
     if not term:
         return jsonify({"error": "La forme validée est vide."}), 400
@@ -1622,7 +1651,9 @@ def api_lexicon(job_id: str):
         saved_terms = LexiconManager.import_from_file(job, cfg["storage"]["jobs_dir"], text)
         audit_source = "text_import"
     else:
-        data = request.get_json() or []
+        data, _json_err = _json_body(list)
+        if _json_err:
+            return _json_err
         saved_terms = LexiconManager.save(job, cfg["storage"]["jobs_dir"], data)
         input_summary = {}
         audit_source = "json"
@@ -1911,7 +1942,9 @@ def api_speakers_map(job_id: str):
     if error_response:
         return error_response
 
-    mapping = request.get_json() or {}
+    mapping, _json_err = _json_body(dict)
+    if _json_err:
+        return _json_err
     from transcria.stt.speaker_detection import SpeakerDetector
     from transcria.workflow.runner import WorkflowRunner
 

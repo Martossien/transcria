@@ -70,6 +70,32 @@ venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3  # Autre fich
 # black n'est PAS utilisé. Respecte le style du fichier que tu modifies.
 ```
 
+## Gates de vérification (rituel obligatoire avant de déclarer « fini »)
+
+Leçons durement acquises (beta.8/beta.9), NON négociables :
+
+```bash
+# Les commandes EXACTES de la CI, sur l'ARBRE ENTIER (jamais une version ciblée) :
+set -o pipefail   # OBLIGATOIRE : `mypy … | tail -1` a déjà laissé passer une CI rouge
+venv/bin/python -m ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
+venv/bin/python -m mypy transcria/ inference_service/ --ignore-missing-imports
+venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75
+```
+
+1. **Jamais de pipe qui masque un code de sortie** sur un gate (`cmd | tail` → l'échec
+   devient invisible). `set -o pipefail` ou pas de pipe du tout.
+2. **UI : piloter ET voir.** Un banc Playwright de GESTES réels (pas des GET), puis
+   **revue visuelle de chaque capture** — la revue attrape ce que les assertions ratent
+   (7 vrais défauts attrapés ainsi sur l'éditeur SRT en une semaine).
+3. **Tests aux limites** sur tout champ nouveau : vide / 1 car. / très long / unicode
+   exotique / type incorrect. Oracle : jamais de 500, message FR qui guide.
+4. **E2E GPU réel** pour tout ce qui touche le pipeline (instance jetable, config de
+   prod copiée en scratch, PG jetable) — le mock ne prouve rien sur les phases LLM.
+5. **Instance de banc ≠ instance de prod** : port dédié (7899/7901), `TRANSCRIA_CONFIG`
+   scratch, kill par `lsof -ti tcp:PORT | xargs -r kill` (JAMAIS pkill par motif).
+6. Après modification de code Python : **redémarrer le serveur de banc** (les templates
+   rechargent à chaud, pas les routes).
+
 ## Stack technique
 
 - **Python 3.11+** avec annotations de type (`type | None`, pas `Optional`)

@@ -416,6 +416,90 @@ class Walkthrough:
         except Exception as exc:  # noqa: BLE001
             self.check("éditeur de transcription", False, str(exc)[:120])
 
+    def states_deep_dive(self, ids: dict) -> None:
+        """C0.1 (RELEASE_0.2.0 §2) : assertions de FOND sur données seedées — les pages
+        admin passent de « marqueur de contenu » à « contenu attendu par état »."""
+        # File d'attente : la file ne liste que les jobs EN FILE (pas tous les jobs) —
+        # l'état couvert ici est donc la FILE VIDE avec ses compteurs lisibles.
+        self.page.goto(f"{self.base}/admin/queue", wait_until="networkidle")
+        body = self.page.content()
+        self.check("file : état vide lisible (compteurs à 0)", "En attente" in body and "En cours" in body)
+        raw_states = [s for s in ("summary_done", "ready_to_process", "lexicon_done") if s in body]
+        self.check("file : aucun état brut affiché", not raw_states, ", ".join(raw_states))
+        self.shot("30_queue_vide")
+
+        # Utilisateurs : les 4 comptes rendus avec leur RÔLE lisible.
+        self.page.goto(f"{self.base}/admin/users", wait_until="networkidle")
+        body = self.page.content()
+        self.check("users : comptes seedés + rôles rendus",
+                   all(u in body for u in ("demo-lectrice", "demo-operateur", "demo-gestionnaire")))
+        self.shot("31_users_peuples")
+
+        # Groupes : les 2 groupes avec nombre de membres.
+        self.page.goto(f"{self.base}/admin/groups", wait_until="networkidle")
+        body = self.page.content()
+        self.check("groupes : Direction + Secrétariat rendus",
+                   "Direction" in body and "Secrétariat" in body)
+        self.shot("32_groupes_peuples")
+
+        # Lexiques centraux : 2 lexiques, compte d'entrées visible.
+        self.page.goto(f"{self.base}/admin/lexicons", wait_until="networkidle")
+        body = self.page.content()
+        self.check("lexiques : les 2 lexiques seedés rendus",
+                   "Vocabulaire interne" in body and "Termes financiers" in body)
+        self.shot("33_lexiques_peuples")
+
+        # Audit : des événements réels sont rendus (pas un tableau vide).
+        self.page.goto(f"{self.base}/admin/audit", wait_until="networkidle")
+        body = self.page.content()
+        self.check("audit : événements seedés rendus (création utilisateur/groupe)",
+                   "demo-operateur" in body or "user_create" in body or "Création" in body)
+        self.shot("34_audit_peuple")
+
+        # Accueil : la liste des jobs montre des ÉTATS FRANÇAIS variés.
+        self.page.goto(f"{self.base}/", wait_until="networkidle")
+        body = self.page.content()
+        self.check("accueil : jobs multi-états rendus",
+                   "Négociation fournisseur" in body or "Réunion client Nord" in body)
+        self.check("accueil : aucun état brut", "ready_to_process" not in body and "summary_done" not in body)
+        self.shot("35_accueil_peuple")
+
+        # Types de réunion : le type personnalisé seedé apparaît dans la galerie.
+        self.page.goto(f"{self.base}/meeting-types", wait_until="networkidle")
+        self.check("types : le type démo personnalisé est rendu",
+                   "Réunion démo qualité" in self.page.content())
+
+    def _logout(self) -> None:
+        # /logout est POST-only (anti-CSRF de déconnexion) : on passe par le formulaire.
+        self.page.goto(f"{self.base}/", wait_until="networkidle")
+        self.page.evaluate("document.querySelector('form[action=\"/logout\"]').submit()")
+        self.page.wait_for_url("**/login*", timeout=8000)
+
+    def role_walkthroughs(self) -> None:
+        """C0.1 : les pages vues À TRAVERS chaque rôle (pas seulement l'admin)."""
+        # Lectrice (VIEWER) : lecture seule — l'admin est interdit, l'accueil lisible.
+        self._logout()
+        self.login("demo-lectrice", "walkthrough-demo-pw")
+        resp = self.page.goto(f"{self.base}/admin/users", wait_until="networkidle")
+        self.check("lectrice : /admin/users interdit", resp is not None and resp.status == 403)
+        self.page.goto(f"{self.base}/", wait_until="networkidle")
+        self.check("lectrice : accueil accessible", "Déconnexion" in self.page.content())
+        self.shot("36_role_lectrice")
+
+        # Opérateur : peut créer un job, pas d'administration.
+        self._logout()
+        self.login("demo-operateur", "walkthrough-demo-pw")
+        resp = self.page.goto(f"{self.base}/admin/config", wait_until="networkidle")
+        self.check("opérateur : /admin/config interdit", resp is not None and resp.status == 403)
+        self.page.goto(f"{self.base}/", wait_until="networkidle")
+        body = self.page.content()
+        self.check("opérateur : création de job proposée", "Nouveau" in body or "nouveau traitement" in body.lower())
+        self.shot("37_role_operateur")
+
+        # Retour admin pour la suite du parcours.
+        self._logout()
+        self.login("admin", self.admin_password)
+
     def refine_chat_panel(self, job_id: str) -> None:
         # Chat d'affinage des livrables (GPU-free : AUCUN appel LLM ici) : le panneau
         # est présent sur /result, l'endpoint de polling répond, et les options de
@@ -502,6 +586,7 @@ def main() -> int:
     parser.add_argument("--password", required=True)
     parser.add_argument("--out", default="/tmp/ui_walkthrough")
     parser.add_argument("--result-job-id", default=None, help="id d'un job terminé seedé → couvre /jobs/<id>/result")
+    parser.add_argument("--demo-ids", default=None, help="JSON de seed_demo_dataset.py → plongée par états + parcours par rôle")
     args = parser.parse_args()
 
     out = Path(args.out)
@@ -512,6 +597,7 @@ def main() -> int:
         page = browser.new_page()
         wt = Walkthrough(page, args.base_url, out)
         try:
+            wt.admin_password = args.password
             wt.login(args.user, args.password)
             wt.create_job_and_open_wizard()
             wt.config_editor()
@@ -521,6 +607,11 @@ def main() -> int:
             wt.auth_flows()
             wt.ux_friendliness()
             wt.meeting_types_page()
+            if args.demo_ids:
+                import json as _json
+                _ids = _json.loads(Path(args.demo_ids).read_text(encoding="utf-8"))
+                wt.states_deep_dive(_ids)
+                wt.role_walkthroughs()
             if args.result_job_id:
                 wt.job_result_page(args.result_job_id)
                 wt.refine_chat_panel(args.result_job_id)
