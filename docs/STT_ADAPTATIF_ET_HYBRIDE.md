@@ -59,7 +59,6 @@ Sortie → `metadata/audio_quality_decision.json` :
 | `scripts/compare_stt_segments.py` | Comparaison alignée dans le temps de plusieurs sorties STT |
 | `scripts/arbitrate_hybrid_llm.py` | Arbitrage LLM segment par segment entre 3 sorties STT |
 | `scripts/build_hybrid_transcript.py` | Reconstruction d'un transcript hybride |
-| `scripts/prepare_hybrid_llm_bench.py` | Préparation d'une campagne d'arbitrage A/B/C |
 
 Ces scripts font déjà, **hors pipeline**, ce que le mode hybride doit faire **dans** le pipeline. L'enjeu est l'intégration, pas l'invention.
 

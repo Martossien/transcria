@@ -49,83 +49,6 @@ def test_compare_stt_segments_builds_time_aligned_recommendations(tmp_path):
     assert report["interval_count"] == 3
     assert report["recommendation_counts"]["whisper"] >= 1
     assert report["rows"][1]["whisper"]["term_hits"] == ["terme critique"]
-
-
-def test_prepare_hotwords_bench_generates_baseline_and_hotwords_commands(tmp_path):
-    module = _load_script("prepare_hotwords_bench.py")
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    (audio_dir / "test file.mp3").write_bytes(b"fake")
-
-    cases = module.discover_audio_files([audio_dir])
-    assert len(cases) == 1
-    assert cases[0].slug == "test-file"
-
-    class Args:
-        audio_root = [audio_dir]
-        output_dir = tmp_path / "out"
-        mode = "fast"
-        keep = True
-        skip_llm = False
-        skip_summary = False
-        skip_diarization = True
-        lexicon_json = None
-        limit = None
-        gpus = "3,5"
-        max_parallel = None
-
-    manifest = module.build_manifest(Args)
-
-    assert manifest["audio_count"] == 1
-    assert manifest["run_count"] == 2
-    variants = {run["variant"] for run in manifest["runs"]}
-    assert variants == {"baseline", "hotwords"}
-    hotwords_run = next(run for run in manifest["runs"] if run["variant"] == "hotwords")
-    assert "--enable-whisper-lexicon-hotwords" in hotwords_run["command"]
-    assert manifest["max_parallel"] == 2
-
-    shell = tmp_path / "run.sh"
-    module.write_shell(manifest, shell, parallel=True)
-    content = shell.read_text(encoding="utf-8")
-    assert "max_parallel=2" in content
-    assert "wait -n" in content
-    assert "failures=$((failures + 1))" in content
-
-
-def test_prepare_hybrid_llm_bench_generates_three_speaker_runs(tmp_path):
-    module = _load_script("prepare_hybrid_llm_bench.py")
-    audio_dir = tmp_path / "audio"
-    audio_dir.mkdir()
-    audio = audio_dir / "réunion test.wav"
-    audio.write_bytes(b"fake")
-    lexicon = tmp_path / "lexicon.json"
-    lexicon.write_text('[{"term": "Terme critique", "priority": "critique"}]', encoding="utf-8")
-
-    class Args:
-        audio_root = [audio_dir]
-        output_dir = tmp_path / "out"
-        mode = "fast"
-        whisper_model_size = "large-v3"
-        gpus = "2,3"
-        max_parallel = None
-        limit = None
-        lexicon_json = lexicon
-        enable_cohere_lexicon_biasing = False
-        config_override = []
-
-    manifest = module.build_manifest(Args)
-
-    assert manifest["run_count"] == 3
-    assert manifest["with_speakers"] is True
-    assert manifest["llm_in_e2e"] is False
-    variants = {run["variant"] for run in manifest["runs"]}
-    assert variants == {"A-cohere", "B-whisper", "C-whisper-hotwords"}
-    assert all("--skip-llm" in run["command"] for run in manifest["runs"])
-    assert all("--skip-diarization" not in run["command"] for run in manifest["runs"])
-    hotwords = next(run for run in manifest["runs"] if run["variant"] == "C-whisper-hotwords")
-    assert "--enable-whisper-lexicon-hotwords" in hotwords["command"]
-
-
 def test_bench_audio_passes_physical_gpu_without_cuda_visible_mask(tmp_path, monkeypatch):
     module = _load_script("bench_audio.py")
     args = SimpleNamespace(
@@ -314,62 +237,6 @@ def test_arbitrate_hybrid_llm_candidate_accepts_e2e_result_json(tmp_path):
     assert candidate.code == "A"
     assert candidate.label == "cohere"
     assert candidate.job_id == "abc-123"
-
-
-def test_analyze_hotwords_bench_pairs_results_and_deltas(tmp_path):
-    module = _load_script("analyze_hotwords_bench.py")
-    results = tmp_path / "results"
-    results.mkdir()
-    baseline_job = tmp_path / "job_base"
-    hotwords_job = tmp_path / "job_hot"
-    for job_dir, score, warnings in ((baseline_job, 80, 2), (hotwords_job, 85, 1)):
-        (job_dir / "metadata").mkdir(parents=True)
-        (job_dir / "quality").mkdir()
-        (job_dir / "metadata" / "transcription.srt").write_text("Terme critique présent", encoding="utf-8")
-        (job_dir / "quality" / "quality_report.json").write_text(
-            f'{{"quality_score": {score}, "warnings": {warnings}}}',
-            encoding="utf-8",
-        )
-
-    common = {
-        "audio_path": "/tmp/audio.wav",
-        "status": "ok",
-        "errors": [],
-        "timings": {"pipeline_s": 10.0},
-        "srt": {"raw_segments": 2, "raw_words": 3},
-        "segment_reliability_counts": {"ok": 2},
-    }
-    (results / "sample-whisper-baseline.json").write_text(
-        __import__("json").dumps({
-            **common,
-            "combo_id": "sample-whisper-baseline",
-            "job_id": "base",
-            "job_dir": str(baseline_job),
-        }),
-        encoding="utf-8",
-    )
-    (results / "sample-whisper-hotwords.json").write_text(
-        __import__("json").dumps({
-            **common,
-            "combo_id": "sample-whisper-hotwords",
-            "job_id": "hot",
-            "job_dir": str(hotwords_job),
-            "srt": {"raw_segments": 3, "raw_words": 4},
-            "segment_reliability_counts": {"ok": 2, "suspect": 1},
-            "whisper_hotwords_data": {"injected_terms": 1, "candidate_terms": 2, "token_count": 5},
-        }),
-        encoding="utf-8",
-    )
-    lexicon = tmp_path / "lexicon.json"
-    lexicon.write_text('[{"term": "Terme critique"}]', encoding="utf-8")
-
-    report = module.build_report(results, lexicon)
-
-    assert report["complete_pair_count"] == 1
-    row = report["rows"][0]
-    assert row["delta"]["quality_score"] == 5
-
-
 def test_bench_analyze_filters_legacy_and_exports_calibration_columns(tmp_path):
     import csv
     import json
@@ -604,29 +471,6 @@ def test_score_reference_bench_loads_cohere_tune_results(tmp_path):
 
     assert [result["combo_id"] for result in results] == ["T09", "P02"]
     assert {result["_path"] for result in results} == {str(result_path), str(pyannote_path)}
-
-
-def test_bench_cohere_tf5_chunks_turns_and_formats_srt():
-    import numpy as np
-
-    module = _load_script("bench_cohere_tf5.py")
-    audio = np.zeros(10 * 16000, dtype=np.float32)
-    turns = [{"start": 1.0, "end": 6.5, "speaker": "SPEAKER_01"}]
-
-    chunks = module.chunk_turns(turns, audio, 16000, max_chunk_s=2.0)
-
-    assert [(round(chunk.start, 1), round(chunk.end, 1), chunk.speaker) for chunk in chunks] == [
-        (1.0, 3.0, "SPEAKER_01"),
-        (3.0, 5.0, "SPEAKER_01"),
-        (5.0, 6.5, "SPEAKER_01"),
-    ]
-    srt = module.segments_to_srt([
-        {"start": 1.0, "end": 2.5, "speaker": "SPEAKER_01", "text": "Bonjour"},
-    ])
-    assert "00:00:01,000 --> 00:00:02,500" in srt
-    assert "SPEAKER_01: Bonjour" in srt
-
-
 def test_arbitrate_hybrid_llm_builds_speaker_aware_units(tmp_path):
     module = _load_script("arbitrate_hybrid_llm.py")
     jobs_dir = tmp_path / "jobs"

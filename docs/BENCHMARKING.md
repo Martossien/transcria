@@ -131,13 +131,16 @@ Le comparatif des modèles d'arbitrage par palier de VRAM (llama.cpp / Ollama / 
 propre méthodo et ses résultats dans **[BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md)** ; la
 table opérationnelle palier → modèle est la source de données `transcria/data/llm_profiles.yaml`.
 
-## Scripts hérités (campagnes ponctuelles)
+## Campagnes historiques (archivées)
 
-Antérieurs au runner de matrice, conservés pour rejouer d'anciennes campagnes précises. Le
-runner `bench_audio.py` les couvre désormais via ses matrices — préférer ce dernier pour un
-nouveau banc :
+Quatre scripts de campagne antérieurs au runner de matrice ont été **archivés** (retirés du
+dépôt, récupérables dans l'historique git) : `prepare_hotwords_bench.py` /
+`analyze_hotwords_bench.py` (Whisper de référence vs hotwords), `prepare_hybrid_llm_bench.py`
+(campagne A/B/C) et `bench_cohere_tf5.py` (essai Cohere ASR natif). Leur fonction est
+couverte par `bench_audio.py` : la matrice `stt` compare les backends (dont `cohere_tf5`), et
+`--lexicon-json` / `--lexicon-term` / `--config-override` gèrent le biasing lexical et les
+hotwords. Pour un nouveau banc, utiliser `bench_audio.py`.
 
-- `scripts/prepare_hotwords_bench.py` + `scripts/analyze_hotwords_bench.py` — Whisper de
-  référence vs hotwords lexique.
-- `scripts/prepare_hybrid_llm_bench.py` — campagne A/B/C (Cohere vs Whisper vs Whisper+hotwords).
-- `scripts/bench_cohere_tf5.py` — essai Cohere ASR natif Transformers 5 sur chunks pyannote.
+Le tooling d'arbitrage hybride segment-par-segment (`arbitrate_hybrid_llm.py`,
+`build_hybrid_transcript.py`, `compare_stt_segments.py`) est conservé — il relève de la
+feature hybride, cf. [STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md).
