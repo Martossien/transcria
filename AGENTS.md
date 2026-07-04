@@ -227,9 +227,6 @@ transcria/
                             #   rendu du gras markdown LLM via _split_markdown_bold()/_add_markdown_runs() (Synthèse),
                             #   champs type-spécifiques, thèmes visuels par type (_DocxTheme), quorum CSE auto.
                             #   generate_docx_report(job_id, jobs_dir, output_path). Exclu de mypy (python-docx sans stubs).
-    integrations/
-      dashboard_client.py   # DashboardClient (port 5001)
-      srt_editor_link.py    # SrtEditorLink (port 7861)
     gpu/
       vram_manager.py       # VRAMManager — orchestration cycle GPU + recalage VRAM mesuré au 1er load (Ollama /api/ps)
       gpu_session.py        # GPUSession — context manager
@@ -363,7 +360,7 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 
 **`GPUSession`** est le context manager utilisé pour Cohere, Whisper, pyannote et Parakeet. Il appelle `ensure_free()` → scanne tous les GPUs → sélectionne le meilleur (VRAM libre max) → logue le GPU choisi → libère via `offload_all()` à la sortie. Ne pas hardcoder `cuda:0` — utiliser `GPUSession` ou `ensure_free()`.
 
-`CUDA_VISIBLE_DEVICES` est supporté : les ids physiques remontés par le dashboard/nvidia-smi sont remappés vers les ordinaux CUDA visibles avant de construire `cuda:N`. Si `CUDA_VISIBLE_DEVICES=-1`, aucun GPU ne doit être sélectionné. La libération VRAM ciblée doit respecter le GPU visible demandé et les patterns `workflow.scheduling.kill_patterns`; ne pas tuer des processus GPU génériques hors liste.
+`CUDA_VISIBLE_DEVICES` est supporté : les ids physiques remontés par nvidia-smi sont remappés vers les ordinaux CUDA visibles avant de construire `cuda:N`. Si `CUDA_VISIBLE_DEVICES=-1`, aucun GPU ne doit être sélectionné. La libération VRAM ciblée doit respecter le GPU visible demandé et les patterns `workflow.scheduling.kill_patterns`; ne pas tuer des processus GPU génériques hors liste.
 
 **Note NeMo (Parakeet) :** `ASRModel.from_pretrained()` ignore `device_map` et charge sur `cuda:0` par défaut. `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant le chargement pour forcer le GPU cible.
 

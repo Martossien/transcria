@@ -664,8 +664,7 @@ contrat produit) :
 |---|---|
 | `analyze(file_path)` | Appelle ffprobe, retourne dict avec duration_seconds, codec, channels, sample_rate_hz, needs_conversion, estimated_machine_minutes, estimated_human_minutes, estimated_total_minutes, size_bytes, format |
 | `_needs_conversion(info)` | Vérifie si codec ≠ PCM 16-bit LE, channels ≠ 1, sample_rate ≠ 16000 |
-| `_estimate_time(info)` | Retourne (machine_min, human_min) — machine = (durée×0.35+130s)×1.25 avec marge 25%, humain = 5min par tranche de 30min |
-| `_format_duration(seconds)` / `format_estimate(info)` | Formatage humain de l'estimation (`1h04`, `12min30s`) |
+| `_estimate_time(info)` | Retourne (machine_min, human_min) — **délègue** la formule historique à `transcria.workflow.timing_model` (source unique : `legacy_machine_seconds` + `human_review_minutes`), reprise comme repli par le modèle de temps calibré. Sert à pré-remplir `audio_analysis.json` |
 
 **`converter.py` — `AudioConverter`** (méthodes de classe)
 | Méthode | Description |
