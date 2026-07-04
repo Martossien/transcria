@@ -148,7 +148,7 @@ SPEAKER_00: bonjour le monde
 
 2
 00:00:06,000 --> 00:00:09,000
-SPEAKER_01(Alice): il faut valider le budget PEI
+SPEAKER_01(Alice): il faut valider le budget ACRO
 
 3
 00:00:10,000 --> 00:00:12,000
@@ -162,7 +162,7 @@ def test_parse_srt_blocks_strips_speaker_prefix_and_parses_time():
     assert blocks[0]["start"] == 0.0 and blocks[0]["end"] == 2.0
     assert blocks[0]["text"] == "bonjour le monde"
     # préfixe SPEAKER_XX(Nom): retiré
-    assert blocks[1]["text"] == "il faut valider le budget PEI"
+    assert blocks[1]["text"] == "il faut valider le budget ACRO"
     assert blocks[1]["start"] == 6.0
     # ligne sans préfixe conservée telle quelle
     assert blocks[2]["text"] == "sans locuteur ici"

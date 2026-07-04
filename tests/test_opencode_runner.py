@@ -948,13 +948,13 @@ class TestBuildHarmonizationGlossary:
         from transcria.gpu.opencode_runner import build_harmonization_glossary
         g = build_harmonization_glossary(
             [{"name": "Jean Dupont"}, {"name": "Marie Martin"}],
-            [{"term": "PEI", "variants": ["PUI"]},
+            [{"term": "ACRO", "variants": ["AKRO"]},
              {"term": "ProWeb", "replace_by": "", "variants": ["pro-web", "ProWebs"]}],
         )
         assert "## Noms de participants (orthographe validée)" in g
         assert "- Jean Dupont" in g and "- Marie Martin" in g
         assert "## Termes métier (forme validée ← variantes connues)" in g
-        assert "- PEI ← PUI" in g
+        assert "- ACRO ← AKRO" in g
         assert "- ProWeb ← pro-web, ProWebs" in g
 
     def test_replace_by_takes_precedence_over_term(self):
@@ -978,7 +978,7 @@ class TestRunFinalReviewInstruction:
     def _capture(self, runner, monkeypatch, outputs=None):
         captured = {}
         outputs = {
-            "summary_harmonized.md": "# Synthèse\nPEI à 90 %.",
+            "summary_harmonized.md": "# Synthèse\nACRO à 90 %.",
             "transcription_reviewed.srt": "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: ok\n",
             "structured_data_reviewed.json": '{"decisions": []}',
             "final_review_report.md": "## Synthèse harmonisée\nok",
@@ -1005,7 +1005,7 @@ class TestRunFinalReviewInstruction:
         for p in ("c.srt", "s.md", "g.md", "sd.json"):
             assert str(tmp_path / p) in captured["instruction"]
         assert res["success"] is True
-        assert "PEI" in res["harmonized_summary"]
+        assert "ACRO" in res["harmonized_summary"]
         assert res["reviewed_srt"]
         assert res["reviewed_structured_data"] == '{"decisions": []}'
         assert res["report"]
@@ -1048,20 +1048,20 @@ class TestApplyFinalReview:
 
         fs = JobFilesystem(str(tmp_path), "job-fr")
         fs.save_text("metadata/transcription_corrigee.srt",
-                     "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: PUI\n")
+                     "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: AKRO\n")
         fs.save_json("context/meeting_context.json", {"summary_llm": "x"})
         result = {
-            "reviewed_srt": "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: PEI\n",
-            "harmonized_summary": "# Synthèse\nPEI",
+            "reviewed_srt": "1\n00:00:00,000 --> 00:00:01,000\nSPEAKER_00: ACRO\n",
+            "harmonized_summary": "# Synthèse\nACRO",
             "reviewed_structured_data": '{"decisions": ["[À VÉRIFIER] budget 60 000 €"]}',
             "report": "## rapport",
         }
         applied = WorkflowRunner._apply_final_review(fs, result)
         assert applied["srt_updated"] and applied["summary_harmonized"] and applied["structured_data_updated"]
         srt = fs.load_text("metadata/transcription_corrigee.srt")
-        assert "PEI" in srt and "PUI" not in srt
+        assert "ACRO" in srt and "AKRO" not in srt
         ctx = fs.load_json("context/meeting_context.json")
-        assert ctx["summary_harmonized"] == "# Synthèse\nPEI"
+        assert ctx["summary_harmonized"] == "# Synthèse\nACRO"
         assert ctx["structured_data"]["decisions"][0].startswith("[À VÉRIFIER]")
         assert (fs.job_dir / "metadata" / "final_review_report.md").exists()
 

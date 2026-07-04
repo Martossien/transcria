@@ -430,12 +430,12 @@ class TestSummaryHarmonizedPreference:
         pytest.importorskip("docx")
         from transcria.exports.docx_report import DocxReport
         ctx = {k: v for k, v in _CTX.items() if k != "summary"}
-        ctx["summary_harmonized"] = "## Synthèse\n**Cadrage.** PEI à 90 %."
-        ctx["summary_llm"] = "## Synthèse\n**Cadrage.** PUI à 90 %."
+        ctx["summary_harmonized"] = "## Synthèse\n**Cadrage.** ACRO à 90 %."
+        ctx["summary_llm"] = "## Synthèse\n**Cadrage.** AKRO à 90 %."
         doc = DocxReport(ctx, [], {}, {}, "", {}).build()
         text = "\n".join(p.text for p in doc.paragraphs)
-        assert "PEI à 90 %" in text
-        assert "PUI" not in text
+        assert "ACRO à 90 %" in text
+        assert "AKRO" not in text
 
     def test_manual_summary_wins_over_harmonized(self):
         pytest.importorskip("docx")
