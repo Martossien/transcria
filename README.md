@@ -75,6 +75,10 @@ imply the tool does more than it does.
 
 ![Processing profile selector](docs/screenshots/07-profile.png)
 
+**Audio analysis — an honest verdict before you spend GPU time: SQUIM/DNSMOS perceptual scores, SNR, a per-window difficulty timeline, and a calibrated time estimate. A rough recording is flagged "watch this", not silently transcribed into mush**
+
+![Audio analysis with difficulty timeline](docs/screenshots/09-audio-analysis.png)
+
 **Speaker validation — listen to excerpts, name speakers, acoustic gender hints**
 
 ![Speaker validation step](docs/screenshots/06-speakers.png)

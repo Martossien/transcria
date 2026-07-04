@@ -80,6 +80,10 @@ fait plus qu'il ne fait.
 
 ![Sélecteur de profil de traitement](docs/screenshots/07-profile.png)
 
+**Analyse audio — un verdict honnête avant de dépenser du GPU : scores perceptifs SQUIM/DNSMOS, SNR, frise de difficulté au fil du temps, et estimation de temps calibrée. Un enregistrement dégradé est signalé « à surveiller », pas transcrit en bouillie en silence**
+
+![Analyse audio avec frise de difficulté](docs/screenshots/09-audio-analysis.png)
+
 **Validation des locuteurs — écouter les extraits, nommer les locuteurs, indices acoustiques de genre**
 
 ![Étape de validation des locuteurs](docs/screenshots/06-speakers.png)
