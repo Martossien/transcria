@@ -1,4 +1,4 @@
-"""Tests C1.2 — mise à niveau outillée (docs/RELEASE_0.2.0.md)."""
+"""Tests C1.2 — mise à niveau outillée (docs/archive/RELEASE_0.2.0.md)."""
 from __future__ import annotations
 
 from pathlib import Path

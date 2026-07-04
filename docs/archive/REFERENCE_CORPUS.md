@@ -1,6 +1,6 @@
 # Corpus de référence & déterminisme (C4.2)
 
-> Chantier C4.2 (docs/RELEASE_0.2.0.md). Détecter les régressions SUBTILES du pipeline
+> Chantier C4.2 (docs/archive/RELEASE_0.2.0.md). Détecter les régressions SUBTILES du pipeline
 > (qualité de transcription, résumé, diarisation) qu'aucun test unitaire ne voit, et
 > vérifier que le pipeline est reproductible.
 

@@ -1,4 +1,4 @@
-"""État système LOCAL pour la page « Système » — chantier C2.3 (docs/RELEASE_0.2.0.md).
+"""État système LOCAL pour la page « Système » — chantier C2.3 (docs/archive/RELEASE_0.2.0.md).
 
 Remplace la dépendance au projet externe « llmdashboard » (DashboardClient) : les
 métriques viennent désormais DE LA MACHINE (psutil pour CPU/RAM, NVML/torch pour les

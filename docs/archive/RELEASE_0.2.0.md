@@ -652,7 +652,7 @@ le seuil monte EN DERNIER, jamais avant). provenance/SBOM confirmés (§4.2). pi
 + sortie humaine-validée ; diff automatique contre référence à chaque run de gel ;
 2× le même audio → diff vide ou expliqué (température, seeds — l'écart accepté est
 DOCUMENTÉ). Harnais : `verify_split_topology.run_job`.
-**Réalisé** : `docs/REFERENCE_CORPUS.md` (critères du corpus, méthode diff+déterminisme,
+**Réalisé** : `docs/archive/REFERENCE_CORPUS.md` (critères du corpus, méthode diff+déterminisme,
 commandes). La constitution du corpus et son exécution sont **operator-run** (Docker+GPU,
 hors flux assistant/CI) ; le filet AUTOMATIQUE permanent = les invariants qualité
 GPU-free (§8.3), déjà en place à chaque run.

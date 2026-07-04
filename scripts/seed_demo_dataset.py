@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Seed un JEU DE DONNÉES DE DÉMONSTRATION complet, sans GPU — chantier C0.1
-(docs/RELEASE_0.2.0.md, vague 0) : le walkthrough passe de « toutes les pages » à
+(docs/archive/RELEASE_0.2.0.md, vague 0) : le walkthrough passe de « toutes les pages » à
 « tous les états », il lui faut des données RÉALISTES derrière chaque page.
 
 Crée (idempotent : préfixe ``demo-``, relance = recrée à l'identique sur base vierge) :

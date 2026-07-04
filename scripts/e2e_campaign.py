@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Campagne E2E complète avec LLM réel — validation pré-0.2.0 (docs/RELEASE_0.2.0.md, C4.3).
+"""Campagne E2E complète avec LLM réel — validation pré-0.2.0 (docs/archive/RELEASE_0.2.0.md, C4.3).
 
 Pour CHAQUE audio : pipeline complet (upload → analyse → résumé → contexte →
 traitement `quality` → export) puis vérification des livrables. Sur l'audio PRIMAIRE,

@@ -101,7 +101,7 @@ class Walkthrough:
             self.shot("03_wizard")
             self.check("wizard ouvert après création", "/jobs/" in self.page.url, self.page.url)
             # Exigence ferme : le choix du profil est posé DÈS l'étape 1 (upload), car il
-            # pilote quelles étapes suivent (cf. docs/RELEASE_0.2.0.md — profil à l'étape 1).
+            # pilote quelles étapes suivent (cf. docs/archive/RELEASE_0.2.0.md — profil à l'étape 1).
             first_section = self.page.locator(".step-section").first
             self.check(
                 "profil de traitement dans la 1ʳᵉ étape du wizard",
@@ -170,7 +170,7 @@ class Walkthrough:
 
     def admin_pages(self) -> None:
         # Chaque onglet est vérifié sur son CONTENU attendu (un marqueur stable du
-        # template), pas seulement sur un « 200 OK » — cf. docs/RELEASE_0.2.0.md §3.2.
+        # template), pas seulement sur un « 200 OK » — cf. docs/archive/RELEASE_0.2.0.md §3.2.
         for path, name, marker in [
             ("/admin/users", "06_users", "Gestion des utilisateurs"),
             ("/admin/groups", "07_groups", "Groupes"),

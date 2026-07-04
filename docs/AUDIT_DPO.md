@@ -1,6 +1,6 @@
 # Registre des traitements de données (côté produit)
 
-> Chantier C3.10 (docs/RELEASE_0.2.0.md). Document destiné au DPO : quelles données
+> Chantier C3.10 (docs/archive/RELEASE_0.2.0.md). Document destiné au DPO : quelles données
 > TranscrIA conserve, où, combien de temps, qui y accède, et comment elles sont purgées.
 > Complète `docs/SECURITY_MODEL.md` (accès) et `docs/UPGRADE.md` (sauvegarde).
 

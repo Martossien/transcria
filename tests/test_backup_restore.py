@@ -1,4 +1,4 @@
-"""Tests C1.1 — sauvegarde / restauration locale (docs/RELEASE_0.2.0.md)."""
+"""Tests C1.1 — sauvegarde / restauration locale (docs/archive/RELEASE_0.2.0.md)."""
 from __future__ import annotations
 
 import sqlite3

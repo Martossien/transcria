@@ -1,4 +1,4 @@
-"""Limitation des tentatives de connexion — chantier C3.3 (docs/RELEASE_0.2.0.md).
+"""Limitation des tentatives de connexion — chantier C3.3 (docs/archive/RELEASE_0.2.0.md).
 
 Constat (audit sécurité) : aucune protection contre le bourrinage sur ``/login``.
 Ici, un compteur EN MÉMOIRE par (IP, identifiant) avec fenêtre glissante et backoff :

@@ -1,4 +1,4 @@
-"""Tests C3.3 — limitation des tentatives de connexion (docs/RELEASE_0.2.0.md)."""
+"""Tests C3.3 — limitation des tentatives de connexion (docs/archive/RELEASE_0.2.0.md)."""
 from __future__ import annotations
 
 from transcria.auth.rate_limit import LoginRateLimiter

@@ -1,4 +1,4 @@
-"""Tests C3.10 — purge de rétention avec dry-run (docs/RELEASE_0.2.0.md, AUDIT_DPO.md).
+"""Tests C3.10 — purge de rétention avec dry-run (docs/archive/RELEASE_0.2.0.md, AUDIT_DPO.md).
 
 La base de test est partagée (session) et d'autres tests y laissent des jobs/entrées de
 file : ces tests raisonnent donc en DELTA (avant/après) et sur un job PRÉCIS, sans jamais

@@ -1,4 +1,4 @@
-"""Mise à niveau outillée — chantier C1.2 (docs/RELEASE_0.2.0.md).
+"""Mise à niveau outillée — chantier C1.2 (docs/archive/RELEASE_0.2.0.md).
 
 Transforme la tradition orale (« git pull && alembic upgrade && restart ») en une
 opération SÛRE et reproductible :

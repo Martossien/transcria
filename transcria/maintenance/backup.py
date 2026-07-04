@@ -1,4 +1,4 @@
-"""Sauvegarde / restauration LOCALE — chantier C1.1 (docs/RELEASE_0.2.0.md).
+"""Sauvegarde / restauration LOCALE — chantier C1.1 (docs/archive/RELEASE_0.2.0.md).
 
 LE manque n°1 de production : aucun mécanisme n'existait (pas un tar.gz, pas un dump).
 Périmètre des données protégées :

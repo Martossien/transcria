@@ -5,24 +5,65 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-ready-336791.svg?logo=postgresql&logoColor=white)](docs/INSTALL.md)
 
-**Self-hosted meeting transcription portal** — turn long meeting recordings into usable deliverables on **your own GPUs**: corrected, speaker-attributed transcripts (SRT), structured summaries, quality reports and meeting-type-aware Word minutes. No cloud, no per-minute API bill, full data sovereignty.
+**Self-hosted meeting transcription portal.** TranscrIA turns long meeting recordings into
+usable deliverables on your own GPUs: corrected, speaker-attributed transcripts (SRT),
+structured summaries, quality reports, and meeting-type-aware Word minutes. No cloud, no
+per-minute API bill, full data sovereignty.
 
-> 🇫🇷 *Interface et documentation actuellement en français — [README français](README.fr.md). The product is French-first today; UI strings and LLM prompts are centralized so localization is a planned evolution, not a rewrite.*
+It is built as a **service** for teams that process real meetings week after week — not as
+a thin wrapper around a transcription model. A guided, human-in-the-loop workflow, a
+production GPU queue, and role-based multi-user access are first-class, not afterthoughts.
 
-![Job pipeline — guided 9-step workflow with audio diagnosis](docs/screenshots/02-job-pipeline.png)
+*Interface and documentation are currently French-first — see [README français](README.fr.md).
+UI strings and LLM prompts are centralized, so localization is a planned evolution rather
+than a rewrite.*
 
-## Why TranscrIA
+![Guided workflow with audio diagnosis](docs/screenshots/02-job-pipeline.png)
 
-Plenty of scripts wrap Whisper. TranscrIA is built as a **service** for teams that process real meetings, week after week:
+## Project status — 0.2.0, first stable release
 
-- **A real audio module, not an `ffmpeg` wrapper.** Acoustic preflight (SNR, clipping, bandwidth, risk flags), speech/music/noise scene analysis, a **per-window difficulty timeline** shown to the user *before* transcription, optional Demucs source separation, loudness normalization, Silero VAD — all coordinated with GPU/VRAM management.
-- **Human-in-the-loop where it matters.** Detected speakers come with playable audio excerpts, talk time and an acoustic gender hint; users validate names, participants and a domain lexicon before the final pass. Known-voice matching is consent-based (signed form, hashed proof, source audio deleted by default).
-- **LLM arbitration with guardrails.** A local OpenAI-compatible LLM (e.g. llama.cpp) produces the structured summary, corrects the SRT using the validated lexicon and context, and a final review pass harmonizes the deliverables — with anti-hallucination cleanup, retry-then-fail-loud semantics, and **prompts editable in the admin UI**.
-- **A built-in transcript editor, made for real proofreading.** Full-screen workshop on any finished job: the text IS the field (click to edit, audio auto-pauses while you type), per-speaker timeline and single-line strip, zoomable real waveform with draggable segment handles (server-computed peaks — smooth even on 4h meetings), split-at-cursor, multi-select floating bar (merge / reassign / delete), solo-listen to one speaker to untangle diarization mix-ups, quality findings as a clickable checklist, and **three safety nets**: undo/redo, a server-side draft every 5 s (survives crashes — "resume where you were"), and explicit restorable versions shared with the refinement chat.
-- **Chat with the finished deliverables.** On the results page of a completed job, discuss the transcript, summary and quality findings with the local LLM (fast read-only answers — nothing is modified), then **apply** a change in one click: a corrected term is fixed **coherently across every deliverable** (summary, SRT, structured data). Each apply snapshots a **restorable version**, and the Word/SRT/ZIP exports are regenerated at download so they always include the refinements.
-- **Production-grade orchestration.** Persistent GPU job queue (priorities, anti-starvation aging, pause/resume, scheduled starts), **VRAM-aware admission** per remaining pipeline phase, calendar-based GPU scheduling, a **resumable pipeline** (checkpoint/resume — a re-queued job never redoes finished work), and "waiting for VRAM" as a first-class, admin-alerted state instead of a silent failure.
-- **Three deployment topologies.** All-in-one box; **CPU-only web frontend + GPU worker** (shared PostgreSQL, job files replicated **through the database** — no NFS to operate, sha256-verified integrity); and a remote **inference node** serving STT/diarization/voice-embedding over HTTP with VRAM autonomy (reuse → launch on demand → explicit 503).
-- **Compliance by design.** Multi-user RBAC (roles, groups), full **GDPR audit trail** (actor, IP, timestamp, filterable, exportable), consent-gated voice profiles, secrets kept out of the versioned config.
+This is the first release TranscrIA considers **stable**. The transcription pipeline,
+the human-in-the-loop wizard, the GPU queue and scheduler, exports, multi-user access,
+and both the single-box and distributed deployments are validated end-to-end (unit and
+integration suite plus real-GPU runs). The interface is French-first, and reference
+quality relies on gated models (see [Requirements](#requirements) and
+[Known limitations](#known-limitations)). We prefer to state limits plainly rather than
+imply the tool does more than it does.
+
+## What it does
+
+- **A real audio module, not an `ffmpeg` wrapper.** Acoustic preflight (SNR, clipping,
+  bandwidth, risk flags), speech/music/noise scene analysis, a per-window difficulty
+  timeline shown *before* transcription, optional Demucs source separation, loudness
+  normalization, and Silero VAD — all coordinated with GPU/VRAM management.
+- **Human-in-the-loop where it matters.** Detected speakers come with playable audio
+  excerpts, talk time, and an acoustic gender hint; users validate names, participants,
+  and a domain lexicon before the final pass. Known-voice matching is consent-based
+  (signed form, hashed proof, source audio deleted by default).
+- **LLM arbitration with guardrails.** A local OpenAI-compatible LLM produces the
+  structured summary, corrects the SRT using the validated lexicon and context, and a
+  final review pass harmonizes the deliverables — with anti-hallucination cleanup,
+  retry-then-fail-loud semantics, and prompts editable in the admin UI.
+- **A built-in transcript editor made for real proofreading.** A full-screen workshop on
+  any finished job: click-to-edit text with audio auto-pause, a zoomable real waveform
+  with draggable segment handles (server-computed peaks, smooth even on 4-hour meetings),
+  split-at-cursor, multi-select actions (merge / reassign / delete), solo-listen per
+  speaker, quality findings as a clickable checklist, and three safety nets — undo/redo,
+  a server-side draft every 5 seconds, and explicit restorable versions.
+- **Chat with the finished deliverables.** On a completed job's results page, discuss the
+  transcript, summary, and quality findings with the local LLM (fast, read-only answers),
+  then apply a change in one click: a corrected term is fixed coherently across every
+  deliverable (summary, SRT, structured data). Each apply snapshots a restorable version,
+  and exports are regenerated at download so they always reflect the latest state.
+- **Production-grade orchestration.** A persistent GPU job queue (priorities,
+  anti-starvation aging, pause/resume, scheduled starts), VRAM-aware admission per
+  remaining pipeline phase, calendar-based GPU scheduling, a resumable pipeline (a
+  re-queued job never redoes finished work), and machine-calibrated time estimates that
+  learn from your own past runs. "Waiting for VRAM" is a first-class, admin-alerted state,
+  not a silent failure.
+- **Compliance by design.** Multi-user RBAC (roles, groups), a full GDPR audit trail
+  (actor, IP, timestamp, filterable and exportable), consent-gated voice profiles, and
+  secrets kept out of the versioned configuration.
 
 ## Screenshots
 
@@ -42,81 +83,136 @@ Plenty of scripts wrap Whisper. TranscrIA is built as a **service** for teams th
 
 ![Configuration editor](docs/screenshots/03-configuration.png)
 
-**GPU scheduling & queue — calendar windows (block night starts, cap concurrency), persistent queue with priorities**
+**GPU scheduling and queue — calendar windows, persistent queue with priorities and estimated wait times**
 
 ![GPU scheduling calendar](docs/screenshots/04-scheduling.png)
 
 ![Persistent GPU queue](docs/screenshots/05-queue.png)
 
+## Processing profiles
+
+After upload, you choose a *deliverable* on a single slider instead of an opaque
+fast/quality switch. The portal greys out profiles your hardware cannot run, pre-selects
+the most complete one that fits, and then executes only the pipeline phases — and reserves
+only the GPU/LLM — that the chosen profile actually needs.
+
+| Profile | Deliverable | Pipeline |
+|---|---|---|
+| **SRT express** | Plain subtitles | STT only |
+| **SRT with speakers** | Speaker-attributed subtitles | STT + diarization |
+| **Word rapide** | Basic Word report | STT + summary |
+| **Word structuré** | Structured Word (context, participants) | STT + diarization + LLM extraction |
+| **Word corrigé** | Corrected, enriched Word | + LLM correction and final review |
+| **Dossier qualité complet** | Full minutes with quality file | Complete pipeline + quality scoring |
+
+Word minutes adapt to built-in meeting types (works council, executive committee, project
+review, crisis, and more), and teams can create, theme, and share their own types — see
+[docs/TYPES_REUNION_PERSONNALISES.md](docs/TYPES_REUNION_PERSONNALISES.md).
+
 ## How it works
 
 ```
-upload ─► audio diagnosis ─► quick summary (STT + LLM) ─► context, participants,
-   lexicon (human validation) ─► final pipeline:
-   preprocess → transcription → diarization → LLM correction → final review
-   → quality scoring → exports (SRT, segments, quality report, DOCX minutes, ZIP)
-   ─► results page: refine chat (discuss / apply, versioned & restorable)
+upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
+  lexicon (human validation) -> final pipeline:
+  preprocess -> transcription -> diarization -> LLM correction -> final review
+  -> quality scoring -> exports (SRT, segments, quality report, DOCX minutes, ZIP)
+  -> results page: refine chat (discuss / apply, versioned and restorable)
 ```
 
-- **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 / faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (experimental) — served locally or by a remote OpenAI-compatible server (vLLM, SGLang…).
+- **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 /
+  faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (experimental) — served locally
+  or by a remote OpenAI-compatible server (vLLM, SGLang).
 - **Diarization backends**: pyannote.audio (default) or NVIDIA Sortformer via NeMo.
-- **Word minutes adapted to 18 meeting types** (works council, executive committee, project review, crisis…): LLM-extracted decisions/actions/votes, type-specific fields and visual themes, graceful degradation if extraction fails. **Users can create and share their own types**: duplicate a built-in one, adjust palette/banner/fields/section order (executive summary first), add a logo and footer, preview the Word output live — admins share to a group or the whole install, and types travel between installs as JSON files (community catalog in `community/meeting-types/`).
-- **Processing profiles** (after upload): pick a *deliverable* on a single slider — from a quick `SRT express` to a full `dossier qualité` — instead of an opaque fast/quality switch. The portal greys out profiles your hardware can't run, pre-selects the most complete one that fits, and then only executes the pipeline phases (and only reserves the GPU/LLM) that the chosen profile actually needs.
-- Every phase is **checkpointed**: a re-dispatched job resumes at the first incomplete phase, even on a different worker.
+- **Arbitration LLM**: a local OpenAI-compatible server (Ollama / llama.cpp / vLLM),
+  selected per hardware from a data-driven tier catalog.
 
-## Quickstart
+Every phase is checkpointed: a re-dispatched job resumes at the first incomplete phase,
+even on a different worker.
+
+## Installation
+
+TranscrIA runs on Linux with an NVIDIA GPU. Two paths, depending on your goal.
+
+### Recommended — install on a GPU host
+
+The installer is the reliable path for a real deployment: it detects your GPUs and CUDA,
+sets up the virtual environment and CUDA-matched PyTorch, helps you pick and download the
+arbitration LLM that best fits your VRAM, and installs a `systemd` service.
 
 ```bash
 git clone https://github.com/Martossien/transcria.git
 cd transcria
-./install.sh            # venv, dependencies, CUDA-matched PyTorch, config.yaml, optional systemd unit
+./install.sh          # guided: GPU/CUDA detection, venv, PyTorch, LLM backend, systemd unit
+./start.sh            # database migrations, then start the server -> http://localhost:7870
 ```
 
-**Arbitration LLM, auto-selected by VRAM.** During install, TranscrIA detects your GPUs and **recommends the largest tier that actually fits** (12 / 16 / 24 / 32 / 48 / 64 GB) — by real per-card placement (mono or split), not by total VRAM — and offers to **download the right GGUF** (with your HF token) and activate it — one prompt, no manual model-picking. Below 12 GB it falls back to **raw transcription** (no correction/summary LLM). The per-tier models are benchmarked in [docs/BENCH_LLM_PALIERS.md](docs/BENCH_LLM_PALIERS.md); switch anytime with `scripts/switch_arbitrage_llm.sh <tier>`.
-
-Still bring your own STT weights and pyannote cache (see [docs/INSTALL.md](docs/INSTALL.md)), fill in `config.yaml`, then validate the install with the built-in preflight — no GPU needed, no side effects:
+Once installed as a service, manage it the usual way (this is how it runs in production):
 
 ```bash
-venv/bin/python scripts/doctor.py            # config, DB schema, LLM server, opencode, nodes, storage
+sudo systemctl enable --now transcria
+sudo systemctl status transcria
+```
+
+Validate any install with the built-in preflight — no GPU needed, no side effects:
+
+```bash
+venv/bin/python scripts/doctor.py            # config, DB schema, LLM server, opencode, storage
 venv/bin/python scripts/doctor.py --strict   # warnings become failures (for deployment gates)
 ```
 
-Start the service (`./start.sh` or systemd) and open the web UI. For distributed setups (web frontend + GPU worker, remote inference node), see [docs/INSTALL.md §11–13](docs/INSTALL.md) and [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
+Options, model prerequisites, and distributed roles are documented in
+[docs/INSTALL.md](docs/INSTALL.md).
 
-### …or run it with Docker (one command)
+### Just evaluating — one Docker command
 
-Prefer containers? A turnkey script takes you from clone to a running stack — host GPU setup, secret/config generation, image build, `docker compose up`, health check — with no manual steps:
+The bundled image ships with default models baked in, so there is no token, no download,
+and it works offline. You only need an NVIDIA GPU (compute capability 7.5 or newer, 12 GB
+VRAM or more) with Docker GPU access.
 
 ```bash
-scripts/docker_quickstart.sh --bundled        # EASIEST: try it — models baked in, no token, no download
-scripts/docker_quickstart.sh                  # all-in-one GPU → http://localhost:7870
-HF_TOKEN=hf_xxx scripts/docker_quickstart.sh  # reference quality (gated Cohere STT + pyannote); omit for the no-token path
-scripts/docker_quickstart.sh --cpu            # no GPU (web + scheduler)
-scripts/docker_quickstart.sh --down           # stop
+scripts/docker_quickstart.sh --bundled       # try it: models included, no token
 ```
 
-> **Default login:** open `http://localhost:7870` and sign in with **`admin`** / **`CHANGE-ME`**
-> (the initial credentials in the generated `config.yaml`, key `auth.first_admin_password`).
-> **Change the password before any real use** — it's a placeholder, and a warning is logged while
-> it stays at its default.
+Image details, the slim-vs-bundled trade-off, the GPU/VRAM compatibility table, and
+rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 
-#### Just want to try it? One command, no token (`--bundled`)
+> **First login:** open `http://localhost:7870` and sign in with `admin` and the initial
+> password from the generated `config.yaml` (`auth.first_admin_password`). Change it
+> before any real use — it is a placeholder, and a warning is logged while it stays at its
+> default.
 
-`scripts/docker_quickstart.sh --bundled` is the **friendliest way to evaluate the project**: it
-pulls (or builds) the **`:bundled`** image with the default models **already baked in** — so there's
-**no Hugging Face token, no download, and it even works offline**. You only need an NVIDIA GPU
-(**compute capability ≥ 7.5** — RTX 20xx or newer — **and ≥ 12 GB VRAM**) with Docker GPU access;
-the script checks this up front and stops with a clear message if your card is too small.
+## Deployment topologies
 
-> ⚠️ **This is a quick-test image, not the complete project.** To keep it token-free it uses the
-> *entry-level* engines: transcription via **Whisper**, diarization via **NVIDIA Sortformer
-> (≤ 4 speakers, experimental)**, and the **smallest 9B arbitration LLM**. It exercises the full
-> 6-profile workflow (summary / correction / review all run), but **not** the reference quality.
-> For that — **Cohere STT + pyannote (unlimited speakers)** and larger LLM tiers — provide a free
-> `HF_TOKEN` (after accepting both models' conditions) or set `TRANSCRIA_LLM_TIER`. Nothing to
-> reconfigure: the same command picks them up.
+- **All-in-one** — a single GPU box runs everything.
+- **Web frontend + GPU worker** — a CPU-only web tier and a GPU worker share a PostgreSQL
+  database; job files are replicated through the database (no shared filesystem to
+  operate, sha256-verified). See [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
+- **Remote inference node** — a GPU resource node serves STT, diarization, and voice
+  embedding over HTTP with VRAM autonomy (reuse, launch on demand, explicit 503). See
+  [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md).
 
-The **all-in-one GPU** image (CUDA 12.6) bundles the whole pipeline — STT, diarization **and** the arbitration LLM (a compiled `llama-server` serving a small non-gated GGUF). The default **`:latest`** (slim) image downloads those models at first run; **`:bundled`** bakes them in (zero download, no host-cache pitfalls — see the slim-vs-bundled table in the docs). **With no token at all**, the full 6-profile workflow runs (speaker labels via NVIDIA Sortformer, ≤4 speakers); a free HF token (plus accepting both model conditions) switches to reference quality (Cohere + pyannote, unlimited speakers). The slim image bakes no weights and is publishable — point the quickstart at a published image (`TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX`) to `pull` instead of build. It is idempotent (never overwrites an existing `config.yaml`/`.env`) and validated end-to-end on GPU. **GPU requirement:** NVIDIA compute capability ≥ 7.5 (Turing or newer — RTX 20xx→50xx, A/L/H-series; Blackwell via PTX JIT) **and ≥ 12 GB VRAM** (the default 9B LLM peaks ~10.6 GB; phases are sequenced, not additive). Full reference — image, compose, **GPU/VRAM compatibility table**, variables, publishing, rollback — in [docs/DOCKER.md](docs/DOCKER.md).
+## Known limitations
+
+We keep this list honest and current.
+
+| Area | Limit | Behaviour beyond it |
+|---|---|---|
+| Meeting length | Tested to about 4h30 (~3,000 segments) | Editor and pipeline stay responsive; beyond that is not guaranteed |
+| Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
+| Speakers (Sortformer diarization) | Up to 4 | Use pyannote (gated) for more |
+| Interface language | French-first | Strings and prompts are centralized; other locales are a planned evolution |
+| Below 12 GB VRAM | No summary/correction LLM | Falls back to raw transcription |
+| Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
+| Retention | Jobs 365 days, audit 1095 days (configurable) | Automatic purge plus a `maintenance.cli purge` command |
+
+## Requirements
+
+- Linux, Python 3.11+, an NVIDIA GPU (compute capability 7.5 or newer).
+- PostgreSQL in production (SQLite is supported for development and tests).
+- Reference quality uses gated models — Cohere STT and pyannote — which require a Hugging
+  Face token and accepting each model's conditions. Without a token, TranscrIA still runs
+  the full workflow using non-gated engines (Whisper, NVIDIA Sortformer, a small
+  non-gated arbitration LLM).
 
 ## Tech stack
 
@@ -124,38 +220,23 @@ The **all-in-one GPU** image (CUDA 12.6) bundles the whole pipeline — STT, dia
 |---|---|
 | Backend | Python 3.11+, Flask 3, SQLAlchemy + Alembic (PostgreSQL in production, SQLite for dev) |
 | STT serving | vLLM / SGLang / any OpenAI-compatible server; local engines |
-| Diarization & voice | pyannote.audio, NVIDIA NeMo (Sortformer), local voice embeddings |
-| LLM phases | [opencode](https://github.com/sst/opencode) driving a local OpenAI-compatible LLM — **selectable backend: Ollama / llama.cpp / vLLM**, chosen per hardware from a data-driven profile catalog ([docs/LLM_BACKENDS.md](docs/LLM_BACKENDS.md)) |
+| Diarization and voice | pyannote.audio, NVIDIA NeMo (Sortformer), local voice embeddings |
+| LLM phases | [opencode](https://github.com/sst/opencode) driving a local OpenAI-compatible LLM — selectable backend (Ollama / llama.cpp / vLLM), chosen per hardware from a data-driven profile catalog ([docs/LLM_BACKENDS.md](docs/LLM_BACKENDS.md)) |
 | Audio | ffmpeg/ffprobe, Demucs, Silero VAD, SQUIM / DNSMOS quality metrics |
 | Frontend | Server-rendered Jinja2 + Bootstrap 5, vanilla JS |
 | Exports | python-docx (themed minutes), SRT, JSON, ZIP package |
 
-## Project status
-
-⚠️ **Beta — latest release: [`v0.1.0-beta.9`](https://github.com/Martossien/transcria/releases/tag/v0.1.0-beta.9).** New in beta.9: the **built-in transcript editor** — full-screen workshop where the text is the field, per-speaker timeline, zoomable real waveform (server-side peaks), split/merge/reassign with multi-select, solo-listen per speaker, quality findings as a clickable checklist, and three safety nets (undo/redo, crash-proof server draft, restorable versions shared with the refinement chat). The external SRT editor fork is retired: edits now flow straight into the Word/SRT/ZIP deliverables. Validated end-to-end on real GPUs (full pipeline → browser-driven personas → final Word with recomputed speaker stats → file-exact restore). **3,196 tests, ~81 % coverage.** Previously in beta.8, two features driven by user feedback: **chat with the finished deliverables** (discuss the transcript/summary with the local LLM on the results page — 1.6 s per turn —, apply a change coherently across every deliverable, restore any version) and **custom meeting types** (duplicate one of the 18 built-in Word themes, adjust palette/banner/fields/section order/logo with a live cover preview, share to a group or the whole install, exchange types as JSON files — community catalog in `community/meeting-types/`). Both validated **end-to-end on real GPUs** (full quality pipeline on real audio, UI-driven Playwright checks). Previously in beta.7: the arbitration LLM became **multi-backend — Ollama / llama.cpp / vLLM — chosen automatically from the physical hardware** via a single data-driven profile catalog (`transcria/data/llm_profiles.yaml`); see [docs/LLM_BACKENDS.md](docs/LLM_BACKENDS.md). The product is functional and covered by **3,196 tests (green CI: ruff, mypy, full pytest on PostgreSQL, ~81 % coverage)**. The installer is validated end-to-end on **Ubuntu 22.04/24.04, Debian 12, Fedora 41, Rocky 9 × Python 3.11–3.13** (apt + dnf), full pipeline STT + diarization + LLM, across mono- and multi-GPU (Ollama 12B/35B, llama.cpp 35B-A3B, vLLM 27B-FP8) — see [docs/LLM_PROFILS_VALIDATION.md](docs/LLM_PROFILS_VALIDATION.md). The **distributed topology** (CPU frontend + GPU resource node) is validated **end-to-end on real audio** with a vLLM arbitration LLM (tensor-parallel) and automatic VRAM placement across 8 GPUs — see [docs/DOCKER.md](docs/DOCKER.md) and [docs/PLAN_TEST_SPLIT_VLLM.md](docs/PLAN_TEST_SPLIT_VLLM.md). **Concurrency hardened under load** (robust up to 8 concurrent jobs — see [docs/PLAN_TEST_CHARGE.md](docs/PLAN_TEST_CHARGE.md)). Following SemVer, the **`0.x` series is a stabilization phase**: the API, the configuration schema and the data model may still change without backward-compatibility guarantees until `1.0.0`. Evaluate it, pilot it — don't bet production on it without your own validation. A containerized deployment (Dockerfile, compose, GPU support, turnkey quickstart) is available — see [docs/DOCKER.md](docs/DOCKER.md).
-
-**Language**: the UI and the LLM prompts are French-first (the pipeline is tuned for French meetings). Both are centralized/editable, so adding languages is a planned evolution, not a rewrite.
-
 ## Documentation
 
-Full documentation lives in [`docs/`](docs/) (currently in French):
+Full documentation lives in [`docs/`](docs/README.md) (French). A few entry points:
 
-| Document | Content |
-|---|---|
-| [docs/INSTALL.md](docs/INSTALL.md) | Installation, models, systemd, troubleshooting, **distributed deployment** |
-| [docs/DOCKER.md](docs/DOCKER.md) | **Containerized deployment** — turnkey quickstart, image, compose, GPU (CDI), variables, rollback |
-| [docs/TECHNICAL.md](docs/TECHNICAL.md) | Architecture, pipeline, API, GPU orchestration |
-| [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) | Complete `config.yaml` reference |
-| [docs/DATA_MODEL.md](docs/DATA_MODEL.md) | DB schema, job states, files per job |
-| [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md) | Remote inference, VRAM autonomy, degraded modes |
-| [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md) | PostgreSQL-backed job file store for split deployments |
-| [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) | Contributing, security policy, changelog |
+- [docs/INSTALL.md](docs/INSTALL.md) — installation, models, `systemd`, distributed roles
+- [docs/DOCKER.md](docs/DOCKER.md) — containerized deployment
+- [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, database
+- [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) — complete `config.yaml` reference
 
 ## License
 
-TranscrIA is released under the [Apache License 2.0](LICENSE). Third-party components
-(bundled libraries and binaries, and runtime-downloaded models) and their licenses /
-attributions are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — including the
-CC-BY-4.0 attribution for the DNSMOS/SQUIM quality models, and the licenses of components
-shipped in the Docker images (opencode — MIT, ffmpeg — GPL/LGPL via Debian, etc.). No
-GPL/AGPL (strong copyleft) dependency is present at runtime.
+Apache-2.0 — see [LICENSE](LICENSE). Third-party components retain their own licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Security policy: [SECURITY.md](SECURITY.md).
+Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Changes: [CHANGELOG.md](CHANGELOG.md).

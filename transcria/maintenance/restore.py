@@ -1,4 +1,4 @@
-"""Restauration LOCALE — chantier C1.1 (docs/RELEASE_0.2.0.md).
+"""Restauration LOCALE — chantier C1.1 (docs/archive/RELEASE_0.2.0.md).
 
 Garde-fous (le restore est irréversible — on protège l'opérateur) :
 - ``--dry-run`` liste ce qui SERAIT restauré, sans rien toucher ;

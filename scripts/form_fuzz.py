@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Banc « fuzz formulaire » générique — chantier C0.2 (docs/RELEASE_0.2.0.md, vague 0).
+"""Banc « fuzz formulaire » générique — chantier C0.2 (docs/archive/RELEASE_0.2.0.md, vague 0).
 
 Soumet CHAQUE formulaire/API déclaré avec des valeurs aux limites (vide, 1 caractère,
 très long, unicode exotique, types incorrects, injections basiques) et vérifie l'ORACLE :

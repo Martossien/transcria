@@ -544,4 +544,4 @@ DOCX/SRT téléchargés conformes, stats recalculées visibles dans le Word → 
 
 *Références : `docs/TYPES_REUNION_PERSONNALISES.md` (rituel), fork
 `/home/admin_ia/srt-editor-pro-fr-easy` (autopsie §1.3), `workflow/refine_store.py`
-(versions), `workflow/runner.py:1860` (garde), `docs/RELEASE_0.2.0.md` (contexte).*
+(versions), `workflow/runner.py:1860` (garde), `docs/archive/RELEASE_0.2.0.md` (contexte).*

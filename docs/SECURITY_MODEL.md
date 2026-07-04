@@ -1,6 +1,6 @@
 # Modèle de sécurité TranscrIA
 
-> Chantiers C3.3 / C3.4 / C3.9 (docs/RELEASE_0.2.0.md). Document destiné à un DPO /
+> Chantiers C3.3 / C3.4 / C3.9 (docs/archive/RELEASE_0.2.0.md). Document destiné à un DPO /
 > RSSI : ce qui protège l'accès, qui peut faire quoi, ce qui est durci et ce qui est
 > une **limitation assumée** (jamais « inconnue »).
 
