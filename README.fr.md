@@ -139,6 +139,32 @@ upload -> diagnostic audio -> synthèse rapide (STT + LLM) -> contexte, particip
 Chaque phase est jalonnée : un job ré-enfilé reprend à la première phase incomplète, même
 sur un autre worker.
 
+## Conçu pour des équipes, pas seulement pour des runs
+
+L'essentiel du travail est dans ce qui entoure la transcription — ce dont on a besoin dès
+que de vraies personnes partagent l'outil, semaine après semaine.
+
+- **Rôles et groupes.** Quatre rôles (admin, manager, opérateur, lecteur) et des groupes
+  avec leurs propres admins ; jobs, lexiques et types de réunion se partagent à un groupe
+  ou à toute l'installation.
+- **Lexiques centraux.** Des glossaires partagés, à portée de groupe, que les admins
+  entretiennent et que les utilisateurs appliquent. Un terme validé sur un job peut être
+  promu dans un lexique central, pour que toute l'organisation écrive « SIRET » ou un
+  acronyme interne de la même façon la fois suivante.
+- **Piste d'audit et protection des données.** Chaque action sensible est journalisée
+  (acteur, IP, horodatage) dans une piste filtrable et exportable ; la rétention est
+  configurable avec purge automatique, documentée pour un DPO dans
+  [docs/AUDIT_DPO.md](docs/AUDIT_DPO.md).
+- **Enrôlement vocal.** Reconnaissance de voix connues soumise au consentement : un
+  formulaire signé et une preuve hachée sont exigés avant toute empreinte, et l'audio de
+  référence est supprimé par défaut.
+- **Sauvegarde, restauration et montée de version guidée.** Une CLI de maintenance
+  sauvegarde la base et les fichiers de job, les restaure, et déroule une montée de
+  version par ses migrations — sur SQLite ou PostgreSQL.
+- **Une configuration réellement gérable.** Un schéma classifié de 423 clés pilote une
+  interface admin claire et une référence générée ; les secrets restent hors de la config
+  versionnée, et un pré-vol `doctor` valide l'ensemble avant la mise en service.
+
 ## Installation
 
 TranscrIA tourne sous Linux avec un GPU NVIDIA. Deux chemins, selon votre objectif.

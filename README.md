@@ -133,6 +133,30 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
 Every phase is checkpointed: a re-dispatched job resumes at the first incomplete phase,
 even on a different worker.
 
+## Built for teams, not just for runs
+
+Most of the work went into the parts *around* the transcription — the things you need
+once real people share the tool week after week.
+
+- **Roles and groups.** Four roles (admin, manager, operator, viewer) and groups with
+  their own admins; jobs, lexicons, and meeting types can be shared to a group or to the
+  whole install.
+- **Central lexicons.** Shared, group-scoped glossaries that admins curate and users
+  apply. A term validated on one job can be promoted into a central lexicon, so the whole
+  organization spells "SIRET" or an internal acronym the same way next time.
+- **Audit trail and data protection.** Every sensitive action is logged (actor, IP,
+  timestamp) in a filterable, exportable trail; retention is configurable with an
+  automatic purge, documented for a DPO in [docs/AUDIT_DPO.md](docs/AUDIT_DPO.md).
+- **Voice enrollment.** Consent-gated known-voice matching: a signed form and a hashed
+  proof are required before any embedding is generated, and reference audio is deleted by
+  default.
+- **Backup, restore, and guided upgrade.** A maintenance CLI backs up the database and
+  job files, restores them, and walks an upgrade through its migrations — on SQLite or
+  PostgreSQL.
+- **Configuration you can actually manage.** A classified 423-key schema drives a friendly
+  admin UI and a generated reference; secrets stay out of the versioned config, and a
+  `doctor` preflight validates the whole thing before you go live.
+
 ## Installation
 
 TranscrIA runs on Linux with an NVIDIA GPU. Two paths, depending on your goal.
