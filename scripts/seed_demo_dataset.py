@@ -36,6 +36,7 @@ from transcria.auth.groups import GroupStore  # noqa: E402
 from transcria.auth.models import GroupRole, Role  # noqa: E402
 from transcria.auth.store import UserStore  # noqa: E402
 from transcria.config import get_config  # noqa: E402
+from transcria.database import db  # noqa: E402
 from transcria.jobs.filesystem import JobFilesystem  # noqa: E402
 from transcria.jobs.models import JobState  # noqa: E402
 from transcria.jobs.store import JobStore  # noqa: E402
@@ -170,6 +171,18 @@ def main(argv: list[str] | None = None) -> int:
             if state is not JobState.CREATED:
                 JobStore.update_state(job.id, state)
             job_ids.append(job.id)
+
+        # Créneaux de planification (la frise hebdomadaire a du contenu à montrer)
+        from transcria.queue.calendar import SchedulingWindowStore
+        from transcria.queue.models import SchedulingWindow
+        if not db.session.query(SchedulingWindow).count():
+            SchedulingWindowStore.create({"name": "Nuit semaine",
+                                          "days": ["lundi", "mardi", "mercredi", "jeudi", "vendredi"],
+                                          "start": "19:00", "end": "07:30",
+                                          "action": "pause_queue", "enabled": True})
+            SchedulingWindowStore.create({"name": "Week-end priorité", "days": ["samedi", "dimanche"],
+                                          "start": "08:00", "end": "20:00",
+                                          "action": "force_gpu", "enabled": True})
 
         result_job_id = _seed_completed_result_job(admin.id, "Job terminé (walkthrough)")
 

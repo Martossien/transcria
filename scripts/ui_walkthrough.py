@@ -464,6 +464,48 @@ class Walkthrough:
         self.check("accueil : aucun état brut", "ready_to_process" not in body and "summary_done" not in body)
         self.shot("35_accueil_peuple")
 
+        # Planification (C3.6) : les 3 questions du gestionnaire ont leur panneau,
+        # la frise hebdomadaire rend les créneaux seedés (segments serveur).
+        self.page.goto(f"{self.base}/admin/schedule", wait_until="networkidle")
+        body = self.page.content()
+        self.check("planification : panneaux « maintenant » rendus",
+                   "En cours de traitement" in body and "En attente" in body and "Agenda" in body)
+        seg_count = self.page.locator(".sched-seg").count()
+        self.check("planification : frise hebdomadaire avec segments", seg_count >= 5, f"{seg_count} segments")
+        self.check("planification : bascule d'agenda visible",
+                   self.page.locator("#schedule-master-toggle").count() == 1)
+        self.shot("38_planification")
+
+        # C3.1 — le wizard à CHAQUE état du workflow : étape courante marquée,
+        # aucun état brut, un guidage visible (captures revues une à une).
+        # indices dans job_ids = ordre de création du seed (_JOB_STATES)
+        state_expectations = [
+            (0, "creé/fichier", "Fichier audio"),
+            (1, "résumé fait", "Contexte de la réunion"),
+            (2, "contexte fait", "Participants"),
+            (3, "lexique fait", "Traitement"),
+            (4, "prêt", "Traitement"),
+            (7, "échec", None),
+        ]
+        job_ids = ids.get("job_ids", [])
+        for idx, (seed_idx, label, expected_marker) in enumerate(state_expectations):
+            job_id = job_ids[seed_idx] if seed_idx < len(job_ids) else None
+            if not job_id:
+                self.check(f"wizard état « {label} » : job seedé retrouvé", False, str(seed_idx))
+                continue
+            self.page.goto(f"{self.base}/jobs/{job_id}", wait_until="networkidle")
+            body = self.page.content()
+            current = self.page.locator(".step-section.current-step").count()
+            raw = [s for s in ("summary_done", "context_done", "lexicon_done",
+                               "ready_to_process") if s in body]
+            self.check(f"wizard « {label} » : étape courante marquée + zéro état brut",
+                       current >= 1 and not raw,
+                       f"current={current}" + (f", bruts={raw}" if raw else ""))
+            if expected_marker:
+                self.check(f"wizard « {label} » : la bonne étape est proposée",
+                           expected_marker in body, expected_marker)
+            self.shot(f"5{idx}_wizard_{label.replace(' ', '_').replace('/', '-')}")
+
         # Types de réunion : le type personnalisé seedé apparaît dans la galerie.
         self.page.goto(f"{self.base}/meeting-types", wait_until="networkidle")
         self.check("types : le type démo personnalisé est rendu",

@@ -386,7 +386,7 @@ dédupliquée dans le fil (« la discussion porte sur ~N % … période X → Y 
 
 > Chaque item suit la grille §0.2. L'ordre ci-dessous = dépendances.
 
-### C3.1 Workflow de traitement, les 9 étapes une par une — **taille L**
+### C3.1 Workflow de traitement, les 9 étapes une par une — **taille L** — 🟢 LIVRÉ (2026-07-04)
 Étapes réelles du wizard (`job_wizard.html`, 9 sections) : 1 fichier+profil → 2 analyse
 audio → 3 résumé → 4 contexte/type → 5 participants/locuteurs → 6 lexique de session →
 7 traitement → 8 qualité → 9 export. Pour CHAQUE étape : grille §0.2 complète + cas
@@ -404,6 +404,16 @@ spécifiques connus :
 - É8 : rapport qualité actionnable (chaque warning → que faire ?) ;
 - É9 : tous les téléchargements + éditeur + affinage accessibles ; purge des sources.
 **Acceptation** : fiche par étape (verdicts) ; anomalies triées ; captures revues.
+**Réalisé** : le walkthrough ouvre le wizard sur CHAQUE état seedé (créé → résumé →
+contexte → lexique → prêt → échec) et asserte : étape courante marquée, ZÉRO état
+brut, la bonne étape proposée (+11 checks, 71/71). Captures revues une à une —
+verdicts : état ÉCHEC exemplaire (bandeau « vos saisies sont conservées » + bouton
+Relancer) ; stepper cohérent à chaque état ; badges d'état FR ; profils
+indisponibles marqués (conscience d'installation) ; formulaire contexte complet.
+Étapes 4/5/6 (+créneaux) déjà sous fuzz (466 soumissions). Cas GPU (É2 diagnostic,
+É3 attente VRAM, É7 relance partielle) : couverts par les E2E réels et les tests
+unitaires existants — fiches spécifiques au fil des E2E de gel. Anomalie A6 (garde
+nom locuteur) : reste différée, décision documentée inchangée.
 
 ### C3.2 Fonctionnalités une par une — **taille L**
 Liste exhaustive : éditeur SRT (⚠ session secrétaires = jalon J4), chat d'affinage,
@@ -483,6 +493,19 @@ où, combien de temps, qui y accède).
    l'incompréhension actuelle.
 **Acceptation** : scénarios walkthrough des 3 questions ; états vide/chargé/conflit ;
 **jalon J3** = validation mainteneur (+ si possible un autre gestionnaire).
+**Réalisé** : la page répond aux 3 questions D'UN COUP D'ŒIL — panneau « En ce
+moment » (traitements en cours / file avec REPRISE ESTIMÉE si suspendue —
+`estimate_queue_resume` traverse les pauses enchaînées / créneau actif + PROCHAINE
+BASCULE — `next_change`) + **frise hebdomadaire 7 j × 24 h** calculée SERVEUR
+(segments % par jour, nuits à cheval sur minuit en 2 segments, légende, zéro JS de
+rendu) + **bascule d'agenda VISIBLE** (constat d'audit : créneaux configurables
+agenda éteint — désormais interrupteur + bandeau d'avertissement, POST
+/api/schedule/enabled via ConfigService, audité, RBAC testé) + libellé force_gpu
+clarifié. L'éditeur de règles existant conservé tel quel. Revue visuelle : 3
+captures revues, un défaut attrapé (« Saturday » — strftime %A suit la locale du
+process → jours FR explicites). Walkthrough +3 checks (60/60), fuzz +1 formulaire
+(466 soumissions, 0 violation), 6 tests calendrier/toggle. J3 = à la disposition
+du mainteneur (non bloquant).
 
 ### C3.7 Lexiques (session + centraux) — **taille M**
 Revue complète avec fuzz : import/export (formats, doublons, casse/accents, 10 k

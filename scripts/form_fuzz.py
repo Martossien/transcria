@@ -105,6 +105,12 @@ def build_specs(job_id: str) -> list[FormSpec]:
                        "new_password": "walkthrough-admin-pw",
                        "confirm_password": "walkthrough-admin-pw"},
                  fuzz_fields=["current_password", "new_password", "confirm_password"]),
+        # Planification : création de créneau (API JSON)
+        FormSpec("api/schedule/windows", "/api/schedule/windows", kind="json",
+                 base={"name": "Fuzz créneau", "days": ["lundi"], "start": "19:00",
+                       "end": "23:00", "action": "pause_queue", "enabled": True},
+                 fuzz_fields=["name", "start", "end", "action"],
+                 typed_fields=["days", "enabled"]),
         # Types de réunion (API JSON de création)
         FormSpec("api/meeting-types", "/api/meeting-types", kind="json",
                  base={"name": "Type fuzz", "badge": "FZ", "banner_text": "B",
