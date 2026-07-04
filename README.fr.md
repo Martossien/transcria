@@ -18,7 +18,7 @@ après semaine — pas comme une simple surcouche autour d'un modèle de transcr
 workflow guidé avec l'humain dans la boucle, une file GPU de production et un accès
 multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
-![Workflow guidé avec diagnostic audio](docs/screenshots/02-job-pipeline.png)
+![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
 ## Statut du projet — 0.2.0, première version stable
 
@@ -30,6 +30,8 @@ L'interface est en français d'abord, et la qualité de référence repose sur d
 sous conditions (voir [Prérequis](#prérequis) et [Limites connues](#limites-connues)).
 Nous préférons énoncer les limites clairement plutôt que de laisser croire que l'outil
 fait plus qu'il ne fait.
+
+**Aller à :** [Ce que ça fait](#ce-que-ça-fait) · [Captures](#captures-décran) · [Conçu pour des équipes](#conçu-pour-des-équipes-pas-seulement-pour-des-runs) · [Profils](#profils-de-traitement) · [Comment ça marche](#comment-ça-marche) · [Installation](#installation) · [Déploiement](#topologies-de-déploiement) · [Limites connues](#limites-connues) · [Stack technique](#stack-technique) · [Documentation](#documentation)
 
 ## Ce que ça fait
 

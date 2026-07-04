@@ -18,7 +18,7 @@ production GPU queue, and role-based multi-user access are first-class, not afte
 UI strings and LLM prompts are centralized, so localization is a planned evolution rather
 than a rewrite.*
 
-![Guided workflow with audio diagnosis](docs/screenshots/02-job-pipeline.png)
+![TranscrIA — quick overview of the workflow](docs/screenshots/00-overview.gif)
 
 ## Project status — 0.2.0, first stable release
 
@@ -29,6 +29,8 @@ integration suite plus real-GPU runs). The interface is French-first, and refere
 quality relies on gated models (see [Requirements](#requirements) and
 [Known limitations](#known-limitations)). We prefer to state limits plainly rather than
 imply the tool does more than it does.
+
+**Jump to:** [What it does](#what-it-does) · [Screenshots](#screenshots) · [Built for teams](#built-for-teams-not-just-for-runs) · [Processing profiles](#processing-profiles) · [How it works](#how-it-works) · [Installation](#installation) · [Deployment](#deployment-topologies) · [Known limitations](#known-limitations) · [Tech stack](#tech-stack) · [Documentation](#documentation)
 
 ## What it does
 
