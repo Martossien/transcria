@@ -97,6 +97,10 @@ imply the tool does more than it does.
 
 ![Transcript editor timeline](docs/screenshots/08-editor.png)
 
+**Word report templates — 18 built-in meeting types (works council, executive committee, project review, crisis, HR, negotiation, and more), each with its own cover theme, badge, and structured fields. Duplicate one, adjust palette / banner / sections, add a logo, preview the DOCX live, then share it to a group or carry it between installs as JSON**
+
+![Meeting type templates gallery](docs/screenshots/11-editor_meeting_template.png)
+
 ## Processing profiles
 
 After upload, you choose a *deliverable* on a single slider instead of an opaque

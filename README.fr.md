@@ -102,6 +102,10 @@ fait plus qu'il ne fait.
 
 ![Frise de l'éditeur de transcription](docs/screenshots/08-editor.png)
 
+**Modèles de compte-rendu Word — 18 types de réunion intégrés (CSE, comité de direction, revue de projet, crise, RH, négociation, et plus), chacun avec sa page de garde, sa pastille et ses champs structurés. Dupliquez-en un, ajustez palette / bannière / sections, ajoutez un logo, prévisualisez le DOCX en direct, puis partagez-le à un groupe ou transportez-le entre installations en JSON**
+
+![Galerie des types de réunion](docs/screenshots/11-editor_meeting_template.png)
+
 ## Profils de traitement
 
 Après l'upload, vous choisissez un *livrable* sur un seul curseur, au lieu d'un opaque
