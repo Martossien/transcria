@@ -110,6 +110,10 @@ fait plus qu'il ne fait.
 
 ![Discuter avec les livrables](docs/screenshots/12-speak_with_doc.png)
 
+**La correction humaine alimente le lexique — un terme suspect (ici « depth techniques », un franglais mal transcrit pour « dettes techniques ») arrive avec son extrait audio à vérifier. Confirmez la bonne orthographe, la catégorie et la priorité, puis ajoutez-le au lexique en un clic : la correction LLM l'applique sur cette transcription et le réutilise sur les prochains traitements**
+
+![Corriger un terme et l'ajouter au lexique](docs/screenshots/13-correct_lexique.png)
+
 ## Profils de traitement
 
 Après l'upload, vous choisissez un *livrable* sur un seul curseur, au lieu d'un opaque

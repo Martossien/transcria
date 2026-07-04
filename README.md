@@ -105,6 +105,10 @@ imply the tool does more than it does.
 
 ![Chat with the deliverables](docs/screenshots/12-speak_with_doc.png)
 
+**Human correction feeds the lexicon — a suspect term (here "depth techniques", a franglais mis-transcription of "dettes techniques") comes with the audio excerpt to check. Confirm the correct spelling, set a category and priority, then add it to the lexicon in one click: the LLM correction applies it across this transcript and reuses it on future jobs**
+
+![Correcting a term and adding it to the lexicon](docs/screenshots/13-correct_lexique.png)
+
 ## Processing profiles
 
 After upload, you choose a *deliverable* on a single slider instead of an opaque
