@@ -134,3 +134,30 @@ class TestAuditStore:
 
             assert db.session.get(AuditLog, lexicon_entry_id) is None
             assert db.session.get(AuditLog, job_entry_id) is not None
+
+
+class TestAuditLabelsFR:
+    """C3.5 — les actions d'audit s'affichent en FRANÇAIS (constat de revue visuelle)."""
+
+    def test_libelles_par_famille(self):
+        from transcria.audit.models import audit_action_label
+        assert audit_action_label("login_failed") == "Échec de connexion"
+        assert audit_action_label("meeting_type_create") == "Type de réunion — création"
+        assert audit_action_label("config_edit") == "Configuration — édition"
+        assert audit_action_label("lexicon_term_add") == "Lexique — ajout de terme"
+
+    def test_slug_inconnu_ne_casse_pas(self):
+        from transcria.audit.models import audit_action_label
+        # un slug non prévu doit rendre quelque chose de lisible, jamais lever
+        assert audit_action_label("truc_bidule") == "Truc bidule"
+
+    def test_page_audit_affiche_le_francais(self, admin_client, app):
+        from transcria.audit.decorator import audit_log
+        from transcria.audit.models import AuditAction
+        with app.app_context():
+            audit_log(AuditAction.MEETING_TYPE_CREATE, target_type="meeting_type", target_label="Démo")
+        r = admin_client.get("/admin/audit")
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        assert "Type de réunion — création" in body
+        assert "meeting_type_create</span>" not in body   # plus de slug brut affiché

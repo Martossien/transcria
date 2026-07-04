@@ -2748,7 +2748,7 @@ def admin_config():
             return _render_config_form(config_yaml, config_path, errors, 400, values=display_values(merged, CONFIG_FORM_SECTIONS))
 
         flash("Réglages sauvegardés.", "success")
-        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=config_path)
+        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=Path(config_path).name)
         cfg = ConfigService.get_singleton()
 
     elif request.method == "POST" and request.form.get("_mode") == "prompts":
@@ -2800,7 +2800,7 @@ def admin_config():
             return _render_config_form(raw_yaml, config_path, errors, 400)
 
         flash(f"Configuration sauvegardée dans {config_path}.", "success")
-        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=config_path)
+        audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=Path(config_path).name)
         cfg = ConfigService.get_singleton()
 
     config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)

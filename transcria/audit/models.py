@@ -70,6 +70,46 @@ class AuditAction(str, enum.Enum):
     VOICE_DELETE = "voice_delete"
     VOICE_CONSENT_VIEW = "voice_consent_view"
 
+_VERB_FR = {
+    "login": "Connexion", "login_failed": "Échec de connexion", "logout": "Déconnexion",
+    "view": "Consultation", "download": "Téléchargement", "delete": "Suppression",
+    "create": "Création", "modify": "Modification", "save": "Enregistrement",
+    "enqueue": "Mise en file", "dequeue": "Sortie de file", "prioritize": "Priorisation",
+    "reorder": "Réordonnancement", "purge": "Purge", "pause": "Pause", "resume": "Reprise",
+    "force": "Forçage", "edit": "Édition", "export": "Export", "import": "Import",
+    "add": "Ajout", "remove": "Retrait", "assign": "Affectation", "revert": "Restauration",
+    "request": "Demande", "map": "Mappage", "push": "Envoi",
+    "scope_change": "Changement de portée", "member_add": "Ajout de membre",
+    "member_remove": "Retrait de membre", "srt_edit_save": "Édition de la transcription",
+    "term_add": "Ajout de terme", "term_modify": "Modification de terme",
+    "term_delete": "Suppression de terme", "context_save": "Enregistrement du contexte",
+    "lexicon_save": "Enregistrement du lexique", "participants_save": "Enregistrement des participants",
+    "speaker_map": "Mappage des locuteurs", "test_purge": "Purge des jobs de test",
+    "window_create": "Création de créneau", "window_modify": "Modification de créneau",
+    "window_delete": "Suppression de créneau", "refine_request": "Demande d'affinage",
+    "refine_revert": "Restauration d'affinage", "external_push": "Envoi externe",
+}
+_DOMAIN_FR = {
+    "job": "traitement", "queue": "file", "schedule": "planification", "config": "configuration",
+    "audit": "audit", "user": "utilisateur", "group": "groupe", "lexicon": "lexique",
+    "meeting_type": "type de réunion", "voice": "voix",
+}
+
+
+def audit_action_label(value: str) -> str:
+    """Libellé FR d'une action d'audit (le SLUG reste la valeur technique). Constat de
+    revue visuelle C3.5 : la page affichait « meeting_type_create » brut."""
+    if value in _VERB_FR:
+        return _VERB_FR[value]
+    # domaine_verbe : « meeting_type_create » → « Type de réunion — Création »
+    for domain, dom_fr in sorted(_DOMAIN_FR.items(), key=lambda kv: -len(kv[0])):
+        if value.startswith(domain + "_"):
+            rest = value[len(domain) + 1:]
+            verb = _VERB_FR.get(rest, rest.replace("_", " "))
+            return f"{dom_fr.capitalize()} — {verb.lower()}"
+    return value.replace("_", " ").capitalize()
+
+
 
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"

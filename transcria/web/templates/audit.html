@@ -22,7 +22,7 @@
       <select name="action" class="form-select form-select-sm">
         <option value="">Toutes actions</option>
         {% for a in AuditAction %}
-        <option value="{{ a.value }}" {% if filters.action == a.value %}selected{% endif %}>{{ a.value }}</option>
+        <option value="{{ a.value }}" {% if filters.action == a.value %}selected{% endif %}>{{ action_label(a.value) }}</option>
         {% endfor %}
       </select>
     </div>
@@ -67,7 +67,7 @@
           <tr>
             <td class="text-muted small">{{ row.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
             <td>{{ row.actor_username }}</td>
-            <td><span class="badge bg-secondary">{{ row.action }}</span></td>
+            <td><span class="badge bg-secondary" title="{{ row.action }}">{{ action_label(row.action) }}</span></td>
             <td>
               <span class="text-muted small">{{ row.target_type }}</span>
               {% if row.target_label %}<br><strong>{{ row.target_label[:80] }}{% if row.target_label|length > 80 %}…{% endif %}</strong>{% endif %}

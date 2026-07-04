@@ -6,7 +6,7 @@ from flask import Blueprint, Response, render_template, request
 from flask_login import login_required
 
 from transcria.audit.decorator import audit_log
-from transcria.audit.models import AuditAction
+from transcria.audit.models import AuditAction, audit_action_label
 from transcria.audit.store import AuditStore
 from transcria.auth.permissions import Permission, requires
 
@@ -86,6 +86,7 @@ def audit_page():
             "until": until,
         },
         AuditAction=AuditAction,
+        action_label=audit_action_label,
     )
 
 
