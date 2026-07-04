@@ -8,6 +8,33 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added — stabilisation 0.2.0 (vague 2)
+- **L'installeur recommande le moteur LLM en l'expliquant** : sur les petits paliers
+  VRAM, llama.cpp sert un modèle d'une classe supérieure (ex. à 12 Go : Qwen3.5-9B
+  contre qwen3.5:4b côté Ollama) — la recommandation, pilotée par le catalogue de
+  paliers (`engine_recommendation`), est affichée avec sa raison et pré-remplit le
+  choix sans jamais l'imposer (`transcria.installer.cli recommend-llm`).
+- **Discussion avec les livrables : budget réel + honnêteté** : le budget de
+  transcription est dérivé du contexte réel du backend (60 000 → 714 000+ caractères
+  sur un palier 24 Go : une réunion de 4 h 30 tient entière) ; si troncature il y a,
+  elle conserve début ET fin, et une notice dans le fil indique la période non visible.
+- **Classification des clés de configuration** (garde CI) : les 423 clés des défauts
+  sont classées (exposées / internes justifiées / différées) — toute clé nouvelle non
+  classée fait échouer la CI.
+
+### Changed
+- **Page Système : sources locales** (psutil CPU/RAM, NVML/torch GPU) — le projet
+  externe « llmdashboard » n'est plus utilisé ; module retiré, clé
+  `services.dashboard_llm_url` obsolète (ignorée avec avertissement).
+- **Diagnostics réseau** : les échecs vers les backends LLM distinguent désormais
+  timeout / connexion refusée / DNS / statut HTTP / JSON invalide, journalisés avec
+  anti-inondation (un poll sur démon éteint ne spamme plus les logs).
+
+### Fixed
+- **Relances du résumé robustes** : si le serveur LLM meurt entre deux tentatives
+  (SIGTERM ponctuel observé), les relances re-vérifient et relancent la LLM au lieu
+  d'attendre le timeout complet dans le vide.
+
 ### Added — stabilisation 0.2.0 (vagues 0-1)
 - **Sauvegarde / restauration locale** (`python -m transcria.maintenance.cli`) :
   `backup` (pg_dump ou SQLite à chaud → tar.gz horodaté, manifeste avec sha256,

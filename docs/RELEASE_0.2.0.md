@@ -250,7 +250,7 @@ nœud éteint, disque plein simulé) → verdict et action attendus, testés.
 > au PATH). +3 tests de régression. Leçon : la revue critique de son propre travail
 > fait partie du rituel.
 
-### C2.1 Installation user-friendly + catalogue de paliers — **taille L**
+### C2.1 Installation user-friendly + catalogue de paliers — **taille L** — 🟢 QUASI-LIVRÉ (2026-07-04)
 **Constat vérifié** : l'install FONCTIONNE (harnais §8.1) mais ne CONSEILLE pas : le
 choix llama.cpp vs Ollama est laissé nu, alors que les bancs
 ([[llm_tier_profiles_roadmap]]) montrent llama.cpp meilleur sur les petits paliers ;
@@ -279,8 +279,21 @@ anti-hardcode verte ; tags modèles vérifiés à la source (jamais de mémoire 
 [[verify_tech_versions_at_source]]).
 **Hors périmètre 0.2.0** : passe de MESURE exhaustive Ollama/vLLM multi-GPU (les valeurs
 bench existantes sont transcrites avec `source:` honnête ; la mesure fine = 0.2.x).
+**Réalisé** : constat d'entrée CADUC pour les points 1-3 — le catalogue
+`transcria/data/llm_profiles.yaml` (schema v2) + `config/llm_profiles.select_profile`
++ les 3 consommateurs étaient DÉJÀ livrés (chantier antérieur, garde anti-hardcode
+comprise). Livré aujourd'hui = le point 4 (le cœur de la demande mainteneur) :
+bloc `engine_recommendation` en DONNÉES (seuil per-card < 31 Go → llama.cpp),
+`recommend_engine()` qui compare CONCRÈTEMENT les deux moteurs (« à 12 Go :
+llama.cpp sert Qwen3.5-9B là où Ollama servirait qwen3.5:4b — déconseillé ici »),
+sous-commande installeur `recommend-llm` (lignes humaines + ENGINE= machine),
+install.sh affiche la recommandation et adapte le défaut du prompt — jamais imposé.
+Point 5 (résumé final actionnable) : déjà livré par le chantier fonte install.sh
+(summary_phase : profil, modèles, base, CHANGE-ME restants, doctor, prochaines
+étapes). RESTE : point 6 (revue de tous les messages d'échec install) → traité au
+fil des E2E matrice.
 
-### C2.2 Menu de configuration — périmètre RÉDUIT (arbitrage mainteneur) — **taille M**
+### C2.2 Menu de configuration — périmètre RÉDUIT (arbitrage mainteneur) — **taille M** — 🟡 PARTIEL (2026-07-04 : garde livrée)
 **Constat vérifié** : 423 clés dans les défauts (`loader.py`), 27 champs exposés
 (`config_form.py::CONFIG_FORM_SECTIONS`, 8 sections). La génération complète depuis le
 schéma (v2 du plan) est déclassée : « pas le plus important ».
@@ -299,8 +312,16 @@ schéma (v2 du plan) est déclassée : « pas le plus important ».
 **Acceptation** : classification 423/423 verte ; fuzz C0.2 vert sur le formulaire étendu ;
 aller-retour sans perte ; un opérateur règle e-mail + rétention + palier LLM sans
 toucher au YAML.
+**Réalisé (point 1 — le cœur anti-divergence)** : `transcria/data/config_classification.yaml`
+(v1 honnête : 27 exposed = le formulaire actuel, 3 internal justifiées — calibrations
+écrites par le système —, 393 deferred à instruire domaine par domaine) + garde CI
+`test_config_classification.py` (clé non classée = échec ; clé fantôme = échec ;
+cohérence formulaire↔exposed ; internal sans raison = échec). **RESTE (points 2-3)** :
+extension du formulaire aux sections opérateur avec aide par champ — à traiter par
+domaine au fil de la vague 3 (notifications avec C3.2, rétention avec C3.10,
+sécurité avec C3.9…), la garde impose la décision consciente à chaque ajout.
 
-### C2.3 Ménage llmdashboard — **taille S/M**
+### C2.3 Ménage llmdashboard — **taille S/M** — ✅ LIVRÉ (2026-07-04)
 **Constat vérifié** : `DashboardClient` + `services.dashboard_llm_url` dans 7 fichiers
 (`integrations/dashboard_client.py`, `integrations/__init__.py`, `gpu/vram_manager.py`,
 `queue/allocator.py`, `web/routes.py`, `config/loader.py`, `config/config_schema.py`).
@@ -311,8 +332,17 @@ servent peut-être comme source d'occupation GPU ; si oui, basculer sur la mesur
 warning une version), tests adaptés, `dashboard_status.html` renommé/refondu si son
 contenu venait de là (à vérifier).
 **Acceptation** : grep vert hors CHANGELOG ; E2E GPU inchangé ; walkthrough vert.
+**Réalisé** : audit d'abord (étape 0) — le dashboard n'était que source PRIMAIRE
+optionnelle avec repli torch DÉJÀ en place dans vram_manager/allocator ; la page
+/system en dépendait pour CPU/RAM/GPU. Livré : `diagnostics/system_status.py`
+(psutil CPU/RAM + NVML→torch GPU, MÊME contrat de sortie → zéro changement
+template), les 2 get_gpu_info passent en local direct, module
+`integrations/dashboard_client.py` SUPPRIMÉ, clé `services.dashboard_llm_url`
+retirée (défauts/schéma/exemple) avec dépréciation douce (warning loader),
+psutil promu dépendance explicite, docs nettoyées (INSTALL/CONFIG_REFERENCE/
+TECHNICAL), tests remplacés (TestSystemStatusLocal). 69 tests consommateurs verts.
 
-### C2.4 Robustesse réseau — **taille M**
+### C2.4 Robustesse réseau — **taille M** — ✅ LIVRÉ (2026-07-04)
 **Constat vérifié** : `gpu/llm_backend.py:72 _http_get_json` → `None` pour toute erreur ;
 motif à inventorier sur TOUS les clients (inference client, remote node, mailer SMTP,
 opencode runner, HF downloads).
@@ -324,8 +354,15 @@ répondu en 5 s » ≠ « réponse illisible ») ; garde grep : plus de `except 
 return None` nu sur un appel réseau.
 **Acceptation** : tests par kind (serveur factice qui timeout/refuse/500/JSON cassé) ;
 doctor distingue les pannes ; logs relus sur un E2E avec nœud coupé.
+**Réalisé** : inventaire d'abord — le client d'inférence (inference/client.py) était
+DÉJÀ propre (InferenceUnavailable avec url+cause) ; le vrai trou = `_http_get_json`
+(llm_backend). Livré : `_http_get_json_result` → (data, "nature: détail") distinguant
+timeout connexion / timeout lecture / connexion refusée / DNS / statut HTTP / JSON
+invalide ; l'appelant garde son contrat (None) mais la nature est JOURNALISÉE avec
+throttle 5 min par (url, nature) — un poll sur démon éteint n'inonde plus les logs.
+6 tests avec serveurs factices réels (503, JSON cassé, refus, DNS, succès, throttle).
 
-### C2.5 Discuss : budget réel + honnêteté — **taille S/M**
+### C2.5 Discuss : budget réel + honnêteté — **taille S/M** — ✅ LIVRÉ (2026-07-04)
 **Constat vérifié** : `workflow/refine_llm.py:24 DEFAULT_MAX_TRANSCRIPT_CHARS = 60000`,
 troncature silencieuse de la transcription injectée au système.
 **Livrables** : budget calculé du contexte réel du backend actif (catalogue C2.1 ;
@@ -335,6 +372,13 @@ sur ~N min sur M » ; prompt système informé de la troncature (le LLM ne prét
 avoir tout lu).
 **Acceptation** : test transcription > budget (bandeau + réponse honnête sur la zone
 manquante) ; E2E discuss court inchangé (1,6 s/tour préservé — non-régression mesurée).
+**Réalisé** : `compute_transcript_budget_chars` (explicite > palier détecté via
+catalogue + GPU locaux > défaut 60 000) — sur la machine 8-GPU le budget passe à
+714 432 caractères : une réunion de 4 h 30 tient ENTIÈRE ; `truncate_transcript`
+début (60 %) + FIN (35 %, les décisions s'y prennent) avec période masquée horodatée
+dans la note au LLM (« ne prétends jamais l'avoir lue ») ; côté UI, notice SYSTÈME
+dédupliquée dans le fil (« la discussion porte sur ~N % … période X → Y non visible »)
+— réutilise le rendu des tours system existant, zéro JS nouveau. 4 tests.
 
 ---
 
@@ -415,6 +459,19 @@ où, combien de temps, qui y accède).
    promet la page, que fait-elle VRAIMENT (fenêtres ? priorités ? qui les crée ?),
    qu'est-ce qui la rend incompréhensible (vocabulaire ? absence d'exemple ? états
    invisibles ?) — verdicts consignés AVANT de coder ;
+   **✅ AUDIT FAIT (2026-07-04)** — la page actuelle est un ÉDITEUR DE RÈGLES
+   correct (formulaire créneau + table + bandeau créneau actif + aide par action),
+   mais : (a) elle ne répond à AUCUNE des 3 questions gestionnaire (rien sur « qui
+   utilise quoi maintenant », rien sur « quand mon job passera », pas de vue
+   hebdomadaire des fenêtres — une table texte) ; (b) on peut créer des créneaux
+   alors que l'AGENDA ENTIER est désactivé en config — mention discrète dans le
+   sous-titre, aucun contrôle d'activation sur la page (constat walkthrough :
+   « Agenda désactivé ») ; (c) terminologie opaque (« Autoriser la libération GPU
+   forcée ») ; (d) aucun lien visuel entre un créneau et son EFFET sur la file.
+   → Re-conception : frise hebdomadaire 7 j × 24 h des créneaux (blocs par action),
+   panneau « maintenant » (jobs en cours, scheduler, créneau actif et son effet),
+   estimation de passage par job en file, activation de l'agenda visible, libellés
+   revus. L'éditeur de règles existant est CONSERVÉ (il fonctionne).
 2. cahier des charges = les 3 questions gestionnaire : « qui utilise quoi MAINTENANT ? »
    « quand ma réunion passera-t-elle ? » « quelles fenêtres sont réservées/libres ? » —
    chacune répondue en <10 s à l'écran ;
@@ -510,8 +567,11 @@ fail-under 75 pour 81 % réels.
    par moyenne) ;
 2. les vagues 1-3 font monter le réel ;
 3. **fail-under 80** en dernière semaine, quand le réel passe ≥ 82 ;
-4. provenance/SBOM : **confirmer sur le run réel beta.9** (attestation visible sur GHCR,
-   pull anonyme OK) — action immédiate possible ;
+4. provenance/SBOM : ✅ **CONFIRMÉ sur run réel (2026-07-04)** — cause racine de
+   4 échecs de publication consécutifs (beta.6→9) trouvée : le paquet GHCR créé par
+   push PAT local ne donnait pas l'accès write aux Actions ; corrigé par le mainteneur
+   (Package settings → Manage Actions access → dépôt en Write) → PREMIÈRE publication
+   slim réussie, manifeste `attestation-manifest` vérifié sur l'index OCI ;
 5. pip-audit (C3.9) stabilisé en bloquant si le bruit le permet.
 **Note** : mypy blocs A et B = déjà résorbés (§8.3) — pas de chantier mypy résiduel
 hors nouveaux codes.
@@ -600,6 +660,8 @@ corriger » beta.9).
 | A8 | `/result` 500 sans rapport qualité | seed `/result` | **corrigée** |
 | A9 | Résumé édité étape 4 absent du ZIP | retour utilisateur | **corrigée** (beta.9) |
 | A10 | CSS/JS périmés (cache navigateur) | retour utilisateur | **corrigée** (asset_url) |
+| A11 | llama-server tué par un SIGTERM non tracé ~2 min après lancement (RÉCIDIVE — déjà observé une fois pendant le chantier refine) | E2E vague 2 (2026-07-04, log arbitrage : `que start_loop: terminate` à uptime 2 m 17 s, aucun acteur dans les logs instance/prod) | **ouverte** — à instrumenter (logger l'appelant dans stop_arbitrage_llm.sh + audit des chemins d'arrêt) ; la robustesse aval est corrigée (A12) |
+| A12 | Les tentatives 2/3 de run_summary supposaient « LLM déjà chargée » : serveur mort ⇒ 2×30 min d'opencode dans le vide | même E2E | **corrigée** — `ensure_arbitrage_llm_ready` re-vérifié (et relance au besoin) avant CHAQUE retry (runner.py) |
 
 **Candidats 0.3** (on n'y touche PAS en 0.2.0) : profils métier (route 1.0), ingestion
 pptx/pdf, harmonisation 1-clic depuis l'éditeur, mesure fine multi-GPU Ollama/vLLM,
