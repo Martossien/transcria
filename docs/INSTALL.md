@@ -1528,15 +1528,31 @@ venv/bin/python scripts/doctor.py
 # ou : venv/bin/python -m transcria.diagnostics.doctor
 ```
 
+Les vérifications sont **conscientes du profil** (`--profile`) : `all-in-one` et
+`scheduler` lancent tout ; `web` (frontale) saute les checks LLM/opencode locaux (elle
+délègue le GPU) ; `resource-node` ne lance que les checks du nœud ; `migrate` ne vérifie
+que la base.
+
 | Vérification | Détecte |
 |---|---|
-| Configuration | `config.yaml` illisible (YAML cassé) |
+| Configuration | `config.yaml` illisible (YAML cassé) — court-circuite le reste |
 | Base de données (schéma) | **schéma dérivé** — table/colonne attendue par les modèles absente de la base (base créée hors Alembic, ou `alembic upgrade head` oublié après un `git pull`) |
-| Script de lancement LLM | `services.arbitrage_script` introuvable ou non exécutable |
+| Base de données (encodage) | PostgreSQL pas en UTF8 (texte stocké sans validation d'encodage) |
+| Script de lancement LLM d'arbitrage | `services.arbitrage_script` introuvable ou non exécutable |
 | LLM d'arbitrage (serveur) | aucun serveur sur le port (rappelle le log à consulter) ; modèle actif ≠ `arbitrage_api_model_id` |
-| Binaire opencode | `opencode` introuvable alors qu'une phase LLM est activée |
-| Nœud(s) distant(s) | en mode `remote`/`hybrid`, nœud de ressources injoignable |
-| Dossiers de travail | `storage.jobs_dir` / `voice_enrollment.storage_dir` non inscriptibles |
+| Binaire opencode (phases LLM) | `opencode` introuvable alors qu'une phase LLM est activée |
+| Résolution du modèle opencode | le provider `local` / le `model_id` ne se résout pas dans la config opencode |
+| Production LLM (smoke) | **opt-in `--llm-smoke`** : opencode produit bien du texte (attrape « exit 0, 0 texte ») |
+| Dossiers de travail (inscriptibles) | `storage.jobs_dir` / `voice_enrollment.storage_dir` non inscriptibles |
+| Espace disque (dossier des jobs) | disque bas (< 10 Go = WARN, < 2 Go = FAIL) |
+| Modèles locaux (cache) | poids/cache STT ou diarisation attendus mais absents |
+| Stockage des fichiers de jobs (split) | backend `pg` mal configuré (frontale/worker sans filesystem partagé) |
+| Profil de déploiement | incohérence entre le profil demandé et la config (rôle/DB/ressources) |
+| Services systemd (profil) | conflits d'unités systemd connus pour le profil |
+| Nœud(s) de ressources distant(s) | en mode `remote`/`hybrid`, nœud de ressources injoignable |
+| Cohérence STT distant / nœud de contrôle | plan de contrôle STT distant incohérent/injoignable |
+| GPU des nœuds de ressources distants | GPU annoncés par le nœud absents/insuffisants |
+| Nœud de ressources (auth API / moteurs STT / ports STT) | profil `resource-node` : clé API, moteurs servis et ports attendus |
 
 Options : `--config <fichier>`, `--json` (pour l'outillage/CI), `--strict` (les
 avertissements deviennent des échecs). Code de sortie **0** si aucun échec bloquant,

@@ -32,6 +32,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from transcria.database import MODEL_MODULES
+
 OK = "ok"
 WARN = "warn"
 FAIL = "fail"
@@ -44,16 +46,10 @@ EXIT_FAIL = 1
 
 _VALID_PROFILES = ("all-in-one", "web", "scheduler", "resource-node", "migrate")
 
-# Modules de modèles à importer pour peupler ``db.metadata`` (même liste que le
-# test anti-dérive Alembic). Repris ici pour le diff de schéma à chaud.
-_MODEL_MODULES = (
-    "transcria.audit.models",
-    "transcria.auth.models",
-    "transcria.context.central_lexicon_models",
-    "transcria.jobs.models",
-    "transcria.queue.models",
-    "transcria.voice.models",
-)
+# SOURCE UNIQUE des modules de modèles (cf. transcria.database.MODEL_MODULES) : le diff de
+# schéma à chaud doit peupler db.metadata avec TOUTES les tables, sinon une table réelle
+# (ex. job_timing, meeting_type_templates) est vue « en trop » ou son absence non détectée.
+_MODEL_MODULES = MODEL_MODULES
 
 
 @dataclass

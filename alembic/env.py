@@ -12,17 +12,12 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
-# --- Métadonnées cibles : importer les modèles enregistre toutes les tables ----
-import transcria.audit.models  # noqa: F401
-import transcria.auth.models  # noqa: F401
-import transcria.context.central_lexicon_models  # noqa: F401
-import transcria.context.meeting_type_models  # noqa: F401
-import transcria.jobs.models  # noqa: F401
-import transcria.jobs.timing_store  # noqa: F401
-import transcria.queue.models  # noqa: F401
-import transcria.voice.models  # noqa: F401
+# --- Métadonnées cibles : importer TOUS les modèles enregistre toutes les tables ----
+# Source unique (transcria.database.MODEL_MODULES) — cf. garde test_model_modules_complete.
 from alembic import context
-from transcria.database import db
+from transcria.database import db, import_all_models
+
+import_all_models()
 
 config = context.config
 if config.config_file_name is not None:

@@ -11,15 +11,11 @@ import os
 from pytest_postgresql.janitor import DatabaseJanitor
 from sqlalchemy import create_engine
 
-# Importer les modèles peuple db.metadata pour la comparaison.
-import transcria.audit.models  # noqa: F401
-import transcria.auth.models  # noqa: F401
-import transcria.context.central_lexicon_models  # noqa: F401
-import transcria.context.meeting_type_models  # noqa: F401
-import transcria.jobs.models  # noqa: F401
-import transcria.queue.models  # noqa: F401
-import transcria.voice.models  # noqa: F401
-from alembic import command
+# Importer TOUS les modèles (source unique) peuple db.metadata pour la comparaison.
+from transcria.database import import_all_models
+
+import_all_models()
+from alembic import command  # noqa: E402
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
