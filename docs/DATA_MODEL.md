@@ -151,6 +151,21 @@ Créneaux calendaires évalués par `SchedulingCalendar`.
 
 Les créneaux peuvent traverser minuit. Si plusieurs créneaux sont actifs, l'ordre de priorité métier est `pause_queue`, puis `limit_concurrency`, puis `force_gpu`, puis `none`. `pause_queue` et `force_gpu` sont des règles on/off ; `limit_concurrency` utilise `action_params_json.max_concurrent_jobs`. Le nombre de GPUs n'est pas stocké dans le calendrier : l'allocation réelle reste calculée par `GPUAllocator`.
 
+### Table `job_timing`
+
+Historique des durées de traitement, source du **modèle de temps calibré machine** (migration `d1e8f2a4c6b9`). Une ligne par (job, étape) terminée ; fenêtre glissante par (profil, étape). Alimenté par le pipeline (`PipelineService._record_stage_timing`) et la phase résumé, lu par les estimateurs (wizard, ETA live, temps d'attente de la file, emails) via `transcria.workflow.timing_model`.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | Integer | PK autoincrement | Identifiant interne |
+| `profile_id` | String(40) | NOT NULL | Profil de traitement (`word_structure`, `dossier_qualite`…) |
+| `stage` | String(40) | NOT NULL | Étape mesurée (`summary`, `transcribe`, `diarization`, `correction`, `final_review`, `quality`, `export`, `type_fields`) |
+| `audio_seconds` | Float | NOT NULL | Durée audio du job (driver universel de l'estimation) |
+| `duration_seconds` | Float | NOT NULL | Durée machine réelle de l'étape |
+| `recorded_at` | DateTime(tz) | NOT NULL | Horodatage |
+
+Index `ix_job_timing_profile_stage` sur `(profile_id, stage, recorded_at)`. L'estimation ajuste `durée ≈ pente × audio + ordonnée` par moindres carrés dès assez d'échantillons, ratio médian sinon, formule historique au démarrage à froid. Une purge/rotation n'est pas nécessaire (seuls les `WINDOW` derniers points par clé sont lus).
+
 ### Tables voix enregistrées
 
 | Table | Rôle | Données sensibles |

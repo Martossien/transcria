@@ -257,8 +257,11 @@ auth:
   first_admin_password: "admin-change-me"
 
 services:
-  dashboard_llm_url: "http://127.0.0.1:5001"   # Monitoring GPU
-  srt_editor_easy_url: "http://127.0.0.1:7861" # Éditeur SRT externe
+  arbitrage_llm_host: "127.0.0.1"   # hôte de la LLM d'arbitrage (nœud GPU en split)
+  arbitrage_llm_port: 8080          # llama.cpp / vLLM (OpenAI-compatible)
+  # NB : `dashboard_llm_url` (monitoring GPU) et `srt_editor_easy_url` (éditeur SRT
+  # externe) ont été RETIRÉS en 0.2.0 — état GPU lu localement (NVML/psutil, page
+  # /system), correction dans l'éditeur SRT intégré (/jobs/<id>/editor).
 
 models:
   stt_backend: "cohere"
@@ -281,7 +284,6 @@ workflow:
   enable_quick_summary: true
   enable_speaker_detection: true
   enable_quality_mode: true
-  enable_external_srt_editor_link: true
   audio_quality:
     force_quality_backend: true
     degraded_levels: ["degrade"]
@@ -1386,8 +1388,30 @@ Les entrées d'audit ne sont jamais supprimables par l'interface (pas de route D
 | Fonction | Description |
 |---|---|
 | `build_email_config(cfg)` | Construit un `EmailConfig` depuis la config applicative (section `notifications.email`) |
-| `send_job_notification_async(cfg, to_email, display_name, job_title, job_id, event, error)` | Point d'entrée public : vérifie la config, construit l'email HTML + texte, lance un daemon thread pour l'envoi SMTP. `event` vaut `"completed"` ou `"failed"`. Ne lève jamais. |
+| `send_job_notification_async(cfg, to_email, display_name, job_title, job_id, event, error, facts)` | Point d'entrée public : vérifie la config, construit l'email HTML + texte, lance un daemon thread pour l'envoi SMTP. `event` vaut `"summary_ready"`, `"completed"` ou `"failed"`. `facts` = lignes (label, valeur) affichées dans le corps. Ne lève jamais. |
 | `_send_smtp(ecfg, to, subject, html, text)` | Envoi SMTP effectif : STARTTLS (`use_starttls=True`), SMTPS/SSL (`use_ssl=True`) ou SMTP nu. Authentification optionnelle. |
+
+**Deux moments d'envoi (l'humain est dans la boucle).** Le workflow enchaîne deux longues phases machine séparées par une validation utilisateur ; on prévient à la fin de chacune, jamais au démarrage :
+
+| Événement | Déclencheur | Contenu (`job_facts.py`) | Lien |
+|---|---|---|---|
+| `summary_ready` | `run_summary` succès (point UNIQUE : couvre le résumé synchrone via la route ET le worker) | type détecté, locuteurs, durée, **temps de traitement estimé** (calibré) | `/jobs/<id>/wizard` (à valider) |
+| `completed` | pipeline terminé (`job_executor`) | **temps réel** de traitement, score qualité, points à vérifier | `/jobs/<id>/result` |
+| `failed` | échec pipeline | message d'erreur | `/jobs/<id>/wizard` |
+
+`transcria/notifications/job_facts.py` assemble les faits (`summary_ready_facts`, `completed_facts`) et déclenche `notify_summary_ready` — best-effort, jamais bloquant.
+
+#### Modèle de temps calibré machine (`transcria/workflow/timing_model.py`, `timing_service.py`)
+
+Source **unique** des estimations de durée, apprises de l'historique réel de la machine (table `job_timing`, cf. `docs/DATA_MODEL.md`) plutôt qu'une formule fixe. Driver universel = durée audio.
+
+| Élément | Rôle |
+|---|---|
+| `timing_model.estimate_stage/estimate_machine` | Pur : régression linéaire par étape (≥ `_MIN_LINEAR_SAMPLES`), ratio médian, sinon `legacy_machine_seconds` (formule à froid). Renvoie `Estimate(seconds, basis measured\|initial, low, high, samples)` |
+| `timing_service` | Façade profil → étapes → estimation (`estimate_processing`, `estimate_total_with_human`, `estimate_remaining`, `estimate_queue_wait_seconds`) |
+| `PipelineService._record_stage_timing` | Historise chaque étape terminée en base (côté scheduler, qui a la DB) |
+
+**Consommateurs** : wizard (estimation profil-aware, badge « calibré · N jobs » vs « estimation initiale »), ETA live (`GET /api/jobs/<id>/status` → `eta`), temps d'attente de la file (`queue.wait_estimate` — durée audio portée par l'entrée de file en DB pour le mode split), emails. Démarrage à froid honnête : formule tant que `< N` échantillons, fourchette dès que calibré.
 
 **Modes SMTP supportés :**
 
@@ -1553,6 +1577,17 @@ opencode run --format json --model local/arbitrage <instruction> -f <prompt_file
 ```
 
 Le résultat est parsé comme NDJSON (un objet JSON par ligne). Les événements de type `text` fournissent le texte généré, les événements `tool_use` les appels d'outils.
+
+### 8.1 Watchdog d'inactivité (`_communicate_with_watchdog`)
+
+opencode a un **bug amont connu** (anomalyco/opencode#17516 : « run hangs after completing tool calls — process never exits ») et n'expose **pas** de timeout de commande (issue #3950). `OpenCodeRunner` lit donc la sortie en **streaming** (deux threads, anti-deadlock stdout/stderr) et applique un watchdog d'**inactivité** — **jamais** un timeout total agressif : un gros job légitime peut durer 30+ min tant que la LLM travaille.
+
+Le process est tué (et relancé par le retry appelant) si :
+- silence opencode > `opencode_idle_grace_s` (défaut 120 s) **ET** la LLM est idle ;
+- repli : silence seul > `opencode_pure_idle_cap_s` (défaut 600 s) ;
+- garde-fou absolu : le `timeout` passé (comportement historique).
+
+Le signal « LLM occupée » vient de `_llm_is_processing`, qui sonde l'endpoint d'arbitrage (résolu par `resolve_arbitrage_endpoint`, donc le **nœud** en split) : `/slots` (llama.cpp, `is_processing`) **puis** `/metrics` (vLLM, `num_requests_running`/`num_requests_waiting`). Backend sans sonde (Ollama) → `None` → repli idle pur.
 
 ---
 

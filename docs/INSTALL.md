@@ -946,7 +946,6 @@ workflow:
   enable_quick_summary: true
   enable_speaker_detection: true
   enable_quality_mode: true
-  enable_external_srt_editor_link: true
   audio_quality:
     force_quality_backend: true
     degraded_levels: ["degrade"]
@@ -1169,12 +1168,11 @@ Le menu **Voix enregistrées** est réservé aux admins globaux et admins de gro
 
 ## 8. Services externes
 
-### Dashboard LLM (port 5001)
+### Monitoring GPU et éditeur SRT (désormais intégrés)
 
-TranscrIA utilise le Dashboard LLM pour vérifier la disponibilité des GPUs. Si le dashboard n'est pas disponible, le fallback utilise `nvidia-smi`.
+L'état des GPUs (mémoire, disponibilité) est lu **localement** via NVML/torch et psutil — voir la page **Système** (`/system`). Le « Dashboard LLM » externe (`dashboard_llm_url`) a été **retiré en 0.2.0** ; sa clé de config est ignorée si présente.
 
-
-Éditeur SRT externe pour la correction manuelle des transcriptions. Optionnel, TranscrIA fonctionne sans.
+La correction manuelle des transcriptions se fait dans l'**éditeur SRT intégré** (`/jobs/<id>/editor`, livré en beta.9) — plus aucun outil externe. Les anciennes clés `srt_editor_easy_url` / `enable_external_srt_editor_link` sont obsolètes et ignorées.
 
 ### Scripts d'arbitrage LLM
 

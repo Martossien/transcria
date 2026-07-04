@@ -485,7 +485,7 @@ prompts ; D est le lot le plus délicat (LLM réelle en jeu → validation E2E G
 
 | # | Point | Position |
 |---|---|---|
-| P1 | **Quand injecter `extract_fields`** (le type n'est choisi qu'à l'étape 4, APRÈS le premier résumé) | **TRANCHÉ (utilisateur, 2026-07-03)** : relances de résumé + relecture finale seulement ; l'union dès le 1ᵉʳ résumé est une v2 |
+| P1 | **Quand injecter `extract_fields`** (le type n'est choisi qu'à l'étape 4, APRÈS le premier résumé) | **TRANCHÉ (utilisateur, 2026-07-03)** : relances de résumé + relecture finale. **Étendu (2026-07-04, A13)** : une micro-étape `run_type_field_extraction` (prompt court, appel LLM direct, gated `not run_final_review AND requires_summary AND type a des extract_fields`) les extrait aussi sur les profils sans relecture finale — au premier chef **Word structuré**, où ils étaient auparavant absents silencieusement. Coût GPU nul quand la garde ne s'applique pas |
 | P2 | Le refactor `build()` est le seul endroit où l'on peut casser l'existant | Fixtures de non-régression AVANT le refactor (lot C commence par les tests) |
 | P3 | Qualité des contributions communautaires | Revue de PR + validation stricte à l'import ; le README de `community/` fixe la barre |
 | P4 | `routes.py:209` (JSON précalculé à l'import) est un piège de cache — d'autres constantes du même genre peuvent exister | Lot A : grep systématique des usages de S1-S4 |
