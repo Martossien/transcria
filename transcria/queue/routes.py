@@ -33,7 +33,7 @@ QUEUE_STATUS_LABELS = {
 SCHEDULE_ACTION_LABELS = {
     "pause_queue": "Bloquer les nouveaux départs",
     "limit_concurrency": "Limiter les jobs simultanés",
-    "force_gpu": "Autoriser la libération GPU forcée",
+    "force_gpu": "Prioriser les traitements (récupération GPU agressive)",
     "none": "Aucune règle",
 }
 
@@ -87,21 +87,115 @@ def queue_page():
     )
 
 
+def _week_strip_segments(windows) -> list[dict]:
+    """Segments de la frise hebdomadaire 7 j × 24 h, calculés SERVEUR (aucun JS) :
+    par jour et par créneau, position/largeur en % de la journée — les fenêtres à
+    cheval sur minuit produisent deux segments (soir + matin du lendemain)."""
+    from transcria.queue.calendar import DAY_TO_INDEX
+
+    def _minutes(hhmm: str) -> int:
+        h, m = hhmm.split(":", 1)
+        return int(h) * 60 + int(m)
+
+    segments: list[dict] = []
+    for window in windows:
+        if not window.enabled:
+            continue
+        start, end = _minutes(window.start_time), _minutes(window.end_time)
+        for day in window.get_days():
+            idx = DAY_TO_INDEX.get(day)
+            if idx is None:
+                continue
+            if start <= end:
+                spans = [(idx, start, end)]
+            else:  # nuit : 19:00→07:30 = soir (jour J) + matin (jour J+1)
+                spans = [(idx, start, 24 * 60), ((idx + 1) % 7, 0, end)]
+            for day_idx, s_min, e_min in spans:
+                segments.append({
+                    "day": day_idx,
+                    "left_pct": round(100 * s_min / (24 * 60), 2),
+                    "width_pct": round(100 * max(e_min - s_min, 10) / (24 * 60), 2),
+                    "action": window.action,
+                    "name": window.name,
+                    "label": f"{window.name} · {window.start_time}→{window.end_time}",
+                })
+    return segments
+
+
 @queue_pages_bp.route("/admin/schedule")
 @login_required
 @requires(Permission.MANAGE_SCHEDULE)
 def schedule_page():
     cfg = get_config()
     calendar = SchedulingCalendar(cfg.get("workflow", {}).get("scheduling", {}) or {})
+    windows = SchedulingWindowStore.list_windows()
+    executor = get_job_executor()
+
+    # « Qui utilise quoi MAINTENANT ? » — jobs en cours + en attente, TITRES inclus.
+    entries = QueueStore.get_ordered_queue(limit=50, include_running=True)
+    running, pending = [], []
+    for entry in entries:
+        job = JobStore.get_by_id(entry.job_id)
+        item = {"title": (job.title if job else entry.job_id[:8]), "entry": entry}
+        (running if entry.status == "running" else pending).append(item)
+
+    # « Quand ma réunion passera-t-elle ? » — reprise estimée si la file est suspendue.
+    resume_at = calendar.estimate_queue_resume()
+    next_change = calendar.next_change(windows)
+
+    # Libellés de dates en FRANÇAIS explicite (strftime %A suit la locale du process —
+    # « Saturday » attrapé par la revue visuelle du banc C3.6).
+    jours_fr = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+    def _fr(dt):
+        if dt is None:
+            return None
+        now_local = calendar.now()
+        prefix = "" if dt.date() == now_local.date() else (
+            "demain " if (dt.date() - now_local.date()).days == 1 else f"{jours_fr[dt.weekday()]} ")
+        return f"{prefix}{dt.strftime('%H:%M')}"
+
+    resume_label = _fr(resume_at)
+    next_change_label = _fr(next_change["at"]) if next_change else None
+
     return render_template(
         "schedule.html",
-        windows=SchedulingWindowStore.list_windows(),
+        windows=windows,
         active_window=calendar.get_active_window(),
         timezone=calendar.timezone_name,
         schedule_enabled=calendar.enabled,
         action_labels=SCHEDULE_ACTION_LABELS,
         action_descriptions=SCHEDULE_ACTION_DESCRIPTIONS,
+        week_segments=_week_strip_segments(windows),
+        running_jobs=running,
+        pending_jobs=pending,
+        queue_resume_at=resume_at,
+        queue_resume_label=resume_label,
+        next_change=next_change,
+        next_change_label=next_change_label,
+        scheduler_runtime=(executor.get_runtime_snapshot() if executor else {"healthy": False}),
     )
+
+
+@queue_api_bp.route("/api/schedule/enabled", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_SCHEDULE)
+def api_schedule_toggle():
+    """Activer/désactiver l'AGENDA ENTIER depuis la page (constat audit C3.6 : on
+    pouvait créer des créneaux alors que l'agenda était éteint en config, sans
+    aucun contrôle visible). Écrit la config via le circuit validé."""
+    from transcria.services.config_service import ConfigService
+
+    body = request.get_json(silent=True) or {}
+    enabled = bool(body.get("enabled"))
+    cfg = ConfigService.load()
+    cfg.setdefault("workflow", {}).setdefault("scheduling", {})["enabled"] = enabled
+    ok, errors, _warnings = ConfigService.save_if_valid(cfg)
+    if not ok:
+        return jsonify({"error": "; ".join(errors) or "configuration invalide"}), 400
+    audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label="workflow.scheduling.enabled",
+              details={"enabled": enabled})
+    return jsonify({"status": "ok", "enabled": enabled})
 
 
 @queue_api_bp.route("/api/queue/status")

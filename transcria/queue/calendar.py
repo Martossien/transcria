@@ -164,3 +164,60 @@ class SchedulingCalendar:
         hour, minute = [int(part) for part in value.split(":", 1)]
         return time(hour=hour, minute=minute)
 
+    # ── Aides « la page répond aux questions du gestionnaire » (C3.6) ──────────
+
+    def next_change(self, windows: list[SchedulingWindow] | None = None,
+                    now: datetime | None = None) -> dict | None:
+        """La PROCHAINE bascule de créneau (« ce soir 19:00 : suspension des
+        départs ») — question gestionnaire n°3. Balaye les 8 prochains jours par
+        pas de minute sur les bornes des créneaux (peu de créneaux : trivialement
+        rapide et exact, y compris fenêtres à cheval sur minuit)."""
+        if not self.enabled:
+            return None
+        from datetime import timedelta
+
+        windows = [w for w in (windows if windows is not None
+                               else SchedulingWindowStore.list_windows()) if w.enabled]
+        if not windows:
+            return None
+        current = (now or self.now()).replace(second=0, microsecond=0)
+        active_now = self._active_id(windows, current)
+        probe = current
+        for _ in range(8 * 24 * 60):
+            probe = probe + timedelta(minutes=1)
+            active_then = self._active_id(windows, probe)
+            if active_then != active_now:
+                window = next((w for w in windows if w.id == active_then), None)
+                return {
+                    "at": probe,
+                    "kind": "start" if window is not None else "end",
+                    "window": window,
+                }
+        return None
+
+    def _active_id(self, windows: list[SchedulingWindow], current: datetime) -> int | None:
+        best: SchedulingWindow | None = None
+        for window in windows:
+            if self._is_in_window(window, current):
+                if best is None or self._action_rank(window.action) > self._action_rank(best.action):
+                    best = window
+        return best.id if best else None
+
+    def estimate_queue_resume(self, now: datetime | None = None) -> datetime | None:
+        """Si la file est SUSPENDUE par un créneau : l'instant estimé de reprise
+        (fin de la période de pause, pauses enchaînées comprises) — question
+        gestionnaire n°2. None si la file n'est pas suspendue par l'agenda."""
+        if not self.enabled:
+            return None
+        from datetime import timedelta
+
+        current = (now or self.now()).replace(second=0, microsecond=0)
+        if not self.is_queue_paused(current):
+            return None
+        probe = current
+        for _ in range(8 * 24 * 60):
+            probe = probe + timedelta(minutes=1)
+            if not self.is_queue_paused(probe):
+                return probe
+        return None
+

@@ -274,3 +274,24 @@ body { background: var(--bg); color: var(--text); font-family: system-ui, -apple
   max-width: 560px; margin: 40px auto; background: var(--card); border: 1px solid var(--border);
   border-radius: 14px; padding: 24px; text-align: center; box-shadow: 0 8px 30px rgba(15, 23, 42, 0.10);
 }
+
+/* ── Planification (C3.6) : frise hebdomadaire des créneaux ────────────────── */
+:root {
+  --sched-pause: #dc6b2f;
+  --sched-limit: #b58a1f;
+  --sched-force: #2f7bdc;
+  --sched-none: #94a3b8;
+}
+.sched-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: baseline; }
+.sched-week { position: relative; padding-top: 18px; }
+.sched-hours { position: relative; height: 14px; margin-left: 88px; font-size: 0.7rem; color: var(--muted, #64748b); }
+.sched-hours span { position: absolute; top: -4px; transform: translateX(-2px); }
+.sched-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.sched-day { width: 80px; text-align: right; font-size: 0.78rem; color: #475569; text-transform: capitalize; }
+.sched-track { position: relative; flex: 1; height: 20px; background: #f1f5f9; border-radius: 5px;
+               background-image: repeating-linear-gradient(to right, transparent, transparent calc(25% - 1px), #e2e8f0 calc(25% - 1px), #e2e8f0 25%); }
+.sched-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; opacity: 0.9; min-width: 4px; }
+.sched-pause_queue { background: var(--sched-pause); }
+.sched-limit_concurrency { background: var(--sched-limit); }
+.sched-force_gpu { background: var(--sched-force); }
+.sched-none { background: var(--sched-none); }

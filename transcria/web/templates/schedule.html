@@ -6,24 +6,127 @@
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
   <div>
     <h1 class="h3 mb-1">Planification</h1>
-    <div class="text-muted small">Fuseau {{ timezone }} · {{ 'agenda actif' if schedule_enabled else 'agenda désactivé dans la configuration' }}</div>
+    <div class="text-muted small">Fuseau {{ timezone }}</div>
   </div>
-  <a href="/admin/queue" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-list-ol" aria-hidden="true"></i> File
-  </a>
+  <div class="d-flex align-items-center gap-3">
+    <div class="form-check form-switch mb-0" title="Quand l'agenda est désactivé, les créneaux ci-dessous n'ont AUCUN effet.">
+      <input class="form-check-input" type="checkbox" id="schedule-master-toggle" {{ 'checked' if schedule_enabled }}>
+      <label class="form-check-label fw-semibold" for="schedule-master-toggle">
+        Agenda {{ 'actif' if schedule_enabled else 'désactivé' }}
+      </label>
+    </div>
+    <a href="/admin/queue" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-list-ol" aria-hidden="true"></i> File
+    </a>
+  </div>
 </div>
 
-{% if active_window %}
-<div class="alert alert-info d-flex align-items-start gap-2" role="status">
-  <i class="bi bi-calendar-check mt-1" aria-hidden="true"></i>
-  <div>
-    <div class="fw-semibold">Créneau actuellement appliqué : {{ active_window.name }}</div>
-    <div class="small">{{ action_labels.get(active_window.action, active_window.action) }}</div>
+{% if not schedule_enabled %}
+<div class="alert alert-warning d-flex align-items-start gap-2">
+  <i class="bi bi-exclamation-triangle mt-1" aria-hidden="true"></i>
+  <div><strong>L'agenda est désactivé</strong> : les créneaux configurés ci-dessous n'ont
+  aucun effet sur la file. Activez-le avec l'interrupteur ci-dessus.</div>
+</div>
+{% endif %}
+
+<!-- ── « En ce moment » : les 3 questions du gestionnaire (C3.6) ─────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-cpu" aria-hidden="true"></i> En cours de traitement</div>
+      <div class="card-body py-2">
+        {% if running_jobs %}
+          {% for item in running_jobs %}
+          <div class="d-flex justify-content-between border-bottom py-1">
+            <span class="text-truncate me-2">{{ item.title }}</span>
+            <span class="badge text-bg-primary">en cours</span>
+          </div>
+          {% endfor %}
+        {% else %}
+        <p class="text-muted small mb-0 py-2">Aucun traitement en cours — les ressources sont libres.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-hourglass-split" aria-hidden="true"></i> En attente ({{ pending_jobs|length }})</div>
+      <div class="card-body py-2">
+        {% if pending_jobs %}
+          {% for item in pending_jobs[:5] %}
+          <div class="d-flex justify-content-between border-bottom py-1">
+            <span class="text-truncate me-2">{{ loop.index }}. {{ item.title }}</span>
+            <span class="text-muted small text-nowrap">
+              {% if loop.index == 1 %}
+                {% if queue_resume_label %}≈ {{ queue_resume_label }}{% else %}dès que possible{% endif %}
+              {% else %}position {{ loop.index }}{% endif %}
+            </span>
+          </div>
+          {% endfor %}
+          {% if pending_jobs|length > 5 %}<div class="text-muted small pt-1">… et {{ pending_jobs|length - 5 }} autre(s)</div>{% endif %}
+          {% if queue_resume_at %}
+          <div class="alert alert-info py-1 px-2 small mt-2 mb-0">File suspendue par l'agenda —
+            reprise estimée <strong>{{ queue_resume_label }}</strong>.</div>
+          {% endif %}
+        {% else %}
+        <p class="text-muted small mb-0 py-2">File vide — un nouveau traitement partirait immédiatement{% if queue_resume_label %} à la reprise ({{ queue_resume_label }}){% endif %}.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header fw-semibold"><i class="bi bi-calendar-week" aria-hidden="true"></i> Agenda</div>
+      <div class="card-body py-2 small">
+        {% if active_window %}
+        <div class="mb-2"><span class="badge text-bg-info">créneau actif</span>
+          <strong>{{ active_window.name }}</strong><br>
+          <span class="text-muted">{{ action_labels.get(active_window.action, active_window.action) }}</span></div>
+        {% else %}
+        <div class="mb-2 text-muted">Aucun créneau actif maintenant{{ '' if schedule_enabled else ' (agenda désactivé)' }}.</div>
+        {% endif %}
+        {% if next_change %}
+        <div><span class="badge text-bg-light border">prochaine bascule</span>
+          {{ next_change_label }} —
+          {% if next_change.kind == 'start' and next_change.window %}début de « {{ next_change.window.name }} » ({{ action_labels.get(next_change.window.action, '') }})
+          {% else %}fin du créneau en cours{% endif %}
+        </div>
+        {% endif %}
+        <div class="mt-2 text-muted">Scheduler : {{ 'opérationnel' if scheduler_runtime.get('healthy', True) else 'indisponible' }}</div>
+      </div>
+    </div>
   </div>
 </div>
-{% elif schedule_enabled %}
-<div class="alert alert-light border" role="status">Aucun créneau n'est actif maintenant.</div>
-{% endif %}
+
+<!-- ── Frise hebdomadaire : les fenêtres d'un coup d'œil (calculée serveur) ── -->
+<div class="card mb-4">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span class="fw-semibold">Semaine type</span>
+    <span class="small d-flex gap-3">
+      <span><span class="sched-dot" style="background: var(--sched-pause)"></span> départs suspendus</span>
+      <span><span class="sched-dot" style="background: var(--sched-limit)"></span> simultanéité limitée</span>
+      <span><span class="sched-dot" style="background: var(--sched-force)"></span> priorité aux traitements</span>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="sched-week" role="img" aria-label="Frise des créneaux de la semaine">
+      <div class="sched-hours">
+        {% for h in [0, 6, 12, 18] %}<span style="left: {{ (h / 24 * 100)|round(1) }}%">{{ '%02d h'|format(h) }}</span>{% endfor %}
+      </div>
+      {% for day in day_labels %}
+      <div class="sched-row">
+        <span class="sched-day">{{ day }}</span>
+        <div class="sched-track">
+          {% for seg in week_segments if seg.day == loop.index0 %}
+          <span class="sched-seg sched-{{ seg.action }}" title="{{ seg.label }}"
+                style="left: {{ seg.left_pct }}%; width: {{ seg.width_pct }}%"></span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 
 <div id="schedule-feedback" class="alert d-none" role="status"></div>
 
@@ -131,6 +234,19 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const masterToggle = document.getElementById('schedule-master-toggle');
+masterToggle?.addEventListener('change', async () => {
+  const resp = await fetch('/api/schedule/enabled', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({enabled: masterToggle.checked}),
+  });
+  if (resp.ok) { location.reload(); }
+  else {
+    const data = await resp.json().catch(() => ({}));
+    alert(data.error || "Impossible de modifier l'agenda.");
+    masterToggle.checked = !masterToggle.checked;
+  }
+});
 const scheduleFeedback = document.getElementById('schedule-feedback');
 const actionSelect = document.getElementById('window-action');
 const workersInput = document.getElementById('window-workers');

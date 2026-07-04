@@ -298,3 +298,83 @@ def test_group_admin_can_prioritize_only_group_queue(app):
         assert QueueStore.get_entry(owned_job_id).base_priority == 5
         assert QueueStore.get_entry(outside_job_id).base_priority == 50
         assert AuditStore.count(action=AuditAction.JOB_PRIORITIZE.value, target_type="job", target_id=owned_job_id) == 1
+
+
+def test_next_change_annonce_le_debut_du_prochain_creneau(app):
+    """C3.6 — « quelles fenêtres arrivent ? » : la prochaine bascule est annoncée."""
+    with app.app_context():
+        _clear_windows()
+        SchedulingWindowStore.create({
+            "name": "nuit semaine", "days": ["lundi"], "start": "19:00", "end": "23:00",
+            "action": "pause_queue", "enabled": True,
+        })
+        calendar = SchedulingCalendar({"enabled": True, "timezone": "Europe/Paris"})
+        # lundi 2026-06-01 à 15:00 → prochaine bascule = 19:00, entrée dans « nuit semaine »
+        now = datetime(2026, 6, 1, 15, 0, tzinfo=ZoneInfo("Europe/Paris"))
+        change = calendar.next_change(now=now)
+        assert change is not None
+        assert change["kind"] == "start"
+        assert change["window"].name == "nuit semaine"
+        assert change["at"].hour == 19 and change["at"].minute == 0
+
+
+def test_next_change_annonce_la_fin_du_creneau_actif(app):
+    with app.app_context():
+        _clear_windows()
+        SchedulingWindowStore.create({
+            "name": "nuit", "days": ["lundi"], "start": "19:00", "end": "23:00",
+            "action": "pause_queue", "enabled": True,
+        })
+        calendar = SchedulingCalendar({"enabled": True, "timezone": "Europe/Paris"})
+        now = datetime(2026, 6, 1, 20, 0, tzinfo=ZoneInfo("Europe/Paris"))  # dans le créneau
+        change = calendar.next_change(now=now)
+        assert change is not None
+        assert change["kind"] == "end"
+        assert change["at"].hour == 23 and change["at"].minute == 1
+
+
+def test_estimate_queue_resume_traverse_les_pauses_enchainees(app):
+    """C3.6 — « quand ma réunion passera-t-elle ? » : reprise après pauses enchaînées."""
+    with app.app_context():
+        _clear_windows()
+        SchedulingWindowStore.create({
+            "name": "soir", "days": ["lundi"], "start": "19:00", "end": "21:00",
+            "action": "pause_queue", "enabled": True,
+        })
+        SchedulingWindowStore.create({
+            "name": "nuit", "days": ["lundi"], "start": "21:00", "end": "23:30",
+            "action": "pause_queue", "enabled": True,
+        })
+        calendar = SchedulingCalendar({"enabled": True, "timezone": "Europe/Paris"})
+        now = datetime(2026, 6, 1, 19, 30, tzinfo=ZoneInfo("Europe/Paris"))
+        resume = calendar.estimate_queue_resume(now)
+        assert resume is not None
+        # la reprise saute les DEUX pauses consécutives
+        assert (resume.hour, resume.minute) == (23, 31)
+
+
+def test_estimate_queue_resume_none_hors_pause(app):
+    with app.app_context():
+        _clear_windows()
+        calendar = SchedulingCalendar({"enabled": True, "timezone": "Europe/Paris"})
+        assert calendar.estimate_queue_resume(datetime(2026, 6, 1, 10, 0, tzinfo=ZoneInfo("Europe/Paris"))) is None
+
+
+def test_toggle_agenda_ecrit_la_config(admin_client, app, tmp_path, monkeypatch):
+    """C3.6 — la bascule d'agenda écrit workflow.scheduling.enabled via le circuit validé."""
+    import transcria.services.config_service as cs
+    saved = {}
+
+    def fake_save_if_valid(config, config_path=None):
+        saved.update(config.get("workflow", {}).get("scheduling", {}))
+        return True, [], []
+
+    monkeypatch.setattr(cs.ConfigService, "save_if_valid", staticmethod(fake_save_if_valid))
+    r = admin_client.post("/api/schedule/enabled", json={"enabled": True})
+    assert r.status_code == 200, r.get_json()
+    assert saved.get("enabled") is True
+
+
+def test_toggle_agenda_interdit_aux_operateurs(operator_client):
+    r = operator_client.post("/api/schedule/enabled", json={"enabled": True})
+    assert r.status_code == 403
