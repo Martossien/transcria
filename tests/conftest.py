@@ -179,3 +179,12 @@ def owner_id(app):
         uname = f"testowner_{uuid.uuid4().hex[:8]}"
         user = UserStore.create_user(username=uname, password="pw", role=Role.OPERATOR)
         return user.id
+
+
+@pytest.fixture(autouse=True)
+def _reset_login_rate_limiter():
+    """C3.3 — le compteur anti-bourrinage est un singleton process : reset entre tests."""
+    from transcria.auth.rate_limit import login_rate_limiter
+    login_rate_limiter.reset()
+    yield
+    login_rate_limiter.reset()

@@ -49,7 +49,8 @@ _DEFAULT_CONFIG = {
             "log_match_scores": True,
         },
     },
-    "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME"},
+    "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME",
+             "session_lifetime_hours": 12},
     "gpu": {
         "cohere_vram_mb": 6000,
         "pyannote_vram_mb": 2000,

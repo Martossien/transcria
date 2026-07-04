@@ -127,6 +127,12 @@ def create_app(config_path: str | None = None) -> Flask:
     # app Flask posant son cookie `session` par défaut ÉCRASE le nôtre et déconnecte
     # l'utilisateur en silence (incident du 12/06/2026 : session morte entre deux polls).
     app.config["SESSION_COOKIE_NAME"] = "transcria_session"
+    # C3.3 — durée de vie EXPLICITE de la session (défaut Flask = à la fermeture du
+    # navigateur, imprévisible). 12 h : une journée de travail sans re-login, pas plus.
+    from datetime import timedelta as _timedelta
+
+    app.config["PERMANENT_SESSION_LIFETIME"] = _timedelta(
+        hours=int(cfg.get("auth", {}).get("session_lifetime_hours", 12)))
 
     # Durcissement du cookie de session (sécurité) :
     # - HTTPONLY : inaccessible au JS (défaut Flask True, rendu explicite).
@@ -202,6 +208,20 @@ def create_app(config_path: str | None = None) -> Flask:
         except OSError:
             version = 0
         return url_for("static", filename=filename, v=version)
+
+    @app.after_request
+    def _security_headers(response):
+        # C3.9 (RELEASE_0.2.0) — en-têtes de sécurité SANS risque de régression :
+        # - nosniff : empêche le navigateur de deviner un type MIME (anti-XSS par upload) ;
+        # - Frame DENY : anti-clickjacking (l'app n'est jamais embarquée en iframe) ;
+        # - Referrer : ne fuite pas l'URL complète (jetons ?next=) vers l'extérieur.
+        # CSP stricte NON posée ici : les templates utilisent des gestionnaires inline
+        # (onclick=) et un bundle CDN → une CSP sans nonce casserait l'UI. Documenté
+        # comme limitation assumée dans docs/SECURITY_MODEL.md (plan : nonces en 0.3).
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(audit_bp)

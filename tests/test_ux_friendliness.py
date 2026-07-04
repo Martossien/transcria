@@ -320,3 +320,17 @@ class TestDefaultPasswordOnboarding:
             follow_redirects=True,
         )
         assert "mot de passe par défaut" not in c.get("/").get_data(as_text=True)
+
+
+class TestSecurityHeaders:
+    """C3.9 — en-têtes de sécurité posés sur les réponses (sans casser l'UI)."""
+
+    def test_headers_sur_page_login(self, client):
+        r = client.get("/login")
+        assert r.headers.get("X-Content-Type-Options") == "nosniff"
+        assert r.headers.get("X-Frame-Options") == "DENY"
+        assert "strict-origin" in r.headers.get("Referrer-Policy", "")
+
+    def test_headers_sur_page_authentifiee(self, admin_client):
+        r = admin_client.get("/")
+        assert r.headers.get("X-Content-Type-Options") == "nosniff"

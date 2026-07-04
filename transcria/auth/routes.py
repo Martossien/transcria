@@ -63,9 +63,22 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        # C3.3 — anti-bourrinage : au-delà du seuil, refus temporaire (429) journalisé.
+        from transcria.auth.rate_limit import login_rate_limiter
+
+        client_ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                     or request.remote_addr or "?")
+        blocked_s = login_rate_limiter.is_blocked(client_ip, username)
+        if blocked_s > 0:
+            audit_log(AuditAction.LOGIN_FAILED, target_label=username,
+                      details={"reason": "rate_limited", "retry_after_s": blocked_s})
+            flash("Trop de tentatives. Réessayez dans quelques minutes.", "error")
+            return render_template("login.html"), 429
         user = UserStore.get_by_username(username)
         if user and user.is_active and user.check_password(password):
+            login_rate_limiter.record_success(client_ip, username)
             UserStore.record_login(user)
+            session.permanent = True   # applique PERMANENT_SESSION_LIFETIME (C3.3)
             login_user(user)
             audit_log(AuditAction.LOGIN)
             # Premier run convivial : si l'admin se connecte encore avec un mot de
@@ -79,7 +92,12 @@ def login():
             if _is_safe_next_url(next_url):
                 return redirect(next_url)
             return redirect(url_for("web.index"))
-        audit_log(AuditAction.LOGIN_FAILED, target_label=username)
+        block_s = login_rate_limiter.record_failure(client_ip, username)
+        audit_log(AuditAction.LOGIN_FAILED, target_label=username,
+                  details={"blocked": bool(block_s)} if block_s else None)
+        if block_s:
+            flash("Trop de tentatives. Réessayez dans quelques minutes.", "error")
+            return render_template("login.html"), 429
         flash("Identifiant ou mot de passe incorrect.", "error")
         return render_template("login.html"), 401
     return render_template("login.html")
