@@ -624,7 +624,7 @@ segments — déjà tenu).
 
 ## 6. Vague 4 — Le verrou final
 
-### C4.1 CI & couverture — **taille M**
+### C4.1 CI & couverture — **taille M** — ✅ LIVRÉ (2026-07-04, seuil 80)
 **Constat vérifié** : `--cov=transcria` seul → **`inference_service` PAS compté** ;
 fail-under 75 pour 81 % réels.
 **Ordre imposé** (le seuil monte EN DERNIER) :
@@ -641,18 +641,43 @@ fail-under 75 pour 81 % réels.
 5. pip-audit (C3.9) stabilisé en bloquant si le bruit le permet.
 **Note** : mypy blocs A et B = déjà résorbés (§8.3) — pas de chantier mypy résiduel
 hors nouveaux codes.
+**Réalisé** : `inference_service` AJOUTÉ à la couverture CI (`--cov=transcria
+--cov=inference_service`) — il était à 83 % (mieux que craint) ; couverture COMBINÉE
+mesurée à **81 %** → **fail-under monté de 75 à 80** (avec marge, comme prévu :
+le seuil monte EN DERNIER, jamais avant). provenance/SBOM confirmés (§4.2). pip-audit
++ garde « secrets dans les logs » = candidats 0.2.x (non bloquants pour le gel).
 
-### C4.2 Corpus de référence & déterminisme — **taille M** (+ temps GPU)
+### C4.2 Corpus de référence & déterminisme — **taille M** (+ temps GPU) — 🟡 CADRÉ (operator-run)
 5-8 audios réels représentatifs (FR, ≤4 locuteurs, qualités variées, dont 1 long ≥2 h)
 + sortie humaine-validée ; diff automatique contre référence à chaque run de gel ;
 2× le même audio → diff vide ou expliqué (température, seeds — l'écart accepté est
 DOCUMENTÉ). Harnais : `verify_split_topology.run_job`.
+**Réalisé** : `docs/REFERENCE_CORPUS.md` (critères du corpus, méthode diff+déterminisme,
+commandes). La constitution du corpus et son exécution sont **operator-run** (Docker+GPU,
+hors flux assistant/CI) ; le filet AUTOMATIQUE permanent = les invariants qualité
+GPU-free (§8.3), déjà en place à chaque run.
 
-### C4.3 Gel et rituel de sortie — **taille S** (mais incompressible en temps)
+### C4.3 Gel et rituel de sortie — **taille S** (mais incompressible en temps) — 🟢 PRÊT (checklist ci-dessous)
 Walkthrough complet + fuzz + matrice install + 3 topologies + charge courte (C3.8)
 verts **deux fois de suite** ; catalogue §9 vide ou assumé ; CHANGELOG 0.2.0 ;
 images slim+bundled ; UPGRADE.md finalisé ; release notes ; **jalon J4** (parcours
 libre mainteneur + session secrétaires si planifiable) AVANT le tag.
+
+**État de la checklist de sortie (2026-07-04)** :
+- [x] Suite complète verte (3 268/3 268), couverture combinée 81 %, seuil CI = 80.
+- [x] Walkthrough CI 71 checks + fuzz 466 soumissions (0 violation).
+- [x] Docs livrées : UPGRADE, SECURITY_MODEL, AUDIT_DPO, REFERENCE_CORPUS + plan à jour.
+- [x] provenance/SBOM confirmés sur la publication slim réelle.
+- [ ] **CHANGELOG promu en [0.2.0]** (fait au moment du tag).
+- [ ] **Operator/mainteneur (non exécutable dans ce flux)** : matrice install ×3 +
+      3 topologies GPU rejouées en conditions release ; corpus de référence + déterminisme ;
+      charge courte 2× ; **J4** (parcours libre + session secrétaires).
+- [ ] **Tag v0.2.0 + images** : sur FEU VERT du mainteneur (le tag n'est jamais posé
+      sans sa décision).
+
+> Ce qui est AUTOMATISABLE est vert et poussé sur main. Le reste (GPU réel matriciel,
+> validation humaine J4) est du ressort du mainteneur/opérateur — le plan les liste
+> explicitement pour qu'aucune étape ne soit « inconnue ».
 
 ---
 
