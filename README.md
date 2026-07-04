@@ -109,6 +109,10 @@ imply the tool does more than it does.
 
 ![Correcting a term and adding it to the lexicon](docs/screenshots/13-correct_lexique.png)
 
+**Central lexicons — a shared glossary scoped either Global (the whole install) or to a single group. Its entries pre-fill the session lexicon on every job, then stay editable per meeting; managers curate them, and a term corrected on one job (above) can be promoted straight into one — so the whole team spells "Kubernetes" or an internal acronym the same way**
+
+![Creating a central lexicon, scoped global or per group](docs/screenshots/14-lexiques.png)
+
 ## Processing profiles
 
 After upload, you choose a *deliverable* on a single slider instead of an opaque

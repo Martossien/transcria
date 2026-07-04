@@ -114,6 +114,10 @@ fait plus qu'il ne fait.
 
 ![Corriger un terme et l'ajouter au lexique](docs/screenshots/13-correct_lexique.png)
 
+**Lexiques centraux — un glossaire partagé, à portée Global (toute l'installation) ou d'un groupe. Ses entrées pré-remplissent le lexique de session à chaque job, puis restent modifiables par réunion ; les gestionnaires les entretiennent, et un terme corrigé sur un job (ci-dessus) peut y être promu directement — pour que toute l'équipe écrive « Kubernetes » ou un acronyme interne de la même façon**
+
+![Créer un lexique central, à portée globale ou de groupe](docs/screenshots/14-lexiques.png)
+
 ## Profils de traitement
 
 Après l'upload, vous choisissez un *livrable* sur un seul curseur, au lieu d'un opaque
