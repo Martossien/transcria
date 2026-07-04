@@ -50,10 +50,11 @@ New here? Start with the [project README](../README.md), then
 | [VAD_OR_NOT.md](VAD_OR_NOT.md) | Voice-activity-detection decision record and tuning |
 | [STT_CORPUS.md](STT_CORPUS.md) | Contextual-biasing corpus format and use |
 
-## Arbitration LLM: benchmarks and validation
+## Benchmarking and validation
 
 | Document | What it covers |
 |---|---|
+| [BENCHMARKING.md](BENCHMARKING.md) | How to run a reproducible bench: the `bench_audio.py` matrix runner and its four analyzers (metrics, LLM quality, WER vs reference, concurrency) |
 | [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
 | [LLM_PROFILS_VALIDATION.md](LLM_PROFILS_VALIDATION.md) | Validation records for the LLM tier profiles |
 

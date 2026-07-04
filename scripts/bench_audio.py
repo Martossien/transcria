@@ -14,7 +14,8 @@ Matrices disponibles (--matrix) :
   stt      : 24 combos Profil A (4 backends STT × 3 diarizations × 2 VAD)
   vad      : 8 combos ciblés VAD final / VAD interne Whisper
   cohere_tune : 9 combos Cohere + pyannote pour calibrage qualité/vitesse
-  all      : base + extended + stt + vad + cohere_tune (77 combos)
+  pyannote_tune : 14 combos calibrage diarisation / chunking pyannote
+  all      : base + extended + stt + vad + cohere_tune + pyannote_tune (91 combos)
 
 Utilisation rapide (sans LLM, 4 GPUs) :
     python scripts/bench_audio.py \\

@@ -1,3 +1,13 @@
+"""Estimateur de concurrence STT — projette le débit local depuis un bench_audio.
+
+Lit les résultats d'une campagne `bench_audio.py` (un `bench_root` = dossier de sortie),
+extrait la durée réelle de transcription par combo depuis les logs (`collect_measurements`),
+puis projette combien de jobs on peut traiter en parallèle sur les GPUs disponibles à une
+efficacité donnée (`estimate_local_concurrency`) et écrit un rapport md/csv (`write_estimates`).
+
+Sert à dimensionner `workflow.scheduling` / le nombre de workers avant une mise en charge,
+à partir de MESURES réelles plutôt que d'hypothèses. Voir docs/BENCHMARKING.md.
+"""
 from __future__ import annotations
 
 import csv
