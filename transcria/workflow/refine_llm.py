@@ -23,6 +23,58 @@ _THINK_BLOCK = re.compile(r"(?s)<think>.*?</think>")
 
 DEFAULT_MAX_TRANSCRIPT_CHARS = 60000
 DEFAULT_MAX_ANSWER_TOKENS = 2000
+# ≈ caractères par token en français (budget dérivé du contexte du backend).
+_CHARS_PER_TOKEN = 3
+# Tokens réservés hors transcription : prompt système + synthèse + JSON + historique + réponse.
+_RESERVED_TOKENS = 24000
+_TIMESTAMP_RE = re.compile(r"(\d{2}:\d{2}:\d{2}),\d{3}")
+
+
+def compute_transcript_budget_chars(config: dict) -> int:
+    """Budget de transcription en caractères, dérivé du CONTEXTE RÉEL du backend
+    d'arbitrage (catalogue de paliers) — C2.5 : fini le 60 000 arbitraire quand on
+    peut faire mieux. Priorité : réglage explicite > palier détecté > défaut."""
+    refine_cfg = config.get("workflow", {}).get("refine", {}) or {}
+    explicit = refine_cfg.get("max_transcript_chars")
+    if explicit is not None:
+        return int(explicit)
+    try:
+        import torch
+
+        from transcria.config.llm_profiles import load_llm_profiles, select_profile
+
+        if torch.cuda.is_available():
+            count = torch.cuda.device_count()
+            per_card = min(torch.cuda.mem_get_info(i)[1] for i in range(count)) // (1024 * 1024)
+            total = sum(torch.cuda.mem_get_info(i)[1] for i in range(count)) // (1024 * 1024)
+            backend = str(config.get("services", {}).get("backend") or "")
+            engine = "ollama" if backend == "ollama" else "llamacpp"
+            choice = select_profile(load_llm_profiles(config), engine,
+                                    gpu_count=count, per_card_vram_mb=int(per_card),
+                                    total_vram_mb=int(total))
+            if choice and choice.context:
+                budget = (choice.context - _RESERVED_TOKENS) * _CHARS_PER_TOKEN
+                return max(budget, DEFAULT_MAX_TRANSCRIPT_CHARS)
+    except Exception:  # noqa: BLE001 — frontale sans GPU / catalogue absent : défaut honnête
+        logger.debug("Budget discuss : palier indétectable, défaut appliqué", exc_info=True)
+    return DEFAULT_MAX_TRANSCRIPT_CHARS
+
+
+def truncate_transcript(srt_text: str, budget_chars: int) -> tuple[str, dict]:
+    """Troncature DÉBUT+FIN (les réunions se concluent à la fin) avec métadonnées
+    honnêtes pour l'UI. Renvoie (texte, {truncated, shown_pct, gap_from, gap_to})."""
+    if budget_chars <= 0 or len(srt_text) <= budget_chars:
+        return srt_text, {"truncated": False}
+    head_len = int(budget_chars * 0.6)
+    tail_len = int(budget_chars * 0.35)
+    head, tail = srt_text[:head_len], srt_text[-tail_len:]
+    gap_from = (_TIMESTAMP_RE.findall(head) or ["?"])[-1]
+    gap_to = (_TIMESTAMP_RE.findall(tail) or ["?"])[0]
+    text = (head + f"\n[… transcription tronquée : la période {gap_from} → {gap_to} "
+            "n'est PAS visible ici — ne prétends jamais l'avoir lue …]\n" + tail)
+    shown_pct = round(100 * (head_len + tail_len) / len(srt_text))
+    return text, {"truncated": True, "shown_pct": shown_pct,
+                  "gap_from": gap_from, "gap_to": gap_to}
 
 
 def build_discuss_messages(

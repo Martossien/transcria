@@ -666,6 +666,17 @@ class WorkflowRunner:
                 if attempt < max_llm_attempts:
                     sl.warning("LLM résumé sans production (tentative %d/%d) — nouvel essai",
                                attempt, max_llm_attempts)
+                    # Robustesse (constat E2E 2026-07-04) : « LLM déjà chargée » est une
+                    # HYPOTHÈSE — si le serveur est mort entre-temps (SIGTERM one-off
+                    # observé), les tentatives suivantes parlaient dans le vide pendant
+                    # tout le timeout opencode. On RE-VÉRIFIE (et relance au besoin)
+                    # avant chaque nouvel essai.
+                    try:
+                        if not self.vram.ensure_arbitrage_llm_ready(api_model_id):
+                            sl.warning("LLM d'arbitrage injoignable avant la tentative %d — relance échouée",
+                                       attempt + 1)
+                    except Exception:  # noqa: BLE001 — le retry reste tenté quoi qu'il arrive
+                        sl.warning("Re-vérification LLM avant retry en erreur", exc_info=True)
 
             workspace.verify_and_restore_sources()
             if parsed.get("_summary_produced"):
@@ -2187,6 +2198,23 @@ class WorkflowRunner:
                     fs.load_text("metadata/transcription_corrigee.srt")
                     or fs.load_text("metadata/transcription.srt") or ""
                 )
+                from transcria.workflow.refine_llm import (
+                    compute_transcript_budget_chars,
+                    truncate_transcript,
+                )
+
+                budget = compute_transcript_budget_chars(config)
+                srt_text, trunc = truncate_transcript(srt_text, budget)
+                if trunc.get("truncated"):
+                    # Honnêteté UI (C2.5) : l'utilisateur SAIT que l'assistant ne voit
+                    # pas tout — notice système dans le fil, dédupliquée.
+                    notice = (f"ℹ️ Réunion longue : la discussion porte sur ~{trunc['shown_pct']} % "
+                              f"de la transcription (la période {trunc['gap_from']} → "
+                              f"{trunc['gap_to']} n'est pas visible de l'assistant).")
+                    already = any(t.get("text") == notice for t in store.load_turns()[-6:])
+                    if not already:
+                        store.append_turn(role="system", kind="notice", text=notice,
+                                          max_turns=max_turns)
                 messages = build_discuss_messages(
                     system_prompt=system_prompt,
                     summary=effective_summary,
@@ -2196,7 +2224,7 @@ class WorkflowRunner:
                     review_points=review_points,
                     history=history,
                     user_message=message,
-                    max_transcript_chars=int(refine_cfg.get("max_transcript_chars", 60000)),
+                    max_transcript_chars=0,  # déjà tronquée (début+fin) ci-dessus
                 )
                 answer = chat_completion(
                     config, messages,

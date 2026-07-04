@@ -153,3 +153,35 @@ class TestChatCompletion:
             raise AssertionError("une exception était attendue")
         except RuntimeError as exc:
             assert "500" in str(exc)
+
+
+class TestBudgetEtTroncatureHonnete:
+    """C2.5 — budget dérivé du contexte réel + troncature début+fin ANNONCÉE."""
+
+    def test_transcription_courte_intacte(self):
+        from transcria.workflow.refine_llm import truncate_transcript
+        text, meta = truncate_transcript("court", 1000)
+        assert text == "court" and meta == {"truncated": False}
+
+    def test_troncature_garde_debut_et_fin(self):
+        from transcria.workflow.refine_llm import truncate_transcript
+        srt = "\n".join(f"{i}\n00:{i // 60:02d}:{i % 60:02d},000 --> 00:00:59,000\nphrase {i}"
+                        for i in range(2000))
+        text, meta = truncate_transcript(srt, 10000)
+        assert meta["truncated"] is True
+        assert "phrase 0" in text            # le début est là
+        assert "phrase 1999" in text         # la FIN est là (les décisions s'y prennent)
+        assert "PAS visible ici" in text     # le LLM est prévenu
+        assert meta["gap_from"].count(":") == 2 and meta["gap_to"].count(":") == 2
+
+    def test_budget_explicite_prioritaire(self):
+        from transcria.workflow.refine_llm import compute_transcript_budget_chars
+        cfg = {"workflow": {"refine": {"max_transcript_chars": 12345}}}
+        assert compute_transcript_budget_chars(cfg) == 12345
+
+    def test_budget_par_defaut_sans_gpu(self, monkeypatch):
+        import transcria.workflow.refine_llm as m
+        # simuler l'absence de GPU (frontale) : le défaut honnête s'applique
+        import torch
+        monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+        assert m.compute_transcript_budget_chars({}) == m.DEFAULT_MAX_TRANSCRIPT_CHARS
