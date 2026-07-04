@@ -423,7 +423,7 @@ qualification audio, file d'attente + planification, exports (SRT/DOCX/ZIP),
 config SMTP guidée ? échec d'envoi visible ? contenu du mail correct ?), lexiques
 centraux, audit, doctor. Pour chacune : E2E rejoué + fiche « limitations assumées ».
 
-### C3.3 Sessions web & authentification — **taille M**
+### C3.3 Sessions web & authentification — **taille M** — ✅ LIVRÉ (2026-07-04)
 **Constat vérifié** : cookies HTTPONLY + SameSite=Lax + SECURE configurable
 (`app.py:129-143`) ; le commentaire `app.py:134` assume que Lax neutralise le CSRF
 (pas de jeton) ; **aucun rate-limiting** sur `/login` ; durée de session / « rester
@@ -436,8 +436,13 @@ mais on l'écrit noir sur blanc dans SECURITY_MODEL.md avec ses limites) ; messa
 session expirée compréhensible (retour au login avec explication, pas une 401 nue).
 **Acceptation** : tests session (expiration, invalidation) ; brute-force simulé → ralenti
 + audité ; fiche SECURITY_MODEL §sessions.
+**Réalisé** : rate-limiter en mémoire (5 échecs/(IP,identifiant)/5 min → blocage 429
+audité, `auth/rate_limit.py`, 7 tests horloge injectée + intégration login) ; durée de
+session EXPLICITE 12 h (`PERMANENT_SESSION_LIFETIME` + `session.permanent`, clé
+`auth.session_lifetime_hours`) ; position CSRF (SameSite=Lax) documentée avec ses
+limites dans SECURITY_MODEL.md §2. Fixture autouse reset le compteur entre tests.
 
-### C3.4 Utilisateurs, admins, groupes, droits — **taille M/L**
+### C3.4 Utilisateurs, admins, groupes, droits — **taille M/L** — 🟢 LIVRÉ (matrice + garde ; parcours par rôle = C0.1)
 **Constat vérifié** : 4 rôles (`auth/models.py:11` : VIEWER < OPERATOR < MANAGER < ADMIN)
 + admin de groupe (memberships). MANAGER est-il utilisé partout où il devrait ? Les
 combinaisons groupe × rôle sont-elles cohérentes (un manager d'un groupe voit-il les
@@ -448,8 +453,13 @@ toute route Flask sans test RBAC référencé = échec CI ; parcours walkthrough
 (viewer, operator, manager, group-admin, admin) ; revue création/désactivation/
 suppression d'utilisateur (que deviennent ses jobs ? ses voix ? — lien C3.10).
 **Acceptation** : matrice publiée ; garde verte ; fuzz sur les formulaires users/groupes.
+**Réalisé** : matrice rôle × permission publiée (docs/SECURITY_MODEL.md §1) ; **garde
+d'introspection** `test_rbac_guard` — les 65 routes mutantes de l'app sont inspectées,
+chacune doit porter login_required/@requires (test négatif confirmé : une vue nue est
+flaggée), `auth.login` seule exemptée. Parcours par rôle déjà au walkthrough (C0.1 :
+viewer 403, opérateur 403 config). Fuzz users/groupes déjà couvert (C0.2).
 
-### C3.5 Audit — **taille M**
+### C3.5 Audit — **taille M** — 🟢 LIVRÉ (2026-07-04 : les 2 constats de revue + libellés FR)
 **Constat vérifié** : 56 actions (`audit/models.py`), page `audit.html`, familles de
 préfixes. Manques à instruire : consultation de données sensibles (écoute d'un audio ?
 téléchargement ? déjà couverts pour l'éditeur), échecs de login (lien C3.3), export du
@@ -460,6 +470,12 @@ page audit avec états (vide/filtres/pagination) au walkthrough ; politique de r
 de l'audit (C3.10) ; `docs/AUDIT_DPO.md` = registre côté produit (quoi est journalisé,
 où, combien de temps, qui y accède).
 **Acceptation** : fiche DPO publiée ; export testé ; fuzz sur les filtres.
+**Réalisé (les 2 constats de revue C0.1)** : `audit_action_label()` — les 56 actions
+s'affichent en FRANÇAIS par famille (« Type de réunion — création » ; le slug reste
+en title=… pour la recherche), badge ET options de filtre ; le `config_edit` ne fuit
+plus le CHEMIN SERVEUR complet (Path.name). 3 tests dont rendu de page. Export CSV,
+filtres, pagination, rétention 1095 j : déjà présents (préservés). RESTE (C3.10) :
+fiche AUDIT_DPO.md (rétention par type + suppression d'utilisateur).
 
 ### C3.6 Planification (calendrier des ressources) — re-conception — **taille L**
 **Arbitrage mainteneur** : demande réelle des gestionnaires techniques — on AMÉLIORE :
@@ -523,7 +539,7 @@ LLM (que voit l'utilisateur pendant/après ?) ; **campagne de charge COURTE re-j
 au gel** (all-in-one 3 jobs + split 4 jobs — [[load_test_concurrency]] a déjà les bancs).
 **Acceptation** : double-submit → 4xx propre ; charge courte verte 2× ; captures file.
 
-### C3.9 Sécurité PSSI (passe transversale) — **taille L** — NOUVEAU (v3)
+### C3.9 Sécurité PSSI (passe transversale) — **taille L** — 🟢 LIVRÉ (headers + doc ; CSP = limitation assumée)
 **Constat vérifié (état des lieux honnête)** : cookies bien configurés, MAX_CONTENT_LENGTH
 configurable (1 Go défaut), pas de jeton CSRF (choix SameSite documenté à re-évaluer
 C3.3), **pas de rate-limiting**, en-têtes de sécurité à inventorier (CSP/X-Frame/
@@ -546,8 +562,14 @@ garde), TLS : hors périmètre app (reverse proxy) mais DOC requise.
   en 0.2.0 : dit, avec plan).
 **Acceptation** : scanner de base (headers) vert ; fuzz injection vert (C0.2) ;
 pip-audit intégré ; SECURITY_MODEL.md publié ; revue croisée avec la page audit.
+**Réalisé** : en-têtes X-Content-Type-Options/X-Frame-Options/Referrer-Policy sur
+toutes les réponses (`app.after_request`, 2 tests) ; **CSP = limitation ASSUMÉE et
+documentée** (handlers inline `onclick=` + bundle CDN → CSP stricte casserait l'UI ;
+plan 0.3 : nonces). SECURITY_MODEL.md publié (rôles, sessions, headers, secrets,
+déploiement recommandé). RESTE (0.2.x) : pip-audit en CI, garde « secrets dans les
+logs » (à brancher sur un E2E), validation d'upload approfondie.
 
-### C3.10 Rétention & purge des données (DPO) — **taille M** — NOUVEAU (v3)
+### C3.10 Rétention & purge des données (DPO) — **taille M** — 🟢 LIVRÉ (2026-07-04)
 **Constat vérifié** : purge/rétention ÉPARPILLÉES (`jobs/store.py`,
 `artifact_store.py`, `agent_workspace.py`, `audit/models.py`, config) — pas de politique
 d'ensemble : combien de temps vivent les jobs (audio ! biométrie voix !), les brouillons
@@ -557,6 +579,14 @@ C2.2), commande/tâche de purge (`transcria purge --dry-run` d'abord), suppressi
 utilisateur = sort de ses données DÉFINI (anonymisation de l'audit ? suppression des
 voix ? réattribution des jobs ?), page « données » dans AUDIT_DPO.md.
 **Acceptation** : purge testée par type ; suppression d'utilisateur E2E ; doc DPO à jour.
+**Réalisé** : `docs/AUDIT_DPO.md` (registre par type de donnée : audio/livrables 365 j,
+audit 1095 j par famille, biométrie tant que le sujet existe ; base légale, minimisation ;
+suppression d'utilisateur = désactivation qui CONSERVE données+audit, chemin d'effacement
+RGPD documenté) ; `purge_expired_jobs(dry_run=…)` + sous-commande `maintenance.cli purge
+[--dry-run]` (réutilise les purges jobs + audit existantes), 4 tests. La machinerie de
+rétention préexistait (config par famille, purge auto au chargement) — ce chantier la
+DOCUMENTE et l'OUTILLE. Commande d'effacement par utilisateur (anonymisation audit) =
+candidat 0.2.x noté.
 
 ### C3.11 Topologies all-in-one / frontale / resource-node — **taille M** — EN DERNIER
 Harnais §8.1 rejoué en conditions release APRÈS tous les chantiers (il re-valide tout) ;

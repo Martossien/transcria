@@ -157,6 +157,33 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_purge(args: argparse.Namespace) -> int:
+    """Purge des données expirées selon la politique de rétention (C3.10).
+    ``--dry-run`` COMPTE sans rien supprimer."""
+    from transcria.config.loader import load_config
+
+    cfg = load_config(args.config)
+    from app import create_app
+
+    app = create_app(args.config)
+    with app.app_context():
+        from transcria.audit.store import AuditStore
+        from transcria.jobs.store import JobStore
+
+        sec = cfg.get("security", {})
+        jobs_dir = cfg["storage"]["jobs_dir"]
+        job_count = JobStore.purge_expired_jobs(sec.get("retention_days"), jobs_dir, dry_run=args.dry_run)
+        mode = "à purger (simulation)" if args.dry_run else "purgés"
+        print(f"Traitements expirés {mode} (rétention {sec.get('retention_days')} j) : {job_count}")
+        if not args.dry_run:
+            audit_days = sec.get("audit_retention_days", 1095)
+            if isinstance(audit_days, (int, float)) and audit_days > 0:
+                n = AuditStore.purge_expired_by_policy(
+                    int(audit_days), sec.get("audit_retention_by_family") or {})
+                print(f"Entrées d'audit purgées : {n}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="transcria-maintenance",
@@ -191,6 +218,10 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--keep", type=int, default=0, help="rotation des sauvegardes")
     u.add_argument("--check", action="store_true", help="lister les étapes sans les exécuter")
     u.set_defaults(func=_cmd_upgrade)
+
+    pg = sub.add_parser("purge", help="purger les données expirées (rétention DPO)")
+    pg.add_argument("--dry-run", action="store_true", help="compter sans supprimer")
+    pg.set_defaults(func=_cmd_purge)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

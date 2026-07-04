@@ -135,7 +135,7 @@ class JobStore:
         return db.session.scalar(db.select(func.count(Job.id)))
 
     @staticmethod
-    def purge_expired_jobs(retention_days: int | str | None, jobs_dir: str) -> int:
+    def purge_expired_jobs(retention_days: int | str | None, jobs_dir: str, *, dry_run: bool = False) -> int:
         try:
             days = int(retention_days)  # type: ignore[arg-type]
         except (TypeError, ValueError):
@@ -159,10 +159,13 @@ class JobStore:
                 updated_at = updated_at.replace(tzinfo=timezone.utc)
             if updated_at >= cutoff:
                 continue
+            if dry_run:                       # C3.10 : comptage sans effet de bord
+                purged += 1
+                continue
             JobFilesystem(jobs_dir, job.id).cleanup()
             db.session.delete(job)
             purged += 1
 
-        if purged:
+        if purged and not dry_run:
             db.session.commit()
         return purged
