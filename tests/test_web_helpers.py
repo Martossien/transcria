@@ -154,7 +154,7 @@ def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
             assert path == "summary/summary.md"
             return """## Participants probables
 
-- SPEAKER_00 [Sylvain Martin] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
+- SPEAKER_00 [Alex Dupont] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
 """
 
         def save_json(self, path, data):
@@ -164,8 +164,8 @@ def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
     fs = FakeFilesystem()
     recovered = _recover_summary_speaker_hints(fs, {})
 
-    assert recovered["speaker_roles_llm"]["SPEAKER_00"]["label"] == "Sylvain Martin"
-    assert "Sylvain Martin" in recovered["participants_detectes"]
+    assert recovered["speaker_roles_llm"]["SPEAKER_00"]["label"] == "Alex Dupont"
+    assert "Alex Dupont" in recovered["participants_detectes"]
     assert fs.saved == recovered
 
 

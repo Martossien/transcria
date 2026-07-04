@@ -387,13 +387,13 @@ Quelques paragraphes de texte sans autres champs structurés.
     def test_parse_speaker_roles_keeps_non_identifiable_inside_role(self):
         text = """## Participants probables
 
-- SPEAKER_00 [Sylvain Martin] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
+- SPEAKER_00 [Alex Dupont] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
 """
         result = OpenCodeRunner._parse_structured_summary(text)
 
-        assert "Sylvain Martin" in result["participants_detectes"]
+        assert "Alex Dupont" in result["participants_detectes"]
         assert result["speaker_roles"]["SPEAKER_00"] == {
-            "label": "Sylvain Martin",
+            "label": "Alex Dupont",
             "role": "personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)",
         }
 

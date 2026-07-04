@@ -63,7 +63,7 @@ Exige de chaque subagent un travail de **haute qualité**, pas un survol.
 ## 4. Tâche A — Harmoniser la synthèse
 Applique sur la synthèse les **noms de participants** et **termes** du glossaire,
 **en contexte**, uniquement quand l'entité correspond (ex. « PUI »→« PEI »,
-« Nicolas Lotte »→« Nicolas LHOTTE », « Stéphane »→« Stephen ROUFFE »). Même contenu,
+« Jean Dupon »→« Jean DUPONT », « Marie »→« Marie DURAND »). Même contenu,
 même longueur, même structure ; seules les graphies couvertes changent.
 → Écris `summary_harmonized.md`.
 

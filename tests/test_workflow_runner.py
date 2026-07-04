@@ -134,7 +134,7 @@ class TestWorkflowRunnerSpeakerRoles:
 
         WorkflowRunner._apply_speaker_roles(
             fs,
-            {"SPEAKER_00": {"label": "Sylvain Martin", "role": "déclarant"}},
+            {"SPEAKER_00": {"label": "Alex Dupont", "role": "déclarant"}},
             Log(),
         )
 
