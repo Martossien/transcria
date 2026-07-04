@@ -2086,6 +2086,14 @@ def api_process(job_id: str):
     from transcria.services.pipeline_service import PipelineService
 
     vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
+    # Durée audio portée par l'entrée de file (DB) : la page File (non job-scoped) n'a pas
+    # accès aux fichiers du job en mode frontale/nœud GPU — sans ça, l'estimation d'attente
+    # serait vide en split. Cf. revue macro split.
+    try:
+        _aa = JobFilesystem(cfg["storage"]["jobs_dir"], job.id).load_json("metadata/audio_analysis.json") or {}
+        vram_profile["audio_seconds"] = float(_aa.get("duration_seconds") or 0.0)
+    except Exception:  # noqa: BLE001 — best-effort, l'attente retombe sur le fichier sinon
+        pass
     try:
         result = executor.submit_process(
             job.id,
@@ -2267,6 +2275,14 @@ def api_reprocess(job_id: str):
     from transcria.services.pipeline_service import PipelineService
 
     vram_profile = PipelineService.estimate_profile_resources(cfg, profile)
+    # Durée audio portée par l'entrée de file (DB) : la page File (non job-scoped) n'a pas
+    # accès aux fichiers du job en mode frontale/nœud GPU — sans ça, l'estimation d'attente
+    # serait vide en split. Cf. revue macro split.
+    try:
+        _aa = JobFilesystem(cfg["storage"]["jobs_dir"], job.id).load_json("metadata/audio_analysis.json") or {}
+        vram_profile["audio_seconds"] = float(_aa.get("duration_seconds") or 0.0)
+    except Exception:  # noqa: BLE001 — best-effort, l'attente retombe sur le fichier sinon
+        pass
     try:
         result = executor.submit_process(
             job.id, str(audio_path), mode, vram_profile=vram_profile, processing_profile_id=profile.id

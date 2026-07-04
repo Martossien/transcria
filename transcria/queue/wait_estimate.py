@@ -19,12 +19,17 @@ def queue_wait_estimates(config: dict, entries: list) -> dict[str, dict]:
 
     def _duration(entry) -> float:
         try:
-            prof_id = (entry.get_vram_profile() or {}).get("processing_profile_id")
+            vram_profile = entry.get_vram_profile() or {}
+            prof_id = vram_profile.get("processing_profile_id")
             profile = get_profile(prof_id) if prof_id and is_profile(prof_id) else None
-            audio_s = float(
-                (JobFilesystem(jobs_dir, entry.job_id).load_json("metadata/audio_analysis.json") or {})
-                .get("duration_seconds") or 0.0
-            )
+            # Durée audio : d'abord depuis l'entrée de file (DB, disponible en split), sinon
+            # le fichier (tout-local). Sans fichier ni valeur DB → pas d'estimation (0).
+            audio_s = float(vram_profile.get("audio_seconds") or 0.0)
+            if audio_s <= 0:
+                audio_s = float(
+                    (JobFilesystem(jobs_dir, entry.job_id).load_json("metadata/audio_analysis.json") or {})
+                    .get("duration_seconds") or 0.0
+                )
             if audio_s <= 0:
                 return 0.0
             if profile is not None:

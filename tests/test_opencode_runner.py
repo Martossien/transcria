@@ -1164,3 +1164,47 @@ class TestSummaryFailureClassification:
         parsed = runner.run_summary("/tmp/transcript.txt")
         assert parsed["_summary_produced"] is False
         assert parsed["_failure_kind"] == "empty_output"
+
+
+class TestWatchdogVllmSignal:
+    """_llm_is_processing sonde llama.cpp (/slots) PUIS vLLM (/metrics) — durcissement split."""
+
+    def test_vllm_metrics_busy_parse(self):
+        busy = 'vllm:num_requests_running{model="q"} 1.0\nvllm:num_requests_waiting{model="q"} 0.0'
+        idle = 'vllm:num_requests_running{model="q"} 0.0\nvllm:num_requests_waiting{model="q"} 0.0'
+        waiting = 'vllm:num_requests_running 0.0\nvllm:num_requests_waiting 3.0'
+        assert OpenCodeRunner._vllm_metrics_busy(busy) is True
+        assert OpenCodeRunner._vllm_metrics_busy(idle) is False
+        assert OpenCodeRunner._vllm_metrics_busy(waiting) is True     # requêtes en attente = occupé
+        assert OpenCodeRunner._vllm_metrics_busy("python_gc 5") is None  # pas du vLLM
+
+    def test_fallback_slots_absent_utilise_metrics_vllm(self, tmp_path, monkeypatch):
+        import requests
+        runner = _make_runner(tmp_path, config={"workflow": {"arbitration_llm": {"model_id": "local/q"}}})
+
+        class _Resp:
+            def __init__(self, code, text=""):
+                self.status_code = code
+                self._text = text
+            @property
+            def text(self):
+                return self._text
+            def json(self):
+                raise ValueError("pas de JSON")
+
+        def _fake_get(url, timeout=0):
+            if url.endswith("/slots"):
+                return _Resp(404)                       # vLLM n'a pas /slots
+            if url.endswith("/metrics"):
+                return _Resp(200, "vllm:num_requests_running 2.0\nvllm:num_requests_waiting 0.0")
+            return _Resp(404)
+
+        monkeypatch.setattr(requests, "get", _fake_get)
+        assert runner._llm_is_processing() is True       # détecté via /metrics vLLM
+
+    def test_aucune_sonde_renvoie_none(self, tmp_path, monkeypatch):
+        import requests
+        runner = _make_runner(tmp_path, config={"workflow": {"arbitration_llm": {"model_id": "local/q"}}})
+        monkeypatch.setattr(requests, "get",
+                            lambda url, timeout=0: type("R", (), {"status_code": 404, "text": ""})())
+        assert runner._llm_is_processing() is None       # ni /slots ni /metrics → repli idle pur

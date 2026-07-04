@@ -79,3 +79,23 @@ class TestQueueWait:
         with app.app_context():
             waits = queue_wait_estimates(cfg, entries)
         assert waits["x"]["seconds"] == 0
+
+
+class TestQueueWaitSplit:
+    """Split (frontale sans fichiers) : la durée audio vient de l'entrée de file (DB)."""
+
+    def _entry(self, job_id, status, position, audio_s, profile_id="dossier_qualite"):
+        vp = {"processing_profile_id": profile_id, "audio_seconds": audio_s}
+        return SimpleNamespace(job_id=job_id, status=status, position=position,
+                               get_vram_profile=lambda v=vp: v)
+
+    def test_attente_calculee_sans_fichier(self, app, _clean, tmp_path):
+        # jobs_dir VIDE (aucun audio_analysis.json) → la valeur DB doit suffire
+        from transcria.queue.wait_estimate import queue_wait_estimates
+        cfg = {"storage": {"jobs_dir": str(tmp_path)}}
+        entries = [self._entry("a", "waiting", 1, 600),
+                   self._entry("b", "waiting", 2, 600)]
+        with app.app_context():
+            waits = queue_wait_estimates(cfg, entries)
+        assert waits["a"]["seconds"] == 0
+        assert waits["b"]["seconds"] > 0        # calculé depuis audio_seconds DB, sans fichier

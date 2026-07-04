@@ -404,11 +404,15 @@ class OpenCodeRunner:
 
     def _llm_is_processing(self) -> bool | None:
         """La LLM d'arbitrage traite-t-elle une requête (prompt eval OU génération) ?
-        True = occupée, False = idle, None = inconnu (endpoint injoignable / pas de /slots).
+        True = occupée, False = idle, None = inconnu (endpoint injoignable / backend sans
+        sonde d'activité).
 
-        Discriminateur du watchdog (llama.cpp est MONO-slot) : opencode silencieux +
-        LLM idle = GEL (jamais une génération légitime, qui garde le slot occupé). Ollama
-        ou une frontale sans /slots ⇒ None ⇒ le watchdog retombe sur l'idle pur généreux.
+        Discriminateur du watchdog : opencode silencieux + LLM idle = GEL (jamais une
+        génération légitime, qui garde le moteur occupé). Sonde deux backends :
+        - **llama.cpp** : ``/slots`` (mono-slot → ``is_processing``) ;
+        - **vLLM** (topologie split-vLLM) : ``/metrics`` Prometheus →
+          ``vllm:num_requests_running`` / ``:num_requests_waiting`` > 0.
+        Aucun des deux (Ollama, frontale sans sonde) ⇒ None ⇒ repli idle pur du watchdog.
         """
         if not self._config:
             return None
@@ -418,18 +422,51 @@ class OpenCodeRunner:
             from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
 
             host, port = resolve_arbitrage_endpoint(self._config)
-            r = requests.get(f"http://{host}:{port}/slots", timeout=3)
-            if r.status_code != 200:
-                return None
-            slots = r.json()
-            if not isinstance(slots, list):
-                return None
-            for s in slots:
-                if s.get("is_processing") is True or s.get("state") in (1, "processing"):
-                    return True
-            return False
+            base = f"http://{host}:{port}"
+
+            # llama.cpp — /slots
+            try:
+                r = requests.get(f"{base}/slots", timeout=3)
+                if r.status_code == 200:
+                    slots = r.json()
+                    if isinstance(slots, list):
+                        return any(
+                            s.get("is_processing") is True or s.get("state") in (1, "processing")
+                            for s in slots
+                        )
+            except requests.RequestException:
+                pass
+
+            # vLLM — /metrics (Prometheus)
+            try:
+                r = requests.get(f"{base}/metrics", timeout=3)
+                if r.status_code == 200:
+                    return self._vllm_metrics_busy(r.text)
+            except requests.RequestException:
+                pass
+
+            return None
         except Exception:  # noqa: BLE001 — signal best-effort du watchdog, jamais bloquant
             return None
+
+    @staticmethod
+    def _vllm_metrics_busy(metrics_text: str) -> bool | None:
+        """Lit l'activité vLLM dans la sortie Prometheus ``/metrics`` : occupé si des
+        requêtes tournent OU attendent. None si les compteurs sont absents (pas du vLLM)."""
+        import re
+
+        seen = False
+        busy = False
+        for name in ("vllm:num_requests_running", "vllm:num_requests_waiting"):
+            for m in re.finditer(rf"^{re.escape(name)}(?:\{{[^}}]*\}})?\s+([0-9eE.+-]+)\s*$",
+                                 metrics_text, re.MULTILINE):
+                seen = True
+                try:
+                    if float(m.group(1)) > 0:
+                        busy = True
+                except ValueError:
+                    continue
+        return busy if seen else None
 
     def _communicate_with_watchdog(
         self, proc: subprocess.Popen, timeout: int

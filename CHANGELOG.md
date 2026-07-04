@@ -8,6 +8,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Fixed — durcissement mode frontale/nœud GPU (revue macro split, 2026-07-04)
+- **Temps d'attente de la file en split** : la durée audio est désormais portée par
+  l'entrée de file (DB, dans le profil VRAM) à l'enfilement — la page File (non
+  job-scoped, donc sans tire des fichiers en mode frontale) calcule l'attente sans
+  dépendre du disque. Repli fichier conservé en tout-local.
+- **Watchdog opencode sur vLLM** : `_llm_is_processing` sonde désormais `/slots`
+  (llama.cpp) PUIS `/metrics` (vLLM : `num_requests_running`/`num_requests_waiting`) —
+  signal d'activité précis aussi en topologie split-vLLM (avant : repli idle pur seul).
+
 ### Added — estimation de temps calibrée machine + emails (revue macro, 2026-07-04)
 - **Modèle de temps calibré machine** (remplace la formule fixe `(audio×0.35+130)×1.25`,
   aveugle au profil et à la machine) : chaque étape terminée est historisée
