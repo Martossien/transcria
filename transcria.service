@@ -17,7 +17,6 @@ Environment=LOG_FILE=/var/log/transcrIA.log
 Environment=PID_FILE=/run/transcrIA.pid
 Environment=VENV=/home/admin_ia/transcria/venv
 Environment=HF_HOME=/home/admin_ia/.cache/huggingface
-Environment=TRANSFORMERS_CACHE=/home/admin_ia/.cache/huggingface/hub
 ExecStart=/home/admin_ia/transcria/start.sh
 ExecStop=/home/admin_ia/transcria/stop.sh
 ExecReload=/bin/kill -HUP $MAINPID

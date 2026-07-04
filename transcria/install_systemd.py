@@ -191,7 +191,6 @@ def render_legacy_unit(template: str, context: SystemdRenderContext) -> str:
     rendered = rendered.replace("Environment=PID_FILE=/run/transcrIA.pid", f"Environment=PID_FILE={pid_file}")
     rendered = rendered.replace(f"Environment=VENV={DEFAULT_INSTALL_DIR}/venv", f"Environment=VENV={venv_dir}")
     rendered = rendered.replace(f"HF_HOME={DEFAULT_SERVICE_HOME}/", f"HF_HOME={context.service_home}/")
-    rendered = rendered.replace(f"TRANSFORMERS_CACHE={DEFAULT_SERVICE_HOME}/", f"TRANSFORMERS_CACHE={context.service_home}/")
     return rendered
 
 

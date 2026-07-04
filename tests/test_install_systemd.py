@@ -39,7 +39,7 @@ def test_render_legacy_unit_replaces_paths_user_and_runtime_files():
     assert "Environment=PID_FILE=/opt/transcria/run/transcrIA.pid" in rendered
     assert "Environment=VENV=/opt/transcria/venv" in rendered
     assert "Environment=HF_HOME=/srv/transcria/.cache/huggingface" in rendered
-    assert "Environment=TRANSFORMERS_CACHE=/srv/transcria/.cache/huggingface/hub" in rendered
+    assert "TRANSFORMERS_CACHE" not in rendered  # var dépréciée (Transformers) — HF_HOME suffit
     assert "ExecStart=/opt/transcria/start.sh" in rendered
     assert "ExecStop=/opt/transcria/stop.sh" in rendered
     assert "/home/admin_ia/transcria" not in rendered
