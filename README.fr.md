@@ -94,6 +94,10 @@ fait plus qu'il ne fait.
 
 ![File GPU persistante](docs/screenshots/05-queue.png)
 
+**Éditeur intégré — chaque locuteur sur une piste sur toute la durée de la réunion ; la vraie forme d'onde est colorée par locuteur, clic pour aller à l'instant, cadre déplaçable pour zoomer. Les pics calculés serveur restent fluides même sur plusieurs heures**
+
+![Frise de l'éditeur de transcription](docs/screenshots/08-editor.png)
+
 ## Profils de traitement
 
 Après l'upload, vous choisissez un *livrable* sur un seul curseur, au lieu d'un opaque
@@ -190,14 +194,22 @@ dans [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Topologies de déploiement
 
-- **Tout-en-un** — une seule machine GPU fait tout.
-- **Frontale web + worker GPU** — une frontale web sans GPU et un worker GPU partagent une
-  base PostgreSQL ; les fichiers de job sont répliqués **via la base** (aucun système de
-  fichiers partagé à exploiter, intégrité vérifiée en sha256). Voir
-  [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
-- **Nœud d'inférence distant** — un nœud de ressources GPU sert STT, diarisation et
-  empreinte vocale par HTTP avec autonomie VRAM (réutilisation, lancement à la demande,
-  503 explicite). Voir [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md).
+L'installeur prend un `--profile` qui choisit le rôle de chaque machine ; le même code et
+le même schéma de configuration servent tous les rôles.
+
+- **Tout-en-un** (`./install.sh --profile all-in-one`, le défaut) — une seule machine GPU
+  fait l'UI web, l'ordonnanceur et l'inférence GPU in-process.
+- **Frontale web + worker GPU** — une frontale sans GPU (`--profile web`) et un worker GPU
+  (`--profile scheduler`) partagent une base PostgreSQL ; les fichiers de job sont
+  répliqués **via la base** (aucun système de fichiers partagé à exploiter, intégrité
+  vérifiée en sha256). Voir [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
+- **Serveur de ressources GPU distant** (`--profile resource-node`) — un nœud GPU **sans
+  base applicative** qui sert STT, diarisation et empreinte vocale par HTTP avec autonomie
+  VRAM (réutilisation, lancement à la demande, 503 explicite sous pression). Voir
+  [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md).
+
+Ces mêmes rôles existent comme points d'entrée de conteneur pour Docker
+([docs/DOCKER.md](docs/DOCKER.md)).
 
 ## Limites connues
 

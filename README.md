@@ -89,6 +89,10 @@ imply the tool does more than it does.
 
 ![Persistent GPU queue](docs/screenshots/05-queue.png)
 
+**Built-in editor — every speaker on one lane across the whole meeting; the real waveform is colored per speaker, click to jump, drag the frame to zoom. Server-computed peaks keep it smooth even on multi-hour recordings**
+
+![Transcript editor timeline](docs/screenshots/08-editor.png)
+
 ## Processing profiles
 
 After upload, you choose a *deliverable* on a single slider instead of an opaque
@@ -183,13 +187,22 @@ rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 
 ## Deployment topologies
 
-- **All-in-one** — a single GPU box runs everything.
-- **Web frontend + GPU worker** — a CPU-only web tier and a GPU worker share a PostgreSQL
-  database; job files are replicated through the database (no shared filesystem to
-  operate, sha256-verified). See [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
-- **Remote inference node** — a GPU resource node serves STT, diarization, and voice
-  embedding over HTTP with VRAM autonomy (reuse, launch on demand, explicit 503). See
+The installer takes a `--profile` that selects the role each machine plays; the same
+codebase and configuration schema serve all of them.
+
+- **All-in-one** (`./install.sh --profile all-in-one`, the default) — a single GPU box
+  runs the web UI, the scheduler, and in-process GPU inference.
+- **Web frontend + GPU worker** — a CPU-only front (`--profile web`, "frontale") and a
+  GPU worker (`--profile scheduler`) share a PostgreSQL database; job files are replicated
+  through the database (no shared filesystem to operate, sha256-verified). See
+  [docs/STOCKAGE_PARTAGE_JOBS.md](docs/STOCKAGE_PARTAGE_JOBS.md).
+- **Remote inference node** (`--profile resource-node`) — a GPU resource server that runs
+  no application database and serves STT, diarization, and voice embedding over HTTP with
+  VRAM autonomy (reuse, launch on demand, explicit 503 under pressure). See
   [docs/SERVICE_RESSOURCES_GPU.md](docs/SERVICE_RESSOURCES_GPU.md).
+
+The same roles exist as container entrypoints for Docker deployments
+([docs/DOCKER.md](docs/DOCKER.md)).
 
 ## Known limitations
 
