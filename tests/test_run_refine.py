@@ -323,3 +323,51 @@ class TestRunRefineApply:
 
         assert "Segment DEUX reformulé" in _srt_of(env)
         assert env.store.list_versions() == [1]
+
+
+# ── Micro-étape « champs du type » (trou macro Word structuré) ────────────────
+
+class TestRunTypeFieldExtraction:
+    """Câblage bout-en-bout GPU-free : charge le transcript, appelle la LLM DIRECTE
+    (chat_completion mocké), parse le JSON, fusionne dans structured_data, persiste."""
+
+    def _set_custom_type(self, env, extract_fields):
+        ctx = env.fs.load_json("context/meeting_context.json")
+        ctx["custom_type"] = {"name": "Conseil E2E", "extract_fields": extract_fields}
+        env.fs.save_json("context/meeting_context.json", ctx)
+
+    def test_extrait_et_fusionne_les_champs_du_type(self, env):
+        self._set_custom_type(env, [
+            {"key": "deliberations", "label": "Délibérations", "instruction": "les délibérations"},
+        ])
+        _FakeChat.answer = '{"deliberations": ["Budget 2026 voté", "Travaux école"]}'
+
+        result = env.runner.run_type_field_extraction(env.job, env.config)
+
+        assert result["success"] is True
+        assert result["fields_added"] == ["deliberations"]
+        sd = env.fs.load_json("context/meeting_context.json")["structured_data"]
+        assert sd["deliberations"] == ["Budget 2026 voté", "Travaux école"]
+        assert sd["decisions"] == ["Décision A"]                 # existant préservé
+        assert ("llm", "j1") in env.runner.allocator.released    # verrou LLM relâché
+        # la transcription a bien été passée à la LLM
+        user_msg = _FakeChat.seen["messages"][-1]["content"]
+        assert "Segment numéro 1" in user_msg
+
+    def test_sans_type_ne_touche_pas_a_la_llm(self, env):
+        # pas de custom_type dans le contexte → court-circuit, aucun appel LLM
+        result = env.runner.run_type_field_extraction(env.job, env.config)
+        assert result["skipped"] is True and result["reason"] == "no_extract_fields"
+        assert _FakeChat.seen == {}
+
+    def test_reponse_llm_illisible_best_effort_rien_ajoute(self, env):
+        self._set_custom_type(env, [
+            {"key": "deliberations", "label": "Délibérations", "instruction": "les délibérations"},
+        ])
+        _FakeChat.answer = "je n'ai pas trouvé de JSON ici"
+
+        result = env.runner.run_type_field_extraction(env.job, env.config)
+
+        assert result["success"] is True and result["fields_added"] == []
+        sd = env.fs.load_json("context/meeting_context.json").get("structured_data", {})
+        assert "deliberations" not in sd                          # rien inventé

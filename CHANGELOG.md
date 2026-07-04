@@ -8,6 +8,19 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added — revue macro workflow/UI (2026-07-04)
+- **Champs sur-mesure des types de réunion dans « Word structuré »** : les
+  `extract_fields` d'un type personnalisé sont désormais extraits pour les profils qui
+  font le résumé mais pas la relecture finale (micro-étape LÉGÈRE `run_type_field_extraction`,
+  prompt court dédié + appel LLM direct, best-effort). Elle ne tourne que si un type avec
+  `extract_fields` est choisi — coût GPU nul autrement. Comble un trou silencieux repéré
+  à l'analyse macro : ces champs n'étaient peuplés que par la relecture finale.
+- **Watchdog anti-gel opencode** : détection d'INACTIVITÉ (silence opencode + slot
+  llama.cpp idle, avec repli idle pur) qui interrompt et relance un `opencode run` gelé
+  (bug amont connu opencode#17516) en ~2 min au lieu d'attendre le timeout. **Sans**
+  timeout total agressif : un gros job légitime peut durer plus de 30 min tant que la
+  LLM travaille (le slot reste occupé).
+
 ### Added — stabilisation 0.2.0 (vague 2)
 - **L'installeur recommande le moteur LLM en l'expliquant** : sur les petits paliers
   VRAM, llama.cpp sert un modèle d'une classe supérieure (ex. à 12 Go : Qwen3.5-9B

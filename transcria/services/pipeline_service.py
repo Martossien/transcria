@@ -1175,6 +1175,20 @@ class PipelineService:
         except (KeyError, ValueError):
             return profiles.get_profile(profiles.resolve_legacy_mode("fast"))
 
+    def _job_has_type_extract_fields(self, job) -> bool:
+        """Le job a-t-il un type de réunion perso matérialisé AVEC des extract_fields ?
+        (garde de la micro-étape « champs du type » — évite tout coût quand inutile)."""
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.workflow.type_field_extraction import extract_fields_from_type
+
+            fs = JobFilesystem(self.config["storage"]["jobs_dir"], job.id)
+            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+            custom_type = meeting_ctx.get("custom_type")
+            return bool(extract_fields_from_type(custom_type if isinstance(custom_type, dict) else None))
+        except Exception:  # noqa: BLE001 — une garde ne doit jamais casser la construction du pipeline
+            return False
+
     def _define_pipeline_steps_for_profile(
         self, job: Job, audio_path: str, profile
     ) -> list[dict]:
@@ -1207,6 +1221,15 @@ class PipelineService:
                     "name": "final_review",
                     "method": partial(self.runner.run_final_review, job, self.config),
                 })
+        # Micro-étape « champs du type » : SEULEMENT si le profil ne fait PAS de relecture
+        # finale (qui les extrait déjà) ET qu'un type perso avec extract_fields est choisi
+        # (trou macro Word structuré). Coût GPU nul sinon — cf. type_field_extraction.
+        if (not profile.run_final_review and profile.requires_summary
+                and self._job_has_type_extract_fields(job)):
+            steps.append({
+                "name": "type_fields",
+                "method": partial(self.runner.run_type_field_extraction, job, self.config),
+            })
         if profile.run_quality != "none":
             steps.append({
                 "name": "quality",

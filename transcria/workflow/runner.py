@@ -2083,6 +2083,78 @@ class WorkflowRunner:
             logger.info("Relecture finale appliquée intégralement: %s", applied)
         return {"review_applied": True, **applied}
 
+    def run_type_field_extraction(self, job: Job, config: dict) -> dict:
+        """Micro-étape LÉGÈRE : extrait les ``extract_fields`` d'un type de réunion
+        personnalisé quand le profil fait le RÉSUMÉ mais PAS la relecture finale
+        (trou macro : Word structuré). Prompt COURT dédié (juste les champs demandés),
+        appel LLM DIRECT (pas d'opencode). BEST-EFFORT : n'interrompt jamais le pipeline.
+
+        Ne tourne que si un type avec ``extract_fields`` est matérialisé dans le job —
+        coût GPU nul pour tous les autres cas (le pipeline ne l'insère que si nécessaire).
+        """
+        from transcria.workflow.type_field_extraction import (
+            build_extraction_messages,
+            extract_fields_from_type,
+            merge_into_structured_data,
+            parse_extracted_fields,
+        )
+
+        fs = self._get_fs(config, job.id)
+        meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+        custom_type = meeting_ctx.get("custom_type")
+        fields = extract_fields_from_type(custom_type if isinstance(custom_type, dict) else None)
+        if not fields:
+            return {"success": True, "skipped": True, "reason": "no_extract_fields"}
+
+        transcript = (
+            fs.load_text("metadata/transcription_corrigee.srt")
+            or fs.load_text("metadata/transcription.srt") or ""
+        )
+        if not transcript.strip():
+            return {"success": True, "skipped": True, "reason": "no_transcript"}
+
+        if not self.allocator.try_acquire_llm(job.id, timeout_s=120):
+            logger.warning("extract_type_fields: verrou LLM occupé — champs de type non extraits (best-effort)")
+            return {"success": True, "skipped": True, "reason": "llm_busy"}
+
+        llm_phase_reserved = False
+        try:
+            if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
+                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+                # Réservation MULTI-GPU tout-ou-rien (comme correction/refine) : la LLM
+                # est déchargée en fin de job, cette micro-étape doit pouvoir la relancer.
+                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "type_fields"):
+                    logger.warning("extract_type_fields: VRAM insuffisante — champs de type non extraits")
+                    return {"success": True, "skipped": True, "reason": "vram_insufficient"}
+                llm_phase_reserved = True
+
+            api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
+            if not self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
+                logger.warning("extract_type_fields: LLM d'arbitrage indisponible — champs de type non extraits")
+                return {"success": True, "skipped": True, "reason": "llm_unavailable"}
+
+            from transcria.workflow.refine_llm import chat_completion
+
+            messages = build_extraction_messages(transcript=transcript, extract_fields=fields)
+            try:
+                answer = chat_completion(config, messages, timeout_s=600, max_tokens=1500)
+            except Exception as exc:  # noqa: BLE001 — best-effort : jamais d'interruption du pipeline
+                logger.warning("extract_type_fields: appel LLM échoué (%s) — champs de type non extraits", exc)
+                return {"success": True, "skipped": True, "reason": "llm_error"}
+
+            extracted = parse_extracted_fields(answer, fields)
+            sd = meeting_ctx.get("structured_data") or {}
+            merged, added = merge_into_structured_data(sd if isinstance(sd, dict) else {}, extracted)
+            if added:
+                meeting_ctx["structured_data"] = merged
+                fs.save_json("context/meeting_context.json", meeting_ctx)
+            logger.info("extract_type_fields: %d champ(s) de type extrait(s) : %s", len(added), added)
+            return {"success": True, "fields_added": added}
+        finally:
+            if llm_phase_reserved:
+                self.allocator.release_phase(job.id, "type_fields")
+            self.allocator.release_llm(job.id)
+
     def run_refine(self, job: Job, config: dict) -> dict:
         """Tour du chat d'affinage des livrables (post-workflow, job terminé).
 

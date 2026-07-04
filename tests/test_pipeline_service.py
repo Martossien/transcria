@@ -709,3 +709,39 @@ class TestEstimateProfileResources:
         assert "diarization" not in fast["phases"]
         quality = PipelineService.estimate_job_vram(self._CFG, "quality")
         assert "diarization" in quality["phases"]
+
+
+class TestTypeFieldsGating:
+    """Micro-étape « champs du type » (trou macro) : insérée SEULEMENT si le profil ne
+    fait pas de relecture finale ET qu'un type perso avec extract_fields est choisi."""
+
+    def _steps(self, profile_id, has_type_fields):
+        from unittest.mock import patch
+        from transcria.workflow.profiles import get_profile
+        svc = _make_svc({"workflow": {"enable_quality_mode": True, "arbitration_llm": {"enabled": True}}})
+        job = _job()
+        with patch.object(svc, "_job_has_type_extract_fields", return_value=has_type_fields):
+            steps = svc._define_pipeline_steps_for_profile(job, "/audio.wav", get_profile(profile_id))
+        return [s["name"] for s in steps]
+
+    def test_word_structure_avec_type_insere_letape(self):
+        # Word structuré (pas de relecture finale) + type avec extract_fields → micro-étape
+        names = self._steps("word_structure", has_type_fields=True)
+        assert "type_fields" in names
+        assert "final_review" not in names          # ce profil ne fait pas la relecture
+
+    def test_word_structure_sans_type_pas_detape(self):
+        names = self._steps("word_structure", has_type_fields=False)
+        assert "type_fields" not in names           # aucun coût quand pas de type
+
+    def test_word_corrige_jamais_de_microetape(self):
+        # Word corrigé fait déjà la relecture finale (qui extrait les champs) → pas de doublon
+        names = self._steps("word_corrige", has_type_fields=True)
+        assert "type_fields" not in names
+        assert "final_review" in names
+
+    def test_srt_express_pas_de_microetape_sans_resume(self):
+        # srt_express ne fait pas de résumé (requires_summary=False) → jamais de micro-étape,
+        # même si on force has_type_fields (un tel job ne peut de toute façon pas choisir de type)
+        names = self._steps("srt_express", has_type_fields=True)
+        assert "type_fields" not in names

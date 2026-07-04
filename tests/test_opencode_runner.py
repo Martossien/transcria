@@ -15,21 +15,37 @@ def _make_runner(tmp_path, **kwargs):
 
 
 class _FakePopen:
-    """Simule subprocess.Popen pour les tests de OpenCodeRunner."""
-    def __init__(self, stdout="", stderr="", returncode=0, communicate_exc=None):
+    """Simule subprocess.Popen pour les tests de OpenCodeRunner (interface streaming).
+
+    ``running_polls`` : nombre d'appels poll() renvoyant None (process « en cours »)
+    avant de renvoyer le returncode — pour simuler un GEL (process qui ne sort pas)."""
+    def __init__(self, stdout="", stderr="", returncode=0, communicate_exc=None,
+                 running_polls=0):
+        import io
         self.pid = 99999
-        self._stdout = stdout
-        self._stderr = stderr
+        self.stdout = io.StringIO(stdout)
+        self.stderr = io.StringIO(stderr)
         self.returncode = returncode
         self._communicate_exc = communicate_exc
+        self._running_polls = running_polls
+        self._terminated = False
 
-    def communicate(self, timeout=None):
+    def poll(self):
+        if self._communicate_exc is not None and not self._terminated:
+            # simule un process qui reste vivant jusqu'au kill du watchdog
+            return None
+        if self._running_polls > 0:
+            self._running_polls -= 1
+            return None
+        return self.returncode
+
+    def communicate(self, timeout=None):  # conservé pour compat (non utilisé par run())
         if self._communicate_exc is not None:
             raise self._communicate_exc
-        return self._stdout, self._stderr
+        return self.stdout.getvalue(), self.stderr.getvalue()
 
     def send_signal(self, sig):
-        pass
+        self._terminated = True
 
     def wait(self, timeout=None):
         pass
@@ -113,18 +129,37 @@ class TestOpenCodeRunnerRun:
         assert result["success"] is False
         assert "Prompt introuvable" in result["error"]
 
-    def test_run_timeout(self, tmp_path, monkeypatch):
+    def _fast_watchdog_cfg(self):
+        # intervalles courts pour un watchdog testable en < 1 s
+        return {"workflow": {"arbitration_llm": {
+            "opencode_watchdog_poll_s": 0.02,
+            "opencode_idle_grace_s": 0.05,
+            "opencode_pure_idle_cap_s": 0.2,
+        }}}
+
+    def _run_hung(self, tmp_path, monkeypatch, llm_processing):
         import shutil
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
         monkeypatch.setattr(os.path, "isfile", lambda p: True)
         monkeypatch.setattr(os.path, "abspath", lambda p: p)
+        # process GELÉ : poll() reste None (communicate_exc), aucune sortie
         monkeypatch.setattr(subprocess, "Popen",
             _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
+        runner = _make_runner(tmp_path, config=self._fast_watchdog_cfg())
+        monkeypatch.setattr(runner, "_llm_is_processing", lambda: llm_processing)
+        return runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
 
-        runner = _make_runner(tmp_path)
-        result = runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
+    def test_watchdog_tue_le_gel_silencieux_llm_idle(self, tmp_path, monkeypatch):
+        # opencode silencieux + LLM idle → gel détecté (opencode#17516) → tué vite
+        result = self._run_hung(tmp_path, monkeypatch, llm_processing=False)
         assert result["success"] is False
-        assert "timeout" in result["error"].lower()
+        assert "interrompu" in result["error"].lower() or "gel" in result["error"].lower()
+
+    def test_watchdog_repli_idle_pur_quand_etat_llm_inconnu(self, tmp_path, monkeypatch):
+        # /slots indisponible (None) : le repli idle pur (0.2 s) tue quand même le gel
+        result = self._run_hung(tmp_path, monkeypatch, llm_processing=None)
+        assert result["success"] is False
+        assert "idle pur" in result["error"].lower() or "interrompu" in result["error"].lower()
 
     def test_run_generic_exception(self, tmp_path, monkeypatch):
         import shutil

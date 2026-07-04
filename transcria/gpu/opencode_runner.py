@@ -402,6 +402,102 @@ class OpenCodeRunner:
             except (ProcessLookupError, subprocess.TimeoutExpired):
                 pass
 
+    def _llm_is_processing(self) -> bool | None:
+        """La LLM d'arbitrage traite-t-elle une requête (prompt eval OU génération) ?
+        True = occupée, False = idle, None = inconnu (endpoint injoignable / pas de /slots).
+
+        Discriminateur du watchdog (llama.cpp est MONO-slot) : opencode silencieux +
+        LLM idle = GEL (jamais une génération légitime, qui garde le slot occupé). Ollama
+        ou une frontale sans /slots ⇒ None ⇒ le watchdog retombe sur l'idle pur généreux.
+        """
+        if not self._config:
+            return None
+        try:
+            import requests
+
+            from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
+
+            host, port = resolve_arbitrage_endpoint(self._config)
+            r = requests.get(f"http://{host}:{port}/slots", timeout=3)
+            if r.status_code != 200:
+                return None
+            slots = r.json()
+            if not isinstance(slots, list):
+                return None
+            for s in slots:
+                if s.get("is_processing") is True or s.get("state") in (1, "processing"):
+                    return True
+            return False
+        except Exception:  # noqa: BLE001 — signal best-effort du watchdog, jamais bloquant
+            return None
+
+    def _communicate_with_watchdog(
+        self, proc: subprocess.Popen, timeout: int
+    ) -> tuple[str, str, str | None]:
+        """Lit opencode en STREAMING avec un watchdog d'INACTIVITÉ.
+
+        opencode a un bug connu de gel sans sortie (issue anomalyco/opencode#17516 :
+        « run hangs after completing tool calls — process never exits ») et n'expose PAS
+        de timeout de commande (issue #3950) : le wrapper doit le détecter. On NE pose PAS
+        de timeout total agressif — un gros job légitime peut durer 30+ min tant que la LLM
+        travaille. On tue seulement sur INACTIVITÉ :
+        - ``opencode_idle_grace_s`` (défaut 120 s) de silence opencode ET LLM slot idle ;
+        - repli ``opencode_pure_idle_cap_s`` (défaut 600 s) de silence seul (si /slots
+          indisponible) ;
+        - ``timeout`` reste le garde-fou ABSOLU (comportement historique préservé).
+        Renvoie (stdout, stderr, erreur|None). L'appelant (retry A12) relance au besoin.
+        """
+        import threading
+
+        llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
+        idle_grace_s = float(llm_cfg.get("opencode_idle_grace_s", 120))
+        pure_idle_cap_s = float(llm_cfg.get("opencode_pure_idle_cap_s", 600))
+        poll_s = float(llm_cfg.get("opencode_watchdog_poll_s", 5))
+
+        out_lines: list[str] = []
+        err_lines: list[str] = []
+        last_activity = [time.monotonic()]  # liste = mutable partagé avec les threads
+
+        def _drain(stream, sink: list[str]) -> None:
+            if stream is None:
+                return
+            for line in stream:  # bloquant par ligne, draine les DEUX pipes (anti-deadlock)
+                sink.append(line)
+                last_activity[0] = time.monotonic()
+
+        t_out = threading.Thread(target=_drain, args=(proc.stdout, out_lines), daemon=True)
+        t_err = threading.Thread(target=_drain, args=(proc.stderr, err_lines), daemon=True)
+        t_out.start()
+        t_err.start()
+
+        start = time.monotonic()
+        reason: str | None = None
+        while proc.poll() is None:
+            time.sleep(poll_s)
+            now = time.monotonic()
+            idle = now - last_activity[0]
+            if now - start >= timeout:
+                reason = f"timeout absolu {timeout}s"
+                break
+            if idle >= pure_idle_cap_s:
+                reason = f"aucune sortie depuis {int(idle)}s (repli idle pur)"
+                break
+            if idle >= idle_grace_s and self._llm_is_processing() is False:
+                reason = (f"opencode silencieux {int(idle)}s + LLM idle "
+                          "— gel détecté (opencode#17516)")
+                break
+
+        if reason is not None:
+            logger.warning("opencode watchdog: %s — arrêt forcé PID=%d", reason, proc.pid)
+            self._terminate_proc(proc)
+
+        t_out.join(timeout=5)
+        t_err.join(timeout=5)
+        stdout, stderr = "".join(out_lines), "".join(err_lines)
+        if reason is not None:
+            return stdout, stderr, f"opencode interrompu ({reason})"
+        return stdout, stderr, None
+
     def run(self, instruction: str, prompt_file: str, timeout: int = 600) -> dict:
         opencode_path = shutil.which(self.opencode_bin)
         if not opencode_path and os.path.isfile(self.opencode_bin):
@@ -479,14 +575,9 @@ class OpenCodeRunner:
             pid_file.write_text(str(proc.pid))
             logger.info("opencode démarré PID=%d (job_dir=%s)", proc.pid, self.work_dir.name)
 
-            try:
-                stdout, stderr = proc.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                logger.warning(
-                    "opencode timeout après %ds — arrêt forcé PID=%d", timeout, proc.pid
-                )
-                self._terminate_proc(proc)
-                return {"success": False, "error": f"opencode timeout après {timeout}s"}
+            stdout, stderr, watchdog_error = self._communicate_with_watchdog(proc, timeout)
+            if watchdog_error is not None:
+                return {"success": False, "error": watchdog_error}
 
         except Exception as exc:
             if proc is not None:

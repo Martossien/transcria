@@ -753,6 +753,29 @@ corriger » beta.9).
 | A10 | CSS/JS périmés (cache navigateur) | retour utilisateur | **corrigée** (asset_url) |
 | A11 | llama-server tué par un SIGTERM non tracé ~2 min après lancement (RÉCIDIVE — déjà observé une fois pendant le chantier refine) | E2E vague 2 (2026-07-04, log arbitrage : `que start_loop: terminate` à uptime 2 m 17 s, aucun acteur dans les logs instance/prod) | **ouverte** — à instrumenter (logger l'appelant dans stop_arbitrage_llm.sh + audit des chemins d'arrêt) ; la robustesse aval est corrigée (A12) |
 | A12 | Les tentatives 2/3 de run_summary supposaient « LLM déjà chargée » : serveur mort ⇒ 2×30 min d'opencode dans le vide | même E2E | **corrigée** — `ensure_arbitrage_llm_ready` re-vérifié (et relance au besoin) avant CHAQUE retry (runner.py) |
+| A13 | Champs sur-mesure d'un type (`extract_fields`) non extraits sur les profils qui font le résumé mais PAS la relecture finale (Word structuré) — silencieux | **analyse macro 2026-07-04** (revue « en hauteur » du workflow demandée par le mainteneur) | **corrigée** — micro-étape `run_type_field_extraction` gated (prompt court dédié, appel LLM direct, best-effort) insérée seulement si `not run_final_review AND requires_summary AND type a des extract_fields` → coût GPU nul sinon |
+| A14 | Gel intermittent d'opencode à l'`init` (bug amont connu anomalyco/opencode#17516 : « run hangs after completing tool calls — process never exits ») → job bloqué jusqu'au timeout (30 min) avant retry | **analyse macro 2026-07-04** (banc E2E : GPU 0 % + opencode vivant 10+ min, log s'arrête à `init`, 0 appel `/v1/models`) | **corrigée** — watchdog d'INACTIVITÉ dans `opencode_runner._communicate_with_watchdog` : lecture streaming + kill si silence prolongé ET slot llama.cpp idle (`/slots`), repli idle pur ; **pas** de timeout total (un gros job légitime peut durer 30+ min tant que la LLM travaille). Complète le durcissement retry A12 |
+
+### Analyse macro workflow + UI (2026-07-04, demandée par le mainteneur)
+
+Revue « en hauteur » (au-delà de la lecture ligne-à-ligne) du workflow de transcription
+et des onglets. Verdicts :
+- **Trou trouvé (A13)** : `extract_fields` non appliqués sur Word structuré → corrigé
+  (micro-étape gated). C'était une CLASSE potentielle de trous « feature appliquée
+  seulement dans certains profils » ; les autres candidats de la classe ont été vérifiés
+  SAINS : le **lexique de session** est proposé (`requires_lexicon`) uniquement sur les
+  profils qui font la correction (qui l'applique) — pas de drop silencieux ; les champs
+  MANUELS d'un type (`type_specific_data`) sont rendus directement par le DOCX (pas de LLM).
+- **Détection de type** : la LLM du résumé voit DÉJÀ les types personnalisés du
+  propriétaire (via `owner` → `visible_templates_for_user` avec leurs `detection_hints`) —
+  la suggestion peut être un type perso. Sain.
+- **Nav File ↔ Planification** : split défendable (File = consultation fréquente en
+  premier niveau ; Planification = config rare en admin) ET DÉJÀ bidirectionnel (liens
+  croisés + créneau actif affiché sur la File). Aucune action.
+- **Deux passes STT + deux diarisations** (aperçu au résumé, qualité au traitement) :
+  voulu (aperçu vs qualité), documenté ; l'aperçu peut différer du livrable final.
+- **Enrôlement voix GPU** : le seul parcours non couvert par les E2E précédents →
+  validé par E2E dédié (consentement → generate → empreinte).
 
 **Candidats 0.3** (on n'y touche PAS en 0.2.0) : profils métier (route 1.0), ingestion
 pptx/pdf, harmonisation 1-clic depuis l'éditeur, mesure fine multi-GPU Ollama/vLLM,
