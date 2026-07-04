@@ -1151,8 +1151,23 @@ def job_wizard(job_id: str):
     quality_report = fs.load_json("quality/quality_report.json") or {}
     srt_content = _effective_srt(fs) or ""
 
+    # Estimation de temps CALIBRÉE MACHINE, spécifique au profil choisi (remplace la
+    # formule fixe historique). Fourchette + base de confiance pour un affichage honnête.
+    timing_estimate = None
+    try:
+        from transcria.workflow.profiles import get_profile, is_profile
+        from transcria.workflow.timing_service import estimate_total_with_human
+
+        _audio_s = float(audio_analysis.get("duration_seconds") or 0)
+        _prof = get_profile(selected_profile_id) if selected_profile_id and is_profile(selected_profile_id) else None
+        if _prof is not None and _audio_s > 0:
+            timing_estimate = estimate_total_with_human(_prof, _audio_s)
+    except Exception:  # noqa: BLE001 — l'estimation ne doit jamais casser le wizard
+        timing_estimate = None
+
     return render_template(
         "job_wizard.html",
+        timing_estimate=timing_estimate,
         job=job,
         steps=steps,
         statuses=statuses,

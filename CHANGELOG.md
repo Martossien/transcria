@@ -8,6 +8,22 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added — estimation de temps calibrée machine + emails (revue macro, 2026-07-04)
+- **Modèle de temps calibré machine** (remplace la formule fixe `(audio×0.35+130)×1.25`,
+  aveugle au profil et à la machine) : chaque étape terminée est historisée
+  `(profil, étape, durée_audio, durée_machine)` en base (`job_timing`, fenêtre glissante) ;
+  l'estimation devient **spécifique au profil choisi et apprise de CETTE machine** (les
+  étapes LLM portent naturellement la vitesse du palier). Régression linéaire par étape
+  dès assez d'historique, ratio médian sinon, **formule en démarrage à froid** (étiquetée
+  « estimation initiale » → « calibré · N jobs »). Fourchette honnête plutôt que fausse
+  précision. Source unique : wizard, emails (et, à venir, ETA live / file d'attente).
+- **Email « pré-analyse prête, à vous de jouer »** (nouveau) : envoyé quand le résumé est
+  prêt et que le workflow attend l'utilisateur — type détecté, locuteurs, durée, **temps
+  de traitement estimé**, lien vers l'étape contexte. Comble un trou de flux (un job
+  restait en attente d'input sans jamais prévenir).
+- **Email « terminé » enrichi** : temps réel de traitement, score qualité, nombre de
+  points à vérifier, et lien direct vers **`/result`** (au lieu du wizard).
+
 ### Added — revue macro workflow/UI (2026-07-04)
 - **Champs sur-mesure des types de réunion dans « Word structuré »** : les
   `extract_fields` d'un type personnalisé sont désormais extraits pour les profils qui

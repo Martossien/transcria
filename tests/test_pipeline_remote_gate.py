@@ -41,7 +41,9 @@ def test_proceed_executes_pipeline(monkeypatch):
                         lambda *a, **k: ran.__setitem__("n", ran["n"] + 1) or {"ok": True})
     out = svc.run_process(_job, "/a.wav", mode="fast")
     assert ran["n"] == 1
-    assert out == {"ok": True}
+    # run_process enrichit le résultat de succès avec le temps machine (email « terminé »)
+    assert out["ok"] is True
+    assert "processing_seconds" in out
 
 
 def test_fail_short_circuits_without_running(monkeypatch):

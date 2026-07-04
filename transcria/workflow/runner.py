@@ -275,8 +275,33 @@ class WorkflowRunner:
         )
         self.store.update_state(job.id, JobState.SUMMARY_DONE)
         self.progress.clear(job.id)
-        sl.info("━━━ FIN résumé ━━━ (%.1fs total)", time.monotonic() - t0,
+        summary_elapsed = time.monotonic() - t0
+        sl.info("━━━ FIN résumé ━━━ (%.1fs total)", summary_elapsed,
                 transcript_chars=len(result.get("transcript_text", "")))
+        # Modèle de temps calibré machine : historiser la phase RÉSUMÉ (STT+diarisation+
+        # LLM) — best-effort, jamais bloquant. Alimente l'estimation totale du wizard.
+        try:
+            from transcria.jobs.timing_store import JobTimingStore
+            from transcria.workflow.profiles import profile_for_job
+
+            audio_s = float(
+                (self._get_fs(config, job.id).load_json("metadata/audio_analysis.json") or {})
+                .get("duration_seconds") or 0.0
+            )
+            prof = profile_for_job(job)
+            JobTimingStore.record(prof.id if prof is not None else "", "summary",
+                                  audio_s, summary_elapsed)
+        except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
+            pass
+        # Email « pré-analyse prête, à vous de jouer » : point UNIQUE (couvre le résumé
+        # synchrone via la route ET le worker). L'utilisateur parti est rappelé quand son
+        # attention redevient utile — cf. revue macro emails.
+        try:
+            from transcria.notifications.job_facts import notify_summary_ready
+
+            notify_summary_ready(config, job)
+        except Exception:  # noqa: BLE001 — notification best-effort
+            pass
         return result
 
     def _load_cached_quick_summary(self, config: dict, job_id: str) -> dict | None:

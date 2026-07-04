@@ -89,20 +89,35 @@ _BODY_SUCCESS = """\
 </p>
 <table width="100%" cellpadding="0" cellspacing="0"
        style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
-  <tr>
-    <td style="padding:16px 20px;">
-      <p style="margin:0 0 6px;color:#666666;font-size:12px;text-transform:uppercase;
-                letter-spacing:0.5px;">Travail</p>
-      <p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">{job_title}</p>
-    </td>
-  </tr>
+  {facts_rows}
 </table>
 <p style="margin:0 0 24px;text-align:center;">
   <a href="{job_url}"
      style="display:inline-block;background:#2563eb;color:#ffffff;
             text-decoration:none;padding:12px 28px;border-radius:6px;
             font-size:15px;font-weight:bold;">
-    Voir la transcription &rarr;
+    Voir les livrables &rarr;
+  </a>
+</p>"""
+
+_BODY_SUMMARY_READY = """\
+<p style="margin:0 0 16px;color:#333333;font-size:15px;">
+  Bonjour {display_name},
+</p>
+<p style="margin:0 0 24px;color:#333333;font-size:15px;">
+  La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le
+  contexte de la réunion, puis lancez le traitement final.
+</p>
+<table width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
+  {facts_rows}
+</table>
+<p style="margin:0 0 24px;text-align:center;">
+  <a href="{job_url}"
+     style="display:inline-block;background:#2563eb;color:#ffffff;
+            text-decoration:none;padding:12px 28px;border-radius:6px;
+            font-size:15px;font-weight:bold;">
+    Vérifier et lancer le traitement &rarr;
   </a>
 </p>"""
 
@@ -173,12 +188,30 @@ _BODY_VRAM_WAIT = """\
 </p>"""
 
 
-def _build_html_success(display_name: str, job_title: str, job_id: str, base_url: str) -> str:
-    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    subject = f"Transcription terminée : {job_title}"
-    body = _BODY_SUCCESS.format(display_name=display_name, job_title=job_title, job_url=job_url)
+def _facts_rows_html(facts: list[tuple[str, str]]) -> str:
+    """Lignes d'un tableau de faits (label + valeur) pour le corps HTML des emails."""
+    import html as html_mod
+
+    rows = []
+    for label, value in facts:
+        rows.append(
+            '<tr><td style="padding:14px 20px;border-top:1px solid #eeeeee;">'
+            f'<p style="margin:0 0 4px;color:#666666;font-size:12px;text-transform:uppercase;'
+            f'letter-spacing:0.5px;">{html_mod.escape(str(label))}</p>'
+            f'<p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">'
+            f'{html_mod.escape(str(value))}</p></td></tr>'
+        )
+    return "".join(rows)
+
+
+def _build_html_success(display_name: str, job_title: str, job_id: str, base_url: str,
+                        facts: list[tuple[str, str]] | None = None) -> str:
+    # Sur un job TERMINÉ, on pointe /result (livrables) plutôt que le wizard.
+    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/result"
+    rows = _facts_rows_html([("Travail", job_title), *(facts or [])])
+    body = _BODY_SUCCESS.format(display_name=display_name, facts_rows=rows, job_url=job_url)
     return _HTML_BASE.format(
-        subject=subject,
+        subject=f"Transcription terminée : {job_title}",
         header_bg="#16a34a",
         header_icon="✓",
         header_title="Transcription terminée",
@@ -186,15 +219,44 @@ def _build_html_success(display_name: str, job_title: str, job_id: str, base_url
     )
 
 
-def _build_text_success(display_name: str, job_title: str, job_id: str, base_url: str) -> str:
+def _build_text_success(display_name: str, job_title: str, job_id: str, base_url: str,
+                        facts: list[tuple[str, str]] | None = None) -> str:
+    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/result"
+    lines = [f"Bonjour {display_name},", "",
+             "Votre transcription est terminée avec succès.", "",
+             f"Travail : {job_title}"]
+    for label, value in (facts or []):
+        lines.append(f"{label} : {value}")
+    lines += [f"Lien    : {job_url}", "", "Cet email a été envoyé automatiquement par TranscrIA."]
+    return "\n".join(lines)
+
+
+def _build_html_summary_ready(display_name: str, job_title: str, job_id: str, base_url: str,
+                              facts: list[tuple[str, str]] | None = None) -> str:
+    # Pré-analyse prête : on pointe le wizard (l'utilisateur doit valider le contexte).
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    return (
-        f"Bonjour {display_name},\n\n"
-        f"Votre transcription est terminée avec succès.\n\n"
-        f"Travail : {job_title}\n"
-        f"Lien    : {job_url}\n\n"
-        "Cet email a été envoyé automatiquement par TranscrIA."
+    rows = _facts_rows_html([("Travail", job_title), *(facts or [])])
+    body = _BODY_SUMMARY_READY.format(display_name=display_name, facts_rows=rows, job_url=job_url)
+    return _HTML_BASE.format(
+        subject=f"Pré-analyse prête : {job_title}",
+        header_bg="#2563eb",
+        header_icon="✓",
+        header_title="Pré-analyse prête — à vous de jouer",
+        body_html=body,
     )
+
+
+def _build_text_summary_ready(display_name: str, job_title: str, job_id: str, base_url: str,
+                              facts: list[tuple[str, str]] | None = None) -> str:
+    job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
+    lines = [f"Bonjour {display_name},", "",
+             "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion,",
+             "puis lancez le traitement final.", "",
+             f"Travail : {job_title}"]
+    for label, value in (facts or []):
+        lines.append(f"{label} : {value}")
+    lines += [f"Lien    : {job_url}", "", "Cet email a été envoyé automatiquement par TranscrIA."]
+    return "\n".join(lines)
 
 
 def _build_html_failure(
@@ -321,6 +383,7 @@ def send_job_notification_async(
     job_id: str,
     event: str,
     error: str | None = None,
+    facts: list[tuple[str, str]] | None = None,
 ) -> None:
     """Lance en tâche de fond l'envoi d'un email de notification.
 
@@ -330,8 +393,10 @@ def send_job_notification_async(
         display_name: nom affiché du destinataire.
         job_title: titre du job.
         job_id: identifiant du job.
-        event: "completed" ou "failed".
+        event: "summary_ready" (pré-analyse prête, à valider), "completed" ou "failed".
         error: message d'erreur (event="failed" uniquement).
+        facts: lignes (label, valeur) affichées dans le corps — type détecté, locuteurs,
+            durée, temps estimé/réel, score qualité selon l'événement.
     """
     ecfg = build_email_config(cfg)
     if not ecfg.enabled:
@@ -348,10 +413,14 @@ def send_job_notification_async(
 
     name = display_name or to_email.split("@")[0]
 
-    if event == "completed":
+    if event == "summary_ready":
+        subject = f"[TranscrIA] Pré-analyse prête : {job_title}"
+        html = _build_html_summary_ready(name, job_title, job_id, ecfg.base_url, facts)
+        text = _build_text_summary_ready(name, job_title, job_id, ecfg.base_url, facts)
+    elif event == "completed":
         subject = f"[TranscrIA] Transcription terminée : {job_title}"
-        html = _build_html_success(name, job_title, job_id, ecfg.base_url)
-        text = _build_text_success(name, job_title, job_id, ecfg.base_url)
+        html = _build_html_success(name, job_title, job_id, ecfg.base_url, facts)
+        text = _build_text_success(name, job_title, job_id, ecfg.base_url, facts)
     else:
         subject = f"[TranscrIA] Échec de transcription : {job_title}"
         html = _build_html_failure(name, job_title, job_id, error or "", ecfg.base_url)

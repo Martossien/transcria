@@ -43,7 +43,8 @@ REFINE_MODE = "refine"
 STEP_MODES = (SUMMARY_MODE, SPEAKER_MODE, REFINE_MODE)
 
 
-def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
+def _notify(cfg: dict, job, event: str, error: str | None = None,
+            facts: list[tuple[str, str]] | None = None) -> None:
     """Envoie une notification email en tâche de fond. Ne lève jamais d'exception."""
     try:
         owner = job.owner if job else None
@@ -57,6 +58,7 @@ def _notify(cfg: dict, job, event: str, error: str | None = None) -> None:
             job_id=job.id if job else "",
             event=event,
             error=error,
+            facts=facts,
         )
     except Exception as exc:
         # Les notifications ne doivent jamais bloquer le pipeline, mais l'échec
@@ -260,7 +262,14 @@ class JobExecutorService:
                     QueueStore.dequeue(job_id, status="done")
                     mark_execution_completed(job_id)
                     JobStore.update_state(job_id, JobState.COMPLETED)
-                    _notify(self.config, job, "completed")
+                    # Email « terminé » enrichi : temps réel + score qualité + points
+                    # (lien vers /result). Best-effort côté collecte des faits.
+                    try:
+                        from transcria.notifications.job_facts import completed_facts
+                        facts = completed_facts(self.config, job, result.get("processing_seconds"))
+                    except Exception:  # noqa: BLE001
+                        facts = None
+                    _notify(self.config, job, "completed", facts=facts)
                     self._purge_input_blobs(job_id, sl)
         except Exception as exc:
             with self.app.app_context():

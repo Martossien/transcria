@@ -119,6 +119,8 @@ class PipelineService:
                     duree=round(elapsed, 1), status=status)
             if not result.get("error"):
                 self.progress.clear(job.id)
+                # Temps machine du traitement (pour l'email « terminé » enrichi).
+                result.setdefault("processing_seconds", round(elapsed, 1))
             return result
         except Exception as exc:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
@@ -201,6 +203,21 @@ class PipelineService:
         finally:
             self._release_arbitrage_llm()
 
+    def _record_stage_timing(self, profile_id: str, audio_seconds: float,
+                             stage: str, elapsed: float) -> None:
+        """Historise une étape terminée pour le modèle de temps (best-effort : une panne
+        d'écriture ne doit JAMAIS interrompre le pipeline)."""
+        try:
+            if audio_seconds and audio_seconds > 0:
+                from transcria.jobs.timing_store import JobTimingStore
+                JobTimingStore.record(profile_id, stage, audio_seconds, elapsed)
+        except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
+            try:
+                from transcria.database import db
+                db.session.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+
     def _run_pipeline_steps(
         self,
         job: Job,
@@ -228,6 +245,16 @@ class PipelineService:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         done = set(resume.get_completed_phases(job))
         recorded_fps = resume.get_phase_fingerprints(job)
+
+        # Modèle de temps calibré machine : profil + durée audio pour historiser CHAQUE
+        # étape terminée (source unique des estimations wizard/ETA/file/email). Best-effort.
+        from transcria.workflow.profiles import profile_for_job
+
+        _timing_profile = profile_for_job(job)
+        _timing_profile_id = _timing_profile.id if _timing_profile is not None else (mode or "")
+        _audio_seconds = float(
+            (fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0.0
+        )
 
         def _checkpoint(phase: str) -> None:
             # Empreintes AVANT le push : la provenance décrit les fichiers locaux qui
@@ -312,6 +339,7 @@ class PipelineService:
                 return {"error": transcribe_result["error"], "step": "transcription"}
             # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
             StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
+            self._record_stage_timing(_timing_profile_id, _audio_seconds, "transcribe", transcribe_elapsed)
             _checkpoint("transcription")
 
         steps = self._define_pipeline_steps(job, audio_path, mode)
@@ -369,6 +397,7 @@ class PipelineService:
             sl.info("Étape terminée", step=name, duree=round(elapsed, 1))
             self._publish_step_progress(job, name, starting=False)
             StageMetrics.get_instance().record(name, elapsed)
+            self._record_stage_timing(_timing_profile_id, _audio_seconds, name, elapsed)
 
         if finalize_job_state:
             JobStore.update_state(job.id, JobState.COMPLETED)

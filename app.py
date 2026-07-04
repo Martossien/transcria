@@ -186,6 +186,7 @@ def create_app(config_path: str | None = None) -> Flask:
     import transcria.context.meeting_type_models  # noqa: F401 — enregistre les tables SQLAlchemy
     import transcria.queue.models  # noqa: F401 — enregistre les tables SQLAlchemy
     import transcria.voice.models  # noqa: F401 — enregistre les tables SQLAlchemy
+    import transcria.jobs.timing_store  # noqa: F401 — enregistre les tables SQLAlchemy
     from transcria.audit.routes import audit_bp
     from transcria.auth.routes import auth_bp, inject_user_context
     from transcria.context.central_lexicon_routes import central_lexicon_bp

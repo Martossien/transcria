@@ -21,6 +21,7 @@ module = [
     "transcria.auth.models",
     "transcria.audit.models",
     "transcria.jobs.models",
+    "transcria.jobs.timing_store",
     "transcria.voice.models",
     "transcria.queue.models",
     "transcria.context.central_lexicon_models",

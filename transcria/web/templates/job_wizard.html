@@ -223,7 +223,21 @@
       {% if audio_analysis.get('needs_conversion') %}
         <div class="alert alert-warning mt-3 mb-0">Conversion requise pour le traitement (effectuée automatiquement).</div>
       {% endif %}
-      {% if audio_analysis.get('estimated_total_minutes') %}
+      {% if timing_estimate and timing_estimate.total_minutes %}
+        {# Estimation CALIBRÉE machine, spécifique au profil choisi (honnête sur sa base). #}
+        <div class="alert alert-info mt-2 mb-0">
+          <strong><i class="bi bi-clock"></i> Temps total estimé : ~{{ timing_estimate.total_minutes|round(0)|int }} min</strong>
+          <span class="text-muted small ms-2">
+            (traitement machine {{ timing_estimate.machine_range }}
+            + validation ~{{ timing_estimate.human_minutes }} min)
+          </span>
+          {% if timing_estimate.basis == 'measured' %}
+          <span class="badge bg-success ms-2" title="Estimation apprise de vos traitements précédents sur cette machine">calibré · {{ timing_estimate.samples }} jobs</span>
+          {% else %}
+          <span class="badge bg-secondary ms-2" title="Estimation initiale (formule) — s'affinera après quelques traitements">estimation initiale</span>
+          {% endif %}
+        </div>
+      {% elif audio_analysis.get('estimated_total_minutes') %}
         <div class="alert alert-info mt-2 mb-0">
           <strong><i class="bi bi-clock"></i> Temps total estimé : ~{{ audio_analysis.estimated_total_minutes|round(0)|int }} min</strong>
           <span class="text-muted small ms-2">

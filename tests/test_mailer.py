@@ -72,7 +72,7 @@ def test_build_email_config_ignores_unknown_keys():
 def test_build_html_success_contains_job_title_and_link():
     html = _build_html_success("Alice", "Réunion du lundi", "abc123", "http://localhost:7870")
     assert "Réunion du lundi" in html
-    assert "http://localhost:7870/jobs/abc123/wizard" in html
+    assert "http://localhost:7870/jobs/abc123/result" in html
     assert "terminée" in html.lower()
     assert "Alice" in html
 
@@ -81,7 +81,7 @@ def test_build_text_success_contains_all_fields():
     text = _build_text_success("Bob", "Conf annuelle", "xyz999", "https://tr.example.com")
     assert "Bob" in text
     assert "Conf annuelle" in text
-    assert "https://tr.example.com/jobs/xyz999/wizard" in text
+    assert "https://tr.example.com/jobs/xyz999/result" in text
     assert "terminée" in text.lower()
 
 
@@ -111,7 +111,7 @@ def test_build_text_failure_includes_error_when_present():
 
 def test_base_url_trailing_slash_stripped():
     html = _build_html_success("Alice", "Job", "abc", "http://localhost:7870/")
-    assert "http://localhost:7870/jobs/abc/wizard" in html
+    assert "http://localhost:7870/jobs/abc/result" in html
 
 
 # ---------------------------------------------------------------------------
