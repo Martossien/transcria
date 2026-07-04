@@ -46,15 +46,21 @@
 {% endif %}
 
 <div class="d-flex flex-wrap gap-2 mb-4">
+  {# R1 (revue macro) : ne montrer un bouton que si le livrable existe réellement —
+     un profil SRT-only ne produit ni Word ni package (has_docx/has_package). #}
+  {% if has_docx %}
   <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary">
     <i class="bi bi-file-earmark-word"></i> Rapport Word (.docx)
   </a>
+  {% endif %}
   <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success">
     <i class="bi bi-download"></i> Télécharger le SRT
   </a>
+  {% if has_package %}
   <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary">
     <i class="bi bi-archive"></i> Package complet
   </a>
+  {% endif %}
   <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary">
     <i class="bi bi-download"></i> Télécharger l'audio
   </a>

@@ -291,7 +291,12 @@ class TestDocxDownload:
 # ── Tests page résultat ───────────────────────────────────────────────────────
 
 class TestJobResultPage:
-    def test_bouton_docx_present_dans_page_resultat(self, admin_client, job_with_docx_data):
+    def test_bouton_docx_present_dans_page_resultat(self, admin_client, app, job_with_docx_data):
+        # /result n'est servie que pour un job COMPLETED (garde R2 de la revue macro)
+        with app.app_context():
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+            JobStore.update_state(job_with_docx_data, JobState.COMPLETED)
         r = admin_client.get(f"/jobs/{job_with_docx_data}/result")
         assert r.status_code == 200
         body = r.data.decode("utf-8")

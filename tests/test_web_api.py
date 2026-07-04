@@ -846,6 +846,44 @@ class TestJobResultRobustness:
         assert r.status_code == 200
         assert "Terminé" in r.data.decode("utf-8")
 
+    def test_result_page_non_completed_redirects(self, app, admin_client):
+        """R2 (revue macro) : un job NON terminé ne doit pas afficher « Terminé » —
+        il est redirigé vers sa page de traitement (état réel)."""
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            job = JobStore.create_job(admin.id, "Job échoué")
+            JobStore.update_state(job.id, JobState.FAILED)
+            job_id = job.id
+
+        r = admin_client.get(f"/jobs/{job_id}/result", follow_redirects=False)
+        assert r.status_code in (301, 302)
+        assert f"/jobs/{job_id}" in r.headers["Location"]
+        assert "/result" not in r.headers["Location"]
+
+    def test_result_page_srt_only_hides_word_button(self, app, admin_client):
+        """R1 (revue macro) : un profil SRT-only (docx_level/zip_level == none) ne montre
+        NI « Rapport Word » NI « Package complet », mais toujours le SRT."""
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            job = JobStore.create_job(admin.id, "Job SRT express")
+            JobStore.update_extra_data(
+                job.id, lambda d: {**d, "execution": {"processing_profile_id": "srt_express"}})
+            JobStore.update_state(job.id, JobState.COMPLETED)
+            job_id = job.id
+
+        html = admin_client.get(f"/jobs/{job_id}/result").data.decode("utf-8")
+        assert "/download/srt" in html                     # SRT toujours proposé
+        assert "/download/docx" not in html                # docx_level=none → pas de Word
+        assert "/download/package" in html                 # zip_level=minimal → package OK
+
 
 class TestLexiconPromote:
     """Étape 6 : pousser une forme validée vers un lexique central (existant ou créé)."""

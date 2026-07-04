@@ -1200,13 +1200,24 @@ def job_result(job_id: str):
     _require_job_access(job, current_user)
     assert job is not None
 
+    # R2 (revue macro) : la page « Résultat » affiche « Terminé » en dur — ne la rendre
+    # que pour un job réellement COMPLETED. Un job échoué/en cours/en attente est renvoyé
+    # vers sa page de traitement (état réel, pas un faux « Terminé »).
+    if job.state != JobState.COMPLETED:
+        return redirect(url_for("web.job_wizard", job_id=job.id))
+
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     quality_report = fs.load_json("quality/quality_report.json") or {}
     review_points = fs.load_json("quality/review_points.json") or []
     srt_content = _effective_srt(fs) or ""
-    has_package = (fs.job_dir / "exports" / f"transcrIA_job_{job.id}.zip").is_file()
-    safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
-    has_docx = (fs.job_dir / "exports" / f"rapport_{safe_title}.docx").is_file()
+    # R1 (revue macro) : gater les boutons sur la CAPACITÉ du profil, pas l'existence du
+    # fichier — le DOCX est (re)généré à la volée au téléchargement, un profil SRT-only
+    # (docx_level/zip_level == "none") ne doit simplement pas montrer ces boutons.
+    from transcria.workflow.profiles import profile_for_job
+
+    profile = profile_for_job(job)
+    has_docx = profile is None or profile.docx_level != "none"
+    has_package = profile is None or profile.zip_level != "none"
 
     return render_template(
         "job_result.html",
