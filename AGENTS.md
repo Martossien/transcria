@@ -279,7 +279,6 @@ transcria/
   jobs/                     # Données runtime (1 sous-répertoire par job)
   configs/
     prompts/                # Prompts LLM (summary, correction, final_review, refine_{discuss,apply}) — placeholders abstraits, JAMAIS d'extrait réel de transcription ; summary porte {{TYPES_REUNION}}/{{INDICES_TYPES}}/{{CHAMPS_EXTRACTION_TYPE}} substitués à l'exécution
-    lexique_metier.txt      # Lexique métier global
   scripts/
     bootstrap_config.py     # Génère config.yaml depuis config.example.yaml + auto-détection
     doctor.py               # Préflight GPU-free (cf. transcria/diagnostics/doctor.py) — wrapper CLI mince

@@ -96,12 +96,6 @@ class SystemInfo:
     def total_vram_mb(self) -> int:
         return sum(g.memory_total_mb for g in self.gpus)
 
-    def get_binary(self, name: str) -> BinaryInfo | None:
-        for b in self.binaries:
-            if b.name == name:
-                return b
-        return None
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "gpus": [g.to_dict() for g in self.gpus],

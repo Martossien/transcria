@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -125,16 +124,3 @@ class LexiconManager:
             terms.append({"term": term, "category": category, "priority": priority, "variants": []})
 
         return LexiconManager.save(job, jobs_dir, terms)
-
-    @staticmethod
-    def load_global_lexicon(config: dict) -> list[str]:
-        path_str = config.get("models", {}).get("global_lexicon_path", "configs/lexique_metier.txt")
-        path = Path(path_str)
-        if not path.is_file():
-            return []
-        terms = []
-        for line in path.read_text(encoding="utf-8").split("\n"):
-            line = line.strip()
-            if line and not line.startswith("#"):
-                terms.append(line)
-        return terms

@@ -188,7 +188,6 @@ transcria/
 │           └── voice_detail.html
 │
 ├── configs/                       # Prompts et lexique
-│   ├── lexique_metier.txt
 │   └── prompts/
 │       ├── summary_prompt.txt      # Prompt résumé structuré (opencode) — v3.0 (contrat de priorités en tête, consigne subagent citable, @general obligatoire)
 │       ├── correction_prompt.txt   # Prompt correction SRT (speakers + application lexique en contexte + orthographe) — v3.0 (contrat de priorités, SPEAKER_XX(nom) intouchable)
@@ -899,7 +898,6 @@ Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sa
 | `get(job, jobs_dir)` | Charge le lexique ou retourne [] |
 | `save(job, jobs_dir, terms)` | Valide (strip, id auto, defaults), conserve les métadonnées centralisées et sauvegarde JSON + .txt |
 | `import_from_file(job, jobs_dir, content)` | Import CSV ou liste simple (# = commentaire) |
-| `load_global_lexicon(config)` | Charge configs/lexique_metier.txt |
 
 `LEXICON_CATEGORIES` : personne, organisation, service, application, projet, sigle, métier, technique, produit, statut, médical, lieu, règlement, finance, montant, processus, document, expression, langue, mot suspect
 `LEXICON_PRIORITIES` : critique, importante, normale
