@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         color: #1f2937; background: #ffffff; }
+  #wrap { width: 1040px; padding: 28px 34px; }
+  .topo { padding: 20px 0 22px; border-top: 1px solid #eef0f3; }
+  .topo:first-child { border-top: none; }
+  .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  .head h3 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  .prof { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+          font-size: 12.5px; color: #2563eb; background: #eff4ff; border: 1px solid #dbe6ff;
+          padding: 2px 8px; border-radius: 6px; }
+  .row { display: flex; align-items: center; gap: 0; }
+  .box { border: 1.5px solid #d5dae1; border-radius: 10px; background: #fbfcfe;
+         padding: 12px 16px; min-width: 150px; }
+  .box.gpu { border-color: #bcd0f7; background: #f3f7ff; }
+  .box .t { font-size: 14.5px; font-weight: 650; }
+  .box .s { font-size: 12.5px; color: #6b7280; margin-top: 3px; line-height: 1.35; }
+  .arrow { color: #9aa3af; font-size: 22px; padding: 0 14px; white-space: nowrap; }
+  .arrow .lbl { display: block; font-size: 10.5px; color: #9aa3af; text-align: center;
+                letter-spacing: 0.04em; margin-bottom: -4px; }
+  .users { font-size: 13px; color: #6b7280; font-weight: 600; padding-right: 4px; min-width: 62px; }
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .db { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-left: 76px; }
+  .db .cyl { border: 1.5px solid #cdd4dd; border-radius: 8px; background: #f4f6f9;
+             padding: 9px 14px; font-size: 13px; }
+  .db .cyl b { color: #1f2937; }
+  .db .link { color: #9aa3af; font-size: 12px; }
+</style></head><body><div id="wrap">
+
+  <div class="topo">
+    <div class="head"><h3>All-in-one</h3><span class="prof">--profile all-in-one</span></div>
+    <div class="row">
+      <span class="users">Users &rarr;</span>
+      <div class="box gpu"><div class="t">GPU host</div>
+        <div class="s">Web UI &middot; scheduler &middot; in-process GPU inference</div></div>
+    </div>
+  </div>
+
+  <div class="topo">
+    <div class="head"><h3>Web front + GPU worker</h3><span class="prof">--profile web / scheduler</span></div>
+    <div class="row">
+      <span class="users">Users &rarr;</span>
+      <div class="box"><div class="t">Web front (CPU)</div><div class="s">--profile web</div></div>
+      <span class="arrow">&nbsp;&nbsp;</span>
+      <div class="box gpu"><div class="t">GPU worker</div><div class="s">--profile scheduler</div></div>
+    </div>
+    <div class="db">
+      <span class="link">both share &rarr;</span>
+      <div class="cyl"><b>PostgreSQL</b> &mdash; jobs + files replicated through the DB (sha256-verified)</div>
+    </div>
+  </div>
+
+  <div class="topo">
+    <div class="head"><h3>Remote inference node</h3><span class="prof">--profile resource-node</span></div>
+    <div class="row">
+      <span class="users">Users &rarr;</span>
+      <div class="box"><div class="t">Web + scheduler</div><div class="s">runs the pipeline, has the DB</div></div>
+      <span class="arrow"><span class="lbl">HTTP</span>&rarr;</span>
+      <div class="box gpu"><div class="t">GPU resource node</div>
+        <div class="s">STT &middot; diarization &middot; voice embeddings &middot; VRAM autonomy &middot; no app DB</div></div>
+    </div>
+  </div>
+
+</div></body></html>

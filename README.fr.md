@@ -98,7 +98,7 @@ fait plus qu'il ne fait.
 
 ![File GPU persistante](docs/screenshots/05-queue.png)
 
-**Éditeur intégré — chaque locuteur sur une piste sur toute la durée de la réunion ; la vraie forme d'onde est colorée par locuteur, clic pour aller à l'instant, cadre déplaçable pour zoomer. Les pics calculés serveur restent fluides même sur plusieurs heures**
+**Éditeur intégré — relire comme un document : clic sur une ligne pour corriger le texte (l'audio se met en pause pendant la frappe), renommer ou réattribuer un locuteur au même endroit, fusionner ou découper des segments. La frise place chaque locuteur sur une piste sur toute la réunion, avec une forme d'onde colorée par locuteur, cliquable pour aller à l'instant et déplaçable pour zoomer ; les pics calculés serveur restent fluides sur plusieurs heures**
 
 ![Frise de l'éditeur de transcription](docs/screenshots/08-editor.png)
 
@@ -226,6 +226,8 @@ dans [docs/DOCKER.md](docs/DOCKER.md).
 
 L'installeur prend un `--profile` qui choisit le rôle de chaque machine ; le même code et
 le même schéma de configuration servent tous les rôles.
+
+![Topologies de déploiement](docs/screenshots/10-topologies.png)
 
 - **Tout-en-un** (`./install.sh --profile all-in-one`, le défaut) — une seule machine GPU
   fait l'UI web, l'ordonnanceur et l'inférence GPU in-process.

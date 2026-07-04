@@ -93,7 +93,7 @@ imply the tool does more than it does.
 
 ![Persistent GPU queue](docs/screenshots/05-queue.png)
 
-**Built-in editor — every speaker on one lane across the whole meeting; the real waveform is colored per speaker, click to jump, drag the frame to zoom. Server-computed peaks keep it smooth even on multi-hour recordings**
+**Built-in editor — proofread like a document: click any line to fix the text (audio auto-pauses while you type), rename or reassign a speaker in one place, merge or split segments. The timeline puts every speaker on a lane over the whole meeting, with a per-speaker colored waveform you click to jump and drag to zoom; server-computed peaks keep it smooth on multi-hour recordings**
 
 ![Transcript editor timeline](docs/screenshots/08-editor.png)
 
@@ -217,6 +217,8 @@ rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 
 The installer takes a `--profile` that selects the role each machine plays; the same
 codebase and configuration schema serve all of them.
+
+![Deployment topologies](docs/screenshots/10-topologies.png)
 
 - **All-in-one** (`./install.sh --profile all-in-one`, the default) — a single GPU box
   runs the web UI, the scheduler, and in-process GPU inference.
