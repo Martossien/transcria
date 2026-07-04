@@ -107,6 +107,11 @@
             <span class="fw-semibold">{{ loop.index }}</span>
             {% if entry.status == 'waiting' %}
               <div class="text-muted small">position {{ entry.position }}</div>
+              {% set wait = wait_estimates.get(entry.job_id) %}
+              {% if wait %}
+              <div class="text-muted small" title="Estimation calibrée sur les traitements précédents">
+                <i class="bi bi-hourglass-split"></i> ~{{ wait.text }}</div>
+              {% endif %}
             {% endif %}
           </td>
           <td style="min-width: 16rem;">

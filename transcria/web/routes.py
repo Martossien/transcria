@@ -2142,11 +2142,36 @@ def api_job_status(job_id: str):
     job, error_response = _get_job_for_api(job_id)
     if error_response:
         return error_response
+    progress = get_workflow_progress(job)
     return jsonify({
         "state": job.state,
         "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
-        "progress": get_workflow_progress(job),
+        "progress": progress,
+        "eta": _live_eta(job, progress),
     })
+
+
+def _live_eta(job, progress) -> dict | None:
+    """ETA live du traitement (temps restant calibré machine) pour le polling de suivi.
+    None si l'estimation n'est pas pertinente (pas en traitement, pas de progression)."""
+    if not isinstance(progress, dict) or progress.get("step") != "processing":
+        return None
+    try:
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.profiles import profile_for_job
+        from transcria.workflow.timing_service import estimate_remaining
+
+        profile = profile_for_job(job)
+        if profile is None:
+            return None
+        cfg = get_config()
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        audio_s = float((fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0.0)
+        if audio_s <= 0:
+            return None
+        return estimate_remaining(profile, audio_s, progress.get("percent"))
+    except Exception:  # noqa: BLE001 — l'ETA ne doit jamais casser le polling
+        return None
 
 
 @web_bp.route("/api/profiles/availability", methods=["GET"])

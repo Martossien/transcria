@@ -73,6 +73,27 @@ def estimate_total_machine(profile, audio_seconds: float) -> Estimate:
     )
 
 
+def estimate_remaining(profile, audio_seconds: float, percent: float | None) -> dict:
+    """Temps de TRAITEMENT restant (ETA live) : estimation calibrée × fraction restante
+    d'après ``percent`` de progression. Renvoie un dict prêt pour le polling de statut."""
+    from transcria.workflow.timing_model import format_duration_fr
+
+    est = estimate_processing(profile, audio_seconds)
+    frac = max(0.0, min(1.0, 1.0 - (float(percent or 0) / 100.0)))
+    remaining = est.seconds * frac
+    return {
+        "seconds": round(remaining),
+        "text": format_duration_fr(remaining),
+        "basis": est.basis,
+    }
+
+
+def estimate_queue_wait_seconds(profile, audio_seconds: float) -> float:
+    """Durée machine TOTALE (résumé + traitement) d'un job en file — pour cumuler le
+    temps d'attente des jobs en amont."""
+    return estimate_total_machine(profile, audio_seconds).seconds
+
+
 def estimate_total_with_human(profile, audio_seconds: float) -> dict:
     """Estimation affichée au wizard : machine (calibré) + validation humaine.
 

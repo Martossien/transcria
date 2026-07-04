@@ -23,6 +23,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   restait en attente d'input sans jamais prévenir).
 - **Email « terminé » enrichi** : temps réel de traitement, score qualité, nombre de
   points à vérifier, et lien direct vers **`/result`** (au lieu du wizard).
+- **ETA live pendant le traitement** : le polling de statut expose un temps restant
+  calibré (estimation du profil × fraction restante) — l'utilisateur voit décroître
+  « ~8 min ».
+- **Temps d'attente de la file** : chaque job en attente affiche son attente estimée =
+  cumul des durées des jobs en amont (remplace le `1800 s` forfaitaire).
 
 ### Added — revue macro workflow/UI (2026-07-04)
 - **Champs sur-mesure des types de réunion dans « Word structuré »** : les

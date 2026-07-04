@@ -72,9 +72,13 @@ def queue_page():
     runtime = executor.get_runtime_snapshot() if executor else {"healthy": False}
     cfg = get_config()
     calendar = SchedulingCalendar(cfg.get("workflow", {}).get("scheduling", {}) or {})
+    from transcria.queue.wait_estimate import queue_wait_estimates
+
+    wait_estimates = queue_wait_estimates(cfg, entries)
     return render_template(
         "queue.html",
         entries=entries,
+        wait_estimates=wait_estimates,
         runtime=runtime,
         counts=QueueStore.count_by_status(),
         status_labels=QUEUE_STATUS_LABELS,
