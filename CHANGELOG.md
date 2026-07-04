@@ -8,6 +8,13 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-04
+
+Première version **stable**. Consolidation de la série `0.1.x` : outillage de
+diagnostic, sauvegarde/restauration/upgrade, classification de configuration, revue
+macro du workflow et de l'UI, modèle de temps calibré machine, durcissement du mode
+frontale/nœud GPU, et refonte de la documentation.
+
 ### Fixed — durcissement mode frontale/nœud GPU (revue macro split, 2026-07-04)
 - **Temps d'attente de la file en split** : la durée audio est désormais portée par
   l'entrée de file (DB, dans le profil VRAM) à l'enfilement — la page File (non
