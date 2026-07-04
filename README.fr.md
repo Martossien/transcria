@@ -86,7 +86,7 @@ fait plus qu'il ne fait.
 
 ![Analyse audio avec frise de difficulté](docs/screenshots/09-audio-analysis.png)
 
-**Validation des locuteurs — écouter les extraits, nommer les locuteurs, indices acoustiques de genre**
+**Validation des locuteurs — écouter les extraits, nommer les locuteurs, indices acoustiques de genre, et rapprocher un locuteur détecté de votre base de voix enregistrées (soumise au consentement RGPD) en un clic**
 
 ![Étape de validation des locuteurs](docs/screenshots/06-speakers.png)
 

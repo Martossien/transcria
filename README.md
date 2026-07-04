@@ -81,7 +81,7 @@ imply the tool does more than it does.
 
 ![Audio analysis with difficulty timeline](docs/screenshots/09-audio-analysis.png)
 
-**Speaker validation — listen to excerpts, name speakers, acoustic gender hints**
+**Speaker validation — listen to excerpts, name speakers, acoustic gender hints, and match a detected speaker against your consent-gated voice enrollment database (GDPR) in one click**
 
 ![Speaker validation step](docs/screenshots/06-speakers.png)
 
