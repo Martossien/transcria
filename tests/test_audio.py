@@ -8,7 +8,6 @@ import pytest
 from transcria.audio.excerpts import AudioExcerptService, parse_time_range, parse_timestamp
 from transcria.audio.preflight import AudioPreflightAnalyzer
 
-
 # ---------------------------------------------------------------------------
 # AudioPreflightAnalyzer
 # ---------------------------------------------------------------------------
@@ -99,6 +98,7 @@ class TestAudioPreflightAnalyzer:
         np = pytest.importorskip("numpy")
         pytest.importorskip("soundfile")
         import subprocess
+
         import soundfile as sf
 
         audio = tmp_path / "compressed.m4a"
@@ -572,6 +572,7 @@ class TestAudioSceneFilterService:
 
     def test_apply_returns_original_on_ffmpeg_failure(self, tmp_path, monkeypatch):
         import subprocess
+
         from transcria.audio.scene_filter import AudioSceneFilterService
 
         input_path = tmp_path / "input.wav"
@@ -690,6 +691,7 @@ class TestAudioNormalizationService:
 
     def test_apply_returns_original_on_ffmpeg_failure(self, tmp_path, monkeypatch):
         import subprocess
+
         from transcria.audio.normalization import AudioNormalizationService
 
         input_path = tmp_path / "input.wav"
@@ -762,31 +764,6 @@ class TestAudioDenoiseService:
         assert should is True
         assert reasons == ["preflight:snr_faible"]
         assert filters == ["afftdn=nr=12:nf=-25"]
-
-
-# ---------------------------------------------------------------------------
-# HysteresisBinarizer
-# ---------------------------------------------------------------------------
-
-
-class TestHysteresisBinarizer:
-    """Seuillage VAD onset/offset avec fusion des gaps courts."""
-
-    def test_binarize_uses_distinct_onset_offset(self):
-        from transcria.audio.vad_hysteresis import HysteresisBinarizer
-
-        binarizer = HysteresisBinarizer(
-            onset=0.6,
-            offset=0.4,
-            frame_s=0.1,
-            min_duration_on=0.1,
-            min_duration_off=0.15,
-        )
-
-        segments = binarizer.binarize([0.1, 0.7, 0.5, 0.45, 0.3])
-
-        assert segments == [{"start": 0.1, "end": 0.4}]
-
 
 # ---------------------------------------------------------------------------
 # AudioSceneWorker — fonctions pures (importables sans dépendance audio lourde)
@@ -977,6 +954,7 @@ class TestAudioSceneAnalyzer:
 
     def test_analyze_worker_failure_returns_empty_dict(self, tmp_path, monkeypatch):
         import subprocess
+
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         audio = tmp_path / "audio.wav"
@@ -991,6 +969,7 @@ class TestAudioSceneAnalyzer:
 
     def test_analyze_timeout_returns_empty_dict(self, tmp_path, monkeypatch):
         import subprocess
+
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         audio = tmp_path / "audio.wav"
@@ -1006,6 +985,7 @@ class TestAudioSceneAnalyzer:
     def test_analyze_parses_valid_json_from_worker_stdout(self, tmp_path, monkeypatch):
         import json
         import subprocess
+
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         audio = tmp_path / "audio.wav"
@@ -1032,6 +1012,7 @@ class TestAudioSceneAnalyzer:
     def test_analyze_sets_stable_worker_environment(self, tmp_path, monkeypatch):
         import json
         import subprocess
+
         from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         audio = tmp_path / "audio.wav"
@@ -1063,9 +1044,6 @@ class TestSceneWorkerGenderSegments:
 
     def _run_worker(self, segments_fixture, detect_gender=True, monkeypatch=None):
         """Appelle _analyze_audio via mock et reconstitue le JSON comme le bloc __main__."""
-        import json
-        import subprocess
-        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
         payload = {
             "has_music": False,

@@ -82,7 +82,6 @@ transcria/
 │   │   ├── preflight.py           # AudioPreflightAnalyzer — pré-diagnostic acoustique (RMS, SNR, bande passante, clipping, flags)
 │   │   ├── vad.py                 # SileroVAD (détection de parole via faster_whisper)
 │   │   ├── vad_adaptive.py        # Adaptation VAD selon audio_quality_decision
-│   │   ├── vad_hysteresis.py      # HysteresisBinarizer — post-traitement hystérésis des scores VAD
 │   │   ├── scene_analyzer.py      # AudioSceneAnalyzer — subprocess isolé librosa (RMS → flatness/ZCR → pitch YIN)
 │   │   ├── _scene_analysis_worker.py # Worker subprocess pur pour l'analyse de scène
 │   │   ├── scene_filter.py        # AudioSceneFilterService — mise en silence optionnelle pré-STT (timeline préservée)

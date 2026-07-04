@@ -65,29 +65,6 @@ class CentralLexiconStore:
         return list(db.session.execute(query).scalars().all())
 
     @staticmethod
-    def list_accessible_lexicons_for_user(user: User) -> list[GroupLexicon]:
-        if user.has_role(Role.ADMIN):
-            query = db.select(GroupLexicon).filter_by(is_active=True).order_by(GroupLexicon.name)
-        else:
-            group_ids = GroupStore.user_group_ids(user.id)
-            if group_ids:
-                query = (
-                    db.select(GroupLexicon)
-                    .filter(
-                        GroupLexicon.is_active.is_(True),
-                        db.or_(GroupLexicon.group_id.is_(None), GroupLexicon.group_id.in_(group_ids)),
-                    )
-                    .order_by(GroupLexicon.name)
-                )
-            else:
-                query = (
-                    db.select(GroupLexicon)
-                    .filter(GroupLexicon.is_active.is_(True), GroupLexicon.group_id.is_(None))
-                    .order_by(GroupLexicon.name)
-                )
-        return list(db.session.execute(query).scalars().all())
-
-    @staticmethod
     def list_accessible_lexicons_for_job(job: Job) -> list[GroupLexicon]:
         owner = db.session.get(User, job.owner_id)
         if owner is None:

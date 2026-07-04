@@ -1107,12 +1107,3 @@ def _check_port_value(val: Any, path: str, r: ValidationResult) -> None:
     port = int(val)
     if port < 1 or port > 65535:
         r.add_error(f"{path}={port}: doit être entre 1 et 65535")
-
-
-def sanitize_llm_config(wf: dict) -> dict:
-    wf = dict(wf)
-    for section in ("summary_llm", "arbitration_llm"):
-        if section in wf and isinstance(wf[section], dict):
-            if not wf[section].get("enabled", True):
-                wf[section] = {"enabled": False}
-    return wf
