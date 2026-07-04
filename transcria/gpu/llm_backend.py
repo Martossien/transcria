@@ -70,14 +70,59 @@ class LLMBackend(ABC):
 
     @staticmethod
     def _http_get_json(url: str, timeout: int = 5) -> dict | None:
+        """GET JSON tolérant MAIS diagnostiquable (C2.4 — plus d'échec silencieux).
+
+        L'appelant garde son contrat historique (``None`` = indisponible), mais la
+        NATURE de l'échec (timeout / connexion refusée / DNS / statut HTTP / JSON
+        invalide) est journalisée — throttlée par (url, nature) pour ne pas inonder
+        les logs quand un poll interroge un démon éteint.
+        """
+        data, err = LLMBackend._http_get_json_result(url, timeout=timeout)
+        if err:
+            LLMBackend._log_network_error_throttled(url, err)
+        return data
+
+    _NETWORK_ERROR_LOGGED: dict[tuple[str, str], float] = {}
+    _NETWORK_ERROR_LOG_EVERY_S = 300.0
+
+    @staticmethod
+    def _http_get_json_result(url: str, timeout: int = 5) -> tuple[dict | None, str | None]:
+        """Renvoie (données, None) ou (None, "nature: détail") — typé, testable."""
         try:
             import requests
-            r = requests.get(url, timeout=timeout)
-            if r.status_code == 200:
-                return r.json()
-        except Exception:
-            pass
-        return None
+            from requests import exceptions as rexc
+
+            try:
+                r = requests.get(url, timeout=timeout)
+            except rexc.ConnectTimeout as exc:
+                return None, f"timeout de connexion ({timeout}s): {exc}"
+            except rexc.ReadTimeout as exc:
+                return None, f"timeout de lecture ({timeout}s): {exc}"
+            except rexc.ConnectionError as exc:
+                detail = str(exc)
+                if "Name or service not known" in detail or "getaddrinfo" in detail:
+                    return None, f"résolution DNS impossible: {detail[:160]}"
+                return None, f"connexion refusée/coupée: {detail[:160]}"
+            if r.status_code != 200:
+                return None, f"statut HTTP {r.status_code}"
+            try:
+                return r.json(), None
+            except ValueError as exc:
+                return None, f"réponse non-JSON: {exc}"
+        except Exception as exc:  # noqa: BLE001 — jamais de crash sur un poll réseau
+            return None, f"erreur inattendue: {exc}"
+
+    @staticmethod
+    def _log_network_error_throttled(url: str, err: str) -> None:
+        import time
+
+        kind = err.split(":", 1)[0]
+        key = (url, kind)
+        now = time.monotonic()
+        last = LLMBackend._NETWORK_ERROR_LOGGED.get(key, 0.0)
+        if now - last >= LLMBackend._NETWORK_ERROR_LOG_EVERY_S:
+            LLMBackend._NETWORK_ERROR_LOGGED[key] = now
+            logger.warning("Backend LLM injoignable — %s : %s", url, err)
 
     @staticmethod
     def is_port_open(port: int, timeout: int = 5) -> bool:
