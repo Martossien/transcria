@@ -422,6 +422,39 @@ def _cmd_python_env(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_recommend_llm_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser("recommend-llm",
+                       help="recommandation de moteur LLM pilotée par le matériel (catalogue de paliers)")
+    p.add_argument("--gpu-count", type=int, required=True)
+    p.add_argument("--per-card-vram-mb", type=int, required=True)
+    p.add_argument("--total-vram-mb", type=int, required=True)
+    p.add_argument("--config", default=None)
+
+
+def _cmd_recommend_llm(args: argparse.Namespace) -> int:
+    """Affiche la recommandation (lignes humaines) et termine par ``ENGINE=<moteur>``
+    (ligne machine, consommée par install.sh). Ne choisit jamais À LA PLACE de
+    l'utilisateur — C2.1 : recommander ET expliquer."""
+    from transcria.config.llm_profiles import load_llm_profiles, recommend_engine
+
+    cfg = None
+    if args.config:
+        from transcria.config.loader import load_config
+
+        cfg = load_config(args.config)
+    profiles = load_llm_profiles(cfg)
+    rec = recommend_engine(profiles,
+                           gpu_count=args.gpu_count,
+                           per_card_vram_mb=args.per_card_vram_mb,
+                           total_vram_mb=args.total_vram_mb)
+    label = "llama.cpp" if rec["engine"] == "llamacpp" else "Ollama"
+    print(f"Moteur recommandé : {label}")
+    if rec["reason"]:
+        print(f"  → {rec['reason']}")
+    print(f"ENGINE={rec['engine']}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="transcria-install", description="Installateur TranscrIA piloté en Python.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -434,6 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_postgres_bootstrap_parser(sub)
     _add_systemd_parser(sub)
     _add_summary_parser(sub)
+    _add_recommend_llm_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -454,6 +488,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_systemd(args)
     if args.command == "summary":
         return _cmd_summary(args)
+    if args.command == "recommend-llm":
+        return _cmd_recommend_llm(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

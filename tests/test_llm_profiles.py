@@ -124,3 +124,41 @@ class TestVllmEnvResolver:
         from transcria.install_arbitrage import render_vllm_env_shell
 
         assert render_vllm_env_shell(None).count("=\n") == 3   # 3 clés vides, sûr pour eval shell
+
+
+class TestRecommendEngine:
+    """C2.1 — recommandation de moteur pilotée par les données (jamais imposée)."""
+
+    def _profiles(self):
+        from transcria.config.llm_profiles import load_llm_profiles
+        return load_llm_profiles(None)
+
+    def test_petit_palier_recommande_llamacpp(self):
+        from transcria.config.llm_profiles import recommend_engine
+        rec = recommend_engine(self._profiles(), gpu_count=1,
+                               per_card_vram_mb=12288, total_vram_mb=12288)
+        assert rec["engine"] == "llamacpp"
+        assert "Qwen3.5-9B" in rec["reason"]          # comparaison CONCRÈTE
+        assert "qwen3.5:4b" in rec["reason"]
+        assert "déconseillé" in rec["reason"]
+
+    def test_grand_palier_recommande_ollama(self):
+        from transcria.config.llm_profiles import recommend_engine
+        rec = recommend_engine(self._profiles(), gpu_count=1,
+                               per_card_vram_mb=49152, total_vram_mb=49152)
+        assert rec["engine"] == "ollama"
+        assert "sans compilation" in rec["reason"]
+
+    def test_les_deux_choix_sont_exposes(self):
+        from transcria.config.llm_profiles import recommend_engine
+        rec = recommend_engine(self._profiles(), gpu_count=2,
+                               per_card_vram_mb=24576, total_vram_mb=49152)
+        assert rec["llamacpp"] is not None and rec["ollama"] is not None
+
+    def test_catalogue_sans_bloc_recommandation(self):
+        from transcria.config.llm_profiles import recommend_engine
+        profiles = {k: v for k, v in self._profiles().items() if k != "engine_recommendation"}
+        rec = recommend_engine(profiles, gpu_count=1,
+                               per_card_vram_mb=12288, total_vram_mb=12288)
+        assert rec["engine"] == "ollama"              # sans règle : défaut simple
+        assert rec["reason"] == ""

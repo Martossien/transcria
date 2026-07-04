@@ -1068,8 +1068,25 @@ else
     if [[ -n "$LLM_BACKEND_FORCED" ]]; then
         LLM_BACKEND="$LLM_BACKEND_FORCED"   # forcé en ligne de commande (non-interactif/CI/E2E)
     elif [[ "$NON_INTERACTIVE" = false && "$INSTALL_PROFILE" == "all-in-one" ]]; then
-        if ask_yn "Backend LLM : utiliser Ollama (recommandé — simple, sans compilation) ? (non = llama.cpp avancé)"; then
-            LLM_BACKEND="ollama"
+        # C2.1 (RELEASE_0.2.0) : recommandation PILOTÉE PAR LE MATÉRIEL, expliquée,
+        # jamais imposée — sur les petits paliers, llama.cpp sert un modèle d'une
+        # classe supérieure (catalogue transcria/data/llm_profiles.yaml).
+        REC_OUTPUT="$("$PYTHON_BIN" -m transcria.installer.cli recommend-llm \
+            --gpu-count "${GPU_COUNT:-0}" \
+            --per-card-vram-mb "${GPU_VRAM_MAX_MB:-0}" \
+            --total-vram-mb "${GPU_VRAM_TOTAL_MB:-0}" 2>/dev/null || true)"
+        REC_ENGINE="$(printf '%s\n' "$REC_OUTPUT" | sed -n 's/^ENGINE=//p')"
+        printf '%s\n' "$REC_OUTPUT" | grep -v '^ENGINE=' | while IFS= read -r line; do log_info "$line"; done
+        if [[ "$REC_ENGINE" == "ollama" ]]; then
+            if ask_yn "Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"; then
+                LLM_BACKEND="ollama"
+            fi
+        else
+            if ask_yn "Suivre la recommandation et utiliser llama.cpp ? (non = Ollama, plus simple mais modèle plus petit sur ce palier)"; then
+                LLM_BACKEND="llamacpp"
+            else
+                LLM_BACKEND="ollama"
+            fi
         fi
     fi
 

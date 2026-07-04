@@ -70,6 +70,53 @@ def valid_tp(gpu_count: int, valid: list[int]) -> int:
     return fitting[-1] if fitting else 1
 
 
+def recommend_engine(
+    profiles: dict,
+    *,
+    gpu_count: int,
+    per_card_vram_mb: int,
+    total_vram_mb: int,
+) -> dict:
+    """Recommandation de moteur PILOTÉE PAR LES DONNÉES (bloc ``engine_recommendation``
+    du catalogue) — C2.1 : l'installeur recommande ET explique, sans jamais imposer.
+
+    Renvoie ``{engine, reason, llamacpp: ProfileChoice|None, ollama: ProfileChoice|None}``.
+    """
+    rec = profiles.get("engine_recommendation", {}) or {}
+    threshold = int(rec.get("prefer_llamacpp_when_per_card_vram_mb_lt", 0))
+
+    kwargs = dict(gpu_count=gpu_count, per_card_vram_mb=per_card_vram_mb,
+                  total_vram_mb=total_vram_mb)
+    llamacpp = select_profile(profiles, "llamacpp", **kwargs)
+    ollama = select_profile(profiles, "ollama", **kwargs)
+
+    prefer_llamacpp = bool(threshold) and per_card_vram_mb < threshold
+    engine = "llamacpp" if prefer_llamacpp else "ollama"
+    # Repli honnête : si le moteur recommandé n'a AUCUN palier atteignable, l'autre gagne.
+    if engine == "llamacpp" and llamacpp is None and ollama is not None:
+        engine = "ollama"
+    if engine == "ollama" and ollama is None and llamacpp is not None:
+        engine = "llamacpp"
+
+    def _model_label(choice: ProfileChoice | None) -> str:
+        if choice is None:
+            return "aucun modèle (palier insuffisant)"
+        model = choice.model
+        if isinstance(model, dict):
+            return str(model.get("file") or model.get("repo") or "?").replace(".gguf", "")
+        return str(model)
+
+    template = rec.get("reason_llamacpp" if engine == "llamacpp" else "reason_ollama", "")
+    reason = str(template).format(
+        per_card_gb=round(per_card_vram_mb / 1024),
+        llamacpp_model=_model_label(llamacpp),
+        llamacpp_ctx=(llamacpp.context // 1024) if llamacpp else 0,
+        ollama_model=_model_label(ollama),
+    ) if template else ""
+
+    return {"engine": engine, "reason": reason, "llamacpp": llamacpp, "ollama": ollama}
+
+
 def select_profile(
     profiles: dict,
     engine: str,

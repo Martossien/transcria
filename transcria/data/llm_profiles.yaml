@@ -18,6 +18,22 @@
 
 schema_version: 2
 
+# Recommandation de MOTEUR à l'installation (C2.1 — « aider l'utilisateur ») :
+# sur les petits paliers, llama.cpp sert un modèle d'une CLASSE supérieure à celui
+# qu'Ollama peut charger sur la même carte (bench) → recommandé, en l'expliquant.
+# Au-delà du seuil, les deux servent des modèles comparables → Ollama pour la
+# simplicité (aucune compilation), llama.cpp pour le contrôle fin.
+engine_recommendation:
+  prefer_llamacpp_when_per_card_vram_mb_lt: 31000
+  reason_llamacpp: >-
+    avec {per_card_gb} Go de VRAM par carte, llama.cpp sert {llamacpp_model}
+    (contexte {llamacpp_ctx}k) là où Ollama servirait {ollama_model} — meilleure
+    qualité mesurée sur ce palier (bench). Ollama reste possible mais déconseillé ici.
+  reason_ollama: >-
+    avec {per_card_gb} Go de VRAM par carte, Ollama sert {ollama_model}
+    (comparable à llama.cpp sur ce palier) — simple, sans compilation, recommandé.
+    llama.cpp reste la voie « contrôle fin / multi-GPU avancé ».
+
 engines:
 
   # ── llama.cpp ──────────────────────────────────────────────────────────────
