@@ -17,7 +17,6 @@ from transcria.gpu.cuda_visible import (
 def _default_config(**overrides):
     cfg = {
         "services": {
-            "dashboard_llm_url": "http://127.0.0.1:5001",
             "arbitrage_script": "/bin/true",
             "stop_script": "/bin/true",
             "qwen_port": 8080,
