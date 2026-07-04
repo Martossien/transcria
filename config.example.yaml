@@ -77,7 +77,6 @@ auth:
   first_admin_password: "CHANGE-ME"
 
 services:
-  dashboard_llm_url: "http://127.0.0.1:5001"
   # Backend de la LLM d'arbitrage. Absent/omis = auto-détection rétro-compatible
   # (ollama_url ⇒ ollama, arbitrage_script ⇒ llama.cpp/vLLM, sinon http distant).
   #   - "script"  : llama.cpp / vLLM lancés par arbitrage_script (contrôle/multi-GPU).

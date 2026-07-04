@@ -61,12 +61,8 @@ class TestVRAMManagerInstantiation:
     def test_instantiation(self):
         mgr = VRAMManager(config=_default_config())
         assert mgr is not None
-        assert mgr.dashboard_url == "http://127.0.0.1:5001"
-
-    def test_custom_url(self):
-        cfg = _default_config(dashboard_llm_url="http://10.0.0.1:9999")
-        mgr = VRAMManager(config=cfg)
-        assert mgr.dashboard_url == "http://10.0.0.1:9999"
+        # C2.3 : llmdashboard retiré — plus d'attribut dashboard_url.
+        assert not hasattr(mgr, "dashboard_url")
 
     def test_config_overrides(self):
         cfg = _default_config(arbitrage_llm_port=9999, llm_cleanup_ports=[8888])
@@ -87,11 +83,6 @@ class TestVRAMManagerInstantiation:
         mgr = VRAMManager(config=_default_config())
         assert mgr.arbitrage_script == "/custom/arb.sh"
         assert mgr.stop_script == "/custom/stop.sh"
-
-    def test_dashboard_url_trailing_slash_stripped(self):
-        cfg = _default_config(dashboard_llm_url="http://10.0.0.1:5001/")
-        mgr = VRAMManager(config=cfg)
-        assert mgr.dashboard_url == "http://10.0.0.1:5001"
 
     def test_vram_defaults(self):
         cfg = {}
@@ -139,31 +130,21 @@ class TestVRAMManagerTracking:
 
 
 class TestVRAMManagerGetGpuInfo:
-    def test_get_gpu_info_from_dashboard_api(self, monkeypatch):
+    def test_get_gpu_info_source_locale(self, monkeypatch):
+        # C2.3 : la source est LOCALE (torch) — aucun appel réseau ne doit partir.
         import requests
-        fake_response = type("R", (), {
-            "status_code": 200,
-            "json": lambda self: {
-                "gpus": [
-                    {"id": 0, "name": "RTX 4090", "memory": {"used": 4.0, "free": 20.0, "total": 24.0}},
-                    {"id": 1, "name": "RTX 4090", "memory": {"used": 10.0, "free": 14.0, "total": 24.0}},
-                ]
-            },
-            "raise_for_status": lambda self: None,
-        })()
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: fake_response)
-        mgr = VRAMManager(config=_default_config())
-        gpus = mgr.get_gpu_info()
-        assert len(gpus) == 2
-        assert gpus[0]["id"] == 0
-        assert gpus[0]["memory"]["free"] == 20.0
 
-    def test_get_gpu_info_fallback_on_error(self, monkeypatch):
-        import requests
-        monkeypatch.setattr(requests, "get", lambda *a, **kw: (_ for _ in ()).throw(ConnectionError("down")))
+        def _no_network(*a, **kw):
+            raise AssertionError("get_gpu_info ne doit plus faire d'appel réseau (C2.3)")
+
+        monkeypatch.setattr(requests, "get", _no_network)
         mgr = VRAMManager(config=_default_config())
         gpus = mgr.get_gpu_info()
-        assert isinstance(gpus, list)
+        assert isinstance(gpus, list)   # torch absent/CPU → liste vide, jamais d'exception
+
+    def test_get_gpu_info_ne_leve_jamais(self):
+        mgr = VRAMManager(config=_default_config())
+        assert isinstance(mgr.get_gpu_info(), list)
 
     def test_get_gpu_info_fallback_on_http_error(self, monkeypatch):
         import requests

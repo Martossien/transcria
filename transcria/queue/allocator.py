@@ -44,14 +44,10 @@ class GPUAllocator:
     def __init__(self, config: dict):
         self.config = config
         gpu_cfg = config.get("gpu", {}) or {}
-        services_cfg = config.get("services", {}) or {}
         scheduling_cfg = config.get("workflow", {}).get("scheduling", {}) or {}
 
         self.min_free_mb = int(gpu_cfg.get("min_free_vram_mb", 4000))
         self.preferred_gpu = self._resolve_preferred_gpu()
-        self.dashboard_url = str(
-            services_cfg.get("dashboard_llm_url", "http://127.0.0.1:5001")
-        ).rstrip("/")
         self._kill_patterns = [
             str(item).lower()
             for item in scheduling_cfg.get(
@@ -118,16 +114,10 @@ class GPUAllocator:
             return 0
 
     def get_gpu_info(self) -> list[dict]:
-        try:
-            import requests
+        # Source LOCALE (C2.3) : détour dashboard externe retiré (repli = vraie source).
+        return self._get_gpu_info_local()
 
-            resp = requests.get(f"{self.dashboard_url}/api/v1/gpus", timeout=5)
-            resp.raise_for_status()
-            return list(resp.json().get("gpus", []))
-        except Exception:
-            return self._get_gpu_info_fallback()
-
-    def _get_gpu_info_fallback(self) -> list[dict]:
+    def _get_gpu_info_local(self) -> list[dict]:
         gpus: list[dict] = []
         try:
             import torch

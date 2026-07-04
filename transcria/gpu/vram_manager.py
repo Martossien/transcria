@@ -33,6 +33,7 @@ class VRAMManager:
     """Cycle de vie GPU : libère, lance, utilise, arrête les modèles."""
 
     def __init__(self, config: dict, dashboard_url: str | None = None):
+        # dashboard_url : paramètre OBSOLÈTE (projet externe retiré — C2.3), ignoré.
         self.config = config
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
@@ -83,7 +84,6 @@ class VRAMManager:
         self.arbitrage_log_path: str = services.get("arbitrage_log_path") or (
             f"/tmp/arbitrage_llm_{self.arbitrage_llm_port}.log"
         )
-        self.dashboard_url = (dashboard_url or services.get("dashboard_llm_url", "http://127.0.0.1:5001")).rstrip("/")
         self._loaded_models: dict[str, dict] = {}
         self._arbitrage_llm_pid: int | None = None
         # Backend LLM construit à la demande : sert à DÉLÉGUER le cycle de vie des moteurs
@@ -145,15 +145,11 @@ class VRAMManager:
     # ── GPU Info ──────────────────────────────────────────
 
     def get_gpu_info(self) -> list[dict]:
-        try:
-            import requests
-            resp = requests.get(f"{self.dashboard_url}/api/v1/gpus", timeout=5)
-            resp.raise_for_status()
-            return resp.json().get("gpus", [])
-        except Exception:
-            return self._get_gpu_info_fallback()
+        # Source LOCALE (C2.3) : l'ancien détour par le dashboard externe est retiré —
+        # torch.cuda.mem_get_info était déjà la vraie source sur toute machine sans lui.
+        return self._get_gpu_info_local()
 
-    def _get_gpu_info_fallback(self) -> list[dict]:
+    def _get_gpu_info_local(self) -> list[dict]:
         gpus = []
         try:
             import torch

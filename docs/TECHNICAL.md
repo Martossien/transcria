@@ -6,7 +6,7 @@ TranscrIA est un portail guidé de transcription de réunion destiné aux utilis
 
 **Stack :** Python 3.11+ / Flask / SQLAlchemy + Alembic (PostgreSQL en prod, SQLite en dev) / Jinja2 / Cohere ASR / faster-whisper large-v3 / Granite Speech expérimental / Parakeet TDT 0.6B v3 expérimental (NeMo) / pyannote / torchaudio CTC / opencode (LLM locale d'arbitrage) / Bootstrap 5 / gunicorn (montée en charge)
 
-**Services externes :** dashboard-llm (port 5001, monitoring GPU), SRT Editor EASY (port 7861, correction manuelle)
+**Services externes :** aucun — la page Système lit des sources locales (psutil/NVML), l'éditeur de transcription est intégré.
 
 **Note LLM :** Qwen est le modèle d'exemple du déploiement local historique. Les noms `qwen_*` conservés dans le code/config sont des aliases de compatibilité ancienne version ; le contrat courant est une LLM d'arbitrage OpenAI-compatible configurée par `services.*` et `workflow.*.model_id`.
 
@@ -132,7 +132,7 @@ transcria/
 │   │
 │   ├── integrations/              # Services externes
 │   │   ├── __init__.py
-│   │   ├── dashboard_client.py    # DashboardClient (API REST :5001)
+│   │   └── (vide — llmdashboard retiré en 0.2.0, cf. diagnostics/system_status.py)
 │   │   └── srt_editor_link.py    # SrtEditorLink (push audio/SRT + resolve_public_url)
 │   │
 │   ├── gpu/                       # Gestion GPU

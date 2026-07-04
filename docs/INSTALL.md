@@ -916,7 +916,6 @@ auth:
   first_admin_password: "VOTRE_MOT_DE_PASSE_ADMIN"
 
 services:
-  dashboard_llm_url: "http://127.0.0.1:5001"
   arbitrage_script: "./scripts/launch_arbitrage.sh"
   stop_script: "./scripts/stop_arbitrage_llm.sh"
   arbitrage_llm_port: 8080
@@ -1300,7 +1299,6 @@ from transcria.config import load_config
 cfg = load_config()
 print(f'Serveur   : {cfg[\"server\"][\"host\"]}:{cfg[\"server\"][\"port\"]}')
 print(f'Jobs dir  : {cfg[\"storage\"][\"jobs_dir\"]}')
-print(f'Dashboard : {cfg[\"services\"][\"dashboard_llm_url\"]}')
 print(f'Cohere    : {cfg[\"models\"][\"cohere_model_path\"]}')
 print(f'LLM port  : {cfg[\"services\"].get(\"arbitrage_llm_port\")}')
 print(f'Script    : {cfg[\"services\"][\"arbitrage_script\"]}')

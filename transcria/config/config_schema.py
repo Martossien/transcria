@@ -185,7 +185,6 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
 
 
 def _check_services(svc: dict, r: ValidationResult) -> None:
-    _check_str(svc, "dashboard_llm_url", "services.dashboard_llm_url", r)
     if "arbitrage_llm_port" in svc:
         _check_int_range(svc, "arbitrage_llm_port", "services.arbitrage_llm_port", 1, 65535, r)
     else:

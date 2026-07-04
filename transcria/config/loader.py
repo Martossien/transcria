@@ -74,7 +74,6 @@ _DEFAULT_CONFIG = {
         "preemption": "own-only",
     },
     "services": {
-        "dashboard_llm_url": "http://127.0.0.1:5001",
         "arbitrage_script": "./scripts/launch_arbitrage.sh",
         "stop_script": "./scripts/stop_arbitrage_llm.sh",
         "arbitrage_log_path": "",
@@ -730,12 +729,14 @@ def _warn_removed_keys(user_cfg: dict) -> None:
     removed = []
     if isinstance(user_cfg.get("services"), dict) and "srt_editor_easy_url" in user_cfg["services"]:
         removed.append("services.srt_editor_easy_url")
+    if isinstance(user_cfg.get("services"), dict) and "dashboard_llm_url" in user_cfg["services"]:
+        removed.append("services.dashboard_llm_url")
     if isinstance(user_cfg.get("workflow"), dict) and "enable_external_srt_editor_link" in user_cfg["workflow"]:
         removed.append("workflow.enable_external_srt_editor_link")
     for key in removed:
         logging.getLogger(__name__).warning(
-            "Clé de configuration obsolète ignorée : %s — l'éditeur de transcription est "
-            "désormais intégré (page /jobs/<id>/editor). Retirez cette clé de config.yaml.", key)
+            "Clé de configuration obsolète ignorée : %s — retirez-la de config.yaml "
+            "(cf. CHANGELOG : fork SRT intégré en beta.9, llmdashboard retiré en 0.2.0).", key)
 
 
 def load_config(config_path: str | None = None) -> dict:

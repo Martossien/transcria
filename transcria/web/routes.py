@@ -42,7 +42,6 @@ from transcria.context.lexicon_audit import lexicon_entries_audit_summary, lexic
 from transcria.context.meeting_context import MeetingContextManager
 from transcria.context.participants import ParticipantsManager
 from transcria.database import db
-from transcria.integrations.dashboard_client import DashboardClient
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
@@ -2685,9 +2684,9 @@ def api_speaker_clip_file(job_id: str, clip_name: str):
 @requires(Permission.ACCESS_SYSTEM)
 def system_status():
     cfg = get_config()
-    dashboard_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
-    client = DashboardClient(dashboard_url)
-    status = client.get_system_status()
+    from transcria.diagnostics.system_status import get_system_status
+
+    status = get_system_status()
     # Page consciente du RÔLE (docs/archive/REFONTE_UI.md lot D) : une frontale CPU-only
     # n'affiche pas de panneaux GPU locaux trompeurs ; le backend de stockage des
     # fichiers de jobs et sa volumétrie sont visibles ici.
@@ -2812,10 +2811,9 @@ def admin_config():
 @login_required
 @requires(Permission.ACCESS_SYSTEM)
 def api_system_status():
-    cfg = get_config()
-    db_url = cfg.get("services", {}).get("dashboard_llm_url", "http://127.0.0.1:5001")
-    client = DashboardClient(db_url)
-    return jsonify(client.get_system_status())
+    from transcria.diagnostics.system_status import get_system_status
+
+    return jsonify(get_system_status())
 
 
 @web_bp.route("/jobs/<job_id>/delete", methods=["POST"])
