@@ -274,3 +274,20 @@ class TestFreshness:
         zip_file = _write(tmp_path, job_id, "exports/p.zip", b"zip")
         assert artifact_store.newest_synced_mtime_ns(_cfg(tmp_path), job_id) == newest
         assert zip_file.stat().st_mtime_ns >= newest
+
+
+class TestEditorArtifactsSynced:
+    """C3.11 — les fichiers de l'éditeur SRT DOIVENT être répliqués en topologie split
+    (frontale/nœud sans FS commun) : un ajout hors SYNCED_PREFIXES casserait l'édition
+    à distance sans que personne ne s'en aperçoive."""
+
+    def test_prefixes_de_l_editeur_sont_synchronises(self):
+        from transcria.jobs import artifact_store
+        # brouillon + pics (metadata/), pool de versions (refine/), ancres qualité (quality/)
+        for path in ("metadata/srt_editor_draft.json",
+                     "metadata/waveform_peaks.bin",
+                     "metadata/transcription_corrigee.srt",
+                     "refine/versions/v1/transcription_corrigee.srt",
+                     "quality/review_points_anchors.json"):
+            assert any(path.startswith(p) for p in artifact_store.SYNCED_PREFIXES), (
+                f"{path} n'est pas couvert par SYNCED_PREFIXES → invisible en split")

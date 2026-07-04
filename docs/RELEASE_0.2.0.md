@@ -595,11 +595,16 @@ rétention préexistait (config par famille, purge auto au chargement) — ce ch
 DOCUMENTE et l'OUTILLE. Commande d'effacement par utilisateur (anonymisation audit) =
 candidat 0.2.x noté.
 
-### C3.11 Topologies all-in-one / frontale / resource-node — **taille M** — EN DERNIER
+### C3.11 Topologies all-in-one / frontale / resource-node — **taille M** — 🟡 GARDE POSÉE (re-run GPU = C4.3)
 Harnais §8.1 rejoué en conditions release APRÈS tous les chantiers (il re-valide tout) ;
 `SYNCED_PREFIXES` re-vérifiés (l'éditeur a ajouté des fichiers — couverts ; la garde
 reste) ; sécurité du lien frontale↔nœud (API key, réseau) documentée dans
 SECURITY_MODEL ; doctor multi-nœuds (C1.3) joué en split.
+**Réalisé** : `SYNCED_PREFIXES` confirmés couvrir TOUS les artefacts de l'éditeur
+(metadata/ brouillon+pics+SRT, refine/ versions, quality/ ancres) — garde de test
+`TestEditorArtifactsSynced` (un ajout hors préfixes = CI rouge). Le RE-RUN GPU réel
+de la matrice ×3 topologies est du ressort de l'opérateur/du gel (C4.3) — non
+exécutable dans ce flux (Docker+GPU). La logique de décision reste couverte en CI.
 
 ### C3.12 Performance, limites & observabilité — **taille M** — 🟢 LIVRÉ (limites publiées + 413/429)
 **Constat** : les limites réelles ne sont écrites nulle part pour l'utilisateur
