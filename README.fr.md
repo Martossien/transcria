@@ -106,6 +106,10 @@ fait plus qu'il ne fait.
 
 ![Galerie des types de réunion](docs/screenshots/11-editor_meeting_template.png)
 
+**Discuter avec vos livrables — posez une question sur la transcription, la synthèse ou les points qualité et obtenez une réponse rapide en lecture seule ; puis, quand une reformulation vous convient, appliquez-la en un clic. Une seule correction se propage de façon cohérente sur le SRT, la synthèse et le compte-rendu Word, chaque application est sauvegardée comme version restaurable et les exports sont régénérés au téléchargement**
+
+![Discuter avec les livrables](docs/screenshots/12-speak_with_doc.png)
+
 ## Profils de traitement
 
 Après l'upload, vous choisissez un *livrable* sur un seul curseur, au lieu d'un opaque

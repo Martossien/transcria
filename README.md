@@ -101,6 +101,10 @@ imply the tool does more than it does.
 
 ![Meeting type templates gallery](docs/screenshots/11-editor_meeting_template.png)
 
+**Chat with your deliverables — ask a question about the transcript, summary or quality findings and get a fast, read-only answer; then, when a rewrite suits you, apply it in one click. A single fix propagates coherently across the SRT, the summary and the Word minutes, each apply saved as a restorable version and the exports regenerated on download**
+
+![Chat with the deliverables](docs/screenshots/12-speak_with_doc.png)
+
 ## Processing profiles
 
 After upload, you choose a *deliverable* on a single slider instead of an opaque
