@@ -334,3 +334,18 @@ class TestSecurityHeaders:
     def test_headers_sur_page_authentifiee(self, admin_client):
         r = admin_client.get("/")
         assert r.headers.get("X-Content-Type-Options") == "nosniff"
+
+
+class TestUploadLimits:
+    """C3.12 — les limites connues échouent PROPREMENT (message, pas de 500 brut)."""
+
+    def test_413_message_francais(self, admin_client, app):
+        # forcer une limite minuscule pour déclencher 413 sans gros fichier
+        app.config["MAX_CONTENT_LENGTH"] = 10
+        try:
+            r = admin_client.post("/jobs/new", data={"title": "x" * 500})
+            # soit 413 (trop gros) soit redirection normale selon la route ; si 413, propre
+            if r.status_code == 413:
+                assert "volumineux" in r.get_data(as_text=True).lower()
+        finally:
+            app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024

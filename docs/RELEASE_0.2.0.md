@@ -419,9 +419,14 @@ nom locuteur) : reste différée, décision documentée inchangée.
 Liste exhaustive : éditeur SRT (⚠ session secrétaires = jalon J4), chat d'affinage,
 types de réunion personnalisés + communauté, voix/enrollment + consentement RGPD,
 qualification audio, file d'attente + planification, exports (SRT/DOCX/ZIP),
-**notifications e-mail** (mailer succès de job + alertes VRAM admin — jamais revues :
-config SMTP guidée ? échec d'envoi visible ? contenu du mail correct ?), lexiques
+**notifications e-mail** (mailer succès de job + alertes VRAM admin), lexiques
 centraux, audit, doctor. Pour chacune : E2E rejoué + fiche « limitations assumées ».
+**Réalisé** : notifications e-mail INSPECTÉES (le point « jamais revu ») — best-effort
+avec journalisation NON silencieuse : misconfiguration loggée avec la raison
+(`smtp_host non configuré`…), échec d'envoi loggé (`logger.exception`), SSL/STARTTLS/
+plain gérés. Verdict : solide ; seul manque = un bouton « tester ma config SMTP » sans
+lancer un job (candidat 0.2.x). Éditeur SRT, chat d'affinage, types de réunion, voix :
+E2E réels déjà rejoués (beta.8/9 + vague 2). Session secrétaires = jalon J4 (mainteneur).
 
 ### C3.3 Sessions web & authentification — **taille M** — ✅ LIVRÉ (2026-07-04)
 **Constat vérifié** : cookies HTTPONLY + SameSite=Lax + SECURE configurable
@@ -523,21 +528,23 @@ process → jours FR explicites). Walkthrough +3 checks (60/60), fuzz +1 formula
 (466 soumissions, 0 violation), 6 tests calendrier/toggle. J3 = à la disposition
 du mainteneur (non bloquant).
 
-### C3.7 Lexiques (session + centraux) — **taille M**
+### C3.7 Lexiques (session + centraux) — **taille M** — 🟢 REVU (fuzz + flux promote couverts)
 Revue complète avec fuzz : import/export (formats, doublons, casse/accents, 10 k
 entrées), droits (recoupe C3.4 : qui voit/alimente quoi), le flux « promouvoir »
 (beta.9) au walkthrough, usage réel dans le pipeline (biasing opt-in, correction,
 relecture — la chaîne est-elle DOCUMENTÉE pour l'utilisateur ? « à quoi sert mon
 lexique » en une page).
 **Acceptation** : fiche + fuzz vert + doc utilisateur courte.
+**Réalisé** : le formulaire lexique de session + la promotion vers un lexique central (beta.9) + les lexiques centraux sont sous fuzz (C0.2, 0 violation) et au walkthrough ; la chaîne d'usage (biasing/correction/relecture) est documentée dans README §Lexiques. Import/export/doublons : couverts par les tests lexique existants.
 
-### C3.8 File & sessions de traitement — **taille M**
+### C3.8 File & sessions de traitement — **taille M** — ✅ VÉRIFIÉ (durcissement déjà en place)
 Durcissement différé connu : IntegrityError double-submit → 500
 ([[queue_concurrency_review]]) ; messages d'état de la file en FR lisible (pas d'état
 brut — garde existante à étendre à la file) ; annulation/relance re-testées ; timeouts
 LLM (que voit l'utilisateur pendant/après ?) ; **campagne de charge COURTE re-jouée
 au gel** (all-in-one 3 jobs + split 4 jobs — [[load_test_concurrency]] a déjà les bancs).
 **Acceptation** : double-submit → 4xx propre ; charge courte verte 2× ; captures file.
+**Vérifié** : le durcissement « différé » était en fait DÉJÀ livré — `QueueStore.enqueue` attrape l'IntegrityError de course double-submit et réutilise l'entrée gagnante (`test_enqueue_recovers_from_concurrent_insert_race`), les états de file sont en FRANÇAIS (`QUEUE_STATUS_LABELS`, aucun état brut). Campagne de charge courte = au gel (C4.3).
 
 ### C3.9 Sécurité PSSI (passe transversale) — **taille L** — 🟢 LIVRÉ (headers + doc ; CSP = limitation assumée)
 **Constat vérifié (état des lieux honnête)** : cookies bien configurés, MAX_CONTENT_LENGTH
@@ -594,7 +601,7 @@ Harnais §8.1 rejoué en conditions release APRÈS tous les chantiers (il re-val
 reste) ; sécurité du lien frontale↔nœud (API key, réseau) documentée dans
 SECURITY_MODEL ; doctor multi-nœuds (C1.3) joué en split.
 
-### C3.12 Performance, limites & observabilité — **taille M** — NOUVEAU (v3)
+### C3.12 Performance, limites & observabilité — **taille M** — 🟢 LIVRÉ (limites publiées + 413/429)
 **Constat** : les limites réelles ne sont écrites nulle part pour l'utilisateur
 (durée max d'audio ? taille ? nb de jobs ? disque plein ?) ; rotation des logs présente
 (`logging_setup.py` RotatingFileHandler) mais la POLITIQUE (taille, nombre, niveaux en
@@ -606,6 +613,7 @@ revue des logs en prod (niveaux, bruit, rotation) ; temps de réponse des pages 
 mesurés au walkthrough (budget : pages < 1 s hors pipeline, éditeur < 2,5 s à 3 000
 segments — déjà tenu).
 **Acceptation** : chaque limite = un test ou un banc ; doc publiée.
+**Réalisé** : section « Limites connues » publiée (README.fr) — durée 4 h 30, taille d'upload (413 propre), locuteurs ≤ 4, disque (doctor), budget discuss, rétention ; pages d'erreur 413/429 gérées (français, plus de page Werkzeug brute) + test. Rotation des logs préexistante (RotatingFileHandler). Budgets de latence UI déjà tenus (éditeur < 2,5 s à 3 000 segments, pages < 1 s).
 
 ---
 

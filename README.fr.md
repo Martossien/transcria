@@ -80,6 +80,17 @@ Quelques partis pris qui le démarquent d'un simple script de transcription :
 | Édition SRT | SRT Editor EASY optionnel |
 | Analyse VAD | `docs/VAD_OR_NOT.md` — recommandations par type de fichier |
 
+## Limites connues
+
+| Aspect | Limite | Comportement au-delà |
+|---|---|---|
+| Durée d'une réunion | testé jusqu'à ~4 h 30 (≈ 3 000 segments) | l'éditeur et le pipeline restent fluides ; au-delà, non garanti |
+| Taille d'un fichier | `security.max_upload_size_mb` (1 Go par défaut) | message « fichier trop volumineux » (413), jamais d'erreur brute |
+| Locuteurs (diarisation Sortformer) | ≤ 4 | au-delà, utiliser pyannote (gated) |
+| Espace disque | surveillé par `doctor` (< 10 Go = alerte, < 2 Go = échec) | un disque plein fait échouer un traitement proprement + apparaît au diagnostic |
+| Discussion avec les livrables | contexte dérivé du palier VRAM (jusqu'à ~4 h 30 sur 24 Go) | au-delà, transcription tronquée début+fin avec notice explicite |
+| Rétention | traitements 365 j, audit 1095 j (configurable) | purge automatique + commande `maintenance.cli purge` |
+
 ## Prérequis
 
 - Python 3.11+

@@ -250,6 +250,9 @@ def create_app(config_path: str | None = None) -> Flask:
         403: ("Accès refusé", "Vous n'avez pas les droits nécessaires pour accéder à cette page."),
         404: ("Page introuvable", "La page demandée n'existe pas ou a été déplacée."),
         405: ("Action non autorisée", "Cette action n'est pas permise sur cette page."),
+        413: ("Fichier trop volumineux", "Le fichier dépasse la taille maximale autorisée "
+              "(voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."),
+        429: ("Trop de tentatives", "Vous avez fait trop de tentatives. Patientez quelques minutes."),
         500: ("Erreur interne", "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."),
     }
 
