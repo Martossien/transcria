@@ -72,6 +72,31 @@ def test_upload_rejects_missing_file(admin_client):
     assert r.status_code == 400
 
 
+def test_upload_rejects_beyond_max_documents(admin_client, app, monkeypatch):
+    job_id = _make_job(admin_client)
+    with app.app_context():
+        from transcria.config import get_config
+        real = get_config()
+    patched = {**real, "security": {**real["security"], "max_documents_per_job": 2}}
+    monkeypatch.setattr("transcria.web.routes.get_config", lambda: patched)
+
+    for i in range(2):
+        r = admin_client.post(
+            f"/api/jobs/{job_id}/meeting-invite/document",
+            data={"file": (io.BytesIO(_make_docx(f"doc {i}")), f"d{i}.docx")},
+            content_type="multipart/form-data",
+        )
+        assert r.status_code == 200
+    # Le 3ᵉ dépasse le cap → rejeté avant lecture du fichier.
+    r = admin_client.post(
+        f"/api/jobs/{job_id}/meeting-invite/document",
+        data={"file": (io.BytesIO(_make_docx("over")), "over.docx")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 400
+    assert "max 2" in r.get_json()["error"].lower()
+
+
 def test_text_invite_preserves_documents(admin_client, app):
     job_id = _make_job(admin_client)
     admin_client.post(

@@ -8,6 +8,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Fixed
+- **Rôle participant** : `_strip_role_gender` ne supprime plus un adjectif de genre
+  lowercase légitime en fin de rôle (« le vestiaire masculin » restait tronqué en « le
+  vestiaire ») — l'indice capitalisé « Masculin/Féminin » reste retiré.
+
+### Added / Hardening
+- **Documents joints** : borne du nombre de documents par job
+  (`security.max_documents_per_job`, défaut 15) pour limiter le contexte LLM agrégé ;
+  message d'erreur clair côté UI en cas de dépassement de la taille serveur (413).
+
 ## [0.3.0] — 2026-07-05
 
 Ingestion des **documents présentés** en réunion pour enrichir le résumé et la

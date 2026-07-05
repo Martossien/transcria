@@ -806,6 +806,19 @@ var TranscrIA = window.TranscrIA || {};
         });
     };
 
+    // Parse robuste : une réponse 413 (dépassement de MAX_CONTENT_LENGTH) ou toute
+    // erreur serveur renvoie du HTML, pas du JSON — r.json() lèverait et masquerait la
+    // vraie cause derrière « Erreur réseau ».
+    W.parseDocResponse = function (r) {
+        if (r.status === 413) {
+            return Promise.resolve({ ok: false, body: { error: 'Fichier trop volumineux (dépasse la limite du serveur).' } });
+        }
+        return r.json().then(
+            function (b) { return { ok: r.ok, body: b }; },
+            function () { return { ok: r.ok, body: { error: 'Réponse serveur inattendue (HTTP ' + r.status + ').' } }; }
+        );
+    };
+
     W.handleMeetingDocument = function (input) {
         console.log('[TranscrIA] handleMeetingDocument()');
         var errEl = document.getElementById('meeting-doc-error');
@@ -815,7 +828,7 @@ var TranscrIA = window.TranscrIA || {};
         var fd = new FormData();
         fd.append('file', file);
         fetch('/api/jobs/' + JOB_ID + '/meeting-invite/document', { method: 'POST', body: fd })
-            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+            .then(W.parseDocResponse)
             .then(function (res) {
                 if (res.ok) {
                     W.renderMeetingDocuments(res.body.documents);
@@ -832,7 +845,7 @@ var TranscrIA = window.TranscrIA || {};
         var errEl = document.getElementById('meeting-doc-error');
         if (errEl) errEl.textContent = '';
         fetch('/api/jobs/' + JOB_ID + '/meeting-invite/document/' + index, { method: 'DELETE' })
-            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+            .then(W.parseDocResponse)
             .then(function (res) {
                 if (res.ok) {
                     W.renderMeetingDocuments(res.body.documents);

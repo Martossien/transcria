@@ -611,6 +611,7 @@ _DEFAULT_CONFIG = {
         "allowed_document_extensions": [".pdf", ".docx", ".pptx", ".txt"],
         "max_document_size_mb": 25,
         "max_document_chars": 12000,
+        "max_documents_per_job": 15,
         "audit_retention_days": 1095,
         "lexicon_export_admin_only": False,
         "audit_retention_by_family": {

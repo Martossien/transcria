@@ -1554,6 +1554,14 @@ def api_meeting_invite_document(job_id: str):
                      f"Acceptés : {', '.join(allowed)} (convertissez les .doc/.ppt hérités)."
         }), 400
 
+    # Borne le nombre de documents (donc le contexte LLM agrégé) — rejet précoce,
+    # avant même de lire le fichier.
+    max_docs = int(sec.get("max_documents_per_job", 15))
+    if len(_meeting_documents(job)) >= max_docs:
+        return jsonify({
+            "error": f"Trop de documents joints (max {max_docs}). Retirez-en un avant d'ajouter."
+        }), 400
+
     data = file.read()
     max_mb = int(sec.get("max_document_size_mb", 25))
     if len(data) > max_mb * 1024 * 1024:

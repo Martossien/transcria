@@ -19,6 +19,7 @@ exposed:
 - security.allowed_upload_extensions
 - security.max_document_chars
 - security.max_document_size_mb
+- security.max_documents_per_job
 - security.max_upload_size_mb
 - server.host
 - server.port

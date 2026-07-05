@@ -1003,6 +1003,7 @@ def _check_security(sec: dict, r: ValidationResult) -> None:
     # Documents joints au contexte du résumé (extraction texte).
     _check_int_range(sec, "max_document_size_mb", "security.max_document_size_mb", 1, 1024, r)
     _check_int_range(sec, "max_document_chars", "security.max_document_chars", 500, 200000, r)
+    _check_int_range(sec, "max_documents_per_job", "security.max_documents_per_job", 1, 100, r)
     doc_extensions = sec.get("allowed_document_extensions", [])
     if not isinstance(doc_extensions, list) or len(doc_extensions) == 0:
         r.add_error(
