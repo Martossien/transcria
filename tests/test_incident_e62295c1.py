@@ -342,3 +342,63 @@ class _DummySL:
     """Logger structuré factice : absorbe info/warning/error/exception/debug + set_context."""
     def __getattr__(self, _name):
         return lambda *a, **k: None
+
+
+# ---------------------------------------------------------------------------
+# Chasse aux bugs (batch E2E 2026-07-05) — correction : retry sur GEL opencode
+# ---------------------------------------------------------------------------
+
+def _corr_setup(app, owner_id, cfg, monkeypatch):
+    from transcria.jobs.filesystem import JobFilesystem
+    job = JobStore.create_job(owner_id, "Corr")
+    runner = WorkflowRunner(JobStore, cfg)
+    fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+    fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:03,000\nBonjour.\n")
+    fs.save_text("context/job_context.yaml", "{}")
+    fs.save_json("context/session_lexicon.json", [])
+    monkeypatch.setattr(runner.allocator, "try_acquire_llm", lambda *a, **k: True)
+    monkeypatch.setattr(runner.allocator, "release_llm", lambda *a, **k: None)
+    monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+    monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda **k: True)
+    monkeypatch.setattr(WorkflowRunner, "_materialize_meeting_invite", staticmethod(lambda fs, job: None))
+    monkeypatch.setattr(WorkflowRunner, "_corrected_srt_integrity_error", staticmethod(lambda src, corr: None))
+    return job, runner, fs
+
+
+def test_correction_retries_on_opencode_hang(app, owner_id, monkeypatch, tmp_path):
+    # Un GEL opencode (watchdog → success=False, « opencode interrompu … ») est TRANSITOIRE
+    # (deadlock de démarrage intermittent) → la correction RETENTE au lieu d'échouer au 1er
+    # coup. Avant : `if not result["success"] ... break` coupait la boucle sur tout échec.
+    with app.app_context():
+        job, runner, fs = _corr_setup(app, owner_id, _cfg(tmp_path), monkeypatch)
+        calls = {"n": 0}
+        good = "1\n00:00:00,000 --> 00:00:03,000\nBonjour corrige.\n"
+
+        def fake_run_correction(self, srt, ctx, lex, invite=None):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                return {"success": False, "corrected_srt": "", "report": "",
+                        "error": "opencode interrompu (gel au démarrage opencode (pré-session))"}
+            return {"success": True, "corrected_srt": good, "report": "ok", "error": ""}
+        monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+
+        result = runner.run_correction(job, _cfg(tmp_path))
+        assert calls["n"] == 3
+        assert result["success"] is True
+        assert fs.load_text("metadata/transcription_corrigee.srt")
+
+
+def test_correction_hard_failure_does_not_retry(app, owner_id, monkeypatch, tmp_path):
+    # Un échec DUR (success=False SANS « interrompu ») n'est pas transitoire → pas de retry.
+    with app.app_context():
+        job, runner, fs = _corr_setup(app, owner_id, _cfg(tmp_path), monkeypatch)
+        calls = {"n": 0}
+
+        def fake_run_correction(self, srt, ctx, lex, invite=None):
+            calls["n"] += 1
+            return {"success": False, "corrected_srt": "", "report": "", "error": "erreur dure quelconque"}
+        monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
+
+        result = runner.run_correction(job, _cfg(tmp_path))
+        assert calls["n"] == 1
+        assert result["success"] is False

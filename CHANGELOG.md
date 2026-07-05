@@ -9,6 +9,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Fixed
+- **Gel opencode au démarrage (résilience)** : diagnostiqué au batch E2E 2026-07-05 — opencode
+  deadlocke par intermittence (~30-50 % avec de gros system-prompts) APRÈS son `init`, AVANT
+  de créer sa session / solliciter la LLM (0 event stdout, slot LLM jamais occupé). Reproduit
+  EN ISOLATION (opencode seul), présent en **1.17.4 ET 1.17.13**, LLM parfaitement saine — bug
+  opencode, pas de côté TranscrIA. Résilience ajoutée : (1) le watchdog détecte ce gel de
+  démarrage en ~45 s (`opencode_first_contact_grace_s` : 0 event + LLM jamais sollicitée +
+  slot idle) au lieu d'attendre le silence générique de 120 s → retry peu coûteux ; (2) la
+  phase de **correction RETENTE** sur gel transitoire (« opencode interrompu … »), comme le
+  résumé, au lieu d'échouer au 1er coup (`if not result["success"] … break` la coupait).
 - **Résumé LLM malformé accepté sans retry** : le retry du résumé se basait sur « la LLM
   a-t-elle réécrit `summary.md` » (mtime), pas sur « le résultat est-il exploitable ». Un
   résumé produit mais MALFORMÉ (gabarit non suivi, reasoning déversé → aucun champ

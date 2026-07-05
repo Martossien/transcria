@@ -1864,10 +1864,16 @@ class WorkflowRunner:
                 result = runner.run_correction(
                     str(staged_srt), str(staged_context), str(staged_lexicon), staged_invite
                 )
-                if not result["success"] or result["corrected_srt"]:
+                # Un GEL opencode (watchdog → success=False, « opencode interrompu … ») est
+                # TRANSITOIRE (deadlock de démarrage intermittent, cf. batch E2E 2026-07-05) :
+                # on RETENTE avec un process opencode neuf, comme le résumé. Seul un échec dur
+                # (success=False SANS interruption) coupe la boucle. Un SRT produit = succès.
+                hang = (not result["success"]) and "interrompu" in str(result.get("error", ""))
+                if result["corrected_srt"] or (not result["success"] and not hang):
                     break
                 logger.warning(
-                    "[correction] LLM sans production (exit 0, 0 texte) — tentative %d/%d",
+                    "[correction] %s — tentative %d/%d",
+                    "gel opencode au démarrage" if hang else "LLM sans production (exit 0, 0 texte)",
                     attempt, max_llm_attempts,
                 )
             workspace.verify_and_restore_sources()

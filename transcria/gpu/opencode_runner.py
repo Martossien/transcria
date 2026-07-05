@@ -499,6 +499,7 @@ class OpenCodeRunner:
         llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
         idle_grace_s = float(llm_cfg.get("opencode_idle_grace_s", 120))
         pure_idle_cap_s = float(llm_cfg.get("opencode_pure_idle_cap_s", 600))
+        first_contact_grace_s = float(llm_cfg.get("opencode_first_contact_grace_s", 45))
         poll_s = float(llm_cfg.get("opencode_watchdog_poll_s", 5))
 
         out_lines: list[str] = []
@@ -528,6 +529,16 @@ class OpenCodeRunner:
                 break
             if idle >= pure_idle_cap_s:
                 reason = f"aucune sortie depuis {int(idle)}s (repli idle pur)"
+                break
+            # Gel au DÉMARRAGE : opencode 1.17.x deadlocke par intermittence (~30-50 % avec
+            # de gros system-prompts) APRÈS « init », AVANT de créer sa session ou de
+            # solliciter la LLM — 0 event stdout ET slot LLM jamais occupé. Signature sans
+            # ambiguïté (un run sain émet un event ou occupe la LLM en quelques s), donc
+            # détectable BIEN plus vite que le silence générique : le retry (process neuf)
+            # réussit le plus souvent, à faible coût. Cf. batch E2E 2026-07-05.
+            if (not out_lines) and (now - start) >= first_contact_grace_s and self._llm_is_processing() is False:
+                reason = (f"aucun événement opencode + LLM jamais sollicitée depuis {int(now - start)}s "
+                          "— gel au démarrage opencode (pré-session)")
                 break
             if idle >= idle_grace_s and self._llm_is_processing() is False:
                 reason = (f"opencode silencieux {int(idle)}s + LLM idle "

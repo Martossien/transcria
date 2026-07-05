@@ -161,6 +161,45 @@ class TestOpenCodeRunnerRun:
         assert result["success"] is False
         assert "idle pur" in result["error"].lower() or "interrompu" in result["error"].lower()
 
+    def _run_hung_cfg(self, tmp_path, monkeypatch, llm_processing, cfg):
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
+        monkeypatch.setattr(os.path, "isfile", lambda p: True)
+        monkeypatch.setattr(os.path, "abspath", lambda p: p)
+        monkeypatch.setattr(subprocess, "Popen",
+            _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
+        runner = _make_runner(tmp_path, config=cfg)
+        monkeypatch.setattr(runner, "_llm_is_processing", lambda: llm_processing)
+        return runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
+
+    def test_watchdog_gel_demarrage_detecte_vite(self, tmp_path, monkeypatch):
+        # Chasse aux bugs (batch E2E 2026-07-05) : opencode deadlocke par intermittence
+        # APRÈS init, avant de solliciter la LLM (0 event stdout + LLM idle). Détecté par le
+        # seuil first_contact (court), pas par le silence générique (idle_grace long).
+        cfg = {"workflow": {"arbitration_llm": {
+            "opencode_watchdog_poll_s": 0.02,
+            "opencode_first_contact_grace_s": 0.05,
+            "opencode_idle_grace_s": 100,      # le silence générique ne doit PAS trancher
+            "opencode_pure_idle_cap_s": 100,
+        }}}
+        result = self._run_hung_cfg(tmp_path, monkeypatch, llm_processing=False, cfg=cfg)
+        assert result["success"] is False
+        assert "démarrage" in result["error"].lower()
+
+    def test_watchdog_gel_demarrage_ne_tue_pas_si_llm_travaille(self, tmp_path, monkeypatch):
+        # 0 event MAIS LLM occupée (reasoning long avant le 1er event) → PAS de faux gel de
+        # démarrage ; seul le repli idle pur borne (preuve que first_contact n'a pas tranché).
+        cfg = {"workflow": {"arbitration_llm": {
+            "opencode_watchdog_poll_s": 0.02,
+            "opencode_first_contact_grace_s": 0.05,
+            "opencode_idle_grace_s": 100,
+            "opencode_pure_idle_cap_s": 0.2,
+        }}}
+        result = self._run_hung_cfg(tmp_path, monkeypatch, llm_processing=True, cfg=cfg)
+        assert result["success"] is False
+        assert "démarrage" not in result["error"].lower()
+        assert "idle pur" in result["error"].lower()
+
     def test_run_generic_exception(self, tmp_path, monkeypatch):
         import shutil
         monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
