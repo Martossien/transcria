@@ -23,6 +23,14 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   quasi constante passait en silence — sur le **dernier** fichier avant export.
   `_apply_final_review` réutilise désormais la même garde déterministe
   (`_corrected_srt_integrity_error` : parité des `-->` + ratio).
+- **Matching de voix** : une empreinte moyenne dégénérée (deux extraits contradictoires
+  d'un même locuteur → vecteur nul) faisait remonter `embedding_norme_nulle` hors garde,
+  faisant échouer TOUT le matching du job. Le locuteur concerné est désormais ignoré
+  (avertissement), le reste du job continue.
+- **Enrôlement de voix (RGPD)** : sur échec d'embedding, l'audio source consenti restait
+  sur disque en fichier orphelin (non tracé en base). Il est désormais supprimé sur le
+  chemin d'échec (si `delete_source_audio_after_embedding`), cohérent avec le chemin
+  succès et la minimisation des données.
 - **Verrou LLM (concurrence)** : `GPUAllocator.release_llm(job_id)` passe en propriété
   **stricte** — il ne libère le verrou que si le job en est le propriétaire courant.
   Fenêtre de course corrigée : un release de filet de sécurité d'un ancien job pouvait,

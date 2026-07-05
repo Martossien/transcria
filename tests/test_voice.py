@@ -421,3 +421,64 @@ class TestVoiceWeb:
         assert data["matches"][0]["suggested_gender"] == "female"
         with app.app_context():
             assert VoiceMatch.query.filter_by(job_id=job.id, speaker_id="SPEAKER_00").count() == 1
+
+
+class TestVoiceMatchingRobustness:
+    def test_speaker_with_degenerate_mean_is_skipped_not_crash(self, tmp_path, monkeypatch):
+        # Chasse aux bugs : deux extraits ~opposés pour le MÊME locuteur → moyenne nulle
+        # → normalize_l2 levait `embedding_norme_nulle` HORS du try (ligne 131) → tout le
+        # matching crashait. Le locuteur dégénéré doit être ignoré, pas faire échouer le job.
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.voice.embedding import PyannoteVoiceEmbeddingBackend, VoiceEmbedding
+        from transcria.voice.matching import VoiceMatchingService
+
+        fs = JobFilesystem(str(tmp_path), "job-voice-deg")
+        (fs.job_dir / "speakers").mkdir(parents=True, exist_ok=True)
+        c1 = fs.job_dir / "speakers" / "c1.wav"; c1.write_bytes(b"x")
+        c2 = fs.job_dir / "speakers" / "c2.wav"; c2.write_bytes(b"x")
+        fs.save_json("speakers/speaker_clips.json", {"SPEAKER_00": [str(c1), str(c2)]})
+
+        vecs = iter([
+            np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+            np.array([-1.0, 0.0, 0.0, 0.0], dtype=np.float32),
+        ])
+
+        def fake_extract(self, clip_path):
+            return VoiceEmbedding(
+                vector=next(vecs), backend="pyannote", model_id="m", model_revision="",
+                normalization="l2", sample_count=1, speech_duration_s=1.0,
+            )
+        monkeypatch.setattr(PyannoteVoiceEmbeddingBackend, "extract_reference_embedding", fake_extract)
+
+        svc = VoiceMatchingService({"storage": {"jobs_dir": str(tmp_path)}}, device="cpu")
+        embeddings = svc._speaker_embeddings_from_clips(fs)
+        assert "SPEAKER_00" not in embeddings
+
+
+class TestVoiceEnrollmentCleanup:
+    def test_failed_embedding_deletes_orphan_source_audio(self, tmp_path, monkeypatch):
+        # Chasse aux bugs : sur échec d'embedding, l'audio source consenti restait sur
+        # disque (fichier orphelin non tracé) — contraire à « supprimé par défaut ».
+        import pytest
+
+        from transcria.voice import enrollment as enroll_mod
+        from transcria.voice.embedding import VoiceEmbeddingError
+        from transcria.voice.enrollment import VoiceEnrollmentService
+
+        audio = tmp_path / "ref.wav"
+        audio.write_bytes(b"x")
+
+        monkeypatch.setattr(enroll_mod.VoiceStore, "active_consent", staticmethod(lambda subject: object()))
+        monkeypatch.setattr(enroll_mod.VoiceStore, "create_processing_profile", staticmethod(lambda *a, **k: object()))
+        monkeypatch.setattr(enroll_mod.VoiceStore, "fail_profile", staticmethod(lambda *a, **k: None))
+
+        class _RaisingBackend:
+            def extract_reference_embedding(self, path):
+                raise VoiceEmbeddingError("boom")
+
+        monkeypatch.setattr(enroll_mod, "create_voice_embedding_backend", lambda config, device="cpu": _RaisingBackend())
+
+        svc = VoiceEnrollmentService({"voice_enrollment": {"delete_source_audio_after_embedding": True}})
+        with pytest.raises(VoiceEmbeddingError):
+            svc.generate_profile(object(), object(), audio)
+        assert not audio.exists()

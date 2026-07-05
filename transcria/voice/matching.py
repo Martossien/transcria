@@ -128,7 +128,16 @@ class VoiceMatchingService:
                 if len(dims) != 1:
                     logger.warning("Matching voix: extraits ignorés, dimensions incompatibles speaker=%s dims=%s", speaker_id, sorted(dims))
                     continue
-                mean = normalize_l2(np.mean([normalize_l2(vector) for vector in vectors], axis=0))
+                try:
+                    mean = normalize_l2(np.mean([normalize_l2(vector) for vector in vectors], axis=0))
+                except VoiceEmbeddingError as exc:
+                    # Moyenne dégénérée (extraits contradictoires, vecteur nul/NaN) : on
+                    # ignore CE locuteur plutôt que de faire échouer tout le matching du job.
+                    logger.warning(
+                        "Matching voix: locuteur ignoré, empreinte moyenne dégénérée speaker=%s reason=%s",
+                        speaker_id, exc,
+                    )
+                    continue
                 embeddings[str(speaker_id)] = VoiceEmbedding(
                     vector=mean,
                     backend=backend.backend_name,

@@ -34,4 +34,9 @@ class VoiceEnrollmentService:
             return profile
         except VoiceEmbeddingError as exc:
             VoiceStore.fail_profile(profile, actor, str(exc))
+            # Empreinte échouée : l'audio source consenti est un fichier ORPHELIN (aucune
+            # référence en base) — on le supprime si la politique de suppression après
+            # embedding est active, cohérent avec le chemin succès et la minimisation RGPD.
+            if self.config.get("voice_enrollment", {}).get("delete_source_audio_after_embedding", True):
+                audio_path.unlink(missing_ok=True)
             raise
