@@ -1072,6 +1072,18 @@ class TestStripRoleGender:
         for role in ("gère l'équipe féminine", "responsable de la santé féminine du groupe"):
             assert OpenCodeRunner._strip_role_gender(role) == role
 
+    def test_keeps_lowercase_trailing_gender_adjective(self):
+        # Bug (pré-existant) : un adjectif de genre LOWERCASE en fin de rôle est un
+        # contenu légitime (l'indice acoustique est capitalisé « Masculin »/« Féminin »).
+        for role in ("le vestiaire masculin", "entraîneur du foot féminin",
+                     "responsable du secteur masculin"):
+            assert OpenCodeRunner._strip_role_gender(role) == role
+
+    def test_still_strips_capitalized_trailing_hint(self):
+        # L'indice capitalisé en fin (avec ou sans symbole) reste retiré.
+        assert OpenCodeRunner._strip_role_gender("présente le budget Masculin") == "présente le budget"
+        assert OpenCodeRunner._strip_role_gender("anime la séance Féminin ♀") == "anime la séance"
+
     def test_parse_summary_removes_gender_from_role(self):
         text = (
             "## Participants probables\n"

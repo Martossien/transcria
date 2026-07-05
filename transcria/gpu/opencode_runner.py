@@ -879,10 +879,19 @@ class OpenCodeRunner:
         cleaned = re.sub(rf"\s*[—–\-,;/]\s*{g}\s*[,;]?", "", cleaned, flags=re.IGNORECASE)
         # (d) symbole isolé n'importe où.
         cleaned = re.sub(r"\s*[♂♀]", "", cleaned)
-        # (e) indice isolé en FIN de ligne (comportement historique) : base + homme/femme.
+        # (e1) indice isolé en FIN de ligne précédé d'une ponctuation de séparation
+        #      (— – - ( , ; /), quelle que soit la casse.
         cleaned = re.sub(
-            r"[\s—–\-(,;/]*\b(?:masculin|f[ée]minin|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
+            r"[\s]*[—–\-(,;/][\s]*\b(?:masculin|f[ée]minin|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
             "", cleaned, flags=re.IGNORECASE,
+        )
+        # (e2) indice en fin de ligne précédé d'un simple espace : retiré UNIQUEMENT s'il est
+        #      capitalisé (« Masculin/Féminin » = l'indice recopié). Un adjectif légitime
+        #      accolé et lowercase (« vestiaire masculin », « foot féminin ») est PRÉSERVÉ
+        #      (bug pré-0.3.0 : l'ancienne règle mangeait ce dernier mot). Sensible à la casse.
+        cleaned = re.sub(
+            r"\s+\b(?:Masculin|F[ée]minin|Homme|Femme)\b\s*[♂♀]?\s*\)?\s*$",
+            "", cleaned,
         )
         # Nettoyage des artefacts laissés par les retraits.
         cleaned = re.sub(r"\(\s*\)", "", cleaned)                # parenthèses vides
