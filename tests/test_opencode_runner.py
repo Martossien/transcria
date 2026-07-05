@@ -1233,6 +1233,30 @@ class TestApplyFinalReview:
         assert applied["srt_updated"] is False
         assert fs.load_text("metadata/transcription_corrigee.srt") == original
 
+    def test_srt_rejected_on_segment_parity_even_when_length_ok(self, tmp_path):
+        # Chasse aux bugs : la relecture finale ne gardait qu'un ratio de TAILLE, sans la
+        # parité de segments que la correction impose. Un SRT relu qui perd/fusionne un
+        # segment tout en restant dans ±10 % de longueur passait en silence — et c'est le
+        # DERNIER fichier avant export.
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        def seg(i):
+            return (f"{i}\n00:00:{i:02d},000 --> 00:00:{i + 1:02d},000\n"
+                    f"SPEAKER_0{i % 2}: parole du segment numero {i} avec assez de texte pour compter.\n")
+
+        fs = JobFilesystem(str(tmp_path), "job-fr-parity")
+        old = "\n".join(seg(i) for i in range(1, 13))       # 12 segments
+        fs.save_text("metadata/transcription_corrigee.srt", old)
+        fs.save_json("context/meeting_context.json", {})
+        reviewed = "\n".join(seg(i) for i in range(1, 12))  # 11 segments (une fusion/perte)
+        ratio = len(reviewed) / len(old)
+        assert 0.9 <= ratio <= 1.1, f"pré-condition : ratio {ratio:.2f} dans la plage (sinon ne prouve rien)"
+
+        applied = WorkflowRunner._apply_final_review(fs, {"reviewed_srt": reviewed})
+        assert applied["srt_updated"] is False
+        assert fs.load_text("metadata/transcription_corrigee.srt") == old
+
     def test_invalid_structured_data_kept(self, tmp_path):
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.workflow.runner import WorkflowRunner

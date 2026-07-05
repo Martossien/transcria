@@ -18,6 +18,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Rapport Word** : durée de réunion de 3599 s (59 min 59 s) affichée « 60 min » au lieu
   de « 1 h » (`_fmt_duration` : l'arrondi des minutes à 60 ne basculait pas en heure quand
   h == 0).
+- **Relecture finale** : le SRT relu n'était gardé que par un ratio de taille, sans la
+  parité de segments que la correction impose. Une fusion/perte de segment à longueur
+  quasi constante passait en silence — sur le **dernier** fichier avant export.
+  `_apply_final_review` réutilise désormais la même garde déterministe
+  (`_corrected_srt_integrity_error` : parité des `-->` + ratio).
 
 ### Added / Hardening
 - **Documents joints** : borne du nombre de documents par job

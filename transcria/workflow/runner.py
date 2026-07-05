@@ -2062,14 +2062,16 @@ class WorkflowRunner:
         reviewed_srt = result.get("reviewed_srt") or ""
         if reviewed_srt:
             old = fs.load_text("metadata/transcription_corrigee.srt") or ""
-            ratio = (len(reviewed_srt) / len(old)) if old else 1.0
-            if 0.9 <= ratio <= 1.1:
+            # Même garde déterministe que la correction : PARITÉ des segments (aucun perdu,
+            # fusionné ou ajouté) + ratio anti-dérive. Un ratio de taille seul laissait
+            # passer une fusion/perte de segment à longueur ~constante, sur le DERNIER
+            # fichier avant export. Échec ⇒ on conserve le SRT corrigé existant.
+            integrity_error = WorkflowRunner._corrected_srt_integrity_error(old, reviewed_srt)
+            if integrity_error:
+                logger.warning("Relecture finale : SRT relu écarté — %s", integrity_error)
+            else:
                 fs.save_text("metadata/transcription_corrigee.srt", reviewed_srt)
                 applied["srt_updated"] = True
-            else:
-                logger.warning(
-                    "Relecture finale : SRT relu écarté (ratio %.2f hors [0.9, 1.1])", ratio
-                )
 
         harmonized = result.get("harmonized_summary") or ""
         if harmonized:
