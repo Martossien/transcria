@@ -97,8 +97,8 @@ Le rollback en cas de pépin, c'est la restauration de la sauvegarde créée à 
 # Prévisualiser les étapes (rien n'est exécuté) :
 venv/bin/python -m transcria.maintenance.cli upgrade --check
 
-# Passer au dernier tag publié (ex. v0.2.0) :
-venv/bin/python -m transcria.maintenance.cli upgrade --ref v0.2.0 \
+# Passer au dernier tag publié (ex. v0.3.0) :
+venv/bin/python -m transcria.maintenance.cli upgrade --ref v0.3.0 \
     --units transcria.service --ready-url http://127.0.0.1:7870/ready
 
 # …ou simplement récupérer la branche courante :
@@ -110,6 +110,13 @@ restaurez la sauvegarde initiale pour revenir en arrière.
 
 ### Notes de migration par version
 
+- **0.2.0 → 0.3.0** : nouvelles dépendances Python (`pypdf`, `python-pptx`, pur-Python,
+  sans paquet système) — l'upgrade les installe via `requirements.txt` (`pip install -r
+  requirements.txt` si mise à niveau manuelle). **Aucune migration Alembic** : la feature
+  « documents présentés » stocke tout dans `extra_data` (JSON). Trois clés de config
+  facultatives sont ajoutées avec des valeurs par défaut sûres (`security.
+  allowed_document_extensions` / `max_document_size_mb` / `max_document_chars`) — un
+  fichier de config existant reste valide sans modification.
 - **beta.7+ → 0.2.0** : les clés de configuration obsolètes sont ignorées avec un
   avertissement (le lien vers le fork externe « SRT Editor EASY » —
   `services.srt_editor_easy_url`, `workflow.enable_external_srt_editor_link`). Retrait

@@ -8,6 +8,44 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-07-05
+
+Ingestion des **documents présentés** en réunion pour enrichir le résumé et la
+correction, plus un durcissement de la garde anti-fuite de genre.
+
+### Added — documents présentés joints au contexte
+- **Joindre les supports de réunion** (PDF, Word `.docx`, PowerPoint `.pptx`, texte) à
+  l'étape « Résumé de contrôle » du wizard. Leur texte est extrait
+  (`context/document_extractor.py`, 100 % pur-Python : pypdf / python-docx / python-pptx)
+  et injecté dans le même canal que l'invitation (`meeting_invite.md`). Les **images sont
+  ignorées** pour l'instant (analyse visuelle par la LLM différée) ; les binaires hérités
+  `.doc`/`.ppt` ne sont pas gérés. Minimisation PII : e-mails retirés, **fichiers jamais
+  conservés** (seul le texte assaini et plafonné). Routes `POST`/`DELETE`
+  `/api/jobs/<id>/meeting-invite/document[/<index>]` (côté web/CPU) ; aucune migration de
+  schéma (documents stockés dans `extra_data`).
+- **Résumé mieux ancré** : ordre du jour, terminologie et structure des documents cadrent
+  la synthèse (indicatif — la transcription prime).
+- **Candidats lexique issus des documents (B1)** : le résumé peut proposer, comme termes à
+  valider, les entités nommées des documents divergentes dans la transcription
+  (`source: document`, badge « issu des documents fournis » à l'étape Lexique). Suggestion
+  validée par l'humain, jamais appliquée d'office.
+- **Correction — référence d'orthographe (A)** : la correction du SRT reçoit les documents
+  comme référence d'orthographe des entités nommées uniquement (jamais autorité de
+  contenu), pour aligner p. ex. une graphie de produit ou de sigle sans altérer ce qui a
+  été dit.
+- Nouvelles dépendances : `pypdf`, `python-pptx` (pur-Python, sans dépendance système ;
+  reprises automatiquement par `install.sh` et les images Docker via `requirements.txt`).
+- Nouvelles clés de configuration : `security.allowed_document_extensions`,
+  `security.max_document_size_mb`, `security.max_document_chars`.
+- Retouche UI : le bouton de promotion d'un terme vers un lexique central reçoit un
+  libellé explicite (« Au lexique central »).
+
+### Fixed
+- **Fuite de genre dans les rôles participants** : `OpenCodeRunner._strip_role_gender()`
+  retire désormais l'indice de genre vocal **où qu'il apparaisse** (label, parenthèse,
+  appositif, symboles ♂/♀), et plus seulement en fin de ligne — un genre accolé à un nom
+  (« équipe féminine ») reste préservé. Corrige l'échec `role_gender_clean` observé en E2E.
+
 ## [0.2.0] — 2026-07-04
 
 Première version **stable**. Consolidation de la série `0.1.x` : outillage de

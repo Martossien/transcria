@@ -20,10 +20,13 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
-## Statut du projet — 0.2.0, première version stable
+## Statut du projet — 0.3.0
 
-C'est la première version que TranscrIA considère **stable**. Le pipeline de transcription,
-l'assistant avec validation humaine, la file GPU et sa planification, les exports, l'accès
+Dans la continuité de la ligne stable 0.2.0. La **0.3.0** ajoute l'ingestion des
+**documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé
+et la correction du SRT, et durcit la garde anti-fuite de genre sur les rôles participants
+(voir le [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
+validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
 bout en bout (suite unitaire et d'intégration, plus des passages sur GPU réel).
 L'interface est en français d'abord, et la qualité de référence repose sur des modèles
@@ -89,6 +92,10 @@ fait plus qu'il ne fait.
 **Analyse audio — un verdict honnête avant de dépenser du GPU : scores perceptifs SQUIM/DNSMOS, SNR, frise de difficulté au fil du temps, et estimation de temps calibrée. Un enregistrement dégradé est signalé « à surveiller », pas transcrit en bouillie en silence**
 
 ![Analyse audio avec frise de difficulté](docs/screenshots/09-audio-analysis.png)
+
+**Apportez les documents de la réunion — collez l'invitation et joignez les slides, l'ordre du jour ou la note de cadrage (PDF, Word, PowerPoint). Leur texte est extrait (images différées à une future vision LLM) et sert deux fois : il ancre le résumé dans l'ordre du jour et la terminologie réels, et il devient une référence d'orthographe pour que la correction rétablisse les entités nommées — p. ex. un nom de produit ou un sigle mal transcrit. Tout reste local ; les e-mails sont retirés et les fichiers eux-mêmes ne sont jamais conservés**
+
+![Joindre les documents présentés en réunion](docs/screenshots/15-join_doc.png)
 
 **Validation des locuteurs — écouter les extraits, nommer les locuteurs, indices acoustiques de genre, et rapprocher un locuteur détecté de votre base de voix enregistrées (soumise au consentement RGPD) en un clic**
 

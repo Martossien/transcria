@@ -20,12 +20,15 @@ than a rewrite.*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/00-overview.gif)
 
-## Project status — 0.2.0, first stable release
+## Project status — 0.3.0
 
-This is the first release TranscrIA considers **stable**. The transcription pipeline,
-the human-in-the-loop wizard, the GPU queue and scheduler, exports, multi-user access,
-and both the single-box and distributed deployments are validated end-to-end (unit and
-integration suite plus real-GPU runs). The interface is French-first, and reference
+Building on the 0.2.0 stable line. **0.3.0** adds ingestion of the **documents presented
+in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT
+correction, and hardens the anti-gender-leak guard on participant roles (see the
+[changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
+GPU queue and scheduler, exports, multi-user access, and both the single-box and
+distributed deployments are validated end-to-end (unit and integration suite plus
+real-GPU runs). The interface is French-first, and reference
 quality relies on gated models (see [Requirements](#requirements) and
 [Known limitations](#known-limitations)). We prefer to state limits plainly rather than
 imply the tool does more than it does.
@@ -84,6 +87,10 @@ imply the tool does more than it does.
 **Audio analysis — an honest verdict before you spend GPU time: SQUIM/DNSMOS perceptual scores, SNR, a per-window difficulty timeline, and a calibrated time estimate. A rough recording is flagged "watch this", not silently transcribed into mush**
 
 ![Audio analysis with difficulty timeline](docs/screenshots/09-audio-analysis.png)
+
+**Bring the meeting's own documents — paste the invitation and attach the slides, agenda or briefing note (PDF, Word, PowerPoint). Their text is extracted (images deferred to future LLM vision) and used two ways: it grounds the summary in the real agenda and terminology, and it becomes a spelling reference so the correction can fix named entities — e.g. a product name or an acronym wrongly transcribed. Everything stays local; emails are stripped and the files themselves are never stored**
+
+![Attach the documents presented in the meeting](docs/screenshots/15-join_doc.png)
 
 **Speaker validation — listen to excerpts, name speakers, acoustic gender hints, and match a detected speaker against your consent-gated voice enrollment database (GDPR) in one click**
 
