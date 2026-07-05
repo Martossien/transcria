@@ -769,6 +769,74 @@ var TranscrIA = window.TranscrIA || {};
         reader.readAsText(file);
     };
 
+    W.renderMeetingDocuments = function (documents) {
+        var list = document.getElementById('meeting-doc-list');
+        if (!list) return;
+        list.innerHTML = '';
+        (documents || []).forEach(function (doc, i) {
+            var meta = (doc.format || '').toUpperCase();
+            if (doc.pages) meta += ', ' + doc.pages + ' page(s)';
+            if (doc.slides) meta += ', ' + doc.slides + ' diapo(s)';
+            if (doc.images_skipped) meta += ', ' + doc.images_skipped + ' image(s) ignorée(s)';
+            if (doc.truncated) meta += ' — tronqué';
+            var li = document.createElement('li');
+            li.className = 'd-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1';
+            li.setAttribute('data-doc-index', i);
+            var name = document.createElement('span');
+            name.innerHTML = '<i class="bi bi-file-earmark-text"></i> ';
+            name.appendChild(document.createTextNode(doc.name || 'document'));
+            var metaSpan = document.createElement('span');
+            metaSpan.className = 'text-muted';
+            metaSpan.textContent = ' — ' + meta;
+            name.appendChild(metaSpan);
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-link btn-sm text-danger p-0';
+            btn.title = 'Retirer';
+            btn.innerHTML = '<i class="bi bi-x-lg"></i>';
+            btn.onclick = function () { W.removeMeetingDocument(i); };
+            li.appendChild(name);
+            li.appendChild(btn);
+            list.appendChild(li);
+        });
+    };
+
+    W.handleMeetingDocument = function (input) {
+        console.log('[TranscrIA] handleMeetingDocument()');
+        var errEl = document.getElementById('meeting-doc-error');
+        if (errEl) errEl.textContent = '';
+        var file = input.files[0];
+        if (!file) return;
+        var fd = new FormData();
+        fd.append('file', file);
+        fetch('/api/jobs/' + JOB_ID + '/meeting-invite/document', { method: 'POST', body: fd })
+            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+            .then(function (res) {
+                if (res.ok) {
+                    W.renderMeetingDocuments(res.body.documents);
+                } else if (errEl) {
+                    errEl.textContent = res.body.error || 'Échec de l\'ajout du document.';
+                }
+            })
+            .catch(function () { if (errEl) errEl.textContent = 'Erreur réseau.'; })
+            .finally(function () { input.value = ''; });
+    };
+
+    W.removeMeetingDocument = function (index) {
+        console.log('[TranscrIA] removeMeetingDocument()', index);
+        var errEl = document.getElementById('meeting-doc-error');
+        if (errEl) errEl.textContent = '';
+        fetch('/api/jobs/' + JOB_ID + '/meeting-invite/document/' + index, { method: 'DELETE' })
+            .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+            .then(function (res) {
+                if (res.ok) {
+                    W.renderMeetingDocuments(res.body.documents);
+                } else if (errEl) {
+                    errEl.textContent = res.body.error || 'Échec de la suppression.';
+                }
+            });
+    };
+
     W.saveLexicon = function () {
         console.log('[TranscrIA] saveLexicon()');
         var rows = document.querySelectorAll('#lexicon-list .lexicon-row');

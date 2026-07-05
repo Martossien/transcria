@@ -1000,6 +1000,23 @@ def _check_security(sec: dict, r: ValidationResult) -> None:
                     "(doit commencer par un point)"
                 )
 
+    # Documents joints au contexte du résumé (extraction texte).
+    _check_int_range(sec, "max_document_size_mb", "security.max_document_size_mb", 1, 1024, r)
+    _check_int_range(sec, "max_document_chars", "security.max_document_chars", 500, 200000, r)
+    doc_extensions = sec.get("allowed_document_extensions", [])
+    if not isinstance(doc_extensions, list) or len(doc_extensions) == 0:
+        r.add_error(
+            "security.allowed_document_extensions doit être une liste non vide "
+            "d'extensions (ex: ['.pdf', '.docx'])"
+        )
+    else:
+        for i, ext in enumerate(doc_extensions):
+            if not isinstance(ext, str) or not ext.startswith("."):
+                r.add_error(
+                    f"security.allowed_document_extensions[{i}]='{ext}' invalide "
+                    "(doit commencer par un point)"
+                )
+
 
 def _check_str(obj: dict, key: str, path: str, r: ValidationResult) -> None:
     val = obj.get(key)

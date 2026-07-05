@@ -113,6 +113,7 @@ transcria/
 │   │   ├── meeting_context.py     # MeetingContextManager + MEETING_TYPES
 │   │   ├── participants.py        # ParticipantsManager + default_participant
 │   │   ├── invite_parser.py       # sanitize_invite/render_invite_markdown — brief d'invitation (noms via e-mails, e-mails retirés)
+│   │   ├── document_extractor.py  # extract_document_text — texte des documents joints (PDF/DOCX/PPTX/TXT, images ignorées)
 │   │   ├── lexicon.py             # LexiconManager + LEXICON_CATEGORIES/PRIORITIES
 │   │   └── job_context_builder.py # JobContextBuilder (build → YAML + JSON)
 │   │
@@ -887,9 +888,16 @@ Constantes de module : `_DEFAULT_MODEL_ID` (repo HF), `_DEFAULT_NEMO_FILE` (nom 
 | Fonction | Description |
 |---|---|
 | `sanitize_invite(raw) → {brief, names}` | Parse une invitation collée. `names` : orthographe probable des participants dérivée des seules parties locales `prenom.nom` des e-mails (signal non ambigu ; exclut les boîtes de ressource type `MS118001-201`). `brief` : texte normalisé, **adresses e-mail retirées**, taille plafonnée. Générique (aucune donnée métier en dur), PII minimisée (e-mails jamais conservés). |
-| `render_invite_markdown(parsed) → str` | Rend `{brief, names}` en Markdown (`## Noms probables` + contexte) pour la LLM ; chaîne vide si rien d'exploitable. |
+| `render_invite_markdown(parsed) → str` | Rend `{brief, names, documents}` en Markdown (`## Noms probables` + contexte + `## Documents présentés`) pour la LLM ; chaîne vide si rien d'exploitable. |
 
-Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sanitize_invite` → `extra_data["meeting_invite"]={brief, names}` → `WorkflowRunner._materialize_meeting_invite` écrit `summary/meeting_invite.md` → `OpenCodeRunner.run_summary(..., invite_path)`. Fichier hors liste blanche d'export (`package_builder`) : non inclus dans le ZIP.
+Flux : route `POST /api/jobs/<id>/meeting-invite` (`api_meeting_invite`) → `sanitize_invite` → `extra_data["meeting_invite"]={brief, names, documents}` → `WorkflowRunner._materialize_meeting_invite` écrit `summary/meeting_invite.md` → `OpenCodeRunner.run_summary(..., invite_path)`. Fichier hors liste blanche d'export (`package_builder`) : non inclus dans le ZIP.
+
+**`document_extractor.py` — texte des documents présentés joints (fonctions pures)**
+| Fonction | Description |
+|---|---|
+| `extract_document_text(data, filename, *, max_chars) → ExtractedDocument` | Extrait le texte d'un support de réunion : `.pdf` (pypdf), `.docx` (python-docx : paragraphes + tableaux), `.pptx` (python-pptx : shapes + notes), `.txt` (décodage tolérant). **Images comptées mais non analysées** (`images_skipped`). E-mails retirés (`_EMAIL_RE`), texte plafonné (`max_chars`), **binaire jamais conservé**. Formats XML modernes uniquement (`.doc`/`.ppt` hérités → `DocumentExtractionError`, comme tout fichier corrompu). Déterministe, GPU-free, sans réseau. |
+
+Flux : routes `POST` / `DELETE /api/jobs/<id>/meeting-invite/document[/<index>]` (`api_meeting_invite_document*`, côté **web**/CPU) → `extract_document_text` → append/pop dans `extra_data["meeting_invite"]["documents"]` (aucun schéma DB, pas de migration) → `render_invite_markdown` (section `## Documents présentés`) → même `meeting_invite.md`. Allowlist/plafonds : `security.allowed_document_extensions` / `max_document_size_mb` / `max_document_chars`.
 
 **`lexicon.py` — `LexiconManager`**
 | Méthode | Description |

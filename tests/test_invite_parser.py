@@ -89,6 +89,28 @@ class TestRenderInviteMarkdown:
         md = render_invite_markdown({"brief": "", "names": ["  ", ""]})
         assert md == ""
 
+    def test_renders_documents_section(self):
+        md = render_invite_markdown({
+            "brief": "",
+            "names": [],
+            "documents": [
+                {"name": "deck.pptx", "text": "Slide 1 : objectifs trimestriels"},
+            ],
+        })
+        assert "Documents présentés" in md
+        assert "deck.pptx" in md
+        assert "objectifs trimestriels" in md
+
+    def test_documents_only_still_renders(self):
+        # Un document joint suffit à produire le brief (ni noms ni texte collé).
+        md = render_invite_markdown({"documents": [{"name": "n.txt", "text": "contenu"}]})
+        assert md != ""
+        assert "contenu" in md
+
+    def test_documents_without_text_are_ignored(self):
+        md = render_invite_markdown({"documents": [{"name": "vide.pdf", "text": ""}]})
+        assert md == ""
+
 
 class TestMaterializeMeetingInvite:
     """Le runner écrit meeting_invite.md depuis extra_data, ou rien si absent."""
@@ -130,3 +152,24 @@ class TestMaterializeMeetingInvite:
         fs = JobFilesystem(str(tmp_path), "job-empty")
         job = self._FakeJob({"meeting_invite": {"brief": "", "names": []}})
         assert WorkflowRunner._materialize_meeting_invite(fs, job) is None
+
+    def test_writes_documents_into_materialized_file(self, tmp_path):
+        # Bout-en-bout (sans GPU) : un document joint se retrouve dans meeting_invite.md,
+        # le fichier passé à la LLM de résumé.
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.workflow.runner import WorkflowRunner
+
+        fs = JobFilesystem(str(tmp_path), "job-doc")
+        (fs.job_dir / "summary").mkdir(parents=True, exist_ok=True)
+        job = self._FakeJob({"meeting_invite": {
+            "brief": "", "names": [],
+            "documents": [{"name": "deck.pptx", "text": "Objectifs du trimestre : croissance"}],
+        }})
+
+        path = WorkflowRunner._materialize_meeting_invite(fs, job)
+
+        assert path is not None
+        content = open(path, encoding="utf-8").read()
+        assert "Documents présentés" in content
+        assert "deck.pptx" in content
+        assert "Objectifs du trimestre" in content

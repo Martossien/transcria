@@ -45,7 +45,11 @@ imply the tool does more than it does.
 - **LLM arbitration with guardrails.** A local OpenAI-compatible LLM produces the
   structured summary, corrects the SRT using the validated lexicon and context, and a
   final review pass harmonizes the deliverables — with anti-hallucination cleanup,
-  retry-then-fail-loud semantics, and prompts editable in the admin UI.
+  retry-then-fail-loud semantics, and prompts editable in the admin UI. You can ground
+  the summary further by pasting the meeting invitation and **attaching the documents
+  presented** (PDF, Word, PowerPoint): their text is extracted to feed the agenda,
+  terminology, and structure to the LLM (images are deferred to future vision support;
+  emails are stripped and the files themselves are never stored).
 - **A built-in transcript editor made for real proofreading.** A full-screen workshop on
   any finished job: click-to-edit text with audio auto-pause, a zoomable real waveform
   with draggable segment handles (server-computed peaks, smooth even on 4-hour meetings),

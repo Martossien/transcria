@@ -82,12 +82,19 @@ def sanitize_invite(raw: str) -> dict:
 def render_invite_markdown(parsed: dict) -> str:
     """Rend le brief d'invitation en Markdown pour la LLM de résumé.
 
-    Retourne une chaîne vide si rien d'exploitable n'a été extrait (le runner
-    n'écrit alors aucun fichier et n'ajoute pas l'instruction correspondante).
+    Agrège trois sources facultatives : les noms probables, le contexte libre collé
+    (objet / corps / ordre du jour) et le texte extrait des **documents présentés**
+    joints (``documents``). Retourne une chaîne vide si rien d'exploitable n'a été
+    extrait (le runner n'écrit alors aucun fichier et n'ajoute pas l'instruction
+    correspondante).
     """
     names = [n for n in (parsed.get("names") or []) if isinstance(n, str) and n.strip()]
     brief = (parsed.get("brief") or "").strip()
-    if not names and not brief:
+    documents = [
+        d for d in (parsed.get("documents") or [])
+        if isinstance(d, dict) and (d.get("text") or "").strip()
+    ]
+    if not names and not brief and not documents:
         return ""
     lines = ["# Brief d'invitation (indicatif)", ""]
     if names:
@@ -97,4 +104,17 @@ def render_invite_markdown(parsed: dict) -> str:
     if brief:
         lines.append("## Contexte (objet, corps, ordre du jour)")
         lines.append(brief)
+        lines.append("")
+    if documents:
+        lines.append("## Documents présentés (extraits texte)")
+        lines.append(
+            "Texte extrait des supports joints à la réunion (images ignorées). "
+            "Contexte substantiel, mais indicatif : la transcription prime."
+        )
+        lines.append("")
+        for doc in documents:
+            name = (doc.get("name") or "document").strip()
+            lines.append(f"### {name}")
+            lines.append((doc.get("text") or "").strip())
+            lines.append("")
     return "\n".join(lines).strip() + "\n"

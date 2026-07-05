@@ -35,6 +35,10 @@ from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge, get_config
 from transcria.context.central_lexicon_service import merge_lexicon_entries, prefilter_lexicon_entries_for_display
 from transcria.context.central_lexicon_store import CentralLexiconStore
+from transcria.context.document_extractor import (
+    DocumentExtractionError,
+    extract_document_text,
+)
 from transcria.context.invite_parser import sanitize_invite
 from transcria.context.job_context_builder import JobContextBuilder
 from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
@@ -1489,8 +1493,128 @@ def api_meeting_invite(job_id: str):
         return err
     raw = body.get("text", "")
     invite = sanitize_invite(raw if isinstance(raw, str) else "")
-    JobStore.update_extra_data(job.id, lambda extra: {**extra, "meeting_invite": invite})
+
+    def _merge(extra: dict) -> dict:
+        # Préserver les documents joints (gérés par la route dédiée) : le texte collé
+        # et les documents alimentent le même canal ``meeting_invite`` sans s'écraser.
+        previous = extra.get("meeting_invite") or {}
+        documents = previous.get("documents") if isinstance(previous, dict) else None
+        merged = {**invite, "documents": documents} if documents else invite
+        return {**extra, "meeting_invite": merged}
+
+    JobStore.update_extra_data(job.id, _merge)
     return jsonify({"status": "ok", "names": invite["names"]})
+
+
+def _document_summary(doc: dict) -> dict:
+    """Vue légère d'un document joint pour l'UI (sans renvoyer tout le texte extrait)."""
+    return {
+        "name": doc.get("name", "document"),
+        "format": doc.get("format", ""),
+        "pages": doc.get("pages", 0),
+        "slides": doc.get("slides", 0),
+        "images_skipped": doc.get("images_skipped", 0),
+        "chars": len((doc.get("text") or "")),
+        "truncated": bool(doc.get("truncated")),
+        "warnings": doc.get("warnings") or [],
+    }
+
+
+def _meeting_documents(job: Job) -> list[dict]:
+    invite = (job.get_extra_data() or {}).get("meeting_invite") or {}
+    docs = invite.get("documents") if isinstance(invite, dict) else None
+    return [_document_summary(d) for d in docs if isinstance(d, dict)] if docs else []
+
+
+@web_bp.route("/api/jobs/<job_id>/meeting-invite/document", methods=["POST"])
+@login_required
+def api_meeting_invite_document(job_id: str):
+    """Joint un document présenté (PDF/DOCX/PPTX/TXT) au contexte du résumé.
+
+    Le texte est extrait immédiatement (images ignorées en v1), les e-mails sont
+    retirés (minimisation PII) et **le binaire n'est jamais conservé** — seul le
+    texte assaini alimente ``meeting_invite.documents``, dans le même canal que
+    l'invitation collée. Les formats binaires hérités (.doc/.ppt) ne sont pas gérés.
+    """
+    cfg = get_config()
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "Aucun fichier fourni"}), 400
+
+    sec = cfg.get("security", {})
+    allowed = sec.get("allowed_document_extensions", [".pdf", ".docx", ".pptx", ".txt"])
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed:
+        return jsonify({
+            "error": f"Format non géré : {ext or file.filename}. "
+                     f"Acceptés : {', '.join(allowed)} (convertissez les .doc/.ppt hérités)."
+        }), 400
+
+    data = file.read()
+    max_mb = int(sec.get("max_document_size_mb", 25))
+    if len(data) > max_mb * 1024 * 1024:
+        return jsonify({"error": f"Document trop volumineux (max {max_mb} Mo)."}), 400
+
+    try:
+        extracted = extract_document_text(
+            data, file.filename, max_chars=int(sec.get("max_document_chars", 12000))
+        )
+    except DocumentExtractionError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    entry = {
+        "name": Path(file.filename).name,
+        "format": extracted.format,
+        "pages": extracted.pages,
+        "slides": extracted.slides,
+        "images_skipped": extracted.images_skipped,
+        "truncated": extracted.truncated,
+        "warnings": extracted.warnings,
+        "text": extracted.text,
+    }
+
+    def _add(extra: dict) -> dict:
+        invite = extra.get("meeting_invite")
+        invite = dict(invite) if isinstance(invite, dict) else {"brief": "", "names": []}
+        documents = list(invite.get("documents") or [])
+        documents.append(entry)
+        invite["documents"] = documents
+        return {**extra, "meeting_invite": invite}
+
+    updated = JobStore.update_extra_data(job.id, _add)
+    return jsonify({"status": "ok", "documents": _meeting_documents(updated or job)})
+
+
+@web_bp.route("/api/jobs/<job_id>/meeting-invite/document/<int:index>", methods=["DELETE"])
+@login_required
+def api_meeting_invite_document_delete(job_id: str, index: int):
+    """Retire un document joint (par position dans la liste)."""
+    job, error_response = _get_job_for_api(job_id)
+    if error_response:
+        return error_response
+
+    removed = False
+
+    def _remove(extra: dict) -> dict:
+        nonlocal removed
+        invite = extra.get("meeting_invite")
+        if not isinstance(invite, dict):
+            return extra
+        documents = list(invite.get("documents") or [])
+        if 0 <= index < len(documents):
+            documents.pop(index)
+            removed = True
+        invite = {**invite, "documents": documents}
+        return {**extra, "meeting_invite": invite}
+
+    updated = JobStore.update_extra_data(job.id, _remove)
+    if not removed:
+        return jsonify({"error": "Document introuvable"}), 404
+    return jsonify({"status": "ok", "documents": _meeting_documents(updated or job)})
 
 
 @web_bp.route("/api/jobs/<job_id>/context", methods=["POST"])

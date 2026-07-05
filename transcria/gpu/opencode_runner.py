@@ -743,9 +743,13 @@ class OpenCodeRunner:
             instruction += (
                 f"Un brief d'invitation est fourni : {invite_path}. Il est INDICATIF "
                 "(invités ≠ présents, des présents peuvent manquer) : le nombre de voix "
-                "détectées prime. Sers-t'en uniquement pour l'orthographe des noms, les "
-                "rôles annoncés et la structure de l'ordre du jour, sans forcer de "
-                "correspondance 1:1 ni inventer de présence. "
+                "détectées prime. Sers-t'en pour l'orthographe des noms, les rôles "
+                "annoncés et la structure de l'ordre du jour, sans forcer de "
+                "correspondance 1:1 ni inventer de présence. Ce brief peut aussi contenir "
+                "une section « Documents présentés » (texte extrait des supports de la "
+                "réunion : ordre du jour, diapositives, note de cadrage) : utilise-la "
+                "comme contexte substantiel pour cadrer et structurer le résumé, mais la "
+                "transcription reste la source de vérité sur ce qui a été effectivement dit. "
             )
         instruction += (
             "Lis la transcription, la diarization si elle est fournie, analyse-les ensemble, et produis un résumé structuré "

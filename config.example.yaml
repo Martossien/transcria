@@ -732,6 +732,15 @@ security:
     - ".mp4"
     - ".flac"
     - ".ogg"
+  # Documents présentés joints au contexte du résumé (étape 3 du wizard). Extraction
+  # texte pur-Python ; formats XML modernes uniquement (.doc/.ppt hérités non gérés).
+  allowed_document_extensions:
+    - ".pdf"
+    - ".docx"
+    - ".pptx"
+    - ".txt"
+  max_document_size_mb: 25       # taille max d'un document joint
+  max_document_chars: 12000      # texte conservé par document (plafond de contexte LLM)
   audit_retention_days: 1095    # 3 ans — rétention des logs d'audit (RGPD Art. 30/32)
   lexicon_export_admin_only: false # true = export CSV des lexiques réservé aux admins globaux
   audit_retention_by_family:

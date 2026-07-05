@@ -606,6 +606,11 @@ _DEFAULT_CONFIG = {
         "allow_job_delete": True,
         "max_upload_size_mb": 1024,
         "allowed_upload_extensions": [".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"],
+        # Documents présentés joints au contexte du résumé (étape 3 du wizard). Formats
+        # XML modernes uniquement (extraction pur-Python) ; distinct de l'audio ci-dessus.
+        "allowed_document_extensions": [".pdf", ".docx", ".pptx", ".txt"],
+        "max_document_size_mb": 25,
+        "max_document_chars": 12000,
         "audit_retention_days": 1095,
         "lexicon_export_admin_only": False,
         "audit_retention_by_family": {

@@ -48,7 +48,11 @@ fait plus qu'il ne fait.
 - **Arbitrage LLM sous garde-fous.** Une LLM locale compatible OpenAI produit la synthèse
   structurée, corrige le SRT à partir du lexique et du contexte validés, et une passe de
   relecture finale harmonise les livrables — avec nettoyage anti-hallucination, sémantique
-  « réessai puis échec explicite », et des prompts éditables dans l'interface admin.
+  « réessai puis échec explicite », et des prompts éditables dans l'interface admin. On peut
+  encore mieux ancrer la synthèse en collant l'invitation de la réunion et en **joignant les
+  documents présentés** (PDF, Word, PowerPoint) : leur texte est extrait pour donner à la LLM
+  l'ordre du jour, la terminologie et la structure (les images sont différées à un futur
+  support vision ; les e-mails sont retirés et les fichiers eux-mêmes ne sont jamais conservés).
 - **Un éditeur de transcription intégré, pensé pour la vraie relecture.** Un atelier plein
   écran sur tout job terminé : texte cliquable-éditable avec pause audio automatique, forme
   d'onde réelle zoomable aux poignées de segment déplaçables (pics calculés serveur, fluide

@@ -15,7 +15,10 @@ exposed:
 - notifications.email.use_ssl
 - notifications.email.use_starttls
 - security.allow_job_delete
+- security.allowed_document_extensions
 - security.allowed_upload_extensions
+- security.max_document_chars
+- security.max_document_size_mb
 - security.max_upload_size_mb
 - server.host
 - server.port

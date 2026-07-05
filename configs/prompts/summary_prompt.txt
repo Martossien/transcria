@@ -53,7 +53,8 @@ En cas de conflit entre deux règles, la règle la plus haute gagne.
 3. Éventuellement, un fichier de contexte avec des indices de qualité audio ou de
    fiabilité de segments.
 4. Éventuellement, un brief d'invitation (`meeting_invite.md`) : noms probables et
-   contexte (objet, corps, ordre du jour) issus de l'invitation.
+   contexte (objet, corps, ordre du jour) issus de l'invitation, et éventuellement le
+   texte des documents présentés joints à la réunion.
 
 Vérification initiale, avant toute analyse :
 
@@ -114,6 +115,12 @@ section (cas normal).
   correspondance établie.
 - **Rôles et ordre du jour** : le corps du brief étaye les rôles annoncés et la
   structure de l'ordre du jour, sans inventer ce qui n'a pas été dit en séance.
+- **Documents présentés** : le brief peut inclure une section « Documents présentés »
+  (texte extrait des supports joints : diapositives, ordre du jour, note de cadrage,
+  images ignorées). Elle apporte du contexte substantiel — terminologie, chiffres
+  annoncés, structure des points — mais reste indicative : ne retenir un élément que
+  s'il éclaire ce qui a été effectivement dit en séance, sans présumer qu'un point du
+  support a été traité s'il n'apparaît pas dans la transcription.
 
 **Animateur = fil de structure, jamais autorité de contenu.** Identifier qui anime
 aide à reconstruire le squelette de la réunion (ordre du jour, transitions, points

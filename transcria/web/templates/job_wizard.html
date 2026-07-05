@@ -329,6 +329,28 @@
           Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées.
           {% if meeting_invite.get('brief') or meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> Invitation enregistrée{% if meeting_invite.get('names') %} — {{ meeting_invite.get('names')|length }} nom(s) détecté(s){% endif %}. Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer.</span>{% endif %}
         </div>
+        <hr class="my-2">
+        <label class="form-label small mb-1"><i class="bi bi-paperclip"></i> Documents présentés <span class="text-muted">(optionnel)</span></label>
+        <div class="form-text small mb-1">
+          Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé.
+          <strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local.
+        </div>
+        <input type="file" id="meeting-doc-input" accept=".pdf,.docx,.pptx,.txt" class="d-none" onchange="TranscrIA.handleMeetingDocument(this)">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('meeting-doc-input').click()">
+          <i class="bi bi-upload"></i> Joindre un document
+        </button>
+        <span id="meeting-doc-error" class="text-danger small ms-2"></span>
+        <ul id="meeting-doc-list" class="list-unstyled small mt-2 mb-0">
+          {% for doc in meeting_invite.get('documents') or [] %}
+          <li class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1" data-doc-index="{{ loop.index0 }}">
+            <span>
+              <i class="bi bi-file-earmark-text"></i> {{ doc.get('name', 'document') }}
+              <span class="text-muted">— {{ doc.get('format', '')|upper }}{% if doc.get('pages') %}, {{ doc.get('pages') }} page(s){% endif %}{% if doc.get('slides') %}, {{ doc.get('slides') }} diapo(s){% endif %}{% if doc.get('images_skipped') %}, {{ doc.get('images_skipped') }} image(s) ignorée(s){% endif %}{% if doc.get('truncated') %} — tronqué{% endif %}</span>
+            </span>
+            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="Retirer" onclick="TranscrIA.removeMeetingDocument({{ loop.index0 }})"><i class="bi bi-x-lg"></i></button>
+          </li>
+          {% endfor %}
+        </ul>
       </div>
       {% if job.get_extra_data().get('summary_llm_failed') %}
       <div class="alert alert-warning">
