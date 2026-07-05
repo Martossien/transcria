@@ -356,6 +356,35 @@ budget, Q1, écarts, enveloppes, validation
         assert result["termes_suspects"][0]["term"] == "API Gateway"
         assert result["termes_suspects"][0]["category"] == "technique"
         assert result["termes_suspects"][0]["priority"] == "critique"
+        # Provenance par défaut : non-document (recoupement documents non signalé).
+        assert result["termes_suspects"][0].get("source", "") == ""
+
+    def test_parse_term_source_document_inline(self):
+        text = (
+            "## Termes douteux à valider\n\n"
+            "- **Kubernetes** [technique] (importante) | variantes_suspectes: cubernétisse "
+            "| commentaire: forme du document présenté | source: document | "
+            'contextes: [00:03:10] SPEAKER_01: "on déploie sur cubernétisse"\n'
+            "- **Terme normal** [métier] (normale) | variantes_suspectes: variante A "
+            '| commentaire: faute STT | contextes: [00:04:00] SPEAKER_02: "variante A"\n'
+        )
+        result = OpenCodeRunner._parse_structured_summary(text)
+        terms = {t["term"]: t for t in result["termes_suspects"]}
+        assert terms["Kubernetes"]["source"] == "document"
+        assert "cubernétisse" in terms["Kubernetes"]["variants"]
+        # Une entrée ordinaire ne reçoit jamais la provenance document.
+        assert terms["Terme normal"].get("source", "") == ""
+
+    def test_parse_term_source_document_table(self):
+        text = (
+            "## Termes douteux à valider\n\n"
+            "| terme | variantes | catégorie | priorité | source |\n"
+            "|---|---|---|---|---|\n"
+            "| Kubernetes | cubernétisse | technique | importante | document |\n"
+        )
+        result = OpenCodeRunner._parse_structured_summary(text)
+        terms = {t["term"]: t for t in result["termes_suspects"]}
+        assert terms["Kubernetes"]["source"] == "document"
 
     def test_parse_empty_text(self):
         result = OpenCodeRunner._parse_structured_summary("")
@@ -787,6 +816,41 @@ class TestOpenCodeRunnerRunCorrection:
         assert str(context_path) in captured["instruction"]
         assert str(lexicon_path) in captured["instruction"]
         assert "lexique validé par l'utilisateur" in captured["instruction"]
+        # Sans invite : aucune clause de brief.
+        assert "brief d'invitation" not in captured["instruction"].casefold()
+
+    def test_run_correction_adds_invite_spelling_clause_when_present(self, tmp_path, monkeypatch):
+        invite_path = tmp_path / "summary" / "meeting_invite.md"
+        invite_path.parent.mkdir(parents=True)
+        invite_path.write_text("# Brief\n## Documents présentés\nKubernetes\n", encoding="utf-8")
+        captured = {}
+
+        def fake_run(self, instruction, prompt_file_arg, timeout=600):
+            captured["instruction"] = instruction
+            return {"success": True, "output": "OK", "files": [], "events_count": 1, "tool_calls": 0}
+
+        monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
+
+        runner = _make_runner(tmp_path / "metadata")
+        runner.run_correction("/srt", "/ctx", "/lex", str(invite_path))
+
+        instr = captured["instruction"]
+        assert str(invite_path) in instr
+        assert "orthographe" in instr.casefold()
+        # Garde-fou : cadré comme référence, jamais autorité de contenu.
+        assert "jamais" in instr.casefold()
+
+    def test_run_correction_ignores_missing_invite_path(self, tmp_path, monkeypatch):
+        captured = {}
+
+        def fake_run(self, instruction, prompt_file_arg, timeout=600):
+            captured["instruction"] = instruction
+            return {"success": True, "output": "OK", "files": [], "events_count": 1, "tool_calls": 0}
+
+        monkeypatch.setattr(OpenCodeRunner, "run", fake_run)
+        runner = _make_runner(tmp_path / "metadata")
+        runner.run_correction("/srt", "/ctx", "/lex", str(tmp_path / "absent.md"))
+        assert "brief d'invitation" not in captured["instruction"].casefold()
 
     def test_run_correction_reads_corrected_srt(self, tmp_path, monkeypatch):
         (tmp_path / "metadata").mkdir()

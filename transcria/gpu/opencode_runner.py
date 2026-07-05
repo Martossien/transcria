@@ -321,6 +321,7 @@ class OpenCodeRunner:
                 variants_raw = values.get("variantes") or values.get("variantes suspectes") or values.get("variants") or ""
                 comment = values.get("commentaire") or values.get("justification") or values.get("comment") or ""
                 contexts_raw = values.get("contextes") or values.get("contexte") or values.get("contexts") or ""
+                source_raw = values.get("source") or values.get("provenance") or ""
                 term = OpenCodeRunner._clean_summary_cell(term)
                 if term and "terme" not in term.casefold():
                     return {
@@ -330,6 +331,7 @@ class OpenCodeRunner:
                         "variants": OpenCodeRunner._normalize_summary_variants(variants_raw, term=term),
                         "comment": OpenCodeRunner._clean_summary_cell(comment),
                         "contexts": OpenCodeRunner._parse_summary_contexts(contexts_raw),
+                        "source": OpenCodeRunner._normalize_summary_source(source_raw),
                     }
 
         text = re.sub(r"^\s*[-*•]\s*", "", text).strip()
@@ -359,6 +361,7 @@ class OpenCodeRunner:
         )
         comment = OpenCodeRunner._extract_summary_field(suffix, ("commentaire", "justification", "comment"))
         contexts_raw = OpenCodeRunner._extract_summary_field(suffix, ("contextes", "contexte", "contexts"))
+        source_raw = OpenCodeRunner._extract_summary_field(suffix, ("source", "provenance"))
 
         if inline_category:
             category = inline_category
@@ -384,7 +387,14 @@ class OpenCodeRunner:
             "variants": variants,
             "comment": comment,
             "contexts": OpenCodeRunner._parse_summary_contexts(contexts_raw),
+            "source": OpenCodeRunner._normalize_summary_source(source_raw),
         }
+
+    @staticmethod
+    def _normalize_summary_source(raw: str) -> str:
+        """Provenance d'un terme suspect. Seule « document » (recoupement avec les
+        documents présentés, cf. summary_prompt §6.10) est reconnue ; sinon chaîne vide."""
+        return "document" if raw and "document" in raw.casefold() else ""
 
     def _terminate_proc(self, proc: subprocess.Popen) -> None:
         """Termine proprement opencode : SIGTERM, attente 5s, SIGKILL si nécessaire."""
@@ -1077,8 +1087,18 @@ class OpenCodeRunner:
 
         return fields
 
-    def run_correction(self, srt_path: str, context_path: str, lexicon_path: str) -> dict:
+    def run_correction(
+        self,
+        srt_path: str,
+        context_path: str,
+        lexicon_path: str,
+        invite_path: str | None = None,
+    ) -> dict:
         """Corrige le SRT via opencode : speakers + lexique + orthographe.
+
+        Si ``invite_path`` pointe vers un fichier existant (brief d'invitation +
+        documents présentés), il est fourni comme **référence d'orthographe des
+        entités nommées uniquement** — jamais comme autorité de contenu.
 
         Returns:
             {"success": bool, "corrected_srt": str, "report": str, "error": str}
@@ -1091,13 +1111,26 @@ class OpenCodeRunner:
             f"Lis le SRT source {srt_path} (tous les segments, du 1 au dernier), "
             f"lis le contexte {context_path}, puis lis intégralement le lexique validé "
             f"par l'utilisateur {lexicon_path}. "
-            f"Compte les entrées du lexique validé, applique les corrections validées "
-            f"avec prudence et documente chaque correction ou préservation lexicale, "
-            f"puis écris exactement 2 fichiers dans ce répertoire : "
-            f"(1) transcription_corrigee.srt — la TOTALITE des segments de 1 a N, "
-            f"contenu SRT uniquement, jamais tronque, jamais reparti sur un autre fichier ; "
-            f"(2) correction_report.md — rapport Markdown uniquement, "
-            f"aucune ligne SRT dans ce fichier."
+        )
+        if invite_path and os.path.isfile(invite_path):
+            instruction += (
+                f"Un brief d'invitation est aussi fourni : {invite_path} (noms probables et "
+                "éventuellement du texte de documents présentés). Utilise-le UNIQUEMENT comme "
+                "référence d'ORTHOGRAPHE des entités nommées (noms de personnes, sigles, "
+                "produits, organisations) : quand une entité du SRT correspond de façon "
+                "certaine à une forme du brief, aligne son orthographe. N'y puise JAMAIS de "
+                "contenu, ne corrige jamais ce qui a été dit pour le faire coller aux "
+                "documents, n'ajoute aucune information absente du SRT — le lexique validé "
+                "reste la seule autorité de remplacement. "
+            )
+        instruction += (
+            "Compte les entrées du lexique validé, applique les corrections validées "
+            "avec prudence et documente chaque correction ou préservation lexicale, "
+            "puis écris exactement 2 fichiers dans ce répertoire : "
+            "(1) transcription_corrigee.srt — la TOTALITE des segments de 1 a N, "
+            "contenu SRT uniquement, jamais tronque, jamais reparti sur un autre fichier ; "
+            "(2) correction_report.md — rapport Markdown uniquement, "
+            "aucune ligne SRT dans ce fichier."
         )
 
         timeout = self._get_correction_timeout()

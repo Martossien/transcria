@@ -1818,6 +1818,12 @@ class WorkflowRunner:
             staged_lexicon = workspace.stage(
                 str(lexicon_path_for_correction.relative_to(fs.job_dir))
             )
+            # Référence d'orthographe des entités nommées (brief d'invitation + documents
+            # présentés), comme au résumé. Indicatif : jamais une autorité de contenu.
+            invite_path = self._materialize_meeting_invite(fs, job)
+            staged_invite = (
+                str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
+            )
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
             runner = OpenCodeRunner(
@@ -1834,7 +1840,9 @@ class WorkflowRunner:
             max_llm_attempts = 3
             result: dict = {}
             for attempt in range(1, max_llm_attempts + 1):
-                result = runner.run_correction(str(staged_srt), str(staged_context), str(staged_lexicon))
+                result = runner.run_correction(
+                    str(staged_srt), str(staged_context), str(staged_lexicon), staged_invite
+                )
                 if not result["success"] or result["corrected_srt"]:
                     break
                 logger.warning(

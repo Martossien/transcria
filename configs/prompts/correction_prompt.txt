@@ -59,6 +59,17 @@ répertoire de travail) :
    `replace_by` s'il est renseigné, sinon `term`. Les entrées marquées
    `_preservation_only: true` sont des formes validées comme correctes — ne jamais
    les corriger ni les modifier, même si elles ressemblent à une faute STT.
+4. **meeting_invite.md** (facultatif) — brief d'invitation : noms probables et,
+   éventuellement, du texte extrait des documents présentés à la réunion. C'est une
+   **référence d'ORTHOGRAPHE des entités nommées uniquement** (personnes, sigles,
+   produits, organisations), jamais une autorité de contenu ni de remplacement.
+   Quand une entité déjà présente dans le SRT correspond **de façon certaine** à une
+   forme du brief (même entité, même contexte), tu peux aligner son orthographe sur
+   celle du brief. Interdits stricts : n'en tire **aucune** information de fond, ne
+   corrige **jamais** ce qui a été dit pour le faire coller aux documents, n'ajoute
+   **aucun** contenu absent du SRT. Les slides ≠ ce qui a été prononcé ; la
+   transcription reste la seule source de vérité, et le lexique validé la seule
+   autorité de remplacement.
 
 ---
 

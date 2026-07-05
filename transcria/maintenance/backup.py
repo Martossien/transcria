@@ -222,16 +222,25 @@ def create_backup(
 
 
 def read_manifest(archive: Path) -> dict:
-    """Lit le manifeste d'une archive sans la déballer entièrement."""
-    with tarfile.open(archive, "r:gz") as tar:
-        try:
-            member = tar.getmember(MANIFEST_NAME)
-        except KeyError as exc:
-            raise BackupError(f"{archive.name} : manifeste absent — archive invalide.") from exc
-        fh = tar.extractfile(member)
-        if fh is None:
-            raise BackupError(f"{archive.name} : manifeste illisible.")
-        return json.loads(fh.read().decode("utf-8"))
+    """Lit le manifeste d'une archive sans la déballer entièrement.
+
+    Toute erreur d'ouverture/lecture (gzip tronqué, tar corrompu, JSON illisible)
+    est convertie en ``BackupError`` : un manifeste au bord d'une zone tronquée peut
+    lever ``EOFError``/``tarfile.TarError`` au ``read()`` — l'appelant (``verify_backup``,
+    restauration) doit recevoir une corruption *signalée*, jamais un crash brut.
+    """
+    try:
+        with tarfile.open(archive, "r:gz") as tar:
+            try:
+                member = tar.getmember(MANIFEST_NAME)
+            except KeyError as exc:
+                raise BackupError(f"{archive.name} : manifeste absent — archive invalide.") from exc
+            fh = tar.extractfile(member)
+            if fh is None:
+                raise BackupError(f"{archive.name} : manifeste illisible.")
+            return json.loads(fh.read().decode("utf-8"))
+    except (OSError, EOFError, tarfile.TarError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise BackupError(f"{archive.name} : archive illisible (corrompue ?) — {exc}") from exc
 
 
 def verify_backup(archive: Path) -> list[str]:

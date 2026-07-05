@@ -719,7 +719,7 @@ var TranscrIA = window.TranscrIA || {};
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
             W.renderLexiconContexts(t.contexts || []) +
             (document.getElementById('lex-promote-modal')
-                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme à un lexique central" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i></button>'
+                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> Au lexique central</button>'
                 : '') +
             '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>';
         container.appendChild(row);
@@ -738,6 +738,11 @@ var TranscrIA = window.TranscrIA || {};
         if (centralBadge && t.central_lexicon_name) {
             centralBadge.classList.remove('d-none');
             centralBadge.innerHTML = '<span class="badge text-bg-light border">Lexique central : ' + W.escapeHtml(t.central_lexicon_name) + '</span>';
+        }
+        if (centralBadge && t.source === 'document') {
+            centralBadge.classList.remove('d-none');
+            centralBadge.insertAdjacentHTML('beforeend',
+                '<span class="badge text-bg-info-subtle border text-info-emphasis ms-1" title="Proposé à partir d\'un document que vous avez joint à la réunion"><i class="bi bi-paperclip"></i> issu des documents fournis</span>');
         }
         row.querySelector('.lex-comment').value = t.comment || '';
         row.querySelector('.lex-contexts-json').textContent = JSON.stringify(t.contexts || []);

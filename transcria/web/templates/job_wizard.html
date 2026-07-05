@@ -805,6 +805,11 @@
           {% endif %}
         </div>
         {% endif %}
+        {% if t.source == 'document' %}
+        <div class="mt-2 lex-doc-badge">
+          <span class="badge text-bg-info-subtle border text-info-emphasis" title="Proposé à partir d'un document que vous avez joint à la réunion"><i class="bi bi-paperclip"></i> issu des documents fournis</span>
+        </div>
+        {% endif %}
         <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>
         {% if t.contexts %}
         <details class="lex-contexts mt-2">
@@ -848,8 +853,8 @@
         </details>
         {% endif %}
         {% if promote_allowed %}
-        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme à un lexique central"
-                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
+                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> Au lexique central</button>
         {% endif %}
         <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
       </div>

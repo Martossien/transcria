@@ -1,4 +1,7 @@
-# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v3.0
+# PROMPT RÉSUMÉ ET LEXIQUE — TranscIA v3.1
+# v3.1 : §6.10 recoupement avec les documents présentés (meeting_invite.md) — proposer
+#        comme termes suspects les entités nommées des documents divergentes dans le
+#        transcript, taguées `| source: document` (suggestion validée par l'humain).
 # v3.0 : restructuration rédactionnelle (audit du 12/06/2026) — contrat de priorités
 #        en tête (zéro invention et format parsé deviennent les règles les plus
 #        saillantes), consigne subagent citable, renumérotation propre (fin des 4bis
@@ -320,6 +323,28 @@ entre guillemets.
 - **Forme correcte A** [mot suspect] (importante) | variantes_suspectes: faute STT A | commentaire: probabilité erreur STT isolée, la forme transcrite est phonétiquement proche de Forme correcte A mais orthographiquement fausse. | contextes: [00:14:22] SPEAKER_02: "extrait contenant faute STT A"
 ```
 
+### 6.10 Recoupement avec les documents présentés
+
+Si le brief d'invitation (`meeting_invite.md`) contient une section **« Documents
+présentés »** (texte extrait des supports de la réunion), s'en servir comme source
+supplémentaire de candidats — **uniquement** pour l'orthographe des entités nommées :
+
+- Repérer les noms propres, sigles, produits, organisations ou termes métier écrits
+  dans les documents qui apparaissent dans la **transcription** sous une forme
+  **divergente ou phonétiquement approximée**.
+- Pour un tel cas, créer une entrée : `term` = la forme du document (référence
+  d'orthographe), `variantes_suspectes` = la ou les formes réellement observées dans
+  la transcription, et **ajouter le champ `| source: document`** en fin de ligne.
+- Le `commentaire` doit préciser que la forme de référence vient d'un document
+  présenté (indice d'orthographe), sans affirmer que la transcription est fausse à
+  coup sûr — c'est une proposition à valider par l'humain.
+
+Ne PAS créer d'entrée « document » quand : la forme du transcript est déjà correcte et
+stable (règle 6.2), le terme du document n'apparaît pas du tout dans la transcription,
+ou il s'agit d'un contenu (chiffre, décision) et non d'une entité nommée. Les
+documents ne sont **jamais** un glossaire à recopier : on ne remonte que les vraies
+divergences d'orthographe utiles à une validation humaine.
+
 ---
 
 ## 7. Format de sortie obligatoire
@@ -363,6 +388,10 @@ transcription. Ne pas se limiter à quelques lignes quand la réunion est longue
 
 - **FORME DE RÉFÉRENCE** [catégorie] (priorité) | variantes_suspectes: variante 1 ; variante 2 | commentaire: raison de la validation humaine | contextes: [HH:MM:SS] SPEAKER_XX: "extrait court"
 ```
+
+Champ facultatif : ajouter `| source: document` en fin de ligne **uniquement** pour
+une entrée issue du recoupement avec les documents présentés (section 6.10). Absent
+pour toutes les autres entrées.
 
 Format des lignes de participants : le nom ou la fonction courte entre crochets
 après `SPEAKER_XX`, le rôle détaillé après le deux-points.

@@ -182,7 +182,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
 
             captured = {}
 
-            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+            def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None):
                 captured["config_timeout"] = self._get_correction_timeout()
                 return {
                     "success": True,
@@ -232,7 +232,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             from transcria.gpu.opencode_runner import OpenCodeRunner
             calls = {"n": 0}
 
-            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+            def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None):
                 calls["n"] += 1
                 return {"success": True, "corrected_srt": "", "report": "", "error": ""}
 
@@ -250,7 +250,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             from transcria.gpu.opencode_runner import OpenCodeRunner
             calls = {"n": 0}
 
-            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+            def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None):
                 calls["n"] += 1
                 if calls["n"] == 1:
                     return {"success": True, "corrected_srt": "", "report": "", "error": ""}
@@ -295,7 +295,7 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)  # pas de réservation VRAM réelle
             captured = {}
 
-            def fake_run_correction(self, srt_path, context_path, lexicon_path):
+            def fake_run_correction(self, srt_path, context_path, lexicon_path, invite_path=None):
                 captured["lexicon_path"] = lexicon_path
                 with open(lexicon_path, "r", encoding="utf-8") as fh:
                     captured["lexicon"] = json.load(fh)
@@ -1295,7 +1295,7 @@ class TestWorkflowRunnerRunCorrection:
 
             from transcria.gpu.opencode_runner import OpenCodeRunner
 
-            def fake_run_correction(self_runner, srt_path, context_path, lexicon_path):
+            def fake_run_correction(self_runner, srt_path, context_path, lexicon_path, invite_path=None):
                 return {
                     "success": True,
                     "corrected_srt": "1\n00:00:00,000 --> 00:00:05,000\nBonjour corrigé\n",
@@ -1927,7 +1927,7 @@ class TestCorrectedSrtIntegrityGuard:
             truncated = self._src(10)
             monkeypatch.setattr(
                 OpenCodeRunner, "run_correction",
-                lambda self_r, s, c, lx: {"success": True, "corrected_srt": truncated, "report": "", "error": ""},
+                lambda self_r, s, c, lx, invite_path=None: {"success": True, "corrected_srt": truncated, "report": "", "error": ""},
             )
 
             result = runner.run_correction(job, cfg)
