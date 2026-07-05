@@ -136,3 +136,29 @@ def test_delete_document_bad_index_404(admin_client):
     job_id = _make_job(admin_client)
     r = admin_client.delete(f"/api/jobs/{job_id}/meeting-invite/document/5")
     assert r.status_code == 404
+
+
+def test_attaching_document_invalidates_done_correction(admin_client, app):
+    # Le contexte d'invitation alimente la correction (meeting_invite.md, non tracé par la
+    # provenance de fichiers). Changer les documents après une correction faite doit
+    # l'invalider, sinon une re-exécution du pipeline ignorerait le nouveau document.
+    job_id = _make_job(admin_client)
+    with app.app_context():
+        from transcria.jobs.store import JobStore
+        from transcria.workflow import resume
+
+        resume.mark_phase_done(JobStore, job_id, "correction", {"metadata/transcription.srt": "sha"})
+        assert "correction" in resume.get_completed_phases(JobStore.get_by_id(job_id))
+
+    r = admin_client.post(
+        f"/api/jobs/{job_id}/meeting-invite/document",
+        data={"file": (io.BytesIO(_make_docx("Nouveau support")), "s.docx")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 200
+
+    with app.app_context():
+        from transcria.jobs.store import JobStore
+        from transcria.workflow import resume
+
+        assert "correction" not in resume.get_completed_phases(JobStore.get_by_id(job_id))

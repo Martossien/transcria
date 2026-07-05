@@ -1502,7 +1502,8 @@ def api_meeting_invite(job_id: str):
         merged = {**invite, "documents": documents} if documents else invite
         return {**extra, "meeting_invite": merged}
 
-    JobStore.update_extra_data(job.id, _merge)
+    updated = JobStore.update_extra_data(job.id, _merge)
+    _invalidate_correction_on_invite_change(updated or job)
     return jsonify({"status": "ok", "names": invite["names"]})
 
 
@@ -1524,6 +1525,19 @@ def _meeting_documents(job: Job) -> list[dict]:
     invite = (job.get_extra_data() or {}).get("meeting_invite") or {}
     docs = invite.get("documents") if isinstance(invite, dict) else None
     return [_document_summary(d) for d in docs if isinstance(d, dict)] if docs else []
+
+
+def _invalidate_correction_on_invite_change(job: Job) -> None:
+    """Le contexte d'invitation (texte + documents) alimente `meeting_invite.md`, lu par la
+    phase de correction. La provenance de reprise ne trace que des FICHIERS
+    (`_PHASE_INPUTS`), pas ce contenu dérivé de `extra_data` — un changement après une
+    correction déjà faite serait donc ignoré à la re-exécution du pipeline. Si la
+    correction est marquée faite, on l'invalide : la cascade de provenance rejoue ensuite
+    final_review / quality / export via `transcription_corrigee.srt`. No-op sinon."""
+    from transcria.workflow import resume
+
+    if job is not None and "correction" in resume.get_completed_phases(job):
+        resume.unmark_phase(JobStore, job.id, "correction")
 
 
 @web_bp.route("/api/jobs/<job_id>/meeting-invite/document", methods=["POST"])
@@ -1594,6 +1608,7 @@ def api_meeting_invite_document(job_id: str):
         return {**extra, "meeting_invite": invite}
 
     updated = JobStore.update_extra_data(job.id, _add)
+    _invalidate_correction_on_invite_change(updated or job)
     return jsonify({"status": "ok", "documents": _meeting_documents(updated or job)})
 
 
@@ -1622,6 +1637,7 @@ def api_meeting_invite_document_delete(job_id: str, index: int):
     updated = JobStore.update_extra_data(job.id, _remove)
     if not removed:
         return jsonify({"error": "Document introuvable"}), 404
+    _invalidate_correction_on_invite_change(updated or job)
     return jsonify({"status": "ok", "documents": _meeting_documents(updated or job)})
 
 

@@ -30,6 +30,10 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   sur la LLM mono-GPU). Le check et le release sont désormais atomiques sous `owner_lock`.
 
 ### Added / Hardening
+- **Documents joints ↔ reprise** : changer l'invitation ou les documents (texte, ajout,
+  suppression) invalide la phase de correction déjà faite (`unmark_phase`), pour qu'une
+  re-exécution du pipeline reprenne le nouveau contexte. La provenance de reprise ne trace
+  que des fichiers, pas ce contenu dérivé d'`extra_data`.
 - **Documents joints** : borne du nombre de documents par job
   (`security.max_documents_per_job`, défaut 15) pour limiter le contexte LLM agrégé ;
   message d'erreur clair côté UI en cas de dépassement de la taille serveur (413).
