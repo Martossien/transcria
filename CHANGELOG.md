@@ -9,6 +9,14 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Fixed
+- **Résumé LLM malformé accepté sans retry** : le retry du résumé se basait sur « la LLM
+  a-t-elle réécrit `summary.md` » (mtime), pas sur « le résultat est-il exploitable ». Un
+  résumé produit mais MALFORMÉ (gabarit non suivi, reasoning déversé → aucun champ
+  critique titre/type/sujet) passait le check et était accepté, faisant échouer tout le
+  parsing aval (sections `## Termes douteux` / `## Données structurées` introuvables,
+  relecture finale non harmonisée). Constaté ~1 run sur 2 en batch E2E (35B, reasoning).
+  Le retry se fait désormais tant que le résumé n'est pas exploitable (`_summary_usable` :
+  produit ET ≥ 1 champ critique extrait), puis échec relançable après 3 tentatives.
 - **Rôle participant** : `_strip_role_gender` ne supprime plus un adjectif de genre
   lowercase légitime en fin de rôle (« le vestiaire masculin » restait tronqué en « le
   vestiaire ») — l'indice capitalisé « Masculin/Féminin » reste retiré.

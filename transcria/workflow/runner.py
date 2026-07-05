@@ -684,13 +684,18 @@ class WorkflowRunner:
                     prompt_substitutions=prompt_subs,
                     extra_structured_keys=extract_keys,
                 )
-                if parsed.get("_summary_produced"):
+                if self._summary_usable(parsed):
                     if attempt > 1:
                         sl.info("LLM résumé produit à la tentative %d/%d", attempt, max_llm_attempts)
                     break
                 if attempt < max_llm_attempts:
-                    sl.warning("LLM résumé sans production (tentative %d/%d) — nouvel essai",
-                               attempt, max_llm_attempts)
+                    # « produit mais inexploitable » (gabarit non suivi, reasoning déversé →
+                    # aucun champ critique extrait) est traité comme un échec de production :
+                    # on retente plutôt que d'accepter un résumé que tout le parsing aval
+                    # rejette (constat batch E2E 2026-07-05).
+                    reason = "malformé (aucun champ critique)" if parsed.get("_summary_produced") else "sans production"
+                    sl.warning("LLM résumé %s (tentative %d/%d) — nouvel essai",
+                               reason, attempt, max_llm_attempts)
                     # Robustesse (constat E2E 2026-07-04) : « LLM déjà chargée » est une
                     # HYPOTHÈSE — si le serveur est mort entre-temps (SIGTERM one-off
                     # observé), les tentatives suivantes parlaient dans le vide pendant
@@ -704,11 +709,13 @@ class WorkflowRunner:
                         sl.warning("Re-vérification LLM avant retry en erreur", exc_info=True)
 
             workspace.verify_and_restore_sources()
-            if parsed.get("_summary_produced"):
+            if self._summary_usable(parsed):
                 self._apply_llm_suggestions(fs, result, parsed, sl)
                 workspace.cleanup(success=True)
             else:
-                failure_kind = parsed.get("_failure_kind", "empty_output")
+                failure_kind = parsed.get("_failure_kind") or (
+                    "unparseable_output" if parsed.get("_summary_produced") else "empty_output"
+                )
                 sl.error("LLM résumé non produit après %d tentatives (cause=%s : %s) — meeting_context "
                          "préservé, résumé marqué indisponible (relançable)", max_llm_attempts,
                          failure_kind, parsed.get("_failure_detail", ""))
@@ -743,6 +750,20 @@ class WorkflowRunner:
         invite_file.parent.mkdir(parents=True, exist_ok=True)
         invite_file.write_text(markdown, encoding="utf-8")
         return str(invite_file)
+
+    @staticmethod
+    def _summary_usable(parsed: dict) -> bool:
+        """Résumé EXPLOITABLE : produit ET au moins un champ critique extrait
+        (titre / type / sujet). Un résumé « produit » mais malformé (gabarit non suivi,
+        reasoning déversé) donne des champs critiques tous vides et fait échouer tout le
+        parsing aval — on le traite comme non produit pour déclencher un retry, plutôt que
+        de l'accepter et de casser la relecture finale / le DOCX."""
+        if not parsed.get("_summary_produced"):
+            return False
+        return any(
+            str(parsed.get(k) or "").strip()
+            for k in ("title_suggere", "type_suggere", "sujet_suggere")
+        )
 
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:

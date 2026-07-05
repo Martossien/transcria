@@ -131,13 +131,45 @@ def test_llm_summary_succeeds_first_try(app, owner_id, monkeypatch, tmp_path):
 
         def fake_run_summary(self, *a, **k):
             calls["n"] += 1
-            return {"_summary_produced": True, "summary_text": "vrai résumé"}
+            # Un résumé EXPLOITABLE : produit ET au moins un champ critique extrait.
+            return {"_summary_produced": True, "title_suggere": "Titre", "summary_text": "vrai résumé"}
 
         monkeypatch.setattr(OpenCodeRunner, "run_summary", fake_run_summary)
         result = {"transcript_text": "du texte"}
         runner._run_llm_summary(job, result, cfg, _DummySL())
         assert calls["n"] == 1
         assert "summary_llm_failed" not in result
+
+
+def test_llm_summary_malformed_output_retries_then_fails(app, owner_id, monkeypatch, tmp_path):
+    # Chasse aux bugs (batch E2E 2026-07-05) : un résumé « produit » mais MALFORMÉ
+    # (gabarit non suivi → aucun champ critique) passait le check `_summary_produced` et
+    # était accepté, cassant tout le parsing aval (relecture finale/DOCX). Il doit
+    # désormais déclencher un retry, puis un échec relançable après 3 tentatives.
+    with app.app_context():
+        cfg = _cfg(tmp_path)
+        job = JobStore.create_job(owner_id, "Malformé")
+        runner = WorkflowRunner(JobStore, cfg)
+        monkeypatch.setattr(runner.allocator, "try_acquire_llm", lambda *a, **k: True)
+        monkeypatch.setattr(runner.allocator, "release_llm", lambda *a, **k: None)
+        monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
+        monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda **k: True)
+        monkeypatch.setattr(WorkflowRunner, "_materialize_meeting_invite", staticmethod(lambda fs, job: None))
+        monkeypatch.setattr(WorkflowRunner, "_apply_llm_suggestions", lambda self, fs, result, parsed, sl: None)
+
+        calls = {"n": 0}
+
+        def fake_run_summary(self, *a, **k):
+            calls["n"] += 1
+            # produit=True mais aucun champ critique (titre/type/sujet vides) → inexploitable.
+            return {"_summary_produced": True, "title_suggere": "", "type_suggere": "",
+                    "sujet_suggere": "", "summary_text": "Now I have all the info. Let me write..."}
+
+        monkeypatch.setattr(OpenCodeRunner, "run_summary", fake_run_summary)
+        result = {"transcript_text": "du texte"}
+        runner._run_llm_summary(job, result, cfg, _DummySL())
+        assert calls["n"] == 3
+        assert result.get("summary_llm_failed") is True
 
 
 # ---------------------------------------------------------------------------
