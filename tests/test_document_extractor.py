@@ -201,3 +201,20 @@ def test_no_extension_raises():
 def test_empty_data_raises():
     with pytest.raises(DocumentExtractionError):
         extract_document_text(b"", "x.pdf")
+
+
+def test_committed_fixture_pdf_extracts_reference_terms():
+    """Garde la fixture E2E (tests/fixtures/francefacil_fromagerie.pdf) : si elle est
+    régénérée ou corrompue, ce test le signale. Les termes de référence (Emmental,
+    Comté, ordre du jour) sont ceux que le test E2E vérifie dans les fichiers produits."""
+    from pathlib import Path
+
+    fixture = Path(__file__).parent / "fixtures" / "francefacil_fromagerie.pdf"
+    if not fixture.is_file():
+        pytest.skip("fixture PDF absente (régénérer via tests/fixtures/make_meeting_document.py)")
+    result = extract_document_text(fixture.read_bytes(), fixture.name)
+    assert result.format == "pdf"
+    assert result.pages == 1
+    lowered = result.text.lower()
+    for term in ("emmental", "comté", "ordre du jour", "beurre", "fromager"):
+        assert term in lowered, f"terme de référence manquant : {term}"

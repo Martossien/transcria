@@ -153,6 +153,15 @@ et utilisée pour vérifier l'artefact `input/original<ext>`.
 | `--speaker-min N` | aucun | Borne basse de la fourchette de locuteurs → `extra_data["speaker_hint"]` (appliquée à la diarisation ; si `min == max`, comptage exact) |
 | `--speaker-max N` | aucun | Borne haute (bascule Sortformer→pyannote si > 4) |
 | `--meeting-invite "TEXTE\|@fichier"` | aucun | Brief d'invitation (objet/corps/destinataires). Préfixe `@` = lire un fichier. Nettoyé par `sanitize_invite()` (noms via e-mails, **e-mails retirés**), stocké dans `extra_data["meeting_invite"]` et utilisé par le résumé pour l'orthographe des noms / les rôles / l'ordre du jour |
+| `--meeting-document FICHIER` (répétable) | aucun | Document présenté à joindre (`.pdf`/`.docx`/`.pptx`/`.txt`). Texte extrait par `document_extractor` (images ignorées), ajouté à `extra_data["meeting_invite"]["documents"]` — **même canal que l'invitation**, utilisé par le résumé **et** la correction. Fixture de démo pour `test2.mp3` : `tests/fixtures/francefacil_fromagerie.pdf` (régénérable via `tests/fixtures/make_meeting_document.py`) |
+
+**Feature « documents présentés » — vérifications sur fichiers produits.** Avec au moins un `--meeting-document`, le run ajoute deux contrôles qui **examinent les fichiers**, pas seulement les codes de retour :
+
+- Après le résumé (`verify_meeting_document_summary`, **hard-check**) : `summary/meeting_invite.md` doit exister, contenir la section `## Documents présentés` et le **texte extrait** de chaque document (mots témoins). C'est la preuve déterministe que le document a atteint l'entrée de la LLM.
+- Recoupement lexique **B1** (informatif, dépend du modèle) : présence de termes suspects `source: document` dans `context/meeting_context.json` (candidats « issus des documents fournis »).
+- Après la correction (`verify_meeting_document_correction`, informatif) : quelles **formes de référence** des documents se retrouvent dans `metadata/transcription_corrigee.srt` — démonstration de la référence d'orthographe des entités nommées (**A**). Sur `test2.mp3` + le PDF fromagerie, la cible est **Emmental** (le STT écrit « émental »/« Emental »).
+
+Exemple complet : `venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --meeting-document tests/fixtures/francefacil_fromagerie.pdf --keep`
 
 Le run affiche en fin de parcours une section **« Qualité & corrections »** : score qualité (`compute_quality_score`), nombre de segments courts et combien sont corroborés (probables hallucinations), nombre de substitutions lexique appliquées (rapport de correction), présence de la **relecture finale** (`final_review_report.md`) et de la synthèse harmonisée, et un garde-fou vérifiant qu'aucun rôle participant ne contient le genre (Masculin/Féminin, ♂/♀). `--output-json` reprend `quality_score`, `role_gender_clean` et `summary_harmonized`.
 

@@ -30,6 +30,14 @@ Prérequis : arrêter le service TranscrIA avant d'exécuter ce test.
     venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3
     systemctl start transcria
 
+Documents présentés joints (feature « support de réunion → résumé + correction ») :
+    # test2.mp3 = dialogue « à la fromagerie » ; le PDF fixe l'orthographe de référence
+    # (Emmental, Comté) et l'ordre du jour. Vérifie sur FICHIERS que le document nourrit
+    # meeting_invite.md, propose des candidats lexique « source: document » (B1) et sert
+    # de référence d'orthographe à la correction (A).
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 \\
+        --meeting-document tests/fixtures/francefacil_fromagerie.pdf --keep
+
 Utilisation bench (plusieurs combos en parallèle) :
     venv/bin/python tests/test_e2e_workflow.py \\
         --audio tests/test1.mp3 \\
@@ -314,6 +322,15 @@ Exemples :
         help="Brief d'invitation (objet/corps/destinataires) à coller. Préfixe '@' "
              "pour lire un fichier. Stocké nettoyé dans extra_data['meeting_invite'] "
              "(noms via e-mails, e-mails retirés) et utilisé par le résumé.",
+    )
+    parser.add_argument(
+        "--meeting-document", type=str, default=None, action="append",
+        metavar="FICHIER.pdf|docx|pptx|txt",
+        help="Document présenté à joindre (répétable). Son texte est extrait "
+             "(document_extractor) et ajouté à extra_data['meeting_invite']['documents'] "
+             "— même canal que l'invitation, utilisé par le résumé ET la correction "
+             "(référence d'orthographe des entités nommées). Ex. pour tests/test2.mp3 : "
+             "--meeting-document tests/fixtures/francefacil_fromagerie.pdf",
     )
 
     # ── GPU et LLM ──────────────────────────────────────────────────────────
@@ -1016,6 +1033,81 @@ def assert_file(path: Path, label: str) -> bool:
         return True
     warn(f"{label} absent ou vide: {path}")
     return False
+
+
+def _document_reference_terms() -> set[str]:
+    """Formes de référence (entités nommées : mot capitalisé, > 4 lettres) issues des
+    documents joints — servent aux vérifications résumé/correction."""
+    terms: set[str] = set()
+    for doc in RESULTS.get("documents_meta", []):
+        for word in (doc.get("text") or "").split():
+            clean = word.strip(".,;:()[]«»\"'").strip()
+            if len(clean) > 4 and clean[:1].isupper():
+                terms.add(clean)
+    return terms
+
+
+def verify_meeting_document_summary(fs) -> None:
+    """Vérifie sur FICHIERS que les documents joints ont bien nourri le résumé.
+
+    Dur (régression si faux) : ``summary/meeting_invite.md`` existe, contient la section
+    « Documents présentés » et le texte extrait de chaque document. Informatif
+    (dépend du modèle) : présence de termes suspects ``source: document`` (feature B1).
+    """
+    section("Vérification « documents joints » → résumé (fichiers produits)")
+    invite_md = fs.job_dir / "summary" / "meeting_invite.md"
+    if not (invite_md.exists() and invite_md.stat().st_size > 0):
+        fail("meeting_invite.md non produit — les documents n'ont pas atteint le résumé", invite_md)
+        return
+    text = invite_md.read_text(encoding="utf-8")
+    ok(f"meeting_invite.md produit ({len(text)} car.)")
+    if "Documents présentés" in text:
+        ok("section « ## Documents présentés » présente")
+    else:
+        fail("section « Documents présentés » absente de meeting_invite.md")
+    for doc in RESULTS.get("documents_meta", []):
+        name = doc["name"]
+        if name in text:
+            ok(f"document « {name} » référencé")
+        else:
+            fail(f"document « {name} » absent de meeting_invite.md")
+        words = [w for w in (doc.get("text") or "").split() if len(w) > 5][:20]
+        present = sum(1 for w in words if w in text)
+        if words and present >= min(5, len(words)):
+            ok(f"texte extrait de « {name} » présent ({present}/{len(words)} mots témoins)")
+        else:
+            fail(f"texte extrait de « {name} » manquant ({present}/{len(words)} mots témoins)")
+    # B1 — recoupement document ↔ transcript (LLM-dépendant, informatif).
+    meeting_ctx = fs.load_json("context/meeting_context.json") or {}
+    doc_terms = [
+        t for t in (meeting_ctx.get("termes_suspects") or [])
+        if isinstance(t, dict) and t.get("source") == "document"
+    ]
+    if doc_terms:
+        ok("B1 — termes suspects « source: document » proposés : "
+           + ", ".join(t.get("term", "") for t in doc_terms[:6]))
+    else:
+        info("B1 — aucun terme « source: document » proposé sur ce run (dépend du modèle ; "
+             "non bloquant ; cf. summary_prompt §6.10)")
+
+
+def verify_meeting_document_correction(fs) -> None:
+    """Informatif (dépend du modèle) : quelles formes de référence des documents se
+    retrouvent dans le SRT corrigé — démonstration de la référence d'orthographe (A)."""
+    section("Vérification « documents joints » → correction (fichier produit)")
+    corr = fs.job_dir / "metadata" / "transcription_corrigee.srt"
+    if not (corr.exists() and corr.stat().st_size > 0):
+        info("transcription_corrigee.srt absent (correction non exécutée) — vérif A ignorée")
+        return
+    corrected = corr.read_text(encoding="utf-8")
+    ref_terms = _document_reference_terms()
+    hits = sorted(t for t in ref_terms if t in corrected)
+    if hits:
+        ok(f"A — {len(hits)} forme(s) de référence du/des document(s) dans le SRT corrigé : "
+           + ", ".join(hits[:8]))
+    else:
+        info("A — aucune forme de référence retrouvée telle quelle dans le SRT corrigé "
+             "(dépend du modèle et du lexique validé ; non bloquant)")
 
 
 def print_json_artifact(fs, relative_path: str, label: str) -> dict | list | None:
@@ -1824,15 +1916,44 @@ def main() -> int:
             if args.speaker_min is not None or args.speaker_max is not None:
                 extra_updates["speaker_hint"] = {"min": args.speaker_min, "max": args.speaker_max}
                 ok(f"speaker_hint : min={args.speaker_min} max={args.speaker_max}")
+            invite_payload: dict = {}
             if args.meeting_invite:
                 from transcria.context.invite_parser import sanitize_invite
                 raw_invite = args.meeting_invite
                 if raw_invite.startswith("@"):
                     raw_invite = Path(raw_invite[1:]).read_text(encoding="utf-8")
-                invite = sanitize_invite(raw_invite)
-                extra_updates["meeting_invite"] = invite
-                ok(f"meeting_invite : {len(invite['names'])} nom(s) extrait(s), "
-                   f"{len(invite['brief'])} car. de brief (e-mails retirés)")
+                invite_payload = sanitize_invite(raw_invite)
+                ok(f"meeting_invite : {len(invite_payload['names'])} nom(s) extrait(s), "
+                   f"{len(invite_payload['brief'])} car. de brief (e-mails retirés)")
+
+            # Documents présentés : extraction texte → même canal meeting_invite.
+            documents: list[dict] = []
+            for doc_path in (args.meeting_document or []):
+                from transcria.context.document_extractor import extract_document_text
+                p = Path(doc_path)
+                if not p.is_file():
+                    raise RuntimeError(f"Document introuvable : {p}")
+                extracted = extract_document_text(p.read_bytes(), p.name)
+                documents.append({
+                    "name": p.name, "format": extracted.format,
+                    "pages": extracted.pages, "slides": extracted.slides,
+                    "images_skipped": extracted.images_skipped,
+                    "truncated": extracted.truncated, "text": extracted.text,
+                })
+                ok(f"document joint : {p.name} ({extracted.format}, "
+                   f"{extracted.pages or extracted.slides} page(s)/diapo(s), "
+                   f"{len(extracted.text)} car. extraits, "
+                   f"{extracted.images_skipped} image(s) ignorée(s))")
+            if documents:
+                invite_payload = invite_payload or {"brief": "", "names": []}
+                invite_payload["documents"] = documents
+                # Mémorisé pour les vérifications sur fichiers produits (résumé + correction).
+                RESULTS["documents_meta"] = [
+                    {"name": d["name"], "text": d["text"]} for d in documents
+                ]
+            if invite_payload:
+                extra_updates["meeting_invite"] = invite_payload
+
             if extra_updates:
                 JobStore.update_extra_data(job_id, lambda extra: {**extra, **extra_updates})
                 job = JobStore.get_by_id(job_id)
@@ -1857,6 +1978,10 @@ def main() -> int:
 
                 if not args.skip_llm:
                     assert_file(fs.job_dir / "summary" / "summary.md", "summary.md")
+
+                # ── Vérif feature « documents joints » sur FICHIERS produits ──────
+                if RESULTS.get("documents_meta"):
+                    verify_meeting_document_summary(fs)
 
                 RESULTS["summary"] = True
                 timer_end("summary")
@@ -2015,6 +2140,10 @@ def main() -> int:
 
             # +2 : ZIP et DOCX, tous deux produits par la phase d'export.
             RESULTS["verify"] = found == len(expected) + 2
+
+            # Vérif feature « documents joints » sur le SRT corrigé (référence A).
+            if RESULTS.get("documents_meta") and not args.skip_llm:
+                verify_meeting_document_correction(fs)
             timer_end("verify")
 
             # Isolation des agents LLM : le scratch vit dans agent_work_dir (hors job_dir,
