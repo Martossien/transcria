@@ -489,6 +489,8 @@ class TestDureeReunion:
         assert _fmt_duration(45) == "1 min"
         assert _fmt_duration(60 * 73) == "1 h 13 min"
         assert _fmt_duration(3600) == "1 h"
+        # 3599 s : l'arrondi des minutes à 60 bascule en heure (avant : « 60 min »).
+        assert _fmt_duration(3599) == "1 h"
 
     def test_duree_sur_la_couverture(self, doc):
         assert "Durée" in _table_texts(doc)

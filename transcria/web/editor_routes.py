@@ -87,6 +87,15 @@ def _audio_duration_ms(fs: JobFilesystem) -> int | None:
         return None
 
 
+def _client_int(value: object, default: int = 0) -> int:
+    """Entier issu d'un payload client, tolérant : une valeur absente ou non entière
+    (ex. ``{"revision": "abc"}``) retombe sur ``default`` au lieu de lever un 500."""
+    try:
+        return int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return default
+
+
 def _clean_chunks(raw: object) -> list[dict]:
     """Valide la FORME du payload client (types/bornes) — lève ValueError explicite."""
     if not isinstance(raw, list) or not raw:
@@ -221,8 +230,8 @@ def editor_draft_put(job_id: str):
 
     existing_raw = fs.load_json(_DRAFT_REL)
     existing = existing_raw if isinstance(existing_raw, dict) else {}
-    client_revision = int(data.get("revision") or 0)
-    server_revision = int(existing.get("revision") or 0)
+    client_revision = _client_int(data.get("revision"))
+    server_revision = _client_int(existing.get("revision"))
     if existing and client_revision != server_revision:
         # Un autre onglet/frontale a écrit depuis (P8) : celui qui a la main la garde.
         return jsonify({"error": "Brouillon modifié ailleurs.", "server_revision": server_revision}), 409
@@ -296,7 +305,7 @@ def editor_save(job_id: str):
     if draft_path.exists():
         draft_path.unlink()
 
-    edited = int(data.get("edited_count") or 0)
+    edited = _client_int(data.get("edited_count"))
     audit_log(AuditAction.JOB_SRT_EDIT_SAVE, target_type="job", target_id=job.id,
               target_label=job.title,
               details={"version": version, "chunks": len(chunks), "edited": edited,

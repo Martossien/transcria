@@ -290,7 +290,7 @@ def _srt_duration_seconds(srt_text: str) -> int:
 def _fmt_duration(seconds: int) -> str:
     h, rem = divmod(int(seconds), 3600)
     m = round(rem / 60)
-    if h and m == 60:
+    if m == 60:  # arrondi de rem→60 min : bascule en heure même quand h == 0 (3599 s → « 1 h »)
         h, m = h + 1, 0
     if h:
         return f"{h} h {m:02d} min" if m else f"{h} h"

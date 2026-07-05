@@ -12,6 +12,12 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 - **Rôle participant** : `_strip_role_gender` ne supprime plus un adjectif de genre
   lowercase légitime en fin de rôle (« le vestiaire masculin » restait tronqué en « le
   vestiaire ») — l'indice capitalisé « Masculin/Féminin » reste retiré.
+- **Éditeur SRT** : une valeur `revision`/`edited_count` non entière envoyée par le
+  client ne provoque plus un HTTP 500 (`int()` non protégé) — traitée de façon tolérante
+  via `_client_int`. Le second cas survenait APRÈS l'écriture du SRT (état incohérent).
+- **Rapport Word** : durée de réunion de 3599 s (59 min 59 s) affichée « 60 min » au lieu
+  de « 1 h » (`_fmt_duration` : l'arrondi des minutes à 60 ne basculait pas en heure quand
+  h == 0).
 
 ### Added / Hardening
 - **Documents joints** : borne du nombre de documents par job

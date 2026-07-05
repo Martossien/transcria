@@ -118,6 +118,14 @@ class TestDraft:
         data = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
         assert data["draft"]["exists"] is True and data["draft"]["conflict"] is True
 
+    def test_revision_non_entiere_ne_casse_pas(self, admin_client, editor_job):
+        # Chasse aux bugs : une révision non entière côté client ne doit jamais donner
+        # un 500 (int('abc') levait ValueError hors du try). Traitée comme 0 (lenient).
+        chunks = self._chunks(admin_client, editor_job)
+        r = admin_client.put(f"/api/jobs/{editor_job}/editor/draft",
+                             json={"revision": "pas-un-entier", "chunks": chunks})
+        assert r.status_code == 200 and r.get_json()["revision"] == 1
+
     def test_payload_invalide_400_et_delete(self, admin_client, editor_job):
         assert admin_client.put(f"/api/jobs/{editor_job}/editor/draft",
                                 json={"revision": 0, "chunks": "pas une liste"}).status_code == 400
