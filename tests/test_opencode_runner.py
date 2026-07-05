@@ -1027,6 +1027,51 @@ class TestStripRoleGender:
         role = "évoque le vestiaire masculin du bâtiment"
         assert OpenCodeRunner._strip_role_gender(role) == role
 
+    # ── Fuites NON en fin de ligne (bug E2E 2026-07-05 : la LLM écrit l'indice de
+    #    voix au milieu du rôle / dans le label / entre parenthèses) ──────────────
+
+    def test_strips_voix_feminine_mid_line(self):
+        # « voix féminine » (adjectif accordé) au milieu — la garde matche « féminin »
+        # en sous-chaîne, l'ancien strip \bféminin\b le ratait.
+        out = OpenCodeRunner._strip_role_gender(
+            "SPEAKER_00 [Client] : achète du fromage, voix féminine, paie en espèces"
+        )
+        assert "féminin" not in out.lower()
+        assert "voix" not in out.lower()
+        assert "achète du fromage" in out and "paie en espèces" in out
+
+    def test_strips_gender_inside_label(self):
+        out = OpenCodeRunner._strip_role_gender("SPEAKER_01 [Fromager, voix masculine] : conseille")
+        assert "masculin" not in out.lower()
+        assert "[Fromager]" in out
+        assert out.endswith("conseille")
+
+    def test_strips_parenthesised_gender_mid_line(self):
+        out = OpenCodeRunner._strip_role_gender("conseille (voix masculine) le client au comptoir")
+        assert "masculin" not in out.lower()
+        assert "()" not in out
+        assert out == "conseille le client au comptoir"
+
+    def test_strips_symbol_mid_line_and_empty_parens(self):
+        out = OpenCodeRunner._strip_role_gender("vendeur (♂) au comptoir")
+        assert "♂" not in out and "()" not in out
+        assert out == "vendeur au comptoir"
+
+    def test_strips_comma_separated_gender_mid_line(self):
+        out = OpenCodeRunner._strip_role_gender("anime la réunion, masculin, puis conclut")
+        assert "masculin" not in out.lower()
+        assert out == "anime la réunion puis conclut"
+
+    def test_keeps_slash_role_intact(self):
+        # Rôle réel du run E2E : le « / » ne doit pas être mangé.
+        role = "Fromager / Commerçant"
+        assert OpenCodeRunner._strip_role_gender(role) == role
+
+    def test_keeps_legit_feminine_noun_phrase(self):
+        # « équipe féminine » (nom + adjectif accolé) est un contenu légitime, pas l'indice.
+        for role in ("gère l'équipe féminine", "responsable de la santé féminine du groupe"):
+            assert OpenCodeRunner._strip_role_gender(role) == role
+
     def test_parse_summary_removes_gender_from_role(self):
         text = (
             "## Participants probables\n"

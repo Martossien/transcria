@@ -851,22 +851,46 @@ class OpenCodeRunner:
 
     @staticmethod
     def _strip_role_gender(text: str) -> str:
-        """Retire un marqueur de genre en fin de ligne participant (« Masculin ♂ », « Féminin ♀ »…).
+        """Retire tout marqueur de genre vocal (indice acoustique) d'une ligne participant.
 
-        Le genre vocal est un indice acoustique fourni à la LLM ; il a un champ
-        dédié dans l'UI et ne doit pas polluer le texte du rôle. Quand la LLM le
-        recopie malgré la consigne, on le retire ici de façon déterministe. La
-        ponctuation de phrase (point final) est préservée.
+        Le genre a un champ dédié (stats/DOCX) et ne doit jamais polluer le rôle
+        (garde ``role_gender_clean``). La LLM le recopie parfois AILLEURS qu'en fin
+        de ligne (dans le label, entre parenthèses, au milieu) — l'ancienne version,
+        ancrée en fin, le ratait. On retire donc, OÙ QU'ILS SOIENT : les symboles
+        ♂/♀ ; « voix/genre/sexe masculin·e|féminin·e » ; un genre entre parenthèses ;
+        un genre détaché par une ponctuation de séparation (— – - , ; /). En FIN de
+        ligne uniquement, on retire aussi un « masculin/féminin/homme/femme » isolé
+        (l'indice recopié après le rôle). Un genre simplement accolé à un nom
+        (« vestiaire masculin », « équipe féminine ») est CONSERVÉ : ce n'est pas
+        l'indice de voix. Les artefacts (parenthèses/crochets vides, séparateurs
+        orphelins, doubles espaces) sont nettoyés ; le point final est préservé.
         """
         import re
 
+        # Adjectif de genre accordé (masculin·e / féminin·e) + symbole facultatif.
+        g = r"(?:masculin|f[ée]minin)e?\s*[♂♀]?"
+        cleaned = text
+        # (a) « (…genre…) » : parenthèse ne contenant qu'un marqueur de genre.
+        cleaned = re.sub(rf"\(\s*(?:voix\s+|genre\s+|sexe\s+)?{g}\s*\)", "", cleaned, flags=re.IGNORECASE)
+        # (b) « voix/genre/sexe masculin·e|féminin·e » n'importe où.
+        cleaned = re.sub(rf"\b(?:voix|genre|sexe)\s+{g}", "", cleaned, flags=re.IGNORECASE)
+        # (c) genre détaché par une ponctuation de séparation, n'importe où ; on consomme
+        #     aussi la virgule/point-virgule fermante d'un appositif (« A, masculin, B » → « A B »).
+        cleaned = re.sub(rf"\s*[—–\-,;/]\s*{g}\s*[,;]?", "", cleaned, flags=re.IGNORECASE)
+        # (d) symbole isolé n'importe où.
+        cleaned = re.sub(r"\s*[♂♀]", "", cleaned)
+        # (e) indice isolé en FIN de ligne (comportement historique) : base + homme/femme.
         cleaned = re.sub(
             r"[\s—–\-(,;/]*\b(?:masculin|f[ée]minin|homme|femme)\b\s*[♂♀]?\s*\)?\s*$",
-            "",
-            text,
-            flags=re.IGNORECASE,
+            "", cleaned, flags=re.IGNORECASE,
         )
-        cleaned = re.sub(r"\s*[♂♀]\s*$", "", cleaned)
+        # Nettoyage des artefacts laissés par les retraits.
+        cleaned = re.sub(r"\(\s*\)", "", cleaned)                # parenthèses vides
+        cleaned = re.sub(r"[\s,;/]+([)\]])", r"\1", cleaned)     # séparateur avant fermeture
+        cleaned = re.sub(r"([,;/])\s*(?:[,;/]\s*)+", r"\1 ", cleaned)  # séparateurs redondants
+        cleaned = re.sub(r"\s+([.,;:)\]])", r"\1", cleaned)      # espace avant ponctuation
+        cleaned = re.sub(r"\s{2,}", " ", cleaned)                # doubles espaces
+        cleaned = re.sub(r"[\s—–\-,;/]+$", "", cleaned)          # séparateur orphelin en fin (garde le point)
         return cleaned.strip()
 
     @staticmethod
