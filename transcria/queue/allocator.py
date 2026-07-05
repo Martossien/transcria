@@ -462,15 +462,21 @@ class GPUAllocator:
     def release_llm(self, job_id: str | None = None) -> None:
         if self._arbitrage_remote:
             return
+        # Propriété STRICTE : un release ciblé (job_id fourni) ne libère le verrou QUE si
+        # ce job en est bien le propriétaire courant. Sinon (owner différent OU owner=None
+        # — fenêtre entre `lock.acquire()` d'un autre job et la pose de son owner), c'est
+        # un release périmé : ne rien faire, sous peine de voler le verrou du détenteur.
+        # Le check ET le release restent dans la SECTION CRITIQUE owner_lock (atomiques).
+        # Un release sans job_id (force/admin) reste inconditionnel.
         with self._llm_owner_lock:
-            if job_id and self._llm_owner and self._llm_owner != job_id:
+            if job_id and self._llm_owner != job_id:
                 return
             self._llm_owner = None
-        try:
-            self._llm_lock.release()
-            logger.info("Verrou LLM libéré", extra={"job_id": job_id or ""})
-        except RuntimeError:
-            pass
+            try:
+                self._llm_lock.release()
+                logger.info("Verrou LLM libéré", extra={"job_id": job_id or ""})
+            except RuntimeError:
+                pass
 
     def register_pid(self, pid: int, label: str) -> None:
         if pid <= 1:

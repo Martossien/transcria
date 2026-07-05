@@ -199,6 +199,19 @@ def test_llm_lock_is_exclusive(tmp_path):
     assert alloc.try_acquire_llm("job-b") is True
 
 
+def test_release_llm_does_not_steal_lock_when_owner_not_yet_set(tmp_path):
+    # Chasse aux bugs — course : entre `lock.acquire()` et la pose de `_llm_owner`, un
+    # autre job détient déjà le verrou mais l'owner est encore None. Un `release_llm(A)`
+    # de filet de sécurité voyait owner=None, passait la garde et libérait le verrou du
+    # détenteur → deux jobs sur la LLM mono-GPU. La propriété stricte l'empêche.
+    alloc = _allocator(tmp_path)
+    assert alloc.try_acquire_llm("job-holder") is True   # verrou tenu
+    alloc._llm_owner = None                               # fenêtre : owner pas encore posé
+    alloc.release_llm("job-a")                            # release périmé d'un AUTRE job
+    # Le verrou doit rester tenu : aucun autre job ne peut l'acquérir.
+    assert alloc.try_acquire_llm("job-c") is False
+
+
 def test_llm_lock_is_noop_for_remote_arbitrage(tmp_path):
     # LLM distante (vLLM batché) : le verrou ne sérialise PAS — plusieurs jobs « acquièrent »
     # concurremment (ils sont batchés côté vLLM), sinon la correction timeout/échoue à tort.

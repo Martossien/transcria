@@ -23,6 +23,11 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   quasi constante passait en silence — sur le **dernier** fichier avant export.
   `_apply_final_review` réutilise désormais la même garde déterministe
   (`_corrected_srt_integrity_error` : parité des `-->` + ratio).
+- **Verrou LLM (concurrence)** : `GPUAllocator.release_llm(job_id)` passe en propriété
+  **stricte** — il ne libère le verrou que si le job en est le propriétaire courant.
+  Fenêtre de course corrigée : un release de filet de sécurité d'un ancien job pouvait,
+  quand l'owner du nouveau détenteur n'était pas encore posé, voler son verrou (deux jobs
+  sur la LLM mono-GPU). Le check et le release sont désormais atomiques sous `owner_lock`.
 
 ### Added / Hardening
 - **Documents joints** : borne du nombre de documents par job
