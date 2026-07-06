@@ -46,6 +46,7 @@ class ModelSpec:
     license: str
     license_url: str
     est_gb: float
+    tier: str = ""   # LLM d'arbitrage uniquement : palier VRAM (ex. "64") → profil de bascule
 
 
 def resolve_hf_home() -> Path:
@@ -66,12 +67,14 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
         try:
             from transcria.install_arbitrage import get_tier_metadata, recommend_tier
 
-            meta = get_tier_metadata(recommend_tier(total_vram_mb))
+            tier = recommend_tier(total_vram_mb)
+            meta = get_tier_metadata(tier)
             specs.append(ModelSpec(
                 role="arbitrage_llm", label=f"LLM d'arbitrage ({meta.file})",
                 repo_id=meta.repo, file=meta.file, kind="gguf", target_subdir=meta.directory,
                 gated=False, license="Apache-2.0 / MIT (quantifications unsloth)",
                 license_url="https://huggingface.co/" + meta.repo, est_gb=_gguf_est_gb(meta.file),
+                tier=tier,
             ))
         except Exception:  # noqa: BLE001 — pas de palier résoluble ⇒ on n'ajoute pas la ligne LLM
             pass

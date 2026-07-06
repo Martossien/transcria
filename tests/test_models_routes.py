@@ -63,3 +63,43 @@ def test_models_progress_returns_json(admin_client):
 
 def test_models_download_forbidden_for_viewer(viewer_client):
     assert viewer_client.post("/admin/models/download", data={}).status_code == 403
+
+
+def test_models_activate_switches_profile_when_present(admin_client, monkeypatch):
+    import subprocess
+
+    _no_detect(monkeypatch)
+    monkeypatch.setattr("transcria.models_catalog.model_status",
+                        lambda spec, **_k: {"present": True, "path": "/x", "size_bytes": 1})
+    calls: dict = {}
+
+    def fake_run(cmd, **_kw):
+        calls["cmd"] = cmd
+
+        class _R:
+            returncode, stdout, stderr = 0, "ok", ""
+
+        return _R()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    resp = admin_client.post("/admin/models/activate")
+    assert resp.status_code == 302
+    assert calls["cmd"][:2] == ["bash", "scripts/switch_arbitrage_llm.sh"]
+    assert calls["cmd"][2].endswith("gb")  # ex. "24gb"
+
+
+def test_models_activate_requires_present(admin_client, monkeypatch):
+    import subprocess
+
+    _no_detect(monkeypatch)
+    monkeypatch.setattr("transcria.models_catalog.model_status",
+                        lambda spec, **_k: {"present": False, "path": None, "size_bytes": 0})
+    called: dict = {}
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: called.update(hit=1))
+    resp = admin_client.post("/admin/models/activate")
+    assert resp.status_code == 302
+    assert "hit" not in called  # pas téléchargé → pas de bascule
+
+
+def test_models_activate_forbidden_for_viewer(viewer_client):
+    assert viewer_client.post("/admin/models/activate").status_code == 403

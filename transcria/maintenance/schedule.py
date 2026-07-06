@@ -10,8 +10,6 @@ l'unité oneshot lit la config via ``--config`` explicite + `EnvironmentFile` (`
 """
 from __future__ import annotations
 
-import os
-import pwd
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -58,7 +56,9 @@ class BackupSchedule:
         resolved_install = install_dir or str(Path(__file__).resolve().parents[2])
         return cls(
             install_dir=resolved_install,
-            service_user=service_user or _owner_of(resolved_install),
+            # Le backup doit tourner comme le SERVICE PRINCIPAL (il possède jobs/ ; un service root
+            # crée des fichiers root que le propriétaire du dossier d'install ne peut PAS lire).
+            service_user=service_user or resolve_service_user(),
             python_bin=python_bin or sys.executable,
             config_path=str(config_path),
             env_file=str(Path(resolved_install) / ".env"),
@@ -104,10 +104,17 @@ class BackupSchedule:
         )
 
 
-def _owner_of(path: str) -> str:
+def resolve_service_user(unit: str = "transcria.service", *, run: RunFn = subprocess.run) -> str:
+    """Utilisateur du service principal (il possède les données à sauvegarder). Défaut : root.
+
+    root peut TOUT lire ; un service non-root crée des données lisibles par lui — dans les deux
+    cas, faire tourner le backup sous CET utilisateur évite les `PermissionError` sur jobs/."""
     try:
-        return pwd.getpwuid(os.stat(path).st_uid).pw_name
-    except (OSError, KeyError):
+        result = run(["systemctl", "show", unit, "-p", "User", "--value"],
+                     capture_output=True, text=True, check=False)
+        user = (getattr(result, "stdout", "") or "").strip()
+        return user or "root"
+    except OSError:
         return "root"
 
 

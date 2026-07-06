@@ -3180,6 +3180,39 @@ def admin_models_download():
     return redirect(url_for("web.admin_models"))
 
 
+@web_bp.route("/admin/models/activate", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_activate():
+    # Relie le téléchargement au SERVING : bascule le profil llama.cpp sur le GGUF téléchargé
+    # (scripts/switch_arbitrage_llm.sh régénère le wrapper + met à jour services.arbitrage_script).
+    import os
+    import subprocess
+
+    from transcria.models_catalog import resolve_models_dir
+
+    item = next((it for it in _models_view()["items"] if it["spec"].role == "arbitrage_llm"), None)
+    if item is None or not item["spec"].tier:
+        abort(404)
+    if not item["present"]:
+        flash("Téléchargez d'abord ce modèle avant de l'activer.", "error")
+        return redirect(url_for("web.admin_models"))
+
+    tier_arg = f"{item['spec'].tier}gb"
+    env = {**os.environ, "MODELS_DIR": str(resolve_models_dir())}
+    try:
+        result = subprocess.run(["bash", "scripts/switch_arbitrage_llm.sh", tier_arg],
+                                capture_output=True, text=True, env=env, cwd=os.getcwd(), timeout=120)
+        if result.returncode == 0:
+            flash(f"Modèle LLM activé (profil {tier_arg}). Redémarrez le service pour l'appliquer : "
+                  "sudo systemctl restart transcria", "success")
+        else:
+            flash("Échec de l'activation : " + ((result.stderr or result.stdout).strip()[:300]), "error")
+    except Exception as exc:  # noqa: BLE001 — surface l'échec du script à l'opérateur
+        flash(f"Échec de l'activation : {exc}", "error")
+    return redirect(url_for("web.admin_models"))
+
+
 @web_bp.route("/admin/models/progress/<role>")
 @login_required
 @requires(Permission.MANAGE_CONFIG)

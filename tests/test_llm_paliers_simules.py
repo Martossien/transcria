@@ -85,9 +85,9 @@ class TestSelectOllamaParPalier:
     @pytest.mark.parametrize(
         "gpu_count,per_card,total,expected_tier,expected_model,expected_spread",
         [
-            (1, MB_12, MB_12, "12", "qwen3.5:4b", False),
-            (1, MB_16, MB_16, "16", "gemma4:12b", False),
-            (1, MB_24, MB_24, "24", "gemma4:12b", False),
+            (1, MB_12, MB_12, "12", "qwen3.5:9b", False),
+            (1, MB_16, MB_16, "16", "qwen3.5:9b", False),
+            (1, MB_24, MB_24, "24", "qwen3.6:27b", False),
             (2, MB_16, MB_16 * 2, "32", "qwen3.6:27b", True),   # multi → total → 32
             (8, MB_24, MB_24 * 8, "64", "qwen3.6:35b", True),   # 8×24 → total 192 → 64
         ],

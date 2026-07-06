@@ -20,6 +20,8 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   non-gated (Qwen GGUF, Whisper) : sans token. En Docker, les téléchargements atterrissent dans les
   volumes montés (`HF_HOME`/`MODELS_DIR`) → persistants sur l'hôte. Modules purs/testés
   `transcria/models_catalog.py` + `transcria/models_download.py` + CLI interne `model-download`.
+  Bouton **« Activer (servir) »** sur la tuile LLM présente : bascule le profil llama.cpp sur le
+  GGUF téléchargé (`switch_arbitrage_llm.sh`) — relie enfin le téléchargement au *serving*.
 - **Sauvegardes dans l'interface (admin)** : nouvelle page **Administration → Maintenance**
   (`/admin/maintenance`, permission `MANAGE_CONFIG`) pour **créer une sauvegarde** (lancée en
   sous-processus détaché — le worker web ne bloque jamais), **lister** les archives (nom, taille,
@@ -59,6 +61,12 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   Ollama. (Le 35B-A3B en Q4 ne rentrant pas dans 24 Go, ce palier sert le 27B.)
 
 ### Fixed
+- **Backup planifié — `PermissionError` sur les données root** : l'unité `transcria-backup.service`
+  était rendue avec `User=` = propriétaire du dossier d'install, alors que le service prod tourne
+  souvent en **root** et crée des fichiers `jobs/` root que ce compte ne peut pas lire (le backup
+  échouait avec `Permission denied`). L'unité tourne désormais comme le **service principal**
+  (`User` résolu via `systemctl show transcria.service`, défaut root). Découvert en validant le
+  timer pour de vrai (archive 1,1 Go produite + vérifiée après correction).
 - **Gel opencode au démarrage — CAUSE RACINE identifiée + court-circuit** : diagnostiqué au
   batch E2E 2026-07-05, **cause prouvée en repro isolé le 2026-07-06**. `opencode run`
   **DEADLOCKE au boot** (process Bun ~52 threads, 48 en `futex`, 0 socket, 0 sortie, ∞) quand

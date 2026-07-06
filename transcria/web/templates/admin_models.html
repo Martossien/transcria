@@ -63,6 +63,14 @@
             {% endif %}
           </td>
           <td class="text-end">
+            {% if it.present and s.role == 'arbitrage_llm' %}
+            <form method="post" action="{{ url_for('web.admin_models_activate') }}" class="d-inline">
+              <button type="submit" class="btn btn-outline-success btn-sm"
+                      title="Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)">
+                <i class="bi bi-play-circle"></i> Activer (servir)
+              </button>
+            </form>
+            {% endif %}
             {% if not it.present and not inprog %}
             <form method="post" action="{{ url_for('web.admin_models_download') }}" class="d-inline-flex gap-1 align-items-center">
               <input type="hidden" name="role" value="{{ s.role }}">

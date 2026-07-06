@@ -93,6 +93,24 @@ def test_remove_disables_and_deletes_units(tmp_path: Path):
     assert ["systemctl", "disable", "--now", TIMER_UNIT] in calls
 
 
+def test_resolve_service_user_from_systemctl():
+    from transcria.maintenance.schedule import resolve_service_user
+
+    def run(cmd, **_kw):
+        return subprocess.CompletedProcess(cmd, 0, stdout="root\n", stderr="")
+
+    assert resolve_service_user(run=run) == "root"
+
+
+def test_resolve_service_user_defaults_root_when_empty():
+    from transcria.maintenance.schedule import resolve_service_user
+
+    def run(cmd, **_kw):
+        return subprocess.CompletedProcess(cmd, 1, stdout="\n", stderr="")
+
+    assert resolve_service_user(run=run) == "root"
+
+
 def test_status_reads_systemctl():
     def run(cmd, **_kw):
         value = "enabled" if "is-enabled" in cmd else "active"
