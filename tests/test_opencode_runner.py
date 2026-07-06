@@ -146,6 +146,9 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(subprocess, "Popen",
             _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
         runner = _make_runner(tmp_path, config=self._fast_watchdog_cfg())
+        # Ces tests visent le WATCHDOG (post-lancement) : on neutralise la pré-garde LLM
+        # (endpoint réputé prêt) pour qu'elle ne court-circuite pas avant le Popen.
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
         monkeypatch.setattr(runner, "_llm_is_processing", lambda: llm_processing)
         return runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
 
@@ -169,6 +172,7 @@ class TestOpenCodeRunnerRun:
         monkeypatch.setattr(subprocess, "Popen",
             _fake_popen(communicate_exc=subprocess.TimeoutExpired(cmd=[], timeout=600)))
         runner = _make_runner(tmp_path, config=cfg)
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: None)
         monkeypatch.setattr(runner, "_llm_is_processing", lambda: llm_processing)
         return runner.run("test instruction", "/tmp/prompt.txt", timeout=600)
 
@@ -199,6 +203,64 @@ class TestOpenCodeRunnerRun:
         assert result["success"] is False
         assert "démarrage" not in result["error"].lower()
         assert "idle pur" in result["error"].lower()
+
+    def test_preflight_blocks_launch_when_endpoint_refused(self, tmp_path, monkeypatch):
+        # CAUSE RACINE (2026-07-06) : opencode DEADLOCKE au boot si le provider LLM refuse la
+        # connexion. La pré-garde doit COURT-CIRCUITER (erreur transitoire « interrompu ») SANS
+        # jamais lancer Popen — sinon on figerait ~45 s jusqu'au watchdog.
+        import shutil
+        monkeypatch.setattr(shutil, "which", lambda name: "/usr/bin/opencode")
+        monkeypatch.setattr(os.path, "isfile", lambda p: True)
+        monkeypatch.setattr(os.path, "abspath", lambda p: p)
+        launched = {"popen": False}
+
+        def _forbidden_popen(cmd, **kw):
+            launched["popen"] = True
+            raise AssertionError("Popen ne doit PAS être appelé quand l'endpoint est refused")
+
+        monkeypatch.setattr(subprocess, "Popen", _forbidden_popen)
+        runner = _make_runner(tmp_path, config={"workflow": {"arbitration_llm": {}}})
+        # endpoint réputé fermé (host, port renvoyés = « bloqué »)
+        monkeypatch.setattr(runner, "_wait_llm_endpoint_ready", lambda w: ("127.0.0.1", 8080))
+
+        result = runner.run("test", "/tmp/prompt.txt")
+        assert result["success"] is False
+        assert launched["popen"] is False
+        assert "interrompu" in result["error"].lower()  # traité comme transitoire par le retry
+        assert "8080" in result["error"]
+
+    def test_preflight_detecte_port_ouvert(self, tmp_path):
+        # _wait_llm_endpoint_ready renvoie None (feu vert) dès que le port ACCEPTE.
+        import socket as _socket
+        srv = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        try:
+            cfg = {"services": {"arbitrage_llm_host": "127.0.0.1", "arbitrage_llm_port": port},
+                   "workflow": {"arbitration_llm": {}}}
+            runner = _make_runner(tmp_path, config=cfg)
+            assert runner._wait_llm_endpoint_ready(2.0) is None
+        finally:
+            srv.close()
+
+    def test_preflight_renvoie_endpoint_si_port_ferme(self, tmp_path):
+        # Port fermé → renvoie (host, port) après la fenêtre d'attente (bornée, courte).
+        import socket as _socket
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()  # port libéré → connexions refusées
+        cfg = {"services": {"arbitrage_llm_host": "127.0.0.1", "arbitrage_llm_port": port},
+               "workflow": {"arbitration_llm": {}}}
+        runner = _make_runner(tmp_path, config=cfg)
+        blocked = runner._wait_llm_endpoint_ready(0.1)
+        assert blocked == ("127.0.0.1", port)
+
+    def test_preflight_saute_sans_config(self, tmp_path):
+        # Sans config, pas d'endpoint résoluble → pré-garde neutre (comportement historique).
+        runner = _make_runner(tmp_path)
+        assert runner._wait_llm_endpoint_ready(5.0) is None
 
     def test_run_generic_exception(self, tmp_path, monkeypatch):
         import shutil

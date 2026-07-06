@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import shutil
+import socket
 import subprocess
 import time
 from pathlib import Path
@@ -478,6 +479,48 @@ class OpenCodeRunner:
                     continue
         return busy if seen else None
 
+    def _wait_llm_endpoint_ready(self, wait_s: float) -> tuple[str, int] | None:
+        """Pré-garde : sonde TCP l'endpoint d'arbitrage jusqu'à ce qu'il ACCEPTE (ou expiration).
+
+        CAUSE RACINE du gel de démarrage (prouvée en repro isolé le 2026-07-06) : ``opencode
+        run`` DEADLOCKE — process Bun ~52 threads, 48 en ``futex``, 0 socket, 0 sortie, ∞ —
+        quand le provider LLM local **refuse la connexion** au boot (ECONNREFUSED). Un endpoint
+        vivant, même LENT (répondant en plusieurs s), NE fige PAS (vérifié) : le seul trigger est
+        « rien en écoute sur le port ». Présent sur opencode 1.17.4 ET 1.17.13 (bug amont).
+
+        En prod le gel n'apparaît qu'en BATCH CONCURRENT : le jonglage VRAM (relance de
+        llama-server, cf. ``VRAMManager``) ouvre une brève fenêtre où le port n'est pas encore
+        bindé ; un boot opencode d'un job chevauchant y tombait et figeait ~45 s (jusqu'au
+        watchdog). On sonde AVANT de lancer et on laisse ``wait_s`` à une relance en cours de
+        (re)binder — dès que le port accepte, on peut lancer sans risque.
+
+        Retourne ``None`` si l'endpoint accepte (feu vert) ou si l'endpoint est indéterminable
+        (pas de config → comportement historique). Retourne ``(host, port)`` si le port est
+        toujours refused après ``wait_s`` → l'appelant renvoie une erreur transitoire (la phase
+        retente) au lieu de laisser opencode figer.
+        """
+        if not self._config:
+            return None
+        try:
+            from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
+
+            host, port = resolve_arbitrage_endpoint(self._config)
+        except Exception:  # noqa: BLE001 — endpoint indéterminé → pas de pré-garde
+            return None
+        deadline = time.monotonic() + max(0.0, wait_s)
+        while True:
+            try:
+                # create_connection = MÊME résolution que `requests` (getaddrinfo dual-stack
+                # IPv4/IPv6) : si `ensure_arbitrage_llm_ready` a joint l'endpoint en HTTP, on le
+                # joint ici aussi. Un `socket(AF_INET)` forcé bloquerait à tort un endpoint IPv6.
+                with socket.create_connection((host, port), timeout=1.0):
+                    return None  # le port accepte → opencode bootera proprement
+            except OSError:
+                pass  # refused / hôte injoignable → traité comme « pas prêt »
+            if time.monotonic() >= deadline:
+                return host, port
+            time.sleep(0.5)
+
     def _communicate_with_watchdog(
         self, proc: subprocess.Popen, timeout: int
     ) -> tuple[str, str, str | None]:
@@ -530,12 +573,13 @@ class OpenCodeRunner:
             if idle >= pure_idle_cap_s:
                 reason = f"aucune sortie depuis {int(idle)}s (repli idle pur)"
                 break
-            # Gel au DÉMARRAGE : opencode 1.17.x deadlocke par intermittence (~30-50 % avec
-            # de gros system-prompts) APRÈS « init », AVANT de créer sa session ou de
-            # solliciter la LLM — 0 event stdout ET slot LLM jamais occupé. Signature sans
-            # ambiguïté (un run sain émet un event ou occupe la LLM en quelques s), donc
-            # détectable BIEN plus vite que le silence générique : le retry (process neuf)
-            # réussit le plus souvent, à faible coût. Cf. batch E2E 2026-07-05.
+            # Gel au DÉMARRAGE — FILET RÉSIDUEL derrière la pré-garde `_wait_llm_endpoint_ready`.
+            # Cause racine prouvée (2026-07-06) : opencode deadlocke si le provider LLM refuse la
+            # connexion au boot (ECONNREFUSED) ; la pré-garde l'évite en amont. Ce cas rattrape le
+            # résiduel (endpoint qui tombe APRÈS la pré-garde mais avant la session) : 0 event
+            # stdout ET slot LLM jamais occupé. Signature sans ambiguïté (un run sain émet un event
+            # ou occupe la LLM en quelques s), détectable bien plus vite que le silence générique ;
+            # le retry (process neuf, après pré-garde) réussit le plus souvent.
             if (not out_lines) and (now - start) >= first_contact_grace_s and self._llm_is_processing() is False:
                 reason = (f"aucun événement opencode + LLM jamais sollicitée depuis {int(now - start)}s "
                           "— gel au démarrage opencode (pré-session)")
@@ -574,6 +618,26 @@ class OpenCodeRunner:
         prompt_file = os.path.abspath(prompt_file)
         if not os.path.isfile(prompt_file):
             return {"success": False, "error": f"Prompt introuvable: {prompt_file}"}
+
+        # Pré-garde LLM : opencode DEADLOCKE au boot si le provider local refuse la connexion
+        # (cf. _wait_llm_endpoint_ready). On sonde d'abord — en laissant une courte fenêtre à une
+        # relance VRAM en cours de binder — et on court-circuite par une erreur TRANSITOIRE
+        # (« interrompu » → la boucle de retry summary/correction rejoue) plutôt que de figer ~45 s.
+        llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
+        preflight_wait_s = float(llm_cfg.get("opencode_preflight_wait_s", 10))
+        blocked = self._wait_llm_endpoint_ready(preflight_wait_s)
+        if blocked is not None:
+            host, port = blocked
+            logger.error(
+                "opencode NON lancé — LLM d'arbitrage injoignable sur %s:%d (port fermé après %.0fs) ; "
+                "opencode gèlerait au démarrage — run interrompu avant lancement.",
+                host, port, preflight_wait_s,
+            )
+            return {
+                "success": False,
+                "error": (f"opencode interrompu (LLM d'arbitrage injoignable sur {host}:{port}, "
+                          "port fermé — gel de démarrage évité)"),
+            }
 
         self.work_dir.mkdir(parents=True, exist_ok=True)
 
