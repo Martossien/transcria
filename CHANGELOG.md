@@ -20,7 +20,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   `python -m transcria.maintenance.cli schedule --enable/--disable` (+ statut par défaut) qui
   installe/retire un couple d'unités `transcria-backup.{service,timer}` (oneshot lançant la CLI
   `backup`, `OnCalendar` + `Persistent=true` pour rattraper une exécution manquée). Pilotable
-  aussi depuis la page **Maintenance** (carte « Sauvegarde planifiée »). Restauration UI : à suivre.
+  aussi depuis la page **Maintenance** (carte « Sauvegarde planifiée »).
+- **Restauration depuis l'interface (one-shot privilégié)** : la page Maintenance permet de
+  restaurer une archive avec **aperçu** (version/base/contenu du manifeste) et **confirmation
+  forte** (ressaisie du nom exact + case à cocher). Restaurer par-dessus une instance vivante
+  corromprait la base : l'UI ne restaure donc pas elle-même — elle dépose une demande et déclenche
+  une unité systemd oneshot `transcria-restore.service` (`User=root`) qui **arrête le service →
+  restaure (force) → rechown les fichiers → redémarre**. Le worker web rend la main immédiatement
+  (`systemctl start --no-block`). Journalisé (`maintenance_backup_restore`) ; garde anti
+  path-traversal + vérification d'intégrité avant déclenchement.
 - **Mise à jour opencode outillée** : nouvelle commande `python -m transcria.maintenance.cli
   opencode-upgrade` qui **détecte le type d'install** du binaire opencode (npm via symlink →
   `node_modules/opencode-ai` ; officiel `~/.opencode/bin` ; brew) et lance l'updater adapté

@@ -57,3 +57,49 @@ def test_schedule_disable_triggers_remove(admin_client, monkeypatch):
 
 def test_schedule_forbidden_for_viewer(viewer_client):
     assert viewer_client.post("/admin/maintenance/schedule", data={"action": "enable"}).status_code == 403
+
+
+def test_restore_requires_acknowledge(admin_client, monkeypatch):
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.restore_service.request_restore",
+                        lambda **_k: triggered.setdefault("hit", True))
+    resp = admin_client.post("/admin/maintenance/restore",
+                             data={"name": "transcria-backup-x.tar.gz", "confirm_name": "transcria-backup-x.tar.gz"})
+    assert resp.status_code == 302
+    assert "hit" not in triggered  # pas de case cochée → aucun déclenchement
+
+
+def test_restore_confirm_name_must_match(admin_client, monkeypatch):
+    triggered: dict = {}
+    monkeypatch.setattr("transcria.maintenance.restore_service.request_restore",
+                        lambda **_k: triggered.setdefault("hit", True))
+    resp = admin_client.post("/admin/maintenance/restore",
+                             data={"name": "transcria-backup-x.tar.gz", "confirm_name": "WRONG", "acknowledge": "on"})
+    assert resp.status_code == 302
+    assert "hit" not in triggered
+
+
+def test_restore_unknown_archive_404(admin_client):
+    name = "transcria-backup-00000000-000000.tar.gz"
+    resp = admin_client.post("/admin/maintenance/restore",
+                             data={"name": name, "confirm_name": name, "acknowledge": "on"})
+    assert resp.status_code == 404
+
+
+def test_restore_success_triggers_request(admin_client, monkeypatch, tmp_path):
+    fake = tmp_path / "transcria-backup-20260101-000000.tar.gz"
+    fake.write_bytes(b"x")
+    monkeypatch.setattr("transcria.web.maintenance_service.MaintenanceService.resolve_archive",
+                        lambda cfg, name: fake if name == fake.name else None)
+    monkeypatch.setattr("transcria.maintenance.backup.verify_backup", lambda a: [])
+    called: dict = {}
+    monkeypatch.setattr("transcria.maintenance.restore_service.request_restore",
+                        lambda **kw: called.update(kw))
+    resp = admin_client.post("/admin/maintenance/restore",
+                             data={"name": fake.name, "confirm_name": fake.name, "acknowledge": "on"})
+    assert resp.status_code == 302
+    assert called.get("archive_name") == fake.name
+
+
+def test_restore_forbidden_for_viewer(viewer_client):
+    assert viewer_client.post("/admin/maintenance/restore", data={}).status_code == 403

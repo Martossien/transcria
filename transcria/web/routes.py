@@ -3026,6 +3026,7 @@ def admin_config():
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_maintenance():
+    from transcria.maintenance.restore import describe_restore
     from transcria.maintenance.schedule import backup_schedule_status
     from transcria.web.maintenance_service import MaintenanceService
 
@@ -3034,9 +3035,19 @@ def admin_maintenance():
         status = backup_schedule_status()  # lecture seule (systemctl is-enabled/is-active)
     except Exception:  # noqa: BLE001 — statut best-effort, jamais bloquant pour la page
         status = {"unit": "transcria-backup.timer", "enabled": "", "active": ""}
+    archives = MaintenanceService.list_archives(cfg)
+    previews: dict = {}
+    for entry in archives:  # aperçu léger (manifeste seul) pour la restauration
+        archive = MaintenanceService.resolve_archive(cfg, entry["name"])
+        if archive is not None:
+            try:
+                previews[entry["name"]] = describe_restore(archive)
+            except Exception:  # noqa: BLE001 — un manifeste illisible ne casse pas la page
+                previews[entry["name"]] = None
     return render_template(
         "admin_maintenance.html",
-        archives=MaintenanceService.list_archives(cfg),
+        archives=archives,
+        previews=previews,
         backup_dir=str(MaintenanceService.backup_dir(cfg)),
         schedule=(cfg.get("maintenance", {}) or {}).get("schedule", {}) or {},
         schedule_status=status,
@@ -3070,6 +3081,51 @@ def admin_maintenance_schedule():
             flash("Sauvegarde planifiée désactivée.", "success")
     except Exception as exc:  # noqa: BLE001 — surface l'échec systemd à l'opérateur
         flash(f"Échec de la planification : {exc}", "error")
+    return redirect(url_for("web.admin_maintenance"))
+
+
+@web_bp.route("/admin/maintenance/restore", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_restore():
+    from transcria.maintenance.backup import verify_backup
+    from transcria.maintenance.restore_service import request_restore
+    from transcria.maintenance.schedule import BackupSchedule
+    from transcria.web.maintenance_service import MaintenanceService
+
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+    name = (request.form.get("name") or "").strip()
+
+    # Confirmation FORTE : case cochée + ressaisie exacte du nom (opération destructive).
+    if request.form.get("acknowledge") != "on":
+        flash("Confirmation requise : la restauration remplace les données et redémarre le service.", "error")
+        return redirect(url_for("web.admin_maintenance"))
+    if (request.form.get("confirm_name") or "").strip() != name:
+        flash("Le nom ressaisi ne correspond pas à l'archive — restauration annulée.", "error")
+        return redirect(url_for("web.admin_maintenance"))
+
+    archive = MaintenanceService.resolve_archive(cfg, name)  # anti path-traversal
+    if archive is None:
+        abort(404)
+    problems = verify_backup(archive)
+    if problems:
+        flash("Archive invalide — restauration refusée : " + " ; ".join(problems), "error")
+        return redirect(url_for("web.admin_maintenance"))
+
+    schedule = BackupSchedule.from_config(cfg, config_path)
+    try:
+        request_restore(
+            install_dir=schedule.install_dir, python_bin=schedule.python_bin,
+            config_path=schedule.config_path, env_file=schedule.env_file,
+            archive_name=archive.name,
+        )
+        audit_log(AuditAction.MAINTENANCE_BACKUP_RESTORE, target_type="maintenance",
+                  target_label=archive.name)
+        flash("Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — "
+              "reconnectez-vous dans une minute environ.", "success")
+    except Exception as exc:  # noqa: BLE001 — surface l'échec de déclenchement à l'opérateur
+        flash(f"Échec du déclenchement de la restauration : {exc}", "error")
     return redirect(url_for("web.admin_maintenance"))
 
 

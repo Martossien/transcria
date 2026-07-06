@@ -194,6 +194,25 @@ def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
+def _cmd_restore_apply(args: argparse.Namespace) -> int:
+    """Applique une restauration en attente (appelé par l'unité oneshot transcria-restore).
+    Arrête le service → restaure (force) → rechown → redémarre. NE PAS lancer à la main sur
+    une instance vivante : c'est le rôle du oneshot privilégié déclenché par l'UI."""
+    from transcria.maintenance.backup import BackupError
+    from transcria.maintenance.restore_service import apply_pending_restore
+
+    cfg, resolved, _version, _revision = _load_cfg_and_meta(args.config)
+    cfg["_config_path"] = resolved
+    try:
+        report = apply_pending_restore(cfg, units=args.units)
+    except BackupError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+    print(f"✅ Restauration appliquée depuis {report.get('restored_from')} "
+          f"(version {report.get('app_version')}, base {report.get('db_kind')})")
+    return 0
+
+
 def _cmd_schedule(args: argparse.Namespace) -> int:
     """Planifie les sauvegardes via un timer systemd (--enable / --disable / défaut = statut)."""
     from transcria.config.loader import get_config_path, load_config
@@ -284,6 +303,12 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--keep", type=int, default=0, help="rotation des sauvegardes")
     u.add_argument("--check", action="store_true", help="lister les étapes sans les exécuter")
     u.set_defaults(func=_cmd_upgrade)
+
+    ra = sub.add_parser("restore-apply",
+                        help="[interne] applique une restauration en attente (oneshot privilégié)")
+    ra.add_argument("--units", default="transcria.service",
+                    help="services systemd à arrêter/redémarrer autour de la restauration")
+    ra.set_defaults(func=_cmd_restore_apply)
 
     sc = sub.add_parser("schedule", help="planifier les sauvegardes (timer systemd)")
     sc.add_argument("--enable", action="store_true", help="installer + activer le timer depuis la config")

@@ -91,11 +91,53 @@
           <td class="font-monospace small">{{ a.name }}</td>
           <td class="text-end">{{ a.size_mb }} Mo</td>
           <td class="small text-muted">{{ a.modified.strftime('%Y-%m-%d %H:%M') }}</td>
-          <td class="text-end">
+          <td class="text-end text-nowrap">
             <a class="btn btn-outline-secondary btn-sm"
                href="{{ url_for('web.admin_maintenance_download', name=a.name) }}">
               <i class="bi bi-download"></i> Télécharger
             </a>
+            <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#restore-{{ loop.index }}" aria-expanded="false">
+              <i class="bi bi-arrow-counterclockwise"></i> Restaurer…
+            </button>
+          </td>
+        </tr>
+        <tr class="collapse" id="restore-{{ loop.index }}">
+          <td colspan="4" class="bg-body-tertiary">
+            {% set p = previews.get(a.name) if previews else None %}
+            {% if p %}
+            <div class="small text-muted mb-2">
+              Contenu : version <strong>{{ p.app_version or '?' }}</strong>,
+              base <strong>{{ p.db_kind or '?' }}</strong>,
+              créée le {{ p.created_at or '?' }},
+              {% if p.include_audio %}audios inclus{% else %}sans audios{% endif %}
+              {% if p.trees %}· arbres : {{ p.trees|join(', ') }}{% endif %}.
+            </div>
+            {% endif %}
+            <div class="alert alert-danger py-2 small mb-2">
+              <i class="bi bi-exclamation-triangle-fill me-1"></i>
+              <strong>Opération destructive.</strong> Le service va <strong>s'arrêter</strong>,
+              la base et les fichiers seront <strong>remplacés</strong> par le contenu de l'archive,
+              puis le service redémarrera. Vous serez déconnecté quelques instants.
+            </div>
+            <form method="post" action="{{ url_for('web.admin_maintenance_restore') }}"
+                  class="row g-2 align-items-center">
+              <input type="hidden" name="name" value="{{ a.name }}">
+              <div class="col-auto">
+                <input type="text" name="confirm_name" class="form-control form-control-sm"
+                       style="width:22rem" autocomplete="off"
+                       placeholder="Ressaisissez le nom exact de l'archive pour confirmer">
+              </div>
+              <div class="col-auto form-check">
+                <input class="form-check-input" type="checkbox" name="acknowledge" id="ack-{{ loop.index }}">
+                <label class="form-check-label small" for="ack-{{ loop.index }}">Je comprends et je confirme</label>
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-danger btn-sm">
+                  <i class="bi bi-arrow-counterclockwise"></i> Restaurer cette archive
+                </button>
+              </div>
+            </form>
           </td>
         </tr>
         {% endfor %}

@@ -62,6 +62,14 @@ Pilotable aussi depuis **Administration → Maintenance** (carte « Sauvegarde p
 
 La restauration est **irréversible** : commencez toujours par une simulation.
 
+> 🖱️ **Depuis l'interface** (Administration → Maintenance) : chaque archive a un bouton
+> « Restaurer… » qui affiche un aperçu (version/base/contenu) et exige une **confirmation forte**
+> (ressaisie du nom exact + case à cocher). Comme l'UI tourne dans une instance vivante, elle ne
+> restaure pas directement : elle déclenche l'unité oneshot privilégiée `transcria-restore.service`
+> (`User=root`) qui **arrête le service → restaure (`--force`) → rechown → redémarre**. Requiert
+> donc un service dont le worker peut lancer `systemctl start` (déploiement root, ou règle sudoers
+> dédiée). En CLI, le déroulé manuel reste ci-dessous.
+
 > ⚠️ **Arrêtez le service avant de restaurer** (`sudo systemctl stop transcria`) :
 > écraser une base vivante risque la corruption. La commande **refuse** d'ailleurs de
 > s'exécuter si le service répond encore à `/ready` (contournable par `--force` en
