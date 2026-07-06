@@ -8,6 +8,8 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-07-06
+
 ### Added
 - **Gestionnaire de modèles dans l'interface** : nouvelle page **Administration → Modèles**
   (`/admin/models`, `MANAGE_CONFIG`) qui liste les modèles **nécessaires à cette installation**

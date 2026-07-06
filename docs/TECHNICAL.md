@@ -1431,6 +1431,22 @@ Source **unique** des estimations de durée, apprises de l'historique réel de l
 
 ---
 
+### 4.15 Maintenance & modèles (`transcria/maintenance/`, `models_catalog.py`, `models_download.py`)
+
+Outillage opérateur, exposé en **CLI** (`python -m transcria.maintenance.cli`) et dans l'**UI admin** (`/admin/maintenance`, `/admin/models`, permission `MANAGE_CONFIG`). Toute la logique métier est PURE et injectable (`run`/`write`/`popen`), testée sans systemd ni réseau ; les pages web ne font qu'orchestrer.
+
+**Sauvegarde / restauration** (`backup.py`, `restore.py`) — archive `tar.gz` horodatée (base via `pg_dump -Fc` ou `sqlite3.backup` à chaud + `jobs/` + `voices/` + prompts + manifeste sha256 ; `.env` **jamais** embarqué). Restauration **gardée** : refus si le service répond à `/ready` ou si la base cible n'est pas vide (sauf `--force`). Résolution du DSN via `resolve_database_url` (honore `TRANSCRIA_DATABASE_URL`). La page Maintenance lance la sauvegarde en **sous-process détaché** (worker web non bloquant) et liste/télécharge les archives (garde anti path-traversal `resolve_archive`).
+
+**Backup planifié** (`schedule.py`) — génère+installe les unités `transcria-backup.{service,timer}` (`OnCalendar` + `Persistent=true`). Le service oneshot tourne comme le **service principal** (`User` résolu via `systemctl show transcria.service`, défaut root) — sinon `PermissionError` sur les fichiers `jobs/` créés par un service root. CLI `schedule --enable/--disable`, ou carte sur la page Maintenance.
+
+**Restauration depuis l'UI** (`restore_service.py`) — restaurer par-dessus une instance vivante corromprait la base ; l'UI ne restaure donc pas elle-même : elle dépose une demande (`/run/transcria-restore.request`) puis déclenche l'unité oneshot **privilégiée** `transcria-restore.service` (`User=root`) qui **arrête le service → restaure (`--force`) → rechown → redémarre** (CLI interne `restore-apply`). Le worker rend la main immédiatement (`systemctl start --no-block`). Confirmation forte côté UI (ressaisie du nom + case) + `verify_backup` avant déclenchement.
+
+**Gestionnaire de modèles** (`models_catalog.py`, `models_download.py`) — `build_catalog(cfg, total_vram_mb)` résout les modèles NÉCESSAIRES à l'install (palier GGUF LLM recommandé pour le VRAM via `install_arbitrage`, STT + diarisation selon `models.{stt_backend,diarization_backend}`). Chaque `ModelSpec` porte repo/fichier/kind (`gguf`→`MODELS_DIR`, `hf_cache`→`HF_HOME`)/`gated`/licence/palier. Téléchargement HF en **sous-process détaché** (CLI interne `model-download`, token via ENV `HF_TOKEN` jamais en argv), progression par **taille sur disque / total du repo** (fichier de statut JSON auto-suffisant, polling `/admin/models/progress/<role>` sans détection GPU). Bouton **« Activer (servir) »** = bascule du profil llama.cpp sur le GGUF téléchargé (`switch_arbitrage_llm.sh`). Cf. `docs/UPGRADE.md`.
+
+**Mise à jour opencode** (`install_opencode.py`) — CLI `opencode-upgrade` : détecte le type d'install du binaire (npm / officiel `~/.opencode/bin` / brew) et lance l'updater adapté.
+
+---
+
 ## 5. API REST
 
 ### 5.1 Format des réponses

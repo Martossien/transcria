@@ -20,12 +20,16 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
-## Statut du projet — 0.3.0
+## Statut du projet — 0.3.1
 
 Dans la continuité de la ligne stable 0.2.0. La **0.3.0** ajoute l'ingestion des
 **documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé
 et la correction du SRT, et durcit la garde anti-fuite de genre sur les rôles participants
-(voir le [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
+(voir le [changelog](CHANGELOG.md)). La **0.3.1** ajoute l'outillage opérateur — une page
+admin *Maintenance* (créer, planifier et restaurer les sauvegardes) et une page *Modèles*
+qui télécharge les modèles nécessaires à l'install — et corrige un gel de démarrage de
+l'agent d'arbitrage (opencode) quand son endpoint LLM local est brièvement injoignable.
+Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
 bout en bout (suite unitaire et d'intégration, plus des passages sur GPU réel).
@@ -191,9 +195,15 @@ que de vraies personnes partagent l'outil, semaine après semaine.
 - **Enrôlement vocal.** Reconnaissance de voix connues soumise au consentement : un
   formulaire signé et une preuve hachée sont exigés avant toute empreinte, et l'audio de
   référence est supprimé par défaut.
-- **Sauvegarde, restauration et montée de version guidée.** Une CLI de maintenance
-  sauvegarde la base et les fichiers de job, les restaure, et déroule une montée de
-  version par ses migrations — sur SQLite ou PostgreSQL.
+- **Sauvegarde, restauration et montée de version guidée — CLI ou interface admin.** Une page
+  *Administration → Maintenance* crée, liste, télécharge et restaure les sauvegardes (la
+  restauration passe par un one-shot privilégié qui arrête le service, restaure, puis redémarre)
+  et installe une **sauvegarde planifiée** (timer systemd) ; les mêmes opérations plus une montée
+  de version outillée (migrations) vivent sur la CLI `maintenance` — sur SQLite ou PostgreSQL.
+- **Gestionnaire de modèles.** Une page *Administration → Modèles* montre les modèles nécessaires
+  à cette install (palier LLM d'arbitrage selon la VRAM, STT, diarisation), vérifie l'espace disque
+  et les télécharge avec une barre de progression — token HuggingFace géré pour les modèles *gated*
+  (pyannote, Cohere), activation en un clic de la LLM servie. Aussi via `maintenance opencode-upgrade`.
 - **Une configuration réellement gérable.** Un schéma classifié de 423 clés pilote une
   interface admin claire et une référence générée ; les secrets restent hors de la config
   versionnée, et un pré-vol `doctor` valide l'ensemble avant la mise en service.

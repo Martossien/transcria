@@ -1372,3 +1372,15 @@ Les chemins sont résolus relativement à `transcria/gpu/opencode_runner.py` (re
 | `security.audit_retention_by_family` | Non | Oui (purge à l'accueil) |
 
 **Problème architecturel :** `get_config()` retourne un singleton. Si `set_config()` est appelé pour mettre à jour une valeur, les routes qui rappellent `get_config()` voient le changement, mais les objets déjà construits avec une ancienne config ne sont pas mis à jour automatiquement.
+
+## Section `maintenance`
+
+Outillage opérateur (sauvegardes + planification), piloté par la page *Administration → Maintenance* et la CLI `python -m transcria.maintenance.cli` — cf. `docs/UPGRADE.md`. Toutes les clés sont optionnelles, avec des défauts sûrs.
+
+| Clé | Défaut | Rôle |
+|---|---|---|
+| `maintenance.backup_dir` | `./backups` | Dossier des archives (page Maintenance + backup planifié) |
+| `maintenance.schedule.enabled` | `false` | Indicatif ; le timer s'installe via `maintenance schedule --enable` ou la carte « Sauvegarde planifiée » |
+| `maintenance.schedule.on_calendar` | `*-*-* 02:00:00` | Cadence systemd `OnCalendar` du backup planifié (`Persistent=true`) |
+| `maintenance.schedule.keep` | `7` | Rotation : nombre d'archives conservées |
+| `maintenance.schedule.exclude_audio` | `false` | Sauvegardes planifiées sans les audios originaux (archives plus légères) |

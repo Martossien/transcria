@@ -20,12 +20,15 @@ than a rewrite.*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/00-overview.gif)
 
-## Project status — 0.3.0
+## Project status — 0.3.1
 
 Building on the 0.2.0 stable line. **0.3.0** adds ingestion of the **documents presented
 in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT
 correction, and hardens the anti-gender-leak guard on participant roles (see the
-[changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
+[changelog](CHANGELOG.md)). **0.3.1** adds operator tooling — a *Maintenance* admin page
+(create, schedule and restore backups) and a *Models* page that downloads the models this
+install needs — and fixes a startup deadlock in the arbitration agent (opencode) when its
+local LLM endpoint is briefly unreachable. The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both the single-box and
 distributed deployments are validated end-to-end (unit and integration suite plus
 real-GPU runs). The interface is French-first, and reference
@@ -183,9 +186,15 @@ once real people share the tool week after week.
 - **Voice enrollment.** Consent-gated known-voice matching: a signed form and a hashed
   proof are required before any embedding is generated, and reference audio is deleted by
   default.
-- **Backup, restore, and guided upgrade.** A maintenance CLI backs up the database and
-  job files, restores them, and walks an upgrade through its migrations — on SQLite or
-  PostgreSQL.
+- **Backup, restore, and guided upgrade — CLI or admin UI.** An *Administration → Maintenance*
+  page creates, lists, downloads and restores backups (restore runs a privileged one-shot that
+  stops the service, restores, and restarts) and installs a **scheduled backup** (systemd timer);
+  the same operations plus a tooled, migration-aware upgrade live on the `maintenance` CLI — on
+  SQLite or PostgreSQL.
+- **Model manager.** An *Administration → Models* page shows which models this install needs
+  (arbitration-LLM tier for the detected VRAM, STT, diarization), checks free disk, and downloads
+  them with a progress bar — HuggingFace token handled for gated models (pyannote, Cohere),
+  one-click activation of the served LLM. Also on the `maintenance opencode-upgrade` CLI.
 - **Configuration you can actually manage.** A classified 423-key schema drives a friendly
   admin UI and a generated reference; secrets stay out of the versioned config, and a
   `doctor` preflight validates the whole thing before you go live.

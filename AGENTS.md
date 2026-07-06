@@ -143,6 +143,14 @@ transcria/
       python_env.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
     deploy/                 # Déploiement conteneurisé (P5)
       entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
+    maintenance/            # Backup/restore/upgrade LOCAL + planification + one-shot restore (opérateur)
+      backup.py / restore.py / upgrade.py # sauvegarde (pg_dump -Fc / sqlite .backup + manifeste), restauration gardée (refus base vivante), montée de version outillée
+      schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
+      restore_service.py    # restore depuis l'UI = one-shot privilégié transcria-restore.service (User=root : stop→restore(force)→rechown→start)
+      cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
+    models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF)
+    models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
+    install_arbitrage.py / install_models.py / install_opencode.py / install_systemd.py # primitives d'install (paliers GGUF, download HF, détection+MàJ opencode, units systemd)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
       models.py             # User, Role, Group, GroupMembership, GroupRole
@@ -265,7 +273,8 @@ transcria/
       matching.py           # Matching job→voix connues depuis clips locuteurs, suggestions validables
       routes.py             # voice_bp : /admin/voices + consentements + vectorisation
     web/
-      routes.py             # web_bp : 30 routes (pages + API JSON)
+      routes.py             # web_bp : pages + API JSON, dont /admin/maintenance (backups + planification + restore) et /admin/models (télécharger + activer les modèles)
+      maintenance_service.py # orchestration LÉGÈRE de la page Maintenance (listing archives, lancement backup en sous-process détaché, garde anti path-traversal)
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran
       prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité)
       templates/            # base.html (navbar à menus déroulants) + templates par étape
