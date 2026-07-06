@@ -198,6 +198,84 @@ def install_opencode_binary(
     return True
 
 
+def classify_opencode_install(binary: Path) -> str:
+    """Type d'install d'un binaire opencode : ``'npm'`` | ``'official'`` | ``'brew'`` | ``'unknown'``.
+
+    Résout d'abord les liens symboliques (l'install npm expose typiquement un symlink PATH
+    ``/usr/local/bin/opencode`` → ``…/node_modules/opencode-ai/bin/opencode.exe``), puis reconnaît
+    la source à l'emplacement RÉEL. Sert à choisir le bon updater (npm ≠ self-update officiel)."""
+    try:
+        real = Path(os.path.realpath(binary)).as_posix()
+    except OSError:
+        real = Path(binary).as_posix()
+    if "node_modules/opencode-ai" in real:
+        return "npm"
+    if "/.opencode/bin/" in real:
+        return "official"
+    if "/Cellar/opencode" in real or "/homebrew/" in real:
+        return "brew"
+    return "unknown"
+
+
+def opencode_upgrade_command(kind: str, binary: Path) -> list[str] | None:
+    """Commande de mise à jour pour un type d'install (``None`` si inconnu)."""
+    if kind == "official":
+        return [str(binary), "upgrade"]  # binaire officiel auto-actualisable en place
+    if kind == "npm":
+        return ["npm", "install", "-g", "opencode-ai@latest"]
+    if kind == "brew":
+        return ["brew", "upgrade", "opencode"]
+    return None
+
+
+@dataclass(frozen=True)
+class OpencodeUpgradeResult:
+    kind: str
+    ok: bool
+    version_before: str
+    version_after: str
+    message: str
+
+
+def upgrade_opencode(
+    *,
+    binary: Path,
+    kind: str | None = None,
+    run: RunFn = subprocess.run,
+    env: dict[str, str] | None = None,
+) -> OpencodeUpgradeResult:
+    """Met à jour opencode selon son type d'install détecté (``run`` injectable pour les tests).
+
+    ``official`` → self-update en place (``opencode upgrade``) ; ``npm`` → ``npm i -g
+    opencode-ai@latest`` ; ``brew`` → ``brew upgrade opencode``. Pour l'officiel on force ``HOME``
+    sur le parent de ``.opencode`` afin de cibler CET install (piège root ≠ utilisateur de service :
+    ``/root/.opencode`` vs ``~/.opencode``). Compare la version avant/après pour un rapport net."""
+    kind = kind or classify_opencode_install(binary)
+    command = opencode_upgrade_command(kind, binary)
+    before = opencode_version(binary, run=run)
+    if command is None:
+        return OpencodeUpgradeResult(
+            kind="unknown", ok=False, version_before=before, version_after=before,
+            message="type d'install opencode inconnu — mise à jour manuelle requise "
+                    "(npm i -g opencode-ai@latest | opencode upgrade | brew upgrade opencode)",
+        )
+    run_env = dict(os.environ if env is None else env)
+    if kind == "official":
+        # binary = <home>/.opencode/bin/opencode → HOME = <home>
+        run_env["HOME"] = str(Path(binary).parent.parent.parent)
+    try:
+        result = run(command, capture_output=True, text=True, timeout=600, check=False, env=run_env)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return OpencodeUpgradeResult(kind, False, before, before, f"échec du lancement : {exc}")
+    after = opencode_version(binary, run=run)
+    if getattr(result, "returncode", 1) != 0:
+        err = (getattr(result, "stderr", "") or getattr(result, "stdout", "") or "").strip()[:300]
+        return OpencodeUpgradeResult(kind, False, before, after,
+                                     f"échec (code {getattr(result, 'returncode', '?')}) : {err}")
+    message = f"déjà à jour ({after})" if after == before else f"mis à jour : {before} → {after}"
+    return OpencodeUpgradeResult(kind, True, before, after, message)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Helpers d'installation opencode TranscrIA.")
     parser.add_argument("--version", action="store_true", help="affiche la version opencode")

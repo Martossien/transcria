@@ -8,6 +8,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Mise à jour opencode outillée** : nouvelle commande `python -m transcria.maintenance.cli
+  opencode-upgrade` qui **détecte le type d'install** du binaire opencode (npm via symlink →
+  `node_modules/opencode-ai` ; officiel `~/.opencode/bin` ; brew) et lance l'updater adapté
+  (`npm install -g opencode-ai@latest` / `opencode upgrade` / `brew upgrade opencode`), avec
+  rapport de version avant/après. `--check` affiche la commande sans l'exécuter. Gère le piège
+  root ≠ utilisateur de service (self-update officiel : `HOME` ciblé sur le bon `.opencode`).
+  Motivé par le service tournant un opencode npm périmé (1.17.4) alors que l'install officielle
+  était en 1.17.14.
+
 ### Fixed
 - **Gel opencode au démarrage — CAUSE RACINE identifiée + court-circuit** : diagnostiqué au
   batch E2E 2026-07-05, **cause prouvée en repro isolé le 2026-07-06**. `opencode run`

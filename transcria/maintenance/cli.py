@@ -4,6 +4,9 @@ Sous-commandes :
     backup            crée une archive tar.gz horodatée (+ rotation, +manifeste)
     backup-verify     vérifie l'intégrité d'une archive (sha256 + ouverture réelle)
     restore           restaure une archive (garde-fous : base vide sauf --force, dry-run)
+    upgrade           mise à niveau outillée (sauvegarde → code → migration → restart → santé)
+    opencode-upgrade  met à jour opencode (détecte npm / officiel / brew)
+    purge             purge les données expirées (rétention DPO)
 
 La logique métier est dans backup.py / restore.py (pur, testé) ; ce module est le runner.
 """
@@ -157,6 +160,39 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
+    """Met à jour opencode en détectant son type d'install (npm / officiel / brew).
+    ``--check`` affiche la commande sans l'exécuter."""
+    from transcria.config.loader import load_config
+    from transcria.install_opencode import (
+        classify_opencode_install,
+        detect_opencode,
+        opencode_upgrade_command,
+        upgrade_opencode,
+    )
+
+    cfg = load_config(args.config)
+    configured_bin = cfg.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
+    home = Path(args.opencode_home) if args.opencode_home else Path.home()
+    detection = detect_opencode(opencode_home=home, user_home=home, configured_bin=configured_bin)
+    if not detection.binary:
+        print("❌ opencode introuvable (ni PATH, ni ~/.opencode/bin, ni opencode_bin de config).",
+              file=sys.stderr)
+        return 1
+
+    kind = classify_opencode_install(detection.binary)
+    if args.check:
+        cmd = opencode_upgrade_command(kind, detection.binary)
+        print(f"opencode : {detection.binary}  (version {detection.version}, install « {kind} »)")
+        print("   Mise à jour : " + (" ".join(cmd) if cmd else "AUCUNE (type inconnu — MàJ manuelle)"))
+        print("   Relancez sans --check pour appliquer.")
+        return 0
+
+    result = upgrade_opencode(binary=detection.binary, kind=kind)
+    print(f"{'✅' if result.ok else '❌'} opencode ({result.kind}) : {result.message}")
+    return 0 if result.ok else 1
+
+
 def _cmd_purge(args: argparse.Namespace) -> int:
     """Purge des données expirées selon la politique de rétention (C3.10).
     ``--dry-run`` COMPTE sans rien supprimer."""
@@ -218,6 +254,12 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--keep", type=int, default=0, help="rotation des sauvegardes")
     u.add_argument("--check", action="store_true", help="lister les étapes sans les exécuter")
     u.set_defaults(func=_cmd_upgrade)
+
+    oc = sub.add_parser("opencode-upgrade", help="mettre à jour opencode (détecte npm / officiel / brew)")
+    oc.add_argument("--check", action="store_true", help="afficher la commande de MàJ sans l'exécuter")
+    oc.add_argument("--opencode-home", default=None,
+                    help="HOME contenant .opencode (défaut : HOME courant — root pour le service)")
+    oc.set_defaults(func=_cmd_opencode_upgrade)
 
     pg = sub.add_parser("purge", help="purger les données expirées (rétention DPO)")
     pg.add_argument("--dry-run", action="store_true", help="compter sans supprimer")

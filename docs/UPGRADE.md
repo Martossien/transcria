@@ -108,6 +108,25 @@ venv/bin/python -m transcria.maintenance.cli upgrade
 Si une étape échoue, la mise à niveau **s'arrête** et affiche les étapes déjà faites ;
 restaurez la sauvegarde initiale pour revenir en arrière.
 
+## Mettre à jour opencode
+
+opencode s'installe de plusieurs façons (installateur officiel dans `~/.opencode/bin`, `npm i -g
+opencode-ai`, `brew`). La commande `opencode-upgrade` **détecte** la méthode utilisée par le
+binaire réellement résolu et lance le bon updater — utile notamment quand le service (root)
+tourne un opencode npm périmé alors que votre compte a une install officielle plus récente.
+
+```bash
+# Prévisualiser (détecte le type d'install et affiche la commande, sans l'exécuter) :
+venv/bin/python -m transcria.maintenance.cli opencode-upgrade --check
+
+# Appliquer (à lancer avec le HOME du service pour cibler SON install — cf. piège root/user) :
+sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
+```
+
+- **npm** (symlink → `node_modules/opencode-ai`) → `npm install -g opencode-ai@latest`
+- **officiel** (`~/.opencode/bin/opencode`) → `opencode upgrade` (self-update, `HOME` ciblé)
+- **brew** → `brew upgrade opencode`
+
 ### Notes de migration par version
 
 - **0.2.0 → 0.3.0** : nouvelles dépendances Python (`pypdf`, `python-pptx`, pur-Python,

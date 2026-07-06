@@ -7,16 +7,111 @@ import pytest
 
 from transcria.install_opencode import (
     OpencodeDetection,
+    classify_opencode_install,
     detect_opencode,
     ensure_shell_path,
     find_opencode_binary,
     install_opencode_binary,
     main,
+    opencode_upgrade_command,
     opencode_version,
     render_install_prompt,
     render_opencode_detection_shell,
     render_setup_log,
+    upgrade_opencode,
 )
+
+
+def _upgrade_run(version_seq, *, upgrade_rc=0, upgrade_out=""):
+    """Fake `run` couvrant les appels `--version` ET la commande d'upgrade. Retourne (run, calls)."""
+    calls: list[tuple[list[str], dict | None]] = []
+    versions = iter(version_seq)
+
+    def run(cmd, capture_output=True, text=True, timeout=None, check=False, env=None):
+        calls.append((list(cmd), env))
+        if cmd[-1] == "--version":
+            return subprocess.CompletedProcess(cmd, 0, stdout=next(versions), stderr="")
+        return subprocess.CompletedProcess(cmd, upgrade_rc, stdout=upgrade_out, stderr=upgrade_out)
+
+    return run, calls
+
+
+def test_classify_opencode_install_npm(tmp_path: Path):
+    real = tmp_path / "node_modules" / "opencode-ai" / "bin" / "opencode.exe"
+    real.parent.mkdir(parents=True)
+    real.write_text("x")
+    link = tmp_path / "opencode"
+    link.symlink_to(real)  # symlink PATH → node_modules (cas npm typique)
+    assert classify_opencode_install(link) == "npm"
+
+
+def test_classify_opencode_install_official(tmp_path: Path):
+    binary = tmp_path / ".opencode" / "bin" / "opencode"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("x")
+    assert classify_opencode_install(binary) == "official"
+
+
+def test_classify_opencode_install_brew():
+    assert classify_opencode_install(Path("/opt/homebrew/Cellar/opencode/1.0/bin/opencode")) == "brew"
+
+
+def test_classify_opencode_install_unknown():
+    assert classify_opencode_install(Path("/usr/bin/opencode")) == "unknown"
+
+
+def test_opencode_upgrade_command_dispatch():
+    assert opencode_upgrade_command("official", Path("/x")) == ["/x", "upgrade"]
+    assert opencode_upgrade_command("npm", Path("/x")) == ["npm", "install", "-g", "opencode-ai@latest"]
+    assert opencode_upgrade_command("brew", Path("/x")) == ["brew", "upgrade", "opencode"]
+    assert opencode_upgrade_command("unknown", Path("/x")) is None
+
+
+def test_upgrade_opencode_official_self_updates_with_scoped_home(tmp_path: Path):
+    binary = tmp_path / ".opencode" / "bin" / "opencode"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("x")
+    run, calls = _upgrade_run(["opencode 1.17.13\n", "opencode 1.17.14\n"])
+    result = upgrade_opencode(binary=binary, run=run, env={})
+    assert result.kind == "official" and result.ok is True
+    assert result.version_before == "opencode 1.17.13" and result.version_after == "opencode 1.17.14"
+    assert "mis à jour" in result.message
+    up = [c for c in calls if c[0][-1] == "upgrade"]
+    assert up and up[0][0] == [str(binary), "upgrade"]
+    assert up[0][1]["HOME"] == str(tmp_path)  # piège root≠user : HOME ciblé sur CET install
+
+
+def test_upgrade_opencode_npm_uses_npm_install(tmp_path: Path):
+    real = tmp_path / "node_modules" / "opencode-ai" / "bin" / "opencode.exe"
+    real.parent.mkdir(parents=True)
+    real.write_text("x")
+    link = tmp_path / "bin" / "opencode"
+    link.parent.mkdir()
+    link.symlink_to(real)
+    run, calls = _upgrade_run(["opencode 1.17.4\n", "opencode 1.17.14\n"])
+    result = upgrade_opencode(binary=link, run=run, env={})
+    assert result.kind == "npm" and result.ok is True
+    npm = [c for c in calls if c[0][:2] == ["npm", "install"]]
+    assert npm and npm[0][0] == ["npm", "install", "-g", "opencode-ai@latest"]
+
+
+def test_upgrade_opencode_unknown_returns_manual_message():
+    run, calls = _upgrade_run(["opencode 1.0\n"])
+    result = upgrade_opencode(binary=Path("/usr/bin/opencode"), run=run, env={})
+    assert result.kind == "unknown" and result.ok is False
+    assert "inconnu" in result.message
+    assert all(c[0][-1] == "--version" for c in calls)  # aucune commande d'upgrade lancée
+
+
+def test_upgrade_opencode_reports_failure(tmp_path: Path):
+    binary = tmp_path / ".opencode" / "bin" / "opencode"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("x")
+    run, _calls = _upgrade_run(["opencode 1.17.13\n", "opencode 1.17.13\n"],
+                               upgrade_rc=1, upgrade_out="network error")
+    result = upgrade_opencode(binary=binary, run=run, env={})
+    assert result.ok is False and result.kind == "official"
+    assert "échec" in result.message and "network error" in result.message
 
 
 def test_opencode_version_returns_first_non_empty_line():
