@@ -5,6 +5,7 @@ Sous-commandes :
     backup-verify     vérifie l'intégrité d'une archive (sha256 + ouverture réelle)
     restore           restaure une archive (garde-fous : base vide sauf --force, dry-run)
     upgrade           mise à niveau outillée (sauvegarde → code → migration → restart → santé)
+    schedule          planifie les sauvegardes via un timer systemd (--enable/--disable)
     opencode-upgrade  met à jour opencode (détecte npm / officiel / brew)
     purge             purge les données expirées (rétention DPO)
 
@@ -193,6 +194,35 @@ def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
+def _cmd_schedule(args: argparse.Namespace) -> int:
+    """Planifie les sauvegardes via un timer systemd (--enable / --disable / défaut = statut)."""
+    from transcria.config.loader import get_config_path, load_config
+    from transcria.maintenance.schedule import (
+        BackupSchedule,
+        backup_schedule_status,
+        install_backup_schedule,
+        remove_backup_schedule,
+    )
+
+    if args.disable:
+        actions = remove_backup_schedule()
+        print("✅ Backup planifié désactivé : " + ", ".join(actions))
+        return 0
+    if args.enable:
+        cfg = load_config(args.config)
+        config_path = get_config_path(args.config)
+        schedule = BackupSchedule.from_config(cfg, config_path, service_user=args.user)
+        actions = install_backup_schedule(schedule)
+        print(f"✅ Backup planifié activé (OnCalendar={schedule.on_calendar}, keep={schedule.keep}, "
+              f"user={schedule.service_user}) : " + ", ".join(actions))
+        print("   Vérifiez : systemctl list-timers transcria-backup.timer")
+        return 0
+    status = backup_schedule_status()
+    print(f"Timer {status['unit']} : enabled={status['enabled'] or 'absent'} · active={status['active'] or 'absent'}")
+    print("   --enable pour installer/activer depuis la config ; --disable pour retirer.")
+    return 0
+
+
 def _cmd_purge(args: argparse.Namespace) -> int:
     """Purge des données expirées selon la politique de rétention (C3.10).
     ``--dry-run`` COMPTE sans rien supprimer."""
@@ -254,6 +284,13 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--keep", type=int, default=0, help="rotation des sauvegardes")
     u.add_argument("--check", action="store_true", help="lister les étapes sans les exécuter")
     u.set_defaults(func=_cmd_upgrade)
+
+    sc = sub.add_parser("schedule", help="planifier les sauvegardes (timer systemd)")
+    sc.add_argument("--enable", action="store_true", help="installer + activer le timer depuis la config")
+    sc.add_argument("--disable", action="store_true", help="désactiver + retirer le timer")
+    sc.add_argument("--user", default=None,
+                    help="utilisateur du service oneshot (défaut : propriétaire du dossier d'install)")
+    sc.set_defaults(func=_cmd_schedule)
 
     oc = sub.add_parser("opencode-upgrade", help="mettre à jour opencode (détecte npm / officiel / brew)")
     oc.add_argument("--check", action="store_true", help="afficher la commande de MàJ sans l'exécuter")

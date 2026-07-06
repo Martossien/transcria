@@ -665,6 +665,17 @@ _DEFAULT_CONFIG = {
             },
         },
     },
+    # Maintenance opérateur : dossier des sauvegardes + planification (timer systemd).
+    # Géré via la page Administration → Maintenance et la CLI `transcria.maintenance.cli`.
+    "maintenance": {
+        "backup_dir": "./backups",
+        "schedule": {
+            "enabled": False,                  # timer systemd installé/activé ?
+            "on_calendar": "*-*-* 02:00:00",   # syntaxe systemd OnCalendar (défaut : 02h00)
+            "keep": 7,                         # rotation : nombre d'archives conservées
+            "exclude_audio": False,            # sauvegardes planifiées sans les audios
+        },
+    },
 }
 
 _CONFIG_PATH_ENV = "TRANSCRIA_CONFIG"

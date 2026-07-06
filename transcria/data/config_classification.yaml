@@ -34,6 +34,11 @@ exposed:
 - workflow.queue.enabled
 - workflow.summary_llm.model_id
 internal:
+  maintenance.backup_dir: dossier des sauvegardes — géré via la page Maintenance / CLI
+  maintenance.schedule.enabled: planification (timer systemd) gérée via la page Maintenance / CLI
+  maintenance.schedule.on_calendar: cadence systemd OnCalendar — page Maintenance / CLI
+  maintenance.schedule.keep: rotation des sauvegardes planifiées — page Maintenance / CLI
+  maintenance.schedule.exclude_audio: sauvegardes planifiées sans audio — page Maintenance / CLI
   gpu.llm_vram_mb: calibration ÉCRITE par le système (recalage mesuré au 1er load)
   gpu.llm_gpu_indices: calibration écrite par le système (placement mesuré)
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système

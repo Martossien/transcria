@@ -3026,14 +3026,51 @@ def admin_config():
 @login_required
 @requires(Permission.MANAGE_CONFIG)
 def admin_maintenance():
+    from transcria.maintenance.schedule import backup_schedule_status
     from transcria.web.maintenance_service import MaintenanceService
 
     cfg = ConfigService.get_singleton()
+    try:
+        status = backup_schedule_status()  # lecture seule (systemctl is-enabled/is-active)
+    except Exception:  # noqa: BLE001 — statut best-effort, jamais bloquant pour la page
+        status = {"unit": "transcria-backup.timer", "enabled": "", "active": ""}
     return render_template(
         "admin_maintenance.html",
         archives=MaintenanceService.list_archives(cfg),
         backup_dir=str(MaintenanceService.backup_dir(cfg)),
+        schedule=(cfg.get("maintenance", {}) or {}).get("schedule", {}) or {},
+        schedule_status=status,
     )
+
+
+@web_bp.route("/admin/maintenance/schedule", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_schedule():
+    from transcria.maintenance.schedule import (
+        BackupSchedule,
+        install_backup_schedule,
+        remove_backup_schedule,
+    )
+
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+    action = request.form.get("action")
+    try:
+        if action == "enable":
+            schedule = BackupSchedule.from_config(cfg, config_path)
+            install_backup_schedule(schedule)
+            audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
+                      target_label=f"planification activée (OnCalendar={schedule.on_calendar})")
+            flash(f"Sauvegarde planifiée activée (cadence {schedule.on_calendar}).", "success")
+        elif action == "disable":
+            remove_backup_schedule()
+            audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
+                      target_label="planification désactivée")
+            flash("Sauvegarde planifiée désactivée.", "success")
+    except Exception as exc:  # noqa: BLE001 — surface l'échec systemd à l'opérateur
+        flash(f"Échec de la planification : {exc}", "error")
+    return redirect(url_for("web.admin_maintenance"))
 
 
 @web_bp.route("/admin/maintenance/backup", methods=["POST"])

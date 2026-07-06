@@ -34,27 +34,29 @@ venv/bin/python -m transcria.maintenance.cli backup --exclude-audio
 venv/bin/python -m transcria.maintenance.cli backup-verify ./backups/transcria-backup-AAAAMMJJ-HHMMSS.tar.gz
 ```
 
-### Automatiser (timer systemd, optionnel)
+### Automatiser (timer systemd)
 
-Un timer quotidien peut appeler la commande `backup`. Modèle à adapter (unités non
-installées par défaut) :
+La commande `schedule` **génère et installe** le couple d'unités
+`transcria-backup.{service,timer}` à partir de la config (`maintenance.schedule`), recharge
+systemd et arme le timer — plus besoin de rédiger les unités à la main :
 
-```ini
-# /etc/systemd/system/transcria-backup.service
-[Service]
-Type=oneshot
-User=transcria
-WorkingDirectory=/opt/transcria
-Environment=TRANSCRIA_CONFIG=/opt/transcria/config.yaml
-ExecStart=/opt/transcria/venv/bin/python -m transcria.maintenance.cli backup --dest /var/backups/transcria --keep 14
+```bash
+# Cadence / rotation dans config.yaml (section maintenance) :
+#   maintenance:
+#     backup_dir: /var/backups/transcria
+#     schedule: { enabled: true, on_calendar: "*-*-* 02:00:00", keep: 14, exclude_audio: false }
 
-# /etc/systemd/system/transcria-backup.timer
-[Timer]
-OnCalendar=*-*-* 02:30:00
-Persistent=true
-[Install]
-WantedBy=timers.target
+# Installer + activer (à lancer en root — écrit dans /etc/systemd/system) :
+sudo HOME=/root venv/bin/python -m transcria.maintenance.cli schedule --enable
+
+# Vérifier / désactiver :
+venv/bin/python -m transcria.maintenance.cli schedule           # statut
+sudo venv/bin/python -m transcria.maintenance.cli schedule --disable
 ```
+
+Le service oneshot appelle la CLI `backup` (rotation `--keep`, `--exclude-audio` selon config) ;
+le timer utilise `Persistent=true` (une exécution manquée pendant une coupure est rattrapée).
+Pilotable aussi depuis **Administration → Maintenance** (carte « Sauvegarde planifiée »).
 
 ## Restaurer
 

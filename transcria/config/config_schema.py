@@ -40,7 +40,32 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
+    _check_maintenance(cfg.get("maintenance", {}), result)
     return result
+
+
+def _check_maintenance(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("maintenance: doit être un objet YAML")
+        return
+    if "backup_dir" in cfg:
+        _check_str(cfg, "backup_dir", "maintenance.backup_dir", r)
+    sched = cfg.get("schedule")
+    if sched is None:
+        return
+    if not isinstance(sched, dict):
+        r.add_error("maintenance.schedule: doit être un objet YAML")
+        return
+    if "enabled" in sched:
+        _check_bool(sched, "enabled", "maintenance.schedule.enabled", r)
+    if "exclude_audio" in sched:
+        _check_bool(sched, "exclude_audio", "maintenance.schedule.exclude_audio", r)
+    if "keep" in sched:
+        _check_int_range(sched, "keep", "maintenance.schedule.keep", 0, 10_000, r)
+    if "on_calendar" in sched:
+        _check_str(sched, "on_calendar", "maintenance.schedule.on_calendar", r)
 
 
 def _check_required_keys(cfg: dict, r: ValidationResult) -> None:

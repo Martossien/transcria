@@ -35,3 +35,25 @@ def test_backup_post_forbidden_for_viewer(viewer_client):
 def test_download_unknown_archive_is_404(admin_client):
     resp = admin_client.get("/admin/maintenance/backup/transcria-backup-00000000-000000.tar.gz/download")
     assert resp.status_code == 404
+
+
+def test_schedule_enable_triggers_install(admin_client, monkeypatch):
+    calls: dict = {}
+    monkeypatch.setattr("transcria.maintenance.schedule.install_backup_schedule",
+                        lambda schedule, **_kw: calls.setdefault("enabled", True) or ["ok"])
+    resp = admin_client.post("/admin/maintenance/schedule", data={"action": "enable"})
+    assert resp.status_code == 302
+    assert calls.get("enabled") is True
+
+
+def test_schedule_disable_triggers_remove(admin_client, monkeypatch):
+    calls: dict = {}
+    monkeypatch.setattr("transcria.maintenance.schedule.remove_backup_schedule",
+                        lambda **_kw: calls.setdefault("removed", True) or ["ok"])
+    resp = admin_client.post("/admin/maintenance/schedule", data={"action": "disable"})
+    assert resp.status_code == 302
+    assert calls.get("removed") is True
+
+
+def test_schedule_forbidden_for_viewer(viewer_client):
+    assert viewer_client.post("/admin/maintenance/schedule", data={"action": "enable"}).status_code == 403

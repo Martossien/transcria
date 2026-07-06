@@ -36,6 +36,44 @@
   </div>
 </div>
 
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center">
+    <i class="bi bi-calendar-week me-2"></i> Sauvegarde planifiée
+    {% if schedule_status and schedule_status.active == 'active' %}
+      <span class="badge bg-success ms-2">active</span>
+    {% else %}
+      <span class="badge bg-secondary ms-2">inactive</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Installe un <strong>timer systemd</strong> qui lance une sauvegarde selon la cadence
+      configurée. Cadence :
+      <code>{{ schedule.on_calendar or '*-*-* 02:00:00' }}</code>
+      (syntaxe <code>OnCalendar</code>), rotation
+      <strong>{{ schedule.keep if schedule.keep is not none else 7 }}</strong> archives,
+      {% if schedule.exclude_audio %}sans les audios{% else %}audios inclus{% endif %}.
+      Modifiable dans <code>maintenance.schedule</code> (config).
+    </p>
+    <form method="post" action="{{ url_for('web.admin_maintenance_schedule') }}" class="d-inline">
+      <input type="hidden" name="action" value="enable">
+      <button type="submit" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-calendar-check"></i> Activer / mettre à jour le timer
+      </button>
+    </form>
+    <form method="post" action="{{ url_for('web.admin_maintenance_schedule') }}" class="d-inline ms-2">
+      <input type="hidden" name="action" value="disable">
+      <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-calendar-x"></i> Désactiver
+      </button>
+    </form>
+    <div class="small text-muted mt-2">
+      État systemd : <code>{{ schedule_status.enabled or 'absent' }}</code> /
+      <code>{{ schedule_status.active or 'absent' }}</code>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header d-flex align-items-center">
     <i class="bi bi-archive me-2"></i> Archives disponibles
