@@ -3129,6 +3129,68 @@ def admin_maintenance_restore():
     return redirect(url_for("web.admin_maintenance"))
 
 
+def _models_view():
+    from transcria.models_catalog import catalog_with_status
+
+    cfg = ConfigService.get_singleton()
+    total_vram_mb = int(ConfigService.detect_system().get("total_vram_mb") or 0) or None
+    return catalog_with_status(cfg, total_vram_mb=total_vram_mb)
+
+
+@web_bp.route("/admin/models")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models():
+    import os
+
+    from transcria.models_catalog import resolve_hf_home, resolve_models_dir
+    from transcria.models_download import read_progress
+
+    view = _models_view()
+    hf_home, models_dir = resolve_hf_home(), resolve_models_dir()
+    for item in view["items"]:
+        item["progress"] = read_progress(item["spec"], hf_home=hf_home, models_dir=models_dir)
+    return render_template("admin_models.html", view=view, has_token=bool(os.environ.get("HF_TOKEN")))
+
+
+@web_bp.route("/admin/models/download", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_download():
+    import os
+
+    from transcria.models_catalog import resolve_hf_home, resolve_models_dir
+    from transcria.models_download import check_space, start_download
+
+    role = request.form.get("role")
+    token = (request.form.get("token") or "").strip() or os.environ.get("HF_TOKEN") or None
+    spec = next((it["spec"] for it in _models_view()["items"] if it["spec"].role == role), None)
+    if spec is None:
+        abort(404)
+    if spec.gated and not token:
+        flash(f"« {spec.label} » est un modèle *gated* : un token HuggingFace est requis "
+              "(et l'acceptation de sa licence sur huggingface.co).", "error")
+        return redirect(url_for("web.admin_models"))
+    ok, msg = check_space(spec, hf_home=resolve_hf_home(), models_dir=resolve_models_dir())
+    if not ok:
+        flash("Téléchargement refusé — " + msg, "error")
+        return redirect(url_for("web.admin_models"))
+    start_download(spec, token=token)
+    flash(f"Téléchargement de « {spec.label} » lancé en arrière-plan.", "success")
+    return redirect(url_for("web.admin_models"))
+
+
+@web_bp.route("/admin/models/progress/<role>")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_models_progress(role: str):
+    # Polled toutes les ~2 s : lecture du statut auto-suffisant, SANS détection GPU ni catalogue.
+    from transcria.models_catalog import resolve_hf_home, resolve_models_dir
+    from transcria.models_download import progress_by_role
+
+    return jsonify(progress_by_role(role, hf_home=resolve_hf_home(), models_dir=resolve_models_dir()))
+
+
 @web_bp.route("/admin/maintenance/backup", methods=["POST"])
 @login_required
 @requires(Permission.MANAGE_CONFIG)

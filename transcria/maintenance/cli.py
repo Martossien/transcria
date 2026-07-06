@@ -194,6 +194,15 @@ def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
     return 0 if result.ok else 1
 
 
+def _cmd_model_download(args: argparse.Namespace) -> int:
+    """[interne] Télécharge un modèle en sous-process (appelé par la page « Modèles »).
+    Publie sa progression dans le fichier de statut ; le token HF vient de l'ENV."""
+    from transcria.models_download import download_from_args
+
+    return download_from_args(role=args.role, repo=args.repo, kind=args.kind,
+                              file=args.file, subdir=args.subdir or "")
+
+
 def _cmd_restore_apply(args: argparse.Namespace) -> int:
     """Applique une restauration en attente (appelé par l'unité oneshot transcria-restore).
     Arrête le service → restaure (force) → rechown → redémarre. NE PAS lancer à la main sur
@@ -303,6 +312,14 @@ def main(argv: list[str] | None = None) -> int:
     u.add_argument("--keep", type=int, default=0, help="rotation des sauvegardes")
     u.add_argument("--check", action="store_true", help="lister les étapes sans les exécuter")
     u.set_defaults(func=_cmd_upgrade)
+
+    md = sub.add_parser("model-download", help="[interne] télécharge un modèle (appelé en sous-process)")
+    md.add_argument("--role", required=True)
+    md.add_argument("--repo", required=True)
+    md.add_argument("--kind", required=True, choices=["gguf", "hf_cache"])
+    md.add_argument("--file", default=None)
+    md.add_argument("--subdir", default="")
+    md.set_defaults(func=_cmd_model_download)
 
     ra = sub.add_parser("restore-apply",
                         help="[interne] applique une restauration en attente (oneshot privilégié)")

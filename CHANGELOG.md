@@ -9,6 +9,17 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Added
+- **Gestionnaire de modèles dans l'interface** : nouvelle page **Administration → Modèles**
+  (`/admin/models`, `MANAGE_CONFIG`) qui liste les modèles **nécessaires à cette installation**
+  (palier GGUF LLM recommandé pour le VRAM détecté, STT + diarisation selon le backend configuré),
+  leur **statut** (présent/absent + taille), la **place disque** (HF_HOME / MODELS_DIR) et permet de
+  **les télécharger** en un clic — téléchargement en **sous-process détaché** (worker web non
+  bloquant), **barre de progression** par polling (taille sur disque / total du repo), **check
+  d'espace** avant lancement. Modèles *gated* (Cohere, pyannote) : champ **token HuggingFace**
+  (repris de `HF_TOKEN` s'il est configuré, jamais passé en argv) + lien vers la licence à accepter ;
+  non-gated (Qwen GGUF, Whisper) : sans token. En Docker, les téléchargements atterrissent dans les
+  volumes montés (`HF_HOME`/`MODELS_DIR`) → persistants sur l'hôte. Modules purs/testés
+  `transcria/models_catalog.py` + `transcria/models_download.py` + CLI interne `model-download`.
 - **Sauvegardes dans l'interface (admin)** : nouvelle page **Administration → Maintenance**
   (`/admin/maintenance`, permission `MANAGE_CONFIG`) pour **créer une sauvegarde** (lancée en
   sous-processus détaché — le worker web ne bloque jamais), **lister** les archives (nom, taille,
