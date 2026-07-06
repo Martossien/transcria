@@ -78,9 +78,14 @@ engines:
     download: ollama_pull
     multi_gpu: {enable_when_gpus_gte: 2, env: {OLLAMA_SCHED_SPREAD: "1"}}
     tiers:
-      - {id: "12", min_vram_mb: 11500, context: 131072, model: "qwen3.5:4b"}
-      - {id: "16", min_vram_mb: 15500, context: 262144, model: "gemma4:12b"}
-      - {id: "24", min_vram_mb: 23000, context: 262144, model: "gemma4:12b"}
+      # Modèles alignés sur les paliers llama.cpp bench'és (famille Qwen : meilleur multilingue
+      # FR + agentique/tool-use pour opencode, cf. MCPMark Qwen3.6≫Gemma). Ollama = Q4_K_M,
+      # donc plus léger qu'au même palier llama.cpp → marge KV/contexte ≥ la référence validée.
+      - {id: "12", min_vram_mb: 11500, context: 131072, model: "qwen3.5:9b"}
+      - {id: "16", min_vram_mb: 15500, context: 262144, model: "qwen3.5:9b"}
+      # 24 Go : llama.cpp sert le 35B-A3B en IQ4 (~19 Go) ; le 35B Q4 d'Ollama (~24 Go) NE rentre
+      # PAS dans 24 Go → on descend au 27B (17 Go), qui reste le meilleur en raisonnement à ce palier.
+      - {id: "24", min_vram_mb: 23000, context: 262144, model: "qwen3.6:27b"}
       - {id: "32", min_vram_mb: 31000, context: 196608, model: "qwen3.6:27b"}
       - {id: "48", min_vram_mb: 46000, context: 262144, model: "qwen3.6:35b"}
       - {id: "64", min_vram_mb: 60000, context: 262144, model: "qwen3.6:35b"}

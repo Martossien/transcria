@@ -49,6 +49,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   Motivé par le service tournant un opencode npm périmé (1.17.4) alors que l'install officielle
   était en 1.17.14.
 
+### Changed
+- **Modèles Ollama par palier VRAM corrigés** (`llm_profiles.yaml`) : les choix renseignés
+  pendant l'enquête sur le gel d'opencode étaient inadaptés (12 Go = `qwen3.5:4b` trop faible ;
+  16 et 24 Go = `gemma4:12b`, doublon qui gâchait la VRAM du 24). Réalignés sur les paliers
+  llama.cpp bench'és (famille **Qwen** : meilleur multilingue FR + agentique/tool-use pour
+  opencode, cf. MCPMark Qwen3.6 ≫ Gemma4) en tenant compte du Q4_K_M d'Ollama :
+  12/16 → `qwen3.5:9b`, 24/32 → `qwen3.6:27b`, 48/64 → `qwen3.6:35b`. Tags vérifiés au registre
+  Ollama. (Le 35B-A3B en Q4 ne rentrant pas dans 24 Go, ce palier sert le 27B.)
+
 ### Fixed
 - **Gel opencode au démarrage — CAUSE RACINE identifiée + court-circuit** : diagnostiqué au
   batch E2E 2026-07-05, **cause prouvée en repro isolé le 2026-07-06**. `opencode run`

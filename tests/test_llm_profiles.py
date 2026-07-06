@@ -74,9 +74,9 @@ class TestSelectLlamacpp:
 
 class TestSelectOllama:
     def test_mono_gpu_uses_per_card(self):
-        # 1 carte 24 Go → palier 24 (9b), pas de spread.
+        # 1 carte 24 Go → palier 24 (27b), pas de spread.
         c = select_profile(_P, "ollama", gpu_count=1, per_card_vram_mb=24000, total_vram_mb=24000)
-        assert c.tier_id == "24" and c.model == "gemma4:12b"
+        assert c.tier_id == "24" and c.model == "qwen3.6:27b"
         assert c.engine_env == {} and c.multi_gpu is False
 
     def test_multi_gpu_uses_total_and_enables_spread(self):
@@ -87,7 +87,7 @@ class TestSelectOllama:
 
     def test_small_single_card_downshifts(self):
         c = select_profile(_P, "ollama", gpu_count=1, per_card_vram_mb=12000, total_vram_mb=12000)
-        assert c.tier_id == "12" and c.model == "qwen3.5:4b"
+        assert c.tier_id == "12" and c.model == "qwen3.5:9b"
 
 
 class TestSelectVllm:
@@ -139,7 +139,7 @@ class TestRecommendEngine:
                                per_card_vram_mb=12288, total_vram_mb=12288)
         assert rec["engine"] == "llamacpp"
         assert "Qwen3.5-9B" in rec["reason"]          # comparaison CONCRÈTE
-        assert "qwen3.5:4b" in rec["reason"]
+        assert "qwen3.5:9b" in rec["reason"]
         assert "déconseillé" in rec["reason"]
 
     def test_grand_palier_recommande_ollama(self):
