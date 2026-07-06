@@ -3022,6 +3022,51 @@ def admin_config():
     return _render_config_form(config_yaml, config_path)
 
 
+@web_bp.route("/admin/maintenance")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance():
+    from transcria.web.maintenance_service import MaintenanceService
+
+    cfg = ConfigService.get_singleton()
+    return render_template(
+        "admin_maintenance.html",
+        archives=MaintenanceService.list_archives(cfg),
+        backup_dir=str(MaintenanceService.backup_dir(cfg)),
+    )
+
+
+@web_bp.route("/admin/maintenance/backup", methods=["POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_backup():
+    from transcria.web.maintenance_service import MaintenanceService
+
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+    exclude_audio = request.form.get("exclude_audio") == "on"
+    keep = request.form.get("keep", type=int) or 0
+    MaintenanceService.start_backup(cfg, config_path, exclude_audio=exclude_audio, keep=keep)
+    audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
+              target_label="backup manuel")
+    flash("Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants.", "success")
+    return redirect(url_for("web.admin_maintenance"))
+
+
+@web_bp.route("/admin/maintenance/backup/<name>/download")
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_maintenance_download(name: str):
+    from transcria.web.maintenance_service import MaintenanceService
+
+    cfg = ConfigService.get_singleton()
+    archive = MaintenanceService.resolve_archive(cfg, name)  # anti path-traversal
+    if archive is None:
+        abort(404)
+    return send_file(archive, as_attachment=True, download_name=archive.name,
+                     mimetype="application/gzip")
+
+
 @web_bp.route("/api/system/status")
 @login_required
 @requires(Permission.ACCESS_SYSTEM)

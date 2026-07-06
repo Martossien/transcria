@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Maintenance — TranscrIA{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0"><i class="bi bi-hdd-stack me-2"></i>Maintenance</h1>
+  <a href="/" class="btn btn-outline-secondary">Retour</a>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center">
+    <i class="bi bi-save me-2"></i> Sauvegarde
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Crée une archive complète (base de données + jobs + voix + prompts + manifeste) dans
+      <code>{{ backup_dir }}</code>. La sauvegarde tourne en arrière-plan — rafraîchissez la page
+      pour voir la nouvelle archive apparaître.
+    </p>
+    <form method="post" action="{{ url_for('web.admin_maintenance_backup') }}" class="row g-3 align-items-end">
+      <div class="col-auto">
+        <label class="form-label small mb-1">Rotation (garder N archives)</label>
+        <input type="number" name="keep" min="0" value="7" class="form-control form-control-sm" style="width:8rem">
+      </div>
+      <div class="col-auto">
+        <div class="form-check mt-4">
+          <input class="form-check-input" type="checkbox" name="exclude_audio" id="exclude_audio">
+          <label class="form-check-label small" for="exclude_audio">Exclure les audios originaux (archive plus légère)</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-play-fill"></i> Sauvegarder maintenant
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center">
+    <i class="bi bi-archive me-2"></i> Archives disponibles
+    <span class="badge bg-secondary ms-2">{{ archives|length }}</span>
+  </div>
+  <div class="card-body p-0">
+    {% if archives %}
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr><th>Archive</th><th class="text-end">Taille</th><th>Date (UTC)</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for a in archives %}
+        <tr>
+          <td class="font-monospace small">{{ a.name }}</td>
+          <td class="text-end">{{ a.size_mb }} Mo</td>
+          <td class="small text-muted">{{ a.modified.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="text-end">
+            <a class="btn btn-outline-secondary btn-sm"
+               href="{{ url_for('web.admin_maintenance_download', name=a.name) }}">
+              <i class="bi bi-download"></i> Télécharger
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted small m-3 mb-3">Aucune archive pour l'instant. Lancez une première sauvegarde ci-dessus.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

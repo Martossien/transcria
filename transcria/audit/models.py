@@ -70,6 +70,9 @@ class AuditAction(str, enum.Enum):
     VOICE_DELETE = "voice_delete"
     VOICE_CONSENT_VIEW = "voice_consent_view"
 
+    MAINTENANCE_BACKUP_CREATE = "maintenance_backup_create"
+    MAINTENANCE_BACKUP_RESTORE = "maintenance_backup_restore"
+
 _VERB_FR = {
     "login": "Connexion", "login_failed": "Échec de connexion", "logout": "Déconnexion",
     "view": "Consultation", "download": "Téléchargement", "delete": "Suppression",
@@ -88,11 +91,12 @@ _VERB_FR = {
     "window_create": "Création de créneau", "window_modify": "Modification de créneau",
     "window_delete": "Suppression de créneau", "refine_request": "Demande d'affinage",
     "refine_revert": "Restauration d'affinage", "external_push": "Envoi externe",
+    "backup_create": "Création de sauvegarde", "backup_restore": "Restauration de sauvegarde",
 }
 _DOMAIN_FR = {
     "job": "traitement", "queue": "file", "schedule": "planification", "config": "configuration",
     "audit": "audit", "user": "utilisateur", "group": "groupe", "lexicon": "lexique",
-    "meeting_type": "type de réunion", "voice": "voix",
+    "meeting_type": "type de réunion", "voice": "voix", "maintenance": "maintenance",
 }
 
 

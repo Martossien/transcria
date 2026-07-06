@@ -63,6 +63,8 @@
               {% if Permission.MANAGE_CONFIG in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/config') %}active{% endif %}" href="/admin/config">
                 <i class="bi bi-sliders me-2"></i>Configuration</a></li>
+              <li><a class="dropdown-item {% if path.startswith('/admin/maintenance') %}active{% endif %}" href="/admin/maintenance">
+                <i class="bi bi-hdd-stack me-2"></i>Maintenance</a></li>
               {% endif %}
               {% if Permission.ACCESS_SYSTEM in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit">

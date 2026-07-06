@@ -9,6 +9,12 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Added
+- **Sauvegardes dans l'interface (admin)** : nouvelle page **Administration → Maintenance**
+  (`/admin/maintenance`, permission `MANAGE_CONFIG`) pour **créer une sauvegarde** (lancée en
+  sous-processus détaché — le worker web ne bloque jamais), **lister** les archives (nom, taille,
+  date) et les **télécharger** (garde anti path-traversal). S'appuie sur la CLI `maintenance`
+  déjà testée ; journalisé à l'audit (`maintenance_backup_create`). Le dossier des archives suit
+  `maintenance.backup_dir` (défaut `./backups`). Restauration UI et backup planifié : à suivre.
 - **Mise à jour opencode outillée** : nouvelle commande `python -m transcria.maintenance.cli
   opencode-upgrade` qui **détecte le type d'install** du binaire opencode (npm via symlink →
   `node_modules/opencode-ai` ; officiel `~/.opencode/bin` ; brew) et lance l'updater adapté
