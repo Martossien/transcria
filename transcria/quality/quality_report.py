@@ -14,6 +14,52 @@ _NON_LATIN_RE = re.compile(r"[\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]")
 _FOREIGN_MARKER_RE = re.compile(r"\[(?:ÉTRANGER|FOREIGN)(?::[^\]]+)?\]", re.IGNORECASE)
 _SPEAKER_PREFIX_RE = re.compile(r"^(SPEAKER_\d+)\(([^)]*)\):")
 
+# Chaînes du rapport qualité complet, par langue des livrables (Axe B ; fr = historique).
+_QR_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "empty": "Segments vides : {n} — vérifier et supprimer manuellement.",
+        "short": "Segments très courts (< 0.5s) : {n} — envisager la fusion.",
+        "long": "Segments très longs (> 60s) : {n} — envisager le découpage.",
+        "gaps": "Trous temporels (>{gap}s) : {n} — vérifier la couverture audio.",
+        "unmapped": "Locuteurs non mappés : {n} segments — associer aux participants.",
+        "low_coverage": "Couverture faible : {pct} — possible perte de transcription.",
+        "low_wps": "Débit de mots faible : {wps} mots/s.",
+        "high_wps": "Débit de mots élevé : {wps} mots/s — possible erreur.",
+        "md_title": "# Rapport qualité", "md_score": "Score qualité: {s}/100",
+        "md_checks": "Contrôles effectués: {c}", "md_warnings": "Points d'attention: {w}",
+        "md_review": "## Points à vérifier", "md_none": "- Aucun point d'attention détecté.",
+        "md_audio_diag": "## Diagnostic audio avant transcription",
+        "md_risk": "- Risque: {v}", "md_flags": "- Flags: {v}", "md_rms": "- RMS: {v}",
+        "md_snr": "- SNR estimé: {v}", "md_bandwidth": "- Bande passante 95%: {v} Hz",
+        "md_silence": "- Silence: {v}", "md_details": "## Détails des contrôles",
+        "md_all_passed": "- Tous les contrôles sont passés avec succès.",
+        "md_review_load": "## Charge de relecture", "risk_unknown": "inconnu",
+    },
+    "en": {
+        "empty": "Empty segments: {n} — check and remove manually.",
+        "short": "Very short segments (< 0.5s): {n} — consider merging.",
+        "long": "Very long segments (> 60s): {n} — consider splitting.",
+        "gaps": "Time gaps (>{gap}s): {n} — check audio coverage.",
+        "unmapped": "Unmapped speakers: {n} segments — map to participants.",
+        "low_coverage": "Low coverage: {pct} — possible transcription loss.",
+        "low_wps": "Low word rate: {wps} words/s.",
+        "high_wps": "High word rate: {wps} words/s — possible error.",
+        "md_title": "# Quality report", "md_score": "Quality score: {s}/100",
+        "md_checks": "Checks performed: {c}", "md_warnings": "Points of attention: {w}",
+        "md_review": "## Points to review", "md_none": "- No point of attention detected.",
+        "md_audio_diag": "## Audio diagnostics before transcription",
+        "md_risk": "- Risk: {v}", "md_flags": "- Flags: {v}", "md_rms": "- RMS: {v}",
+        "md_snr": "- Estimated SNR: {v}", "md_bandwidth": "- 95% bandwidth: {v} Hz",
+        "md_silence": "- Silence: {v}", "md_details": "## Check details",
+        "md_all_passed": "- All checks passed successfully.",
+        "md_review_load": "## Review load", "risk_unknown": "unknown",
+    },
+}
+
+
+def _qr_strings(language: str | None) -> dict[str, str]:
+    return _QR_STRINGS.get((language or "fr"), _QR_STRINGS["fr"])
+
 
 def _normalize_noise_text(text: str) -> str:
     """Normalise un texte pour comparaison avec les marqueurs ASR.
@@ -140,6 +186,8 @@ class QualityReporter:
 
     def run_all_checks(self, job: Job) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+        from transcria.gpu.opencode_runner import resolve_output_language
+        self.S = _qr_strings(resolve_output_language(job))
 
         srt_content = fs.load_text("metadata/transcription.srt") or ""
         segments = fs.load_json("metadata/transcription_segments.json") or []
@@ -168,7 +216,7 @@ class QualityReporter:
         total_checks += 1
         if empty_segments:
             checks.append({"type": "empty_segments", "count": len(empty_segments), "severity": "warning"})
-            review_points.append(f"Segments vides : {len(empty_segments)} — vérifier et supprimer manuellement.")
+            review_points.append(self.S["empty"].format(n=len(empty_segments)))
             warnings += len(empty_segments)
 
         # 2. Segments très courts
@@ -176,7 +224,7 @@ class QualityReporter:
         total_checks += 1
         if very_short:
             checks.append({"type": "short_segments", "count": len(very_short), "severity": "warning"})
-            review_points.append(f"Segments très courts (< 0.5s) : {len(very_short)} — envisager la fusion.")
+            review_points.append(self.S["short"].format(n=len(very_short)))
             warnings += len(very_short)
 
         # 3. Segments très longs
@@ -184,7 +232,7 @@ class QualityReporter:
         total_checks += 1
         if very_long:
             checks.append({"type": "long_segments", "count": len(very_long), "severity": "warning"})
-            review_points.append(f"Segments très longs (> 60s) : {len(very_long)} — envisager le découpage.")
+            review_points.append(self.S["long"].format(n=len(very_long)))
             warnings += len(very_long)
 
         # 4. Trous temporels
@@ -197,7 +245,7 @@ class QualityReporter:
                     gaps.append({"index": i, "gap_seconds": round(gap, 2)})
             if gaps:
                 checks.append({"type": "time_gaps", "count": len(gaps), "severity": "info"})
-                review_points.append(f"Trous temporels (>{thresholds['gap_s']}s) : {len(gaps)} — vérifier la couverture audio.")
+                review_points.append(self.S["gaps"].format(gap=thresholds['gap_s'], n=len(gaps)))
 
         # 5. Chevauchements
         total_checks += 1
@@ -247,7 +295,7 @@ class QualityReporter:
         unmapped_count = sum(1 for s in segments if s.get("speaker", "").startswith("SPEAKER_"))
         if unmapped_count > 0:
             checks.append({"type": "unmapped_speakers", "count": unmapped_count, "severity": "warning"})
-            review_points.append(f"Locuteurs non mappés : {unmapped_count} segments — associer aux participants.")
+            review_points.append(self.S["unmapped"].format(n=unmapped_count))
 
         # 7. Termes du lexique normalisés absents
         total_checks += 1
@@ -593,7 +641,7 @@ class QualityReporter:
             coverage_ratio = duration_covered / audio_duration
             if coverage_ratio < thresholds["coverage_ratio"]:
                 checks.append({"type": "low_coverage", "ratio": round(coverage_ratio, 2), "severity": "error"})
-                review_points.append(f"Couverture faible : {coverage_ratio:.0%} — possible perte de transcription.")
+                review_points.append(self.S["low_coverage"].format(pct=f"{coverage_ratio:.0%}"))
                 warnings += 1
 
         # 13. Ratio mots/durée suspect
@@ -603,10 +651,10 @@ class QualityReporter:
             words_per_second = word_count / duration_covered
             if words_per_second < thresholds["low_word_rate"]:
                 checks.append({"type": "low_word_rate", "rate": round(words_per_second, 2), "severity": "info"})
-                review_points.append(f"Débit de mots faible : {words_per_second:.1f} mots/s.")
+                review_points.append(self.S["low_wps"].format(wps=f"{words_per_second:.1f}"))
             if words_per_second > thresholds["high_word_rate"]:
                 checks.append({"type": "high_word_rate", "rate": round(words_per_second, 2), "severity": "warning"})
-                review_points.append(f"Débit de mots élevé : {words_per_second:.1f} mots/s — possible erreur.")
+                review_points.append(self.S["high_wps"].format(wps=f"{words_per_second:.1f}"))
 
         # 14. Résumé anormalement court (A4) : réunion substantielle mais résumé quasi vide
         # → génération tronquée/échouée. Le SRT sert de proxy de substance (toujours chargé).
@@ -663,45 +711,46 @@ class QualityReporter:
         return report
 
     def _format_markdown(self, report: dict) -> str:
+        S = getattr(self, "S", None) or _qr_strings("fr")
         lines = [
-            "# Rapport qualité",
+            S["md_title"],
             "",
-            f"Score qualité: {report['quality_score']}/100",
-            f"Contrôles effectués: {report['total_checks']}",
-            f"Points d'attention: {report['warnings']}",
+            S["md_score"].format(s=report['quality_score']),
+            S["md_checks"].format(c=report['total_checks']),
+            S["md_warnings"].format(w=report['warnings']),
             "",
-            "## Points à vérifier",
+            S["md_review"],
             "",
         ]
         if report.get("review_points"):
             for point in report["review_points"]:
                 lines.append(f"- {point}")
         else:
-            lines.append("- Aucun point d'attention détecté.")
+            lines.append(S["md_none"])
         preflight = self._find_check(report, "audio_preflight_flags")
         if preflight:
             metrics = preflight.get("metrics") or {}
             lines.extend([
                 "",
-                "## Diagnostic audio avant transcription",
+                S["md_audio_diag"],
                 "",
-                f"- Risque: {preflight.get('risk_level') or 'inconnu'}",
-                f"- Flags: {', '.join(preflight.get('flags') or [])}",
-                f"- RMS: {metrics.get('rms')}",
-                f"- SNR estimé: {metrics.get('estimated_snr_db')}",
-                f"- Bande passante 95%: {metrics.get('bandwidth_95_hz')} Hz",
-                f"- Silence: {metrics.get('silence_ratio')}",
+                S["md_risk"].format(v=preflight.get('risk_level') or S["risk_unknown"]),
+                S["md_flags"].format(v=', '.join(preflight.get('flags') or [])),
+                S["md_rms"].format(v=metrics.get('rms')),
+                S["md_snr"].format(v=metrics.get('estimated_snr_db')),
+                S["md_bandwidth"].format(v=metrics.get('bandwidth_95_hz')),
+                S["md_silence"].format(v=metrics.get('silence_ratio')),
             ])
         lines.append("")
-        lines.append("## Détails des contrôles")
+        lines.append(S["md_details"])
         lines.append("")
         for check in report.get("checks", []):
             lines.append(f"- **{check['type']}** ({check['severity']})")
         if not report.get("checks"):
-            lines.append("- Tous les contrôles sont passés avec succès.")
+            lines.append(S["md_all_passed"])
         if report.get("review_load"):
             lines.append("")
-            lines.append("## Charge de relecture")
+            lines.append(S["md_review_load"])
             lines.append("")
             for key, value in report["review_load"].items():
                 lines.append(f"- {key}: {value}")

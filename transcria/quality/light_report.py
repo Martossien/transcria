@@ -22,9 +22,35 @@ logger = logging.getLogger(__name__)
 _SHORT_SEGMENT_S = 0.5
 _LONG_SEGMENT_S = 60.0
 # Pénalités de score (bornées), proportionnelles à la part de segments problématiques.
-_EMPTY_LABEL = "Segments vides : {n} — vérifier et supprimer manuellement."
-_SHORT_LABEL = "Segments très courts (< 0,5s) : {n} — envisager la fusion."
-_LONG_LABEL = "Segments très longs (> 60s) : {n} — envisager le découpage."
+# Chaînes du rapport, par langue des livrables (Axe B ; fr = historique inchangé).
+_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "empty": "Segments vides : {n} — vérifier et supprimer manuellement.",
+        "short": "Segments très courts (< 0,5s) : {n} — envisager la fusion.",
+        "long": "Segments très longs (> 60s) : {n} — envisager le découpage.",
+        "missing_srt": "SRT absent ou vide — la transcription a échoué.",
+        "md_title": "# Rapport qualité (contrôle léger)",
+        "md_score": "Score qualité : {s}/100",
+        "md_checks": "Contrôles : {c} · avertissements : {w}",
+        "md_review": "## Points à vérifier",
+        "md_none": "Aucun point de vérification détecté par le contrôle léger.",
+    },
+    "en": {
+        "empty": "Empty segments: {n} — check and remove manually.",
+        "short": "Very short segments (< 0.5s): {n} — consider merging.",
+        "long": "Very long segments (> 60s): {n} — consider splitting.",
+        "missing_srt": "SRT missing or empty — transcription failed.",
+        "md_title": "# Quality report (light check)",
+        "md_score": "Quality score: {s}/100",
+        "md_checks": "Checks: {c} · warnings: {w}",
+        "md_review": "## Points to review",
+        "md_none": "No review point detected by the light check.",
+    },
+}
+
+
+def _strings(language: str | None) -> dict[str, str]:
+    return _STRINGS.get((language or "fr"), _STRINGS["fr"])
 
 _REVIEW_LOAD_ZERO = {
     "foreign_segments": 0,
@@ -40,6 +66,8 @@ _REVIEW_LOAD_ZERO = {
 def run_light_quality(job: Job, config: dict) -> dict:
     """Exécute le contrôle léger et écrit `quality/quality_report.{json,md}` + review_points."""
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+    from transcria.gpu.opencode_runner import resolve_output_language
+    S = _strings(resolve_output_language(job))
     srt_content = fs.load_text("metadata/transcription.srt") or ""
     segments = fs.load_json("metadata/transcription_segments.json") or []
 
@@ -51,13 +79,13 @@ def run_light_quality(job: Job, config: dict) -> dict:
     total_checks += 1
     if not srt_content.strip():
         checks.append({"type": "missing_srt", "severity": "error"})
-        review_points.append("SRT absent ou vide — la transcription a échoué.")
+        review_points.append(S["missing_srt"])
 
     empty = [s for s in segments if not (s.get("text") or "").strip()]
     total_checks += 1
     if empty:
         checks.append({"type": "empty_segments", "count": len(empty), "severity": "warning"})
-        review_points.append(_EMPTY_LABEL.format(n=len(empty)))
+        review_points.append(S["empty"].format(n=len(empty)))
         warnings += len(empty)
 
     very_short = [
@@ -67,7 +95,7 @@ def run_light_quality(job: Job, config: dict) -> dict:
     total_checks += 1
     if very_short:
         checks.append({"type": "short_segments", "count": len(very_short), "severity": "warning"})
-        review_points.append(_SHORT_LABEL.format(n=len(very_short)))
+        review_points.append(S["short"].format(n=len(very_short)))
         warnings += len(very_short)
 
     very_long = [
@@ -77,7 +105,7 @@ def run_light_quality(job: Job, config: dict) -> dict:
     total_checks += 1
     if very_long:
         checks.append({"type": "long_segments", "count": len(very_long), "severity": "warning"})
-        review_points.append(_LONG_LABEL.format(n=len(very_long)))
+        review_points.append(S["long"].format(n=len(very_long)))
         warnings += len(very_long)
 
     quality_score = _light_score(srt_content, segments, empty, very_short, very_long)
@@ -93,7 +121,7 @@ def run_light_quality(job: Job, config: dict) -> dict:
     }
 
     fs.save_json("quality/quality_report.json", report)
-    fs.save_text("quality/quality_report.md", _format_markdown(report))
+    fs.save_text("quality/quality_report.md", _format_markdown(report, S))
     fs.save_json("quality/review_points.json", review_points)
     from transcria.quality.review_points import ReviewPoints as _RP
     fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report))
@@ -114,17 +142,17 @@ def _light_score(srt_content, segments, empty, very_short, very_long) -> int:
     return max(0, min(100, round(100 - penalty)))
 
 
-def _format_markdown(report: dict) -> str:
+def _format_markdown(report: dict, S: dict[str, str]) -> str:
     lines = [
-        "# Rapport qualité (contrôle léger)",
+        S["md_title"],
         "",
-        f"Score qualité : {report['quality_score']}/100",
-        f"Contrôles : {report['total_checks']} · avertissements : {report['warnings']}",
+        S["md_score"].format(s=report['quality_score']),
+        S["md_checks"].format(c=report['total_checks'], w=report['warnings']),
         "",
     ]
     if report.get("review_points"):
-        lines.append("## Points à vérifier")
+        lines.append(S["md_review"])
         lines.extend(f"- {p}" for p in report["review_points"])
     else:
-        lines.append("Aucun point de vérification détecté par le contrôle léger.")
+        lines.append(S["md_none"])
     return "\n".join(lines)

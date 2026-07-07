@@ -145,6 +145,32 @@ def test_en_markers_not_found_in_fr_mode():
     assert p_fr["speaker_count"] == 0
 
 
+def test_quality_reports_localized():
+    """Rapports qualité (léger + complet) : markdown généré dans la langue du livrable."""
+    from transcria.quality.light_report import _format_markdown as light_md
+    from transcria.quality.light_report import _strings as light_strings
+    from transcria.quality.quality_report import QualityReporter, _qr_strings
+    # Léger
+    rep = {"quality_score": 88, "total_checks": 4, "warnings": 1,
+           "review_points": ["Empty segments: 1 — check and remove manually."]}
+    md_en = light_md(rep, light_strings("en"))
+    assert md_en.startswith("# Quality report (light check)")
+    assert "## Points to review" in md_en and "Quality score: 88/100" in md_en
+    md_fr = light_md(rep, light_strings("fr"))
+    assert md_fr.startswith("# Rapport qualité (contrôle léger)")
+    # Complet
+    qr = QualityReporter(config={})
+    qr.S = _qr_strings("en")
+    full_en = qr._format_markdown({"quality_score": 77, "total_checks": 6, "warnings": 2,
+                                   "review_points": [], "checks": [], "review_load": {}})
+    assert "# Quality report" in full_en and "## Points to review" in full_en
+    assert "No point of attention detected" in full_en
+    # fr par défaut (self.S absent) = repli
+    qr2 = QualityReporter(config={})
+    assert qr2._format_markdown({"quality_score": 50, "total_checks": 1, "warnings": 0,
+                                 "review_points": [], "checks": [], "review_load": {}}).startswith("# Rapport qualité")
+
+
 def test_localized_field_labels():
     """Libellés des champs type-spécifiques localisés (repli fr/authoré)."""
     from transcria.context.meeting_type_catalog import localized_field_labels
