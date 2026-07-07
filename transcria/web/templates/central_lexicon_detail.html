@@ -1,54 +1,54 @@
 {% extends "base.html" %}
-{% block title %}{{ lexicon.name if lexicon else "Nouveau lexique" }} — TranscrIA{% endblock %}
+{% block title %}{{ lexicon.name if lexicon else _("Nouveau lexique") }} — TranscrIA{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
-    <h1 class="h3 mb-1">{{ lexicon.name if lexicon else "Nouveau lexique" }}</h1>
-    <p class="text-muted mb-0">Les entrées pré-remplissent le lexique de session, puis restent modifiables par l'utilisateur.</p>
+    <h1 class="h3 mb-1">{{ lexicon.name if lexicon else _("Nouveau lexique") }}</h1>
+    <p class="text-muted mb-0">{{ _("Les entrées pré-remplissent le lexique de session, puis restent modifiables par l'utilisateur.") }}</p>
   </div>
-  <a class="btn btn-outline-secondary" href="/admin/lexicons">Retour</a>
+  <a class="btn btn-outline-secondary" href="/admin/lexicons">{{ _('Retour') }}</a>
 </div>
 
 <div class="row g-4">
   <div class="col-lg-5">
     <div class="card p-4">
-      <h2 class="h5">Informations</h2>
+      <h2 class="h5">{{ _('Informations') }}</h2>
       <form method="post" action="{{ '/admin/lexicons/' ~ lexicon.id ~ '/metadata' if lexicon else '/admin/lexicons/new' }}">
         <div class="mb-3">
-          <label class="form-label">Nom</label>
+          <label class="form-label">{{ _('Nom') }}</label>
           <input class="form-control" name="name" value="{{ lexicon.name if lexicon else '' }}" required>
         </div>
         <div class="mb-3">
-          <label class="form-label">Description</label>
+          <label class="form-label">{{ _('Description') }}</label>
           <textarea class="form-control" name="description" rows="3">{{ lexicon.description if lexicon else '' }}</textarea>
         </div>
         <div class="mb-3">
-          <label class="form-label">Groupe</label>
+          <label class="form-label">{{ _('Groupe') }}</label>
           <select class="form-select" name="group_id" {% if not allow_global %}required{% endif %}>
             {% if allow_global %}
-            <option value="" {% if lexicon and not lexicon.group_id %}selected{% endif %}>Global</option>
+            <option value="" {% if lexicon and not lexicon.group_id %}selected{% endif %}>{{ _('Global') }}</option>
             {% endif %}
             {% for group in groups %}
             <option value="{{ group.id }}" {% if lexicon and lexicon.group_id == group.id %}selected{% endif %}>{{ group.name }}</option>
             {% endfor %}
           </select>
         </div>
-        <button class="btn btn-primary" type="submit">{{ "Enregistrer" if lexicon else "Créer" }}</button>
+        <button class="btn btn-primary" type="submit">{{ _('Enregistrer') if lexicon else _('Créer') }}</button>
       </form>
       {% if lexicon %}
       <hr>
       <div class="mb-3">
-        <div class="small text-muted mb-1">Périmètre</div>
+        <div class="small text-muted mb-1">{{ _('Périmètre') }}</div>
         <span class="badge text-bg-light border">
           {% if lexicon.group_id %}
-            Groupe : {{ lexicon.group.name if lexicon.group else "[Groupe supprimé]" }}
+            {{ _('Groupe : %(g)s', g=lexicon.group.name if lexicon.group else _("[Groupe supprimé]")) }}
           {% else %}
-            Global
+            {{ _('Global') }}
           {% endif %}
         </span>
       </div>
-      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" onsubmit="return confirm('Supprimer ce lexique et toutes ses entrées ?')">
-        <button class="btn btn-outline-danger" type="submit">Supprimer ce lexique</button>
+      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" onsubmit="return confirm('{{ _('Supprimer ce lexique et toutes ses entrées ?') }}')">
+        <button class="btn btn-outline-danger" type="submit">{{ _('Supprimer ce lexique') }}</button>
       </form>
       {% endif %}
     </div>
@@ -59,22 +59,22 @@
     <div class="card p-4 mb-4">
       <div class="d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h2 class="h5 mb-1">Traçabilité</h2>
-          <p class="text-muted small mb-0">Usage, périmètre et signaux de sensibilité sans journaliser les termes.</p>
+          <h2 class="h5 mb-1">{{ _('Traçabilité') }}</h2>
+          <p class="text-muted small mb-0">{{ _('Usage, périmètre et signaux de sensibilité sans journaliser les termes.') }}</p>
         </div>
-        <span class="badge text-bg-light border">{{ usage_stats.total_usage if usage_stats else 0 }} utilisation(s)</span>
+        <span class="badge text-bg-light border">{{ _('%(n)s utilisation(s)', n=usage_stats.total_usage if usage_stats else 0) }}</span>
       </div>
       <div class="row g-3 mt-1">
         <div class="col-sm-4">
-          <div class="small text-muted">Entrées utilisées</div>
+          <div class="small text-muted">{{ _('Entrées utilisées') }}</div>
           <div class="fw-semibold">{{ usage_stats.used_count if usage_stats else 0 }} / {{ usage_stats.entry_count if usage_stats else 0 }}</div>
         </div>
         <div class="col-sm-4">
-          <div class="small text-muted">Jamais utilisées</div>
+          <div class="small text-muted">{{ _('Jamais utilisées') }}</div>
           <div class="fw-semibold">{{ usage_stats.never_used_count if usage_stats else 0 }}</div>
         </div>
         <div class="col-sm-4">
-          <div class="small text-muted">Dernière utilisation</div>
+          <div class="small text-muted">{{ _('Dernière utilisation') }}</div>
           <div class="fw-semibold">
             {% if usage_stats and usage_stats.last_used_at %}
               {{ usage_stats.last_used_at.strftime('%Y-%m-%d') }}
@@ -86,27 +86,27 @@
       </div>
       <div class="row g-3 mt-1">
         <div class="col-sm-4">
-          <div class="small text-muted">Signal noms propres</div>
+          <div class="small text-muted">{{ _('Signal noms propres') }}</div>
           <div class="fw-semibold">
             {% if sensitivity_summary and sensitivity_summary.contains_probable_person_names %}
-              {{ sensitivity_summary.probable_person_name_count }} possible(s)
+              {{ _('%(n)s possible(s)', n=sensitivity_summary.probable_person_name_count) }}
             {% else %}
-              Aucun signal
+              {{ _('Aucun signal') }}
             {% endif %}
           </div>
         </div>
         <div class="col-sm-4">
-          <div class="small text-muted">Variantes</div>
+          <div class="small text-muted">{{ _('Variantes') }}</div>
           <div class="fw-semibold">{{ sensitivity_summary.variant_count if sensitivity_summary else 0 }}</div>
         </div>
         <div class="col-sm-4">
-          <div class="small text-muted">Audit</div>
-          <div class="fw-semibold">Contenu non journalisé</div>
+          <div class="small text-muted">{{ _('Audit') }}</div>
+          <div class="fw-semibold">{{ _('Contenu non journalisé') }}</div>
         </div>
       </div>
       {% if usage_stats and usage_stats.top_entries %}
       <div class="mt-3">
-        <div class="small text-muted mb-1">Entrées les plus utilisées</div>
+        <div class="small text-muted mb-1">{{ _('Entrées les plus utilisées') }}</div>
         <div class="d-flex flex-wrap gap-2">
           {% for entry in usage_stats.top_entries %}
           <span class="badge text-bg-light border">{{ entry.term }} · {{ entry.usage_count }}</span>
@@ -118,11 +118,11 @@
 
     {% if quality_issues %}
     <div class="card p-4 mb-4">
-      <h2 class="h5 mb-2">Contrôles qualité</h2>
+      <h2 class="h5 mb-2">{{ _('Contrôles qualité') }}</h2>
       <div class="vstack gap-2">
         {% for issue in quality_issues %}
         <div class="d-flex align-items-start gap-2 small">
-          <span class="badge {{ 'text-bg-warning' if issue.severity == 'warning' else 'text-bg-light border' }}">{{ 'Attention' if issue.severity == 'warning' else 'Info' }}</span>
+          <span class="badge {{ 'text-bg-warning' if issue.severity == 'warning' else 'text-bg-light border' }}">{{ _('Attention') if issue.severity == 'warning' else _('Info') }}</span>
           <div>
             <strong>{{ issue.entry.term }}</strong>
             <span class="text-muted">— {{ issue.message }}</span>
@@ -134,34 +134,34 @@
     {% endif %}
 
     <div class="card p-4 mb-4">
-      <h2 class="h5">Ajouter une entrée</h2>
+      <h2 class="h5">{{ _('Ajouter une entrée') }}</h2>
       <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries">
         {% include "_central_lexicon_entry_fields.html" %}
-        <button class="btn btn-primary mt-2" type="submit">Ajouter</button>
+        <button class="btn btn-primary mt-2" type="submit">{{ _('Ajouter') }}</button>
       </form>
     </div>
 
     <div class="card p-4 mb-4">
       <div class="d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h2 class="h5">Importer / exporter</h2>
-          <p class="small text-muted mb-0">Les imports et exports sont enregistrés dans l'audit de sécurité.</p>
+          <h2 class="h5">{{ _('Importer / exporter') }}</h2>
+          <p class="small text-muted mb-0">{{ _("Les imports et exports sont enregistrés dans l'audit de sécurité.") }}</p>
         </div>
         {% if lexicon_export_allowed %}
         <form method="post" action="/admin/lexicons/{{ lexicon.id }}/export.csv"
-              onsubmit="return confirm('Exporter ce lexique complet ? Cette action sera enregistrée dans l’audit de sécurité.')">
-          <button class="btn btn-sm btn-outline-secondary" type="submit">Exporter CSV</button>
+              onsubmit="return confirm('{{ _('Exporter ce lexique complet ? Cette action sera enregistrée dans l’audit de sécurité.') }}')">
+          <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _('Exporter CSV') }}</button>
         </form>
         {% else %}
-        <span class="badge text-bg-light border">Export réservé aux admins globaux</span>
+        <span class="badge text-bg-light border">{{ _('Export réservé aux admins globaux') }}</span>
         {% endif %}
       </div>
       <form method="post" action="/admin/lexicons/{{ lexicon.id }}/import" enctype="multipart/form-data">
         <div class="mb-2">
           <input class="form-control" type="file" name="file" accept=".txt,.csv" required>
         </div>
-        <p class="small text-muted mb-2">Format : forme correcte, catégorie, priorité, commentaire optionnel.</p>
-        <button class="btn btn-outline-primary" type="submit">Importer</button>
+        <p class="small text-muted mb-2">{{ _('Format : forme correcte, catégorie, priorité, commentaire optionnel.') }}</p>
+        <button class="btn btn-outline-primary" type="submit">{{ _('Importer') }}</button>
       </form>
     </div>
   </div>
@@ -169,10 +169,10 @@
   <div class="col-12">
     <div class="card p-4">
       <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2 class="h5 mb-0">Entrées</h2>
+        <h2 class="h5 mb-0">{{ _('Entrées') }}</h2>
         <div class="d-flex gap-2">
-          <span class="badge bg-secondary">{{ lexicon.entries|length }} entrée(s)</span>
-          <span class="badge text-bg-light border">{{ usage_stats.total_usage if usage_stats else 0 }} utilisation(s)</span>
+          <span class="badge bg-secondary">{{ _('%(n)s entrée(s)', n=lexicon.entries|length) }}</span>
+          <span class="badge text-bg-light border">{{ _('%(n)s utilisation(s)', n=usage_stats.total_usage if usage_stats else 0) }}</span>
         </div>
       </div>
       {% if lexicon.entries %}
@@ -182,19 +182,19 @@
           <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}">
             <div class="row g-2 align-items-end">
               <div class="col-md-3">
-                <label class="form-label small">Forme correcte</label>
+                <label class="form-label small">{{ _('Forme correcte') }}</label>
                 <input class="form-control form-control-sm" name="term" value="{{ entry.term }}" required>
               </div>
               <div class="col-md-3">
-                <label class="form-label small">Variantes</label>
+                <label class="form-label small">{{ _('Variantes') }}</label>
                 <input class="form-control form-control-sm" name="variants" value="{{ entry.variants|join(', ') }}">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Catégorie</label>
+                <label class="form-label small">{{ _('Catégorie') }}</label>
                 <input class="form-control form-control-sm" name="category" list="central-lexicon-categories" value="{{ entry.category }}">
               </div>
               <div class="col-md-2">
-                <label class="form-label small">Priorité</label>
+                <label class="form-label small">{{ _('Priorité') }}</label>
                 <select class="form-select form-select-sm" name="priority">
                   {% for priority in priorities %}
                   <option value="{{ priority }}" {% if entry.priority == priority %}selected{% endif %}>{{ priority }}</option>
@@ -202,28 +202,28 @@
                 </select>
               </div>
               <div class="col-md-2 text-md-end">
-                <button class="btn btn-sm btn-outline-primary" type="submit">Enregistrer</button>
+                <button class="btn btn-sm btn-outline-primary" type="submit">{{ _('Enregistrer') }}</button>
               </div>
             </div>
             <div class="mt-2">
-              <label class="form-label small">Commentaire</label>
+              <label class="form-label small">{{ _('Commentaire') }}</label>
               <input class="form-control form-control-sm" name="comment" value="{{ entry.comment }}">
             </div>
             <div class="mt-2 small text-muted">
-              Utilisé {{ entry.usage_count or 0 }} fois
+              {{ _('Utilisé %(n)s fois', n=entry.usage_count or 0) }}
               {% if entry.last_used_at %}
-              · dernière utilisation {{ entry.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+              · {{ _('dernière utilisation %(d)s', d=entry.last_used_at.strftime('%Y-%m-%d %H:%M')) }}
               {% endif %}
             </div>
           </form>
-          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" onsubmit="return confirm('Supprimer cette entrée ?')">
-            <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" onsubmit="return confirm('{{ _('Supprimer cette entrée ?') }}')">
+            <button class="btn btn-sm btn-outline-danger" type="submit">{{ _('Supprimer') }}</button>
           </form>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <div class="alert alert-light border mb-0">Aucune entrée pour ce lexique.</div>
+      <div class="alert alert-light border mb-0">{{ _('Aucune entrée pour ce lexique.') }}</div>
       {% endif %}
     </div>
   </div>

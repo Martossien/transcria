@@ -114,15 +114,15 @@
     allLocal: {{ _('tout local')|tojson }},
     noRemote: {{ _('Aucune ressource distante configurée (tout intégré).')|tojson }},
     unreachable: {{ _('injoignable')|tojson }},
-    nodeUnreachable: {{ _('Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : %(reqs)s.')|tojson }},
+    nodeUnreachable: {{ _('Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}.')|tojson }},
     remote: {{ _('distant')|tojson }},
     gpuLabel: {{ _('GPU :')|tojson }},
-    gpuLine: {{ _('GPU %(i)s — libre %(free)s / %(total)s Mo')|tojson }},
+    gpuLine: {{ _('GPU {i} — libre {free} / {total} Mo')|tojson }},
     noEngine: {{ _('Aucun moteur déclaré.')|tojson }},
     error: {{ _('erreur')|tojson }},
-    statusUnavailable: {{ _('Statut indisponible (%(e)s).')|tojson }},
+    statusUnavailable: {{ _('Statut indisponible ({e}).')|tojson }},
   };
-  function fmt(s, p) { return s.replace(/%\(([^)]+)\)s/g, function (m, k) { return p[k] !== undefined ? p[k] : m; }); }
+  function fmt(s, p) { return s.replace(/\{([^}]+)\}/g, function (m, k) { return p[k] !== undefined ? p[k] : m; }); }
   const modeEl = document.getElementById('rr-mode');
   const body = document.getElementById('rr-body');
   function dot(up) {

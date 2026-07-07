@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Éditer la transcription — TranscrIA{% endblock %}
+{% block title %}{{ _('Éditer la transcription') }} — TranscrIA{% endblock %}
 {% block content %}
 {# Atelier d'édition (lot B — docs/EDITEUR_SRT_INTEGRE.md §7). Tout l'état vient de
    GET /editor/state ; le rendu des cartes est paresseux (content-visibility). #}
@@ -7,90 +7,90 @@
 
   <div class="se-topbar">
     <a href="/jobs/{{ job.id }}/result" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Résultats</a>
+      <i class="bi bi-arrow-left"></i> {{ _('Résultats') }}</a>
     <span class="se-title"><i class="bi bi-pencil-square me-1"></i>{{ job.title }}</span>
     <span class="text-muted small" id="se-meta"></span>
-    <span class="se-gauge text-muted small" id="se-gauge" title="Progression de la relecture (segments visités)"></span>
+    <span class="se-gauge text-muted small" id="se-gauge" title="{{ _('Progression de la relecture (segments visités)') }}"></span>
     <div class="input-group input-group-sm se-search" style="max-width: 240px">
-      <input class="form-control" id="se-search" placeholder="Rechercher… (Ctrl+F)">
-      <button class="btn btn-outline-secondary" id="se-search-prev" title="Précédent">↑</button>
-      <button class="btn btn-outline-secondary" id="se-search-next" title="Suivant">↓</button>
+      <input class="form-control" id="se-search" placeholder="{{ _('Rechercher… (Ctrl+F)') }}">
+      <button class="btn btn-outline-secondary" id="se-search-prev" title="{{ _('Précédent') }}">↑</button>
+      <button class="btn btn-outline-secondary" id="se-search-next" title="{{ _('Suivant') }}">↓</button>
     </div>
     <span class="ms-auto se-save-state" id="se-save-state" aria-live="polite"></span>
-    <button class="btn btn-sm btn-outline-secondary" id="se-undo" title="Annuler (Ctrl+Z)" disabled>
+    <button class="btn btn-sm btn-outline-secondary" id="se-undo" title="{{ _('Annuler (Ctrl+Z)') }}" disabled>
       <i class="bi bi-arrow-counterclockwise"></i></button>
-    <button class="btn btn-sm btn-outline-secondary" id="se-redo" title="Rétablir (Ctrl+Y)" disabled>
+    <button class="btn btn-sm btn-outline-secondary" id="se-redo" title="{{ _('Rétablir (Ctrl+Y)') }}" disabled>
       <i class="bi bi-arrow-clockwise"></i></button>
-    <button class="btn btn-sm btn-outline-secondary" id="se-help" title="Raccourcis clavier (?)">
+    <button class="btn btn-sm btn-outline-secondary" id="se-help" title="{{ _('Raccourcis clavier (?)') }}">
       <i class="bi bi-question-lg"></i></button>
     <button class="btn btn-sm btn-primary" id="se-save" title="Ctrl+S">
-      <i class="bi bi-floppy"></i> Enregistrer une version</button>
+      <i class="bi bi-floppy"></i> {{ _('Enregistrer une version') }}</button>
   </div>
 
   <div id="se-banners"></div>
 
   <!-- Carte de reprise du brouillon (affichée seule si brouillon présent) -->
   <div class="se-resume-card d-none" id="se-resume">
-    <h5><i class="bi bi-life-preserver me-2"></i>Reprendre où vous en étiez ?</h5>
+    <h5><i class="bi bi-life-preserver me-2"></i>{{ _('Reprendre où vous en étiez ?') }}</h5>
     <p class="text-muted" id="se-resume-detail"></p>
     <div class="d-flex gap-2 justify-content-center">
-      <button class="btn btn-primary" id="se-resume-yes">Reprendre le brouillon</button>
-      <button class="btn btn-outline-secondary" id="se-resume-no">Repartir de la dernière version</button>
+      <button class="btn btn-primary" id="se-resume-yes">{{ _('Reprendre le brouillon') }}</button>
+      <button class="btn btn-outline-secondary" id="se-resume-no">{{ _('Repartir de la dernière version') }}</button>
     </div>
   </div>
 
   <div id="se-main" class="d-none">
     <div class="se-sticky">
     <div class="se-player" id="se-player-wrap">
-      <button class="btn btn-sm btn-primary" id="se-play" title="Lecture/pause (Espace)">
+      <button class="btn btn-sm btn-primary" id="se-play" title="{{ _('Lecture/pause (Espace)') }}">
         <i class="bi bi-play-fill"></i></button>
-      <button class="btn btn-sm btn-outline-secondary" id="se-back10" title="Reculer 10 s">
+      <button class="btn btn-sm btn-outline-secondary" id="se-back10" title="{{ _('Reculer 10 s') }}">
         <i class="bi bi-arrow-counterclockwise"></i>10s</button>
-      <button class="btn btn-sm btn-outline-secondary" id="se-fwd10" title="Avancer 10 s">
+      <button class="btn btn-sm btn-outline-secondary" id="se-fwd10" title="{{ _('Avancer 10 s') }}">
         10s<i class="bi bi-arrow-clockwise"></i></button>
       <span class="se-time" id="se-time">00:00:00 / —</span>
-      <select class="form-select form-select-sm" id="se-rate" style="width: 82px" title="Vitesse">
+      <select class="form-select form-select-sm" id="se-rate" style="width: 82px" title="{{ _('Vitesse') }}">
         <option value="0.75">×0,75</option><option value="1" selected>×1</option>
         <option value="1.25">×1,25</option><option value="1.5">×1,5</option><option value="2">×2</option>
       </select>
       <span class="badge text-bg-primary d-none" id="se-solo-chip" role="button"
-            title="Quitter l'écoute solo">🎧 Solo : <span id="se-solo-name"></span> ✕</span>
-      <div class="form-check form-switch ms-2" title="La liste suit la lecture">
+            title="{{ _("Quitter l'écoute solo") }}">🎧 {{ _('Solo :') }} <span id="se-solo-name"></span> ✕</span>
+      <div class="form-check form-switch ms-2" title="{{ _('La liste suit la lecture') }}">
         <input class="form-check-input" type="checkbox" id="se-follow" checked>
-        <label class="form-check-label small" for="se-follow">Suivre</label>
+        <label class="form-check-label small" for="se-follow">{{ _('Suivre') }}</label>
       </div>
       <audio id="se-audio" preload="metadata"></audio>
     </div>
 
     <div class="se-fresque-wrap">
       <div class="d-flex align-items-center gap-2 mb-1 se-timeline-bar">
-        <div class="btn-group btn-group-sm" role="group" id="se-view-toggle" title="Vue de la timeline">
-          <button class="btn btn-outline-secondary active" data-view="fresque">Fresque</button>
-          <button class="btn btn-outline-secondary" data-view="lanes">Par locuteur</button>
+        <div class="btn-group btn-group-sm" role="group" id="se-view-toggle" title="{{ _('Vue de la timeline') }}">
+          <button class="btn btn-outline-secondary active" data-view="fresque">{{ _('Fresque') }}</button>
+          <button class="btn btn-outline-secondary" data-view="lanes">{{ _('Par locuteur') }}</button>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" id="se-marker-btn" title="Poser un repère à la lecture (M)">
-          <i class="bi bi-geo-alt"></i> Repère</button>
+        <button class="btn btn-sm btn-outline-secondary" id="se-marker-btn" title="{{ _('Poser un repère à la lecture (M)') }}">
+          <i class="bi bi-geo-alt"></i> {{ _('Repère') }}</button>
         <div class="dropdown">
           <button class="btn btn-sm btn-outline-warning dropdown-toggle d-none" id="se-review-btn"
-                  data-bs-toggle="dropdown" title="Points à vérifier du rapport qualité"></button>
+                  data-bs-toggle="dropdown" title="{{ _('Points à vérifier du rapport qualité') }}"></button>
           <div class="dropdown-menu se-review-menu" id="se-review-menu"></div>
         </div>
         <span id="se-marker-chips" class="d-flex gap-1 flex-wrap"></span>
         <span class="ms-auto d-flex align-items-center gap-1">
-          <span class="text-muted small">Zoom</span>
+          <span class="text-muted small">{{ _('Zoom') }}</span>
           <span class="btn-group btn-group-sm">
-            <button class="btn btn-outline-secondary" id="se-zoom-out" title="Zoom arrière (molette)">−</button>
-            <button class="btn btn-outline-secondary" id="se-zoom-fit" title="Voir toute la réunion">Ajuster</button>
-            <button class="btn btn-outline-secondary" id="se-zoom-in" title="Zoom avant (molette)">+</button>
+            <button class="btn btn-outline-secondary" id="se-zoom-out" title="{{ _('Zoom arrière (molette)') }}">−</button>
+            <button class="btn btn-outline-secondary" id="se-zoom-fit" title="{{ _('Voir toute la réunion') }}">{{ _('Ajuster') }}</button>
+            <button class="btn btn-outline-secondary" id="se-zoom-in" title="{{ _('Zoom avant (molette)') }}">+</button>
           </span>
         </span>
       </div>
       <canvas class="se-fresque" id="se-fresque" height="34"
-              title="Fresque : clic = aller à cet instant · le cadre = la fenêtre zoomée"></canvas>
+              title="{{ _('Fresque : clic = aller à cet instant · le cadre = la fenêtre zoomée') }}"></canvas>
       <canvas class="se-lanes d-none" id="se-lanes"
-              title="Un locuteur par ligne : clic = aller à cette prise de parole"></canvas>
+              title="{{ _('Un locuteur par ligne : clic = aller à cette prise de parole') }}"></canvas>
       <canvas class="se-zoomband" id="se-zoomband" height="86"
-              title="Forme d'onde : molette = zoom · glisser les bords du segment actif = retimer"></canvas>
+              title="{{ _("Forme d'onde : molette = zoom · glisser les bords du segment actif = retimer") }}"></canvas>
     </div>
     </div><!-- /se-sticky -->
 
@@ -99,10 +99,10 @@
     <!-- Barre flottante de sélection multiple (shift-clic sur les cartes) -->
     <div class="se-selection-bar d-none" id="se-selection-bar">
       <span id="se-selection-count"></span>
-      <button class="btn btn-sm btn-outline-light" id="se-sel-speaker">🗣 Attribuer à…</button>
-      <button class="btn btn-sm btn-outline-light" id="se-sel-merge" title="Fusionner (plage contiguë)">⧉ Fusionner</button>
-      <button class="btn btn-sm btn-outline-danger" id="se-sel-delete">🗑 Supprimer</button>
-      <button class="btn btn-sm btn-outline-light" id="se-sel-clear" title="Échap">Annuler</button>
+      <button class="btn btn-sm btn-outline-light" id="se-sel-speaker">🗣 {{ _('Attribuer à…') }}</button>
+      <button class="btn btn-sm btn-outline-light" id="se-sel-merge" title="{{ _('Fusionner (plage contiguë)') }}">⧉ {{ _('Fusionner') }}</button>
+      <button class="btn btn-sm btn-outline-danger" id="se-sel-delete">🗑 {{ _('Supprimer') }}</button>
+      <button class="btn btn-sm btn-outline-light" id="se-sel-clear" title="{{ _('Échap') }}">{{ _('Annuler') }}</button>
     </div>
   </div>
 </div>

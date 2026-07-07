@@ -1,22 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Planification - TranscrIA{% endblock %}
+{% block title %}{{ _('Planification') }} - TranscrIA{% endblock %}
 {% block content %}
 {% set day_labels = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'] %}
+{# Les valeurs de jour restent en français (identifiants soumis à l'API / stockés) ;
+   seul l'AFFICHAGE est traduit via ce dictionnaire. #}
+{% set day_display = {'lundi': _('lundi'), 'mardi': _('mardi'), 'mercredi': _('mercredi'), 'jeudi': _('jeudi'), 'vendredi': _('vendredi'), 'samedi': _('samedi'), 'dimanche': _('dimanche')} %}
 
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
   <div>
-    <h1 class="h3 mb-1">Planification</h1>
-    <div class="text-muted small">Fuseau {{ timezone }}</div>
+    <h1 class="h3 mb-1">{{ _('Planification') }}</h1>
+    <div class="text-muted small">{{ _('Fuseau %(tz)s', tz=timezone) }}</div>
   </div>
   <div class="d-flex align-items-center gap-3">
-    <div class="form-check form-switch mb-0" title="Quand l'agenda est désactivé, les créneaux ci-dessous n'ont AUCUN effet.">
+    <div class="form-check form-switch mb-0" title="{{ _("Quand l'agenda est désactivé, les créneaux ci-dessous n'ont AUCUN effet.") }}">
       <input class="form-check-input" type="checkbox" id="schedule-master-toggle" {{ 'checked' if schedule_enabled }}>
       <label class="form-check-label fw-semibold" for="schedule-master-toggle">
-        Agenda {{ 'actif' if schedule_enabled else 'désactivé' }}
+        {{ _('Agenda actif') if schedule_enabled else _('Agenda désactivé') }}
       </label>
     </div>
     <a href="/admin/queue" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-list-ol" aria-hidden="true"></i> File
+      <i class="bi bi-list-ol" aria-hidden="true"></i> {{ pgettext('navigation', 'File') }}
     </a>
   </div>
 </div>
@@ -24,8 +27,7 @@
 {% if not schedule_enabled %}
 <div class="alert alert-warning d-flex align-items-start gap-2">
   <i class="bi bi-exclamation-triangle mt-1" aria-hidden="true"></i>
-  <div><strong>L'agenda est désactivé</strong> : les créneaux configurés ci-dessous n'ont
-  aucun effet sur la file. Activez-le avec l'interrupteur ci-dessus.</div>
+  <div>{% trans %}<strong>L'agenda est désactivé</strong> : les créneaux configurés ci-dessous n'ont aucun effet sur la file. Activez-le avec l'interrupteur ci-dessus.{% endtrans %}</div>
 </div>
 {% endif %}
 
@@ -33,24 +35,24 @@
 <div class="row g-3 mb-4">
   <div class="col-lg-4">
     <div class="card h-100">
-      <div class="card-header fw-semibold"><i class="bi bi-cpu" aria-hidden="true"></i> En cours de traitement</div>
+      <div class="card-header fw-semibold"><i class="bi bi-cpu" aria-hidden="true"></i> {{ _('En cours de traitement') }}</div>
       <div class="card-body py-2">
         {% if running_jobs %}
           {% for item in running_jobs %}
           <div class="d-flex justify-content-between border-bottom py-1">
             <span class="text-truncate me-2">{{ item.title }}</span>
-            <span class="badge text-bg-primary">en cours</span>
+            <span class="badge text-bg-primary">{{ _('en cours') }}</span>
           </div>
           {% endfor %}
         {% else %}
-        <p class="text-muted small mb-0 py-2">Aucun traitement en cours — les ressources sont libres.</p>
+        <p class="text-muted small mb-0 py-2">{{ _('Aucun traitement en cours — les ressources sont libres.') }}</p>
         {% endif %}
       </div>
     </div>
   </div>
   <div class="col-lg-4">
     <div class="card h-100">
-      <div class="card-header fw-semibold"><i class="bi bi-hourglass-split" aria-hidden="true"></i> En attente ({{ pending_jobs|length }})</div>
+      <div class="card-header fw-semibold"><i class="bi bi-hourglass-split" aria-hidden="true"></i> {{ _('En attente (%(n)s)', n=pending_jobs|length) }}</div>
       <div class="card-body py-2">
         {% if pending_jobs %}
           {% for item in pending_jobs[:5] %}
@@ -58,41 +60,40 @@
             <span class="text-truncate me-2">{{ loop.index }}. {{ item.title }}</span>
             <span class="text-muted small text-nowrap">
               {% if loop.index == 1 %}
-                {% if queue_resume_label %}≈ {{ queue_resume_label }}{% else %}dès que possible{% endif %}
-              {% else %}position {{ loop.index }}{% endif %}
+                {% if queue_resume_label %}≈ {{ queue_resume_label }}{% else %}{{ _('dès que possible') }}{% endif %}
+              {% else %}{{ _('position %(n)s', n=loop.index) }}{% endif %}
             </span>
           </div>
           {% endfor %}
-          {% if pending_jobs|length > 5 %}<div class="text-muted small pt-1">… et {{ pending_jobs|length - 5 }} autre(s)</div>{% endif %}
+          {% if pending_jobs|length > 5 %}<div class="text-muted small pt-1">{{ _('… et %(n)s autre(s)', n=pending_jobs|length - 5) }}</div>{% endif %}
           {% if queue_resume_at %}
-          <div class="alert alert-info py-1 px-2 small mt-2 mb-0">File suspendue par l'agenda —
-            reprise estimée <strong>{{ queue_resume_label }}</strong>.</div>
+          <div class="alert alert-info py-1 px-2 small mt-2 mb-0">{{ _("File suspendue par l'agenda — reprise estimée <strong>%(label)s</strong>.", label=queue_resume_label) }}</div>
           {% endif %}
         {% else %}
-        <p class="text-muted small mb-0 py-2">File vide — un nouveau traitement partirait immédiatement{% if queue_resume_label %} à la reprise ({{ queue_resume_label }}){% endif %}.</p>
+        <p class="text-muted small mb-0 py-2">{{ _('File vide — un nouveau traitement partirait immédiatement') }}{% if queue_resume_label %} {{ _('à la reprise (%(label)s)', label=queue_resume_label) }}{% endif %}.</p>
         {% endif %}
       </div>
     </div>
   </div>
   <div class="col-lg-4">
     <div class="card h-100">
-      <div class="card-header fw-semibold"><i class="bi bi-calendar-week" aria-hidden="true"></i> Agenda</div>
+      <div class="card-header fw-semibold"><i class="bi bi-calendar-week" aria-hidden="true"></i> {{ _('Agenda') }}</div>
       <div class="card-body py-2 small">
         {% if active_window %}
-        <div class="mb-2"><span class="badge text-bg-info">créneau actif</span>
+        <div class="mb-2"><span class="badge text-bg-info">{{ _('créneau actif') }}</span>
           <strong>{{ active_window.name }}</strong><br>
           <span class="text-muted">{{ action_labels.get(active_window.action, active_window.action) }}</span></div>
         {% else %}
-        <div class="mb-2 text-muted">Aucun créneau actif maintenant{{ '' if schedule_enabled else ' (agenda désactivé)' }}.</div>
+        <div class="mb-2 text-muted">{{ _('Aucun créneau actif maintenant') }}{{ '' if schedule_enabled else _(' (agenda désactivé)') }}.</div>
         {% endif %}
         {% if next_change %}
-        <div><span class="badge text-bg-light border">prochaine bascule</span>
+        <div><span class="badge text-bg-light border">{{ _('prochaine bascule') }}</span>
           {{ next_change_label }} —
-          {% if next_change.kind == 'start' and next_change.window %}début de « {{ next_change.window.name }} » ({{ action_labels.get(next_change.window.action, '') }})
-          {% else %}fin du créneau en cours{% endif %}
+          {% if next_change.kind == 'start' and next_change.window %}{{ _('début de « %(name)s » (%(action)s)', name=next_change.window.name, action=action_labels.get(next_change.window.action, '')) }}
+          {% else %}{{ _('fin du créneau en cours') }}{% endif %}
         </div>
         {% endif %}
-        <div class="mt-2 text-muted">Scheduler : {{ 'opérationnel' if scheduler_runtime.get('healthy', True) else 'indisponible' }}</div>
+        <div class="mt-2 text-muted">{{ _('Scheduler : %(state)s', state=(_('opérationnel') if scheduler_runtime.get('healthy', True) else _('indisponible'))) }}</div>
       </div>
     </div>
   </div>
@@ -101,21 +102,21 @@
 <!-- ── Frise hebdomadaire : les fenêtres d'un coup d'œil (calculée serveur) ── -->
 <div class="card mb-4">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <span class="fw-semibold">Semaine type</span>
+    <span class="fw-semibold">{{ _('Semaine type') }}</span>
     <span class="small d-flex gap-3">
-      <span><span class="sched-dot" style="background: var(--sched-pause)"></span> départs suspendus</span>
-      <span><span class="sched-dot" style="background: var(--sched-limit)"></span> simultanéité limitée</span>
-      <span><span class="sched-dot" style="background: var(--sched-force)"></span> priorité aux traitements</span>
+      <span><span class="sched-dot" style="background: var(--sched-pause)"></span> {{ _('départs suspendus') }}</span>
+      <span><span class="sched-dot" style="background: var(--sched-limit)"></span> {{ _('simultanéité limitée') }}</span>
+      <span><span class="sched-dot" style="background: var(--sched-force)"></span> {{ _('priorité aux traitements') }}</span>
     </span>
   </div>
   <div class="card-body">
-    <div class="sched-week" role="img" aria-label="Frise des créneaux de la semaine">
+    <div class="sched-week" role="img" aria-label="{{ _('Frise des créneaux de la semaine') }}">
       <div class="sched-hours">
         {% for h in [0, 6, 12, 18] %}<span style="left: {{ (h / 24 * 100)|round(1) }}%">{{ '%02d h'|format(h) }}</span>{% endfor %}
       </div>
       {% for day in day_labels %}
       <div class="sched-row">
-        <span class="sched-day">{{ day }}</span>
+        <span class="sched-day">{{ day_display.get(day, day) }}</span>
         <div class="sched-track">
           {% for seg in week_segments if seg.day == loop.index0 %}
           <span class="sched-seg sched-{{ seg.action }}" title="{{ seg.label }}"
@@ -131,23 +132,23 @@
 <div id="schedule-feedback" class="alert d-none" role="status"></div>
 
 <div class="card mb-4">
-  <div class="card-header fw-semibold">Nouveau créneau</div>
+  <div class="card-header fw-semibold">{{ _('Nouveau créneau') }}</div>
   <div class="card-body">
     <form id="schedule-form" class="row g-3">
       <div class="col-md-4 col-xl-3">
-        <label class="form-label" for="window-name">Nom</label>
-        <input id="window-name" class="form-control" name="name" placeholder="Nuit semaine" required>
+        <label class="form-label" for="window-name">{{ _('Nom') }}</label>
+        <input id="window-name" class="form-control" name="name" placeholder="{{ _('Nuit semaine') }}" required>
       </div>
       <div class="col-6 col-md-2">
-        <label class="form-label" for="window-start">Début</label>
+        <label class="form-label" for="window-start">{{ _('Début') }}</label>
         <input id="window-start" class="form-control" name="start" type="time" value="19:00" required>
       </div>
       <div class="col-6 col-md-2">
-        <label class="form-label" for="window-end">Fin</label>
+        <label class="form-label" for="window-end">{{ _('Fin') }}</label>
         <input id="window-end" class="form-control" name="end" type="time" value="07:30" required>
       </div>
       <div class="col-md-4 col-xl-3">
-        <label class="form-label" for="window-action">Règle appliquée</label>
+        <label class="form-label" for="window-action">{{ _('Règle appliquée') }}</label>
         <select id="window-action" class="form-select" name="action">
           {% for value, label in action_labels.items() %}
           <option value="{{ value }}">{{ label }}</option>
@@ -156,15 +157,15 @@
         <div id="window-action-help" class="form-text"></div>
       </div>
       <div class="col-md-2">
-        <label class="form-label" for="window-workers">Jobs simultanés max</label>
+        <label class="form-label" for="window-workers">{{ _('Jobs simultanés max') }}</label>
         <input id="window-workers" class="form-control" name="max_concurrent_jobs" type="number" min="1" max="32" value="1" disabled>
       </div>
       <div class="col-12">
-        <div class="form-label">Jours</div>
+        <div class="form-label">{{ _('Jours') }}</div>
         <div class="d-flex flex-wrap gap-2">
           {% for day in day_labels %}
           <label class="btn btn-outline-secondary btn-sm">
-            <input class="form-check-input me-1" type="checkbox" name="days" value="{{ day }}"> {{ day }}
+            <input class="form-check-input me-1" type="checkbox" name="days" value="{{ day }}"> {{ day_display.get(day, day) }}
           </label>
           {% endfor %}
         </div>
@@ -172,10 +173,10 @@
       <div class="col-12 d-flex flex-wrap justify-content-between align-items-center gap-2">
         <label class="form-check mb-0">
           <input class="form-check-input" type="checkbox" name="enabled" checked>
-          <span class="form-check-label">Activer immédiatement</span>
+          <span class="form-check-label">{{ _('Activer immédiatement') }}</span>
         </label>
         <button class="btn btn-primary" type="submit">
-          <i class="bi bi-plus-lg" aria-hidden="true"></i> Ajouter
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> {{ _('Ajouter') }}
         </button>
       </div>
     </form>
@@ -184,19 +185,19 @@
 
 <div class="card">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <span class="fw-semibold">Créneaux configurés</span>
-    <span class="text-muted small">{{ windows|length }} créneau{{ 'x' if windows|length > 1 else '' }}</span>
+    <span class="fw-semibold">{{ _('Créneaux configurés') }}</span>
+    <span class="text-muted small">{% trans count=windows|length %}{{ count }} créneau{% pluralize %}{{ count }} créneaux{% endtrans %}</span>
   </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
       <thead>
         <tr>
-          <th>Nom</th>
-          <th>Jours</th>
-          <th class="text-nowrap">Horaire</th>
-          <th>Règle appliquée</th>
-          <th class="text-nowrap">État</th>
-          <th class="text-end">Actions</th>
+          <th>{{ _('Nom') }}</th>
+          <th>{{ _('Jours') }}</th>
+          <th class="text-nowrap">{{ _('Horaire') }}</th>
+          <th>{{ _('Règle appliquée') }}</th>
+          <th class="text-nowrap">{{ _('État') }}</th>
+          <th class="text-end">{{ _('Actions') }}</th>
         </tr>
       </thead>
       <tbody id="windows-body">
@@ -204,28 +205,28 @@
         {% set params = window.get_action_params() %}
         <tr data-id="{{ window.id }}">
           <td class="fw-semibold">{{ window.name }}</td>
-          <td>{{ window.get_days() | join(', ') }}</td>
+          <td>{% for d in window.get_days() %}{{ day_display.get(d, d) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
           <td class="text-nowrap">{{ window.start_time }} → {{ window.end_time }}</td>
           <td>
             <span class="badge text-bg-light border">{{ action_labels.get(window.action, window.action) }}</span>
             {% if window.action == 'limit_concurrency' %}
-              <div class="text-muted small">maximum {{ params.get('max_concurrent_jobs', 1) }} job{{ 's' if params.get('max_concurrent_jobs', 1) != 1 else '' }}</div>
+              <div class="text-muted small">{% trans count=params.get('max_concurrent_jobs', 1) %}maximum {{ count }} job{% pluralize %}maximum {{ count }} jobs{% endtrans %}</div>
             {% endif %}
           </td>
           <td class="text-nowrap">
-            <span class="badge {{ 'text-bg-success' if window.enabled else 'text-bg-secondary' }}">{{ 'Actif' if window.enabled else 'Désactivé' }}</span>
+            <span class="badge {{ 'text-bg-success' if window.enabled else 'text-bg-secondary' }}">{{ _('Actif') if window.enabled else _('Désactivé') }}</span>
           </td>
           <td class="text-end text-nowrap">
-            <button class="btn btn-sm btn-outline-secondary" data-toggle="{{ window.id }}" data-enabled="{{ '1' if window.enabled else '0' }}" title="{{ 'Désactiver' if window.enabled else 'Activer' }}">
+            <button class="btn btn-sm btn-outline-secondary" data-toggle="{{ window.id }}" data-enabled="{{ '1' if window.enabled else '0' }}" title="{{ _('Désactiver') if window.enabled else _('Activer') }}">
               <i class="bi {{ 'bi-toggle-on' if window.enabled else 'bi-toggle-off' }}" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-sm btn-outline-danger" data-delete="{{ window.id }}" title="Supprimer">
+            <button class="btn btn-sm btn-outline-danger" data-delete="{{ window.id }}" title="{{ _('Supprimer') }}">
               <i class="bi bi-trash" aria-hidden="true"></i>
             </button>
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-5">Aucun créneau configuré</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-5">{{ _('Aucun créneau configuré') }}</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -243,7 +244,7 @@ masterToggle?.addEventListener('change', async () => {
   if (resp.ok) { location.reload(); }
   else {
     const data = await resp.json().catch(() => ({}));
-    alert(data.error || "Impossible de modifier l'agenda.");
+    alert(data.error || {{ _("Impossible de modifier l'agenda.")|tojson }});
     masterToggle.checked = !masterToggle.checked;
   }
 });
@@ -267,7 +268,7 @@ async function sendScheduleRequest(url, options) {
   const response = await fetch(url, options);
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || 'Modification impossible.');
+    throw new Error(data.error || {{ _('Modification impossible.')|tojson }});
   }
   return data;
 }
@@ -281,7 +282,7 @@ document.getElementById('schedule-form').addEventListener('submit', async (event
   const elements = form.elements;
   const days = Array.from(form.querySelectorAll('input[name="days"]:checked')).map((item) => item.value);
   if (days.length === 0) {
-    showScheduleFeedback('Sélectionne au moins un jour.');
+    showScheduleFeedback({{ _('Sélectionne au moins un jour.')|tojson }});
     return;
   }
   const maxWorkers = Number.parseInt(elements.namedItem('max_concurrent_jobs').value, 10);
@@ -325,7 +326,7 @@ document.querySelectorAll('[data-toggle]').forEach((button) => {
 
 document.querySelectorAll('[data-delete]').forEach((button) => {
   button.addEventListener('click', async () => {
-    if (!window.confirm('Supprimer ce créneau ?')) {
+    if (!window.confirm({{ _('Supprimer ce créneau ?')|tojson }})) {
       return;
     }
     button.disabled = true;
