@@ -187,7 +187,8 @@ class QualityReporter:
     def run_all_checks(self, job: Job) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         from transcria.gpu.opencode_runner import resolve_output_language
-        self.S = _qr_strings(resolve_output_language(job))
+        self._lang = resolve_output_language(job)
+        self.S = _qr_strings(self._lang)
 
         srt_content = fs.load_text("metadata/transcription.srt") or ""
         segments = fs.load_json("metadata/transcription_segments.json") or []
@@ -706,7 +707,7 @@ class QualityReporter:
         fs.save_text("quality/quality_report.md", md)
         fs.save_json("quality/review_points.json", review_points)
         from transcria.quality.review_points import ReviewPoints as _RP
-        fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report))
+        fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report, getattr(self, "_lang", "fr")))
 
         return report
 

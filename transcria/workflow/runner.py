@@ -86,6 +86,7 @@ def _refine_messages(language: str | None) -> dict[str, str]:
 _PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
     "fr": {
         "summary_stt": "Résumé : transcription rapide en cours",
+        "summary_stt_load": "Résumé : chargement STT {backend}",
         "summary_scene": "Résumé : analyse acoustique de la réunion",
         "summary_diar": "Résumé : détection des locuteurs en cours",
         "summary_llm": "Résumé : génération LLM en cours",
@@ -101,6 +102,7 @@ _PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
     },
     "en": {
         "summary_stt": "Summary: quick transcription in progress",
+        "summary_stt_load": "Summary: loading STT {backend}",
         "summary_scene": "Summary: acoustic analysis of the meeting",
         "summary_diar": "Summary: speaker detection in progress",
         "summary_llm": "Summary: LLM generation in progress",
@@ -538,7 +540,7 @@ class WorkflowRunner:
             job.id,
             step="summary",
             phase="summary_stt",
-            message=f"Résumé : chargement STT {backend}",
+            message=_progress_msg(resolve_output_language(job), "summary_stt_load").format(backend=backend),
             percent=10,
             force=True,
         )

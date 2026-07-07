@@ -64,14 +64,20 @@ class ReviewPoints:
         return points
 
     @staticmethod
-    def generate_anchors(quality_report: dict) -> list[dict]:
+    def generate_anchors(quality_report: dict, language: str = "fr") -> list[dict]:
         """Ancres CLIQUABLES pour l'éditeur de transcription (cadrage éditeur §3.6).
 
         Fichier JUMEAU de ``review_points.json`` (compat totale : la liste de strings
-        ne change pas). Deux sortes d'ancres :
+        ne change pas). ``language`` (Axe B) localise le texte affiché dans l'éditeur.
+        Deux sortes d'ancres :
         - ``kind="time"``   : zone datée → l'éditeur cale l'audio dessus ;
         - ``kind="search"`` : terme suspect → l'éditeur lance la recherche.
         """
+        en = (language == "en")
+        t_audio = "Audio zone: {lbl} {a}→{b}" if en else "Zone audio : {lbl} {a}→{b}"
+        t_incons = "Inconsistent form: {f} (to resolve)" if en else "Forme incohérente : {f} (à trancher)"
+        t_variant = "Variant to fix: {v} → {t}" if en else "Variante à corriger : {v} → {t}"
+        t_close = "Close form: {f} (≈ {t})" if en else "Forme proche : {f} (≈ {t})"
         anchors: list[dict] = []
         for check in quality_report.get("checks", []):
             ctype = check.get("type", "")
@@ -84,8 +90,8 @@ class ReviewPoints:
                         continue
                     anchors.append({
                         "kind": "time",
-                        "text": f"Zone audio : {item.get('label', '?')} "
-                                f"{item.get('start_label', '')}→{item.get('end_label', '')}",
+                        "text": t_audio.format(lbl=item.get('label', '?'),
+                                               a=item.get('start_label', ''), b=item.get('end_label', '')),
                         "start_ms": start_ms,
                         "end_ms": end_ms,
                     })
@@ -94,24 +100,17 @@ class ReviewPoints:
                     forms = group.get("forms", [])
                     if len(forms) >= 2:
                         anchors.append({"kind": "search",
-                                        "text": f"Forme incohérente : {' / '.join(forms)} (à trancher)",
-                                        "query": forms[1]})
-            elif ctype == "inconsistent_word_forms":
-                for group in check.get("groups", [])[:10]:
-                    forms = group.get("forms", [])
-                    if len(forms) >= 2:
-                        anchors.append({"kind": "search",
-                                        "text": f"Forme incohérente : {' / '.join(forms)} (à trancher)",
+                                        "text": t_incons.format(f=' / '.join(forms)),
                                         "query": forms[1]})
             elif ctype == "unresolved_lexicon_variants":
                 for item in check.get("exact_variants", [])[:10]:
                     variant = str(item.get("variant") or "").strip()
                     if variant:
-                        anchors.append({"kind": "search", "text": f"Variante à corriger : {variant} → {item.get('term')}",
+                        anchors.append({"kind": "search", "text": t_variant.format(v=variant, t=item.get('term')),
                                         "query": variant})
                 for item in check.get("close_forms", [])[:10]:
                     form = str(item.get("form") or "").strip()
                     if form:
-                        anchors.append({"kind": "search", "text": f"Forme proche : {form} (≈ {item.get('term')})",
+                        anchors.append({"kind": "search", "text": t_close.format(f=form, t=item.get('term')),
                                         "query": form})
         return anchors
