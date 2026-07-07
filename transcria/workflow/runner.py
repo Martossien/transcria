@@ -4,6 +4,7 @@ import time
 from types import SimpleNamespace
 
 from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.models import Job, JobState
@@ -46,6 +47,13 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
         "progress_working": "Affinage : l'assistant travaille",
         "progress_done": "Affinage terminé",
         "invalid_structured": "Données structurées relues invalides (pas un objet JSON) — conservées en l'état.",
+        "non_json_structured": "Données structurées relues non JSON — conservées en l'état.",
+        "non_json_options": "Options de rendu relues non JSON — conservées en l'état.",
+        "no_change": "Aucune modification applicable n'a été produite.",
+        "zip_failed": "Le paquet ZIP n'a pas pu être reconstruit immédiatement.",
+        "applied": "Modifications appliquées.",
+        "version_saved": ("\n\n(version v{version} enregistrée — restauration possible depuis la page. "
+                          "Retéléchargez les documents — Word, SRT, paquet — pour obtenir la version à jour.)"),
     },
     "en": {
         "busy": "The assistant is busy (the LLM is serving another job). Try again in a few minutes.",
@@ -57,6 +65,13 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
         "progress_working": "Refinement: the assistant is working",
         "progress_done": "Refinement complete",
         "invalid_structured": "Reviewed structured data invalid (not a JSON object) — kept as is.",
+        "non_json_structured": "Reviewed structured data not JSON — kept as is.",
+        "non_json_options": "Reviewed render options not JSON — kept as is.",
+        "no_change": "No applicable modification was produced.",
+        "zip_failed": "The ZIP package could not be rebuilt immediately.",
+        "applied": "Modifications applied.",
+        "version_saved": ("\n\n(version v{version} saved — can be restored from the page. "
+                          "Re-download the documents — Word, SRT, package — to get the updated version.)"),
     },
 }
 
@@ -64,6 +79,47 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
 def _refine_messages(language: str | None) -> dict[str, str]:
     """Messages du chat d'affinage pour ``language`` (repli français)."""
     return _REFINE_MESSAGES.get((language or "fr"), _REFINE_MESSAGES["fr"])
+
+
+# Messages de progression du pipeline (barre d'avancement, vus par l'utilisateur) —
+# dans la langue des livrables du job (Axe B). Repli français.
+_PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
+    "fr": {
+        "summary_stt": "Résumé : transcription rapide en cours",
+        "summary_scene": "Résumé : analyse acoustique de la réunion",
+        "summary_diar": "Résumé : détection des locuteurs en cours",
+        "summary_llm": "Résumé : génération LLM en cours",
+        "summary_stt_done": "Résumé : transcription rapide terminée",
+        "transcribe": "Transcription finale en cours",
+        "transcribe_done": "Transcription finale terminée",
+        "diar": "Diarisation finale en cours", "diar_done": "Diarisation finale terminée",
+        "quality": "Contrôle qualité en cours", "quality_done": "Contrôle qualité terminé",
+        "correction": "Correction LLM du sous-titrage en cours",
+        "correction_off": "Correction LLM désactivée", "correction_done": "Correction LLM terminée",
+        "review": "Relecture finale : cohérence et fidélité", "review_done": "Relecture finale terminée",
+        "package": "Préparation du paquet final",
+    },
+    "en": {
+        "summary_stt": "Summary: quick transcription in progress",
+        "summary_scene": "Summary: acoustic analysis of the meeting",
+        "summary_diar": "Summary: speaker detection in progress",
+        "summary_llm": "Summary: LLM generation in progress",
+        "summary_stt_done": "Summary: quick transcription complete",
+        "transcribe": "Final transcription in progress",
+        "transcribe_done": "Final transcription complete",
+        "diar": "Final diarization in progress", "diar_done": "Final diarization complete",
+        "quality": "Quality check in progress", "quality_done": "Quality check complete",
+        "correction": "LLM subtitle correction in progress",
+        "correction_off": "LLM correction disabled", "correction_done": "LLM correction complete",
+        "review": "Final review: consistency and fidelity", "review_done": "Final review complete",
+        "package": "Preparing the final package",
+    },
+}
+
+
+def _progress_msg(language: str | None, key: str) -> str:
+    """Message de progression localisé (repli français, puis clé brute)."""
+    return _PROGRESS_MESSAGES.get((language or "fr"), _PROGRESS_MESSAGES["fr"]).get(key, key)
 
 
 class WorkflowRunner:
@@ -188,7 +244,7 @@ class WorkflowRunner:
             job.id,
             step="summary",
             phase="summary_stt",
-            message="Résumé : transcription rapide en cours",
+            message=_progress_msg(resolve_output_language(job), "summary_stt"),
             percent=5,
             force=True,
         )
@@ -239,7 +295,7 @@ class WorkflowRunner:
             job.id,
             step="summary",
             phase="audio_scene",
-            message="Résumé : analyse acoustique de la réunion",
+            message=_progress_msg(resolve_output_language(job), "summary_scene"),
             percent=35,
             force=True,
         )
@@ -250,7 +306,7 @@ class WorkflowRunner:
             job.id,
             step="summary",
             phase="pyannote",
-            message="Résumé : détection des locuteurs en cours",
+            message=_progress_msg(resolve_output_language(job), "summary_diar"),
             percent=50,
             force=True,
         )
@@ -262,7 +318,7 @@ class WorkflowRunner:
             job.id,
             step="summary",
             phase="summary_llm",
-            message="Résumé : génération LLM en cours",
+            message=_progress_msg(resolve_output_language(job), "summary_llm"),
             percent=80,
             force=True,
         )
@@ -530,7 +586,7 @@ class WorkflowRunner:
                 job.id,
                 step="summary",
                 phase="summary_stt",
-                message="Résumé : transcription rapide terminée",
+                message=_progress_msg(resolve_output_language(job), "summary_stt_done"),
                 percent=30,
                 force=True,
             )
@@ -709,7 +765,6 @@ class WorkflowRunner:
             max_llm_attempts = 3
             parsed = {}
             for attempt in range(1, max_llm_attempts + 1):
-                from transcria.gpu.opencode_runner import resolve_output_language
                 parsed = runner.run_summary(
                     str(staged_transcript),
                     str(staged_context),
@@ -1519,7 +1574,7 @@ class WorkflowRunner:
             job.id,
             step="processing",
             phase="transcription",
-            message="Transcription finale en cours",
+            message=_progress_msg(resolve_output_language(job), "transcribe"),
             percent=35,
             force=True,
         )
@@ -1559,7 +1614,7 @@ class WorkflowRunner:
                 job.id,
                 step="processing",
                 phase="transcription",
-                message="Transcription finale terminée",
+                message=_progress_msg(resolve_output_language(job), "transcribe_done"),
                 percent=55,
                 force=True,
             )
@@ -1579,7 +1634,7 @@ class WorkflowRunner:
             job.id,
             step="processing",
             phase="diarization",
-            message="Diarisation finale en cours",
+            message=_progress_msg(resolve_output_language(job), "diar"),
             percent=60,
             force=True,
         )
@@ -1659,7 +1714,7 @@ class WorkflowRunner:
                 job.id,
                 step="processing",
                 phase="diarization",
-                message="Diarisation finale terminée",
+                message=_progress_msg(resolve_output_language(job), "diar_done"),
                 percent=70,
                 force=True,
             )
@@ -1721,7 +1776,7 @@ class WorkflowRunner:
             job.id,
             step="quality",
             phase="quality_checks",
-            message="Contrôle qualité en cours",
+            message=_progress_msg(resolve_output_language(job), "quality"),
             percent=90,
             force=True,
         )
@@ -1745,7 +1800,7 @@ class WorkflowRunner:
                 job.id,
                 step="quality",
                 phase="quality_checks",
-                message="Contrôle qualité terminé",
+                message=_progress_msg(resolve_output_language(job), "quality_done"),
                 percent=92,
                 force=True,
             )
@@ -1765,7 +1820,7 @@ class WorkflowRunner:
             job.id,
             step="processing",
             phase="llm_correction",
-            message="Correction LLM du sous-titrage en cours",
+            message=_progress_msg(resolve_output_language(job), "correction"),
             percent=75,
             force=True,
         )
@@ -1776,7 +1831,7 @@ class WorkflowRunner:
                 job.id,
                 step="processing",
                 phase="llm_correction",
-                message="Correction LLM désactivée",
+                message=_progress_msg(resolve_output_language(job), "correction_off"),
                 percent=80,
                 force=True,
             )
@@ -1900,7 +1955,6 @@ class WorkflowRunner:
             max_llm_attempts = 3
             result: dict = {}
             for attempt in range(1, max_llm_attempts + 1):
-                from transcria.gpu.opencode_runner import resolve_output_language
                 result = runner.run_correction(
                     str(staged_srt), str(staged_context), str(staged_lexicon), staged_invite,
                     output_language=resolve_output_language(job),
@@ -1947,7 +2001,7 @@ class WorkflowRunner:
                 job.id,
                 step="processing",
                 phase="llm_correction",
-                message="Correction LLM terminée",
+                message=_progress_msg(resolve_output_language(job), "correction_done"),
                 percent=82,
                 force=True,
             )
@@ -2031,7 +2085,7 @@ class WorkflowRunner:
             job.id,
             step="processing",
             phase="final_review",
-            message="Relecture finale : cohérence et fidélité",
+            message=_progress_msg(resolve_output_language(job), "review"),
             percent=83,
             force=True,
         )
@@ -2093,7 +2147,6 @@ class WorkflowRunner:
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
             runner = OpenCodeRunner(str(workspace.scratch_dir), opencode_bin=opencode_bin, config=config)
-            from transcria.gpu.opencode_runner import resolve_output_language
             result = runner.run_final_review(
                 str(staged_srt),
                 str(summary_file),
@@ -2108,7 +2161,7 @@ class WorkflowRunner:
                 job.id,
                 step="processing",
                 phase="final_review",
-                message="Relecture finale terminée",
+                message=_progress_msg(resolve_output_language(job), "review_done"),
                 percent=89,
                 force=True,
             )
@@ -2311,7 +2364,6 @@ class WorkflowRunner:
         kind = str(request.get("kind") or "")
         kind = kind if kind in ("discuss", "apply") else "discuss"
         # Langue des livrables (Axe B) : prompts refine localisés + messages du chat.
-        from transcria.gpu.opencode_runner import resolve_output_language
         output_language = resolve_output_language(job)
         rmsg = _refine_messages(output_language)
         max_turns = int(refine_cfg.get("max_turns_kept", 200))
@@ -2492,10 +2544,9 @@ class WorkflowRunner:
         4) write-back ; 5) reconstruction du package (best-effort) ; 6) tour assistant.
         """
         from transcria.exports.docx_report import _sanitize_render_options
-        from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
+        from transcria.gpu.opencode_runner import OpenCodeRunner
 
-        _lang = resolve_output_language(job)
-        _en = (_lang == "en")
+        rmsg = _refine_messages(resolve_output_language(job))
 
         report = workspace.read_output("refine_report.md")
         notes: list[str] = []
@@ -2505,7 +2556,7 @@ class WorkflowRunner:
         srt_out = workspace.read_output("transcription_refined.srt")
         if srt_out:
             source_srt = fs.load_text("metadata/transcription_corrigee.srt") or ""
-            err = self._corrected_srt_integrity_error(source_srt, srt_out, _lang)
+            err = self._corrected_srt_integrity_error(source_srt, srt_out, resolve_output_language(job))
             if err:
                 notes.append(err)
                 srt_out = ""
@@ -2517,13 +2568,10 @@ class WorkflowRunner:
                 parsed = json.loads(structured_out)
                 if isinstance(parsed, dict):
                     structured_norm = OpenCodeRunner._normalize_structured_data(parsed)
-                elif _en:
-                    notes.append("Reviewed structured data invalid (not a JSON object) — kept as is.")
                 else:
-                    notes.append("Données structurées relues invalides (pas un objet JSON) — conservées en l'état.")
+                    notes.append(rmsg["invalid_structured"])
             except (ValueError, TypeError):
-                notes.append("Reviewed structured data not JSON — kept as is." if _en
-                             else "Données structurées relues non JSON — conservées en l'état.")
+                notes.append(rmsg["non_json_structured"])
 
         options_clean: dict = {}
         options_out = workspace.read_output("render_options_refined.json")
@@ -2531,14 +2579,14 @@ class WorkflowRunner:
             try:
                 options_clean = _sanitize_render_options(json.loads(options_out))
             except (ValueError, TypeError):
-                notes.append("Options de rendu relues non JSON — conservées en l'état.")
+                notes.append(rmsg["non_json_options"])
 
         applied = {
             "summary_updated": False, "srt_updated": False,
             "structured_data_updated": False, "render_options_updated": False,
         }
         if not (summary_out or srt_out or structured_norm is not None or options_clean):
-            text = report or "Aucune modification applicable n'a été produite."
+            text = report or rmsg["no_change"]
             if notes:
                 text += "\n\n" + "\n".join(f"⚠ {n}" for n in notes)
             store.append_turn(role="assistant", kind=kind, text=text, max_turns=max_turns)
@@ -2575,13 +2623,10 @@ class WorkflowRunner:
         except Exception:
             logger.warning("Affinage : reconstruction du package échouée (le DOCX est "
                            "régénéré au téléchargement) — job=%s", job.id, exc_info=True)
-            notes.append("Le paquet ZIP n'a pas pu être reconstruit immédiatement.")
+            notes.append(rmsg["zip_failed"])
 
-        text = report or "Modifications appliquées."
-        text += (
-            f"\n\n(version v{version} enregistrée — restauration possible depuis la page. "
-            "Retéléchargez les documents — Word, SRT, paquet — pour obtenir la version à jour.)"
-        )
+        text = report or rmsg["applied"]
+        text += rmsg["version_saved"].format(version=version)
         if notes:
             text += "\n\n" + "\n".join(f"⚠ {n}" for n in notes)
         store.append_turn(role="assistant", kind=kind, text=text, max_turns=max_turns)
@@ -2593,7 +2638,7 @@ class WorkflowRunner:
             job.id,
             step="export",
             phase="package",
-            message="Préparation du paquet final",
+            message=_progress_msg(resolve_output_language(job), "package"),
             percent=95,
             force=True,
         )

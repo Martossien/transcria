@@ -145,6 +145,23 @@ def test_en_markers_not_found_in_fr_mode():
     assert p_fr["speaker_count"] == 0
 
 
+def test_progress_messages_localized():
+    """Messages de progression du pipeline localisés (repli fr)."""
+    from transcria.workflow.runner import _progress_msg
+    assert _progress_msg("en", "summary_llm") == "Summary: LLM generation in progress"
+    assert _progress_msg("en", "correction_done") == "LLM correction complete"
+    assert _progress_msg("fr", "package") == "Préparation du paquet final"
+    assert _progress_msg("de", "review") == "Relecture finale : cohérence et fidélité"  # repli fr
+
+
+def test_refine_apply_messages_present():
+    """Toutes les clés de tours du chat apply existent en fr et en."""
+    from transcria.workflow.runner import _refine_messages
+    for key in ("no_change", "applied", "zip_failed", "non_json_options", "version_saved"):
+        assert key in _refine_messages("fr") and key in _refine_messages("en")
+    assert "{version}" in _refine_messages("en")["version_saved"]
+
+
 def test_quality_reports_localized():
     """Rapports qualité (léger + complet) : markdown généré dans la langue du livrable."""
     from transcria.quality.light_report import _format_markdown as light_md
