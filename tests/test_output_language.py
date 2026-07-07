@@ -145,6 +145,48 @@ def test_en_markers_not_found_in_fr_mode():
     assert p_fr["speaker_count"] == 0
 
 
+def test_localized_field_labels():
+    """Libellés des champs type-spécifiques localisés (repli fr/authoré)."""
+    from transcria.context.meeting_type_catalog import localized_field_labels
+    assert localized_field_labels("en")["formateur"] == "Trainer"
+    assert localized_field_labels("en")["nom_client"] == "Client"
+    assert localized_field_labels("fr")["formateur"] == "Formateur"  # fr inchangé
+
+
+def test_refine_messages_by_language():
+    """Messages du chat d'affinage localisés (repli fr)."""
+    from transcria.workflow.runner import _refine_messages
+    assert _refine_messages("en")["progress_done"] == "Refinement complete"
+    assert _refine_messages("fr")["progress_done"] == "Affinage terminé"
+    assert _refine_messages("de")["busy"].startswith("L'assistant")  # repli fr
+    assert "{exc}" in _refine_messages("en")["fail"]
+
+
+def test_proposal_label_bilingual():
+    """extract_proposal reconnaît le label EN « Apply proposal: » et « none »."""
+    from transcria.workflow.refine_store import extract_proposal
+    text_en = "Here is my answer.\n\n---\nApply proposal: shorten the summary"
+    body, prop = extract_proposal(text_en)
+    assert prop == "shorten the summary" and "Apply proposal" not in body
+    _, none = extract_proposal("Answer.\n\n---\nApply proposal: none")
+    assert none is None
+
+
+def test_docx_type_specific_field_localized_en():
+    """Rendu DOCX EN : les libellés de champs type-spécifiques sont en anglais."""
+    from transcria.exports.docx_report import DocxReport
+    ctx = {"language": "en", "meeting_type": "Formation",
+           "type_specific_data": {"formateur": "Acme Corp", "nb_participants_formation": "12"}}
+    rep = DocxReport(ctx=ctx, participants=[], speaker_stats={}, quality={}, srt_text="")
+    doc = rep.build()
+    full = "\n".join(p.text for p in doc.paragraphs)
+    for t in doc.tables:
+        for row in t.rows:
+            full += "\n" + " | ".join(c.text for c in row.cells)
+    assert "Trainer" in full and "Participants" in full
+    assert "Formateur" not in full and "Nb participants" not in full
+
+
 def test_localized_type_display():
     """Affichage du type localisé (clé FR conservée pour la logique ; repli custom)."""
     from transcria.context.meeting_type_catalog import localized_type_display as f

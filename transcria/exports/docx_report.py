@@ -17,7 +17,7 @@ from docx.shared import Cm, Pt, RGBColor
 from transcria.context.meeting_type_catalog import (
     ORDERABLE_SECTIONS,
     confidential_types,
-    field_short_labels,
+    localized_field_labels,
     localized_type_display,
     quorum_types,
     theme_specs,
@@ -92,6 +92,8 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "chk_audio_preflight_flags": "Alertes de qualité audio",
         "chk_suspect_no_speech_prob": "Segments à faible probabilité de parole",
         "chk_suspicious_short_segments": "Segments courts suspects",
+        "quorum": "Quorum", "quorum_reached": "✓ Quorum atteint",
+        "quorum_not_reached": "✗ Quorum non atteint", "odj_prefix": "ODJ",
     },
     "en": {
         "banner": "TRANSCRIPTION REPORT",
@@ -136,6 +138,8 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "chk_audio_preflight_flags": "Audio quality alerts",
         "chk_suspect_no_speech_prob": "Low speech-probability segments",
         "chk_suspicious_short_segments": "Suspicious short segments",
+        "quorum": "Quorum", "quorum_reached": "✓ Quorum reached",
+        "quorum_not_reached": "✗ Quorum not reached", "odj_prefix": "Agenda",
     },
 }
 
@@ -990,7 +994,7 @@ class DocxReport:
         # Libellés courts par clé — depuis le catalogue (`short_label` sinon `label`),
         # complétés par la fiche du type personnalisé du job le cas échéant ; une clé
         # inconnue (donnée ancienne, type supprimé) garde le repli générique.
-        labels_by_key = dict(field_short_labels())
+        labels_by_key = dict(localized_field_labels(self.language))
         for field in self.custom_type.get("fields") or []:
             if isinstance(field, dict) and field.get("key"):
                 labels_by_key[field["key"]] = str(field.get("short_label") or field.get("label") or field["key"])
@@ -1006,7 +1010,7 @@ class DocxReport:
                 for i, line in enumerate(str(val).splitlines()):
                     line = line.strip()
                     if line:
-                        rows_data.append((f"ODJ {i+1}" if i == 0 else "", line))
+                        rows_data.append((f"{self.L['odj_prefix']} {i+1}" if i == 0 else "", line))
                 continue
             rows_data.append((label, str(val).strip()))
 
@@ -1017,8 +1021,8 @@ class DocxReport:
                 total    = int(non_empty.get("membres_total", 0))
                 if presents and total:
                     pct    = round(100 * presents / total)
-                    quorum = "✓ Quorum atteint" if presents > total / 2 else "✗ Quorum non atteint"
-                    rows_data.append(("Quorum", f"{quorum} ({presents}/{total} — {pct}%)"))
+                    quorum = self.L["quorum_reached"] if presents > total / 2 else self.L["quorum_not_reached"]
+                    rows_data.append((self.L["quorum"], f"{quorum} ({presents}/{total} — {pct}%)"))
             except (ValueError, TypeError):
                 pass
 
@@ -1040,7 +1044,8 @@ class DocxReport:
             r_lbl.font.color.rgb = _GREY_DARK
             r_lbl.font.name = "Calibri"
 
-            color = _GREEN if "Quorum atteint" in val else _RED if "non atteint" in val else self.theme.primary
+            # Détection de couleur indépendante de la langue (symboles ✓/✗ des libellés quorum).
+            color = _GREEN if "✓" in val else _RED if "✗" in val else self.theme.primary
             r_val = cells[1].paragraphs[0].add_run(val)
             r_val.font.size = Pt(9.5)
             r_val.font.color.rgb = color

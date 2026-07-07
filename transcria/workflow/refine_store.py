@@ -32,7 +32,11 @@ _DEFAULT_MAX_TURNS = 200
 # « --- » sur sa propre ligne (séparateur du bloc proposition, contrat du prompt discuss).
 _PROPOSAL_SEP = re.compile(r"\n-{3,}\s*\n")
 # Label littéral (apostrophe droite ou typographique, gras Markdown toléré).
-_PROPOSAL_LABEL = re.compile(r"(?is)^\*{0,2}proposition\s+d[’']application\*{0,2}\s*:?\s*(.+)$")
+# Label de proposition, FR (« Proposition d'application : ») ou EN (« Apply proposal: »,
+# prompt refine EN Axe B).
+_PROPOSAL_LABEL = re.compile(
+    r"(?is)^\*{0,2}(?:proposition\s+d[’']application|apply\s+proposal)\*{0,2}\s*:?\s*(.+)$"
+)
 
 
 def extract_proposal(text: str) -> tuple[str, str | None]:
@@ -78,7 +82,7 @@ def extract_proposal(text: str) -> tuple[str, str | None]:
 
 def _clean_proposal(raw: str) -> str | None:
     proposal = raw.strip().strip("*_").strip()
-    if not proposal or re.match(r"(?i)^aucune\b", proposal):
+    if not proposal or re.match(r"(?i)^(aucune|none)\b", proposal):  # « aucune » (fr) / « none » (en)
         return None
     return proposal
 

@@ -44,8 +44,14 @@ _LANGUAGE_NAMES = {
 
 
 def resolve_output_language(job=None, extra_data: dict | None = None) -> str:
-    """Langue cible des livrables : ``meeting_context.language`` du job, défaut « fr »."""
-    data = extra_data if extra_data is not None else (job.get_extra_data() if job else {})
+    """Langue cible des livrables : ``meeting_context.language`` du job, défaut « fr ».
+
+    Défensif : un objet job sans ``get_extra_data`` (doublure de test) → défaut « fr »."""
+    if extra_data is not None:
+        data = extra_data
+    else:
+        getter = getattr(job, "get_extra_data", None)
+        data = getter() if callable(getter) else {}
     lang = ((data or {}).get("meeting_context", {}) or {}).get("language") or "fr"
     return str(lang)
 
@@ -1479,6 +1485,7 @@ class OpenCodeRunner:
         options_path: str,
         user_message: str,
         review_path: str | None = None,
+        output_language: str = "fr",
     ) -> dict:
         """Tour « apply » du chat d'affinage des livrables (post-workflow).
 
@@ -1491,9 +1498,7 @@ class OpenCodeRunner:
         Le mode « discuss » ne passe PAS par opencode : lecture seule → complétion
         directe sur la LLM d'arbitrage (cf. ``transcria.workflow.refine_llm``).
         """
-        prompt_file = os.path.abspath(
-            os.path.join(_get_prompts_dir(self._config), "refine_apply_prompt.txt")
-        )
+        prompt_file = resolve_prompt_file(self._config, "refine_apply_prompt.txt", output_language)
         expected = (
             "écris UNIQUEMENT les fichiers que la demande modifie parmi : "
             "summary_refined.md, transcription_refined.srt (TOTALITÉ des segments), "
@@ -1502,6 +1507,7 @@ class OpenCodeRunner:
         )
         review_part = f"Points à vérifier (contrôle qualité) : {review_path}. " if review_path else ""
         instruction = (
+            f"{language_directive(output_language)}"
             f"Tu travailles dans le répertoire {self.work_dir}. "
             f"Conversation précédente : {conversation_path}. Demande courante : {request_path}. "
             f"Synthèse actuelle : {summary_path}. Transcription corrigée : {srt_path}. "

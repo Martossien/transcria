@@ -33,6 +33,39 @@ class _NoReservationSession:
         return False
 
 
+# Messages utilisateur du chat d'affinage (Axe B) — dans la langue des livrables du job.
+# Repli français pour toute langue non couverte.
+_REFINE_MESSAGES: dict[str, dict[str, str]] = {
+    "fr": {
+        "busy": "L'assistant est occupé (la LLM sert un autre traitement). Réessayez dans quelques minutes.",
+        "vram": "VRAM insuffisante pour charger l'assistant (un traitement occupe les GPU). Réessayez plus tard.",
+        "no_start": "L'assistant n'a pas pu démarrer (LLM d'arbitrage indisponible). Réessayez plus tard.",
+        "long_notice": ("ℹ️ Réunion longue : la discussion porte sur ~{pct} % de la transcription "
+                        "(la période {gap_from} → {gap_to} n'est pas visible de l'assistant)."),
+        "fail": "Échec de l'affinage ({exc}) — les livrables n'ont pas été modifiés. Réessayez.",
+        "progress_working": "Affinage : l'assistant travaille",
+        "progress_done": "Affinage terminé",
+        "invalid_structured": "Données structurées relues invalides (pas un objet JSON) — conservées en l'état.",
+    },
+    "en": {
+        "busy": "The assistant is busy (the LLM is serving another job). Try again in a few minutes.",
+        "vram": "Not enough VRAM to load the assistant (a job is using the GPUs). Try again later.",
+        "no_start": "The assistant could not start (arbitration LLM unavailable). Try again later.",
+        "long_notice": ("ℹ️ Long meeting: the discussion covers ~{pct}% of the transcription "
+                        "(the {gap_from} → {gap_to} period is not visible to the assistant)."),
+        "fail": "Refinement failed ({exc}) — the deliverables were not modified. Try again.",
+        "progress_working": "Refinement: the assistant is working",
+        "progress_done": "Refinement complete",
+        "invalid_structured": "Reviewed structured data invalid (not a JSON object) — kept as is.",
+    },
+}
+
+
+def _refine_messages(language: str | None) -> dict[str, str]:
+    """Messages du chat d'affinage pour ``language`` (repli français)."""
+    return _REFINE_MESSAGES.get((language or "fr"), _REFINE_MESSAGES["fr"])
+
+
 class WorkflowRunner:
     def __init__(self, store: type[JobStore] | JobStore, config: dict | None = None):
         self.store = store
@@ -1936,7 +1969,7 @@ class WorkflowRunner:
             self.allocator.release_llm(job.id)
 
     @staticmethod
-    def _corrected_srt_integrity_error(source: str, corrected: str) -> str | None:
+    def _corrected_srt_integrity_error(source: str, corrected: str, language: str = "fr") -> str | None:
         """Garde déterministe du contrat de correction (motif « le prompt exige, le code vérifie »).
 
         - **Parité des segments** : même nombre de timecodes (`-->`) que le source —
@@ -1951,7 +1984,14 @@ class WorkflowRunner:
         """
         src_segments = source.count("-->")
         out_segments = corrected.count("-->")
+        en = (language == "en")
         if src_segments and out_segments != src_segments:
+            if en:
+                return (
+                    f"Corrected SRT invalid: {out_segments} segments instead of {src_segments} "
+                    "(segments lost, merged or added by the LLM). The raw SRT is kept — "
+                    "re-run the job, only the correction will be replayed."
+                )
             return (
                 f"SRT corrigé non conforme : {out_segments} segments au lieu de {src_segments} "
                 "(segments perdus, fusionnés ou ajoutés par la LLM). Le SRT brut est conservé — "
@@ -1960,6 +2000,12 @@ class WorkflowRunner:
         if len(source) >= 2000:
             ratio = len(corrected) / max(len(source), 1)
             if not (0.90 <= ratio <= 1.10):
+                if en:
+                    return (
+                        f"Corrected SRT invalid: size ratio {ratio:.2f} outside [0.90, 1.10] "
+                        "(content truncated, summarised or rewritten — e.g. altered speaker prefixes). "
+                        "The raw SRT is kept — re-run the job, only the correction will be replayed."
+                    )
                 return (
                     f"SRT corrigé non conforme : ratio de taille {ratio:.2f} hors [0.90, 1.10] "
                     "(contenu tronqué, résumé ou réécrit — ex. préfixes locuteurs altérés). "
@@ -2264,6 +2310,10 @@ class WorkflowRunner:
             return {"success": True, "skipped": True, "reason": "no_request"}
         kind = str(request.get("kind") or "")
         kind = kind if kind in ("discuss", "apply") else "discuss"
+        # Langue des livrables (Axe B) : prompts refine localisés + messages du chat.
+        from transcria.gpu.opencode_runner import resolve_output_language
+        output_language = resolve_output_language(job)
+        rmsg = _refine_messages(output_language)
         max_turns = int(refine_cfg.get("max_turns_kept", 200))
         # Historique AVANT le tour courant (rejoué à la LLM en vrais tours de chat).
         history = store.load_turns()[-int(refine_cfg.get("context_turns", 12)):]
@@ -2271,13 +2321,13 @@ class WorkflowRunner:
 
         self.progress.update(
             job.id, step="processing", phase="refine",
-            message="Affinage : l'assistant travaille", percent=97, force=True,
+            message=rmsg["progress_working"], percent=97, force=True,
         )
 
         if not self.allocator.try_acquire_llm(job.id, timeout_s=int(refine_cfg.get("llm_lock_timeout_s", 120))):
             store.append_turn(
                 role="assistant", kind=kind, max_turns=max_turns,
-                text="L'assistant est occupé (la LLM sert un autre traitement). Réessayez dans quelques minutes.",
+                text=rmsg["busy"],
             )
             return {"success": True, "skipped": True, "retryable": True, "reason": "llm_busy"}
 
@@ -2293,7 +2343,7 @@ class WorkflowRunner:
                 if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine"):
                     store.append_turn(
                         role="assistant", kind=kind, max_turns=max_turns,
-                        text="VRAM insuffisante pour charger l'assistant (un traitement occupe les GPU). Réessayez plus tard.",
+                        text=rmsg["vram"],
                     )
                     return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
                 llm_phase_reserved = True
@@ -2301,7 +2351,7 @@ class WorkflowRunner:
             if not self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
                 store.append_turn(
                     role="assistant", kind=kind, max_turns=max_turns,
-                    text="L'assistant n'a pas pu démarrer (LLM d'arbitrage indisponible). Réessayez plus tard.",
+                    text=rmsg["no_start"],
                 )
                 return {"success": True, "skipped": True, "retryable": True, "reason": "llm_unavailable"}
 
@@ -2329,13 +2379,11 @@ class WorkflowRunner:
 
             if kind == "discuss":
                 # Lecture seule → complétion DIRECTE (pas d'opencode, pas de workspace).
-                import os as _os
-
-                from transcria.gpu.opencode_runner import _get_prompts_dir
+                from transcria.gpu.opencode_runner import resolve_prompt_file
                 from transcria.workflow.refine_llm import build_discuss_messages, chat_completion
                 from transcria.workflow.refine_store import extract_proposal
 
-                prompt_path = _os.path.join(_get_prompts_dir(config), "refine_discuss_prompt.txt")
+                prompt_path = resolve_prompt_file(config, "refine_discuss_prompt.txt", output_language)
                 with open(prompt_path, encoding="utf-8") as fh:
                     system_prompt = fh.read()
                 srt_text = (
@@ -2352,9 +2400,8 @@ class WorkflowRunner:
                 if trunc.get("truncated"):
                     # Honnêteté UI (C2.5) : l'utilisateur SAIT que l'assistant ne voit
                     # pas tout — notice système dans le fil, dédupliquée.
-                    notice = (f"ℹ️ Réunion longue : la discussion porte sur ~{trunc['shown_pct']} % "
-                              f"de la transcription (la période {trunc['gap_from']} → "
-                              f"{trunc['gap_to']} n'est pas visible de l'assistant).")
+                    notice = rmsg["long_notice"].format(
+                        pct=trunc['shown_pct'], gap_from=trunc['gap_from'], gap_to=trunc['gap_to'])
                     already = any(t.get("text") == notice for t in store.load_turns()[-6:])
                     if not already:
                         store.append_turn(role="system", kind="notice", text=notice,
@@ -2396,7 +2443,8 @@ class WorkflowRunner:
             options_file = workspace.write_input("render_options.json", options_json)
             review_file = workspace.write_input(
                 "review_points.md",
-                "\n".join(f"- {p}" for p in review_points) or "(aucun point signalé)",
+                "\n".join(f"- {p}" for p in review_points)
+                or ("(no point flagged)" if output_language == "en" else "(aucun point signalé)"),
             )
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
@@ -2411,6 +2459,7 @@ class WorkflowRunner:
                 options_path=str(options_file),
                 review_path=str(review_file),
                 user_message=message,
+                output_language=output_language,
             )
             workspace.verify_and_restore_sources()
 
@@ -2421,7 +2470,7 @@ class WorkflowRunner:
             logger.exception("Échec affinage (best-effort, livrables intacts): job=%s", job.id)
             store.append_turn(
                 role="assistant", kind=kind, max_turns=max_turns,
-                text=f"Échec de l'affinage ({exc}) — les livrables n'ont pas été modifiés. Réessayez.",
+                text=rmsg["fail"].format(exc=exc),
             )
             if not llm_was_already_running:
                 self.vram.stop_arbitrage_llm()
@@ -2432,7 +2481,7 @@ class WorkflowRunner:
             self.allocator.release_llm(job.id)
             self.progress.update(
                 job.id, step="processing", phase="refine",
-                message="Affinage terminé", percent=100, force=True,
+                message=rmsg["progress_done"], percent=100, force=True,
             )
 
     def _apply_refine(self, fs, store, workspace, job: Job, config: dict, *, kind: str, max_turns: int) -> dict:
@@ -2443,7 +2492,10 @@ class WorkflowRunner:
         4) write-back ; 5) reconstruction du package (best-effort) ; 6) tour assistant.
         """
         from transcria.exports.docx_report import _sanitize_render_options
-        from transcria.gpu.opencode_runner import OpenCodeRunner
+        from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
+
+        _lang = resolve_output_language(job)
+        _en = (_lang == "en")
 
         report = workspace.read_output("refine_report.md")
         notes: list[str] = []
@@ -2453,7 +2505,7 @@ class WorkflowRunner:
         srt_out = workspace.read_output("transcription_refined.srt")
         if srt_out:
             source_srt = fs.load_text("metadata/transcription_corrigee.srt") or ""
-            err = self._corrected_srt_integrity_error(source_srt, srt_out)
+            err = self._corrected_srt_integrity_error(source_srt, srt_out, _lang)
             if err:
                 notes.append(err)
                 srt_out = ""
@@ -2465,10 +2517,13 @@ class WorkflowRunner:
                 parsed = json.loads(structured_out)
                 if isinstance(parsed, dict):
                     structured_norm = OpenCodeRunner._normalize_structured_data(parsed)
+                elif _en:
+                    notes.append("Reviewed structured data invalid (not a JSON object) — kept as is.")
                 else:
                     notes.append("Données structurées relues invalides (pas un objet JSON) — conservées en l'état.")
             except (ValueError, TypeError):
-                notes.append("Données structurées relues non JSON — conservées en l'état.")
+                notes.append("Reviewed structured data not JSON — kept as is." if _en
+                             else "Données structurées relues non JSON — conservées en l'état.")
 
         options_clean: dict = {}
         options_out = workspace.read_output("render_options_refined.json")

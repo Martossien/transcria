@@ -323,3 +323,31 @@ def localized_type_display(type_name: str, language: str | None, field: str, fal
         return fallback
     tr = _TYPE_DISPLAY_I18N.get(language, {}).get(type_name or "", {})
     return tr.get(field, fallback)
+
+
+# Libellés courts des champs type-spécifiques, par langue (Axe B) — affichage DOCX.
+# Clé de champ → libellé traduit. Un champ absent (type custom utilisateur) retombe sur
+# son `short_label` authoré.
+_FIELD_LABEL_I18N: dict[str, dict[str, str]] = {
+    "en": {
+        "chef_de_projet": "Project lead", "evaluateur": "Reviewer", "formateur": "Trainer",
+        "lieu_formation": "Location", "membres_presents": "Members present",
+        "membres_total": "Total members", "nature_incident": "Incident type",
+        "nb_groupes": "Working groups", "nb_participants_formation": "Participants",
+        "nom_client": "Client", "nom_projet": "Project", "objet_negociation": "Subject",
+        "objet_seance": "Session subject", "ordre_du_jour_items": "Agenda",
+        "parties": "Stakeholders", "periode_evaluee": "Review period",
+        "phase_jalon": "Phase / Milestone", "poste_evalue": "Position reviewed",
+        "president_seance": "Session chair", "ref_contrat": "Contract reference",
+        "ref_pv_precedent": "Prev. minutes ref.", "responsable_crise": "Crisis owner",
+        "secretaire_seance": "Session secretary", "sprint": "Sprint", "thematique": "Theme",
+    },
+}
+
+
+def localized_field_labels(language: str | None) -> dict[str, str]:
+    """Libellés courts des champs type-spécifiques pour ``language`` (repli fr/authoré)."""
+    base = dict(field_short_labels())
+    if language and language != "fr":
+        base.update(_FIELD_LABEL_I18N.get(language, {}))
+    return base
