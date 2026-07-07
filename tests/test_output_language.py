@@ -145,6 +145,37 @@ def test_en_markers_not_found_in_fr_mode():
     assert p_fr["speaker_count"] == 0
 
 
+def test_docx_labels_by_language():
+    """Table de libellés DOCX : en localisé, fr/inconnu = français (repli)."""
+    from transcria.exports.docx_report import _docx_labels
+    assert _docx_labels("en")["banner"] == "TRANSCRIPTION REPORT"
+    assert _docx_labels("en")["sec_participants"] == "Participants & Speakers"
+    assert _docx_labels("fr")["banner"] == "COMPTE-RENDU DE TRANSCRIPTION"
+    assert _docx_labels("de")["banner"] == "COMPTE-RENDU DE TRANSCRIPTION"  # repli fr
+
+
+def test_docx_extract_synthese_en_ignores_meta_and_json():
+    """Bug corrigé : en EN, on extrait la seule prose (pas les méta ni le bloc JSON).
+
+    Structure réaliste d'un summary.md : les méta et le JSON encadrent la section
+    synthèse ; ``_extract_synthese`` ne doit renvoyer QUE la prose de cette section."""
+    from transcria.exports.docx_report import _extract_synthese
+    en_md = (
+        "# Summary report\n\n## Meeting information\n- **Suggested title:** X\n\n"
+        "## Summary\nThe speaker opens with a vision. A second paragraph follows.\n\n"
+        "## Doubtful terms to validate\n- **term** [x] (normal)\n\n"
+        "## Structured data\n```json\n{\"decisions\": []}\n```\n"
+    )
+    prose_en = _extract_synthese(en_md, "en")
+    assert prose_en.startswith("The speaker opens with a vision")
+    for banned in ("Suggested title", "Structured data", '"decisions"', "```json", "Doubtful terms"):
+        assert banned not in prose_en, f"fuite dans la prose EN : {banned}"
+    # FR non-régression : même extraction depuis « ## Synthèse ».
+    fr_md = "## Synthèse\nProse française.\n\n## Données structurées\n```json\n{}\n```\n"
+    prose_fr = _extract_synthese(fr_md, "fr")
+    assert prose_fr == "Prose française."
+
+
 def test_effective_summary_marker_by_language():
     """La section synthèse remplacée dépend de la langue du meeting."""
     from transcria.context.meeting_context import MeetingContextManager
