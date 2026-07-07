@@ -59,6 +59,7 @@ def _notify(cfg: dict, job, event: str, error: str | None = None,
             event=event,
             error=error,
             facts=facts,
+            locale=getattr(owner, "locale", None) if owner else None,
         )
     except Exception as exc:
         # Les notifications ne doivent jamais bloquer le pipeline, mais l'échec

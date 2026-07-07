@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import smtplib
 import ssl
 import threading
@@ -11,6 +12,31 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 logger = logging.getLogger(__name__)
+
+_TRANSLATIONS_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "translations")
+)
+
+
+def N_(s: str) -> str:
+    """Marqueur d'extraction gettext (no-op) : pybabel récolte l'argument."""
+    return s
+
+
+def _translator(locale: str | None, cfg: dict | None = None):
+    """Traducteur autonome (Babel, SANS Flask) pour rendre l'email dans la langue du
+    DESTINATAIRE — l'envoi tourne en thread de fond, hors contexte d'application.
+
+    Repli sur la locale par défaut de l'instance, puis sur le français source (NullTranslations).
+    """
+    from babel.support import Translations
+
+    default = ((cfg or {}).get("i18n", {}) or {}).get("default_locale", "fr")
+    loc = locale or default
+    try:
+        return Translations.load(_TRANSLATIONS_DIR, [loc], domain="messages")
+    except Exception:  # noqa: BLE001 — un email dans la langue source vaut mieux qu'un crash
+        return Translations()
 
 
 @dataclass
@@ -39,7 +65,7 @@ def build_email_config(cfg: dict) -> EmailConfig:
 
 _HTML_BASE = """\
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{lang}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -69,8 +95,8 @@ _HTML_BASE = """\
         <tr>
           <td style="padding:16px 32px 24px;border-top:1px solid #eeeeee;">
             <p style="margin:0;color:#999999;font-size:12px;">
-              Cet email a été envoyé automatiquement par TranscrIA.<br>
-              Vous recevez ce message car vous êtes propriétaire d'un travail de transcription.
+              {footer_auto}<br>
+              {footer_reason}
             </p>
           </td>
         </tr>
@@ -80,12 +106,13 @@ _HTML_BASE = """\
 </body>
 </html>"""
 
-_BODY_SUCCESS = """\
+# Squelettes HTML SANS texte français : les phrases sont injectées traduites (slots {…}).
+_BODY_WITH_FACTS = """\
 <p style="margin:0 0 16px;color:#333333;font-size:15px;">
-  Bonjour {display_name},
+  {greeting}
 </p>
 <p style="margin:0 0 24px;color:#333333;font-size:15px;">
-  Votre transcription est <strong>terminée avec succès</strong>.
+  {intro}
 </p>
 <table width="100%" cellpadding="0" cellspacing="0"
        style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
@@ -93,58 +120,37 @@ _BODY_SUCCESS = """\
 </table>
 <p style="margin:0 0 24px;text-align:center;">
   <a href="{job_url}"
-     style="display:inline-block;background:#2563eb;color:#ffffff;
+     style="display:inline-block;background:{cta_bg};color:#ffffff;
             text-decoration:none;padding:12px 28px;border-radius:6px;
             font-size:15px;font-weight:bold;">
-    Voir les livrables &rarr;
+    {cta} &rarr;
   </a>
 </p>"""
 
-_BODY_SUMMARY_READY = """\
+_BODY_JOB_BLOCK = """\
 <p style="margin:0 0 16px;color:#333333;font-size:15px;">
-  Bonjour {display_name},
+  {greeting}
 </p>
 <p style="margin:0 0 24px;color:#333333;font-size:15px;">
-  La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le
-  contexte de la réunion, puis lancez le traitement final.
-</p>
-<table width="100%" cellpadding="0" cellspacing="0"
-       style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
-  {facts_rows}
-</table>
-<p style="margin:0 0 24px;text-align:center;">
-  <a href="{job_url}"
-     style="display:inline-block;background:#2563eb;color:#ffffff;
-            text-decoration:none;padding:12px 28px;border-radius:6px;
-            font-size:15px;font-weight:bold;">
-    Vérifier et lancer le traitement &rarr;
-  </a>
-</p>"""
-
-_BODY_FAILURE = """\
-<p style="margin:0 0 16px;color:#333333;font-size:15px;">
-  Bonjour {display_name},
-</p>
-<p style="margin:0 0 24px;color:#333333;font-size:15px;">
-  Votre transcription a <strong>échoué</strong>.
+  {intro}
 </p>
 <table width="100%" cellpadding="0" cellspacing="0"
        style="background:#f8f9fa;border-radius:6px;margin-bottom:16px;">
   <tr>
     <td style="padding:16px 20px;">
       <p style="margin:0 0 6px;color:#666666;font-size:12px;text-transform:uppercase;
-                letter-spacing:0.5px;">Travail</p>
+                letter-spacing:0.5px;">{job_label}</p>
       <p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">{job_title}</p>
     </td>
   </tr>
 </table>
-{error_block}
+{extra_block}
 <p style="margin:16px 0 24px;text-align:center;">
   <a href="{job_url}"
-     style="display:inline-block;background:#dc2626;color:#ffffff;
+     style="display:inline-block;background:{cta_bg};color:#ffffff;
             text-decoration:none;padding:12px 28px;border-radius:6px;
             font-size:15px;font-weight:bold;">
-    Voir le détail &rarr;
+    {cta} &rarr;
   </a>
 </p>"""
 
@@ -152,44 +158,14 @@ _ERROR_BLOCK = """\
 <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;
             padding:12px 16px;margin-bottom:16px;">
   <p style="margin:0 0 4px;color:#dc2626;font-size:12px;font-weight:bold;
-            text-transform:uppercase;letter-spacing:0.5px;">Erreur</p>
+            text-transform:uppercase;letter-spacing:0.5px;">{error_label}</p>
   <p style="margin:0;color:#7f1d1d;font-size:13px;font-family:monospace;
             word-break:break-all;">{error}</p>
 </div>"""
 
-_BODY_VRAM_WAIT = """\
-<p style="margin:0 0 16px;color:#333333;font-size:15px;">
-  Bonjour {display_name},
-</p>
-<p style="margin:0 0 24px;color:#333333;font-size:15px;">
-  Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est
-  insuffisante pour la phase <strong>{phase}</strong> ({required_mb}&nbsp;Mo requis).
-  Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM
-  sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement)
-  pour accélérer la reprise.
-</p>
-<table width="100%" cellpadding="0" cellspacing="0"
-       style="background:#f8f9fa;border-radius:6px;margin-bottom:24px;">
-  <tr>
-    <td style="padding:16px 20px;">
-      <p style="margin:0 0 6px;color:#666666;font-size:12px;text-transform:uppercase;
-                letter-spacing:0.5px;">Travail</p>
-      <p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">{job_title}</p>
-    </td>
-  </tr>
-</table>
-<p style="margin:0 0 24px;text-align:center;">
-  <a href="{job_url}"
-     style="display:inline-block;background:#d97706;color:#ffffff;
-            text-decoration:none;padding:12px 28px;border-radius:6px;
-            font-size:15px;font-weight:bold;">
-    Voir le traitement &rarr;
-  </a>
-</p>"""
 
-
-def _facts_rows_html(facts: list[tuple[str, str]]) -> str:
-    """Lignes d'un tableau de faits (label + valeur) pour le corps HTML des emails."""
+def _facts_rows_html(facts: list[tuple[str, str]], tr) -> str:
+    """Lignes d'un tableau de faits (label + valeur) — label traduit dans la langue du destinataire."""
     import html as html_mod
 
     rows = []
@@ -197,142 +173,138 @@ def _facts_rows_html(facts: list[tuple[str, str]]) -> str:
         rows.append(
             '<tr><td style="padding:14px 20px;border-top:1px solid #eeeeee;">'
             f'<p style="margin:0 0 4px;color:#666666;font-size:12px;text-transform:uppercase;'
-            f'letter-spacing:0.5px;">{html_mod.escape(str(label))}</p>'
+            f'letter-spacing:0.5px;">{html_mod.escape(str(tr.gettext(label)))}</p>'
             f'<p style="margin:0;color:#111111;font-size:16px;font-weight:bold;">'
             f'{html_mod.escape(str(value))}</p></td></tr>'
         )
     return "".join(rows)
 
 
-def _build_html_success(display_name: str, job_title: str, job_id: str, base_url: str,
-                        facts: list[tuple[str, str]] | None = None) -> str:
+def _greeting(tr, display_name: str) -> str:
+    return tr.gettext("Bonjour %(name)s,") % {"name": display_name}
+
+
+def _html_shell(tr, lang: str, subject: str, header_bg: str, header_icon: str,
+                header_title: str, body_html: str) -> str:
+    return _HTML_BASE.format(
+        lang=lang, subject=subject, header_bg=header_bg, header_icon=header_icon,
+        header_title=header_title, body_html=body_html,
+        footer_auto=tr.gettext("Cet email a été envoyé automatiquement par TranscrIA."),
+        footer_reason=tr.gettext("Vous recevez ce message car vous êtes propriétaire d'un travail de transcription."),
+    )
+
+
+# Labels traduisibles des faits/champs (marqués pour extraction ; la valeur runtime = français
+# source, retraduite par le destinataire dans _facts_rows_html).
+N_("Travail")
+
+
+def _build_html_success(tr, lang, display_name, job_title, job_id, base_url, facts=None):
     # Sur un job TERMINÉ, on pointe /result (livrables) plutôt que le wizard.
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/result"
-    rows = _facts_rows_html([("Travail", job_title), *(facts or [])])
-    body = _BODY_SUCCESS.format(display_name=display_name, facts_rows=rows, job_url=job_url)
-    return _HTML_BASE.format(
-        subject=f"Transcription terminée : {job_title}",
-        header_bg="#16a34a",
-        header_icon="✓",
-        header_title="Transcription terminée",
-        body_html=body,
-    )
+    rows = _facts_rows_html([(N_("Travail"), job_title), *(facts or [])], tr)
+    body = _BODY_WITH_FACTS.format(
+        greeting=_greeting(tr, display_name),
+        intro=tr.gettext("Votre transcription est <strong>terminée avec succès</strong>."),
+        facts_rows=rows, job_url=job_url, cta_bg="#2563eb",
+        cta=tr.gettext("Voir les livrables"))
+    return _html_shell(tr, lang, tr.gettext("Transcription terminée : %(title)s") % {"title": job_title},
+                       "#16a34a", "✓", tr.gettext("Transcription terminée"), body)
 
 
-def _build_text_success(display_name: str, job_title: str, job_id: str, base_url: str,
-                        facts: list[tuple[str, str]] | None = None) -> str:
+def _build_text_success(tr, display_name, job_title, job_id, base_url, facts=None):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/result"
-    lines = [f"Bonjour {display_name},", "",
-             "Votre transcription est terminée avec succès.", "",
-             f"Travail : {job_title}"]
+    lines = [_greeting(tr, display_name), "",
+             tr.gettext("Votre transcription est terminée avec succès."), "",
+             tr.gettext("Travail") + f" : {job_title}"]
     for label, value in (facts or []):
-        lines.append(f"{label} : {value}")
-    lines += [f"Lien    : {job_url}", "", "Cet email a été envoyé automatiquement par TranscrIA."]
+        lines.append(f"{tr.gettext(label)} : {value}")
+    lines += [tr.gettext("Lien") + f"    : {job_url}", "",
+              tr.gettext("Cet email a été envoyé automatiquement par TranscrIA.")]
     return "\n".join(lines)
 
 
-def _build_html_summary_ready(display_name: str, job_title: str, job_id: str, base_url: str,
-                              facts: list[tuple[str, str]] | None = None) -> str:
+def _build_html_summary_ready(tr, lang, display_name, job_title, job_id, base_url, facts=None):
     # Pré-analyse prête : on pointe le wizard (l'utilisateur doit valider le contexte).
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    rows = _facts_rows_html([("Travail", job_title), *(facts or [])])
-    body = _BODY_SUMMARY_READY.format(display_name=display_name, facts_rows=rows, job_url=job_url)
-    return _HTML_BASE.format(
-        subject=f"Pré-analyse prête : {job_title}",
-        header_bg="#2563eb",
-        header_icon="✓",
-        header_title="Pré-analyse prête — à vous de jouer",
-        body_html=body,
-    )
+    rows = _facts_rows_html([(N_("Travail"), job_title), *(facts or [])], tr)
+    body = _BODY_WITH_FACTS.format(
+        greeting=_greeting(tr, display_name),
+        intro=tr.gettext("La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : "
+                          "vérifiez le contexte de la réunion, puis lancez le traitement final."),
+        facts_rows=rows, job_url=job_url, cta_bg="#2563eb",
+        cta=tr.gettext("Vérifier et lancer le traitement"))
+    return _html_shell(tr, lang, tr.gettext("Pré-analyse prête : %(title)s") % {"title": job_title},
+                       "#2563eb", "✓", tr.gettext("Pré-analyse prête — à vous de jouer"), body)
 
 
-def _build_text_summary_ready(display_name: str, job_title: str, job_id: str, base_url: str,
-                              facts: list[tuple[str, str]] | None = None) -> str:
+def _build_text_summary_ready(tr, display_name, job_title, job_id, base_url, facts=None):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    lines = [f"Bonjour {display_name},", "",
-             "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion,",
-             "puis lancez le traitement final.", "",
-             f"Travail : {job_title}"]
+    lines = [_greeting(tr, display_name), "",
+             tr.gettext("La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, "
+                        "puis lancez le traitement final."), "",
+             tr.gettext("Travail") + f" : {job_title}"]
     for label, value in (facts or []):
-        lines.append(f"{label} : {value}")
-    lines += [f"Lien    : {job_url}", "", "Cet email a été envoyé automatiquement par TranscrIA."]
+        lines.append(f"{tr.gettext(label)} : {value}")
+    lines += [tr.gettext("Lien") + f"    : {job_url}", "",
+              tr.gettext("Cet email a été envoyé automatiquement par TranscrIA.")]
     return "\n".join(lines)
 
 
-def _build_html_failure(
-    display_name: str, job_title: str, job_id: str, error: str, base_url: str
-) -> str:
+def _build_html_failure(tr, lang, display_name, job_title, job_id, error, base_url):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    subject = f"Échec de transcription : {job_title}"
     import html as html_mod
     error_safe = html_mod.escape(error) if error else ""
-    error_block = _ERROR_BLOCK.format(error=error_safe) if error_safe else ""
-    body = _BODY_FAILURE.format(
-        display_name=display_name,
-        job_title=job_title,
-        job_url=job_url,
-        error_block=error_block,
-    )
-    return _HTML_BASE.format(
-        subject=subject,
-        header_bg="#dc2626",
-        header_icon="✗",
-        header_title="Échec de transcription",
-        body_html=body,
-    )
+    error_block = _ERROR_BLOCK.format(error_label=tr.gettext("Erreur"), error=error_safe) if error_safe else ""
+    body = _BODY_JOB_BLOCK.format(
+        greeting=_greeting(tr, display_name),
+        intro=tr.gettext("Votre transcription a <strong>échoué</strong>."),
+        job_label=tr.gettext("Travail"), job_title=job_title, extra_block=error_block,
+        job_url=job_url, cta_bg="#dc2626", cta=tr.gettext("Voir le détail"))
+    return _html_shell(tr, lang, tr.gettext("Échec de transcription : %(title)s") % {"title": job_title},
+                       "#dc2626", "✗", tr.gettext("Échec de transcription"), body)
 
 
-def _build_html_vram_wait(
-    display_name: str, job_title: str, job_id: str, required_mb: int, phase: str, base_url: str
-) -> str:
+def _build_html_vram_wait(tr, lang, display_name, job_title, job_id, required_mb, phase, base_url):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
-    subject = f"En attente de VRAM : {job_title}"
-    body = _BODY_VRAM_WAIT.format(
-        display_name=display_name,
-        job_title=job_title,
-        job_url=job_url,
-        required_mb=required_mb,
-        phase=phase,
-    )
-    return _HTML_BASE.format(
-        subject=subject,
-        header_bg="#d97706",
-        header_icon="⏳",
-        header_title="Traitement en attente de VRAM",
-        body_html=body,
-    )
+    body = _BODY_JOB_BLOCK.format(
+        greeting=_greeting(tr, display_name),
+        intro=tr.gettext(
+            "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est "
+            "insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). "
+            "Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM "
+            "sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) "
+            "pour accélérer la reprise.") % {"phase": phase, "mb": required_mb},
+        job_label=tr.gettext("Travail"), job_title=job_title, extra_block="",
+        job_url=job_url, cta_bg="#d97706", cta=tr.gettext("Voir le traitement"))
+    return _html_shell(tr, lang, tr.gettext("En attente de VRAM : %(title)s") % {"title": job_title},
+                       "#d97706", "⏳", tr.gettext("Traitement en attente de VRAM"), body)
 
 
-def _build_text_vram_wait(
-    display_name: str, job_title: str, job_id: str, required_mb: int, phase: str, base_url: str
-) -> str:
+def _build_text_vram_wait(tr, display_name, job_title, job_id, required_mb, phase, base_url):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
     return (
-        f"Bonjour {display_name},\n\n"
-        f"Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase "
-        f"{phase}, {required_mb} Mo requis).\n"
-        f"Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée.\n\n"
-        f"Travail : {job_title}\n"
-        f"Lien    : {job_url}\n\n"
-        "Cet email a été envoyé automatiquement par TranscrIA."
+        _greeting(tr, display_name) + "\n\n"
+        + tr.gettext("Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase "
+                     "%(phase)s, %(mb)s Mo requis).") % {"phase": phase, "mb": required_mb} + "\n"
+        + tr.gettext("Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée.") + "\n\n"
+        + tr.gettext("Travail") + f" : {job_title}\n"
+        + tr.gettext("Lien") + f"    : {job_url}\n\n"
+        + tr.gettext("Cet email a été envoyé automatiquement par TranscrIA.")
     )
 
 
-def _build_text_failure(
-    display_name: str, job_title: str, job_id: str, error: str, base_url: str
-) -> str:
+def _build_text_failure(tr, display_name, job_title, job_id, error, base_url):
     job_url = f"{base_url.rstrip('/')}/jobs/{job_id}/wizard"
     lines = [
-        f"Bonjour {display_name},",
-        "",
-        "Votre transcription a échoué.",
-        "",
-        f"Travail : {job_title}",
-        f"Lien    : {job_url}",
+        _greeting(tr, display_name), "",
+        tr.gettext("Votre transcription a échoué."), "",
+        tr.gettext("Travail") + f" : {job_title}",
+        tr.gettext("Lien") + f"    : {job_url}",
     ]
     if error:
-        lines += ["", f"Erreur  : {error}"]
-    lines += ["", "Cet email a été envoyé automatiquement par TranscrIA."]
+        lines += ["", tr.gettext("Erreur") + f"  : {error}"]
+    lines += ["", tr.gettext("Cet email a été envoyé automatiquement par TranscrIA.")]
     return "\n".join(lines)
 
 
@@ -384,8 +356,9 @@ def send_job_notification_async(
     event: str,
     error: str | None = None,
     facts: list[tuple[str, str]] | None = None,
+    locale: str | None = None,
 ) -> None:
-    """Lance en tâche de fond l'envoi d'un email de notification.
+    """Lance en tâche de fond l'envoi d'un email de notification, dans la langue du destinataire.
 
     Args:
         cfg: config applicative complète (get_config()).
@@ -397,6 +370,7 @@ def send_job_notification_async(
         error: message d'erreur (event="failed" uniquement).
         facts: lignes (label, valeur) affichées dans le corps — type détecté, locuteurs,
             durée, temps estimé/réel, score qualité selon l'événement.
+        locale: langue du destinataire (``user.locale``) ; None ⇒ défaut d'instance.
     """
     ecfg = build_email_config(cfg)
     if not ecfg.enabled:
@@ -412,19 +386,22 @@ def send_job_notification_async(
         return
 
     name = display_name or to_email.split("@")[0]
+    tr = _translator(locale, cfg)
+    lang = locale or ((cfg.get("i18n", {}) or {}).get("default_locale", "fr"))
+    _prefix = "[TranscrIA] "
 
     if event == "summary_ready":
-        subject = f"[TranscrIA] Pré-analyse prête : {job_title}"
-        html = _build_html_summary_ready(name, job_title, job_id, ecfg.base_url, facts)
-        text = _build_text_summary_ready(name, job_title, job_id, ecfg.base_url, facts)
+        subject = _prefix + tr.gettext("Pré-analyse prête : %(title)s") % {"title": job_title}
+        html = _build_html_summary_ready(tr, lang, name, job_title, job_id, ecfg.base_url, facts)
+        text = _build_text_summary_ready(tr, name, job_title, job_id, ecfg.base_url, facts)
     elif event == "completed":
-        subject = f"[TranscrIA] Transcription terminée : {job_title}"
-        html = _build_html_success(name, job_title, job_id, ecfg.base_url, facts)
-        text = _build_text_success(name, job_title, job_id, ecfg.base_url, facts)
+        subject = _prefix + tr.gettext("Transcription terminée : %(title)s") % {"title": job_title}
+        html = _build_html_success(tr, lang, name, job_title, job_id, ecfg.base_url, facts)
+        text = _build_text_success(tr, name, job_title, job_id, ecfg.base_url, facts)
     else:
-        subject = f"[TranscrIA] Échec de transcription : {job_title}"
-        html = _build_html_failure(name, job_title, job_id, error or "", ecfg.base_url)
-        text = _build_text_failure(name, job_title, job_id, error or "", ecfg.base_url)
+        subject = _prefix + tr.gettext("Échec de transcription : %(title)s") % {"title": job_title}
+        html = _build_html_failure(tr, lang, name, job_title, job_id, error or "", ecfg.base_url)
+        text = _build_text_failure(tr, name, job_title, job_id, error or "", ecfg.base_url)
 
     def _do_send() -> None:
         try:
@@ -465,13 +442,16 @@ def send_admin_vram_alert_async(
         logger.warning("Alerte VRAM admin ignorée: SMTP non configuré (job=%s)", job_id)
         return
 
-    subject = f"[TranscrIA] En attente de VRAM : {job_title}"
+    # Alerte technique aux admins : langue par défaut de l'instance (on n'a que les emails).
+    tr = _translator(None, cfg)
+    lang = (cfg.get("i18n", {}) or {}).get("default_locale", "fr")
+    subject = "[TranscrIA] " + tr.gettext("En attente de VRAM : %(title)s") % {"title": job_title}
 
     def _do_send() -> None:
         for to_email in recipients:
             name = to_email.split("@")[0]
-            html = _build_html_vram_wait(name, job_title, job_id, required_mb, phase, ecfg.base_url)
-            text = _build_text_vram_wait(name, job_title, job_id, required_mb, phase, ecfg.base_url)
+            html = _build_html_vram_wait(tr, lang, name, job_title, job_id, required_mb, phase, ecfg.base_url)
+            text = _build_text_vram_wait(tr, name, job_title, job_id, required_mb, phase, ecfg.base_url)
             try:
                 _send_smtp(ecfg, to_email, subject, html, text)
                 logger.info("Alerte VRAM admin envoyée: job=%s to=%s", job_id, to_email)

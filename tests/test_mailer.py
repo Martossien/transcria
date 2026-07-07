@@ -13,9 +13,14 @@ from transcria.notifications.mailer import (
     _build_html_success,
     _build_text_failure,
     _build_text_success,
+    _translator,
     build_email_config,
     send_job_notification_async,
 )
+
+# Traducteur français (source) pour tester les builders directement (langue du destinataire).
+_TR = _translator("fr", {"i18n": {"default_locale": "fr"}})
+_LANG = "fr"
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +75,7 @@ def test_build_email_config_ignores_unknown_keys():
 # ---------------------------------------------------------------------------
 
 def test_build_html_success_contains_job_title_and_link():
-    html = _build_html_success("Alice", "Réunion du lundi", "abc123", "http://localhost:7870")
+    html = _build_html_success(_TR, _LANG, "Alice", "Réunion du lundi", "abc123", "http://localhost:7870")
     assert "Réunion du lundi" in html
     assert "http://localhost:7870/jobs/abc123/result" in html
     assert "terminée" in html.lower()
@@ -78,7 +83,7 @@ def test_build_html_success_contains_job_title_and_link():
 
 
 def test_build_text_success_contains_all_fields():
-    text = _build_text_success("Bob", "Conf annuelle", "xyz999", "https://tr.example.com")
+    text = _build_text_success(_TR, "Bob", "Conf annuelle", "xyz999", "https://tr.example.com")
     assert "Bob" in text
     assert "Conf annuelle" in text
     assert "https://tr.example.com/jobs/xyz999/result" in text
@@ -86,7 +91,7 @@ def test_build_text_success_contains_all_fields():
 
 
 def test_build_html_failure_contains_error_and_link():
-    html = _build_html_failure("Carol", "Présentation Q4", "err001", "VRAM insuffisante", "http://host")
+    html = _build_html_failure(_TR, _LANG, "Carol", "Présentation Q4", "err001", "VRAM insuffisante", "http://host")
     assert "Présentation Q4" in html
     assert "VRAM insuffisante" in html
     assert "http://host/jobs/err001/wizard" in html
@@ -94,24 +99,60 @@ def test_build_html_failure_contains_error_and_link():
 
 
 def test_build_html_failure_escapes_html_in_error():
-    html = _build_html_failure("Dave", "Job", "j1", "<script>alert('xss')</script>", "http://h")
+    html = _build_html_failure(_TR, _LANG, "Dave", "Job", "j1", "<script>alert('xss')</script>", "http://h")
     assert "<script>" not in html
     assert "&lt;script&gt;" in html
 
 
 def test_build_text_failure_omits_error_block_when_empty():
-    text = _build_text_failure("Eve", "Job", "j2", "", "http://h")
+    text = _build_text_failure(_TR, "Eve", "Job", "j2", "", "http://h")
     assert "Erreur" not in text
 
 
 def test_build_text_failure_includes_error_when_present():
-    text = _build_text_failure("Eve", "Job", "j3", "Timeout LLM", "http://h")
+    text = _build_text_failure(_TR, "Eve", "Job", "j3", "Timeout LLM", "http://h")
     assert "Timeout LLM" in text
 
 
 def test_base_url_trailing_slash_stripped():
-    html = _build_html_success("Alice", "Job", "abc", "http://localhost:7870/")
+    html = _build_html_success(_TR, _LANG, "Alice", "Job", "abc", "http://localhost:7870/")
     assert "http://localhost:7870/jobs/abc/result" in html
+
+
+def test_build_html_success_english_locale():
+    """L'email est rendu dans la langue du destinataire (Vague 3)."""
+    from transcria.installer.i18n_phase import I18nPlan, apply_i18n
+    from pathlib import Path
+
+    class _C:
+        def info(self, m): ...
+        def ok(self, m): ...
+        def warn(self, m): ...
+        def error(self, m): ...
+    apply_i18n(I18nPlan(translations_dir=Path("transcria/web/translations")), console=_C())
+
+    tr_en = _translator("en", {"i18n": {"default_locale": "fr"}})
+    html = _build_html_success(tr_en, "en", "Alice", "Weekly meeting", "abc", "http://h",
+                               [("Locuteurs", "3")])
+    assert '<html lang="en">' in html
+    assert "View deliverables" in html          # CTA traduit
+    assert "Speakers" in html                    # label de fait traduit
+    assert "completed successfully" in html.lower()
+
+
+def test_send_notification_threads_recipient_locale():
+    """send_job_notification_async accepte et applique locale=… du destinataire."""
+    sent = threading.Event()
+    captured = {}
+
+    def fake_smtp(ecfg, to, subject, html, text):
+        captured["subject"] = subject
+        sent.set()
+
+    with patch("transcria.notifications.mailer._send_smtp", side_effect=fake_smtp):
+        send_job_notification_async(_cfg(), "u@e.com", "Al", "Meeting", "id1", "completed", locale="en")
+        assert sent.wait(timeout=2)
+    assert "completed" in captured["subject"].lower()  # sujet EN
 
 
 # ---------------------------------------------------------------------------

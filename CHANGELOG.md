@@ -18,7 +18,13 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   Les catalogues (`.po`) sont versionnés ; les `.mo` sont **compilés** en CI, au **build Docker**
   et à l'**entrypoint** (jamais un binaire périmé en git). La **langue des livrables générés**
   (résumé, correction, DOCX) reste distincte et arrive dans une vague ultérieure (réglage par job).
-  Voir `docs/I18N_MULTILANGUE.md`. *(Socle : navigation traduite ; les autres surfaces suivent.)*
+  Voir `docs/I18N_MULTILANGUE.md`. **Couverture** : toute l'interface (navigation, connexion,
+  accueil, file, résultats, **assistant wizard complet** + son JS, **toutes les pages
+  d'administration** — utilisateurs, groupes, voix, lexiques, audit, planification, configuration,
+  maintenance, modèles, système, éditeur SRT, types de réunion — messages `flash`/erreurs Python,
+  pages d'erreur) **et les emails de notification** (rendus dans la langue du **destinataire**).
+  Catalogue de ~970 chaînes. **La langue des livrables générés** (résumé/correction/DOCX) reste
+  distincte et arrive séparément (réglage par job).
 
 ### Fixed
 - **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient

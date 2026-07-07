@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 21:41+0200\n"
+"POT-Creation-Date: 2026-07-07 21:55+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -677,6 +677,11 @@ msgstr "Basculer le profil llama.cpp sur ce modèle (redémarrage du service req
 msgid "Binaires :"
 msgstr "Binaires :"
 
+#: transcria/notifications/mailer.py:184
+#, python-format
+msgid "Bonjour %(name)s,"
+msgstr "Bonjour %(name)s,"
+
 #: transcria/web/i18n_js.py:125 transcria/web/templates/meeting_types.html:151
 msgid "COMPTE-RENDU DE TRANSCRIPTION"
 msgstr "COMPTE-RENDU DE TRANSCRIPTION"
@@ -727,6 +732,12 @@ msgstr "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou 
 #: transcria/web/templates/admin_config.html:122
 msgid "Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire)."
 msgstr "Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire)."
+
+#: transcria/notifications/mailer.py:192 transcria/notifications/mailer.py:223
+#: transcria/notifications/mailer.py:250 transcria/notifications/mailer.py:293
+#: transcria/notifications/mailer.py:307
+msgid "Cet email a été envoyé automatiquement par TranscrIA."
+msgstr "Cet email a été envoyé automatiquement par TranscrIA."
 
 #: app.py:261
 msgid "Cette action n'est pas permise sur cette page."
@@ -1050,6 +1061,10 @@ msgstr "Données enrichies extraites par l'IA"
 msgid "Durée"
 msgstr "Durée"
 
+#: transcria/notifications/job_facts.py:48
+msgid "Durée audio"
+msgstr "Durée audio"
+
 #: transcria/web/i18n_js.py:138 transcria/web/templates/schedule.html:143
 msgid "Début"
 msgstr "Début"
@@ -1127,6 +1142,11 @@ msgstr "En attente"
 msgid "En attente (%(n)s)"
 msgstr "En attente (%(n)s)"
 
+#: transcria/notifications/mailer.py:280 transcria/notifications/mailer.py:448
+#, python-format
+msgid "En attente de VRAM : %(title)s"
+msgstr "En attente de VRAM : %(title)s"
+
 #: transcria/web/templates/queue.html:50
 msgid "En cours"
 msgstr "En cours"
@@ -1202,6 +1222,7 @@ msgstr "Entrées utilisées"
 msgid "Environnement détecté"
 msgstr "Environnement détecté"
 
+#: transcria/notifications/mailer.py:258 transcria/notifications/mailer.py:306
 #: transcria/web/templates/job_result.html:170
 msgid "Erreur"
 msgstr "Erreur"
@@ -1793,6 +1814,10 @@ msgstr "L'assistant travaille (30 s à 2 min)…"
 msgid "L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés."
 msgstr "L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés."
 
+#: transcria/notifications/mailer.py:233
+msgid "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le contexte de la réunion, puis lancez le traitement final."
+msgstr "La <strong>pré-analyse de votre audio est prête</strong>. À vous de jouer : vérifiez le contexte de la réunion, puis lancez le traitement final."
+
 #: transcria/web/templates/job_wizard.html:754
 msgid "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
 msgstr "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
@@ -1824,6 +1849,10 @@ msgstr "La page demandée n'existe pas ou a été déplacée."
 #: transcria/web/templates/queue.html:233
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "La priorité doit être comprise entre 1 et 100."
+
+#: transcria/notifications/mailer.py:244
+msgid "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, puis lancez le traitement final."
+msgstr "La pré-analyse de votre audio est prête. Vérifiez le contexte de la réunion, puis lancez le traitement final."
 
 #: transcria/web/i18n_js.py:153
 msgid "La transcription a changé depuis (correction ou affinage) : reprendre le brouillon écrasera ces changements à l'enregistrement."
@@ -1877,6 +1906,10 @@ msgstr "Le fichier dépasse la taille maximale autorisée (voir security.max_upl
 #: transcria/auth/routes.py:334 transcria/auth/routes.py:356
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "Le groupe doit conserver au moins un admin de groupe."
+
+#: transcria/notifications/mailer.py:290
+msgid "Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée."
+msgstr "Le job n'a pas échoué : il reprendra automatiquement dès que la VRAM sera libérée."
 
 #: transcria/web/templates/job_wizard.html:743
 msgid "Le lexique de session déjà sauvegardé est conservé."
@@ -2000,6 +2033,15 @@ msgstr "Libellé court (Word)"
 #: transcria/web/templates/admin_models.html:33
 msgid "Licence"
 msgstr "Licence"
+
+#: transcria/notifications/mailer.py:222 transcria/notifications/mailer.py:249
+#: transcria/notifications/mailer.py:292 transcria/notifications/mailer.py:303
+msgid "Lien"
+msgstr "Lien"
+
+#: transcria/notifications/job_facts.py:46
+msgid "Locuteurs"
+msgstr "Locuteurs"
 
 #: transcria/web/templates/meeting_types.html:92
 msgid "Logo (page de garde — PNG/JPEG, 500 Ko max)"
@@ -2409,7 +2451,8 @@ msgstr "Points bloquants"
 msgid "Points reportés"
 msgstr "Points reportés"
 
-#: transcria/web/i18n_js.py:170 transcria/web/templates/job_result.html:20
+#: transcria/notifications/job_facts.py:74 transcria/web/i18n_js.py:170
+#: transcria/web/templates/job_result.html:20
 #: transcria/web/templates/job_result.html:37
 #: transcria/web/templates/job_result.html:134
 msgid "Points à vérifier"
@@ -2504,6 +2547,15 @@ msgstr "Proposition"
 #: transcria/web/i18n_js.py:78 transcria/web/templates/job_wizard.html:800
 msgid "Proposé à partir d'un document que vous avez joint à la réunion"
 msgstr "Proposé à partir d'un document que vous avez joint à la réunion"
+
+#: transcria/notifications/mailer.py:237 transcria/notifications/mailer.py:394
+#, python-format
+msgid "Pré-analyse prête : %(title)s"
+msgstr "Pré-analyse prête : %(title)s"
+
+#: transcria/notifications/mailer.py:238
+msgid "Pré-analyse prête — à vous de jouer"
+msgstr "Pré-analyse prête — à vous de jouer"
 
 #: transcria/web/templates/srt_editor.html:16
 msgid "Précédent"
@@ -2870,6 +2922,7 @@ msgstr "Scheduler"
 msgid "Scheduler : %(state)s"
 msgstr "Scheduler : %(state)s"
 
+#: transcria/notifications/job_facts.py:71
 #: transcria/web/templates/job_result.html:10
 msgid "Score qualité"
 msgstr "Score qualité"
@@ -3132,6 +3185,14 @@ msgstr "Traitement annulé."
 msgid "Traitement démarré. Transcription ASR en cours… (0s écoulées)"
 msgstr "Traitement démarré. Transcription ASR en cours… (0s écoulées)"
 
+#: transcria/notifications/mailer.py:281
+msgid "Traitement en attente de VRAM"
+msgstr "Traitement en attente de VRAM"
+
+#: transcria/notifications/job_facts.py:54
+msgid "Traitement estimé"
+msgstr "Traitement estimé"
+
 #: transcria/web/i18n_js.py:92
 msgid "Traitement relancé. Transcription ASR en cours… (0s écoulées)"
 msgstr "Traitement relancé. Transcription ASR en cours… (0s écoulées)"
@@ -3153,6 +3214,10 @@ msgstr "Traitement terminé en %(elapsed)s. Chargement…"
 msgid "Traitements"
 msgstr "Traitements"
 
+#: transcria/notifications/job_facts.py:67
+msgid "Traité en"
+msgstr "Traité en"
+
 #: transcria/web/templates/job_wizard.html:746
 #, python-format
 msgid "TranscrIA prépare %(n)s terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation."
@@ -3170,6 +3235,23 @@ msgstr "Transcription"
 msgid "Transcription ASR en cours…"
 msgstr "Transcription ASR en cours…"
 
+#: transcria/notifications/mailer.py:212
+msgid "Transcription terminée"
+msgstr "Transcription terminée"
+
+#: transcria/notifications/mailer.py:211 transcria/notifications/mailer.py:398
+#, python-format
+msgid "Transcription terminée : %(title)s"
+msgstr "Transcription terminée : %(title)s"
+
+#: transcria/notifications/mailer.py:199 transcria/notifications/mailer.py:205
+#: transcria/notifications/mailer.py:219 transcria/notifications/mailer.py:230
+#: transcria/notifications/mailer.py:246 transcria/notifications/mailer.py:262
+#: transcria/notifications/mailer.py:278 transcria/notifications/mailer.py:291
+#: transcria/notifications/mailer.py:302
+msgid "Travail"
+msgstr "Travail"
+
 #: transcria/web/templates/central_lexicon_detail.html:62
 msgid "Traçabilité"
 msgstr "Traçabilité"
@@ -3185,6 +3267,10 @@ msgstr "Trop de tentatives. Réessayez dans quelques minutes."
 #: transcria/web/templates/job_wizard.html:380
 msgid "Type"
 msgstr "Type"
+
+#: transcria/notifications/job_facts.py:42
+msgid "Type détecté"
+msgstr "Type détecté"
 
 #: transcria/web/templates/job_wizard.html:274
 msgid "Type suggéré :"
@@ -3269,6 +3355,16 @@ msgstr "Un brouillon du <strong>%(when)s</strong> (%(n)s segments) a été trouv
 #: transcria/web/templates/srt_editor.html:91
 msgid "Un locuteur par ligne : clic = aller à cette prise de parole"
 msgstr "Un locuteur par ligne : clic = aller à cette prise de parole"
+
+#: transcria/notifications/mailer.py:273
+#, python-format
+msgid "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
+msgstr "Un traitement est <strong>en attente de VRAM</strong> : la mémoire GPU disponible est insuffisante pour la phase <strong>%(phase)s</strong> (%(mb)s&nbsp;Mo requis). Le job n'a <strong>pas</strong> échoué — il reprendra automatiquement dès que la VRAM sera libérée. Libérez de la mémoire GPU (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
+
+#: transcria/notifications/mailer.py:288
+#, python-format
+msgid "Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase %(phase)s, %(mb)s Mo requis)."
+msgstr "Un traitement est en attente de VRAM (mémoire GPU insuffisante pour la phase %(phase)s, %(mb)s Mo requis)."
 
 #: transcria/web/i18n_js.py:193
 msgid "Un traitement est en cours sur ce dossier — l'éditeur est en lecture seule et rouvrira en écriture à la fin."
@@ -3373,9 +3469,21 @@ msgstr "Visualiser le rendu du type"
 msgid "Vitesse"
 msgstr "Vitesse"
 
+#: transcria/notifications/mailer.py:263
+msgid "Voir le détail"
+msgstr "Voir le détail"
+
+#: transcria/notifications/mailer.py:279
+msgid "Voir le traitement"
+msgstr "Voir le traitement"
+
 #: transcria/web/templates/job_wizard.html:181
 msgid "Voir les détails techniques"
 msgstr "Voir les détails techniques"
+
+#: transcria/notifications/mailer.py:210
+msgid "Voir les livrables"
+msgstr "Voir les livrables"
 
 #: transcria/web/templates/srt_editor.html:83
 msgid "Voir toute la réunion"
@@ -3411,6 +3519,22 @@ msgstr "Vos saisies (contexte, participants, lexique) sont conservées — vous 
 msgid "Votes"
 msgstr "Votes"
 
+#: transcria/notifications/mailer.py:261
+msgid "Votre transcription a <strong>échoué</strong>."
+msgstr "Votre transcription a <strong>échoué</strong>."
+
+#: transcria/notifications/mailer.py:301
+msgid "Votre transcription a échoué."
+msgstr "Votre transcription a échoué."
+
+#: transcria/notifications/mailer.py:208
+msgid "Votre transcription est <strong>terminée avec succès</strong>."
+msgstr "Votre transcription est <strong>terminée avec succès</strong>."
+
+#: transcria/notifications/mailer.py:218
+msgid "Votre transcription est terminée avec succès."
+msgstr "Votre transcription est terminée avec succès."
+
 #: transcria/web/i18n_js.py:96
 msgid "Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)"
 msgstr "Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)"
@@ -3427,6 +3551,10 @@ msgstr "Vous avez été déconnecté."
 msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 msgstr "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 
+#: transcria/notifications/mailer.py:193
+msgid "Vous recevez ce message car vous êtes propriétaire d'un travail de transcription."
+msgstr "Vous recevez ce message car vous êtes propriétaire d'un travail de transcription."
+
 #: transcria/web/templates/base.html:133
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
@@ -3434,6 +3562,10 @@ msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a hr
 #: transcria/web/templates/srt_editor.html:67
 msgid "Vue de la timeline"
 msgstr "Vue de la timeline"
+
+#: transcria/notifications/mailer.py:236
+msgid "Vérifier et lancer le traitement"
+msgstr "Vérifier et lancer le traitement"
 
 #: transcria/web/templates/voice_detail.html:60
 msgid "Vérifier la preuve signée"
@@ -3962,6 +4094,15 @@ msgstr "Échec de l'ajout du document."
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Échec de la planification : %(e)s"
+
+#: transcria/notifications/mailer.py:265
+msgid "Échec de transcription"
+msgstr "Échec de transcription"
+
+#: transcria/notifications/mailer.py:264 transcria/notifications/mailer.py:402
+#, python-format
+msgid "Échec de transcription : %(title)s"
+msgstr "Échec de transcription : %(title)s"
 
 #: transcria/web/routes.py:3129
 #, python-format

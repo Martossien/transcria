@@ -11,6 +11,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def N_(s: str) -> str:
+    """Marqueur d'extraction gettext : les labels de faits sont retraduits dans la langue
+    du destinataire par le mailer (la valeur runtime reste le français source)."""
+    return s
+
+
 def _audio_seconds(config: dict, job_id: str) -> float:
     from transcria.jobs.filesystem import JobFilesystem
 
@@ -33,19 +39,19 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
     facts: list[tuple[str, str]] = []
     detected = ctx.get("meeting_type") or ctx.get("type_suggere")
     if detected:
-        facts.append(("Type détecté", str(detected)))
+        facts.append((N_("Type détecté"), str(detected)))
     roles = ctx.get("speaker_roles_llm") or {}
     n_speakers = len(roles) if roles else len(ctx.get("participants") or [])
     if n_speakers:
-        facts.append(("Locuteurs", str(n_speakers)))
+        facts.append((N_("Locuteurs"), str(n_speakers)))
     if audio_s > 0:
-        facts.append(("Durée audio", format_duration_fr(audio_s)))
+        facts.append((N_("Durée audio"), format_duration_fr(audio_s)))
 
     profile = profile_for_job(job)
     if profile is not None and audio_s > 0:
         est = estimate_processing(profile, audio_s)
         suffix = "" if est.basis == "measured" else " (estimation initiale)"
-        facts.append(("Traitement estimé", format_range_fr(est) + suffix))
+        facts.append((N_("Traitement estimé"), format_range_fr(est) + suffix))
     return facts
 
 
@@ -58,14 +64,14 @@ def completed_facts(config: dict, job, processing_seconds: float | None = None) 
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     facts: list[tuple[str, str]] = []
     if processing_seconds and processing_seconds > 0:
-        facts.append(("Traité en", format_duration_fr(processing_seconds)))
+        facts.append((N_("Traité en"), format_duration_fr(processing_seconds)))
     quality = fs.load_json("quality/quality_report.json") or {}
     score = quality.get("quality_score")
     if score is not None:
-        facts.append(("Score qualité", f"{score}/100"))
+        facts.append((N_("Score qualité"), f"{score}/100"))
     points = fs.load_json("quality/review_points.json")
     if isinstance(points, list):
-        facts.append(("Points à vérifier", str(len(points))))
+        facts.append((N_("Points à vérifier"), str(len(points))))
     return facts
 
 
@@ -84,6 +90,7 @@ def notify_summary_ready(config: dict, job) -> None:
             config, to_email=to_email, display_name=display_name,
             job_title=getattr(job, "title", ""), job_id=getattr(job, "id", ""),
             event="summary_ready", facts=summary_ready_facts(config, job),
+            locale=getattr(owner, "locale", None) if owner else None,
         )
     except Exception as exc:  # noqa: BLE001 — notification best-effort
         logger.warning("Email « résumé prêt » ignoré (job=%s): %s", getattr(job, "id", None), exc)

@@ -5,25 +5,31 @@ import pytest
 
 
 class TestEmailBuilders:
+    # Traducteur FR source pour tester les builders (langue du destinataire, cf. Vague 3 i18n).
+    @staticmethod
+    def _tr():
+        from transcria.notifications.mailer import _translator
+        return _translator("fr", {"i18n": {"default_locale": "fr"}})
+
     def test_summary_ready_html_pointe_le_wizard_et_montre_les_faits(self):
         from transcria.notifications.mailer import _build_html_summary_ready
         facts = [("Type détecté", "Conseil municipal"), ("Locuteurs", "4"),
                  ("Traitement estimé", "~8 min")]
-        h = _build_html_summary_ready("Alice", "Réunion X", "job-1", "http://x", facts)
+        h = _build_html_summary_ready(self._tr(), "fr", "Alice", "Réunion X", "job-1", "http://x", facts)
         assert "Pré-analyse" in h and "Conseil municipal" in h and "~8 min" in h
         assert "/jobs/job-1/wizard" in h            # l'utilisateur doit valider le contexte
 
     def test_completed_html_pointe_result_et_montre_temps_qualite(self):
         from transcria.notifications.mailer import _build_html_success, _build_text_success
         facts = [("Traité en", "12 min"), ("Score qualité", "93/100")]
-        h = _build_html_success("Alice", "Réunion X", "job-1", "http://x", facts)
+        h = _build_html_success(self._tr(), "fr", "Alice", "Réunion X", "job-1", "http://x", facts)
         assert "/jobs/job-1/result" in h and "12 min" in h and "93/100" in h
-        t = _build_text_success("Alice", "Réunion X", "job-1", "http://x", facts)
+        t = _build_text_success(self._tr(), "Alice", "Réunion X", "job-1", "http://x", facts)
         assert "Traité en : 12 min" in t and "/result" in t
 
     def test_faits_html_echappes(self):
         from transcria.notifications.mailer import _facts_rows_html
-        rows = _facts_rows_html([("Type", "<script>alert(1)</script>")])
+        rows = _facts_rows_html([("Type", "<script>alert(1)</script>")], self._tr())
         assert "<script>" not in rows and "&lt;script&gt;" in rows
 
 
