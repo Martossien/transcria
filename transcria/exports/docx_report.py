@@ -56,6 +56,7 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "sec_participants": "Participants & Locuteurs",
         "sec_transcription": "Transcription", "sec_review": "Points à vérifier",
         "no_participants": "Aucun participant enregistré.",
+        "no_transcription": "Aucune transcription disponible.",
         "next_meeting": "Prochaine réunion : ",
         "sd_agenda": "Ordre du jour", "sd_decisions": "Décisions prises",
         "sd_votes": "Votes", "sd_resolutions": "Résolutions adoptées",
@@ -106,6 +107,7 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "sec_participants": "Participants & Speakers",
         "sec_transcription": "Transcription", "sec_review": "Points to review",
         "no_participants": "No participant recorded.",
+        "no_transcription": "No transcription available.",
         "next_meeting": "Next meeting: ",
         "sd_agenda": "Agenda", "sd_decisions": "Decisions made",
         "sd_votes": "Votes", "sd_resolutions": "Adopted resolutions",
@@ -1212,7 +1214,7 @@ class DocxReport:
         self._section_heading(doc, f"{base}.", self.L["sec_transcription"])
 
         if not self.srt_entries:
-            doc.add_paragraph("Aucune transcription disponible.")
+            doc.add_paragraph(self.L["no_transcription"])
             return
 
         table = doc.add_table(rows=len(self.srt_entries), cols=3)
