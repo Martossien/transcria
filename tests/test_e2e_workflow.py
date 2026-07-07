@@ -169,6 +169,14 @@ Exemples :
         "--job-title", type=str, default=DEFAULT_JOB_TITLE,
         help="Titre du job créé (utile pour l'identification en bench)",
     )
+    parser.add_argument(
+        "--language", type=str, default="fr",
+        help=(
+            "Langue des livrables (Axe B) : pilote meeting_context.language, donc le prompt "
+            "localisé (configs/prompts/<lang>/, repli fr) et la consigne de langue LLM. "
+            "Défaut: fr (comportement historique). Ex: --language en."
+        ),
+    )
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
@@ -899,11 +907,11 @@ def print_effective_config(cfg: dict, args: argparse.Namespace) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers de construction du contexte
 # ─────────────────────────────────────────────────────────────────────────────
-def build_context_payload(fs, fallback_title: str) -> dict:
+def build_context_payload(fs, fallback_title: str, language: str = "fr") -> dict:
     meeting_ctx = fs.load_json("context/meeting_context.json") or {}
     return {
         "title": meeting_ctx.get("title_suggere") or fallback_title,
-        "language": "fr",
+        "language": meeting_ctx.get("language") or language,
         "meeting_type": meeting_ctx.get("type_suggere") or "",
         "sensitivity": "normal",
         "objective": meeting_ctx.get("objectif_suggere") or "",
@@ -1958,6 +1966,16 @@ def main() -> int:
                 JobStore.update_extra_data(job_id, lambda extra: {**extra, **extra_updates})
                 job = JobStore.get_by_id(job_id)
 
+            # ── Langue des livrables (Axe B) : semer meeting_context.language AVANT le résumé
+            #    (resolve_output_language le lit) ; merge non destructif. ────────
+            if args.language and args.language != "fr":
+                def _seed_language(extra: dict) -> dict:
+                    mc = {**(extra.get("meeting_context") or {}), "language": args.language}
+                    return {**extra, "meeting_context": mc}
+                JobStore.update_extra_data(job_id, _seed_language)
+                job = JobStore.get_by_id(job_id)
+                ok(f"langue des livrables : {args.language} (prompt localisé + consigne LLM)")
+
             # ── Phase résumé ─────────────────────────────────────────────────
             if not args.skip_summary:
                 step("Résumé production (WorkflowRunner.run_summary)")
@@ -1997,7 +2015,7 @@ def main() -> int:
             step("Contexte réunion")
             timer_start("context")
 
-            context_payload = build_context_payload(fs, args.job_title)
+            context_payload = build_context_payload(fs, args.job_title, args.language)
             MeetingContextManager.save(job, cfg["storage"]["jobs_dir"], context_payload)
             if job.state == JobState.SUMMARY_DONE.value:
                 JobStore.update_state(job.id, JobState.CONTEXT_DONE)
