@@ -34,6 +34,52 @@ def _get_prompts_dir(config: dict | None = None) -> str:
     )
 
 
+# Langue des LIVRABLES générés (Axe B). Réutilise ``meeting_context.language`` (choisi à
+# l'étape Contexte, défaut « fr »). Les prompts localisés vivent dans
+# ``configs/prompts/<lang>/`` ; en leur absence on retombe sur la racine (français source),
+# ce qui garantit la non-régression pour les jobs existants.
+_LANGUAGE_NAMES = {
+    "fr": "français", "en": "English", "de": "Deutsch", "it": "italiano", "es": "español",
+}
+
+
+def resolve_output_language(job=None, extra_data: dict | None = None) -> str:
+    """Langue cible des livrables : ``meeting_context.language`` du job, défaut « fr »."""
+    data = extra_data if extra_data is not None else (job.get_extra_data() if job else {})
+    lang = ((data or {}).get("meeting_context", {}) or {}).get("language") or "fr"
+    return str(lang)
+
+
+def resolve_prompt_file(config: dict | None, filename: str, language: str = "fr") -> str:
+    """Chemin absolu du prompt pour ``language`` : ``<prompts_dir>/<lang>/<filename>`` s'il
+    existe, sinon repli sur ``<prompts_dir>/<filename>`` (français source)."""
+    base = _get_prompts_dir(config)
+    localized = os.path.abspath(os.path.join(base, language, filename))
+    if language and language != "fr" and os.path.isfile(localized):
+        return localized
+    return os.path.abspath(os.path.join(base, filename))
+
+
+def language_directive(language: str) -> str:
+    """Consigne EXPLICITE de langue de sortie injectée dans l'instruction LLM.
+
+    Robustesse (Axe B, bêta) : en plus du prompt localisé éventuel, on ne laisse jamais le
+    modèle deviner la langue. On lui demande de rédiger le CONTENU rédactionnel (synthèse,
+    reformulations, valeurs de champs) dans la langue cible, tout en **préservant à
+    l'identique les en-têtes de structure et marqueurs de format** (ex. ``## Synthèse``,
+    balises, noms de clés) — ils sont lus par le code : les traduire casserait le parsing."""
+    if not language or language == "fr":
+        return ""
+    name = _LANGUAGE_NAMES.get(language, language)
+    return (
+        f"IMPORTANT (langue des livrables) : rédige le CONTENU rédactionnel (synthèse, "
+        f"reformulations, valeurs de champs) en {name}. En revanche, garde EXACTEMENT tels "
+        f"quels les en-têtes de structure, marqueurs de format et noms de clés spécifiés par "
+        f"le prompt (ils sont lus par le code : ne les traduis pas), ainsi que les noms "
+        f"propres et les termes du glossaire. "
+    )
+
+
 def build_harmonization_glossary(participants: list, lexicon: list) -> str:
     """Construit le glossaire validé (Markdown) pour harmoniser la synthèse.
 
@@ -797,21 +843,25 @@ class OpenCodeRunner:
         invite_path: str | None = None,
         prompt_substitutions: dict[str, str] | None = None,
         extra_structured_keys: tuple[str, ...] = (),
+        output_language: str = "fr",
     ) -> dict:
         """Génère un résumé structuré via opencode.
+
+        ``output_language`` : langue des livrables (Axe B). Sélectionne le prompt localisé
+        (``configs/prompts/<lang>/``, repli français) et injecte une consigne de langue.
 
         Returns:
             {"summary_text": str, "title_suggere": str, "type_suggere": str,
              "sujet_suggere": str, "objectif_suggere": str, "notes_suggeres": str,
              "participants_detectes": str, "mots_cles": str}
         """
-        prompt_file = os.path.join(_get_prompts_dir(self._config), "summary_prompt.txt")
-        prompt_file = os.path.abspath(prompt_file)
+        prompt_file = resolve_prompt_file(self._config, "summary_prompt.txt", output_language)
         if prompt_substitutions:
             prompt_file = self._materialize_prompt(prompt_file, prompt_substitutions)
 
         instruction = (
-            f"Tu travailles dans le répertoire {self.work_dir}. "
+            language_directive(output_language)
+            + f"Tu travailles dans le répertoire {self.work_dir}. "
             f"Le fichier de transcription est : {transcript_path}. "
         )
         if diarization_context_path and os.path.isfile(diarization_context_path):
@@ -1201,6 +1251,7 @@ class OpenCodeRunner:
         context_path: str,
         lexicon_path: str,
         invite_path: str | None = None,
+        output_language: str = "fr",
     ) -> dict:
         """Corrige le SRT via opencode : speakers + lexique + orthographe.
 
@@ -1208,14 +1259,16 @@ class OpenCodeRunner:
         documents présentés), il est fourni comme **référence d'orthographe des
         entités nommées uniquement** — jamais comme autorité de contenu.
 
+        ``output_language`` : langue des livrables (Axe B) — prompt localisé + consigne.
+
         Returns:
             {"success": bool, "corrected_srt": str, "report": str, "error": str}
         """
-        prompt_file = os.path.join(_get_prompts_dir(self._config), "correction_prompt.txt")
-        prompt_file = os.path.abspath(prompt_file)
+        prompt_file = resolve_prompt_file(self._config, "correction_prompt.txt", output_language)
 
         instruction = (
-            f"Tu travailles dans le répertoire {self.work_dir}. "
+            language_directive(output_language)
+            + f"Tu travailles dans le répertoire {self.work_dir}. "
             f"Lis le SRT source {srt_path} (tous les segments, du 1 au dernier), "
             f"lis le contexte {context_path}, puis lis intégralement le lexique validé "
             f"par l'utilisateur {lexicon_path}. "
@@ -1278,6 +1331,7 @@ class OpenCodeRunner:
         summary_path: str,
         glossary_path: str,
         structured_data_path: str,
+        output_language: str = "fr",
     ) -> dict:
         """Passe de relecture finale (A+C+D+G) sur les artefacts déjà produits.
 
@@ -1294,11 +1348,11 @@ class OpenCodeRunner:
         Returns: {"success", "reviewed_srt", "harmonized_summary",
                   "reviewed_structured_data", "report", "error"}
         """
-        prompt_file = os.path.join(_get_prompts_dir(self._config), "final_review_prompt.txt")
-        prompt_file = os.path.abspath(prompt_file)
+        prompt_file = resolve_prompt_file(self._config, "final_review_prompt.txt", output_language)
 
         instruction = (
-            f"Tu travailles dans le répertoire {self.work_dir}. "
+            language_directive(output_language)
+            + f"Tu travailles dans le répertoire {self.work_dir}. "
             f"Entrées : SRT corrigé {srt_path}, synthèse à harmoniser {summary_path}, "
             f"glossaire validé {glossary_path}, données structurées {structured_data_path}. "
             f"Exécute la relecture finale (A harmonisation synthèse, C+D cohérence et "

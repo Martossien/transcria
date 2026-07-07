@@ -23,8 +23,13 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   d'administration** — utilisateurs, groupes, voix, lexiques, audit, planification, configuration,
   maintenance, modèles, système, éditeur SRT, types de réunion — messages `flash`/erreurs Python,
   pages d'erreur) **et les emails de notification** (rendus dans la langue du **destinataire**).
-  Catalogue de ~970 chaînes. **La langue des livrables générés** (résumé/correction/DOCX) reste
-  distincte et arrive séparément (réglage par job).
+  Catalogue de ~970 chaînes.
+- **Langue des livrables générés (Axe B, bêta)** : le sélecteur **« Langue »** de l'étape Contexte
+  pilote désormais AUSSI la langue du compte-rendu et des corrections. Les prompts LLM sont résolus
+  par langue (`configs/prompts/<lang>/`, **repli français** ⇒ aucune régression) et une **consigne
+  de langue parser-safe** est injectée (le contenu est rédigé dans la langue cible, les marqueurs de
+  format restent intacts pour le parsing). Défaut `fr` = comportement inchangé. *Bêta : les fichiers
+  de prompts EN dédiés, la localisation des libellés DOCX et la validation E2E GPU restent à faire.*
 
 ### Fixed
 - **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient

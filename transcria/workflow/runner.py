@@ -676,6 +676,7 @@ class WorkflowRunner:
             max_llm_attempts = 3
             parsed = {}
             for attempt in range(1, max_llm_attempts + 1):
+                from transcria.gpu.opencode_runner import resolve_output_language
                 parsed = runner.run_summary(
                     str(staged_transcript),
                     str(staged_context),
@@ -683,6 +684,7 @@ class WorkflowRunner:
                     staged_invite,
                     prompt_substitutions=prompt_subs,
                     extra_structured_keys=extract_keys,
+                    output_language=resolve_output_language(job),
                 )
                 if self._summary_usable(parsed):
                     if attempt > 1:
@@ -1861,8 +1863,10 @@ class WorkflowRunner:
             max_llm_attempts = 3
             result: dict = {}
             for attempt in range(1, max_llm_attempts + 1):
+                from transcria.gpu.opencode_runner import resolve_output_language
                 result = runner.run_correction(
-                    str(staged_srt), str(staged_context), str(staged_lexicon), staged_invite
+                    str(staged_srt), str(staged_context), str(staged_lexicon), staged_invite,
+                    output_language=resolve_output_language(job),
                 )
                 # Un GEL opencode (watchdog → success=False, « opencode interrompu … ») est
                 # TRANSITOIRE (deadlock de démarrage intermittent, cf. batch E2E 2026-07-05) :
@@ -2039,11 +2043,13 @@ class WorkflowRunner:
 
             opencode_bin = config.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
             runner = OpenCodeRunner(str(workspace.scratch_dir), opencode_bin=opencode_bin, config=config)
+            from transcria.gpu.opencode_runner import resolve_output_language
             result = runner.run_final_review(
                 str(staged_srt),
                 str(summary_file),
                 str(glossary_file),
                 str(structured_file),
+                output_language=resolve_output_language(job),
             )
             workspace.verify_and_restore_sources()
             applied = self._apply_final_review(fs, result)

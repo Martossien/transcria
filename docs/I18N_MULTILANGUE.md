@@ -305,6 +305,22 @@ défaut). Fonction pure, **testable isolément** (cœur de la couverture A).
 | **4 — AXE B** | prompts localisés (`configs/prompts/<lang>/`), `output_language` par job, DOCX, wizard « langue des livrables » | **Livrables EN** (bêta, derrière choix explicite) |
 
 ### Suivi d'implémentation
+- **Vagues 1-3 — LIVRÉES** (commits locaux) : toute l'interface (surfaces à fort trafic + toutes
+  les pages d'administration + JS externes) et les emails (langue du destinataire). Catalogue
+  ~968 chaînes FR+EN, garde CI verte, suite complète verte.
+- **Vague 4 (Axe B) — FONDATION LIVRÉE (bêta)** : `resolve_output_language` (réutilise
+  `meeting_context.language` — le sélecteur « Langue » de l'étape Contexte pilote désormais AUSSI
+  les livrables ; pas de nouveau champ), `resolve_prompt_file` (prompt localisé
+  `configs/prompts/<lang>/` avec **repli français** ⇒ non-régression), `language_directive`
+  (consigne de langue **parser-safe** : contenu traduit, marqueurs de format PRÉSERVÉS), threadé
+  dans `run_summary`/`run_correction`/`run_final_review` (défaut `fr`). Tests unitaires
+  (`test_output_language.py`). **RESTE (bêta → GA, nécessite GPU E2E + revue humaine)** : (1)
+  fichiers de prompts EN parser-safe dans `configs/prompts/en/` — délicat car les marqueurs de
+  sortie sont lus par le code, à valider en E2E réel ; (2) localisation des **libellés DOCX**
+  (`exports/docx_report.py` : en-têtes de sections + lignes de méta, ~50 libellés liés aux types
+  de réunion) via table par langue ; (3) validation E2E GPU d'un job audio anglais (fidélité du
+  CR). La fondation actuelle produit déjà un **contenu en langue cible** (via la consigne) sans
+  casser le parsing (marqueurs FR conservés).
 - **Vague 0 — LIVRÉE** (commit local, non poussé) : Flask-Babel câblé (`transcria/web/i18n.py` +
   `i18n_js.py`, route `/i18n/messages.js`, helper `static/js/i18n.js`) ; `select_locale` (ordre
   `?lang` > `user.locale` > `Accept-Language` > défaut) avec persistance par utilisateur

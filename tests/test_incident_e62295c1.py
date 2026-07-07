@@ -374,7 +374,7 @@ def test_correction_retries_on_opencode_hang(app, owner_id, monkeypatch, tmp_pat
         calls = {"n": 0}
         good = "1\n00:00:00,000 --> 00:00:03,000\nBonjour corrige.\n"
 
-        def fake_run_correction(self, srt, ctx, lex, invite=None):
+        def fake_run_correction(self, srt, ctx, lex, invite=None, **_kw):
             calls["n"] += 1
             if calls["n"] < 3:
                 return {"success": False, "corrected_srt": "", "report": "",
@@ -394,7 +394,7 @@ def test_correction_hard_failure_does_not_retry(app, owner_id, monkeypatch, tmp_
         job, runner, fs = _corr_setup(app, owner_id, _cfg(tmp_path), monkeypatch)
         calls = {"n": 0}
 
-        def fake_run_correction(self, srt, ctx, lex, invite=None):
+        def fake_run_correction(self, srt, ctx, lex, invite=None, **_kw):
             calls["n"] += 1
             return {"success": False, "corrected_srt": "", "report": "", "error": "erreur dure quelconque"}
         monkeypatch.setattr(OpenCodeRunner, "run_correction", fake_run_correction)
