@@ -145,6 +145,28 @@ def test_en_markers_not_found_in_fr_mode():
     assert p_fr["speaker_count"] == 0
 
 
+def test_localized_type_display():
+    """Affichage du type localisé (clé FR conservée pour la logique ; repli custom)."""
+    from transcria.context.meeting_type_catalog import localized_type_display as f
+    assert f("Podcast / média", "en", "name", "Podcast / média") == "Podcast / media"
+    assert f("Podcast / média", "en", "badge", "MÉDIA") == "MEDIA"
+    assert f("Réunion de crise", "en", "name", "Réunion de crise") == "Crisis meeting"
+    assert f("Réunion interne", "fr", "name", "Réunion interne") == "Réunion interne"  # fr inchangé
+    assert f("Type Custom Utilisateur", "en", "name", "Type Custom Utilisateur") == "Type Custom Utilisateur"  # repli
+
+
+def test_docx_quality_labels_localized():
+    """Les libellés + descriptions des points à vérifier sont localisés (pas de FR en EN)."""
+    from transcria.exports.docx_report import _docx_labels
+    en = _docx_labels("en")
+    assert en["q_coverage"] == "⚠  Audio coverage"
+    assert en["badge_crise"] == "⚠  CRISIS SITUATION  ⚠"
+    assert en["chk_empty_segments"] == "Empty segments"
+    # les templates de description se formatent proprement
+    assert en["d_coverage"].format(pct=63) == "63% — possible transcription loss"
+    assert en["d_altered_name"].format(sid="S0", found="X", expected="Y") == "S0: “X” instead of “Y”"
+
+
 def test_docx_labels_by_language():
     """Table de libellés DOCX : en localisé, fr/inconnu = français (repli)."""
     from transcria.exports.docx_report import _docx_labels

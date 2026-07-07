@@ -18,6 +18,7 @@ from transcria.context.meeting_type_catalog import (
     ORDERABLE_SECTIONS,
     confidential_types,
     field_short_labels,
+    localized_type_display,
     quorum_types,
     theme_specs,
 )
@@ -63,6 +64,34 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "th_name": "Nom", "th_function": "Fonction", "th_service": "Service",
         "th_role": "Rôle", "th_speaking_time": "Tps de parole",
         "th_turns": "Interventions", "quality": "Qualité",
+        # Badges de couverture
+        "badge_crise": "⚠  SITUATION DE CRISE  ⚠",
+        "badge_confidentiel": "▪  DOCUMENT CONFIDENTIEL  ▪",
+        # Points à vérifier — libellés
+        "q_coverage": "⚠  Couverture audio", "q_relisten": "🔍  Zone à réécouter",
+        "q_term_validate": "✎  Terme à valider", "q_spelling": "✎  Orthographe à vérifier",
+        "q_altered_name": "⚠  Nom de locuteur altéré",
+        "q_missing_term": "✎  Terme du lexique non appliqué",
+        "q_unmapped": "⚠  Locuteurs non identifiés",
+        "q_foreign": "🔍  Segments en langue étrangère",
+        "q_non_latin": "🔍  Caractères non latins", "q_anomaly": "anomalie",
+        # Points à vérifier — descriptions (templates .format)
+        "d_coverage": "{pct}% — possible perte de transcription",
+        "d_term_validate": "{term} (variante : {variant})",
+        "d_spelling": "{form} proche de {term}",
+        "d_altered_name": "{sid} : « {found} » au lieu de « {expected} »",
+        "d_missing_term": "« {term} » introuvable dans la transcription corrigée",
+        "d_unmapped": "{count} segment(s) sans participant associé",
+        "d_foreign": "{count} segment(s) marqué(s) — hallucination ASR ou zone bruitée probable",
+        "d_non_latin": "{count} segment(s) — zones à réécouter",
+        "d_generic_count": "{count} élément(s) concerné(s)",
+        "d_generic_details": "détails dans quality_report.md",
+        # _CHECK_LABELS génériques
+        "chk_empty_segments": "Segments vides", "chk_short_segments": "Segments très courts",
+        "chk_long_segments": "Segments très longs", "chk_overlaps": "Chevauchements de parole",
+        "chk_audio_preflight_flags": "Alertes de qualité audio",
+        "chk_suspect_no_speech_prob": "Segments à faible probabilité de parole",
+        "chk_suspicious_short_segments": "Segments courts suspects",
     },
     "en": {
         "banner": "TRANSCRIPTION REPORT",
@@ -83,6 +112,30 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "th_name": "Name", "th_function": "Function", "th_service": "Department",
         "th_role": "Role", "th_speaking_time": "Speaking time",
         "th_turns": "Turns", "quality": "Quality",
+        "badge_crise": "⚠  CRISIS SITUATION  ⚠",
+        "badge_confidentiel": "▪  CONFIDENTIAL DOCUMENT  ▪",
+        "q_coverage": "⚠  Audio coverage", "q_relisten": "🔍  Zone to re-listen",
+        "q_term_validate": "✎  Term to validate", "q_spelling": "✎  Spelling to check",
+        "q_altered_name": "⚠  Altered speaker name",
+        "q_missing_term": "✎  Glossary term not applied",
+        "q_unmapped": "⚠  Unidentified speakers",
+        "q_foreign": "🔍  Foreign-language segments",
+        "q_non_latin": "🔍  Non-Latin characters", "q_anomaly": "anomaly",
+        "d_coverage": "{pct}% — possible transcription loss",
+        "d_term_validate": "{term} (variant: {variant})",
+        "d_spelling": "{form} close to {term}",
+        "d_altered_name": "{sid}: “{found}” instead of “{expected}”",
+        "d_missing_term": "“{term}” not found in the corrected transcription",
+        "d_unmapped": "{count} segment(s) with no associated participant",
+        "d_foreign": "{count} segment(s) flagged — probable ASR hallucination or noisy zone",
+        "d_non_latin": "{count} segment(s) — zones to re-listen",
+        "d_generic_count": "{count} element(s) concerned",
+        "d_generic_details": "details in quality_report.md",
+        "chk_empty_segments": "Empty segments", "chk_short_segments": "Very short segments",
+        "chk_long_segments": "Very long segments", "chk_overlaps": "Speech overlaps",
+        "chk_audio_preflight_flags": "Audio quality alerts",
+        "chk_suspect_no_speech_prob": "Low speech-probability segments",
+        "chk_suspicious_short_segments": "Suspicious short segments",
     },
 }
 
@@ -591,7 +644,12 @@ class DocxReport:
         p_hdr = hdr_cell.paragraphs[0]
         p_hdr.alignment = WD_ALIGN_PARAGRAPH.CENTER
         # Bandeau par défaut localisé ; un bandeau de type personnalisé (authoré) est conservé.
-        banner_text = self.L["banner"] if theme.banner_text == _DOCX_LABELS["fr"]["banner"] else theme.banner_text
+        # Bandeau : défaut localisé via la table ; bandeau typé localisé via le catalogue
+        # (repli sur la forme française authorée pour un type personnalisé).
+        if theme.banner_text == _DOCX_LABELS["fr"]["banner"]:
+            banner_text = self.L["banner"]
+        else:
+            banner_text = localized_type_display(mtype, self.language, "banner_text", theme.banner_text)
         r_hdr = p_hdr.add_run(banner_text)
         r_hdr.font.color.rgb = _WHITE
         r_hdr.font.bold = True
@@ -612,8 +670,7 @@ class DocxReport:
         is_crise = mtype == "Réunion de crise"
         if is_confidentiel or is_crise:
             badge_color = _RED if is_crise else RGBColor(0x6A, 0x1B, 0x9A)
-            badge_text  = ("⚠  SITUATION DE CRISE  ⚠" if is_crise
-                           else "▪  DOCUMENT CONFIDENTIEL  ▪")
+            badge_text  = self.L["badge_crise"] if is_crise else self.L["badge_confidentiel"]
             conf_t = doc.add_table(rows=1, cols=1)
             _table_full_width(conf_t)
             _table_no_borders(conf_t)
@@ -674,7 +731,7 @@ class DocxReport:
         if self.duration_s:
             meta_rows.append((self.L["duration"], _fmt_duration(self.duration_s)))
         if mtype:
-            meta_rows.append((self.L["type"], mtype))
+            meta_rows.append((self.L["type"], localized_type_display(mtype, self.language, "name", mtype)))
         if svc:
             meta_rows.append((self.L["service"], svc))
         if lang:
@@ -770,7 +827,8 @@ class DocxReport:
         if theme.cover_badge:
             p_badge = doc.add_paragraph()
             p_badge.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r_badge = p_badge.add_run(f"[ {theme.cover_badge} ]")
+            _badge = localized_type_display(mtype, self.language, "badge", theme.cover_badge)
+            r_badge = p_badge.add_run(f"[ {_badge} ]")
             r_badge.font.size = Pt(8)
             r_badge.font.color.rgb = theme.accent
             r_badge.font.bold = True
@@ -1195,15 +1253,8 @@ class DocxReport:
 
     # Libellés français des checks sans rendu dédié (repli générique — un avertissement
     # du rapport qualité n'est JAMAIS caché au lecteur du document final).
-    _CHECK_LABELS_FR: dict[str, str] = {
-        "empty_segments": "Segments vides",
-        "short_segments": "Segments très courts",
-        "long_segments": "Segments très longs",
-        "overlaps": "Chevauchements de parole",
-        "audio_preflight_flags": "Alertes de qualité audio",
-        "suspect_no_speech_prob": "Segments à faible probabilité de parole",
-        "suspicious_short_segments": "Segments courts suspects",
-    }
+    # Libellés génériques des contrôles qualité → désormais dans _DOCX_LABELS (clés « chk_* »),
+    # résolus par langue via self.L (Axe B).
 
     def _section_quality(self, doc: DocumentT, base: int = 4) -> None:
         checks = self.quality.get("checks", [])
@@ -1219,51 +1270,51 @@ class DocxReport:
                 ratio = check.get("ratio", 1.0)
                 if ratio < 0.85:
                     pct = round(ratio * 100)
-                    points.append(("⚠  Couverture audio", f"{pct}% — possible perte de transcription"))
+                    points.append((self.L["q_coverage"], self.L["d_coverage"].format(pct=pct)))
 
             elif ctype == "audio_problem_segments":
                 examples = check.get("examples", [])
                 for ex in examples:
-                    label = ex.get("label", "anomalie")
+                    label = ex.get("label", self.L["q_anomaly"])
                     s = ex.get("start_label", "")
                     e = ex.get("end_label", "")
-                    points.append(("🔍  Zone à réécouter", f"{s} → {e} ({label})"))
+                    points.append((self.L["q_relisten"], f"{s} → {e} ({label})"))
 
             elif ctype == "unresolved_lexicon_variants":
                 for ev in check.get("exact_variants", []):
-                    points.append(("✎  Terme à valider", f"{ev['term']} (variante : {ev['variant']})"))
+                    points.append((self.L["q_term_validate"],
+                                   self.L["d_term_validate"].format(term=ev['term'], variant=ev['variant'])))
                 for cf in check.get("close_forms", []):
-                    points.append(("✎  Orthographe à vérifier", f"{cf['form']} proche de {cf['term']}"))
+                    points.append((self.L["q_spelling"],
+                                   self.L["d_spelling"].format(form=cf['form'], term=cf['term'])))
 
             elif ctype == "speaker_name_violations":
                 # severity=error : un nom de locuteur a été ALTÉRÉ dans le SRT corrigé —
                 # information capitale pour le relecteur du document final.
                 for v in check.get("violations", [])[:10]:
                     points.append((
-                        "⚠  Nom de locuteur altéré",
-                        f"{v.get('speaker_id', '?')} : « {v.get('found', '')} » au lieu de « {v.get('expected', '')} »",
+                        self.L["q_altered_name"],
+                        self.L["d_altered_name"].format(
+                            sid=v.get('speaker_id', '?'), found=v.get('found', ''), expected=v.get('expected', '')),
                     ))
 
             elif ctype == "missing_lexicon_terms":
                 for term in check.get("terms", [])[:10]:
-                    points.append(("✎  Terme du lexique non appliqué", f"« {term} » introuvable dans la transcription corrigée"))
+                    points.append((self.L["q_missing_term"], self.L["d_missing_term"].format(term=term)))
 
             elif ctype == "unmapped_speakers":
-                points.append(("⚠  Locuteurs non identifiés",
-                               f"{check.get('count', 0)} segment(s) sans participant associé"))
+                points.append((self.L["q_unmapped"], self.L["d_unmapped"].format(count=check.get('count', 0))))
 
             elif ctype == "foreign_segments":
-                points.append(("🔍  Segments en langue étrangère",
-                               f"{check.get('count', 0)} segment(s) marqué(s) — hallucination ASR ou zone bruitée probable"))
+                points.append((self.L["q_foreign"], self.L["d_foreign"].format(count=check.get('count', 0))))
 
             elif ctype == "non_latin_segments":
-                points.append(("🔍  Caractères non latins",
-                               f"{check.get('count', 0)} segment(s) — zones à réécouter"))
+                points.append((self.L["q_non_latin"], self.L["d_non_latin"].format(count=check.get('count', 0))))
 
             else:
-                label = self._CHECK_LABELS_FR.get(str(ctype), str(ctype).replace("_", " ").capitalize())
+                label = self.L.get("chk_" + str(ctype), str(ctype).replace("_", " ").capitalize())
                 count = check.get("count")
-                desc = f"{count} élément(s) concerné(s)" if count else "détails dans quality_report.md"
+                desc = self.L["d_generic_count"].format(count=count) if count else self.L["d_generic_details"]
                 points.append((f"⚠  {label}", desc))
 
         if not points:

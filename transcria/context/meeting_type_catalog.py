@@ -284,3 +284,42 @@ def detection_hints() -> dict[str, list[str]]:
     """Indices de sélection du « Type suggéré » par type (consommés au lot D —
     le prompt de résumé garde sa copie en dur d'ici là, synchrone par test)."""
     return {t["name"]: list(t["detection_hints"]) for t in load_builtin_types() if t["detection_hints"]}
+
+
+# ── Localisation d'affichage des types (Axe B) ───────────────────────────────
+# Le `name` d'un type est la CLÉ logique (comparaisons, lookups) : il reste français.
+# Ces traductions ne servent qu'à l'AFFICHAGE (DOCX) quand la langue des livrables
+# n'est pas le français. Un type personnalisé absent de la carte retombe sur sa forme
+# authorée (contenu de l'utilisateur) — c'est le comportement voulu.
+_TYPE_DISPLAY_I18N: dict[str, dict[str, dict[str, str]]] = {
+    "en": {
+        "Réunion interne":        {"name": "Internal meeting"},
+        "Réunion projet":         {"name": "Project meeting", "badge": "PROJECT", "banner_text": "PROJECT MEETING REPORT"},
+        "Réunion technique":      {"name": "Technical meeting", "badge": "TECHNICAL", "banner_text": "TECHNICAL MEETING REPORT"},
+        "Formation":              {"name": "Training", "badge": "TRAINING", "banner_text": "TRAINING REPORT"},
+        "Réunion médicale / santé": {"name": "Medical / health meeting", "badge": "CONFIDENTIAL", "banner_text": "MEDICAL REPORT"},
+        "RH":                     {"name": "HR", "badge": "HR", "banner_text": "REPORT — HUMAN RESOURCES"},
+        "Entretien":              {"name": "Interview", "badge": "INTERVIEW", "banner_text": "INTERVIEW REPORT"},
+        "CSE":                    {"name": "CSE", "badge": "CSE", "banner_text": "MINUTES OF THE SOCIAL AND ECONOMIC COMMITTEE"},
+        "CSE extraordinaire":     {"name": "Extraordinary CSE", "badge": "CSE EXTRA", "banner_text": "CSE MINUTES — EXTRAORDINARY SESSION"},
+        "CODIR / COMEX":          {"name": "CODIR / COMEX", "badge": "CODIR", "banner_text": "REPORT — EXECUTIVE COMMITTEE"},
+        "Réunion client":         {"name": "Client meeting", "badge": "CLIENT", "banner_text": "CLIENT MEETING REPORT"},
+        "Point projet":           {"name": "Project checkpoint", "badge": "PROJECT", "banner_text": "PROJECT MEETING REPORT"},
+        "Réunion de crise":       {"name": "Crisis meeting", "badge": "CRISIS", "banner_text": "REPORT — CRISIS MEETING"},
+        "Séminaire / atelier":    {"name": "Seminar / workshop", "badge": "SEMINAR", "banner_text": "SEMINAR / WORKSHOP REPORT"},
+        "Négociation":            {"name": "Negotiation", "badge": "NEGOTIATION", "banner_text": "NEGOTIATION REPORT"},
+        "Entretien individuel":   {"name": "One-on-one", "badge": "CONFIDENTIAL", "banner_text": "ONE-ON-ONE MEETING"},
+        "Podcast / média":        {"name": "Podcast / media", "badge": "MEDIA", "banner_text": "TRANSCRIPTION"},
+        "Autre":                  {"name": "Other"},
+    },
+}
+
+
+def localized_type_display(type_name: str, language: str | None, field: str, fallback: str) -> str:
+    """Forme localisée du champ d'affichage ``field`` (``name`` | ``badge`` |
+    ``banner_text``) d'un type pour ``language``. Repli sur ``fallback`` (forme
+    française authorée) si langue = fr, type inconnu ou champ non traduit."""
+    if not language or language == "fr":
+        return fallback
+    tr = _TYPE_DISPLAY_I18N.get(language, {}).get(type_name or "", {})
+    return tr.get(field, fallback)
