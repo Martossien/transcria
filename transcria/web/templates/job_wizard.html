@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Traitement — TranscrIA{% endblock %}
+{% block title %}{{ _('Traitement') }} — TranscrIA{% endblock %}
 {# Styles du wizard : static/css/transcria.css (docs/REFONTE_UI.md) #}
 {% block content %}
 <div class="wizard-container" id="wizard-root"
@@ -14,7 +14,7 @@
   <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
       <h1 class="h4 mb-1">{{ job.title }}</h1>
-      <small class="text-muted">Créé le {{ job.created_at.strftime('%d/%m/%Y à %H:%M') }}</small>
+      <small class="text-muted">{{ _('Créé le %(date)s', date=job.created_at.strftime('%d/%m/%Y à %H:%M')) }}</small>
     </div>
     <div>
       <span class="badge {{ job.state|state_badge }} fs-6">{{ job.state|state_label }}</span>
@@ -24,15 +24,14 @@
   {% if job.state == 'failed' %}
   <div class="alert alert-danger d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
     <div>
-      <strong><i class="bi bi-x-octagon"></i> Le traitement a échoué.</strong>
+      <strong><i class="bi bi-x-octagon"></i> {{ _('Le traitement a échoué.') }}</strong>
       {% if job.error_message %}
       <div class="small mt-1 font-monospace">{{ job.error_message }}</div>
       {% endif %}
-      <div class="small mt-1">Vos saisies (contexte, participants, lexique) sont conservées —
-        vous pouvez relancer le traitement.</div>
+      <div class="small mt-1">{{ _('Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement.') }}</div>
     </div>
     <button class="btn btn-outline-danger" onclick="TranscrIA.startProcessing()">
-      <i class="bi bi-arrow-clockwise"></i> Relancer le traitement
+      <i class="bi bi-arrow-clockwise"></i> {{ _('Relancer le traitement') }}
     </button>
   </div>
   {% endif %}
@@ -56,23 +55,23 @@
   <!-- Step 1: File upload + choix du profil (le profil pilote la suite du parcours) -->
   {% set file_status = statuses.get('file', 'todo') %}
   <div class="step-section {% if file_status == 'todo' or file_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-{{ wizard_layout.step_num.file }}-circle-fill step-icon"></i> Fichier audio &amp; profil de traitement</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.file }}-circle-fill step-icon"></i> {{ _('Fichier audio & profil de traitement') }}</h3>
     {% if file_status == 'done' %}
       <div class="alert alert-success">
-        <i class="bi bi-check-circle"></i> Fichier reçu.
+        <i class="bi bi-check-circle"></i> {{ _('Fichier reçu.') }}
         {% if audio_analysis %}
           <strong>{{ audio_analysis.get('format', '') }}</strong> —
-          {{ (audio_analysis.get('size_bytes', 0) / (1024*1024))|round(1) }} Mo
+          {{ _('%(mb)s Mo', mb=(audio_analysis.get('size_bytes', 0) / (1024*1024))|round(1)) }}
           {% if audio_analysis.get('duration_seconds') %}
-          — {{ (audio_analysis.duration_seconds / 60)|round(1) }} min
+          — {{ _('%(min)s min', min=(audio_analysis.duration_seconds / 60)|round(1)) }}
           {% endif %}
         {% endif %}
       </div>
     {% else %}
-      <p class="text-muted">Déposez le fichier audio ou vidéo de la réunion.</p>
+      <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
       <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg" class="form-control mb-2">
       <button class="btn btn-primary" onclick="TranscrIA.uploadFile()">
-        <span id="upload-spinner" class="spinner d-none"></span> Téléverser
+        <span id="upload-spinner" class="spinner d-none"></span> {{ _('Téléverser') }}
       </button>
       <div id="upload-result" class="mt-2"></div>
     {% endif %}
@@ -82,46 +81,42 @@
     {% set profile_locked = file_status != 'done' %}
     <hr class="my-3">
     <p class="text-muted mb-2">
-      <strong>Profil de traitement</strong> — choisissez votre niveau de livrable.
-      Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est
-      présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite =
-      livrable plus riche. Les étapes inutiles à votre profil seront masquées.
+      {% trans %}<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées.{% endtrans %}
     </p>
     {% if profile_locked %}
     <div class="alert alert-secondary py-2 small mb-2">
-      <i class="bi bi-lock"></i> Téléversez d'abord votre fichier — le choix du profil s'activera ensuite.
+      <i class="bi bi-lock"></i> {{ _("Téléversez d'abord votre fichier — le choix du profil s'activera ensuite.") }}
     </div>
     {% endif %}
     <div id="profile-selector"
          class="profile-selector mb-3{% if profile_locked %} opacity-50{% endif %}"
          data-selected="{{ selected_profile_id }}">
-      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="Profil de traitement">
+      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="{{ _('Profil de traitement') }}">
         {% for p in processing_profiles.profiles %}
         <button type="button"
                 class="profile-pill btn flex-fill {% if p.id == selected_profile_id %}btn-success active{% else %}btn-outline-secondary{% endif %}"
                 data-profile-id="{{ p.id }}"
                 {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"
-                {% elif profile_locked %}disabled aria-disabled="true" title="Téléversez d'abord le fichier audio"{% endif %}
+                {% elif profile_locked %}disabled aria-disabled="true" title="{{ _('Téléversez d\'abord le fichier audio') }}"{% endif %}
                 onclick="TranscrIA.chooseProfile('{{ p.id }}')">
           <span class="d-block fw-semibold">{{ p.label }}</span>
           <span class="d-block small opacity-75">
-            {% if not p.available %}<i class="bi bi-slash-circle"></i> indisponible{% else %}niveau {{ p.level }}{% endif %}
+            {% if not p.available %}<i class="bi bi-slash-circle"></i> {{ _('indisponible') }}{% else %}{{ _('niveau %(n)s', n=p.level) }}{% endif %}
           </span>
         </button>
         {% endfor %}
       </div>
       <div class="d-flex justify-content-between small text-muted mt-1 px-1">
-        <span><i class="bi bi-lightning-charge"></i> Rapide</span>
-        <span>Complet <i class="bi bi-stars"></i></span>
+        <span><i class="bi bi-lightning-charge"></i> {{ _('Rapide') }}</span>
+        <span>{{ _('Complet') }} <i class="bi bi-stars"></i></span>
       </div>
     </div>
     <div id="profile-detail" class="card border-success mb-1">
-      <div class="card-body"><span class="text-muted">Sélectionnez un profil…</span></div>
+      <div class="card-body"><span class="text-muted">{{ _('Sélectionnez un profil…') }}</span></div>
     </div>
     {% if not processing_profiles.recommended %}
     <div class="alert alert-warning mt-2 mb-0">
-      Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée
-      ou mode qualité désactivé). Voir la configuration.
+      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration.{% endtrans %}
     </div>
     {% endif %}
     <script type="application/json" id="profiles-data">{{ processing_profiles|tojson }}</script>
@@ -131,7 +126,7 @@
   {% set analyze_status = statuses.get('analyze', 'todo') %}
   {% if file_status == 'done' %}
   <div class="step-section {% if analyze_status == 'todo' or analyze_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-{{ wizard_layout.step_num.analyze }}-circle-fill step-icon"></i> Analyse audio</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.analyze }}-circle-fill step-icon"></i> {{ _('Analyse audio') }}</h3>
     {% if audio_analysis and audio_analysis.get('duration_seconds') %}
       {% if audio_diagnostic %}
       <div class="alert alert-{{ audio_diagnostic.class }} mb-3">
@@ -153,19 +148,19 @@
         {% endif %}
         {% if audio_diagnostic.difficulty %}
         <div class="small mt-2">
-          Passages :
-          <strong>{{ audio_diagnostic.difficulty.degrade }}</strong> difficile(s) ·
-          <strong>{{ audio_diagnostic.difficulty.suspect }}</strong> à surveiller
-          sur {{ audio_diagnostic.difficulty.windows }} fenêtre(s) de 5 s.
+          {{ _('Passages :') }}
+          <strong>{{ audio_diagnostic.difficulty.degrade }}</strong> {{ _('difficile(s) ·') }}
+          <strong>{{ audio_diagnostic.difficulty.suspect }}</strong> {{ _('à surveiller') }}
+          {{ _('sur %(n)s fenêtre(s) de 5 s.', n=audio_diagnostic.difficulty.windows) }}
         </div>
         {% endif %}
         {% if audio_diagnostic.frise %}
-        {% set _frise_labels = {'ok': 'son exploitable', 'suspect': 'à surveiller', 'degrade': 'difficile'} %}
+        {% set _frise_labels = {'ok': _('son exploitable'), 'suspect': _('à surveiller'), 'degrade': _('difficile')} %}
         {% set _frise_classes = {'ok': 'success', 'suspect': 'warning', 'degrade': 'danger'} %}
         <div class="mt-2">
-          <div class="small text-muted mb-1">Difficulté au fil du temps</div>
+          <div class="small text-muted mb-1">{{ _('Difficulté au fil du temps') }}</div>
           <div class="d-flex" style="height: 14px; border-radius: 4px; overflow: hidden;"
-               role="img" aria-label="Frise temporelle de la difficulté audio">
+               role="img" aria-label="{{ _('Frise temporelle de la difficulté audio') }}">
             {% for seg in audio_diagnostic.frise %}
             <div class="bg-{{ _frise_classes[seg.level] }}" style="width: {{ seg.pct }}%;"
                  title="{{ seg.label }} · {{ _frise_labels[seg.level] }}{% if seg.reasons %} · {{ seg.reasons|join(', ') }}{% endif %}"></div>
@@ -176,14 +171,14 @@
             <span>{{ audio_diagnostic.frise[-1].label.split('–')[1] }}</span>
           </div>
           <div class="small mt-1">
-            <span class="badge text-bg-success">&nbsp;</span> exploitable
-            <span class="badge text-bg-warning ms-2">&nbsp;</span> à surveiller
-            <span class="badge text-bg-danger ms-2">&nbsp;</span> difficile
+            <span class="badge text-bg-success">&nbsp;</span> {{ _('exploitable') }}
+            <span class="badge text-bg-warning ms-2">&nbsp;</span> {{ _('à surveiller') }}
+            <span class="badge text-bg-danger ms-2">&nbsp;</span> {{ _('difficile') }}
           </div>
         </div>
         {% endif %}
         <details class="small mt-2">
-          <summary>Voir les détails techniques</summary>
+          <summary>{{ _('Voir les détails techniques') }}</summary>
           {% if audio_diagnostic.perceptual.squim or audio_diagnostic.perceptual.dnsmos %}
           <div class="row mt-2">
             {% if audio_diagnostic.perceptual.squim %}
@@ -205,51 +200,49 @@
           </div>
           {% endif %}
           <div class="row mt-2">
-            <div class="col-md-3">RMS : {{ audio_diagnostic.metrics.rms if audio_diagnostic.metrics.rms is not none else '—' }}</div>
-            <div class="col-md-3">SNR estimé : {{ audio_diagnostic.metrics.estimated_snr_db if audio_diagnostic.metrics.estimated_snr_db is not none else '—' }} dB</div>
-            <div class="col-md-3">Silence : {{ ((audio_diagnostic.metrics.silence_ratio or 0) * 100)|round(0)|int }}%</div>
-            <div class="col-md-3">Bande 95% : {{ audio_diagnostic.metrics.bandwidth_95_hz if audio_diagnostic.metrics.bandwidth_95_hz is not none else '—' }} Hz</div>
+            <div class="col-md-3">{{ _('RMS :') }} {{ audio_diagnostic.metrics.rms if audio_diagnostic.metrics.rms is not none else '—' }}</div>
+            <div class="col-md-3">{{ _('SNR estimé :') }} {{ audio_diagnostic.metrics.estimated_snr_db if audio_diagnostic.metrics.estimated_snr_db is not none else '—' }} dB</div>
+            <div class="col-md-3">{{ _('Silence :') }} {{ ((audio_diagnostic.metrics.silence_ratio or 0) * 100)|round(0)|int }}%</div>
+            <div class="col-md-3">{{ _('Bande 95%% :') }} {{ audio_diagnostic.metrics.bandwidth_95_hz if audio_diagnostic.metrics.bandwidth_95_hz is not none else '—' }} Hz</div>
           </div>
         </details>
       </div>
       {% endif %}
       <div class="row">
-        <div class="col-md-3"><strong>Durée</strong><br>{{ (audio_analysis.duration_seconds / 60)|round(1) }} minutes</div>
-        <div class="col-md-2"><strong>Format</strong><br>{{ audio_analysis.get('format', '?') }}</div>
-        <div class="col-md-2"><strong>Codec</strong><br>{{ audio_analysis.get('codec', '?') }}</div>
-        <div class="col-md-2"><strong>Canaux</strong><br>{{ audio_analysis.get('channels', '?') }}</div>
-        <div class="col-md-3"><strong>Fréquence</strong><br>{{ audio_analysis.get('sample_rate_hz', '?') }} Hz</div>
+        <div class="col-md-3"><strong>{{ _('Durée') }}</strong><br>{{ _('%(min)s minutes', min=(audio_analysis.duration_seconds / 60)|round(1)) }}</div>
+        <div class="col-md-2"><strong>{{ _('Format') }}</strong><br>{{ audio_analysis.get('format', '?') }}</div>
+        <div class="col-md-2"><strong>{{ _('Codec') }}</strong><br>{{ audio_analysis.get('codec', '?') }}</div>
+        <div class="col-md-2"><strong>{{ _('Canaux') }}</strong><br>{{ audio_analysis.get('channels', '?') }}</div>
+        <div class="col-md-3"><strong>{{ _('Fréquence') }}</strong><br>{{ audio_analysis.get('sample_rate_hz', '?') }} Hz</div>
       </div>
       {% if audio_analysis.get('needs_conversion') %}
-        <div class="alert alert-warning mt-3 mb-0">Conversion requise pour le traitement (effectuée automatiquement).</div>
+        <div class="alert alert-warning mt-3 mb-0">{{ _('Conversion requise pour le traitement (effectuée automatiquement).') }}</div>
       {% endif %}
       {% if timing_estimate and timing_estimate.total_minutes %}
         {# Estimation CALIBRÉE machine, spécifique au profil choisi (honnête sur sa base). #}
         <div class="alert alert-info mt-2 mb-0">
-          <strong><i class="bi bi-clock"></i> Temps total estimé : ~{{ timing_estimate.total_minutes|round(0)|int }} min</strong>
+          <strong><i class="bi bi-clock"></i> {{ _('Temps total estimé : ~%(min)s min', min=timing_estimate.total_minutes|round(0)|int) }}</strong>
           <span class="text-muted small ms-2">
-            (traitement machine {{ timing_estimate.machine_range }}
-            + validation ~{{ timing_estimate.human_minutes }} min)
+            {{ _('(traitement machine %(range)s + validation ~%(human)s min)', range=timing_estimate.machine_range, human=timing_estimate.human_minutes) }}
           </span>
           {% if timing_estimate.basis == 'measured' %}
-          <span class="badge bg-success ms-2" title="Estimation apprise de vos traitements précédents sur cette machine">calibré · {{ timing_estimate.samples }} jobs</span>
+          <span class="badge bg-success ms-2" title="{{ _('Estimation apprise de vos traitements précédents sur cette machine') }}">{{ _('calibré · %(n)s jobs', n=timing_estimate.samples) }}</span>
           {% else %}
-          <span class="badge bg-secondary ms-2" title="Estimation initiale (formule) — s'affinera après quelques traitements">estimation initiale</span>
+          <span class="badge bg-secondary ms-2" title="{{ _('Estimation initiale (formule) — s\'affinera après quelques traitements') }}">{{ _('estimation initiale') }}</span>
           {% endif %}
         </div>
       {% elif audio_analysis.get('estimated_total_minutes') %}
         <div class="alert alert-info mt-2 mb-0">
-          <strong><i class="bi bi-clock"></i> Temps total estimé : ~{{ audio_analysis.estimated_total_minutes|round(0)|int }} min</strong>
+          <strong><i class="bi bi-clock"></i> {{ _('Temps total estimé : ~%(min)s min', min=audio_analysis.estimated_total_minutes|round(0)|int) }}</strong>
           <span class="text-muted small ms-2">
-            (traitement machine ~{{ audio_analysis.estimated_machine_minutes|round(0)|int }} min
-            + validation ~{{ audio_analysis.estimated_human_minutes }} min)
+            {{ _('(traitement machine ~%(machine)s min + validation ~%(human)s min)', machine=audio_analysis.estimated_machine_minutes|round(0)|int, human=audio_analysis.estimated_human_minutes) }}
           </span>
         </div>
       {% endif %}
     {% else %}
-      <p class="text-muted">Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques.</p>
+      <p class="text-muted">{{ _("Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques.") }}</p>
       <button class="btn btn-primary" onclick="TranscrIA.analyzeAudio()">
-        <span id="analyze-spinner" class="spinner d-none"></span> Analyser le fichier
+        <span id="analyze-spinner" class="spinner d-none"></span> {{ _('Analyser le fichier') }}
       </button>
       <div id="analyze-result" class="mt-2"></div>
     {% endif %}
@@ -258,86 +251,86 @@
 
   {% if wizard_layout.first_optional == 'summary' and file_status == 'done' %}
   <details class="optional-steps mb-4">
-    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
   {% endif %}
   <!-- Step 3: Quick summary -->
   {% set summary_status = statuses.get('summary', 'todo') %}
   {% if file_status == 'done' and audio_analysis %}
   {% set _n = wizard_layout.step_num.get('summary') %}
   <div class="step-section {% if summary_status == 'todo' or summary_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Résumé de contrôle</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Résumé de contrôle') }}</h3>
     <div id="workflow-status-banner" class="alert alert-info workflow-status-banner mb-3" data-initial-state="{{ job.state }}" role="status" aria-live="polite"></div>
     {% if summary and summary.get('summary_text') and summary.summary_text not in ['Résumé de contrôle indisponible (LLM non configurée).', 'Résumé indisponible.'] %}
       <div class="card bg-light mb-3">
         <div class="card-body">
-          <h6 class="card-title"><i class="bi bi-magic"></i> Résumé généré par l'IA</h6>
+          <h6 class="card-title"><i class="bi bi-magic"></i> {{ _("Résumé généré par l'IA") }}</h6>
           {% if meeting.get('speaker_count_llm') %}
-          <p class="mb-1"><span class="badge bg-primary">{{ meeting.speaker_count_llm }} participants détectés</span></p>
+          <p class="mb-1"><span class="badge bg-primary">{{ _('%(n)s participants détectés', n=meeting.speaker_count_llm) }}</span></p>
           {% endif %}
           <p class="mb-0 small">{{ summary.summary_text[:1500] }}</p>
           {% if meeting.get('title_suggere') %}
           <div class="mt-2 small text-muted">
-            <strong>Titre suggéré :</strong> {{ meeting.title_suggere }}<br>
-            <strong>Type suggéré :</strong> {{ meeting.type_suggere }}<br>
-            <strong>Sujet :</strong> {{ meeting.sujet_suggere }}
+            <strong>{{ _('Titre suggéré :') }}</strong> {{ meeting.title_suggere }}<br>
+            <strong>{{ _('Type suggéré :') }}</strong> {{ meeting.type_suggere }}<br>
+            <strong>{{ _('Sujet :') }}</strong> {{ meeting.sujet_suggere }}
           </div>
           {% endif %}
         </div>
       </div>
       {% if summary.get('transcript_short') %}
       <details class="mb-3">
-        <summary class="text-muted">Extrait de transcription (début)</summary>
+        <summary class="text-muted">{{ _('Extrait de transcription (début)') }}</summary>
         <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
       </details>
       {% endif %}
-      <p><strong>Est-ce bien le fichier attendu ?</strong></p>
-      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">Oui, continuer</button>
-      <button class="btn btn-warning btn-sm me-2" onclick="TranscrIA.validateSummary('maybe')">Continuer quand même</button>
-      <button class="btn btn-danger btn-sm" onclick="TranscrIA.validateSummary('no')">Non, arrêter</button>
+      <p><strong>{{ _('Est-ce bien le fichier attendu ?') }}</strong></p>
+      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm me-2" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
+      <button class="btn btn-danger btn-sm" onclick="TranscrIA.validateSummary('no')">{{ _('Non, arrêter') }}</button>
     {% elif summary and summary.get('transcript_short') %}
       <div class="alert alert-info">
         {% if meeting.get('speaker_count_llm') %}
-        <span class="badge bg-primary me-2">{{ meeting.speaker_count_llm }} participants détectés</span>
+        <span class="badge bg-primary me-2">{{ _('%(n)s participants détectés', n=meeting.speaker_count_llm) }}</span>
         {% endif %}
-        <strong>Résumé :</strong> {{ summary.summary_text }}<br>
-        <small>Extrait disponible ci-dessous pour vérifier.</small>
+        <strong>{{ _('Résumé :') }}</strong> {{ summary.summary_text }}<br>
+        <small>{{ _('Extrait disponible ci-dessous pour vérifier.') }}</small>
       </div>
       <details class="mb-3">
-        <summary class="text-muted">Extrait de transcription (début)</summary>
+        <summary class="text-muted">{{ _('Extrait de transcription (début)') }}</summary>
         <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
       </details>
-      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">Oui, continuer</button>
-      <button class="btn btn-warning btn-sm" onclick="TranscrIA.validateSummary('maybe')">Continuer quand même</button>
+      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
     {% else %}
-      <p class="text-muted">Générez un résumé rapide pour vérifier le contenu du fichier.</p>
+      <p class="text-muted">{{ _('Générez un résumé rapide pour vérifier le contenu du fichier.') }}</p>
       {% set speaker_hint = job.get_extra_data().get('speaker_hint') or {} %}
       <div class="card card-body bg-light p-2 mb-2">
-        <label class="form-label small mb-1"><i class="bi bi-people-fill"></i> Nombre de locuteurs <span class="text-muted">(optionnel)</span></label>
+        <label class="form-label small mb-1"><i class="bi bi-people-fill"></i> {{ _('Nombre de locuteurs') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
         <div class="d-flex align-items-center gap-2">
-          <input type="number" min="1" max="50" id="speaker-min" class="form-control form-control-sm" style="width:6rem" placeholder="min" value="{{ speaker_hint.get('min') if speaker_hint.get('min') is not none else '' }}">
-          <span class="text-muted small">à</span>
-          <input type="number" min="1" max="50" id="speaker-max" class="form-control form-control-sm" style="width:6rem" placeholder="max" value="{{ speaker_hint.get('max') if speaker_hint.get('max') is not none else '' }}">
-          <span class="text-muted small">locuteurs</span>
+          <input type="number" min="1" max="50" id="speaker-min" class="form-control form-control-sm" style="width:6rem" placeholder="{{ _('min') }}" value="{{ speaker_hint.get('min') if speaker_hint.get('min') is not none else '' }}">
+          <span class="text-muted small">{{ _('à') }}</span>
+          <input type="number" min="1" max="50" id="speaker-max" class="form-control form-control-sm" style="width:6rem" placeholder="{{ _('max') }}" value="{{ speaker_hint.get('max') if speaker_hint.get('max') is not none else '' }}">
+          <span class="text-muted small">{{ _('locuteurs') }}</span>
         </div>
-        <div class="form-text small">Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement.</div>
+        <div class="form-text small">{{ _('Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement.') }}</div>
       </div>
       {% set meeting_invite = job.get_extra_data().get('meeting_invite') or {} %}
       <div class="card card-body bg-light p-2 mb-2">
-        <label for="meeting-invite" class="form-label small mb-1"><i class="bi bi-envelope-paper"></i> Invitation de la réunion <span class="text-muted">(optionnel)</span></label>
-        <textarea id="meeting-invite" class="form-control form-control-sm" rows="4" placeholder="Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé.">{{ meeting_invite.get('brief', '') }}</textarea>
+        <label for="meeting-invite" class="form-label small mb-1"><i class="bi bi-envelope-paper"></i> {{ _('Invitation de la réunion') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
+        <textarea id="meeting-invite" class="form-control form-control-sm" rows="4" placeholder="{{ _("Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé.") }}">{{ meeting_invite.get('brief', '') }}</textarea>
         <div class="form-text small">
-          Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées.
-          {% if meeting_invite.get('brief') or meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> Invitation enregistrée{% if meeting_invite.get('names') %} — {{ meeting_invite.get('names')|length }} nom(s) détecté(s){% endif %}. Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer.</span>{% endif %}
+          {{ _('Reste local (jamais transmis à l\'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées.') }}
+          {% if meeting_invite.get('brief') or meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> {{ _('Invitation enregistrée') }}{% if meeting_invite.get('names') %} — {{ _('%(n)s nom(s) détecté(s)', n=meeting_invite.get('names')|length) }}{% endif %}. {{ _('Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer.') }}</span>{% endif %}
         </div>
         <hr class="my-2">
-        <label class="form-label small mb-1"><i class="bi bi-paperclip"></i> Documents présentés <span class="text-muted">(optionnel)</span></label>
+        <label class="form-label small mb-1"><i class="bi bi-paperclip"></i> {{ _('Documents présentés') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
         <div class="form-text small mb-1">
-          Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé.
-          <strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local.
+          {{ _('Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé.') }}
+          {% trans %}<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local.{% endtrans %}
         </div>
         <input type="file" id="meeting-doc-input" accept=".pdf,.docx,.pptx,.txt" class="d-none" onchange="TranscrIA.handleMeetingDocument(this)">
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('meeting-doc-input').click()">
-          <i class="bi bi-upload"></i> Joindre un document
+          <i class="bi bi-upload"></i> {{ _('Joindre un document') }}
         </button>
         <span id="meeting-doc-error" class="text-danger small ms-2"></span>
         <ul id="meeting-doc-list" class="list-unstyled small mt-2 mb-0">
@@ -345,9 +338,9 @@
           <li class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1" data-doc-index="{{ loop.index0 }}">
             <span>
               <i class="bi bi-file-earmark-text"></i> {{ doc.get('name', 'document') }}
-              <span class="text-muted">— {{ doc.get('format', '')|upper }}{% if doc.get('pages') %}, {{ doc.get('pages') }} page(s){% endif %}{% if doc.get('slides') %}, {{ doc.get('slides') }} diapo(s){% endif %}{% if doc.get('images_skipped') %}, {{ doc.get('images_skipped') }} image(s) ignorée(s){% endif %}{% if doc.get('truncated') %} — tronqué{% endif %}</span>
+              <span class="text-muted">— {{ doc.get('format', '')|upper }}{% if doc.get('pages') %}, {{ _('%(n)s page(s)', n=doc.get('pages')) }}{% endif %}{% if doc.get('slides') %}, {{ _('%(n)s diapo(s)', n=doc.get('slides')) }}{% endif %}{% if doc.get('images_skipped') %}, {{ _('%(n)s image(s) ignorée(s)', n=doc.get('images_skipped')) }}{% endif %}{% if doc.get('truncated') %} — {{ _('tronqué') }}{% endif %}</span>
             </span>
-            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="Retirer" onclick="TranscrIA.removeMeetingDocument({{ loop.index0 }})"><i class="bi bi-x-lg"></i></button>
+            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="{{ _('Retirer') }}" onclick="TranscrIA.removeMeetingDocument({{ loop.index0 }})"><i class="bi bi-x-lg"></i></button>
           </li>
           {% endfor %}
         </ul>
@@ -355,13 +348,11 @@
       {% if job.get_extra_data().get('summary_llm_failed') %}
       <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle"></i>
-        Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives
-        (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée —
-        relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.
+        {% trans %}Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.{% endtrans %}
       </div>
       {% endif %}
       <button class="btn btn-primary" onclick="TranscrIA.generateSummary()">
-        <span id="summary-spinner" class="spinner d-none"></span> Générer le résumé
+        <span id="summary-spinner" class="spinner d-none"></span> {{ _('Générer le résumé') }}
       </button>
       <div id="summary-result" class="mt-3"></div>
     {% endif %}
@@ -370,28 +361,28 @@
 
   {% if wizard_layout.first_optional == 'context' and file_status == 'done' %}
   <details class="optional-steps mb-4">
-    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
   {% endif %}
   <!-- Step 4: Meeting Context -->
   {% set ctx_status = statuses.get('context', 'todo') %}
   {% if summary_status == 'done' %}
   {% set _n = wizard_layout.step_num.get('context') %}
   <div class="step-section {% if ctx_status == 'todo' or ctx_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Contexte de la réunion</h3>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Contexte de la réunion') }}</h3>
 
     {% if meeting.get('title_suggere') or meeting.get('type_suggere') %}
     <div class="alert alert-info mb-3 small">
-      <strong><i class="bi bi-magic"></i> Champs suggérés :</strong>
+      <strong><i class="bi bi-magic"></i> {{ _('Champs suggérés :') }}</strong>
       {% if meeting.get('title_suggere') %}
-        <span class="badge bg-dark me-1">📌 Titre</span> {{ meeting.title_suggere }}<br>
+        <span class="badge bg-dark me-1">📌 {{ _('Titre') }}</span> {{ meeting.title_suggere }}<br>
       {% endif %}
       {% if meeting.get('type_suggere') %}
-        <span class="badge bg-dark me-1">🏷 Type</span> {{ meeting.type_suggere }}<br>
+        <span class="badge bg-dark me-1">🏷 {{ _('Type') }}</span> {{ meeting.type_suggere }}<br>
       {% endif %}
       {% if meeting.get('sujet_suggere') %}
-        <span class="badge bg-dark me-1">📝 Sujet</span> {{ meeting.sujet_suggere }}
+        <span class="badge bg-dark me-1">📝 {{ _('Sujet') }}</span> {{ meeting.sujet_suggere }}
       {% endif %}
-      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" onclick="TranscrIA.prefillContext()">Appliquer les suggestions</button>
+      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" onclick="TranscrIA.prefillContext()">{{ _('Appliquer les suggestions') }}</button>
     </div>
     {% endif %}
 
@@ -406,24 +397,24 @@
         {% set synthese = meeting.summary_llm.split('## Synthèse')[1].split('##')[0] if meeting.summary_llm.split('## Synthèse')|length > 1 else meeting.summary_llm %}
       {% endif %}
       <details class="mb-3" open>
-        <summary class="text-muted fw-bold">📋 Résumé de la réunion — modifiez-le avant d'enregistrer</summary>
+        <summary class="text-muted fw-bold">{{ _("📋 Résumé de la réunion — modifiez-le avant d'enregistrer") }}</summary>
         <textarea name="summary" class="form-control form-control-sm mt-2" rows="12"
                   style="font-size: 0.85rem;">{{ synthese.strip() }}</textarea>
-        <div class="form-text small">Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.</div>
+        <div class="form-text small">{{ _("Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.") }}</div>
       </details>
       {% endif %}
 
       <div class="row">
         <div class="col-md-6 mb-2">
-          <label class="form-label small">Titre de la réunion</label>
+          <label class="form-label small">{{ _('Titre de la réunion') }}</label>
           <input type="text" name="title" class="form-control form-control-sm" value="{{ meeting.title or meeting.title_suggere or job.title }}">
         </div>
         <div class="col-md-3 mb-2">
-          <label class="form-label small">Date</label>
+          <label class="form-label small">{{ _('Date') }}</label>
           <input type="date" name="date" class="form-control form-control-sm" value="{{ meeting.date }}">
         </div>
         <div class="col-md-3 mb-2">
-          <label class="form-label small">Langue</label>
+          <label class="form-label small">{{ _('Langue') }}</label>
           <select name="language" class="form-select form-select-sm">
             <option value="fr" {{ 'selected' if meeting.language == 'fr' }}>Français</option>
             <option value="en" {{ 'selected' if meeting.language == 'en' }}>English</option>
@@ -439,12 +430,12 @@
           <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select"
                   onchange="TranscrIA.updateTypeSpecificFields(this.value)">
             {% if custom_meeting_types %}
-            <optgroup label="Types intégrés">
+            <optgroup label="{{ _('Types intégrés') }}">
               {% for mt in meeting_types %}
               <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
               {% endfor %}
             </optgroup>
-            <optgroup label="Mes types &amp; partagés">
+            <optgroup label="{{ _('Mes types & partagés') }}">
               {% for mt in custom_meeting_types %}
               <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
               {% endfor %}
@@ -457,20 +448,20 @@
           </select>
         </div>
         <div class="col-md-6 mb-2">
-          <label class="form-label small">Service / Domaine</label>
+          <label class="form-label small">{{ _('Service / Domaine') }}</label>
           <input type="text" name="service" class="form-control form-control-sm" value="{{ meeting.service }}">
         </div>
       </div>
       <div class="mb-2">
-        <label class="form-label small">Sujet</label>
+        <label class="form-label small">{{ _('Sujet') }}</label>
         <input type="text" name="topic" class="form-control form-control-sm" id="topic_input" value="{{ meeting.topic or meeting.sujet_suggere }}">
       </div>
       <div class="mb-2">
-        <label class="form-label small">Objectif</label>
+        <label class="form-label small">{{ _('Objectif') }}</label>
         <textarea name="objective" class="form-control form-control-sm" id="objective_input" rows="2">{{ meeting.objective or meeting.objectif_suggere }}</textarea>
       </div>
       <div class="mb-2">
-        <label class="form-label small">Notes / Ordre du jour</label>
+        <label class="form-label small">{{ _('Notes / Ordre du jour') }}</label>
         <textarea name="notes" class="form-control form-control-sm" id="notes_input" rows="2">{{ meeting.notes or meeting.notes_suggeres }}</textarea>
       </div>
 
@@ -479,14 +470,14 @@
         <div class="card border-primary-subtle bg-primary-subtle bg-opacity-10">
           <div class="card-header py-1 px-3 d-flex align-items-center gap-2 border-primary-subtle">
             <i class="bi bi-sliders text-primary"></i>
-            <span class="small fw-semibold text-primary" id="type-specific-title">Informations complémentaires</span>
+            <span class="small fw-semibold text-primary" id="type-specific-title">{{ _('Informations complémentaires') }}</span>
           </div>
           <div class="card-body py-2 px-3" id="type-specific-body"></div>
         </div>
       </div>
 
-      <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveContext()">Enregistrer le contexte</button>
-      <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
+      <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveContext()">{{ _('Enregistrer le contexte') }}</button>
+      <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
     </form>
 
     {% set sd = meeting.structured_data %}
@@ -495,61 +486,61 @@
     <div class="mt-3">
       <details>
         <summary class="fw-semibold text-muted small" style="cursor:pointer;">
-          <i class="bi bi-magic"></i> Données enrichies extraites par l'IA
+          <i class="bi bi-magic"></i> {{ _("Données enrichies extraites par l'IA") }}
           {% if sd_status == 'ok' %}
           <span class="badge bg-success ms-1" style="font-size:.65rem;">OK</span>
           {% elif sd_status == 'partial' %}
-          <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">Partiel</span>
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">{{ _('Partiel') }}</span>
           {% elif sd_status == 'failed' %}
-          <span class="badge bg-danger ms-1" style="font-size:.65rem;">Échec</span>
+          <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ _('Échec') }}</span>
           {% endif %}
-          <span class="text-muted ms-1" style="font-size:.75rem;">— apparaîtront dans le rapport Word selon le type de réunion</span>
+          <span class="text-muted ms-1" style="font-size:.75rem;">{{ _('— apparaîtront dans le rapport Word selon le type de réunion') }}</span>
         </summary>
         <div class="mt-2 ps-3 border-start border-2 border-primary-subtle">
           {% if sd.points_odj %}
           <div class="mb-2">
-            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-list-ol"></i> Ordre du jour</div>
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-list-ol"></i> {{ _('Ordre du jour') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.points_odj %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.decisions %}
           <div class="mb-2">
-            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-check2-circle"></i> Décisions prises</div>
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-check2-circle"></i> {{ _('Décisions prises') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.decisions %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.actions %}
           <div class="mb-2">
-            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-arrow-right-circle"></i> Actions à réaliser</div>
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-arrow-right-circle"></i> {{ _('Actions à réaliser') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.actions %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.blocages %}
           <div class="mb-2">
-            <div class="small fw-semibold text-warning-emphasis mb-1"><i class="bi bi-exclamation-triangle"></i> Points bloquants</div>
+            <div class="small fw-semibold text-warning-emphasis mb-1"><i class="bi bi-exclamation-triangle"></i> {{ _('Points bloquants') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.blocages %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.reports %}
           <div class="mb-2">
-            <div class="small fw-semibold text-secondary mb-1"><i class="bi bi-clock-history"></i> Points reportés</div>
+            <div class="small fw-semibold text-secondary mb-1"><i class="bi bi-clock-history"></i> {{ _('Points reportés') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.reports %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.votes %}
           <div class="mb-2">
-            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-ballot"></i> Votes</div>
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-ballot"></i> {{ _('Votes') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.votes %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.resolutions %}
           <div class="mb-2">
-            <div class="small fw-semibold text-success-emphasis mb-1"><i class="bi bi-clipboard-check"></i> Résolutions adoptées</div>
+            <div class="small fw-semibold text-success-emphasis mb-1"><i class="bi bi-clipboard-check"></i> {{ _('Résolutions adoptées') }}</div>
             <ul class="small mb-0 ps-3">{% for item in sd.resolutions %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
           {% endif %}
           {% if sd.prochaine_date %}
-          <div class="small text-muted"><i class="bi bi-calendar-event"></i> Prochaine réunion : <strong>{{ sd.prochaine_date }}</strong></div>
+          <div class="small text-muted"><i class="bi bi-calendar-event"></i> {{ _('Prochaine réunion :') }} <strong>{{ sd.prochaine_date }}</strong></div>
           {% endif %}
           {% if meeting.structured_data_parse_warning %}
           <div class="mt-1 small text-warning-emphasis"><i class="bi bi-info-circle"></i> {{ meeting.structured_data_parse_warning }}</div>
@@ -563,7 +554,7 @@
 
   {% if wizard_layout.first_optional == 'participants' and file_status == 'done' %}
   <details class="optional-steps mb-4">
-    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
   {% endif %}
   <!-- Step 5: Participants & Locuteurs (merged) -->
   {% set part_status = statuses.get('participants', 'todo') %}
@@ -572,19 +563,19 @@
   {% set merged_ready = (part_status == 'todo' or part_status == 'in_progress' or spk_status == 'todo' or spk_status == 'in_progress' or spk_status == 'done') %}
   {% set _n = wizard_layout.step_num.get('participants') %}
   <div class="step-section {% if part_status in ('todo','in_progress') or spk_status in ('todo','in_progress') %}current-step{% endif %}">
-    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Participants &amp; Locuteurs</h3>
-    <p class="text-muted small mb-2">Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.</p>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Participants & Locuteurs') }}</h3>
+    <p class="text-muted small mb-2">{{ _('Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.') }}</p>
 
     {% if not speakers.get('speakers') %}
     <button class="btn btn-primary btn-sm mb-3" onclick="TranscrIA.detectSpeakers()">
-      <span id="speaker-spinner" class="spinner d-none"></span> 🔍 Détecter les locuteurs
+      <span id="speaker-spinner" class="spinner d-none"></span> 🔍 {{ _('Détecter les locuteurs') }}
     </button>
     <div id="speaker-result" class="mt-2"></div>
     {% endif %}
 
     {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
     <div class="alert alert-success mb-3 small">
-      <strong><i class="bi bi-mic-fill"></i> {{ speakers.speakers|length }} locuteur(s) détecté(s)</strong>
+      <strong><i class="bi bi-mic-fill"></i> {{ _('%(n)s locuteur(s) détecté(s)', n=speakers.speakers|length) }}</strong>
       {% for s in speakers.speakers %}
         <span class="badge bg-secondary me-1">{{ s.speaker_id }}: {{ (s.speaking_time_seconds / 60)|round(1) }} min</span>
       {% endfor %}
@@ -593,11 +584,11 @@
     <div class="d-flex align-items-center gap-2 mb-2">
       <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.matchKnownVoices()">
         <span id="voice-match-spinner" class="spinner d-none"></span>
-        <i class="bi bi-person-bounding-box"></i> Rechercher les voix connues
+        <i class="bi bi-person-bounding-box"></i> {{ _('Rechercher les voix connues') }}
       </button>
       <span id="voice-match-result" class="small text-muted">
         {% if voice_matches.get('available') %}
-          {{ voice_matches.matches|length }} suggestion(s) disponible(s)
+          {{ _('%(n)s suggestion(s) disponible(s)', n=voice_matches.matches|length) }}
         {% elif voice_matches.get('message') %}
           {{ voice_matches.message }}
         {% endif %}
@@ -608,7 +599,7 @@
 
     {% if meeting.get('participants_detectes') and participants|length == 0 %}
     <div class="alert alert-info mb-3 small">
-      <strong><i class="bi bi-people"></i> Participants identifiés dans la transcription :</strong>
+      <strong><i class="bi bi-people"></i> {{ _('Participants identifiés dans la transcription :') }}</strong>
       {% for line in meeting.participants_detectes.split('\n') %}
         {% if line.strip() %}<span class="me-2">👤 {{ line.strip() }}</span>{% endif %}
       {% endfor %}
@@ -623,13 +614,12 @@
         <div class="alert alert-light border py-1 px-2 mb-2 small d-flex align-items-center gap-2">
           <i class="bi bi-soundwave text-secondary"></i>
           <span>
-            <strong>Analyse acoustique globale :</strong>
-            {{ (scene_gender.male_ratio * 100)|round|int }}% voix masculine,
-            {{ (scene_gender.female_ratio * 100)|round|int }}% voix féminine
+            <strong>{{ _('Analyse acoustique globale :') }}</strong>
+            {{ _('%(m)s%% voix masculine, %(f)s%% voix féminine', m=(scene_gender.male_ratio * 100)|round|int, f=(scene_gender.female_ratio * 100)|round|int) }}
             {% if scene_gender.dominant == 'male' %}
-              — <span class="text-primary">voix masculine dominante</span>
+              — <span class="text-primary">{{ _('voix masculine dominante') }}</span>
             {% elif scene_gender.dominant == 'female' %}
-              — <span class="text-danger">voix féminine dominante</span>
+              — <span class="text-danger">{{ _('voix féminine dominante') }}</span>
             {% endif %}
           </span>
         </div>
@@ -643,21 +633,21 @@
         {% endfor %}
         <div class="speaker-item" id="spk-{{ s.speaker_id }}">
           <strong>{{ s.speaker_id }}</strong>
-          <span class="text-muted small">{{ s.speaking_time_seconds|round(0) }}s, {{ s.turn_count }} interventions</span>
+          <span class="text-muted small">{{ _('%(s)ss, %(n)s interventions', s=s.speaking_time_seconds|round(0), n=s.turn_count) }}</span>
           <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="TranscrIA.loadClips('{{ s.speaker_id }}')"
-                  aria-label="Écouter des extraits de ce locuteur" title="Écouter des extraits de ce locuteur"><i class="bi bi-play-fill"></i></button>
-          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
-          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
-          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle dans la réunion" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
-          <select class="form-select form-select-sm speaker-gender" style="max-width:130px;" title="Genre vocal (modifiable)">
-            <option value="" {% if not s.get('gender') %}selected{% endif %}>Non déterminé</option>
-            <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>Féminin ♀</option>
-            <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>Masculin ♂</option>
+                  aria-label="{{ _('Écouter des extraits de ce locuteur') }}" title="{{ _('Écouter des extraits de ce locuteur') }}"><i class="bi bi-play-fill"></i></button>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle dans la réunion') }}" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
+          <select class="form-select form-select-sm speaker-gender" style="max-width:130px;" title="{{ _('Genre vocal (modifiable)') }}">
+            <option value="" {% if not s.get('gender') %}selected{% endif %}>{{ _('Non déterminé') }}</option>
+            <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>{{ _('Féminin ♀') }}</option>
+            <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>{{ _('Masculin ♂') }}</option>
           </select>
           {% if voice_hint.item %}
           <button type="button"
                   class="btn btn-sm btn-outline-success voice-suggestion"
-                  title="Suggestion issue des voix enregistrées"
+                  title="{{ _('Suggestion issue des voix enregistrées') }}"
                   data-speaker="{{ s.speaker_id }}"
                   data-name="{{ voice_hint.item.get('suggested_name', '') }}"
                   data-gender="{{ voice_hint.item.get('suggested_gender', '') }}"
@@ -670,11 +660,11 @@
       {% elif participants|length > 0 %}
         {% for p in participants %}
         <div class="speaker-item">
-          <span class="text-muted small">participant</span>
-          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ p.name }}" style="max-width:150px;">
-          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="{{ p.function }}" style="max-width:130px;">
-          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle" value="{{ p.role }}" style="max-width:150px;">
-          {% if p.is_animator %}<span class="badge bg-warning text-dark">Animateur</span>{% endif %}
+          <span class="text-muted small">{{ _('participant') }}</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ p.name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ p.function }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ p.role }}" style="max-width:150px;">
+          {% if p.is_animator %}<span class="badge bg-warning text-dark">{{ _('Animateur') }}</span>{% endif %}
           <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
         </div>
         {% endfor %}
@@ -693,10 +683,10 @@
           {% endif %}
         {% endif %}
         <div class="speaker-item">
-          <span class="text-muted small">suggéré</span>
-          <input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" value="{{ name }}" style="max-width:150px;">
-          <input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" value="" style="max-width:130px;">
-          <input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle" value="{{ role }}" style="max-width:150px;">
+          <span class="text-muted small">{{ _('suggéré') }}</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ role }}" style="max-width:150px;">
           <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
         </div>
         {% endif %}
@@ -704,33 +694,33 @@
       {% endif %}
     </div>
 
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addParticipantRow()">+ Ajouter un participant</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addParticipantRow()">{{ _('+ Ajouter un participant') }}</button>
     <br>
-    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveParticipantsAndSpeakers()">Valider participants &amp; locuteurs</button>
-    <span id="participants-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Validé</span>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveParticipantsAndSpeakers()">{{ _('Valider participants & locuteurs') }}</button>
+    <span id="participants-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Validé') }}</span>
   </div>
   {% endif %}
 
   {% if wizard_layout.first_optional == 'lexicon' and file_status == 'done' %}
   <details class="optional-steps mb-4">
-    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> Étapes optionnelles pour ce profil</summary>
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
   {% endif %}
   <!-- Step 6: Lexicon -->
   {% set lex_status = statuses.get('lexicon', 'todo') %}
   {% if part_status == 'done' or spk_status == 'done' %}
   {% set _n = wizard_layout.step_num.get('lexicon') %}
   <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> Lexique de session</h3>
-    <p class="text-muted small">Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.</p>
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Lexique de session') }}</h3>
+    <p class="text-muted small">{{ _('Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.') }}</p>
     {% if central_lexicons %}
     <div class="alert alert-light border small">
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <strong>Lexiques utilisés pour ce job</strong>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.applySelectedLexicons()">Appliquer la sélection</button>
+        <strong>{{ _('Lexiques utilisés pour ce job') }}</strong>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.applySelectedLexicons()">{{ _('Appliquer la sélection') }}</button>
       </div>
       <details class="mt-2" {% if central_lexicons|length <= 8 %}open{% endif %}>
         <summary class="text-muted">
-          {{ central_lexicon_display.selected_lexicons }} / {{ central_lexicon_display.available_lexicons }} sélectionné(s)
+          {{ _('%(sel)s / %(avail)s sélectionné(s)', sel=central_lexicon_display.selected_lexicons, avail=central_lexicon_display.available_lexicons) }}
         </summary>
         <div class="mt-2 d-flex flex-wrap gap-2">
           {% for central in central_lexicons %}
@@ -746,14 +736,14 @@
       </details>
       {% if central_lexicon_display.hidden_central_entries %}
       <div class="mt-2 text-muted">
-        {{ central_lexicon_display.hidden_central_entries }} terme(s) peu probables sont masqués pour garder la liste lisible.
+        {{ _('%(n)s terme(s) peu probables sont masqués pour garder la liste lisible.', n=central_lexicon_display.hidden_central_entries) }}
       </div>
       {% endif %}
       {% if session_lexicon_exists %}
-      <div class="mt-1 text-muted">Le lexique de session déjà sauvegardé est conservé.</div>
+      <div class="mt-1 text-muted">{{ _('Le lexique de session déjà sauvegardé est conservé.') }}</div>
       {% else %}
       <div class="mt-1 text-muted">
-        TranscrIA prépare {{ central_lexicon_prefill_count }} terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation.
+        {{ _('TranscrIA prépare %(n)s terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation.', n=central_lexicon_prefill_count) }}
       </div>
       {% endif %}
     </div>
@@ -761,11 +751,11 @@
     {% if meeting.get('termes_suspects_parse_status') %}
       {% if meeting.termes_suspects_parse_status == 'section_unparsed' %}
       <div class="alert alert-warning small">
-        La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement.
+        {{ _('La LLM a signalé des termes à vérifier, mais le format n\'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement.') }}
       </div>
       {% elif meeting.termes_suspects_parse_status == 'empty' %}
       <div class="alert alert-light border small">
-        Aucun terme douteux détecté automatiquement.
+        {{ _('Aucun terme douteux détecté automatiquement.') }}
       </div>
       {% endif %}
     {% endif %}
@@ -773,13 +763,13 @@
       {% for t in lexicon %}
       <div class="lexicon-row lexicon-card">
         <div class="lexicon-grid">
-          <label class="form-label small mb-1">Forme validée</label>
-          <label class="form-label small mb-1">Formes suspectes observées</label>
-          <label class="form-label small mb-1">Catégorie</label>
-          <label class="form-label small mb-1">Priorité</label>
-          <input type="text" class="form-control form-control-sm lex-term" placeholder="Ex: Forme validée" value="{{ t.term }}">
-          <input type="text" class="form-control form-control-sm lex-variants" placeholder="Ex: Forme douteuse A, forme douteuse B" value="{{ (t.variants or [])|join(', ') }}">
-          <input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="Catégorie libre" value="{{ t.category }}">
+          <label class="form-label small mb-1">{{ _('Forme validée') }}</label>
+          <label class="form-label small mb-1">{{ _('Formes suspectes observées') }}</label>
+          <label class="form-label small mb-1">{{ _('Catégorie') }}</label>
+          <label class="form-label small mb-1">{{ _('Priorité') }}</label>
+          <input type="text" class="form-control form-control-sm lex-term" placeholder="{{ _('Ex: Forme validée') }}" value="{{ t.term }}">
+          <input type="text" class="form-control form-control-sm lex-variants" placeholder="{{ _('Ex: Forme douteuse A, forme douteuse B') }}" value="{{ (t.variants or [])|join(', ') }}">
+          <input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="{{ _('Catégorie libre') }}" value="{{ t.category }}">
           <select class="form-select form-select-sm lex-prio">
             {% for prio in lexicon_priorities %}
             <option value="{{ prio }}" {{ 'selected' if t.priority == prio }}>{{ prio }}</option>
@@ -795,40 +785,40 @@
         <script type="application/json" class="lex-contexts-json">{{ (t.contexts or [])|tojson }}</script>
         {% if t.central_lexicon_name %}
         <div class="mt-2">
-          <span class="badge text-bg-light border">Lexique central : {{ t.central_lexicon_name }}</span>
+          <span class="badge text-bg-light border">{{ _('Lexique central : %(name)s', name=t.central_lexicon_name) }}</span>
           {% if t._display_reason == 'term_presence' %}
-          <span class="badge text-bg-light border">trouvé dans le texte</span>
+          <span class="badge text-bg-light border">{{ _('trouvé dans le texte') }}</span>
           {% elif t._display_reason == 'variant_presence' %}
-          <span class="badge text-bg-light border">variante détectée</span>
+          <span class="badge text-bg-light border">{{ _('variante détectée') }}</span>
           {% elif t._display_reason == 'priority' %}
-          <span class="badge text-bg-light border">priorité {{ t.priority }}</span>
+          <span class="badge text-bg-light border">{{ _('priorité %(p)s', p=t.priority) }}</span>
           {% endif %}
         </div>
         {% endif %}
         {% if t.source == 'document' %}
         <div class="mt-2 lex-doc-badge">
-          <span class="badge text-bg-info-subtle border text-info-emphasis" title="Proposé à partir d'un document que vous avez joint à la réunion"><i class="bi bi-paperclip"></i> issu des documents fournis</span>
+          <span class="badge text-bg-info-subtle border text-info-emphasis" title="{{ _('Proposé à partir d\'un document que vous avez joint à la réunion') }}"><i class="bi bi-paperclip"></i> {{ _('issu des documents fournis') }}</span>
         </div>
         {% endif %}
-        <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée">{{ t.comment or '' }}</textarea>
+        <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="{{ _('Pourquoi cette forme doit être validée') }}">{{ t.comment or '' }}</textarea>
         {% if t.contexts %}
         <details class="lex-contexts mt-2">
           <summary class="small text-muted">
-            Contexte proposé ({{ t.contexts|length }})
+            {{ _('Contexte proposé (%(n)s)', n=t.contexts|length) }}
             <span class="lex-context-counter" data-listened="{{ t.contexts_listened_count or 0 }}" data-total="{{ t.contexts|length }}">
-              · {{ t.contexts_listened_count or 0 }}/{{ t.contexts|length }} écoutés
+              {{ _('· %(listened)s/%(total)s écoutés', listened=t.contexts_listened_count or 0, total=t.contexts|length) }}
             </span>
           </summary>
           <div class="small mt-2">
             {% for c in t.contexts %}
             <div class="lex-context-item" data-context-index="{{ loop.index0 }}">
-              <span class="text-muted">{{ c.timecode or 'sans timecode' }}{% if c.speaker %} — {{ c.speaker }}{% endif %}</span>
+              <span class="text-muted">{{ c.timecode or _('sans timecode') }}{% if c.speaker %} — {{ c.speaker }}{% endif %}</span>
               <div>« {{ c.quote }} »</div>
               {% if c.reason %}<div class="text-muted">{{ c.reason }}</div>{% endif %}
               <div class="lex-context-actions">
                 <button type="button"
                         class="btn btn-sm btn-outline-primary lex-context-play"
-                        title="Écouter 5 secondes avant et après"
+                        title="{{ _('Écouter 5 secondes avant et après') }}"
                         data-timecode="{{ c.timecode or '' }}"
                         data-quote="{{ c.quote or '' }}"
                         {% if not c.audio_available %}disabled{% endif %}
@@ -841,10 +831,10 @@
                          data-context-index="{{ loop.index0 }}"
                          {% if c.listened %}checked{% endif %}
                          onchange="TranscrIA.setLexiconContextListened(this)">
-                  Écouté
+                  {{ _('Écouté') }}
                 </label>
                 {% if not c.audio_available %}
-                <span class="text-muted">Audio indisponible pour ce timecode</span>
+                <span class="text-muted">{{ _('Audio indisponible pour ce timecode') }}</span>
                 {% endif %}
               </div>
             </div>
@@ -853,20 +843,20 @@
         </details>
         {% endif %}
         {% if promote_allowed %}
-        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
-                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> Au lexique central</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="{{ _('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') }}"
+                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> {{ _('Au lexique central') }}</button>
         {% endif %}
         <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
       </div>
       {% endfor %}
     </div>
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addLexiconTerm()">+ Ajouter un terme</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" onclick="TranscrIA.importLexiconFile()">+ Importer depuis un fichier .txt</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addLexiconTerm()">{{ _('+ Ajouter un terme') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" onclick="TranscrIA.importLexiconFile()">{{ _('+ Importer depuis un fichier .txt') }}</button>
     <input type="file" id="lexicon-file-input" accept=".txt,.csv" class="d-none" onchange="TranscrIA.handleLexiconFile(this)">
     <br>
-    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveLexicon()">Enregistrer le lexique</button>
-    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" onclick="TranscrIA.skipLexicon()">Continuer sans lexique</button>
-    <span id="lexicon-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> Enregistré</span>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveLexicon()">{{ _('Enregistrer le lexique') }}</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" onclick="TranscrIA.skipLexicon()">{{ _('Continuer sans lexique') }}</button>
+    <span id="lexicon-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
   </div>
   {% endif %}
 
@@ -878,23 +868,21 @@
   {% set proc_status = statuses.get('processing', 'todo') %}
   {% if wizard_layout.launch_ready or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
   <div class="step-section {% if proc_status == 'todo' or proc_status == 'in_progress' %}current-step{% endif %}">
-    <h3><i class="bi bi-{{ wizard_layout.step_num.processing }}-circle-fill step-icon"></i> Lancer le traitement</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.processing }}-circle-fill step-icon"></i> {{ _('Lancer le traitement') }}</h3>
     {% if selected_profile_id %}
     <p class="text-muted mb-3">
-      Profil retenu : <strong>{{ (processing_profiles.profiles | selectattr('id', 'equalto', selected_profile_id) | first).label }}</strong>.
-      Pour en changer, revenez à l'étape 1.
+      {{ _('Profil retenu : <strong>%(label)s</strong>. Pour en changer, revenez à l\'étape 1.', label=(processing_profiles.profiles | selectattr('id', 'equalto', selected_profile_id) | first).label) }}
     </p>
     {% else %}
     <div class="alert alert-warning">
-      Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée
-      ou mode qualité désactivé). Voir la configuration.
+      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration.{% endtrans %}
     </div>
     {% endif %}
 
     <button id="profile-launch-btn" class="btn btn-success btn-lg"
             {% if not selected_profile_id %}disabled{% endif %}
             onclick="TranscrIA.startSelectedProfile()">
-      <i class="bi bi-play-fill"></i> Lancer le traitement
+      <i class="bi bi-play-fill"></i> {{ _('Lancer le traitement') }}
     </button>
     <div id="processing-result" class="mt-3"></div>
   </div>
@@ -904,17 +892,17 @@
   {% set qual_status = statuses.get('quality', 'todo') %}
   {% if proc_status == 'done' %}
   <div class="step-section {% if qual_status == 'todo' %}current-step{% endif %}">
-    <h3><i class="bi bi-{{ wizard_layout.step_num.quality }}-circle-fill step-icon"></i> Contrôle qualité</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.quality }}-circle-fill step-icon"></i> {{ _('Contrôle qualité') }}</h3>
     {% if processing_diagnostic and processing_diagnostic.backend %}
     <div class="alert alert-light border small">
-      <strong>Traitement réalisé :</strong>
+      <strong>{{ _('Traitement réalisé :') }}</strong>
       backend {{ processing_diagnostic.backend }}
       {% if processing_diagnostic.chunking_mode %}— {{ processing_diagnostic.chunking_mode }}{% endif %}
-      {% if processing_diagnostic.segments %}— {{ processing_diagnostic.segments }} segments{% endif %}
-      {% if processing_diagnostic.vad_final_enabled %}— VAD final activé{% endif %}
+      {% if processing_diagnostic.segments %}— {{ _('%(n)s segments', n=processing_diagnostic.segments) }}{% endif %}
+      {% if processing_diagnostic.vad_final_enabled %}— {{ _('VAD final activé') }}{% endif %}
       {% if processing_diagnostic.reliability_counts %}
       <div class="mt-2">
-        Fiabilité :
+        {{ _('Fiabilité :') }}
         {% for level, count in processing_diagnostic.reliability_counts.items() %}
         <span class="badge text-bg-{{ 'danger' if level == 'degrade' else 'warning' if level == 'suspect' else 'success' }} me-1">{{ level }}={{ count }}</span>
         {% endfor %}
@@ -924,14 +912,13 @@
     {% endif %}
     {% if quality_report and quality_report.get('checks') %}
       <div class="mb-3">
-        <strong>Score qualité :</strong>
+        <strong>{{ _('Score qualité :') }}</strong>
         <span class="quality-badge {{ 'quality-ok' if quality_report.quality_score >= 80 else 'quality-warning' if quality_report.quality_score >= 50 else 'quality-error' }}">
           {{ quality_report.quality_score }}/100
         </span>
       </div>
       <p class="text-muted small">
-        Points à vérifier : {{ quality_report.warnings }} —
-        Termes métier suspects : {{ quality_report.checks|selectattr('type', 'equalto', 'missing_lexicon_terms')|list|length }}
+        {{ _('Points à vérifier : %(w)s — Termes métier suspects : %(t)s', w=quality_report.warnings, t=quality_report.checks|selectattr('type', 'equalto', 'missing_lexicon_terms')|list|length) }}
       </p>
       {% for check in quality_report.checks[:5] %}
       <div class="small mb-1">
@@ -942,7 +929,7 @@
       {% endfor %}
       {% if processing_diagnostic and processing_diagnostic.suspect_segments %}
       <details class="mt-3">
-        <summary class="text-muted">Segments à vérifier en priorité ({{ processing_diagnostic.suspect_segments|length }})</summary>
+        <summary class="text-muted">{{ _('Segments à vérifier en priorité (%(n)s)', n=processing_diagnostic.suspect_segments|length) }}</summary>
         <div class="mt-2">
           {% for segment in processing_diagnostic.suspect_segments %}
           <div class="small border-start ps-2 mb-2">
@@ -957,7 +944,7 @@
       </details>
       {% endif %}
     {% else %}
-      <p class="text-muted">Le contrôle qualité sera effectué après le traitement.</p>
+      <p class="text-muted">{{ _('Le contrôle qualité sera effectué après le traitement.') }}</p>
     {% endif %}
   </div>
   {% endif %}
@@ -966,37 +953,35 @@
   {% set exp_status = statuses.get('export', 'todo') %}
   {% if qual_status == 'done' %}
   <div class="step-section {% if exp_status == 'todo' %}current-step{% endif %}">
-    <h3><i class="bi bi-{{ wizard_layout.step_num.export }}-circle-fill step-icon"></i> Export et résultats</h3>
+    <h3><i class="bi bi-{{ wizard_layout.step_num.export }}-circle-fill step-icon"></i> {{ _('Export et résultats') }}</h3>
     {% if job.state in ('completed', 'export_ready') %}
     <!-- Porte d'entrée vers la page de résultats : lecture des livrables + chat d'affinage. -->
     <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
       <span>
-        <i class="bi bi-chat-dots"></i> Relisez vos livrables et <strong>affinez-les avec
-        l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats.
+        <i class="bi bi-chat-dots"></i> {% trans %}Relisez vos livrables et <strong>affinez-les avec l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats.{% endtrans %}
       </span>
       <a href="/jobs/{{ job.id }}/result" class="btn btn-primary">
-        <i class="bi bi-stars"></i> Résultats &amp; affinage
+        <i class="bi bi-stars"></i> {{ _('Résultats & affinage') }}
       </a>
     </div>
     {% endif %}
     {% if srt_content %}
       <details class="mb-3">
-        <summary class="text-muted">Aperçu du SRT généré</summary>
+        <summary class="text-muted">{{ _('Aperçu du SRT généré') }}</summary>
         <pre class="srt-preview mt-2">{{ srt_content[:3000] }}</pre>
       </details>
       <div class="d-flex flex-wrap gap-2">
-        <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-word"></i> Rapport Word (.docx)</a>
-        <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> Télécharger le SRT</a>
-        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> Package complet</a>
-        <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Télécharger l'audio</a>
-        <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> Éditer la transcription</a>
+        <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-word"></i> {{ _('Rapport Word (.docx)') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> {{ _('Télécharger le SRT') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> {{ _('Package complet') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> {{ _("Télécharger l'audio") }}</a>
+        <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> {{ _('Éditer la transcription') }}</a>
       </div>
       <p class="text-muted small mt-2">
-        L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en
-        écoutant l'audio — vos modifications sont versionnées et les documents régénérés.
+        {{ _("L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés.") }}
       </p>
     {% else %}
-      <p class="text-muted">Le package final sera disponible après le traitement complet.</p>
+      <p class="text-muted">{{ _('Le package final sera disponible après le traitement complet.') }}</p>
     {% endif %}
     <div id="export-result" class="mt-3"></div>
   </div>
@@ -1092,25 +1077,25 @@ window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meet
   <div class="modal-dialog modal-sm">
     <div class="modal-content">
       <div class="modal-header py-2">
-        <h6 class="modal-title">Ajouter au lexique central</h6>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+        <h6 class="modal-title">{{ _('Ajouter au lexique central') }}</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ _('Fermer') }}"></button>
       </div>
       <div class="modal-body">
-        <p class="small mb-2">Forme : <strong id="lex-promote-term"></strong></p>
+        <p class="small mb-2">{{ _('Forme :') }} <strong id="lex-promote-term"></strong></p>
         {% if promote_lexicons %}
-        <label class="form-label small mb-1">Lexique existant</label>
+        <label class="form-label small mb-1">{{ _('Lexique existant') }}</label>
         <select class="form-select form-select-sm mb-2" id="lex-promote-select">
           {% for lx in promote_lexicons %}
           <option value="{{ lx.id }}">{{ lx.name }} ({{ lx.group_name }})</option>
           {% endfor %}
-          <option value="">— Nouveau lexique… —</option>
+          <option value="">{{ _('— Nouveau lexique… —') }}</option>
         </select>
         {% endif %}
         <div id="lex-promote-new" {% if promote_lexicons %}class="d-none"{% endif %}>
-          <label class="form-label small mb-1">Nom du nouveau lexique</label>
-          <input type="text" class="form-control form-control-sm mb-2" id="lex-promote-name" placeholder="Ex : Vocabulaire fromagerie">
+          <label class="form-label small mb-1">{{ _('Nom du nouveau lexique') }}</label>
+          <input type="text" class="form-control form-control-sm mb-2" id="lex-promote-name" placeholder="{{ _('Ex : Vocabulaire fromagerie') }}">
           {% if promote_groups|length > 1 %}
-          <label class="form-label small mb-1">Groupe</label>
+          <label class="form-label small mb-1">{{ _('Groupe') }}</label>
           <select class="form-select form-select-sm mb-2" id="lex-promote-group">
             {% for g in promote_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
           </select>
@@ -1119,7 +1104,7 @@ window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meet
         <div class="small text-danger d-none" id="lex-promote-error"></div>
       </div>
       <div class="modal-footer py-2">
-        <button type="button" class="btn btn-sm btn-primary" onclick="TranscrIA.confirmPromoteLexicon()">Ajouter</button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="TranscrIA.confirmPromoteLexicon()">{{ _('Ajouter') }}</button>
       </div>
     </div>
   </div>

@@ -213,7 +213,7 @@ class TestEtape4:
         assert admin_client.post("/api/meeting-types", json=_definition(name)).status_code == 201
         html = admin_client.get(f"/jobs/{job_id}").data.decode()
         assert f'<option value="{name}"' in html          # dans le sélecteur de l'étape 4
-        assert "Mes types &amp; partagés" in html          # optgroup des personnalisés
+        assert "Mes types & partagés" in html              # optgroup des personnalisés (i18n : gettext rend un & littéral)
         # Les champs du type personnalisé sont câblés pour le JS de l'étape 4.
         assert "Filiale concernée" in html
 

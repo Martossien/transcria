@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 19:35+0200\n"
+"POT-Creation-Date: 2026-07-07 19:51+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -30,9 +30,113 @@ msgstr[1] "%(count)s éléments"
 msgid "%(gb)s Go"
 msgstr "%(gb)s Go"
 
+#: transcria/web/templates/job_wizard.html:618
+#, python-format
+msgid "%(m)s%% voix masculine, %(f)s%% voix féminine"
+msgstr "%(m)s%% voix masculine, %(f)s%% voix féminine"
+
+#: transcria/web/templates/job_wizard.html:64
+#, python-format
+msgid "%(mb)s Mo"
+msgstr "%(mb)s Mo"
+
+#: transcria/web/templates/job_wizard.html:66
+#, python-format
+msgid "%(min)s min"
+msgstr "%(min)s min"
+
+#: transcria/web/templates/job_wizard.html:212
+#, python-format
+msgid "%(min)s minutes"
+msgstr "%(min)s minutes"
+
+#: transcria/web/templates/job_wizard.html:341
+#, python-format
+msgid "%(n)s diapo(s)"
+msgstr "%(n)s diapo(s)"
+
+#: transcria/web/templates/job_wizard.html:341
+#, python-format
+msgid "%(n)s image(s) ignorée(s)"
+msgstr "%(n)s image(s) ignorée(s)"
+
+#: transcria/web/templates/job_wizard.html:578
+#, python-format
+msgid "%(n)s locuteur(s) détecté(s)"
+msgstr "%(n)s locuteur(s) détecté(s)"
+
+#: transcria/web/templates/job_wizard.html:323
+#, python-format
+msgid "%(n)s nom(s) détecté(s)"
+msgstr "%(n)s nom(s) détecté(s)"
+
+#: transcria/web/templates/job_wizard.html:341
+#, python-format
+msgid "%(n)s page(s)"
+msgstr "%(n)s page(s)"
+
+#: transcria/web/templates/job_wizard.html:268
+#: transcria/web/templates/job_wizard.html:293
+#, python-format
+msgid "%(n)s participants détectés"
+msgstr "%(n)s participants détectés"
+
+#: transcria/web/templates/job_wizard.html:901
+#, python-format
+msgid "%(n)s segments"
+msgstr "%(n)s segments"
+
+#: transcria/web/templates/job_wizard.html:591
+#, python-format
+msgid "%(n)s suggestion(s) disponible(s)"
+msgstr "%(n)s suggestion(s) disponible(s)"
+
+#: transcria/web/templates/job_wizard.html:739
+#, python-format
+msgid "%(n)s terme(s) peu probables sont masqués pour garder la liste lisible."
+msgstr "%(n)s terme(s) peu probables sont masqués pour garder la liste lisible."
+
+#: transcria/web/templates/job_wizard.html:636
+#, python-format
+msgid "%(s)ss, %(n)s interventions"
+msgstr "%(s)ss, %(n)s interventions"
+
+#: transcria/web/templates/job_wizard.html:723
+#, python-format
+msgid "%(sel)s / %(avail)s sélectionné(s)"
+msgstr "%(sel)s / %(avail)s sélectionné(s)"
+
+#: transcria/web/templates/job_wizard.html:308
+#: transcria/web/templates/job_wizard.html:319
+#: transcria/web/templates/job_wizard.html:326
+msgid "(optionnel)"
+msgstr "(optionnel)"
+
 #: transcria/web/templates/job_result.html:122
 msgid "(selon le type)"
 msgstr "(selon le type)"
+
+#: transcria/web/templates/job_wizard.html:226
+#, python-format
+msgid "(traitement machine %(range)s + validation ~%(human)s min)"
+msgstr "(traitement machine %(range)s + validation ~%(human)s min)"
+
+#: transcria/web/templates/job_wizard.html:238
+#, python-format
+msgid "(traitement machine ~%(machine)s min + validation ~%(human)s min)"
+msgstr "(traitement machine ~%(machine)s min + validation ~%(human)s min)"
+
+#: transcria/web/templates/job_wizard.html:697
+msgid "+ Ajouter un participant"
+msgstr "+ Ajouter un participant"
+
+#: transcria/web/templates/job_wizard.html:853
+msgid "+ Ajouter un terme"
+msgstr "+ Ajouter un terme"
+
+#: transcria/web/templates/job_wizard.html:854
+msgid "+ Importer depuis un fichier .txt"
+msgstr "+ Importer depuis un fichier .txt"
 
 #: transcria/web/templates/base.html:142
 #, python-format
@@ -40,6 +144,14 @@ msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
+
+#: transcria/web/templates/job_wizard.html:329
+msgid "<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local."
+msgstr "<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local."
+
+#: transcria/web/templates/job_wizard.html:84
+msgid "<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées."
+msgstr "<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées."
 
 #: transcria/web/templates/index.html:2
 #: transcria/web/templates/job_result.html:145
@@ -53,6 +165,10 @@ msgstr "Action impossible sur ce job."
 #: transcria/web/templates/queue.html:98
 msgid "Actions"
 msgstr "Actions"
+
+#: transcria/web/templates/job_wizard.html:514
+msgid "Actions à réaliser"
+msgstr "Actions à réaliser"
 
 #: transcria/web/templates/queue.html:84
 msgid "Actualiser"
@@ -80,6 +196,34 @@ msgstr "Agenda %(tz)s"
 msgid "Agenda désactivé"
 msgstr "Agenda désactivé"
 
+#: transcria/web/templates/job_wizard.html:1107
+msgid "Ajouter"
+msgstr "Ajouter"
+
+#: transcria/web/templates/job_wizard.html:1080
+msgid "Ajouter au lexique central"
+msgstr "Ajouter au lexique central"
+
+#: transcria/web/templates/job_wizard.html:846
+msgid "Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
+msgstr "Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
+
+#: transcria/web/templates/job_wizard.html:617
+msgid "Analyse acoustique globale :"
+msgstr "Analyse acoustique globale :"
+
+#: transcria/web/templates/job_wizard.html:129
+msgid "Analyse audio"
+msgstr "Analyse audio"
+
+#: transcria/web/templates/job_wizard.html:245
+msgid "Analyser le fichier"
+msgstr "Analyser le fichier"
+
+#: transcria/web/templates/job_wizard.html:667
+msgid "Animateur"
+msgstr "Animateur"
+
 #: transcria/web/templates/queue.html:173
 msgid "Annuler"
 msgstr "Annuler"
@@ -91,6 +235,10 @@ msgstr "Annuler ce job ?"
 #: transcria/web/templates/job_result.html:79
 msgid "Aperçu du SRT"
 msgstr "Aperçu du SRT"
+
+#: transcria/web/templates/job_wizard.html:970
+msgid "Aperçu du SRT généré"
+msgstr "Aperçu du SRT généré"
 
 #: transcria/web/templates/job_result.html:168
 msgid "Appliquer aux documents :"
@@ -104,6 +252,10 @@ msgstr "Appliquer cette proposition"
 msgid "Appliquer la priorité"
 msgstr "Appliquer la priorité"
 
+#: transcria/web/templates/job_wizard.html:719
+msgid "Appliquer la sélection"
+msgstr "Appliquer la sélection"
+
 #: transcria/web/templates/job_result.html:108
 msgid "Appliquer les modifications"
 msgstr "Appliquer les modifications"
@@ -112,17 +264,71 @@ msgstr "Appliquer les modifications"
 msgid "Appliquer les options"
 msgstr "Appliquer les options"
 
+#: transcria/web/templates/job_wizard.html:385
+msgid "Appliquer les suggestions"
+msgstr "Appliquer les suggestions"
+
+#: transcria/web/templates/job_wizard.html:847
+msgid "Au lexique central"
+msgstr "Au lexique central"
+
 #: transcria/web/templates/queue.html:180
 msgid "Aucun job en file"
 msgstr "Aucun job en file"
+
+#: transcria/web/templates/job_wizard.html:119
+#: transcria/web/templates/job_wizard.html:878
+msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
+msgstr "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
+
+#: transcria/web/templates/job_wizard.html:758
+msgid "Aucun terme douteux détecté automatiquement."
+msgstr "Aucun terme douteux détecté automatiquement."
 
 #: transcria/web/templates/index.html:48
 msgid "Aucun traitement pour le moment."
 msgstr "Aucun traitement pour le moment."
 
+#: transcria/web/templates/job_wizard.html:837
+msgid "Audio indisponible pour ce timecode"
+msgstr "Audio indisponible pour ce timecode"
+
 #: transcria/web/templates/base.html:73
 msgid "Audit"
 msgstr "Audit"
+
+#: transcria/web/templates/job_wizard.html:206
+#, python-format
+msgid "Bande 95%% :"
+msgstr "Bande 95%% :"
+
+#: transcria/web/templates/job_wizard.html:215
+msgid "Canaux"
+msgstr "Canaux"
+
+#: transcria/web/templates/job_wizard.html:768
+msgid "Catégorie"
+msgstr "Catégorie"
+
+#: transcria/web/templates/job_wizard.html:772
+msgid "Catégorie libre"
+msgstr "Catégorie libre"
+
+#: transcria/web/templates/job_wizard.html:403
+msgid "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
+msgstr "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
+
+#: transcria/web/templates/job_wizard.html:375
+msgid "Champs suggérés :"
+msgstr "Champs suggérés :"
+
+#: transcria/web/templates/job_wizard.html:214
+msgid "Codec"
+msgstr "Codec"
+
+#: transcria/web/templates/job_wizard.html:111
+msgid "Complet"
+msgstr "Complet"
 
 #: transcria/web/templates/base.html:65
 msgid "Configuration"
@@ -132,17 +338,60 @@ msgstr "Configuration"
 msgid "Connexion"
 msgstr "Connexion"
 
+#: transcria/web/templates/job_wizard.html:371
+msgid "Contexte de la réunion"
+msgstr "Contexte de la réunion"
+
+#: transcria/web/templates/job_wizard.html:807
+#, python-format
+msgid "Contexte proposé (%(n)s)"
+msgstr "Contexte proposé (%(n)s)"
+
+#: transcria/web/templates/job_wizard.html:288
+#: transcria/web/templates/job_wizard.html:303
+msgid "Continuer quand même"
+msgstr "Continuer quand même"
+
+#: transcria/web/templates/job_wizard.html:858
+msgid "Continuer sans lexique"
+msgstr "Continuer sans lexique"
+
+#: transcria/web/templates/job_wizard.html:895
+msgid "Contrôle qualité"
+msgstr "Contrôle qualité"
+
 #: transcria/web/templates/job_result.html:28
 msgid "Contrôles"
 msgstr "Contrôles"
+
+#: transcria/web/templates/job_wizard.html:219
+msgid "Conversion requise pour le traitement (effectuée automatiquement)."
+msgstr "Conversion requise pour le traitement (effectuée automatiquement)."
+
+#: transcria/web/templates/job_wizard.html:320
+msgid "Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé."
+msgstr "Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé."
 
 #: transcria/web/templates/index.html:49
 msgid "Créez votre premier traitement pour transcrire une réunion."
 msgstr "Créez votre premier traitement pour transcrire une réunion."
 
+#: transcria/web/templates/job_wizard.html:17
+#, python-format
+msgid "Créé le %(date)s"
+msgstr "Créé le %(date)s"
+
+#: transcria/web/templates/job_wizard.html:413
+msgid "Date"
+msgstr "Date"
+
 #: transcria/web/templates/queue.html:161
 msgid "Descendre"
 msgstr "Descendre"
+
+#: transcria/web/templates/job_wizard.html:161
+msgid "Difficulté au fil du temps"
+msgstr "Difficulté au fil du temps"
 
 #: transcria/web/templates/job_result.html:105
 msgid "Discuter"
@@ -151,6 +400,22 @@ msgstr "Discuter"
 #: transcria/web/templates/job_result.html:95
 msgid "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
 msgstr "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
+
+#: transcria/web/templates/job_wizard.html:326
+msgid "Documents présentés"
+msgstr "Documents présentés"
+
+#: transcria/web/templates/job_wizard.html:489
+msgid "Données enrichies extraites par l'IA"
+msgstr "Données enrichies extraites par l'IA"
+
+#: transcria/web/templates/job_wizard.html:212
+msgid "Durée"
+msgstr "Durée"
+
+#: transcria/web/templates/job_wizard.html:508
+msgid "Décisions prises"
+msgstr "Décisions prises"
 
 #: transcria/web/templates/base.html:111
 msgid "Déconnexion"
@@ -164,6 +429,14 @@ msgstr "Décrivez la modification à appliquer, ou cliquez « Appliquer cette pr
 msgid "Départ"
 msgstr "Départ"
 
+#: transcria/web/templates/job_wizard.html:71
+msgid "Déposez le fichier audio ou vidéo de la réunion."
+msgstr "Déposez le fichier audio ou vidéo de la réunion."
+
+#: transcria/web/templates/job_wizard.html:571
+msgid "Détecter les locuteurs"
+msgstr "Détecter les locuteurs"
+
 #: transcria/web/templates/queue.html:42
 msgid "En attente"
 msgstr "En attente"
@@ -176,6 +449,19 @@ msgstr "En cours"
 msgid "En pause manuelle"
 msgstr "En pause manuelle"
 
+#: transcria/web/templates/job_wizard.html:479
+msgid "Enregistrer le contexte"
+msgstr "Enregistrer le contexte"
+
+#: transcria/web/templates/job_wizard.html:857
+msgid "Enregistrer le lexique"
+msgstr "Enregistrer le lexique"
+
+#: transcria/web/templates/job_wizard.html:480
+#: transcria/web/templates/job_wizard.html:859
+msgid "Enregistré"
+msgstr "Enregistré"
+
 #: transcria/web/templates/job_result.html:170
 msgid "Erreur"
 msgstr "Erreur"
@@ -184,13 +470,66 @@ msgstr "Erreur"
 msgid "Erreur réseau — réessayez."
 msgstr "Erreur réseau — réessayez."
 
+#: transcria/web/templates/job_wizard.html:286
+msgid "Est-ce bien le fichier attendu ?"
+msgstr "Est-ce bien le fichier attendu ?"
+
+#: transcria/web/templates/job_wizard.html:229
+msgid "Estimation apprise de vos traitements précédents sur cette machine"
+msgstr "Estimation apprise de vos traitements précédents sur cette machine"
+
 #: transcria/web/templates/queue.html:112
 msgid "Estimation calibrée sur les traitements précédents"
 msgstr "Estimation calibrée sur les traitements précédents"
 
+#: transcria/web/templates/job_wizard.html:231
+msgid "Estimation initiale (formule) — s'affinera après quelques traitements"
+msgstr "Estimation initiale (formule) — s'affinera après quelques traitements"
+
+#: transcria/web/templates/job_wizard.html:1096
+msgid "Ex : Vocabulaire fromagerie"
+msgstr "Ex : Vocabulaire fromagerie"
+
 #: transcria/web/templates/job_result.html:101
 msgid "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
 msgstr "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
+
+#: transcria/web/templates/job_wizard.html:771
+msgid "Ex: Forme douteuse A, forme douteuse B"
+msgstr "Ex: Forme douteuse A, forme douteuse B"
+
+#: transcria/web/templates/job_wizard.html:770
+msgid "Ex: Forme validée"
+msgstr "Ex: Forme validée"
+
+#: transcria/web/templates/job_wizard.html:956
+msgid "Export et résultats"
+msgstr "Export et résultats"
+
+#: transcria/web/templates/job_wizard.html:282
+#: transcria/web/templates/job_wizard.html:299
+msgid "Extrait de transcription (début)"
+msgstr "Extrait de transcription (début)"
+
+#: transcria/web/templates/job_wizard.html:296
+msgid "Extrait disponible ci-dessous pour vérifier."
+msgstr "Extrait disponible ci-dessous pour vérifier."
+
+#: transcria/web/templates/job_wizard.html:1081
+msgid "Fermer"
+msgstr "Fermer"
+
+#: transcria/web/templates/job_wizard.html:905
+msgid "Fiabilité :"
+msgstr "Fiabilité :"
+
+#: transcria/web/templates/job_wizard.html:58
+msgid "Fichier audio & profil de traitement"
+msgstr "Fichier audio & profil de traitement"
+
+#: transcria/web/templates/job_wizard.html:61
+msgid "Fichier reçu."
+msgstr "Fichier reçu."
 
 #: transcria/web/templates/base.html:35
 msgctxt "navigation"
@@ -201,13 +540,75 @@ msgstr "File"
 msgid "File d'attente"
 msgstr "File d'attente"
 
+#: transcria/web/templates/job_wizard.html:640
+#: transcria/web/templates/job_wizard.html:665
+#: transcria/web/templates/job_wizard.html:688
+msgid "Fonction"
+msgstr "Fonction"
+
+#: transcria/web/templates/job_wizard.html:213
+msgid "Format"
+msgstr "Format"
+
+#: transcria/web/templates/job_wizard.html:1084
+msgid "Forme :"
+msgstr "Forme :"
+
+#: transcria/web/templates/job_wizard.html:766
+msgid "Forme validée"
+msgstr "Forme validée"
+
+#: transcria/web/templates/job_wizard.html:767
+msgid "Formes suspectes observées"
+msgstr "Formes suspectes observées"
+
+#: transcria/web/templates/job_wizard.html:163
+msgid "Frise temporelle de la difficulté audio"
+msgstr "Frise temporelle de la difficulté audio"
+
+#: transcria/web/templates/job_wizard.html:216
+msgid "Fréquence"
+msgstr "Fréquence"
+
+#: transcria/web/templates/job_wizard.html:644
+msgid "Féminin ♀"
+msgstr "Féminin ♀"
+
+#: transcria/web/templates/job_wizard.html:642
+msgid "Genre vocal (modifiable)"
+msgstr "Genre vocal (modifiable)"
+
+#: transcria/web/templates/job_wizard.html:1098
+msgid "Groupe"
+msgstr "Groupe"
+
 #: transcria/web/templates/base.html:54
 msgid "Groupes"
 msgstr "Groupes"
 
+#: transcria/web/templates/job_wizard.html:355
+msgid "Générer le résumé"
+msgstr "Générer le résumé"
+
+#: transcria/web/templates/job_wizard.html:305
+msgid "Générez un résumé rapide pour vérifier le contenu du fichier."
+msgstr "Générez un résumé rapide pour vérifier le contenu du fichier."
+
 #: transcria/web/templates/queue.html:149
 msgid "Immédiat"
 msgstr "Immédiat"
+
+#: transcria/web/templates/job_wizard.html:473
+msgid "Informations complémentaires"
+msgstr "Informations complémentaires"
+
+#: transcria/web/templates/job_wizard.html:319
+msgid "Invitation de la réunion"
+msgstr "Invitation de la réunion"
+
+#: transcria/web/templates/job_wizard.html:323
+msgid "Invitation enregistrée"
+msgstr "Invitation enregistrée"
 
 #: transcria/web/templates/queue.html:92
 msgid "Job"
@@ -217,9 +618,25 @@ msgstr "Job"
 msgid "Jobs planifiés"
 msgstr "Jobs planifiés"
 
+#: transcria/web/templates/job_wizard.html:328
+msgid "Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé."
+msgstr "Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé."
+
+#: transcria/web/templates/job_wizard.html:333
+msgid "Joindre un document"
+msgstr "Joindre un document"
+
 #: transcria/web/templates/job_result.html:90
 msgid "L'assistant travaille (30 s à 2 min)…"
 msgstr "L'assistant travaille (30 s à 2 min)…"
+
+#: transcria/web/templates/job_wizard.html:981
+msgid "L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés."
+msgstr "L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés."
+
+#: transcria/web/templates/job_wizard.html:754
+msgid "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
+msgstr "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
 
 #: transcria/web/templates/base.html:143
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
@@ -229,25 +646,95 @@ msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement 
 msgid "La priorité doit être comprise entre 1 et 100."
 msgstr "La priorité doit être comprise entre 1 et 100."
 
+#: transcria/web/templates/job_wizard.html:315
+msgid "Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement."
+msgstr "Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement."
+
+#: transcria/web/templates/job_wizard.html:871
+#: transcria/web/templates/job_wizard.html:885
+msgid "Lancer le traitement"
+msgstr "Lancer le traitement"
+
+#: transcria/web/templates/job_wizard.html:243
+msgid "Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques."
+msgstr "Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques."
+
+#: transcria/web/templates/job_wizard.html:417
+msgid "Langue"
+msgstr "Langue"
+
 #: transcria/web/templates/base.html:87
 msgid "Langue de l'interface"
 msgstr "Langue de l'interface"
+
+#: transcria/web/templates/job_wizard.html:947
+msgid "Le contrôle qualité sera effectué après le traitement."
+msgstr "Le contrôle qualité sera effectué après le traitement."
+
+#: transcria/web/templates/job_wizard.html:351
+msgid "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
+msgstr "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
+
+#: transcria/web/templates/job_wizard.html:743
+msgid "Le lexique de session déjà sauvegardé est conservé."
+msgstr "Le lexique de session déjà sauvegardé est conservé."
+
+#: transcria/web/templates/job_wizard.html:984
+msgid "Le package final sera disponible après le traitement complet."
+msgstr "Le package final sera disponible après le traitement complet."
+
+#: transcria/web/templates/job_wizard.html:323
+msgid "Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer."
+msgstr "Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer."
+
+#: transcria/web/templates/job_wizard.html:27
+msgid "Le traitement a échoué."
+msgstr "Le traitement a échoué."
 
 #: transcria/web/templates/queue.html:251
 msgid "Les jobs en cours seront ignorés."
 msgstr "Les jobs en cours seront ignorés."
 
+#: transcria/web/templates/job_wizard.html:567
+msgid "Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez."
+msgstr "Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez."
+
+#: transcria/web/templates/job_wizard.html:788
+#, python-format
+msgid "Lexique central : %(name)s"
+msgstr "Lexique central : %(name)s"
+
+#: transcria/web/templates/job_wizard.html:713
+msgid "Lexique de session"
+msgstr "Lexique de session"
+
+#: transcria/web/templates/job_wizard.html:1086
+msgid "Lexique existant"
+msgstr "Lexique existant"
+
 #: transcria/web/templates/base.html:56
 msgid "Lexiques"
 msgstr "Lexiques"
+
+#: transcria/web/templates/job_wizard.html:718
+msgid "Lexiques utilisés pour ce job"
+msgstr "Lexiques utilisés pour ce job"
 
 #: transcria/web/templates/base.html:67
 msgid "Maintenance"
 msgstr "Maintenance"
 
+#: transcria/web/templates/job_wizard.html:645
+msgid "Masculin ♂"
+msgstr "Masculin ♂"
+
 #: transcria/web/templates/base.html:19
 msgid "Menu"
 msgstr "Menu"
+
+#: transcria/web/templates/job_wizard.html:438
+msgid "Mes types & partagés"
+msgstr "Mes types & partagés"
 
 #: transcria/web/templates/queue.html:169
 msgid "Mettre en pause"
@@ -277,6 +764,12 @@ msgstr "Nettoyage impossible."
 msgid "Nettoyer E2E"
 msgstr "Nettoyer E2E"
 
+#: transcria/web/templates/job_wizard.html:639
+#: transcria/web/templates/job_wizard.html:664
+#: transcria/web/templates/job_wizard.html:687
+msgid "Nom"
+msgstr "Nom"
+
 #: transcria/web/templates/login.html:17
 msgid "Nom d'utilisateur"
 msgstr "Nom d'utilisateur"
@@ -285,9 +778,33 @@ msgstr "Nom d'utilisateur"
 msgid "Nom de la réunion"
 msgstr "Nom de la réunion"
 
+#: transcria/web/templates/job_wizard.html:1095
+msgid "Nom du nouveau lexique"
+msgstr "Nom du nouveau lexique"
+
+#: transcria/web/templates/job_wizard.html:308
+msgid "Nombre de locuteurs"
+msgstr "Nombre de locuteurs"
+
+#: transcria/web/templates/job_wizard.html:643
+msgid "Non déterminé"
+msgstr "Non déterminé"
+
+#: transcria/web/templates/job_wizard.html:289
+msgid "Non, arrêter"
+msgstr "Non, arrêter"
+
+#: transcria/web/templates/job_wizard.html:464
+msgid "Notes / Ordre du jour"
+msgstr "Notes / Ordre du jour"
+
 #: transcria/web/templates/index.html:8
 msgid "Nouveau traitement"
 msgstr "Nouveau traitement"
+
+#: transcria/web/templates/job_wizard.html:460
+msgid "Objectif"
+msgstr "Objectif"
 
 #: transcria/web/templates/job_result.html:118
 msgid "Options du document (sans assistant — immédiat)"
@@ -296,6 +813,15 @@ msgstr "Options du document (sans assistant — immédiat)"
 #: transcria/web/templates/job_result.html:172
 msgid "Options invalides"
 msgstr "Options invalides"
+
+#: transcria/web/templates/job_wizard.html:502
+msgid "Ordre du jour"
+msgstr "Ordre du jour"
+
+#: transcria/web/templates/job_wizard.html:287
+#: transcria/web/templates/job_wizard.html:302
+msgid "Oui, continuer"
+msgstr "Oui, continuer"
 
 #: transcria/web/templates/index.html:27
 msgid "Ouvrir"
@@ -306,6 +832,7 @@ msgid "Package"
 msgstr "Package"
 
 #: transcria/web/templates/job_result.html:61
+#: transcria/web/templates/job_wizard.html:976
 msgid "Package complet"
 msgstr "Package complet"
 
@@ -318,9 +845,33 @@ msgstr "Partagé par %(name)s"
 msgid "Participants"
 msgstr "Participants"
 
+#: transcria/web/templates/job_wizard.html:566
+msgid "Participants & Locuteurs"
+msgstr "Participants & Locuteurs"
+
+#: transcria/web/templates/job_wizard.html:602
+msgid "Participants identifiés dans la transcription :"
+msgstr "Participants identifiés dans la transcription :"
+
+#: transcria/web/templates/job_wizard.html:493
+msgid "Partiel"
+msgstr "Partiel"
+
+#: transcria/web/templates/job_wizard.html:151
+msgid "Passages :"
+msgstr "Passages :"
+
 #: transcria/web/templates/base.html:76 transcria/web/templates/queue.html:31
 msgid "Planification"
 msgstr "Planification"
+
+#: transcria/web/templates/job_wizard.html:520
+msgid "Points bloquants"
+msgstr "Points bloquants"
+
+#: transcria/web/templates/job_wizard.html:526
+msgid "Points reportés"
+msgstr "Points reportés"
 
 #: transcria/web/templates/job_result.html:20
 #: transcria/web/templates/job_result.html:37
@@ -328,10 +879,20 @@ msgstr "Planification"
 msgid "Points à vérifier"
 msgstr "Points à vérifier"
 
+#: transcria/web/templates/job_wizard.html:921
+#, python-format
+msgid "Points à vérifier : %(w)s — Termes métier suspects : %(t)s"
+msgstr "Points à vérifier : %(w)s — Termes métier suspects : %(t)s"
+
 #: transcria/web/templates/login.html:14
 msgid "Portail de transcription de réunion"
 msgstr "Portail de transcription de réunion"
 
+#: transcria/web/templates/job_wizard.html:803
+msgid "Pourquoi cette forme doit être validée"
+msgstr "Pourquoi cette forme doit être validée"
+
+#: transcria/web/templates/job_wizard.html:769
 #: transcria/web/templates/queue.html:93
 msgid "Priorité"
 msgstr "Priorité"
@@ -340,17 +901,55 @@ msgstr "Priorité"
 msgid "Priorité de base"
 msgstr "Priorité de base"
 
+#: transcria/web/templates/job_wizard.html:543
+msgid "Prochaine réunion :"
+msgstr "Prochaine réunion :"
+
+#: transcria/web/templates/job_wizard.html:94
+msgid "Profil de traitement"
+msgstr "Profil de traitement"
+
+#: transcria/web/templates/job_wizard.html:874
+#, python-format
+msgid "Profil retenu : <strong>%(label)s</strong>. Pour en changer, revenez à l'étape 1."
+msgstr "Profil retenu : <strong>%(label)s</strong>. Pour en changer, revenez à l'étape 1."
+
 #: transcria/web/templates/job_result.html:162
 msgid "Proposition"
 msgstr "Proposition"
+
+#: transcria/web/templates/job_wizard.html:800
+msgid "Proposé à partir d'un document que vous avez joint à la réunion"
+msgstr "Proposé à partir d'un document que vous avez joint à la réunion"
+
+#: transcria/web/templates/job_wizard.html:203
+msgid "RMS :"
+msgstr "RMS :"
 
 #: transcria/web/templates/queue.html:91
 msgid "Rang"
 msgstr "Rang"
 
+#: transcria/web/templates/job_wizard.html:110
+msgid "Rapide"
+msgstr "Rapide"
+
 #: transcria/web/templates/job_result.html:53
+#: transcria/web/templates/job_wizard.html:974
 msgid "Rapport Word (.docx)"
 msgstr "Rapport Word (.docx)"
+
+#: transcria/web/templates/job_wizard.html:587
+msgid "Rechercher les voix connues"
+msgstr "Rechercher les voix connues"
+
+#: transcria/web/templates/job_wizard.html:34
+msgid "Relancer le traitement"
+msgstr "Relancer le traitement"
+
+#: transcria/web/templates/job_wizard.html:961
+msgid "Relisez vos livrables et <strong>affinez-les avec l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats."
+msgstr "Relisez vos livrables et <strong>affinez-les avec l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats."
 
 #: transcria/web/templates/queue.html:165
 msgid "Reprendre"
@@ -373,9 +972,21 @@ msgstr "Restaurer"
 msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
 msgstr "Restaurer la version v{v} ? Les documents reviendront à cet état."
 
+#: transcria/web/templates/job_wizard.html:322
+msgid "Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées."
+msgstr "Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées."
+
+#: transcria/web/templates/job_wizard.html:343
+msgid "Retirer"
+msgstr "Retirer"
+
 #: transcria/web/templates/job_result.html:144
 msgid "Retour au traitement"
 msgstr "Retour au traitement"
+
+#: transcria/web/templates/job_wizard.html:538
+msgid "Résolutions adoptées"
+msgstr "Résolutions adoptées"
 
 #: transcria/web/templates/job_result.html:2
 msgid "Résultat"
@@ -385,9 +996,38 @@ msgstr "Résultat"
 msgid "Résultats"
 msgstr "Résultats"
 
+#: transcria/web/templates/job_wizard.html:964
+msgid "Résultats & affinage"
+msgstr "Résultats & affinage"
+
+#: transcria/web/templates/job_wizard.html:295
+msgid "Résumé :"
+msgstr "Résumé :"
+
+#: transcria/web/templates/job_wizard.html:261
+msgid "Résumé de contrôle"
+msgstr "Résumé de contrôle"
+
+#: transcria/web/templates/job_wizard.html:266
+msgid "Résumé généré par l'IA"
+msgstr "Résumé généré par l'IA"
+
+#: transcria/web/templates/job_wizard.html:666
+#: transcria/web/templates/job_wizard.html:689
+msgid "Rôle"
+msgstr "Rôle"
+
 #: transcria/web/templates/base.html:104
 msgid "Rôle :"
 msgstr "Rôle :"
+
+#: transcria/web/templates/job_wizard.html:641
+msgid "Rôle dans la réunion"
+msgstr "Rôle dans la réunion"
+
+#: transcria/web/templates/job_wizard.html:204
+msgid "SNR estimé :"
+msgstr "SNR estimé :"
 
 #: transcria/web/templates/queue.html:66
 msgid "Scheduler"
@@ -397,9 +1037,39 @@ msgstr "Scheduler"
 msgid "Score qualité"
 msgstr "Score qualité"
 
+#: transcria/web/templates/job_wizard.html:915
+msgid "Score qualité :"
+msgstr "Score qualité :"
+
 #: transcria/web/templates/login.html:24
 msgid "Se connecter"
 msgstr "Se connecter"
+
+#: transcria/web/templates/job_wizard.html:932
+#, python-format
+msgid "Segments à vérifier en priorité (%(n)s)"
+msgstr "Segments à vérifier en priorité (%(n)s)"
+
+#: transcria/web/templates/job_wizard.html:451
+msgid "Service / Domaine"
+msgstr "Service / Domaine"
+
+#: transcria/web/templates/job_wizard.html:205
+msgid "Silence :"
+msgstr "Silence :"
+
+#: transcria/web/templates/job_wizard.html:650
+msgid "Suggestion issue des voix enregistrées"
+msgstr "Suggestion issue des voix enregistrées"
+
+#: transcria/web/templates/job_wizard.html:383
+#: transcria/web/templates/job_wizard.html:456
+msgid "Sujet"
+msgstr "Sujet"
+
+#: transcria/web/templates/job_wizard.html:275
+msgid "Sujet :"
+msgstr "Sujet :"
 
 #: transcria/web/templates/index.html:36
 msgid "Supprimer"
@@ -421,6 +1091,16 @@ msgstr "Supprimer tous les jobs de test ?"
 msgid "Système"
 msgstr "Système"
 
+#: transcria/web/templates/job_wizard.html:115
+msgid "Sélectionnez un profil…"
+msgstr "Sélectionnez un profil…"
+
+#: transcria/web/templates/job_wizard.html:224
+#: transcria/web/templates/job_wizard.html:236
+#, python-format
+msgid "Temps total estimé : ~%(min)s min"
+msgstr "Temps total estimé : ~%(min)s min"
+
 #: transcria/web/templates/job_result.html:4
 msgid "Terminé"
 msgstr "Terminé"
@@ -429,25 +1109,76 @@ msgstr "Terminé"
 msgid "Thème du rapport"
 msgstr "Thème du rapport"
 
+#: transcria/web/templates/job_wizard.html:377
+msgid "Titre"
+msgstr "Titre"
+
+#: transcria/web/templates/job_wizard.html:409
+msgid "Titre de la réunion"
+msgstr "Titre de la réunion"
+
+#: transcria/web/templates/job_wizard.html:273
+msgid "Titre suggéré :"
+msgstr "Titre suggéré :"
+
+#: transcria/web/templates/job_wizard.html:2
+msgid "Traitement"
+msgstr "Traitement"
+
+#: transcria/web/templates/job_wizard.html:898
+msgid "Traitement réalisé :"
+msgstr "Traitement réalisé :"
+
 #: transcria/web/templates/base.html:26 transcria/web/templates/index.html:5
 msgid "Traitements"
 msgstr "Traitements"
+
+#: transcria/web/templates/job_wizard.html:746
+#, python-format
+msgid "TranscrIA prépare %(n)s terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation."
+msgstr "TranscrIA prépare %(n)s terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation."
 
 #: transcria/web/templates/job_result.html:130
 msgid "Transcription"
 msgstr "Transcription"
 
+#: transcria/web/templates/job_wizard.html:380
+msgid "Type"
+msgstr "Type"
+
+#: transcria/web/templates/job_wizard.html:274
+msgid "Type suggéré :"
+msgstr "Type suggéré :"
+
 #: transcria/web/templates/base.html:30
 msgid "Types de réunion"
 msgstr "Types de réunion"
 
+#: transcria/web/templates/job_wizard.html:433
+msgid "Types intégrés"
+msgstr "Types intégrés"
+
 #: transcria/web/templates/job_result.html:65
+#: transcria/web/templates/job_wizard.html:977
 msgid "Télécharger l'audio"
 msgstr "Télécharger l'audio"
 
 #: transcria/web/templates/job_result.html:57
+#: transcria/web/templates/job_wizard.html:975
 msgid "Télécharger le SRT"
 msgstr "Télécharger le SRT"
+
+#: transcria/web/templates/job_wizard.html:74
+msgid "Téléverser"
+msgstr "Téléverser"
+
+#: transcria/web/templates/job_wizard.html:100
+msgid "Téléversez d'abord le fichier audio"
+msgstr "Téléversez d'abord le fichier audio"
+
+#: transcria/web/templates/job_wizard.html:88
+msgid "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
+msgstr "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
 
 #: transcria/web/templates/job_result.html:169
 msgid "Une version restaurable sera créée (retour arrière possible)."
@@ -457,13 +1188,41 @@ msgstr "Une version restaurable sera créée (retour arrière possible)."
 msgid "Utilisateurs"
 msgstr "Utilisateurs"
 
+#: transcria/web/templates/job_wizard.html:902
+msgid "VAD final activé"
+msgstr "VAD final activé"
+
+#: transcria/web/templates/job_wizard.html:699
+msgid "Valider participants & locuteurs"
+msgstr "Valider participants & locuteurs"
+
+#: transcria/web/templates/job_wizard.html:714
+msgid "Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible."
+msgstr "Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible."
+
+#: transcria/web/templates/job_wizard.html:700
+msgid "Validé"
+msgstr "Validé"
+
 #: transcria/web/templates/job_result.html:164
 msgid "Version"
 msgstr "Version"
 
+#: transcria/web/templates/job_wizard.html:181
+msgid "Voir les détails techniques"
+msgstr "Voir les détails techniques"
+
 #: transcria/web/templates/base.html:58
 msgid "Voix enregistrées"
 msgstr "Voix enregistrées"
+
+#: transcria/web/templates/job_wizard.html:31
+msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
+msgstr "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
+
+#: transcria/web/templates/job_wizard.html:532
+msgid "Votes"
+msgstr "Votes"
 
 #: transcria/web/templates/base.html:133
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
@@ -473,10 +1232,24 @@ msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a hr
 msgid "actif"
 msgstr "actif"
 
+#: transcria/web/templates/job_wizard.html:229
+#, python-format
+msgid "calibré · %(n)s jobs"
+msgstr "calibré · %(n)s jobs"
+
 #: transcria/web/templates/queue.html:154
 #, python-format
 msgid "créé %(t)s"
 msgstr "créé %(t)s"
+
+#: transcria/web/templates/job_wizard.html:158
+#: transcria/web/templates/job_wizard.html:176
+msgid "difficile"
+msgstr "difficile"
+
+#: transcria/web/templates/job_wizard.html:152
+msgid "difficile(s) ·"
+msgstr "difficile(s) ·"
 
 #: transcria/web/templates/queue.html:152
 #, python-format
@@ -488,18 +1261,99 @@ msgstr "démarré %(t)s"
 msgid "effective %(p)s"
 msgstr "effective %(p)s"
 
+#: transcria/web/templates/job_wizard.html:231
+msgid "estimation initiale"
+msgstr "estimation initiale"
+
+#: transcria/web/templates/job_wizard.html:174
+msgid "exploitable"
+msgstr "exploitable"
+
+#: transcria/web/templates/job_wizard.html:104
 #: transcria/web/templates/queue.html:69
 msgid "indisponible"
 msgstr "indisponible"
+
+#: transcria/web/templates/job_wizard.html:800
+msgid "issu des documents fournis"
+msgstr "issu des documents fournis"
 
 #: transcria/web/templates/queue.html:264
 msgid "job(s) de test supprimé(s)."
 msgstr "job(s) de test supprimé(s)."
 
+#: transcria/web/templates/job_wizard.html:313
+msgid "locuteurs"
+msgstr "locuteurs"
+
+#: transcria/web/templates/job_wizard.html:312
+msgid "max"
+msgstr "max"
+
+#: transcria/web/templates/job_wizard.html:310
+msgid "min"
+msgstr "min"
+
+#: transcria/web/templates/job_wizard.html:104
+#, python-format
+msgid "niveau %(n)s"
+msgstr "niveau %(n)s"
+
+#: transcria/web/templates/job_wizard.html:663
+msgid "participant"
+msgstr "participant"
+
 #: transcria/web/templates/queue.html:109
 #, python-format
 msgid "position %(n)s"
 msgstr "position %(n)s"
+
+#: transcria/web/templates/job_wizard.html:794
+#, python-format
+msgid "priorité %(p)s"
+msgstr "priorité %(p)s"
+
+#: transcria/web/templates/job_wizard.html:815
+msgid "sans timecode"
+msgstr "sans timecode"
+
+#: transcria/web/templates/job_wizard.html:158
+msgid "son exploitable"
+msgstr "son exploitable"
+
+#: transcria/web/templates/job_wizard.html:686
+msgid "suggéré"
+msgstr "suggéré"
+
+#: transcria/web/templates/job_wizard.html:154
+#, python-format
+msgid "sur %(n)s fenêtre(s) de 5 s."
+msgstr "sur %(n)s fenêtre(s) de 5 s."
+
+#: transcria/web/templates/job_wizard.html:341
+msgid "tronqué"
+msgstr "tronqué"
+
+#: transcria/web/templates/job_wizard.html:790
+msgid "trouvé dans le texte"
+msgstr "trouvé dans le texte"
+
+#: transcria/web/templates/job_wizard.html:792
+msgid "variante détectée"
+msgstr "variante détectée"
+
+#: transcria/web/templates/job_wizard.html:622
+msgid "voix féminine dominante"
+msgstr "voix féminine dominante"
+
+#: transcria/web/templates/job_wizard.html:620
+msgid "voix masculine dominante"
+msgstr "voix masculine dominante"
+
+#: transcria/web/templates/job_wizard.html:809
+#, python-format
+msgid "· %(listened)s/%(total)s écoutés"
+msgstr "· %(listened)s/%(total)s écoutés"
 
 #: transcria/web/templates/queue.html:17
 msgid "· aucun créneau actif"
@@ -515,20 +1369,69 @@ msgstr "· bonus %(b)s"
 msgid "· créneau actif : %(name)s (%(action)s)"
 msgstr "· créneau actif : %(name)s (%(action)s)"
 
+#: transcria/web/templates/job_wizard.html:495
+msgid "Échec"
+msgstr "Échec"
+
+#: transcria/web/templates/job_wizard.html:821
+msgid "Écouter 5 secondes avant et après"
+msgstr "Écouter 5 secondes avant et après"
+
+#: transcria/web/templates/job_wizard.html:638
+msgid "Écouter des extraits de ce locuteur"
+msgstr "Écouter des extraits de ce locuteur"
+
+#: transcria/web/templates/job_wizard.html:834
+msgid "Écouté"
+msgstr "Écouté"
+
 #: transcria/web/templates/job_result.html:167
 msgid "Écrivez d'abord votre demande."
 msgstr "Écrivez d'abord votre demande."
 
 #: transcria/web/templates/job_result.html:68
+#: transcria/web/templates/job_wizard.html:978
 msgid "Éditer la transcription"
 msgstr "Éditer la transcription"
+
+#: transcria/web/templates/job_wizard.html:254
+#: transcria/web/templates/job_wizard.html:364
+#: transcria/web/templates/job_wizard.html:557
+#: transcria/web/templates/job_wizard.html:706
+msgid "Étapes optionnelles pour ce profil"
+msgstr "Étapes optionnelles pour ce profil"
 
 #: transcria/web/templates/queue.html:96
 msgid "État"
 msgstr "État"
 
+#: transcria/web/templates/job_wizard.html:311
+msgid "à"
+msgstr "à"
+
+#: transcria/web/templates/job_wizard.html:153
+#: transcria/web/templates/job_wizard.html:158
+#: transcria/web/templates/job_wizard.html:175
+msgid "à surveiller"
+msgstr "à surveiller"
+
+#: transcria/web/templates/job_wizard.html:1091
+msgid "— Nouveau lexique… —"
+msgstr "— Nouveau lexique… —"
+
+#: transcria/web/templates/job_wizard.html:497
+msgid "— apparaîtront dans le rapport Word selon le type de réunion"
+msgstr "— apparaîtront dans le rapport Word selon le type de réunion"
+
+#: transcria/web/templates/job_wizard.html:400
+msgid "📋 Résumé de la réunion — modifiez-le avant d'enregistrer"
+msgstr "📋 Résumé de la réunion — modifiez-le avant d'enregistrer"
+
 #~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
 #~ msgstr "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
+
+#~ msgid "Bande 95% :"
+#~ msgstr "Bande 95% :"
 
 #~ msgid "Restaurer la version v%(v)s ? Les documents reviendront à cet état."
 #~ msgstr "Restaurer la version v%(v)s ? Les documents reviendront à cet état."

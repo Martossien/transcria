@@ -256,4 +256,4 @@ def test_wizard_rend_avec_srt_express_persiste(admin_client, app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Lancer le traitement" in html
-    assert "Fichier audio &amp; profil de traitement" in html
+    assert "Fichier audio & profil de traitement" in html  # i18n : gettext rend un & littéral
