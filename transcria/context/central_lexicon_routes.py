@@ -5,6 +5,7 @@ import io
 import logging
 
 from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
+from flask_babel import gettext as _
 from flask_login import current_user, login_required
 
 from transcria.audit.decorator import audit_log
@@ -65,7 +66,7 @@ def lexicon_create():
                 group_id=request.form.get("group_id") or None,
                 allow_global=allow_global,
             )
-            flash("Lexique créé.", "success")
+            flash(_("Lexique créé."), "success")
             audit_log(
                 AuditAction.LEXICON_CREATE, target_type="lexicon", target_id=lexicon.id,
                 target_label=lexicon.name,
@@ -131,7 +132,7 @@ def lexicon_update_metadata(lexicon_id: str):
             group_id=request.form.get("group_id") or None,
             allow_global=current_user.has_role(Role.ADMIN),
         )
-        flash("Lexique mis à jour.", "success")
+        flash(_("Lexique mis à jour."), "success")
         audit_log(
             AuditAction.LEXICON_MODIFY, target_type="lexicon", target_id=lexicon_id,
             target_label=lexicon.name,
@@ -182,7 +183,7 @@ def lexicon_delete(lexicon_id: str):
                 **summary,
             },
         )
-        flash("Lexique supprimé.", "success")
+        flash(_("Lexique supprimé."), "success")
     except CentralLexiconAccessError as exc:
         flash(str(exc), "error")
     return redirect(url_for("central_lexicon.lexicon_list"))
@@ -219,7 +220,7 @@ def _save_entry(lexicon_id: str, entry_id: str | None):
             comment=request.form.get("comment", ""),
             source=request.form.get("source", "manual"),
         )
-        flash("Entrée enregistrée.", "success")
+        flash(_("Entrée enregistrée."), "success")
         audit_log(
             AuditAction.LEXICON_TERM_MODIFY if entry_id else AuditAction.LEXICON_TERM_ADD,
             target_type="lexicon",
@@ -261,7 +262,7 @@ def lexicon_delete_entry(lexicon_id: str, entry_id: str):
                 **summary,
             },
         )
-        flash("Entrée supprimée.", "success")
+        flash(_("Entrée supprimée."), "success")
     except (CentralLexiconValidationError, CentralLexiconAccessError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("central_lexicon.lexicon_detail", lexicon_id=lexicon_id))
@@ -295,7 +296,7 @@ def lexicon_import(lexicon_id: str):
                 **input_summary,
             },
         )
-        flash(f"Import terminé : {result['imported']} entrée(s), {result['rejected']} rejet(s).", "success")
+        flash(_("Import terminé : %(i)s entrée(s), %(r)s rejet(s).", i=result['imported'], r=result['rejected']), "success")
     except (CentralLexiconValidationError, CentralLexiconAccessError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("central_lexicon.lexicon_detail", lexicon_id=lexicon_id))

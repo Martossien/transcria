@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from flask import Blueprint, Response, flash, redirect, render_template, request, send_file, url_for
+from flask_babel import gettext as _
 from flask_login import current_user, login_required
 
 from transcria.audit.decorator import audit_log
@@ -73,7 +74,7 @@ def voice_create():
                 group_id=request.form.get("group_id") or None,
                 allow_global_profiles=bool(voice_cfg.get("allow_global_profiles", False)),
             )
-            flash("Voix créée. Ajoutez maintenant le consentement signé.", "success")
+            flash(_("Voix créée. Ajoutez maintenant le consentement signé."), "success")
             audit_log(
                 AuditAction.VOICE_CREATE, target_type="voice", target_id=subject.id,
                 target_label=subject.display_name,
@@ -123,7 +124,7 @@ def voice_update_metadata(subject_id: str):
             email=request.form.get("email", ""),
             external_ref=request.form.get("external_ref", ""),
         )
-        flash("Informations de la voix mises à jour.", "success")
+        flash(_("Informations de la voix mises à jour."), "success")
         audit_log(
             AuditAction.VOICE_MODIFY, target_type="voice", target_id=subject_id,
             target_label=subject.display_name,
@@ -175,7 +176,7 @@ def voice_upload_consent(subject_id: str):
     consent_cfg = cfg.get("voice_enrollment", {}).get("consent", {})
     proof = request.files.get("proof")
     if proof is None:
-        flash("Preuve de consentement obligatoire.", "error")
+        flash(_("Preuve de consentement obligatoire."), "error")
         return redirect(url_for("voice.voice_detail", subject_id=subject.id))
     try:
         status = VoiceConsentStatus(request.form.get("status", VoiceConsentStatus.ACTIVE.value))
@@ -193,7 +194,7 @@ def voice_upload_consent(subject_id: str):
             proof_path=path,
             proof_sha256=sha,
         )
-        flash("Consentement enregistré.", "success")
+        flash(_("Consentement enregistré."), "success")
     except (ValueError, VoiceValidationError, VoiceAccessError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("voice.voice_detail", subject_id=subject.id))
@@ -212,11 +213,11 @@ def voice_generate_profile(subject_id: str):
     if subject is None:
         return ("Voix introuvable", 404)
     if VoiceStore.active_consent(subject) is None:
-        flash("Consentement actif requis avant tout upload audio.", "error")
+        flash(_("Consentement actif requis avant tout upload audio."), "error")
         return redirect(url_for("voice.voice_detail", subject_id=subject.id))
     audio = request.files.get("audio")
     if audio is None:
-        flash("Fichier audio de référence obligatoire.", "error")
+        flash(_("Fichier audio de référence obligatoire."), "error")
         return redirect(url_for("voice.voice_detail", subject_id=subject.id))
     try:
         path, sha = save_upload(
@@ -227,10 +228,10 @@ def voice_generate_profile(subject_id: str):
         )
         service = VoiceEnrollmentService(cfg, device="cpu")
         service.generate_profile(subject, current_user, Path(path), audio_sha256=sha)
-        flash("Empreinte vocale générée.", "success")
+        flash(_("Empreinte vocale générée."), "success")
     except (VoiceValidationError, VoiceEmbeddingError, VoiceAccessError) as exc:
         logger.warning("Génération empreinte vocale refusée: subject=%s erreur=%s", subject.id, exc)
-        flash(f"Génération impossible : {exc}", "error")
+        flash(_("Génération impossible : %(e)s", e=exc), "error")
     return redirect(url_for("voice.voice_detail", subject_id=subject.id))
 
 
@@ -246,5 +247,5 @@ def voice_disable(subject_id: str):
     if subject is None:
         return ("Voix introuvable", 404)
     VoiceStore.disable_subject(subject, current_user)
-    flash("Voix désactivée.", "success")
+    flash(_("Voix désactivée."), "success")
     return redirect(url_for("voice.voice_detail", subject_id=subject.id))

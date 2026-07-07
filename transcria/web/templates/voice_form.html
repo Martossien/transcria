@@ -1,47 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Ajouter une voix — TranscrIA{% endblock %}
+{% block title %}{{ _('Ajouter une voix') }} — TranscrIA{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">Ajouter une voix</h1>
+<h1 class="h3 mb-4">{{ _('Ajouter une voix') }}</h1>
 <div class="alert alert-light border d-flex justify-content-between align-items-center">
-  <span>Le consentement signé est requis avant toute génération d'empreinte vocale.</span>
+  <span>{{ _("Le consentement signé est requis avant toute génération d'empreinte vocale.") }}</span>
   <a class="btn btn-sm btn-outline-primary" href="/admin/voices/consent-form.pdf">
-    Télécharger le formulaire vierge
+    {{ _('Télécharger le formulaire vierge') }}
   </a>
 </div>
 <form method="post" class="card p-4">
   <div class="mb-3">
-    <label class="form-label">Nom de la personne</label>
+    <label class="form-label">{{ _('Nom de la personne') }}</label>
     <input class="form-control" name="display_name" required>
   </div>
   <div class="mb-3">
-    <label class="form-label">Genre validé</label>
+    <label class="form-label">{{ _('Genre validé') }}</label>
     <select class="form-select" name="gender" required>
-      <option value="" selected disabled>Choisir un genre</option>
-      <option value="female">Féminin</option>
-      <option value="male">Masculin</option>
-      <option value="other">Autre / non binaire</option>
+      <option value="" selected disabled>{{ _('Choisir un genre') }}</option>
+      <option value="female">{{ _('Féminin') }}</option>
+      <option value="male">{{ _('Masculin') }}</option>
+      <option value="other">{{ _('Autre / non binaire') }}</option>
     </select>
   </div>
   <div class="mb-3">
-    <label class="form-label">Groupe</label>
+    <label class="form-label">{{ _('Groupe') }}</label>
     <select class="form-select" name="group_id" {% if not allow_global %}required{% endif %}>
-      {% if allow_global %}<option value="">Global</option>{% endif %}
+      {% if allow_global %}<option value="">{{ _('Global') }}</option>{% endif %}
       {% for group in groups %}
       <option value="{{ group.id }}">{{ group.name }}</option>
       {% endfor %}
     </select>
   </div>
   <div class="mb-3">
-    <label class="form-label">Email</label>
+    <label class="form-label">{{ _('Email') }}</label>
     <input class="form-control" name="email" type="email">
   </div>
   <div class="mb-3">
-    <label class="form-label">Référence interne</label>
+    <label class="form-label">{{ _('Référence interne') }}</label>
     <input class="form-control" name="external_ref">
   </div>
   <div class="d-flex gap-2">
-    <button class="btn btn-primary" type="submit">Créer</button>
-    <a class="btn btn-outline-secondary" href="/admin/voices">Annuler</a>
+    <button class="btn btn-primary" type="submit">{{ _('Créer') }}</button>
+    <a class="btn btn-outline-secondary" href="/admin/voices">{{ _('Annuler') }}</a>
   </div>
 </form>
 {% endblock %}

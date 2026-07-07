@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Voix enregistrées — TranscrIA{% endblock %}
+{% block title %}{{ _('Voix enregistrées') }} — TranscrIA{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
-    <h1 class="h3 mb-1">Voix enregistrées</h1>
-    <p class="text-muted mb-0">Profils vocaux consentis, utilisés uniquement comme aide à la validation.</p>
+    <h1 class="h3 mb-1">{{ _('Voix enregistrées') }}</h1>
+    <p class="text-muted mb-0">{{ _('Profils vocaux consentis, utilisés uniquement comme aide à la validation.') }}</p>
   </div>
-  <a href="/admin/voices/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Ajouter une voix</a>
+  <a href="/admin/voices/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> {{ _('Ajouter une voix') }}</a>
 </div>
 
 <div class="card">
@@ -14,10 +14,10 @@
     <table class="table align-middle mb-0">
       <thead>
         <tr>
-          <th>Personne</th>
-          <th>Groupe</th>
-          <th>Consentement</th>
-          <th>Profil</th>
+          <th>{{ _('Personne') }}</th>
+          <th>{{ _('Groupe') }}</th>
+          <th>{{ _('Consentement') }}</th>
+          <th>{{ _('Profil') }}</th>
           <th></th>
         </tr>
       </thead>
@@ -31,21 +31,21 @@
             {% if subject.email %}<div class="small text-muted">{{ subject.email }}</div>{% endif %}
             {% if subject.gender %}
             <div class="small text-muted">
-              {% if subject.gender == 'female' %}Féminin{% elif subject.gender == 'male' %}Masculin{% else %}Autre / non binaire{% endif %}
+              {% if subject.gender == 'female' %}{{ _('Féminin') }}{% elif subject.gender == 'male' %}{{ _('Masculin') }}{% else %}{{ _('Autre / non binaire') }}{% endif %}
             </div>
             {% endif %}
           </td>
-          <td>{{ subject.group.name if subject.group else "Global" }}</td>
+          <td>{{ subject.group.name if subject.group else _('Global') }}</td>
           <td>
-            {% if consent %}<span class="badge bg-success">actif</span>{% else %}<span class="badge bg-secondary">absent</span>{% endif %}
+            {% if consent %}<span class="badge bg-success">{{ _('actif') }}</span>{% else %}<span class="badge bg-secondary">{{ _('absent') }}</span>{% endif %}
           </td>
           <td>
-            {% if profile %}<span class="badge bg-info text-dark">{{ profile.status }}</span>{% else %}<span class="badge bg-secondary">aucun</span>{% endif %}
+            {% if profile %}<span class="badge bg-info text-dark">{{ profile.status }}</span>{% else %}<span class="badge bg-secondary">{{ _('aucun') }}</span>{% endif %}
           </td>
-          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/admin/voices/{{ subject.id }}">Ouvrir</a></td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="/admin/voices/{{ subject.id }}">{{ _('Ouvrir') }}</a></td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted text-center py-4">Aucune voix enregistrée.</td></tr>
+        <tr><td colspan="5" class="text-muted text-center py-4">{{ _('Aucune voix enregistrée.') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>

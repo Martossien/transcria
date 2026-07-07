@@ -23,6 +23,7 @@ from flask import (
     send_file,
     url_for,
 )
+from flask_babel import gettext as _
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
@@ -1054,7 +1055,7 @@ def index():
 def create_job():
     title = _clean_job_title(request.form.get("title"))
     job = JobStore.create_job(owner_id=current_user.id, title=title)
-    flash("Nouveau traitement créé.", "success")
+    flash(_("Nouveau traitement créé."), "success")
     return redirect(url_for("web.job_wizard", job_id=job.id))
 
 
@@ -2958,11 +2959,11 @@ def admin_config():
         if not ok:
             for err in errors:
                 flash(err, "error")
-            flash(f"{len(errors)} erreur(s) de validation. Sauvegarde annulée.", "error")
+            flash(_("%(n)s erreur(s) de validation. Sauvegarde annulée.", n=len(errors)), "error")
             config_yaml = yaml.safe_dump(_config_for_display(cfg), allow_unicode=True, sort_keys=False)
             return _render_config_form(config_yaml, config_path, errors, 400, values=display_values(merged, CONFIG_FORM_SECTIONS))
 
-        flash("Réglages sauvegardés.", "success")
+        flash(_("Réglages sauvegardés."), "success")
         audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=Path(config_path).name)
         cfg = ConfigService.get_singleton()
 
@@ -2987,18 +2988,18 @@ def admin_config():
                 audit_log(AuditAction.CONFIG_EDIT, target_type="prompt",
                           target_label=spec["filename"])
         if saved == 0:
-            flash("Aucun prompt modifié.", "info")
+            flash(_("Aucun prompt modifié."), "info")
 
     elif request.method == "POST":
         raw_yaml = request.form.get("config_yaml", "")
         try:
             loaded = yaml.safe_load(raw_yaml) or {}
         except yaml.YAMLError as exc:
-            flash(f"YAML invalide : {exc}", "error")
+            flash(_("YAML invalide : %(e)s", e=exc), "error")
             return _render_config_form(raw_yaml, config_path, [], 400)
 
         if not isinstance(loaded, dict):
-            flash("La configuration doit être un objet YAML racine.", "error")
+            flash(_("La configuration doit être un objet YAML racine."), "error")
             return _render_config_form(raw_yaml, config_path, [], 400)
 
         loaded = _restore_masked_config_secrets(loaded, cfg)
@@ -3011,10 +3012,10 @@ def admin_config():
         if not ok:
             for err in errors:
                 flash(err, "error")
-            flash(f"{len(errors)} erreur(s) de validation. Sauvegarde annulée.", "error")
+            flash(_("%(n)s erreur(s) de validation. Sauvegarde annulée.", n=len(errors)), "error")
             return _render_config_form(raw_yaml, config_path, errors, 400)
 
-        flash(f"Configuration sauvegardée dans {config_path}.", "success")
+        flash(_("Configuration sauvegardée dans %(p)s.", p=config_path), "success")
         audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=Path(config_path).name)
         cfg = ConfigService.get_singleton()
 
@@ -3073,14 +3074,14 @@ def admin_maintenance_schedule():
             install_backup_schedule(schedule)
             audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
                       target_label=f"planification activée (OnCalendar={schedule.on_calendar})")
-            flash(f"Sauvegarde planifiée activée (cadence {schedule.on_calendar}).", "success")
+            flash(_("Sauvegarde planifiée activée (cadence %(c)s).", c=schedule.on_calendar), "success")
         elif action == "disable":
             remove_backup_schedule()
             audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
                       target_label="planification désactivée")
-            flash("Sauvegarde planifiée désactivée.", "success")
+            flash(_("Sauvegarde planifiée désactivée."), "success")
     except Exception as exc:  # noqa: BLE001 — surface l'échec systemd à l'opérateur
-        flash(f"Échec de la planification : {exc}", "error")
+        flash(_("Échec de la planification : %(e)s", e=exc), "error")
     return redirect(url_for("web.admin_maintenance"))
 
 
@@ -3099,10 +3100,10 @@ def admin_maintenance_restore():
 
     # Confirmation FORTE : case cochée + ressaisie exacte du nom (opération destructive).
     if request.form.get("acknowledge") != "on":
-        flash("Confirmation requise : la restauration remplace les données et redémarre le service.", "error")
+        flash(_("Confirmation requise : la restauration remplace les données et redémarre le service."), "error")
         return redirect(url_for("web.admin_maintenance"))
     if (request.form.get("confirm_name") or "").strip() != name:
-        flash("Le nom ressaisi ne correspond pas à l'archive — restauration annulée.", "error")
+        flash(_("Le nom ressaisi ne correspond pas à l'archive — restauration annulée."), "error")
         return redirect(url_for("web.admin_maintenance"))
 
     archive = MaintenanceService.resolve_archive(cfg, name)  # anti path-traversal
@@ -3110,7 +3111,7 @@ def admin_maintenance_restore():
         abort(404)
     problems = verify_backup(archive)
     if problems:
-        flash("Archive invalide — restauration refusée : " + " ; ".join(problems), "error")
+        flash(_("Archive invalide — restauration refusée : ") + " ; ".join(problems), "error")
         return redirect(url_for("web.admin_maintenance"))
 
     schedule = BackupSchedule.from_config(cfg, config_path)
@@ -3122,10 +3123,10 @@ def admin_maintenance_restore():
         )
         audit_log(AuditAction.MAINTENANCE_BACKUP_RESTORE, target_type="maintenance",
                   target_label=archive.name)
-        flash("Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — "
-              "reconnectez-vous dans une minute environ.", "success")
+        flash(_("Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — "
+                "reconnectez-vous dans une minute environ."), "success")
     except Exception as exc:  # noqa: BLE001 — surface l'échec de déclenchement à l'opérateur
-        flash(f"Échec du déclenchement de la restauration : {exc}", "error")
+        flash(_("Échec du déclenchement de la restauration : %(e)s", e=exc), "error")
     return redirect(url_for("web.admin_maintenance"))
 
 
@@ -3168,15 +3169,15 @@ def admin_models_download():
     if spec is None:
         abort(404)
     if spec.gated and not token:
-        flash(f"« {spec.label} » est un modèle *gated* : un token HuggingFace est requis "
-              "(et l'acceptation de sa licence sur huggingface.co).", "error")
+        flash(_("« %(l)s » est un modèle *gated* : un token HuggingFace est requis "
+                "(et l'acceptation de sa licence sur huggingface.co).", l=spec.label), "error")
         return redirect(url_for("web.admin_models"))
     ok, msg = check_space(spec, hf_home=resolve_hf_home(), models_dir=resolve_models_dir())
     if not ok:
-        flash("Téléchargement refusé — " + msg, "error")
+        flash(_("Téléchargement refusé — ") + msg, "error")
         return redirect(url_for("web.admin_models"))
     start_download(spec, token=token)
-    flash(f"Téléchargement de « {spec.label} » lancé en arrière-plan.", "success")
+    flash(_("Téléchargement de « %(l)s » lancé en arrière-plan.", l=spec.label), "success")
     return redirect(url_for("web.admin_models"))
 
 
@@ -3195,7 +3196,7 @@ def admin_models_activate():
     if item is None or not item["spec"].tier:
         abort(404)
     if not item["present"]:
-        flash("Téléchargez d'abord ce modèle avant de l'activer.", "error")
+        flash(_("Téléchargez d'abord ce modèle avant de l'activer."), "error")
         return redirect(url_for("web.admin_models"))
 
     tier_arg = f"{item['spec'].tier}gb"
@@ -3204,12 +3205,12 @@ def admin_models_activate():
         result = subprocess.run(["bash", "scripts/switch_arbitrage_llm.sh", tier_arg],
                                 capture_output=True, text=True, env=env, cwd=os.getcwd(), timeout=120)
         if result.returncode == 0:
-            flash(f"Modèle LLM activé (profil {tier_arg}). Redémarrez le service pour l'appliquer : "
-                  "sudo systemctl restart transcria", "success")
+            flash(_("Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : "
+                    "sudo systemctl restart transcria", t=tier_arg), "success")
         else:
-            flash("Échec de l'activation : " + ((result.stderr or result.stdout).strip()[:300]), "error")
+            flash(_("Échec de l'activation : ") + ((result.stderr or result.stdout).strip()[:300]), "error")
     except Exception as exc:  # noqa: BLE001 — surface l'échec du script à l'opérateur
-        flash(f"Échec de l'activation : {exc}", "error")
+        flash(_("Échec de l'activation : %(e)s", e=exc), "error")
     return redirect(url_for("web.admin_models"))
 
 
@@ -3237,7 +3238,7 @@ def admin_maintenance_backup():
     MaintenanceService.start_backup(cfg, config_path, exclude_audio=exclude_audio, keep=keep)
     audit_log(AuditAction.MAINTENANCE_BACKUP_CREATE, target_type="maintenance",
               target_label="backup manuel")
-    flash("Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants.", "success")
+    flash(_("Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."), "success")
     return redirect(url_for("web.admin_maintenance"))
 
 
@@ -3279,5 +3280,5 @@ def delete_job(job_id: str):
     audit_log(AuditAction.JOB_DELETE, target_type="job", target_id=job.id, target_label=job.title)
     from transcria.workflow.agent_workspace import resolve_agent_work_root
     JobService.delete(job.id, cfg["storage"]["jobs_dir"], agent_work_dir=resolve_agent_work_root(cfg))
-    flash("Traitement supprimé.", "info")
+    flash(_("Traitement supprimé."), "info")
     return redirect(url_for("web.index"))

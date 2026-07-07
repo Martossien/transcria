@@ -1,26 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Audit de sécurité — TranscrIA{% endblock %}
+{% block title %}{{ _('Audit de sécurité') }} — TranscrIA{% endblock %}
 
 {% block content %}
 <div class="container">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0"><i class="bi bi-shield-check"></i> Audit de sécurité</h2>
+    <h2 class="mb-0"><i class="bi bi-shield-check"></i> {{ _('Audit de sécurité') }}</h2>
     <a href="{{ url_for('audit.audit_export_csv', since=filters.since, until=filters.until) }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-download"></i> Exporter CSV
+      <i class="bi bi-download"></i> {{ _('Exporter CSV') }}
     </a>
   </div>
   <p class="text-muted small">
-    Journal des actions utilisateur — conservation par défaut {{ config.security.get('audit_retention_days', 1095) }} jours.
-    Les familles d'audit peuvent avoir une rétention dédiée selon la configuration.
+    {{ _("Journal des actions utilisateur — conservation par défaut %(days)s jours. Les familles d'audit peuvent avoir une rétention dédiée selon la configuration.", days=config.security.get('audit_retention_days', 1095)) }}
   </p>
 
   <form method="get" class="row g-2 mb-3">
     <div class="col-md-2">
-      <input type="text" name="actor" class="form-control form-control-sm" placeholder="Utilisateur" value="{{ filters.actor }}">
+      <input type="text" name="actor" class="form-control form-control-sm" placeholder="{{ _('Utilisateur') }}" value="{{ filters.actor }}">
     </div>
     <div class="col-md-2">
       <select name="action" class="form-select form-select-sm">
-        <option value="">Toutes actions</option>
+        <option value="">{{ _('Toutes actions') }}</option>
         {% for a in AuditAction %}
         <option value="{{ a.value }}" {% if filters.action == a.value %}selected{% endif %}>{{ action_label(a.value) }}</option>
         {% endfor %}
@@ -28,15 +27,15 @@
     </div>
     <div class="col-md-2">
       <select name="target_type" class="form-select form-select-sm">
-        <option value="">Toutes cibles</option>
-        <option value="job" {% if filters.target_type == 'job' %}selected{% endif %}>Job</option>
-        <option value="user" {% if filters.target_type == 'user' %}selected{% endif %}>Utilisateur</option>
-        <option value="group" {% if filters.target_type == 'group' %}selected{% endif %}>Groupe</option>
-        <option value="config" {% if filters.target_type == 'config' %}selected{% endif %}>Configuration</option>
-        <option value="audit" {% if filters.target_type == 'audit' %}selected{% endif %}>Audit</option>
-        <option value="lexicon" {% if filters.target_type == 'lexicon' %}selected{% endif %}>Lexique</option>
-        <option value="voice" {% if filters.target_type == 'voice' %}selected{% endif %}>Voix</option>
-        <option value="system" {% if filters.target_type == 'system' %}selected{% endif %}>Système</option>
+        <option value="">{{ _('Toutes cibles') }}</option>
+        <option value="job" {% if filters.target_type == 'job' %}selected{% endif %}>{{ _('Job') }}</option>
+        <option value="user" {% if filters.target_type == 'user' %}selected{% endif %}>{{ _('Utilisateur') }}</option>
+        <option value="group" {% if filters.target_type == 'group' %}selected{% endif %}>{{ _('Groupe') }}</option>
+        <option value="config" {% if filters.target_type == 'config' %}selected{% endif %}>{{ _('Configuration') }}</option>
+        <option value="audit" {% if filters.target_type == 'audit' %}selected{% endif %}>{{ _('Audit') }}</option>
+        <option value="lexicon" {% if filters.target_type == 'lexicon' %}selected{% endif %}>{{ _('Lexique') }}</option>
+        <option value="voice" {% if filters.target_type == 'voice' %}selected{% endif %}>{{ _('Voix') }}</option>
+        <option value="system" {% if filters.target_type == 'system' %}selected{% endif %}>{{ _('Système') }}</option>
       </select>
     </div>
     <div class="col-md-2">
@@ -46,7 +45,7 @@
       <input type="date" name="until" class="form-control form-control-sm" value="{{ filters.until }}">
     </div>
     <div class="col-md-2">
-      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Filtrer</button>
+      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> {{ _('Filtrer') }}</button>
     </div>
   </form>
 
@@ -55,11 +54,11 @@
       <table class="table table-sm table-hover mb-0">
         <thead class="table-light">
           <tr>
-            <th style="width:160px">Horodatage (UTC)</th>
-            <th>Utilisateur</th>
-            <th>Action</th>
-            <th>Cible</th>
-            <th>Adresse IP</th>
+            <th style="width:160px">{{ _('Horodatage (UTC)') }}</th>
+            <th>{{ _('Utilisateur') }}</th>
+            <th>{{ _('Action') }}</th>
+            <th>{{ _('Cible') }}</th>
+            <th>{{ _('Adresse IP') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -77,7 +76,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="5" class="text-center text-muted py-4">Aucune entrée d'audit trouvée.</td>
+            <td colspan="5" class="text-center text-muted py-4">{{ _("Aucune entrée d'audit trouvée.") }}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -86,7 +85,7 @@
   </div>
 
   <div class="d-flex justify-content-between align-items-center mt-3">
-    <span class="text-muted small">{{ total }} entrée(s)</span>
+    <span class="text-muted small">{{ _('%(n)s entrée(s)', n=total) }}</span>
     <nav>
       <ul class="pagination pagination-sm mb-0">
         <li class="page-item {% if page <= 1 %}disabled{% endif %}">

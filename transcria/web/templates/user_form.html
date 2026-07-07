@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Modifier' if user else 'Nouvel' }} utilisateur — TranscrIA{% endblock %}
+{% block title %}{{ _("Modifier l'utilisateur") if user else _('Nouvel utilisateur') }} — TranscrIA{% endblock %}
 {% block content %}
-<h1 class="h3 mb-4">{{ 'Modifier' if user else 'Créer un' }} utilisateur</h1>
+<h1 class="h3 mb-4">{{ _("Modifier l'utilisateur") if user else _('Créer un utilisateur') }}</h1>
 <div class="card">
   <div class="card-body">
     <form method="POST">
       <div class="row">
         <div class="col-md-6 mb-3">
-          <label class="form-label">Nom d'utilisateur</label>
+          <label class="form-label">{{ _("Nom d'utilisateur") }}</label>
           <input type="text" name="username" class="form-control" value="{{ user.username if user else '' }}" {{ 'readonly' if user else 'required' }}>
         </div>
         <div class="col-md-6 mb-3">
-          <label class="form-label">Nom affiché</label>
+          <label class="form-label">{{ _('Nom affiché') }}</label>
           <input type="text" name="display_name" class="form-control" value="{{ user.display_name if user else '' }}">
         </div>
       </div>
       <div class="mb-3">
-        <label class="form-label">Email</label>
+        <label class="form-label">{{ _('Email') }}</label>
         <input type="email" name="email" class="form-control" value="{{ user.email if user else '' }}">
       </div>
       <div class="row">
         <div class="col-md-6 mb-3">
-          <label class="form-label">Rôle</label>
+          <label class="form-label">{{ _('Rôle') }}</label>
           <select name="role" class="form-select">
             {% for r in roles %}
             <option value="{{ r.value }}" {{ 'selected' if user and user.role == r.value }}>{{ r.value }}</option>
@@ -29,26 +29,26 @@
           </select>
         </div>
         <div class="col-md-6 mb-3">
-          <label class="form-label">{{ 'Réinitialiser le mot de passe' if user else 'Mot de passe' }}</label>
+          <label class="form-label">{{ _('Réinitialiser le mot de passe') if user else _('Mot de passe') }}</label>
           <input type="password" name="password" class="form-control" minlength="8" autocomplete="new-password" {{ '' if user else 'required' }}>
           {% if user %}
-          <div class="form-text">Laisser vide pour ne pas changer.</div>
+          <div class="form-text">{{ _('Laisser vide pour ne pas changer.') }}</div>
           {% endif %}
         </div>
       </div>
       <div class="mb-3">
-        <label class="form-label">Confirmation du mot de passe</label>
+        <label class="form-label">{{ _('Confirmation du mot de passe') }}</label>
         <input type="password" name="password_confirm" class="form-control" minlength="8" autocomplete="new-password" {{ '' if user else 'required' }}>
       </div>
       {% if user %}
       <div class="mb-3 form-check">
         <input type="checkbox" name="is_active" value="1" class="form-check-input" id="is_active" {{ 'checked' if user.is_active }}>
-        <label class="form-check-label" for="is_active">Compte actif</label>
-        <div class="form-text">Désactiver un compte bloque la connexion sans supprimer ses traitements ni son historique.</div>
+        <label class="form-check-label" for="is_active">{{ _('Compte actif') }}</label>
+        <div class="form-text">{{ _('Désactiver un compte bloque la connexion sans supprimer ses traitements ni son historique.') }}</div>
       </div>
       {% endif %}
-      <button type="submit" class="btn btn-primary">{{ 'Enregistrer' if user else 'Créer' }}</button>
-      <a href="/admin/users" class="btn btn-outline-secondary">Annuler</a>
+      <button type="submit" class="btn btn-primary">{{ _('Enregistrer') if user else _('Créer') }}</button>
+      <a href="/admin/users" class="btn btn-outline-secondary">{{ _('Annuler') }}</a>
     </form>
   </div>
 </div>
