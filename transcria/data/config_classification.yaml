@@ -5,6 +5,8 @@ exposed:
 - auth.first_admin_password
 - gpu.min_free_vram_mb
 - gpu.preemption
+- i18n.available_locales
+- i18n.default_locale
 - models.diarization_backend
 - models.stt_backend
 - notifications.email.base_url

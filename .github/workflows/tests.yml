@@ -55,6 +55,9 @@ jobs:
       - name: Type check (mypy)
         run: mypy transcria/ inference_service/ --ignore-missing-imports
 
+      - name: i18n — catalogues à jour, complets et compilés
+        run: python scripts/i18n_check.py
+
       - name: Run test suite with coverage
         env:
           TRANSCRIA_TEST_PG_HOST: 127.0.0.1

@@ -28,6 +28,28 @@ def _add_python_env_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--force-cuda", default=None, help="Forcer le tag wheel (cu121/cu124/cu126/cpu)")
 
 
+def _add_i18n_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "i18n-compile",
+        help="Compile les catalogues de traduction .po → .mo (interface multilingue).",
+    )
+    p.add_argument("--translations-dir", required=True, help="Dossier <locale>/LC_MESSAGES/messages.po")
+    p.add_argument("--force", action="store_true", help="Recompiler même si le .mo est à jour")
+
+
+def _cmd_i18n(args: argparse.Namespace) -> int:
+    from transcria.installer.i18n_phase import I18nError, I18nPlan, apply_i18n
+
+    console = Console()
+    plan = I18nPlan(translations_dir=Path(args.translations_dir), force=bool(args.force))
+    try:
+        apply_i18n(plan, console=console)
+    except I18nError as exc:
+        console.error(str(exc))
+        return 1
+    return 0
+
+
 def _add_config_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "config",
@@ -459,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="transcria-install", description="Installateur TranscrIA piloté en Python.")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_python_env_parser(sub)
+    _add_i18n_parser(sub)
     _add_config_parser(sub)
     _add_config_proxy_parser(sub)
     _add_opencode_parser(sub)
@@ -472,6 +495,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "python-env":
         return _cmd_python_env(args)
+    if args.command == "i18n-compile":
+        return _cmd_i18n(args)
     if args.command == "config":
         return _cmd_config(args)
     if args.command == "config-proxy":

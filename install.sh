@@ -558,6 +558,14 @@ python_module transcria.installer.cli "${PYENV_ARGS[@]}"
 
 source "$VENV/bin/activate"
 
+# Compilation des catalogues de traduction (.po → .mo) de l'interface multilingue.
+# Idempotent ; requiert Babel (installé via requirements.txt à la phase précédente).
+if [[ "$SKIP_DEPS" != true ]]; then
+    python_module transcria.installer.cli i18n-compile \
+        --translations-dir "$INSTALL_DIR/transcria/web/translations" || \
+        log_warn "Compilation des traductions ignorée (interface en français par défaut)."
+fi
+
 # ============================================================================
 # SECTION 5 — Répertoires
 # ============================================================================

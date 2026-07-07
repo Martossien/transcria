@@ -57,6 +57,12 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=transcria:transcria . /app
 
+# Catalogues de traduction (.po → .mo) de l'interface multilingue, bakés dans l'image.
+# Hérité par toutes les images dérivées (allinone-gpu/-bundled, resource-node, worker).
+# L'entrypoint recompile au runtime si un volume écrase transcria/web/translations.
+RUN python -m transcria.installer.cli i18n-compile \
+        --translations-dir /app/transcria/web/translations || true
+
 # Répertoires d'exécution inscriptibles par l'utilisateur de service (le rôle écrit
 # les artefacts de jobs, voix, instance). `/app` reste root après WORKDIR : on rend
 # l'arbre et ces dossiers propriété de transcria. Les volumes nommés montés sur

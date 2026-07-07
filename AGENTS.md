@@ -138,9 +138,9 @@ transcria/
     diagnostics/
       doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers
     installer/              # Logique métier d'installation fondue depuis install.sh (modules testés, runner injectable)
-      cli.py                # `python -m transcria.installer.cli <phase>` — 8 phases : python-env, config, config-proxy, opencode, postgres, postgres-bootstrap, systemd, summary
+      cli.py                # `python -m transcria.installer.cli <phase>` — 9 phases : python-env, i18n-compile, config, config-proxy, opencode, postgres, postgres-bootstrap, systemd, summary
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
-      python_env.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
+      python_env.py / i18n_phase.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
     deploy/                 # Déploiement conteneurisé (P5)
       entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
     maintenance/            # Backup/restore/upgrade LOCAL + planification + one-shot restore (opérateur)
@@ -276,6 +276,8 @@ transcria/
       routes.py             # web_bp : pages + API JSON, dont /admin/maintenance (backups + planification + restore) et /admin/models (télécharger + activer les modèles)
       maintenance_service.py # orchestration LÉGÈRE de la page Maintenance (listing archives, lancement backup en sous-process détaché, garde anti path-traversal)
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran
+      i18n.py               # i18n INTERFACE (Flask-Babel) : select_locale (?lang > user.locale > Accept-Language > défaut), init_app, route /i18n/messages.js
+      i18n_js.py            # catalogue des chaînes JS (window.I18N) — même source gettext ; JS_MESSAGES enrichi vague après vague
       prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité)
       templates/            # base.html (navbar à menus déroulants) + templates par étape
       static/css/           # transcria.css (tokens + composants — docs/archive/REFONTE_UI.md ; pas de styles inline)

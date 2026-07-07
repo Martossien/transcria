@@ -676,6 +676,16 @@ _DEFAULT_CONFIG = {
             "exclude_audio": False,            # sauvegardes planifiées sans les audios
         },
     },
+    # Internationalisation de l'INTERFACE (chrome applicatif). Distinct de la langue des
+    # livrables générés, qui est un réglage PAR JOB (pré-rempli par la langue détectée de
+    # l'audio). default_locale = langue par défaut de l'instance ; available_locales =
+    # allowlist des langues proposées (sélecteur navbar + négociation Accept-Language).
+    # Ajouter une langue = ajouter un catalogue transcria/web/translations/<code>/ + son
+    # code ici (aucun autre changement de code requis).
+    "i18n": {
+        "default_locale": "fr",
+        "available_locales": ["fr", "en"],
+    },
 }
 
 _CONFIG_PATH_ENV = "TRANSCRIA_CONFIG"

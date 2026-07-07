@@ -197,6 +197,7 @@ def classify_db_unreachable(database_url: str) -> str:
 
 # Rôles qui exécutent les phases LLM (correction/résumé via opencode) → provisioning opencode.
 _LLM_ROLES = ("all", "scheduler")
+_UI_ROLES = ("all", "web")  # rôles qui servent l'interface HTML → besoin des catalogues .mo
 
 
 def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
@@ -241,6 +242,33 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
               f"| external_directory allow={work_root}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort, ne bloque jamais le rôle
         print(f"[WARN] provisioning opencode ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+
+
+def provision_translations(plan: EntrypointPlan, env: dict[str, str]) -> None:
+    """Filet runtime : recompile les catalogues .mo si absents/périmés (rôles UI).
+
+    Les .mo sont normalement bakés au build (Dockerfile). Ce filet couvre le cas d'un VOLUME
+    montant/écrasant ``transcria/web/translations`` (override de traductions, patch à chaud) :
+    on recompile pour que l'interface reflète les .po montés. Best-effort et idempotent : tout
+    échec est journalisé, l'app retombe sur le français par défaut. N'agit que pour ``_UI_ROLES``.
+    """
+    if plan.role not in _UI_ROLES:
+        return
+    try:
+        from transcria.installer.i18n_phase import I18nPlan, apply_i18n
+
+        app_root = Path(__file__).resolve().parents[2]
+        translations_dir = app_root / "transcria" / "web" / "translations"
+
+        class _Stderr:
+            def info(self, m: str) -> None: print(f"[INFO] {m}", file=sys.stderr, flush=True)
+            def ok(self, m: str) -> None: print(f"[INFO] {m}", file=sys.stderr, flush=True)
+            def warn(self, m: str) -> None: print(f"[WARN] {m}", file=sys.stderr, flush=True)
+            def error(self, m: str) -> None: print(f"[ERROR] {m}", file=sys.stderr, flush=True)
+
+        apply_i18n(I18nPlan(translations_dir=translations_dir), console=_Stderr())
+    except Exception as exc:  # noqa: BLE001 — best-effort, ne bloque jamais le démarrage
+        print(f"[WARN] compilation des traductions ignorée ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
 
 
 ModelDownloader = Callable[[str, str, str], None]  # (repo, filename, local_dir)
@@ -349,6 +377,7 @@ def main(
     sleep_fn: Callable[[float], None] = time.sleep,
     opencode_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_opencode,
     model_provisioner: Callable[[EntrypointPlan, dict[str, str]], bool] = provision_arbitrage_model,
+    translations_provisioner: Callable[[EntrypointPlan, dict[str, str]], None] = provision_translations,
 ) -> int:
     env = dict(os.environ if env is None else env)
     probe = db_probe or _default_db_probe
@@ -393,6 +422,8 @@ def main(
             )
             return 1
 
+    # Filet i18n : recompile les .mo si un volume a écrasé les traductions (rôles UI).
+    translations_provisioner(plan, env)
     # Provisionne opencode (provider local) pour les rôles LLM, depuis la config montée.
     opencode_provisioner(plan, env)
     # Provisionne le modèle d'arbitrage (rôle all : télécharge le GGUF si absent, résout le

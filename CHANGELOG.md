@@ -8,6 +8,18 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Added
+- **Interface multilingue (i18n) — socle (français + anglais)** : l'interface se traduit via
+  **Flask-Babel** (gettext). Un **sélecteur de langue** apparaît dans la barre de navigation ;
+  le choix est mémorisé en session **et** persisté par utilisateur (`users.locale`, migration
+  Alembic), donc conservé d'un appareil à l'autre. Résolution de la locale : `?lang=` >
+  préférence utilisateur > en-tête `Accept-Language` du navigateur > défaut d'instance
+  (`i18n.default_locale`). Nouvelles clés de config `i18n.default_locale` / `i18n.available_locales`.
+  Les catalogues (`.po`) sont versionnés ; les `.mo` sont **compilés** en CI, au **build Docker**
+  et à l'**entrypoint** (jamais un binaire périmé en git). La **langue des livrables générés**
+  (résumé, correction, DOCX) reste distincte et arrive dans une vague ultérieure (réglage par job).
+  Voir `docs/I18N_MULTILANGUE.md`. *(Socle : navigation traduite ; les autres surfaces suivent.)*
+
 ### Fixed
 - **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient
   « absent » quand ils vivaient à un emplacement non standard (bug : segment `hub/` manquant pour

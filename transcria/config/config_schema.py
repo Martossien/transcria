@@ -41,7 +41,42 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
     _check_maintenance(cfg.get("maintenance", {}), result)
+    _check_i18n(cfg.get("i18n", {}), result)
     return result
+
+
+# Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale
+# fantaisiste dans le sélecteur). Étendre ici en même temps qu'on livre un catalogue.
+_KNOWN_LOCALES = {"fr", "en", "es", "de", "it", "pt", "nl"}
+
+
+def _check_i18n(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("i18n: doit être un objet YAML")
+        return
+    available = cfg.get("available_locales")
+    if available is not None:
+        if not isinstance(available, list) or not all(isinstance(x, str) for x in available):
+            r.add_error("i18n.available_locales: doit être une liste de chaînes (codes de langue)")
+            available = None
+        else:
+            for code in available:
+                if code not in _KNOWN_LOCALES:
+                    r.add_warning(
+                        f"i18n.available_locales: langue '{code}' inconnue "
+                        f"(reconnues : {', '.join(sorted(_KNOWN_LOCALES))})"
+                    )
+    default = cfg.get("default_locale")
+    if default is not None:
+        if not isinstance(default, str):
+            r.add_error("i18n.default_locale: doit être une chaîne (code de langue)")
+        elif isinstance(available, list) and available and default not in available:
+            r.add_error(
+                f"i18n.default_locale '{default}' absent de i18n.available_locales "
+                f"({', '.join(available)})"
+            )
 
 
 def _check_maintenance(cfg: dict, r: ValidationResult) -> None:

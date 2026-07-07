@@ -1,0 +1,112 @@
+# French translations for TranscrIA.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the TranscrIA project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: TranscrIA VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-07-07 18:59+0200\n"
+"PO-Revision-Date: 2026-07-07 19:01+0200\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: fr\n"
+"Language-Team: fr <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: transcria/web/templates/base.html:142
+#, python-format
+msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
+msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
+msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
+msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
+
+#: transcria/web/templates/base.html:45
+msgid "Administration"
+msgstr "Administration"
+
+#: transcria/web/templates/base.html:73
+msgid "Audit"
+msgstr "Audit"
+
+#: transcria/web/templates/base.html:65
+msgid "Configuration"
+msgstr "Configuration"
+
+#: transcria/web/templates/base.html:111
+msgid "Déconnexion"
+msgstr "Déconnexion"
+
+#: transcria/web/templates/base.html:35
+msgctxt "navigation"
+msgid "File"
+msgstr "File"
+
+#: transcria/web/templates/base.html:54
+msgid "Groupes"
+msgstr "Groupes"
+
+#: transcria/web/templates/base.html:143
+msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
+msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
+
+#: transcria/web/templates/base.html:87
+msgid "Langue de l'interface"
+msgstr "Langue de l'interface"
+
+#: transcria/web/templates/base.html:56
+msgid "Lexiques"
+msgstr "Lexiques"
+
+#: transcria/web/templates/base.html:67
+msgid "Maintenance"
+msgstr "Maintenance"
+
+#: transcria/web/templates/base.html:19
+msgid "Menu"
+msgstr "Menu"
+
+#: transcria/web/templates/base.html:69
+msgid "Modèles"
+msgstr "Modèles"
+
+#: transcria/web/templates/base.html:107
+msgid "Mot de passe"
+msgstr "Mot de passe"
+
+#: transcria/web/templates/base.html:76
+msgid "Planification"
+msgstr "Planification"
+
+#: transcria/web/templates/base.html:104
+msgid "Rôle :"
+msgstr "Rôle :"
+
+#: transcria/web/templates/base.html:79
+msgid "Système"
+msgstr "Système"
+
+#: transcria/web/templates/base.html:26
+msgid "Traitements"
+msgstr "Traitements"
+
+#: transcria/web/templates/base.html:30
+msgid "Types de réunion"
+msgstr "Types de réunion"
+
+#: transcria/web/templates/base.html:50
+msgid "Utilisateurs"
+msgstr "Utilisateurs"
+
+#: transcria/web/templates/base.html:58
+msgid "Voix enregistrées"
+msgstr "Voix enregistrées"
+
+#: transcria/web/templates/base.html:133
+msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
+msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
+

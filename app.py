@@ -233,6 +233,12 @@ def create_app(config_path: str | None = None) -> Flask:
 
     app.context_processor(inject_user_context)
 
+    # Internationalisation de l'interface (Flask-Babel) : sélecteur de locale, globals Jinja
+    # (get_locale, available_locales) et route de catalogue JS. Distinct de la langue des
+    # livrables (réglage par job). Voir docs/I18N_MULTILANGUE.md.
+    from transcria.web import i18n as web_i18n
+    web_i18n.init_app(app)
+
     import transcria.auth.permissions
 
     app.jinja_env.globals["Permission"] = transcria.auth.permissions.Permission

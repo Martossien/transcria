@@ -35,6 +35,10 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     last_login = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Langue préférée de l'INTERFACE (code BCP-47 court, ex. "fr"/"en"). NULL = suivre le
+    # navigateur / la locale par défaut de l'instance. Distinct de la langue des livrables
+    # (réglage par job). Voir docs/I18N_MULTILANGUE.md et transcria/web/i18n.py.
+    locale = db.Column(db.String(8), nullable=True)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -60,6 +64,7 @@ class User(UserMixin, db.Model):
             "email": self.email,
             "role": self.role,
             "is_active": self.is_active,
+            "locale": self.locale,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
         }

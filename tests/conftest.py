@@ -9,6 +9,25 @@ from pytest_postgresql.janitor import DatabaseJanitor
 
 from transcria.config import _deep_merge, load_config
 
+# Catalogues i18n compilés à la volée (les .mo sont gitignorés, cf. décision #4 : jamais de
+# binaire périmé en git). Garantit que les tests d'interface disposent des traductions sans
+# étape manuelle, en local comme en CI (où la CI compile aussi avant pytest).
+try:
+    from transcria.installer.i18n_phase import I18nPlan, apply_i18n
+
+    class _SilentConsole:
+        def info(self, m: str) -> None: ...
+        def ok(self, m: str) -> None: ...
+        def warn(self, m: str) -> None: ...
+        def error(self, m: str) -> None: ...
+
+    apply_i18n(
+        I18nPlan(translations_dir=Path(__file__).resolve().parents[1] / "transcria" / "web" / "translations"),
+        console=_SilentConsole(),
+    )
+except Exception:  # noqa: BLE001 — l'absence de traductions ne doit pas casser la collecte des tests
+    pass
+
 # Un éventuel TRANSCRIA_DATABASE_URL (dev/.env) ne doit pas fuiter dans les tests :
 # ceux-ci tournent sur une base PostgreSQL éphémère dédiée.
 os.environ.pop("TRANSCRIA_DATABASE_URL", None)

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ get_locale() }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,23 +16,23 @@
     <div class="container">
       <a class="navbar-brand" href="/"><i class="bi bi-file-earmark-text"></i> TranscrIA</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-nav"
-              aria-controls="main-nav" aria-expanded="false" aria-label="Menu">
+              aria-controls="main-nav" aria-expanded="false" aria-label="{{ _('Menu') }}">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="main-nav">
         <ul class="navbar-nav me-auto">
           <li class="nav-item">
             <a class="nav-link {% if path == '/' or path.startswith('/jobs') %}active{% endif %}" href="/">
-              <i class="bi bi-collection-play"></i> Traitements</a>
+              <i class="bi bi-collection-play"></i> {{ _('Traitements') }}</a>
           </li>
           <li class="nav-item">
             <a class="nav-link {% if path.startswith('/meeting-types') %}active{% endif %}" href="/meeting-types">
-              <i class="bi bi-easel2"></i> Types de réunion</a>
+              <i class="bi bi-easel2"></i> {{ _('Types de réunion') }}</a>
           </li>
           {% if can_manage_groups %}
           <li class="nav-item">
             <a class="nav-link {% if path.startswith('/admin/queue') %}active{% endif %}" href="/admin/queue">
-              <i class="bi bi-list-ol"></i> File</a>
+              <i class="bi bi-list-ol"></i> {{ pgettext('navigation', 'File') }}</a>
           </li>
           {% endif %}
         </ul>
@@ -42,42 +42,56 @@
           <li class="nav-item dropdown">
             <a class="nav-link dropdown-toggle {% if path.startswith('/admin') and not path.startswith('/admin/queue') or path == '/system' %}active{% endif %}"
                href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-gear"></i> Administration
+              <i class="bi bi-gear"></i> {{ _('Administration') }}
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
               {% if Permission.MANAGE_USERS in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/users') %}active{% endif %}" href="/admin/users">
-                <i class="bi bi-people me-2"></i>Utilisateurs</a></li>
+                <i class="bi bi-people me-2"></i>{{ _('Utilisateurs') }}</a></li>
               {% endif %}
               {% if can_manage_groups %}
               <li><a class="dropdown-item {% if path.startswith('/admin/groups') %}active{% endif %}" href="/admin/groups">
-                <i class="bi bi-diagram-3 me-2"></i>Groupes</a></li>
+                <i class="bi bi-diagram-3 me-2"></i>{{ _('Groupes') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/lexicons') %}active{% endif %}" href="/admin/lexicons">
-                <i class="bi bi-book me-2"></i>Lexiques</a></li>
+                <i class="bi bi-book me-2"></i>{{ _('Lexiques') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/voices') %}active{% endif %}" href="/admin/voices">
-                <i class="bi bi-mic me-2"></i>Voix enregistrées</a></li>
+                <i class="bi bi-mic me-2"></i>{{ _('Voix enregistrées') }}</a></li>
               {% endif %}
               {% if Permission.MANAGE_CONFIG in user_permissions or Permission.ACCESS_SYSTEM in user_permissions %}
               <li><hr class="dropdown-divider"></li>
               {% endif %}
               {% if Permission.MANAGE_CONFIG in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/config') %}active{% endif %}" href="/admin/config">
-                <i class="bi bi-sliders me-2"></i>Configuration</a></li>
+                <i class="bi bi-sliders me-2"></i>{{ _('Configuration') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/maintenance') %}active{% endif %}" href="/admin/maintenance">
-                <i class="bi bi-hdd-stack me-2"></i>Maintenance</a></li>
+                <i class="bi bi-hdd-stack me-2"></i>{{ _('Maintenance') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/models') %}active{% endif %}" href="/admin/models">
-                <i class="bi bi-boxes me-2"></i>Modèles</a></li>
+                <i class="bi bi-boxes me-2"></i>{{ _('Modèles') }}</a></li>
               {% endif %}
               {% if Permission.ACCESS_SYSTEM in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit">
-                <i class="bi bi-journal-text me-2"></i>Audit</a></li>
+                <i class="bi bi-journal-text me-2"></i>{{ _('Audit') }}</a></li>
               {% if Permission.MANAGE_SCHEDULE in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/schedule') %}active{% endif %}" href="/admin/schedule">
-                <i class="bi bi-calendar-week me-2"></i>Planification</a></li>
+                <i class="bi bi-calendar-week me-2"></i>{{ _('Planification') }}</a></li>
               {% endif %}
               <li><a class="dropdown-item {% if path == '/system' %}active{% endif %}" href="/system">
-                <i class="bi bi-cpu me-2"></i>Système</a></li>
+                <i class="bi bi-cpu me-2"></i>{{ _('Système') }}</a></li>
               {% endif %}
+            </ul>
+          </li>
+          {% endif %}
+          {% if available_locales() | length > 1 %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"
+               aria-expanded="false" title="{{ _('Langue de l\'interface') }}">
+              <i class="bi bi-translate"></i> {{ get_locale() | string | upper }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end">
+              {% for code in available_locales() %}
+              <li><a class="dropdown-item {% if get_locale() | string == code %}active{% endif %}"
+                     href="?lang={{ code }}">{{ code | upper }}</a></li>
+              {% endfor %}
             </ul>
           </li>
           {% endif %}
@@ -87,14 +101,14 @@
             </a>
             <ul class="dropdown-menu dropdown-menu-end">
               <li><span class="dropdown-item-text small text-muted">
-                Rôle : <span class="badge bg-secondary">{{ current_user.role }}</span></span></li>
+                {{ _('Rôle :') }} <span class="badge bg-secondary">{{ current_user.role }}</span></span></li>
               <li><hr class="dropdown-divider"></li>
               <li><a class="dropdown-item" href="/account/password">
-                <i class="bi bi-key me-2"></i>Mot de passe</a></li>
+                <i class="bi bi-key me-2"></i>{{ _('Mot de passe') }}</a></li>
               <li>
                 <form method="post" action="/logout" class="m-0">
                   <button type="submit" class="dropdown-item text-danger">
-                    <i class="bi bi-box-arrow-right me-2"></i>Déconnexion</button>
+                    <i class="bi bi-box-arrow-right me-2"></i>{{ _('Déconnexion') }}</button>
                 </form>
               </li>
             </ul>
@@ -116,8 +130,7 @@
       <div class="alert alert-warning d-flex align-items-center" role="alert">
         <i class="bi bi-shield-exclamation me-2"></i>
         <div>
-          Vous utilisez encore le <strong>mot de passe par défaut</strong>.
-          <a href="/account/password" class="alert-link">Changez-le maintenant</a> pour sécuriser votre compte.
+          {% trans %}Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href="/account/password" class="alert-link">Changez-le maintenant</a> pour sécuriser votre compte.{% endtrans %}
         </div>
       </div>
     {% endif %}
@@ -126,9 +139,8 @@
       <div class="alert alert-warning d-flex align-items-center" role="alert">
         <i class="bi bi-gpu-card me-2"></i>
         <div>
-          <strong>{{ vram_waiting_count }}</strong> traitement(s) en attente de VRAM.
-          La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée.
-          Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise.
+          {% trans count=vram_waiting_count %}<strong>{{ count }}</strong> traitement en attente de VRAM.{% pluralize %}<strong>{{ count }}</strong> traitements en attente de VRAM.{% endtrans %}
+          {% trans %}La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise.{% endtrans %}
         </div>
       </div>
     {% endif %}
@@ -137,6 +149,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Catalogue i18n JS (window.I18N pour la locale courante) + helper t() -->
+  <script src="/i18n/messages.js?lang={{ get_locale() }}"></script>
+  <script src="{{ asset_url('js/i18n.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -752,6 +752,15 @@ security:
     config: 1095                # Configuration, utilisateurs et groupes
     other: 1095
 
+# Internationalisation de l'INTERFACE (chrome). Distinct de la langue des livrables générés,
+# qui est un réglage PAR JOB (pré-rempli par la langue détectée de l'audio). Ajouter une langue
+# = livrer un catalogue transcria/web/translations/<code>/ + l'inscrire dans available_locales.
+i18n:
+  default_locale: "fr"           # langue par défaut de l'instance (si aucune préférence/négociation)
+  available_locales:             # allowlist du sélecteur + de la négociation Accept-Language
+    - "fr"
+    - "en"
+
 notifications:
   email:
     enabled: false              # true = activer les notifications email

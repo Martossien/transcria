@@ -1,6 +1,10 @@
 flask>=3.0,<4.0
 flask-login>=0.6,<1.0
 flask-sqlalchemy>=3.1,<4.0
+# i18n (interface multilingue FR/EN) : gettext + négociation Accept-Language + formats
+# date/nombre localisés. Pur-Python (tire Babel) → images Docker inchangées. Catalogues
+# dans transcria/web/translations/, compilés en CI + build Docker + entrypoint.
+flask-babel>=4.0,<5.0
 werkzeug>=3.0,<4.0
 gunicorn>=21.2,<24.0        # serveur WSGI du tier web (rôle web/all en prod)
 pyyaml>=6.0,<7.0
