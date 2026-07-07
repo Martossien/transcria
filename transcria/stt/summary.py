@@ -30,7 +30,12 @@ class SummaryGenerator:
 
         device = f"cuda:{gpu_index}" if gpu_index is not None else None
         backend = self.config.get("models", {}).get("stt_backend", "cohere")
-        sl.info("━━━ DÉBUT transcription rapide ━━━ backend=%s gpu=%s", backend, gpu_index)
+        # Langue de transcription = langue des livrables du job (Axe B). Défaut « fr »
+        # (comportement historique). Sans ça, le STT rapide forçait le français et
+        # transcrivait un audio anglais en charabia phonétique franco-anglais.
+        from transcria.gpu.opencode_runner import resolve_output_language
+        stt_language = resolve_output_language(job)
+        sl.info("━━━ DÉBUT transcription rapide ━━━ backend=%s gpu=%s langue=%s", backend, gpu_index, stt_language)
 
         # Charger l'audio une fois pour VAD + transcription
         sl.info("[summary] Chargement audio: %s", audio_path)
@@ -69,7 +74,7 @@ class SummaryGenerator:
         for chunk in vad_chunks:
             chunk_segs = transcriber.transcribe(
                 audio_path=None,
-                language="fr",
+                language=stt_language,
                 audio_array=chunk["audio"],
                 sample_rate=int(sr),
             )
