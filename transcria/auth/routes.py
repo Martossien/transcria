@@ -1,6 +1,7 @@
 import logging
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask_babel import gettext as _
 from flask_login import current_user, login_required, login_user, logout_user
 
 from transcria.audit.decorator import audit_log
@@ -50,9 +51,9 @@ def _is_safe_next_url(target: str | None) -> bool:
 
 def _password_validation_error(password: str, confirmation: str | None = None) -> str | None:
     if len(password) < MIN_PASSWORD_LENGTH:
-        return f"Le mot de passe doit contenir au moins {MIN_PASSWORD_LENGTH} caractères."
+        return _("Le mot de passe doit contenir au moins %(n)s caractères.", n=MIN_PASSWORD_LENGTH)
     if confirmation is not None and password != confirmation:
-        return "La confirmation du mot de passe ne correspond pas."
+        return _("La confirmation du mot de passe ne correspond pas.")
     return None
 
 
@@ -72,7 +73,7 @@ def login():
         if blocked_s > 0:
             audit_log(AuditAction.LOGIN_FAILED, target_label=username,
                       details={"reason": "rate_limited", "retry_after_s": blocked_s})
-            flash("Trop de tentatives. Réessayez dans quelques minutes.", "error")
+            flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
             return render_template("login.html"), 429
         user = UserStore.get_by_username(username)
         if user and user.is_active and user.check_password(password):
@@ -96,9 +97,9 @@ def login():
         audit_log(AuditAction.LOGIN_FAILED, target_label=username,
                   details={"blocked": bool(block_s)} if block_s else None)
         if block_s:
-            flash("Trop de tentatives. Réessayez dans quelques minutes.", "error")
+            flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
             return render_template("login.html"), 429
-        flash("Identifiant ou mot de passe incorrect.", "error")
+        flash(_("Identifiant ou mot de passe incorrect."), "error")
         return render_template("login.html"), 401
     return render_template("login.html")
 
@@ -108,7 +109,7 @@ def login():
 def logout():
     audit_log(AuditAction.LOGOUT)
     logout_user()
-    flash("Vous avez été déconnecté.", "info")
+    flash(_("Vous avez été déconnecté."), "info")
     return redirect(url_for("auth.login"))
 
 
@@ -121,7 +122,7 @@ def change_own_password():
         confirm_password = request.form.get("confirm_password", "")
 
         if not current_user.check_password(current_password):
-            flash("Mot de passe actuel incorrect.", "error")
+            flash(_("Mot de passe actuel incorrect."), "error")
             return render_template("change_password.html"), 400
 
         validation_error = _password_validation_error(new_password, confirm_password)
@@ -131,7 +132,7 @@ def change_own_password():
 
         UserStore.change_password(current_user.id, new_password)
         session.pop("default_password_warning", None)
-        flash("Mot de passe mis à jour.", "success")
+        flash(_("Mot de passe mis à jour."), "success")
         return redirect(url_for("web.index"))
 
     return render_template("change_password.html")
@@ -158,11 +159,11 @@ def user_create():
         role_str = request.form.get("role", "operator")
 
         if not username or not password:
-            flash("Le nom d'utilisateur et le mot de passe sont obligatoires.", "error")
+            flash(_("Le nom d'utilisateur et le mot de passe sont obligatoires."), "error")
             return render_template("user_form.html", roles=Role, user=None)
 
         if UserStore.get_by_username(username):
-            flash("Ce nom d'utilisateur existe déjà.", "error")
+            flash(_("Ce nom d'utilisateur existe déjà."), "error")
             return render_template("user_form.html", roles=Role, user=None)
 
         validation_error = _password_validation_error(password, password_confirm)
@@ -180,7 +181,7 @@ def user_create():
             AuditAction.USER_CREATE, target_type="user", target_label=username,
             details={"role": role.value},
         )
-        flash(f"Utilisateur {username} créé.", "success")
+        flash(_("Utilisateur %(u)s créé.", u=username), "success")
         return redirect(url_for("auth.user_list"))
 
     return render_template("user_form.html", roles=Role, user=None)
@@ -192,7 +193,7 @@ def user_create():
 def user_edit(user_id: str):
     user = UserStore.get_by_id(user_id)
     if user is None:
-        flash("Utilisateur introuvable.", "error")
+        flash(_("Utilisateur introuvable."), "error")
         return redirect(url_for("auth.user_list"))
 
     if request.method == "POST":
@@ -214,8 +215,8 @@ def user_edit(user_id: str):
         # rétrograder/désactiver lui-même et rendre la plateforme non administrable.
         if _removes_last_active_admin(user, role, new_active, UserStore.count_active_admins()):
             flash(
-                "Action refusée : ce compte est le dernier administrateur actif. "
-                "Promouvez d'abord un autre administrateur.", "error",
+                _("Action refusée : ce compte est le dernier administrateur actif. "
+                  "Promouvez d'abord un autre administrateur."), "error",
             )
             logger.warning(
                 "Tentative de retrait du dernier admin actif (user=%s) par %s — refusée.",
@@ -246,7 +247,7 @@ def user_edit(user_id: str):
                 "is_active": new_active,
             },
         )
-        flash("Utilisateur mis à jour.", "success")
+        flash(_("Utilisateur mis à jour."), "success")
         return redirect(url_for("auth.user_list"))
 
     return render_template("user_form.html", roles=Role, user=user)
@@ -270,17 +271,17 @@ def group_create():
         name = request.form.get("name", "").strip()
         description = request.form.get("description", "").strip()
         if not name:
-            flash("Le nom du groupe est obligatoire.", "error")
+            flash(_("Le nom du groupe est obligatoire."), "error")
             return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
         if GroupStore.get_by_name(name):
-            flash("Ce groupe existe déjà.", "error")
+            flash(_("Ce groupe existe déjà."), "error")
             return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
         group = GroupStore.create_group(name, description)
         audit_log(
             AuditAction.GROUP_CREATE, target_type="group", target_id=group.id,
             target_label=group.name,
         )
-        flash(f"Groupe {group.name} créé.", "success")
+        flash(_("Groupe %(g)s créé.", g=group.name), "success")
         return redirect(url_for("auth.group_edit", group_id=group.id))
     return render_template("group_form.html", group=None, members=[], users=[], group_roles=GroupRole)
 
@@ -290,7 +291,7 @@ def group_create():
 def group_edit(group_id: str):
     group = GroupStore.get_by_id(group_id)
     if group is None:
-        flash("Groupe introuvable.", "error")
+        flash(_("Groupe introuvable."), "error")
         return redirect(url_for("auth.group_list"))
     if not GroupStore.can_manage_group(current_user, group_id):
         return ("Accès interdit", 403)
@@ -302,16 +303,16 @@ def group_edit(group_id: str):
             description = request.form.get("description", "").strip()
             existing_group = GroupStore.get_by_name(name) if name else None
             if not name:
-                flash("Le nom du groupe est obligatoire.", "error")
+                flash(_("Le nom du groupe est obligatoire."), "error")
             elif existing_group and existing_group.id != group.id:
-                flash("Ce groupe existe déjà.", "error")
+                flash(_("Ce groupe existe déjà."), "error")
             else:
                 GroupStore.update_group(group.id, name, description)
                 audit_log(
                     AuditAction.GROUP_MODIFY, target_type="group", target_id=group.id,
                     target_label=name, details={"name": name, "description": description},
                 )
-                flash("Groupe mis à jour.", "success")
+                flash(_("Groupe mis à jour."), "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
         if action == "add_member":
@@ -330,36 +331,36 @@ def group_edit(group_id: str):
                 and not current_user.has_role(Role.ADMIN)
             )
             if demotes_last_admin:
-                flash("Le groupe doit conserver au moins un admin de groupe.", "error")
+                flash(_("Le groupe doit conserver au moins un admin de groupe."), "error")
             elif GroupStore.add_member(group.id, user_id, role) is None:
-                flash("Utilisateur introuvable ou inactif.", "error")
+                flash(_("Utilisateur introuvable ou inactif."), "error")
             else:
                 audit_log(
                     AuditAction.GROUP_MEMBER_ADD, target_type="group", target_id=group.id,
                     target_label=group.name, details={"member_id": user_id, "role": role.value},
                 )
-                flash("Membre ajouté au groupe.", "success")
+                flash(_("Membre ajouté au groupe."), "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
         if action == "remove_member":
             user_id = request.form.get("user_id", "")
             membership = GroupStore.get_membership(group.id, user_id)
             if user_id == current_user.id and not current_user.has_role(Role.ADMIN):
-                flash("Un admin de groupe ne peut pas se retirer lui-même.", "error")
+                flash(_("Un admin de groupe ne peut pas se retirer lui-même."), "error")
             elif (
                 membership is not None
                 and membership.role == GroupRole.GROUP_ADMIN.value
                 and GroupStore.count_group_admins(group.id) <= 1
                 and not current_user.has_role(Role.ADMIN)
             ):
-                flash("Le groupe doit conserver au moins un admin de groupe.", "error")
+                flash(_("Le groupe doit conserver au moins un admin de groupe."), "error")
             else:
                 GroupStore.remove_member(group.id, user_id)
                 audit_log(
                     AuditAction.GROUP_MEMBER_REMOVE, target_type="group", target_id=group.id,
                     target_label=group.name, details={"member_id": user_id},
                 )
-                flash("Membre retiré du groupe.", "success")
+                flash(_("Membre retiré du groupe."), "success")
             return redirect(url_for("auth.group_edit", group_id=group.id))
 
         if action == "delete_group" and current_user.has_role(Role.ADMIN):
@@ -368,7 +369,7 @@ def group_edit(group_id: str):
                 target_label=group.name,
             )
             GroupStore.delete_group(group.id)
-            flash("Groupe supprimé.", "success")
+            flash(_("Groupe supprimé."), "success")
             return redirect(url_for("auth.group_list"))
 
     members = GroupStore.list_members(group.id)

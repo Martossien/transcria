@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 20:02+0200\n"
+"POT-Creation-Date: 2026-07-07 20:14+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -167,9 +167,21 @@ msgstr "<strong>Processing profile</strong> — choose your deliverable level. T
 msgid "Accueil"
 msgstr "Home"
 
+#: app.py:259
+msgid "Accès refusé"
+msgstr "Access denied"
+
 #: transcria/web/templates/queue.html:206
 msgid "Action impossible sur ce job."
 msgstr "Action not possible on this job."
+
+#: app.py:261
+msgid "Action non autorisée"
+msgstr "Action not allowed"
+
+#: transcria/auth/routes.py:218
+msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
+msgstr "Action denied: this account is the last active administrator. Promote another administrator first."
 
 #: transcria/web/templates/queue.html:98
 msgid "Actions"
@@ -327,13 +339,25 @@ msgstr "Category"
 msgid "Catégorie libre"
 msgstr "Free category"
 
+#: transcria/auth/routes.py:277 transcria/auth/routes.py:308
+msgid "Ce groupe existe déjà."
+msgstr "This group already exists."
+
 #: transcria/web/i18n_js.py:39
 msgid "Ce job a déjà été traité."
 msgstr "This job has already been processed."
 
+#: transcria/auth/routes.py:166
+msgid "Ce nom d'utilisateur existe déjà."
+msgstr "This username already exists."
+
 #: transcria/web/templates/job_wizard.html:403
 msgid "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
 msgstr "This text is the AI-generated summary. You can correct or complete it before saving."
+
+#: app.py:261
+msgid "Cette action n'est pas permise sur cette page."
+msgstr "This action is not permitted on this page."
 
 #: transcria/web/templates/job_wizard.html:375
 msgid "Champs suggérés :"
@@ -503,6 +527,11 @@ msgstr "Saved"
 msgid "Erreur"
 msgstr "Error"
 
+#: transcria/web/templates/error.html:2
+#, python-format
+msgid "Erreur %(code)s"
+msgstr "Error %(code)s"
+
 #: transcria/web/i18n_js.py:46
 msgid "Erreur :"
 msgstr "Error:"
@@ -511,6 +540,10 @@ msgstr "Error:"
 #, python-format
 msgid "Erreur : %(e)s"
 msgstr "Error: %(e)s"
+
+#: app.py:265
+msgid "Erreur interne"
+msgstr "Internal error"
 
 #: transcria/web/i18n_js.py:48
 #, python-format
@@ -599,6 +632,10 @@ msgstr "Audio file & processing profile"
 msgid "Fichier reçu."
 msgstr "File received."
 
+#: app.py:262
+msgid "Fichier trop volumineux"
+msgstr "File too large"
+
 #: transcria/web/i18n_js.py:55
 msgid "Fichier trop volumineux (dépasse la limite du serveur)."
 msgstr "File too large (exceeds the server limit)."
@@ -662,6 +699,23 @@ msgstr "Vocal gender (editable)"
 msgid "Groupe"
 msgstr "Group"
 
+#: transcria/auth/routes.py:284
+#, python-format
+msgid "Groupe %(g)s créé."
+msgstr "Group %(g)s created."
+
+#: transcria/auth/routes.py:294
+msgid "Groupe introuvable."
+msgstr "Group not found."
+
+#: transcria/auth/routes.py:315
+msgid "Groupe mis à jour."
+msgstr "Group updated."
+
+#: transcria/auth/routes.py:372
+msgid "Groupe supprimé."
+msgstr "Group deleted."
+
 #: transcria/web/templates/base.html:54
 msgid "Groupes"
 msgstr "Groups"
@@ -673,6 +727,10 @@ msgstr "Generate summary"
 #: transcria/web/templates/job_wizard.html:305
 msgid "Générez un résumé rapide pour vérifier le contenu du fichier."
 msgstr "Generate a quick summary to check the file content."
+
+#: transcria/auth/routes.py:102
+msgid "Identifiant ou mot de passe incorrect."
+msgstr "Incorrect username or password."
 
 #: transcria/web/i18n_js.py:61
 msgid "Identification des locuteurs…"
@@ -758,9 +816,17 @@ msgstr "The LLM flagged terms to check, but the format could not be read automat
 msgid "La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service."
 msgstr "The LLM may be looping. If the correction files are already produced, you can cancel — the job will be recovered automatically when the service restarts."
 
+#: transcria/auth/routes.py:56
+msgid "La confirmation du mot de passe ne correspond pas."
+msgstr "The password confirmation does not match."
+
 #: transcria/web/templates/base.html:143
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "GPU memory is insufficient; these jobs will resume automatically as soon as it is freed. Free up VRAM (stop an LLM, finish another job) to speed up the resumption."
+
+#: app.py:260
+msgid "La page demandée n'existe pas ou a été déplacée."
+msgstr "The requested page does not exist or has been moved."
 
 #: transcria/web/templates/queue.html:233
 msgid "La priorité doit être comprise entre 1 et 100."
@@ -795,9 +861,30 @@ msgstr "Quality control will run after processing."
 msgid "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
 msgstr "The last summary could not be generated: the arbitration LLM produced no text after 3 attempts (common cause: transcript too long, model or prompt). The quick transcription is kept — regenerate the summary below. Admin diagnostic: <code>transcria doctor --llm-smoke</code>."
 
+#: app.py:262
+msgid "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
+msgstr "The file exceeds the maximum allowed size (see security.max_upload_size_mb). Compress it or raise the limit."
+
+#: transcria/auth/routes.py:334 transcria/auth/routes.py:356
+msgid "Le groupe doit conserver au moins un admin de groupe."
+msgstr "The group must keep at least one group admin."
+
 #: transcria/web/templates/job_wizard.html:743
 msgid "Le lexique de session déjà sauvegardé est conservé."
 msgstr "The already-saved session glossary is kept."
+
+#: transcria/auth/routes.py:54
+#, python-format
+msgid "Le mot de passe doit contenir au moins %(n)s caractères."
+msgstr "The password must contain at least %(n)s characters."
+
+#: transcria/auth/routes.py:162
+msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
+msgstr "Username and password are required."
+
+#: transcria/auth/routes.py:274 transcria/auth/routes.py:306
+msgid "Le nom du groupe est obligatoire."
+msgstr "The group name is required."
 
 #: transcria/web/templates/job_wizard.html:984
 msgid "Le package final sera disponible après le traitement complet."
@@ -852,6 +939,14 @@ msgstr "Maintenance"
 msgid "Masculin ♂"
 msgstr "Male ♂"
 
+#: transcria/auth/routes.py:342
+msgid "Membre ajouté au groupe."
+msgstr "Member added to the group."
+
+#: transcria/auth/routes.py:363
+msgid "Membre retiré du groupe."
+msgstr "Member removed from the group."
+
 #: transcria/web/templates/base.html:19
 msgid "Menu"
 msgstr "Menu"
@@ -879,6 +974,14 @@ msgstr "Move up"
 #: transcria/web/templates/base.html:107 transcria/web/templates/login.html:21
 msgid "Mot de passe"
 msgstr "Password"
+
+#: transcria/auth/routes.py:125
+msgid "Mot de passe actuel incorrect."
+msgstr "Current password is incorrect."
+
+#: transcria/auth/routes.py:135
+msgid "Mot de passe mis à jour."
+msgstr "Password updated."
 
 #: transcria/web/templates/queue.html:261
 msgid "Nettoyage impossible."
@@ -967,6 +1070,10 @@ msgstr "Package"
 #: transcria/web/templates/job_wizard.html:976
 msgid "Package complet"
 msgstr "Full package"
+
+#: app.py:260
+msgid "Page introuvable"
+msgstr "Page not found"
 
 #: transcria/web/templates/index.html:20
 #, python-format
@@ -1131,6 +1238,10 @@ msgstr "Remove"
 #: transcria/web/templates/job_result.html:144
 msgid "Retour au traitement"
 msgstr "Back to job"
+
+#: transcria/web/templates/error.html:9
+msgid "Retour à l'accueil"
+msgstr "Back to home"
 
 #: transcria/web/i18n_js.py:84
 #, python-format
@@ -1333,6 +1444,14 @@ msgstr "Transcript"
 msgid "Transcription ASR en cours…"
 msgstr "ASR transcription in progress…"
 
+#: app.py:264
+msgid "Trop de tentatives"
+msgstr "Too many attempts"
+
+#: transcria/auth/routes.py:76 transcria/auth/routes.py:100
+msgid "Trop de tentatives. Réessayez dans quelques minutes."
+msgstr "Too many attempts. Try again in a few minutes."
+
 #: transcria/web/templates/job_wizard.html:380
 msgid "Type"
 msgstr "Type"
@@ -1371,9 +1490,34 @@ msgstr "Upload the audio file first"
 msgid "Téléversez d'abord votre fichier — le choix du profil s'activera ensuite."
 msgstr "Upload your file first — the profile choice will then become available."
 
+#: transcria/auth/routes.py:349
+msgid "Un admin de groupe ne peut pas se retirer lui-même."
+msgstr "A group admin cannot remove themselves."
+
+#: app.py:265
+msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
+msgstr "An unexpected error occurred. Try again or contact an administrator."
+
 #: transcria/web/templates/job_result.html:169
 msgid "Une version restaurable sera créée (retour arrière possible)."
 msgstr "A restorable version will be created (you can revert)."
+
+#: transcria/auth/routes.py:184
+#, python-format
+msgid "Utilisateur %(u)s créé."
+msgstr "User %(u)s created."
+
+#: transcria/auth/routes.py:336
+msgid "Utilisateur introuvable ou inactif."
+msgstr "User not found or inactive."
+
+#: transcria/auth/routes.py:196
+msgid "Utilisateur introuvable."
+msgstr "User not found."
+
+#: transcria/auth/routes.py:250
+msgid "Utilisateur mis à jour."
+msgstr "User updated."
 
 #: transcria/web/templates/base.html:50
 msgid "Utilisateurs"
@@ -1422,6 +1566,18 @@ msgstr "Votes"
 #: transcria/web/i18n_js.py:96
 msgid "Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)"
 msgstr "Do you want to restart processing? (the current glossary and corrections will be applied)"
+
+#: app.py:264
+msgid "Vous avez fait trop de tentatives. Patientez quelques minutes."
+msgstr "You have made too many attempts. Please wait a few minutes."
+
+#: transcria/auth/routes.py:112
+msgid "Vous avez été déconnecté."
+msgstr "You have been logged out."
+
+#: app.py:259
+msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
+msgstr "You do not have the required permissions to access this page."
 
 #: transcria/web/templates/base.html:133
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."

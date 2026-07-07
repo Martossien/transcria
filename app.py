@@ -250,19 +250,26 @@ def create_app(config_path: str | None = None) -> Flask:
     # Pages d'erreur conviviales (français + lien retour) au lieu des pages brutes
     # Werkzeug (anglais, techniques). Les routes /api/ gardent un JSON explicite pour
     # que le front ne tente pas de parser du HTML (cf. le handler 401 ci-dessus).
+    # Sources marquées avec N_ (gettext-noop, extrait par pybabel) : traduites à l'affichage
+    # dans _render_error avec la locale de la requête (le dict est construit une seule fois).
+    def N_(s: str) -> str:
+        return s
+
     _ERROR_COPY = {
-        403: ("Accès refusé", "Vous n'avez pas les droits nécessaires pour accéder à cette page."),
-        404: ("Page introuvable", "La page demandée n'existe pas ou a été déplacée."),
-        405: ("Action non autorisée", "Cette action n'est pas permise sur cette page."),
-        413: ("Fichier trop volumineux", "Le fichier dépasse la taille maximale autorisée "
-              "(voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."),
-        429: ("Trop de tentatives", "Vous avez fait trop de tentatives. Patientez quelques minutes."),
-        500: ("Erreur interne", "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."),
+        403: (N_("Accès refusé"), N_("Vous n'avez pas les droits nécessaires pour accéder à cette page.")),
+        404: (N_("Page introuvable"), N_("La page demandée n'existe pas ou a été déplacée.")),
+        405: (N_("Action non autorisée"), N_("Cette action n'est pas permise sur cette page.")),
+        413: (N_("Fichier trop volumineux"), N_("Le fichier dépasse la taille maximale autorisée "
+              "(voir security.max_upload_size_mb). Compressez-le ou augmentez la limite.")),
+        429: (N_("Trop de tentatives"), N_("Vous avez fait trop de tentatives. Patientez quelques minutes.")),
+        500: (N_("Erreur interne"), N_("Une erreur inattendue est survenue. Réessayez ou contactez un administrateur.")),
     }
 
     def _render_error(code: int):
         from flask import jsonify, render_template, request
-        heading, message = _ERROR_COPY[code]
+        from flask_babel import gettext
+        heading_src, message_src = _ERROR_COPY[code]
+        heading, message = gettext(heading_src), gettext(message_src)
         if request.path.startswith("/api/"):
             return jsonify({"error": message, "code": code}), code
         return render_template("error.html", code=code, heading=heading, message=message), code
