@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Configuration — TranscrIA{% endblock %}
+{% block title %}{{ _('Configuration') }} — TranscrIA{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0">Configuration</h1>
-  <a href="/" class="btn btn-outline-secondary">Retour</a>
+  <h1 class="h3 mb-0">{{ _('Configuration') }}</h1>
+  <a href="/" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
 </div>
 
 {% if system_info and system_info.gpus %}
 <div class="card mb-3">
-  <div class="card-header">Environnement détecté</div>
+  <div class="card-header">{{ _('Environnement détecté') }}</div>
   <div class="card-body py-2 small">
     <div class="row">
       <div class="col-md-6">
-        <strong>GPUs :</strong> {{ system_info.gpu_count }} × {{ system_info.gpus[0].name or 'NVIDIA' }} ({{ system_info.total_vram_gb }} Go VRAM)
-        {% if system_info.cuda_version %}<br><strong>CUDA :</strong> {{ system_info.cuda_version }}{% endif %}
-        <br><strong>RAM :</strong> {{ system_info.ram_total_gb }} Go
+        <strong>{{ _('GPUs :') }}</strong> {{ system_info.gpu_count }} × {{ system_info.gpus[0].name or 'NVIDIA' }} ({{ _('%(n)s Go VRAM', n=system_info.total_vram_gb) }})
+        {% if system_info.cuda_version %}<br><strong>{{ _('CUDA :') }}</strong> {{ system_info.cuda_version }}{% endif %}
+        <br><strong>{{ _('RAM :') }}</strong> {{ system_info.ram_total_gb }} {{ _('Go') }}
       </div>
       <div class="col-md-6">
-        <strong>Binaires :</strong>
+        <strong>{{ _('Binaires :') }}</strong>
         {% for b in system_info.binaries %}
           <span class="badge bg-{{ 'success' if b.available else 'danger' }} me-1">{{ b.name }}</span>
         {% endfor %}
-        <br><strong>Disque :</strong> {{ system_info.disk_free_gb }} Go libres sur {{ system_info.disk_path }}
+        <br><strong>{{ _('Disque :') }}</strong> {{ _('%(free)s Go libres sur %(path)s', free=system_info.disk_free_gb, path=system_info.disk_path) }}
       </div>
     </div>
     {% if system_info.warnings %}
@@ -37,7 +37,7 @@
 
 {% if validation_errors %}
 <div class="alert alert-danger">
-  <strong>Erreurs de validation ({{ validation_errors|length }}) :</strong>
+  <strong>{{ _('Erreurs de validation (%(n)s) :', n=validation_errors|length) }}</strong>
   <ul class="mb-0 mt-1 small">
     {% for err in validation_errors %}
     <li>{{ err }}</li>
@@ -49,19 +49,19 @@
 <ul class="nav nav-tabs mb-3" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="tab-form" data-bs-toggle="tab" data-bs-target="#pane-form"
-            type="button" role="tab">Réglages</button>
+            type="button" role="tab">{{ _('Réglages') }}</button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-prompts" data-bs-toggle="tab" data-bs-target="#pane-prompts"
-            type="button" role="tab">Prompts LLM</button>
+            type="button" role="tab">{{ _('Prompts LLM') }}</button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-scripts" data-bs-toggle="tab" data-bs-target="#pane-scripts"
-            type="button" role="tab">Scripts (lecture seule)</button>
+            type="button" role="tab">{{ _('Scripts (lecture seule)') }}</button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="tab-yaml" data-bs-toggle="tab" data-bs-target="#pane-yaml"
-            type="button" role="tab">YAML (avancé)</button>
+            type="button" role="tab">{{ _('YAML (avancé)') }}</button>
   </li>
 </ul>
 
@@ -111,18 +111,15 @@
       </div>
       {% endfor %}
       <div class="d-flex gap-2 mb-4">
-        <button type="submit" class="btn btn-primary">Sauvegarder les réglages</button>
-        <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
+        <button type="submit" class="btn btn-primary">{{ _('Sauvegarder les réglages') }}</button>
+        <a href="/admin/config" class="btn btn-outline-secondary">{{ _('Recharger') }}</a>
       </div>
     </form>
   </div>
 
   <div class="tab-pane fade" id="pane-prompts" role="tabpanel">
     <div class="alert alert-info small">
-      <i class="bi bi-info-circle"></i> Ces prompts pilotent la LLM d'arbitrage (résumé,
-      correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à
-      chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux
-      <strong>prochains</strong> traitements (aucun redémarrage nécessaire).
+      <i class="bi bi-info-circle"></i> {% trans %}Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire).{% endtrans %}
     </div>
     <form method="POST" action="/admin/config">
       <input type="hidden" name="_mode" value="prompts">
@@ -135,7 +132,7 @@
         <div class="card-body">
           {% if p.help %}<p class="small text-muted">{{ p.help }}</p>{% endif %}
           {% if not p.exists %}
-          <div class="alert alert-warning py-1 small">Fichier absent — il sera créé à la sauvegarde.</div>
+          <div class="alert alert-warning py-1 small">{{ _('Fichier absent — il sera créé à la sauvegarde.') }}</div>
           {% endif %}
           <textarea name="prompt-{{ p.name }}" class="form-control prompt-editor" rows="14"
                     spellcheck="false">{{ p.content }}</textarea>
@@ -143,26 +140,24 @@
       </div>
       {% endfor %}
       <div class="d-flex gap-2 mb-4">
-        <button type="submit" class="btn btn-primary">Sauvegarder les prompts</button>
-        <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
+        <button type="submit" class="btn btn-primary">{{ _('Sauvegarder les prompts') }}</button>
+        <a href="/admin/config" class="btn btn-outline-secondary">{{ _('Recharger') }}</a>
       </div>
     </form>
   </div>
 
   <div class="tab-pane fade" id="pane-scripts" role="tabpanel">
     <div class="alert alert-info small">
-      <i class="bi bi-shield-lock"></i> Les scripts sont affichés en <strong>lecture seule</strong> :
-      les éditer depuis le navigateur permettrait d'exécuter du code arbitraire sur le serveur.
-      Leurs <em>chemins</em> se règlent dans l'onglet Réglages / YAML ; leur contenu se modifie en SSH.
+      <i class="bi bi-shield-lock"></i> {% trans %}Les scripts sont affichés en <strong>lecture seule</strong> : les éditer depuis le navigateur permettrait d'exécuter du code arbitraire sur le serveur. Leurs <em>chemins</em> se règlent dans l'onglet Réglages / YAML ; leur contenu se modifie en SSH.{% endtrans %}
     </div>
     {% for s in scripts %}
     <div class="card mb-3">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>{{ s.label }}
-          {% if not s.configured %}<span class="badge text-bg-secondary ms-1">non configuré</span>
-          {% elif not s.exists %}<span class="badge text-bg-danger ms-1">introuvable</span>
-          {% elif not s.executable %}<span class="badge text-bg-warning ms-1">non exécutable</span>
-          {% else %}<span class="badge text-bg-success ms-1">prêt</span>{% endif %}
+          {% if not s.configured %}<span class="badge text-bg-secondary ms-1">{{ _('non configuré') }}</span>
+          {% elif not s.exists %}<span class="badge text-bg-danger ms-1">{{ _('introuvable') }}</span>
+          {% elif not s.executable %}<span class="badge text-bg-warning ms-1">{{ _('non exécutable') }}</span>
+          {% else %}<span class="badge text-bg-success ms-1">{{ _('prêt') }}</span>{% endif %}
         </span>
         <code class="small fw-normal">{{ s.path or '—' }}</code>
       </div>
@@ -178,18 +173,17 @@
   <div class="tab-pane fade" id="pane-yaml" role="tabpanel">
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <span>config.yaml — édition complète</span>
+        <span>{{ _('config.yaml — édition complète') }}</span>
         <code>{{ config_path }}</code>
       </div>
       <div class="card-body">
-        <p class="small text-muted">Édition libre de toute la configuration. Référence des paramètres :
-          <code>docs/CONFIG_REFERENCE.md</code>. Les secrets masqués (********) sont préservés si laissés tels quels.</p>
+        <p class="small text-muted">{% trans %}Édition libre de toute la configuration. Référence des paramètres : <code>docs/CONFIG_REFERENCE.md</code>. Les secrets masqués (********) sont préservés si laissés tels quels.{% endtrans %}</p>
         <form method="POST" action="/admin/config">
           <input type="hidden" name="_mode" value="yaml">
           <textarea name="config_yaml" class="form-control font-monospace" rows="28" spellcheck="false">{{ config_yaml }}</textarea>
           <div class="mt-3 d-flex gap-2">
-            <button type="submit" class="btn btn-primary">Sauvegarder le YAML</button>
-            <a href="/admin/config" class="btn btn-outline-secondary">Recharger</a>
+            <button type="submit" class="btn btn-primary">{{ _('Sauvegarder le YAML') }}</button>
+            <a href="/admin/config" class="btn btn-outline-secondary">{{ _('Recharger') }}</a>
           </div>
         </form>
       </div>

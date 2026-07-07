@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 21:19+0200\n"
+"POT-Creation-Date: 2026-07-07 21:22+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -24,6 +24,11 @@ msgid "%(count)s élément"
 msgid_plural "%(count)s éléments"
 msgstr[0] "%(count)s élément"
 msgstr[1] "%(count)s éléments"
+
+#: transcria/web/templates/admin_config.html:24
+#, python-format
+msgid "%(free)s Go libres sur %(path)s"
+msgstr "%(free)s Go libres sur %(path)s"
 
 #: transcria/web/templates/queue.html:134
 #, python-format
@@ -63,6 +68,11 @@ msgstr "%(min)s minutes"
 #, python-format
 msgid "%(n)s Go"
 msgstr "%(n)s Go"
+
+#: transcria/web/templates/admin_config.html:15
+#, python-format
+msgid "%(n)s Go VRAM"
+msgstr "%(n)s Go VRAM"
 
 #: transcria/web/i18n_js.py:29 transcria/web/templates/job_wizard.html:341
 #, python-format
@@ -177,6 +187,11 @@ msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
+
+#: transcria/web/templates/dashboard_status.html:92
+#, python-format
+msgid "<strong>%(files)s</strong> fichier(s) en base — <strong>%(mb)s Mo</strong>. Le volume redescend après chaque traitement terminé (purge de l'audio)."
+msgstr "<strong>%(files)s</strong> fichier(s) en base — <strong>%(mb)s Mo</strong>. Le volume redescend après chaque traitement terminé (purge de l'audio)."
 
 #: transcria/web/templates/job_wizard.html:329
 msgid "<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local."
@@ -375,6 +390,10 @@ msgstr "Archives disponibles"
 msgid "Au lexique central"
 msgstr "Au lexique central"
 
+#: transcria/web/templates/dashboard_status.html:61
+msgid "Aucun GPU détecté."
+msgstr "Aucun GPU détecté."
+
 #: transcria/web/templates/voice_detail.html:63
 msgid "Aucun consentement actif. La génération d'empreinte est bloquée."
 msgstr "Aucun consentement actif. La génération d'empreinte est bloquée."
@@ -395,6 +414,10 @@ msgstr "Aucun lexique centralisé disponible."
 msgid "Aucun membre dans ce groupe."
 msgstr "Aucun membre dans ce groupe."
 
+#: transcria/web/templates/dashboard_status.html:121
+msgid "Aucun moteur déclaré."
+msgstr "Aucun moteur déclaré."
+
 #: transcria/web/templates/job_wizard.html:119
 #: transcria/web/templates/job_wizard.html:878
 msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
@@ -403,6 +426,10 @@ msgstr "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbit
 #: transcria/web/routes.py:2991
 msgid "Aucun prompt modifié."
 msgstr "Aucun prompt modifié."
+
+#: transcria/web/templates/dashboard_status.html:42
+msgid "Aucun service."
+msgstr "Aucun service."
 
 #: transcria/web/templates/central_lexicons.html:50
 msgid "Aucun signal sensible"
@@ -427,6 +454,10 @@ msgstr "Aucune empreinte générée."
 #: transcria/web/templates/audit.html:79
 msgid "Aucune entrée d'audit trouvée."
 msgstr "Aucune entrée d'audit trouvée."
+
+#: transcria/web/templates/dashboard_status.html:115
+msgid "Aucune ressource distante configurée (tout intégré)."
+msgstr "Aucune ressource distante configurée (tout intégré)."
 
 #: transcria/web/templates/voices.html:48
 msgid "Aucune voix enregistrée."
@@ -464,6 +495,14 @@ msgstr "Bande 95%% :"
 msgid "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
 msgstr "Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)"
 
+#: transcria/web/templates/admin_config.html:20
+msgid "Binaires :"
+msgstr "Binaires :"
+
+#: transcria/web/templates/admin_config.html:16
+msgid "CUDA :"
+msgstr "CUDA :"
+
 #: transcria/web/templates/admin_models.html:12
 msgid "Cache HuggingFace (STT, diarisation)"
 msgstr "Cache HuggingFace (STT, diarisation)"
@@ -498,9 +537,17 @@ msgstr "Ce nom d'utilisateur existe déjà."
 msgid "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
 msgstr "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
 
+#: transcria/web/templates/admin_config.html:122
+msgid "Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire)."
+msgstr "Ces prompts pilotent la LLM d'arbitrage (résumé, correction, relecture finale). Une copie de secours <code>.bak</code> est conservée à chaque sauvegarde. Un prompt vide est refusé. La modification s'applique aux <strong>prochains</strong> traitements (aucun redémarrage nécessaire)."
+
 #: app.py:261
 msgid "Cette action n'est pas permise sur cette page."
 msgstr "Cette action n'est pas permise sur cette page."
+
+#: transcria/web/templates/dashboard_status.html:13
+msgid "Cette machine est une <strong>frontale sans GPU</strong> : toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes »."
+msgstr "Cette machine est une <strong>frontale sans GPU</strong> : toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes »."
 
 #: transcria/web/templates/job_wizard.html:375
 msgid "Champs suggérés :"
@@ -510,6 +557,14 @@ msgstr "Champs suggérés :"
 #: transcria/web/templates/change_password.html:4
 msgid "Changer mon mot de passe"
 msgstr "Changer mon mot de passe"
+
+#: transcria/web/templates/dashboard_status.html:22
+msgid "Charge :"
+msgstr "Charge :"
+
+#: transcria/web/templates/dashboard_status.html:108
+msgid "Chargement…"
+msgstr "Chargement…"
 
 #: transcria/web/templates/voice_form.html:19
 msgid "Choisir un genre"
@@ -539,6 +594,8 @@ msgstr "Complet"
 msgid "Compte actif"
 msgstr "Compte actif"
 
+#: transcria/web/templates/admin_config.html:2
+#: transcria/web/templates/admin_config.html:5
 #: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:65
 msgid "Configuration"
 msgstr "Configuration"
@@ -656,6 +713,11 @@ msgstr "Créez votre premier traitement pour transcrire une réunion."
 msgid "Créé le %(date)s"
 msgstr "Créé le %(date)s"
 
+#: transcria/web/templates/dashboard_status.html:76
+#, python-format
+msgid "Dashboard LLM indisponible sur %(url)s."
+msgstr "Dashboard LLM indisponible sur %(url)s."
+
 #: transcria/web/templates/job_wizard.html:413
 msgid "Date"
 msgstr "Date"
@@ -688,6 +750,14 @@ msgstr "Discuter"
 #: transcria/web/templates/job_result.html:95
 msgid "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
 msgstr "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
+
+#: transcria/web/templates/admin_config.html:24
+msgid "Disque :"
+msgstr "Disque :"
+
+#: transcria/web/templates/dashboard_status.html:97
+msgid "Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>."
+msgstr "Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>."
 
 #: transcria/web/templates/job_wizard.html:326
 msgid "Documents présentés"
@@ -807,6 +877,10 @@ msgstr "Entrée supprimée."
 msgid "Entrées"
 msgstr "Entrées"
 
+#: transcria/web/templates/admin_config.html:11
+msgid "Environnement détecté"
+msgstr "Environnement détecté"
+
 #: transcria/web/templates/job_result.html:170
 msgid "Erreur"
 msgstr "Erreur"
@@ -850,6 +924,11 @@ msgstr "Erreur serveur (%(status)s)."
 #: transcria/web/i18n_js.py:51
 msgid "Erreur serveur non JSON."
 msgstr "Erreur serveur non JSON."
+
+#: transcria/web/templates/admin_config.html:40
+#, python-format
+msgid "Erreurs de validation (%(n)s) :"
+msgstr "Erreurs de validation (%(n)s) :"
 
 #: transcria/web/templates/job_wizard.html:286
 msgid "Est-ce bien le fichier attendu ?"
@@ -916,6 +995,10 @@ msgstr "Fermer"
 msgid "Fiabilité :"
 msgstr "Fiabilité :"
 
+#: transcria/web/templates/admin_config.html:135
+msgid "Fichier absent — il sera créé à la sauvegarde."
+msgstr "Fichier absent — il sera créé à la sauvegarde."
+
 #: transcria/web/templates/job_wizard.html:58
 msgid "Fichier audio & profil de traitement"
 msgstr "Fichier audio & profil de traitement"
@@ -939,6 +1022,10 @@ msgstr "Fichier trop volumineux (dépasse la limite du serveur)."
 #: transcria/web/i18n_js.py:56
 msgid "Fichier téléversé. Rechargement…"
 msgstr "Fichier téléversé. Rechargement…"
+
+#: transcria/web/templates/dashboard_status.html:90
+msgid "Fichiers répliqués via PostgreSQL (topologie split sans disque partagé — <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>)."
+msgstr "Fichiers répliqués via PostgreSQL (topologie split sans disque partagé — <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>)."
 
 #: transcria/web/templates/base.html:35
 msgctxt "navigation"
@@ -1006,6 +1093,23 @@ msgstr "Féminin"
 msgid "Féminin ♀"
 msgstr "Féminin ♀"
 
+#: transcria/web/templates/dashboard_status.html:120
+#, python-format
+msgid "GPU %(i)s — libre %(free)s / %(total)s Mo"
+msgstr "GPU %(i)s — libre %(free)s / %(total)s Mo"
+
+#: transcria/web/templates/dashboard_status.html:50
+msgid "GPU (machine locale)"
+msgstr "GPU (machine locale)"
+
+#: transcria/web/templates/dashboard_status.html:119
+msgid "GPU :"
+msgstr "GPU :"
+
+#: transcria/web/templates/admin_config.html:15
+msgid "GPUs :"
+msgstr "GPUs :"
+
 #: transcria/web/templates/voice_detail.html:27
 #: transcria/web/templates/voice_form.html:17
 msgid "Genre validé"
@@ -1025,7 +1129,10 @@ msgstr "Gestion des utilisateurs"
 msgid "Global"
 msgstr "Global"
 
+#: transcria/web/templates/admin_config.html:17
 #: transcria/web/templates/admin_models.html:97
+#: transcria/web/templates/dashboard_status.html:28
+#: transcria/web/templates/dashboard_status.html:56
 msgid "Go"
 msgstr "Go"
 
@@ -1258,6 +1365,10 @@ msgstr "Le consentement signé est requis avant toute génération d'empreinte v
 msgid "Le contrôle qualité sera effectué après le traitement."
 msgstr "Le contrôle qualité sera effectué après le traitement."
 
+#: transcria/web/templates/dashboard_status.html:78
+msgid "Le dashboard doit être lancé pour afficher l'état technique."
+msgstr "Le dashboard doit être lancé pour afficher l'état technique."
+
 #: transcria/web/templates/job_wizard.html:351
 msgid "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
 msgstr "Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>."
@@ -1314,6 +1425,10 @@ msgstr "Les jobs en cours seront ignorés."
 #: transcria/web/templates/job_wizard.html:567
 msgid "Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez."
 msgstr "Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez."
+
+#: transcria/web/templates/admin_config.html:151
+msgid "Les scripts sont affichés en <strong>lecture seule</strong> : les éditer depuis le navigateur permettrait d'exécuter du code arbitraire sur le serveur. Leurs <em>chemins</em> se règlent dans l'onglet Réglages / YAML ; leur contenu se modifie en SSH."
+msgstr "Les scripts sont affichés en <strong>lecture seule</strong> : les éditer depuis le navigateur permettrait d'exécuter du code arbitraire sur le serveur. Leurs <em>chemins</em> se règlent dans l'onglet Réglages / YAML ; leur contenu se modifie en SSH."
 
 #: transcria/web/templates/audit.html:36
 msgid "Lexique"
@@ -1437,6 +1552,10 @@ msgstr "Modèle"
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 
+#: transcria/web/templates/dashboard_status.html:68
+msgid "Modèle actif"
+msgstr "Modèle actif"
+
 #: transcria/web/templates/admin_models.html:2
 #: transcria/web/templates/admin_models.html:5
 #: transcria/web/templates/base.html:69
@@ -1531,6 +1650,10 @@ msgstr "Non déterminé"
 msgid "Non, arrêter"
 msgstr "Non, arrêter"
 
+#: transcria/web/templates/dashboard_status.html:77
+msgid "Normal sur une frontale : le dashboard tourne sur la machine GPU."
+msgstr "Normal sur une frontale : le dashboard tourne sur la machine GPU."
+
 #: transcria/web/templates/job_wizard.html:464
 msgid "Notes / Ordre du jour"
 msgstr "Notes / Ordre du jour"
@@ -1560,6 +1683,11 @@ msgstr "Nouveau traitement créé."
 #: transcria/web/templates/users.html:5
 msgid "Nouvel utilisateur"
 msgstr "Nouvel utilisateur"
+
+#: transcria/web/templates/dashboard_status.html:117
+#, python-format
+msgid "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : %(reqs)s."
+msgstr "Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : %(reqs)s."
 
 #: transcria/web/templates/job_wizard.html:460
 msgid "Objectif"
@@ -1721,6 +1849,10 @@ msgstr "Profil retenu : <strong>%(label)s</strong>. Pour en changer, revenez à 
 msgid "Profils vocaux consentis, utilisés uniquement comme aide à la validation."
 msgstr "Profils vocaux consentis, utilisés uniquement comme aide à la validation."
 
+#: transcria/web/templates/admin_config.html:56
+msgid "Prompts LLM"
+msgstr "Prompts LLM"
+
 #: transcria/web/templates/job_result.html:162
 msgid "Proposition"
 msgstr "Proposition"
@@ -1733,6 +1865,10 @@ msgstr "Proposé à partir d'un document que vous avez joint à la réunion"
 #, python-format
 msgid "Qualité : %(q)s"
 msgstr "Qualité : %(q)s"
+
+#: transcria/web/templates/admin_config.html:17
+msgid "RAM :"
+msgstr "RAM :"
 
 #: transcria/web/templates/job_wizard.html:203
 msgid "RMS :"
@@ -1754,6 +1890,12 @@ msgstr "Rapport Word (.docx)"
 #: transcria/web/i18n_js.py:79
 msgid "Rapport qualité…"
 msgstr "Rapport qualité…"
+
+#: transcria/web/templates/admin_config.html:115
+#: transcria/web/templates/admin_config.html:144
+#: transcria/web/templates/admin_config.html:186
+msgid "Recharger"
+msgstr "Recharger"
 
 #: transcria/web/templates/job_wizard.html:587
 msgid "Rechercher les voix connues"
@@ -1799,6 +1941,10 @@ msgstr "Ressaisissez le nom exact de l'archive pour confirmer"
 msgid "Ressources"
 msgstr "Ressources"
 
+#: transcria/web/templates/dashboard_status.html:104
+msgid "Ressources distantes (inférence)"
+msgstr "Ressources distantes (inférence)"
+
 #: transcria/web/templates/job_result.html:174
 msgid "Restauration impossible"
 msgstr "Restauration impossible"
@@ -1837,8 +1983,10 @@ msgstr "Retirer"
 msgid "Retirer cet utilisateur du groupe ?"
 msgstr "Retirer cet utilisateur du groupe ?"
 
+#: transcria/web/templates/admin_config.html:6
 #: transcria/web/templates/admin_maintenance.html:6
 #: transcria/web/templates/admin_models.html:6
+#: transcria/web/templates/dashboard_status.html:174
 #: transcria/web/templates/group_form.html:23
 #: transcria/web/templates/voice_detail.html:14
 msgid "Retour"
@@ -1860,6 +2008,10 @@ msgstr "Rotation (garder N archives)"
 #: transcria/web/templates/voice_form.html:39
 msgid "Référence interne"
 msgstr "Référence interne"
+
+#: transcria/web/templates/admin_config.html:52
+msgid "Réglages"
+msgstr "Réglages"
 
 #: transcria/web/routes.py:2966
 msgid "Réglages sauvegardés."
@@ -1921,6 +2073,10 @@ msgstr "Rôle :"
 msgid "Rôle dans la réunion"
 msgstr "Rôle dans la réunion"
 
+#: transcria/web/templates/dashboard_status.html:7
+msgid "Rôle du process (runtime.role / TRANSCRIA_ROLE)"
+msgstr "Rôle du process (runtime.role / TRANSCRIA_ROLE)"
+
 #: transcria/web/templates/group_form.html:38
 #: transcria/web/templates/group_form.html:84
 msgid "Rôle groupe"
@@ -1951,6 +2107,18 @@ msgstr "Sauvegarde planifiée activée (cadence %(c)s)."
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Sauvegarde planifiée désactivée."
 
+#: transcria/web/templates/admin_config.html:185
+msgid "Sauvegarder le YAML"
+msgstr "Sauvegarder le YAML"
+
+#: transcria/web/templates/admin_config.html:143
+msgid "Sauvegarder les prompts"
+msgstr "Sauvegarder les prompts"
+
+#: transcria/web/templates/admin_config.html:114
+msgid "Sauvegarder les réglages"
+msgstr "Sauvegarder les réglages"
+
 #: transcria/web/templates/admin_maintenance.html:30
 msgid "Sauvegarder maintenant"
 msgstr "Sauvegarder maintenant"
@@ -1967,6 +2135,10 @@ msgstr "Score qualité"
 msgid "Score qualité :"
 msgstr "Score qualité :"
 
+#: transcria/web/templates/admin_config.html:60
+msgid "Scripts (lecture seule)"
+msgstr "Scripts (lecture seule)"
+
 #: transcria/web/templates/login.html:24
 msgid "Se connecter"
 msgstr "Se connecter"
@@ -1979,6 +2151,10 @@ msgstr "Segments à vérifier en priorité (%(n)s)"
 #: transcria/web/templates/job_wizard.html:451
 msgid "Service / Domaine"
 msgstr "Service / Domaine"
+
+#: transcria/web/templates/dashboard_status.html:32
+msgid "Services"
+msgstr "Services"
 
 #: transcria/web/i18n_js.py:87
 msgid "Session expirée — redirection vers la connexion…"
@@ -1996,6 +2172,15 @@ msgstr "Silence :"
 #: transcria/web/templates/voice_detail.html:72
 msgid "Statut"
 msgstr "Statut"
+
+#: transcria/web/templates/dashboard_status.html:123
+#, python-format
+msgid "Statut indisponible (%(e)s)."
+msgstr "Statut indisponible (%(e)s)."
+
+#: transcria/web/templates/dashboard_status.html:84
+msgid "Stockage des fichiers de jobs"
+msgstr "Stockage des fichiers de jobs"
 
 #: transcria/web/templates/job_wizard.html:650
 msgid "Suggestion issue des voix enregistrées"
@@ -2049,6 +2234,10 @@ msgstr "Séparées par virgule ou point-virgule"
 #: transcria/web/templates/admin_maintenance.html:78
 msgid "Taille"
 msgstr "Taille"
+
+#: transcria/web/templates/dashboard_status.html:57
+msgid "Temp :"
+msgstr "Temp :"
 
 #: transcria/web/templates/job_wizard.html:224
 #: transcria/web/templates/job_wizard.html:236
@@ -2253,13 +2442,25 @@ msgstr "Utilisateur mis à jour."
 msgid "Utilisateurs"
 msgstr "Utilisateurs"
 
+#: transcria/web/templates/dashboard_status.html:57
+msgid "Utilisation :"
+msgstr "Utilisation :"
+
 #: transcria/web/templates/central_lexicons.html:22
 msgid "Utilisations"
 msgstr "Utilisations"
 
+#: transcria/web/templates/dashboard_status.html:28
+msgid "Utilisée :"
+msgstr "Utilisée :"
+
 #: transcria/web/templates/job_wizard.html:902
 msgid "VAD final activé"
 msgstr "VAD final activé"
+
+#: transcria/web/templates/dashboard_status.html:56
+msgid "VRAM :"
+msgstr "VRAM :"
 
 #: transcria/web/i18n_js.py:95
 msgid "VRAM insuffisante : l'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
@@ -2303,6 +2504,10 @@ msgstr "Voix désactivée."
 msgid "Voix enregistrées"
 msgstr "Voix enregistrées"
 
+#: transcria/web/templates/dashboard_status.html:94
+msgid "Volumétrie indisponible."
+msgstr "Volumétrie indisponible."
+
 #: transcria/web/templates/job_wizard.html:31
 msgid "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
 msgstr "Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement."
@@ -2334,6 +2539,10 @@ msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a hr
 #: transcria/web/templates/voice_detail.html:60
 msgid "Vérifier la preuve signée"
 msgstr "Vérifier la preuve signée"
+
+#: transcria/web/templates/admin_config.html:64
+msgid "YAML (avancé)"
+msgstr "YAML (avancé)"
 
 #: transcria/web/routes.py:2998
 #, python-format
@@ -2376,10 +2585,19 @@ msgstr "aucun"
 msgid "audios inclus"
 msgstr "audios inclus"
 
+#: transcria/web/templates/dashboard_status.html:86
+#, python-format
+msgid "backend %(b)s"
+msgstr "backend %(b)s"
+
 #: transcria/web/templates/job_wizard.html:229
 #, python-format
 msgid "calibré · %(n)s jobs"
 msgstr "calibré · %(n)s jobs"
+
+#: transcria/web/templates/admin_config.html:176
+msgid "config.yaml — édition complète"
+msgstr "config.yaml — édition complète"
 
 #: transcria/web/templates/queue.html:154
 #, python-format
@@ -2400,6 +2618,10 @@ msgstr "difficile"
 msgid "difficile(s) ·"
 msgstr "difficile(s) ·"
 
+#: transcria/web/templates/dashboard_status.html:118
+msgid "distant"
+msgstr "distant"
+
 #: transcria/web/templates/admin_models.html:56
 msgid "démarrage…"
 msgstr "démarrage…"
@@ -2414,6 +2636,10 @@ msgstr "démarré %(t)s"
 msgid "effective %(p)s"
 msgstr "effective %(p)s"
 
+#: transcria/web/templates/dashboard_status.html:122
+msgid "erreur"
+msgstr "erreur"
+
 #: transcria/web/templates/job_wizard.html:231
 msgid "estimation initiale"
 msgstr "estimation initiale"
@@ -2421,6 +2647,10 @@ msgstr "estimation initiale"
 #: transcria/web/templates/job_wizard.html:174
 msgid "exploitable"
 msgstr "exploitable"
+
+#: transcria/web/templates/dashboard_status.html:8
+msgid "frontale (web)"
+msgstr "frontale (web)"
 
 #: transcria/web/templates/admin_maintenance.html:43
 msgid "inactive"
@@ -2430,6 +2660,14 @@ msgstr "inactive"
 #: transcria/web/templates/queue.html:69
 msgid "indisponible"
 msgstr "indisponible"
+
+#: transcria/web/templates/dashboard_status.html:116
+msgid "injoignable"
+msgstr "injoignable"
+
+#: transcria/web/templates/admin_config.html:158
+msgid "introuvable"
+msgstr "introuvable"
 
 #: transcria/web/i18n_js.py:97 transcria/web/templates/job_wizard.html:800
 msgid "issu des documents fournis"
@@ -2476,10 +2714,23 @@ msgstr "mis à jour il y a %(n)smin"
 msgid "mis à jour il y a %(n)ss"
 msgstr "mis à jour il y a %(n)ss"
 
+#: transcria/web/templates/dashboard_status.html:8
+#, python-format
+msgid "mode %(m)s"
+msgstr "mode %(m)s"
+
 #: transcria/web/templates/job_wizard.html:104
 #, python-format
 msgid "niveau %(n)s"
 msgstr "niveau %(n)s"
+
+#: transcria/web/templates/admin_config.html:157
+msgid "non configuré"
+msgstr "non configuré"
+
+#: transcria/web/templates/admin_config.html:159
+msgid "non exécutable"
+msgstr "non exécutable"
 
 #: transcria/web/i18n_js.py:101
 msgid "nouveau"
@@ -2502,6 +2753,10 @@ msgstr "priorité %(p)s"
 #: transcria/web/templates/admin_models.html:50
 msgid "présent"
 msgstr "présent"
+
+#: transcria/web/templates/admin_config.html:160
+msgid "prêt"
+msgstr "prêt"
 
 #: transcria/web/i18n_js.py:102
 msgid "requête impossible"
@@ -2540,6 +2795,14 @@ msgstr "token HF"
 #: transcria/web/templates/admin_models.html:85
 msgid "token HF configuré utilisé"
 msgstr "token HF configuré utilisé"
+
+#: transcria/web/templates/dashboard_status.html:114
+msgid "tout local"
+msgstr "tout local"
+
+#: transcria/web/templates/dashboard_status.html:8
+msgid "tout-en-un"
+msgstr "tout-en-un"
 
 #: transcria/web/i18n_js.py:104 transcria/web/templates/job_wizard.html:341
 msgid "tronqué"
@@ -2651,6 +2914,10 @@ msgstr "Écrivez d'abord votre demande."
 msgid "Éditer la transcription"
 msgstr "Éditer la transcription"
 
+#: transcria/web/templates/admin_config.html:180
+msgid "Édition libre de toute la configuration. Référence des paramètres : <code>docs/CONFIG_REFERENCE.md</code>. Les secrets masqués (********) sont préservés si laissés tels quels."
+msgstr "Édition libre de toute la configuration. Référence des paramètres : <code>docs/CONFIG_REFERENCE.md</code>. Les secrets masqués (********) sont préservés si laissés tels quels."
+
 #: transcria/web/templates/job_wizard.html:254
 #: transcria/web/templates/job_wizard.html:364
 #: transcria/web/templates/job_wizard.html:557
@@ -2665,6 +2932,14 @@ msgstr "État"
 #: transcria/web/templates/admin_maintenance.html:63
 msgid "État systemd :"
 msgstr "État systemd :"
+
+#: transcria/web/templates/dashboard_status.html:2
+msgid "État système"
+msgstr "État système"
+
+#: transcria/web/templates/dashboard_status.html:5
+msgid "État technique du système"
+msgstr "État technique du système"
 
 #: transcria/web/templates/job_wizard.html:311
 msgid "à"

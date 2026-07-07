@@ -1,19 +1,16 @@
 {% extends "base.html" %}
-{% block title %}État système — TranscrIA{% endblock %}
+{% block title %}{{ _('État système') }} — TranscrIA{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
-  <h1 class="h3 mb-0">État technique du système</h1>
+  <h1 class="h3 mb-0">{{ _('État technique du système') }}</h1>
   <span class="badge {{ 'text-bg-primary' if runtime_role == 'all' else 'text-bg-info' }}"
-        title="Rôle du process (runtime.role / TRANSCRIA_ROLE)">
-    mode {{ 'tout-en-un' if runtime_role == 'all' else 'frontale (web)' if runtime_role == 'web' else runtime_role }}
+        title="{{ _('Rôle du process (runtime.role / TRANSCRIA_ROLE)') }}">
+    {{ _('mode %(m)s', m=(_('tout-en-un') if runtime_role == 'all' else _('frontale (web)') if runtime_role == 'web' else runtime_role)) }}
   </span>
 </div>
 {% if runtime_role == 'web' %}
 <div class="alert alert-info small">
-  <i class="bi bi-info-circle"></i> Cette machine est une <strong>frontale sans GPU</strong> :
-  toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de
-  ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources
-  GPU distantes est dans le panneau « Ressources distantes ».
+  <i class="bi bi-info-circle"></i> {% trans %}Cette machine est une <strong>frontale sans GPU</strong> : toute la charge GPU (transcription, diarisation, LLM) est portée par le worker / serveur de ressources. Les panneaux ci-dessous décrivent <em>cette</em> machine ; l'état des ressources GPU distantes est dans le panneau « Ressources distantes ».{% endtrans %}
 </div>
 {% endif %}
 {% if status and status.available %}
@@ -22,17 +19,17 @@
     <div class="card mb-3">
       <div class="card-header">CPU</div>
       <div class="card-body">
-        <p>Charge: <strong>{{ status.cpu.load if status.cpu else '—' }}%</strong></p>
+        <p>{{ _('Charge :') }} <strong>{{ status.cpu.load if status.cpu else '—' }}%</strong></p>
       </div>
     </div>
     <div class="card mb-3">
       <div class="card-header">RAM</div>
       <div class="card-body">
-        <p>Utilisée: <strong>{{ status.ram.used if status.ram else '—' }} Go</strong> / {{ status.ram.total if status.ram else '—' }} Go</p>
+        <p>{{ _('Utilisée :') }} <strong>{{ status.ram.used if status.ram else '—' }} {{ _('Go') }}</strong> / {{ status.ram.total if status.ram else '—' }} {{ _('Go') }}</p>
       </div>
     </div>
     <div class="card mb-3">
-      <div class="card-header">Services</div>
+      <div class="card-header">{{ _('Services') }}</div>
       <div class="card-body">
         {% if status.services %}
         {% for name, state in status.services.items() %}
@@ -42,7 +39,7 @@
         </div>
         {% endfor %}
         {% else %}
-        <p class="text-muted">Aucun service.</p>
+        <p class="text-muted">{{ _('Aucun service.') }}</p>
         {% endif %}
       </div>
     </div>
@@ -50,25 +47,25 @@
   <div class="col-md-6">
     {% if runtime_role != 'web' or status.gpus %}
     <div class="card mb-3">
-      <div class="card-header">GPU (machine locale)</div>
+      <div class="card-header">{{ _('GPU (machine locale)') }}</div>
       <div class="card-body">
         {% if status.gpus %}
         {% for gpu in status.gpus %}
         <div class="mb-3 p-2 border rounded">
           <strong>{{ gpu.name }}</strong><br>
-          <small>VRAM: {{ gpu.memory.used }} / {{ gpu.memory.total }} Go</small><br>
-          <small>Utilisation: {{ gpu.gpu_util }}% | Temp: {{ gpu.temp }}°C</small>
+          <small>{{ _('VRAM :') }} {{ gpu.memory.used }} / {{ gpu.memory.total }} {{ _('Go') }}</small><br>
+          <small>{{ _('Utilisation :') }} {{ gpu.gpu_util }}% | {{ _('Temp :') }} {{ gpu.temp }}°C</small>
         </div>
         {% endfor %}
         {% else %}
-        <p class="text-muted">Aucun GPU détecté.</p>
+        <p class="text-muted">{{ _('Aucun GPU détecté.') }}</p>
         {% endif %}
       </div>
     </div>
     {% endif %}
     {% if status.model %}
     <div class="card mb-3">
-      <div class="card-header">Modèle actif</div>
+      <div class="card-header">{{ _('Modèle actif') }}</div>
       <div class="card-body"><strong>{{ status.model }}</strong></div>
     </div>
     {% endif %}
@@ -76,47 +73,56 @@
 </div>
 {% else %}
 <div class="alert {{ 'alert-info' if runtime_role == 'web' else 'alert-warning' }}">
-  <i class="bi bi-exclamation-triangle"></i> Dashboard LLM indisponible sur {{ app_config.services.dashboard_llm_url if app_config else 'port 5001' }}.
-  <br><small>{% if runtime_role == 'web' %}Normal sur une frontale : le dashboard tourne sur la machine GPU.
-  {% else %}Le dashboard doit être lancé pour afficher l'état technique.{% endif %}</small>
+  <i class="bi bi-exclamation-triangle"></i> {{ _('Dashboard LLM indisponible sur %(url)s.', url=app_config.services.dashboard_llm_url if app_config else 'port 5001') }}
+  <br><small>{% if runtime_role == 'web' %}{{ _('Normal sur une frontale : le dashboard tourne sur la machine GPU.') }}
+  {% else %}{{ _("Le dashboard doit être lancé pour afficher l'état technique.") }}{% endif %}</small>
 </div>
 {% endif %}
 
 <div class="card mb-3">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Stockage des fichiers de jobs</span>
+    <span>{{ _('Stockage des fichiers de jobs') }}</span>
     <span class="badge {{ 'text-bg-primary' if storage_backend == 'pg' else 'text-bg-secondary' }}">
-      backend {{ storage_backend }}</span>
+      {{ _('backend %(b)s', b=storage_backend) }}</span>
   </div>
   <div class="card-body small">
     {% if storage_backend == 'pg' %}
-    <p class="mb-1">Fichiers répliqués via PostgreSQL (topologie split sans disque partagé —
-      <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>).</p>
+    <p class="mb-1">{% trans %}Fichiers répliqués via PostgreSQL (topologie split sans disque partagé — <code>docs/STOCKAGE_PARTAGE_JOBS.md</code>).{% endtrans %}</p>
     {% if storage_stats %}
-    <p class="mb-0"><strong>{{ storage_stats.files }}</strong> fichier(s) en base —
-      <strong>{{ (storage_stats.bytes / (1024*1024)) | round(1) }} Mo</strong>.
-      Le volume redescend après chaque traitement terminé (purge de l'audio).</p>
+    <p class="mb-0">{{ _('<strong>%(files)s</strong> fichier(s) en base — <strong>%(mb)s Mo</strong>. Le volume redescend après chaque traitement terminé (purge de l\'audio).', files=storage_stats.files, mb=(storage_stats.bytes / (1024*1024)) | round(1)) }}</p>
     {% else %}
-    <p class="mb-0 text-muted">Volumétrie indisponible.</p>
+    <p class="mb-0 text-muted">{{ _('Volumétrie indisponible.') }}</p>
     {% endif %}
     {% else %}
-    <p class="mb-0 text-muted">Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un
-      ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>.</p>
+    <p class="mb-0 text-muted">{% trans %}Disque local (<code>storage.jobs_dir</code>) — adapté au tout-en-un ou à un montage partagé. En split deux machines, passer <code>storage.shared_backend: pg</code>.{% endtrans %}</p>
     {% endif %}
   </div>
 </div>
 
 <div class="card mb-3" id="remote-resources-card">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span>Ressources distantes (inférence)</span>
+    <span>{{ _('Ressources distantes (inférence)') }}</span>
     <span id="rr-mode" class="badge bg-secondary">…</span>
   </div>
   <div class="card-body">
-    <div id="rr-body"><p class="text-muted">Chargement…</p></div>
+    <div id="rr-body"><p class="text-muted">{{ _('Chargement…') }}</p></div>
   </div>
 </div>
 <script>
 (function () {
+  const T = {
+    allLocal: {{ _('tout local')|tojson }},
+    noRemote: {{ _('Aucune ressource distante configurée (tout intégré).')|tojson }},
+    unreachable: {{ _('injoignable')|tojson }},
+    nodeUnreachable: {{ _('Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : %(reqs)s.')|tojson }},
+    remote: {{ _('distant')|tojson }},
+    gpuLabel: {{ _('GPU :')|tojson }},
+    gpuLine: {{ _('GPU %(i)s — libre %(free)s / %(total)s Mo')|tojson }},
+    noEngine: {{ _('Aucun moteur déclaré.')|tojson }},
+    error: {{ _('erreur')|tojson }},
+    statusUnavailable: {{ _('Statut indisponible (%(e)s).')|tojson }},
+  };
+  function fmt(s, p) { return s.replace(/%\(([^)]+)\)s/g, function (m, k) { return p[k] !== undefined ? p[k] : m; }); }
   const modeEl = document.getElementById('rr-mode');
   const body = document.getElementById('rr-body');
   function dot(up) {
@@ -129,19 +135,18 @@
       const d = await resp.json();
       const reqs = d.requires_remote || [];
       if (reqs.length === 0) {
-        modeEl.textContent = 'tout local';
+        modeEl.textContent = T.allLocal;
         modeEl.className = 'badge bg-secondary';
-        body.innerHTML = '<p class="text-muted">Aucune ressource distante configurée (tout intégré).</p>';
+        body.innerHTML = '<p class="text-muted">' + T.noRemote + '</p>';
         return;
       }
       if (!d.reachable) {
-        modeEl.textContent = 'injoignable';
+        modeEl.textContent = T.unreachable;
         modeEl.className = 'badge bg-danger';
-        body.innerHTML = '<div class="alert alert-danger mb-0">Nœud de ressources injoignable — '
-          + 'les transcriptions distantes sont mises en file. Requis : ' + reqs.join(', ') + '.</div>';
+        body.innerHTML = '<div class="alert alert-danger mb-0">' + fmt(T.nodeUnreachable, { reqs: reqs.join(', ') }) + '</div>';
         return;
       }
-      modeEl.textContent = d.mode || 'distant';
+      modeEl.textContent = d.mode || T.remote;
       modeEl.className = 'badge bg-success';
       let html = '';
       (d.engines || []).forEach(function (e) {
@@ -149,16 +154,16 @@
           + ' <small class="text-muted">(' + e.kind + ')</small></span>' + dot(e.up) + '</div>';
       });
       if ((d.gpus || []).length) {
-        html += '<hr><small class="text-muted">GPU :</small>';
+        html += '<hr><small class="text-muted">' + T.gpuLabel + '</small>';
         d.gpus.forEach(function (g) {
-          html += '<div><small>GPU ' + g.index + ' — libre ' + g.free_mb + ' / ' + g.total_mb + ' Mo</small></div>';
+          html += '<div><small>' + fmt(T.gpuLine, { i: g.index, free: g.free_mb, total: g.total_mb }) + '</small></div>';
         });
       }
-      body.innerHTML = html || '<p class="text-muted">Aucun moteur déclaré.</p>';
+      body.innerHTML = html || '<p class="text-muted">' + T.noEngine + '</p>';
     } catch (err) {
-      modeEl.textContent = 'erreur';
+      modeEl.textContent = T.error;
       modeEl.className = 'badge bg-warning';
-      body.innerHTML = '<p class="text-muted">Statut indisponible (' + err + ').</p>';
+      body.innerHTML = '<p class="text-muted">' + fmt(T.statusUnavailable, { e: err }) + '</p>';
     }
   }
   refresh();
@@ -166,5 +171,5 @@
 })();
 </script>
 
-<a href="/" class="btn btn-outline-secondary">Retour</a>
+<a href="/" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
 {% endblock %}
