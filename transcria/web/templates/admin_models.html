@@ -1,36 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Modèles — TranscrIA{% endblock %}
+{% block title %}{{ _('Modèles') }} — TranscrIA{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h1 class="h3 mb-0"><i class="bi bi-boxes me-2"></i>Modèles</h1>
-  <a href="/" class="btn btn-outline-secondary">Retour</a>
+  <h1 class="h3 mb-0"><i class="bi bi-boxes me-2"></i>{{ _('Modèles') }}</h1>
+  <a href="/" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
 </div>
 
 <div class="row g-3 mb-4">
   <div class="col-md-6">
     <div class="card h-100"><div class="card-body py-2 small">
-      <div class="text-muted">Cache HuggingFace (STT, diarisation)</div>
+      <div class="text-muted">{{ _('Cache HuggingFace (STT, diarisation)') }}</div>
       <code>{{ view.hf_home }}</code>
-      <div class="mt-1"><strong>{{ view.hf_free_gb }} Go</strong> libres</div>
+      <div class="mt-1"><strong>{{ _('%(n)s Go', n=view.hf_free_gb) }}</strong> {{ _('libres') }}</div>
     </div></div>
   </div>
   <div class="col-md-6">
     <div class="card h-100"><div class="card-body py-2 small">
-      <div class="text-muted">Modèles GGUF (LLM d'arbitrage)</div>
+      <div class="text-muted">{{ _("Modèles GGUF (LLM d'arbitrage)") }}</div>
       <code>{{ view.models_dir }}</code>
-      <div class="mt-1"><strong>{{ view.models_free_gb }} Go</strong> libres</div>
+      <div class="mt-1"><strong>{{ _('%(n)s Go', n=view.models_free_gb) }}</strong> {{ _('libres') }}</div>
     </div></div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header d-flex align-items-center">
-    <i class="bi bi-hdd-network me-2"></i> Modèles requis par cette installation
+    <i class="bi bi-hdd-network me-2"></i> {{ _('Modèles requis par cette installation') }}
   </div>
   <div class="card-body p-0">
     <table class="table table-sm align-middle mb-0">
       <thead class="table-light">
-        <tr><th>Modèle</th><th>Licence</th><th>Statut</th><th class="text-end">Action</th></tr>
+        <tr><th>{{ _('Modèle') }}</th><th>{{ _('Licence') }}</th><th>{{ _('Statut') }}</th><th class="text-end">{{ _('Action') }}</th></tr>
       </thead>
       <tbody>
         {% for it in view['items'] %}
@@ -43,31 +43,31 @@
           </td>
           <td class="small">
             <a href="{{ s.license_url }}" target="_blank" rel="noopener">{{ s.license }}</a>
-            {% if s.gated %}<span class="badge bg-warning text-dark ms-1">token HF</span>{% endif %}
+            {% if s.gated %}<span class="badge bg-warning text-dark ms-1">{{ _('token HF') }}</span>{% endif %}
           </td>
           <td style="min-width:16rem">
             {% if it.present %}
-              <span class="badge bg-success">présent</span>
-              <span class="small text-muted">{{ (it.size_bytes / 1e9)|round(1) }} Go</span>
+              <span class="badge bg-success">{{ _('présent') }}</span>
+              <span class="small text-muted">{{ _('%(n)s Go', n=(it.size_bytes / 1e9)|round(1)) }}</span>
             {% elif inprog %}
               <div class="progress" style="height:1.1rem" data-progress-role="{{ s.role }}">
                 <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">…</div>
               </div>
-              <div class="small text-muted" data-progress-label="{{ s.role }}">démarrage…</div>
+              <div class="small text-muted" data-progress-label="{{ s.role }}">{{ _('démarrage…') }}</div>
             {% elif it.progress and it.progress.status == 'error' %}
-              <span class="badge bg-danger">échec</span>
+              <span class="badge bg-danger">{{ _('échec') }}</span>
               <div class="small text-danger">{{ it.progress.message }}</div>
             {% else %}
-              <span class="badge bg-secondary">absent</span>
-              <span class="small text-muted">~{{ s.est_gb }} Go</span>
+              <span class="badge bg-secondary">{{ _('absent') }}</span>
+              <span class="small text-muted">~{{ _('%(n)s Go', n=s.est_gb) }}</span>
             {% endif %}
           </td>
           <td class="text-end">
             {% if it.present and s.role == 'arbitrage_llm' %}
             <form method="post" action="{{ url_for('web.admin_models_activate') }}" class="d-inline">
               <button type="submit" class="btn btn-outline-success btn-sm"
-                      title="Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)">
-                <i class="bi bi-play-circle"></i> Activer (servir)
+                      title="{{ _('Basculer le profil llama.cpp sur ce modèle (redémarrage du service requis)') }}">
+                <i class="bi bi-play-circle"></i> {{ _('Activer (servir)') }}
               </button>
             </form>
             {% endif %}
@@ -76,13 +76,13 @@
               <input type="hidden" name="role" value="{{ s.role }}">
               {% if s.gated and not has_token %}
               <input type="password" name="token" class="form-control form-control-sm" style="width:12rem"
-                     placeholder="token HF" autocomplete="off">
+                     placeholder="{{ _('token HF') }}" autocomplete="off">
               {% endif %}
               <button type="submit" class="btn btn-primary btn-sm">
-                <i class="bi bi-download"></i> Télécharger
+                <i class="bi bi-download"></i> {{ _('Télécharger') }}
               </button>
             </form>
-            {% if s.gated and has_token %}<div class="small text-muted">token HF configuré utilisé</div>{% endif %}
+            {% if s.gated and has_token %}<div class="small text-muted">{{ _('token HF configuré utilisé') }}</div>{% endif %}
             {% endif %}
           </td>
         </tr>
@@ -94,7 +94,8 @@
 
 <script>
 (function () {
-  function human(n) { return (n / 1e9).toFixed(1) + " Go"; }
+  var GO = {{ _('Go')|tojson }};
+  function human(n) { return (n / 1e9).toFixed(1) + " " + GO; }
   var bars = document.querySelectorAll("[data-progress-role]");
   bars.forEach(function (el) {
     var role = el.getAttribute("data-progress-role");
@@ -111,7 +112,7 @@
             bar.textContent = p.pct + "%";
             if (label) label.textContent = human(p.downloaded_bytes || 0) + " / " + human(p.total_bytes || 0);
           } else if (label) {
-            label.textContent = "téléchargement… " + human(p.downloaded_bytes || 0);
+            label.textContent = {{ _('téléchargement…')|tojson }} + " " + human(p.downloaded_bytes || 0);
           }
         })
         .catch(function () {});

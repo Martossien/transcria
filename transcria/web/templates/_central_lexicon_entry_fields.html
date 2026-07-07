@@ -1,18 +1,18 @@
 <div class="row g-2">
   <div class="col-md-6">
-    <label class="form-label">Forme correcte</label>
+    <label class="form-label">{{ _('Forme correcte') }}</label>
     <input class="form-control" name="term" required>
   </div>
   <div class="col-md-6">
-    <label class="form-label">Formes erronées observées</label>
-    <input class="form-control" name="variants" placeholder="Séparées par virgule ou point-virgule">
+    <label class="form-label">{{ _('Formes erronées observées') }}</label>
+    <input class="form-control" name="variants" placeholder="{{ _('Séparées par virgule ou point-virgule') }}">
   </div>
   <div class="col-md-4">
-    <label class="form-label">Catégorie</label>
+    <label class="form-label">{{ _('Catégorie') }}</label>
     <input class="form-control" name="category" list="central-lexicon-categories" value="mot suspect">
   </div>
   <div class="col-md-4">
-    <label class="form-label">Priorité</label>
+    <label class="form-label">{{ _('Priorité') }}</label>
     <select class="form-select" name="priority">
       {% for priority in priorities %}
       <option value="{{ priority }}">{{ priority }}</option>
@@ -20,12 +20,12 @@
     </select>
   </div>
   <div class="col-12">
-    <label class="form-label">Commentaire</label>
+    <label class="form-label">{{ _('Commentaire') }}</label>
     <input class="form-control" name="comment">
   </div>
   <details class="col-12">
-    <summary class="small text-muted">Option avancée</summary>
-    <label class="form-label mt-2">Remplacer par</label>
+    <summary class="small text-muted">{{ _('Option avancée') }}</summary>
+    <label class="form-label mt-2">{{ _('Remplacer par') }}</label>
     <input class="form-control" name="replace_by">
   </details>
 </div>

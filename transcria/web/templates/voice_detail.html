@@ -1,110 +1,110 @@
 {% extends "base.html" %}
-{% block title %}Voix — {{ subject.display_name }}{% endblock %}
+{% block title %}{{ _('Voix') }} — {{ subject.display_name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
     <h1 class="h3 mb-1">{{ subject.display_name }}</h1>
     <p class="text-muted mb-0">
-      {{ subject.group.name if subject.group else "Profil global" }}
+      {{ subject.group.name if subject.group else _("Profil global") }}
       {% if subject.gender %}
-        · {% if subject.gender == 'female' %}Féminin{% elif subject.gender == 'male' %}Masculin{% else %}Autre / non binaire{% endif %}
+        · {% if subject.gender == 'female' %}{{ _('Féminin') }}{% elif subject.gender == 'male' %}{{ _('Masculin') }}{% else %}{{ _('Autre / non binaire') }}{% endif %}
       {% endif %}
     </p>
   </div>
-  <a href="/admin/voices" class="btn btn-outline-secondary">Retour</a>
+  <a href="/admin/voices" class="btn btn-outline-secondary">{{ _('Retour') }}</a>
 </div>
 
 <div class="row g-4">
   <div class="col-lg-6">
     <div class="card p-4 h-100">
-      <h2 class="h5">Personne</h2>
+      <h2 class="h5">{{ _('Personne') }}</h2>
       <form action="/admin/voices/{{ subject.id }}/metadata" method="post">
         <div class="mb-3">
-          <label class="form-label">Nom de la personne</label>
+          <label class="form-label">{{ _('Nom de la personne') }}</label>
           <input class="form-control" name="display_name" value="{{ subject.display_name }}" required>
         </div>
         <div class="mb-3">
-          <label class="form-label">Genre validé</label>
+          <label class="form-label">{{ _('Genre validé') }}</label>
           <select class="form-select" name="gender" required>
-            <option value="female" {% if subject.gender == 'female' %}selected{% endif %}>Féminin</option>
-            <option value="male" {% if subject.gender == 'male' %}selected{% endif %}>Masculin</option>
-            <option value="other" {% if subject.gender == 'other' %}selected{% endif %}>Autre / non binaire</option>
+            <option value="female" {% if subject.gender == 'female' %}selected{% endif %}>{{ _('Féminin') }}</option>
+            <option value="male" {% if subject.gender == 'male' %}selected{% endif %}>{{ _('Masculin') }}</option>
+            <option value="other" {% if subject.gender == 'other' %}selected{% endif %}>{{ _('Autre / non binaire') }}</option>
           </select>
         </div>
         <div class="mb-3">
-          <label class="form-label">Email</label>
+          <label class="form-label">{{ _('Email') }}</label>
           <input class="form-control" name="email" type="email" value="{{ subject.email or '' }}">
         </div>
         <div class="mb-3">
-          <label class="form-label">Référence interne</label>
+          <label class="form-label">{{ _('Référence interne') }}</label>
           <input class="form-control" name="external_ref" value="{{ subject.external_ref or '' }}">
         </div>
-        <button class="btn btn-primary" type="submit">Enregistrer</button>
+        <button class="btn btn-primary" type="submit">{{ _('Enregistrer') }}</button>
       </form>
     </div>
   </div>
 
   <div class="col-lg-6">
     <div class="card p-4 h-100">
-      <h2 class="h5">Consentement</h2>
+      <h2 class="h5">{{ _('Consentement') }}</h2>
       <p class="small">
-        <a href="/admin/voices/consent-form.pdf">Télécharger le formulaire vierge</a>
+        <a href="/admin/voices/consent-form.pdf">{{ _('Télécharger le formulaire vierge') }}</a>
       </p>
       {% if active_consent %}
-      <p><span class="badge bg-success">Actif</span> version {{ active_consent.form_version }}</p>
-      <p class="small text-muted">Hash preuve : {{ active_consent.proof_sha256[:16] }}…</p>
+      <p><span class="badge bg-success">{{ _('Actif') }}</span> {{ _('version %(v)s', v=active_consent.form_version) }}</p>
+      <p class="small text-muted">{{ _('Hash preuve : %(h)s…', h=active_consent.proof_sha256[:16]) }}</p>
       <a class="btn btn-sm btn-outline-secondary"
          href="/admin/voices/{{ subject.id }}/consent-proof/{{ active_consent.id }}"
          target="_blank"
          rel="noopener">
-        Vérifier la preuve signée
+        {{ _('Vérifier la preuve signée') }}
       </a>
       {% else %}
-      <p class="text-muted">Aucun consentement actif. La génération d'empreinte est bloquée.</p>
+      <p class="text-muted">{{ _("Aucun consentement actif. La génération d'empreinte est bloquée.") }}</p>
       {% endif %}
       <hr>
       <form action="/admin/voices/{{ subject.id }}/consents" method="post" enctype="multipart/form-data">
         <div class="mb-3">
-          <label class="form-label">Preuve signée</label>
+          <label class="form-label">{{ _('Preuve signée') }}</label>
           <input class="form-control" type="file" name="proof" required>
         </div>
         <div class="mb-3">
-          <label class="form-label">Statut</label>
+          <label class="form-label">{{ _('Statut') }}</label>
           <select class="form-select" name="status">
-            <option value="active">Actif</option>
-            <option value="rejected">Rejeté</option>
+            <option value="active">{{ _('Actif') }}</option>
+            <option value="rejected">{{ _('Rejeté') }}</option>
           </select>
         </div>
-        <button class="btn btn-primary" type="submit">Enregistrer le consentement</button>
+        <button class="btn btn-primary" type="submit">{{ _('Enregistrer le consentement') }}</button>
       </form>
     </div>
   </div>
 
   <div class="col-lg-6">
     <div class="card p-4 h-100">
-      <h2 class="h5">Empreinte vocale</h2>
+      <h2 class="h5">{{ _('Empreinte vocale') }}</h2>
       {% if latest_profile %}
       <p>
         <span class="badge bg-info text-dark">{{ latest_profile.status }}</span>
         {{ latest_profile.embedding_backend }} · dim {{ latest_profile.embedding_dim }}
       </p>
-      <p class="small text-muted">Qualité : {{ latest_profile.quality_status or "n/a" }}</p>
+      <p class="small text-muted">{{ _('Qualité : %(q)s', q=latest_profile.quality_status or "n/a") }}</p>
       {% else %}
-      <p class="text-muted">Aucune empreinte générée.</p>
+      <p class="text-muted">{{ _('Aucune empreinte générée.') }}</p>
       {% endif %}
       <hr>
       <form action="/admin/voices/{{ subject.id }}/generate" method="post" enctype="multipart/form-data">
         <div class="mb-3">
-          <label class="form-label">Audio de référence</label>
+          <label class="form-label">{{ _('Audio de référence') }}</label>
           <input class="form-control" type="file" name="audio" required {% if not active_consent %}disabled{% endif %}>
         </div>
-        <button class="btn btn-primary" type="submit" {% if not active_consent %}disabled{% endif %}>Générer l'empreinte</button>
+        <button class="btn btn-primary" type="submit" {% if not active_consent %}disabled{% endif %}>{{ _("Générer l'empreinte") }}</button>
       </form>
     </div>
   </div>
 </div>
 
 <form action="/admin/voices/{{ subject.id }}/disable" method="post" class="mt-4">
-  <button class="btn btn-outline-danger" type="submit">Désactiver cette voix</button>
+  <button class="btn btn-outline-danger" type="submit">{{ _('Désactiver cette voix') }}</button>
 </form>
 {% endblock %}
