@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 19:51+0200\n"
+"POT-Creation-Date: 2026-07-07 20:02+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -30,6 +30,11 @@ msgstr[1] "%(count)s items"
 msgid "%(gb)s Go"
 msgstr "%(gb)s GB"
 
+#: transcria/web/i18n_js.py:28
+#, python-format
+msgid "%(label)s (%(elapsed)s écoulées)"
+msgstr "%(label)s (%(elapsed)s elapsed)"
+
 #: transcria/web/templates/job_wizard.html:618
 #, python-format
 msgid "%(m)s%% voix masculine, %(f)s%% voix féminine"
@@ -50,12 +55,12 @@ msgstr "%(min)s min"
 msgid "%(min)s minutes"
 msgstr "%(min)s minutes"
 
-#: transcria/web/templates/job_wizard.html:341
+#: transcria/web/i18n_js.py:29 transcria/web/templates/job_wizard.html:341
 #, python-format
 msgid "%(n)s diapo(s)"
 msgstr "%(n)s slide(s)"
 
-#: transcria/web/templates/job_wizard.html:341
+#: transcria/web/i18n_js.py:30 transcria/web/templates/job_wizard.html:341
 #, python-format
 msgid "%(n)s image(s) ignorée(s)"
 msgstr "%(n)s image(s) skipped"
@@ -70,7 +75,7 @@ msgstr "%(n)s speaker(s) detected"
 msgid "%(n)s nom(s) détecté(s)"
 msgstr "%(n)s name(s) detected"
 
-#: transcria/web/templates/job_wizard.html:341
+#: transcria/web/i18n_js.py:31 transcria/web/templates/job_wizard.html:341
 #, python-format
 msgid "%(n)s page(s)"
 msgstr "%(n)s page(s)"
@@ -105,6 +110,10 @@ msgstr "%(s)ss, %(n)s turns"
 #, python-format
 msgid "%(sel)s / %(avail)s sélectionné(s)"
 msgstr "%(sel)s / %(avail)s selected"
+
+#: transcria/web/i18n_js.py:32
+msgid "(créé)"
+msgstr "(created)"
 
 #: transcria/web/templates/job_wizard.html:308
 #: transcria/web/templates/job_wizard.html:319
@@ -204,7 +213,7 @@ msgstr "Add"
 msgid "Ajouter au lexique central"
 msgstr "Add to central glossary"
 
-#: transcria/web/templates/job_wizard.html:846
+#: transcria/web/i18n_js.py:33 transcria/web/templates/job_wizard.html:846
 msgid "Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs"
 msgstr "Add this validated form to a central glossary, shared and reused on future jobs"
 
@@ -224,13 +233,17 @@ msgstr "Analyze the file"
 msgid "Animateur"
 msgstr "Facilitator"
 
-#: transcria/web/templates/queue.html:173
+#: transcria/web/i18n_js.py:34 transcria/web/templates/queue.html:173
 msgid "Annuler"
 msgstr "Cancel"
 
 #: transcria/web/templates/queue.html:213
 msgid "Annuler ce job ?"
 msgstr "Cancel this job?"
+
+#: transcria/web/i18n_js.py:35
+msgid "Annuler le traitement"
+msgstr "Cancel processing"
 
 #: transcria/web/templates/job_result.html:79
 msgid "Aperçu du SRT"
@@ -268,7 +281,7 @@ msgstr "Apply options"
 msgid "Appliquer les suggestions"
 msgstr "Apply suggestions"
 
-#: transcria/web/templates/job_wizard.html:847
+#: transcria/web/i18n_js.py:36 transcria/web/templates/job_wizard.html:847
 msgid "Au lexique central"
 msgstr "To central glossary"
 
@@ -306,13 +319,17 @@ msgstr "Bandwidth 95%% :"
 msgid "Canaux"
 msgstr "Channels"
 
-#: transcria/web/templates/job_wizard.html:768
+#: transcria/web/i18n_js.py:37 transcria/web/templates/job_wizard.html:768
 msgid "Catégorie"
 msgstr "Category"
 
-#: transcria/web/templates/job_wizard.html:772
+#: transcria/web/i18n_js.py:38 transcria/web/templates/job_wizard.html:772
 msgid "Catégorie libre"
 msgstr "Free category"
+
+#: transcria/web/i18n_js.py:39
+msgid "Ce job a déjà été traité."
+msgstr "This job has already been processed."
 
 #: transcria/web/templates/job_wizard.html:403
 msgid "Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer."
@@ -342,7 +359,11 @@ msgstr "Sign in"
 msgid "Contexte de la réunion"
 msgstr "Meeting context"
 
-#: transcria/web/templates/job_wizard.html:807
+#: transcria/web/i18n_js.py:40
+msgid "Contexte projet"
+msgstr "Project context"
+
+#: transcria/web/i18n_js.py:41 transcria/web/templates/job_wizard.html:807
 #, python-format
 msgid "Contexte proposé (%(n)s)"
 msgstr "Suggested context (%(n)s)"
@@ -355,6 +376,10 @@ msgstr "Continue anyway"
 #: transcria/web/templates/job_wizard.html:858
 msgid "Continuer sans lexique"
 msgstr "Continue without glossary"
+
+#: transcria/web/i18n_js.py:42
+msgid "Continuer à attendre"
+msgstr "Keep waiting"
 
 #: transcria/web/templates/job_wizard.html:895
 msgid "Contrôle qualité"
@@ -371,6 +396,10 @@ msgstr "Conversion required for processing (done automatically)."
 #: transcria/web/templates/job_wizard.html:320
 msgid "Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé."
 msgstr "Paste the invitation (subject, body, agenda, recipients). Helps the LLM spell names and structure the summary."
+
+#: transcria/web/i18n_js.py:43
+msgid "Correction LLM en cours…"
+msgstr "LLM correction in progress…"
 
 #: transcria/web/templates/index.html:49
 msgid "Créez votre premier traitement pour transcrire une réunion."
@@ -425,6 +454,10 @@ msgstr "Log out"
 msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
 msgstr "Describe the change to apply, or click \"Apply this proposal\" under an assistant reply."
 
+#: transcria/web/i18n_js.py:44
+msgid "Démarrage…"
+msgstr "Starting…"
+
 #: transcria/web/templates/queue.html:97
 msgid "Départ"
 msgstr "Start"
@@ -436,6 +469,10 @@ msgstr "Drop the meeting audio or video file."
 #: transcria/web/templates/job_wizard.html:571
 msgid "Détecter les locuteurs"
 msgstr "Detect speakers"
+
+#: transcria/web/i18n_js.py:45
+msgid "Détection des locuteurs lancée sur le nœud GPU — la page se rafraîchira."
+msgstr "Speaker detection started on the GPU node — the page will refresh."
 
 #: transcria/web/templates/queue.html:42
 msgid "En attente"
@@ -466,9 +503,36 @@ msgstr "Saved"
 msgid "Erreur"
 msgstr "Error"
 
+#: transcria/web/i18n_js.py:46
+msgid "Erreur :"
+msgstr "Error:"
+
+#: transcria/web/i18n_js.py:47
+#, python-format
+msgid "Erreur : %(e)s"
+msgstr "Error: %(e)s"
+
+#: transcria/web/i18n_js.py:48
+#, python-format
+msgid "Erreur réseau : %(msg)s"
+msgstr "Network error: %(msg)s"
+
 #: transcria/web/templates/job_result.html:171
 msgid "Erreur réseau — réessayez."
 msgstr "Network error — please retry."
+
+#: transcria/web/i18n_js.py:49
+msgid "Erreur réseau."
+msgstr "Network error."
+
+#: transcria/web/i18n_js.py:50
+#, python-format
+msgid "Erreur serveur (%(status)s)."
+msgstr "Server error (%(status)s)."
+
+#: transcria/web/i18n_js.py:51
+msgid "Erreur serveur non JSON."
+msgstr "Non-JSON server error."
 
 #: transcria/web/templates/job_wizard.html:286
 msgid "Est-ce bien le fichier attendu ?"
@@ -494,13 +558,17 @@ msgstr "E.g.: Cheese-making vocabulary"
 msgid "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
 msgstr "E.g.: \"Shorten the summary and highlight the decisions\" — or ask a question about the content"
 
-#: transcria/web/templates/job_wizard.html:771
+#: transcria/web/i18n_js.py:52 transcria/web/templates/job_wizard.html:771
 msgid "Ex: Forme douteuse A, forme douteuse B"
 msgstr "E.g.: Doubtful form A, doubtful form B"
 
-#: transcria/web/templates/job_wizard.html:770
+#: transcria/web/i18n_js.py:53 transcria/web/templates/job_wizard.html:770
 msgid "Ex: Forme validée"
 msgstr "E.g.: Validated form"
+
+#: transcria/web/i18n_js.py:54
+msgid "Export en cours…"
+msgstr "Exporting…"
 
 #: transcria/web/templates/job_wizard.html:956
 msgid "Export et résultats"
@@ -531,6 +599,14 @@ msgstr "Audio file & processing profile"
 msgid "Fichier reçu."
 msgstr "File received."
 
+#: transcria/web/i18n_js.py:55
+msgid "Fichier trop volumineux (dépasse la limite du serveur)."
+msgstr "File too large (exceeds the server limit)."
+
+#: transcria/web/i18n_js.py:56
+msgid "Fichier téléversé. Rechargement…"
+msgstr "File uploaded. Reloading…"
+
 #: transcria/web/templates/base.html:35
 msgctxt "navigation"
 msgid "File"
@@ -540,7 +616,11 @@ msgstr "Queue"
 msgid "File d'attente"
 msgstr "Queue"
 
-#: transcria/web/templates/job_wizard.html:640
+#: transcria/web/i18n_js.py:57
+msgid "Finalisation…"
+msgstr "Finalizing…"
+
+#: transcria/web/i18n_js.py:58 transcria/web/templates/job_wizard.html:640
 #: transcria/web/templates/job_wizard.html:665
 #: transcria/web/templates/job_wizard.html:688
 msgid "Fonction"
@@ -554,11 +634,11 @@ msgstr "Format"
 msgid "Forme :"
 msgstr "Form:"
 
-#: transcria/web/templates/job_wizard.html:766
+#: transcria/web/i18n_js.py:59 transcria/web/templates/job_wizard.html:766
 msgid "Forme validée"
 msgstr "Validated form"
 
-#: transcria/web/templates/job_wizard.html:767
+#: transcria/web/i18n_js.py:60 transcria/web/templates/job_wizard.html:767
 msgid "Formes suspectes observées"
 msgstr "Observed doubtful forms"
 
@@ -594,13 +674,49 @@ msgstr "Generate summary"
 msgid "Générez un résumé rapide pour vérifier le contenu du fichier."
 msgstr "Generate a quick summary to check the file content."
 
+#: transcria/web/i18n_js.py:61
+msgid "Identification des locuteurs…"
+msgstr "Identifying speakers…"
+
 #: transcria/web/templates/queue.html:149
 msgid "Immédiat"
 msgstr "Immediate"
 
+#: transcria/web/i18n_js.py:62
+msgid "Informations client"
+msgstr "Client information"
+
 #: transcria/web/templates/job_wizard.html:473
 msgid "Informations complémentaires"
 msgstr "Additional information"
+
+#: transcria/web/i18n_js.py:63
+msgid "Informations entretien"
+msgstr "Interview information"
+
+#: transcria/web/i18n_js.py:64
+msgid "Informations formation"
+msgstr "Training information"
+
+#: transcria/web/i18n_js.py:65
+msgid "Informations incident"
+msgstr "Incident information"
+
+#: transcria/web/i18n_js.py:66
+msgid "Informations légales PV"
+msgstr "Legal minutes information"
+
+#: transcria/web/i18n_js.py:67
+msgid "Informations légales PV — Séance extraordinaire"
+msgstr "Legal minutes information — Extraordinary session"
+
+#: transcria/web/i18n_js.py:68
+msgid "Informations négociation"
+msgstr "Negotiation information"
+
+#: transcria/web/i18n_js.py:69
+msgid "Informations séminaire"
+msgstr "Seminar information"
 
 #: transcria/web/templates/job_wizard.html:319
 msgid "Invitation de la réunion"
@@ -637,6 +753,10 @@ msgstr "The built-in editor lets you fix the text, speakers and timings while li
 #: transcria/web/templates/job_wizard.html:754
 msgid "La LLM a signalé des termes à vérifier, mais le format n'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement."
 msgstr "The LLM flagged terms to check, but the format could not be read automatically. You can add the important terms manually."
+
+#: transcria/web/i18n_js.py:70
+msgid "La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service."
+msgstr "The LLM may be looping. If the correction files are already produced, you can cancel — the job will be recovered automatically when the service restarts."
 
 #: transcria/web/templates/base.html:143
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
@@ -683,6 +803,10 @@ msgstr "The already-saved session glossary is kept."
 msgid "Le package final sera disponible après le traitement complet."
 msgstr "The final package will be available after full processing."
 
+#: transcria/web/i18n_js.py:71
+msgid "Le résumé n'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer."
+msgstr "The summary could not be generated (LLM produced nothing after 3 attempts). The transcription is kept — you can restart."
+
 #: transcria/web/templates/job_wizard.html:323
 msgid "Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer."
 msgstr "The text above is kept; edit it or paste again to replace."
@@ -699,7 +823,7 @@ msgstr "Running jobs will be skipped."
 msgid "Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez."
 msgstr "Detected speakers are pre-filled. Check, complete, then validate."
 
-#: transcria/web/templates/job_wizard.html:788
+#: transcria/web/i18n_js.py:72 transcria/web/templates/job_wizard.html:788
 #, python-format
 msgid "Lexique central : %(name)s"
 msgstr "Central glossary: %(name)s"
@@ -764,7 +888,7 @@ msgstr "Cleanup failed."
 msgid "Nettoyer E2E"
 msgstr "Clean E2E"
 
-#: transcria/web/templates/job_wizard.html:639
+#: transcria/web/i18n_js.py:73 transcria/web/templates/job_wizard.html:639
 #: transcria/web/templates/job_wizard.html:664
 #: transcria/web/templates/job_wizard.html:687
 msgid "Nom"
@@ -818,10 +942,18 @@ msgstr "Invalid options"
 msgid "Ordre du jour"
 msgstr "Agenda"
 
+#: transcria/web/i18n_js.py:74
+msgid "Ordre du jour & indicateurs"
+msgstr "Agenda & indicators"
+
 #: transcria/web/templates/job_wizard.html:287
 #: transcria/web/templates/job_wizard.html:302
 msgid "Oui, continuer"
 msgstr "Yes, continue"
+
+#: transcria/web/i18n_js.py:75
+msgid "Oui, relancer"
+msgstr "Yes, restart"
 
 #: transcria/web/templates/index.html:27
 msgid "Ouvrir"
@@ -888,11 +1020,11 @@ msgstr "Points to review: %(w)s — Doubtful domain terms: %(t)s"
 msgid "Portail de transcription de réunion"
 msgstr "Meeting transcription portal"
 
-#: transcria/web/templates/job_wizard.html:803
+#: transcria/web/i18n_js.py:76 transcria/web/templates/job_wizard.html:803
 msgid "Pourquoi cette forme doit être validée"
 msgstr "Why this form must be validated"
 
-#: transcria/web/templates/job_wizard.html:769
+#: transcria/web/i18n_js.py:77 transcria/web/templates/job_wizard.html:769
 #: transcria/web/templates/queue.html:93
 msgid "Priorité"
 msgstr "Priority"
@@ -918,7 +1050,7 @@ msgstr "Chosen profile: <strong>%(label)s</strong>. To change it, go back to ste
 msgid "Proposition"
 msgstr "Proposal"
 
-#: transcria/web/templates/job_wizard.html:800
+#: transcria/web/i18n_js.py:78 transcria/web/templates/job_wizard.html:800
 msgid "Proposé à partir d'un document que vous avez joint à la réunion"
 msgstr "Suggested from a document you attached to the meeting"
 
@@ -939,9 +1071,21 @@ msgstr "Fast"
 msgid "Rapport Word (.docx)"
 msgstr "Word report (.docx)"
 
+#: transcria/web/i18n_js.py:79
+msgid "Rapport qualité…"
+msgstr "Quality report…"
+
 #: transcria/web/templates/job_wizard.html:587
 msgid "Rechercher les voix connues"
 msgstr "Search known voices"
+
+#: transcria/web/i18n_js.py:80
+msgid "Relancement du traitement…"
+msgstr "Restarting processing…"
+
+#: transcria/web/i18n_js.py:81
+msgid "Relancer le résumé"
+msgstr "Regenerate the summary"
 
 #: transcria/web/templates/job_wizard.html:34
 msgid "Relancer le traitement"
@@ -950,6 +1094,10 @@ msgstr "Restart processing"
 #: transcria/web/templates/job_wizard.html:961
 msgid "Relisez vos livrables et <strong>affinez-les avec l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats."
 msgstr "Review your deliverables and <strong>refine them with the assistant</strong> (reword the summary, adjust the document…) on the results page."
+
+#: transcria/web/i18n_js.py:82
+msgid "Renseignez d'abord la forme validée."
+msgstr "Enter the validated form first."
 
 #: transcria/web/templates/queue.html:165
 msgid "Reprendre"
@@ -976,13 +1124,22 @@ msgstr "Restore version v{v}? The documents will return to this state."
 msgid "Reste local (jamais transmis à l'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées."
 msgstr "Stays local (never sent outside). Email addresses are used only to spell names, then deleted."
 
-#: transcria/web/templates/job_wizard.html:343
+#: transcria/web/i18n_js.py:83 transcria/web/templates/job_wizard.html:343
 msgid "Retirer"
 msgstr "Remove"
 
 #: transcria/web/templates/job_result.html:144
 msgid "Retour au traitement"
 msgstr "Back to job"
+
+#: transcria/web/i18n_js.py:84
+#, python-format
+msgid "Réponse serveur inattendue (HTTP %(status)s)."
+msgstr "Unexpected server response (HTTP %(status)s)."
+
+#: transcria/web/i18n_js.py:85
+msgid "Réponse serveur invalide."
+msgstr "Invalid server response."
 
 #: transcria/web/templates/job_wizard.html:538
 msgid "Résolutions adoptées"
@@ -1021,7 +1178,7 @@ msgstr "Role"
 msgid "Rôle :"
 msgstr "Role:"
 
-#: transcria/web/templates/job_wizard.html:641
+#: transcria/web/i18n_js.py:86 transcria/web/templates/job_wizard.html:641
 msgid "Rôle dans la réunion"
 msgstr "Role in the meeting"
 
@@ -1053,6 +1210,10 @@ msgstr "Segments to review first (%(n)s)"
 #: transcria/web/templates/job_wizard.html:451
 msgid "Service / Domaine"
 msgstr "Department / Domain"
+
+#: transcria/web/i18n_js.py:87
+msgid "Session expirée — redirection vers la connexion…"
+msgstr "Session expired — redirecting to sign-in…"
 
 #: transcria/web/templates/job_wizard.html:205
 msgid "Silence :"
@@ -1105,6 +1266,10 @@ msgstr "Estimated total time: ~%(min)s min"
 msgid "Terminé"
 msgstr "Completed"
 
+#: transcria/web/i18n_js.py:88
+msgid "Terminé."
+msgstr "Done."
+
 #: transcria/web/templates/job_result.html:121
 msgid "Thème du rapport"
 msgstr "Report theme"
@@ -1125,9 +1290,31 @@ msgstr "Suggested title:"
 msgid "Traitement"
 msgstr "Job"
 
+#: transcria/web/i18n_js.py:89
+#, python-format
+msgid "Traitement annulé après %(elapsed)s."
+msgstr "Processing cancelled after %(elapsed)s."
+
+#: transcria/web/i18n_js.py:90
+msgid "Traitement annulé."
+msgstr "Processing cancelled."
+
+#: transcria/web/i18n_js.py:91
+msgid "Traitement démarré. Transcription ASR en cours… (0s écoulées)"
+msgstr "Processing started. ASR transcription in progress… (0s elapsed)"
+
+#: transcria/web/i18n_js.py:92
+msgid "Traitement relancé. Transcription ASR en cours… (0s écoulées)"
+msgstr "Processing restarted. ASR transcription in progress… (0s elapsed)"
+
 #: transcria/web/templates/job_wizard.html:898
 msgid "Traitement réalisé :"
 msgstr "Processing performed:"
+
+#: transcria/web/i18n_js.py:93
+#, python-format
+msgid "Traitement terminé en %(elapsed)s. Chargement…"
+msgstr "Processing completed in %(elapsed)s. Loading…"
 
 #: transcria/web/templates/base.html:26 transcria/web/templates/index.html:5
 msgid "Traitements"
@@ -1141,6 +1328,10 @@ msgstr "TranscrIA prepares %(n)s central term(s) with the summary suggestions. Y
 #: transcria/web/templates/job_result.html:130
 msgid "Transcription"
 msgstr "Transcript"
+
+#: transcria/web/i18n_js.py:94
+msgid "Transcription ASR en cours…"
+msgstr "ASR transcription in progress…"
 
 #: transcria/web/templates/job_wizard.html:380
 msgid "Type"
@@ -1192,6 +1383,10 @@ msgstr "Users"
 msgid "VAD final activé"
 msgstr "final VAD enabled"
 
+#: transcria/web/i18n_js.py:95
+msgid "VRAM insuffisante : l'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."
+msgstr "Insufficient VRAM: the administrator has been notified. The summary will resume automatically as soon as GPU memory is freed."
+
 #: transcria/web/templates/job_wizard.html:699
 msgid "Valider participants & locuteurs"
 msgstr "Validate participants & speakers"
@@ -1223,6 +1418,10 @@ msgstr "Your inputs (context, participants, glossary) are kept — you can resta
 #: transcria/web/templates/job_wizard.html:532
 msgid "Votes"
 msgstr "Votes"
+
+#: transcria/web/i18n_js.py:96
+msgid "Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)"
+msgstr "Do you want to restart processing? (the current glossary and corrections will be applied)"
 
 #: transcria/web/templates/base.html:133
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
@@ -1274,7 +1473,7 @@ msgstr "usable"
 msgid "indisponible"
 msgstr "unavailable"
 
-#: transcria/web/templates/job_wizard.html:800
+#: transcria/web/i18n_js.py:97 transcria/web/templates/job_wizard.html:800
 msgid "issu des documents fournis"
 msgstr "from the provided documents"
 
@@ -1294,10 +1493,29 @@ msgstr "max"
 msgid "min"
 msgstr "min"
 
+#: transcria/web/i18n_js.py:98
+#, python-format
+msgid "mis à jour il y a %(n)sh"
+msgstr "updated %(n)sh ago"
+
+#: transcria/web/i18n_js.py:99
+#, python-format
+msgid "mis à jour il y a %(n)smin"
+msgstr "updated %(n)smin ago"
+
+#: transcria/web/i18n_js.py:100
+#, python-format
+msgid "mis à jour il y a %(n)ss"
+msgstr "updated %(n)ss ago"
+
 #: transcria/web/templates/job_wizard.html:104
 #, python-format
 msgid "niveau %(n)s"
 msgstr "level %(n)s"
+
+#: transcria/web/i18n_js.py:101
+msgid "nouveau"
+msgstr "new"
 
 #: transcria/web/templates/job_wizard.html:663
 msgid "participant"
@@ -1313,7 +1531,11 @@ msgstr "position %(n)s"
 msgid "priorité %(p)s"
 msgstr "priority %(p)s"
 
-#: transcria/web/templates/job_wizard.html:815
+#: transcria/web/i18n_js.py:102
+msgid "requête impossible"
+msgstr "request failed"
+
+#: transcria/web/i18n_js.py:103 transcria/web/templates/job_wizard.html:815
 msgid "sans timecode"
 msgstr "no timecode"
 
@@ -1330,7 +1552,7 @@ msgstr "suggested"
 msgid "sur %(n)s fenêtre(s) de 5 s."
 msgstr "over %(n)s window(s) of 5 s."
 
-#: transcria/web/templates/job_wizard.html:341
+#: transcria/web/i18n_js.py:104 transcria/web/templates/job_wizard.html:341
 msgid "tronqué"
 msgstr "truncated"
 
@@ -1350,7 +1572,7 @@ msgstr "female voice dominant"
 msgid "voix masculine dominante"
 msgstr "male voice dominant"
 
-#: transcria/web/templates/job_wizard.html:809
+#: transcria/web/i18n_js.py:105 transcria/web/templates/job_wizard.html:809
 #, python-format
 msgid "· %(listened)s/%(total)s écoutés"
 msgstr "· %(listened)s/%(total)s listened"
@@ -1373,7 +1595,20 @@ msgstr "· active window: %(name)s (%(action)s)"
 msgid "Échec"
 msgstr "Failed"
 
-#: transcria/web/templates/job_wizard.html:821
+#: transcria/web/i18n_js.py:106
+msgid "Échec de l'ajout du document."
+msgstr "Failed to add the document."
+
+#: transcria/web/i18n_js.py:107
+#, python-format
+msgid "Échec du traitement après %(elapsed)s."
+msgstr "Processing failed after %(elapsed)s."
+
+#: transcria/web/i18n_js.py:108
+msgid "Échec du traitement."
+msgstr "Processing failed."
+
+#: transcria/web/i18n_js.py:109 transcria/web/templates/job_wizard.html:821
 msgid "Écouter 5 secondes avant et après"
 msgstr "Listen 5 seconds before and after"
 
@@ -1381,7 +1616,7 @@ msgstr "Listen 5 seconds before and after"
 msgid "Écouter des extraits de ce locuteur"
 msgstr "Listen to excerpts of this speaker"
 
-#: transcria/web/templates/job_wizard.html:834
+#: transcria/web/i18n_js.py:110 transcria/web/templates/job_wizard.html:834
 msgid "Écouté"
 msgstr "Listened"
 
@@ -1422,6 +1657,11 @@ msgstr "— New glossary… —"
 #: transcria/web/templates/job_wizard.html:497
 msgid "— apparaîtront dans le rapport Word selon le type de réunion"
 msgstr "— will appear in the Word report depending on the meeting type"
+
+#: transcria/web/i18n_js.py:111
+#, python-format
+msgid "⚠ Le traitement LLM prend plus de temps que prévu (%(elapsed)s)."
+msgstr "⚠ LLM processing is taking longer than expected (%(elapsed)s)."
 
 #: transcria/web/templates/job_wizard.html:400
 msgid "📋 Résumé de la réunion — modifiez-le avant d'enregistrer"

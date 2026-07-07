@@ -18,7 +18,7 @@ TranscrIA.api = function (endpoint, method, body) {
         if (r.status === 401 || (r.redirected && r.url.indexOf('/login') !== -1)) {
             console.warn('[TranscrIA] session expirée — redirection vers /login');
             window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
-            return { status: 401, data: { error: 'Session expirée — redirection vers la connexion…' } };
+            return { status: 401, data: { error: t('Session expirée — redirection vers la connexion…') } };
         }
         return r.text().then(function (text) {
             var data = {};
@@ -26,17 +26,17 @@ TranscrIA.api = function (endpoint, method, body) {
                 try {
                     data = JSON.parse(text);
                 } catch (e) {
-                    data = { error: r.ok ? 'Réponse serveur invalide.' : 'Erreur serveur non JSON.' };
+                    data = { error: r.ok ? t('Réponse serveur invalide.') : t('Erreur serveur non JSON.') };
                 }
             }
             if (!r.ok && !data.error) {
-                data.error = 'Erreur serveur (' + r.status + ').';
+                data.error = t('Erreur serveur (%(status)s).', { status: r.status });
             }
             return { status: r.status, data: data };
         });
     }).catch(function (err) {
         console.error('[TranscrIA] api error:', err);
-        return { status: 0, data: { error: 'Erreur réseau: ' + (err && err.message ? err.message : 'requête impossible') } };
+        return { status: 0, data: { error: t('Erreur réseau : %(msg)s', { msg: (err && err.message ? err.message : t('requête impossible')) }) } };
     });
 };
 

@@ -42,10 +42,10 @@ var TranscrIA = window.TranscrIA || {};
                 W.hideSpinner('upload-spinner');
                 if (data.error) {
                     document.getElementById('upload-result').innerHTML =
-                        '<div class="alert alert-danger">Erreur: ' + data.error + '</div>';
+                        '<div class="alert alert-danger">' + t('Erreur :') + ' ' + data.error + '</div>';
                 } else {
                     document.getElementById('upload-result').innerHTML =
-                        '<div class="alert alert-success">Fichier téléversé. Rechargement...</div>';
+                        '<div class="alert alert-success">' + t('Fichier téléversé. Rechargement…') + '</div>';
                     W.reloadAfter(1000);
                 }
             })
@@ -53,7 +53,7 @@ var TranscrIA = window.TranscrIA || {};
                 W.hideSpinner('upload-spinner');
                 console.error('[TranscrIA] uploadFile error:', err);
                 document.getElementById('upload-result').innerHTML =
-                    '<div class="alert alert-danger">Erreur réseau: ' + err.message + '</div>';
+                    '<div class="alert alert-danger">' + t('Erreur réseau : %(msg)s', { msg: err.message }) + '</div>';
             });
     };
 
@@ -99,8 +99,7 @@ var TranscrIA = window.TranscrIA || {};
                 // Dans les deux cas le client se contente de POLLER l'état — il NE relance
                 // PAS /summary (sinon course avec le worker).
                 var msg = r.data.message ||
-                    'VRAM insuffisante : l\'administrateur a été prévenu. ' +
-                    'Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.';
+                    t('VRAM insuffisante : l\'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée.');
                 W.showVramWaitBanner(msg);
                 W.pollSummaryResume();
                 return;
@@ -109,12 +108,11 @@ var TranscrIA = window.TranscrIA || {};
                 // La LLM n'a rien produit après 3 tentatives : transcript conservé, job
                 // non validé mais relançable (la relance réutilise le STT en cache).
                 var failMsg = r.data.message ||
-                    'Le résumé n\'a pas pu être généré (LLM sans production après 3 tentatives). ' +
-                    'La transcription est conservée — vous pouvez relancer.';
+                    t('Le résumé n\'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer.');
                 document.getElementById('summary-result').innerHTML =
                     '<div class="alert alert-warning">' + W.escapeHtml(failMsg) +
                     '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="TranscrIA.generateSummary()">' +
-                    'Relancer le résumé</button></div></div>';
+                    t('Relancer le résumé') + '</button></div></div>';
                 return;
             }
             if (r.data.error) {
@@ -197,7 +195,7 @@ var TranscrIA = window.TranscrIA || {};
     W.openPromoteLexicon = function (btn) {
         promoteRow = btn.closest('.lexicon-row');
         var term = (promoteRow.querySelector('.lex-term') || {}).value || '';
-        if (!term.trim()) { alert('Renseignez d\'abord la forme validée.'); return; }
+        if (!term.trim()) { alert(t('Renseignez d\'abord la forme validée.')); return; }
         document.getElementById('lex-promote-term').textContent = term.trim();
         document.getElementById('lex-promote-error').classList.add('d-none');
         var sel = document.getElementById('lex-promote-select');
@@ -236,7 +234,7 @@ var TranscrIA = window.TranscrIA || {};
             bootstrap.Modal.getInstance(document.getElementById('lex-promote-modal')).hide();
             var badge = document.createElement('span');
             badge.className = 'badge text-bg-success ms-1';
-            badge.textContent = '→ ' + r.data.lexicon.name + (r.data.created_lexicon ? ' (créé)' : '');
+            badge.textContent = '→ ' + r.data.lexicon.name + (r.data.created_lexicon ? ' ' + t('(créé)') : '');
             var btn = promoteRow.querySelector('.lex-promote');
             if (btn) { btn.replaceWith(badge); } else { promoteRow.appendChild(badge); }
             if (r.data.created_lexicon && document.getElementById('lex-promote-select')) {
@@ -306,7 +304,7 @@ var TranscrIA = window.TranscrIA || {};
             'Séminaire / atelier': 'Informations séminaire',
             'Négociation': 'Informations négociation'
         };
-        if (title) { title.textContent = titles[meetingType] || 'Informations complémentaires'; }
+        if (title) { title.textContent = t(titles[meetingType] || 'Informations complémentaires'); }
 
         // Générer les champs
         var html = '<div class="row g-2">';
@@ -364,10 +362,10 @@ var TranscrIA = window.TranscrIA || {};
         var container = document.getElementById('participants-list');
         var row = document.createElement('div');
         row.className = 'speaker-item';
-        row.innerHTML = '<span class="text-muted small">nouveau</span>' +
-            '<input type="text" class="form-control form-control-sm speaker-name" placeholder="Nom" style="max-width:150px;">' +
-            '<input type="text" class="form-control form-control-sm speaker-func" placeholder="Fonction" style="max-width:130px;">' +
-            '<input type="text" class="form-control form-control-sm speaker-role" placeholder="Rôle dans la réunion" style="max-width:150px;">' +
+        row.innerHTML = '<span class="text-muted small">' + t('nouveau') + '</span>' +
+            '<input type="text" class="form-control form-control-sm speaker-name" placeholder="' + t('Nom') + '" style="max-width:150px;">' +
+            '<input type="text" class="form-control form-control-sm speaker-func" placeholder="' + t('Fonction') + '" style="max-width:130px;">' +
+            '<input type="text" class="form-control form-control-sm speaker-role" placeholder="' + t('Rôle dans la réunion') + '" style="max-width:150px;">' +
             '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
         container.appendChild(row);
     };
@@ -469,7 +467,7 @@ var TranscrIA = window.TranscrIA || {};
                 // Frontal sans GPU : la détection a été déléguée au worker GPU. On poll
                 // l'état et on recharge dès qu'elle est terminée (pas de re-POST).
                 W.showWaitBanner('speaker-result', r.data.message ||
-                    'Détection des locuteurs lancée sur le nœud GPU — la page se rafraîchira.');
+                    t('Détection des locuteurs lancée sur le nœud GPU — la page se rafraîchira.'));
                 W.pollServerStep();
                 return;
             }
@@ -552,7 +550,7 @@ var TranscrIA = window.TranscrIA || {};
         if (counter) {
             counter.dataset.listened = String(listened);
             counter.dataset.total = String(inputs.length);
-            counter.textContent = ' · ' + listened + '/' + inputs.length + ' écoutés';
+            counter.textContent = ' ' + t('· %(listened)s/%(total)s écoutés', { listened: listened, total: inputs.length });
         }
     };
 
@@ -640,18 +638,18 @@ var TranscrIA = window.TranscrIA || {};
     W.renderLexiconContexts = function (contexts) {
         if (!Array.isArray(contexts) || contexts.length === 0) return '';
         var html = '<details class="lex-contexts mt-2">' +
-            '<summary class="small text-muted">Contexte proposé (' + contexts.length + ')' +
-            '<span class="lex-context-counter"> · 0/' + contexts.length + ' écoutés</span></summary>' +
+            '<summary class="small text-muted">' + t('Contexte proposé (%(n)s)', { n: contexts.length }) +
+            '<span class="lex-context-counter"> ' + t('· %(listened)s/%(total)s écoutés', { listened: 0, total: contexts.length }) + '</span></summary>' +
             '<div class="small mt-2">';
         contexts.forEach(function (c) {
-            var meta = (c.timecode || 'sans timecode') + (c.speaker ? ' — ' + c.speaker : '');
+            var meta = (c.timecode || t('sans timecode')) + (c.speaker ? ' — ' + c.speaker : '');
             html += '<div class="lex-context-item">' +
                 '<span class="text-muted"></span>' +
                 '<div class="lex-context-quote"></div>' +
                 (c.reason ? '<div class="text-muted lex-context-reason"></div>' : '') +
                 '<div class="lex-context-actions">' +
-                '<button type="button" class="btn btn-sm btn-outline-primary lex-context-play" title="Écouter 5 secondes avant et après" onclick="TranscrIA.toggleLexiconContextAudio(this)"><i class="bi bi-play-fill"></i></button>' +
-                '<label class="lex-context-listened"><input type="checkbox" class="form-check-input lex-context-listened-input" onchange="TranscrIA.setLexiconContextListened(this)"> Écouté</label>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary lex-context-play" title="' + t('Écouter 5 secondes avant et après') + '" onclick="TranscrIA.toggleLexiconContextAudio(this)"><i class="bi bi-play-fill"></i></button>' +
+                '<label class="lex-context-listened"><input type="checkbox" class="form-check-input lex-context-listened-input" onchange="TranscrIA.setLexiconContextListened(this)"> ' + t('Écouté') + '</label>' +
                 '</div>' +
                 '</div>';
         });
@@ -664,7 +662,7 @@ var TranscrIA = window.TranscrIA || {};
         contexts.forEach(function (c, index) {
             var item = items[index];
             if (!item) return;
-            var meta = (c.timecode || 'sans timecode') + (c.speaker ? ' — ' + c.speaker : '');
+            var meta = (c.timecode || t('sans timecode')) + (c.speaker ? ' — ' + c.speaker : '');
             var metaEl = item.querySelector('span');
             var quoteEl = item.querySelector('.lex-context-quote');
             var reasonEl = item.querySelector('.lex-context-reason');
@@ -694,16 +692,16 @@ var TranscrIA = window.TranscrIA || {};
     W.renderLexiconRow = function (term) {
         var container = document.getElementById('lexicon-list');
         var row = document.createElement('div');
-        var t = term || {};
+        var td = term || {};   // NB : `t` reste le helper i18n global — la donnée est `td`.
         row.className = 'lexicon-row lexicon-card';
         row.innerHTML = '<div class="lexicon-grid">' +
-            '<label class="form-label small mb-1">Forme validée</label>' +
-            '<label class="form-label small mb-1">Formes suspectes observées</label>' +
-            '<label class="form-label small mb-1">Catégorie</label>' +
-            '<label class="form-label small mb-1">Priorité</label>' +
-            '<input type="text" class="form-control form-control-sm lex-term" placeholder="Ex: Forme validée" value="" data-field="term">' +
-            '<input type="text" class="form-control form-control-sm lex-variants" placeholder="Ex: Forme douteuse A, forme douteuse B" value="" data-field="variants">' +
-            '<input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="Catégorie libre" value="" data-field="category">' +
+            '<label class="form-label small mb-1">' + t('Forme validée') + '</label>' +
+            '<label class="form-label small mb-1">' + t('Formes suspectes observées') + '</label>' +
+            '<label class="form-label small mb-1">' + t('Catégorie') + '</label>' +
+            '<label class="form-label small mb-1">' + t('Priorité') + '</label>' +
+            '<input type="text" class="form-control form-control-sm lex-term" placeholder="' + t('Ex: Forme validée') + '" value="" data-field="term">' +
+            '<input type="text" class="form-control form-control-sm lex-variants" placeholder="' + t('Ex: Forme douteuse A, forme douteuse B') + '" value="" data-field="variants">' +
+            '<input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="' + t('Catégorie libre') + '" value="" data-field="category">' +
             '<select class="form-select form-select-sm lex-prio" style="max-width:110px;">' +
             (document.getElementById('lexicon-prio-tpl') ? document.getElementById('lexicon-prio-tpl').innerHTML : '') +
             '</select>' +
@@ -716,37 +714,37 @@ var TranscrIA = window.TranscrIA || {};
             '<input type="hidden" class="lex-display-reason" value="">' +
             '<div class="mt-2 lex-central-badge d-none"></div>' +
             '<script type="application/json" class="lex-contexts-json">[]</script>' +
-            '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="Pourquoi cette forme doit être validée"></textarea>' +
-            W.renderLexiconContexts(t.contexts || []) +
+            '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="' + t('Pourquoi cette forme doit être validée') + '"></textarea>' +
+            W.renderLexiconContexts(td.contexts || []) +
             (document.getElementById('lex-promote-modal')
-                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> Au lexique central</button>'
+                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="' + t('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') + '" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> ' + t('Au lexique central') + '</button>'
                 : '') +
             '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>';
         container.appendChild(row);
 
-        row.querySelector('.lex-term').value = t.term || '';
-        row.querySelector('.lex-variants').value = W.formatLexiconVariants(t.variants);
-        row.querySelector('.lex-cat').value = t.category || '';
-        row.querySelector('.lex-prio').value = t.priority || 'normale';
-        row.querySelector('.lex-replace').value = t.replace_by || '';
-        row.querySelector('.lex-source').value = t.source || '';
-        row.querySelector('.lex-central-entry-id').value = t.central_entry_id || '';
-        row.querySelector('.lex-central-lexicon-id').value = t.central_lexicon_id || '';
-        row.querySelector('.lex-central-lexicon-name').value = t.central_lexicon_name || '';
-        row.querySelector('.lex-display-reason').value = t._display_reason || '';
+        row.querySelector('.lex-term').value = td.term || '';
+        row.querySelector('.lex-variants').value = W.formatLexiconVariants(td.variants);
+        row.querySelector('.lex-cat').value = td.category || '';
+        row.querySelector('.lex-prio').value = td.priority || 'normale';
+        row.querySelector('.lex-replace').value = td.replace_by || '';
+        row.querySelector('.lex-source').value = td.source || '';
+        row.querySelector('.lex-central-entry-id').value = td.central_entry_id || '';
+        row.querySelector('.lex-central-lexicon-id').value = td.central_lexicon_id || '';
+        row.querySelector('.lex-central-lexicon-name').value = td.central_lexicon_name || '';
+        row.querySelector('.lex-display-reason').value = td._display_reason || '';
         var centralBadge = row.querySelector('.lex-central-badge');
-        if (centralBadge && t.central_lexicon_name) {
+        if (centralBadge && td.central_lexicon_name) {
             centralBadge.classList.remove('d-none');
-            centralBadge.innerHTML = '<span class="badge text-bg-light border">Lexique central : ' + W.escapeHtml(t.central_lexicon_name) + '</span>';
+            centralBadge.innerHTML = '<span class="badge text-bg-light border">' + t('Lexique central : %(name)s', { name: W.escapeHtml(td.central_lexicon_name) }) + '</span>';
         }
-        if (centralBadge && t.source === 'document') {
+        if (centralBadge && td.source === 'document') {
             centralBadge.classList.remove('d-none');
             centralBadge.insertAdjacentHTML('beforeend',
-                '<span class="badge text-bg-info-subtle border text-info-emphasis ms-1" title="Proposé à partir d\'un document que vous avez joint à la réunion"><i class="bi bi-paperclip"></i> issu des documents fournis</span>');
+                '<span class="badge text-bg-info-subtle border text-info-emphasis ms-1" title="' + t('Proposé à partir d\'un document que vous avez joint à la réunion') + '"><i class="bi bi-paperclip"></i> ' + t('issu des documents fournis') + '</span>');
         }
-        row.querySelector('.lex-comment').value = t.comment || '';
-        row.querySelector('.lex-contexts-json').textContent = JSON.stringify(t.contexts || []);
-        W.fillLexiconContexts(row, t.contexts || []);
+        row.querySelector('.lex-comment').value = td.comment || '';
+        row.querySelector('.lex-contexts-json').textContent = JSON.stringify(td.contexts || []);
+        W.fillLexiconContexts(row, td.contexts || []);
         return row;
     };
 
@@ -780,10 +778,10 @@ var TranscrIA = window.TranscrIA || {};
         list.innerHTML = '';
         (documents || []).forEach(function (doc, i) {
             var meta = (doc.format || '').toUpperCase();
-            if (doc.pages) meta += ', ' + doc.pages + ' page(s)';
-            if (doc.slides) meta += ', ' + doc.slides + ' diapo(s)';
-            if (doc.images_skipped) meta += ', ' + doc.images_skipped + ' image(s) ignorée(s)';
-            if (doc.truncated) meta += ' — tronqué';
+            if (doc.pages) meta += ', ' + t('%(n)s page(s)', { n: doc.pages });
+            if (doc.slides) meta += ', ' + t('%(n)s diapo(s)', { n: doc.slides });
+            if (doc.images_skipped) meta += ', ' + t('%(n)s image(s) ignorée(s)', { n: doc.images_skipped });
+            if (doc.truncated) meta += ' — ' + t('tronqué');
             var li = document.createElement('li');
             li.className = 'd-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1';
             li.setAttribute('data-doc-index', i);
@@ -797,7 +795,7 @@ var TranscrIA = window.TranscrIA || {};
             var btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-link btn-sm text-danger p-0';
-            btn.title = 'Retirer';
+            btn.title = t('Retirer');
             btn.innerHTML = '<i class="bi bi-x-lg"></i>';
             btn.onclick = function () { W.removeMeetingDocument(i); };
             li.appendChild(name);
@@ -811,11 +809,11 @@ var TranscrIA = window.TranscrIA || {};
     // vraie cause derrière « Erreur réseau ».
     W.parseDocResponse = function (r) {
         if (r.status === 413) {
-            return Promise.resolve({ ok: false, body: { error: 'Fichier trop volumineux (dépasse la limite du serveur).' } });
+            return Promise.resolve({ ok: false, body: { error: t('Fichier trop volumineux (dépasse la limite du serveur).') } });
         }
         return r.json().then(
             function (b) { return { ok: r.ok, body: b }; },
-            function () { return { ok: r.ok, body: { error: 'Réponse serveur inattendue (HTTP ' + r.status + ').' } }; }
+            function () { return { ok: r.ok, body: { error: t('Réponse serveur inattendue (HTTP %(status)s).', { status: r.status }) } }; }
         );
     };
 
@@ -833,10 +831,10 @@ var TranscrIA = window.TranscrIA || {};
                 if (res.ok) {
                     W.renderMeetingDocuments(res.body.documents);
                 } else if (errEl) {
-                    errEl.textContent = res.body.error || 'Échec de l\'ajout du document.';
+                    errEl.textContent = res.body.error || t('Échec de l\'ajout du document.');
                 }
             })
-            .catch(function () { if (errEl) errEl.textContent = 'Erreur réseau.'; })
+            .catch(function () { if (errEl) errEl.textContent = t('Erreur réseau.'); })
             .finally(function () { input.value = ''; });
     };
 
@@ -963,12 +961,11 @@ var TranscrIA = window.TranscrIA || {};
         function showLlmWarning() {
             div.innerHTML =
                 '<div class="alert alert-warning">' +
-                '<strong>⚠ Le traitement LLM prend plus de temps que prévu (' + elapsedStr() + ').</strong><br>' +
-                'La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, ' +
-                'vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service.' +
+                '<strong>' + t('⚠ Le traitement LLM prend plus de temps que prévu (%(elapsed)s).', { elapsed: elapsedStr() }) + '</strong><br>' +
+                t('La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service.') +
                 '<div class="mt-2 d-flex gap-2">' +
-                '<button class="btn btn-sm btn-warning" onclick="TranscrIA.cancelProcessing()">Annuler le traitement</button>' +
-                '<button class="btn btn-sm btn-outline-secondary" onclick="TranscrIA._resumePolling()">Continuer à attendre</button>' +
+                '<button class="btn btn-sm btn-warning" onclick="TranscrIA.cancelProcessing()">' + t('Annuler le traitement') + '</button>' +
+                '<button class="btn btn-sm btn-outline-secondary" onclick="TranscrIA._resumePolling()">' + t('Continuer à attendre') + '</button>' +
                 '</div></div>';
         }
 
@@ -976,14 +973,14 @@ var TranscrIA = window.TranscrIA || {};
             W.api('/api/jobs/' + JOB_ID + '/status', 'GET').then(function (r) {
                 if (!r || r.data.error) { setTimeout(poll, 4000); return; }
                 var state = r.data.state;
-                var label = _STATE_LABELS[state] || state;
+                var label = _STATE_LABELS[state] ? t(_STATE_LABELS[state]) : state;
                 if (_TERMINAL_STATES.indexOf(state) !== -1) {
                     if (state === 'failed') {
-                        div.innerHTML = '<div class="alert alert-danger">Échec du traitement après ' + elapsedStr() + '.</div>';
+                        div.innerHTML = '<div class="alert alert-danger">' + t('Échec du traitement après %(elapsed)s.', { elapsed: elapsedStr() }) + '</div>';
                     } else if (state === 'cancelled') {
-                        div.innerHTML = '<div class="alert alert-warning">Traitement annulé après ' + elapsedStr() + '.</div>';
+                        div.innerHTML = '<div class="alert alert-warning">' + t('Traitement annulé après %(elapsed)s.', { elapsed: elapsedStr() }) + '</div>';
                     } else {
-                        div.innerHTML = '<div class="alert alert-success">Traitement terminé en ' + elapsedStr() + '. Chargement…</div>';
+                        div.innerHTML = '<div class="alert alert-success">' + t('Traitement terminé en %(elapsed)s. Chargement…', { elapsed: elapsedStr() }) + '</div>';
                         location.reload();
                     }
                 } else {
@@ -993,7 +990,7 @@ var TranscrIA = window.TranscrIA || {};
                         _warnShown = true;
                         showLlmWarning();
                     } else if (!_warnShown) {
-                        setInfo(label + ' (' + elapsedStr() + ' écoulées)', progress);
+                        setInfo(t('%(label)s (%(elapsed)s écoulées)', { label: label, elapsed: elapsedStr() }), progress);
                     }
                     setTimeout(poll, 4000);
                 }
@@ -1029,10 +1026,10 @@ var TranscrIA = window.TranscrIA || {};
         var parsed = Date.parse(updatedAt);
         if (Number.isNaN(parsed)) return '';
         var seconds = Math.max(0, Math.floor((Date.now() - parsed) / 1000));
-        if (seconds < 60) return 'mis à jour il y a ' + seconds + 's';
+        if (seconds < 60) return t('mis à jour il y a %(n)ss', { n: seconds });
         var minutes = Math.floor(seconds / 60);
-        if (minutes < 60) return 'mis à jour il y a ' + minutes + 'min';
-        return 'mis à jour il y a ' + Math.floor(minutes / 60) + 'h';
+        if (minutes < 60) return t('mis à jour il y a %(n)smin', { n: minutes });
+        return t('mis à jour il y a %(n)sh', { n: Math.floor(minutes / 60) });
     }
 
     function _renderWorkflowStatusBanner(banner, state, progress) {
@@ -1129,16 +1126,16 @@ var TranscrIA = window.TranscrIA || {};
                 // Job déjà terminé — proposer de relancer
                 div.innerHTML =
                     '<div class="alert alert-warning">' +
-                    '<strong>Ce job a déjà été traité.</strong> ' +
-                    'Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)' +
+                    '<strong>' + t('Ce job a déjà été traité.') + '</strong> ' +
+                    t('Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)') +
                     '<div class="mt-2 d-flex gap-2">' +
-                    '<button class="btn btn-sm btn-primary" onclick="TranscrIA.confirmReprocess(\'' + mode + '\')">Oui, relancer</button>' +
-                    '<button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'processing-result\').innerHTML=\'\'">Annuler</button>' +
+                    '<button class="btn btn-sm btn-primary" onclick="TranscrIA.confirmReprocess(\'' + mode + '\')">' + t('Oui, relancer') + '</button>' +
+                    '<button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'processing-result\').innerHTML=\'\'">' + t('Annuler') + '</button>' +
                     '</div></div>';
             } else if (r.data.error) {
-                div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
+                div.innerHTML = '<div class="alert alert-danger">' + t('Erreur : %(e)s', { e: r.data.error }) + '</div>';
             } else {
-                poller.setInfo('Traitement démarré. Transcription ASR en cours… (0s écoulées)');
+                poller.setInfo(t('Traitement démarré. Transcription ASR en cours… (0s écoulées)'));
                 setTimeout(poller.poll, 4000);
             }
         });
@@ -1150,13 +1147,13 @@ var TranscrIA = window.TranscrIA || {};
         var startTime = Date.now();
         var poller = _buildProcessingPoller(div, startTime);
 
-        poller.setInfo('Relancement du traitement…');
+        poller.setInfo(t('Relancement du traitement…'));
         var body = mode ? { processing_profile_id: mode } : { mode: 'fast' };
         W.api('/api/jobs/' + JOB_ID + '/reprocess', 'POST', body).then(function (r) {
             if (r.data.error) {
-                div.innerHTML = '<div class="alert alert-danger">Erreur : ' + r.data.error + '</div>';
+                div.innerHTML = '<div class="alert alert-danger">' + t('Erreur : %(e)s', { e: r.data.error }) + '</div>';
             } else {
-                poller.setInfo('Traitement relancé. Transcription ASR en cours… (0s écoulées)');
+                poller.setInfo(t('Traitement relancé. Transcription ASR en cours… (0s écoulées)'));
                 setTimeout(poller.poll, 4000);
             }
         });
