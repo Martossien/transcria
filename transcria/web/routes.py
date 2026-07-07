@@ -463,7 +463,7 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
 
     from transcria.gpu.opencode_runner import OpenCodeRunner
 
-    parsed = OpenCodeRunner._parse_structured_summary(summary_text)
+    parsed = OpenCodeRunner._parse_structured_summary(summary_text, language=meeting.get("language", "fr"))
     speaker_roles = parsed.get("speaker_roles") or {}
     participants_detectes = parsed.get("participants_detectes") or ""
     if not speaker_roles and not participants_detectes:

@@ -73,11 +73,51 @@ def language_directive(language: str) -> str:
     name = _LANGUAGE_NAMES.get(language, language)
     return (
         f"IMPORTANT (langue des livrables) : rédige le CONTENU rédactionnel (synthèse, "
-        f"reformulations, valeurs de champs) en {name}. En revanche, garde EXACTEMENT tels "
-        f"quels les en-têtes de structure, marqueurs de format et noms de clés spécifiés par "
-        f"le prompt (ils sont lus par le code : ne les traduis pas), ainsi que les noms "
-        f"propres et les termes du glossaire. "
+        f"reformulations, valeurs de champs) en {name}. Emploie EXACTEMENT les en-têtes de "
+        f"structure et marqueurs de format spécifiés par le prompt (ils sont lus par le code) ; "
+        f"conserve les noms propres et les termes du glossaire. "
     )
+
+
+# ── Contrat de marqueurs du résumé, par langue (Axe B) ──────────────────────
+# Les entrées `fr` reproduisent À L'IDENTIQUE les marqueurs historiques (non-régression
+# prouvée par test). Les entrées `en` sont le contrat que le prompt EN doit respecter :
+# ``configs/prompts/en/summary_prompt.txt`` DOIT produire ces marqueurs, et le parser les
+# lit ici. Correction / relecture finale n'apparaissent pas : elles lisent des fichiers à
+# noms fixes (SRT + .md), donc neutres en langue.
+_SUMMARY_MARKERS: dict[str, dict[str, str]] = {
+    "fr": {
+        "title": "Titre suggéré",
+        "type": "Type suggéré",
+        "subject": "Sujet principal",
+        "objective": "Objectif probable",
+        "notes": "Notes / Ordre du jour probable",
+        "keywords": "Mots-clés",
+        "participant_count": "Nombre de participants détectés",
+        "participants_heading": "## Participants probables",
+        "terms_section_re": r"Termes\s+(?:suspects|douteux)[^\n]*",
+        "structured_section_re": r"Données\s+structurées",
+        "summary_heading": "## Synthèse",
+    },
+    "en": {
+        "title": "Suggested title",
+        "type": "Suggested type",
+        "subject": "Main topic",
+        "objective": "Probable objective",
+        "notes": "Notes / Probable agenda",
+        "keywords": "Keywords",
+        "participant_count": "Number of detected participants",
+        "participants_heading": "## Probable participants",
+        "terms_section_re": r"(?:Doubtful|Suspect)\s+terms[^\n]*",
+        "structured_section_re": r"Structured\s+data",
+        "summary_heading": "## Summary",
+    },
+}
+
+
+def summary_markers(language: str | None) -> dict[str, str]:
+    """Marqueurs du résumé pour ``language`` (repli français si langue inconnue)."""
+    return _SUMMARY_MARKERS.get((language or "fr"), _SUMMARY_MARKERS["fr"])
 
 
 def build_harmonization_glossary(participants: list, lexicon: list) -> str:
@@ -921,7 +961,7 @@ class OpenCodeRunner:
                 produced = bool(summary_text)
 
         if produced:
-            parsed = self._parse_structured_summary(summary_text, extra_structured_keys)
+            parsed = self._parse_structured_summary(summary_text, extra_structured_keys, output_language)
         else:
             # opencode terminé mais SANS production (n'a ni réécrit summary.md ni émis de
             # texte) : le summary.md présent est le placeholder → on ne le parse PAS et on
@@ -1034,18 +1074,20 @@ class OpenCodeRunner:
         if not text:
             return True
         lowered = text.casefold()
-        if lowered in {"non identifiable", "(non identifiable)", "aucun", "(aucun)", "aucune", "(aucune)"}:
+        # Sentinelles « aucun participant » FR + EN (Axe B : le prompt EN écrit "(not identifiable)").
+        _none = {"non identifiable", "(non identifiable)", "aucun", "(aucun)", "aucune", "(aucune)",
+                 "not identifiable", "(not identifiable)", "none", "(none)"}
+        if lowered in _none:
             return True
 
         speaker_id, label, role = OpenCodeRunner._parse_participant_line(text)
         if speaker_id:
             label_key = label.casefold().strip()
             role_key = role.casefold().strip()
-            return label_key in {"non identifiable", "(non identifiable)"} or (
-                not label_key and role_key in {"non identifiable", "(non identifiable)"}
-            )
+            _lbl_none = {"non identifiable", "(non identifiable)", "not identifiable", "(not identifiable)"}
+            return label_key in _lbl_none or (not label_key and role_key in _lbl_none)
 
-        return lowered.startswith("non identifiable")
+        return lowered.startswith(("non identifiable", "not identifiable"))
 
     @staticmethod
     def _normalize_structured_data(raw: dict, extra_keys: tuple[str, ...] = ()) -> dict:
@@ -1067,8 +1109,10 @@ class OpenCodeRunner:
         return result
 
     @staticmethod
-    def _parse_structured_data(text: str, extra_keys: tuple[str, ...] = ()) -> tuple[dict, str, str]:
-        """Extrait la section ## Données structurées du markdown LLM.
+    def _parse_structured_data(
+        text: str, extra_keys: tuple[str, ...] = (), language: str = "fr"
+    ) -> tuple[dict, str, str]:
+        """Extrait la section « données structurées » du markdown LLM (en-tête selon ``language``).
 
         Trois niveaux de fallback :
           1. json.loads() strict → status "ok"
@@ -1083,7 +1127,7 @@ class OpenCodeRunner:
 
         EMPTY = dict(_STRUCTURED_DATA_EMPTY)
 
-        section, has_section = OpenCodeRunner._summary_section(text, r"Données\s+structurées")
+        section, has_section = OpenCodeRunner._summary_section(text, summary_markers(language)["structured_section_re"])
         if not has_section:
             logger.debug("_parse_structured_data: section absente")
             return EMPTY, "missing", ""
@@ -1136,9 +1180,15 @@ class OpenCodeRunner:
         return EMPTY, "failed", warning
 
     @staticmethod
-    def _parse_structured_summary(text: str, extra_structured_keys: tuple[str, ...] = ()) -> dict:
-        """Parse le markdown structuré en dictionnaire de champs."""
+    def _parse_structured_summary(
+        text: str, extra_structured_keys: tuple[str, ...] = (), language: str = "fr"
+    ) -> dict:
+        """Parse le markdown structuré en dictionnaire de champs.
+
+        ``language`` : langue des marqueurs de sortie (Axe B). ``fr`` = comportement
+        historique inchangé ; ``en`` = marqueurs anglais (cf. ``summary_markers``)."""
         import re
+        m = summary_markers(language)
         fields = {
             "title_suggere": "",
             "type_suggere": "",
@@ -1151,12 +1201,12 @@ class OpenCodeRunner:
         }
 
         patterns = {
-            "title_suggere": r"\*\*Titre suggéré\s*:\s*\*\*\s*(.+?)(?:\n|$)",
-            "type_suggere": r"\*\*Type suggéré\s*:\s*\*\*\s*(.+?)(?:\n|$)",
-            "sujet_suggere": r"\*\*Sujet principal\s*:\s*\*\*\s*(.+?)(?:\n|$)",
-            "objectif_suggere": r"\*\*Objectif probable\s*:\s*\*\*\s*(.+?)(?:\n|$)",
-            "notes_suggeres": r"\*\*Notes / Ordre du jour probable\s*:\s*\*\*\s*(.+?)(?:\n|$)",
-            "mots_cles": r"\*\*Mots-clés\*\*\s*\n(.+?)(?:\n\n|\Z)",
+            "title_suggere": rf"\*\*{m['title']}\s*:\s*\*\*\s*(.+?)(?:\n|$)",
+            "type_suggere": rf"\*\*{m['type']}\s*:\s*\*\*\s*(.+?)(?:\n|$)",
+            "sujet_suggere": rf"\*\*{m['subject']}\s*:\s*\*\*\s*(.+?)(?:\n|$)",
+            "objectif_suggere": rf"\*\*{m['objective']}\s*:\s*\*\*\s*(.+?)(?:\n|$)",
+            "notes_suggeres": rf"\*\*{m['notes']}\s*:\s*\*\*\s*(.+?)(?:\n|$)",
+            "mots_cles": rf"\*\*{m['keywords']}\*\*\s*\n(.+?)(?:\n\n|\Z)",
         }
 
         for key, pattern in patterns.items():
@@ -1171,13 +1221,13 @@ class OpenCodeRunner:
         if missing_critical:
             logger.warning("_parse_structured_summary: champs critiques non extraits — %s", missing_critical)
 
-        nb_match = re.search(r"\*\*Nombre de participants détectés\s*:\s*\*\*\s*(\d+)", text)
+        nb_match = re.search(rf"\*\*{m['participant_count']}\s*:\s*\*\*\s*(\d+)", text)
         if nb_match:
             fields["speaker_count"] = int(nb_match.group(1))
 
-        part_match = re.search(r"## Participants probables\s*\n(.+?)(?:\n##|\Z)", text, re.DOTALL)
+        part_match = re.search(rf"{re.escape(m['participants_heading'])}\s*\n(.+?)(?:\n##|\Z)", text, re.DOTALL)
         if not part_match:
-            logger.warning("_parse_structured_summary: section '## Participants probables' introuvable")
+            logger.warning("_parse_structured_summary: section '%s' introuvable", m['participants_heading'])
         if part_match:
             participants = []
             speaker_roles: dict[str, dict] = {}
@@ -1204,12 +1254,12 @@ class OpenCodeRunner:
         termes_suspects = []
         terms_section, has_terms_section = OpenCodeRunner._summary_section(
             text,
-            r"Termes\s+(?:suspects|douteux)[^\n]*",
+            m["terms_section_re"],
         )
         parse_status = "missing"
         parse_warning = ""
         if not has_terms_section:
-            logger.warning("_parse_structured_summary: section '## Termes suspects/douteux' introuvable")
+            logger.warning("_parse_structured_summary: section termes ('%s') introuvable", m["terms_section_re"])
         else:
             table_headers: list[str] | None = None
             for line in OpenCodeRunner._normalize_summary_lines(terms_section):
@@ -1227,7 +1277,9 @@ class OpenCodeRunner:
                     continue
                 termes_suspects.append(parsed_term)
         if has_terms_section and not termes_suspects:
-            parse_status = "empty" if "aucun terme suspect" in terms_section.casefold() else "section_unparsed"
+            _low = terms_section.casefold()
+            _empty = "aucun terme suspect" in _low or "no doubtful term" in _low or "no suspect term" in _low
+            parse_status = "empty" if _empty else "section_unparsed"
             if parse_status == "section_unparsed":
                 parse_warning = "section termes présente mais aucun terme extrait"
                 logger.warning("_parse_structured_summary: section termes présente mais aucun terme extrait (format inattendu ?)")
@@ -1238,7 +1290,7 @@ class OpenCodeRunner:
         fields["termes_suspects_parse_status"] = parse_status
         fields["termes_suspects_parse_warning"] = parse_warning
 
-        sd, sd_status, sd_warning = OpenCodeRunner._parse_structured_data(text, extra_structured_keys)
+        sd, sd_status, sd_warning = OpenCodeRunner._parse_structured_data(text, extra_structured_keys, language)
         fields["structured_data"] = sd
         fields["structured_data_parse_status"] = sd_status
         fields["structured_data_parse_warning"] = sd_warning

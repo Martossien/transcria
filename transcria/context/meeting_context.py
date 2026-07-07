@@ -56,7 +56,9 @@ class MeetingContextManager:
         raw = raw_md or ""
         if not effective:
             return raw
-        marker = "## Synthèse"
+        # Marqueur de la section synthèse selon la langue des livrables (Axe B ; défaut « ## Synthèse »).
+        from transcria.gpu.opencode_runner import summary_markers
+        marker = summary_markers(meeting_ctx.get("language"))["summary_heading"]
         if marker not in raw:
             return effective + "\n"
         head, _, tail = raw.partition(marker)
