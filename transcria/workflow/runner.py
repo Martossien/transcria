@@ -826,11 +826,15 @@ class WorkflowRunner:
         # summary_text commence déjà par "# Résumé de contrôle" (écrit par opencode).
         # On n'ajoute que la section transcript en fin de fichier.
         transcript_short = result.get("transcript_short", "")
+        # En-tête de l'extrait localisé selon la langue des livrables (Axe B).
+        _excerpt_heading = (
+            "## Transcript excerpt" if meeting_ctx.get("language") == "en" else "## Extrait de transcription"
+        )
         fs.save_text(
             "summary/summary.md",
             summary_text
             + (
-                f"\n\n---\n\n## Extrait de transcription\n\n{transcript_short}\n"
+                f"\n\n---\n\n{_excerpt_heading}\n\n{transcript_short}\n"
                 if transcript_short
                 else "\n"
             ),

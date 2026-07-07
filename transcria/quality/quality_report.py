@@ -10,7 +10,8 @@ from transcria.quality.srt_checks import SRTChecker
 logger = logging.getLogger(__name__)
 
 _NON_LATIN_RE = re.compile(r"[\u0600-\u06FF\u3040-\u30FF\u4E00-\u9FFF]")
-_FOREIGN_MARKER_RE = re.compile(r"\[ÉTRANGER(?::[^\]]+)?\]", re.IGNORECASE)
+# Marqueur de segment étranger, FR (« [ÉTRANGER] ») ou EN (« [FOREIGN] », prompt EN Axe B).
+_FOREIGN_MARKER_RE = re.compile(r"\[(?:ÉTRANGER|FOREIGN)(?::[^\]]+)?\]", re.IGNORECASE)
 _SPEAKER_PREFIX_RE = re.compile(r"^(SPEAKER_\d+)\(([^)]*)\):")
 
 
