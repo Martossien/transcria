@@ -6,6 +6,10 @@
 (function () {
   "use strict";
 
+  // Alias du helper i18n (window.t chargé par i18n.js avant ce script). `_t` évite toute
+  // collision avec les variables locales `t` (ex. review.points.forEach((t) => …)).
+  const _t = window.t;
+
   const root = document.getElementById("se-root");
   const JOB = root.dataset.jobId;
   const $ = (id) => document.getElementById(id);
@@ -86,7 +90,7 @@
   // ── Chargement ─────────────────────────────────────────────────────────────
   async function load() {
     const r = await fetch(`/api/jobs/${JOB}/editor/state`);
-    if (!r.ok) { banner("warn", "Impossible de charger la transcription."); return; }
+    if (!r.ok) { banner("warn", _t("Impossible de charger la transcription.")); return; }
     const data = await r.json();
     state.srtSha = data.srt_sha256;
     state.audio = data.audio;
@@ -110,10 +114,11 @@
     $("se-resume").classList.remove("d-none");
     const when = data.draft.updated_at ? new Date(data.draft.updated_at).toLocaleString("fr-FR") : "?";
     $("se-resume-detail").innerHTML =
-      `Un brouillon du <strong>${esc(when)}</strong> (${data.draft.chunk_count} segments) a été trouvé.` +
+      _t("Un brouillon du <strong>%(when)s</strong> (%(n)s segments) a été trouvé.", { when: esc(when), n: data.draft.chunk_count }) +
       (data.draft.conflict
-        ? "<br><span class='text-warning'>⚠ La transcription a changé depuis (correction ou affinage) : " +
-          "reprendre le brouillon écrasera ces changements à l'enregistrement.</span>"
+        ? "<br><span class='text-warning'>⚠ " +
+          _t("La transcription a changé depuis (correction ou affinage) : reprendre le brouillon écrasera ces changements à l'enregistrement.") +
+          "</span>"
         : "");
     $("se-resume-yes").onclick = async () => {
       const dr = await fetch(`/api/jobs/${JOB}/editor/state`);
@@ -142,10 +147,10 @@
   function start(data, opts) {
     $("se-main").classList.remove("d-none");
     if (state.readonly) {
-      banner("info", "Un traitement est en cours sur ce dossier — l'éditeur est en lecture seule et rouvrira en écriture à la fin.");
+      banner("info", _t("Un traitement est en cours sur ce dossier — l'éditeur est en lecture seule et rouvrira en écriture à la fin."));
     }
     if (!state.audio.available) {
-      banner("warn", "Audio non disponible sur cette installation — l'écoute et la forme d'onde sont désactivées, toutes les éditions restent possibles.");
+      banner("warn", _t("Audio non disponible sur cette installation — l'écoute et la forme d'onde sont désactivées, toutes les éditions restent possibles."));
       $("se-player-wrap").querySelectorAll("button, select").forEach((b) => { b.disabled = true; });
     } else {
       audio.src = `/api/jobs/${JOB}/audio/stream`;
@@ -161,7 +166,7 @@
     renderReviewMenu();
     if (opts && opts.fromDraft) {
       for (let i = 0; i < state.chunks.length; i++) state.dirty.add(i);
-      setSaveState("brouillon repris — pensez à enregistrer une version", "saving");
+      setSaveState(_t("brouillon repris — pensez à enregistrer une version"), "saving");
     } else {
       setSaveState("aucune modification");
     }
@@ -197,41 +202,41 @@
     return `
       <div class="se-card${state.dirty.has(i) ? " dirty" : ""}" data-i="${i}" style="--se-color:${color}">
         <div class="se-card-head">
-          <span class="se-speaker-chip" data-act="speaker" title="Changer le locuteur">
+          <span class="se-speaker-chip" data-act="speaker" title="${_t('Changer le locuteur')}">
             <span class="se-speaker-dot"></span>${esc(speakerLabel(c))}</span>
-          <span class="se-times" data-act="seek" title="Aller à cet instant">${fmt(c.start_ms)} → ${fmt(c.end_ms)}</span>
-          <span class="se-dirty-dot" title="Modifié depuis la dernière version"></span>
+          <span class="se-times" data-act="seek" title="${_t('Aller à cet instant')}">${fmt(c.start_ms)} → ${fmt(c.end_ms)}</span>
+          <span class="se-dirty-dot" title="${_t('Modifié depuis la dernière version')}"></span>
           ${i > 0 && c.start_ms < state.chunks[i - 1].end_ms
-            ? '<span class="se-overlap-pill" title="Commence avant la fin du segment précédent">chevauche</span>' : ""}
+            ? `<span class="se-overlap-pill" title="${_t('Commence avant la fin du segment précédent')}">${_t('chevauche')}</span>` : ""}
           <span class="ms-auto">#${i + 1}</span>
         </div>
         <div class="se-text" ${state.readonly ? "" : 'contenteditable="true"'} spellcheck="true">${esc(c.text)}</div>
         <div class="se-actions">
-          ${state.audio.available ? '<button class="btn btn-outline-secondary" data-act="play" title="Écouter ce segment">▶</button>' : ""}
-          <button class="btn btn-outline-secondary" data-act="speaker" title="Changer le locuteur">🗣</button>
-          <button class="btn btn-outline-secondary" data-act="split" title="Couper au curseur (C)">✂</button>
-          <button class="btn btn-outline-secondary" data-act="merge" title="Fusionner avec le précédent">⧉</button>
-          <button class="btn btn-outline-secondary" data-act="timing" title="Ajuster début/fin">⏱</button>
-          <button class="btn btn-outline-danger" data-act="delete" title="Supprimer ce segment">🗑</button>
+          ${state.audio.available ? `<button class="btn btn-outline-secondary" data-act="play" title="${_t('Écouter ce segment')}">▶</button>` : ""}
+          <button class="btn btn-outline-secondary" data-act="speaker" title="${_t('Changer le locuteur')}">🗣</button>
+          <button class="btn btn-outline-secondary" data-act="split" title="${_t('Couper au curseur (C)')}">✂</button>
+          <button class="btn btn-outline-secondary" data-act="merge" title="${_t('Fusionner avec le précédent')}">⧉</button>
+          <button class="btn btn-outline-secondary" data-act="timing" title="${_t('Ajuster début/fin')}">⏱</button>
+          <button class="btn btn-outline-danger" data-act="delete" title="${_t('Supprimer ce segment')}">🗑</button>
         </div>
         <div class="se-timing">
-          <label>Début <input class="form-control form-control-sm se-t-start" value="${fmtMs(c.start_ms)}"></label>
-          <label>Fin <input class="form-control form-control-sm se-t-end" value="${fmtMs(c.end_ms)}"></label>
-          <span class="text-muted">Début</span>
+          <label>${_t('Début')} <input class="form-control form-control-sm se-t-start" value="${fmtMs(c.start_ms)}"></label>
+          <label>${_t('Fin')} <input class="form-control form-control-sm se-t-end" value="${fmtMs(c.end_ms)}"></label>
+          <span class="text-muted">${_t('Début')}</span>
           <span class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" data-tshift="start:-100">−100 ms</button>
             <button class="btn btn-outline-secondary" data-tshift="start:100">+100 ms</button>
           </span>
-          <span class="text-muted">Fin</span>
+          <span class="text-muted">${_t('Fin')}</span>
           <span class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary" data-tshift="end:-100">−100 ms</button>
             <button class="btn btn-outline-secondary" data-tshift="end:100">+100 ms</button>
           </span>
           <span class="btn-group btn-group-sm">
-            <button class="btn btn-outline-secondary" data-cascade="-500" title="Avancer ce segment ET tous les suivants de 500 ms">⇤ suivants −500 ms</button>
-            <button class="btn btn-outline-secondary" data-cascade="500" title="Reculer ce segment ET tous les suivants de 500 ms">suivants +500 ms ⇥</button>
+            <button class="btn btn-outline-secondary" data-cascade="-500" title="${_t('Avancer ce segment ET tous les suivants de 500 ms')}">${_t('⇤ suivants −500 ms')}</button>
+            <button class="btn btn-outline-secondary" data-cascade="500" title="${_t('Reculer ce segment ET tous les suivants de 500 ms')}">${_t('suivants +500 ms ⇥')}</button>
           </span>
-          <span class="text-muted">S/E : caler début/fin sur la lecture</span>
+          <span class="text-muted">${_t('S/E : caler début/fin sur la lecture')}</span>
         </div>
       </div>`;
   }
@@ -239,7 +244,7 @@
   function renderList() {
     $("se-list").innerHTML = state.chunks.map((c, i) => cardHtml(c, i)).join("");
     $("se-meta").textContent =
-      `${state.chunks.length} segments · ${knownSpeakers().size} locuteurs` +
+      _t("%(seg)s segments · %(spk)s locuteurs", { seg: state.chunks.length, spk: knownSpeakers().size }) +
       (state.audio.duration_ms ? ` · ${fmt(state.audio.duration_ms)}` : "");
   }
 
@@ -263,7 +268,7 @@
 
   function markDirtyFromDelta(delta) {
     if (typeof delta.i === "number") state.dirty.add(delta.i);
-    setSaveState("modifications non enregistrées", "saving");
+    setSaveState(_t("modifications non enregistrées"), "saving");
   }
 
   function applyDelta(delta, direction) {
@@ -377,7 +382,7 @@
 
   function deleteChunk(i) {
     const c = state.chunks[i];
-    if (c.text.trim() && !confirm(`Supprimer le segment #${i + 1} et son texte ?`)) return;
+    if (c.text.trim() && !confirm(_t("Supprimer le segment #%(n)s et son texte ?", { n: i + 1 }))) return;
     pushUndo({op: "delete", i, before: structuredClone(c)});
     state.chunks.splice(i, 1);
     renderList();
@@ -398,7 +403,7 @@
     }
     menu.innerHTML = items + `
       <div class="border-top mt-1 pt-1 d-flex gap-1">
-        <input class="form-control form-control-sm" id="se-new-speaker" placeholder="Nouveau locuteur…">
+        <input class="form-control form-control-sm" id="se-new-speaker" placeholder="${_t('Nouveau locuteur…')}">
         <button class="btn btn-sm btn-primary" id="se-new-speaker-ok">OK</button>
       </div>`;
     document.body.appendChild(menu);
@@ -667,7 +672,7 @@
     } else {
       ctx.fillStyle = "#94a3b8";
       ctx.font = "11px system-ui";
-      ctx.fillText("préparation de la forme d'onde…", 8, 46);
+      ctx.fillText(_t("préparation de la forme d'onde…"), 8, 46);
     }
 
     // segments : liserés colorés en bas + bornes du segment ACTIF en poignées
@@ -705,7 +710,7 @@
   function addMarker() {
     if (!state.audio.available) return;
     const at = Math.round(audio.currentTime * 1000);
-    state.markers.push({at_ms: at, label: `Repère ${state.markers.length + 1} — ${fmt(at)}`});
+    state.markers.push({at_ms: at, label: _t("Repère %(n)s — %(t)s", { n: state.markers.length + 1, t: fmt(at) })});
     renderMarkerChips();
     drawFresque(); drawZoomBand();
     scheduleDraft();
@@ -713,7 +718,7 @@
 
   function renderMarkerChips() {
     $("se-marker-chips").innerHTML = state.markers.map((m, k) =>
-      `<span class="se-marker-chip" data-k="${k}" title="Aller au repère">${esc(m.label)}<span class="se-marker-x" data-x="${k}" title="Retirer">×</span></span>`
+      `<span class="se-marker-chip" data-k="${k}" title="${_t('Aller au repère')}">${esc(m.label)}<span class="se-marker-x" data-x="${k}" title="${_t('Retirer')}">×</span></span>`
     ).join("");
   }
 
@@ -770,15 +775,15 @@
     });
     if (r.status === 409) {
       state.draftBlocked = true;
-      banner("warn", "Ce dossier est édité dans un autre onglet ou par une autre personne — brouillon suspendu ici pour ne rien écraser.");
-      setSaveState("brouillon suspendu (édition ailleurs)", "error");
+      banner("warn", _t("Ce dossier est édité dans un autre onglet ou par une autre personne — brouillon suspendu ici pour ne rien écraser."));
+      setSaveState(_t("brouillon suspendu (édition ailleurs)"), "error");
       return;
     }
     if (r.ok) {
       state.revision = (await r.json()).revision;
-      setSaveState(`brouillon enregistré à ${new Date().toLocaleTimeString("fr-FR")}`);
+      setSaveState(_t("brouillon enregistré à %(t)s", { t: new Date().toLocaleTimeString() }));
     } else {
-      setSaveState("brouillon non enregistré — nouvelle tentative", "error");
+      setSaveState(_t("brouillon non enregistré — nouvelle tentative"), "error");
       clearTimeout(state.draftTimer);
       state.draftTimer = setTimeout(pushDraft, 5000);
     }
@@ -816,9 +821,9 @@
     const fresh = await (await fetch(`/api/jobs/${JOB}/editor/state`)).json();
     state.srtSha = fresh.srt_sha256;
     renderList();
-    setSaveState(`version v${data.version} enregistrée — documents à jour au téléchargement`);
+    setSaveState(_t("version v%(v)s enregistrée — documents à jour au téléchargement", { v: data.version }));
     if (data.warnings && data.warnings.length) {
-      banner("warn", `Avertissements (non bloquants) : ${data.warnings.join(" · ")}`);
+      banner("warn", _t("Avertissements (non bloquants) : %(w)s", { w: data.warnings.join(" · ") }));
     }
   }
 
@@ -886,7 +891,7 @@
     const sorted = [...state.selection].sort((a, b) => a - b);
     const contiguous = sorted[sorted.length - 1] - sorted[0] === sorted.length - 1;
     $("se-sel-merge").disabled = !contiguous;
-    $("se-sel-merge").title = contiguous ? "Fusionner la sélection" : "Fusion possible sur une plage contiguë seulement";
+    $("se-sel-merge").title = contiguous ? _t("Fusionner la sélection") : _t("Fusion possible sur une plage contiguë seulement");
   }
 
   function applyRange(start, before, after) {
@@ -907,7 +912,7 @@
   };
   $("se-sel-delete").onclick = () => {
     const sorted = [...state.selection].sort((a, b) => a - b);
-    if (!confirm(`Supprimer ${sorted.length} segments ?`)) return;
+    if (!confirm(_t("Supprimer %(n)s segments ?", { n: sorted.length }))) return;
     // plages potentiellement non contiguës : traiter de la fin vers le début
     for (let k = sorted.length - 1; k >= 0; k--) {
       pushUndo({op: "delete", i: sorted[k], before: structuredClone(state.chunks[sorted[k]])});
@@ -965,18 +970,18 @@
     const btn = $("se-review-btn");
     btn.classList.toggle("d-none", total === 0);
     if (!total) return;
-    btn.innerHTML = `<i class="bi bi-clipboard-check"></i> À vérifier ${state.review.done.size}/${total}`;
+    btn.innerHTML = `<i class="bi bi-clipboard-check"></i> ` + _t("À vérifier %(done)s/%(total)s", { done: state.review.done.size, total: total });
     let html = "";
     state.review.anchors.forEach((a, k) => {
       html += `<div class="se-review-item anchored${state.review.done.has("a" + k) ? " done" : ""}" data-anchor="${k}">
         <input type="checkbox" data-done="a${k}" ${state.review.done.has("a" + k) ? "checked" : ""}
-               title="Marquer comme traité">
+               title="${_t('Marquer comme traité')}">
         <span>${a.kind === "time" ? "🎧" : "🔎"} ${esc(a.text)}</span></div>`;
     });
     state.review.points.forEach((t, k) => {
       html += `<div class="se-review-item${state.review.done.has("p" + k) ? " done" : ""}">
         <input type="checkbox" data-done="p${k}" ${state.review.done.has("p" + k) ? "checked" : ""}
-               title="Marquer comme traité">
+               title="${_t('Marquer comme traité')}">
         <span>${esc(t)}</span></div>`;
     });
     $("se-review-menu").innerHTML = html;
@@ -1013,14 +1018,14 @@
   function updateGauge() {
     if (!state.chunks.length) return;
     const pct = Math.round((state.visited.size / state.chunks.length) * 100);
-    $("se-gauge").textContent = pct ? `relu : ${pct} %` : "";
+    $("se-gauge").textContent = pct ? _t("relu : %(pct)s %%", { pct: pct }) : "";
   }
 
   // Édition de texte : pause auto à la frappe (D3), commit au blur/Entrée
   $("se-list").addEventListener("input", (ev) => {
     if (!ev.target.classList.contains("se-text")) return;
     if (!audio.paused) { state.wasPlayingBeforeType = true; audio.pause(); }
-    setSaveState("modifications non enregistrées", "saving");
+    setSaveState(_t("modifications non enregistrées"), "saving");
   });
   $("se-list").addEventListener("focusout", (ev) => {
     if (!ev.target.classList.contains("se-text")) return;
@@ -1234,13 +1239,13 @@
 
   function showHelp() {
     alert(
-      "Raccourcis :\n" +
-      "Espace — lecture/pause\nEntrée — valider le texte et reprendre l'écoute\n" +
-      "Tab / Maj+Tab — segment suivant / précédent\nS / E — caler le début / la fin sur la lecture\n" +
-      "Ctrl+Z / Ctrl+Y — annuler / rétablir\nCtrl+S — enregistrer une version\n" +
-      "M — poser un repère · G — aller au temps\n" +
-      "✂ — couper au curseur · ⧉ — fusionner avec le précédent\n" +
-      "Bande du bas : molette = zoom · glisser les bords bleus = retimer le segment actif"
+      _t("Raccourcis :") + "\n" +
+      _t("Espace — lecture/pause") + "\n" + _t("Entrée — valider le texte et reprendre l'écoute") + "\n" +
+      _t("Tab / Maj+Tab — segment suivant / précédent") + "\n" + _t("S / E — caler le début / la fin sur la lecture") + "\n" +
+      _t("Ctrl+Z / Ctrl+Y — annuler / rétablir") + "\n" + _t("Ctrl+S — enregistrer une version") + "\n" +
+      _t("M — poser un repère · G — aller au temps") + "\n" +
+      _t("✂ — couper au curseur · ⧉ — fusionner avec le précédent") + "\n" +
+      _t("Bande du bas : molette = zoom · glisser les bords bleus = retimer le segment actif")
     );
   }
 

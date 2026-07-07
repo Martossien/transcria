@@ -4,6 +4,10 @@
 (function () {
   "use strict";
 
+  // Alias du helper i18n : dans ce fichier `t` désigne souvent un TYPE de réunion (donnée),
+  // donc on traduit avec `_t(...)` pour éviter toute collision.
+  const _t = window.t;
+
   const state = {
     catalog: null,        // réponse GET /api/meeting-types
     editingId: null,      // id du template en cours d'édition (null = création)
@@ -16,13 +20,13 @@
     {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
 
   const SECTION_LABELS = {
-    contexte: "Contexte de la réunion",
-    synthese: "Synthèse (en section autonome)",
-    champs_type: "Informations spécifiques (champs du type)",
-    pv: "Contenu extrait (ordre du jour, décisions, votes…)",
-    participants: "Participants & locuteurs",
-    transcript: "Transcription",
-    quality: "Points à vérifier",
+    contexte: _t("Contexte de la réunion"),
+    synthese: _t("Synthèse (en section autonome)"),
+    champs_type: _t("Informations spécifiques (champs du type)"),
+    pv: _t("Contenu extrait (ordre du jour, décisions, votes…)"),
+    participants: _t("Participants & locuteurs"),
+    transcript: _t("Transcription"),
+    quality: _t("Points à vérifier"),
   };
   const DEFAULT_ORDER = ["contexte", "pv", "participants", "transcript", "quality"];
   const TOGGLEABLE = ["participants", "transcript", "quality"];
@@ -35,16 +39,16 @@
     renderPalettes();
     const used = state.catalog.custom.filter(
       (t) => t.created_by === null || true).length; // le quota exact est côté serveur
-    $("mt-quota").textContent = `${state.catalog.custom.length} type(s) visible(s) — quota : ${state.catalog.max_per_user} créés/personne`;
+    $("mt-quota").textContent = _t("%(n)s type(s) visible(s) — quota : %(max)s créés/personne", { n: state.catalog.custom.length, max: state.catalog.max_per_user });
   }
 
   // ── Galerie ───────────────────────────────────────────────────────────────
   function scopeBadge(t) {
-    if (t.builtin) return '<span class="badge text-bg-light border">Intégré</span>';
-    if (t.is_active === false) return '<span class="badge text-bg-warning">Importé — à relire</span>';
-    if (t.scope === "global") return '<span class="badge text-bg-primary">Partagé à tous</span>';
-    if (t.scope === "group") return `<span class="badge text-bg-info">Groupe ${esc(t.group_name)}</span>`;
-    return '<span class="badge text-bg-secondary">Privé</span>';
+    if (t.builtin) return '<span class="badge text-bg-light border">' + _t("Intégré") + '</span>';
+    if (t.is_active === false) return '<span class="badge text-bg-warning">' + _t("Importé — à relire") + '</span>';
+    if (t.scope === "global") return '<span class="badge text-bg-primary">' + _t("Partagé à tous") + '</span>';
+    if (t.scope === "group") return `<span class="badge text-bg-info">` + _t("Groupe %(g)s", { g: esc(t.group_name) }) + `</span>`;
+    return '<span class="badge text-bg-secondary">' + _t("Privé") + '</span>';
   }
 
   function paletteDots(palette) {
@@ -56,18 +60,18 @@
   function card(t) {
     const def = t.builtin ? t : (t.definition || {});
     const palette = def.palette;
-    const banner = def.banner_text || "COMPTE-RENDU DE TRANSCRIPTION";
+    const banner = def.banner_text || _t("COMPTE-RENDU DE TRANSCRIPTION");
     const primary = palette ? `#${palette.primary}` : "#1f3864";
     const manageable = !t.builtin && state.catalog.manageable_ids.includes(t.id);
     const name = t.builtin ? t.name : t.name;
     let actions = `
       <button class="btn btn-sm btn-primary" data-action="duplicate" data-id="${esc(t.id || "")}" data-name="${esc(name)}">
-        <i class="bi bi-plus-circle"></i> Créer le mien</button>`;
+        <i class="bi bi-plus-circle"></i> ` + _t("Créer le mien") + `</button>`;
     if (!t.builtin) {
       actions += ` <a class="btn btn-sm btn-outline-secondary" href="/api/meeting-types/${esc(t.id)}/preview.docx"
-                     title="Télécharger un exemple Word"><i class="bi bi-file-earmark-word"></i></a>`;
+                     title="${_t("Télécharger un exemple Word")}"><i class="bi bi-file-earmark-word"></i></a>`;
       actions += ` <a class="btn btn-sm btn-outline-secondary" href="/api/meeting-types/${esc(t.id)}/export"
-                     title="Exporter (partage entre installations / communauté)"><i class="bi bi-box-arrow-up"></i></a>`;
+                     title="${_t("Exporter (partage entre installations / communauté)")}"><i class="bi bi-box-arrow-up"></i></a>`;
     }
     if (manageable) {
       actions += ` <button class="btn btn-sm btn-outline-secondary" data-action="edit" data-id="${esc(t.id)}">
@@ -98,15 +102,15 @@
     let items = "";
     for (const g of targets.groups) {
       items += `<li><a class="dropdown-item" href="#" data-action="share" data-id="${esc(t.id)}"
-                   data-scope="group" data-group="${esc(g.id)}">Partager au groupe ${esc(g.name)}</a></li>`;
+                   data-scope="group" data-group="${esc(g.id)}">${_t("Partager au groupe %(g)s", { g: esc(g.name) })}</a></li>`;
     }
     if (targets.global) {
       items += `<li><a class="dropdown-item" href="#" data-action="share" data-id="${esc(t.id)}"
-                   data-scope="global">Partager à tous</a></li>`;
+                   data-scope="global">${_t("Partager à tous")}</a></li>`;
     }
     if (t.scope !== "private") {
       items += `<li><a class="dropdown-item" href="#" data-action="share" data-id="${esc(t.id)}"
-                   data-scope="private">Rendre privé</a></li>`;
+                   data-scope="private">${_t("Rendre privé")}</a></li>`;
     }
     if (!items) return "";
     return `
@@ -139,7 +143,7 @@
 
   function renderPalettes() {
     $("mt-palettes").innerHTML = builtinPalettes().map((p, i) => `
-      <button type="button" class="mt-palette" title="Appliquer cette palette"
+      <button type="button" class="mt-palette" title="${_t("Appliquer cette palette")}"
               data-primary="${p.primary}" data-accent="${p.accent}" data-light="${p.light}">
         <span style="background:#${p.primary}"></span><span style="background:#${p.accent}"></span><span style="background:#${p.light}"></span>
       </button>`).join("");
@@ -150,9 +154,9 @@
     state.editingId = editingId || null;
     state.baseDefinition = source;
     state.hasLogo = false;
-    $("mt-editor-title").textContent = editingId ? `Modifier « ${source.name} »` : `Créer mon type (à partir de « ${source.name} »)`;
+    $("mt-editor-title").textContent = editingId ? _t("Modifier « %(name)s »", { name: source.name }) : _t("Créer mon type (à partir de « %(name)s »)", { name: source.name });
     $("mt-name").value = editingId ? source.name : "";
-    $("mt-name").placeholder = editingId ? "" : `ex. ${source.name} — mon équipe`;
+    $("mt-name").placeholder = editingId ? "" : _t("ex. %(name)s — mon équipe", { name: source.name });
     $("mt-badge").value = source.badge || "";
     $("mt-banner").value = source.banner_text || "";
     $("mt-description").value = source.description || "";
@@ -196,13 +200,13 @@
     row.className = "row g-1 mb-1 mt-field-row";
     row.innerHTML = `
       <div class="col-5"><input class="form-control form-control-sm mt-f-label" maxlength="80"
-        placeholder="Libellé (ex. Filiale concernée)" value="${esc(f && f.label || "")}"></div>
+        placeholder="${_t("Libellé (ex. Filiale concernée)")}" value="${esc(f && f.label || "")}"></div>
       <div class="col-3"><select class="form-select form-select-sm mt-f-type">
-        <option value="text">Texte</option><option value="number">Nombre</option><option value="textarea">Texte long</option>
+        <option value="text">${_t("Texte")}</option><option value="number">${_t("Nombre")}</option><option value="textarea">${_t("Texte long")}</option>
       </select></div>
       <div class="col-3"><input class="form-control form-control-sm mt-f-short" maxlength="80"
-        placeholder="Libellé court (Word)" value="${esc(f && f.short_label || "")}"></div>
-      <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="Retirer"
+        placeholder="${_t("Libellé court (Word)")}" value="${esc(f && f.short_label || "")}"></div>
+      <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="${_t("Retirer")}"
         onclick="this.closest('.mt-field-row').remove()"><i class="bi bi-x"></i></button></div>`;
     if (f && f.type) row.querySelector(".mt-f-type").value = f.type;
     row.dataset.key = (f && f.key) || "";
@@ -219,10 +223,10 @@
     row.className = "row g-1 mb-1 mt-extract-row";
     row.innerHTML = `
       <div class="col-4"><input class="form-control form-control-sm mt-e-label" maxlength="80"
-        placeholder="Libellé (ex. Budgets évoqués)" value="${esc(e && e.label || "")}"></div>
+        placeholder="${_t("Libellé (ex. Budgets évoqués)")}" value="${esc(e && e.label || "")}"></div>
       <div class="col-7"><input class="form-control form-control-sm mt-e-instr" maxlength="200"
-        placeholder="À relever (ex. montants budgétaires explicitement cités)" value="${esc(e && e.instruction || "")}"></div>
-      <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="Retirer"
+        placeholder="${_t("À relever (ex. montants budgétaires explicitement cités)")}" value="${esc(e && e.instruction || "")}"></div>
+      <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="${_t("Retirer")}"
         onclick="this.closest('.mt-extract-row').remove()"><i class="bi bi-x"></i></button></div>`;
     row.dataset.key = (e && e.key) || "";
     $("mt-extracts").appendChild(row);
@@ -245,11 +249,11 @@
       li.dataset.key = key;
       const toggle = TOGGLEABLE.includes(key)
         ? `<input type="checkbox" class="form-check-input mt-s-enabled" ${enabled[key] === false ? "" : "checked"}>`
-        : `<i class="bi bi-lock text-muted" title="Toujours présent"></i>`;
+        : `<i class="bi bi-lock text-muted" title="${_t("Toujours présent")}"></i>`;
       li.innerHTML = `
         <span class="btn-group btn-group-sm">
-          <button class="btn btn-outline-secondary py-0 px-1" data-move="-1" title="Monter"><i class="bi bi-chevron-up"></i></button>
-          <button class="btn btn-outline-secondary py-0 px-1" data-move="1" title="Descendre"><i class="bi bi-chevron-down"></i></button>
+          <button class="btn btn-outline-secondary py-0 px-1" data-move="-1" title="${_t("Monter")}"><i class="bi bi-chevron-up"></i></button>
+          <button class="btn btn-outline-secondary py-0 px-1" data-move="1" title="${_t("Descendre")}"><i class="bi bi-chevron-down"></i></button>
         </span>
         ${toggle}
         <span class="small">${SECTION_LABELS[key] || key}</span>`;
@@ -333,18 +337,18 @@
     $("mt-cover-confidential").classList.toggle("d-none", !$("mt-confidential").checked);
     const footer = $("mt-footer").value.trim();
     $("mt-cover-footer").textContent =
-      (footer ? footer + " · " : "") + "TranscrIA · Réunion d'exemple · Page 1/4";
+      (footer ? footer + " · " : "") + _t("TranscrIA · Réunion d'exemple · Page 1/4");
     $("mt-cover-logo").classList.toggle("d-none", !state.hasLogo);
     $("mt-contrast-warning").classList.toggle("d-none", luminance(primary) < 0.6);
   }
 
   async function downloadPreview() {
     const definition = currentDefinition();
-    if (!definition.name) { $("mt-error").textContent = "Donnez d'abord un nom au type."; return; }
+    if (!definition.name) { $("mt-error").textContent = _t("Donnez d'abord un nom au type."); return; }
     const r = await fetch("/api/meeting-types/preview.docx", {
       method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(definition),
     });
-    if (!r.ok) { $("mt-error").textContent = (await r.json()).error || "Aperçu impossible."; return; }
+    if (!r.ok) { $("mt-error").textContent = (await r.json()).error || _t("Aperçu impossible."); return; }
     const blob = await r.blob();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -363,14 +367,14 @@
       headers: {"Content-Type": "application/json"}, body: JSON.stringify(definition),
     });
     const data = await r.json();
-    if (!r.ok) { $("mt-error").textContent = data.error || "Enregistrement impossible."; return; }
+    if (!r.ok) { $("mt-error").textContent = data.error || _t("Enregistrement impossible."); return; }
     // Logo choisi : téléversé après coup (le binaire vit hors de la fiche).
     const logoInput = $("mt-logo");
     if (logoInput.files && logoInput.files[0]) {
       const form = new FormData();
       form.append("logo", logoInput.files[0]);
       const lr = await fetch(`/api/meeting-types/${data.id}/logo`, {method: "POST", body: form});
-      if (!lr.ok) { $("mt-error").textContent = (await lr.json()).error || "Logo refusé."; return; }
+      if (!lr.ok) { $("mt-error").textContent = (await lr.json()).error || _t("Logo refusé."); return; }
     }
     await load();
     closeEditor();
@@ -389,8 +393,8 @@
     form.append("file", file);
     const r = await fetch("/api/meeting-types/import", {method: "POST", body: form});
     const data = await r.json();
-    if (!r.ok) { alert(data.error || "Import impossible."); return; }
-    alert(`Type « ${data.name} » importé (privé, à relire) : ouvrez-le, vérifiez, enregistrez pour l'activer.`);
+    if (!r.ok) { alert(data.error || _t("Import impossible.")); return; }
+    alert(_t("Type « %(name)s » importé (privé, à relire) : ouvrez-le, vérifiez, enregistrez pour l'activer.", { name: data.name }));
     await load();
   }
 
@@ -399,12 +403,12 @@
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({scope, group_id: groupId || null}),
     });
-    if (!r.ok) alert((await r.json()).error || "Partage impossible.");
+    if (!r.ok) alert((await r.json()).error || _t("Partage impossible."));
     await load();
   }
 
   async function remove(id, name) {
-    if (!confirm(`Supprimer le type « ${name} » ? Les traitements passés le conservent.`)) return;
+    if (!confirm(_t("Supprimer le type « %(name)s » ? Les traitements passés le conservent.", { name: name }))) return;
     const r = await fetch(`/api/meeting-types/${id}`, {method: "DELETE"});
     if (!r.ok) alert((await r.json()).error || "Suppression impossible.");
     await load();
