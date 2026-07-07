@@ -24,12 +24,24 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   maintenance, modèles, système, éditeur SRT, types de réunion — messages `flash`/erreurs Python,
   pages d'erreur) **et les emails de notification** (rendus dans la langue du **destinataire**).
   Catalogue de ~970 chaînes.
-- **Langue des livrables générés (Axe B, bêta)** : le sélecteur **« Langue »** de l'étape Contexte
-  pilote désormais AUSSI la langue du compte-rendu et des corrections. Les prompts LLM sont résolus
-  par langue (`configs/prompts/<lang>/`, **repli français** ⇒ aucune régression) et une **consigne
-  de langue parser-safe** est injectée (le contenu est rédigé dans la langue cible, les marqueurs de
-  format restent intacts pour le parsing). Défaut `fr` = comportement inchangé. *Bêta : les fichiers
-  de prompts EN dédiés, la localisation des libellés DOCX et la validation E2E GPU restent à faire.*
+- **Langue des livrables générés (Axe B) — livrable anglais de bout en bout** : le sélecteur
+  **« Langue »** de l'étape Contexte pilote désormais AUSSI toute la chaîne de production du
+  livrable. Défaut `fr` = comportement strictement inchangé. En anglais :
+  - **Prompts LLM dédiés** `configs/prompts/en/` (résumé, correction, relecture finale ; repli
+    français si absent ⇒ aucune régression). Les **parsers** du résumé sont pilotés par langue
+    (table de marqueurs FR/EN, chemins isolés) ; le marqueur de segment étranger et l'extraction
+    de la synthèse dans le DOCX sont bilingues.
+  - **STT du résumé** : la transcription rapide suit la langue du job (corrige un
+    `language="fr"` codé en dur qui transcrivait l'anglais en charabia phonétique).
+  - **DOCX entièrement localisé** : bandeau, métadonnées, sections, données structurées,
+    tableau des participants, points à vérifier (libellés **et** descriptions), badges, et
+    **nom/badge/bannière du type de réunion** (la clé du type reste française pour la logique,
+    seul l'affichage est traduit). Zéro français côté utilisateur quand l'anglais est choisi.
+  - **Validé par un E2E GPU réel** (audio anglais, pipeline complet 13/13) : résumé, SRT
+    corrigé, rapports et DOCX produits en anglais.
+  - Nouveau : option `--language` du harnais E2E, migration `users.locale` appliquée.
+  *Autres langues : le socle est prêt (repli français partout) ; il suffit d'ajouter un dossier
+  `configs/prompts/<lang>/` et les traductions d'affichage.*
 
 ### Fixed
 - **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient
