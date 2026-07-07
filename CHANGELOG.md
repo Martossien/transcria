@@ -8,6 +8,16 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 
 ## [Unreleased]
 
+### Fixed
+- **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient
+  « absent » quand ils vivaient à un emplacement non standard (bug : segment `hub/` manquant pour
+  le cache HF ; LLM cherchée uniquement sous `MODELS_DIR`). La détection cherche désormais à
+  **plusieurs endroits** : le `--model` du **script de lancement d'arbitrage** (source la plus
+  fiable pour le GGUF servi, avec expansion de `${MODELS_DIR}`), plusieurs **caches HF**
+  (`HF_HOME`, `~/.cache`, `/root/.cache`, tous en `…/hub/`), plusieurs **racines de modèles**
+  (`MODELS_DIR`, `/root/models`, `~/models`, `./models`) avec **glob** du fichier GGUF où qu'il
+  soit — résilient aux dossiers non lisibles (ex. `/root/models` pour un process non-root).
+
 ## [0.3.1] — 2026-07-06
 
 ### Added

@@ -65,6 +65,56 @@ def test_model_status_hf_cache_present(tmp_path: Path, monkeypatch):
     assert status["present"] is True and status["size_bytes"] == 4096
 
 
+def test_served_llm_gguf_parses_launch_script(tmp_path: Path):
+    from transcria.models_catalog import served_llm_gguf
+
+    script = tmp_path / "launch.sh"
+    script.write_text("llama-server \\\n--model /root/models/x/Model-Q8.gguf \\\n--port 8080\n")
+    assert served_llm_gguf({"services": {"arbitrage_script": str(script)}}) == Path("/root/models/x/Model-Q8.gguf")
+
+
+def test_served_llm_gguf_expands_models_dir_template(tmp_path: Path, monkeypatch):
+    from transcria.models_catalog import served_llm_gguf
+
+    monkeypatch.setenv("MODELS_DIR", "/data/models")
+    script = tmp_path / "launch.sh"
+    script.write_text('--model "${MODELS_DIR:-/home/x/models}/Sub/Model.gguf" \\\n')
+    assert served_llm_gguf({"services": {"arbitrage_script": str(script)}}) == Path("/data/models/Sub/Model.gguf")
+
+
+def test_model_status_finds_served_llm_anywhere(tmp_path: Path):
+    served = tmp_path / "served" / "Model-Q8.gguf"
+    served.parent.mkdir(parents=True)
+    served.write_bytes(b"x" * 100)
+    spec = ModelSpec("arbitrage_llm", "L", "r/x", "Model-Q8.gguf", "gguf", "expected-subdir", False, "MIT", "u", 38.0)
+    status = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "nope", served_path=served)
+    assert status["present"] and status["path"] == str(served) and status["size_bytes"] == 100
+
+
+def test_model_status_gguf_glob_finds_file_in_other_subdir(tmp_path: Path):
+    actual = tmp_path / "weird-name" / "Model.gguf"   # sous-dossier ≠ target_subdir attendu
+    actual.parent.mkdir(parents=True)
+    actual.write_bytes(b"y" * 64)
+    spec = ModelSpec("arbitrage_llm", "L", "r/x", "Model.gguf", "gguf", "expected", False, "MIT", "u", 1.0)
+    status = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path)
+    assert status["present"] and status["path"] == str(actual)
+
+
+def test_model_status_hf_cache_probes_hub_subdir(tmp_path: Path, monkeypatch):
+    # LE bug corrigé : les modèles sont dans <hf_home>/hub/models--… (pas <hf_home>/models--…)
+    seen: dict = {}
+
+    def fake_find(hub, repo):
+        seen.setdefault("hubs", []).append(str(hub))
+        return (hub / ("models--" + repo.replace("/", "--"))) if Path(hub).name == "hub" else None
+
+    monkeypatch.setattr(mc, "find_hf_cache_model", fake_find)
+    spec = ModelSpec("stt", "S", "Org/Model", None, "hf_cache", "", False, "MIT", "u", 1.0)
+    status = model_status(spec, hf_home=tmp_path, models_dir=tmp_path)
+    assert status["present"] is True
+    assert any(h.endswith("/hub") or h.endswith("\\hub") for h in seen["hubs"])
+
+
 def test_disk_free_bytes_positive(tmp_path: Path):
     assert disk_free_bytes(tmp_path / "does" / "not" / "exist") > 0  # remonte au parent existant
 
