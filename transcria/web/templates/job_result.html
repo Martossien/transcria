@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Résultat — TranscrIA{% endblock %}
+{% block title %}{{ _('Résultat') }} — TranscrIA{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">{{ job.title }} <span class="badge bg-success">Terminé</span></h1>
+<h1 class="h4 mb-3">{{ job.title }} <span class="badge bg-success">{{ _('Terminé') }}</span></h1>
 
 <div class="row mb-4">
   <div class="col-md-4">
     <div class="card text-center">
       <div class="card-body">
-        <h5 class="text-muted">Score qualité</h5>
+        <h5 class="text-muted">{{ _('Score qualité') }}</h5>
         <span class="display-4 {{ 'text-success' if (quality_report.quality_score or 0) >= 80 else 'text-warning' if (quality_report.quality_score or 0) >= 50 else 'text-danger' }}">
           {{ quality_report.quality_score or '—' }}<small style="font-size:0.4em">/100</small>
         </span>
@@ -17,7 +17,7 @@
   <div class="col-md-4">
     <div class="card text-center">
       <div class="card-body">
-        <h5 class="text-muted">Points à vérifier</h5>
+        <h5 class="text-muted">{{ _('Points à vérifier') }}</h5>
         <span class="display-4 {{ 'text-success' if review_points|length == 0 else 'text-warning' }}">{{ review_points|length }}</span>
       </div>
     </div>
@@ -25,7 +25,7 @@
   <div class="col-md-4">
     <div class="card text-center">
       <div class="card-body">
-        <h5 class="text-muted">Contrôles</h5>
+        <h5 class="text-muted">{{ _('Contrôles') }}</h5>
         <span class="display-4 text-muted">{{ quality_report.total_checks or 0 }}</span>
       </div>
     </div>
@@ -34,7 +34,7 @@
 
 {% if review_points %}
 <div class="card mb-4">
-  <div class="card-header">Points à vérifier</div>
+  <div class="card-header">{{ _('Points à vérifier') }}</div>
   <div class="card-body">
     <ul class="mb-0">
       {% for point in review_points %}
@@ -50,22 +50,22 @@
      un profil SRT-only ne produit ni Word ni package (has_docx/has_package). #}
   {% if has_docx %}
   <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary">
-    <i class="bi bi-file-earmark-word"></i> Rapport Word (.docx)
+    <i class="bi bi-file-earmark-word"></i> {{ _('Rapport Word (.docx)') }}
   </a>
   {% endif %}
   <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success">
-    <i class="bi bi-download"></i> Télécharger le SRT
+    <i class="bi bi-download"></i> {{ _('Télécharger le SRT') }}
   </a>
   {% if has_package %}
   <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary">
-    <i class="bi bi-archive"></i> Package complet
+    <i class="bi bi-archive"></i> {{ _('Package complet') }}
   </a>
   {% endif %}
   <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary">
-    <i class="bi bi-download"></i> Télécharger l'audio
+    <i class="bi bi-download"></i> {{ _("Télécharger l'audio") }}
   </a>
   <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-primary">
-    <i class="bi bi-pencil-square"></i> Éditer la transcription
+    <i class="bi bi-pencil-square"></i> {{ _('Éditer la transcription') }}
   </a>
 </div>
 {# Visible dès qu'un affinage a été appliqué (rempli par le JS du panneau) : rassure
@@ -76,7 +76,7 @@
 
 {% if srt_content %}
 <details>
-  <summary class="text-muted mb-2">Aperçu du SRT</summary>
+  <summary class="text-muted mb-2">{{ _('Aperçu du SRT') }}</summary>
   <pre class="srt-preview">{{ srt_content[:5000] }}</pre>
 </details>
 {% endif %}
@@ -84,58 +84,56 @@
 {# ── Chat d'affinage des livrables (LLM locale) ─────────────────────────── #}
 <div class="card mb-4 mt-4" id="refine-chat" data-job-id="{{ job.id }}">
   <div class="card-header d-flex justify-content-between align-items-center">
-    <span><i class="bi bi-chat-dots"></i> Affiner les livrables avec l'assistant</span>
+    <span><i class="bi bi-chat-dots"></i> {{ _("Affiner les livrables avec l'assistant") }}</span>
     <span id="refine-busy" class="text-muted small d-none">
       <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-      L'assistant travaille (30&nbsp;s à 2&nbsp;min)…
+      {{ _("L'assistant travaille (30 s à 2 min)…") }}
     </span>
   </div>
   <div class="card-body">
     <p class="text-muted small mb-2">
-      Discutez du résultat (question, vérification, demande de reformulation), puis
-      <strong>appliquez</strong> quand la proposition vous convient : les documents sont
-      régénérés et chaque application crée une <strong>version restaurable</strong>.
+      {% trans %}Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>.{% endtrans %}
     </p>
     <div id="refine-thread" class="border rounded p-2 mb-2 bg-body-tertiary"
          style="max-height: 340px; overflow-y: auto; display: none;"></div>
     <div class="input-group mb-2">
       <textarea id="refine-input" class="form-control" rows="2" maxlength="4000"
-        placeholder="Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"></textarea>
+        placeholder="{{ _('Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu') }}"></textarea>
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
       <button id="refine-discuss" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-chat"></i> Discuter
+        <i class="bi bi-chat"></i> {{ _('Discuter') }}
       </button>
       <button id="refine-apply" class="btn btn-primary btn-sm">
-        <i class="bi bi-magic"></i> Appliquer les modifications
+        <i class="bi bi-magic"></i> {{ _('Appliquer les modifications') }}
       </button>
       <span class="ms-auto"></span>
       <select id="refine-versions" class="form-select form-select-sm d-none" style="width:auto"></select>
       <button id="refine-revert" class="btn btn-outline-danger btn-sm d-none">
-        <i class="bi bi-arrow-counterclockwise"></i> Restaurer
+        <i class="bi bi-arrow-counterclockwise"></i> {{ _('Restaurer') }}
       </button>
     </div>
 
     <details class="mt-3">
-      <summary class="text-muted small">Options du document (sans assistant — immédiat)</summary>
+      <summary class="text-muted small">{{ _('Options du document (sans assistant — immédiat)') }}</summary>
       <div class="d-flex flex-wrap gap-3 align-items-end mt-2">
         <div>
-          <label class="form-label small mb-1" for="refine-theme">Thème du rapport</label>
-          <select id="refine-theme" class="form-select form-select-sm"><option value="">(selon le type)</option></select>
+          <label class="form-label small mb-1" for="refine-theme">{{ _('Thème du rapport') }}</label>
+          <select id="refine-theme" class="form-select form-select-sm"><option value="">{{ _('(selon le type)') }}</option></select>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="checkbox" id="refine-sec-participants" checked>
-          <label class="form-check-label small" for="refine-sec-participants">Participants</label>
+          <label class="form-check-label small" for="refine-sec-participants">{{ _('Participants') }}</label>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="checkbox" id="refine-sec-transcript" checked>
-          <label class="form-check-label small" for="refine-sec-transcript">Transcription</label>
+          <label class="form-check-label small" for="refine-sec-transcript">{{ _('Transcription') }}</label>
         </div>
         <div class="form-check form-check-inline">
           <input class="form-check-input" type="checkbox" id="refine-sec-quality" checked>
-          <label class="form-check-label small" for="refine-sec-quality">Points à vérifier</label>
+          <label class="form-check-label small" for="refine-sec-quality">{{ _('Points à vérifier') }}</label>
         </div>
-        <button id="refine-options-apply" class="btn btn-outline-secondary btn-sm">Appliquer les options</button>
+        <button id="refine-options-apply" class="btn btn-outline-secondary btn-sm">{{ _('Appliquer les options') }}</button>
       </div>
     </details>
     <div id="refine-error" class="alert alert-warning py-1 px-2 small mt-2 d-none"></div>
@@ -143,8 +141,8 @@
 </div>
 
 <div class="mt-3">
-  <a href="/jobs/{{ job.id }}" class="btn btn-outline-primary btn-sm">Retour au traitement</a>
-  <a href="/" class="btn btn-outline-secondary btn-sm">Accueil</a>
+  <a href="/jobs/{{ job.id }}" class="btn btn-outline-primary btn-sm">{{ _('Retour au traitement') }}</a>
+  <a href="/" class="btn btn-outline-secondary btn-sm">{{ _('Accueil') }}</a>
 </div>
 {% endblock %}
 
@@ -158,6 +156,23 @@
   const thread = el("refine-thread"), input = el("refine-input");
   let busy = false, pollTimer = null;
   let lastProposal = null;   // dernière « Proposition d'application » du fil
+
+  // Chaînes traduites (mêmes catalogues gettext) — script inline rendu par Jinja.
+  const T = {
+    proposition: {{ _('Proposition')|tojson }},
+    applyProposal: {{ _('Appliquer cette proposition')|tojson }},
+    version: {{ _('Version')|tojson }},
+    refineApplied: {{ _('Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications.')|tojson }},
+    describeChange: {{ _("Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant.")|tojson }},
+    writeFirst: {{ _("Écrivez d'abord votre demande.")|tojson }},
+    applyHead: {{ _('Appliquer aux documents :')|tojson }},
+    applyFoot: {{ _('Une version restaurable sera créée (retour arrière possible).')|tojson }},
+    error: {{ _('Erreur')|tojson }},
+    networkError: {{ _('Erreur réseau — réessayez.')|tojson }},
+    invalidOptions: {{ _('Options invalides')|tojson }},
+    revertConfirm: {{ _('Restaurer la version v{v} ? Les documents reviendront à cet état.')|tojson }},
+    revertFailed: {{ _('Restauration impossible')|tojson }},
+  };
 
   function showError(msg) {
     const box = el("refine-error");
@@ -191,9 +206,9 @@
         card.className = "text-start mb-2 ms-3";
         card.innerHTML =
           '<div class="border border-primary-subtle rounded p-2 d-inline-block" style="max-width:85%;background:var(--bs-primary-bg-subtle);">' +
-          '<div class="small mb-1"><i class="bi bi-lightbulb"></i> <strong>Proposition</strong> : <span class="prop-text"></span></div>' +
+          '<div class="small mb-1"><i class="bi bi-lightbulb"></i> <strong>' + T.proposition + '</strong> : <span class="prop-text"></span></div>' +
           '<button type="button" class="btn btn-primary btn-sm refine-proposal-btn">' +
-          '<i class="bi bi-magic"></i> Appliquer cette proposition</button></div>';
+          '<i class="bi bi-magic"></i> ' + T.applyProposal + '</button></div>';
         card.querySelector(".prop-text").textContent = t.proposal;
         card.querySelector(".refine-proposal-btn").addEventListener("click", () => submit("apply", t.proposal));
         thread.appendChild(card);
@@ -213,7 +228,7 @@
     const sel = el("refine-versions"), btn = el("refine-revert");
     sel.classList.toggle("d-none", !versions.length);
     btn.classList.toggle("d-none", !versions.length);
-    sel.innerHTML = versions.map(v => `<option value="${v}">Version v${v}</option>`).join("");
+    sel.innerHTML = versions.map(v => `<option value="${v}">${T.version} v${v}</option>`).join("");
     sel.selectedIndex = sel.options.length - 1;
     // Note près des boutons de téléchargement : après un affinage, ils servent
     // toujours la dernière version (les documents sont régénérés à chaque clic).
@@ -222,8 +237,7 @@
       note.classList.toggle("d-none", !versions.length);
       if (versions.length) {
         note.querySelector("span").textContent =
-          "Affinage appliqué (version v" + versions[versions.length - 1] +
-          ") — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications.";
+          T.refineApplied.replace("{v}", versions[versions.length - 1]);
       }
     }
   }
@@ -267,16 +281,13 @@
       message = lastProposal;
     }
     if (!message) {
-      showError(kind === "apply"
-        ? "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
-        : "Écrivez d'abord votre demande.");
+      showError(kind === "apply" ? T.describeChange : T.writeFirst);
       return;
     }
     if (kind === "apply") {
       // Confirmation EXPLICITE : l'utilisateur relit la demande exacte qui sera appliquée.
       const preview = message.length > 240 ? message.slice(0, 240) + "…" : message;
-      if (!confirm("Appliquer aux documents :\n\n« " + preview + " »\n\n" +
-                   "Une version restaurable sera créée (retour arrière possible).")) return;
+      if (!confirm(T.applyHead + "\n\n« " + preview + " »\n\n" + T.applyFoot)) return;
     }
     setBusy(true);
     try {
@@ -285,11 +296,11 @@
         body: JSON.stringify({ kind, message }),
       });
       const data = await r.json();
-      if (!r.ok) { setBusy(false); showError(data.error || "Erreur"); return; }
+      if (!r.ok) { setBusy(false); showError(data.error || T.error); return; }
       if (fromInput) input.value = "";
       if (!pollTimer) pollTimer = setInterval(refresh, 4000);
       refresh();
-    } catch (e) { setBusy(false); showError("Erreur réseau — réessayez."); }
+    } catch (e) { setBusy(false); showError(T.networkError); }
   }
 
   el("refine-discuss").addEventListener("click", () => submit("discuss"));
@@ -314,23 +325,23 @@
         body: JSON.stringify(payload),
       });
       const data = await r.json();
-      if (!r.ok) { showError(data.error || "Options invalides"); return; }
+      if (!r.ok) { showError(data.error || T.invalidOptions); return; }
       refresh();
-    } catch (e) { showError("Erreur réseau — réessayez."); }
+    } catch (e) { showError(T.networkError); }
   });
 
   el("refine-revert").addEventListener("click", async () => {
     const v = parseInt(el("refine-versions").value, 10);
-    if (!v || !confirm(`Restaurer la version v${v} ? Les documents reviendront à cet état.`)) return;
+    if (!v || !confirm(T.revertConfirm.replace("{v}", v))) return;
     try {
       const r = await fetch(api("/revert"), {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ version: v }),
       });
       const data = await r.json();
-      if (!r.ok) { showError(data.error || "Restauration impossible"); return; }
+      if (!r.ok) { showError(data.error || T.revertFailed); return; }
       refresh();
-    } catch (e) { showError("Erreur réseau — réessayez."); }
+    } catch (e) { showError(T.networkError); }
   });
 
   refresh();

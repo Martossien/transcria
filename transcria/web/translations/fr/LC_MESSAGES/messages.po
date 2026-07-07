@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 18:59+0200\n"
+"POT-Creation-Date: 2026-07-07 19:35+0200\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -18,6 +18,22 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+#: transcria/web/templates/queue.html:81
+#, python-format
+msgid "%(count)s élément"
+msgid_plural "%(count)s éléments"
+msgstr[0] "%(count)s élément"
+msgstr[1] "%(count)s éléments"
+
+#: transcria/web/templates/queue.html:134
+#, python-format
+msgid "%(gb)s Go"
+msgstr "%(gb)s Go"
+
+#: transcria/web/templates/job_result.html:122
+msgid "(selon le type)"
+msgstr "(selon le type)"
+
 #: transcria/web/templates/base.html:142
 #, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
@@ -25,9 +41,84 @@ msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
 
+#: transcria/web/templates/index.html:2
+#: transcria/web/templates/job_result.html:145
+msgid "Accueil"
+msgstr "Accueil"
+
+#: transcria/web/templates/queue.html:206
+msgid "Action impossible sur ce job."
+msgstr "Action impossible sur ce job."
+
+#: transcria/web/templates/queue.html:98
+msgid "Actions"
+msgstr "Actions"
+
+#: transcria/web/templates/queue.html:84
+msgid "Actualiser"
+msgstr "Actualiser"
+
 #: transcria/web/templates/base.html:45
 msgid "Administration"
 msgstr "Administration"
+
+#: transcria/web/templates/job_result.html:165
+#, python-brace-format
+msgid "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
+msgstr "Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
+
+#: transcria/web/templates/job_result.html:87
+msgid "Affiner les livrables avec l'assistant"
+msgstr "Affiner les livrables avec l'assistant"
+
+#: transcria/web/templates/queue.html:13
+#, python-format
+msgid "Agenda %(tz)s"
+msgstr "Agenda %(tz)s"
+
+#: transcria/web/templates/queue.html:20
+msgid "Agenda désactivé"
+msgstr "Agenda désactivé"
+
+#: transcria/web/templates/queue.html:173
+msgid "Annuler"
+msgstr "Annuler"
+
+#: transcria/web/templates/queue.html:213
+msgid "Annuler ce job ?"
+msgstr "Annuler ce job ?"
+
+#: transcria/web/templates/job_result.html:79
+msgid "Aperçu du SRT"
+msgstr "Aperçu du SRT"
+
+#: transcria/web/templates/job_result.html:168
+msgid "Appliquer aux documents :"
+msgstr "Appliquer aux documents :"
+
+#: transcria/web/templates/job_result.html:163
+msgid "Appliquer cette proposition"
+msgstr "Appliquer cette proposition"
+
+#: transcria/web/templates/queue.html:126
+msgid "Appliquer la priorité"
+msgstr "Appliquer la priorité"
+
+#: transcria/web/templates/job_result.html:108
+msgid "Appliquer les modifications"
+msgstr "Appliquer les modifications"
+
+#: transcria/web/templates/job_result.html:136
+msgid "Appliquer les options"
+msgstr "Appliquer les options"
+
+#: transcria/web/templates/queue.html:180
+msgid "Aucun job en file"
+msgstr "Aucun job en file"
+
+#: transcria/web/templates/index.html:48
+msgid "Aucun traitement pour le moment."
+msgstr "Aucun traitement pour le moment."
 
 #: transcria/web/templates/base.html:73
 msgid "Audit"
@@ -37,26 +128,114 @@ msgstr "Audit"
 msgid "Configuration"
 msgstr "Configuration"
 
+#: transcria/web/templates/login.html:2
+msgid "Connexion"
+msgstr "Connexion"
+
+#: transcria/web/templates/job_result.html:28
+msgid "Contrôles"
+msgstr "Contrôles"
+
+#: transcria/web/templates/index.html:49
+msgid "Créez votre premier traitement pour transcrire une réunion."
+msgstr "Créez votre premier traitement pour transcrire une réunion."
+
+#: transcria/web/templates/queue.html:161
+msgid "Descendre"
+msgstr "Descendre"
+
+#: transcria/web/templates/job_result.html:105
+msgid "Discuter"
+msgstr "Discuter"
+
+#: transcria/web/templates/job_result.html:95
+msgid "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
+msgstr "Discutez du résultat (question, vérification, demande de reformulation), puis <strong>appliquez</strong> quand la proposition vous convient : les documents sont régénérés et chaque application crée une <strong>version restaurable</strong>."
+
 #: transcria/web/templates/base.html:111
 msgid "Déconnexion"
 msgstr "Déconnexion"
+
+#: transcria/web/templates/job_result.html:166
+msgid "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
+msgstr "Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."
+
+#: transcria/web/templates/queue.html:97
+msgid "Départ"
+msgstr "Départ"
+
+#: transcria/web/templates/queue.html:42
+msgid "En attente"
+msgstr "En attente"
+
+#: transcria/web/templates/queue.html:50
+msgid "En cours"
+msgstr "En cours"
+
+#: transcria/web/templates/queue.html:58
+msgid "En pause manuelle"
+msgstr "En pause manuelle"
+
+#: transcria/web/templates/job_result.html:170
+msgid "Erreur"
+msgstr "Erreur"
+
+#: transcria/web/templates/job_result.html:171
+msgid "Erreur réseau — réessayez."
+msgstr "Erreur réseau — réessayez."
+
+#: transcria/web/templates/queue.html:112
+msgid "Estimation calibrée sur les traitements précédents"
+msgstr "Estimation calibrée sur les traitements précédents"
+
+#: transcria/web/templates/job_result.html:101
+msgid "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
+msgstr "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou posez une question sur le contenu"
 
 #: transcria/web/templates/base.html:35
 msgctxt "navigation"
 msgid "File"
 msgstr "File"
 
+#: transcria/web/templates/queue.html:2 transcria/web/templates/queue.html:10
+msgid "File d'attente"
+msgstr "File d'attente"
+
 #: transcria/web/templates/base.html:54
 msgid "Groupes"
 msgstr "Groupes"
+
+#: transcria/web/templates/queue.html:149
+msgid "Immédiat"
+msgstr "Immédiat"
+
+#: transcria/web/templates/queue.html:92
+msgid "Job"
+msgstr "Job"
+
+#: transcria/web/templates/queue.html:80
+msgid "Jobs planifiés"
+msgstr "Jobs planifiés"
+
+#: transcria/web/templates/job_result.html:90
+msgid "L'assistant travaille (30 s à 2 min)…"
+msgstr "L'assistant travaille (30 s à 2 min)…"
 
 #: transcria/web/templates/base.html:143
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 
+#: transcria/web/templates/queue.html:233
+msgid "La priorité doit être comprise entre 1 et 100."
+msgstr "La priorité doit être comprise entre 1 et 100."
+
 #: transcria/web/templates/base.html:87
 msgid "Langue de l'interface"
 msgstr "Langue de l'interface"
+
+#: transcria/web/templates/queue.html:251
+msgid "Les jobs en cours seront ignorés."
+msgstr "Les jobs en cours seront ignorés."
 
 #: transcria/web/templates/base.html:56
 msgid "Lexiques"
@@ -70,37 +249,217 @@ msgstr "Maintenance"
 msgid "Menu"
 msgstr "Menu"
 
+#: transcria/web/templates/queue.html:169
+msgid "Mettre en pause"
+msgstr "Mettre en pause"
+
+#: transcria/web/templates/queue.html:94
+msgid "Mode"
+msgstr "Mode"
+
 #: transcria/web/templates/base.html:69
 msgid "Modèles"
 msgstr "Modèles"
 
-#: transcria/web/templates/base.html:107
+#: transcria/web/templates/queue.html:158
+msgid "Monter"
+msgstr "Monter"
+
+#: transcria/web/templates/base.html:107 transcria/web/templates/login.html:21
 msgid "Mot de passe"
 msgstr "Mot de passe"
 
-#: transcria/web/templates/base.html:76
+#: transcria/web/templates/queue.html:261
+msgid "Nettoyage impossible."
+msgstr "Nettoyage impossible."
+
+#: transcria/web/templates/queue.html:27
+msgid "Nettoyer E2E"
+msgstr "Nettoyer E2E"
+
+#: transcria/web/templates/login.html:17
+msgid "Nom d'utilisateur"
+msgstr "Nom d'utilisateur"
+
+#: transcria/web/templates/index.html:7
+msgid "Nom de la réunion"
+msgstr "Nom de la réunion"
+
+#: transcria/web/templates/index.html:8
+msgid "Nouveau traitement"
+msgstr "Nouveau traitement"
+
+#: transcria/web/templates/job_result.html:118
+msgid "Options du document (sans assistant — immédiat)"
+msgstr "Options du document (sans assistant — immédiat)"
+
+#: transcria/web/templates/job_result.html:172
+msgid "Options invalides"
+msgstr "Options invalides"
+
+#: transcria/web/templates/index.html:27
+msgid "Ouvrir"
+msgstr "Ouvrir"
+
+#: transcria/web/templates/index.html:31
+msgid "Package"
+msgstr "Package"
+
+#: transcria/web/templates/job_result.html:61
+msgid "Package complet"
+msgstr "Package complet"
+
+#: transcria/web/templates/index.html:20
+#, python-format
+msgid "Partagé par %(name)s"
+msgstr "Partagé par %(name)s"
+
+#: transcria/web/templates/job_result.html:126
+msgid "Participants"
+msgstr "Participants"
+
+#: transcria/web/templates/base.html:76 transcria/web/templates/queue.html:31
 msgid "Planification"
 msgstr "Planification"
+
+#: transcria/web/templates/job_result.html:20
+#: transcria/web/templates/job_result.html:37
+#: transcria/web/templates/job_result.html:134
+msgid "Points à vérifier"
+msgstr "Points à vérifier"
+
+#: transcria/web/templates/login.html:14
+msgid "Portail de transcription de réunion"
+msgstr "Portail de transcription de réunion"
+
+#: transcria/web/templates/queue.html:93
+msgid "Priorité"
+msgstr "Priorité"
+
+#: transcria/web/templates/queue.html:125
+msgid "Priorité de base"
+msgstr "Priorité de base"
+
+#: transcria/web/templates/job_result.html:162
+msgid "Proposition"
+msgstr "Proposition"
+
+#: transcria/web/templates/queue.html:91
+msgid "Rang"
+msgstr "Rang"
+
+#: transcria/web/templates/job_result.html:53
+msgid "Rapport Word (.docx)"
+msgstr "Rapport Word (.docx)"
+
+#: transcria/web/templates/queue.html:165
+msgid "Reprendre"
+msgstr "Reprendre"
+
+#: transcria/web/templates/queue.html:95
+msgid "Ressources"
+msgstr "Ressources"
+
+#: transcria/web/templates/job_result.html:174
+msgid "Restauration impossible"
+msgstr "Restauration impossible"
+
+#: transcria/web/templates/job_result.html:113
+msgid "Restaurer"
+msgstr "Restaurer"
+
+#: transcria/web/templates/job_result.html:173
+#, python-brace-format
+msgid "Restaurer la version v{v} ? Les documents reviendront à cet état."
+msgstr "Restaurer la version v{v} ? Les documents reviendront à cet état."
+
+#: transcria/web/templates/job_result.html:144
+msgid "Retour au traitement"
+msgstr "Retour au traitement"
+
+#: transcria/web/templates/job_result.html:2
+msgid "Résultat"
+msgstr "Résultat"
+
+#: transcria/web/templates/index.html:29
+msgid "Résultats"
+msgstr "Résultats"
 
 #: transcria/web/templates/base.html:104
 msgid "Rôle :"
 msgstr "Rôle :"
 
+#: transcria/web/templates/queue.html:66
+msgid "Scheduler"
+msgstr "Scheduler"
+
+#: transcria/web/templates/job_result.html:10
+msgid "Score qualité"
+msgstr "Score qualité"
+
+#: transcria/web/templates/login.html:24
+msgid "Se connecter"
+msgstr "Se connecter"
+
+#: transcria/web/templates/index.html:36
+msgid "Supprimer"
+msgstr "Supprimer"
+
+#: transcria/web/templates/index.html:35
+msgid "Supprimer ce traitement ? Cette action est irréversible."
+msgstr "Supprimer ce traitement ? Cette action est irréversible."
+
+#: transcria/web/templates/queue.html:26
+msgid "Supprimer les jobs de test E2E"
+msgstr "Supprimer les jobs de test E2E"
+
+#: transcria/web/templates/queue.html:251
+msgid "Supprimer tous les jobs de test ?"
+msgstr "Supprimer tous les jobs de test ?"
+
 #: transcria/web/templates/base.html:79
 msgid "Système"
 msgstr "Système"
 
-#: transcria/web/templates/base.html:26
+#: transcria/web/templates/job_result.html:4
+msgid "Terminé"
+msgstr "Terminé"
+
+#: transcria/web/templates/job_result.html:121
+msgid "Thème du rapport"
+msgstr "Thème du rapport"
+
+#: transcria/web/templates/base.html:26 transcria/web/templates/index.html:5
 msgid "Traitements"
 msgstr "Traitements"
+
+#: transcria/web/templates/job_result.html:130
+msgid "Transcription"
+msgstr "Transcription"
 
 #: transcria/web/templates/base.html:30
 msgid "Types de réunion"
 msgstr "Types de réunion"
 
+#: transcria/web/templates/job_result.html:65
+msgid "Télécharger l'audio"
+msgstr "Télécharger l'audio"
+
+#: transcria/web/templates/job_result.html:57
+msgid "Télécharger le SRT"
+msgstr "Télécharger le SRT"
+
+#: transcria/web/templates/job_result.html:169
+msgid "Une version restaurable sera créée (retour arrière possible)."
+msgstr "Une version restaurable sera créée (retour arrière possible)."
+
 #: transcria/web/templates/base.html:50
 msgid "Utilisateurs"
 msgstr "Utilisateurs"
+
+#: transcria/web/templates/job_result.html:164
+msgid "Version"
+msgstr "Version"
 
 #: transcria/web/templates/base.html:58
 msgid "Voix enregistrées"
@@ -109,4 +468,68 @@ msgstr "Voix enregistrées"
 #: transcria/web/templates/base.html:133
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
+
+#: transcria/web/templates/queue.html:69
+msgid "actif"
+msgstr "actif"
+
+#: transcria/web/templates/queue.html:154
+#, python-format
+msgid "créé %(t)s"
+msgstr "créé %(t)s"
+
+#: transcria/web/templates/queue.html:152
+#, python-format
+msgid "démarré %(t)s"
+msgstr "démarré %(t)s"
+
+#: transcria/web/templates/queue.html:130
+#, python-format
+msgid "effective %(p)s"
+msgstr "effective %(p)s"
+
+#: transcria/web/templates/queue.html:69
+msgid "indisponible"
+msgstr "indisponible"
+
+#: transcria/web/templates/queue.html:264
+msgid "job(s) de test supprimé(s)."
+msgstr "job(s) de test supprimé(s)."
+
+#: transcria/web/templates/queue.html:109
+#, python-format
+msgid "position %(n)s"
+msgstr "position %(n)s"
+
+#: transcria/web/templates/queue.html:17
+msgid "· aucun créneau actif"
+msgstr "· aucun créneau actif"
+
+#: transcria/web/templates/queue.html:130
+#, python-format
+msgid "· bonus %(b)s"
+msgstr "· bonus %(b)s"
+
+#: transcria/web/templates/queue.html:15
+#, python-format
+msgid "· créneau actif : %(name)s (%(action)s)"
+msgstr "· créneau actif : %(name)s (%(action)s)"
+
+#: transcria/web/templates/job_result.html:167
+msgid "Écrivez d'abord votre demande."
+msgstr "Écrivez d'abord votre demande."
+
+#: transcria/web/templates/job_result.html:68
+msgid "Éditer la transcription"
+msgstr "Éditer la transcription"
+
+#: transcria/web/templates/queue.html:96
+msgid "État"
+msgstr "État"
+
+#~ msgid "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
+#~ msgstr "Affinage appliqué (version v%(v)s) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications."
+
+#~ msgid "Restaurer la version v%(v)s ? Les documents reviendront à cet état."
+#~ msgstr "Restaurer la version v%(v)s ? Les documents reviendront à cet état."
 
