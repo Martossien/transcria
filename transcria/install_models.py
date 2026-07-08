@@ -79,8 +79,13 @@ def find_hf_cache_model(hf_cache: Path, repo_id: str) -> Path | None:
         return None  # chemin local, pas un repo id
     cache_dir = Path(hf_cache) / ("models--" + repo_id.replace("/", "--"))
     snapshots = cache_dir / "snapshots"
-    if cache_dir.is_dir() and snapshots.is_dir() and any(snapshots.iterdir()):
-        return cache_dir
+    try:
+        if cache_dir.is_dir() and snapshots.is_dir() and any(snapshots.iterdir()):
+            return cache_dir
+    except OSError:
+        # Cache non lisible (ex. ~/.cache/huggingface d'un autre compte, /root en CI) :
+        # on considère le modèle ABSENT plutôt que de propager (parité avec la branche gguf).
+        return None
     return None
 
 

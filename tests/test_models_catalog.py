@@ -65,6 +65,26 @@ def test_model_status_hf_cache_present(tmp_path: Path, monkeypatch):
     assert status["present"] is True and status["size_bytes"] == 4096
 
 
+def test_find_hf_cache_model_unreadable_dir_returns_none(tmp_path: Path):
+    """Cache HF non lisible (ex. /root/.cache en CI) → ABSENT, jamais de PermissionError
+    qui casserait le rendu de /admin/models (régression CI)."""
+    import os
+
+    import pytest
+
+    from transcria.install_models import find_hf_cache_model
+
+    if os.geteuid() == 0:
+        pytest.skip("root ignore les permissions de fichier")
+    cache = tmp_path / "models--CohereLabs--cohere-transcribe-03-2026"
+    (cache / "snapshots" / "abc").mkdir(parents=True)
+    os.chmod(cache, 0o000)
+    try:
+        assert find_hf_cache_model(tmp_path, "CohereLabs/cohere-transcribe-03-2026") is None
+    finally:
+        os.chmod(cache, 0o755)  # pour que pytest puisse nettoyer tmp_path
+
+
 def test_served_llm_gguf_parses_launch_script(tmp_path: Path):
     from transcria.models_catalog import served_llm_gguf
 
