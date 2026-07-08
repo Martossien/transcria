@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
 
+from transcria.install_messages import t
 from transcria.install_paths import directory_specs_for_kind, ensure_directories
 from transcria.install_systemd import (
     SystemdRenderContext,
@@ -190,7 +191,7 @@ def apply_systemd(
     if not unit_plans:
         return result  # plan vide (ex. --no-service) : aucune section, fidèle au shell
 
-    console.section("Services systemd")
+    console.section(t("phase_systemd_section"))
 
     # Avertissement : transcria.service legacy encore activé en déploiement split.
     if plan.profile in _SPLIT_PROFILES and plan.have_systemctl and systemctl_enabled("transcria"):

@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from transcria.install_messages import t
 from transcria.install_torch import build_install_plan
 
 Runner = Callable[..., Any]
@@ -94,21 +95,21 @@ def apply_python_env(
                 f"--skip-deps requiert un environnement Python déjà présent dans {plan.venv_path} "
                 "(venv existant ou couche build Docker)"
             )
-        console.info(f"Dépendances Python : ignorées (--skip-deps ; venv déjà fourni : {plan.venv_path})")
+        console.info(t("pe_skip_deps", venv=plan.venv_path))
         result.record("skip-deps")
         return result
 
     # ── venv ──────────────────────────────────────────────────────────────
     if (plan.venv_path / "bin" / "activate").exists():
-        console.ok(f"venv existant : {plan.venv_path}")
+        console.ok(t("pe_venv_existing", venv=plan.venv_path))
         result.record("venv-existing")
     else:
-        console.info("Création du venv...")
+        console.info(t("pe_venv_create"))
         _run(runner, [system_python, "-m", "venv", str(plan.venv_path)])
-        console.ok(f"venv créé : {plan.venv_path}")
+        console.ok(t("pe_venv_created", venv=plan.venv_path))
         result.record("venv-created")
 
-    console.info("Mise à jour de pip...")
+    console.info(t("pe_pip_upgrade"))
     _run(runner, [str(venv_python), "-m", "pip", "install", "--upgrade", "pip", "--quiet"])
     result.record("pip-upgrade")
 
@@ -123,31 +124,31 @@ def apply_python_env(
         console.warn(torch_plan.cuda_warning)
 
     if torch_plan.action == "skip":
-        console.info("PyTorch : skippé (--no-torch / --skip-deps)")
+        console.info(t("pe_torch_skip"))
     elif torch_plan.action == "already-installed":
-        console.ok(f"PyTorch déjà installé (CUDA {torch_plan.installed_cuda})")
+        console.ok(t("pe_torch_present", cuda=torch_plan.installed_cuda))
     elif torch_plan.action == "install-cpu":
-        console.info("Installation PyTorch CPU...")
+        console.info(t("pe_torch_cpu_start"))
         # torchcodec installé ICI, depuis le même index que torch : c'est le décodeur audio
         # de pyannote.audio 4.x, couplé à l'ABI/CUDA de torch. Le laisser arriver en transitif
         # via PyPI tirerait un wheel bâti pour un autre torch → AudioDecoder cassé.
         _run(runner, [str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec", "--quiet"])
-        console.ok("PyTorch installé")
+        console.ok(t("pe_torch_installed"))
     elif torch_plan.action == "install-cuda":
-        console.info(f"Installation PyTorch {torch_plan.cuda_tag}...")
+        console.info(t("pe_torch_cuda_start", tag=torch_plan.cuda_tag))
         _run(runner, [
             str(venv_python), "-m", "pip", "install", "torch", "torchvision", "torchaudio", "torchcodec",
             "--index-url", f"https://download.pytorch.org/whl/{torch_plan.cuda_tag}", "--quiet",
         ])
-        console.ok("PyTorch installé")
+        console.ok(t("pe_torch_installed"))
     else:  # pragma: no cover - garde défensive (build_install_plan est exhaustif)
         raise PythonEnvError(f"Action PyTorch inconnue : {torch_plan.action}")
     result.record(f"torch-{torch_plan.action}")
 
     # ── requirements ────────────────────────────────────────────────────────
-    console.info("Installation des dépendances (requirements.txt)...")
+    console.info(t("pe_deps_start"))
     _run(runner, [str(venv_python), "-m", "pip", "install", "-r", str(plan.requirements_path), "--quiet"])
-    console.ok("Dépendances installées")
+    console.ok(t("pe_deps_ok"))
     result.record("requirements")
 
     return result

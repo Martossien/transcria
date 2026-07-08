@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from transcria.config.yaml_file import set_yaml_file_value
+from transcria.install_messages import t
 
 Runner = Callable[..., Any]
 ConfirmFn = Callable[[str], bool]
@@ -208,30 +209,30 @@ def apply_ollama(
     # 1. Garde GPU : Ollama a besoin d'un driver NVIDIA déjà présent. On ne l'installe pas
     #    à sa place (le script Ollama tenterait sinon un cuda-drivers + reboot invasif).
     if not plan.gpu_present:
-        console.warn("Aucun GPU NVIDIA détecté (nvidia-smi) — backend Ollama ignoré.")
+        console.warn(t("ol_no_gpu"))
         return result.record("gpu-absent")
 
     # 2. Installer le binaire si absent (version épinglée), sinon réutiliser.
     if has_command("ollama"):
-        console.ok("Ollama déjà installé — réutilisation.")
+        console.ok(t("ol_present"))
         result.record("ollama-present")
     else:
         do_install = True if not plan.interactive else confirm(
             f"Installer Ollama ({plan.install_url}) comme backend LLM « facile » ?"
         )
         if not do_install:
-            console.info("Installation Ollama ignorée (choix opérateur).")
+            console.info(t("ol_install_skipped"))
             return result.record("install-declined")
         if not has_command("zstd"):
-            console.warn("zstd introuvable — l'extraction Ollama peut échouer (installez zstd).")
+            console.warn(t("ol_zstd_missing"))
         version = f" (version épinglée {plan.pin_version})" if plan.pin_version else ""
-        console.info(f"Installation d'Ollama{version}…")
+        console.info(t("ol_install_start", version=version))
         env = {"OLLAMA_VERSION": plan.pin_version} if plan.pin_version else None
         proc = runner(["/bin/sh", "-c", f"curl -fsSL {plan.install_url} | sh"], env=env, check=False)
         if getattr(proc, "returncode", 1) != 0:
-            console.error("Échec de l'installation d'Ollama — voir https://ollama.com/download")
+            console.error(t("ol_install_failed"))
             return result.record("install-failed")
-        console.ok("Ollama installé.")
+        console.ok(t("ol_installed"))
         result.record("installed")
 
     # 3. S'assurer que le démon tourne AVANT le pull. Sur hôte systemd, le script Ollama
@@ -240,26 +241,26 @@ def apply_ollama(
     if is_daemon_up():
         result.record("daemon-present")
     else:
-        console.info("Démarrage du démon Ollama (ollama serve)…")
+        console.info(t("ol_daemon_start"))
         serve()
         deadline = time.time() + 30
         while time.time() < deadline and not is_daemon_up():
             time.sleep(1)
         if is_daemon_up():
-            console.ok("Démon Ollama prêt.")
+            console.ok(t("ol_daemon_ready"))
             result.record("daemon-started")
         else:
-            console.warn("Démon Ollama injoignable après démarrage — 'ollama pull' peut échouer.")
+            console.warn(t("ol_daemon_unreachable"))
             result.record("daemon-unreachable")
 
     # 4. Tirer le modèle du palier (registre Ollama).
-    console.info(f"Téléchargement du modèle Ollama « {plan.model} »…")
+    console.info(t("ol_pull_start", model=plan.model))
     proc = runner(["ollama", "pull", plan.model], check=False)
     if getattr(proc, "returncode", 1) != 0:
-        console.error(f"Échec 'ollama pull {plan.model}' — le modèle devra être tiré manuellement.")
+        console.error(t("ol_pull_failed", model=plan.model))
         result.record("pull-failed")
     else:
-        console.ok(f"Modèle « {plan.model} » disponible.")
+        console.ok(t("ol_model_available", model=plan.model))
         result.record("pulled")
 
     # 4bis. Mesurer la taille du modèle pour dériver l'empreinte VRAM (poids + KV).
@@ -270,11 +271,11 @@ def apply_ollama(
     if measured_vram_mb and measured_vram_mb > 0:
         from dataclasses import replace as _dc_replace
         plan = _dc_replace(plan, llm_vram_mb=measured_vram_mb)
-        console.ok(f"Empreinte VRAM Ollama dérivée : {measured_vram_mb} Mo (poids + KV @{plan.context // 1024}K).")
+        console.ok(t("ol_vram_measured", mb=measured_vram_mb, ctx=plan.context // 1024))
         result.record("vram-calibrated")
 
     # 5. Écrire la config backend (même en cas d'échec de pull : l'opérateur peut retirer
     #    le modèle plus tard ; la config reste cohérente et pointe le bon endpoint).
     _write_backend_config(plan)
-    console.ok(f"Config backend Ollama écrite (endpoint {plan.ollama_url}, modèle local/{plan.model}).")
+    console.ok(t("ol_config_written", url=plan.ollama_url, model=plan.model))
     return result.record("configured")

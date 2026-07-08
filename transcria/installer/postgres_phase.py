@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from transcria.config.env_file import update_env_file
+from transcria.install_messages import t
 from transcria.install_postgres import (
     build_pg_dsn,
     decide_schema_action,
@@ -426,13 +427,13 @@ def _bootstrap_pg_hba(
 
     hba_rc, raw = admin_pg_hba_rewrite(path)
     if hba_rc != 0:
-        console.warn("Impossible de modifier pg_hba.conf automatiquement. Vérifiez l'authentification TCP PostgreSQL.")
+        console.warn(t("pp_pg_hba_failed"))
         return
 
     try:
         decision = render_pg_hba_rewrite_result(raw.strip())
     except ValueError:
-        console.warn(f"Résultat pg_hba.conf invalide : {raw.strip()}")
+        console.warn(t("pp_pg_hba_invalid", raw=raw.strip()))
         raise PostgresPhaseError("pg_hba result invalid") from None
 
     should_reload = False
@@ -492,7 +493,7 @@ def apply_postgres_bootstrap(
 
     dsn = build_pg_dsn(plan.host, plan.port, plan.db, plan.user, plan.password)
     if app_query(dsn, "SELECT 1") == "1":
-        console.ok(f"Rôle et base PostgreSQL déjà provisionnés et joignables ({plan.user}@{plan.db}) — bootstrap local sauté.")
+        console.ok(t("pp_already_provisioned", user=plan.user, db=plan.db))
         result.record("already-provisioned")
         return result
 

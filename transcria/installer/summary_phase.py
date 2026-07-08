@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from transcria.config.yaml_file import count_text_occurrences
+from transcria.install_messages import t
 from transcria.install_models import render_model_summary
 from transcria.install_profiles import (
     SummaryRenderContext,
@@ -67,7 +68,7 @@ def apply_summary(plan: SummaryPlan, *, console: _ConsoleLike) -> None:
         final_log_file=plan.final_log_file,
     )
 
-    console.section("Résumé de l'installation")
+    console.section(t("phase_summary_section"))
     blocks = [
         render_profile_summary_text(install_plan, context),
         render_model_summary(
