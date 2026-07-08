@@ -351,3 +351,31 @@ def localized_field_labels(language: str | None) -> dict[str, str]:
     if language and language != "fr":
         base.update(_FIELD_LABEL_I18N.get(language, {}))
     return base
+
+
+def localized_builtin_types(language: str | None) -> list[dict]:
+    """Types intégrés avec `name`/`badge`/`banner_text`/labels de champs traduits pour
+    l'AFFICHAGE dans ``language`` (galerie « Mes types de réunion », axe A).
+
+    ⚠️ À N'UTILISER QUE POUR L'AFFICHAGE : le `name` traduit N'EST PLUS la clé logique
+    (comparaisons, lookups quorum/thème/champs). Le wizard, qui persiste `meeting_type`,
+    NE doit PAS consommer cette vue — il garde le `name` français. Ici (galerie), le nom
+    ne sert que de graine de duplication et de titre de carte, aucun couplage logique.
+    fr (ou langue non traduite) ⇒ catalogue authoré inchangé.
+    """
+    types = [dict(t) for t in load_builtin_types()]
+    if not language or language == "fr":
+        return types
+    field_labels = _FIELD_LABEL_I18N.get(language, {})
+    for t in types:
+        name = t["name"]
+        for attr in ("name", "badge", "banner_text"):
+            if t.get(attr):
+                t[attr] = localized_type_display(name, language, attr, t[attr])
+        if t.get("fields"):
+            t["fields"] = [
+                {**f, "label": field_labels.get(f["key"], f["label"]),
+                 **({"short_label": field_labels.get(f["key"], f["short_label"])} if f.get("short_label") else {})}
+                for f in t["fields"]
+            ]
+    return types

@@ -1098,6 +1098,15 @@ def job_wizard(job_id: str):
         builtin_meeting_types = meeting_type_names()
         custom_meeting_types = []
         merged_type_fields = type_specific_fields()
+    # Affichage traduit des types intégrés dans la locale de l'INTERFACE (axe A). Le
+    # `name` reste la CLÉ (value de l'<option>, posté en meeting_type, lookups/comparaisons) ;
+    # seule l'étiquette visible est localisée. Custom = déjà dans la langue de l'auteur.
+    from transcria.context.meeting_type_catalog import localized_type_display
+    from transcria.web.i18n import select_locale
+    _ui_locale = select_locale()
+    meeting_type_display = {
+        mt: localized_type_display(mt, _ui_locale, "name", mt) for mt in builtin_meeting_types
+    }
     if selected_profile is None and profiles_view.get("recommended"):
         selected_profile = get_profile(profiles_view["recommended"])
     wizard_layout = compute_wizard_layout(selected_profile, statuses)
@@ -1198,6 +1207,7 @@ def job_wizard(job_id: str):
         quality_report=quality_report,
         srt_content=srt_content,
         meeting_types=builtin_meeting_types,
+        meeting_type_display=meeting_type_display,
         custom_meeting_types=custom_meeting_types,
         type_specific_fields_json=json.dumps(merged_type_fields, ensure_ascii=False),
         lexicon_categories=LEXICON_CATEGORIES,

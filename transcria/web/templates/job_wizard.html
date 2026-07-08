@@ -427,13 +427,13 @@
       </div>
       <div class="row">
         <div class="col-md-6 mb-2">
-          <label class="form-label small">Type de réunion</label>
+          <label class="form-label small">{{ _('Type de réunion') }}</label>
           <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select"
                   onchange="TranscrIA.updateTypeSpecificFields(this.value)">
             {% if custom_meeting_types %}
             <optgroup label="{{ _('Types intégrés') }}">
               {% for mt in meeting_types %}
-              <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
+              <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ meeting_type_display.get(mt, mt) }}</option>
               {% endfor %}
             </optgroup>
             <optgroup label="{{ _('Mes types & partagés') }}">
@@ -443,7 +443,7 @@
             </optgroup>
             {% else %}
             {% for mt in meeting_types %}
-            <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
+            <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ meeting_type_display.get(mt, mt) }}</option>
             {% endfor %}
             {% endif %}
           </select>

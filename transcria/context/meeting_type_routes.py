@@ -20,7 +20,7 @@ from transcria.auth.models import Role
 from transcria.config import get_config
 from transcria.context.meeting_type_catalog import (
     MeetingTypeCatalogError,
-    load_builtin_types,
+    localized_builtin_types,
     validate_type_definition,
 )
 from transcria.context.meeting_type_store import (
@@ -145,10 +145,13 @@ def list_meeting_types():
     ``manageable_ids`` et ``share_targets`` alimentent l'éditeur (lot E) :
     quels types je peux modifier/partager, et vers quels groupes.
     """
+    from transcria.web.i18n import select_locale
     templates = MeetingTypeStore.gallery_templates_for_user(current_user)
     manageable = {t.id for t in MeetingTypeStore.list_manageable(current_user)}
+    # Affichage traduit dans la locale de l'INTERFACE (axe A) : les types intégrés ne
+    # servent ici que de vignettes/graines de duplication, jamais de clé logique.
     return jsonify({
-        "builtin": [dict(t, builtin=True) for t in load_builtin_types()],
+        "builtin": [dict(t, builtin=True) for t in localized_builtin_types(select_locale())],
         "custom": [t.to_dict() for t in templates],
         "manageable_ids": sorted(manageable),
         "share_targets": {

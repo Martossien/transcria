@@ -240,6 +240,27 @@ def test_localized_type_display():
     assert f("Type Custom Utilisateur", "en", "name", "Type Custom Utilisateur") == "Type Custom Utilisateur"  # repli
 
 
+def test_localized_builtin_types_gallery():
+    """Vue galerie (axe A) : name/badge/banner_text + labels de champs traduits en EN,
+    catalogue français inchangé pour fr / langue non traduite."""
+    from transcria.context.meeting_type_catalog import localized_builtin_types
+
+    en = {t["name"]: t for t in localized_builtin_types("en")}
+    assert "Project meeting" in en
+    assert en["Project meeting"]["banner_text"] == "PROJECT MEETING REPORT"
+    assert en["Technical meeting"]["badge"] == "TECHNICAL"
+    # labels de champs type-spécifiques traduits (graine de duplication cohérente)
+    training = en["Training"]
+    assert {f["label"] for f in training["fields"]} >= {"Trainer", "Location"}
+
+    fr = {t["name"]: t for t in localized_builtin_types("fr")}
+    assert "Réunion projet" in fr  # clé française conservée
+    assert fr["Réunion projet"]["banner_text"] == "COMPTE-RENDU DE RÉUNION PROJET"
+    # langue non traduite ⇒ repli intégral sur le catalogue authoré
+    de = {t["name"]: t for t in localized_builtin_types("de")}
+    assert de["Réunion projet"]["banner_text"] == "COMPTE-RENDU DE RÉUNION PROJET"
+
+
 def test_docx_quality_labels_localized():
     """Les libellés + descriptions des points à vérifier sont localisés (pas de FR en EN)."""
     from transcria.exports.docx_report import _docx_labels

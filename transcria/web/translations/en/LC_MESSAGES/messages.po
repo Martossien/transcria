@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-07 22:10+0200\n"
+"POT-Creation-Date: 2026-07-08 18:46+0200\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -96,7 +96,7 @@ msgstr "%(n)s slide(s)"
 msgid "%(n)s entrée(s)"
 msgstr "%(n)s entry(ies)"
 
-#: transcria/web/routes.py:2962 transcria/web/routes.py:3015
+#: transcria/web/routes.py:2972 transcria/web/routes.py:3025
 #, python-format
 msgid "%(n)s erreur(s) de validation. Sauvegarde annulée."
 msgstr "%(n)s validation error(s). Save cancelled."
@@ -494,7 +494,7 @@ msgstr "Apply suggestions"
 msgid "Archive"
 msgstr "Archive"
 
-#: transcria/web/routes.py:3114
+#: transcria/web/routes.py:3124
 msgid "Archive invalide — restauration refusée : "
 msgstr "Invalid archive — restore denied: "
 
@@ -555,7 +555,7 @@ msgstr "No engine declared."
 msgid "Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration."
 msgstr "No profile can be launched with the current configuration (arbitration LLM not configured or quality mode disabled). See the configuration."
 
-#: transcria/web/routes.py:2991
+#: transcria/web/routes.py:3001
 msgid "Aucun prompt modifié."
 msgstr "No prompt modified."
 
@@ -815,7 +815,7 @@ msgstr "Active account"
 msgid "Configuration"
 msgstr "Configuration"
 
-#: transcria/web/routes.py:3018
+#: transcria/web/routes.py:3028
 #, python-format
 msgid "Configuration sauvegardée dans %(p)s."
 msgstr "Configuration saved to %(p)s."
@@ -828,7 +828,7 @@ msgstr "Confirmation"
 msgid "Confirmation du mot de passe"
 msgstr "Password confirmation"
 
-#: transcria/web/routes.py:3103
+#: transcria/web/routes.py:3113
 msgid "Confirmation requise : la restauration remplace les données et redémarre le service."
 msgstr "Confirmation required: restoring replaces the data and restarts the service."
 
@@ -1826,7 +1826,7 @@ msgstr "The LLM flagged terms to check, but the format could not be read automat
 msgid "La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service."
 msgstr "The LLM may be looping. If the correction files are already produced, you can cancel — the job will be recovered automatically when the service restarts."
 
-#: transcria/web/routes.py:3002
+#: transcria/web/routes.py:3012
 msgid "La configuration doit être un objet YAML racine."
 msgstr "The configuration must be a root YAML object."
 
@@ -1936,7 +1936,7 @@ msgstr "Username and password are required."
 msgid "Le nom du groupe est obligatoire."
 msgstr "The group name is required."
 
-#: transcria/web/routes.py:3106
+#: transcria/web/routes.py:3116
 msgid "Le nom ressaisi ne correspond pas à l'archive — restauration annulée."
 msgstr "The re-entered name does not match the archive — restore cancelled."
 
@@ -2151,7 +2151,7 @@ msgstr "Modified since the last version"
 msgid "Modèle"
 msgstr "Model"
 
-#: transcria/web/routes.py:3208
+#: transcria/web/routes.py:3218
 #, python-format
 msgid "Modèle LLM activé (profil %(t)s). Redémarrez le service pour l'appliquer : sudo systemctl restart transcria"
 msgstr "LLM model activated (profile %(t)s). Restart the service to apply it: sudo systemctl restart transcria"
@@ -2710,7 +2710,7 @@ msgstr "Remote resources (inference)"
 msgid "Restauration impossible"
 msgstr "Restore failed"
 
-#: transcria/web/routes.py:3126
+#: transcria/web/routes.py:3136
 msgid "Restauration lancée. Le service va s'arrêter, restaurer, puis redémarrer — reconnectez-vous dans une minute environ."
 msgstr "Restore started. The service will stop, restore, then restart — sign back in within a minute or so."
 
@@ -2786,7 +2786,7 @@ msgstr "Internal reference"
 msgid "Réglages"
 msgstr "Settings"
 
-#: transcria/web/routes.py:2966
+#: transcria/web/routes.py:2976
 msgid "Réglages sauvegardés."
 msgstr "Settings saved."
 
@@ -2884,7 +2884,7 @@ msgstr "Estimated SNR:"
 msgid "Sauvegarde"
 msgstr "Backup"
 
-#: transcria/web/routes.py:3241
+#: transcria/web/routes.py:3251
 msgid "Sauvegarde lancée en arrière-plan. Rafraîchissez la page dans quelques instants."
 msgstr "Backup started in the background. Refresh the page in a few moments."
 
@@ -2892,12 +2892,12 @@ msgstr "Backup started in the background. Refresh the page in a few moments."
 msgid "Sauvegarde planifiée"
 msgstr "Scheduled backup"
 
-#: transcria/web/routes.py:3077
+#: transcria/web/routes.py:3087
 #, python-format
 msgid "Sauvegarde planifiée activée (cadence %(c)s)."
 msgstr "Scheduled backup enabled (cadence %(c)s)."
 
-#: transcria/web/routes.py:3082
+#: transcria/web/routes.py:3092
 msgid "Sauvegarde planifiée désactivée."
 msgstr "Scheduled backup disabled."
 
@@ -3205,7 +3205,7 @@ msgstr "Processing restarted. ASR transcription in progress… (0s elapsed)"
 msgid "Traitement réalisé :"
 msgstr "Processing performed:"
 
-#: transcria/web/routes.py:3283
+#: transcria/web/routes.py:3293
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -3272,6 +3272,10 @@ msgstr "Too many attempts. Try again in a few minutes."
 msgid "Type"
 msgstr "Type"
 
+#: transcria/web/templates/job_wizard.html:430
+msgid "Type de réunion"
+msgstr "Meeting type"
+
 #: transcria/notifications/job_facts.py:42
 msgid "Type détecté"
 msgstr "Detected type"
@@ -3294,12 +3298,12 @@ msgstr "Meeting types"
 msgid "Types intégrés"
 msgstr "Built-in types"
 
-#: transcria/web/routes.py:3180
+#: transcria/web/routes.py:3190
 #, python-format
 msgid "Téléchargement de « %(l)s » lancé en arrière-plan."
 msgstr "Download of \"%(l)s\" started in the background."
 
-#: transcria/web/routes.py:3177
+#: transcria/web/routes.py:3187
 msgid "Téléchargement refusé — "
 msgstr "Download denied — "
 
@@ -3331,7 +3335,7 @@ msgstr "Download a sample (.docx)"
 msgid "Télécharger un exemple Word"
 msgstr "Download a Word sample"
 
-#: transcria/web/routes.py:3199
+#: transcria/web/routes.py:3209
 msgid "Téléchargez d'abord ce modèle avant de l'activer."
 msgstr "Download this model first before activating it."
 
@@ -3579,7 +3583,7 @@ msgstr "Check the signed proof"
 msgid "YAML (avancé)"
 msgstr "YAML (advanced)"
 
-#: transcria/web/routes.py:2998
+#: transcria/web/routes.py:3008
 #, python-format
 msgid "YAML invalide : %(e)s"
 msgstr "Invalid YAML: %(e)s"
@@ -4040,7 +4044,7 @@ msgstr "female voice dominant"
 msgid "voix masculine dominante"
 msgstr "male voice dominant"
 
-#: transcria/web/routes.py:3172
+#: transcria/web/routes.py:3182
 #, python-format
 msgid "« %(l)s » est un modèle *gated* : un token HuggingFace est requis (et l'acceptation de sa licence sur huggingface.co)."
 msgstr "\"%(l)s\" is a *gated* model: a HuggingFace token is required (and accepting its license on huggingface.co)."
@@ -4081,11 +4085,11 @@ msgstr "Esc"
 msgid "Échec"
 msgstr "Failed"
 
-#: transcria/web/routes.py:3211
+#: transcria/web/routes.py:3221
 msgid "Échec de l'activation : "
 msgstr "Activation failed: "
 
-#: transcria/web/routes.py:3213
+#: transcria/web/routes.py:3223
 #, python-format
 msgid "Échec de l'activation : %(e)s"
 msgstr "Activation failed: %(e)s"
@@ -4094,7 +4098,7 @@ msgstr "Activation failed: %(e)s"
 msgid "Échec de l'ajout du document."
 msgstr "Failed to add the document."
 
-#: transcria/web/routes.py:3084
+#: transcria/web/routes.py:3094
 #, python-format
 msgid "Échec de la planification : %(e)s"
 msgstr "Scheduling failed: %(e)s"
@@ -4108,7 +4112,7 @@ msgstr "Transcription failed"
 msgid "Échec de transcription : %(title)s"
 msgstr "Transcription failed: %(title)s"
 
-#: transcria/web/routes.py:3129
+#: transcria/web/routes.py:3139
 #, python-format
 msgid "Échec du déclenchement de la restauration : %(e)s"
 msgstr "Failed to trigger the restore: %(e)s"
