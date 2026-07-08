@@ -197,62 +197,66 @@ def render_install_plan_shell(plan: InstallPlan) -> str:
 
 
 def render_profile_summary_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
-    """Rend le bloc d'en-tête du résumé final."""
+    """Rend le bloc d'en-tête du résumé final (FR/EN ; commandes/ports littéraux)."""
+    from transcria.install_messages import t
+
     lines_by_profile = {
         "resource-node": [
-            "TranscrIA Inference Service (nœud de ressources GPU)",
+            t("prof_rn_header"),
             "  Port  : 8002",
-            "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)",
+            t("prof_rn_engines"),
         ],
         "web": [
-            f"TranscrIA tier web installé dans : {context.install_dir}",
-            "  Rôle : web (Gunicorn, sans scheduler)",
+            t("prof_web_header", dir=context.install_dir),
+            t("prof_web_role"),
         ],
         "scheduler": [
-            f"TranscrIA scheduler installé dans : {context.install_dir}",
-            "  Rôle : scheduler (ordonnanceur unique)",
+            t("prof_sched_header", dir=context.install_dir),
+            t("prof_sched_role"),
         ],
         "migrate": [
-            f"TranscrIA migrations installées dans : {context.install_dir}",
-            "  Rôle : migration Alembic uniquement",
+            t("prof_migrate_header", dir=context.install_dir),
+            t("prof_migrate_role"),
         ],
     }
-    return "\n".join(lines_by_profile.get(plan.profile, [f"TranscrIA installé dans : {context.install_dir}"])) + "\n"
+    return "\n".join(lines_by_profile.get(plan.profile, [t("prof_default_header", dir=context.install_dir)])) + "\n"
 
 
 def render_profile_next_steps_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
-    """Rend les commandes de démarrage adaptées au profil installé."""
+    """Rend les commandes de démarrage adaptées au profil (FR/EN ; systemctl/URLs littéraux)."""
+    from transcria.install_messages import t
+
     lines_by_profile = {
         "resource-node": [
-            "Lancer le nœud de ressources :",
+            t("prof_next_rn"),
             "  sudo systemctl start transcria-inference",
             "  Health    : http://localhost:8002/health",
             "  Capacités : http://localhost:8002/capabilities",
             f"  Logs      : tail -f {context.inference_log_dir}/transcria-inference.log",
         ],
         "web": [
-            "Lancer la frontale web :",
+            t("prof_next_web"),
             "  sudo systemctl start transcria-migrate",
             "  sudo systemctl start transcria-web",
             "  Interface : http://localhost:7870",
         ],
         "scheduler": [
-            "Lancer l'ordonnanceur :",
+            t("prof_next_sched"),
             "  sudo systemctl start transcria-migrate",
             "  sudo systemctl start transcria-scheduler",
         ],
         "migrate": [
-            "Lancer les migrations :",
+            t("prof_next_migrate"),
             "  sudo systemctl start transcria-migrate",
         ],
     }
     lines = lines_by_profile.get(
         plan.profile,
         [
-            "Lancer TranscrIA :",
+            t("prof_next_default"),
             f"  export VENV=\"{context.venv}\"",
             f"  {context.install_dir}/start.sh --port 7870",
-            "  # ou : sudo systemctl start transcria",
+            t("prof_next_default_comment"),
             "",
             "  Interface : http://localhost:7870",
             f"  Logs      : tail -f {context.final_log_file}",

@@ -37,6 +37,23 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pre_binary_opt_curl": "curl manquant — requis pour télécharger opencode (LLM d'arbitrage). "
                                "Installer: apt install curl",
         "pre_binary_opt_generic": "{name} manquant",
+        # install_profiles : résumé final + commandes de démarrage (lignes en prose ;
+        # les commandes systemctl / URLs / ports restent littérales, non localisées).
+        "prof_rn_header": "TranscrIA Inference Service (nœud de ressources GPU)",
+        "prof_rn_engines": "  Moteurs : diarize, voice-embed, STT (si déclarés dans config.yaml)",
+        "prof_web_header": "TranscrIA tier web installé dans : {dir}",
+        "prof_web_role": "  Rôle : web (Gunicorn, sans scheduler)",
+        "prof_sched_header": "TranscrIA scheduler installé dans : {dir}",
+        "prof_sched_role": "  Rôle : scheduler (ordonnanceur unique)",
+        "prof_migrate_header": "TranscrIA migrations installées dans : {dir}",
+        "prof_migrate_role": "  Rôle : migration Alembic uniquement",
+        "prof_default_header": "TranscrIA installé dans : {dir}",
+        "prof_next_rn": "Lancer le nœud de ressources :",
+        "prof_next_web": "Lancer la frontale web :",
+        "prof_next_sched": "Lancer l'ordonnanceur :",
+        "prof_next_migrate": "Lancer les migrations :",
+        "prof_next_default": "Lancer TranscrIA :",
+        "prof_next_default_comment": "  # ou : sudo systemctl start transcria",
     },
     "en": {
         "path_venv_existing": "Existing venv: {value}",
@@ -60,6 +77,21 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
         "pre_binary_opt_curl": "curl missing — required to download opencode (arbitration LLM). "
                                "Install: apt install curl",
         "pre_binary_opt_generic": "{name} missing",
+        "prof_rn_header": "TranscrIA Inference Service (GPU resource node)",
+        "prof_rn_engines": "  Engines: diarize, voice-embed, STT (if declared in config.yaml)",
+        "prof_web_header": "TranscrIA web tier installed in: {dir}",
+        "prof_web_role": "  Role: web (Gunicorn, no scheduler)",
+        "prof_sched_header": "TranscrIA scheduler installed in: {dir}",
+        "prof_sched_role": "  Role: scheduler (single scheduler)",
+        "prof_migrate_header": "TranscrIA migrations installed in: {dir}",
+        "prof_migrate_role": "  Role: Alembic migration only",
+        "prof_default_header": "TranscrIA installed in: {dir}",
+        "prof_next_rn": "Start the resource node:",
+        "prof_next_web": "Start the web front-end:",
+        "prof_next_sched": "Start the scheduler:",
+        "prof_next_migrate": "Run the migrations:",
+        "prof_next_default": "Start TranscrIA:",
+        "prof_next_default_comment": "  # or: sudo systemctl start transcria",
     },
 }
 
