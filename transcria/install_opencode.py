@@ -107,45 +107,51 @@ def ensure_shell_path(opencode_dir: Path, rc_files: list[Path], *, current_path:
 
 
 def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
-    """Rend les messages d'installation opencode utilisés par install.sh."""
+    """Rend les messages d'installation opencode utilisés par install.sh (FR/EN).
+
+    Préfixe lu par install.sh (non localisé) ; lignes de commande curl/npm littérales."""
+    from transcria.install_messages import t
+
     if event == "found":
-        return f"OK:opencode trouvé : {value}\n"
+        return f"OK:{t('oc_found', value=value)}\n"
     if event == "missing":
-        return "WARN:opencode non trouvé\n"
+        return f"WARN:{t('oc_missing_msg')}\n"
     if event == "download-start":
-        return "INFO:Installation d'opencode via l'installateur officiel (opencode.ai/install)…\n"
+        return f"INFO:{t('oc_download_start')}\n"
     if event == "installed":
-        return f"OK:opencode installé : {value}\n"
+        return f"OK:{t('oc_installed', value=value)}\n"
     if event == "path-updated":
-        return f"OK:PATH mis à jour dans {value}\n"
+        return f"OK:{t('oc_path_updated', value=value)}\n"
     if event == "shell-reload":
-        return f"INFO:Relancez votre shell ou : export PATH=\"{value}:$PATH\"\n"
+        return f"INFO:{t('oc_shell_reload', value=value)}\n"
     if event == "download-failed":
-        return "ERROR:Téléchargement opencode échoué — vérifiez la connectivité\n"
+        return f"ERROR:{t('oc_download_failed')}\n"
     if event == "manual-title":
-        return "INFO:Installation manuelle d'opencode (voir https://opencode.ai/download) :\n"
+        return f"INFO:{t('oc_manual_title')}\n"
     if event == "manual-curl":
         return "INFO:  curl -fsSL https://opencode.ai/install | bash\n"
     if event == "manual-alt":
         return "INFO:  ou : npm i -g opencode-ai  |  bun add -g opencode-ai  |  brew install anomalyco/tap/opencode\n"
     if event == "ignored":
-        return "INFO:opencode ignoré — résumé/correction LLM désactivé\n"
+        return f"INFO:{t('oc_ignored')}\n"
     if event == "install-later":
-        return "INFO:Pour installer plus tard : https://opencode.ai\n"
+        return f"INFO:{t('oc_install_later')}\n"
     if event == "configure-start":
-        return "INFO:Configuration du provider opencode local…\n"
+        return f"INFO:{t('oc_configure_start')}\n"
     if event == "provider-ok":
-        return "OK:opencode provider local configuré\n"
+        return f"OK:{t('oc_provider_ok')}\n"
     if event == "provider-incomplete":
-        return f"WARN:Configuration opencode incomplète — relancez : {value}\n"
+        return f"WARN:{t('oc_provider_incomplete', value=value)}\n"
     if event == "profile-skipped":
-        return f"INFO:Profil {profile} : opencode non requis\n"
+        return f"INFO:{t('oc_profile_skipped', profile=profile)}\n"
     raise ValueError(f"événement opencode inconnu : {event}")
 
 
 def render_install_prompt(*, opencode_home: Path) -> str:
-    """Rend la question d'installation interactive opencode."""
-    return f"Installer opencode dans {opencode_home}/.opencode/bin/ ?"
+    """Rend la question d'installation interactive opencode (FR/EN)."""
+    from transcria.install_messages import t
+
+    return t("oc_install_prompt", home=opencode_home)
 
 
 def _best_effort_chown_tree(path: Path, service_user: str) -> None:

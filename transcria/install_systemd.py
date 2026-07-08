@@ -195,31 +195,36 @@ def render_legacy_unit(template: str, context: SystemdRenderContext) -> str:
 
 
 def render_setup_log(*, event: str, unit: str = "", adapted: str = "", dst: str = "") -> str:
-    """Rend les messages d'installation systemd utilisés par install.sh."""
+    """Rend les messages d'installation systemd utilisés par install.sh (FR/EN).
+
+    Préfixe (``OK:``/``INFO:``/``WARN:``) lu par install.sh, non localisé ; les lignes de
+    commande (``sudo cp``/``systemctl``) restent littérales, seul le texte suit la langue."""
+    from transcria.install_messages import t
+
     if event == "skipped":
-        return f"INFO:Service {unit} non installé (--no-service)\n"
+        return f"INFO:{t('sys_skipped', unit=unit)}\n"
     if event == "installed":
-        return f"OK:Service {unit} installé et activé\n"
+        return f"OK:{t('sys_installed', unit=unit)}\n"
     if event == "sudo-missing":
-        return f"WARN:sudo indisponible — fichier adapté : {adapted}\n"
+        return f"WARN:{t('sys_sudo_missing', adapted=adapted)}\n"
     if event == "manual-title":
-        return "WARN:Pour installer :\n"
+        return f"WARN:{t('sys_manual_title')}\n"
     if event == "manual-copy":
         return f"WARN:  sudo cp {adapted} {dst}\n"
     if event == "manual-enable":
         return f"WARN:  sudo systemctl daemon-reload && sudo systemctl enable {unit}\n"
     if event == "missing-unit":
-        return f"WARN:{unit}.service introuvable — service non installé\n"
+        return f"WARN:{t('sys_missing_unit', unit=unit)}\n"
     if event == "legacy-missing":
-        return "WARN:transcria.service introuvable — service non installé\n"
+        return f"WARN:{t('sys_legacy_missing')}\n"
     if event == "split-legacy-enabled":
-        return "WARN:transcria.service est déjà activé. En déploiement split, désactivez-le avant de démarrer web/scheduler :\n"
+        return f"WARN:{t('sys_split_legacy_enabled')}\n"
     if event == "split-legacy-disable-command":
         return "WARN:  sudo systemctl disable --now transcria.service\n"
     if event == "inference-missing":
-        return "WARN:transcria-inference.service introuvable — service non installé\n"
+        return f"WARN:{t('sys_inference_missing')}\n"
     if event == "inference-missing-hint":
-        return "WARN:  Vérifiez que deploy/transcria-inference.service existe.\n"
+        return f"WARN:{t('sys_inference_missing_hint')}\n"
     raise ValueError(f"événement systemd inconnu : {event}")
 
 
