@@ -11,7 +11,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.config import get_config
-from transcria.voice.consent_form import CONSENT_FORM_FILENAME, build_voice_consent_pdf
+from transcria.voice.consent_form import build_voice_consent_pdf, consent_form_filename
 from transcria.voice.embedding import VoiceEmbeddingError
 from transcria.voice.enrollment import VoiceEnrollmentService
 from transcria.voice.models import VoiceConsentStatus
@@ -45,13 +45,17 @@ def voice_list():
 def voice_consent_form():
     if not _require_voice_admin():
         return ("Accès interdit", 403)
+    from transcria.web.i18n import select_locale
     cfg = get_config()
     form_version = cfg.get("voice_enrollment", {}).get("consent", {}).get("current_form_version", "voice-consent-v1")
-    pdf = build_voice_consent_pdf(form_version=form_version)
+    # Le formulaire vierge suit la langue de l'interface (le `form_version` reste la clé
+    # de consentement, inchangée par la langue).
+    language = select_locale()
+    pdf = build_voice_consent_pdf(form_version=form_version, language=language)
     return Response(
         pdf,
         mimetype="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{CONSENT_FORM_FILENAME}"'},
+        headers={"Content-Disposition": f'attachment; filename="{consent_form_filename(language)}"'},
     )
 
 

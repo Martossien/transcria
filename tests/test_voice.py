@@ -208,6 +208,23 @@ class TestVoiceWeb:
         assert response.content_type == "application/pdf"
         assert response.data.startswith(b"%PDF-")
         assert b"voice-consent-v1" in response.data
+        assert b"Consentement pour empreinte vocale" in response.data  # fr par défaut
+
+    def test_consent_pdf_follows_interface_language(self, admin_client):
+        """Le formulaire vierge suit la langue de l'interface (axe A). Locale via session
+        pour ne pas persister user.locale de l'admin partagé (cf. mémoire i18n)."""
+        with admin_client.session_transaction() as sess:
+            sess["ui_locale"] = "en"
+        try:
+            response = admin_client.get("/admin/voices/consent-form.pdf")
+            assert response.status_code == 200
+            assert b"Voice fingerprint consent" in response.data
+            assert b"Consentement" not in response.data  # zéro FR en EN
+            assert b"voice-consent-v1" in response.data  # form_version inchangé
+            assert "voice_fingerprint_consent_v1.pdf" in response.headers["Content-Disposition"]
+        finally:
+            with admin_client.session_transaction() as sess:
+                sess.pop("ui_locale", None)
 
     def test_admin_can_create_voice_and_upload_consent(self, app, admin_client):
         group_name = f"voice-web-{uuid.uuid4().hex[:8]}"

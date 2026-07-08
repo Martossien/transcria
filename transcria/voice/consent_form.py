@@ -4,15 +4,28 @@ from datetime import date
 
 CONSENT_FORM_VERSION = "voice-consent-v1"
 CONSENT_FORM_FILENAME = "consentement_empreinte_vocale_v1.pdf"
+# Nom du fichier téléchargé, par langue de l'interface (le contenu suit la même langue).
+# Volontairement sans accents : le PDF minimal utilise Helvetica/latin-1.
+_FILENAMES = {
+    "fr": CONSENT_FORM_FILENAME,
+    "en": "voice_fingerprint_consent_v1.pdf",
+}
 
 
-def build_voice_consent_pdf(form_version: str = CONSENT_FORM_VERSION) -> bytes:
-    """Génère le PDF vierge de consentement vocal sans dépendance externe."""
-    lines = [
+def consent_form_filename(language: str | None = "fr") -> str:
+    """Nom de fichier du PDF de consentement pour ``language`` (repli fr)."""
+    return _FILENAMES.get((language or "fr"), CONSENT_FORM_FILENAME)
+
+
+# Texte du formulaire, par langue. Le PDF minimal (Helvetica/latin-1) impose un texte
+# SANS accents ; les deux versions respectent cette contrainte. `{form_version}` et
+# `{today}` sont interpolés à la génération.
+_CONSENT_TEXT: dict[str, list[str]] = {
+    "fr": [
         "TranscrIA - Consentement pour empreinte vocale",
         "",
-        f"Version du formulaire : {form_version}",
-        f"Date du modele : {date.today().isoformat()}",
+        "Version du formulaire : {form_version}",
+        "Date du modele : {today}",
         "",
         "Personne concernee",
         "Nom et prenom : ______________________________________________",
@@ -44,7 +57,52 @@ def build_voice_consent_pdf(form_version: str = CONSENT_FORM_VERSION) -> bytes:
         "Cadre reserve a l'administration TranscrIA",
         "Recu par : _____________________  Date : ____ / ____ / ________",
         "Statut : [ ] actif   [ ] rejete   Motif si rejet : _____________",
-    ]
+    ],
+    "en": [
+        "TranscrIA - Voice fingerprint consent",
+        "",
+        "Form version: {form_version}",
+        "Template date: {today}",
+        "",
+        "Data subject",
+        "Full name: ____________________________________________________",
+        "Organisation / department: ____________________________________",
+        "Contact: ______________________________________________________",
+        "",
+        "Authorisation",
+        "I authorise the creation of a digital voice fingerprint from a",
+        "reference audio recording provided voluntarily.",
+        "This fingerprint is used only to propose a speaker",
+        "identification in TranscrIA, subject to human validation.",
+        "",
+        "Data processed",
+        "- reference audio, deleted by default after vectorisation;",
+        "- local voice fingerprint;",
+        "- signed proof of consent and audit trail.",
+        "",
+        "Rights",
+        "I may withdraw this consent at any time. The enrolled voice will",
+        "then be disabled or deleted according to the applicable request.",
+        "",
+        "Signature",
+        "Done at: ______________________  On: ____ / ____ / ________",
+        "",
+        "Signature of the data subject:",
+        "",
+        "______________________________________________________________",
+        "",
+        "Reserved for TranscrIA administration",
+        "Received by: ____________________  Date: ____ / ____ / ________",
+        "Status: [ ] active   [ ] rejected   Reason if rejected: ________",
+    ],
+}
+
+
+def build_voice_consent_pdf(form_version: str = CONSENT_FORM_VERSION, language: str | None = "fr") -> bytes:
+    """Génère le PDF vierge de consentement vocal (sans dépendance externe) dans ``language``."""
+    template = _CONSENT_TEXT.get((language or "fr"), _CONSENT_TEXT["fr"])
+    today = date.today().isoformat()
+    lines = [line.format(form_version=form_version, today=today) for line in template]
     return _minimal_pdf(lines)
 
 
