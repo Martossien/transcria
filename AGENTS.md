@@ -133,10 +133,14 @@ transcria/
       loader.py             # load_config(), get_config(), save_config(), _deep_merge()
       config_schema.py      # validate_config(), ValidationResult
       llm_profiles.py       # catalogue de profils LLM (data/llm_profiles.yaml) + select_profile piloté matériel (mono/multi) ; cf. docs/LLM_BACKENDS.md
-      system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque
+      system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque ; _resolve_binary = PATH + emplacements connus hors PATH (nvcc/llama-server introuvables via PATH réduit du service root)
+      loader.py (i18n)      # override env TRANSCRIA_DEFAULT_LOCALE → i18n.default_locale (ergonomie Docker/CI)
+    cli_i18n.py             # i18n des sorties CLI HORS-web (installateur + doctor) : resolve_cli_locale (env TRANSCRIA_DEFAULT_LOCALE, défaut fr) + make_translator(catalogue fr/en) ; sans dépendance, distinct de Flask-Babel (web)
+    install_messages.py     # catalogue fr/en des messages installateur (partagé install_*.py + installer/*) ; fr = libellés historiques mot pour mot (défaut octet-pour-octet inchangé)
     database.py             # db = SQLAlchemy()
     diagnostics/
-      doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers
+      doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers — sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
+      doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
     installer/              # Logique métier d'installation fondue depuis install.sh (modules testés, runner injectable)
       cli.py                # `python -m transcria.installer.cli <phase>` — 9 phases : python-env, i18n-compile, config, config-proxy, opencode, postgres, postgres-bootstrap, systemd, summary
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
@@ -150,7 +154,7 @@ transcria/
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
     models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF)
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
-    install_arbitrage.py / install_models.py / install_opencode.py / install_systemd.py # primitives d'install (paliers GGUF, download HF, détection+MàJ opencode, units systemd)
+    install_arbitrage.py / install_models.py / install_opencode.py / install_systemd.py / install_prerequisites.py / install_paths.py / install_profiles.py / install_postgres.py # primitives d'install (paliers GGUF, download HF, opencode, systemd, prérequis, chemins, profils, PostgreSQL) — sortie bilingue via install_messages.py (préfixes OK:/INFO:/WARN:/ERROR: NON localisés = lus par install.sh)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
       models.py             # User, Role, Group, GroupMembership, GroupRole
@@ -272,13 +276,15 @@ transcria/
       enrollment.py         # Génération profil depuis audio de référence avec suppression source par défaut
       matching.py           # Matching job→voix connues depuis clips locuteurs, suggestions validables
       routes.py             # voice_bp : /admin/voices + consentements + vectorisation
+      consent_form.py       # PDF vierge de consentement (sans dépendance) — texte + nom de fichier bilingues fr/en (suit la locale UI) ; form_version = clé de consentement, non localisée
     web/
       routes.py             # web_bp : pages + API JSON, dont /admin/maintenance (backups + planification + restore) et /admin/models (télécharger + activer les modèles)
       maintenance_service.py # orchestration LÉGÈRE de la page Maintenance (listing archives, lancement backup en sous-process détaché, garde anti path-traversal)
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran
       i18n.py               # i18n INTERFACE (Flask-Babel) : select_locale (?lang > user.locale > Accept-Language > défaut), init_app, route /i18n/messages.js
       i18n_js.py            # catalogue des chaînes JS (window.I18N) — même source gettext ; JS_MESSAGES enrichi vague après vague
-      prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité)
+      prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité) ; LANGUE-AWARE : édite configs/prompts/<lang>/ selon la locale UI (racine pour fr) ; libellés lazy_gettext
+      config_form.py        # spec déclarative du formulaire /admin/config ; libellés/aides marqués lazy_gettext (résolus à la locale UI ; logique = path/type/options)
       templates/            # base.html (navbar à menus déroulants) + templates par étape
       static/css/           # transcria.css (tokens + composants — docs/archive/REFONTE_UI.md ; pas de styles inline)
       static/js/            # wizard.js, wizard-api.js
@@ -334,12 +340,26 @@ transcria/
 - Pas de commentaires sauf si le code est non évident
 - Chaînes en français pour les messages utilisateur et la documentation
 - Messages de log en français
-- **Prêt-à-traduire (discipline i18n, sans i18n)** : tout libellé d'état de job passe par
-  `transcria/web/ui_labels.py` (filtres `state_label`/`state_badge`) — jamais d'état brut ni de
-  libellé en dur dans un template ou du JS ; les prompts LLM restent des **fichiers**
-  (`configs/prompts/`), jamais des chaînes en dur ; ne pas stocker en base des messages destinés
-  à l'affichage quand une clé suffit. Objectif : pouvoir ajouter une langue plus tard **sans
-  refonte** (cf. README « Language »). On ne traduit pas aujourd'hui ; on ne se l'interdit pas demain.
+- **i18n multilingue FR/EN (LIVRÉ)** — trois surfaces, deux moteurs :
+  - **Interface web** = Flask-Babel/gettext. Catalogues `.po` versionnés dans
+    `transcria/web/translations/<code>/`, `.mo` compilés en CI/build/entrypoint. Chaînes UI via
+    `{{ _('…') }}`/`{% trans %}` (templates), `gettext` (Python), `t()` (`window.I18N`, JS).
+    **Constantes définies à l'import** (formulaire de config, prompts éditables) via
+    `lazy_gettext` — **extraction : `scripts/i18n_check.py` ajoute `-k lazy_gettext -k _l`**
+    (absent des clés babel par défaut). Locale = `?lang` > `user.locale` > `Accept-Language` >
+    `i18n.default_locale`.
+  - **Livrables générés (Axe B)** = réglage PAR JOB (`meeting_context.language`). Prompts localisés
+    `configs/prompts/<lang>/` (repli fr) ; DOCX/rapports/refine via tables fr/en ; types de réunion
+    traduits À L'AFFICHAGE (`localized_type_display`/`localized_builtin_types` dans
+    `meeting_type_catalog`) — le **nom du type reste la clé logique** (comparaisons, lookups, valeur postée).
+  - **CLI hors-web (installateur + doctor)** = `transcria/cli_i18n.py` (autonome, tables fr/en, pas
+    de gettext) piloté par `TRANSCRIA_DEFAULT_LOCALE` (exporté par `install.sh`). PDF de consentement
+    vocal (`voice/consent_form.py`) = table fr/en (document, pas du chrome).
+  - **Invariant** : défaut `fr` = sortie **octet-pour-octet inchangée** (les `fr` reprennent les
+    libellés historiques mot pour mot ; tests tournent sans env = fr). Ajouter une langue = catalogue
+    `.po` + `available_locales` (UI) et/ou dossier `configs/prompts/<lang>/` + tables d'affichage.
+  - Discipline conservée : libellés d'état via `ui_labels.py` ; prompts = **fichiers** jamais en dur ;
+    pas de message d'affichage stocké en base quand une clé suffit.
 
 ### Nomenclature
 - Fichiers Python : `snake_case.py`

@@ -6,7 +6,12 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [Unreleased]
+## [0.3.2] — 2026-07-08
+
+Version **« bilingue de bout en bout »** : interface, livrables générés, **installateur**,
+**doctor** et **formulaire de consentement vocal** parlent français **ou** anglais. Le défaut
+reste `fr` (comportement strictement inchangé) ; l'anglais est un choix explicite (sélecteur
+navbar, préférence par utilisateur, réglage par job, et **choix de langue en tête d'installation**).
 
 ### Added
 - **Interface multilingue (i18n) — socle (français + anglais)** : l'interface se traduit via
@@ -17,7 +22,7 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   (`i18n.default_locale`). Nouvelles clés de config `i18n.default_locale` / `i18n.available_locales`.
   Les catalogues (`.po`) sont versionnés ; les `.mo` sont **compilés** en CI, au **build Docker**
   et à l'**entrypoint** (jamais un binaire périmé en git). La **langue des livrables générés**
-  (résumé, correction, DOCX) reste distincte et arrive dans une vague ultérieure (réglage par job).
+  (résumé, correction, DOCX) est un réglage distinct PAR JOB, traité par l'axe B ci-dessous.
   Voir `docs/I18N_MULTILANGUE.md`. **Couverture** : toute l'interface (navigation, connexion,
   accueil, file, résultats, **assistant wizard complet** + son JS, **toutes les pages
   d'administration** — utilisateurs, groupes, voix, lexiques, audit, planification, configuration,
@@ -42,8 +47,33 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   - Nouveau : option `--language` du harnais E2E, migration `users.locale` appliquée.
   *Autres langues : le socle est prêt (repli français partout) ; il suffit d'ajouter un dossier
   `configs/prompts/<lang>/` et les traductions d'affichage.*
+- **La langue = choix produit de premier plan à l'installation** : `install.sh` demande la langue
+  en **toute première question** (ou `--locale fr|en`, ou l'env `TRANSCRIA_DEFAULT_LOCALE`), écrit
+  `i18n.default_locale` et l'exporte à tous les sous-process. **Toute la sortie de l'installateur
+  ET du `doctor` est bilingue** : `install.sh` + les modules Python (`transcria/install_*`,
+  `transcria/installer/*` : prérequis, chemins, modèles, Cohere/pyannote, LLM d'arbitrage, opencode,
+  systemd, PostgreSQL, phases) + `transcria doctor` (toutes les vérifications, le rapport et l'aide).
+  Socle autonome `transcria/cli_i18n.py` (catalogues fr/en, sans dépendance) ; défaut `fr` =
+  sortie octet-pour-octet inchangée. Nouvel env `TRANSCRIA_DEFAULT_LOCALE` = override de
+  `i18n.default_locale` (ergonomie Docker/CI).
+- **Page Configuration (`/admin/config`) entièrement localisée** : libellés et aides du formulaire
+  de réglages (`lazy_gettext`) et de l'éditeur de prompts ; l'éditeur de prompts devient
+  **langue-aware** (édite `configs/prompts/<lang>/` selon la locale de l'interface).
+- **Galerie et sélecteur des types de réunion localisés** (`/meeting-types` + étape 4 du wizard) :
+  nom/badge/bannière des types **intégrés** traduits à l'affichage (la clé du type reste française
+  pour la logique — comparaisons, lookups, valeur postée).
+- **Formulaire de consentement vocal (PDF) bilingue** (`/admin/voices/new`) : le PDF vierge et son
+  nom de fichier suivent la langue de l'interface (`voice-consent-v1` reste la clé de consentement).
 
 ### Fixed
+- **Page Configuration — binaires hors PATH affichés « absents »** : `nvcc` (`/usr/local/cuda/bin`)
+  et le `llama-server` compilé maison (`~/llama.cpp/build/bin`, hors PATH) apparaissaient en rouge
+  alors qu'ils sont présents, quand le service tourne avec un PATH réduit (root). La détection sonde
+  désormais les **emplacements connus hors PATH** en plus du PATH (idem pour la version CUDA).
+- **Page Modèles — cache HF non lisible faisait planter le rendu** : un cache HuggingFace inaccessible
+  (ex. `/root/.cache` sondé mais non lisible par le process) levait une `PermissionError` au lieu de
+  considérer le modèle « absent » (6 tests CI rouges). Détection rendue résiliente aux dossiers non
+  lisibles (parité avec la branche GGUF).
 - **Page Modèles — détection trop rigide** : des modèles pourtant présents s'affichaient
   « absent » quand ils vivaient à un emplacement non standard (bug : segment `hub/` manquant pour
   le cache HF ; LLM cherchée uniquement sous `MODELS_DIR`). La détection cherche désormais à
