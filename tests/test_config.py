@@ -876,3 +876,45 @@ class TestResourceNodeManifest:
         )
 
         assert updated == existing
+
+
+class TestBinaryResolution:
+    """Détection des binaires (page /admin/config) : repli hors PATH pour ne pas afficher
+    à tort « absent » quand le service tourne au PATH réduit (root : ni CUDA, ni build maison)."""
+
+    def test_path_hit_wins(self, monkeypatch):
+        from transcria.config import system_detector as sd
+
+        monkeypatch.setattr(sd.shutil, "which", lambda name: "/usr/bin/nvcc")
+        assert sd.SystemDetector._resolve_binary("nvcc") == "/usr/bin/nvcc"
+
+    def test_fallback_glob_when_not_on_path(self, monkeypatch, tmp_path):
+        from transcria.config import system_detector as sd
+
+        fake = tmp_path / "nvcc"
+        fake.write_text("#!/bin/sh\n")
+        fake.chmod(0o755)
+        monkeypatch.setattr(sd.shutil, "which", lambda name: None)
+        monkeypatch.setattr(sd, "_BINARY_FALLBACK_GLOBS",
+                            {"nvcc": [str(tmp_path / "nvcc")]})
+        assert sd.SystemDetector._resolve_binary("nvcc") == str(fake)
+
+    def test_llama_server_probes_home_build(self, monkeypatch, tmp_path):
+        from transcria.config import system_detector as sd
+
+        build = tmp_path / "llama.cpp" / "build" / "bin"
+        build.mkdir(parents=True)
+        binary = build / "llama-server"
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+        monkeypatch.setattr(sd.shutil, "which", lambda name: None)
+        monkeypatch.setattr(sd, "_BINARY_FALLBACK_GLOBS", {"llama-server": []})
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert sd.SystemDetector._resolve_binary("llama-server") == str(binary)
+
+    def test_missing_binary_returns_none(self, monkeypatch):
+        from transcria.config import system_detector as sd
+
+        monkeypatch.setattr(sd.shutil, "which", lambda name: None)
+        monkeypatch.setattr(sd, "_BINARY_FALLBACK_GLOBS", {"nvcc": ["/nonexistent/nvcc"]})
+        assert sd.SystemDetector._resolve_binary("nvcc") is None

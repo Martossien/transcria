@@ -1,3 +1,4 @@
+import glob
 import logging
 import os
 import shutil
@@ -17,6 +18,24 @@ _KNOWN_BINARIES = [
     "python3",
     "nvcc",
 ]
+
+# Emplacements connus HORS PATH, sondés quand `shutil.which` échoue. Le service tourne
+# souvent en root (cf. runtime_root_vs_admin_env), dont le PATH n'a ni /usr/local/cuda/bin
+# (nvcc) ni le `llama-server` compilé maison (~/llama.cpp/build/bin, hors PATH par nature).
+# Les motifs peuvent contenir des jokers glob ; le premier fichier exécutable gagne.
+_BINARY_FALLBACK_GLOBS: dict[str, list[str]] = {
+    "nvcc": [
+        "/usr/local/cuda/bin/nvcc",       # symlink « courant » d'abord
+        "/usr/local/cuda-*/bin/nvcc",
+        "/opt/cuda/bin/nvcc",
+    ],
+    "llama-server": [
+        "/usr/local/bin/llama-server",
+        "/opt/llama.cpp/build/bin/llama-server",
+        "/root/llama.cpp/build/bin/llama-server",
+        "/home/*/llama.cpp/build/bin/llama-server",  # build maison d'un compte utilisateur
+    ],
+}
 
 
 @dataclass
@@ -172,9 +191,12 @@ class SystemDetector:
 
     @staticmethod
     def _detect_cuda_version() -> str | None:
+        nvcc = SystemDetector._resolve_binary("nvcc")
         try:
+            if nvcc is None:
+                raise FileNotFoundError("nvcc")
             result = subprocess.run(
-                ["nvcc", "--version"],
+                [nvcc, "--version"],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -202,10 +224,30 @@ class SystemDetector:
         return None
 
     @staticmethod
+    def _resolve_binary(name: str) -> str | None:
+        """Chemin d'un binaire : PATH d'abord, puis emplacements connus hors PATH.
+
+        Le repli hors PATH évite les faux « absents » sur la page config quand le service
+        tourne dans un environnement au PATH réduit (root : ni CUDA, ni build maison)."""
+        path = shutil.which(name)
+        if path:
+            return path
+        patterns = list(_BINARY_FALLBACK_GLOBS.get(name, []))
+        home = os.environ.get("HOME")
+        if name == "llama-server" and home:
+            patterns.insert(0, os.path.join(home, "llama.cpp", "build", "bin", "llama-server"))
+        for pattern in patterns:
+            # Ordre décroissant : à versions multiples (cuda-13 vs cuda-12), la plus récente.
+            for candidate in sorted(glob.glob(pattern), reverse=True):
+                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                    return candidate
+        return None
+
+    @staticmethod
     def _detect_binaries() -> list[BinaryInfo]:
         binaries: list[BinaryInfo] = []
         for name in _KNOWN_BINARIES:
-            path = shutil.which(name)
+            path = SystemDetector._resolve_binary(name)
             version = None
             if path:
                 version = SystemDetector._get_binary_version(name, path)
