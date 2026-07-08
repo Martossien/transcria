@@ -32,7 +32,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from transcria.cli_i18n import make_translator
 from transcria.database import MODEL_MODULES
+from transcria.diagnostics.doctor_messages import DOCTOR_MESSAGES
+
+# Traducteur FR/EN des sorties du doctor (locale résolue depuis TRANSCRIA_DEFAULT_LOCALE,
+# exporté par install.sh ; défaut fr ⇒ sortie historique inchangée). `_t(clé, **vars)`.
+_t = make_translator(DOCTOR_MESSAGES)
 
 OK = "ok"
 WARN = "warn"
@@ -91,18 +97,18 @@ def _humanize_diff(diff) -> list[tuple[str, str]]:
 
     op = diff[0]
     if op == "add_table":
-        return [("missing", f"table absente de la base : {diff[1].name}")]
+        return [("missing", _t("diff_add_table", name=diff[1].name))]
     if op == "remove_table":
-        return [("extra", f"table en trop dans la base : {diff[1].name}")]
+        return [("extra", _t("diff_remove_table", name=diff[1].name))]
     if op == "add_column":
-        return [("missing", f"colonne absente de la base : {diff[2]}.{diff[3].name}")]
+        return [("missing", _t("diff_add_column", table=diff[2], col=diff[3].name))]
     if op == "remove_column":
-        return [("extra", f"colonne en trop dans la base : {diff[2]}.{diff[3].name}")]
+        return [("extra", _t("diff_remove_column", table=diff[2], col=diff[3].name))]
     if op.startswith("modify_"):
         # ('modify_nullable'|'modify_type'|…, schema, table, column, …)
         table, column = diff[2], diff[3]
-        return [("modify", f"divergence {op} sur {table}.{column}")]
-    return [("other", f"divergence schéma : {op}")]
+        return [("modify", _t("diff_modify", op=op, table=table, col=column))]
+    return [("other", _t("diff_other", op=op))]
 
 
 def diff_live_schema(database_uri: str) -> list[tuple[str, str]]:
@@ -146,31 +152,31 @@ def check_database(
     database_uri: str | None = None,
     differ: Callable[[str], list[tuple[str, str]]] = diff_live_schema,
 ) -> CheckResult:
-    name = "Base de données (schéma)"
+    name = _t("chk_database")
     uri = database_uri or _resolve_database_uri(cfg)
     redacted = _redact_uri(uri)
     try:
         findings = differ(uri)
     except Exception as exc:  # noqa: BLE001 — toute panne de connexion = fail explicite
         return CheckResult(
-            name, FAIL, f"base injoignable ({redacted}) : {exc}",
-            hint="Vérifier que la base tourne et que TRANSCRIA_DATABASE_URL / storage.database_url est correct.",
+            name, FAIL, _t("db_unreachable", uri=redacted, exc=exc),
+            hint=_t("db_unreachable_hint"),
         )
 
     if not findings:
-        return CheckResult(name, OK, f"schéma aligné sur les modèles ({redacted})")
+        return CheckResult(name, OK, _t("db_aligned", uri=redacted))
 
     missing = [msg for sev, msg in findings if sev == "missing"]
     others = [msg for sev, msg in findings if sev != "missing"]
     detail = "; ".join(missing + others)
     if missing:
         return CheckResult(
-            name, FAIL, f"schéma dérivé — {detail}",
-            hint="Base en retard sur les modèles : appliquer `alembic upgrade head`.",
+            name, FAIL, _t("db_drifted", detail=detail),
+            hint=_t("db_drifted_hint"),
         )
     return CheckResult(
-        name, WARN, f"divergences mineures — {detail}",
-        hint="Objets en trop / divergences : vérifier l'historique Alembic.",
+        name, WARN, _t("db_minor", detail=detail),
+        hint=_t("db_minor_hint"),
     )
 
 
@@ -187,25 +193,24 @@ def check_database_encoding(
     et les clients qui ne forcent pas `client_encoding` reçoivent des `bytes`
     (psycopg3). L'app force client_encoding=utf8 (défense), mais la base doit être
     créée/migrée en UTF8 — procédure : docs/INSTALL.md, section « Encodage »."""
-    name = "Base de données (encodage)"
+    name = _t("chk_db_encoding")
     uri = database_uri or _resolve_database_uri(cfg)
     if not uri.startswith("postgresql"):
-        return CheckResult(name, OK, "SQLite — encodage géré par le fichier, rien à vérifier")
+        return CheckResult(name, OK, _t("enc_sqlite"))
     probe = prober or _probe_server_encoding
     try:
         encoding = str(probe(uri)).upper()
     except Exception as exc:  # noqa: BLE001 — toute panne de connexion = fail explicite
         return CheckResult(
-            name, FAIL, f"base injoignable ({_redact_uri(uri)}) : {exc}",
-            hint="Vérifier que la base tourne et que TRANSCRIA_DATABASE_URL / storage.database_url est correct.",
+            name, FAIL, _t("db_unreachable", uri=_redact_uri(uri), exc=exc),
+            hint=_t("db_unreachable_hint"),
         )
     if encoding == "UTF8":
-        return CheckResult(name, OK, "PostgreSQL en UTF8")
+        return CheckResult(name, OK, _t("enc_utf8"))
     return CheckResult(
         name, WARN,
-        f"PostgreSQL en {encoding} (UTF8 attendu) — texte stocké sans validation d'encodage",
-        hint="Migrer la base (dump → CREATE DATABASE … ENCODING 'UTF8' TEMPLATE template0 → restore), "
-             "cf. docs/INSTALL.md § Encodage. L'app force client_encoding=utf8 en attendant.",
+        _t("enc_other", encoding=encoding),
+        hint=_t("enc_other_hint"),
     )
 
 
@@ -215,21 +220,21 @@ def check_arbitrage_script(
     is_file: Callable[[str], bool] = os.path.isfile,
     is_executable: Callable[[str], bool] = lambda p: os.access(p, os.X_OK),
 ) -> CheckResult:
-    name = "Script de lancement LLM d'arbitrage"
+    name = _t("chk_arb_script")
     services = cfg.get("services", {})
     script = os.environ.get("TRANSCRIA_ARBITRAGE_SCRIPT") or services.get("arbitrage_script", "")
     if not script:
-        return CheckResult(name, WARN, "aucun script configuré (services.arbitrage_script vide)",
-                           hint="Renseigner services.arbitrage_script, ou utiliser un backend déjà lancé.")
+        return CheckResult(name, WARN, _t("arbs_none"),
+                           hint=_t("arbs_none_hint"))
     if not is_file(script):
         return CheckResult(
-            name, FAIL, f"introuvable : {script}",
-            hint="Adapter services.arbitrage_script au chemin réel (le script livré est un EXEMPLE machine-spécifique).",
+            name, FAIL, _t("arbs_missing", script=script),
+            hint=_t("arbs_missing_hint"),
         )
     if not is_executable(script):
-        return CheckResult(name, WARN, f"présent mais non exécutable : {script}",
+        return CheckResult(name, WARN, _t("arbs_not_exec", script=script),
                            hint=f"chmod +x {script}")
-    return CheckResult(name, OK, f"présent et exécutable : {script}")
+    return CheckResult(name, OK, _t("arbs_ok", script=script))
 
 
 def check_arbitrage_llm(
@@ -237,7 +242,7 @@ def check_arbitrage_llm(
     *,
     probe: Callable[[int], dict | None] | None = None,
 ) -> CheckResult:
-    name = "LLM d'arbitrage (serveur)"
+    name = _t("chk_arb_llm")
     services = cfg.get("services", {})
     port = int(services.get("arbitrage_llm_port", services.get("qwen_port", 8080)))
     expected_model = (services.get("arbitrage_api_model_id") or "").strip()
@@ -253,8 +258,8 @@ def check_arbitrage_llm(
     if not models:
         # Non bloquant : la LLM est lancée à la demande par le workflow.
         return CheckResult(
-            name, WARN, f"aucun serveur ne répond sur le port {port} (lancé à la demande)",
-            hint=f"S'il reste « down » après lancement, lire {log_path} et ./scripts/check_arbitrage_llm.sh.",
+            name, WARN, _t("arbl_down", port=port),
+            hint=_t("arbl_down_hint", log=log_path),
         )
     active = ""
     data = models.get("data") or []
@@ -262,10 +267,10 @@ def check_arbitrage_llm(
         active = data[0].get("id", "")
     if expected_model and active and active != expected_model:
         return CheckResult(
-            name, WARN, f"actif sur le port {port} mais modèle « {active} » ≠ services.arbitrage_api_model_id « {expected_model} »",
-            hint="Aligner services.arbitrage_api_model_id sur l'alias réellement servi.",
+            name, WARN, _t("arbl_mismatch", port=port, active=active, expected=expected_model),
+            hint=_t("arbl_mismatch_hint"),
         )
-    return CheckResult(name, OK, f"répond sur le port {port}" + (f" (modèle « {active} »)" if active else ""))
+    return CheckResult(name, OK, _t("arbl_ok", port=port) + (_t("arbl_ok_model", active=active) if active else ""))
 
 
 def check_opencode(
@@ -273,12 +278,12 @@ def check_opencode(
     *,
     finder: Callable[..., str | None] | None = None,
 ) -> CheckResult:
-    name = "Binaire opencode (phases LLM)"
+    name = _t("chk_opencode")
     workflow = cfg.get("workflow", {})
     summary_on = workflow.get("summary_llm", {}).get("enabled", False)
     arbitration_on = workflow.get("arbitration_llm", {}).get("enabled", False)
     if not (summary_on or arbitration_on):
-        return CheckResult(name, OK, "phases LLM désactivées — opencode non requis")
+        return CheckResult(name, OK, _t("oc_disabled"))
 
     config_bin = workflow.get("arbitration_llm", {}).get("opencode_bin")
     if finder is None:
@@ -288,10 +293,10 @@ def check_opencode(
     resolved = finder(config_bin=config_bin)
     if not resolved:
         return CheckResult(
-            name, FAIL, "opencode introuvable (PATH, TRANSCRIA_OPENCODE_BIN, chemins connus)",
-            hint="Installer opencode et/ou définir TRANSCRIA_OPENCODE_BIN — cf. docs/INSTALL.md.",
+            name, FAIL, _t("oc_missing"),
+            hint=_t("oc_missing_hint"),
         )
-    return CheckResult(name, OK, f"trouvé : {resolved}")
+    return CheckResult(name, OK, _t("oc_found", resolved=resolved))
 
 
 def _opencode_config_path() -> str:
@@ -335,23 +340,23 @@ def check_opencode_model_resolution(
     Ce contrôle est GPU-free et ne démarre PAS la LLM (contrairement au smoke opt-in) :
     il attrape le décalage à l'install / au doctor par défaut.
     """
-    name = "Résolution du modèle opencode (provider local)"
+    name = _t("chk_model_resolution")
     workflow = cfg.get("workflow", {})
     summary_on = workflow.get("summary_llm", {}).get("enabled", False)
     arbitration_on = workflow.get("arbitration_llm", {}).get("enabled", False)
     if not (summary_on or arbitration_on):
-        return CheckResult(name, OK, "phases LLM désactivées — résolution non requise")
+        return CheckResult(name, OK, _t("mr_disabled"))
 
     model_id = ((workflow.get("arbitration_llm", {}) or {}).get("model_id") or "").strip()
     if not model_id:
         return CheckResult(
-            name, WARN, "workflow.arbitration_llm.model_id non défini",
-            hint="Définir model_id (ex. local/arbitrage) dans config.yaml.",
+            name, WARN, _t("mr_no_id"),
+            hint=_t("mr_no_id_hint"),
         )
     if "/" not in model_id:
         return CheckResult(
-            name, WARN, f"model_id « {model_id} » sans provider (attendu provider/modèle, ex. local/arbitrage)",
-            hint="opencode résout les modèles sous la forme provider/modèle.",
+            name, WARN, _t("mr_no_provider", model_id=model_id),
+            hint=_t("mr_no_provider_hint"),
         )
     provider, _, model_key = model_id.partition("/")
 
@@ -360,27 +365,25 @@ def check_opencode_model_resolution(
     data = reader(path)
     if data is None:
         return CheckResult(
-            name, FAIL, f"config opencode introuvable/illisible : {path}",
-            hint="Lancer scripts/setup_opencode.py (génère provider.local d'après config.yaml).",
+            name, FAIL, _t("mr_no_config", path=path),
+            hint=_t("mr_no_config_hint"),
         )
     providers = data.get("provider") or {}
     prov = providers.get(provider)
     if not isinstance(prov, dict) or not isinstance(prov.get("models"), dict):
         return CheckResult(
-            name, FAIL, f"provider opencode « {provider} » absent (ou sans modèles) dans {path}",
-            hint=f"Lancer scripts/setup_opencode.py (écrit provider.{provider} selon config.yaml).",
+            name, FAIL, _t("mr_no_prov_key", provider=provider, path=path),
+            hint=_t("mr_no_prov_key_hint", provider=provider),
         )
     models = prov["models"]
     if model_key not in models:
         available = ", ".join(models) or "(aucun)"
         return CheckResult(
             name, FAIL,
-            f"opencode {provider} n'expose pas le modèle « {model_key} » (présents : {available}) — "
-            f"« {model_id} » ne se résout pas → phases LLM en « aucun texte produit »",
-            hint="Réaligner avec scripts/setup_opencode.py (régénère provider.local d'après "
-                 "workflow.arbitration_llm.model_id — contrat d'alias générique).",
+            _t("mr_no_model", provider=provider, model_key=model_key, available=available, model_id=model_id),
+            hint=_t("mr_no_model_hint"),
         )
-    return CheckResult(name, OK, f"« {model_id} » résout (provider {provider}, modèle {model_key})")
+    return CheckResult(name, OK, _t("mr_ok", model_id=model_id, provider=provider, model_key=model_key))
 
 
 def check_opencode_smoke(
@@ -400,11 +403,11 @@ def check_opencode_smoke(
     échoue **immédiatement** avec une consigne claire au lieu d'attendre le timeout
     opencode (jusqu'à 120 s).
     """
-    name = "Production LLM (opencode smoke)"
+    name = _t("chk_smoke")
     workflow = cfg.get("workflow", {})
     if not (workflow.get("summary_llm", {}).get("enabled", False)
             or workflow.get("arbitration_llm", {}).get("enabled", False)):
-        return CheckResult(name, OK, "phases LLM désactivées — smoke non requis")
+        return CheckResult(name, OK, _t("smoke_disabled"))
 
     import tempfile
     from pathlib import Path
@@ -421,8 +424,8 @@ def check_opencode_smoke(
         models = None
     if not models:
         return CheckResult(
-            name, FAIL, f"LLM d'arbitrage injoignable sur le port {port} — smoke non lancé",
-            hint=f"Lancez-la d'abord (./scripts/launch_arbitrage.sh) puis relancez ; en cas d'échec de démarrage, lire {log_path}.",
+            name, FAIL, _t("smoke_down", port=port),
+            hint=_t("smoke_down_hint", log=log_path),
         )
 
     if runner_factory is None:
@@ -438,17 +441,17 @@ def check_opencode_smoke(
     with tempfile.TemporaryDirectory(prefix="transcria_doctor_smoke_") as tmp:
         work = Path(tmp)
         prompt_file = work / "smoke_prompt.txt"
-        prompt_file.write_text("Tu es un assistant de test de diagnostic. Suis exactement la consigne.", encoding="utf-8")
+        prompt_file.write_text(_t("smoke_prompt_sys"), encoding="utf-8")
         runner = runner_factory(str(work), config=cfg)
         result = runner.run(
-            "Écris exactement le texte « OK » dans un fichier nommé smoke.md, sans rien d'autre.",
+            _t("smoke_prompt_task"),
             str(prompt_file),
             timeout=timeout_s,
         )
         if not result.get("success"):
             return CheckResult(
-                name, FAIL, f"opencode a échoué : {result.get('error', 'inconnu')}",
-                hint=f"Vérifier la LLM d'arbitrage (port {port}) et lire {log_path}.",
+                name, FAIL, _t("smoke_failed", error=result.get("error", _t("smoke_unknown_error"))),
+                hint=_t("smoke_failed_hint", port=port, log=log_path),
             )
         smoke = work / "smoke.md"
         produced = bool(result.get("output")) or (
@@ -457,11 +460,10 @@ def check_opencode_smoke(
         if not produced:
             return CheckResult(
                 name, FAIL,
-                "opencode a terminé (exit 0) mais la LLM n'a produit AUCUN texte ni fichier",
-                hint="La LLM démarre mais ne génère rien (transcript/contexte trop long, modèle ou "
-                     f"prompt inadapté). Lire {log_path}.",
+                _t("smoke_notext"),
+                hint=_t("smoke_notext_hint", log=log_path),
             )
-    return CheckResult(name, OK, f"opencode → LLM → texte : production confirmée (port {port})")
+    return CheckResult(name, OK, _t("smoke_ok", port=port))
 
 
 def check_inference_nodes(
@@ -469,35 +471,35 @@ def check_inference_nodes(
     *,
     health: Callable[[str], bool] | None = None,
 ) -> CheckResult:
-    name = "Nœud(s) de ressources distant(s)"
+    name = _t("chk_inference_nodes")
     inference = cfg.get("inference", {})
     mode = inference.get("mode", "local")
     if mode == "local":
-        return CheckResult(name, OK, "topologie locale — pas de nœud distant à joindre")
+        return CheckResult(name, OK, _t("in_local"))
 
     nodes = inference.get("nodes") or []
     urls = [n.get("url", "") for n in nodes if n.get("url")] if nodes else []
     if not urls and inference.get("url"):
         urls = [inference["url"]]
     if not urls:
-        return CheckResult(name, WARN, f"mode « {mode} » mais aucun nœud configuré (inference.nodes / inference.url)",
-                           hint="Renseigner inference.nodes (ou inference.url), ou repasser inference.mode à local.")
+        return CheckResult(name, WARN, _t("in_no_node", mode=mode),
+                           hint=_t("in_no_node_hint"))
 
     health = health or _probe_node_health
     reachable = [u for u in urls if _safe_health(health, u)]
     fallback = bool(inference.get("fallback_local", True))
     if reachable:
-        return CheckResult(name, OK, f"{len(reachable)}/{len(urls)} nœud(s) joignable(s) : {', '.join(reachable)}")
+        return CheckResult(name, OK, _t("in_reachable", n=len(reachable), total=len(urls), list=", ".join(reachable)))
     if fallback:
-        return CheckResult(name, WARN, f"aucun des {len(urls)} nœud(s) ne répond — repli local actif (mode dégradé)",
-                           hint="Vérifier le service distant ; sinon les jobs basculent en local.")
-    return CheckResult(name, FAIL, f"aucun des {len(urls)} nœud(s) ne répond et fallback_local=false",
-                       hint="Démarrer le nœud de ressources, ou activer inference.fallback_local.")
+        return CheckResult(name, WARN, _t("in_degraded", total=len(urls)),
+                           hint=_t("in_degraded_hint"))
+    return CheckResult(name, FAIL, _t("in_down", total=len(urls)),
+                       hint=_t("in_down_hint"))
 
 
 def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
     """Vérifie qu'un STT distant a aussi un nœud de contrôle pour `/engines/ensure`."""
-    name = "Cohérence STT distant / nœud de contrôle"
+    name = _t("chk_stt_control")
     inference = cfg.get("inference", {}) or {}
     mode = inference.get("mode", "local")
     stt_cfg = (inference.get("stt") or {}) if isinstance(inference.get("stt"), dict) else {}
@@ -508,13 +510,13 @@ def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
         if isinstance(spec, dict) and str(spec.get("url") or "").strip()
     )
     if not remote_backends:
-        return CheckResult(name, OK, "aucun backend STT distant déclaré")
+        return CheckResult(name, OK, _t("stt_none"))
     if mode not in ("remote", "hybrid"):
         return CheckResult(
             name,
             WARN,
-            f"backend(s) STT distant(s) déclaré(s) ({', '.join(remote_backends)}) mais inference.mode={mode}",
-            hint="Passer inference.mode à remote/hybrid ou retirer les URLs STT distantes.",
+            _t("stt_mode", backends=", ".join(remote_backends), mode=mode),
+            hint=_t("stt_mode_hint"),
         )
 
     nodes = inference.get("nodes") or []
@@ -525,10 +527,10 @@ def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
         return CheckResult(
             name,
             WARN,
-            f"backend(s) STT distant(s) déclaré(s) ({', '.join(remote_backends)}) sans inference.url / inference.nodes",
-            hint="Déclarer le nœud de contrôle resource-node pour permettre /engines/ensure avant les jobs.",
+            _t("stt_no_control", backends=", ".join(remote_backends)),
+            hint=_t("stt_no_control_hint"),
         )
-    return CheckResult(name, OK, f"{len(remote_backends)} backend(s) STT distant(s), {len(urls)} nœud(s) de contrôle déclaré(s)")
+    return CheckResult(name, OK, _t("stt_ok", n=len(remote_backends), m=len(urls)))
 
 
 def _caps_reports_gpu(capabilities: dict) -> bool:
@@ -558,34 +560,32 @@ def check_inference_node_gpus(
     au pré-vol (`remote_vram_admits` → None faute de données GPU) au lieu d'être
     dispatchés normalement. Mieux vaut le voir au `doctor` que via des jobs qui stagnent.
     """
-    name = "GPU des nœuds de ressources distants"
+    name = _t("chk_node_gpus")
     inference = cfg.get("inference", {})
     mode = inference.get("mode", "local")
     if mode == "local":
-        return CheckResult(name, OK, "topologie locale — pas de nœud distant à sonder")
+        return CheckResult(name, OK, _t("ng_local"))
 
     nodes = inference.get("nodes") or []
     urls = [n.get("url", "") for n in nodes if n.get("url")] if nodes else []
     if not urls and inference.get("url"):
         urls = [inference["url"]]
     if not urls:
-        return CheckResult(name, OK, "aucun nœud configuré — couvert par le check de joignabilité")
+        return CheckResult(name, OK, _t("ng_no_node"))
 
     probe = capabilities_probe or _probe_node_capabilities
     reachable = [(u, caps) for u in urls if (caps := _safe_capabilities(probe, u)) is not None]
     if not reachable:
-        return CheckResult(name, OK, "aucun nœud ne renvoie /capabilities — couvert par le check de joignabilité")
+        return CheckResult(name, OK, _t("ng_no_caps"))
 
     without_gpu = [u for u, caps in reachable if not _caps_reports_gpu(caps)]
     if without_gpu:
         return CheckResult(
             name, WARN,
-            f"{len(without_gpu)}/{len(reachable)} nœud(s) joignable(s) n'énumèrent aucun GPU : "
-            + ", ".join(without_gpu),
-            hint="Vérifier nvidia-smi / la configuration GPU du nœud distant ; sinon les jobs "
-                 "distants défèrent au pré-vol (admission VRAM impossible) au lieu d'être dispatchés.",
+            _t("ng_without_gpu", n=len(without_gpu), total=len(reachable), list=", ".join(without_gpu)),
+            hint=_t("ng_without_gpu_hint"),
         )
-    return CheckResult(name, OK, f"{len(reachable)} nœud(s) joignable(s) énumèrent leurs GPU")
+    return CheckResult(name, OK, _t("ng_ok", n=len(reachable)))
 
 
 def check_storage(
@@ -593,7 +593,7 @@ def check_storage(
     *,
     is_writable: Callable[[str], bool] | None = None,
 ) -> CheckResult:
-    name = "Dossiers de travail (inscriptibles)"
+    name = _t("chk_storage")
     is_writable = is_writable or _dir_writable
     targets: list[tuple[str, str]] = []
     jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
@@ -604,9 +604,9 @@ def check_storage(
 
     failures = [f"{label} ({path})" for label, path in targets if not is_writable(path)]
     if failures:
-        return CheckResult(name, FAIL, "non inscriptible : " + "; ".join(failures),
-                           hint="Créer le dossier et corriger les droits (l'utilisateur du service doit pouvoir écrire).")
-    return CheckResult(name, OK, ", ".join(f"{label}={path}" for label, path in targets) + " inscriptibles")
+        return CheckResult(name, FAIL, _t("st_not_writable", list="; ".join(failures)),
+                           hint=_t("st_not_writable_hint"))
+    return CheckResult(name, OK, _t("st_ok", list=", ".join(f"{label}={path}" for label, path in targets)))
 
 
 def check_disk_space(
@@ -616,7 +616,7 @@ def check_disk_space(
 ) -> CheckResult:
     """Espace disque du dossier des jobs — un disque plein fait échouer les traitements
     de façon cryptique (C1.3). Seuils : < 2 Go = fail, < 10 Go = warn."""
-    name = "Espace disque (dossier des jobs)"
+    name = _t("chk_disk")
     jobs_dir = cfg.get("storage", {}).get("jobs_dir", "./jobs")
 
     def _usage(path: str) -> tuple[int, int]:
@@ -632,15 +632,15 @@ def check_disk_space(
     try:
         free_bytes, _total = usage_fn(jobs_dir)
     except OSError as exc:
-        return CheckResult(name, WARN, f"espace disque illisible ({exc})")
+        return CheckResult(name, WARN, _t("disk_unreadable", exc=exc))
     free_gb = free_bytes / (1024 ** 3)
     if free_gb < 2:
-        return CheckResult(name, FAIL, f"{free_gb:.1f} Go libres sur {jobs_dir}",
-                          hint="Libérez de l'espace (purge des vieux jobs) ou déplacez storage.jobs_dir.")
+        return CheckResult(name, FAIL, _t("disk_fail", gb=f"{free_gb:.1f}", dir=jobs_dir),
+                          hint=_t("disk_fail_hint"))
     if free_gb < 10:
-        return CheckResult(name, WARN, f"{free_gb:.1f} Go libres sur {jobs_dir} — surveiller",
-                          hint="Prévoyez une purge/rotation ; une réunion longue peut consommer plusieurs Go.")
-    return CheckResult(name, OK, f"{free_gb:.0f} Go libres sur {jobs_dir}")
+        return CheckResult(name, WARN, _t("disk_warn", gb=f"{free_gb:.1f}", dir=jobs_dir),
+                          hint=_t("disk_warn_hint"))
+    return CheckResult(name, OK, _t("disk_ok", gb=f"{free_gb:.0f}", dir=jobs_dir))
 
 
 def expected_model_assets(cfg: dict) -> list[tuple[str, str, str]]:
@@ -721,20 +721,18 @@ def check_local_models(
     configuré dans l'environnement du service, ce téléchargement échoue — ou pend
     indéfiniment (incident SQUIM du 12/06/2026 : préflight gelé, job bloqué). Ce
     check rend le manque visible AVANT le premier job."""
-    name = "Modèles locaux (cache)"
+    name = _t("chk_local_models")
     exists = asset_exists or _model_asset_exists
     assets = expected_model_assets(cfg)
     if not assets:
-        return CheckResult(name, OK, "aucun modèle local requis (phases servies à distance)")
+        return CheckResult(name, OK, _t("lm_none"))
     missing = [(label, ref) for label, kind, ref in assets if not exists(kind, ref)]
     if not missing:
-        return CheckResult(name, OK, f"{len(assets)} modèle(s) requis présents en cache local")
+        return CheckResult(name, OK, _t("lm_ok", n=len(assets)))
     return CheckResult(
         name, WARN,
-        "absent(s) du cache local : " + "; ".join(f"{label} ({ref})" for label, ref in missing),
-        hint="Pré-télécharger depuis une session disposant du réseau (proxy d'entreprise compris), "
-             "ex. `huggingface-cli download <id>` — cf. docs/INSTALL.md § « Réseau d'entreprise ». "
-             "Sinon le premier job tentera le téléchargement et échouera si la sortie réseau est bloquée.",
+        _t("lm_missing", list="; ".join(f"{label} ({ref})" for label, ref in missing)),
+        hint=_t("lm_missing_hint"),
     )
 
 
@@ -750,7 +748,7 @@ def check_shared_storage(
     téléchargements 404 côté frontale). En backend `pg`, sonde l'existence des tables
     `job_files` (utile AVANT le premier démarrage de l'app, qui les crée sinon).
     Voir docs/STOCKAGE_PARTAGE_JOBS.md."""
-    name = "Stockage des fichiers de jobs (split)"
+    name = _t("chk_shared_storage")
     role = (
         os.environ.get("TRANSCRIA_ROLE")
         or (cfg.get("runtime") or {}).get("role")
@@ -765,34 +763,33 @@ def check_shared_storage(
         )
         if not str(url).startswith("postgresql"):
             return CheckResult(
-                name, FAIL, "shared_backend=pg mais la base n'est pas PostgreSQL",
-                hint="Le backend pg réplique les fichiers via PostgreSQL : corriger storage.database_url.",
+                name, FAIL, _t("ss_pg_not_pg"),
+                hint=_t("ss_pg_not_pg_hint"),
             )
         probe = table_exists or _job_files_table_exists
         try:
             ready = probe(str(url))
         except Exception as exc:  # noqa: BLE001 — panne de connexion = fail explicite
             return CheckResult(
-                name, FAIL, f"backend pg : base injoignable ({exc})",
-                hint="Vérifier que PostgreSQL tourne et que le DSN est correct.",
+                name, FAIL, _t("ss_pg_unreachable", exc=exc),
+                hint=_t("ss_pg_unreachable_hint"),
             )
         if not ready:
             return CheckResult(
-                name, FAIL, "backend pg : tables job_files absentes",
-                hint="Appliquer `alembic upgrade head` (ou démarrer l'app, qui les crée via create_all).",
+                name, FAIL, _t("ss_pg_no_tables"),
+                hint=_t("ss_pg_no_tables_hint"),
             )
         return CheckResult(
             name, OK,
-            "backend pg : fichiers répliqués via PostgreSQL (tables job_files présentes)",
+            _t("ss_pg_ok"),
         )
     if role in ("web", "scheduler"):
         return CheckResult(
             name, WARN,
-            f"role={role} avec shared_backend=fs : exige un jobs_dir PARTAGÉ entre frontale et worker",
-            hint="Deux machines sans montage commun → passer storage.shared_backend: pg "
-                 "(cf. docs/STOCKAGE_PARTAGE_JOBS.md) ; même machine ou NFS → OK, ignorer.",
+            _t("ss_fs_split", role=role),
+            hint=_t("ss_fs_split_hint"),
         )
-    return CheckResult(name, OK, "tout-en-un (fs) : disque local suffisant")
+    return CheckResult(name, OK, _t("ss_allinone"))
 
 
 def check_deployment_profile(cfg: dict, *, profile: str | None = None) -> CheckResult:
@@ -802,14 +799,14 @@ def check_deployment_profile(cfg: dict, *, profile: str | None = None) -> CheckR
     il vérifie que le rôle runtime et le type de base ne contredisent pas le profil
     annoncé par l'installateur.
     """
-    name = "Profil de déploiement"
+    name = _t("chk_deploy_profile")
     if not profile:
         role = _effective_runtime_role(cfg)
-        return CheckResult(name, OK, f"aucun profil doctor forcé (runtime.role={role})")
+        return CheckResult(name, OK, _t("dp_none", role=role))
     if profile not in _VALID_PROFILES:
         return CheckResult(
-            name, FAIL, f"profil inconnu : {profile}",
-            hint="Profils attendus : " + ", ".join(_VALID_PROFILES),
+            name, FAIL, _t("dp_unknown", profile=profile),
+            hint=_t("dp_unknown_hint", profiles=", ".join(_VALID_PROFILES)),
         )
 
     role = _effective_runtime_role(cfg)
@@ -822,17 +819,17 @@ def check_deployment_profile(cfg: dict, *, profile: str | None = None) -> CheckR
     }.get(profile)
     if expected_role and role != expected_role:
         return CheckResult(
-            name, FAIL, f"--profile {profile} mais runtime effectif={role} (attendu {expected_role})",
-            hint="Corriger runtime.role dans config.yaml ou TRANSCRIA_ROLE dans .env/environnement.",
+            name, FAIL, _t("dp_role_mismatch", profile=profile, role=role, expected=expected_role),
+            hint=_t("dp_role_mismatch_hint"),
         )
     if profile in ("web", "scheduler", "migrate") and not is_postgres:
         return CheckResult(
-            name, FAIL, f"--profile {profile} exige PostgreSQL ({_redact_uri(uri)})",
-            hint="Définir TRANSCRIA_DATABASE_URL ou storage.database_url avec un DSN postgresql+psycopg://...",
+            name, FAIL, _t("dp_needs_pg", profile=profile, uri=_redact_uri(uri)),
+            hint=_t("dp_needs_pg_hint"),
         )
     if profile == "resource-node":
-        return CheckResult(name, OK, "resource-node : service GPU dédié, base applicative non requise")
-    return CheckResult(name, OK, f"--profile {profile} cohérent (runtime.role={role})")
+        return CheckResult(name, OK, _t("dp_resource_node"))
+    return CheckResult(name, OK, _t("dp_ok", profile=profile, role=role))
 
 
 def check_systemd_profile(
@@ -847,9 +844,9 @@ def check_systemd_profile(
     On retourne alors OK avec un détail explicite. Les conflits connus sont des WARN,
     pas des FAIL, car l'opérateur peut volontairement cohéberger certains rôles.
     """
-    name = "Services systemd (profil)"
+    name = _t("chk_systemd_profile")
     if not profile:
-        return CheckResult(name, OK, "aucun profil doctor forcé")
+        return CheckResult(name, OK, _t("sp_none"))
     probe = unit_state or _systemd_unit_state
 
     legacy = "transcria.service"
@@ -873,9 +870,9 @@ def check_systemd_profile(
         if active or enabled:
             detail = []
             if active:
-                detail.append("actif")
+                detail.append(_t("sp_active"))
             if enabled:
-                detail.append("activé")
+                detail.append(_t("sp_enabled"))
             conflicts.append(f"{unit} ({', '.join(detail)})")
 
     # Sonde une unité attendue pour distinguer systemd absent de "aucun conflit".
@@ -893,12 +890,12 @@ def check_systemd_profile(
         return CheckResult(
             name,
             WARN,
-            f"--profile {profile} avec service(s) incompatible(s) détecté(s) : " + "; ".join(conflicts),
-            hint="Désactiver les services incompatibles avant démarrage (ex. `sudo systemctl disable --now transcria.service`).",
+            _t("sp_conflicts", profile=profile, list="; ".join(conflicts)),
+            hint=_t("sp_conflicts_hint"),
         )
     if not saw_systemd:
-        return CheckResult(name, OK, "systemd non disponible ou unités absentes — check de conflit sauté")
-    return CheckResult(name, OK, f"--profile {profile} : aucun conflit systemd détecté")
+        return CheckResult(name, OK, _t("sp_no_systemd"))
+    return CheckResult(name, OK, _t("sp_ok", profile=profile))
 
 
 def check_resource_node_auth(cfg: dict) -> CheckResult:
@@ -908,19 +905,19 @@ def check_resource_node_auth(cfg: dict) -> CheckResult:
     `resource-node` correspond à un service réseau appelé par une frontale distante :
     le doctor doit rendre l'oubli visible.
     """
-    name = "Nœud de ressources (auth API)"
+    name = _t("chk_rn_auth")
     auth = ((cfg.get("inference") or {}).get("auth") or {})
     env_name = str(auth.get("api_key_env") or "TRANSCRIA_INFERENCE_API_KEY")
     env_value = os.environ.get(env_name)
     direct = auth.get("api_key")
     if env_value or direct:
-        source = f"env {env_name}" if env_value else "config inference.auth.api_key"
-        return CheckResult(name, OK, f"clé API configurée ({source})")
+        source = _t("rna_src_env", env=env_name) if env_value else _t("rna_src_config")
+        return CheckResult(name, OK, _t("rna_ok", source=source))
     return CheckResult(
         name,
         FAIL,
-        f"aucune clé API configurée ({env_name} absent et inference.auth.api_key vide)",
-        hint=f"Ajouter {env_name}=<secret long> dans .env ou renseigner inference.auth.api_key.",
+        _t("rna_missing", env=env_name),
+        hint=_t("rna_missing_hint", env=env_name),
     )
 
 
@@ -937,17 +934,17 @@ def check_resource_node_engines(
     l'absence de moteur est donc un WARN. En revanche, un moteur déclaré doit être
     cohérent, sinon `/engines/ensure` échouera en production.
     """
-    name = "Nœud de ressources (moteurs STT)"
+    name = _t("chk_rn_engines")
     engines = ((cfg.get("resource_node") or {}).get("engines") or [])
     if not engines:
         return CheckResult(
             name,
             WARN,
-            "aucun moteur STT déclaré dans resource_node.engines",
-            hint="Déclarer les moteurs STT attendus (ex. cohere/whisper) ou ignorer si ce nœud ne sert que diarize/voice-embed.",
+            _t("rne_no_engine"),
+            hint=_t("rne_no_engine_hint"),
         )
     if not isinstance(engines, list):
-        return CheckResult(name, FAIL, "resource_node.engines doit être une liste")
+        return CheckResult(name, FAIL, _t("rne_not_list"))
 
     errors: list[str] = []
     warnings: list[str] = []
@@ -961,17 +958,17 @@ def check_resource_node_engines(
 
     for index, raw in enumerate(engines, start=1):
         if not isinstance(raw, dict):
-            errors.append(f"entrée #{index} invalide (objet attendu)")
+            errors.append(_t("rne_entry_invalid", index=index))
             continue
         label = str(raw.get("name") or f"#{index}")
         missing = [key for key in ("name", "script", "gpu", "port") if raw.get(key) in (None, "")]
         if missing:
-            errors.append(f"{label}: champ(s) requis manquant(s): {', '.join(missing)}")
+            errors.append(_t("rne_missing_fields", label=label, fields=", ".join(missing)))
             continue
 
         engine_name = str(raw["name"]).strip()
         if engine_name in seen_names:
-            errors.append(f"{engine_name}: nom de moteur dupliqué")
+            errors.append(_t("rne_dup_name", name=engine_name))
         seen_names.add(engine_name)
 
         try:
@@ -979,49 +976,49 @@ def check_resource_node_engines(
             if port < 1 or port > 65535:
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append(f"{engine_name}: port invalide ({raw.get('port')!r})")
+            errors.append(_t("rne_bad_port", name=engine_name, port=repr(raw.get("port"))))
             continue
         if port in seen_ports:
-            errors.append(f"{engine_name}: port dupliqué ({port})")
+            errors.append(_t("rne_dup_port", name=engine_name, port=port))
         seen_ports.add(port)
         if port in reserved_ports:
-            errors.append(f"{engine_name}: port réservé au service inference_service ({port})")
+            errors.append(_t("rne_reserved_port", name=engine_name, port=port))
 
         try:
             gpu = int(raw["gpu"])
             if gpu < 0:
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append(f"{engine_name}: gpu invalide ({raw.get('gpu')!r})")
+            errors.append(_t("rne_bad_gpu", name=engine_name, gpu=repr(raw.get("gpu"))))
 
         try:
             gpu_mem = float(raw.get("gpu_mem", 0.85))
             if gpu_mem <= 0 or gpu_mem > 1:
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append(f"{engine_name}: gpu_mem invalide ({raw.get('gpu_mem')!r}, attendu 0 < valeur <= 1)")
+            errors.append(_t("rne_bad_gpu_mem", name=engine_name, gpu_mem=repr(raw.get("gpu_mem"))))
 
         script = _resolve_manifest_path(str(raw["script"]))
         if not is_file(script):
-            errors.append(f"{engine_name}: script introuvable ({script})")
+            errors.append(_t("rne_script_missing", name=engine_name, script=script))
         elif not is_executable(script):
-            warnings.append(f"{engine_name}: script présent mais non exécutable ({script})")
+            warnings.append(_t("rne_script_not_exec", name=engine_name, script=script))
 
     if errors:
         return CheckResult(
             name,
             FAIL,
             "; ".join(errors),
-            hint="Corriger resource_node.engines dans config.yaml avant d'utiliser /engines/ensure.",
+            hint=_t("rne_errors_hint"),
         )
     if warnings:
         return CheckResult(
             name,
             WARN,
             "; ".join(warnings),
-            hint="Rendre les scripts exécutables (`chmod +x scripts/launch_stt_*.sh`) pour garder un manifeste propre.",
+            hint=_t("rne_warnings_hint"),
         )
-    return CheckResult(name, OK, f"{len(engines)} moteur(s) STT déclaré(s) cohérent(s)")
+    return CheckResult(name, OK, _t("rne_ok", n=len(engines)))
 
 
 def _tcp_port_open(port: int, *, host: str = "127.0.0.1", timeout: float = 0.2) -> bool:
@@ -1041,10 +1038,10 @@ def check_resource_node_ports(
     models_probe: Callable[[int], dict | None] | None = None,
 ) -> CheckResult:
     """Vérifie que les ports STT déclarés sont libres ou déjà occupés par un STT sain."""
-    name = "Nœud de ressources (ports STT)"
+    name = _t("chk_rn_ports")
     engines = ((cfg.get("resource_node") or {}).get("engines") or [])
     if not isinstance(engines, list) or not engines:
-        return CheckResult(name, OK, "aucun port STT déclaré à sonder")
+        return CheckResult(name, OK, _t("rnp_none"))
 
     models_probe = models_probe or _probe_openai_models
     occupied_by_engine: list[str] = []
@@ -1070,7 +1067,7 @@ def check_resource_node_ports(
             continue
         models = models_probe(port)
         if models and models.get("data"):
-            active = str((models.get("data") or [{}])[0].get("id") or "modèle inconnu")
+            active = str((models.get("data") or [{}])[0].get("id") or _t("rnp_unknown_model"))
             occupied_by_engine.append(f"{engine_name}:{port} ({active})")
         else:
             conflicts.append(f"{engine_name}:{port}")
@@ -1079,15 +1076,15 @@ def check_resource_node_ports(
         return CheckResult(
             name,
             FAIL,
-            "port(s) STT occupé(s) par un service non OpenAI-compatible : " + ", ".join(conflicts),
-            hint="Libérer ces ports ou modifier resource_node.engines avant de démarrer les moteurs STT.",
+            _t("rnp_conflicts", list=", ".join(conflicts)),
+            hint=_t("rnp_conflicts_hint"),
         )
     details = []
     if free_ports:
-        details.append("libres: " + ", ".join(free_ports))
+        details.append(_t("rnp_free", list=", ".join(free_ports)))
     if occupied_by_engine:
-        details.append("déjà actifs: " + ", ".join(occupied_by_engine))
-    return CheckResult(name, OK, "; ".join(details) if details else "ports STT cohérents")
+        details.append(_t("rnp_active", list=", ".join(occupied_by_engine)))
+    return CheckResult(name, OK, "; ".join(details) if details else _t("rnp_ok"))
 
 
 # ── Sondes / helpers effectifs (injectables ci-dessus) ────────────────────
@@ -1316,11 +1313,11 @@ def run_doctor(
     try:
         cfg = loader(config_path)
     except Exception as exc:  # noqa: BLE001
-        return [CheckResult("Configuration", FAIL, f"chargement impossible : {exc}",
-                            hint="Corriger la syntaxe YAML de config.yaml (cf. config.example.yaml).")]
+        return [CheckResult(_t("chk_config"), FAIL, _t("cfg_load_failed", exc=exc),
+                            hint=_t("cfg_load_failed_hint"))]
 
     path_used = config_path or os.environ.get("TRANSCRIA_CONFIG") or "config.yaml"
-    results = [CheckResult("Configuration", OK, f"chargée ({path_used})")]
+    results = [CheckResult(_t("chk_config"), OK, _t("cfg_loaded", path=path_used))]
     if profile:
         results.append(check_deployment_profile(cfg, profile=profile))
         results.append(check_systemd_profile(cfg, profile=profile))
@@ -1330,7 +1327,7 @@ def run_doctor(
         try:
             results.append(check(cfg))
         except Exception as exc:  # noqa: BLE001 — une vérif ne doit jamais crasher le doctor
-            results.append(CheckResult(getattr(check, "__name__", "check"), FAIL, f"vérification en erreur : {exc}"))
+            results.append(CheckResult(getattr(check, "__name__", "check"), FAIL, _t("check_errored", exc=exc)))
     return results
 
 
@@ -1349,7 +1346,7 @@ def format_report(results: list[CheckResult], *, color: bool | None = None) -> s
     ansi = {OK: "\033[32m", WARN: "\033[33m", FAIL: "\033[31m"} if color else {}
     reset = "\033[0m" if color else ""
 
-    lines = ["", "TranscrIA doctor — préflight de diagnostic", "=" * 44]
+    lines = ["", _t("report_title"), "=" * 44]
     for r in results:
         col = ansi.get(r.status, "")
         lines.append(f"{col}{_SYMBOLS[r.status]} [{_LABELS[r.status]:>4}]{reset} {r.name} — {r.detail}")
@@ -1360,13 +1357,13 @@ def format_report(results: list[CheckResult], *, color: bool | None = None) -> s
     n_warn = sum(1 for r in results if r.status == WARN)
     n_ok = sum(1 for r in results if r.status == OK)
     lines.append("-" * 44)
-    lines.append(f"Bilan : {n_ok} OK, {n_warn} avertissement(s), {n_fail} échec(s).")
+    lines.append(_t("report_summary", ok=n_ok, warn=n_warn, fail=n_fail))
     if n_fail:
-        lines.append("→ Des problèmes bloquants ont été détectés (voir ↳).")
+        lines.append(_t("report_has_fail"))
     elif n_warn:
-        lines.append("→ Aucun échec bloquant ; vérifier les avertissements.")
+        lines.append(_t("report_has_warn"))
     else:
-        lines.append("→ Tout est vert.")
+        lines.append(_t("report_all_green"))
     lines.append("")
     return "\n".join(lines)
 
@@ -1374,16 +1371,15 @@ def format_report(results: list[CheckResult], *, color: bool | None = None) -> s
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="transcria doctor",
-        description="Préflight de diagnostic GPU-free : config, schéma DB, LLM d'arbitrage, opencode, "
-                    "nœuds distants, dossiers de travail.",
+        description=_t("cli_description"),
     )
-    parser.add_argument("--config", default=None, help="chemin de config.yaml (défaut : TRANSCRIA_CONFIG ou ./config.yaml)")
+    parser.add_argument("--config", default=None, help=_t("cli_config"))
     parser.add_argument("--profile", choices=_VALID_PROFILES, default=None,
-                        help="profil de déploiement à valider (all-in-one|web|scheduler|resource-node|migrate)")
-    parser.add_argument("--strict", action="store_true", help="traiter les avertissements comme des échecs (code de sortie ≠ 0)")
-    parser.add_argument("--json", action="store_true", help="sortie JSON (pour l'outillage / CI)")
+                        help=_t("cli_profile"))
+    parser.add_argument("--strict", action="store_true", help=_t("cli_strict"))
+    parser.add_argument("--json", action="store_true", help=_t("cli_json"))
     parser.add_argument("--llm-smoke", action="store_true",
-                        help="ajoute un test RÉEL opencode→LLM→texte (nécessite la LLM up + VRAM ; non GPU-free)")
+                        help=_t("cli_llm_smoke"))
     args = parser.parse_args(argv)
 
     results = run_doctor(config_path=args.config, llm_smoke=args.llm_smoke, profile=args.profile)
