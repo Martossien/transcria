@@ -193,19 +193,23 @@ def render_connection_failure(*, db: str, user: str, host: str, port: str, local
 
 def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int, alembic_version: str) -> str:
     """Rend le résumé d'état PostgreSQL affiché avant décision Alembic."""
+    from transcria.install_messages import t
+
     schema_count = parse_non_negative_int(has_schema, name="has_schema")
     data_count = parse_non_negative_int(has_data, name="has_data")
-    return f"Base '{db}' : tables public={schema_count} | alembic='{alembic_version}' | utilisateurs={data_count}\n"
+    return t("pg_state_summary", db=db, schema=schema_count, alembic=alembic_version, data=data_count) + "\n"
 
 
 def render_schema_action_log(*, db: str, action: str) -> str:
-    """Rend le message initial associé à une action Alembic."""
+    """Rend le message initial associé à une action Alembic (FR/EN)."""
+    from transcria.install_messages import t
+
     if action == "keep":
-        return f"OK:La base '{db}' existe déjà avec des données. Conservation.\n"
+        return f"OK:{t('pg_schema_keep', db=db)}\n"
     if action == "upgrade-existing":
-        return f"INFO:La base '{db}' a le schéma mais est vide. Application des migrations Alembic…\n"
+        return f"INFO:{t('pg_schema_upgrade', db=db)}\n"
     if action == "create":
-        return "INFO:Création du schéma (alembic upgrade head)…\n"
+        return f"INFO:{t('pg_schema_create')}\n"
     raise ValueError(f"action Alembic PostgreSQL inconnue : {action}")
 
 
@@ -217,117 +221,125 @@ def render_pg_hba_rewrite_result(result: str) -> str:
     changed = int(match.group("count"))
     if changed == 0:
         return "ACTION:none\n"
-    return "INFO:Mise à jour de pg_hba.conf (ident/peer → scram-sha-256)…\nACTION:reload\n"
+    from transcria.install_messages import t as _t_hba
+    return f"INFO:{_t_hba('pg_hba_update')}\nACTION:reload\n"
 
 
 def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
-    """Rend les messages de bootstrap PostgreSQL local/distant."""
+    """Rend les messages de bootstrap PostgreSQL local/distant (FR/EN)."""
+    from transcria.install_messages import t
+
     if event == "local-check":
-        return f"INFO:Vérification du rôle '{user}' et de la base '{db}'…\n"
+        return f"INFO:{t('pg_local_check', user=user, db=db)}\n"
     if event == "role-error":
-        return "ERROR:Échec de la création du rôle PostgreSQL — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+        return f"ERROR:{t('pg_role_error')}\n"
     if event == "database-fallback":
-        return "WARN:CREATE DATABASE UTF8 refusé (locale du cluster incompatible ?) — repli LC_COLLATE/LC_CTYPE 'C'…\n"
+        return f"WARN:{t('pg_database_fallback')}\n"
     if event == "database-error":
-        return "ERROR:Échec de la création de la base PostgreSQL en UTF8 — vérifiez les droits sudo/runuser sur le compte postgres.\n"
+        return f"ERROR:{t('pg_database_error')}\n"
     if event == "local-ready":
-        return "OK:Rôle et base PostgreSQL prêts\n"
+        return f"OK:{t('pg_local_ready')}\n"
     if event == "remote-detected":
-        return f"INFO:PostgreSQL distant détecté ({host}) : rôle/base supposés déjà créés.\n"
+        return f"INFO:{t('pg_remote_detected', host=host)}\n"
     if event == "connection-ok":
-        return "OK:Connexion PostgreSQL validée\n"
+        return f"OK:{t('pg_connection_ok')}\n"
     if event == "dsn-written":
-        return "OK:DSN PostgreSQL écrit dans .env (chmod 600)\n"
+        return f"OK:{t('pg_dsn_written')}\n"
     raise ValueError(f"événement PostgreSQL inconnu : {event}")
 
 
 def render_alembic_log(*, event: str, action: str = "") -> str:
-    """Rend les messages de résultat Alembic PostgreSQL."""
+    """Rend les messages de résultat Alembic PostgreSQL (FR/EN)."""
+    from transcria.install_messages import t
+
     if event == "upgrade-ok":
-        return "OK:Schéma à jour (Alembic)\n"
+        return f"OK:{t('pg_alembic_upgrade_ok')}\n"
     if event == "rebuild-start":
-        return "ERROR:Alembic a échoué. Tentative de reconstruction locale…\n"
+        return f"ERROR:{t('pg_alembic_rebuild_start')}\n"
     if event == "rebuild-ok":
-        return "OK:Schéma reconstruit\n"
+        return f"OK:{t('pg_alembic_rebuild_ok')}\n"
     if event == "rebuild-failed":
-        return "ERROR:Alembic a échoué une seconde fois. Arrêt.\n"
+        return f"ERROR:{t('pg_alembic_rebuild_failed')}\n"
     if event == "remote-upgrade-failed":
-        return "ERROR:Alembic a échoué sur PostgreSQL distant. Reconstruction automatique refusée.\n"
+        return f"ERROR:{t('pg_alembic_remote_failed')}\n"
     if event == "create-ok":
-        return "OK:Schéma PostgreSQL créé\n"
+        return f"OK:{t('pg_alembic_create_ok')}\n"
     if event == "create-failed":
-        return "ERROR:Échec d'alembic upgrade head\n"
+        return f"ERROR:{t('pg_alembic_create_failed')}\n"
     if event == "unknown-action":
-        return f"ERROR:Action Alembic PostgreSQL inconnue : {action}\n"
+        return f"ERROR:{t('pg_alembic_unknown', action=action)}\n"
     raise ValueError(f"événement Alembic PostgreSQL inconnu : {event}")
 
 
 def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "", backup_path: str = "") -> str:
-    """Rend les messages liés à la migration SQLite vers PostgreSQL."""
+    """Rend les messages liés à la migration SQLite vers PostgreSQL (FR/EN)."""
+    from transcria.install_messages import t
+
     if event == "detected":
-        return f"INFO:Base SQLite détectée : {sqlite_db}\n"
+        return f"INFO:{t('pg_sqlite_detected', sqlite_db=sqlite_db)}\n"
     if event == "skipped":
-        return "INFO:Migration sautée (--pg-migrate absent)\n"
+        return f"INFO:{t('pg_sqlite_skipped')}\n"
     if event == "ignored":
-        return f"INFO:Migration ignorée — PG reste vide, {sqlite_db} conservé\n"
+        return f"INFO:{t('pg_sqlite_ignored', sqlite_db=sqlite_db)}\n"
     if event == "unknown-action":
-        return f"ERROR:Action de migration SQLite inconnue : {action}\n"
+        return f"ERROR:{t('pg_sqlite_unknown_action', action=action)}\n"
     if event == "backup-error":
-        return f"ERROR:Échec du backup SQLite : {sqlite_db} → {backup_path}\n"
+        return f"ERROR:{t('pg_sqlite_backup_error', sqlite_db=sqlite_db, backup_path=backup_path)}\n"
     if event == "backup-ok":
-        return f"OK:Backup SQLite sauvegardé : {backup_path}\n"
+        return f"OK:{t('pg_sqlite_backup_ok', backup_path=backup_path)}\n"
     if event == "migrate-start":
-        return "INFO:Migration des données SQLite → PostgreSQL…\n"
+        return f"INFO:{t('pg_sqlite_migrate_start')}\n"
     if event == "migrate-ok":
-        return "OK:Données migrées\n"
+        return f"OK:{t('pg_sqlite_migrate_ok')}\n"
     if event == "migrate-failed":
-        return "ERROR:Échec de la migration SQLite → PostgreSQL\n"
+        return f"ERROR:{t('pg_sqlite_migrate_failed')}\n"
     if event == "migrate-partial":
-        return (
-            "WARN:La base PostgreSQL est peut-être partiellement remplie. "
-            "Utilisez --truncate pour recommencer ou nettoyez la base PG manuellement.\n"
-        )
+        return f"WARN:{t('pg_sqlite_migrate_partial')}\n"
     raise ValueError(f"événement de migration SQLite inconnu : {event}")
 
 
 def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str, host: str, port: str) -> str:
-    """Rend le prompt interactif de migration SQLite vers PostgreSQL."""
+    """Rend le prompt interactif de migration SQLite vers PostgreSQL (FR/EN)."""
+    from transcria.install_messages import t
+
     return "\n".join([
         "",
-        "=== Migration SQLite → PostgreSQL ===",
-        f"  Source : {sqlite_db} ({sqlite_size})",
-        f"  Cible  : {db}@{host}:{port}",
+        t("pg_migprompt_title"),
+        t("pg_migprompt_source", sqlite_db=sqlite_db, sqlite_size=sqlite_size),
+        t("pg_migprompt_target", db=db, host=host, port=port),
         "",
-        "Options :",
-        "  1. Migrer les données SQLite (conservation locale + copie PG)",
-        "  2. Ignorer (démarre avec une base PostgreSQL vide, laisse SQLite intact)",
-        "  Votre choix [1/2] : ",
+        t("pg_migprompt_options"),
+        t("pg_migprompt_opt1"),
+        t("pg_migprompt_opt2"),
+        t("pg_migprompt_choice"),
     ])
 
 
 def render_database_setup_log(*, event: str, user: str = "", db: str = "", host: str = "", port: str = "") -> str:
-    """Rend les messages du choix global SQLite/PostgreSQL."""
+    """Rend les messages du choix global SQLite/PostgreSQL (FR/EN ; commandes dnf/apt littérales)."""
+    from transcria.install_messages import t
+
     if event == "sqlite-kept":
-        return "OK:Base SQLite conservée (storage.database_url de config.yaml)\n"
+        return f"OK:{t('pg_db_sqlite_kept')}\n"
     if event == "psql-missing":
         return "\n".join([
-            "ERROR:psql introuvable — PostgreSQL n'est pas installé.",
+            f"ERROR:{t('pg_db_psql_missing1')}",
             "WARN:  Fedora/RHEL  : sudo dnf install postgresql-server postgresql && "
             "sudo postgresql-setup --initdb && sudo systemctl enable --now postgresql",
             "WARN:  Debian/Ubuntu: sudo apt install postgresql && sudo systemctl enable --now postgresql",
-            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+            f"ERROR:{t('pg_db_stop_not_sqlite')}",
         ]) + "\n"
     if event == "sudo-missing":
         return "\n".join([
-            "ERROR:sudo requis pour créer le rôle/la base PostgreSQL (compte postgres).",
-            "ERROR:PostgreSQL demandé : arrêt au lieu de poursuivre silencieusement en SQLite.",
+            f"ERROR:{t('pg_db_sudo_missing1')}",
+            f"ERROR:{t('pg_db_stop_not_sqlite')}",
         ]) + "\n"
     if event == "password-generated":
-        return f"INFO:Mot de passe du rôle '{user}' généré automatiquement.\n"
+        return f"INFO:{t('pg_db_password_generated', user=user)}\n"
     if event == "configured":
         return f"VALUE:PostgreSQL ({db}@{host}:{port})\n"
     if event == "config-failed":
-        return "ERROR:PostgreSQL demandé mais la configuration a échoué.\n"
+        return f"ERROR:{t('pg_db_config_failed')}\n"
     raise ValueError(f"événement de choix base de données inconnu : {event}")
 
 
