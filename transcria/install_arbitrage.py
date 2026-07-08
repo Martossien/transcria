@@ -525,77 +525,79 @@ def render_setup_log(
     tier: str = "",
     label: str = "",
 ) -> str:
-    """Rend les messages de sélection de la LLM d'arbitrage locale."""
+    """Rend les messages de sélection de la LLM d'arbitrage locale (FR/EN ; préfixe et
+    lignes de commande scripts/*.sh non localisés)."""
+    from transcria.install_messages import t
+
     if event == "profile-skipped":
-        return f"INFO:Profil {profile} : LLM d'arbitrage locale non requise\n"
+        return f"INFO:{t('arb_profile_skipped', profile=profile)}\n"
     if event == "vram-too-low":
-        return f"WARN:VRAM totale {value} Mio (< 12 Go) — pas de LLM d'arbitrage local.\n"
+        return f"WARN:{t('arb_vram_too_low', value=value)}\n"
     if event == "raw-mode":
-        return "INFO:TranscrIA fonctionnera en TRANSCRIPTION BRUTE (résumé/correction LLM désactivés).\n"
+        return f"INFO:{t('arb_raw_mode')}\n"
     if event == "opencode-missing":
-        return "WARN:opencode absent — LLM d'arbitrage non configurable (transcription brute).\n"
+        return f"WARN:{t('arb_opencode_missing')}\n"
     if event == "opencode-install-later":
-        return "INFO:Installez opencode puis relancez, ou utilisez scripts/switch_arbitrage_llm.sh plus tard.\n"
+        return f"INFO:{t('arb_opencode_install_later')}\n"
     if event == "vram-status":
-        return f"OK:VRAM : total {value} Mio sur {gpu_count} GPU (plus grande carte {max_mb} Mio)\n"
+        return f"OK:{t('arb_vram_status', value=value, gpu_count=gpu_count, max_mb=max_mb)}\n"
     if event == "planner-fallback":
-        return "WARN:Planner de placement indisponible — recommandation par VRAM totale (moins fiable).\n"
+        return f"WARN:{t('arb_planner_fallback')}\n"
     if event == "no-tier":
-        return "WARN:Aucun palier LLM ne tient sur cette topologie — transcription brute conseillée.\n"
+        return f"WARN:{t('arb_no_tier')}\n"
     if event == "recommended-tier":
-        return f"INFO:Palier recommandé : {tier} Go → {label}\n"
+        return f"INFO:{t('arb_recommended_tier', tier=tier, label=label)}\n"
     if event == "tiers-info":
-        return "INFO:Paliers : 12 / 16 / 24 / 32 / 48 / 64 (Go) — laisser vide pour ignorer.\n"
+        return f"INFO:{t('arb_tiers_info')}\n"
     if event == "llama-qualified":
-        return f"OK:llama-server qualifié : {value} (build {tier}, source {label})\n"
+        return f"OK:{t('arb_llama_qualified', value=value, tier=tier, label=label)}\n"
     if event == "llama-unusable":
-        return f"WARN:llama-server trouvé mais NON utilisable ({tier}) : {value}\n"
+        return f"WARN:{t('arb_llama_unusable', tier=tier, value=value)}\n"
     if event == "llama-ld-hint":
-        return (
-            "WARN:Libs llama hors chemins standard — exportez "
-            f"LLAMA_LD_LIBRARY_PATH={value} dans l'environnement du service (les profils l'honorent).\n"
-        )
+        return f"WARN:{t('arb_llama_ld_hint', value=value)}\n"
     if event == "model-present":
-        return f"OK:Modèle déjà présent : {value}\n"
+        return f"OK:{t('arb_model_present', value=value)}\n"
     if event == "hf-cli-missing":
-        return "ERROR:Ni 'hf' ni 'huggingface-cli' trouvés — installez : pip install -U huggingface_hub\n"
+        return f"ERROR:{t('arb_hf_cli_missing')}\n"
     if event == "download-start":
-        return f"INFO:Téléchargement ({tier}) de {value} → {label} (peut prendre plusieurs minutes)…\n"
+        return f"INFO:{t('arb_download_start', tier=tier, value=value, label=label)}\n"
     if event == "model-downloaded":
-        return f"OK:Modèle téléchargé : {value}\n"
+        return f"OK:{t('arb_model_downloaded', value=value)}\n"
     if event == "download-failed":
-        return "ERROR:Téléchargement échoué — vérifiez la connectivité / le HF_TOKEN.\n"
+        return f"ERROR:{t('arb_download_failed')}\n"
     if event == "download-skipped":
-        return "INFO:Téléchargement ignoré.\n"
+        return f"INFO:{t('arb_download_skipped')}\n"
     if event == "tier-activated":
-        return f"OK:Palier {tier} Go activé (alias générique 'arbitrage').\n"
+        return f"OK:{t('arb_tier_activated', tier=tier)}\n"
     if event == "calibration-ok":
-        return "OK:Calibration GPU écrite (placement réel par carte).\n"
+        return f"OK:{t('arb_calibration_ok')}\n"
     if event == "calibration-failed":
-        return "WARN:Calibration auto échouée — vérifiez : scripts/check_arbitrage_llm.sh\n"
+        return f"WARN:{t('arb_calibration_failed')}\n"
     if event == "start-managed":
-        return "INFO:Démarrage de la LLM : géré par TranscrIA via services.arbitrage_script.\n"
+        return f"INFO:{t('arb_start_managed')}\n"
     if event == "switch-incomplete":
-        return f"WARN:Bascule de palier incomplète — voir scripts/switch_arbitrage_llm.sh {tier}gb\n"
+        return f"WARN:{t('arb_switch_incomplete', tier=tier)}\n"
     if event == "model-absent":
-        return "INFO:Modèle absent — palier non activé (transcription brute pour l'instant).\n"
+        return f"INFO:{t('arb_model_absent')}\n"
     if event == "ignored":
-        return "INFO:LLM d'arbitrage ignoré — transcription brute. Activable plus tard :\n"
+        return f"INFO:{t('arb_ignored')}\n"
     if event == "manual-switch":
         return "INFO:  scripts/switch_arbitrage_llm.sh <palier>  (après téléchargement du modèle)\n"
     raise ValueError(f"événement LLM inconnu : {event}")
 
 
 def render_prompt(*, prompt: str, label: str = "", repo: str = "") -> str:
-    """Rend les questions interactives du choix de LLM d'arbitrage."""
+    """Rend les questions interactives du choix de LLM d'arbitrage (FR/EN)."""
+    from transcria.install_messages import t
+
     if prompt == "tier":
-        return "Palier LLM à installer"
+        return t("arb_prompt_tier")
     if prompt == "models-dir":
-        return "Répertoire de téléchargement des modèles"
+        return t("arb_prompt_models_dir")
     if prompt == "llama-server":
-        return "Chemin du binaire llama-server (≥ b9630 — voir scripts/detect_llama_server.py)"
+        return t("arb_prompt_llama")
     if prompt == "download":
-        return f"Télécharger {label} depuis {repo} ?"
+        return t("arb_prompt_download", label=label, repo=repo)
     raise ValueError(f"prompt LLM inconnu : {prompt}")
 
 
