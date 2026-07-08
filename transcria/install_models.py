@@ -194,30 +194,24 @@ def render_model_summary(
     qwen_ok: bool,
     opencode_bin: str,
 ) -> str:
-    """Rend le bilan final des modèles à partir des états déjà détectés."""
-    lines = ["Modèles IA :"]
+    """Rend le bilan final des modèles à partir des états déjà détectés (FR/EN)."""
+    from transcria.install_messages import t
+
+    lines = [t("mdl_sum_title")]
     if needs_local_models:
-        lines.append(
-            "  [OK] Cohere ASR"
-            if cohere_ok
-            else "  [MANQUANT] Cohere ASR — hf download CohereLabs/cohere-transcribe-03-2026"
-        )
-        lines.append(
-            "  [OK] pyannote diarization"
-            if pyannote_ok
-            else "  [MANQUANT] pyannote — HF_TOKEN dans .env + accepter conditions HuggingFace"
-        )
+        lines.append(t("mdl_sum_cohere_ok") if cohere_ok else t("mdl_sum_cohere_missing"))
+        lines.append(t("mdl_sum_pyannote_ok") if pyannote_ok else t("mdl_sum_pyannote_missing"))
     else:
-        lines.append(f"  [INFO] Modèles GPU locaux non requis pour le profil {profile}")
+        lines.append(t("mdl_sum_local_not_required", profile=profile))
 
     if needs_llm:
-        lines.append("  [OK] LLM d'arbitrage GGUF" if qwen_ok else "  [MANQUANT] LLM d'arbitrage GGUF — choisir un palier dans install.sh")
+        lines.append(t("mdl_sum_llm_ok") if qwen_ok else t("mdl_sum_llm_missing"))
         if opencode_bin:
-            lines.append(f"  [OK] opencode : {opencode_bin}")
+            lines.append(t("mdl_sum_opencode_ok", bin=opencode_bin))
         else:
-            lines.append("  [MANQUANT] opencode — résumé/correction LLM désactivé")
+            lines.append(t("mdl_sum_opencode_missing"))
     else:
-        lines.append(f"  [INFO] LLM/opencode non requis pour le profil {profile}")
+        lines.append(t("mdl_sum_llm_not_required", profile=profile))
     return "\n".join(lines) + "\n"
 
 
@@ -236,132 +230,146 @@ def render_model_detection_table(
     qwen_gguf: str,
     squim_ok: bool,
 ) -> str:
-    """Rend le tableau de vérification des modèles locaux."""
+    """Rend le tableau de vérification des modèles locaux (FR/EN)."""
+    from transcria.install_messages import t
+
     rows = [
         (
-            "Cohere ASR (STT ~6 Go)",
-            "OK" if cohere_ok else "MANQUANT",
+            t("mdl_tbl_cohere"),
+            "OK" if cohere_ok else t("mdl_missing"),
             _basename_or_empty(cohere_path) if cohere_ok else "hf download CohereLabs/...",
         ),
         (
-            "pyannote diarization (~2 Go)",
-            "OK" if pyannote_ok else "MANQUANT",
-            _basename_or_empty(pyannote_cache) if pyannote_ok else "HF_TOKEN requis + accepter conditions HF",
+            t("mdl_tbl_pyannote"),
+            "OK" if pyannote_ok else t("mdl_missing"),
+            _basename_or_empty(pyannote_cache) if pyannote_ok else t("mdl_tbl_pyannote_info"),
         ),
     ]
     if needs_llm:
         rows.append(
             (
-                "LLM arbitrage GGUF",
-                "OK" if qwen_ok else "MANQUANT",
-                _basename_or_empty(qwen_gguf) if qwen_ok else "palier configurable via install.sh",
+                t("mdl_tbl_llm"),
+                "OK" if qwen_ok else t("mdl_missing"),
+                _basename_or_empty(qwen_gguf) if qwen_ok else t("mdl_tbl_llm_info"),
             )
         )
     rows.append(
         (
-            "SQUIM préflight (~28 Mo)",
-            "OK" if squim_ok else "MANQUANT",
-            "cache torchaudio" if squim_ok else "cf. docs/INSTALL.md § Réseau d'entreprise",
+            t("mdl_tbl_squim"),
+            "OK" if squim_ok else t("mdl_missing"),
+            t("mdl_tbl_squim_ok_info") if squim_ok else t("mdl_tbl_squim_missing_info"),
         )
     )
 
-    lines = ["Modèles détectés :"]
+    lines = [t("mdl_tbl_title")]
     lines.extend(f"  - {name}: {status} — {info}" for name, status, info in rows)
     return "\n".join(lines) + "\n"
 
 
 def render_model_status_log(*, event: str, value: str = "", profile: str = "") -> str:
-    """Rend une ligne de statut de vérification locale des modèles."""
+    """Rend une ligne de statut de vérification locale des modèles (FR/EN ; préfixe non localisé)."""
+    from transcria.install_messages import t
+
     if event == "cohere-ok":
-        return f"OK:Cohere ASR       : {value}\n"
+        return f"OK:{t('mdl_st_cohere_ok', value=value)}\n"
     if event == "cohere-missing":
-        return f"WARN:Cohere ASR       : ABSENT  ({value})\n"
+        return f"WARN:{t('mdl_st_cohere_missing', value=value)}\n"
     if event == "pyannote-ok":
-        return f"OK:pyannote cache   : {_basename_or_empty(value)}\n"
+        return f"OK:{t('mdl_st_pyannote_ok', value=_basename_or_empty(value))}\n"
     if event == "pyannote-missing":
-        return "WARN:pyannote cache   : ABSENT  (téléchargement requis, HF_TOKEN nécessaire)\n"
+        return f"WARN:{t('mdl_st_pyannote_missing')}\n"
     if event == "squim-ok":
-        return f"OK:SQUIM préflight  : {value}\n"
+        return f"OK:{t('mdl_st_squim_ok', value=value)}\n"
     if event == "squim-missing":
-        return "WARN:SQUIM préflight  : ABSENT — téléchargé au 1er job (proxy requis si réseau filtré)\n"
+        return f"WARN:{t('mdl_st_squim_missing')}\n"
     if event == "llm-ok":
-        return f"OK:LLM arbitrage    : {value}\n"
+        return f"OK:{t('mdl_st_llm_ok', value=value)}\n"
     if event == "llm-missing":
-        return "WARN:LLM arbitrage    : ABSENT  (résumé/correction LLM non disponible)\n"
+        return f"WARN:{t('mdl_st_llm_missing')}\n"
     if event == "llm-not-required":
-        return f"INFO:LLM d'arbitrage : non requis pour le profil {profile}\n"
+        return f"INFO:{t('mdl_st_llm_not_required', profile=profile)}\n"
     if event == "local-models-skipped":
-        return f"INFO:Profil {profile} : vérification des modèles GPU locaux sautée\n"
+        return f"INFO:{t('mdl_st_local_skipped', profile=profile)}\n"
     raise ValueError(f"événement modèle inconnu : {event}")
 
 
 def render_cohere_setup_log(*, event: str, value: str = "") -> str:
-    """Rend les messages interactifs de configuration du modèle Cohere."""
+    """Rend les messages interactifs de configuration du modèle Cohere (FR/EN)."""
+    from transcria.install_messages import t
+
     if event == "missing":
-        return "WARN:Le modèle Cohere ASR est introuvable au chemin configuré.\n"
+        return f"WARN:{t('coh_missing')}\n"
     if event == "current-path":
-        return f"INFO:Chemin actuel dans config.yaml : {value}\n"
+        return f"INFO:{t('coh_current_path', value=value)}\n"
     if event == "path-updated":
-        return f"OK:cohere_model_path mis à jour : {value}\n"
+        return f"OK:{t('coh_path_updated', value=value)}\n"
     if event == "path-missing":
-        return "WARN:Chemin introuvable — config inchangée\n"
+        return f"WARN:{t('coh_path_missing')}\n"
     if event == "download-start":
-        return "INFO:Téléchargement de CohereLabs/cohere-transcribe-03-2026...\n"
+        return f"INFO:{t('coh_download_start')}\n"
     if event == "download-ok":
-        return "OK:Modèle Cohere téléchargé et configuré\n"
+        return f"OK:{t('coh_download_ok')}\n"
     if event == "download-failed":
-        return "ERROR:Téléchargement échoué — vérifiez vos accès HuggingFace\n"
+        return f"ERROR:{t('coh_download_failed')}\n"
     if event == "cli-missing":
-        return "WARN:hf (ou huggingface-cli) non trouvé — installer avec: pip install huggingface_hub\n"
+        return f"WARN:{t('coh_cli_missing')}\n"
     if event == "manual-command-title":
-        return "INFO:Commande manuelle :\n"
+        return f"INFO:{t('coh_manual_title')}\n"
     if event == "manual-command":
         return f"INFO:  hf download CohereLabs/cohere-transcribe-03-2026 --local-dir {value}\n"
     if event == "ignored":
-        return "INFO:Modèle Cohere ignoré — pipeline STT désactivé\n"
+        return f"INFO:{t('coh_ignored')}\n"
     raise ValueError(f"événement Cohere inconnu : {event}")
 
 
 def render_cohere_setup_prompt() -> str:
-    """Rend le prompt interactif de configuration Cohere."""
+    """Rend le prompt interactif de configuration Cohere (FR/EN)."""
+    from transcria.install_messages import t
+
     return "\n".join([
         "",
-        "  Options :",
-        "   1. Entrer le chemin où le modèle est déjà téléchargé",
-        "   2. Télécharger maintenant (nécessite hf/huggingface-cli + accès CohereLabs)",
-        "   3. Ignorer (pipeline STT non fonctionnel)",
+        t("coh_prompt_options"),
+        t("coh_prompt_opt1"),
+        t("coh_prompt_opt2"),
+        t("coh_prompt_opt3"),
         "",
-        "  Votre choix [1/2/3] : ",
+        t("coh_prompt_choice"),
     ])
 
 
 def render_pyannote_setup_log(*, event: str) -> str:
-    """Rend les messages interactifs de configuration pyannote."""
+    """Rend les messages interactifs de configuration pyannote (FR/EN ; URLs littérales)."""
+    from transcria.install_messages import t
+
     if event == "missing-token":
-        return "WARN:HF_TOKEN manquant — requis pour télécharger pyannote\n"
+        return f"WARN:{t('pya_missing_token')}\n"
     if event == "create-token-url":
         return "INFO:(Créer un token sur https://huggingface.co/settings/tokens)\n"
     if event == "accept-terms-url":
         return "INFO:(Accepter les conditions : https://huggingface.co/pyannote/speaker-diarization-community-1)\n"
     if event == "token-saved":
-        return "OK:HF_TOKEN sauvegardé dans .env\n"
+        return f"OK:{t('pya_token_saved')}\n"
     if event == "download-start":
-        return "INFO:Téléchargement pyannote (peut prendre quelques minutes)...\n"
+        return f"INFO:{t('pya_download_start')}\n"
     if event == "download-ok":
-        return "OK:pyannote téléchargé\n"
+        return f"OK:{t('pya_download_ok')}\n"
     if event == "download-failed":
-        return "ERROR:Téléchargement pyannote échoué — vérifiez le token et les conditions HF\n"
+        return f"ERROR:{t('pya_download_failed')}\n"
     raise ValueError(f"événement pyannote inconnu : {event}")
 
 
 def render_pyannote_token_prompt() -> str:
-    """Rend le prompt de saisie silencieuse du token HuggingFace."""
-    return "  HF_TOKEN (laisser vide pour ignorer) : "
+    """Rend le prompt de saisie silencieuse du token HuggingFace (FR/EN)."""
+    from transcria.install_messages import t
+
+    return t("pya_token_prompt")
 
 
 def render_pyannote_download_prompt() -> str:
-    """Rend la question de préchargement pyannote."""
-    return "Télécharger pyannote/speaker-diarization-community-1 maintenant ?"
+    """Rend la question de préchargement pyannote (FR/EN)."""
+    from transcria.install_messages import t
+
+    return t("pya_download_prompt")
 
 
 def main(argv: list[str] | None = None) -> int:
