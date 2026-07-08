@@ -13,117 +13,123 @@ from __future__ import annotations
 
 import copy
 
+from flask_babel import lazy_gettext as _l
+
 # Marqueur d'un secret masqué côté UI (aligné sur web.routes.CONFIG_SECRET_SENTINEL).
 SECRET_SENTINEL = "********"
 
 # Spécification déclarative des sections et champs. `path` = chemin pointé dans
 # config.yaml (vérifié présent dans les defaults par un test anti-dérive).
 # `type ∈ {text, int, bool, csv, select, password}`.
+# Les libellés/aides d'AFFICHAGE (`title`/`label`/`help`) sont marqués via `lazy_gettext`
+# (résolus dans la locale de l'interface au rendu) ; la LOGIQUE n'utilise que
+# `path`/`type`/`options`/`secret`, jamais ces chaînes — le marquage est donc sans effet
+# de bord. `lazy_gettext` est extrait par pybabel (clé ajoutée dans scripts/i18n_check.py).
 CONFIG_FORM_SECTIONS: list[dict] = [
     {
-        "title": "Modèles & backends",
-        "help": "Choix des moteurs de transcription et de diarisation.",
+        "title": _l("Modèles & backends"),
+        "help": _l("Choix des moteurs de transcription et de diarisation."),
         "fields": [
-            {"path": "models.stt_backend", "label": "Backend STT", "type": "select",
+            {"path": "models.stt_backend", "label": _l("Backend STT"), "type": "select",
              "options": ["cohere", "whisper", "granite", "parakeet", "remote"],
-             "help": "Moteur de transcription par défaut (cohere recommandé)."},
-            {"path": "models.diarization_backend", "label": "Backend diarisation", "type": "select",
+             "help": _l("Moteur de transcription par défaut (cohere recommandé).")},
+            {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
              "options": ["pyannote", "sortformer", "remote"],
-             "help": "Détection des locuteurs (pyannote recommandé)."},
+             "help": _l("Détection des locuteurs (pyannote recommandé).")},
         ],
     },
     {
-        "title": "LLM d'arbitrage",
-        "help": "Résumé et correction par la LLM locale OpenAI-compatible.",
+        "title": _l("LLM d'arbitrage"),
+        "help": _l("Résumé et correction par la LLM locale OpenAI-compatible."),
         "fields": [
-            {"path": "workflow.arbitration_llm.enabled", "label": "Activer la correction LLM", "type": "bool",
-             "help": "Désactiver pour produire un SRT brut sans correction."},
-            {"path": "workflow.summary_llm.model_id", "label": "Modèle de résumé", "type": "text",
-             "help": "Identifiant opencode, ex. local/arbitrage."},
-            {"path": "workflow.arbitration_llm.model_id", "label": "Modèle de correction", "type": "text",
-             "help": "Identifiant opencode du modèle de correction du SRT."},
-            {"path": "services.arbitrage_llm_port", "label": "Port du serveur LLM", "type": "int",
-             "help": "Port du backend OpenAI-compatible (llama-server par défaut : 8080)."},
-            {"path": "services.arbitrage_api_model_id", "label": "Alias modèle rapporté par le serveur", "type": "text",
-             "help": "Doit correspondre à l'alias servi (cf. scripts/check_arbitrage_llm.sh)."},
+            {"path": "workflow.arbitration_llm.enabled", "label": _l("Activer la correction LLM"), "type": "bool",
+             "help": _l("Désactiver pour produire un SRT brut sans correction.")},
+            {"path": "workflow.summary_llm.model_id", "label": _l("Modèle de résumé"), "type": "text",
+             "help": _l("Identifiant opencode, ex. local/arbitrage.")},
+            {"path": "workflow.arbitration_llm.model_id", "label": _l("Modèle de correction"), "type": "text",
+             "help": _l("Identifiant opencode du modèle de correction du SRT.")},
+            {"path": "services.arbitrage_llm_port", "label": _l("Port du serveur LLM"), "type": "int",
+             "help": _l("Port du backend OpenAI-compatible (llama-server par défaut : 8080).")},
+            {"path": "services.arbitrage_api_model_id", "label": _l("Alias modèle rapporté par le serveur"), "type": "text",
+             "help": _l("Doit correspondre à l'alias servi (cf. scripts/check_arbitrage_llm.sh).")},
         ],
     },
     {
-        "title": "File & exécution",
-        "help": "File GPU persistante et parallélisme des jobs.",
+        "title": _l("File & exécution"),
+        "help": _l("File GPU persistante et parallélisme des jobs."),
         "fields": [
-            {"path": "workflow.queue.enabled", "label": "File persistante activée", "type": "bool",
-             "help": "Mise en file des traitements (recommandé)."},
-            {"path": "workflow.execution.max_concurrent_jobs", "label": "Jobs simultanés max", "type": "int",
-             "help": "Concurrence par défaut (1 = comportement historique)."},
-            {"path": "storage.shared_backend", "label": "Stockage des fichiers de jobs", "type": "select",
+            {"path": "workflow.queue.enabled", "label": _l("File persistante activée"), "type": "bool",
+             "help": _l("Mise en file des traitements (recommandé).")},
+            {"path": "workflow.execution.max_concurrent_jobs", "label": _l("Jobs simultanés max"), "type": "int",
+             "help": _l("Concurrence par défaut (1 = comportement historique).")},
+            {"path": "storage.shared_backend", "label": _l("Stockage des fichiers de jobs"), "type": "select",
              "options": ["fs", "pg"],
-             "help": "fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir "
-                     "partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la "
-                     "frontale (role=web) et le worker (role=scheduler) sont sur deux machines "
-                     "sans filesystem commun (cf. docs/STOCKAGE_PARTAGE_JOBS.md)."},
+             "help": _l("fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir "
+                        "partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la "
+                        "frontale (role=web) et le worker (role=scheduler) sont sur deux machines "
+                        "sans filesystem commun (cf. docs/STOCKAGE_PARTAGE_JOBS.md).")},
         ],
     },
     {
-        "title": "Ressources GPU",
-        "help": "Récupération de la VRAM quand un job est bloqué faute de mémoire GPU.",
+        "title": _l("Ressources GPU"),
+        "help": _l("Récupération de la VRAM quand un job est bloqué faute de mémoire GPU."),
         "fields": [
-            {"path": "gpu.preemption", "label": "Politique de préemption VRAM", "type": "select",
+            {"path": "gpu.preemption", "label": _l("Politique de préemption VRAM"), "type": "select",
              "options": ["own-only", "aggressive"],
-             "help": "own-only (recommandé) : n'arrête que NOS process gérés inactifs "
-                     "(LLM d'arbitrage), jamais un process tiers. aggressive : préempte "
-                     "aussi les serveurs d'inférence tiers, uniquement dans la fenêtre "
-                     "calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA."},
-            {"path": "gpu.min_free_vram_mb", "label": "VRAM libre minimale (Mo)", "type": "int",
-             "help": "Marge libre exigée en plus du besoin d'une phase avant de l'allouer."},
+             "help": _l("own-only (recommandé) : n'arrête que NOS process gérés inactifs "
+                        "(LLM d'arbitrage), jamais un process tiers. aggressive : préempte "
+                        "aussi les serveurs d'inférence tiers, uniquement dans la fenêtre "
+                        "calendaire « force_gpu » — à réserver à un GPU dédié à TranscrIA.")},
+            {"path": "gpu.min_free_vram_mb", "label": _l("VRAM libre minimale (Mo)"), "type": "int",
+             "help": _l("Marge libre exigée en plus du besoin d'une phase avant de l'allouer.")},
         ],
     },
     {
-        "title": "Sécurité & upload",
-        "help": "Limites d'upload et suppression des jobs.",
+        "title": _l("Sécurité & upload"),
+        "help": _l("Limites d'upload et suppression des jobs."),
         "fields": [
-            {"path": "security.max_upload_size_mb", "label": "Taille max d'upload (Mo)", "type": "int",
-             "help": "Taille maximale d'un fichier déposé."},
-            {"path": "security.allowed_upload_extensions", "label": "Extensions autorisées", "type": "csv",
-             "help": "Liste séparée par des virgules, ex. mp3, wav, mp4, m4a."},
-            {"path": "security.allow_job_delete", "label": "Autoriser la suppression de jobs", "type": "bool",
-             "help": "Permet aux admins de supprimer un job et ses fichiers."},
+            {"path": "security.max_upload_size_mb", "label": _l("Taille max d'upload (Mo)"), "type": "int",
+             "help": _l("Taille maximale d'un fichier déposé.")},
+            {"path": "security.allowed_upload_extensions", "label": _l("Extensions autorisées"), "type": "csv",
+             "help": _l("Liste séparée par des virgules, ex. mp3, wav, mp4, m4a.")},
+            {"path": "security.allow_job_delete", "label": _l("Autoriser la suppression de jobs"), "type": "bool",
+             "help": _l("Permet aux admins de supprimer un job et ses fichiers.")},
         ],
     },
     {
-        "title": "Notifications email",
-        "help": "Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur.",
+        "title": _l("Notifications email"),
+        "help": _l("Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."),
         "fields": [
-            {"path": "notifications.email.enabled", "label": "Activer les emails", "type": "bool",
-             "help": "Envoie un email au propriétaire à la fin (succès/échec)."},
-            {"path": "notifications.email.smtp_host", "label": "Serveur SMTP", "type": "text"},
-            {"path": "notifications.email.smtp_port", "label": "Port SMTP", "type": "int",
-             "help": "Ex. 587 (STARTTLS) ou 465 (SSL)."},
-            {"path": "notifications.email.use_starttls", "label": "STARTTLS", "type": "bool"},
-            {"path": "notifications.email.use_ssl", "label": "SSL/SMTPS", "type": "bool"},
-            {"path": "notifications.email.from_address", "label": "Adresse expéditeur", "type": "text"},
-            {"path": "notifications.email.base_url", "label": "URL de base du portail", "type": "text",
-             "help": "Utilisée dans les liens des emails, ex. http://localhost:7870."},
+            {"path": "notifications.email.enabled", "label": _l("Activer les emails"), "type": "bool",
+             "help": _l("Envoie un email au propriétaire à la fin (succès/échec).")},
+            {"path": "notifications.email.smtp_host", "label": _l("Serveur SMTP"), "type": "text"},
+            {"path": "notifications.email.smtp_port", "label": _l("Port SMTP"), "type": "int",
+             "help": _l("Ex. 587 (STARTTLS) ou 465 (SSL).")},
+            {"path": "notifications.email.use_starttls", "label": _l("STARTTLS"), "type": "bool"},
+            {"path": "notifications.email.use_ssl", "label": _l("SSL/SMTPS"), "type": "bool"},
+            {"path": "notifications.email.from_address", "label": _l("Adresse expéditeur"), "type": "text"},
+            {"path": "notifications.email.base_url", "label": _l("URL de base du portail"), "type": "text",
+             "help": _l("Utilisée dans les liens des emails, ex. http://localhost:7870.")},
         ],
     },
     {
-        "title": "Voix enregistrées",
-        "help": "Référentiel de voix connues (consentement requis).",
+        "title": _l("Voix enregistrées"),
+        "help": _l("Référentiel de voix connues (consentement requis)."),
         "fields": [
-            {"path": "voice_enrollment.enabled", "label": "Activer les voix enregistrées", "type": "bool"},
-            {"path": "voice_enrollment.storage_dir", "label": "Répertoire de stockage", "type": "text",
-             "help": "Stockage local protégé des voix et consentements."},
+            {"path": "voice_enrollment.enabled", "label": _l("Activer les voix enregistrées"), "type": "bool"},
+            {"path": "voice_enrollment.storage_dir", "label": _l("Répertoire de stockage"), "type": "text",
+             "help": _l("Stockage local protégé des voix et consentements.")},
         ],
     },
     {
-        "title": "Serveur & compte admin",
-        "help": "Écoute du portail et mot de passe du premier administrateur.",
+        "title": _l("Serveur & compte admin"),
+        "help": _l("Écoute du portail et mot de passe du premier administrateur."),
         "fields": [
-            {"path": "server.host", "label": "Hôte d'écoute", "type": "text"},
-            {"path": "server.port", "label": "Port d'écoute", "type": "int"},
-            {"path": "auth.first_admin_password", "label": "Mot de passe admin initial", "type": "password",
+            {"path": "server.host", "label": _l("Hôte d'écoute"), "type": "text"},
+            {"path": "server.port", "label": _l("Port d'écoute"), "type": "int"},
+            {"path": "auth.first_admin_password", "label": _l("Mot de passe admin initial"), "type": "password",
              "secret": True,
-             "help": "Changez la valeur par défaut avant tout usage réel."},
+             "help": _l("Changez la valeur par défaut avant tout usage réel.")},
         ],
     },
 ]

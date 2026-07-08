@@ -2933,13 +2933,14 @@ def system_status():
 def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None,
                         status: int = 200, values: dict | None = None):
     from transcria.web import prompt_files
+    from transcria.web.i18n import select_locale
 
     cfg_now = ConfigService.get_singleton()
     if values is None:
         values = display_values(cfg_now, CONFIG_FORM_SECTIONS)
     return render_template(
         "admin_config.html",
-        prompts=prompt_files.load_prompts(cfg_now),
+        prompts=prompt_files.load_prompts(cfg_now, select_locale()),
         scripts=prompt_files.load_scripts(cfg_now),
         config_yaml=config_yaml,
         config_path=config_path,
@@ -2981,17 +2982,20 @@ def admin_config():
         # Édition des prompts LLM : liste FERMÉE de fichiers connus (prompt_files),
         # garde non-vide + backup .bak — voir docs/archive/REFONTE_UI.md.
         from transcria.web import prompt_files
+        from transcria.web.i18n import select_locale
 
+        prompt_lang = select_locale()
         saved = 0
+        current_prompts = prompt_files.load_prompts(cfg, prompt_lang)
         for spec in prompt_files.PROMPT_FILES:
             submitted = request.form.get(f"prompt-{spec['name']}")
             if submitted is None:
                 continue
-            current = next((p["content"] for p in prompt_files.load_prompts(cfg)
+            current = next((p["content"] for p in current_prompts
                             if p["name"] == spec["name"]), "")
             if submitted.replace("\r\n", "\n") == current:
                 continue
-            ok, message = prompt_files.save_prompt(cfg, spec["name"], submitted)
+            ok, message = prompt_files.save_prompt(cfg, spec["name"], submitted, prompt_lang)
             flash(message, "success" if ok else "error")
             if ok:
                 saved += 1

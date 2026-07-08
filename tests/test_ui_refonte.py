@@ -155,6 +155,50 @@ class TestConfigPrompts:
         assert "Prompt résumé v1" in html
         assert "lecture seule" in html
 
+    def test_prompt_editor_is_language_aware(self, monkeypatch, tmp_path):
+        """Éditeur de prompts piloté par la langue de l'interface : fr → racine,
+        en → sous-dossier en/ (même convention que la résolution runtime des livrables)."""
+        from transcria.web import prompt_files
+
+        base = self._prompts_tmp(monkeypatch, tmp_path)
+        (base / "en").mkdir()
+        (base / "en" / "summary_prompt.txt").write_text("EN summary prompt", encoding="utf-8")
+        cfg = get_config()
+
+        fr = {p["name"]: p for p in prompt_files.load_prompts(cfg, "fr")}
+        assert fr["summary_prompt"]["path"] == str(base / "summary_prompt.txt")
+        assert fr["summary_prompt"]["content"] == "Prompt résumé v1"
+
+        en = {p["name"]: p for p in prompt_files.load_prompts(cfg, "en")}
+        assert en["summary_prompt"]["path"] == str(base / "en" / "summary_prompt.txt")
+        assert en["summary_prompt"]["content"] == "EN summary prompt"
+        # une langue sans fichier : chemin déterministe dans en/, marqué absent (créé au save)
+        assert en["correction_prompt"]["path"] == str(base / "en" / "correction_prompt.txt")
+        assert en["correction_prompt"]["exists"] is False
+
+        ok, _msg = prompt_files.save_prompt(cfg, "correction_prompt", "New EN correction", "en")
+        assert ok
+        assert (base / "en" / "correction_prompt.txt").read_text(encoding="utf-8") == "New EN correction"
+        # le prompt français correspondant n'est pas touché
+        assert (base / "correction_prompt.txt").read_text(encoding="utf-8") == "Prompt correction v1"
+
+    def test_config_form_labels_translated_in_english(self, admin_client):
+        """Les libellés/aides du formulaire de config sont traduits en anglais (axe A).
+
+        On force la locale via la SESSION (pas ?lang=) pour ne pas persister ``user.locale``
+        de l'admin partagé et polluer les autres tests (cf. mémoire i18n)."""
+        with admin_client.session_transaction() as sess:
+            sess["ui_locale"] = "en"
+        try:
+            html = admin_client.get("/admin/config").data.decode()
+            assert "STT backend" in html
+            assert "Default transcription engine (cohere recommended)." in html
+            assert "Structured summary" in html  # label de prompt
+            assert "Backend STT" not in html  # plus de version française
+        finally:
+            with admin_client.session_transaction() as sess:
+                sess.pop("ui_locale", None)
+
     def test_save_prompt_writes_file_and_backup(self, admin_client, monkeypatch, tmp_path):
         base = self._prompts_tmp(monkeypatch, tmp_path)
         resp = admin_client.post("/admin/config", data={

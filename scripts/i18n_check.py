@@ -30,6 +30,10 @@ def _extract_pot(dest: Path) -> None:
     # y être quand on lance le python du venv directement).
     subprocess.run(
         [sys.executable, "-m", "babel.messages.frontend", "extract", "-F", str(BABEL_CFG),
+         # `lazy_gettext`/`_l` : chaînes traduisibles définies à l'import (constantes de
+         # formulaire, cf. web/config_form.py, web/prompt_files.py) — absent des clés babel
+         # par défaut, à déclarer explicitement sinon elles échappent au catalogue.
+         "-k", "lazy_gettext", "-k", "_l",
          "-o", str(dest), "--project=TranscrIA", "--no-wrap", str(ROOT)],
         check=True, cwd=str(ROOT), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
