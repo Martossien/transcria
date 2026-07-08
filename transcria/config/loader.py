@@ -720,6 +720,14 @@ def _normalize_config(cfg: dict) -> dict:
     if "enable_vad" in workflow:
         vad.setdefault("enabled_summary", bool(workflow["enable_vad"]))
         vad.setdefault("enabled_final", bool(workflow["enable_vad"]))
+    # Override d'environnement de la langue par défaut de l'instance (ergonomie Docker/CI :
+    # choisir la langue sans éditer le YAML). Ignoré si hors de l'allowlist available_locales.
+    env_locale = os.environ.get("TRANSCRIA_DEFAULT_LOCALE")
+    if env_locale:
+        i18n = normalized.setdefault("i18n", {})
+        available = i18n.get("available_locales") or ["fr"]
+        if env_locale in available:
+            i18n["default_locale"] = env_locale
     return normalized
 
 

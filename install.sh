@@ -58,6 +58,73 @@ log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $*"; }
 log_section() { echo -e "\n${BOLD}${BLUE}═══ $* ═══${NC}"; }
 
+# ── i18n de l'installateur (FR/EN) ─────────────────────────────────────────────
+# Catalogue auto-suffisant (aucune dépendance : pas de gettext shell). Clé composée
+# « <locale>:<clé> » ; repli fr puis clé brute. `t <clé>` rend le texte ; les phases
+# Python reçoivent --locale et localisent leur propre sortie (transcria/installer/messages.py).
+declare -A _MSG=(
+    [fr:sec_prereq]="Vérification des prérequis"
+    [en:sec_prereq]="Checking prerequisites"
+    [fr:sec_python]="Environnement Python"
+    [en:sec_python]="Python environment"
+    [fr:sec_dirs]="Répertoires"
+    [en:sec_dirs]="Directories"
+    [fr:sec_config]="Configuration"
+    [en:sec_config]="Configuration"
+    [fr:sec_db]="Base de données"
+    [en:sec_db]="Database"
+    [fr:sec_models]="Vérification des modèles IA"
+    [en:sec_models]="Checking AI models"
+    [fr:sec_interactive]="Configuration interactive"
+    [en:sec_interactive]="Interactive setup"
+    [fr:sec_opencode]="opencode (moteur LLM)"
+    [en:sec_opencode]="opencode (LLM engine)"
+    [fr:sec_llm]="LLM d'arbitrage — sélection selon la VRAM"
+    [en:sec_llm]="Arbitration LLM — selection based on VRAM"
+    [fr:sec_imports]="Vérification des imports"
+    [en:sec_imports]="Checking imports"
+    [fr:sec_postinstall]="Validation post-install"
+    [en:sec_postinstall]="Post-install validation"
+    [fr:sec_language]="Langue"
+    [en:sec_language]="Language"
+    [fr:ask_language]="Langue de l'interface et des messages ? [1] Français  [2] English"
+    [en:ask_language]="Interface and message language? [1] Français  [2] English"
+    [fr:locale_set]="Langue : français (interface, livrables et installateur)."
+    [en:locale_set]="Language: English (interface, deliverables and installer)."
+    [fr:ask_pg]="Configurer PostgreSQL ? (choix principal hors dev ; non = SQLite dev local explicite)"
+    [en:ask_pg]="Set up PostgreSQL? (recommended outside dev; no = explicit local SQLite dev)"
+    [fr:ask_admin_pw]="Définir le mot de passe admin maintenant ?"
+    [en:ask_admin_pw]="Set the admin password now?"
+    [fr:ask_ollama]="Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"
+    [en:ask_ollama]="Follow the recommendation and use Ollama? (no = llama.cpp, fine control)"
+    [fr:ask_llamacpp]="Suivre la recommandation et utiliser llama.cpp ? (non = Ollama, plus simple mais modèle plus petit sur ce palier)"
+    [en:ask_llamacpp]="Follow the recommendation and use llama.cpp? (no = Ollama, simpler but a smaller model at this tier)"
+    [fr:i18n_skipped]="Compilation des traductions ignorée (interface en français par défaut)."
+    [en:i18n_skipped]="Translation compilation skipped (interface defaults to French)."
+    [fr:py_required]="Python 3.11+ requis. Installer avec: apt install python3.11 (ou dnf install python3.11 sur RHEL)"
+    [en:py_required]="Python 3.11+ required. Install with: apt install python3.11 (or dnf install python3.11 on RHEL)"
+    [fr:py_found]="Python %s trouvé (%s)"
+    [en:py_found]="Python %s found (%s)"
+    [fr:unknown_arg]="Argument inconnu: %s"
+    [en:unknown_arg]="Unknown argument: %s"
+    [fr:bad_locale]="Langue inconnue : %s (attendu fr ou en). Utilisation de « fr »."
+    [en:bad_locale]="Unknown language: %s (expected fr or en). Falling back to \"fr\"."
+)
+
+t() {
+    local key="$1"; local loc="${INSTALL_LOCALE:-fr}"
+    printf '%s' "${_MSG[$loc:$key]:-${_MSG[fr:$key]:-$key}}"
+}
+
+# Normalise INSTALL_LOCALE (fr/en) ; toute autre valeur retombe sur fr (avec avertissement).
+normalize_install_locale() {
+    case "$INSTALL_LOCALE" in
+        fr|en) ;;
+        "") INSTALL_LOCALE="fr" ;;
+        *) printf -v _bl "$(t bad_locale)" "$INSTALL_LOCALE"; log_warn "$_bl"; INSTALL_LOCALE="fr" ;;
+    esac
+}
+
 # ── Defaults ─────────────────────────────────────────────────────────────────
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Utilisateur de service : $USER si défini, sinon l'utilisateur effectif courant (root en
@@ -70,6 +137,12 @@ INSTALL_SERVICE=true
 INSTALL_TORCH=true
 FORCE_CUDA=""
 HF_TOKEN=""
+# Langue de l'installateur ET langue par défaut de l'instance (i18n.default_locale).
+# Choix PRODUIT de premier plan : --locale, sinon TRANSCRIA_DEFAULT_LOCALE, sinon 1re question
+# interactive, sinon "fr". Pilote la sortie de install.sh ET des phases Python.
+INSTALL_LOCALE="${TRANSCRIA_DEFAULT_LOCALE:-}"
+LOCALE_EXPLICIT=false   # --locale ou env fournis → pas de question interactive
+[[ -n "$INSTALL_LOCALE" ]] && LOCALE_EXPLICIT=true
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
 SKIP_DOCTOR=false
@@ -112,6 +185,7 @@ while [[ $# -gt 0 ]]; do
         --skip-deps)       SKIP_DEPS=true; INSTALL_TORCH=false; shift ;;
         --cuda)            FORCE_CUDA="$2"; shift 2 ;;
         --llm-backend)     LLM_BACKEND_FORCED="$2"; shift 2 ;;
+        --locale)          INSTALL_LOCALE="$2"; LOCALE_EXPLICIT=true; shift 2 ;;
         --user)            SERVICE_USER="$2"; shift 2 ;;
         --install-dir)     INSTALL_DIR="$2"; shift 2 ;;
         --hf-token)        HF_TOKEN="$2"; shift 2 ;;
@@ -143,9 +217,29 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             awk 'NR>1 && /^[^#]/{exit} NR>1 && /^#/{sub(/^# ?/,""); print}' "$0"
             exit 0 ;;
-        *) log_error "Argument inconnu: $1"; exit 1 ;;
+        *) printf -v _ua "$(t unknown_arg)" "$1"; log_error "$_ua"; exit 1 ;;
     esac
 done
+
+# ── Langue : PREMIER choix produit (pilote toute la suite : install.sh + phases Python) ──
+# --locale ou TRANSCRIA_DEFAULT_LOCALE court-circuitent la question ; sinon on demande d'abord,
+# UNIQUEMENT sur un vrai terminal (`-t 0`) et hors --plan (mode « imprime et sors »). `read` est
+# tolérant à l'EOF (set -e) : pas de tty ⇒ défaut sans planter.
+if [[ "$LOCALE_EXPLICIT" != true && "$NON_INTERACTIVE" != true && "$PLAN_ONLY" != true && -t 0 ]]; then
+    log_section "$(t sec_language)"
+    echo -n "  $(t ask_language) [1] : "
+    read -r _lang_answer || _lang_answer=""
+    case "${_lang_answer:-1}" in
+        2|en|EN|english|English|anglais) INSTALL_LOCALE="en" ;;
+        *) INSTALL_LOCALE="fr" ;;
+    esac
+fi
+normalize_install_locale
+# Exporté → tous les sous-process Python de l'installateur ET le doctor localisent leur
+# sortie via transcria/cli_i18n.py (résolution depuis cet env). Aussi l'override de
+# i18n.default_locale côté application (cf. config/loader) : langue cohérente partout.
+export TRANSCRIA_DEFAULT_LOCALE="$INSTALL_LOCALE"
+[[ "$PLAN_ONLY" != true ]] && log_info "$(t locale_set)"
 
 if [[ "$SKIP_DOCTOR" = true && "$STRICT_DOCTOR" = true ]]; then
     log_error "--skip-doctor et --strict-doctor sont incompatibles"
@@ -162,13 +256,13 @@ for candidate in python3.13 python3.12 python3.11 python3; do
         version=$("$candidate" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true)
         if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
             PYTHON_BIN="$candidate"
-            log_ok "Python $version trouvé ($(command -v "$candidate"))"
+            printf -v _pf "$(t py_found)" "$version" "$(command -v "$candidate")"; log_ok "$_pf"
             break
         fi
     fi
 done
 if [[ -z "$PYTHON_BIN" ]]; then
-    log_error "Python 3.11+ requis. Installer avec: apt install python3.11 (ou dnf install python3.11 sur RHEL)"
+    log_error "$(t py_required)"
     exit 1
 fi
 
@@ -460,7 +554,7 @@ secure_env_file() {
 # ============================================================================
 # SECTION 1 — Vérification des prérequis
 # ============================================================================
-log_section "Vérification des prérequis"
+log_section "$(t sec_prereq)"
 
 log_prerequisite_event() {
     local event="$1" name="${2:-}" value="${3:-}" path="${4:-}"
@@ -534,7 +628,7 @@ fi
 # ============================================================================
 # SECTION 2 — Environnement Python (venv + PyTorch + dépendances)
 # ============================================================================
-log_section "Environnement Python"
+log_section "$(t sec_python)"
 
 log_local_setup_event() {
     local event="$1" value="${2:-}"
@@ -563,13 +657,13 @@ source "$VENV/bin/activate"
 if [[ "$SKIP_DEPS" != true ]]; then
     python_module transcria.installer.cli i18n-compile \
         --translations-dir "$INSTALL_DIR/transcria/web/translations" || \
-        log_warn "Compilation des traductions ignorée (interface en français par défaut)."
+        log_warn "$(t i18n_skipped)"
 fi
 
 # ============================================================================
 # SECTION 5 — Répertoires
 # ============================================================================
-log_section "Répertoires"
+log_section "$(t sec_dirs)"
 
 install_paths_helper >/dev/null
 log_local_setup_event runtime-dirs-ready
@@ -577,7 +671,7 @@ log_local_setup_event runtime-dirs-ready
 # ============================================================================
 # SECTION 6 — Configuration (config.yaml)
 # ============================================================================
-log_section "Configuration"
+log_section "$(t sec_config)"
 
 log_config_setup_event() {
     local event="$1" value="${2:-}"
@@ -605,6 +699,14 @@ CONFIG_CLI_ARGS=(
 [[ "$INSTALL_INFERENCE" = true ]] && CONFIG_CLI_ARGS+=(--install-inference)
 [[ "$FORCE_CONFIG" = true ]] && CONFIG_CLI_ARGS+=(--force-config)
 PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${CONFIG_CLI_ARGS[@]}"
+
+# Langue par défaut de l'instance = choix fait en tête d'install (i18n.default_locale).
+# Écrit APRÈS la génération pour piloter l'interface web (le sélecteur navbar et la
+# préférence par utilisateur restent disponibles ensuite). available_locales garde fr+en.
+if [[ -f "$CONFIG_PATH" ]]; then
+    yaml_set "i18n.default_locale" "$INSTALL_LOCALE" >/dev/null 2>&1 || \
+        log_warn "Impossible d'écrire i18n.default_locale=$INSTALL_LOCALE dans config.yaml"
+fi
 
 # ── Proxy d'entreprise ──────────────────────────────────────────────────────
 # Le service systemd n'hérite PAS de l'environnement du shell : un proxy connu du
@@ -635,14 +737,14 @@ fi
 # ============================================================================
 # SECTION 6.5 — Base de données PostgreSQL (optionnel, recommandé en prod)
 # ============================================================================
-log_section "Base de données"
+log_section "$(t sec_db)"
 
 DB_BACKEND="SQLite"
 
 if [[ -z "$SETUP_PG" ]]; then
     if [[ "$NON_INTERACTIVE" = true ]]; then
         SETUP_PG=false
-    elif ask_yn "Configurer PostgreSQL ? (choix principal hors dev ; non = SQLite dev local explicite)"; then
+    elif ask_yn "$(t ask_pg)"; then
         SETUP_PG=true
     else
         SETUP_PG=false
@@ -796,7 +898,7 @@ fi
 # ============================================================================
 # SECTION 7 — Vérification des modèles IA
 # ============================================================================
-log_section "Vérification des modèles IA"
+log_section "$(t sec_models)"
 
 log_model_status_event() {
     local event="$1" value="${2:-}"
@@ -875,7 +977,7 @@ fi
 # ============================================================================
 # SECTION 8 — Configuration interactive des valeurs manquantes
 # ============================================================================
-log_section "Configuration interactive"
+log_section "$(t sec_interactive)"
 
 CHANGED_CONFIG=false
 
@@ -884,7 +986,7 @@ CURRENT_PWD=$(yaml_get "auth.first_admin_password")
 if [[ "$PROFILE_NEEDS_ADMIN_CONFIG" = true && "$CURRENT_PWD" = "CHANGE-ME" ]]; then
     echo ""
     log_config_setup_event admin-default-password
-    if ask_yn "Définir le mot de passe admin maintenant ?"; then
+    if ask_yn "$(t ask_admin_pw)"; then
         echo -n "  Nouveau mot de passe (min 8 caractères) : "
         read -rs ADMIN_PASS; echo ""
         if [[ ${#ADMIN_PASS} -ge 8 ]]; then
@@ -989,7 +1091,7 @@ log_config_setup_event env-secured "$SERVICE_USER"
 # ============================================================================
 # SECTION 9 — opencode (moteur LLM pour résumé/correction)
 # ============================================================================
-log_section "opencode (moteur LLM)"
+log_section "$(t sec_opencode)"
 
 # Phase opencode (détection / installation interactive / configuration du provider)
 # déléguée à l'installateur Python. Tourne sous le python du venv (PyYAML). Les effets
@@ -1033,7 +1135,7 @@ fi
 # ============================================================================
 # SECTION 9-bis — LLM d'arbitrage : palier VRAM + téléchargement du modèle
 # ============================================================================
-log_section "LLM d'arbitrage — sélection selon la VRAM"
+log_section "$(t sec_llm)"
 
 log_llm_setup_event() {
     local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}"
@@ -1086,11 +1188,11 @@ else
         REC_ENGINE="$(printf '%s\n' "$REC_OUTPUT" | sed -n 's/^ENGINE=//p')"
         printf '%s\n' "$REC_OUTPUT" | grep -v '^ENGINE=' | while IFS= read -r line; do log_info "$line"; done
         if [[ "$REC_ENGINE" == "ollama" ]]; then
-            if ask_yn "Suivre la recommandation et utiliser Ollama ? (non = llama.cpp, contrôle fin)"; then
+            if ask_yn "$(t ask_ollama)"; then
                 LLM_BACKEND="ollama"
             fi
         else
-            if ask_yn "Suivre la recommandation et utiliser llama.cpp ? (non = Ollama, plus simple mais modèle plus petit sur ce palier)"; then
+            if ask_yn "$(t ask_llamacpp)"; then
                 LLM_BACKEND="llamacpp"
             else
                 LLM_BACKEND="ollama"
@@ -1280,7 +1382,7 @@ fi
 # ============================================================================
 # SECTION 10 — Vérification des imports Python
 # ============================================================================
-log_section "Vérification des imports"
+log_section "$(t sec_imports)"
 
 IMPORT_OUTPUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_imports --profile "$INSTALL_PROFILE" 2>&1 || true)
 while IFS= read -r line; do
@@ -1313,7 +1415,7 @@ PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" "${SYSTE
 # ============================================================================
 # SECTION 11.9 — Validation post-install
 # ============================================================================
-log_section "Validation post-install"
+log_section "$(t sec_postinstall)"
 
 if [[ "$SKIP_DOCTOR" = true ]]; then
     DOCTOR_STATUS="sauté (--skip-doctor)"
