@@ -72,21 +72,26 @@ def directory_specs_for_kind(kind: str, install_dir: Path) -> list[DirectorySpec
 
 
 def render_setup_log(*, event: str, value: str = "") -> str:
-    """Rend les messages de préparation locale des chemins et dépendances."""
+    """Rend les messages de préparation locale des chemins et dépendances (FR/EN).
+
+    Le PRÉFIXE (``OK:``/``INFO:``) est lu par ``install.sh`` (non localisé) ; seul le
+    message suit la langue (``TRANSCRIA_DEFAULT_LOCALE``, défaut fr = inchangé)."""
+    from transcria.install_messages import t
+
     if event == "venv-existing":
-        return f"OK:Venv existant : {value}\n"
+        return f"OK:{t('path_venv_existing', value=value)}\n"
     if event == "venv-create-start":
-        return "INFO:Création du venv...\n"
+        return f"INFO:{t('path_venv_create_start')}\n"
     if event == "venv-created":
-        return f"OK:Venv créé : {value}\n"
+        return f"OK:{t('path_venv_created', value=value)}\n"
     if event == "pip-upgrade":
-        return "INFO:Mise à jour de pip...\n"
+        return f"INFO:{t('path_pip_upgrade')}\n"
     if event == "requirements-start":
-        return "INFO:Installation requirements.txt...\n"
+        return f"INFO:{t('path_requirements_start')}\n"
     if event == "requirements-ok":
-        return "OK:requirements.txt installé\n"
+        return f"OK:{t('path_requirements_ok')}\n"
     if event == "runtime-dirs-ready":
-        return "OK:jobs/, models/, instance/ prêts\n"
+        return f"OK:{t('path_runtime_dirs_ready')}\n"
     raise ValueError(f"événement chemins inconnu : {event}")
 
 

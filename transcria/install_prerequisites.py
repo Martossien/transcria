@@ -128,32 +128,34 @@ def resolve_user_home(user: str, *, get_home: UserHomeFn | None = None) -> str:
 
 
 def render_setup_log(*, event: str, name: str = "", value: str = "", path: str = "") -> str:
-    """Rend les messages de prérequis utilisés par install.sh."""
+    """Rend les messages de prérequis utilisés par install.sh (FR/EN).
+
+    Le PRÉFIXE (``OK:``/``ERROR:``/``WARN:``) est lu par ``install.sh`` (non localisé) ;
+    seul le message suit la langue (``TRANSCRIA_DEFAULT_LOCALE``, défaut fr = inchangé)."""
+    from transcria.install_messages import t
+
     if event == "python-ok":
-        return f"OK:Python {value} : {path}\n"
+        return f"OK:{t('pre_python_ok', value=value, path=path)}\n"
     if event == "python-missing":
-        return "ERROR:Python 3.11+ requis. Installer avec: apt install python3.11\n"
+        return f"ERROR:{t('pre_python_missing')}\n"
     if event == "venv-missing":
-        return (
-            "ERROR:module venv/ensurepip indisponible — `python -m venv` échouerait. "
-            "Installer avec: apt install python3-venv\n"
-        )
+        return f"ERROR:{t('pre_venv_missing')}\n"
     if event == "nvidia-ok":
-        return f"OK:nvidia-smi — {value} GPU(s), CUDA {path}\n"
+        return f"OK:{t('pre_nvidia_ok', value=value, path=path)}\n"
     if event == "nvidia-missing":
-        return "WARN:nvidia-smi non trouvé ou inutilisable — fonctionnement sans GPU (transcription très lente)\n"
+        return f"WARN:{t('pre_nvidia_missing')}\n"
     if event == "binary-ok":
-        return f"OK:{name} : {path}\n"
+        return f"OK:{t('pre_binary_ok', name=name, path=path)}\n"
     if event == "binary-required-missing":
         if name in {"ffmpeg", "ffprobe"}:
-            return f"ERROR:{name} manquant. Installer avec: apt install ffmpeg\n"
-        return f"ERROR:{name} manquant.\n"
+            return f"ERROR:{t('pre_binary_req_ffmpeg', name=name)}\n"
+        return f"ERROR:{t('pre_binary_req_generic', name=name)}\n"
     if event == "binary-optional-missing":
         if name == "lsof":
-            return "WARN:lsof manquant — requis par start.sh/stop.sh. Installer: apt install lsof\n"
+            return f"WARN:{t('pre_binary_opt_lsof')}\n"
         if name == "curl":
-            return "WARN:curl manquant — requis pour télécharger opencode (LLM d'arbitrage). Installer: apt install curl\n"
-        return f"WARN:{name} manquant\n"
+            return f"WARN:{t('pre_binary_opt_curl')}\n"
+        return f"WARN:{t('pre_binary_opt_generic', name=name)}\n"
     raise ValueError(f"événement prérequis inconnu : {event}")
 
 
