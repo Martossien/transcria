@@ -1215,10 +1215,24 @@ Envoie un email à l'utilisateur propriétaire du job à la fin du traitement (s
 
 ---
 
+### `i18n` — Internationalisation de l'interface (FR/EN)
+
+| Clé | Type | Défaut | Description |
+|---|---|---|---|
+| `i18n.default_locale` | str | `"fr"` | Langue par défaut de l'instance (si aucune préférence utilisateur ni négociation `Accept-Language`). Écrite par `install.sh` selon le choix de langue. Surchargée par l'env `TRANSCRIA_DEFAULT_LOCALE`. |
+| `i18n.available_locales` | liste | `["fr", "en"]` | Allowlist des langues proposées (sélecteur navbar + négociation). Une valeur hors liste retombe sur le défaut. |
+
+Distinct de la **langue des livrables** (compte-rendu, corrections), qui est un réglage **par job**
+(étape Contexte, pré-rempli par la langue détectée de l'audio). Ajouter une langue : cf.
+`docs/I18N_MULTILANGUE.md`.
+
+---
+
 ## 6. Variables d'environnement
 
 | Variable | Description | Défaut si absente |
 |---|---|---|
+| `TRANSCRIA_DEFAULT_LOCALE` | Langue par défaut de l'interface (`fr`/`en`) — override de `i18n.default_locale` sans éditer le YAML (ergonomie Docker/CI). Exportée par `install.sh` pour localiser aussi l'installateur et le `doctor`. | `fr` |
 | `TRANSCRIA_CONFIG` | Chemin vers le fichier config.yaml | `config.yaml` |
 | `TRANSCRIA_SECRET` | Clé secrète Flask (sessions) | `os.urandom(32).hex()` (aléatoire à chaque redémarrage) |
 | `TRANSCRIA_DATABASE_URL` | DSN base de données (prioritaire sur `storage.database_url`). Garde le mot de passe hors config versionnée. Ex. `postgresql+psycopg://transcria:***@127.0.0.1:5432/transcria` | Valeur de `storage.database_url` |

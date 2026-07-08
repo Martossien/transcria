@@ -127,12 +127,30 @@ cd transcria
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts ; installe opencode automatiquement si le profil requiert le LLM)
 ./install.sh --skip-doctor         # Sauter explicitement la validation post-install doctor
 ./install.sh --strict-doctor       # Validation post-install stricte (warnings doctor = échec)
+./install.sh --locale en           # Langue (fr|en) : interface, livrables ET sortie de l'installateur
 
 # PostgreSQL
 ./install.sh --postgres             # PostgreSQL local : crée rôle/base, écrit DSN, applique alembic
 ./install.sh --postgres --pg-migrate # + migre les données SQLite existantes
 ./install.sh --sqlite-dev           # SQLite explicite, dev local mono-process uniquement
 # --no-postgres reste accepté comme alias historique de --sqlite-dev
+```
+
+### Langue (français / anglais)
+
+TranscrIA est **bilingue FR/EN**. La langue est **la toute première question** de l'installation
+interactive (ou `--locale fr|en`, ou l'env `TRANSCRIA_DEFAULT_LOCALE=en`). Le choix :
+
+- écrit `i18n.default_locale` dans `config.yaml` (langue par défaut de l'interface web) ;
+- pilote **toute la sortie de l'installateur et du `doctor`** (français ou anglais) ;
+- sert de défaut ; chaque utilisateur peut ensuite changer via le **sélecteur de langue** de la
+  barre de navigation (préférence persistée dans `users.locale`), et la **langue des livrables**
+  (compte-rendu, corrections) se règle **par job** à l'étape Contexte.
+
+Le défaut est `fr` (comportement inchangé). `available_locales` (`config.yaml`) liste les langues
+proposées (`["fr", "en"]`). En Docker/CI non interactif, passer `TRANSCRIA_DEFAULT_LOCALE=en`.
+
+```bash
 ./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
 # PostgreSQL distant : créer d'abord rôle/base côté serveur, puis fournir --pg-host/--pg-user/--pg-password.
 ./install.sh --postgres --pg-existing --pg-host db --pg-user transcria --pg-password "..."  # Base déjà provisionnée (Docker, base distante, migrate) : écrit DSN + alembic, sans bootstrap privilégié

@@ -1,9 +1,20 @@
-# Plan — Internationalisation (i18n) : TranscrIA multilingue (FR + EN, extensible)
+# Internationalisation (i18n) : TranscrIA multilingue (FR + EN, extensible)
 
-> Statut : **PLAN** (aucun code écrit). Cible v1 : **français + anglais**, **axes A + B** dans la
-> même trajectoire. Architecture pensée pour accueillir d'autres langues (ES/DE/…) **sans refonte**
-> mais **sans les implémenter** en v1. Priorité affichée par l'utilisateur : **la haute qualité
-> prime sur la simplicité**.
+> Statut : **LIVRÉ en 0.3.2** — **axes A (interface) + B (livrables) COMPLETS**, plus la
+> localisation de l'**installateur** (`install.sh` + modules Python) et du **`doctor`**, du
+> **formulaire de consentement vocal (PDF)** et de la page **/admin/config**. Défaut `fr` =
+> comportement strictement inchangé ; l'anglais est un choix explicite. Architecture prête pour
+> d'autres langues (ES/DE/…) **sans refonte** (repli français partout).
+>
+> ## Ajouter une langue `<xx>`
+> 1. **Interface** : `transcria/web/translations/<xx>/LC_MESSAGES/messages.po` (traduire les
+>    msgid depuis `fr`) + ajouter `<xx>` à `i18n.available_locales` (config). Les `.mo` se
+>    compilent en CI/build/entrypoint.
+> 2. **Livrables** : dossier `configs/prompts/<xx>/` (traductions des prompts) + entrées `<xx>`
+>    dans les tables d'affichage (`_TYPE_DISPLAY_I18N`, `_DOCX_LABELS`, marqueurs de résumé…).
+> 3. **CLI/installateur/doctor** : ajouter la clé `<xx>` aux catalogues `transcria/install_messages.py`,
+>    `transcria/diagnostics/doctor_messages.py` et à `_AVAILABLE` dans `transcria/cli_i18n.py`.
+> Un `<xx>` incomplet retombe proprement sur le français (jamais de crash).
 
 ## 0. Décisions verrouillées (arbitrages utilisateur)
 

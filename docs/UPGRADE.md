@@ -139,6 +139,12 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.1 → 0.3.2** : interface, livrables, installateur, `doctor` et PDF de consentement
+  deviennent **bilingues FR/EN** (défaut `fr` inchangé). **Migration Alembic requise** :
+  colonne `users.locale` (nullable, additive, sans perte) — appliquée automatiquement par le job
+  `migrate` (Docker) ou `install.sh --postgres` ; en mise à niveau manuelle, lancer
+  `alembic upgrade head`. Deux clés de config facultatives (`i18n.default_locale` /
+  `i18n.available_locales`) avec défauts sûrs — un `config.yaml` existant reste valide.
 - **0.2.0 → 0.3.0** : nouvelles dépendances Python (`pypdf`, `python-pptx`, pur-Python,
   sans paquet système) — l'upgrade les installe via `requirements.txt` (`pip install -r
   requirements.txt` si mise à niveau manuelle). **Aucune migration Alembic** : la feature

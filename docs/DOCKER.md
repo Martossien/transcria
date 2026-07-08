@@ -42,6 +42,12 @@ scripts/docker_quickstart.sh --down
 > hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + la LLM 9B → aucun
 > téléchargement, cache HF en **volume nommé** seedé depuis l'image (élimine le `[Errno 17]
 > File exists` ci-dessous). Dans les deux cas, pyannote/Cohere restent en opt-in `HF_TOKEN`.
+>
+> **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque le palier 12 Go
+> (Qwen3.5-9B), mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :
+> passer `TRANSCRIA_LLM_TIER=16|24|32|48|64` (ou télécharger depuis **Administration → Modèles**)
+> **télécharge la LLM plus grosse au runtime** dans le volume persistant — le modèle baké
+> n'empêche pas la mise à niveau.
 
 > Le quickstart **vérifie le GPU** avant tout (compute capability ≥ 7.5 **et** VRAM ≥ ~12 Go,
 > cf. `transcria.deploy.gpu_preflight`) et échoue tôt avec un message clair plutôt que de laisser
@@ -167,6 +173,7 @@ Conteneurs **externes** à ce compose :
 | `TRANSCRIA_LLM_TIER` | all | non (défaut `12`) | Palier VRAM de la LLM embarquée (12/16/24/32/48/64). Pilote le GGUF téléchargé ET le script de lancement du palier (`scripts/arbitrage_profiles/<tier>gb_*.sh`) |
 | `MODELS_DIR` | all | non (défaut `/app/models`) | Répertoire (volume `models`, persistant) où le GGUF d'arbitrage est téléchargé au runtime |
 | `TRANSCRIA_ARBITRAGE_SCRIPT` | all | non (déduit du palier) | Override explicite du script de lancement de la LLM (sinon résolu depuis `TRANSCRIA_LLM_TIER`) |
+| `TRANSCRIA_DEFAULT_LOCALE` | all, web | non (défaut `fr`) | Langue par défaut de l'interface (`fr`/`en`) — override de `i18n.default_locale` sans éditer le YAML. Le sélecteur navbar et la préférence par utilisateur restent disponibles ; la langue des livrables se règle par job |
 | `TRANSCRIA_ALLINONE_IMAGE` | all (compose) | non (défaut `transcria-allinone:latest`) | Réf. de l'image GPU. Pointer un tag de registre (ex. `ghcr.io/<owner>/transcria-allinone:vX`) → le quickstart fait un `pull` au lieu d'un build |
 
 Build-time (`docker build --build-arg`) :

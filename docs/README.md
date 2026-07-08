@@ -1,7 +1,11 @@
 # TranscrIA — Documentation
 
-Reference documentation for operators, integrators, and contributors. The documents
-themselves are written in **French**; this index is the English entry point.
+Reference documentation for operators, integrators, and contributors. The **product itself
+is bilingual French / English** (interface, deliverables, installer, doctor — pick the
+language at install time or from the navbar). The **project README is available in both
+languages** ([English](../README.md) · [français](../README.fr.md)) and covers the full
+install + Docker quickstart. These deeper reference documents are written in **French**;
+this index is the English entry point (English summaries below).
 
 New here? Start with the [project README](../README.md), then
 [INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) to get a running instance.
@@ -24,6 +28,7 @@ New here? Start with the [project README](../README.md), then
 | [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (generated from the schema) |
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
 | [LLM_BACKENDS.md](LLM_BACKENDS.md) | Arbitration LLM backends (Ollama / llama.cpp / vLLM) and hardware-driven selection |
+| [I18N_MULTILANGUE.md](I18N_MULTILANGUE.md) | Bilingual FR/EN architecture (interface, deliverables, installer, doctor) and how to add a language |
 
 ## Features
 

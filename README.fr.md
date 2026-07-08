@@ -20,20 +20,25 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
-## Statut du projet — 0.3.1
+## Statut du projet — 0.3.2
 
 Dans la continuité de la ligne stable 0.2.0. La **0.3.0** ajoute l'ingestion des
 **documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé
-et la correction du SRT, et durcit la garde anti-fuite de genre sur les rôles participants
-(voir le [changelog](CHANGELOG.md)). La **0.3.1** ajoute l'outillage opérateur — une page
-admin *Maintenance* (créer, planifier et restaurer les sauvegardes) et une page *Modèles*
-qui télécharge les modèles nécessaires à l'install — et corrige un gel de démarrage de
-l'agent d'arbitrage (opencode) quand son endpoint LLM local est brièvement injoignable.
+et la correction du SRT. La **0.3.1** ajoute l'outillage opérateur — une page admin
+*Maintenance* (créer, planifier et restaurer les sauvegardes) et une page *Modèles* qui
+télécharge les modèles nécessaires à l'install. La **0.3.2** rend TranscrIA **bilingue
+français / anglais de bout en bout** : l'interface web, les **livrables générés**
+(compte-rendu, corrections, DOCX, rapports), l'**installateur**, le **`doctor`** et le PDF
+de consentement vocal parlent français **ou** anglais. Le défaut reste le français
+(strictement inchangé) ; l'anglais est un choix explicite — sélecteur de langue dans la
+barre de navigation, préférence par utilisateur, langue des livrables par job, et **choix
+de la langue dès la première question de l'installation**. Ajouter d'autres langues ne
+demande aucune refonte (repli français partout).
 Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
 bout en bout (suite unitaire et d'intégration, plus des passages sur GPU réel).
-L'interface est en français d'abord, et la qualité de référence repose sur des modèles
+La qualité de référence repose sur des modèles
 sous conditions (voir [Prérequis](#prérequis) et [Limites connues](#limites-connues)).
 Nous préférons énoncer les limites clairement plutôt que de laisser croire que l'outil
 fait plus qu'il ne fait.
@@ -291,7 +296,7 @@ Nous gardons cette liste honnête et à jour.
 | Durée d'une réunion | Testé jusqu'à ~4 h 30 (≈ 3 000 segments) | L'éditeur et le pipeline restent fluides ; au-delà, non garanti |
 | Taille d'un fichier | `security.max_upload_size_mb` (1 Go par défaut) | Message « fichier trop volumineux » (413), jamais d'erreur brute |
 | Locuteurs (diarisation Sortformer) | ≤ 4 | Utiliser pyannote (sous conditions) au-delà |
-| Langue de l'interface | Français d'abord | Chaînes et prompts centralisés ; autres langues = évolution prévue |
+| Langue de l'interface | Français / anglais | Bilingue (interface, livrables, installateur, doctor) ; autres langues sans refonte (repli français) |
 | VRAM < 12 Go | Pas de LLM de synthèse/correction | Repli sur la transcription brute |
 | Espace disque | Surveillé par `doctor` (< 10 Go = alerte, < 2 Go = échec) | Un disque plein fait échouer un job proprement et apparaît au diagnostic |
 | Rétention | Traitements 365 j, audit 1095 j (configurable) | Purge automatique + commande `maintenance.cli purge` |

@@ -14,27 +14,30 @@ It is built as a **service** for teams that process real meetings week after wee
 a thin wrapper around a transcription model. A guided, human-in-the-loop workflow, a
 production GPU queue, and role-based multi-user access are first-class, not afterthoughts.
 
-*Interface and documentation are currently French-first — see [README français](README.fr.md).
-UI strings and LLM prompts are centralized, so localization is a planned evolution rather
-than a rewrite.*
+*The interface, the generated deliverables and the installer are **bilingual French / English**
+(pick the language at install time or from the navbar; default French). See also
+[README français](README.fr.md). Adding more languages needs no rewrite (French fallback
+everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/00-overview.gif)
 
-## Project status — 0.3.1
+## Project status — 0.3.2
 
 Building on the 0.2.0 stable line. **0.3.0** adds ingestion of the **documents presented
 in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT
-correction, and hardens the anti-gender-leak guard on participant roles (see the
-[changelog](CHANGELOG.md)). **0.3.1** adds operator tooling — a *Maintenance* admin page
-(create, schedule and restore backups) and a *Models* page that downloads the models this
-install needs — and fixes a startup deadlock in the arbitration agent (opencode) when its
-local LLM endpoint is briefly unreachable. The transcription pipeline, the human-in-the-loop wizard, the
-GPU queue and scheduler, exports, multi-user access, and both the single-box and
-distributed deployments are validated end-to-end (unit and integration suite plus
-real-GPU runs). The interface is French-first, and reference
-quality relies on gated models (see [Requirements](#requirements) and
-[Known limitations](#known-limitations)). We prefer to state limits plainly rather than
-imply the tool does more than it does.
+correction. **0.3.1** adds operator tooling — a *Maintenance* admin page (create, schedule
+and restore backups) and a *Models* page that downloads the models this install needs.
+**0.3.2** makes TranscrIA **bilingual French / English end to end**: the web interface, the
+**generated deliverables** (minutes, corrections, DOCX, reports), the **installer**, the
+**`doctor`** and the voice-consent PDF all speak French **or** English. The default stays
+French (strictly unchanged); English is an explicit choice — a navbar language switcher, a
+per-user preference, a per-job deliverable language, and a **first-question language choice
+at install time**. Adding more languages needs no refactor (French fallback everywhere).
+The transcription pipeline, the human-in-the-loop wizard, the GPU queue and scheduler,
+exports, multi-user access, and both single-box and distributed deployments are validated
+end-to-end (unit and integration suite plus real-GPU runs). Reference quality relies on
+gated models (see [Requirements](#requirements) and [Known limitations](#known-limitations)).
+We prefer to state limits plainly rather than imply the tool does more than it does.
 
 **Jump to:** [What it does](#what-it-does) · [Screenshots](#screenshots) · [Built for teams](#built-for-teams-not-just-for-runs) · [Processing profiles](#processing-profiles) · [How it works](#how-it-works) · [Installation](#installation) · [Deployment](#deployment-topologies) · [Known limitations](#known-limitations) · [Tech stack](#tech-stack) · [Documentation](#documentation)
 
@@ -281,7 +284,7 @@ We keep this list honest and current.
 | Meeting length | Tested to about 4h30 (~3,000 segments) | Editor and pipeline stay responsive; beyond that is not guaranteed |
 | Upload size | `security.max_upload_size_mb` (1 GB default) | A clear "file too large" (413), never a raw error |
 | Speakers (Sortformer diarization) | Up to 4 | Use pyannote (gated) for more |
-| Interface language | French-first | Strings and prompts are centralized; other locales are a planned evolution |
+| Interface language | French / English | Bilingual (UI, deliverables, installer, doctor); more languages need no rewrite (French fallback) |
 | Below 12 GB VRAM | No summary/correction LLM | Falls back to raw transcription |
 | Disk space | Monitored by `doctor` (< 10 GB warns, < 2 GB fails) | A full disk fails a job cleanly and surfaces in diagnostics |
 | Retention | Jobs 365 days, audit 1095 days (configurable) | Automatic purge plus a `maintenance.cli purge` command |
