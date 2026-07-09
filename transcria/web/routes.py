@@ -1142,6 +1142,13 @@ def job_wizard(job_id: str):
     summary_data = fs.load_json("summary/summary.json") or {}
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     meeting = _recover_summary_speaker_hints(fs, meeting)
+    # Pré-sélection du sélecteur de langue (étape 3) : langue explicite du job, sinon la langue
+    # RÉSOLUE (locale du propriétaire = langue d'interface choisie). Sans ça, le <select> ne
+    # sélectionnait aucune option quand meeting.language était vide → le navigateur retombait
+    # sur la 1re (Français) → l'utilisateur enregistrait « fr » et forçait des livrables FR.
+    if not meeting.get("language"):
+        from transcria.gpu.opencode_runner import resolve_output_language
+        meeting["language"] = resolve_output_language(job)
     # Pré-remplissage du champ « Résumé » (étape 4) : synthèse SEULE, langue-aware (le template
     # testait « ## Synthèse » en dur → markdown brut affiché pour un résumé anglais).
     synthese_prefill = _wizard_synthese_prefill(meeting)
