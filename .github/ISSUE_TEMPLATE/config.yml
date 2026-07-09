@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: 💬 Questions & ideas — Discussions
+    url: https://github.com/Martossien/transcria/discussions
+    about: "Not sure it's a bug? Want to share a setup or ask anything? Start a discussion (FR/EN welcome)."
   - name: 📖 Installation & troubleshooting guide
     url: https://github.com/Martossien/transcria/blob/main/docs/INSTALL.md
     about: "Setup, models, systemd, distributed deployment, common failures (run scripts/doctor.py first!)"

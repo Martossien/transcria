@@ -30,7 +30,10 @@ body:
     attributes:
       label: Deployment topology
       options:
-        - All-in-one (single machine)
+        - All-in-one (single machine, install.sh)
+        - Docker — bundled image (models baked in)
+        - Docker — slim image
+        - Docker Compose (web + worker / resource-node)
         - Web frontend + GPU worker (role=web / role=scheduler)
         - With remote inference node (inference_service)
     validations:

@@ -170,7 +170,8 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
   or by a remote OpenAI-compatible server (vLLM, SGLang).
 - **Diarization backends**: pyannote.audio (default) or NVIDIA Sortformer via NeMo.
 - **Arbitration LLM**: a local OpenAI-compatible server (Ollama / llama.cpp / vLLM),
-  selected per hardware from a data-driven tier catalog.
+  selected per hardware from a benchmarked VRAM tier catalog (12 → 64 GB, one validated
+  model + quant + context per tier) — see [docs/LLM_TIERS.md](docs/LLM_TIERS.md) (English).
 
 Every phase is checkpointed: a re-dispatched job resumes at the first incomplete phase,
 even on a different worker.
@@ -308,7 +309,7 @@ We keep this list honest and current.
 | Backend | Python 3.11+, Flask 3, SQLAlchemy + Alembic (PostgreSQL in production, SQLite for dev) |
 | STT serving | vLLM / SGLang / any OpenAI-compatible server; local engines |
 | Diarization and voice | pyannote.audio, NVIDIA NeMo (Sortformer), local voice embeddings |
-| LLM phases | [opencode](https://github.com/sst/opencode) driving a local OpenAI-compatible LLM — selectable backend (Ollama / llama.cpp / vLLM), chosen per hardware from a data-driven profile catalog ([docs/LLM_BACKENDS.md](docs/LLM_BACKENDS.md)) |
+| LLM phases | [opencode](https://github.com/sst/opencode) driving a local OpenAI-compatible LLM — selectable backend (Ollama / llama.cpp / vLLM), chosen per hardware from a benchmarked VRAM tier catalog ([docs/LLM_TIERS.md](docs/LLM_TIERS.md), English) |
 | Audio | ffmpeg/ffprobe, Demucs, Silero VAD, SQUIM / DNSMOS quality metrics |
 | Frontend | Server-rendered Jinja2 + Bootstrap 5, vanilla JS |
 | Exports | python-docx (themed minutes), SRT, JSON, ZIP package |

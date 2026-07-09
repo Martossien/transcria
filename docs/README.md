@@ -27,6 +27,7 @@ New here? Start with the [project README](../README.md), then
 | [TECHNICAL.md](TECHNICAL.md) | Architecture, pipeline, modules, HTTP API, GPU orchestration, timing model, database |
 | [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (generated from the schema) |
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
+| [LLM_TIERS.md](LLM_TIERS.md) | **In English** — the benchmarked arbitration-LLM VRAM tiers (12 → 64 GB): validated model, quant and context per tier, backend recommendation |
 | [LLM_BACKENDS.md](LLM_BACKENDS.md) | Arbitration LLM backends (Ollama / llama.cpp / vLLM) and hardware-driven selection |
 | [I18N_MULTILANGUE.md](I18N_MULTILANGUE.md) | Bilingual FR/EN architecture (interface, deliverables, installer, doctor) and how to add a language |
 
