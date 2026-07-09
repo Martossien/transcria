@@ -46,6 +46,23 @@ class TestPackageBuilder:
             assert any("context/job_context.yaml" in n for n in names)
             assert any("quality/quality_report.json" in n for n in names)
 
+    def test_zip_garde_le_srt_brut_a_cote_du_corrige(self, tmp_dir):
+        """Réunion contestée : le ZIP doit permettre de comparer ce que l'ASR a entendu
+        (brut) et ce que la LLM a corrigé — le brut n'est PAS remplacé par la corrigée."""
+        job = self._prepare_job(tmp_dir, "job-pkg-raw")
+        fs = JobFilesystem(tmp_dir, "job-pkg-raw")
+        fs.save_text("metadata/transcription_corrigee.srt",
+                     "1\n00:00:01,000 --> 00:00:04,000\nHello, corrected\n")
+        config = {"storage": {"jobs_dir": tmp_dir}}
+        result = PackageBuilder(config).build_package(job)
+
+        with zipfile.ZipFile(result["zip_path"], "r") as zf:
+            names = zf.namelist()
+            assert "subtitles/transcription.srt" in names
+            assert "subtitles/transcription_raw.srt" in names
+            assert "corrected" in zf.read("subtitles/transcription.srt").decode("utf-8")
+            assert "Hello\n" in zf.read("subtitles/transcription_raw.srt").decode("utf-8")
+
     def test_build_package_no_srt_still_works(self, tmp_dir):
         fs = JobFilesystem(tmp_dir, "job-minimal")
         fs.save_json("context/meeting_context.json", {"title": "Min"})

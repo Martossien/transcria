@@ -37,6 +37,11 @@ class PackageBuilder:
                 self._add_if_exists(zf, fs, "metadata/transcription_corrigee.srt", "subtitles/transcription.srt")
                 if not (fs.job_dir / "metadata" / "transcription_corrigee.srt").is_file():
                     self._add_if_exists(zf, fs, "metadata/transcription.srt", "subtitles/transcription.srt")
+                else:
+                    # Transcription BRUTE (pré-correction) conservée à côté de la corrigée :
+                    # pour les réunions contestées, on veut pouvoir comparer ce que l'ASR a
+                    # entendu et ce que la LLM a corrigé (en plus de correction_report.md).
+                    self._add_if_exists(zf, fs, "metadata/transcription.srt", "subtitles/transcription_raw.srt")
                 self._add_if_exists(zf, fs, "metadata/transcription_segments.json", "subtitles/transcription_segments.json")
                 # — Standard et + : contexte, participants, locuteurs, résumé —
                 if zip_level in ("standard", "full"):
