@@ -1193,9 +1193,9 @@ var TranscrIA = window.TranscrIA || {};
             '<p class="text-muted mb-3">' + _esc(p.description) + '</p>' +
             '<div class="row g-3">' +
             '<div class="col-md-6"><div class="small text-uppercase text-muted mb-1">' +
-            '<i class="bi bi-box-seam"></i> Produit</div>' + chips(p.deliverables, 'success') + '</div>' +
+            '<i class="bi bi-box-seam"></i> ' + t('Produit') + '</div>' + chips(p.deliverables, 'success') + '</div>' +
             '<div class="col-md-6"><div class="small text-uppercase text-muted mb-1">' +
-            '<i class="bi bi-check2-square"></i> À valider</div>' + chips(p.validations, 'primary') + '</div>' +
+            '<i class="bi bi-check2-square"></i> ' + t('À valider') + '</div>' + chips(p.validations, 'primary') + '</div>' +
             '</div>' +
             (p.available ? '' :
                 '<div class="alert alert-warning mt-3 mb-0 py-2 small">' +

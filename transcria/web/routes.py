@@ -1080,7 +1080,8 @@ def job_wizard(job_id: str):
     # Le profil pilote la disposition du wizard (étapes affichées/masquées, numérotation).
     # Profil sélectionné = celui persisté sur le job, sinon le recommandé (présélection du
     # curseur) ; None ⇒ comportement complet (legacy/aucun profil dispo).
-    profiles_view = compute_profiles_view(cfg)
+    from transcria.web.i18n import select_locale as _select_locale_for_profiles
+    profiles_view = compute_profiles_view(cfg, _select_locale_for_profiles())
     selected_profile = profile_for_job(job)
 
     # Types de réunion : intégrés + personnalisés VISIBLES DU PROPRIÉTAIRE du job
@@ -2345,9 +2346,10 @@ def _live_eta(job, progress) -> dict | None:
 @login_required
 def api_profiles_availability():
     """Profils de traitement disponibles + profil recommandé (source unique pour le wizard)."""
+    from transcria.web.i18n import select_locale
     from transcria.workflow.profile_availability import compute_profiles_view
 
-    return jsonify(compute_profiles_view(get_config()))
+    return jsonify(compute_profiles_view(get_config(), select_locale()))
 
 
 @web_bp.route("/api/jobs/<job_id>/profile", methods=["POST"])

@@ -24,6 +24,7 @@ from transcria.workflow.profiles import (
     profile_deliverables,
     profile_validations,
 )
+from transcria.workflow.profiles_i18n import localize_profile_text
 
 _AVAILABLE_STATUSES = ("available", "available_remote")
 
@@ -67,14 +68,21 @@ def profile_status(profile: ProcessingProfile, config: dict) -> tuple[str, list[
     return "available", []
 
 
-def compute_profiles_view(config: dict) -> dict:
+def compute_profiles_view(config: dict, language: str | None = None) -> dict:
     """Vue complète des profils pour l'UI : statut, livrables, et profil recommandé.
 
     `recommended` = profil disponible de plus haut niveau (le maximum qui passe), en privilégiant
     le défaut configuré s'il est disponible. None si aucun profil n'est lançable.
+
+    `language` = locale d'AFFICHAGE (UI). Toutes les chaînes user-facing (label/description/
+    livrables/validations/raisons) sont localisées via `localize_profile_text` ; l'`id` reste la
+    clé logique. Défaut `None`/`fr` = sortie FR historique inchangée.
     """
     enabled = _enabled_ids(config)
     configured_default = (config.get("workflow", {}).get("profiles", {}) or {}).get("default") or DEFAULT_PROFILE_ID
+
+    def _tr(text: str) -> str:
+        return localize_profile_text(text, language)
 
     items: list[dict] = []
     available_by_level: list[ProcessingProfile] = []
@@ -88,14 +96,14 @@ def compute_profiles_view(config: dict) -> dict:
             available_by_level.append(profile)
         items.append({
             "id": profile.id,
-            "label": profile.label,
-            "description": profile.description,
+            "label": _tr(profile.label),
+            "description": _tr(profile.description),
             "level": profile.level,
             "status": status,
             "available": is_available,
-            "reasons": reasons,
-            "deliverables": profile_deliverables(profile),
-            "validations": profile_validations(profile),
+            "reasons": [_tr(r) for r in reasons],
+            "deliverables": [_tr(d) for d in profile_deliverables(profile)],
+            "validations": [_tr(v) for v in profile_validations(profile)],
         })
 
     # Recommandé = le profil disponible de PLUS HAUT niveau (« le maximum que le matériel /

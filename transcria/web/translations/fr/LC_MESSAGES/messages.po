@@ -2752,6 +2752,10 @@ msgstr "Prompt système de la passe de relecture finale (harmonisation glossaire
 msgid "Prompts LLM"
 msgstr "Prompts LLM"
 
+#: transcria/web/i18n_js.py:78
+msgid "Produit"
+msgstr "Produit"
+
 #: transcria/web/templates/job_result.html:162
 msgid "Proposition"
 msgstr "Proposition"
@@ -4360,6 +4364,10 @@ msgstr "· créneau actif : %(name)s (%(action)s)"
 #: transcria/web/i18n_js.py:205
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "À relever (ex. montants budgétaires explicitement cités)"
+
+#: transcria/web/i18n_js.py:207
+msgid "À valider"
+msgstr "À valider"
 
 #: transcria/web/i18n_js.py:206
 #, python-format

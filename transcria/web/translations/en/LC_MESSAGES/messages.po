@@ -2752,6 +2752,10 @@ msgstr "System prompt for the final review pass (glossary harmonization)."
 msgid "Prompts LLM"
 msgstr "LLM prompts"
 
+#: transcria/web/i18n_js.py:78
+msgid "Produit"
+msgstr "Product"
+
 #: transcria/web/templates/job_result.html:162
 msgid "Proposition"
 msgstr "Proposal"
@@ -4360,6 +4364,10 @@ msgstr "· active window: %(name)s (%(action)s)"
 #: transcria/web/i18n_js.py:205
 msgid "À relever (ex. montants budgétaires explicitement cités)"
 msgstr "To note (e.g. budget amounts explicitly cited)"
+
+#: transcria/web/i18n_js.py:207
+msgid "À valider"
+msgstr "To validate"
 
 #: transcria/web/i18n_js.py:206
 #, python-format
