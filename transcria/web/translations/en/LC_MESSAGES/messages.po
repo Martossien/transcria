@@ -4548,3 +4548,109 @@ msgstr "📋 Meeting summary — edit it before saving"
 #~ msgid "Statut indisponible (%(e)s)."
 #~ msgstr "Status unavailable (%(e)s)."
 
+
+#: transcria/web/routes.py
+msgid "Son exploitable"
+msgstr "Usable audio"
+
+#: transcria/web/routes.py
+msgid "À surveiller"
+msgstr "Needs attention"
+
+#: transcria/web/routes.py
+msgid "Son difficile"
+msgstr "Difficult audio"
+
+#: transcria/web/routes.py
+msgid "volume très faible"
+msgstr "very low volume"
+
+#: transcria/web/routes.py
+msgid "volume faible"
+msgstr "low volume"
+
+#: transcria/web/routes.py
+msgid "bruit de fond présent"
+msgstr "background noise present"
+
+#: transcria/web/routes.py
+msgid "voix peu détaillée"
+msgstr "low voice detail"
+
+#: transcria/web/routes.py
+msgid "saturation détectée"
+msgstr "clipping detected"
+
+#: transcria/web/routes.py
+msgid "vérification renforcée utile"
+msgstr "closer review advisable"
+
+#: transcria/web/routes.py
+msgid "intelligibilité réduite"
+msgstr "reduced intelligibility"
+
+#: transcria/web/routes.py
+msgid "qualité perceptive faible"
+msgstr "low perceptual quality"
+
+#: transcria/web/routes.py
+msgid "distorsion présente"
+msgstr "distortion present"
+
+#: transcria/web/routes.py
+msgid "qualité globale faible"
+msgstr "low overall quality"
+
+#: transcria/web/routes.py
+msgid "réverbération marquée"
+msgstr "strong reverberation"
+
+#: transcria/web/routes.py
+msgid "clarté faible"
+msgstr "low clarity"
+
+#: transcria/web/routes.py
+msgid "bande téléphonique (codec)"
+msgstr "telephone band (codec)"
+
+#: transcria/web/routes.py
+msgid "voix superposées"
+msgstr "overlapping voices"
+
+#: transcria/web/routes.py
+msgid "parole peu nette"
+msgstr "unclear speech"
+
+#: transcria/web/routes.py
+msgid "Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable."
+msgstr "The volume is very low. The transcription will likely be unreliable — careful proofreading is essential."
+
+#: transcria/web/routes.py
+msgid "Les caractéristiques audio ne montrent pas de risque majeur."
+msgstr "The audio characteristics show no major risk."
+
+#: transcria/web/routes.py
+msgid "La transcription reste possible, mais certains passages pourront demander une vérification."
+msgstr "Transcription is still possible, but some passages may require verification."
+
+#: transcria/web/routes.py
+msgid "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages."
+msgstr "The file is usable, with a higher risk on certain words or passages."
+
+#: transcria/web/routes.py
+msgid "Diagnostic audio disponible."
+msgstr "Audio diagnostic available."
+
+#: transcria/web/routes.py
+#, python-format
+msgid "Bruit de fond dominant — un débruitage peut aider (BAK %(bak)s < SIG %(sig)s)."
+msgstr "Dominant background noise — denoising may help (BAK %(bak)s < SIG %(sig)s)."
+
+#: transcria/web/routes.py
+#, python-format
+msgid "Parole elle-même dégradée — vérification renforcée conseillée (SIG %(sig)s < BAK %(bak)s)."
+msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(bak)s)."
+
+#: transcria/web/routes.py
+msgid "Bande passante de type téléphonique détectée (codec)."
+msgstr "Telephone-type bandwidth detected (codec)."

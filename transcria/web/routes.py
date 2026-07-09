@@ -354,9 +354,9 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
 
     level = str(preflight.get("risk_level") or "ok")
     level_labels = {
-        "ok": "Son exploitable",
-        "suspect": "À surveiller",
-        "degrade": "Son difficile",
+        "ok": _("Son exploitable"),
+        "suspect": _("À surveiller"),
+        "degrade": _("Son difficile"),
     }
     level_classes = {
         "ok": "success",
@@ -364,32 +364,32 @@ def _audio_diagnostic_view(preflight: dict, audio_scene: dict | None = None) -> 
         "degrade": "danger",
     }
     flag_labels = {
-        "audio_tres_faible": "volume très faible",
-        "audio_faible": "volume faible",
-        "snr_faible": "bruit de fond présent",
-        "bande_etroite": "voix peu détaillée",
-        "clipping_detecte": "saturation détectée",
-        "risque_transcription_non_fiable": "vérification renforcée utile",
-        "squim_stoi_faible": "intelligibilité réduite",
-        "squim_pesq_faible": "qualité perceptive faible",
-        "squim_sisdr_faible": "distorsion présente",
-        "dnsmos_ovrl_faible": "qualité globale faible",
-        "rt60_eleve": "réverbération marquée",
-        "c50_faible": "clarté faible",
-        "codec_artefact": "bande téléphonique (codec)",
-        "overlap": "voix superposées",
-        "sig_lt_bak": "parole peu nette",
+        "audio_tres_faible": _("volume très faible"),
+        "audio_faible": _("volume faible"),
+        "snr_faible": _("bruit de fond présent"),
+        "bande_etroite": _("voix peu détaillée"),
+        "clipping_detecte": _("saturation détectée"),
+        "risque_transcription_non_fiable": _("vérification renforcée utile"),
+        "squim_stoi_faible": _("intelligibilité réduite"),
+        "squim_pesq_faible": _("qualité perceptive faible"),
+        "squim_sisdr_faible": _("distorsion présente"),
+        "dnsmos_ovrl_faible": _("qualité globale faible"),
+        "rt60_eleve": _("réverbération marquée"),
+        "c50_faible": _("clarté faible"),
+        "codec_artefact": _("bande téléphonique (codec)"),
+        "overlap": _("voix superposées"),
+        "sig_lt_bak": _("parole peu nette"),
     }
     flags = [str(flag) for flag in preflight.get("flags", []) if flag]
     reasons = [flag_labels.get(flag, flag.replace("_", " ")) for flag in flags]
     if "audio_tres_faible" in flags and "risque_transcription_non_fiable" in flags:
-        message = "Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable."
+        message = _("Le volume est très faible. La transcription sera probablement peu fiable — une relecture attentive est indispensable.")
     else:
         message = {
-            "ok": "Les caractéristiques audio ne montrent pas de risque majeur.",
-            "suspect": "La transcription reste possible, mais certains passages pourront demander une vérification.",
-            "degrade": "Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages.",
-        }.get(level, "Diagnostic audio disponible.")
+            "ok": _("Les caractéristiques audio ne montrent pas de risque majeur."),
+            "suspect": _("La transcription reste possible, mais certains passages pourront demander une vérification."),
+            "degrade": _("Le fichier est exploitable, avec un risque plus élevé sur certains mots ou passages."),
+        }.get(level, _("Diagnostic audio disponible."))
 
     squim = preflight.get("squim_global") or {}
     dnsmos = preflight.get("dnsmos_global") or {}
@@ -440,15 +440,15 @@ def _audio_advice(dnsmos: dict, flags: list[str]) -> dict | None:
         if bak < sig:
             return {
                 "class": "info",
-                "text": f"Bruit de fond dominant — un débruitage peut aider (BAK {bak} < SIG {sig}).",
+                "text": _("Bruit de fond dominant — un débruitage peut aider (BAK %(bak)s < SIG %(sig)s).", bak=bak, sig=sig),
             }
         if sig < bak:
             return {
                 "class": "warning",
-                "text": f"Parole elle-même dégradée — vérification renforcée conseillée (SIG {sig} < BAK {bak}).",
+                "text": _("Parole elle-même dégradée — vérification renforcée conseillée (SIG %(sig)s < BAK %(bak)s).", sig=sig, bak=bak),
             }
     if "codec_artefact" in flags:
-        return {"class": "info", "text": "Bande passante de type téléphonique détectée (codec)."}
+        return {"class": "info", "text": _("Bande passante de type téléphonique détectée (codec).")}
     return None
 
 
