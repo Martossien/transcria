@@ -4654,3 +4654,15 @@ msgstr "Parole elle-même dégradée — vérification renforcée conseillée (S
 #: transcria/web/routes.py
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Bande passante de type téléphonique détectée (codec)."
+
+#: transcria/web/i18n_js.py
+msgid "aucune modification"
+msgstr "aucune modification"
+
+#: transcria/web/i18n_js.py
+msgid "enregistrement de la version…"
+msgstr "enregistrement de la version…"
+
+#: transcria/web/i18n_js.py
+msgid "enregistrement impossible"
+msgstr "enregistrement impossible"

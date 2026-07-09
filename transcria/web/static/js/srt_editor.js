@@ -168,7 +168,7 @@
       for (let i = 0; i < state.chunks.length; i++) state.dirty.add(i);
       setSaveState(_t("brouillon repris — pensez à enregistrer une version"), "saving");
     } else {
-      setSaveState("aucune modification");
+      setSaveState(_t("aucune modification"));
     }
   }
 
@@ -808,14 +808,14 @@
   // ── Enregistrer une version (D2, filet n°3) ────────────────────────────────
   async function saveVersion() {
     if (state.readonly) return;
-    setSaveState("enregistrement de la version…", "saving");
+    setSaveState(_t("enregistrement de la version…"), "saving");
     const r = await fetch(`/api/jobs/${JOB}/editor/save`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({chunks: state.chunks, edited_count: state.dirty.size,
                             new_speakers: newSpeakersPayload()}),
     });
     const data = await r.json();
-    if (!r.ok) { setSaveState(data.error || "enregistrement impossible", "error"); return; }
+    if (!r.ok) { setSaveState(data.error || _t("enregistrement impossible"), "error"); return; }
     state.dirty.clear();
     state.revision = 0;
     const fresh = await (await fetch(`/api/jobs/${JOB}/editor/state`)).json();

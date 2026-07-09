@@ -4654,3 +4654,15 @@ msgstr "Speech itself degraded — closer review advised (SIG %(sig)s < BAK %(ba
 #: transcria/web/routes.py
 msgid "Bande passante de type téléphonique détectée (codec)."
 msgstr "Telephone-type bandwidth detected (codec)."
+
+#: transcria/web/i18n_js.py
+msgid "aucune modification"
+msgstr "no changes"
+
+#: transcria/web/i18n_js.py
+msgid "enregistrement de la version…"
+msgstr "saving version…"
+
+#: transcria/web/i18n_js.py
+msgid "enregistrement impossible"
+msgstr "save failed"
