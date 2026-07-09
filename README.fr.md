@@ -20,7 +20,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
-## Statut du projet — 0.3.2
+## Statut du projet — 0.3.3
 
 Dans la continuité de la ligne stable 0.2.0. La **0.3.0** ajoute l'ingestion des
 **documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé
@@ -34,6 +34,10 @@ de consentement vocal parlent français **ou** anglais. Le défaut reste le fran
 barre de navigation, préférence par utilisateur, langue des livrables par job, et **choix
 de la langue dès la première question de l'installation**. Ajouter d'autres langues ne
 demande aucune refonte (repli français partout).
+La **0.3.3** est une version de finitions : elle ferme les dernières poches de français en
+interface anglaise (profils de traitement, analyse audio, états de l'éditeur, libellés d'état
+des jobs, règles de planification, priorités de lexique) et aligne la langue des livrables sur
+le choix d'interface — sans migration de base de données.
 Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de

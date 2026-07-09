@@ -21,7 +21,7 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
-## Project status — 0.3.2
+## Project status — 0.3.3
 
 Building on the 0.2.0 stable line. **0.3.0** adds ingestion of the **documents presented
 in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT
@@ -33,6 +33,9 @@ and restore backups) and a *Models* page that downloads the models this install 
 French (strictly unchanged); English is an explicit choice — a navbar language switcher, a
 per-user preference, a per-job deliverable language, and a **first-question language choice
 at install time**. Adding more languages needs no refactor (French fallback everywhere).
+**0.3.3** is a polish release that closes the last French-in-an-English-UI gaps (processing
+profiles, audio analysis, editor states, job status labels, scheduling rules, lexicon
+priorities) and aligns the deliverable language with the interface choice — no database migration.
 The transcription pipeline, the human-in-the-loop wizard, the GPU queue and scheduler,
 exports, multi-user access, and both single-box and distributed deployments are validated
 end-to-end (unit and integration suite plus real-GPU runs). Reference quality relies on

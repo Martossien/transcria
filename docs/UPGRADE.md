@@ -139,6 +139,10 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.2 → 0.3.3** : finitions bilingues (dernières surfaces d'interface localisées, langue des
+  livrables alignée sur le choix d'interface) + durcissement CI. **Aucune migration Alembic**,
+  aucun changement de schéma ni de config : une mise à niveau se limite à récupérer le nouveau
+  code (et recompiler les `.mo`, fait automatiquement par le job `migrate`/l'entrypoint/`install.sh`).
 - **0.3.1 → 0.3.2** : interface, livrables, installateur, `doctor` et PDF de consentement
   deviennent **bilingues FR/EN** (défaut `fr` inchangé). **Migration Alembic requise** :
   colonne `users.locale` (nullable, additive, sans perte) — appliquée automatiquement par le job

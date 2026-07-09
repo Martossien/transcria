@@ -6,6 +6,41 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.3] — 2026-07-09
+
+Version de **finitions bilingues**. La 0.3.2 a rendu le produit bilingue de bout en bout ;
+la 0.3.3 corrige les dernières poches de français qui subsistaient dans l'interface anglaise
+(des surfaces que la 0.3.2 avait manquées) et deux bugs de langue des livrables, plus un
+durcissement de la CI. **Aucune migration de base de données** (contrairement à 0.3.2) : une
+mise à niveau ne requiert pas d'`alembic upgrade head`.
+
+### Fixed
+- **i18n — surfaces d'interface restées en français en mode anglais** : profils de traitement
+  (étape 1 du wizard), diagnostic audio (étape 2), états SRT de l'éditeur (« aucune modification »…),
+  libellés d'état des jobs (« Terminé » → « Completed »), règles de planification GPU (« Prioriser
+  les traitements… »), mentions « Extrait N » et **priorités de lexique** (« critique » → « critical »).
+  Localisation d'**AFFICHAGE** : les clés logiques (id de profil, valeurs d'état/priorité) restent
+  inchangées (stockées, comparées) ; seul le libellé visible est traduit — même principe que les
+  types de réunion.
+- **Langue des livrables alignée sur le choix d'interface** : quand aucune langue n'est
+  explicitement fixée sur un job, la transcription rapide, le résumé, la transcription complète et
+  les rapports suivent désormais la **locale du propriétaire** (la langue choisie dans l'interface)
+  au lieu d'un français codé en dur. Le sélecteur de langue de l'étape 3 ne retombe plus
+  implicitement sur « français ». Conséquence concrète : un audio anglais n'est plus transcrit en
+  charabia franco-anglais par défaut.
+- **Résumé de contrôle anglais** : le champ « Résumé » éditable de l'étape 3 n'affiche plus le
+  markdown brut (en-têtes, participants, bloc JSON) — la synthèse est extraite avec le marqueur de
+  section de la langue du job (repli robuste sur tous les marqueurs connus).
+- **Cache-busting** : `wizard.js` / `wizard-api.js` passent par `asset_url` (`?v=mtime`) — une
+  mise à jour de ces scripts n'exige plus de vider le cache du navigateur.
+- **CI** : le job de tests saturait le disque du runner GitHub (« No space left on device ») lors
+  de l'installation de `torch` (wheels CUDA) puis de l'exécution de la suite — une étape de
+  libération d'espace disque est ajoutée en amont.
+
+### Docs
+- README **anglais** entièrement illustré en anglais : jeu de captures d'écran dédié
+  (`docs/screenshots/en/`) et gif d'aperçu en anglais ; le README français conserve ses visuels.
+
 ## [0.3.2] — 2026-07-08
 
 Version **« bilingue de bout en bout »** : interface, livrables générés, **installateur**,

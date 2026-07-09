@@ -1,10 +1,14 @@
 # Internationalisation (i18n) : TranscrIA multilingue (FR + EN, extensible)
 
-> Statut : **LIVRÉ en 0.3.2** — **axes A (interface) + B (livrables) COMPLETS**, plus la
-> localisation de l'**installateur** (`install.sh` + modules Python) et du **`doctor`**, du
-> **formulaire de consentement vocal (PDF)** et de la page **/admin/config**. Défaut `fr` =
-> comportement strictement inchangé ; l'anglais est un choix explicite. Architecture prête pour
-> d'autres langues (ES/DE/…) **sans refonte** (repli français partout).
+> Statut : **LIVRÉ en 0.3.2, complété en 0.3.3** — **axes A (interface) + B (livrables) COMPLETS**,
+> plus la localisation de l'**installateur** (`install.sh` + modules Python) et du **`doctor`**, du
+> **formulaire de consentement vocal (PDF)** et de la page **/admin/config**. La **0.3.3** ferme les
+> dernières poches de français (profils étape 1, diagnostic audio étape 2, états SRT, libellés
+> d'état des jobs, règles de planification, priorités de lexique) et **aligne la langue des
+> livrables sur le choix d'interface** (`resolve_output_language` → `owner.locale` à défaut de
+> langue explicite du job). Défaut `fr` = comportement strictement inchangé ; l'anglais est un
+> choix explicite. Architecture prête pour d'autres langues (ES/DE/…) **sans refonte** (repli
+> français partout).
 >
 > ## Ajouter une langue `<xx>`
 > 1. **Interface** : `transcria/web/translations/<xx>/LC_MESSAGES/messages.po` (traduire les

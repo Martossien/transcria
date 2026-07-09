@@ -360,6 +360,18 @@ transcria/
     `.po` + `available_locales` (UI) et/ou dossier `configs/prompts/<lang>/` + tables d'affichage.
   - Discipline conservée : libellés d'état via `ui_labels.py` ; prompts = **fichiers** jamais en dur ;
     pas de message d'affichage stocké en base quand une clé suffit.
+  - **Résolution de la langue de CONTENU** (`resolve_output_language`, `opencode_runner`) : langue
+    explicite du job (`meeting_context.language`) → sinon **`owner.locale`** (la langue d'interface
+    choisie) → sinon `fr`. Sans ce repli, la passe STT rapide (qui tourne avant l'étape 3) forçait
+    le français sur un audio anglais. Le formulaire de contexte reflète le choix de langue dans
+    `extra_data` (la STT/les rapports le lisent là, pas dans le fichier).
+  - **Localisation d'affichage de données de taxonomie** (clé logique inchangée) : profils
+    (`workflow/profiles_i18n.localize_profile_text`), priorités de lexique
+    (`context/lexicon.localized_priority` + global de template `lexicon_priority_label` dans
+    `app.py`), libellés d'état/planification (`ui_labels`, `queue/routes` : `N_` + résolution
+    `gettext`/`_localized` au rendu — nécessaire car un dict est passé en `|tojson` au JS).
+    Extraction du champ synthèse pilotée par la langue (`routes._wizard_synthese_prefill`, repli
+    sur tous les marqueurs de `_SUMMARY_MARKERS`).
 
 ### Nomenclature
 - Fichiers Python : `snake_case.py`
