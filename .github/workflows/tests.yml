@@ -43,6 +43,19 @@ jobs:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      - name: Free disk space
+        # Runner ubuntu-22.04 = ~14 Go libres. L'install (torch + wheels CUDA nvidia-* ≈ 6-7 Go)
+        # PUIS la suite complète (données PostgreSQL, tmp pytest, cache HF, coverage) saturaient
+        # le disque en cours d'exécution → « No space left on device » = tests en cascade F/E
+        # (rien à voir avec le code). On récupère ~25 Go en retirant les toolchains préinstallées
+        # inutilisées ici (dotnet, android, Haskell, swift, CodeQL).
+        run: |
+          echo "Avant nettoyage :"; df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /usr/share/swift /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force || true
+          echo "Après nettoyage :"; df -h /
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
