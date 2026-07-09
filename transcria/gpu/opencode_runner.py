@@ -44,16 +44,35 @@ _LANGUAGE_NAMES = {
 
 
 def resolve_output_language(job=None, extra_data: dict | None = None) -> str:
-    """Langue cible des livrables : ``meeting_context.language`` du job, défaut « fr ».
+    """Langue cible des livrables (STT, résumé, prompts, DOCX, rapports).
 
-    Défensif : un objet job sans ``get_extra_data`` (doublure de test) → défaut « fr »."""
+    Ordre de résolution :
+      1. langue EXPLICITE du job (``meeting_context.language`` dans extra_data — posée par le
+         formulaire de contexte de l'étape 3 ou la détection LLM) ;
+      2. à défaut, la locale du PROPRIÉTAIRE (= la langue d'interface qu'il a choisie) : si
+         l'utilisateur travaille en anglais, ses jobs sortent en anglais PAR DÉFAUT (sinon la
+         passe STT rapide, qui tourne AVANT l'étape 3, franciserait un audio anglais) ;
+      3. à défaut, « fr » (source historique).
+
+    Défensif : un objet job sans ``get_extra_data``/``owner`` (doublure de test) ou un owner
+    détaché de session → « fr »."""
     if extra_data is not None:
         data = extra_data
     else:
         getter = getattr(job, "get_extra_data", None)
         data = getter() if callable(getter) else {}
-    lang = ((data or {}).get("meeting_context", {}) or {}).get("language") or "fr"
-    return str(lang)
+    explicit = ((data or {}).get("meeting_context", {}) or {}).get("language")
+    if explicit:
+        return str(explicit)
+    try:
+        owner = getattr(job, "owner", None)
+        owner_locale = getattr(owner, "locale", None) if owner is not None else None
+    except Exception:  # noqa: BLE001 — owner détaché de session hors requête : repli sûr
+        owner_locale = None
+    # N'accepter qu'une vraie chaîne (une doublure de test peut exposer un Mock tronqué).
+    if isinstance(owner_locale, str) and owner_locale:
+        return owner_locale
+    return "fr"
 
 
 def resolve_prompt_file(config: dict | None, filename: str, language: str = "fr") -> str:

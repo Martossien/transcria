@@ -1693,7 +1693,17 @@ def api_context(job_id: str):
                 logo_target.write_bytes(template.logo_blob)
             elif logo_target.exists():
                 logo_target.unlink()
-    MeetingContextManager.save(job, cfg["storage"]["jobs_dir"], data)
+    merged_ctx = MeetingContextManager.save(job, cfg["storage"]["jobs_dir"], data)
+    # La langue des livrables est lue depuis extra_data (STT rapide, transcription, rapports,
+    # DOCX via resolve_output_language). Le formulaire ne mettait à jour QUE le fichier
+    # meeting_context.json → un choix EXPLICITE de langue était ignoré. On le reflète ici pour
+    # qu'il prime sur le repli « locale du propriétaire ».
+    _ctx_lang = (merged_ctx or {}).get("language")
+    if _ctx_lang:
+        JobStore.update_extra_data(
+            job.id,
+            lambda e: {**e, "meeting_context": {**(e.get("meeting_context") or {}), "language": _ctx_lang}},
+        )
     audit_log(AuditAction.JOB_CONTEXT_SAVE, target_type="job", target_id=job.id, target_label=job.title)
     if job.state == JobState.SUMMARY_DONE.value:
         JobStore.update_state(job.id, JobState.CONTEXT_DONE)

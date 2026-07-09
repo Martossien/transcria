@@ -89,7 +89,8 @@ class Transcriber:
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="transcribe")
 
-        lang = job.get_extra_data().get("meeting_context", {}).get("language", "fr")
+        from transcria.gpu.opencode_runner import resolve_output_language
+        lang = resolve_output_language(job)
         backend = self.config.get("models", {}).get("stt_backend", "cohere")
 
         speaker_turns = fs.load_json("speakers/speaker_turns.json")
