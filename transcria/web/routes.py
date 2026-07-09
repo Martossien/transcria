@@ -955,6 +955,31 @@ def _extract_synthese(md_text: str) -> str:
     return md_text[:800]
 
 
+def _wizard_synthese_prefill(meeting: dict) -> str:
+    """Valeur initiale du champ « Résumé » de l'étape 4 : l'édition manuelle si elle existe,
+    sinon UNIQUEMENT la section synthèse du résumé LLM — jamais tout le markdown brut (méta,
+    participants, termes, bloc JSON de données structurées).
+
+    Le marqueur de section (« ## Synthèse » / « ## Summary »…) est choisi selon la langue du
+    job, avec repli sur TOUS les marqueurs connus : robuste pour les jobs dont la langue n'a
+    pas (encore) été persistée. Auparavant, le template testait « ## Synthèse » en dur → un
+    résumé anglais affichait le markdown complet dans le champ éditable.
+    """
+    edited = str((meeting or {}).get("summary") or "").strip()
+    if edited:
+        return edited
+    llm = str((meeting or {}).get("summary_llm") or "")
+    if not llm.strip():
+        return ""
+    from transcria.gpu.opencode_runner import _SUMMARY_MARKERS, summary_markers
+    headings = [summary_markers(meeting.get("language"))["summary_heading"]]
+    headings += [m["summary_heading"] for m in _SUMMARY_MARKERS.values()]
+    for heading in headings:
+        if heading in llm:
+            return llm.split(heading, 1)[1].split("\n##", 1)[0].strip()
+    return llm.strip()
+
+
 def _check_database_health() -> tuple[bool, str | None]:
     try:
         db.session.execute(db.select(1)).scalar()
@@ -1117,6 +1142,9 @@ def job_wizard(job_id: str):
     summary_data = fs.load_json("summary/summary.json") or {}
     meeting = MeetingContextManager.get(job, cfg["storage"]["jobs_dir"])
     meeting = _recover_summary_speaker_hints(fs, meeting)
+    # Pré-remplissage du champ « Résumé » (étape 4) : synthèse SEULE, langue-aware (le template
+    # testait « ## Synthèse » en dur → markdown brut affiché pour un résumé anglais).
+    synthese_prefill = _wizard_synthese_prefill(meeting)
     session_lexicon = LexiconManager.get(job, cfg["storage"]["jobs_dir"])
     central_lexicons, initial_lexicon, central_lexicon_display = _central_lexicon_context(job, fs, session_lexicon, meeting)
     summary_segments = summary_data.get("segments") if isinstance(summary_data, dict) else []
@@ -1189,6 +1217,7 @@ def job_wizard(job_id: str):
         next_step=next_step,
         summary=summary_data,
         meeting=meeting,
+        synthese_prefill=synthese_prefill,
         participants=participants,
         lexicon=lexicon,
         central_lexicons=central_lexicons,

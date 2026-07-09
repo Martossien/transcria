@@ -1002,6 +1002,11 @@ class OpenCodeRunner:
 
         parsed["_summary_produced"] = produced
         parsed["summary_text"] = summary_text if produced else "Résumé indisponible."
+        # Langue des livrables RÉSOLUE : persistée dans meeting_context (via _apply_llm_suggestions)
+        # pour que TOUT l'affichage (extraction de la synthèse, en-tête d'extrait, rapports,
+        # DOCX) sélectionne les bons marqueurs. Sans ça, meeting_context.language restait vide
+        # → repli « fr » → un résumé anglais s'affichait en markdown brut.
+        parsed["language"] = output_language
         if not produced:
             # Distingue deux classes de panne aux corrections OPPOSÉES :
             #   - opencode_error : opencode n'a pas tourné (exit≠0, modèle non résolu,

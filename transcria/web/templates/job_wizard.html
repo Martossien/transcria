@@ -391,15 +391,11 @@
          FormData(#context-form), donc un champ hors formulaire n'est jamais POSTé. La clé
          `summary` est l'édition manuelle, prioritaire sur summary_llm dans les livrables
          (cf. exports/docx_report._meta et workflow/runner._apply_final_review). #}
-      {% if meeting.get('summary_llm') or meeting.get('summary') %}
-      {% set synthese = meeting.get('summary') or meeting.summary_llm %}
-      {% if not meeting.get('summary') and '## Synthèse' in meeting.summary_llm %}
-        {% set synthese = meeting.summary_llm.split('## Synthèse')[1].split('##')[0] if meeting.summary_llm.split('## Synthèse')|length > 1 else meeting.summary_llm %}
-      {% endif %}
+      {% if synthese_prefill %}
       <details class="mb-3" open>
         <summary class="text-muted fw-bold">{{ _("📋 Résumé de la réunion — modifiez-le avant d'enregistrer") }}</summary>
         <textarea name="summary" class="form-control form-control-sm mt-2" rows="12"
-                  style="font-size: 0.85rem;">{{ synthese.strip() }}</textarea>
+                  style="font-size: 0.85rem;">{{ synthese_prefill }}</textarea>
         <div class="form-text small">{{ _("Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.") }}</div>
       </details>
       {% endif %}

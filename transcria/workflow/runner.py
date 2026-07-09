@@ -867,6 +867,12 @@ class WorkflowRunner:
         result["summary_text"] = summary_text
         meeting_ctx = fs.load_json("context/meeting_context.json") or {}
 
+        # Langue des livrables RÉSOLUE (owner.locale / détection) : persistée pour que l'affichage
+        # (extraction de la synthèse, en-tête d'extrait ligne ~921, rapports, DOCX) choisisse les
+        # bons marqueurs. Ne PAS écraser un choix explicite déjà posé par l'utilisateur.
+        if parsed.get("language") and not meeting_ctx.get("language"):
+            meeting_ctx["language"] = parsed["language"]
+
         suggestion_fields = [
             "title_suggere", "type_suggere", "sujet_suggere",
             "objectif_suggere", "notes_suggeres", "participants_detectes",
