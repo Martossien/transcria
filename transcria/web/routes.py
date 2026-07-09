@@ -939,22 +939,6 @@ def _restore_masked_config_secrets(submitted: dict, current_cfg: dict) -> dict:
     return restored
 
 
-def _extract_synthese(md_text: str) -> str:
-    """Extrait uniquement la section Synthèse du markdown LLM."""
-    import re
-    m = re.search(r'## Synthèse\s*\n(.+?)(?:\n##|\Z)', md_text, re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    # Fallback: prend les dernières lignes après le dernier ##
-    parts = md_text.split('## ')
-    if len(parts) > 1:
-        last = parts[-1]
-        lines = last.split('\n', 1)
-        if len(lines) > 1:
-            return lines[1].strip()
-    return md_text[:800]
-
-
 def _wizard_synthese_prefill(meeting: dict) -> str:
     """Valeur initiale du champ « Résumé » de l'étape 4 : l'édition manuelle si elle existe,
     sinon UNIQUEMENT la section synthèse du résumé LLM — jamais tout le markdown brut (méta,

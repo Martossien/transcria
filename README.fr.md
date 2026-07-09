@@ -7,6 +7,11 @@
 
 *English version: [README.md](README.md).*
 
+*L'interface, les livrables générés et l'installateur sont **bilingues français / anglais**
+(choix de la langue à l'installation ou dans la barre de navigation ; défaut français).
+Ajouter d'autres langues ne demande aucune refonte (repli français partout) — voir
+[docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
+
 **Portail de transcription de réunion auto-hébergé.** TranscrIA transforme de longs
 enregistrements de réunion en livrables exploitables, sur vos propres GPU : transcriptions
 corrigées et attribuées aux locuteurs (SRT), synthèses structurées, rapports qualité et

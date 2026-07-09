@@ -512,7 +512,7 @@ var TranscrIA = window.TranscrIA || {};
         if (genderInput && suggestedGender) genderInput.value = suggestedGender;
         button.classList.remove('btn-outline-success');
         button.classList.add('btn-success');
-        button.textContent = 'Voix retenue';
+        button.textContent = t('Voix retenue');
     };
 
     W.formatLexiconVariants = function (variants) {
@@ -1040,7 +1040,7 @@ var TranscrIA = window.TranscrIA || {};
             return;
         }
 
-        var label = _STATE_LABELS[state] || state || 'Traitement en cours';
+        var label = _STATE_LABELS[state] ? t(_STATE_LABELS[state]) : (state || t('Traitement en cours'));
         var message = progress && progress.message ? progress.message : label;
         var phase = progress && progress.phase ? progress.phase : '';
         var pct = progress && typeof progress.percent === 'number' ? Math.max(0, Math.min(100, progress.percent)) : null;

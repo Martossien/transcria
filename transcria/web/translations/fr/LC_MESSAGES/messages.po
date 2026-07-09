@@ -4779,3 +4779,11 @@ msgstr "Qualité vérifiée"
 #: transcria/web/ui_labels.py
 msgid "Export prêt"
 msgstr "Export prêt"
+
+#: transcria/web/i18n_js.py
+msgid "Traitement en cours"
+msgstr "Traitement en cours"
+
+#: transcria/web/i18n_js.py
+msgid "Voix retenue"
+msgstr "Voix retenue"

@@ -93,7 +93,7 @@ We prefer to state limits plainly rather than imply the tool does more than it d
 
 ![Processing profile selector](docs/screenshots/en/07-profile.png)
 
-**Audio analysis — an honest verdict before you spend GPU time: SQUIM/DNSMOS perceptual scores, SNR, a per-window difficulty timeline, and a calibrated time estimate. A rough recording is flagged "watch this", not silently transcribed into mush**
+**Audio analysis — an honest verdict before you spend GPU time: SQUIM/DNSMOS perceptual scores, SNR, a per-window difficulty timeline, and a calibrated time estimate. A rough recording is flagged "needs attention", not silently transcribed into mush**
 
 ![Audio analysis with difficulty timeline](docs/screenshots/en/09-audio-analysis.png)
 
@@ -127,7 +127,7 @@ We prefer to state limits plainly rather than imply the tool does more than it d
 
 ![Chat with the deliverables](docs/screenshots/en/12-speak_with_doc.png)
 
-**Human correction feeds the lexicon — a suspect term (here "depth techniques", a franglais mis-transcription of "dettes techniques") comes with the audio excerpt you can play to hear what was actually said. Confirm the correct spelling, set a category and priority, then add it to the lexicon in one click: the LLM correction applies it across this transcript and reuses it on future jobs**
+**Human correction feeds the lexicon — a suspect term (here "nominaton", an STT mis-spelling of "nomination") comes with the audio excerpt you can play to hear what was actually said. Confirm the correct spelling, set a category and priority, then add it to the lexicon in one click: the LLM correction applies it across this transcript and reuses it on future jobs**
 
 ![Correcting a term and adding it to the lexicon](docs/screenshots/en/13-correct_lexique.png)
 
@@ -144,12 +144,12 @@ only the GPU/LLM — that the chosen profile actually needs.
 
 | Profile | Deliverable | Pipeline |
 |---|---|---|
-| **SRT express** | Plain subtitles | STT only |
+| **Express SRT** | Plain subtitles | STT only |
 | **SRT with speakers** | Speaker-attributed subtitles | STT + diarization |
-| **Word rapide** | Basic Word report | STT + summary |
-| **Word structuré** | Structured Word (context, participants) | STT + diarization + LLM extraction |
-| **Word corrigé** | Corrected, enriched Word | + LLM correction and final review |
-| **Dossier qualité complet** | Full minutes with quality file | Complete pipeline + quality scoring |
+| **Quick Word** | Basic Word report | STT + summary |
+| **Structured Word** | Structured Word (context, participants) | STT + diarization + LLM extraction |
+| **Corrected Word** | Corrected, enriched Word | + LLM correction and final review |
+| **Full quality package** | Full minutes with quality file | Complete pipeline + quality scoring |
 
 Word minutes adapt to built-in meeting types (works council, executive committee, project
 review, crisis, and more), and teams can create, theme, and share their own types — see
