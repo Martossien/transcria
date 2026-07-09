@@ -19,7 +19,7 @@ production GPU queue, and role-based multi-user access are first-class, not afte
 [README français](README.fr.md). Adding more languages needs no rewrite (French fallback
 everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
-![TranscrIA — quick overview of the workflow](docs/screenshots/00-overview.gif)
+![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
 ## Project status — 0.3.2
 
@@ -84,53 +84,53 @@ We prefer to state limits plainly rather than imply the tool does more than it d
 
 **Home — jobs at a glance, one-click SRT / ZIP downloads**
 
-![Home — job list](docs/screenshots/01-home.png)
+![Home — job list](docs/screenshots/en/01-home.png)
 
 **Processing profiles — pick your deliverable on a single slider right after upload; the portal pre-selects the most complete profile your hardware can run and hides the steps it doesn't need**
 
-![Processing profile selector](docs/screenshots/07-profile.png)
+![Processing profile selector](docs/screenshots/en/07-profile.png)
 
 **Audio analysis — an honest verdict before you spend GPU time: SQUIM/DNSMOS perceptual scores, SNR, a per-window difficulty timeline, and a calibrated time estimate. A rough recording is flagged "watch this", not silently transcribed into mush**
 
-![Audio analysis with difficulty timeline](docs/screenshots/09-audio-analysis.png)
+![Audio analysis with difficulty timeline](docs/screenshots/en/09-audio-analysis.png)
 
 **Bring the meeting's own documents — paste the invitation and attach the slides, agenda or briefing note (PDF, Word, PowerPoint). Their text is extracted (images deferred to future LLM vision) and used two ways: it grounds the summary in the real agenda and terminology, and it becomes a spelling reference so the correction can fix named entities — e.g. a product name or an acronym wrongly transcribed. Everything stays local; emails are stripped and the files themselves are never stored**
 
-![Attach the documents presented in the meeting](docs/screenshots/15-join_doc.png)
+![Attach the documents presented in the meeting](docs/screenshots/en/15-join_doc.png)
 
 **Speaker validation — listen to excerpts, name speakers, acoustic gender hints, and match a detected speaker against your consent-gated voice enrollment database (GDPR) in one click**
 
-![Speaker validation step](docs/screenshots/06-speakers.png)
+![Speaker validation step](docs/screenshots/en/06-speakers.png)
 
 **Configuration — detected hardware, friendly forms, LLM prompts editable in-app, full YAML for experts**
 
-![Configuration editor](docs/screenshots/03-configuration.png)
+![Configuration editor](docs/screenshots/en/03-configuration.png)
 
 **GPU scheduling and queue — calendar windows, persistent queue with priorities and estimated wait times**
 
-![GPU scheduling calendar](docs/screenshots/04-scheduling.png)
+![GPU scheduling calendar](docs/screenshots/en/04-scheduling.png)
 
-![Persistent GPU queue](docs/screenshots/05-queue.png)
+![Persistent GPU queue](docs/screenshots/en/05-queue.png)
 
 **Built-in editor — proofread like a document: click any line to fix the text (audio auto-pauses while you type), rename or reassign a speaker in one place, merge or split segments. The timeline puts every speaker on a lane over the whole meeting, with a per-speaker colored waveform you click to jump and drag to zoom; server-computed peaks keep it smooth on multi-hour recordings**
 
-![Transcript editor timeline](docs/screenshots/08-editor.png)
+![Transcript editor timeline](docs/screenshots/en/08-editor.png)
 
 **Word report templates — 18 built-in meeting types (works council, executive committee, project review, crisis, HR, negotiation, and more), each with its own cover theme, badge, and structured fields. Duplicate one, adjust palette / banner / sections, add a logo, preview the DOCX live, then share it to a group or carry it between installs as JSON**
 
-![Meeting type templates gallery](docs/screenshots/11-editor_meeting_template.png)
+![Meeting type templates gallery](docs/screenshots/en/11-editor_meeting_template.png)
 
 **Chat with your deliverables — ask a question about the transcript, summary or quality findings and get a fast, read-only answer; then, when a rewrite suits you, apply it in one click. A single fix propagates coherently across the SRT, the summary and the Word minutes, each apply saved as a restorable version and the exports regenerated on download**
 
-![Chat with the deliverables](docs/screenshots/12-speak_with_doc.png)
+![Chat with the deliverables](docs/screenshots/en/12-speak_with_doc.png)
 
 **Human correction feeds the lexicon — a suspect term (here "depth techniques", a franglais mis-transcription of "dettes techniques") comes with the audio excerpt you can play to hear what was actually said. Confirm the correct spelling, set a category and priority, then add it to the lexicon in one click: the LLM correction applies it across this transcript and reuses it on future jobs**
 
-![Correcting a term and adding it to the lexicon](docs/screenshots/13-correct_lexique.png)
+![Correcting a term and adding it to the lexicon](docs/screenshots/en/13-correct_lexique.png)
 
 **Central lexicons — a shared glossary scoped either Global (the whole install) or to a single group. Its entries pre-fill the session lexicon on every job, then stay editable per meeting; managers curate them, and a term corrected on one job (above) can be promoted straight into one — so the whole team spells "Kubernetes" or an internal acronym the same way**
 
-![Creating a central lexicon, scoped global or per group](docs/screenshots/14-lexiques.png)
+![Creating a central lexicon, scoped global or per group](docs/screenshots/en/14-lexiques.png)
 
 ## Processing profiles
 
@@ -259,7 +259,7 @@ rollback are in [docs/DOCKER.md](docs/DOCKER.md).
 The installer takes a `--profile` that selects the role each machine plays; the same
 codebase and configuration schema serve all of them.
 
-![Deployment topologies](docs/screenshots/10-topologies.png)
+![Deployment topologies](docs/screenshots/en/10-topologies.png)
 
 - **All-in-one** (`./install.sh --profile all-in-one`, the default) — a single GPU box
   runs the web UI, the scheduler, and in-process GPU inference.
