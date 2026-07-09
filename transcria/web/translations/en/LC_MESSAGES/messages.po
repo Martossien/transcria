@@ -4666,3 +4666,116 @@ msgstr "saving version…"
 #: transcria/web/i18n_js.py
 msgid "enregistrement impossible"
 msgstr "save failed"
+
+#: transcria/web/ui_labels.py
+msgid "En pause"
+msgstr "Paused"
+
+#: transcria/web/ui_labels.py
+msgid "Annulé"
+msgstr "Cancelled"
+
+#: transcria/web/ui_labels.py
+msgid "Bloquer les nouveaux départs"
+msgstr "Block new starts"
+
+#: transcria/web/ui_labels.py
+msgid "Limiter les jobs simultanés"
+msgstr "Limit concurrent jobs"
+
+#: transcria/web/ui_labels.py
+msgid "Prioriser les traitements (récupération GPU agressive)"
+msgstr "Prioritize processing (aggressive GPU reclaim)"
+
+#: transcria/web/ui_labels.py
+msgid "Aucune règle"
+msgstr "No rule"
+
+#: transcria/web/ui_labels.py
+msgid "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
+msgstr "Jobs already running continue, but no new job starts during this slot."
+
+#: transcria/web/ui_labels.py
+msgid "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
+msgstr "The scheduler temporarily reduces the maximum number of jobs running in parallel."
+
+#: transcria/web/ui_labels.py
+msgid "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
+msgstr "If the first phase lacks VRAM, TranscrIA may free a GPU by killing only the external processes allowed by the configuration."
+
+#: transcria/web/ui_labels.py
+msgid "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
+msgstr "The slot is kept as a time marker, without changing the queue behavior."
+
+#: transcria/web/ui_labels.py
+#, python-format
+msgid "Extrait %(n)s :"
+msgstr "Excerpt %(n)s:"
+
+#: transcria/web/ui_labels.py
+msgid "Extrait indisponible"
+msgstr "Excerpt unavailable"
+
+#: transcria/web/ui_labels.py
+msgid "Créé"
+msgstr "Created"
+
+#: transcria/web/ui_labels.py
+msgid "Fichier reçu"
+msgstr "File received"
+
+#: transcria/web/ui_labels.py
+msgid "Audio analysé"
+msgstr "Audio analyzed"
+
+#: transcria/web/ui_labels.py
+msgid "Résumé en cours…"
+msgstr "Summary in progress…"
+
+#: transcria/web/ui_labels.py
+msgid "Résumé prêt"
+msgstr "Summary ready"
+
+#: transcria/web/ui_labels.py
+msgid "Contexte renseigné"
+msgstr "Context filled in"
+
+#: transcria/web/ui_labels.py
+msgid "Participants renseignés"
+msgstr "Participants filled in"
+
+#: transcria/web/ui_labels.py
+msgid "Lexique prêt"
+msgstr "Glossary ready"
+
+#: transcria/web/ui_labels.py
+msgid "Détection des locuteurs…"
+msgstr "Detecting speakers…"
+
+#: transcria/web/ui_labels.py
+msgid "Locuteurs détectés"
+msgstr "Speakers detected"
+
+#: transcria/web/ui_labels.py
+msgid "Prêt à traiter"
+msgstr "Ready to process"
+
+#: transcria/web/ui_labels.py
+msgid "Transcription…"
+msgstr "Transcribing…"
+
+#: transcria/web/ui_labels.py
+msgid "Correction LLM…"
+msgstr "LLM correction…"
+
+#: transcria/web/ui_labels.py
+msgid "Contrôle qualité…"
+msgstr "Quality check…"
+
+#: transcria/web/ui_labels.py
+msgid "Qualité vérifiée"
+msgstr "Quality checked"
+
+#: transcria/web/ui_labels.py
+msgid "Export prêt"
+msgstr "Export ready"

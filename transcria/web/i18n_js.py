@@ -52,6 +52,8 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('Ex: Forme douteuse A, forme douteuse B'),
     N_('Ex: Forme validée'),
     N_('Export en cours…'),
+    N_('Extrait %(n)s :'),
+    N_('Extrait indisponible'),
     N_('Fichier trop volumineux (dépasse la limite du serveur).'),
     N_('Fichier téléversé. Rechargement…'),
     N_('Finalisation…'),

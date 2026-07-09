@@ -4666,3 +4666,116 @@ msgstr "enregistrement de la version…"
 #: transcria/web/i18n_js.py
 msgid "enregistrement impossible"
 msgstr "enregistrement impossible"
+
+#: transcria/web/ui_labels.py
+msgid "En pause"
+msgstr "En pause"
+
+#: transcria/web/ui_labels.py
+msgid "Annulé"
+msgstr "Annulé"
+
+#: transcria/web/ui_labels.py
+msgid "Bloquer les nouveaux départs"
+msgstr "Bloquer les nouveaux départs"
+
+#: transcria/web/ui_labels.py
+msgid "Limiter les jobs simultanés"
+msgstr "Limiter les jobs simultanés"
+
+#: transcria/web/ui_labels.py
+msgid "Prioriser les traitements (récupération GPU agressive)"
+msgstr "Prioriser les traitements (récupération GPU agressive)"
+
+#: transcria/web/ui_labels.py
+msgid "Aucune règle"
+msgstr "Aucune règle"
+
+#: transcria/web/ui_labels.py
+msgid "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
+msgstr "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."
+
+#: transcria/web/ui_labels.py
+msgid "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
+msgstr "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."
+
+#: transcria/web/ui_labels.py
+msgid "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
+msgstr "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU en tuant uniquement les processus externes autorisés par la configuration."
+
+#: transcria/web/ui_labels.py
+msgid "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
+msgstr "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."
+
+#: transcria/web/ui_labels.py
+#, python-format
+msgid "Extrait %(n)s :"
+msgstr "Extrait %(n)s :"
+
+#: transcria/web/ui_labels.py
+msgid "Extrait indisponible"
+msgstr "Extrait indisponible"
+
+#: transcria/web/ui_labels.py
+msgid "Créé"
+msgstr "Créé"
+
+#: transcria/web/ui_labels.py
+msgid "Fichier reçu"
+msgstr "Fichier reçu"
+
+#: transcria/web/ui_labels.py
+msgid "Audio analysé"
+msgstr "Audio analysé"
+
+#: transcria/web/ui_labels.py
+msgid "Résumé en cours…"
+msgstr "Résumé en cours…"
+
+#: transcria/web/ui_labels.py
+msgid "Résumé prêt"
+msgstr "Résumé prêt"
+
+#: transcria/web/ui_labels.py
+msgid "Contexte renseigné"
+msgstr "Contexte renseigné"
+
+#: transcria/web/ui_labels.py
+msgid "Participants renseignés"
+msgstr "Participants renseignés"
+
+#: transcria/web/ui_labels.py
+msgid "Lexique prêt"
+msgstr "Lexique prêt"
+
+#: transcria/web/ui_labels.py
+msgid "Détection des locuteurs…"
+msgstr "Détection des locuteurs…"
+
+#: transcria/web/ui_labels.py
+msgid "Locuteurs détectés"
+msgstr "Locuteurs détectés"
+
+#: transcria/web/ui_labels.py
+msgid "Prêt à traiter"
+msgstr "Prêt à traiter"
+
+#: transcria/web/ui_labels.py
+msgid "Transcription…"
+msgstr "Transcription…"
+
+#: transcria/web/ui_labels.py
+msgid "Correction LLM…"
+msgstr "Correction LLM…"
+
+#: transcria/web/ui_labels.py
+msgid "Contrôle qualité…"
+msgstr "Contrôle qualité…"
+
+#: transcria/web/ui_labels.py
+msgid "Qualité vérifiée"
+msgstr "Qualité vérifiée"
+
+#: transcria/web/ui_labels.py
+msgid "Export prêt"
+msgstr "Export prêt"

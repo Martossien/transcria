@@ -446,7 +446,7 @@ var TranscrIA = window.TranscrIA || {};
                 var html = '';
                 clips.forEach(function (clipName, i) {
                     var safeName = String(clipName || '').split('/').map(encodeURIComponent).join('/');
-                    html += '<small class="text-muted">Extrait ' + (i+1) + ' :</small>' +
+                    html += '<small class="text-muted">' + t('Extrait %(n)s :', { n: i + 1 }) + '</small>' +
                         '<audio controls preload="none">' +
                         '<source src="/api/jobs/' + JOB_ID + '/speakers/clip/' + safeName +
                         '" type="audio/wav"></audio>';
@@ -591,7 +591,7 @@ var TranscrIA = window.TranscrIA || {};
                 missingError.className = 'text-danger lex-context-audio-error';
                 item.querySelector('.lex-context-actions').appendChild(missingError);
             }
-            missingError.textContent = 'Extrait indisponible';
+            missingError.textContent = t('Extrait indisponible');
             return;
         }
 
@@ -628,7 +628,7 @@ var TranscrIA = window.TranscrIA || {};
                 error.className = 'text-danger lex-context-audio-error';
                 item.querySelector('.lex-context-actions').appendChild(error);
             }
-            error.textContent = 'Extrait indisponible';
+            error.textContent = t('Extrait indisponible');
         });
         audio.play().catch(function () {
             W.stopLexiconContextAudio();

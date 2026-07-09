@@ -7,28 +7,34 @@ Exposé aux templates via les filtres Jinja `state_label` et `state_badge`
 
 from __future__ import annotations
 
-# État JobState → libellé utilisateur. Les états « en cours » portent une ellipse.
+from flask_babel import gettext
+
+from transcria.web.i18n_js import N_
+
+# État JobState → libellé utilisateur. Les états « en cours » portent une ellipse. Les valeurs
+# sont marquées `N_` (extraites par babel, source FR inchangée) et TRADUITES au rendu dans
+# `state_label` via `gettext` — sinon la liste des jobs affichait « Terminé » même en UI EN.
 JOB_STATE_LABELS: dict[str, str] = {
-    "created": "Créé",
-    "uploaded": "Fichier reçu",
-    "analyzed": "Audio analysé",
-    "summary_running": "Résumé en cours…",
-    "summary_done": "Résumé prêt",
-    "context_done": "Contexte renseigné",
-    "participants_done": "Participants renseignés",
-    "lexicon_done": "Lexique prêt",
-    "speaker_detection_running": "Détection des locuteurs…",
-    "speaker_detection_done": "Locuteurs détectés",
-    "ready_to_process": "Prêt à traiter",
-    "transcribing": "Transcription…",
-    "diarizing": "Identification des locuteurs…",
-    "arbitrating": "Correction LLM…",
-    "quality_checking": "Contrôle qualité…",
-    "quality_checked": "Qualité vérifiée",
-    "export_ready": "Export prêt",
-    "completed": "Terminé",
-    "failed": "Échec",
-    "cancelled": "Annulé",
+    "created": N_("Créé"),
+    "uploaded": N_("Fichier reçu"),
+    "analyzed": N_("Audio analysé"),
+    "summary_running": N_("Résumé en cours…"),
+    "summary_done": N_("Résumé prêt"),
+    "context_done": N_("Contexte renseigné"),
+    "participants_done": N_("Participants renseignés"),
+    "lexicon_done": N_("Lexique prêt"),
+    "speaker_detection_running": N_("Détection des locuteurs…"),
+    "speaker_detection_done": N_("Locuteurs détectés"),
+    "ready_to_process": N_("Prêt à traiter"),
+    "transcribing": N_("Transcription…"),
+    "diarizing": N_("Identification des locuteurs…"),
+    "arbitrating": N_("Correction LLM…"),
+    "quality_checking": N_("Contrôle qualité…"),
+    "quality_checked": N_("Qualité vérifiée"),
+    "export_ready": N_("Export prêt"),
+    "completed": N_("Terminé"),
+    "failed": N_("Échec"),
+    "cancelled": N_("Annulé"),
 }
 
 _RUNNING_STATES = {
@@ -47,8 +53,14 @@ _BADGE_CLASSES: dict[str, str] = {
 
 
 def state_label(state: str | None) -> str:
-    """Libellé français d'un état de job (l'état brut en dernier recours, jamais vide)."""
-    return JOB_STATE_LABELS.get(str(state or ""), str(state or "inconnu"))
+    """Libellé LOCALISÉ d'un état de job (l'état brut en dernier recours, jamais vide).
+
+    Traduit à l'appel (filtre Jinja = contexte requête) ; hors contexte, `gettext` renvoie la
+    source FR — comportement historique préservé."""
+    label = JOB_STATE_LABELS.get(str(state or ""))
+    if label is None:
+        return str(state or "inconnu")
+    return gettext(label)
 
 
 def state_badge(state: str | None) -> str:

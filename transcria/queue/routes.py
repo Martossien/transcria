@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, render_template, request
+from flask_babel import gettext
 from flask_login import current_user, login_required
 
 from transcria.audit.decorator import audit_log
@@ -16,36 +17,45 @@ from transcria.queue.calendar import SchedulingCalendar, SchedulingWindowStore
 from transcria.queue.store import QueueStore
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
+from transcria.web.i18n_js import N_
 from transcria.workflow.transitions import get_execution_status, mark_execution_cancelled, request_execution_cancel
 
 queue_pages_bp = Blueprint("queue_pages", __name__)
 queue_api_bp = Blueprint("queue_api", __name__)
 
+# Libellés marqués `N_` (extraits par babel, source FR inchangée) et TRADUITS au rendu via
+# `_localized()` — sinon la file/planification affichait « Terminé », « Prioriser les
+# traitements… » même en UI EN (dont un passage `|tojson` vers le JS de schedule.html).
 QUEUE_STATUS_LABELS = {
-    "waiting": "En attente",
-    "paused": "En pause",
-    "running": "En cours",
-    "done": "Terminé",
-    "cancelled": "Annulé",
-    "failed": "Erreur",
+    "waiting": N_("En attente"),
+    "paused": N_("En pause"),
+    "running": N_("En cours"),
+    "done": N_("Terminé"),
+    "cancelled": N_("Annulé"),
+    "failed": N_("Erreur"),
 }
 
 SCHEDULE_ACTION_LABELS = {
-    "pause_queue": "Bloquer les nouveaux départs",
-    "limit_concurrency": "Limiter les jobs simultanés",
-    "force_gpu": "Prioriser les traitements (récupération GPU agressive)",
-    "none": "Aucune règle",
+    "pause_queue": N_("Bloquer les nouveaux départs"),
+    "limit_concurrency": N_("Limiter les jobs simultanés"),
+    "force_gpu": N_("Prioriser les traitements (récupération GPU agressive)"),
+    "none": N_("Aucune règle"),
 }
 
 SCHEDULE_ACTION_DESCRIPTIONS = {
-    "pause_queue": "Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau.",
-    "limit_concurrency": "Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle.",
-    "force_gpu": (
+    "pause_queue": N_("Les jobs déjà lancés continuent, mais aucun nouveau job ne démarre pendant ce créneau."),
+    "limit_concurrency": N_("Le scheduler réduit temporairement le nombre maximal de jobs lancés en parallèle."),
+    "force_gpu": N_(
         "Si la première phase manque de VRAM, TranscrIA peut libérer un GPU"
         " en tuant uniquement les processus externes autorisés par la configuration."
     ),
-    "none": "Le créneau est conservé comme repère horaire, sans modifier le comportement de la file.",
+    "none": N_("Le créneau est conservé comme repère horaire, sans modifier le comportement de la file."),
 }
+
+
+def _localized(labels: dict[str, str]) -> dict[str, str]:
+    """Traduit les valeurs d'un dict de libellés dans la locale UI (str simple, sérialisable JSON)."""
+    return {key: gettext(value) for key, value in labels.items()}
 
 E2E_TEST_JOB_TITLE_PREFIX = "E2E workflow"
 RUNNING_JOB_STATES = {
@@ -81,8 +91,8 @@ def queue_page():
         wait_estimates=wait_estimates,
         runtime=runtime,
         counts=QueueStore.count_by_status(),
-        status_labels=QUEUE_STATUS_LABELS,
-        schedule_action_labels=SCHEDULE_ACTION_LABELS,
+        status_labels=_localized(QUEUE_STATUS_LABELS),
+        schedule_action_labels=_localized(SCHEDULE_ACTION_LABELS),
         active_window=calendar.get_active_window(),
         schedule_enabled=calendar.enabled,
         timezone=calendar.timezone_name,
@@ -168,8 +178,8 @@ def schedule_page():
         active_window=calendar.get_active_window(),
         timezone=calendar.timezone_name,
         schedule_enabled=calendar.enabled,
-        action_labels=SCHEDULE_ACTION_LABELS,
-        action_descriptions=SCHEDULE_ACTION_DESCRIPTIONS,
+        action_labels=_localized(SCHEDULE_ACTION_LABELS),
+        action_descriptions=_localized(SCHEDULE_ACTION_DESCRIPTIONS),
         week_segments=_week_strip_segments(windows),
         running_jobs=running,
         pending_jobs=pending,
