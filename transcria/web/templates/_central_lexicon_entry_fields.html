@@ -15,7 +15,7 @@
     <label class="form-label">{{ _('Priorité') }}</label>
     <select class="form-select" name="priority">
       {% for priority in priorities %}
-      <option value="{{ priority }}">{{ priority }}</option>
+      <option value="{{ priority }}">{{ lexicon_priority_label(priority) }}</option>
       {% endfor %}
     </select>
   </div>

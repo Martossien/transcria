@@ -197,7 +197,7 @@
                 <label class="form-label small">{{ _('Priorité') }}</label>
                 <select class="form-select form-select-sm" name="priority">
                   {% for priority in priorities %}
-                  <option value="{{ priority }}" {% if entry.priority == priority %}selected{% endif %}>{{ priority }}</option>
+                  <option value="{{ priority }}" {% if entry.priority == priority %}selected{% endif %}>{{ lexicon_priority_label(priority) }}</option>
                   {% endfor %}
                 </select>
               </div>

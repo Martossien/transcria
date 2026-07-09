@@ -207,6 +207,14 @@ def create_app(config_path: str | None = None) -> Flask:
             version = 0
         return url_for("static", filename=filename, v=version)
 
+    @app.template_global("lexicon_priority_label")
+    def lexicon_priority_label(key: str) -> str:
+        # Affichage localisé des priorités de lexique (value = clé FR canonique inchangée) :
+        # « critique » → « critical » en UI EN. Le menu était systématiquement FR sinon.
+        from transcria.context.lexicon import localized_priority
+        from transcria.web.i18n import select_locale
+        return localized_priority(key, select_locale())
+
     @app.after_request
     def _security_headers(response):
         # C3.9 (RELEASE_0.2.0) — en-têtes de sécurité SANS risque de régression :

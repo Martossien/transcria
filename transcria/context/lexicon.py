@@ -11,6 +11,18 @@ LEXICON_CATEGORIES = [
 
 LEXICON_PRIORITIES = ["critique", "importante", "normale"]
 
+# Affichage localisé des priorités (axe A). La VALEUR reste la clé canonique FR (stockée,
+# comparée : _PRIORITY_RANK, keep_priorities…) ; seul le libellé visible est traduit. fr =
+# identité stricte. Même principe que les profils/types de réunion.
+_LEXICON_PRIORITY_LABELS_EN = {"critique": "critical", "importante": "important", "normale": "normal"}
+
+
+def localized_priority(key: str, language: str | None) -> str:
+    """Libellé d'affichage d'une priorité de lexique (repli = clé FR inchangée)."""
+    if language == "en":
+        return _LEXICON_PRIORITY_LABELS_EN.get(key, key)
+    return key
+
 
 class LexiconManager:
     @staticmethod
