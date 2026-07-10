@@ -21,26 +21,24 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
-## Project status — 0.3.3
+## Project status
 
-Building on the 0.2.0 stable line. **0.3.0** adds ingestion of the **documents presented
-in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT
-correction. **0.3.1** adds operator tooling — a *Maintenance* admin page (create, schedule
-and restore backups) and a *Models* page that downloads the models this install needs.
-**0.3.2** makes TranscrIA **bilingual French / English end to end**: the web interface, the
-**generated deliverables** (minutes, corrections, DOCX, reports), the **installer**, the
-**`doctor`** and the voice-consent PDF all speak French **or** English. The default stays
-French (strictly unchanged); English is an explicit choice — a navbar language switcher, a
-per-user preference, a per-job deliverable language, and a **first-question language choice
-at install time**. Adding more languages needs no refactor (French fallback everywhere).
-**0.3.3** is a polish release that closes the last French-in-an-English-UI gaps (processing
-profiles, audio analysis, editor states, job status labels, scheduling rules, lexicon
-priorities) and aligns the deliverable language with the interface choice — no database migration.
-The transcription pipeline, the human-in-the-loop wizard, the GPU queue and scheduler,
-exports, multi-user access, and both single-box and distributed deployments are validated
-end-to-end (unit and integration suite plus real-GPU runs). Reference quality relies on
-gated models (see [Requirements](#requirements) and [Known limitations](#known-limitations)).
-We prefer to state limits plainly rather than imply the tool does more than it does.
+**Current release: 0.3.3** ([releases](https://github.com/Martossien/transcria/releases) ·
+[changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
+GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
+deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
+Reference quality relies on gated models (see [Requirements](#requirements) and
+[Known limitations](#known-limitations)). We prefer to state limits plainly rather than
+imply the tool does more than it does.
+
+Recent milestones, newest first (all on the 0.2.0 stable line):
+
+| Version | What it brought |
+|---|---|
+| **0.3.3** | Polish — the last French leftovers in the English UI closed; the deliverable language now follows the interface choice |
+| **0.3.2** | **Bilingual French / English end to end** — web UI, generated deliverables (minutes, corrections, DOCX, reports), installer, `doctor`, voice-consent PDF. Default stays French; English is an explicit choice (navbar switcher, per-user preference, per-job deliverable language, install-time question). More languages need no refactor |
+| **0.3.1** | Operator tooling — a *Maintenance* admin page (create, schedule, restore backups) and a *Models* page that downloads the models this install needs |
+| **0.3.0** | Ingestion of the **documents presented in a meeting** (PDF / Word / PowerPoint) to ground both the summary and the SRT correction |
 
 **Jump to:** [What it does](#what-it-does) · [Screenshots](#screenshots) · [Built for teams](#built-for-teams-not-just-for-runs) · [Processing profiles](#processing-profiles) · [How it works](#how-it-works) · [Installation](#installation) · [Deployment](#deployment-topologies) · [Known limitations](#known-limitations) · [Tech stack](#tech-stack) · [Documentation](#documentation)
 
@@ -318,6 +316,7 @@ We keep this list honest and current.
 
 Full documentation lives in [`docs/`](docs/README.md) (French). A few entry points:
 
+- [docs/TESTERS.md](docs/TESTERS.md) — **testing TranscrIA**: what to expect, the 15-minute smoke test, what to report
 - [docs/INSTALL.md](docs/INSTALL.md) — installation, models, `systemd`, distributed roles
 - [docs/DOCKER.md](docs/DOCKER.md) — containerized deployment
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, database

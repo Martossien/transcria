@@ -25,28 +25,23 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
-## Statut du projet — 0.3.3
+## Statut du projet
 
-Dans la continuité de la ligne stable 0.2.0. La **0.3.0** ajoute l'ingestion des
-**documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé
-et la correction du SRT. La **0.3.1** ajoute l'outillage opérateur — une page admin
-*Maintenance* (créer, planifier et restaurer les sauvegardes) et une page *Modèles* qui
-télécharge les modèles nécessaires à l'install. La **0.3.2** rend TranscrIA **bilingue
-français / anglais de bout en bout** : l'interface web, les **livrables générés**
-(compte-rendu, corrections, DOCX, rapports), l'**installateur**, le **`doctor`** et le PDF
-de consentement vocal parlent français **ou** anglais. Le défaut reste le français
-(strictement inchangé) ; l'anglais est un choix explicite — sélecteur de langue dans la
-barre de navigation, préférence par utilisateur, langue des livrables par job, et **choix
-de la langue dès la première question de l'installation**. Ajouter d'autres langues ne
-demande aucune refonte (repli français partout).
-La **0.3.3** est une version de finitions : elle ferme les dernières poches de français en
-interface anglaise (profils de traitement, analyse audio, états de l'éditeur, libellés d'état
-des jobs, règles de planification, priorités de lexique) et aligne la langue des livrables sur
-le choix d'interface — sans migration de base de données.
-Le pipeline de transcription, l'assistant avec
+**Version actuelle : 0.3.3** ([releases](https://github.com/Martossien/transcria/releases) ·
+[changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
 bout en bout (suite unitaire et d'intégration, plus des passages sur GPU réel).
+
+Jalons récents, du plus récent au plus ancien (tous dans la continuité de la ligne stable 0.2.0) :
+
+| Version | Ce qu'elle apporte |
+|---|---|
+| **0.3.3** | Finitions — les dernières poches de français en interface anglaise fermées ; la langue des livrables suit désormais le choix d'interface |
+| **0.3.2** | **Bilingue français / anglais de bout en bout** — interface web, livrables générés (compte-rendu, corrections, DOCX, rapports), installateur, `doctor`, PDF de consentement vocal. Le défaut reste le français ; l'anglais est un choix explicite (sélecteur dans la barre de navigation, préférence par utilisateur, langue des livrables par job, question à l'installation). Ajouter d'autres langues ne demande aucune refonte |
+| **0.3.1** | Outillage opérateur — page admin *Maintenance* (créer, planifier, restaurer les sauvegardes) et page *Modèles* qui télécharge les modèles nécessaires à l'install |
+| **0.3.0** | Ingestion des **documents présentés en réunion** (PDF / Word / PowerPoint) pour mieux ancrer le résumé et la correction du SRT |
+
 La qualité de référence repose sur des modèles
 sous conditions (voir [Prérequis](#prérequis) et [Limites connues](#limites-connues)).
 Nous préférons énoncer les limites clairement plutôt que de laisser croire que l'outil
@@ -336,6 +331,7 @@ Nous gardons cette liste honnête et à jour.
 La documentation complète vit dans [`docs/`](docs/README.md) (en français). Quelques points
 d'entrée :
 
+- [docs/TESTERS.md](docs/TESTERS.md) — **tester TranscrIA** (en anglais) : à quoi s'attendre, le test fumée de 15 minutes, quoi rapporter
 - [docs/INSTALL.md](docs/INSTALL.md) — installation, modèles, `systemd`, rôles distribués
 - [docs/DOCKER.md](docs/DOCKER.md) — déploiement conteneurisé
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, base de données

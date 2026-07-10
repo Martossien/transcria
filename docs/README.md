@@ -14,6 +14,7 @@ New here? Start with the [project README](../README.md), then
 
 | Document | What it covers |
 |---|---|
+| [TESTERS.md](TESTERS.md) | **In English** — testing TranscrIA: what to expect (disk, first startup, models, GPU floor), the 15-minute smoke test, topologies we need tested, diagnostics and the report template |
 | [INSTALL.md](INSTALL.md) | Host installation (`install.sh`), hardware and CUDA detection, models, `systemd` service, distributed roles, troubleshooting |
 | [DOCKER.md](DOCKER.md) | Containerized deployment: turnkey quickstart, slim vs. bundled images, Compose, GPU access, variables, rollback |
 | [UPGRADE.md](UPGRADE.md) | Upgrade and rollback procedure, obsolete configuration keys, database migrations |
