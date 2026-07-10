@@ -21,6 +21,10 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ![TranscrIA — quick overview of the workflow](docs/screenshots/en/00-overview.gif)
 
+> **Non-technical reader?** (project manager, business owner, decision maker) — a
+> business-oriented overview exists: use cases, benefits, example results and the user
+> journey, no jargon → **[docs/PRESENTATION.md](docs/PRESENTATION.md)** (in French).
+
 ## Project status
 
 **Current release: 0.3.3** ([releases](https://github.com/Martossien/transcria/releases) ·

@@ -9,6 +9,9 @@ this index is the English entry point (English summaries below).
 
 New here? Start with the [project README](../README.md), then
 [INSTALL.md](INSTALL.md) or [DOCKER.md](DOCKER.md) to get a running instance.
+Non-technical readers (business owners, project managers, decision makers) have a
+dedicated overview: [PRESENTATION.md](PRESENTATION.md) (in French) — use cases, benefits,
+example results and the user journey.
 
 ## Deployment and operations
 

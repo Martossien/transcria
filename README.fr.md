@@ -25,6 +25,10 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ![TranscrIA — aperçu rapide du workflow](docs/screenshots/00-overview.gif)
 
+> **Lecteur non technique ?** (chef de projet, MOA, secrétaire de séance, DSI, décideur) —
+> une présentation orientée métier existe : cas d'usage, bénéfices, exemples de résultats
+> et parcours utilisateur, sans jargon → **[docs/PRESENTATION.md](docs/PRESENTATION.md)**.
+
 ## Statut du projet
 
 **Version actuelle : 0.3.3** ([releases](https://github.com/Martossien/transcria/releases) ·

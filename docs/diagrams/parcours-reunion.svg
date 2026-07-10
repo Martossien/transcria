@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 520" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- Fond blanc : le diagramme reste lisible en thème sombre GitHub -->
+  <rect x="0" y="0" width="1220" height="520" rx="14" fill="#ffffff" stroke="#d8dee6"/>
+
+  <!-- Titre -->
+  <text x="610" y="46" text-anchor="middle" font-size="24" font-weight="700" fill="#1F3864">De la réunion aux livrables — avec l'humain aux commandes</text>
+
+  <!-- Flèches (définition de la pointe) -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- ── Étape 1 : Réunion enregistrée ─────────────────────────────── -->
+  <rect x="30" y="120" width="200" height="180" rx="12" fill="#EEF3FA" stroke="#1F3864" stroke-width="1.5"/>
+  <circle cx="55" cy="145" r="13" fill="#1F3864"/>
+  <text x="55" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
+  <text x="130" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">Réunion</text>
+  <text x="130" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">enregistrée</text>
+  <text x="130" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="130" dy="0">enregistrement audio,</tspan>
+    <tspan x="130" dy="17">dictaphone ou piste</tspan>
+    <tspan x="130" dy="17">audio d'une visio</tspan>
+  </text>
+
+  <line x1="230" y1="210" x2="264" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Étape 2 : TranscrIA transcrit ─────────────────────────────── -->
+  <rect x="270" y="120" width="200" height="180" rx="12" fill="#E0F2F1" stroke="#004D40" stroke-width="1.5"/>
+  <circle cx="295" cy="145" r="13" fill="#004D40"/>
+  <text x="295" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
+  <text x="370" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">TranscrIA</text>
+  <text x="370" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">écoute et transcrit</text>
+  <text x="370" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="370" dy="0">qui a parlé, quand, quoi —</tspan>
+    <tspan x="370" dy="17">analyse du son, transcription,</tspan>
+    <tspan x="370" dy="17">première synthèse</tspan>
+    <tspan x="370" dy="17">(IA 100 % locale)</tspan>
+  </text>
+
+  <line x1="470" y1="210" x2="504" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Étape 3 : VOUS VALIDEZ (le différenciateur) ───────────────── -->
+  <rect x="510" y="100" width="200" height="220" rx="12" fill="#FEF3C7" stroke="#B45309" stroke-width="3"/>
+  <circle cx="535" cy="127" r="13" fill="#B45309"/>
+  <text x="535" y="132" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">3</text>
+  <text x="610" y="168" text-anchor="middle" font-size="18" font-weight="800" fill="#92400E">Vous validez</text>
+  <text x="610" y="196" text-anchor="middle" font-size="13" fill="#78350F">
+    <tspan x="610" dy="0">locuteurs (extraits écoutables),</tspan>
+    <tspan x="610" dy="17">participants, lexique métier,</tspan>
+    <tspan x="610" dy="17">synthèse de contrôle,</tspan>
+    <tspan x="610" dy="17">documents présentés</tspan>
+  </text>
+  <text x="610" y="292" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B45309">L'HUMAIN GARDE LA MAIN</text>
+
+  <line x1="710" y1="210" x2="744" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Étape 4 : l'IA corrige et assemble ────────────────────────── -->
+  <rect x="750" y="120" width="200" height="180" rx="12" fill="#E0F2F1" stroke="#004D40" stroke-width="1.5"/>
+  <circle cx="775" cy="145" r="13" fill="#004D40"/>
+  <text x="775" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4</text>
+  <text x="850" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">L'IA corrige</text>
+  <text x="850" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">et assemble</text>
+  <text x="850" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="850" dy="0">correction avec VOTRE</tspan>
+    <tspan x="850" dy="17">lexique validé, relecture</tspan>
+    <tspan x="850" dy="17">finale, chaque correction</tspan>
+    <tspan x="850" dy="17">documentée</tspan>
+  </text>
+
+  <line x1="950" y1="210" x2="984" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Étape 5 : livrables ───────────────────────────────────────── -->
+  <rect x="990" y="100" width="200" height="220" rx="12" fill="#EEF3FA" stroke="#1F3864" stroke-width="1.5"/>
+  <circle cx="1015" cy="127" r="13" fill="#1F3864"/>
+  <text x="1015" y="132" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">5</text>
+  <text x="1090" y="165" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">Vos livrables</text>
+  <text x="1010" y="193" font-size="13" fill="#334155">
+    <tspan x="1010" dy="0">• compte-rendu Word</tspan>
+    <tspan x="1018" dy="16" font-size="12" fill="#64748b">au format du type de réunion</tspan>
+    <tspan x="1010" dy="18">• synthèse, décisions,</tspan>
+    <tspan x="1018" dy="16">actions à réaliser</tspan>
+    <tspan x="1010" dy="18">• transcription horodatée</tspan>
+    <tspan x="1018" dy="16" font-size="12" fill="#64748b">par locuteur (brute + corrigée)</tspan>
+    <tspan x="1010" dy="18">• rapports qualité</tspan>
+  </text>
+
+  <!-- Boucle de retouche : livrables → validation -->
+  <path d="M 1090 320 L 1090 356 L 610 356 L 610 326" fill="none" stroke="#B45309" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+  <text x="850" y="348" text-anchor="middle" font-size="12.5" fill="#92400E">retouches après coup : éditeur intégré + demandes en langage naturel, chaque version restaurable</text>
+
+  <!-- ── Bandeau souveraineté ──────────────────────────────────────── -->
+  <rect x="30" y="396" width="1160" height="94" rx="12" fill="#F1F5F9" stroke="#CBD5E1"/>
+  <text x="610" y="432" text-anchor="middle" font-size="15.5" font-weight="700" fill="#1F3864">Le tout sur VOS serveurs, avec VOS cartes graphiques — l'enregistrement ne quitte jamais votre infrastructure.</text>
+  <text x="610" y="460" text-anchor="middle" font-size="13.5" fill="#475569">Aucun abonnement, aucune facturation à la minute. Accès par comptes et groupes, journal d'audit complet (RGPD),</text>
+  <text x="610" y="478" text-anchor="middle" font-size="13.5" fill="#475569">consentement explicite pour la reconnaissance des voix connues.</text>
+</svg>
