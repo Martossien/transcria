@@ -4,8 +4,13 @@
 [![Licence : Apache-2.0](https://img.shields.io/badge/Licence-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pr%C3%AAt-336791.svg?logo=postgresql&logoColor=white)](docs/INSTALL.md)
+[![Démo en ligne](https://img.shields.io/badge/%F0%9F%A4%97%20D%C3%A9mo%20en%20ligne-votre%20audio%20va--t--il%20bien%20se%20transcrire%20%3F-ffcc4d.svg)](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
 
 *English version: [README.md](README.md).*
+
+**Essayez tout de suite, sans installation :** la [démo de pré-vol audio](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
+exécute l'analyse « cet enregistrement va-t-il bien se transcrire ? » de TranscrIA
+**entièrement dans votre navigateur** (rien n'est envoyé — WebAssembly).
 
 *L'interface, les livrables générés et l'installateur sont **bilingues français / anglais**
 (choix de la langue à l'installation ou dans la barre de navigation ; défaut français).

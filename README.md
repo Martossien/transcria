@@ -4,6 +4,11 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-ready-336791.svg?logo=postgresql&logoColor=white)](docs/INSTALL.md)
+[![Live demo](https://img.shields.io/badge/%F0%9F%A4%97%20Live%20demo-will%20your%20audio%20transcribe%20well%3F-ffcc4d.svg)](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
+
+**Try it right now, no install:** the [audio preflight demo](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
+runs TranscrIA's "will this recording transcribe well?" analysis **entirely in your browser**
+(nothing is uploaded — WebAssembly).
 
 **Self-hosted meeting transcription portal.** TranscrIA turns long meeting recordings into
 usable deliverables on your own GPUs: corrected, speaker-attributed transcripts (SRT),
