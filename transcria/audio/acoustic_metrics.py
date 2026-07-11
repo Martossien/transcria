@@ -90,7 +90,8 @@ def estimate_rt60(
         return None
     power_db = 10.0 * np.log10(power + 1e-12)
     if power_db.size >= 3:
-        power_db = np.convolve(power_db, np.ones(3) / 3.0, mode="same")
+        # astype : les stubs numpy récents typent np.convolve en floating[Any] (vu en CI).
+        power_db = np.convolve(power_db, np.ones(3) / 3.0, mode="same").astype(np.float64)
     hop_s = hop / sample_rate
 
     # Parcours : chaque décroissance va d'un maximum local au minimum suivant.
