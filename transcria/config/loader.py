@@ -390,7 +390,10 @@ _DEFAULT_CONFIG = {
         # pipeline qui compare N transcriptions COMPLÈTES par fenêtres).
         "multi_stt": {
             "enabled": False,
-            "secondary_backend": "whisper",
+            # voxtral : tête-à-tête E2E réel du 2026-07-11 — remplacements tous
+            # pertinents, zéro anglicisation (langue forcée nativement), et 10/20
+            # candidats identiques au primaire = confirmation mutuelle gratuite.
+            "secondary_backend": "voxtral",
             "levels": ["degrade"],
             "max_segments": 20,
             "min_segment_s": 0.8,

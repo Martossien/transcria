@@ -481,7 +481,9 @@ workflow:
     # Audit par job : metadata/multi_stt.json. Distinct de stt_hybrid ci-dessous
     # (prototype hors pipeline comparant N transcriptions COMPLÈTES).
     enabled: false
-    secondary_backend: whisper
+    # voxtral recommandé : candidats dans la langue de la réunion par construction
+    # (zéro risque de dérive en traduction), remplacements pertinents en E2E réel.
+    secondary_backend: voxtral
     levels: ["degrade"]
     max_segments: 20
     min_segment_s: 0.8

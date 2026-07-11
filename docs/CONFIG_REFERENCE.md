@@ -393,7 +393,7 @@ explicitement pour des tests, des fallbacks ou des campagnes ciblées.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `force_stt_backend` | string/null | `null` | Backend forcé quand une règle explicite s'applique |
+| `force_stt_backend` | string/null | `null` | Backend forcé quand une règle explicite s'applique. `voxtral` recommandé pour un profil qualité : meilleur WER mesuré contre référence humaine sur réunions réelles (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`), au prix de ~+55 % de temps STT |
 | `enabled_for_modes` | list[string] | `[]` | Modes de traitement qui forcent le backend configuré |
 | `force_on_degraded_summary` | bool | `false` | Force le backend configuré si `summary/summary.json` signale un niveau dégradé |
 | `degraded_summary_levels` | list[string] | `["degrade"]` | Niveaux de diagnostic considérés comme dégradés |
@@ -746,7 +746,7 @@ complètes par fenêtres).
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `false` | Active l'étape `multi_stt_review` (profils avec correction LLM uniquement) |
-| `secondary_backend` | string | `"whisper"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`) ; s'il égale le backend principal, bascule automatique sur un autre |
+| `secondary_backend` | string | `"voxtral"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`) ; s'il égale le backend principal, bascule automatique sur un autre. Voxtral recommandé : langue forcée nativement → candidats jamais traduits |
 | `levels` | list[string] | `["degrade"]` | Niveaux de la `difficulty_map` déclenchant la retranscription (`degrade`, `suspect`) |
 | `max_segments` | int | `20` | Plafond de segments retranscrits (les plus sévères d'abord) |
 | `min_segment_s` | float | `0.8` | Durée minimale d'un segment candidat |
