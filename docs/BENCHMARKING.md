@@ -98,15 +98,24 @@ nécessite la LLM up) :
 ```bash
 venv/bin/python scripts/bench_eval.py \
     --bench-dir bench_results/test2_20260705_101500 \
-    --arbitrage-port 8080
+    --arbitrage-port 8080 --runs 3
 # → <bench-dir>/eval_report.md   (utiliser --dry-run pour prévisualiser)
 ```
+
+**`--runs 3` recommandé** : le juge LLM mono-run a une variance réelle (classements
+inversés observés entre deux passes identiques). Avec N runs, le rapport s'ouvre sur un
+tableau agrégé — médiane des notes globales + étendue min–max par combo — et une étendue
+large signale un verdict fragile, à trancher par lecture humaine ou par le score référence.
 
 ## 4. Scorer contre une référence — `scripts/score_reference_bench.py`
 
 Proxy de calibration : compare les transcriptions à des **fenêtres de référence** (texte
 stable, p. ex. extrait d'un compte-rendu validé) et sort WER/CER approximatifs + ratio de mots.
-Ce n'est pas une vérité parfaite, mais un repère textuel reproductible.
+Ce n'est pas une vérité parfaite, mais un repère textuel reproductible. Deux colonnes
+d'« honnêteté » indépendantes de la référence complètent le tableau : **EN%** (ratio de
+mots-outils anglais non ambigus — détecte un moteur parti en TRADUCTION, piège réel constaté)
+et **boucles** (répétitions détectées par l'anti-hallucination du pipeline). Résultats
+publiés sur corpus réel : `docs/STT_BENCHMARK_REAL_MEETINGS.md`.
 
 ```bash
 venv/bin/python scripts/score_reference_bench.py \

@@ -849,7 +849,9 @@ class TestTranscriber:
         scored = SegmentReliabilityScorer(config).score_segments(segments)
 
         assert scored[0]["reliability"] == "degrade"
-        assert scored[0]["reliability_reasons"] == ["hallucination_generique"]
+        assert "hallucination_generique" in scored[0]["reliability_reasons"]
+        # 30 s pour 4 mots : le débit anormal co-signale légitimement le même segment.
+        assert "debit_parole_anormal" in scored[0]["reliability_reasons"]
 
     def test_segment_reliability_does_not_flag_thank_you_inside_real_sentence(self):
         from transcria.stt.reliability import SegmentReliabilityScorer
@@ -1372,3 +1374,37 @@ class TestVoxtralTranscriber:
 
         assert get_backend_vram_mb("voxtral", {}) == 11000
         assert get_backend_vram_mb("voxtral", {"gpu": {"voxtral_vram_mb": 12345}}) == 12345
+
+
+class TestSegmentReliabilitySparseSpeechRate:
+    """Débit anormalement bas sur segment long : signature de remplissage LLM-STT
+    sur audio quasi muet (constaté en bench réel : 21,5 s rendues par 4 mots).
+    On SIGNALE, on ne supprime jamais."""
+
+    def _score(self, segments, cfg=None):
+        from transcria.stt.reliability import SegmentReliabilityScorer
+
+        config = {"workflow": {"segment_reliability": cfg or {}}}
+        return SegmentReliabilityScorer(config).score_segments(segments, {})
+
+    def test_flag_segment_long_quasi_vide(self):
+        scored = self._score([{"start": 0.657, "end": 22.203, "text": "Je ne sais pas."}])
+        assert "debit_parole_anormal" in scored[0]["reliability_reasons"]
+        assert scored[0]["text"] == "Je ne sais pas."  # jamais de suppression
+
+    def test_pas_de_flag_sur_parole_normale(self):
+        # ~2,3 mots/s : rythme de réunion ordinaire.
+        text = " ".join(["mot"] * 28)
+        scored = self._score([{"start": 0.0, "end": 12.0, "text": text}])
+        assert "debit_parole_anormal" not in scored[0].get("reliability_reasons", [])
+
+    def test_pas_de_flag_sous_la_duree_minimale(self):
+        scored = self._score([{"start": 0.0, "end": 4.0, "text": "Oui."}])
+        assert "debit_parole_anormal" not in scored[0].get("reliability_reasons", [])
+
+    def test_desactivable_par_config(self):
+        scored = self._score(
+            [{"start": 0.0, "end": 22.0, "text": "Je ne sais pas."}],
+            cfg={"sparse_words_per_second": 0},
+        )
+        assert "debit_parole_anormal" not in scored[0].get("reliability_reasons", [])

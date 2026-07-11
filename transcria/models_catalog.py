@@ -23,6 +23,12 @@ _STT_SOURCES: dict[str, dict] = {
                "license_url": "https://huggingface.co/" + COHERE_MODEL_ID, "est_gb": 6.0},
     "whisper": {"repo": "openai/whisper-large-v3", "gated": False, "license": "MIT",
                 "license_url": "https://huggingface.co/openai/whisper-large-v3", "est_gb": 3.1},
+    "voxtral": {"repo": "mistralai/Voxtral-Mini-3B-2507", "gated": False, "license": "Apache-2.0",
+                "license_url": "https://huggingface.co/mistralai/Voxtral-Mini-3B-2507", "est_gb": 9.3},
+    "granite": {"repo": "ibm-granite/granite-speech-4.1-2b", "gated": False, "license": "Apache-2.0",
+                "license_url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b", "est_gb": 4.6},
+    "parakeet": {"repo": "nvidia/parakeet-tdt-0.6b-v3", "gated": False, "license": "CC-BY-4.0",
+                 "license_url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", "est_gb": 2.5},
 }
 _DIAR_SOURCES: dict[str, dict] = {
     "pyannote": {"repo": PYANNOTE_MODEL_ID, "gated": True,

@@ -185,8 +185,12 @@ upload -> diagnostic audio -> synthèse rapide (STT + LLM) -> contexte, particip
 ```
 
 - **Moteurs STT** (interchangeables) : Cohere transcribe (défaut), Whisper large-v3 /
-  faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (expérimental) — servis en local
-  ou par un serveur distant compatible OpenAI (vLLM, SGLang).
+  faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
+  Parakeet TDT (expérimental) — servis en local ou par un serveur distant compatible
+  OpenAI (vLLM, SGLang). Nous les benchons sur de **vraies réunions françaises** contre
+  une transcription humaine professionnelle — WER, détecteur de dérive en traduction,
+  juge LLM multi-passes et lecture humaine des modes d'échec :
+  [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (anglais).
 - **Moteurs de diarisation** : pyannote.audio (défaut) ou NVIDIA Sortformer via NeMo.
 - **LLM d'arbitrage** : un serveur local compatible OpenAI (Ollama / llama.cpp / vLLM),
   sélectionné selon le matériel depuis un catalogue de paliers piloté par les données.

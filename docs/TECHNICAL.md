@@ -95,6 +95,7 @@ transcria/
 │   │   ├── cohere_transcriber.py  # CohereTranscriber (load, transcribe, segments_to_srt, offload)
 │   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper large-v3 qualité)
 │   │   ├── granite_transcriber.py # GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
+│   │   ├── voxtral_transcriber.py # VoxtralTranscriber — Mistral Voxtral Mini 3B expérimental (Apache-2.0)
 │   │   ├── anti_hallucination.py  # Réduction boucles ASR répétitives
 │   │   ├── forced_alignment.py    # Alignement CTC natif torchaudio optionnel
 │   │   ├── speaker_realignment.py # Réalignement locuteur/ponctuation au niveau mot
@@ -345,6 +346,8 @@ Le backend normal reste `models.stt_backend` (`cohere` par défaut). Le mode `qu
 Whisper large-v3 reste disponible pour les tests, fallbacks et campagnes ciblées. Il apporte les timestamps mot-à-mot, les seuils anti-hallucination de faster-whisper, la réduction de boucles répétitives (`anti_hallucination.py`), l'alignement CTC optionnel (`forced_alignment.py`) et le réalignement locuteur/ponctuation (`speaker_realignment.py`). Aucune dépendance WhisperX n'est utilisée.
 
 Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désactivé par défaut. Il utilise `AutoProcessor` + `AutoModelForSpeechSeq2Seq`, le modèle local `models/granite-speech-4.1-2b/` si présent, des prompts IBM configurables et le flag `fix_mistral_regex=true` quand la version de `transformers` le supporte. La diarisation reste portée par pyannote : Granite normal produit seulement du texte par chunk, ensuite attribué aux tours pyannote comme Cohere.
+
+Mistral **Voxtral Mini 3B** (`voxtral`, Apache-2.0, non-gated) est intégré comme backend expérimental via `VoxtralForConditionalGeneration` (transformers ≥ 4.57) + `mistral-common[audio]`. Mode « pure transcription » du modèle avec **langue forcée nativement** (`apply_transcription_request` — piège : un `ndarray` exige `format=["wav"]` et `return_tensors="pt"`). Modèle local `models/voxtral-mini-3b-2507/` si présent, sinon repli automatique sur l'identifiant HF (cache) — la page « Modèles » sait le télécharger (catalogue non-gated, ~9,3 Go). Sur le corpus de réunions réelles (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`), meilleur WER des quatre backends contre référence humaine. Comme les autres backends LLM-STT, il n'émet ni `no_speech_prob` ni confiance mot : le garde-fou `debit_parole_anormal` de `segment_reliability` signale ses remplissages éventuels sur audio quasi muet (segment long à débit absurde), sans jamais supprimer de texte.
 
 **Fallback automatique Granite sur audio dégradé :** `PipelineService._config_for_mode()` bascule de `granite` vers le backend de production configuré dans `self.config` (ou `cohere` si celui-ci est aussi `granite`) quand `audio_quality_decision.json` indique `level=degrade` ou que `audio_preflight.json` contient le flag `audio_tres_faible`. Le backend de fallback effectivement utilisé est logué et tracé dans `metadata/transcription_metadata.json`.
 
@@ -757,7 +760,7 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 **`transcriber_factory.py` — `TranscriberFactory`**
 | Méthode | Description |
 |---|---|
-| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere`, `whisper` ou `granite`) |
+| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet` ou `voxtral`) |
 | `list_available_backends()` | Liste les backends disponibles |
 | `get_backend_vram_mb(backend)` | VRAM estimée pour un backend |
 

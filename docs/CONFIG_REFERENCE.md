@@ -804,6 +804,8 @@ textuelles doivent être déclarées dans la configuration.
 | `low_word_confidence_min` | float | `0.4` | Seuil de probabilité mot pour le flag « peu confiant » |
 | `micro_segment_s` | float | `0.35` | Durée en secondes en dessous de laquelle un segment est « micro » |
 | `short_segment_s` | float | `0.8` | Durée en secondes en dessous de laquelle un segment est « court » |
+| `sparse_min_duration_s` | float | `8.0` | Durée minimale d'un segment pour le contrôle de débit de parole |
+| `sparse_words_per_second` | float | `0.5` | Débit (mots/s) sous lequel un segment long est signalé `debit_parole_anormal` — signature de remplissage LLM-STT sur audio quasi muet ; `0` désactive. Signale, ne supprime jamais |
 | `detect_non_latin` | bool | `true` | Active le flag `texte_non_latin` via une regex configurable |
 | `non_latin_char_pattern` | string | regex Unicode | Regex des familles de caractères considérées hors alphabet latin attendu |
 | `non_latin_min_chars` | int | `2` | Nombre minimal de caractères détectés avant de signaler le segment |

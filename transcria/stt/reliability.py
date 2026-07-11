@@ -17,6 +17,13 @@ class SegmentReliabilityScorer:
         self.low_word_confidence_ratio = float(cfg.get("low_word_confidence_ratio", 0.5))
         self.micro_segment_s = float(cfg.get("micro_segment_s", 0.35))
         self.short_segment_s = float(cfg.get("short_segment_s", 0.8))
+        # Débit de parole anormalement bas sur segment LONG : signature des backends
+        # LLM-STT (sans no_speech_prob ni confiance mot) qui « remplissent » un tour
+        # quasi muet par une phrase brève — constaté en bench réel 2026-07-11 (tour de
+        # 21,5 s rendu par 4 mots sur audio à 500 Hz de bande). On SIGNALE, on ne
+        # supprime jamais : le texte réel d'un tour lent légitime reste intact.
+        self.sparse_min_duration_s = float(cfg.get("sparse_min_duration_s", 8.0))
+        self.sparse_words_per_second = float(cfg.get("sparse_words_per_second", 0.5))
         self.detect_non_latin = bool(cfg.get("detect_non_latin", True))
         self.detect_generic_hallucinations = bool(cfg.get("detect_generic_hallucinations", True))
         self.non_latin_min_chars = int(cfg.get("non_latin_min_chars", 2))
@@ -78,6 +85,14 @@ class SegmentReliabilityScorer:
             reasons.append("segment_micro")
         elif duration > 0.0 and duration < self.short_segment_s and len(text.split()) <= 2:
             reasons.append("segment_court")
+
+        if (
+            self.sparse_words_per_second > 0
+            and duration >= self.sparse_min_duration_s
+            and text
+            and len(text.split()) / duration < self.sparse_words_per_second
+        ):
+            reasons.append("debit_parole_anormal")
 
         nsp = segment.get("no_speech_prob")
         if nsp is not None and float(nsp) > self.no_speech_prob_threshold:

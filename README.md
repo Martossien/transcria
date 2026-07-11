@@ -174,8 +174,12 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
 ```
 
 - **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 /
-  faster-whisper, IBM Granite Speech, NVIDIA Parakeet TDT (experimental) — served locally
-  or by a remote OpenAI-compatible server (vLLM, SGLang).
+  faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
+  Parakeet TDT (experimental) — served locally or by a remote OpenAI-compatible server
+  (vLLM, SGLang). We benchmark them on **real French meeting recordings** against a
+  professional human transcript — WER, an English-drift detector, a multi-run LLM judge
+  and human reading of the failure modes:
+  [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (English).
 - **Diarization backends**: pyannote.audio (default) or NVIDIA Sortformer via NeMo.
 - **Arbitration LLM**: a local OpenAI-compatible server (Ollama / llama.cpp / vLLM),
   selected per hardware from a benchmarked VRAM tier catalog (12 → 64 GB, one validated

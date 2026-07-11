@@ -882,6 +882,7 @@ exporté), plutôt que de compter sur le téléchargement au premier job :
 | Modèle | Cache | Commande |
 |---|---|---|
 | Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `hf download <model_id>` |
+| Voxtral Mini 3B (Apache-2.0, non-gated) | `$HF_HOME/hub` (ou `models/voxtral-mini-3b-2507/`) | `hf download mistralai/Voxtral-Mini-3B-2507` — aussi téléchargeable depuis la page « Modèles » de l'UI |
 | pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `hf download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
 | Whisper (faster-whisper) | `$HF_HOME/hub` | `hf download Systran/faster-whisper-large-v3` |
 | SQUIM (préflight) | `~/.cache/torch/hub/torchaudio/models/` | `curl -o ~/.cache/torch/hub/torchaudio/models/squim_objective_dns2020.pth https://download.pytorch.org/torchaudio/models/squim_objective_dns2020.pth` |
@@ -941,7 +942,7 @@ services:
     - 8000
 
 models:
-  stt_backend: "cohere"                     # ou "whisper" pour utiliser Whisper (via faster-whisper)
+  stt_backend: "cohere"                     # ou "whisper", "voxtral" (Apache-2.0), "granite", "parakeet"
   default_stt_model: "cohere-transcribe-03-2026"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"

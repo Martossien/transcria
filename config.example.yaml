@@ -386,6 +386,12 @@ workflow:
     low_word_confidence_min: 0.4
     micro_segment_s: 0.35
     short_segment_s: 0.8
+    # Débit anormalement bas sur segment LONG (ex. 21 s rendues par 4 mots) :
+    # signature de remplissage des backends LLM-STT (voxtral/granite, sans
+    # no_speech_prob) sur audio quasi muet. SIGNALE (raison
+    # debit_parole_anormal), ne supprime jamais.
+    sparse_min_duration_s: 8.0
+    sparse_words_per_second: 0.5
     # Flags textuels configurables. Aucun terme métier n'est codé en dur :
     # ajoutez ici vos regex si des hallucinations génériques récurrentes sont observées.
     detect_non_latin: true

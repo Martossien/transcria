@@ -619,6 +619,7 @@ def _check_segment_reliability(cfg: dict, r: ValidationResult) -> None:
     for key in (
         "no_speech_prob_threshold", "low_word_confidence_ratio",
         "low_word_confidence_min", "micro_segment_s", "short_segment_s",
+        "sparse_min_duration_s", "sparse_words_per_second",
     ):
         _check_optional_number(cfg, key, f"workflow.segment_reliability.{key}", r)
     if "non_latin_min_chars" in cfg:

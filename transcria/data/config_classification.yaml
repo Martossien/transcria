@@ -393,6 +393,8 @@ deferred:
 - workflow.segment_reliability.non_latin_char_pattern
 - workflow.segment_reliability.non_latin_min_chars
 - workflow.segment_reliability.short_segment_s
+- workflow.segment_reliability.sparse_min_duration_s
+- workflow.segment_reliability.sparse_words_per_second
 - workflow.source_separation.backend
 - workflow.source_separation.decision.min_duration_s
 - workflow.source_separation.decision.min_score

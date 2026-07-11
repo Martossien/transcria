@@ -124,6 +124,17 @@ class VoxtralTranscriber(BaseTranscriber):
 
             dtype = self._resolve_torch_dtype(torch)
             load_t0 = _time.time()
+            # Chemin local configuré mais absent (ex. modèle téléchargé via la page
+            # « Modèles » → cache HF) : repli sur l'identifiant HF officiel.
+            resolved_path = self.model_path
+            if resolved_path.startswith((".", "/")) and not Path(resolved_path).exists():
+                logger.info(
+                    "Voxtral STT: chemin local %s absent — repli sur %s (cache HF)",
+                    resolved_path, _VOXTRAL_MODEL_REPO,
+                )
+                resolved_path = _VOXTRAL_MODEL_REPO
+            self.model_path = resolved_path
+            self._metadata["model_path"] = resolved_path
             local_only = self._is_local_model_path(self.model_path)
             # Même verrou que Granite/pyannote : device_map= passe par
             # accelerate.init_empty_weights (monkeypatch meta global non thread-safe).

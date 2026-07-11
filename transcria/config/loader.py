@@ -303,6 +303,10 @@ _DEFAULT_CONFIG = {
             "low_word_confidence_min": 0.4,
             "micro_segment_s": 0.35,
             "short_segment_s": 0.8,
+            # Débit anormalement bas sur segment long (LLM-STT sans confiances) :
+            # signale un probable remplissage sur audio quasi muet, sans rien supprimer.
+            "sparse_min_duration_s": 8.0,
+            "sparse_words_per_second": 0.5,
             "detect_non_latin": True,
             "non_latin_char_pattern": (
                 r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
