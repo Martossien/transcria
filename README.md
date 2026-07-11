@@ -28,7 +28,8 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 > **Non-technical reader?** (project manager, business owner, decision maker) — a
 > business-oriented overview exists: use cases, benefits, example results and the user
-> journey, no jargon → **[docs/PRESENTATION.md](docs/PRESENTATION.md)** (in French).
+> journey, no jargon → **[docs/PRESENTATION.en.md](docs/PRESENTATION.en.md)**
+> ([version française](docs/PRESENTATION.md)).
 
 ## Project status
 

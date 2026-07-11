@@ -1,5 +1,7 @@
 # TranscrIA côté métier — cas d'usage, bénéfices, parcours
 
+> 🇬🇧 [English version](PRESENTATION.en.md)
+
 > Cette page s'adresse aux lecteurs **non techniques** : chefs de projet, MOA, secrétaires
 > de séance, responsables métier, DSI, décideurs. Pas de jargon, pas de ligne de commande —
 > l'entrée technique (installation, architecture) reste le [README du dépôt](../README.fr.md).
@@ -123,6 +125,9 @@ Autant le dire clairement :
 
 ## Pour essayer
 
+- **Sans rien installer :** la [démo d'analyse du son](https://huggingface.co/spaces/martossien/transcria-audio-preflight)
+  tourne entièrement dans votre navigateur — *vos* enregistrements de réunion se
+  transcriront-ils bien ?
 - **Vous avez une DSI ?** Transmettez-lui le [guide d'essai](TESTERS.md) (test en
   15 minutes sur une machine équipée) ou le [déploiement Docker](DOCKER.md) — une
   commande suffit pour une instance d'évaluation.

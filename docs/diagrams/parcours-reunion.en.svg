@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1220 520" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <!-- White background: the diagram stays readable in GitHub dark theme -->
+  <rect x="0" y="0" width="1220" height="520" rx="14" fill="#ffffff" stroke="#d8dee6"/>
+
+  <!-- Title -->
+  <text x="610" y="46" text-anchor="middle" font-size="24" font-weight="700" fill="#1F3864">From the meeting to the deliverables — with a human in charge</text>
+
+  <!-- Arrows (arrowhead definition) -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <!-- ── Step 1: recorded meeting ──────────────────────────────────── -->
+  <rect x="30" y="120" width="200" height="180" rx="12" fill="#EEF3FA" stroke="#1F3864" stroke-width="1.5"/>
+  <circle cx="55" cy="145" r="13" fill="#1F3864"/>
+  <text x="55" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
+  <text x="130" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">Recorded</text>
+  <text x="130" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">meeting</text>
+  <text x="130" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="130" dy="0">an audio recording:</tspan>
+    <tspan x="130" dy="17">dictaphone, or the audio</tspan>
+    <tspan x="130" dy="17">track of a video call</tspan>
+  </text>
+
+  <line x1="230" y1="210" x2="264" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Step 2: TranscrIA transcribes ─────────────────────────────── -->
+  <rect x="270" y="120" width="200" height="180" rx="12" fill="#E0F2F1" stroke="#004D40" stroke-width="1.5"/>
+  <circle cx="295" cy="145" r="13" fill="#004D40"/>
+  <text x="295" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
+  <text x="370" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">TranscrIA listens</text>
+  <text x="370" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">and transcribes</text>
+  <text x="370" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="370" dy="0">who spoke, when, what —</tspan>
+    <tspan x="370" dy="17">audio analysis, transcript,</tspan>
+    <tspan x="370" dy="17">first summary</tspan>
+    <tspan x="370" dy="17">(100% local AI)</tspan>
+  </text>
+
+  <line x1="470" y1="210" x2="504" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Step 3: YOU VALIDATE (the differentiator) ─────────────────── -->
+  <rect x="510" y="100" width="200" height="220" rx="12" fill="#FEF3C7" stroke="#B45309" stroke-width="3"/>
+  <circle cx="535" cy="127" r="13" fill="#B45309"/>
+  <text x="535" y="132" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">3</text>
+  <text x="610" y="168" text-anchor="middle" font-size="18" font-weight="800" fill="#92400E">You validate</text>
+  <text x="610" y="196" text-anchor="middle" font-size="13" fill="#78350F">
+    <tspan x="610" dy="0">speakers (playable excerpts),</tspan>
+    <tspan x="610" dy="17">participants, business lexicon,</tspan>
+    <tspan x="610" dy="17">control summary,</tspan>
+    <tspan x="610" dy="17">presented documents</tspan>
+  </text>
+  <text x="610" y="292" text-anchor="middle" font-size="12.5" font-weight="700" fill="#B45309">THE HUMAN STAYS IN CHARGE</text>
+
+  <line x1="710" y1="210" x2="744" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Step 4: the AI corrects and assembles ─────────────────────── -->
+  <rect x="750" y="120" width="200" height="180" rx="12" fill="#E0F2F1" stroke="#004D40" stroke-width="1.5"/>
+  <circle cx="775" cy="145" r="13" fill="#004D40"/>
+  <text x="775" y="150" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4</text>
+  <text x="850" y="185" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">The AI corrects</text>
+  <text x="850" y="205" text-anchor="middle" font-size="17" font-weight="700" fill="#004D40">and assembles</text>
+  <text x="850" y="235" text-anchor="middle" font-size="13" fill="#475569">
+    <tspan x="850" dy="0">correction using YOUR</tspan>
+    <tspan x="850" dy="17">validated lexicon, final</tspan>
+    <tspan x="850" dy="17">review pass, every</tspan>
+    <tspan x="850" dy="17">correction documented</tspan>
+  </text>
+
+  <line x1="950" y1="210" x2="984" y2="210" stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ── Step 5: deliverables ──────────────────────────────────────── -->
+  <rect x="990" y="100" width="200" height="220" rx="12" fill="#EEF3FA" stroke="#1F3864" stroke-width="1.5"/>
+  <circle cx="1015" cy="127" r="13" fill="#1F3864"/>
+  <text x="1015" y="132" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">5</text>
+  <text x="1090" y="165" text-anchor="middle" font-size="17" font-weight="700" fill="#1F3864">Your deliverables</text>
+  <text x="1010" y="193" font-size="13" fill="#334155">
+    <tspan x="1010" dy="0">• Word meeting minutes</tspan>
+    <tspan x="1018" dy="16" font-size="12" fill="#64748b">styled after the meeting type</tspan>
+    <tspan x="1010" dy="18">• summary, decisions,</tspan>
+    <tspan x="1018" dy="16">action items</tspan>
+    <tspan x="1010" dy="18">• time-coded transcript</tspan>
+    <tspan x="1018" dy="16" font-size="12" fill="#64748b">per speaker (raw + corrected)</tspan>
+    <tspan x="1010" dy="18">• quality reports</tspan>
+  </text>
+
+  <!-- Retouching loop: deliverables → validation -->
+  <path d="M 1090 320 L 1090 356 L 610 356 L 610 326" fill="none" stroke="#B45309" stroke-width="1.8" stroke-dasharray="6 5" marker-end="url(#arrow)"/>
+  <text x="850" y="348" text-anchor="middle" font-size="12.5" fill="#92400E">after-the-fact edits: built-in editor + plain-language requests, every version restorable</text>
+
+  <!-- ── Sovereignty banner ────────────────────────────────────────── -->
+  <rect x="30" y="396" width="1160" height="94" rx="12" fill="#F1F5F9" stroke="#CBD5E1"/>
+  <text x="610" y="432" text-anchor="middle" font-size="15.5" font-weight="700" fill="#1F3864">Everything on YOUR servers, with YOUR graphics cards — the recording never leaves your infrastructure.</text>
+  <text x="610" y="460" text-anchor="middle" font-size="13.5" fill="#475569">No subscription, no per-minute billing. Account- and group-based access, full audit log (GDPR),</text>
+  <text x="610" y="478" text-anchor="middle" font-size="13.5" fill="#475569">explicit consent for known-voice recognition.</text>
+</svg>
