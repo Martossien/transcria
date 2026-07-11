@@ -1973,8 +1973,12 @@ def main() -> int:
                 job = JobStore.get_by_id(job_id)
 
             # ── Langue des livrables (Axe B) : semer meeting_context.language AVANT le résumé
-            #    (resolve_output_language le lit) ; merge non destructif. ────────
-            if args.language and args.language != "fr":
+            #    (resolve_output_language le lit) ; merge non destructif. TOUJOURS semer,
+            #    y compris fr : depuis l'i18n, le repli sans langue explicite est la LOCALE
+            #    DU PROPRIÉTAIRE — un admin en interface anglaise faisait silencieusement
+            #    transcrire les benchs français en mode TRADUCTION anglaise (constaté
+            #    2026-07-11 : WER 0,95 vs référence, 27 % de mots-outils EN). ────────
+            if args.language:
                 def _seed_language(extra: dict) -> dict:
                     mc = {**(extra.get("meeting_context") or {}), "language": args.language}
                     return {**extra, "meeting_context": mc}

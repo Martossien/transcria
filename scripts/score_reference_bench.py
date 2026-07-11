@@ -88,6 +88,36 @@ def load_results(bench_dir: Path) -> list[dict]:
     return results
 
 
+# Mots-outils SANS homographe français : leur densité trahit un passage du moteur
+# STT en mode TRADUCTION anglaise (dérive constatée en E2E réel sur audio dégradé,
+# 2026-07-11 : « comté d'été » → « summer county »). Les homographes fréquents
+# (a, on, an, as, or, but, if…) sont volontairement exclus.
+_EN_MARKERS = {
+    "the", "and", "are", "was", "were", "this", "they", "you", "of", "to",
+    "with", "have", "has", "what", "which", "not", "will", "would", "could",
+    "there", "from", "does", "be", "it", "is", "we", "your", "their",
+}
+
+
+def en_marker_ratio(tokens: list[str]) -> float | None:
+    """Ratio de mots-outils anglais non ambigus — proxy de dérive en traduction."""
+    if not tokens:
+        return None
+    hits = sum(1 for tok in tokens if tok.lower() in _EN_MARKERS)
+    return round(hits / len(tokens), 4)
+
+
+def repetition_loop_count(text: str) -> int | None:
+    """Boucles répétitives détectées par l'anti-hallucination du pipeline (best-effort)."""
+    try:
+        from transcria.stt.anti_hallucination import collapse_repetition_loops
+
+        _, loops = collapse_repetition_loops(text)
+        return len(loops)
+    except Exception:
+        return None
+
+
 def score_pair(reference: str, hypothesis: str) -> dict:
     ref_words = words(reference)
     hyp_words = words(hypothesis)
@@ -104,6 +134,12 @@ def score_pair(reference: str, hypothesis: str) -> dict:
         "word_ratio": round(len(hyp_words) / len(ref_words), 4) if ref_words else None,
         "wer": round(wer_distance / len(ref_words), 4) if ref_words else None,
         "cer": round(1.0 - char_similarity, 4) if ref_norm else None,
+        # Signaux d'honnêteté (indépendants de la référence) : un WER moyen peut
+        # cacher une dérive en traduction ou des boucles — ces deux colonnes les
+        # rendent visibles sans relecture.
+        "hyp_en_ratio": en_marker_ratio(hyp_words),
+        "ref_en_ratio": en_marker_ratio(ref_words),
+        "hyp_loops": repetition_loop_count(hypothesis),
     }
 
 
@@ -159,13 +195,14 @@ def write_report(rows: list[dict], output: Path) -> None:
         "",
         "> WER/CER approximatifs contre le DOCX de référence. Le DOCX marché reste un proxy, pas une vérité parfaite.",
         "",
-        "| Fenêtre | Combo | STT | status | ref mots | hyp mots | ratio | WER | CER | temps | VRAM |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Fenêtre | Combo | STT | status | ref mots | hyp mots | ratio | WER | CER | EN% | boucles | temps | VRAM |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
             f"| {row['window']} | {row['combo_id']} | {row['stt_backend']} | {row['status']} | {row['ref_words']} | {row['hyp_words']} | "
             f"{_fmt(row['word_ratio'])} | {_fmt(row['wer'])} | {_fmt(row['cer'])} | "
+            f"{_fmt(row.get('hyp_en_ratio'))} | {_fmt(row.get('hyp_loops'), 0)} | "
             f"{_fmt(row['total_s'], 1)} | {_fmt(row['vram_peak_mb'], 0)} |"
         )
 

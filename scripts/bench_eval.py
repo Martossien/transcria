@@ -29,7 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -87,6 +87,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--timeout", type=int, default=600,
         help="Timeout en secondes pour l'appel LLM (défaut: 600)",
+    )
+    parser.add_argument(
+        "--runs", type=int, default=1,
+        help="Nombre de passes du juge LLM — médiane + étendue agrégées "
+             "(le juge mono-run a une variance réelle ; 3 recommandé)",
     )
     parser.add_argument(
         "--dry-run", action="store_true",
@@ -280,6 +285,54 @@ def call_llm(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Agrégation multi-runs (médiane des notes globales + étendue)
+# ─────────────────────────────────────────────────────────────────────────────
+_RANK_ROW_RE = re.compile(
+    r"\|\s*\d+\s*\|\s*(?:SRT-)?([A-Za-z0-9_-]+)\s*\|\s*([\d]+(?:[.,]\d+)?)\s*\|"
+)
+
+
+def parse_global_scores(llm_response: str) -> dict[str, float]:
+    """Notes globales du tableau CLASSEMENT d'une réponse juge (id → note)."""
+    scores: dict[str, float] = {}
+    for match in _RANK_ROW_RE.finditer(llm_response):
+        combo_id, raw = match.group(1), match.group(2).replace(",", ".")
+        try:
+            scores.setdefault(combo_id, float(raw))
+        except ValueError:
+            continue
+    return scores
+
+
+def aggregate_runs(responses: list[str]) -> str:
+    """Tableau agrégé : médiane, min-max et stabilité du rang sur N runs."""
+    import statistics
+
+    per_run = [parse_global_scores(resp) for resp in responses]
+    ids = sorted({cid for run in per_run for cid in run})
+    lines = [
+        f"### CLASSEMENT AGRÉGÉ ({len(responses)} runs du juge — médiane des notes globales)",
+        "",
+        "> Le juge LLM mono-run a une variance réelle : une étendue large = verdict fragile,",
+        "> à trancher par lecture humaine ou par le score référence (WER).",
+        "",
+        "| ID | Médiane | Min–Max | Runs notés |",
+        "|---|---:|---:|---:|",
+    ]
+    rows = []
+    for cid in ids:
+        values = [run[cid] for run in per_run if cid in run]
+        if not values:
+            continue
+        rows.append((statistics.median(values), cid, values))
+    for median_value, cid, values in sorted(rows, reverse=True):
+        lines.append(
+            f"| {cid} | {median_value:.1f} | {min(values):.1f}–{max(values):.1f} | {len(values)}/{len(responses)} |"
+        )
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Rapport Markdown
 # ─────────────────────────────────────────────────────────────────────────────
 def write_report(
@@ -373,18 +426,29 @@ def main() -> int:
         print(user_content[:3000], "...[tronqué]" if len(user_content) > 3000 else "")
         return 0
 
-    # ── Appel LLM ────────────────────────────────────────────────────────────
+    # ── Appel LLM (multi-runs : le juge mono-run a une VARIANCE réelle — écarts
+    # de classement observés entre passes identiques le 2026-07-11 ; la médiane
+    # de N runs + l'étendue rendent le verdict honnête) ────────────────────────
     t0 = time.monotonic()
+    responses: list[str] = []
     try:
-        llm_response = call_llm(
-            system_prompt, user_content,
-            args.arbitrage_port, args.model_id, args.timeout,
-        )
+        for run_index in range(max(1, args.runs)):
+            if args.runs > 1:
+                logger.info("Run juge LLM %d/%d", run_index + 1, args.runs)
+            responses.append(call_llm(
+                system_prompt, user_content,
+                args.arbitrage_port, args.model_id, args.timeout,
+            ))
     except Exception as exc:
         logger.error("Échec appel LLM : %s", exc)
         return 1
 
     elapsed = time.monotonic() - t0
+    llm_response = responses[0]
+    if len(responses) > 1:
+        llm_response = aggregate_runs(responses) + "\n\n---\n\n" + "\n\n---\n\n".join(
+            f"## Run {i + 1} (brut)\n\n{resp}" for i, resp in enumerate(responses)
+        )
 
     # ── Rapport ──────────────────────────────────────────────────────────────
     report_path = write_report(llm_response, entries, args, bench_dir, elapsed)
