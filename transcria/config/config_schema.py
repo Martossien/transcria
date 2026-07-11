@@ -36,6 +36,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_cohere_tf5(cfg.get("cohere_tf5", {}), result)
     _check_whisper(cfg.get("whisper", {}), result)
     _check_granite(cfg.get("granite", {}), result)
+    _check_voxtral(cfg.get("voxtral", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
@@ -225,6 +226,7 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
     _check_int_range(gpu, "pyannote_vram_mb", "gpu.pyannote_vram_mb", 500, 100000, r)
     _check_int_range(gpu, "llm_vram_mb", "gpu.llm_vram_mb", 1000, 500000, r)
     _check_int_range(gpu, "granite_vram_mb", "gpu.granite_vram_mb", 1000, 100000, r)
+    _check_int_range(gpu, "voxtral_vram_mb", "gpu.voxtral_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "min_free_vram_mb", "gpu.min_free_vram_mb", 100, 50000, r)
     indices = gpu.get("llm_gpu_indices")
     if indices is not None:
@@ -284,7 +286,7 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
 
 
 def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
-    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet"}
+    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"}
     backend = mod.get("stt_backend", "cohere")
     if not isinstance(backend, str) or backend not in valid:
         r.add_error(
@@ -715,6 +717,36 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
                     r.add_error(f"workflow.transcription_cleanup.{key}[{i}]: doit être une chaîne")
 
 
+def _check_voxtral(voxtral: dict, r: ValidationResult) -> None:
+    if not voxtral:
+        return
+    if not isinstance(voxtral, dict):
+        r.add_error("voxtral: doit être un objet YAML")
+        return
+    _check_bool(voxtral, "enabled", "voxtral.enabled", r)
+    _check_str(voxtral, "model_id", "voxtral.model_id", r)
+    _check_str(voxtral, "torch_dtype", "voxtral.torch_dtype", r)
+    dtype = voxtral.get("torch_dtype")
+    if isinstance(dtype, str) and dtype not in {"bfloat16", "bf16", "float16", "fp16", "float32", "fp32"}:
+        r.add_error("voxtral.torch_dtype: valeurs acceptées bfloat16, float16, float32")
+    _check_int_range(voxtral, "chunk_length_s", "voxtral.chunk_length_s", 1, 600, r)
+    _check_int_range(voxtral, "max_new_tokens", "voxtral.max_new_tokens", 1, 20000, r)
+    _check_optional_number(voxtral, "max_new_tokens_per_second", "voxtral.max_new_tokens_per_second", r)
+    _check_int_range(voxtral, "min_new_tokens", "voxtral.min_new_tokens", 1, 20000, r)
+    max_new_tokens_per_second = voxtral.get("max_new_tokens_per_second")
+    if (
+        max_new_tokens_per_second is not None
+        and not isinstance(max_new_tokens_per_second, bool)
+        and isinstance(max_new_tokens_per_second, (int, float))
+        and max_new_tokens_per_second <= 0
+    ):
+        r.add_error("voxtral.max_new_tokens_per_second: doit être strictement positif ou null")
+    _check_bool(voxtral, "collapse_repetition_loops", "voxtral.collapse_repetition_loops", r)
+    _check_int_range(voxtral, "repetition_loop_min_repeats", "voxtral.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(voxtral, "repetition_loop_max_phrase_words", "voxtral.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(voxtral, "repetition_loop_keep_repeats", "voxtral.repetition_loop_keep_repeats", 1, 20, r)
+
+
 def _check_multi_stt(cfg: dict, r: ValidationResult) -> None:
     if not cfg:
         return
@@ -724,9 +756,9 @@ def _check_multi_stt(cfg: dict, r: ValidationResult) -> None:
     _check_bool(cfg, "enabled", "workflow.multi_stt.enabled", r)
     _check_str(cfg, "secondary_backend", "workflow.multi_stt.secondary_backend", r)
     secondary = cfg.get("secondary_backend")
-    if isinstance(secondary, str) and secondary not in {"cohere", "cohere_tf5", "whisper", "granite", "parakeet"}:
+    if isinstance(secondary, str) and secondary not in {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"}:
         r.add_error(
-            "workflow.multi_stt.secondary_backend: valeurs acceptées cohere, cohere_tf5, whisper, granite, parakeet"
+            "workflow.multi_stt.secondary_backend: valeurs acceptées cohere, cohere_tf5, whisper, granite, parakeet, voxtral"
         )
     _check_int_range(cfg, "max_segments", "workflow.multi_stt.max_segments", 1, 500, r)
     for key in ("min_segment_s", "padding_s"):

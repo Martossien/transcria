@@ -273,7 +273,8 @@ assert len(EXTENDED_COMBO_MATRIX) == 12, (
 # (pyannote étant le défaut). Quand "off", --skip-diarization est utilisé.
 # Quand VAD OFF, --config-override workflow.vad.enabled_summary=false est ajouté.
 # ─────────────────────────────────────────────────────────────────────────────
-_STT_BACKENDS = ["cohere", "whisper", "granite", "parakeet"]
+# Ajouter UNIQUEMENT en fin de liste : les IDs S01..S24 existants dépendent de l'ordre.
+_STT_BACKENDS = ["cohere", "whisper", "granite", "parakeet", "voxtral"]
 _DIARIZATION_OPTIONS = [
     {"key": "pyannote", "skip": False, "override": None},
     {"key": "sortformer", "skip": False, "override": "models.diarization_backend=sortformer"},
@@ -309,8 +310,9 @@ for _stt in _STT_BACKENDS:
                 "label_extra": f"{_stt}+{_dia['key']}+{_vad['key']}",
             })
 
-assert len(STT_COMBO_MATRIX) == 24, (
-    f"La matrice STT devrait contenir 24 combos, pas {len(STT_COMBO_MATRIX)}"
+# 5 backends × 3 diarisations × 2 VAD (voxtral ajouté en S25-S30 le 2026-07-11).
+assert len(STT_COMBO_MATRIX) == 30, (
+    f"La matrice STT devrait contenir 30 combos, pas {len(STT_COMBO_MATRIX)}"
 )
 
 

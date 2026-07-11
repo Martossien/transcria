@@ -5,7 +5,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet")
+_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral")
 
 
 def create_transcriber(
@@ -41,6 +41,8 @@ def create_transcriber(
         return _create_granite(config, device)
     elif backend == "parakeet":
         return _create_parakeet(config, device)
+    elif backend == "voxtral":
+        return _create_voxtral(config, device)
 
     return _create_cohere(config, device)
 
@@ -203,6 +205,31 @@ def _effective_parakeet_config(config: dict) -> dict:
     return _deep_merge(defaults, current)
 
 
+def _create_voxtral(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.voxtral_transcriber import VoxtralTranscriber
+
+    voxtral_cfg = _effective_voxtral_config(config)
+    return VoxtralTranscriber(
+        model_path=voxtral_cfg.get("model_id"),
+        device=device,
+        chunk_length_s=voxtral_cfg.get("chunk_length_s", 30),
+        max_new_tokens=voxtral_cfg.get("max_new_tokens", 2000),
+        max_new_tokens_per_second=voxtral_cfg.get("max_new_tokens_per_second", 10.0),
+        min_new_tokens=voxtral_cfg.get("min_new_tokens", 64),
+        torch_dtype=voxtral_cfg.get("torch_dtype", "bfloat16"),
+        collapse_repetition_loops=voxtral_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=voxtral_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=voxtral_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=voxtral_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def _effective_voxtral_config(config: dict) -> dict:
+    current = config.get("voxtral", {})
+    defaults = get_default_config()["voxtral"]
+    return _deep_merge(defaults, current)
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 
@@ -234,4 +261,6 @@ def get_backend_vram_mb(backend: str, config: dict) -> int:
         return int(config.get("gpu", {}).get("granite_vram_mb", get_default_config()["gpu"]["granite_vram_mb"]))
     elif backend == "parakeet":
         return int(config.get("gpu", {}).get("parakeet_vram_mb", get_default_config()["gpu"]["parakeet_vram_mb"]))
+    elif backend == "voxtral":
+        return int(config.get("gpu", {}).get("voxtral_vram_mb", get_default_config()["gpu"]["voxtral_vram_mb"]))
     return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))

@@ -235,6 +235,28 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `repetition_loop_max_phrase_words` | int | `10` | Taille maximale d'une phrase répétée détectée |
 | `repetition_loop_keep_repeats` | int | `2` | Occurrences conservées après réduction d'une boucle |
 
+### `voxtral`
+
+Backend STT expérimental **Mistral Voxtral Mini 3B** (Apache-2.0, non-gated —
+aucun token HF). Mode « pure transcription » du modèle, **langue forcée
+nativement** (pas de prompt à bricoler), ~9,5 Go en bfloat16. Nécessite
+`mistral-common[audio]` (dans requirements.txt) et `transformers >= 4.57`.
+Activer avec `models.stt_backend=voxtral`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Marqueur d'activation (le backend effectif reste `models.stt_backend`) |
+| `model_id` | string | `"./models/voxtral-mini-3b-2507"` | Chemin local ou identifiant HuggingFace |
+| `torch_dtype` | string | `"bfloat16"` | Type torch (`bfloat16`, `float16`, `float32`) |
+| `chunk_length_s` | int | `30` | Durée maximale d'un chunk (le chunking par tours pyannote domine en pratique) |
+| `max_new_tokens` | int | `2000` | Plafond absolu de génération par chunk |
+| `max_new_tokens_per_second` | float/null | `10.0` | Borne dynamique du budget selon la durée du chunk |
+| `min_new_tokens` | int | `64` | Budget minimal pour les chunks courts |
+| `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives après génération |
+| `repetition_loop_*` | int | `4` / `10` / `2` | Réglages de la réduction de boucles (mêmes sémantiques que les autres backends) |
+
+**VRAM :** `gpu.voxtral_vram_mb` (défaut `11000`).
+
 ### `granite`
 
 Backend STT expérimental IBM Granite Speech 4.1 2B. Il reste désactivé par défaut

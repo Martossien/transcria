@@ -102,6 +102,7 @@ deferred:
 - gpu.parakeet_vram_mb
 - gpu.pyannote_vram_mb
 - gpu.sortformer_vram_mb
+- gpu.voxtral_vram_mb
 - granite.chunk_length_s
 - granite.collapse_repetition_loops
 - granite.enabled
@@ -213,6 +214,17 @@ deferred:
 - voice_enrollment.matching.suggestion_threshold
 - voice_enrollment.require_active_consent
 - voice_enrollment.require_explicit_job_group_for_multi_group_users
+- voxtral.chunk_length_s
+- voxtral.collapse_repetition_loops
+- voxtral.enabled
+- voxtral.max_new_tokens
+- voxtral.max_new_tokens_per_second
+- voxtral.min_new_tokens
+- voxtral.model_id
+- voxtral.repetition_loop_keep_repeats
+- voxtral.repetition_loop_max_phrase_words
+- voxtral.repetition_loop_min_repeats
+- voxtral.torch_dtype
 - whisper.beam_size
 - whisper.best_of
 - whisper.chunk_length_s

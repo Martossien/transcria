@@ -1328,3 +1328,47 @@ class TestSpeakerDetector:
             assert result["available"] is True
             assert calls
             assert fs.load_json("speakers/speaker_clips.json") == {"SPEAKER_00": ["clip.wav"]}
+
+
+class TestVoxtralTranscriber:
+    def test_voxtral_backend_is_available_in_factory(self):
+        assert "voxtral" in list_available_backends()
+
+    def test_create_voxtral_transcriber_from_config(self):
+        from transcria.stt.voxtral_transcriber import VoxtralTranscriber
+
+        config = {
+            "models": {"stt_backend": "voxtral"},
+            "voxtral": {
+                "model_id": "./models/voxtral-mini-3b-2507",
+                "chunk_length_s": 30,
+                "max_new_tokens_per_second": 10.0,
+            },
+        }
+        transcriber = create_transcriber(config, backend="voxtral", device="cpu")
+        assert isinstance(transcriber, VoxtralTranscriber)
+        assert transcriber.model_path == "./models/voxtral-mini-3b-2507"
+        assert transcriber.chunk_length_s == 30
+
+    def test_voxtral_language_mapping(self):
+        from transcria.stt.voxtral_transcriber import VoxtralTranscriber
+
+        t = VoxtralTranscriber(device="cpu")
+        assert t._language_code("fr") == "fr"
+        assert t._language_code("french") == "fr"
+        assert t._language_code("en") == "en"
+        assert t._language_code("klingon") == "fr"  # repli sûr
+
+    def test_voxtral_token_budget_scaling(self):
+        from transcria.stt.voxtral_transcriber import VoxtralTranscriber
+
+        t = VoxtralTranscriber(device="cpu", max_new_tokens=2000, max_new_tokens_per_second=10.0, min_new_tokens=64)
+        assert t._max_new_tokens_for_chunk(3.0) == 64      # plancher
+        assert t._max_new_tokens_for_chunk(30.0) == 300    # 30 s × 10
+        assert t._max_new_tokens_for_chunk(600.0) == 2000  # plafond
+
+    def test_voxtral_vram_from_config(self):
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        assert get_backend_vram_mb("voxtral", {}) == 11000
+        assert get_backend_vram_mb("voxtral", {"gpu": {"voxtral_vram_mb": 12345}}) == 12345

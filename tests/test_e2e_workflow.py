@@ -180,7 +180,7 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet"], default="cohere",
+        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"], default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."
@@ -1507,6 +1507,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     granite_keywords_data = fs.load_json("metadata/granite_keywords.json") or {}
     multi_stt_data = fs.load_json("metadata/multi_stt.json") or {}
     parakeet_data = fs.load_json("metadata/parakeet.json") or {}
+    voxtral_data = fs.load_json("metadata/voxtral.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
     meeting_ctx = fs.load_json("context/meeting_context.json") or {}
@@ -1543,6 +1544,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "granite_keywords_data": granite_keywords_data or None,
         "multi_stt_data": multi_stt_data or None,
         "parakeet_data": parakeet_data or None,
+        "voxtral_data": voxtral_data or None,
         "mode": args.mode,
         "skip_llm": args.skip_llm,
         "skip_diarization": args.skip_diarization,
@@ -1626,6 +1628,7 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "granite_keywords": (fs.job_dir / "metadata" / "granite_keywords.json").exists(),
             "multi_stt": (fs.job_dir / "metadata" / "multi_stt.json").exists(),
             "parakeet": (fs.job_dir / "metadata" / "parakeet.json").exists(),
+            "voxtral": (fs.job_dir / "metadata" / "voxtral.json").exists(),
             "zip_export": bool(list((fs.job_dir / "exports").glob("*.zip"))) if (fs.job_dir / "exports").exists() else False,
             "docx_export": bool(list((fs.job_dir / "exports").glob("*.docx"))) if (fs.job_dir / "exports").exists() else False,
         },

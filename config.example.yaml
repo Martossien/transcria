@@ -243,6 +243,23 @@ granite:
   repetition_loop_max_phrase_words: 10
   repetition_loop_keep_repeats: 2
 
+voxtral:
+  # Backend STT expérimental Mistral Voxtral Mini 3B (Apache-2.0, NON-gated).
+  # Mode « pure transcription » du modèle, langue forcée nativement, ~9,5 Go bf16.
+  # Nécessite mistral-common[audio] (dans requirements.txt) + transformers >= 4.57.
+  # Activer via models.stt_backend: "voxtral".
+  enabled: false
+  model_id: "./models/voxtral-mini-3b-2507"
+  torch_dtype: "bfloat16"
+  chunk_length_s: 30
+  max_new_tokens: 2000
+  max_new_tokens_per_second: 10.0
+  min_new_tokens: 64
+  collapse_repetition_loops: true
+  repetition_loop_min_repeats: 4
+  repetition_loop_max_phrase_words: 10
+  repetition_loop_keep_repeats: 2
+
 sortformer:
   # Backend de diarisation experimental NVIDIA Sortformer 4spk v2.1 via NeMo.
   # Language-agnostic (embeddings acoustiques), max 4 locuteurs, CC-BY-4.0.
@@ -281,6 +298,7 @@ gpu:
   # carte, alignée sur llm_gpu_indices (ex. [18000, 6000] pour 24+8 Go). Absent = égal.
   # llm_vram_mb_per_gpu: [20000, 20000, 20000]
   granite_vram_mb: 6000
+  voxtral_vram_mb: 11000
   parakeet_vram_mb: 8000
   sortformer_vram_mb: 3500
   # Marge libre exigée PAR GPU en plus du besoin d'une phase. À RÉDUIRE sur les

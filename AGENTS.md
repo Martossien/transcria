@@ -200,6 +200,7 @@ transcria/
       whisper_transcriber.py# WhisperTranscriber — faster-whisper large-v3 qualité
       granite_transcriber.py# GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
       parakeet_transcriber.py# ParakeetTranscriber — NVIDIA Parakeet TDT 0.6B v3 expérimental (NeMo, auto-détection langue, timestamps natifs)
+      voxtral_transcriber.py# VoxtralTranscriber — Mistral Voxtral Mini 3B expérimental (Apache-2.0, non-gated, langue forcée nativement, mistral-common)
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
       contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session
