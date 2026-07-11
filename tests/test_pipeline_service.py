@@ -745,3 +745,100 @@ class TestTypeFieldsGating:
         # même si on force has_type_fields (un tel job ne peut de toute façon pas choisir de type)
         names = self._steps("srt_express", has_type_fields=True)
         assert "type_fields" not in names
+
+
+# ---------------------------------------------------------------------------
+# _inject_granite_lexicon_keywords
+# ---------------------------------------------------------------------------
+
+
+class TestInjectGraniteLexiconKeywords:
+    """Injection du lexique de session dans le prompt Granite « Keywords: »."""
+
+    def _cfg(self, tmp_path, enabled=True, backend="granite"):
+        return {
+            "models": {"stt_backend": backend},
+            "storage": {"jobs_dir": str(tmp_path)},
+            "granite": {
+                "prompt_mode": "asr_punctuated",
+                "keywords": [],
+                "lexicon_keywords": {
+                    "enabled": enabled,
+                    "priorities": ["critique", "importante"],
+                    "max_terms": 50,
+                },
+            },
+        }
+
+    def _write_lexicon(self, tmp_path, job_id, entries):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(tmp_path), job_id)
+        fs.save_json("context/session_lexicon.json", entries)
+        return fs
+
+    def test_noop_si_backend_non_granite(self, tmp_path):
+        svc = _make_svc()
+        cfg = self._cfg(tmp_path, backend="cohere")
+        job = _job()
+        self._write_lexicon(tmp_path, job.id, [{"term": "DRITE", "priority": "critique"}])
+
+        svc._inject_granite_lexicon_keywords(cfg, job)
+
+        assert cfg["granite"]["keywords"] == []
+        assert cfg["granite"]["prompt_mode"] == "asr_punctuated"
+
+    def test_noop_si_desactive(self, tmp_path):
+        svc = _make_svc()
+        cfg = self._cfg(tmp_path, enabled=False)
+        job = _job()
+        self._write_lexicon(tmp_path, job.id, [{"term": "DRITE", "priority": "critique"}])
+
+        svc._inject_granite_lexicon_keywords(cfg, job)
+
+        assert cfg["granite"]["keywords"] == []
+        assert cfg["granite"]["prompt_mode"] == "asr_punctuated"
+
+    def test_injecte_termes_et_bascule_prompt_mode(self, tmp_path):
+        svc = _make_svc()
+        cfg = self._cfg(tmp_path)
+        job = _job()
+        fs = self._write_lexicon(
+            tmp_path,
+            job.id,
+            [
+                {"term": "DRITE", "priority": "critique"},
+                {"term": "quorum", "replace_by": "quorum", "priority": "importante"},
+                {"term": "banal", "priority": "normale"},  # hors priorités retenues
+            ],
+        )
+
+        svc._inject_granite_lexicon_keywords(cfg, job)
+
+        assert cfg["granite"]["prompt_mode"] == "keywords"
+        assert "DRITE" in cfg["granite"]["keywords"]
+        assert "quorum" in cfg["granite"]["keywords"]
+        assert "banal" not in cfg["granite"]["keywords"]
+        stats = fs.load_json("metadata/granite_keywords.json")
+        assert stats["injected_terms"] == 2
+        assert stats["prompt_mode"] == "keywords"
+
+    def test_lexique_vide_ne_change_rien(self, tmp_path):
+        svc = _make_svc()
+        cfg = self._cfg(tmp_path)
+        job = _job()
+        self._write_lexicon(tmp_path, job.id, [])
+
+        svc._inject_granite_lexicon_keywords(cfg, job)
+
+        assert cfg["granite"]["keywords"] == []
+        assert cfg["granite"]["prompt_mode"] == "asr_punctuated"
+
+    def test_lexique_absent_ne_change_rien(self, tmp_path):
+        svc = _make_svc()
+        cfg = self._cfg(tmp_path)
+
+        svc._inject_granite_lexicon_keywords(cfg, _job())
+
+        assert cfg["granite"]["keywords"] == []
+        assert cfg["granite"]["prompt_mode"] == "asr_punctuated"

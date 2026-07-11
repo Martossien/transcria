@@ -179,6 +179,7 @@ transcria/
       runner.py             # WorkflowRunner — exécution des étapes (dont run_refine : chat d'affinage post-workflow)
       refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables), extract_proposal (label contractuel tolérant)
       refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>)
+      multi_stt_review.py   # EXPÉRIMENTAL multi-STT ciblé — segments sur fenêtres dégradées (difficulty_map) retranscrits par un 2e moteur + arbitrage LLM A/B (workflow.multi_stt, défaut off)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)

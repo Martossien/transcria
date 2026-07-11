@@ -308,6 +308,7 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_pyannote_chunking(wf.get("pyannote_chunking", {}), r)
     _check_vad_section(wf.get("vad", {}), r)
     _check_transcription_cleanup(wf.get("transcription_cleanup", {}), r)
+    _check_multi_stt(wf.get("multi_stt", {}), r)
     _check_stt_hybrid(wf.get("stt_hybrid", {}), r)
     _check_audio_scene(wf.get("audio_scene", {}), r)
     _check_audio_scene_filter(wf.get("audio_scene_filter", {}), r)
@@ -442,6 +443,23 @@ def _check_granite(granite: dict, r: ValidationResult) -> None:
                 r.add_error(f"granite.keywords[{index}]: doit être une chaîne non vide")
     else:
         r.add_error("granite.keywords: doit être une chaîne ou une liste de chaînes")
+    lexicon_keywords = granite.get("lexicon_keywords", {})
+    if lexicon_keywords is not None:
+        if not isinstance(lexicon_keywords, dict):
+            r.add_error("granite.lexicon_keywords: doit être un objet YAML")
+        else:
+            _check_bool(lexicon_keywords, "enabled", "granite.lexicon_keywords.enabled", r)
+            _check_int_range(lexicon_keywords, "max_terms", "granite.lexicon_keywords.max_terms", 1, 2000, r)
+            priorities = lexicon_keywords.get("priorities", [])
+            if not isinstance(priorities, list) or not priorities:
+                r.add_error("granite.lexicon_keywords.priorities: doit être une liste non vide")
+            else:
+                allowed = {"critique", "importante", "normale"}
+                for index, priority in enumerate(priorities):
+                    if not isinstance(priority, str) or priority not in allowed:
+                        r.add_error(
+                            f"granite.lexicon_keywords.priorities[{index}]: valeurs acceptées critique, importante, normale"
+                        )
     for key in ("fix_mistral_regex", "collapse_repetition_loops"):
         _check_bool(granite, key, f"granite.{key}", r)
     _check_int_range(granite, "repetition_loop_min_repeats", "granite.repetition_loop_min_repeats", 2, 100, r)
@@ -695,6 +713,31 @@ def _check_transcription_cleanup(cfg: dict, r: ValidationResult) -> None:
             for i, value in enumerate(values):
                 if not isinstance(value, str):
                     r.add_error(f"workflow.transcription_cleanup.{key}[{i}]: doit être une chaîne")
+
+
+def _check_multi_stt(cfg: dict, r: ValidationResult) -> None:
+    if not cfg:
+        return
+    if not isinstance(cfg, dict):
+        r.add_error("workflow.multi_stt: doit être un objet YAML")
+        return
+    _check_bool(cfg, "enabled", "workflow.multi_stt.enabled", r)
+    _check_str(cfg, "secondary_backend", "workflow.multi_stt.secondary_backend", r)
+    secondary = cfg.get("secondary_backend")
+    if isinstance(secondary, str) and secondary not in {"cohere", "cohere_tf5", "whisper", "granite", "parakeet"}:
+        r.add_error(
+            "workflow.multi_stt.secondary_backend: valeurs acceptées cohere, cohere_tf5, whisper, granite, parakeet"
+        )
+    _check_int_range(cfg, "max_segments", "workflow.multi_stt.max_segments", 1, 500, r)
+    for key in ("min_segment_s", "padding_s"):
+        _check_optional_number(cfg, key, f"workflow.multi_stt.{key}", r)
+    levels = cfg.get("levels", [])
+    if not isinstance(levels, list) or not levels:
+        r.add_error("workflow.multi_stt.levels: doit être une liste non vide")
+    else:
+        for i, value in enumerate(levels):
+            if value not in {"suspect", "degrade"}:
+                r.add_error(f"workflow.multi_stt.levels[{i}]: doit valoir suspect ou degrade")
 
 
 def _check_stt_hybrid(cfg: dict, r: ValidationResult) -> None:

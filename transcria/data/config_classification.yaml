@@ -107,6 +107,9 @@ deferred:
 - granite.enabled
 - granite.fix_mistral_regex
 - granite.keywords
+- granite.lexicon_keywords.enabled
+- granite.lexicon_keywords.max_terms
+- granite.lexicon_keywords.priorities
 - granite.max_new_tokens
 - granite.max_new_tokens_per_second
 - granite.min_new_tokens
@@ -335,6 +338,12 @@ deferred:
 - workflow.enable_quick_summary
 - workflow.enable_speaker_detection
 - workflow.enable_vad
+- workflow.multi_stt.enabled
+- workflow.multi_stt.levels
+- workflow.multi_stt.max_segments
+- workflow.multi_stt.min_segment_s
+- workflow.multi_stt.padding_s
+- workflow.multi_stt.secondary_backend
 - workflow.progress.enabled
 - workflow.progress.update_interval_s
 - workflow.pyannote_chunking.isolated_min_chunk_s

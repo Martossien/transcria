@@ -170,16 +170,23 @@ _DEFAULT_CONFIG = {
     "granite": {
         "enabled": False,
         "model_id": "./models/granite-speech-4.1-2b",
-            "torch_dtype": "bfloat16",
-            "chunk_length_s": 300,
-            "max_new_tokens": 2000,
-            "max_new_tokens_per_second": 8.0,
-            "min_new_tokens": 64,
-            "prompt_mode": "asr_punctuated",
+        "torch_dtype": "bfloat16",
+        # 30 s : à 300 s le modèle hallucine sur réunions longues
+        # (docs/archive/GRANITE_STT_EXPERIMENT.md).
+        "chunk_length_s": 30,
+        "max_new_tokens": 2000,
+        "max_new_tokens_per_second": 8.0,
+        "min_new_tokens": 64,
+        "prompt_mode": "asr_punctuated",
         "prompt_asr_raw": "<|audio|>can you transcribe the speech into a written format?",
         "prompt_asr_punctuated": "<|audio|>transcribe the speech with proper punctuation and capitalization.",
         "prompt_keywords": "<|audio|>transcribe the speech to text. Keywords: {keywords}",
         "keywords": [],
+        "lexicon_keywords": {
+            "enabled": False,
+            "priorities": ["critique", "importante"],
+            "max_terms": 50,
+        },
         "fix_mistral_regex": True,
         "collapse_repetition_loops": True,
         "repetition_loop_min_repeats": 4,
@@ -358,6 +365,18 @@ _DEFAULT_CONFIG = {
         },
         "stt_corpus": {
             "enabled": True,
+        },
+        # Multi-STT ciblé EXPÉRIMENTAL : les segments chevauchant des fenêtres
+        # dégradées de la difficulty_map sont retranscrits par un 2e moteur, puis la
+        # LLM d'arbitrage choisit (A/B). Distinct de stt_hybrid (prototype hors
+        # pipeline qui compare N transcriptions COMPLÈTES par fenêtres).
+        "multi_stt": {
+            "enabled": False,
+            "secondary_backend": "whisper",
+            "levels": ["degrade"],
+            "max_segments": 20,
+            "min_segment_s": 0.8,
+            "padding_s": 0.2,
         },
         "stt_hybrid": {
             "enabled": False,

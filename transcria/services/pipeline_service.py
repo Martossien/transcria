@@ -464,6 +464,7 @@ class PipelineService:
                 cfg["models"]["stt_backend"] = fallback
         self._inject_whisper_lexicon_hotwords(cfg, job)
         self._inject_cohere_lexicon_biasing(cfg, job)
+        self._inject_granite_lexicon_keywords(cfg, job)
         return cfg
 
     def _inject_whisper_lexicon_hotwords(self, cfg: dict, job: Job | None) -> None:
@@ -554,6 +555,56 @@ class PipelineService:
             )
         except Exception as exc:
             logger.warning("Biasing Cohere depuis lexique indisponible: job=%s error=%s", job.id, exc)
+
+    def _inject_granite_lexicon_keywords(self, cfg: dict, job: Job | None) -> None:
+        """Injecte le lexique de session dans le prompt Granite « Keywords: ».
+
+        C'est le mécanisme de biasing officiel IBM (noms propres, acronymes,
+        jargon). Miroir de `_inject_cohere_lexicon_biasing` : seules les formes
+        cibles validées sont poussées.
+        """
+        backend = cfg.get("models", {}).get("stt_backend", "cohere")
+        if backend != "granite" or job is None:
+            return
+
+        granite_cfg = cfg.setdefault("granite", {})
+        keywords_cfg = granite_cfg.get("lexicon_keywords", {})
+        if not isinstance(keywords_cfg, dict) or not keywords_cfg.get("enabled", False):
+            return
+
+        try:
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.stt.contextual_biasing import select_lexicon_bias_terms
+
+            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
+            lexicon = fs.load_json("context/session_lexicon.json") or []
+            if not isinstance(lexicon, list):
+                logger.warning("Keywords Granite lexique ignorés: format lexique inattendu job=%s", job.id)
+                return
+
+            terms, stats = select_lexicon_bias_terms(
+                lexicon,
+                enabled=True,
+                priorities=keywords_cfg.get("priorities"),
+                max_terms=keywords_cfg.get("max_terms", 50),
+            )
+            if not terms:
+                logger.info("Keywords Granite depuis lexique: job=%s aucun terme retenu", job.id)
+                return
+            granite_cfg["keywords"] = terms
+            granite_cfg["prompt_mode"] = "keywords"
+            stats["prompt_mode"] = "keywords"
+            fs.save_json("metadata/granite_keywords.json", stats)
+            logger.info(
+                "Keywords Granite depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
+                job.id,
+                stats.get("candidate_terms", 0),
+                stats.get("injected_terms", 0),
+                stats.get("excluded_terms", 0),
+                ",".join(stats.get("priorities", [])),
+            )
+        except Exception as exc:
+            logger.warning("Keywords Granite depuis lexique indisponibles: job=%s error=%s", job.id, exc)
 
     @staticmethod
     def _should_force_quality_backend_for_degraded_summary(job: Job | None, cfg: dict) -> bool:
@@ -1229,6 +1280,20 @@ class PipelineService:
         """
         wf = self.config.get("workflow", {})
         steps = []
+
+        # Multi-STT EXPÉRIMENTAL : retranscription des segments dégradés par un 2e
+        # moteur + arbitrage LLM. Juste après la transcription, avant tout consommateur
+        # du SRT. Gated : flag config explicite ET profil avec correction LLM (les
+        # profils express ne touchent jamais à une LLM). Best-effort dans le runner.
+        if (
+            (wf.get("multi_stt", {}) or {}).get("enabled", False)
+            and profile.run_llm_correction
+            and wf.get("arbitration_llm", {}).get("enabled") is not False
+        ):
+            steps.append({
+                "name": "multi_stt_review",
+                "method": partial(self.runner.run_multi_stt_review, job, audio_path, self.config),
+            })
 
         if profile.run_diarization and wf.get("enable_quality_mode", True):
             steps.append({

@@ -40,7 +40,7 @@ class GraniteTranscriber(BaseTranscriber):
         self,
         model_path: str | None = None,
         device: str | None = None,
-        chunk_length_s: int = 300,
+        chunk_length_s: int = 30,
         max_new_tokens: int = 2000,
         max_new_tokens_per_second: float | None = 8.0,
         min_new_tokens: int = 64,
@@ -58,7 +58,9 @@ class GraniteTranscriber(BaseTranscriber):
     ):
         self.model_path = model_path or _GRANITE_MODEL_REPO
         self.device = device or self._detect_device()
-        self.chunk_length_s = int(chunk_length_s or 300)
+        # 30 s par défaut : à 300 s le modèle hallucine massivement sur réunions longues
+        # (constat docs/archive/GRANITE_STT_EXPERIMENT.md, test7.mp3).
+        self.chunk_length_s = int(chunk_length_s or 30)
         self.max_new_tokens = int(max_new_tokens or 2000)
         self.max_new_tokens_per_second = (
             float(max_new_tokens_per_second)

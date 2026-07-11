@@ -246,7 +246,7 @@ tests ou campagnes ciblées avec `models.stt_backend=granite`.
 | `enabled` | bool | `false` | Marque documentaire/expérimentale ; le choix effectif reste `models.stt_backend` |
 | `model_id` | string | `"./models/granite-speech-4.1-2b"` | Chemin local ou identifiant HuggingFace du modèle Granite normal |
 | `torch_dtype` | string | `"bfloat16"` | Type torch (`bfloat16`, `float16`, `float32`) |
-| `chunk_length_s` | int | `300` | Durée maximale d'un chunk Granite |
+| `chunk_length_s` | int | `30` | Durée maximale d'un chunk Granite (au-delà de ~30 s le modèle hallucine sur réunions longues — constat archivé `docs/archive/GRANITE_STT_EXPERIMENT.md`) |
 | `max_new_tokens` | int | `2000` | Plafond absolu de génération par chunk |
 | `max_new_tokens_per_second` | float/null | `8.0` | Borne dynamique du budget selon la durée du chunk ; `null` désactive le scaling |
 | `min_new_tokens` | int | `64` | Budget minimal conservé quand le chunk est court |
@@ -255,6 +255,9 @@ tests ou campagnes ciblées avec `models.stt_backend=granite`.
 | `prompt_asr_punctuated` | string | prompt IBM | Prompt de transcription avec ponctuation/capitalisation |
 | `prompt_keywords` | string | prompt IBM | Prompt avec `{keywords}` pour tests de biasing Granite |
 | `keywords` | list/string | `[]` | Mots-clés passés si `prompt_mode=keywords` |
+| `lexicon_keywords.enabled` | bool | `false` | Injecte le lexique de session validé dans le prompt `Keywords:` (biasing officiel IBM) ; bascule `prompt_mode` sur `keywords` pour le job |
+| `lexicon_keywords.priorities` | list | `["critique", "importante"]` | Priorités de lexique retenues pour l'injection |
+| `lexicon_keywords.max_terms` | int | `50` | Nombre maximal de termes injectés dans le prompt |
 | `fix_mistral_regex` | bool | `true` | Passe le correctif tokenizer Granite/Mistral à `AutoProcessor` quand supporté |
 | `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives après génération |
 | `repetition_loop_min_repeats` | int | `4` | Répétitions minimales pour détecter une boucle |
@@ -704,6 +707,28 @@ compact est promu dans `extra_data.stt_corpus_summary` (requêtable cross-jobs).
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Écrit le corpus par segment + l'agrégat compact. Coût négligeable ; désactiver pour ne rien ajouter aux jobs. |
+
+#### `workflow.multi_stt`
+
+**EXPÉRIMENTAL** — multi-STT ciblé : après la transcription, les segments qui
+chevauchent des fenêtres acoustiquement dégradées de la `difficulty_map` du pré-vol
+sont retranscrits par un **second** moteur STT, puis la LLM d'arbitrage choisit le
+candidat le plus plausible (réponse A/B stricte — elle ne réécrit jamais de texte,
+zéro invention possible). Le surcoût GPU est marginal : seuls les segments ciblés
+sont retraités. L'étape ne s'insère que sur les profils avec correction LLM, est
+best-effort (tout empêchement la saute sans casser le pipeline) et trace ses
+décisions dans `metadata/multi_stt.json` par job. À ne pas confondre avec
+`workflow.stt_hybrid` ci-dessous (prototype hors pipeline comparant N transcriptions
+complètes par fenêtres).
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Active l'étape `multi_stt_review` (profils avec correction LLM uniquement) |
+| `secondary_backend` | string | `"whisper"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`) ; s'il égale le backend principal, bascule automatique sur un autre |
+| `levels` | list[string] | `["degrade"]` | Niveaux de la `difficulty_map` déclenchant la retranscription (`degrade`, `suspect`) |
+| `max_segments` | int | `20` | Plafond de segments retranscrits (les plus sévères d'abord) |
+| `min_segment_s` | float | `0.8` | Durée minimale d'un segment candidat |
+| `padding_s` | float | `0.2` | Marge audio ajoutée de part et d'autre du segment retranscrit |
 
 #### `workflow.stt_hybrid`
 
