@@ -18,13 +18,15 @@ segments acoustiquement dégradés). **Aucune migration de base de données** ; 
 dépendance Python (`mistral-common[audio]`) est installée par `pip install -r requirements.txt`.
 
 ### Added
-- **Multi-STT ciblé (expérimental, désactivé par défaut)** — `workflow.multi_stt` : les segments
-  chevauchant les fenêtres acoustiquement dégradées du pré-vol sont retranscrits par un second
-  moteur, puis la LLM d'arbitrage choisit le candidat le plus plausible (A/B strict — elle ne
-  réécrit jamais, le doute conserve le principal). Coût nul sur audio sain (l'étape ne s'insère
-  que si des fenêtres `degrade` existent), ~1 min au pire ; audit par job dans
-  `metadata/multi_stt.json`. Secondaire par défaut : `voxtral` (candidats dans la langue de la
-  réunion par construction).
+- **Multi-STT ciblé (ACTIVÉ par défaut)** — `workflow.multi_stt` : les segments chevauchant les
+  fenêtres acoustiquement dégradées du pré-vol sont retranscrits par un second moteur, puis la
+  LLM d'arbitrage choisit le candidat le plus plausible (A/B strict — elle ne réécrit jamais, le
+  doute conserve le principal). Coût nul sur audio sain (l'étape ne s'insère que si des fenêtres
+  `degrade` existent), ~1 min au pire ; **best-effort intégral** : VRAM ou modèle secondaire
+  manquants → étape sautée, pipeline intact. Secondaire par défaut : `voxtral` (candidats dans
+  la langue de la réunion par construction) — s'il n'est pas présent localement, il est
+  téléchargé au premier usage (pré-téléchargeable depuis la page « Modèles »). Audit par job
+  dans `metadata/multi_stt.json`. Désactivable : `workflow.multi_stt.enabled: false`.
 - **Backend STT Voxtral Mini 3B** (Mistral, Apache-2.0, non-gated — aucun token HF) :
   `models.stt_backend: voxtral`. Langue forcée nativement, ~9,5 Go bf16, téléchargeable depuis
   la page « Modèles » (comme désormais granite et parakeet). Sur le corpus de réunions réelles :

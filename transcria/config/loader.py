@@ -389,7 +389,10 @@ _DEFAULT_CONFIG = {
         # LLM d'arbitrage choisit (A/B). Distinct de stt_hybrid (prototype hors
         # pipeline qui compare N transcriptions COMPLÈTES par fenêtres).
         "multi_stt": {
-            "enabled": False,
+            # ON par défaut (0.3.4) : coût NUL sur audio sain (l'étape ne s'insère que
+            # si le pré-vol voit des fenêtres dégradées) et best-effort intégral (VRAM
+            # ou modèle secondaire manquants → étape sautée, pipeline intact).
+            "enabled": True,
             # voxtral : tête-à-tête E2E réel du 2026-07-11 — remplacements tous
             # pertinents, zéro anglicisation (langue forcée nativement), et 10/20
             # candidats identiques au primaire = confirmation mutuelle gratuite.

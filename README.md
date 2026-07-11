@@ -45,7 +45,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
-| **0.3.4** | **STT engines & benchmarks** — engines measured on real French meetings against a human reference ([published results](docs/STT_BENCHMARK_REAL_MEETINGS.md)); new Mistral Voxtral Mini 3B backend (Apache-2.0, best measured WER); experimental targeted multi-STT (arbitrated re-transcription of degraded segments only) |
+| **0.3.4** | **STT engines & benchmarks** — engines measured on real French meetings against a human reference ([published results](docs/STT_BENCHMARK_REAL_MEETINGS.md)); new Mistral Voxtral Mini 3B backend (Apache-2.0, best measured WER); targeted multi-STT **on by default** (arbitrated re-transcription of degraded segments only — zero cost on clean audio, best-effort) |
 | **0.3.3** | Polish — the last French leftovers in the English UI closed; the deliverable language now follows the interface choice |
 | **0.3.2** | **Bilingual French / English end to end** — web UI, generated deliverables (minutes, corrections, DOCX, reports), installer, `doctor`, voice-consent PDF. Default stays French; English is an explicit choice (navbar switcher, per-user preference, per-job deliverable language, install-time question). More languages need no refactor |
 | **0.3.1** | Operator tooling — a *Maintenance* admin page (create, schedule, restore backups) and a *Models* page that downloads the models this install needs |

@@ -473,14 +473,17 @@ workflow:
     # cross-jobs). Coût négligeable ; sert à calibrer les seuils SQUIM/DNSMOS.
     enabled: true
   multi_stt:
-    # EXPÉRIMENTAL — multi-STT ciblé : les segments qui chevauchent des fenêtres
-    # acoustiquement dégradées (difficulty_map du pré-vol) sont retranscrits par un
-    # SECOND moteur STT, puis la LLM d'arbitrage choisit le candidat le plus
-    # plausible (A/B — elle ne réécrit jamais). Surcoût GPU marginal (segments
-    # ciblés uniquement). Ne tourne que sur les profils avec correction LLM.
-    # Audit par job : metadata/multi_stt.json. Distinct de stt_hybrid ci-dessous
-    # (prototype hors pipeline comparant N transcriptions COMPLÈTES).
-    enabled: false
+    # Multi-STT ciblé (ACTIVÉ par défaut depuis 0.3.4) : les segments qui chevauchent
+    # des fenêtres acoustiquement dégradées (difficulty_map du pré-vol) sont
+    # retranscrits par un SECOND moteur STT, puis la LLM d'arbitrage choisit le
+    # candidat le plus plausible (A/B — elle ne réécrit jamais). Coût NUL sur audio
+    # sain ; ne tourne que sur les profils avec correction LLM ; BEST-EFFORT : VRAM
+    # ou modèle secondaire manquants → étape sautée, pipeline intact. Si le modèle
+    # voxtral n'est pas présent localement, il est téléchargé au premier usage
+    # (page « Modèles » pour le pré-télécharger). Audit par job :
+    # metadata/multi_stt.json. Distinct de stt_hybrid ci-dessous (prototype hors
+    # pipeline comparant N transcriptions COMPLÈTES).
+    enabled: true
     # voxtral recommandé : candidats dans la langue de la réunion par construction
     # (zéro risque de dérive en traduction), remplacements pertinents en E2E réel.
     secondary_backend: voxtral

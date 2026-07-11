@@ -4,8 +4,8 @@
 # modèles par défaut NON gated EMBARQUÉS (whisper + Sortformer + Voxtral Mini 3B + LLM
 # d'arbitrage Qwen3.5-9B). Objectif : « pull & run » DÉTERMINISTE et HORS-LIGNE — aucun
 # téléchargement au runtime, et plus aucun contact avec le cache HF de l'hôte (⇒ supprime
-# le piège « File exists »). Voxtral (0.3.4) sert de SECONDAIRE au multi-STT ciblé, activé
-# par docker_quickstart.sh --bundled (retranscription arbitrée des segments dégradés).
+# le piège « File exists »). Voxtral (0.3.4) sert de SECONDAIRE au multi-STT ciblé
+# (ON par défaut — retranscription arbitrée des segments dégradés, hors-ligne ici).
 #
 # CE N'EST PAS « full » : pyannote/Cohere (gated) et les paliers LLM > 12 Go ne sont PAS
 # embarqués — ils restent en opt-in via HF_TOKEN / TRANSCRIA_LLM_TIER (cf. docs/DOCKER.md).

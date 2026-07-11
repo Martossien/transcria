@@ -745,7 +745,7 @@ complètes par fenêtres).
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `enabled` | bool | `false` | Active l'étape `multi_stt_review` (profils avec correction LLM uniquement) |
+| `enabled` | bool | `true` | Active l'étape `multi_stt_review` (profils avec correction LLM uniquement ; coût nul sur audio sain, best-effort si VRAM/modèle manquent) |
 | `secondary_backend` | string | `"voxtral"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`) ; s'il égale le backend principal, bascule automatique sur un autre. Voxtral recommandé : langue forcée nativement → candidats jamais traduits |
 | `levels` | list[string] | `["degrade"]` | Niveaux de la `difficulty_map` déclenchant la retranscription (`degrade`, `suspect`) |
 | `max_segments` | int | `20` | Plafond de segments retranscrits (les plus sévères d'abord) |

@@ -45,15 +45,6 @@ disable_llm_block() {
         {print}' config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
 }
 
-# Active un bloc workflow.<name> (enabled: false → true) dans config.yaml — utilisé en mode
-# BUNDLED pour le multi-STT ciblé (le secondaire Voxtral est embarqué dans l'image).
-enable_workflow_block() {
-    awk -v blk="$1" '
-        $0 ~ "^[[:space:]]*"blk":" {f=1}
-        f && /^[[:space:]]*enabled:[[:space:]]*false/ {sub(/false/,"true"); f=0}
-        {print}' config.yaml > config.yaml.tmp && mv config.yaml.tmp config.yaml
-}
-
 ENV_FILE=".env.docker"
 COMPOSE=(docker compose --env-file "$ENV_FILE")
 # Profils alternatifs (à ne pas activer ensemble : web et all-in-one publient :7870) :
@@ -144,13 +135,8 @@ if [[ ! -f "config.yaml" ]]; then
     # LLM d'arbitrage : l'image GPU (mode gpu) l'EMBARQUE (llama.cpp + petit GGUF tiré au runtime).
     # En mode cpu/split, l'image n'en embarque pas → sans endpoint externe on désactive résumé +
     # correction (l'UI grise alors proprement ces profils ; transcription + diarisation marchent).
-    # Mode BUNDLED : le secondaire Voxtral est embarqué dans l'image → activer le multi-STT
-    # ciblé (coût nul sur audio sain : l'étape ne s'insère que si le pré-vol voit des fenêtres
-    # dégradées ; best-effort si la VRAM manque). Cf. docs/STT_BENCHMARK_REAL_MEETINGS.md.
-    if [[ "$BUNDLED" == "1" ]]; then
-        enable_workflow_block multi_stt
-        ok "Multi-STT ciblé activé (secondaire Voxtral embarqué — retranscription arbitrée des segments dégradés)."
-    fi
+    # Multi-STT ciblé : ON par défaut depuis 0.3.4 (config.example.yaml) — rien à activer ici.
+    # L'image BUNDLED embarque son secondaire Voxtral ; ailleurs il est téléchargé au 1ᵉ usage.
     if [[ "$MODE" == "gpu" ]]; then
         # Aligner la réservation VRAM de la LLM sur le palier embarqué (l'exemple vaut 60000 =
         # palier 64 Go multi-GPU). SANS ça, l'admission GPU refuserait le 9B (~10,6 Go) sur une
