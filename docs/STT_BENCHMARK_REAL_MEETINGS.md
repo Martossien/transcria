@@ -76,11 +76,12 @@ real meeting audio looks like, and it is far from LibriSpeech.
 
 ## Engines and protocol
 
-| Engine | Model | Serving |
-|---|---|---|
-| `cohere` | Cohere labs ASR (production default) | in-process, turn-level chunking |
-| `whisper` | Whisper large-v3 (faster-whisper) | in-process, turn-level chunking |
-| `granite` | IBM Granite Speech 4.1 2B (experimental) | in-process, turn-level chunking |
+| Engine | Model | Licence | Serving |
+|---|---|---|---|
+| `cohere` | Cohere labs ASR (production default) | CC-BY-NC (gated) | in-process, turn-level chunking |
+| `whisper` | Whisper large-v3 (faster-whisper) | MIT | in-process, turn-level chunking |
+| `granite` | IBM Granite Speech 4.1 2B (experimental) | Apache-2.0 | in-process, turn-level chunking |
+| `voxtral` | Mistral Voxtral Mini 3B (experimental) | Apache-2.0 | in-process, turn-level chunking |
 
 All runs: full TranscrIA pipeline (preflight → pyannote diarization → turn-chunked
 STT), same GPU pool, deliverable language pinned to French, no session lexicon
@@ -88,21 +89,27 @@ STT), same GPU pool, deliverable language pinned to French, no session lexicon
 
 ## Results — Set L (vs human reference)
 
-8 windows × 3 engines, French pinned, no lexicon. Mean over the 8 windows:
+8 windows × 4 engines, French pinned, no lexicon. Mean over the 8 windows:
 
 | Engine | WER ↓ | CER ↓ | Word ratio | EN-drift ratio | Mean time/window |
 |---|---:|---:|---:|---:|---:|
-| **whisper large-v3** | **0.437** | **0.204** | 0.96 | 0.000 | 112 s |
-| cohere | 0.460 | 0.211 | 1.02 | 0.000 | 84 s |
+| **voxtral Mini 3B** | **0.427** | **0.203** | 0.97 | ~0.000 | 130 s |
+| whisper large-v3 | 0.437 | 0.204 | 0.96 | 0.000 | 112 s |
+| cohere | 0.460 | 0.211 | 1.02 | 0.000 | **84 s** |
 | granite 4.1 2B | 0.643 | 0.376 | **0.79** | 0.02–0.07 | 143 s |
 
 Reading the numbers:
 
-- **Absolute WER around 0.44 against an edited human transcript is normal** for
+- **Absolute WER around 0.43 against an edited human transcript is normal** for
   verbatim ASR on this material: the reference removes fillers, restarts and
   rephrases — every disfluency the engine faithfully writes counts as an "error".
-  Compare engines, not absolutes. Best window (clear Q&A): whisper 0.22 /
-  cohere 0.25. Worst (densest): ~0.47–0.67 across engines.
+  Compare engines, not absolutes. Best window (clear Q&A): voxtral 0.227 /
+  whisper 0.222 / cohere 0.253. Worst (densest): ~0.47–0.67 across engines.
+- **Voxtral takes the ground-truth lead on its first day** — best mean WER and
+  CER of the four, complete sentences on the densest window, and the domain
+  acronyms that granite corrupted are correct in our reading. An Apache-2.0,
+  non-gated model from a French lab leading on French meetings is exactly the
+  kind of result this corpus was built to detect.
 - **Granite's word ratio of 0.79 is the real story**: it silently *drops* about a
   fifth of the words, cutting turns mid-sentence on dense passages. We tested the
   hypothesis that our anti-hallucination generation budget caused it (raising the
@@ -116,15 +123,21 @@ Reading the numbers:
 
 ## Results — Set R (LLM judge, median of 3 runs + deterministic signals)
 
-18 windows × 3 engines; each window judged by the arbitration LLM **3 times**,
-we aggregate the medians (only 2 of 54 scores had a run-to-run spread ≥ 2 points
-— the median makes the judge usable).
+18 windows × 4 engines; each window judged by the arbitration LLM **3 times**,
+we aggregate the medians (4 of 72 scores had a run-to-run spread ≥ 2 points —
+the median makes the judge usable).
 
 | Engine | Judge score (median of medians, /10) | Words produced | EN-drift | Near-empty windows |
 |---|---:|---:|---:|---:|
-| cohere | **7.3** | 2473 | 0.000 | 1 |
-| whisper large-v3 | 6.8 | 2382 | 0.000 | 1 |
-| granite 4.1 2B | 3.4 | 1920 | 0.059 | 1 |
+| whisper large-v3 | 7.6 | 2382 | 0.000 | 1 |
+| cohere | 7.5 | 2473 | 0.000 | 1 |
+| voxtral Mini 3B | 7.1 | 2378 | 0.001 | 0 |
+| granite 4.1 2B | 3.2 | 1920 | 0.059 | 1 |
+
+The top three sit **within the judge's own noise band**: adding a fourth
+candidate to the same prompt shifted cohere/whisper by ±0.5 and even swapped
+their order relative to the 3-candidate run. Treat "7.6 vs 7.1" as a tie and
+granite's 3.2 as the only significant gap.
 
 The "near-empty" window is the same for all three: a 60-second slice whose 99 %
 bandwidth is ~500 Hz (essentially rumble). The interesting part is **how** each
@@ -133,7 +146,7 @@ engine fails there — see below.
 ### Where this sits next to our other results
 
 On a *clean bilingual* recording with a session lexicon, granite previously
-produced the best raw transcript of the three (it fixed a critical domain term
+produced the best raw transcript of the incumbents (it fixed a critical domain term
 at the source via its prompt-based keyword biasing, which the logit-boost
 biasing of the default engine failed to fix). On *real narrowband meetings
 without a lexicon*, granite is clearly behind. Both results are true: **engine
@@ -154,8 +167,10 @@ from private meetings is reproduced here):
    precisely the class our session-lexicon biasing targets; the benchmark ran
    without lexicon to measure raw engines.
 3. **Language-drift fabrication** (granite): on near-silent/pathological audio,
-   whole invented sentences in English and Spanish. The other engines produced
+   whole invented sentences in English and Spanish. cohere and whisper produced
    a single polite word and stopped — honest emptiness beats fluent invention.
+   Voxtral sits in between: it fills the same window with short generic French
+   phrases — benign, but still words nobody said.
 4. **Plausible-sentence invention** (cohere): a fluent, contextually plausible
    French sentence with no acoustic support. Harder to spot than gibberish.
 5. **Idiom competition**: on one turn, the experimental engine got a French
