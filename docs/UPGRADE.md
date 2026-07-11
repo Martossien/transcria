@@ -139,6 +139,12 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.3 → 0.3.4** : moteurs STT & benchmarks (backend Voxtral, multi-STT ciblé expérimental,
+  benchmark publié). **Aucune migration Alembic**, aucun changement de schéma. Une nouvelle
+  dépendance Python (`mistral-common[audio]`) est requise : relancer
+  `venv/bin/pip install -r requirements.txt` (fait automatiquement par `install.sh` et les
+  images Docker). Le modèle Voxtral (~9,3 Go) n'est téléchargé que si vous activez le backend
+  (page « Modèles » ou `hf download mistralai/Voxtral-Mini-3B-2507`).
 - **0.3.2 → 0.3.3** : finitions bilingues (dernières surfaces d'interface localisées, langue des
   livrables alignée sur le choix d'interface) + durcissement CI. **Aucune migration Alembic**,
   aucun changement de schéma ni de config : une mise à niveau se limite à récupérer le nouveau

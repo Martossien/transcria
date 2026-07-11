@@ -6,6 +6,60 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.4] — 2026-07-11
+
+Version **moteurs STT & benchmarks**. Le choix des moteurs de transcription cesse d'être une
+affaire d'intuition : les backends sont désormais **benchés sur de vraies réunions françaises**
+contre une transcription humaine professionnelle, les résultats sont publiés
+(`docs/STT_BENCHMARK_REAL_MEETINGS.md` — corpus privé, métriques agrégées et modes d'échec
+anonymisés), et deux nouveautés en découlent : le backend **Voxtral Mini 3B** (Mistral,
+Apache-2.0, meilleur WER mesuré) et le **multi-STT ciblé** (retranscription arbitrée des seuls
+segments acoustiquement dégradés). **Aucune migration de base de données** ; une nouvelle
+dépendance Python (`mistral-common[audio]`) est installée par `pip install -r requirements.txt`.
+
+### Added
+- **Multi-STT ciblé (expérimental, désactivé par défaut)** — `workflow.multi_stt` : les segments
+  chevauchant les fenêtres acoustiquement dégradées du pré-vol sont retranscrits par un second
+  moteur, puis la LLM d'arbitrage choisit le candidat le plus plausible (A/B strict — elle ne
+  réécrit jamais, le doute conserve le principal). Coût nul sur audio sain (l'étape ne s'insère
+  que si des fenêtres `degrade` existent), ~1 min au pire ; audit par job dans
+  `metadata/multi_stt.json`. Secondaire par défaut : `voxtral` (candidats dans la langue de la
+  réunion par construction).
+- **Backend STT Voxtral Mini 3B** (Mistral, Apache-2.0, non-gated — aucun token HF) :
+  `models.stt_backend: voxtral`. Langue forcée nativement, ~9,5 Go bf16, téléchargeable depuis
+  la page « Modèles » (comme désormais granite et parakeet). Sur le corpus de réunions réelles :
+  meilleur WER des quatre backends contre référence humaine (0,427 vs 0,437 whisper, 0,460
+  cohere), recommandé pour `workflow.quality_transcription.force_stt_backend`. Cohere reste le
+  défaut de production (vitesse, VRAM, maturité).
+- **Benchmark STT publié** — `docs/STT_BENCHMARK_REAL_MEETINGS.md` : 8 fenêtres avec vérité
+  terrain + 18 fenêtres réelles, 4 moteurs, WER/CER, détecteur de dérive en traduction, juge LLM
+  multi-passes, lecture humaine des modes d'échec (hallucination de prénom, acronymes corrompus,
+  fabrication multilingue…) et les pièges de benchmarking rencontrés. Lié depuis les READMEs.
+- **Biasing lexical Granite** — `granite.lexicon_keywords` : injection du lexique de session
+  validé dans le prompt `Keywords:` officiel IBM (miroir des hotwords whisper / du biasing
+  Cohere) ; en E2E réel, écrit les termes critiques correctement dans le SRT **brut**.
+- **Garde-fou « débit de parole anormal »** — `workflow.segment_reliability` signale
+  (`debit_parole_anormal`) les segments longs au débit absurde (ex. 21 s rendues par 4 mots),
+  signature de remplissage des backends LLM-STT sur audio quasi muet. Signale, ne supprime jamais.
+- **SRT brut dans le paquet** : l'archive ZIP embarque la transcription pré-correction à côté de
+  la version corrigée.
+- **Vitrine** : page de présentation métier en anglais (`docs/PRESENTATION.en.md` + diagramme),
+  badge et lien vers la démo navigateur Hugging Face (pré-vol audio), guide testeurs
+  (`docs/TESTERS.md`), GIF d'aperçu compact pour les catalogues.
+- **Outillage bench** : `bench_eval.py --runs N` (médiane + étendue — le juge LLM mono-run a une
+  variance réelle), colonnes EN% (dérive en traduction) et boucles dans
+  `score_reference_bench.py`, matrice STT étendue à voxtral (S25-S30).
+
+### Fixed
+- **Granite `chunk_length_s` 300 → 30** : le défaut historique faisait halluciner le modèle sur
+  les réunions longues (constat archivé jamais répercuté) ; l'E2E réel avec chunk 30 + lexique
+  donne un score qualité supérieur au défaut de production sur l'audio de test.
+- **E2E/bench : langue des livrables** — sans langue explicite, le repli sur la locale
+  d'interface du propriétaire faisait transcrire les benchs français en mode **traduction
+  anglaise** sans avertissement ; le runner E2E épingle désormais toujours la langue.
+- **`bench_eval.py`** : reconnaît les IDs de matrice `S`/`V` (seuls `001`/`E01` passaient) ;
+  son prompt, archivé par erreur, est restauré dans `prompts/`.
+
 ## [0.3.3] — 2026-07-09
 
 Version de **finitions bilingues**. La 0.3.2 a rendu le produit bilingue de bout en bout ;
