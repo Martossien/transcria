@@ -39,7 +39,7 @@ scripts/docker_quickstart.sh --down
 ```
 
 > **Deux images GPU.** `:latest` (**slim**) télécharge les modèles au 1ᵉ run dans le cache HF
-> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + la LLM 9B → aucun
+> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + Voxtral + la LLM 9B → aucun
 > téléchargement, cache HF en **volume nommé** seedé depuis l'image (élimine le `[Errno 17]
 > File exists` ci-dessous). Dans les deux cas, pyannote/Cohere restent en opt-in `HF_TOKEN`.
 >
@@ -301,7 +301,7 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 #### Image `:bundled` — modèles embarqués (zéro-download, hors-ligne)
 
 Variante de l'all-in-one GPU qui **embarque les modèles par défaut non gated** au lieu de les
-télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), la
+télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, activé par le quickstart `--bundled`), la
 LLM d'arbitrage Qwen3.5-9B Q5_K_M (Apache-2.0) **et** le modèle de qualification audio **SQUIM**
 (torchaudio, ~29 Mo) — seul modèle que le pipeline téléchargeait encore au runtime (DNSMOS est déjà
 un `.onnx` versionné dans le dépôt). Résultat : **aucun téléchargement au 1ᵉ run** (validé E2E).
@@ -317,7 +317,7 @@ scripts/docker_quickstart.sh --bundled        # pull :bundled si publiée, sinon
 | Cache HF | bind du cache **hôte** | **volume nommé** `hfcache` (seedé) |
 | 1ᵉ démarrage | réseau requis (~12 Go) | **hors-ligne, instantané** |
 | Piège `[Errno 17] File exists` | possible (cache hôte) | **supprimé** |
-| Taille image | ~19 Go | ~31 Go |
+| Taille image | ~19 Go | ~40 Go |
 | `/licenses/` (attributions) | n/a (rien de baké) | **inclus** (NOTICE + NVIDIA OML + MIT) |
 
 Ce n'est **pas** une image « full » : pyannote/Cohere (gated) et les paliers LLM > 12 Go ne sont
@@ -393,12 +393,12 @@ TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX.Y.Z scripts/docke
 
 #### Publication de l'image `:bundled` (build local + push manuel)
 
-L'image `:bundled` (~31 Go avec les poids) **dépasse le disque d'un runner GitHub standard** → elle
+L'image `:bundled` (~40 Go avec les poids) **dépasse le disque d'un runner GitHub standard** → elle
 n'est **pas** construite en CI (le workflow `publish-image.yml` ne publie que le slim). On la
 construit et la pousse **depuis une machine GPU** :
 
 ```bash
-# 1. Construire (télécharge ~12 Go de poids NON gated au build — réseau requis, aucun token) :
+# 1. Construire (télécharge ~21 Go de poids NON gated au build — réseau requis, aucun token) :
 docker build -f Dockerfile.allinone-bundled -t ghcr.io/<owner>/transcria-allinone:bundled .
 # 2. S'authentifier sur GHCR (token avec scope write:packages) puis pousser :
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <owner> --password-stdin

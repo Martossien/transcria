@@ -22,6 +22,15 @@ ci-dessous. L'application TranscrIA elle-même est sous **Apache-2.0** (`/app/LI
 - **Licence** : **MIT**
 - **Texte** : voir `MIT-faster-whisper.txt` (ce répertoire).
 
+## 2 bis. Transcription secondaire (multi-STT) — Mistral Voxtral Mini 3B
+
+- **Dépôt** : `mistralai/Voxtral-Mini-3B-2507`
+- **Licence** : **Apache License 2.0**
+- **Texte** : voir `/app/LICENSE` (Apache-2.0 intégral, identique pour le projet et ce modèle).
+- Rôle dans l'image : moteur secondaire du **multi-STT ciblé** (retranscription arbitrée des
+  segments acoustiquement dégradés), activé par `docker_quickstart.sh --bundled`. Utilisable
+  aussi comme backend principal (`models.stt_backend: voxtral`).
+
 ## 3. Diarisation — NVIDIA Streaming Sortformer 4spk v2.1
 
 - **Dépôt** : `nvidia/diar_streaming_sortformer_4spk-v2.1`
