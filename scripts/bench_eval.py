@@ -101,8 +101,8 @@ def parse_args() -> argparse.Namespace:
 def load_bench_results(bench_dir: Path) -> list[dict]:
     """Charge tous les JSON de résultats du répertoire de bench."""
     results = []
-    # Support both numeric IDs (001.json) and E-prefixed IDs (E01.json)
-    patterns = ["[0-9][0-9][0-9].json", "E[0-9][0-9].json"]
+    # IDs numériques (001.json) et préfixés d'une lettre de matrice (E01/S01/V01…).
+    patterns = ["[0-9][0-9][0-9].json", "[A-Z][0-9][0-9].json"]
     seen: set[Path] = set()
     for pattern in patterns:
         for json_path in sorted(bench_dir.glob(pattern)):

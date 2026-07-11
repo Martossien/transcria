@@ -161,3 +161,17 @@ class TestMultiSttStepGating:
         assert "multi_stt_review" not in self._steps(
             "word_corrige", multi_stt_enabled=True, arbitration_enabled=False
         )
+
+
+class TestArbitrationLanguageHint:
+    """Indice de langue : constaté en E2E réel, sans lui un candidat TRADUIT
+    (whisper en mode traduction sur audio très dégradé) peut battre un franglais fidèle."""
+
+    def test_indice_present_quand_langue_fournie(self):
+        messages = build_arbitration_messages(primary_text="X", secondary_text="Y", language="fr")
+        assert "français" in messages[0]["content"]
+        assert "TRADUITE" in messages[0]["content"]
+
+    def test_pas_d_indice_sans_langue(self):
+        messages = build_arbitration_messages(primary_text="X", secondary_text="Y")
+        assert "TRADUITE" not in messages[0]["content"]

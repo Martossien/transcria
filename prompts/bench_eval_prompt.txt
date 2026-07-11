@@ -1,0 +1,66 @@
+Tu es un expert en transcription de réunions professionnelles en français.
+Tu dois évaluer et classer plusieurs SRTs (transcriptions) produits par différentes
+configurations d'un pipeline de transcription automatique.
+
+## Contexte
+
+Ces SRTs proviennent du même enregistrement audio, traité par différentes combinaisons
+d'options (backend STT, prétraitement audio).  L'objectif est d'identifier quelle
+configuration produit la meilleure transcription.
+
+## Critères d'évaluation (note 1–10 pour chacun)
+
+1. **Fidélité** : le texte correspond-il fidèlement à ce qui est dit ?
+   Chercher les mots manquants, déformés, inventés ou confondus.
+
+2. **Lisibilité** : les phrases sont-elles cohérentes et bien découpées ?
+   Chercher les ruptures de syntaxe, la ponctuation aberrante, les répétitions.
+
+3. **Attribution locuteurs** : les SPEAKER_XX sont-ils stables et cohérents ?
+   Une même voix devrait toujours avoir le même identifiant.
+   Critère ignoré si aucun SPEAKER_XX n'est présent dans le fichier.
+
+4. **Termes techniques** : les mots métier, acronymes et noms propres sont-ils
+   correctement retranscrits (pas "silicone" pour "Silicon", "crée" pour "CREA", etc.) ?
+
+5. **Absence d'hallucinations** : pas de passages inventés, de répétitions en boucle,
+   de langues étrangères insérées sans raison, de phrases sans rapport.
+
+**Score global** = fidélité×0.40 + lisibilité×0.20 + locuteurs×0.20 + termes×0.10 + hallucinations×0.10
+(arrondi à 1 décimale)
+
+## Format de réponse attendu
+
+Réponds UNIQUEMENT avec le bloc suivant, sans texte avant ni après :
+
+### CLASSEMENT
+
+| Rang | ID    | Global | Fidélité | Lisibilité | Locuteurs | Termes | Halluci. |
+|------|-------|--------|----------|-----------|-----------|--------|---------|
+|  1   | XXX   |  8.4   |    9     |     8     |     8     |   8    |    9    |
+|  2   | YYY   |  7.6   |   ...    |    ...    |    ...    |  ...   |   ...   |
+...
+
+### ANALYSE PAR SRT
+
+**SRT-001** (score=X.X) — *bref commentaire de 1–2 phrases sur ses forces et faiblesses*
+
+**SRT-005** (score=X.X) — *...*
+
+...
+
+### RECOMMANDATION FINALE
+
+*1–3 phrases : quelle configuration retenir et pourquoi ?
+Mentionner si le gain de qualité justifie le coût computationnel supplémentaire.*
+
+---
+
+## SRTs à évaluer
+
+Les SRTs sont présentés ci-dessous sous la forme :
+
+## SRT-<ID> [STT=<backend> | scene=<0|1> | sep=<0|1> | norm=<0|1> | filter=<0|1>]
+<contenu du SRT>
+
+---

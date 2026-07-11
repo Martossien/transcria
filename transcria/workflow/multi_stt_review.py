@@ -88,13 +88,31 @@ def texts_equivalent(primary: str, secondary: str) -> bool:
     return _normalize_text(primary) == _normalize_text(secondary)
 
 
-def build_arbitration_messages(*, primary_text: str, secondary_text: str) -> list[dict]:
-    """Messages OpenAI-chat pour l'arbitrage A/B. Le modèle CHOISIT, il ne réécrit pas."""
+_LANGUAGE_NAMES = {"fr": "français", "en": "anglais"}
+
+
+def build_arbitration_messages(
+    *, primary_text: str, secondary_text: str, language: str | None = None
+) -> list[dict]:
+    """Messages OpenAI-chat pour l'arbitrage A/B. Le modèle CHOISIT, il ne réécrit pas.
+
+    ``language`` = langue de la réunion : sans elle, un candidat parti en TRADUCTION
+    (whisper sur audio très dégradé) peut battre un franglais fidèle — constaté en E2E
+    réel (« comté d'été » → « summer county » retenu à tort).
+    """
+    language_hint = ""
+    if language:
+        lang_name = _LANGUAGE_NAMES.get(str(language).lower(), str(language))
+        language_hint = (
+            f" La réunion est en {lang_name} : à contenu comparable, préfère le candidat "
+            f"dans la langue de la réunion — une transcription TRADUITE dans une autre "
+            f"langue est un défaut, pas une qualité."
+        )
     system = (
         "Deux systèmes de reconnaissance vocale ont transcrit LE MÊME court extrait "
         "audio dégradé d'une réunion. Choisis la transcription la plus plausible : "
         "syntaxe naturelle, vocabulaire cohérent, absence de répétitions ou de suites "
-        "de mots absurdes. Ne corrige rien, ne réécris rien.\n"
+        f"de mots absurdes.{language_hint} Ne corrige rien, ne réécris rien.\n"
         "Réponds UNIQUEMENT par la lettre A ou B, sans aucun autre texte."
     )
     user = (

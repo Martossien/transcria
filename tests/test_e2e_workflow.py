@@ -1504,6 +1504,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
     cohere_biasing_data = fs.load_json("metadata/cohere_lexicon_biasing.json") or {}
     cohere_tf5_data = fs.load_json("metadata/cohere_tf5.json") or {}
     granite_data = fs.load_json("metadata/granite.json") or {}
+    granite_keywords_data = fs.load_json("metadata/granite_keywords.json") or {}
+    multi_stt_data = fs.load_json("metadata/multi_stt.json") or {}
     parakeet_data = fs.load_json("metadata/parakeet.json") or {}
     transcription_metadata = fs.load_json("metadata/transcription_metadata.json") or {}
     transcription_segments = fs.load_json("metadata/transcription_segments.json") or []
@@ -1538,6 +1540,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
         "whisper_model_size": args.whisper_model_size if args.stt_backend == "whisper" else None,
         "cohere_tf5_data": cohere_tf5_data or None,
         "granite_data": granite_data or None,
+        "granite_keywords_data": granite_keywords_data or None,
+        "multi_stt_data": multi_stt_data or None,
         "parakeet_data": parakeet_data or None,
         "mode": args.mode,
         "skip_llm": args.skip_llm,
@@ -1619,6 +1623,8 @@ def write_output_json(path: Path, args: argparse.Namespace, cfg: dict, fs) -> No
             "normalization": (fs.job_dir / "input" / "normalized.wav").exists(),
             "diarization_checkpoint": (fs.job_dir / "speakers" / "diarization_checkpoint.json").exists(),
             "granite": (fs.job_dir / "metadata" / "granite.json").exists(),
+            "granite_keywords": (fs.job_dir / "metadata" / "granite_keywords.json").exists(),
+            "multi_stt": (fs.job_dir / "metadata" / "multi_stt.json").exists(),
             "parakeet": (fs.job_dir / "metadata" / "parakeet.json").exists(),
             "zip_export": bool(list((fs.job_dir / "exports").glob("*.zip"))) if (fs.job_dir / "exports").exists() else False,
             "docx_export": bool(list((fs.job_dir / "exports").glob("*.docx"))) if (fs.job_dir / "exports").exists() else False,
@@ -2393,6 +2399,16 @@ def main() -> int:
                 m = re.search(r"[Ss]ubstitutions?\s+lexique\s+appliquées?\s*:?\s*\**\s*(\d+)", txt)
                 if m:
                     info(f"Substitutions lexique appliquées (rapport correction) : {m.group(1)}")
+            # ── Multi-STT ciblé (expérimental) : audit des arbitrages A/B ──
+            ms = fs.load_json("metadata/multi_stt.json") or {}
+            if ms:
+                info(f"Multi-STT ({ms.get('secondary_backend')}) : {ms.get('candidates', 0)} candidat(s), "
+                     f"{ms.get('arbitrated', 0)} arbitrage(s) LLM, {ms.get('replaced', 0)} remplacement(s)")
+                for d in (ms.get("decisions") or []):
+                    if d.get("choice") == "B":
+                        info(f"  [{d.get('start')}–{d.get('end')} s] B retenu : "
+                             f"« {str(d.get('primary_text'))[:60]} » → « {str(d.get('secondary_text'))[:60]} »")
+                RESULTS["multi_stt_replaced"] = ms.get("replaced", 0)
             # Relecture finale (A+C+D+G) : harmonisation synthèse + cohérence SRT + audit
             # données structurées. Contrat du code : run_final_review s'exécute en mode
             # quality avec LLM ; un run sain produit final_review_report.md ET applique

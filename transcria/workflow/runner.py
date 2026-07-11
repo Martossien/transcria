@@ -2473,7 +2473,9 @@ class WorkflowRunner:
                         decisions.append(decision)
                         continue
                     messages = build_arbitration_messages(
-                        primary_text=primary_text, secondary_text=secondary_text
+                        primary_text=primary_text,
+                        secondary_text=secondary_text,
+                        language=language,
                     )
                     try:
                         answer = chat_completion(config, messages, timeout_s=120, max_tokens=16)
