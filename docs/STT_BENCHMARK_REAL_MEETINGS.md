@@ -184,6 +184,45 @@ from private meetings is reproduced here):
    in the professional human reference itself (a similar-sounding verb
    substituted for the correct one). Ground truth is a proxy.
 
+## Bonus round — C++ runtimes and unified models (served, whole-window protocol)
+
+We also pointed the harness at engines served over HTTP by external runtimes:
+[audio.cpp](https://github.com/0xShug0/audio.cpp) (a young ggml-based C++ audio
+engine — think "llama.cpp for audio") and Microsoft's
+[VibeVoice-ASR](https://huggingface.co/microsoft/VibeVoice-ASR) (9B, MIT, joint
+speaker+timestamp+text) via its official vLLM plugin. **Protocol difference,
+stated plainly:** these engines transcribed each 5-minute window in one pass over
+HTTP, while our in-pipeline engines used diarization-turn chunking. Same
+reference, same scorer, different serving path.
+
+| Engine (runtime) | Mean WER ↓ | Wall/5-min window | GPU footprint | Notes |
+|---|---:|---:|---|---|
+| Qwen3-ASR-0.6B (audio.cpp, CUDA) | 0.56 *(0.42 excl. one window)* | **7–10 s** | one 24 GB card, small | over-generated ×2 on one chaotic multi-speaker opening; healthy elsewhere |
+| Nemotron 3.5 ASR 0.6B (audio.cpp) | 0.51 *(7/8 windows)* | **1–3 s** | one card, small | needs a server restart per request today (session-reuse bug we reported); one window came back empty even so |
+| VibeVoice-ASR 9B (vLLM, TP=4) | raw: 4.09 *(8/8 repetition loops)* — with the official auto-recovery client: 0.23–0.48 on 5/8 windows, 3 empty | 20–70 s | 4 × 24 GB | best CER of the whole test on its good windows, plus native speaker+timestamp structure (it under-counted speakers: 3–7 found vs 5–11 in reference) |
+
+What we take away:
+
+- **A 0.6B model at 30–150× real-time within ~5 % WER of our production engine**
+  is a real result: the C++-runtime route (tiny VRAM, no Python environment,
+  OpenAI-compatible endpoint) is worth watching closely. Since our remote-STT
+  client already speaks `/v1/audio/transcriptions`, connecting audio.cpp took
+  **zero code** — configuration only.
+- **VibeVoice-ASR is the most interesting failure of the test.** Raw serving
+  loops on every one of our real narrowband multi-speaker windows (its authors
+  ship a recovery client precisely for this); with that client it reaches
+  top-tier accuracy on the windows it completes — with speaker attribution and
+  timestamps nobody else provides — but it completed only 5 of 8. On short clean
+  speech it produced the best transcription of the entire test. One to re-test
+  as it matures, not one to deploy today.
+- **Deployment traps collected on the way** (all reproducible): a hardcoded
+  `max_tokens` in the vendor's own test client silently returning empty results
+  on capped-context servers; the audio encoder allocating *outside* vLLM's
+  memory budget (OOM at 92 % utilization on 24 GB cards); and a session-reuse
+  bug making a streaming ASR model return empty text from the second request on.
+  Young runtimes are qualified with the same harness — that is the point of
+  having one.
+
 ## Traps we fell into (so you don't)
 
 1. **The silent translation benchmark.** Our first Set-L run produced WER ≈ 0.95
