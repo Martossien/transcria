@@ -137,8 +137,7 @@ COPY --from=llama-builder /opt/llama/bin /opt/llama/bin
 RUN echo /opt/llama/bin > /etc/ld.so.conf.d/llama.conf && ldconfig \
     && ln -sf /opt/llama/bin/llama-server /usr/local/bin/llama-server
 
-# Couches MODÈLES + LICENCES placées AVANT `COPY . /app
-COPY --from=stt-runtimes-builder /opt/runtimes /opt/runtimes` et l'install : un patch de code
+# Couches MODÈLES + LICENCES placées AVANT `COPY . /app` et l'install : un patch de code
 # n'invalide donc PAS ces couches (12,5 Go) → pas de re-pull côté testeur sur une MAJ de code.
 # `/app/models` n'est PAS écrasé par `COPY . /app` (le dossier `models` est exclu par
 # .dockerignore ⇒ absent du contexte). HF_HOME=/hf et MODELS_DIR=/app/models sont montés en
@@ -149,6 +148,7 @@ COPY licenses/ /licenses/
 
 WORKDIR /app
 COPY . /app
+COPY --from=stt-runtimes-builder /opt/runtimes /opt/runtimes
 
 ARG PG_DSN_HOST=db
 ARG PG_DSN_PORT=5432
