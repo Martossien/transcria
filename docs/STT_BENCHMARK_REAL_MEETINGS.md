@@ -191,7 +191,9 @@ We also pointed the harness at engines served by external runtimes:
 engine — think "llama.cpp for audio"),
 [parakeet.cpp](https://github.com/mudler/parakeet.cpp) (ggml inference for
 NVIDIA's Parakeet/Nemotron families, by the LocalAI author — CLI, C API and an
-OpenAI-compatible server), and Microsoft's
+OpenAI-compatible server), [Kroko-ASR](https://huggingface.co/Banafo/Kroko-ASR)
+(per-language streaming Zipformer transducers on sherpa-onnx; CC-BY-SA community
+models, commercial tiers exist), and Microsoft's
 [VibeVoice-ASR](https://huggingface.co/microsoft/VibeVoice-ASR) (9B, MIT, joint
 speaker+timestamp+text) via its official vLLM plugin. **Protocol difference,
 stated plainly:** these engines transcribed each 5-minute window in one pass
@@ -204,6 +206,7 @@ Same reference, same scorer, different serving path.
 | Nemotron 3.5 ASR 0.6B (audio.cpp) | 0.51 *(7/8 windows)* | **1–3 s** | one card, small | needs a server restart per request today (session-reuse bug we reported); one window came back empty even so |
 | Nemotron 3.5 ASR 0.6B (parakeet.cpp, f16 GGUF, `--lang fr`) | **0.49** *(8/8, zero empty)* | **7–8 s** (CLI, incl. model load) | one card, ~1.4 GB weights | same model, different runtime: no session bug (3 identical back-to-back server replies), no empty windows, 0 % EN drift — best small-model result of the whole test |
 | Parakeet TDT 0.6B v3 (parakeet.cpp, auto language) | 0.93 *(8/8, heavy truncation)* | 5 s | one card, small | its automatic language detection drifted to English on ~all windows (11–36 % EN function words) and there is no way to force a language on this model — unusable on narrowband French |
+| Kroko-ASR FR Community 128 (sherpa-onnx, **CPU only**, 8 threads) | **0.43** *(8/8, zero empty)* | **10 s** | **no GPU at all**, 155 MB weights | French-dedicated streaming Zipformer; punctuated, cased output; best single-window score of the entire test (0.20); the low-latency FR-64 variant scores the same (0.43) |
 | VibeVoice-ASR 9B (vLLM, TP=4) | raw: 4.09 *(8/8 repetition loops)* — with the official auto-recovery client: 0.23–0.48 on 5/8 windows, 3 empty | 20–70 s | 4 × 24 GB | best CER of the whole test on its good windows, plus native speaker+timestamp structure (it under-counted speakers: 3–7 found vs 5–11 in reference) |
 
 What we take away:
@@ -220,6 +223,16 @@ What we take away:
   timestamps nobody else provides — but it completed only 5 of 8. On short clean
   speech it produced the best transcription of the entire test. One to re-test
   as it matures, not one to deploy today.
+- **The most surprising number of the whole benchmark is CPU-only.** A 155 MB
+  French-dedicated streaming Zipformer (Kroko-ASR Community, CC-BY-SA) lands at
+  0.43 mean WER on 8/8 windows — within noise of our 3B-parameter GPU leader
+  (0.427) and ahead of whisper large-v3 (0.437) — at 30× real-time on eight CPU
+  threads, with punctuation and casing, zero English drift, zero loops. A
+  language-dedicated small model beating language-generalist giants on hard
+  real-world audio is a lesson in itself. Caveats: French-only weights (one
+  model per language), CC-BY-SA copyleft on the community weights, and a
+  vendor whose better models are the paid tier — but as a no-GPU option it
+  instantly obsoletes everything else we tested in that class.
 - **Same model, two runtimes — the runtime is part of the result.** Nemotron
   3.5 ASR 0.6B scored 0.51 with per-request restarts and an empty window under
   one runtime, and a clean 0.49 on 8/8 with stable repeated serving under
