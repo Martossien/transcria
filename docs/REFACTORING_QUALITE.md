@@ -286,6 +286,55 @@ Trois contrats d'API distincts, aux enjeux différents :
 | API inter-nœuds (`inference_service` : `/diarize`, `/voice_embed`, `/capabilities`, `/engines/ensure`) | les topologies split — **le contrat le plus critique** | prose dans SERVICE_RESSOURCES_GPU.md + tests |
 | Sous-ensemble scriptable (upload → process → status → download) | les auto-hébergeurs qui scriptent | rien ne le distingue de l'interne |
 
+### 3.12 Livrables, affinage-discussion et éditeur SRT — la zone SAINE (contre-exemple)
+
+Mesure complète de la chaîne « fichiers finaux » — et c'est le contre-exemple qui valide
+la méthode : **cette zone n'est PAS un chantier**, elle est le modèle que le reste doit
+rejoindre.
+
+| Brique | Taille | Couv. | État |
+|---|---:|---:|---|
+| `exports/docx_report.py` | 1 508 l. | **96 %** | gros mais sain (registre de sections, §3.1) |
+| `exports/package_builder.py` (ZIP) | 140 l. | 90 % | sain |
+| `web/editor_routes.py` (éditeur SRT) | 501 l., 22 fonctions | 89 % | sain — son seul défaut (import de la privée `_get_job_for_api`) est traité en A2 |
+| `workflow/refine_llm.py` (discussion + passe LLM) | 177 l. | 95 % | sain |
+| `workflow/refine_store.py` (pool de versions commun éditeur/affinage) | 227 l. | 96 % | sain — bon patron de partage |
+| `context/document_extractor.py` (PDF/DOCX/PPTX joints) | 207 l. | 90 % | sain |
+| `context/invite_parser.py` + `job_context_builder.py` | 313 l. | 100/96 % | sains |
+
+Pourquoi cette zone est saine alors qu'elle est récente et complexe (sync-summary,
+versions, documents joints) : chaque brique est **un module à une responsabilité, testé à
+l'os, derrière une frontière claire** (le pool de versions est LE point de rencontre
+éditeur/affinage, pas deux implémentations). C'est exactement la cible des pistes A/B.
+
+Ce qui reste à faire ici est déjà porté par les vagues existantes : `run_refine`/
+`_apply_refine` (305 l. dans le runner) partent dans `phases/refine.py` (**B1**) ;
+`srt_editor.js` (1 309 l.) suit la règle d'opportunité (**A3**) ; les endpoints éditeur
+entrent dans la référence générée (**C8**). Un seul ajout propre à la zone : un **golden
+des livrables** — un job-fixture figé → DOCX/SRT/ZIP générés → structure comparée
+(sections du DOCX, entrées du ZIP, index SRT) — posé en **B0** avec les autres goldens,
+c'est LA garde transverse de « livrables identiques » promise au §5.7.
+
+### 3.13 Couverture du périmètre — la carte de complétude
+
+Toutes les surfaces du produit ont été auditées ; chacune a son état des lieux et sa
+vague (ou son motif de non-action) :
+
+| Surface | État des lieux | Traitement |
+|---|---|---|
+| Code Python (web, workflow, pipeline, GPU, STT) | §3.1-3.5 | A2, B0-B3, C1-C2 |
+| Topologies all-in-one / frontale / nœud GPU | §5.3 | matrice §6.0 |
+| Base de données (dialectes, primitives, Alembic) | §5.4 | gel + gates 2 dialectes |
+| Concurrence mémoire (threads/verrous) | §5.5 | règles §5.5, B3 encadré |
+| i18n / templates / catalogues | §5.6 | A1 |
+| Installation (shell + 2 générations Python) | §3.8 | C6 |
+| Docker (5 images, compose, publish) | §3.9 | C7 |
+| Interface (templates, JS, contrat front↔back) | §3.10 | A3 |
+| Documentation d'API (3 contrats) | §3.11 | C8 |
+| Livrables / éditeur SRT / affinage / documents | §3.12 | sain — goldens en B0, restes portés par B1/A3/C8 |
+| Config (schéma, classification) | §3.3, C3 | vues typées, schéma souverain |
+| Tests (conftest, fakes, contrats) | §3.6, C4 | C4 |
+
 ## 4. Diagnostic
 
 Le mécanisme d'accumulation : une feature = une route + une phase + une étape → chacune
@@ -636,7 +685,9 @@ class ExecutionCommand:
 chaînes historiques — sérialisation base/API inchangée).
 **Tests golden préalables** : figer par un test la correspondance dict→décision actuelle de
 `job_executor` (chaque combinaison de clés observée → état de job résultant), pour prouver
-l'équivalence après migration.
+l'équivalence après migration. S'y ajoute le **golden des livrables** (§3.12) : job-fixture
+figé → DOCX/SRT/ZIP → structure comparée — la garde transverse que toutes les vagues
+suivantes réutilisent.
 
 **DoD** : plus aucun dict de résultat créé dans pipeline_service/job_executor ; golden
 verts avant/après ; mypy sans `type: ignore` ajouté.
