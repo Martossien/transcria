@@ -186,7 +186,11 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"], default="cohere",
+        "--stt-backend",
+        choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
+                 # backends SERVIS (runtimes C++ — nécessitent --remote-stt vers le serveur)
+                 "qwen3asr", "nemotron"],
+        default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."
@@ -675,8 +679,9 @@ def apply_e2e_config(cfg: dict, args: argparse.Namespace) -> None:
 
     # STT distant : le pipeline transcrit via un serveur compatible OpenAI.
     if args.remote_stt:
-        # Cohere Transcribe (vLLM) refuse verbose_json → texte ; Whisper gère les segments.
-        rfmt = "json" if args.stt_backend == "cohere" else "verbose_json"
+        # Cohere Transcribe (vLLM) refuse verbose_json → texte ; Whisper gère les segments ;
+        # les runtimes C++ servis (audio.cpp/parakeet.cpp) renvoient du json simple.
+        rfmt = "json" if args.stt_backend in ("cohere", "qwen3asr", "nemotron") else "verbose_json"
         inference = cfg.setdefault("inference", {})
         inference["mode"] = "remote"
         stt = inference.setdefault("stt", {})
@@ -690,7 +695,9 @@ def apply_e2e_config(cfg: dict, args: argparse.Namespace) -> None:
         # served-model-name attendu par le serveur (cf. launch_stt_*.sh) ; ne pas
         # écraser une valeur déjà fournie par la config.
         be.setdefault("model", {"cohere": "cohere-transcribe",
-                                "whisper": "whisper-large-v3"}.get(args.stt_backend, args.stt_backend))
+                                "whisper": "whisper-large-v3",
+                                "qwen3asr": "qwen3-asr-1.7b",
+                                "nemotron": "nemotron"}.get(args.stt_backend, args.stt_backend))
         info(f"STT distant : {args.stt_backend} → {args.remote_stt} "
              f"(model={be['model']}, response_format={rfmt}, fallback_local=off)")
 

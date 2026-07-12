@@ -145,3 +145,65 @@ def test_catalog_with_status_shape(monkeypatch):
     assert set(view) >= {"items", "hf_home", "models_dir", "hf_free_gb", "models_free_gb"}
     assert all("present" in it and "spec" in it for it in view["items"])
     assert any(it["spec"].role == "arbitrage_llm" for it in view["items"])
+
+
+class TestServedSttCatalog:
+    """Lignes catalogue des moteurs STT servis (runtimes C++) : proposées quand le
+    moteur est déclaré (manifeste) ou le backend routé ; kind runtime sondé sous
+    runtimes/ ; kind gguf = machinerie existante."""
+
+    def _cfg(self, *, engine=None, backend_url=None):
+        cfg = {"models": {"stt_backend": "whisper", "diarization_backend": "sortformer"}}
+        if engine:
+            cfg["resource_node"] = {"engines": [{"name": engine, "script": "s.sh",
+                                                 "gpu": 0, "port": 8021}]}
+        if backend_url:
+            cfg["inference"] = {"mode": "hybrid",
+                                "stt": {"backends": {"qwen3asr": {"url": backend_url}}}}
+        return cfg
+
+    def test_moteur_declare_propose_la_ligne(self):
+        from transcria.models_catalog import build_catalog
+
+        specs = build_catalog(self._cfg(engine="qwen3asr"))
+        served = [s for s in specs if s.role == "stt_served"]
+        assert len(served) == 1
+        assert served[0].repo_id == "Qwen/Qwen3-ASR-1.7B-hf"
+        assert served[0].kind == "runtime"
+        assert served[0].file == "qwen3_asr_1_7b_hf"  # id du paquet délégué
+
+    def test_backend_route_sans_manifeste_propose_aussi(self):
+        from transcria.models_catalog import build_catalog
+
+        specs = build_catalog(self._cfg(backend_url="http://127.0.0.1:8021/v1"))
+        assert any(s.role == "stt_served" and s.kind == "runtime" for s in specs)
+
+    def test_nemotron_est_un_gguf_classique(self):
+        from transcria.models_catalog import build_catalog
+
+        cfg = self._cfg()
+        cfg["resource_node"] = {"engines": [{"name": "nemotron", "script": "s.sh",
+                                             "gpu": 0, "port": 8022}]}
+        served = [s for s in build_catalog(cfg) if s.role == "stt_served"]
+        assert served[0].kind == "gguf"
+        assert served[0].file.endswith(".gguf")
+        assert served[0].target_subdir == "parakeet-cpp"
+
+    def test_aucun_moteur_aucune_ligne(self):
+        from transcria.models_catalog import build_catalog
+
+        assert not any(s.role == "stt_served" for s in build_catalog(self._cfg()))
+
+    def test_statut_runtime_sonde_sous_runtimes(self, monkeypatch, tmp_path):
+        from transcria.models_catalog import build_catalog, model_status
+
+        monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+        spec = [s for s in build_catalog(self._cfg(engine="qwen3asr"))
+                if s.role == "stt_served"][0]
+        st = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "m")
+        assert st["present"] is False
+        target = tmp_path / "audiocpp" / "src" / "models" / "Qwen3-ASR-1.7B-hf"
+        target.mkdir(parents=True)
+        (target / "config.json").write_text("{}")
+        st = model_status(spec, hf_home=tmp_path / "hf", models_dir=tmp_path / "m")
+        assert st["present"] is True and st["size_bytes"] > 0

@@ -30,6 +30,10 @@ def target_dir_for(spec: ModelSpec, *, hf_home: Path, models_dir: Path) -> Path:
     """Dossier qui GROSSIT pendant le téléchargement (base du calcul de progression)."""
     if spec.kind == "gguf":
         return models_dir / spec.target_subdir
+    if spec.kind == "runtime":
+        from transcria.models_catalog import resolve_runtimes_dir
+
+        return resolve_runtimes_dir() / spec.target_subdir
     return hf_home / "hub" / ("models--" + spec.repo_id.replace("/", "--"))
 
 
@@ -96,6 +100,24 @@ def run_download(
     try:
         if hf_download is not None:
             hf_download(spec, hf_home, models_dir, token)
+        elif spec.kind == "runtime":
+            # Poids gérés par le runtime servi (audio.cpp) : téléchargement DÉLÉGUÉ à
+            # SON model_manager (venv dédié, provisionnés par `installer.cli audiocpp`).
+            # spec.file porte l'id du paquet chez eux (cf. _SERVED_STT_SOURCES).
+            from transcria.models_catalog import resolve_runtimes_dir
+
+            home = resolve_runtimes_dir() / "audiocpp"
+            manager = home / "src" / "tools" / "model_manager.py"
+            py = home / "venv" / "bin" / "python"
+            if not (py.exists() and manager.exists()):
+                raise RuntimeError(
+                    "runtime audio.cpp non provisionné — lancer d'abord : "
+                    "venv/bin/python -m transcria.installer.cli audiocpp"
+                )
+            if not spec.file:
+                raise ValueError("modèle runtime sans id de paquet")
+            subprocess.run([str(py), str(manager), "install", spec.file],
+                           check=True, cwd=str(home / "src"))
         elif spec.kind == "gguf":
             from huggingface_hub import hf_hub_download
 

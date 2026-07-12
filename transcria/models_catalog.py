@@ -36,6 +36,43 @@ _STT_SOURCES: dict[str, dict] = {
     "moss": {"repo": "OpenMOSS-Team/MOSS-Transcribe-Diarize", "gated": False, "license": "Apache-2.0",
              "license_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize", "est_gb": 3.7},
 }
+
+# Modèles des MOTEURS STT SERVIS (runtimes C++ — cf. docs/EXTERNAL_STT_RUNTIMES.md), keyés
+# par nom de moteur du manifeste `resource_node.engines`. kind "gguf" = fichier unique via
+# la machinerie existante ; kind "runtime" = poids gérés par le runtime lui-même
+# (audio.cpp model_manager) — présence sondée sous runtimes/, téléchargement délégué.
+_SERVED_STT_SOURCES: dict[str, dict] = {
+    # kind runtime : target_subdir = chemin RELATIF sous runtimes/ (présence),
+    # file = id du paquet dans le model_manager du runtime (téléchargement délégué).
+    "qwen3asr": {
+        "repo": "Qwen/Qwen3-ASR-1.7B-hf", "kind": "runtime",
+        "target_subdir": "audiocpp/src/models/Qwen3-ASR-1.7B-hf",
+        "file": "qwen3_asr_1_7b_hf",
+        "gated": False, "license": "Apache-2.0",
+        "license_url": "https://huggingface.co/Qwen/Qwen3-ASR-1.7B-hf", "est_gb": 3.9,
+    },
+    "nemotron": {
+        "repo": "mudler/parakeet-cpp-gguf", "kind": "gguf",
+        "file": "nemotron-3.5-asr-streaming-0.6b-f16.gguf", "target_subdir": "parakeet-cpp",
+        "gated": False, "license": "MIT (runtime) / NVIDIA Open Model License (poids)",
+        "license_url": "https://huggingface.co/mudler/parakeet-cpp-gguf", "est_gb": 1.4,
+    },
+}
+
+
+def resolve_runtimes_dir() -> Path:
+    return Path(os.environ.get("TRANSCRIA_RUNTIMES_DIR") or "./runtimes")
+
+
+def _declared_engine_names(cfg: dict) -> list[str]:
+    engines = ((cfg.get("resource_node", {}) or {}).get("engines") or [])
+    return [str(e.get("name")) for e in engines if isinstance(e, dict) and e.get("name")]
+
+
+def _served_backend_names(cfg: dict) -> list[str]:
+    backends = (((cfg.get("inference", {}) or {}).get("stt", {}) or {}).get("backends", {}) or {})
+    return [name for name, spec in backends.items()
+            if isinstance(spec, dict) and str(spec.get("url") or "").strip()]
 _DIAR_SOURCES: dict[str, dict] = {
     "pyannote": {"repo": PYANNOTE_MODEL_ID, "gated": True,
                  "license": "pyannote (token HF + acceptation des conditions)",
@@ -105,6 +142,20 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
             role="diarization", label=f"Diarisation — {models.get('diarization_backend')}",
             repo_id=diar["repo"], file=None, kind="hf_cache", target_subdir="", gated=diar["gated"],
             license=diar["license"], license_url=diar["license_url"], est_gb=diar["est_gb"]))
+
+    # Moteurs STT SERVIS : une ligne par moteur déclaré (manifeste) ou backend routé,
+    # dont le modèle est connu du catalogue — dédupliqué, sans doubler le backend principal.
+    seen = {s.repo_id for s in specs}
+    for engine_name in dict.fromkeys(_declared_engine_names(cfg) + _served_backend_names(cfg)):
+        served = _SERVED_STT_SOURCES.get(engine_name)
+        if not served or served["repo"] in seen:
+            continue
+        seen.add(served["repo"])
+        specs.append(ModelSpec(
+            role="stt_served", label=f"STT servi — {engine_name}", repo_id=served["repo"],
+            file=served.get("file"), kind=served["kind"],
+            target_subdir=served.get("target_subdir", ""), gated=served["gated"],
+            license=served["license"], license_url=served["license_url"], est_gb=served["est_gb"]))
     return specs
 
 
@@ -177,6 +228,16 @@ def model_status(
     GGUF : le ``--model`` réellement servi d'abord, puis le fichier cherché sous plusieurs racines
     (le sous-dossier peut différer de l'attendu). HF cache : plusieurs répertoires ``hub/``.
     Résilient aux dossiers non lisibles (ex. ``/root/models`` pour un process non-root)."""
+    if spec.kind == "runtime":
+        # Poids gérés par un runtime servi (audio.cpp…) : présence = dossier non vide
+        # sous runtimes/<target_subdir> (aucun réseau, comme le reste du statut).
+        target = resolve_runtimes_dir() / spec.target_subdir
+        try:
+            if target.is_dir() and any(target.iterdir()):
+                return {"present": True, "path": str(target), "size_bytes": _dir_size(target)}
+        except OSError:
+            pass
+        return {"present": False, "path": None, "size_bytes": 0}
     if spec.kind == "gguf" and spec.file:
         if served_path is not None and served_path.name == spec.file:
             try:

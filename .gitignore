@@ -101,3 +101,4 @@ backups/
 transcria/web/translations/messages.pot
 transcria/web/translations/**/*.mo
 models/kroko/
+runtimes/
