@@ -247,6 +247,28 @@ Les problèmes, mesurés :
   être poussé sans avoir jamais été parsé (vécu : le COPY injecté dans un commentaire de
   la bundled, découvert au build local).
 
+### 3.10 L'interface utilisateur — le wizard est un god-feature trans-couches
+
+Inventaire : **21 templates Jinja2, 4 158 lignes** ; **6 fichiers statiques, 3 418 lignes**
+(`srt_editor.js` 1 309 l. / 138 fonctions, `wizard.js` 1 268 l. / 130 fonctions,
+`meeting_types.js` 456, `transcria.css` 297, `i18n.js` 29 — catalogue servi par le Python,
+patron sain) ; cache-busting `asset_url` en place.
+
+Les problèmes, mesurés :
+
+- **`job_wizard.html` = 1 110 lignes** (27 % de tous les templates) avec **6 blocs
+  `<script>`** — le miroir exact de la route `job_wizard` (171 l.) et de `wizard.js`
+  (1 268 l.) : le parcours de création est un god-feature qui traverse les trois couches ;
+- **548 lignes de JS inline** dans les templates (relevé regex sur les `<script>` sans
+  `src=`) : invisibles pour tout lint, non cachables, non réutilisables ;
+- **34 appels `fetch`/XHR** dans le JS pointent des URLs `/api/...` en littéraux —
+  le contrat JS↔routes n'a **aucune garde** : renommer une route casse le front sans
+  qu'aucun test unitaire ne rougisse (seul le walkthrough Playwright l'attraperait) ;
+- **aucun lint JS** (ruff ne couvre que Python ; pas de toolchain node dans le projet) ;
+- la validation UI existante : walkthrough Playwright en CI (`scripts/ui_walkthrough.py`)
+  + pilotage réel pour les features (l'éditeur SRT et la sync-summary ont été validés
+  ainsi) — c'est le filet à préserver.
+
 ## 4. Diagnostic
 
 Le mécanisme d'accumulation : une feature = une route + une phase + une étape → chacune
@@ -406,6 +428,7 @@ disponibles, du moins cher au plus cher :
 | A0 filets | ✔ | — | — | — | — | — |
 | A1 i18n | ✔ | ✔ (bascule FR/EN) | — | — | — | — |
 | A2 blueprints | ✔ | ✔ | ✔ (1 run de contrôle) | — | — | — |
+| A3 UI | ✔ (garde contrat) | **✔ complet + éditeur SRT** | — | — | — | — |
 | B0 contrats | ✔ | — | ✔ | — | — | — |
 | B1 phases | ✔ | ✔ | ✔ (dont scénario gate) | ✔ | — | — |
 | B2 pipeline | ✔ | — | ✔ (+ reprise mi-parcours) | ✔ | — | — |
@@ -513,6 +536,33 @@ appellent les endpoints, pas les fonctions.
 **DoD** : routes.py < 300 l. ; aucun module web > 900 l. ; fan-out par module ≤ 20 ; zéro
 import différé non justifié dans web/ ; `url_for` inchangés (grep `url_for('web.` sur les
 templates = zéro diff nécessaire) ; ratchet abaissé.
+
+#### A3 — Interface utilisateur : sortir le JS des templates, garder le contrat (effort M)
+
+Après A2 (les routes), le pendant front (état des lieux §3.10) — même philosophie
+mécanique, **aucune réécriture, pas de SPA, pas de toolchain node** :
+
+1. **Extraire les 548 lignes de JS inline** des templates vers `static/js/` (un fichier
+   par page : `job_wizard_page.js`, `base_nav.js`, …), référencés par `asset_url`
+   (cache-busting existant). Comportement identique, JS enfin visible et cachable.
+2. **`tests/test_js_api_contract.py`** — la garde du contrat front↔back, pure texte en
+   CI : extraire les littéraux `/api/...` des fichiers JS et des templates, vérifier que
+   chacun matche une règle de `app.url_map`. Renommer une route casse un test unitaire
+   AVANT le walkthrough. (C'est aussi le filet de sécurité d'A2.)
+3. **Découpe de `job_wizard.html`** (1 110 l.) en `{% include %}` par étape du parcours —
+   mécanique, miroir de la découpe de la route en A2 ; `wizard.js` n'est découpé QUE si
+   une feature doit y toucher (règle d'opportunité, pas de campagne).
+4. **Budgets front** (ratchet) : 0 nouveau JS inline (hors initialisation d'une ligne
+   passant des données Jinja) ; template ≤ 400 l. ; fichier JS ≤ 900 l. comme le Python.
+
+**Non retenu, avec raison** : lint JS (eslint/biome) — imposerait une toolchain node à un
+projet qui n'en a pas ; à réévaluer seulement si le volume JS croît. Framework front /
+bundler : le produit est une app serveur classique, les 3 400 l. de JS vanilla sont
+maintenables une fois lintables du regard et gardées par le contrat (2).
+
+**DoD** : zéro `<script>` sans `src=` dans les templates (hors init 1 ligne) ; garde
+contrat verte et rouge sur mutation volontaire ; walkthrough Playwright + parcours éditeur
+SRT réels inchangés ; `job_wizard.html` < 400 l.
 
 ---
 
@@ -808,13 +858,13 @@ rejouée via le script sur la prochaine version ; zéro copie de SHA non gardée
 ## 7. Séquencement et efforts
 
 ```
-A0 (S) ──► A1 (S) ──► A2 (L) ─────────────► C2 (M) ─► C5 (M) ─► C6 (L) ; C7 (M) indépendante, à tout moment après A0
+A0 (S) ──► A1 (S) ──► A2 (L) ──► A3 (M) ──► C2 (M) ─► C5 (M) ─► C6 (L) ; C7 (M) indépendante, à tout moment après A0
              │                                  ▲
              └──► B0 (M) ──► B1 (XL) ──► B2 (L) ┴─► C1 (M) ─► C4 (M) ─► B3 (M)
                                                         └──► C3 (M, étalé)
 ```
 
-Ordre recommandé : **A0 → A1 → B0 → A2 → B1 → C1 → B2 → C3 → C2/C4/C5 → B3 → C6.**
+Ordre recommandé : **A0 → A1 → B0 → A2 → A3 → B1 → C1 → B2 → C3 → C2/C4/C5 → B3 → C6.**
 (C6 peut aussi avancer indépendamment par petites PR — il ne touche aucun module des
 pistes A/B ; seule contrainte : pas en même temps qu'une release.)
 Justification : A0/A1 posent les gardes sur de petits périmètres ; B0 sécurise toutes les
@@ -917,6 +967,9 @@ l'annexe C.
 | Appels directs install.sh → legacy | 26 | 0 | C6 |
 | Copies de chaque SHA épinglée (Dockerfiles+Python) | 5 sans garde | 5 gardées par test (1 source de vérité) | C7 |
 | Dockerfiles buildables sans jamais être parsés par la CI | 3 (bundled, resource-node, worker) | 0 non couvert par garde ou rituel | C7 |
+| JS inline dans les templates | 548 l. | 0 (hors init 1 ligne) | A3 |
+| Contrat JS↔routes (34 fetch) | aucune garde | test de contrat en CI | A3 |
+| Plus gros template | job_wizard.html : 1 110 l. | < 400 l. | A3 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
