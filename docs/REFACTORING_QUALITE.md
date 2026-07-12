@@ -351,7 +351,38 @@ modules testés, la CLI ne garde que le parsing et la délégation ; sa couvertu
 mécaniquement haute. Rattaché à **C6**. Piège documenté : `resolve_database_url` honore
 `TRANSCRIA_DATABASE_URL` sinon vise la base par défaut — les goldens de backup fixent l'env.
 
-### 3.14 Couverture du périmètre — la carte de complétude
+### 3.14 Les tests GPU/VRAM — bons fakes, frontière du réel non formalisée
+
+Inventaire : **17 fichiers de tests** dédiés (allocator, vram_manager, planner, superviseur,
+préflight, multi-GPU, vram_wait, concurrence…), ~166 tests, **tous à fakes**
+(`CUDA_VISIBLE_DEVICES` monkeypatché, sorties nvidia-smi simulées, sondes injectées) —
+c'est ce qui permet à la CI sans GPU de tester ce domaine. Résultats par module :
+
+| Module | Couv. | Lecture |
+|---|---:|---|
+| `stt_vram_planner` / `llm_placement` / `llama_runtime` | 98-99 % | la stratégie fakes au sommet |
+| `stt_engine_supervisor` | 93 % | sondes injectées (patron modèle) |
+| `vram_manager` | 84 % | correct — les lignes mortes sont les chemins « processus réel » (kills, ports) |
+| `queue/allocator` | 77 % | idem — et c'est LA classe critique de concurrence |
+| `gpu/llm_backend.py` (cycle de vie Ollama/llama/vLLM) | **56 %** (141 l. mortes) | le trou : lourd en sous-processus, peu de coutures injectables |
+| `gpu/llm_footprint.py` | **55 %** | idem |
+
+**Le vrai constat structurel** : la frontière fakes ↔ GPU réel n'est **pas formalisée**.
+Tout ce qui exige du matériel (parsing nvidia-smi live, kills réels, lancement réel de
+llama-server/vLLM, mesure VRAM) vit HORS pytest — E2E opérateur, campagne de charge, tests
+de lanceurs à la main. Ça fonctionne (c'est le niveau 3-6 de la matrice §6.0) mais rien ne
+distingue dans le code de test ce qui est simulé de ce qui a déjà tourné sur carte.
+
+Actions (rattachées aux vagues existantes) :
+- **C4** : marqueur `@pytest.mark.gpu_real` + petite suite smoke GPU réel exécutable sur
+  la machine de dev (PAS en CI) — snapshot allocator vs nvidia-smi réel, kill d'un
+  processus factice réel, launch réel d'un stub par le superviseur. Formalise ce qui se
+  fait aujourd'hui à la main, et donne à **B3** son filet outillé ;
+- **préparation de B3** : remonter `llm_backend.py` à ≥ 75 % en injectant les coutures
+  sous-processus (le patron runner-injecté des phases d'installeur, déjà éprouvé) —
+  refactorer la zone GPU avec son cycle de vie LLM à 56 % serait imprudent.
+
+### 3.15 Couverture du périmètre — la carte de complétude
 
 Toutes les surfaces du produit ont été auditées ; chacune a son état des lieux et sa
 vague (ou son motif de non-action) :
@@ -372,6 +403,7 @@ vague (ou son motif de non-action) :
 | Page système / dashboards | §3.13 | B3 (snapshot unique) + C8 |
 | Maintenance (backup/restore/upgrade/CLI) | §3.13 | C6 (amincir la CLI) |
 | Tests (conftest, fakes, contrats) | §3.6, C4 | C4 |
+| Tests GPU/VRAM (fakes vs réel) | §3.14 | C4 (marqueur gpu_real) + prépa B3 (llm_backend) |
 
 ## 4. Diagnostic
 
@@ -814,6 +846,10 @@ modules — §9) :
 3. `VRAMManager` et `GPUAllocator` **consomment** ces deux modules (leurs méthodes
    deviennent des délégations — signatures publiques inchangées, aucun appelant touché).
 
+**Prérequis** (§3.14) : `llm_backend.py` remonté à ≥ 75 % (coutures sous-processus
+injectées) et suite smoke `gpu_real` en place — on ne refactore pas une zone dont le
+cycle de vie LLM est testé à 56 %.
+
 **Protection obligatoire** : cette zone porte les correctifs de concurrence les plus
 durement acquis. Avant merge : rejouer la **campagne de charge** (3 jobs simultanés
 all-in-one ; montée à 8 en split) + les tests d'admission existants.
@@ -1119,6 +1155,8 @@ l'annexe C.
 | Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
 | Couverture config_schema.py (validateurs) | 80 % (205 l. mortes) | ≥ 90 % | C3 |
 | Couverture maintenance/cli.py | **38 %** | ≥ 80 % (par amincissement) | C6 |
+| Couverture gpu/llm_backend.py | **56 %** | ≥ 75 % (coutures injectées) | prépa B3 |
+| Frontière tests fakes ↔ GPU réel | non formalisée | marqueur `gpu_real` + suite smoke | C4 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
