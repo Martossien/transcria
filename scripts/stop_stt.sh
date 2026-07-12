@@ -21,7 +21,8 @@ PORT=""
 TIMEOUT="${STOP_STT_TIMEOUT:-60}"
 ALL=false
 # Ports STT par défaut : Cohere=8003, Whisper=8005, Granite=8007.
-read -ra DEFAULT_PORTS <<< "${STT_STOP_PORTS:-8003 8005 8007}"
+# 8021/8022 = runtimes C++ servis (audio.cpp qwen3asr / parakeet.cpp nemotron)
+read -ra DEFAULT_PORTS <<< "${STT_STOP_PORTS:-8003 8005 8007 8021 8022}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

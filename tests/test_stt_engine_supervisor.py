@@ -335,3 +335,58 @@ def test_reap_skips_already_down_and_forgets():
     assert sup.reap_idle([spec], now=99999.0) == []
     assert stopped == []
     assert "cohere" not in sup._last_used           # oublié
+
+
+class TestHealthPathAndMode:
+    """Sonde de vie configurable par moteur (runtimes C++ sans /v1/models)."""
+
+    def test_manifeste_health_path_et_mode(self):
+        from transcria.gpu.stt_engine_supervisor import engine_specs_from_config
+
+        cfg = {"resource_node": {"engines": [
+            {"name": "nemotron", "script": "s.sh", "gpu": 0, "port": 8022,
+             "health_path": "health", "health_mode": "http_any"},
+            {"name": "cohere", "script": "s.sh", "gpu": 1, "port": 8003},
+        ]}}
+        specs = {s.name: s for s in engine_specs_from_config(cfg)}
+        assert specs["nemotron"].health_url.endswith(":8022/health")
+        assert specs["nemotron"].health_mode == "http_any"
+        # défauts rétro-compatibles
+        assert specs["cohere"].health_url.endswith(":8003/v1/models")
+        assert specs["cohere"].health_mode == "http_2xx"
+
+    def test_health_mode_inconnu_replie_sur_2xx(self):
+        from transcria.gpu.stt_engine_supervisor import engine_specs_from_config
+
+        cfg = {"resource_node": {"engines": [
+            {"name": "x", "script": "s.sh", "gpu": 0, "port": 8021, "health_mode": "yolo"},
+        ]}}
+        assert engine_specs_from_config(cfg)[0].health_mode == "http_2xx"
+
+    def test_prober_http_any_accepte_404(self):
+        from transcria.gpu.stt_engine_supervisor import http_health_prober
+
+        class Sess:
+            def get(self, url, timeout):
+                from types import SimpleNamespace
+                return SimpleNamespace(status_code=404)
+
+        assert http_health_prober("http://x/health", session=Sess(), mode="http_any") is True
+        assert http_health_prober("http://x/health", session=Sess()) is False  # 2xx requis
+
+    def test_probe_engine_health_compat_fakes_un_argument(self):
+        from transcria.gpu.stt_engine_supervisor import EngineSpec, probe_engine_health
+
+        spec = EngineSpec(name="n", script="s", gpu=0, gpu_mem=0.1, port=8022,
+                          health_url="http://x/health", health_mode="http_any")
+        seen = {}
+
+        def modern(url, *, mode):
+            seen["mode"] = mode
+            return True
+
+        def legacy(url):
+            return True
+
+        assert probe_engine_health(modern, spec) and seen["mode"] == "http_any"
+        assert probe_engine_health(legacy, spec)

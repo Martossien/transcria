@@ -524,6 +524,20 @@ def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
     if not urls and inference.get("url"):
         urls = [inference["url"]]
     if not urls:
+        # All-in-one : un backend routé loopback avec un moteur homonyme déclaré dans
+        # `resource_node.engines` est assuré EN PROCESS par le gate (pas besoin de nœud
+        # de contrôle) — état sain, pas un oubli de config.
+        from urllib.parse import urlparse
+
+        declared = {str(e.get("name")) for e in ((cfg.get("resource_node", {}) or {}).get("engines") or [])
+                    if isinstance(e, dict)}
+        local_served = [
+            b for b in remote_backends
+            if (urlparse(str(backends[b].get("url"))).hostname in ("127.0.0.1", "localhost", "::1"))
+            and b in declared
+        ]
+        if set(local_served) == set(remote_backends):
+            return CheckResult(name, OK, _t("stt_local_served", backends=", ".join(local_served)))
         return CheckResult(
             name,
             WARN,

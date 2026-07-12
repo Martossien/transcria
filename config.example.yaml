@@ -904,8 +904,15 @@ inference:
       # url vide = ce moteur reste local. Renseigner pour servir le STT à distance.
       cohere:  { url: "", model: "cohere-transcribe",  response_format: "json" }          # Cohere refuse verbose_json
       whisper: { url: "", model: "whisper-large-v3", response_format: "verbose_json" }
+      # Runtimes C++ SERVIS (audio.cpp / parakeet.cpp — cf. docs/EXTERNAL_STT_RUNTIMES.md).
+      # `fallback_backend` = backend NATIF de repli si le serveur tombe (sans lui : erreur
+      # explicite, jamais de repli implicite). En all-in-one, une URL loopback + un moteur
+      # homonyme déclaré dans resource_node.engines ⇒ démarrage géré automatiquement.
+      # qwen3asr:  { url: "http://127.0.0.1:8021/v1", model: "qwen3-asr-1.7b", response_format: "json", fallback_backend: "whisper" }
+      # nemotron:  { url: "http://127.0.0.1:8022/v1", model: "nemotron",       response_format: "json", fallback_backend: "parakeet" }
 
-# Config du NŒUD DE RESSOURCES uniquement (laisser absent côté frontale).
+# Config du NŒUD DE RESSOURCES — ou de l'ALL-IN-ONE qui sert ses propres moteurs STT
+# (laisser absent côté frontale split).
 # Décrit les moteurs STT que le service peut gérer (cycle A/B/C). Le placement
 # (gpu, port, fraction VRAM) est à la charge de l'admin.
 # resource_node:
@@ -915,4 +922,10 @@ inference:
 #   engines:
 #     - { name: cohere,  script: scripts/launch_stt_cohere.sh,  gpu: 3, gpu_mem: 0.85, port: 8003, idle_timeout_s: 0 }
 #     - { name: whisper, script: scripts/launch_stt_whisper.sh, gpu: 5, gpu_mem: 0.85, port: 8005, idle_timeout_s: 0 }
+#     # Runtimes C++ (gpu_mem = ADMISSION planner seulement, ces serveurs ignorent STT_GPU_MEM —
+#     # calibrer sur la conso mesurée). health_path/health_mode : sonde de vie par moteur ;
+#     # http_any = toute réponse HTTP prouve la vie (runtimes mono-modèle qui chargent leurs
+#     # poids AVANT de binder le port) — ne JAMAIS l'utiliser pour un vLLM.
+#     - { name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 0, gpu_mem: 0.25, port: 8021 }
+#     - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 0, gpu_mem: 0.10, port: 8022, health_mode: http_any }
 #   # idle_timeout_s > 0 : arrêt automatique du moteur après N secondes d'inactivité (idle-stop). 0 = résident.

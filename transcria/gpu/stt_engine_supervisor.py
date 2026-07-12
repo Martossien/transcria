@@ -32,13 +32,19 @@ logger = logging.getLogger(__name__)
 class EngineSpec:
     """Moteur STT déclaré par l'admin (placement)."""
 
-    name: str            # "cohere", "whisper", …
+    name: str            # "cohere", "whisper", "qwen3asr", "nemotron", …
     script: str          # scripts/launch_stt_<name>.sh
     gpu: int             # GPU assigné (physique, = STT_GPU)
     gpu_mem: float       # gpu_memory_utilization (fraction du total)
     port: int            # port HTTP
-    health_url: str      # ex. http://host:port/v1/models
+    health_url: str      # ex. http://host:port/v1/models (dérivée de health_path)
     idle_timeout_s: float = 0.0  # > 0 : arrêt après inactivité (idle-stop). 0 = jamais
+    # Sonde de vie : certains runtimes C++ n'exposent pas /v1/models.
+    # health_mode "http_2xx" (défaut) = 200 requis ; "http_any" = TOUTE réponse HTTP
+    # prouve la vie (valide pour un serveur mono-modèle qui charge ses poids AVANT de
+    # binder le port, ex. parakeet-server). http_any ne doit JAMAIS devenir le défaut :
+    # un vLLM bind son port avant d'être prêt.
+    health_mode: str = "http_2xx"
 
 
 @dataclass(frozen=True)
@@ -55,6 +61,15 @@ class EnsureResult:
     @property
     def ok(self) -> bool:
         return self.status in ("ready", "launched")
+
+
+def probe_engine_health(prober: "HealthProber", spec: "EngineSpec") -> bool:
+    """Sonde un moteur en honorant son `health_mode` (compat : les probers/fakes
+    historiques à un seul argument restent acceptés)."""
+    try:
+        return prober(spec.health_url, mode=spec.health_mode)  # type: ignore[call-arg]
+    except TypeError:
+        return prober(spec.health_url)
 
 
 # health_prober(health_url) -> bool ; launcher(spec, gpu_index) -> bool (lancé & prêt)
@@ -92,6 +107,14 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
         try:
             port = int(entry["port"])
             host = entry.get("host", "127.0.0.1")
+            health_path = str(entry.get("health_path") or "/v1/models")
+            if not health_path.startswith("/"):
+                health_path = "/" + health_path
+            health_mode = str(entry.get("health_mode") or "http_2xx")
+            if health_mode not in ("http_2xx", "http_any"):
+                logger.warning("[stt-sup] health_mode inconnu %r (moteur %s) — repli http_2xx",
+                               health_mode, entry.get("name"))
+                health_mode = "http_2xx"
             specs.append(
                 EngineSpec(
                     name=str(entry["name"]),
@@ -99,8 +122,9 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
                     gpu=int(entry["gpu"]),
                     gpu_mem=float(entry.get("gpu_mem", 0.85)),
                     port=port,
-                    health_url=f"http://{host}:{port}/v1/models",
+                    health_url=f"http://{host}:{port}{health_path}",
                     idle_timeout_s=float(entry.get("idle_timeout_s", 0) or 0),
+                    health_mode=health_mode,
                 )
             )
         except (KeyError, TypeError, ValueError) as exc:
@@ -171,7 +195,7 @@ class SttEngineSupervisor:
 
     def ensure_ready(self, spec: EngineSpec) -> EnsureResult:
         # CAS A — déjà résident et sain.
-        if self._health(spec.health_url):
+        if probe_engine_health(self._health, spec):
             self._record_used(spec.name)
             logger.info("[stt-sup] %s CAS A — déjà actif (%s)", spec.name, spec.health_url)
             return EnsureResult("ready", spec.gpu, "cas_a_resident")
@@ -184,7 +208,7 @@ class SttEngineSupervisor:
             logger.debug("[stt-sup] %s — verrou moteur acquis pour ensure", spec.name)
             # Double-check indispensable : un appel concurrent a pu lancer le moteur
             # pendant que celui-ci attendait le verrou.
-            if self._health(spec.health_url):
+            if probe_engine_health(self._health, spec):
                 self._record_used(spec.name)
                 logger.info("[stt-sup] %s CAS A — actif après attente du verrou (%s)", spec.name, spec.health_url)
                 return EnsureResult("ready", spec.gpu, "cas_a_after_wait")
@@ -238,7 +262,7 @@ class SttEngineSupervisor:
             last = self._last_used_for(spec.name)
             if last is None or (now - last) < spec.idle_timeout_s:
                 continue
-            if not self._health(spec.health_url):  # déjà éteint → rien à faire
+            if not probe_engine_health(self._health, spec):  # déjà éteint → rien à faire
                 self._forget_used(spec.name)
                 continue
             logger.info("[stt-sup] %s inactif depuis %.0fs (> %.0fs) — arrêt",
@@ -250,13 +274,18 @@ class SttEngineSupervisor:
 
 # ── Adaptateurs de production (coutures injectables pour les tests) ──────────--
 
-def http_health_prober(url: str, *, timeout: float = 3.0, session=None) -> bool:
-    """True si `url` répond 200 (sonde `/v1/models`). Best-effort, sans exception."""
+def http_health_prober(url: str, *, timeout: float = 3.0, session=None, mode: str = "http_2xx") -> bool:
+    """Sonde de vie best-effort, sans exception.
+
+    mode "http_2xx" (défaut) : 200 requis. mode "http_any" : TOUTE réponse HTTP
+    (même 404) prouve qu'un serveur écoute — réservé aux runtimes mono-modèle qui
+    chargent leurs poids AVANT de binder le port (cf. EngineSpec.health_mode)."""
     import requests
 
     sess = session or requests
     try:
-        return sess.get(url, timeout=timeout).status_code == 200
+        status = sess.get(url, timeout=timeout).status_code
+        return True if mode == "http_any" else status == 200
     except Exception as exc:  # noqa: BLE001
         logger.debug("[stt-sup] sonde %s injoignable : %s", url, exc)
         return False
@@ -317,7 +346,7 @@ def make_script_launcher(
 
         deadline = time.monotonic() + ready_timeout_s
         while time.monotonic() < deadline:
-            if health_prober(spec.health_url):
+            if probe_engine_health(health_prober, spec):
                 logger.info("[stt-sup] %s prêt sur GPU %d (port %d)", spec.name, gpu_index, spec.port)
                 return True
             sleep(poll_interval_s)

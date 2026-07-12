@@ -1247,7 +1247,16 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 | `max_concurrent_jobs` | int | `1` | **Capacité d'admission** du nœud : nb de pipelines de jobs que la frontale peut lancer concurremment contre ce nœud (annoncé dans `/capabilities`, borné 1-8). Découplé de la mono-capacité des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission) ; STT/LLM vLLM batchent. Défaut 1 = séquentiel. À aligner avec `workflow.execution.max_concurrent_jobs`. Sweet spot ≈ 4 (cf. `docs/PLAN_TEST_CHARGE.md`). |
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
-| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
+| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s, health_path, health_mode}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
+
+`health_path` (défaut `/v1/models`) et `health_mode` (`http_2xx` défaut \| `http_any`)
+règlent la sonde de vie par moteur — `http_any` accepte toute réponse HTTP (runtimes C++
+mono-modèle qui chargent leurs poids avant de binder le port, ex. parakeet-server) et ne
+doit JAMAIS servir pour un vLLM. En **all-in-one**, un backend `inference.stt.backends.*`
+routé vers une URL loopback avec un moteur homonyme déclaré ici est **démarré
+automatiquement en process** par le pré-vol des jobs (aucun nœud de contrôle requis).
+`inference.stt.backends.<nom>.fallback_backend` désigne le backend NATIF de repli d'un
+backend servi (sans lui : erreur explicite, jamais de repli implicite vers Cohere).
 
 `./install.sh --profile resource-node` génère ce manifeste pour Cohere et Whisper
 lors de la création initiale de `config.yaml`, si des GPU et les scripts

@@ -237,25 +237,52 @@ class RemoteTranscriber(BaseTranscriber):
         if not self.fallback_local:
             logger.error("RemoteTranscriber: échec sans fallback (%s)", reason)
             return [{"error": f"asr_remote_indisponible: {reason}"}]
-        logger.warning("RemoteTranscriber: bascule sur le transcripteur local '%s' (%s)", self.backend, reason)
         local = self._get_local()
+        if local is None:
+            # Backend SERVI (qwen3asr, nemotron, …) sans `fallback_backend` déclaré :
+            # erreur EXPLICITE — jamais de chargement Cohere implicite (6 Go, gated).
+            logger.error(
+                "RemoteTranscriber: backend servi '%s' indisponible et aucun "
+                "inference.stt.backends.%s.fallback_backend déclaré (%s)",
+                self.backend, self.backend, reason,
+            )
+            return [{"error": f"asr_remote_indisponible: {reason} (aucun repli natif configuré)"}]
+        logger.warning(
+            "RemoteTranscriber: bascule sur le transcripteur local '%s' (%s)",
+            getattr(local, "model_name", self.backend), reason,
+        )
         return local.transcribe(
             audio_path, language=language, chunk_length_s=chunk_length_s,
             progress_callback=progress_callback, audio_array=audio_array, sample_rate=sample_rate,
         )
 
-    def _get_local(self) -> BaseTranscriber:
-        """Construit (une fois) le transcripteur local du même backend, sans récursion."""
+    def _resolve_fallback_builder(self):
+        """Builder natif de repli : `fallback_backend` configuré, sinon le backend
+        lui-même s'il est natif, sinon None (backend servi pur → pas de repli implicite)."""
+        from transcria.stt.transcriber_factory import local_builders
+
+        builders = local_builders()
+        spec = (((self.config.get("inference", {}) or {}).get("stt", {}) or {})
+                .get("backends", {}) or {}).get(self.backend, {}) or {}
+        declared = str(spec.get("fallback_backend") or "").strip()
+        if declared:
+            builder = builders.get(declared)
+            if builder is not None:
+                return builder
+            logger.warning(
+                "RemoteTranscriber: fallback_backend '%s' inconnu pour '%s' (natifs: %s)",
+                declared, self.backend, sorted(builders),
+            )
+        return builders.get(self.backend)
+
+    def _get_local(self) -> "BaseTranscriber | None":
+        """Construit (une fois) le transcripteur natif de repli, sans récursion.
+        Retourne None si aucun repli natif n'est résoluble (cf. _resolve_fallback_builder)."""
         if self._local is not None:
             return self._local
-        from transcria.stt import transcriber_factory as tf
-
-        builder = {
-            "cohere": tf._create_cohere,
-            "whisper": tf._create_whisper,
-            "granite": tf._create_granite,
-            "parakeet": tf._create_parakeet,
-        }.get(self.backend, tf._create_cohere)
+        builder = self._resolve_fallback_builder()
+        if builder is None:
+            return None
         local = builder(self.config, self.device)
         self._local = local
         return local

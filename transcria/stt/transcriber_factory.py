@@ -285,6 +285,22 @@ def _effective_moss_config(config: dict) -> dict:
     return _deep_merge(defaults, current)
 
 
+# Registre PUBLIC des builders de backends NATIFS (source unique — consommé par le
+# fallback local de RemoteTranscriber). Un backend SERVI (qwen3asr, nemotron, …) n'y
+# figure pas : son repli passe par `inference.stt.backends.<nom>.fallback_backend`.
+def local_builders() -> dict:
+    return {
+        "cohere": _create_cohere,
+        "cohere_tf5": _create_cohere_tf5,
+        "whisper": _create_whisper,
+        "granite": _create_granite,
+        "parakeet": _create_parakeet,
+        "voxtral": _create_voxtral,
+        "kroko": _create_kroko,
+        "moss": _create_moss,
+    }
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 
@@ -304,6 +320,12 @@ def list_available_backends() -> list[str]:
 
 
 def get_backend_vram_mb(backend: str, config: dict) -> int:
+    # Backend routé vers un serveur distant/servi : la VRAM vit côté serveur (le
+    # superviseur/planner l'admissionne) — 0 localement. Sans cette garde, un backend
+    # servi inconnu (qwen3asr, nemotron…) retombait sur cohere_vram_mb et réservait
+    # 6 Go locaux fantômes.
+    if _should_use_remote_stt(config, backend):
+        return 0
     if backend in {"cohere", "cohere_tf5"}:
         return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))
     elif backend == "whisper":

@@ -256,3 +256,78 @@ def test_remote_transcriber_401_no_fallback():
         segs = rt.transcribe(audio_path=None, audio_array=np.zeros(16000, dtype=np.float32))
     assert segs[0]["error"].startswith("asr_remote_4xx")
     assert called["n"] == 0  # pas de bascule sur une 401
+
+
+class TestServedBackendFallback:
+    """Repli local des backends SERVIS : fallback_backend configuré → builder natif ;
+    sans lui → erreur explicite, JAMAIS de chargement Cohere implicite."""
+
+    def _remote(self, backend, backends_cfg, monkeypatch, builder_calls):
+        from transcria.stt import transcriber_factory as tf
+        from transcria.stt.remote_transcriber import RemoteTranscriber
+
+        class FakeNative:
+            model_name = "fake-native"
+
+            def transcribe(self, *a, **k):
+                return [{"start": 0, "end": 1, "text": "repli natif"}]
+
+        def fake_builders():
+            return {"whisper": lambda cfg, dev: builder_calls.append("whisper") or FakeNative(),
+                    "parakeet": lambda cfg, dev: builder_calls.append("parakeet") or FakeNative()}
+
+        monkeypatch.setattr(tf, "local_builders", fake_builders)
+        cfg = {"inference": {"mode": "hybrid",
+                             "stt": {"fallback_local": True, "backends": backends_cfg}}}
+
+        class DeadClient:
+            model = "m"
+            base_url = "http://127.0.0.1:9/v1"
+
+            def health(self):
+                return None
+
+            def transcribe(self, *a, **k):
+                from transcria.inference.asr_client import InferenceUnavailable
+                raise InferenceUnavailable("serveur mort")
+
+        return RemoteTranscriber(cfg, backend=backend, client=DeadClient())
+
+    def test_fallback_backend_configure_est_honore(self, monkeypatch, tmp_path):
+        calls: list = []
+        r = self._remote("qwen3asr",
+                         {"qwen3asr": {"url": "http://127.0.0.1:8021/v1",
+                                       "fallback_backend": "whisper"}},
+                         monkeypatch, calls)
+        wav = tmp_path / "a.wav"
+        import numpy as np
+        import soundfile as sf
+        sf.write(str(wav), np.zeros(16000, dtype="float32"), 16000)
+        out = r.transcribe(wav, language="fr")
+        assert calls == ["whisper"]
+        assert out[0]["text"] == "repli natif"
+
+    def test_backend_servi_sans_fallback_erreur_explicite(self, monkeypatch, tmp_path):
+        calls: list = []
+        r = self._remote("nemotron",
+                         {"nemotron": {"url": "http://127.0.0.1:8022/v1"}},
+                         monkeypatch, calls)
+        wav = tmp_path / "a.wav"
+        import numpy as np
+        import soundfile as sf
+        sf.write(str(wav), np.zeros(16000, dtype="float32"), 16000)
+        out = r.transcribe(wav, language="fr")
+        assert calls == []                          # aucun builder natif chargé
+        assert "error" in out[0]
+        assert "aucun repli natif" in out[0]["error"]
+
+
+class TestRemoteBackendVram:
+    def test_backend_route_remote_vram_zero(self):
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        cfg = {"inference": {"mode": "hybrid",
+                             "stt": {"backends": {"qwen3asr": {"url": "http://127.0.0.1:8021/v1"}}}}}
+        assert get_backend_vram_mb("qwen3asr", cfg) == 0
+        # non routé → défaut historique (cohere) inchangé
+        assert get_backend_vram_mb("qwen3asr", {}) > 0
