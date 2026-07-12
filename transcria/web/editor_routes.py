@@ -305,13 +305,125 @@ def editor_save(job_id: str):
     if draft_path.exists():
         draft_path.unlink()
 
+    # Reconstruction du package (best-effort, comme le changement d'options de rendu) :
+    # sans elle, le ZIP servi contiendrait un DOCX antérieur aux corrections.
+    try:
+        from transcria.exports.package_builder import PackageBuilder
+
+        PackageBuilder(get_config()).build_package(job)
+    except Exception:
+        logger.warning("Éditeur SRT : reconstruction du package échouée (best-effort) — job=%s",
+                       job.id, exc_info=True)
+
     edited = _client_int(data.get("edited_count"))
+    new_speakers_count = len(data.get("new_speakers") or [])
     audit_log(AuditAction.JOB_SRT_EDIT_SAVE, target_type="job", target_id=job.id,
               target_label=job.title,
               details={"version": version, "chunks": len(chunks), "edited": edited,
-                       "new_speakers": len(data.get("new_speakers") or [])})
+                       "new_speakers": new_speakers_count})
     warnings = validate_chunks(chunks, audio_duration_ms=_audio_duration_ms(fs))
-    return jsonify({"version": version, "warnings": warnings})
+    # Le verbatim/les stats du DOCX suivent le SRT automatiquement (régénéré au
+    # téléchargement) ; la SYNTHÈSE, elle, ne se resynchronise que par une passe
+    # LLM — on la PROPOSE (jamais automatique) dès qu'un contenu a changé.
+    suggest = bool(edited or new_speakers_count) and _sync_summary_available(job)
+    return jsonify({
+        "version": version,
+        "warnings": warnings,
+        "summary_update_suggested": suggest,
+        "edited_count": edited,
+        "new_speakers_count": new_speakers_count,
+    })
+
+
+_SYNC_READY_STATES = ("completed", "export_ready")  # mêmes états que le chat d'affinage
+
+
+def _sync_summary_available(job) -> bool:
+    """La passe de resynchronisation est-elle proposable ? (mêmes prérequis que
+    le chat d'affinage : job terminé + LLM d'arbitrage non désactivée)."""
+    cfg = get_config()
+    wf = cfg.get("workflow", {}) or {}
+    if (wf.get("refine_chat", {}) or {}).get("enabled", True) is False:
+        return False
+    if (wf.get("arbitration_llm", {}) or {}).get("enabled") is False:
+        return False
+    return job.state in _SYNC_READY_STATES
+
+
+def _sync_summary_message(language: str, edited: int, new_speakers: int) -> str:
+    """Demande d'affinage composée côté serveur (tour utilisateur `apply`).
+
+    Instruction ABSTRAITE (aucun contenu réel — l'agent lit lui-même le SRT
+    corrigé et la synthèse dans son espace de travail) : mettre à jour UNIQUEMENT
+    ce que le verbatim corrigé contredit, ne rien restructurer, signaler les
+    ambiguïtés plutôt que trancher."""
+    if language == "en":
+        return (
+            f"The user has just corrected the transcript in the SRT editor "
+            f"({edited} segment(s) edited, {new_speakers} speaker(s) renamed or added). "
+            "Update the summary and the structured data ONLY where the corrected "
+            "transcript contradicts them: names, figures, speaker attributions, "
+            "decisions and actions. Do not restructure or rewrite the style. "
+            "If a point is ambiguous, flag it in your report instead of deciding."
+        )
+    return (
+        f"L'utilisateur vient de corriger le verbatim dans l'éditeur SRT "
+        f"({edited} segment(s) modifié(s), {new_speakers} locuteur(s) renommé(s) ou ajouté(s)). "
+        "Mets à jour le résumé et les données structurées UNIQUEMENT là où le verbatim "
+        "corrigé les contredit : noms, chiffres, attributions de parole, décisions et "
+        "actions. Ne restructure rien, ne réécris pas le style. En cas d'ambiguïté, "
+        "signale le point dans ton rapport au lieu de trancher."
+    )
+
+
+@editor_bp.route("/api/jobs/<job_id>/editor/sync-summary", methods=["POST"])
+@login_required
+def editor_sync_summary(job_id: str):
+    """Enfile la passe LLM « synthèse mise à jour depuis le SRT corrigé ».
+
+    Réutilise INTÉGRALEMENT la phase d'affinage (mode apply) : workspace agent,
+    garde-fous déterministes, snapshot de version AVANT write-back, reconstruction
+    du package. Le web ne fait que composer la demande et enfiler — jamais
+    automatique, toujours au clic de l'utilisateur."""
+    job, error = _get_job(job_id)
+    if error:
+        return error
+    if not _sync_summary_available(job):
+        return jsonify({"error": "Mise à jour de la synthèse indisponible "
+                                 "(job non terminé ou LLM désactivée)."}), 409
+
+    cfg = get_config()
+    store = RefineStore(jobs_dir=cfg["storage"]["jobs_dir"], job_id=job.id)
+    from transcria.web.routes import _refine_running
+
+    if store.has_active_request() or _refine_running(job):
+        return jsonify({"error": "Une demande d'affinage est déjà en cours pour ce job."}), 409
+
+    from transcria.services.job_executor import REFINE_MODE, get_job_executor
+
+    executor = get_job_executor()
+    if executor is None:
+        return jsonify({"error": "Worker de traitement indisponible"}), 503
+
+    from transcria.gpu.opencode_runner import resolve_output_language
+
+    data = request.get_json(silent=True) or {}
+    edited = _client_int(data.get("edited_count"))
+    new_speakers = _client_int(data.get("new_speakers_count"))
+    message = _sync_summary_message(resolve_output_language(job), edited, new_speakers)
+    store.write_request(kind="apply", message=message)
+
+    fs = _fs(job.id)
+    audio_path = fs.get_original_audio_path()
+    submit = executor.submit_process(job.id, str(audio_path or ""), REFINE_MODE)
+    if not submit.get("accepted", True):
+        store.consume_request()  # pas de demande fantôme
+        return jsonify({"error": "Le job est déjà dans la file de traitement"}), 409
+
+    audit_log(AuditAction.JOB_REFINE_REQUEST, target_type="job", target_id=job.id,
+              target_label=job.title,
+              details={"kind": "sync_summary", "edited": edited, "new_speakers": new_speakers})
+    return jsonify({"accepted": True}), 202
 
 
 def _merge_new_speakers(fs: JobFilesystem, raw: object) -> None:

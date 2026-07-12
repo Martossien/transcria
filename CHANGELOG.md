@@ -9,6 +9,15 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Added
+- **Éditeur SRT → DOCX au choix : rapide ou synthèse resynchronisée.** Après « Enregistrer
+  une version », si du contenu a changé (segments édités, locuteurs renommés/ajoutés),
+  l'éditeur propose deux chemins : **DOCX rapide** (immédiat — le verbatim et les stats
+  suivent déjà le SRT) ou **« Mettre à jour la synthèse »** : une passe LLM (jamais
+  automatique) resynchronise résumé/décisions/données structurées avec le verbatim corrigé,
+  en ne touchant QUE ce que le transcript contredit. La passe emprunte la phase d'affinage
+  existante : versionnée (snapshot avant écriture), restaurable depuis le chat, garde-fous
+  déterministes. La sauvegarde reconstruit aussi le package ZIP (best-effort) — il ne sert
+  plus un DOCX antérieur aux corrections. Interface FR/EN.
 - **Backend STT expérimental MOSS-Transcribe-Diarize (`moss`)** — OpenMOSS 0,9B, Apache-2.0 :
   transcription + **étiquettes locuteur + timestamps fins en une seule passe**, meilleur WER
   texte de notre banc de réunions réelles (0,41 — cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`),

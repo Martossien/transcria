@@ -236,3 +236,86 @@ class TestAudioEtPics:
         data = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
         assert data["audio"]["available"] is True
         assert data["audio"]["duration_ms"] == 1000
+
+
+class TestSyncSummary:
+    """Choix DOCX rapide vs synthèse resynchronisée : suggestion à la sauvegarde,
+    enfilage d'une demande refine `apply` composée serveur, gardes anti-double."""
+
+    def test_save_suggere_la_mise_a_jour(self, admin_client, editor_job):
+        state = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        chunks = state["chunks"]
+        chunks[0]["text"] = "Texte corrigé par l'utilisateur."
+        r = admin_client.post(f"/api/jobs/{editor_job}/editor/save",
+                              json={"chunks": chunks, "edited_count": 1, "new_speakers": []})
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["summary_update_suggested"] is True
+        assert body["edited_count"] == 1
+
+    def test_save_sans_modification_ne_suggere_pas(self, admin_client, editor_job):
+        state = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        r = admin_client.post(f"/api/jobs/{editor_job}/editor/save",
+                              json={"chunks": state["chunks"], "edited_count": 0, "new_speakers": []})
+        assert r.status_code == 200
+        assert r.get_json()["summary_update_suggested"] is False
+
+    def test_sync_enfile_une_demande_apply_composee(self, admin_client, app, editor_job, monkeypatch):
+        import transcria.services.job_executor as executor_mod
+
+        submitted = {}
+
+        class FakeExecutor:
+            def submit_process(self, job_id, audio_path, mode):
+                submitted.update(job_id=job_id, mode=mode)
+                return {"accepted": True}
+
+        monkeypatch.setattr(executor_mod, "get_job_executor", lambda: FakeExecutor())
+        r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary",
+                              json={"edited_count": 3, "new_speakers_count": 1})
+        assert r.status_code == 202, r.get_json()
+        assert submitted["job_id"] == editor_job
+
+        from transcria.config import get_config
+        from transcria.workflow.refine_store import RefineStore
+        with app.app_context():
+            store = RefineStore(jobs_dir=get_config()["storage"]["jobs_dir"], job_id=editor_job)
+            request = store.consume_request()
+        assert request["kind"] == "apply"
+        assert "3 segment" in request["message"]
+        assert "UNIQUEMENT" in request["message"]  # instruction de prudence
+
+    def test_sync_refuse_si_demande_deja_active(self, admin_client, app, editor_job, monkeypatch):
+        from transcria.config import get_config
+        from transcria.workflow.refine_store import RefineStore
+        with app.app_context():
+            store = RefineStore(jobs_dir=get_config()["storage"]["jobs_dir"], job_id=editor_job)
+            store.write_request(kind="apply", message="occupé")
+        r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary", json={})
+        assert r.status_code == 409
+        with app.app_context():
+            store = RefineStore(jobs_dir=get_config()["storage"]["jobs_dir"], job_id=editor_job)
+            store.consume_request()  # nettoyage
+
+    def test_sync_refuse_si_llm_desactivee(self, admin_client, app, editor_job, monkeypatch):
+        from transcria.config import get_config
+        with app.app_context():
+            cfg = get_config()
+        monkeypatch.setitem(cfg.setdefault("workflow", {}).setdefault("arbitration_llm", {}),
+                            "enabled", False)
+        try:
+            r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary", json={})
+            assert r.status_code == 409
+        finally:
+            cfg["workflow"]["arbitration_llm"].pop("enabled", None)
+
+    def test_message_compose_localise(self):
+        from transcria.web.editor_routes import _sync_summary_message
+
+        fr = _sync_summary_message("fr", 2, 1)
+        en = _sync_summary_message("en", 2, 1)
+        assert "2 segment" in fr and "UNIQUEMENT" in fr
+        assert "2 segment" in en and "ONLY" in en
+        # jamais de contenu réel : instruction abstraite uniquement
+        for msg in (fr, en):
+            assert "SPEAKER_" not in msg

@@ -809,6 +809,7 @@
   async function saveVersion() {
     if (state.readonly) return;
     setSaveState(_t("enregistrement de la version…"), "saving");
+    const savedCounts = {edited: state.dirty.size, speakers: newSpeakersPayload().length};
     const r = await fetch(`/api/jobs/${JOB}/editor/save`, {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({chunks: state.chunks, edited_count: state.dirty.size,
@@ -825,6 +826,61 @@
     if (data.warnings && data.warnings.length) {
       banner("warn", _t("Avertissements (non bloquants) : %(w)s", { w: data.warnings.join(" · ") }));
     }
+    if (data.summary_update_suggested) showSyncChoice(savedCounts);
+  }
+
+  // ── Choix post-sauvegarde : DOCX rapide vs synthèse resynchronisée ─────────
+  // Le verbatim du DOCX suit le SRT automatiquement ; la SYNTHÈSE (résumé,
+  // décisions, actions) ne bouge que via une passe LLM — PROPOSÉE ici, jamais
+  // automatique. La passe emprunte le chat d'affinage : versionnée, réversible.
+  function showSyncChoice(counts) {
+    document.getElementById("se-sync-banner")?.remove();
+    const div = document.createElement("div");
+    div.className = "se-banner info";
+    div.id = "se-sync-banner";
+    div.innerHTML =
+      `<i class="bi bi-magic me-1"></i>` +
+      `<span>${esc(_t("Vos corrections sont dans le verbatim. La synthèse (résumé, décisions) n'est pas encore à jour :"))}</span> ` +
+      `<a class="btn btn-sm btn-outline-secondary ms-2" href="/api/jobs/${JOB}/download/docx">` +
+      esc(_t("DOCX rapide (synthèse inchangée)")) + `</a> ` +
+      `<button class="btn btn-sm btn-primary ms-1" id="se-sync-go">` +
+      esc(_t("Mettre à jour la synthèse (LLM, quelques minutes)")) + `</button>`;
+    $("se-banners").appendChild(div);
+    document.getElementById("se-sync-go").onclick = () => runSyncSummary(counts);
+  }
+
+  async function runSyncSummary(counts) {
+    const btn = document.getElementById("se-sync-go");
+    if (btn) { btn.disabled = true; btn.textContent = _t("Mise à jour en cours…"); }
+    const r = await fetch(`/api/jobs/${JOB}/editor/sync-summary`, {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({edited_count: counts.edited, new_speakers_count: counts.speakers}),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      document.getElementById("se-sync-banner")?.remove();
+      banner("warn", data.error || _t("Mise à jour de la synthèse impossible"));
+      return;
+    }
+    pollSyncDone();
+  }
+
+  async function pollSyncDone() {
+    try {
+      const s = await (await fetch(`/api/jobs/${JOB}/refine/chat`)).json();
+      if (s.busy) { setTimeout(pollSyncDone, 4000); return; }
+      document.getElementById("se-sync-banner")?.remove();
+      const div = document.createElement("div");
+      div.className = "se-banner info";
+      div.innerHTML =
+        `<i class="bi bi-check-circle me-1"></i>` +
+        `<span>${esc(_t("Synthèse mise à jour (versionnée — restaurable depuis le chat d'affinage)."))}</span> ` +
+        `<a class="btn btn-sm btn-primary ms-2" href="/api/jobs/${JOB}/download/docx">` +
+        esc(_t("Télécharger le DOCX à jour")) + `</a> ` +
+        `<a class="btn btn-sm btn-outline-secondary ms-1" href="/jobs/${JOB}/result">` +
+        esc(_t("Voir le détail dans le chat")) + `</a>`;
+      $("se-banners").appendChild(div);
+    } catch (e) { setTimeout(pollSyncDone, 8000); }
   }
 
   // ── Événements globaux ─────────────────────────────────────────────────────

@@ -526,6 +526,33 @@ DOCX/SRT téléchargés conformes, stats recalculées visibles dans le Word → 
 | Bascule fresque ↔ timeline par locuteur | **Validé, lot C** : un seul contrôle alterne fresque compacte / lanes par locuteur (repliables), plutôt que d'empiler les deux |
 | Fresque très serrée → sur plusieurs lignes ? | **Avis : non** — une fresque multiligne casse la continuité temporelle du clic-navigation ; la réponse est la BANDE ZOOMÉE (lot C) + les lanes + la minimap. À revisiter si le zoom ne suffit pas à l'usage |
 
+## 11 bis. Choix post-sauvegarde : DOCX rapide vs synthèse resynchronisée (2026-07-12)
+
+Le verbatim du DOCX suit le SRT automatiquement (S9 : régénéré à chaque
+téléchargement) et les stats locuteurs sont recalculées à la sauvegarde (A2).
+La **synthèse** (résumé, décisions, actions — `context/meeting_context.json`),
+elle, ne se resynchronise que par une passe LLM. Décision utilisateur : **on
+propose, on n'impose jamais**.
+
+- `POST /editor/save` renvoie `summary_update_suggested` dès qu'un contenu a
+  changé (`edited_count` ou nouveaux locuteurs) et que le chat d'affinage est
+  disponible (job terminé + LLM d'arbitrage active). La sauvegarde reconstruit
+  aussi le **package ZIP** en best-effort (sinon le ZIP servirait un DOCX
+  antérieur aux corrections).
+- L'UI affiche alors deux choix : **« DOCX rapide (synthèse inchangée) »**
+  (lien de téléchargement direct) et **« Mettre à jour la synthèse »** →
+  `POST /api/jobs/<id>/editor/sync-summary`.
+- `sync-summary` compose côté serveur une demande d'affinage `apply`
+  **localisée** (FR/EN selon la langue des livrables) et **abstraite** (aucun
+  contenu réel — l'agent lit lui-même le SRT corrigé) : « mets à jour le résumé
+  et les données structurées UNIQUEMENT là où le verbatim corrigé les contredit ;
+  ne restructure rien ; signale les ambiguïtés ». Puis elle enfile la phase
+  `refine` existante : workspace agent, garde-fous déterministes, **snapshot de
+  version AVANT write-back**, reconstruction du package. Gardes : 409 si une
+  demande d'affinage est déjà active ou si la LLM est désactivée.
+- L'UI poll le `busy` du chat (`GET /refine/chat`) et, à la fin, propose le
+  DOCX à jour + un lien vers le chat (détail du tour, restauration de version).
+
 ## 12. Risques & points ouverts
 
 | # | Point | Position |
