@@ -79,6 +79,12 @@ example results and the user journey.
 | [PLAN_TEST_CHARGE.md](PLAN_TEST_CHARGE.md) | Load-test procedure and campaigns |
 | [PLAN_TEST_SPLIT_VLLM.md](PLAN_TEST_SPLIT_VLLM.md) | Split-topology (vLLM) validation procedure |
 
+## Engineering plans
+
+| Document | What it covers |
+|---|---|
+| [REFACTORING_QUALITE.md](REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
+
 ## History
 
 Superseded planning documents, benchmarks, and analyses are kept under
