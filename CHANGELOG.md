@@ -6,6 +6,24 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [Unreleased]
+
+### Added
+- **Runtimes STT servis de première classe : audio.cpp (`qwen3asr`) et parakeet.cpp
+  (`nemotron`).** TranscrIA gère leur cycle de vie comme celui de llama-server : builds
+  ÉPINGLÉS par l'installeur (`installer.cli audiocpp --with-model` / `parakeetcpp`,
+  idempotents, arch CUDA `native`), lanceurs `scripts/launch_stt_{qwen3asr,nemotron}.sh`,
+  **démarrage automatique au pré-vol des jobs** (all-in-one : URL loopback + moteur déclaré
+  dans `resource_node.engines` ⇒ le gate lance le moteur en process — vérifié E2E moteur
+  éteint ; split : `/engines/ensure` inchangé), santé configurable par moteur
+  (`health_path`/`health_mode` — parakeet-server n'a pas de `/v1/models` mais un `/health`),
+  admission VRAM par le planner existant, arrêt par `stop_stt.sh`. Modèles via la page
+  « Modèles » (Qwen3-ASR-1.7B délégué au model_manager d'audio.cpp ; GGUF Nemotron en
+  téléchargement direct). Repli NATIF configurable (`fallback_backend`) — un backend servi
+  sans repli échoue explicitement, jamais de chargement Cohere implicite. Qualifiés sur le
+  benchmark réel : qwen3asr **0,421 WER (2ᵉ du banc)**, nemotron **0,492 à ~2 s/fenêtre**.
+  Doc : `docs/EXTERNAL_STT_RUNTIMES.md` (réécrite — fini le squat de la clé whisper).
+
 ## [0.3.5] — 2026-07-12
 
 Version **nouveaux moteurs & éditeur plus malin**. Deux backends STT rejoignent le catalogue
