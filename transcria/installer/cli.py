@@ -477,6 +477,34 @@ def _cmd_recommend_llm(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_moss_site_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "moss-site",
+        help="Provisionne le site Transformers 5 isolé du backend STT `moss` (opt-in, ~800 Mo).",
+    )
+    p.add_argument("--dir", required=True, help="Répertoire cible du site (moss.moss_site dans config.yaml)")
+    p.add_argument("--python", default=sys.executable, help="Python du venv (défaut : l'interpréteur courant)")
+    p.add_argument("--force", action="store_true", help="Réinstaller même si le site semble complet")
+
+
+def _cmd_moss_site(args: argparse.Namespace) -> int:
+    import subprocess
+
+    from transcria.installer.moss_site_phase import MossSiteError, MossSitePlan, apply_moss_site
+
+    console = Console()
+    plan = MossSitePlan(site_dir=Path(args.dir), python_bin=Path(args.python), force=bool(args.force))
+    try:
+        def _runner(cmd: list[str]) -> None:
+            subprocess.run(cmd, check=True)
+
+        apply_moss_site(plan, console=console, runner=_runner)
+    except MossSiteError as exc:
+        console.error(str(exc))
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="transcria-install", description="Installateur TranscrIA piloté en Python.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -491,6 +519,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_systemd_parser(sub)
     _add_summary_parser(sub)
     _add_recommend_llm_parser(sub)
+    _add_moss_site_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -515,6 +544,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_summary(args)
     if args.command == "recommend-llm":
         return _cmd_recommend_llm(args)
+    if args.command == "moss-site":
+        return _cmd_moss_site(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 

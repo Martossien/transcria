@@ -28,8 +28,18 @@ ci-dessous. L'application TranscrIA elle-même est sous **Apache-2.0** (`/app/LI
 - **Licence** : **Apache License 2.0**
 - **Texte** : voir `/app/LICENSE` (Apache-2.0 intégral, identique pour le projet et ce modèle).
 - Rôle dans l'image : moteur secondaire du **multi-STT ciblé** (retranscription arbitrée des
-  segments acoustiquement dégradés), activé par `docker_quickstart.sh --bundled`. Utilisable
+  segments acoustiquement dégradés), **activé par défaut** depuis 0.3.4. Utilisable
   aussi comme backend principal (`models.stt_backend: voxtral`).
+
+## 2 ter. Transcription une passe (opt-in) — MOSS-Transcribe-Diarize 0,9B
+
+- **Dépôt** : `OpenMOSS-Team/MOSS-Transcribe-Diarize`
+- **Licence** : **Apache License 2.0**
+- **Texte** : voir `/app/LICENSE` (Apache-2.0 intégral, identique pour le projet et ce modèle).
+- Rôle dans l'image : backend STT **opt-in** (`models.stt_backend: moss`) — transcription +
+  étiquettes locuteur + timestamps en une passe. Le site Transformers 5 isolé requis est baké
+  dans `/opt/transcria-moss-site` (paquets pip sous leurs licences respectives, `dist-info`
+  conservés) et symlinké au démarrage sur le défaut de configuration.
 
 ## 3. Diarisation — NVIDIA Streaming Sortformer 4spk v2.1
 

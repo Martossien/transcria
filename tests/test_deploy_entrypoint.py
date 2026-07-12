@@ -370,3 +370,51 @@ def test_main_resource_node_skips_db_wait_and_execs(tmp_path):
     assert rc == 0
     assert probe_calls["n"] == 0  # nœud GPU : pas d'attente DB
     assert "inference_service:create_app()" in ex.calls[0][1]
+
+
+class TestProvisionMossSiteLink:
+    """Symlink du site moss baké (image bundled) : idempotent, best-effort,
+    ne touche jamais un site réel préexistant."""
+
+    def test_creates_symlink_when_baked_exists(self, tmp_path):
+        from transcria.deploy.entrypoint import provision_moss_site_link
+
+        baked = tmp_path / "opt-site"
+        baked.mkdir()
+        default = tmp_path / "default-site"
+        provision_moss_site_link(baked=baked, default=default)
+        assert default.is_symlink() and default.resolve() == baked.resolve()
+        # idempotent : second appel sans erreur, lien inchangé
+        provision_moss_site_link(baked=baked, default=default)
+        assert default.resolve() == baked.resolve()
+
+    def test_noop_when_baked_missing(self, tmp_path):
+        from transcria.deploy.entrypoint import provision_moss_site_link
+
+        default = tmp_path / "default-site"
+        provision_moss_site_link(baked=tmp_path / "absent", default=default)
+        assert not default.exists()
+
+    def test_never_touches_real_site(self, tmp_path):
+        from transcria.deploy.entrypoint import provision_moss_site_link
+
+        baked = tmp_path / "opt-site"
+        baked.mkdir()
+        default = tmp_path / "default-site"
+        default.mkdir()
+        (default / "transformers").mkdir()
+        provision_moss_site_link(baked=baked, default=default)
+        assert not default.is_symlink()
+        assert (default / "transformers").is_dir()
+
+    def test_replaces_stale_symlink(self, tmp_path):
+        from transcria.deploy.entrypoint import provision_moss_site_link
+
+        old = tmp_path / "vieux"
+        old.mkdir()
+        baked = tmp_path / "opt-site"
+        baked.mkdir()
+        default = tmp_path / "default-site"
+        default.symlink_to(old)
+        provision_moss_site_link(baked=baked, default=default)
+        assert default.resolve() == baked.resolve()

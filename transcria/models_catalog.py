@@ -34,7 +34,7 @@ _STT_SOURCES: dict[str, dict] = {
               "license_url": "https://huggingface.co/Banafo/Kroko-ASR", "est_gb": 3.2},
     # ASR + locuteurs + timestamps en une passe (0,9B) ; worker Transformers 5 isolé (moss.moss_site).
     "moss": {"repo": "OpenMOSS-Team/MOSS-Transcribe-Diarize", "gated": False, "license": "Apache-2.0",
-             "license_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize", "est_gb": 2.5},
+             "license_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize", "est_gb": 3.7},
 }
 _DIAR_SOURCES: dict[str, dict] = {
     "pyannote": {"repo": PYANNOTE_MODEL_ID, "gated": True,

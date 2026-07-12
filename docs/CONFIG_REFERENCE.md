@@ -289,12 +289,15 @@ Backend STT expérimental **MOSS-Transcribe-Diarize 0,9B** (OpenMOSS, Apache-2.0
 non-gated) : transcription + **étiquettes locuteur + timestamps fins en une
 passe**. Meilleur WER texte de notre banc de réunions réelles
 (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`). Exige Transformers 5.x → worker
-subprocess sur un site isolé (même patron que `cohere_tf5`) :
+subprocess sur un site isolé (même patron que `cohere_tf5`), provisionné par
+l'installeur (idempotent, ~800 Mo, sans torch — celui du venv est réutilisé) :
 
 ```bash
-pip install --target /srv/transcria_moss_site "transformers>=5,<6" \
-    git+https://github.com/OpenMOSS/MOSS-Transcribe-Diarize.git
+venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site
 ```
+
+(L'image Docker `:bundled` bake ce site dans `/opt/transcria-moss-site` et le
+symlinke au démarrage sur le défaut ci-dessous — rien à faire en conteneur.)
 
 Activer avec `models.stt_backend=moss`. Pas de forçage de langue (le modèle
 transcrit dans la langue source). Son défaut mesuré est l'**omission

@@ -38,7 +38,7 @@ Matrices intégrées (`--matrix`) :
 |---|---:|---|
 | `base` | 24 | scène / séparation de sources / normalisation / filtre / STT (5 dimensions) |
 | `extended` | 12 | diarisation, décodage Whisper, pénalité de répétition Cohere |
-| `stt` | 30 | 5 backends STT (cohere/whisper/granite/parakeet/voxtral) × 3 diarisations × 2 VAD (comparatif moteurs) |
+| `stt` | 42 | 7 backends STT (cohere/whisper/granite/parakeet/voxtral/kroko/moss) × 3 diarisations × 2 VAD (comparatif moteurs ; kroko = CPU pur, moss requiert `moss.moss_site`) |
 | `vad` | 8 | VAD final vs VAD interne Whisper |
 | `cohere_tune` | 9 | calibrage qualité/vitesse Cohere + pyannote |
 | `pyannote_tune` | 14 | calibrage diarisation / chunking pyannote |

@@ -244,6 +244,36 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         print(f"[WARN] provisioning opencode ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
 
 
+_MOSS_SITE_BAKED = Path("/opt/transcria-moss-site")
+_MOSS_SITE_DEFAULT = Path("/tmp/transcria_moss_site")
+
+
+def provision_moss_site_link(
+    baked: Path = _MOSS_SITE_BAKED, default: Path = _MOSS_SITE_DEFAULT
+) -> None:
+    """Symlinke le défaut config du site moss vers le site baké de l'image bundled.
+
+    Le site Transformers 5 isolé est baké à un chemin STABLE (/opt) — jamais /tmp,
+    qu'un tmpfs runtime purgerait. Le défaut de ``moss.moss_site`` étant
+    /tmp/transcria_moss_site, on pose le lien à CHAQUE démarrage (idempotent) :
+    une config non modifiée trouve le site sans réglage. Image slim (site absent)
+    ou chemin déjà occupé par un vrai site ⇒ no-op. Best-effort, ne bloque jamais.
+    """
+    try:
+        if not baked.is_dir():
+            return
+        if default.is_symlink():
+            if default.resolve() == baked.resolve():
+                return
+            default.unlink()
+        elif default.exists():
+            return  # un site réel existe déjà à cet emplacement — on n'y touche pas
+        default.symlink_to(baked)
+        print(f"[INFO] site moss baké : {default} → {baked}", file=sys.stderr, flush=True)
+    except Exception as exc:  # noqa: BLE001 — best-effort, ne bloque jamais le démarrage
+        print(f"[WARN] symlink site moss ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
+
+
 def provision_translations(plan: EntrypointPlan, env: dict[str, str]) -> None:
     """Filet runtime : recompile les catalogues .mo si absents/périmés (rôles UI).
 
@@ -424,6 +454,8 @@ def main(
 
     # Filet i18n : recompile les .mo si un volume a écrasé les traductions (rôles UI).
     translations_provisioner(plan, env)
+    # Image bundled : expose le site Transformers 5 baké au chemin par défaut de la config.
+    provision_moss_site_link()
     # Provisionne opencode (provider local) pour les rôles LLM, depuis la config montée.
     opencode_provisioner(plan, env)
     # Provisionne le modèle d'arbitrage (rôle all : télécharge le GGUF si absent, résout le

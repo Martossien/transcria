@@ -39,9 +39,10 @@ scripts/docker_quickstart.sh --down
 ```
 
 > **Deux images GPU.** `:latest` (**slim**) télécharge les modèles au 1ᵉ run dans le cache HF
-> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + Voxtral + la LLM 9B → aucun
-> téléchargement, cache HF en **volume nommé** seedé depuis l'image (élimine le `[Errno 17]
-> File exists` ci-dessous). Dans les deux cas, pyannote/Cohere restent en opt-in `HF_TOKEN`.
+> hôte. `:bundled` (`--bundled`) **embarque** whisper + Sortformer + Voxtral + MOSS-TD (une passe
+> ASR+locuteurs, opt-in) + la LLM 9B → aucun téléchargement, cache HF en **volume nommé** seedé
+> depuis l'image (élimine le `[Errno 17] File exists` ci-dessous). Dans les deux cas,
+> pyannote/Cohere restent en opt-in `HF_TOKEN` (et Kroko-ASR via la page « Modèles »).
 >
 > **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque le palier 12 Go
 > (Qwen3.5-9B), mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :
@@ -301,7 +302,7 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 #### Image `:bundled` — modèles embarqués (zéro-download, hors-ligne)
 
 Variante de l'all-in-one GPU qui **embarque les modèles par défaut non gated** au lieu de les
-télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, **activé par défaut** depuis 0.3.4), la
+télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, **activé par défaut** depuis 0.3.4), MOSS-Transcribe-Diarize (Apache-2.0 — backend opt-in « une passe ASR+locuteurs », poids **et** site Transformers 5 isolé bakés dans `/opt/transcria-moss-site`, symlinké au démarrage sur le défaut de config), la
 LLM d'arbitrage Qwen3.5-9B Q5_K_M (Apache-2.0) **et** le modèle de qualification audio **SQUIM**
 (torchaudio, ~29 Mo) — seul modèle que le pipeline téléchargeait encore au runtime (DNSMOS est déjà
 un `.onnx` versionné dans le dépôt). Résultat : **aucun téléchargement au 1ᵉ run** (validé E2E).

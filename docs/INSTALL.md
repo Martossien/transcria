@@ -884,7 +884,7 @@ exporté), plutôt que de compter sur le téléchargement au premier job :
 | Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `hf download <model_id>` |
 | Voxtral Mini 3B (Apache-2.0, non-gated) | `$HF_HOME/hub` (ou `models/voxtral-mini-3b-2507/`) | `hf download mistralai/Voxtral-Mini-3B-2507` — aussi téléchargeable depuis la page « Modèles » de l'UI |
 | Kroko-ASR (CC-BY-SA community, non-gated) — **backend CPU, aucun GPU requis** | `$HF_HOME/hub` (ou `models/kroko/`) | `hf download Banafo/Kroko-ASR` (les 10 langues, ~3,2 Go) — aussi téléchargeable depuis la page « Modèles » ; à défaut, le fichier de la langue du job (~155 Mo) est récupéré à la demande |
-| MOSS-Transcribe-Diarize (Apache-2.0, non-gated) — une passe ASR+locuteurs | `$HF_HOME/hub` | `hf download OpenMOSS-Team/MOSS-Transcribe-Diarize` (~2,5 Go) — nécessite AUSSI le site isolé Transformers 5 (`moss.moss_site`, cf. `docs/CONFIG_REFERENCE.md` § `moss`) |
+| MOSS-Transcribe-Diarize (Apache-2.0, non-gated) — une passe ASR+locuteurs | `$HF_HOME/hub` | `hf download OpenMOSS-Team/MOSS-Transcribe-Diarize` (~3,7 Go) — aussi téléchargeable depuis la page « Modèles » ; nécessite AUSSI le site isolé Transformers 5 : `venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site` |
 | pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `hf download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
 | Whisper (faster-whisper) | `$HF_HOME/hub` | `hf download Systran/faster-whisper-large-v3` |
 | SQUIM (préflight) | `~/.cache/torch/hub/torchaudio/models/` | `curl -o ~/.cache/torch/hub/torchaudio/models/squim_objective_dns2020.pth https://download.pytorch.org/torchaudio/models/squim_objective_dns2020.pth` |
