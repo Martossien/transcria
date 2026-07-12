@@ -16,8 +16,9 @@
 2. [Méthode de mesure](#2-méthode-de-mesure-reproductible)
 3. [État des lieux chiffré](#3-état-des-lieux-chiffré)
 4. [Diagnostic](#4-diagnostic)
-5. [Architecture cible et étoile polaire](#5-architecture-cible)
-6. [Plan d'action détaillé — vagues A0→C6](#6-plan-daction-détaillé)
+5. [Architecture cible, étoile polaire et invariants d'exploitation](#5-architecture-cible)
+   (topologies, base de données, concurrence, i18n — §5.3 à §5.7)
+6. [Plan d'action détaillé — matrice de validation + vagues A0→C6](#6-plan-daction-détaillé)
 7. [Séquencement, dépendances, efforts](#7-séquencement-et-efforts)
 8. [Garde-fous permanents](#8-garde-fous-permanents)
 9. [Propositions écartées, avec justification](#9-ce-quon-ne-fait-pas)
@@ -195,7 +196,9 @@ séparés (`editor_routes`, `queue/routes`), phases d'installeur au patron unifo
 YAML des types de réunion, sondes injectables du superviseur STT. **Généraliser ces
 gestes-là** — pas en inventer de nouveaux.
 
-## 5. Architecture cible
+## 5. Architecture cible et invariants d'exploitation
+
+### 5.1 Les couches
 
 Quatre couches, dépendances **strictement descendantes** :
 
@@ -210,7 +213,9 @@ Règles : une couche n'importe jamais au-dessus d'elle ; la couche 4 ne contient
 logique métier (elle parse, appelle la 3, sérialise) ; imports internes en tête de fichier
 sauf exceptions du §8.3 ; les frontières 3↔2 passent par des **objets typés**.
 
-**L'étoile polaire** — le test qui dira que c'est gagné :
+### 5.2 L'étoile polaire
+
+Le test qui dira que c'est gagné :
 
 ```python
 def test_pipeline_runs_without_flask_pg_gpu():
@@ -228,6 +233,83 @@ def test_pipeline_runs_without_flask_pg_gpu():
 Quand ce test s'écrit naturellement — sans Flask, sans PostgreSQL, sans GPU réel — la
 maintenabilité est acquise. Tout le plan converge vers lui.
 
+### 5.3 Les topologies — l'invariant numéro un du refactoring
+
+TranscrIA se déploie en **cinq rôles** (`deploy/entrypoint.py:66-94` : `all`, `web`,
+`scheduler`, `resource-node`, `migrate`) qui composent **trois topologies** : all-in-one,
+split web/scheduler (frontale), et frontale + nœud(s) de ressources GPU. **La CI n'a pas de
+GPU** : elle ne prouve JAMAIS qu'une topologie fonctionne — seuls les E2E réels le font.
+Tout déplacement de code doit donc connaître les **modules sensibles à la topologie** :
+
+| Module | Sensibilité |
+|---|---|
+| `inference/resource_gate.py` | LA couture : `client is None` = all-in-one (ensure **en process** des moteurs servis) ; client présent = frontale (préflight distant, defer). Toute vague B qui touche le préflight (`_preflight_remote_stt` du runner) passe par ici |
+| `stt/remote_transcriber.py`, `stt/asr_client.py` | routage `_should_use_remote_stt` : un backend au nom ARBITRAIRE devient distant dès que `inference.stt.backends.<nom>.url` existe — le registre C1 doit préserver ce contrat (backends « hors registre local » légitimes) |
+| `gpu/stt_engine_supervisor.py` | cycle A/B/C des moteurs, consommé EN PROCESS (all-in-one) ET via `/engines/ensure` (nœud) — deux appelants, un comportement |
+| `queue/scheduler.py` | capacité d'admission **distante** (nœud) vs locale (VRAM) — deux chemins dans le même fichier |
+| `queue/allocator.py` | verrou LLM **no-op en distant** (correctif de charge) — B3 ne doit pas ré-unifier ce qui a été volontairement séparé |
+| `inference_service/` | le serveur du nœud : **1 173 lignes, déjà propre** (routes/ séparées, sécurité, capabilities) — pas un chantier, mais son API (`/diarize`, `/voice_embed`, `/capabilities`, `/engines/ensure`) est un **contrat gelé** entre topologies |
+| `deploy/entrypoint.py` | compose l'app par rôle : les modules qu'il importe par rôle définissent ce qui DOIT rester importable sans GPU/Flask selon le rôle |
+
+Règle : **toute vague qui touche un module de cette table exige la matrice de validation
+complète (§6.0), pas seulement les gates CI.** Pièges topologiques documentés à connaître :
+`inference.url` résiduel qui PRIME sur l'ensure local en mode hybrid ; la clé API d'env
+(`TRANSCRIA_INFERENCE_API_KEY`) qui PRIME sur la config ; l'env runtime root ≠ admin_ia.
+
+### 5.4 La base de données — contrats gelés et primitives de concurrence
+
+- **Deux dialectes vivants** : PostgreSQL (prod, tests `pytest-postgresql` éphémères) et
+  SQLite (petites installs). Toute vague B qui touche `queue/` ou `services/` doit passer
+  les deux jeux de tests — c'est déjà le cas en CI (job dédié migration), le rappeler dans
+  la checklist de vague.
+- **Primitives de concurrence** (inventaire exact — les fichiers qui utilisent
+  LISTEN/NOTIFY, verrou advisory, `FOR UPDATE SKIP LOCKED`) : `queue/store.py` (claim
+  atomique), `queue/scheduler_lock.py` (advisory lock d'instance unique),
+  `queue/notify_listener.py`, `queue/scheduler.py`, `gpu/llm_backend.py`,
+  `gpu/vram_manager.py`. **Ces six fichiers ne bougent pas pendant les vagues A/B0/B1/B2** ;
+  seul B3 les approche, sous campagne de charge.
+- **La couche modèle est gelée** : `jobs/models` (fan-in 28) et le schéma Alembic
+  (7 migrations) ne changent pas d'un octet pendant le chantier — le refactoring est
+  structurel, pas relationnel. Si une vague croit avoir besoin d'une migration, elle a mal
+  compris son périmètre : stop et re-cadrage.
+- **`jobs/store.py` et `jobs/artifact_store.py` sont des contrats** (réplication PG des
+  fichiers pour les déploiements sans filesystem partagé — cf.
+  `STOCKAGE_PARTAGE_JOBS.md`) : les vagues les consomment, ne les modifient pas.
+
+### 5.5 La concurrence en mémoire — threads et verrous
+
+Inventaire des fichiers créant threads/verrous (`threading.Thread/Lock/RLock/Event`) :
+`queue/allocator.py` (5 — RLock global conservateur), `queue/scheduler.py` (4 — thread de
+polling + pool), `queue/notify_listener.py` (4), `gpu/stt_engine_supervisor.py` (3),
+`workflow/concurrency_profile.py`, `services/job_executor.py`, `gpu/opencode_runner.py`
+(watchdog), `gpu/model_load_lock.py` (correctif meta-tensor), `notifications/mailer.py`,
+`web/editor_routes.py`, `web/routes.py`, `jobs/artifact_store.py`.
+
+Règles pour les vagues : (1) un déplacement ne sépare JAMAIS un verrou de la structure
+qu'il protège (ils déménagent ensemble ou pas du tout) ; (2) les sections critiques
+existantes ne sont ni élargies ni rétrécies « au passage » ; (3) B1 extrait la session GPU
+**avec** son usage des verrous de l'allocator, sans en changer la granularité.
+
+### 5.6 i18n, templates et assets — ce que les vagues web doivent savoir
+
+- `babel.cfg` scanne `transcria/**.py` et `app.py` : **déplacer un fichier ne casse pas
+  l'extraction** (A2 est sûr), mais toute vague qui touche des chaînes traduites doit
+  suivre le flux pybabel **canonique** (`extract`/`update` avec `-k lazy_gettext -k _l
+  --no-wrap` — un update sans ces flags a déjà détruit les catalogues) et laisser
+  `i18n_check.py` vert (compilation `.mo` incluse) ;
+- les **templates** (`web/templates/`) et le JS ne changent pas en A2 (les endpoints
+  `url_for('web.xxx')` survivent par le blueprint partagé) — un grep de contrôle
+  `url_for('web.` sur les templates fait partie de la DoD ;
+- le catalogue JS (`i18n_js.py`, chaînes `N_`) suit le déplacement A1 sans impact
+  d'extraction (récolté côté Python).
+
+### 5.7 Ce que le chantier ne doit jamais casser (résumé opérationnel)
+
+Les cinq rôles d'entrypoint démarrent ; les trois topologies passent leur E2E ; les deux
+dialectes de base passent les tests ; `config.yaml` existant reste valide ; les livrables
+(DOCX/SRT/ZIP) sont identiques octet pour octet à profil égal ; les images Docker
+construisent ; `install.sh` et le doctor restent cohérents avec le code.
+
 ## 6. Plan d'action détaillé
 
 Deux pistes parallèles aux profils de risque opposés + une piste transverse. Chaque vague
@@ -236,6 +318,45 @@ inference_service/ --line-length 140 --select E,W,F,I` ; `mypy transcria/
 inference_service/ --ignore-missing-imports` ; `python scripts/i18n_check.py` ; `pytest
 tests/ -q --cov… --cov-fail-under=80`) et ne change **aucun comportement observable**.
 Le patron commun de chaque vague est en annexe C.
+
+### 6.0 Matrice de validation par vague
+
+La CI (sans GPU) ne suffit que pour les vagues qui ne touchent ni un module sensible à la
+topologie (§5.3) ni une primitive de concurrence (§5.4-5.5). Niveaux de validation
+disponibles, du moins cher au plus cher :
+
+1. **Gates CI** — toujours (ruff/mypy arbre entier, i18n_check, pytest 2 dialectes, cov ≥ 80) ;
+2. **Walkthrough UI** — `scripts/ui_walkthrough.py` (Playwright, en CI) : parcours complet
+   de l'interface ;
+3. **E2E all-in-one GPU réel** — `tests/test_e2e_workflow.py` (13 étapes : upload → DOCX),
+   variantes `--stt-backend`, `--mode`, `--skip-*` ; scénario « gate » = moteur servi
+   ÉTEINT au départ (prouve l'ensure en process) ;
+4. **E2E frontale** — mêmes 13 étapes avec `--remote-stt URL` / `--remote-inference URL`
+   (+ clés API) contre un nœud réel ;
+5. **Nœud de ressources** — `POST /engines/ensure` froid→launched, re-POST→ready,
+   moteur inconnu→404, sur l'inference_service réel ;
+6. **Campagne de charge** — `scripts/load_test.py` : 3 jobs simultanés all-in-one,
+   montée à 8 en split (les seuils validés des tests de charge historiques).
+
+| Vague | 1. CI | 2. UI | 3. E2E all-in-one | 4. E2E frontale | 5. Nœud | 6. Charge |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| A0 filets | ✔ | — | — | — | — | — |
+| A1 i18n | ✔ | ✔ (bascule FR/EN) | — | — | — | — |
+| A2 blueprints | ✔ | ✔ | ✔ (1 run de contrôle) | — | — | — |
+| B0 contrats | ✔ | — | ✔ | — | — | — |
+| B1 phases | ✔ | ✔ | ✔ (dont scénario gate) | ✔ | — | — |
+| B2 pipeline | ✔ | — | ✔ (+ reprise mi-parcours) | ✔ | — | — |
+| B3 GPU | ✔ | — | ✔ | ✔ | ✔ | **✔ obligatoire** |
+| C1 registre STT | ✔ | ✔ (page Modèles) | ✔ (backend natif + backend servi) | ✔ | ✔ | — |
+| C2 opencode | ✔ | — | ✔ (phases LLM réelles) | — | — | — |
+| C3 vues config | ✔ | — | au fil des adoptions | — | — | — |
+| C4 app/tests | ✔ | ✔ | ✔ | — | — | — |
+| C5/C6 | ✔ | — | ✔ (1 run final) | — | — | — |
+
+Lecture : C1 est la vague la plus « topologique » (elle touche le routage
+`_should_use_remote_stt` — un backend servi n'a PAS de builder local et doit rester
+routable par sa seule URL) ; B1/B2 valident les deux topologies parce que le runner porte
+le préflight distant (`_preflight_remote_stt`) et la couture du gate.
 
 ---
 
@@ -507,7 +628,10 @@ reste, elle change de source). Migration en 3 PR : factory → vram/catalog → 
 prouve : segments triés, timestamps monotones, WAV 16k accepté, erreur propre sans modèle.
 
 **DoD** : ajouter un backend = 1 module + 1 enregistrement (démonstration : PR qui ajoute
-un backend factice de test en un fichier) ; les 6 sites du §3.5 lisent le registre.
+un backend factice de test en un fichier) ; les 6 sites du §3.5 lisent le registre. **Garde
+topologique** : un backend SERVI (qwen3asr/nemotron) n'a pas de builder local — le
+registre doit continuer d'accepter un nom hors registre local dès qu'il est routé par URL
+(`_should_use_remote_stt`), et `fallback_backend` continue de pointer un builder NATIF.
 
 #### C2 — Découpe d'`opencode_runner.py` *(effort M)*
 
@@ -654,6 +778,10 @@ l'annexe C.
 | Les shims de transition s'éternisent | chaque shim porte sa date de suppression (release suivante) ; import-linter les compte |
 | Le chantier s'enlise à mi-course | chaque vague a une DoD binaire ; le ratchet interdit la re-dérive même si tout s'arrête après A1 |
 | La couverture chute pendant B1 (déplacement de tests) | migrer les tests DANS la même PR que la phase ; `--cov-fail-under=80` fait gate |
+| Une topologie casse sans que la CI le voie (pas de GPU en CI) | matrice de validation §6.0 obligatoire pour toute vague touchant un module de la table §5.3 |
+| Divergence SQLite/PostgreSQL introduite par un déplacement | les deux dialectes sont dans les gates ; les 6 fichiers de primitives (§5.4) sont gelés hors B3 |
+| Un verrou séparé de la structure qu'il protège | règle §5.5 : verrou et structure déménagent ensemble ; revue spécifique sur tout diff touchant threading |
+| Catalogues i18n détruits par un pybabel non canonique | flux canonique documenté (§5.6) ; i18n_check en gate |
 
 ## 11. Tableau de bord
 
@@ -801,6 +929,9 @@ forbidden_modules = flask
 [ ] quality_baseline.json re-généré (métriques en baisse uniquement)
 [ ] Tableau de bord (§11) mis à jour dans ce document
 [ ] AGENTS.md / docs impactées mises à jour
+[ ] Matrice de validation §6.0 appliquée (topologies selon les modules touchés)
+[ ] Aucun des 6 fichiers de primitives de concurrence (§5.4) modifié (hors B3)
+[ ] Verrous déplacés AVEC leurs structures (§5.5) ; aucune section critique élargie/rétrécie
 [ ] Pour B1/B2 : E2E GPU réel rejoué ; pour B3 : campagne de charge rejouée
 ```
 
