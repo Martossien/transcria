@@ -18,7 +18,7 @@
 4. [Diagnostic](#4-diagnostic)
 5. [Architecture cible, étoile polaire et invariants d'exploitation](#5-architecture-cible)
    (topologies, base de données, concurrence, i18n — §5.3 à §5.7)
-6. [Plan d'action détaillé — matrice de validation + vagues A0→C6](#6-plan-daction-détaillé)
+6. [Plan d'action détaillé — matrice de validation + vagues A0→C7](#6-plan-daction-détaillé)
 7. [Séquencement, dépendances, efforts](#7-séquencement-et-efforts)
 8. [Garde-fous permanents](#8-garde-fous-permanents)
 9. [Propositions écartées, avec justification](#9-ce-quon-ne-fait-pas)
@@ -216,6 +216,37 @@ build). `installer/cli.py` (643 l., fan-out 15, 17 imports différés) est l'ent
 nouvelle génération — ses différés relèvent en partie de l'exception §8.3(c) (point
 d'entrée), à justifier un par un.
 
+### 3.9 La surface Docker — duplication sans garde
+
+Inventaire : **5 Dockerfiles** (`Dockerfile` slim CPU 84 l. — rôles web/scheduler/migrate ;
+`Dockerfile.worker` 69 l. ; `Dockerfile.allinone-gpu` 177 l. ; `Dockerfile.allinone-bundled`
+192 l. ; `Dockerfile.resource-node` 130 l.), **3 compose** (`docker-compose.yml` 183 l.,
+`split-gpu.yml` 181 l., `split-gpu.dev.yml`), 2 scripts (`docker_quickstart.sh`,
+`setup_docker_gpu.sh`), 1 workflow (`publish-image.yml`), `.dockerignore` (44 l.),
+`deploy/entrypoint.py` (472 l. — patron sain : réconciliation au runtime, ex.
+`provision_opencode`).
+
+Les problèmes, mesurés :
+
+- **Duplication massive sans garde** : 85 lignes actives identiques entre
+  `allinone-gpu` et `bundled` (sur 87/108 actives — l'image GPU est incluse à ~98 % dans
+  la bundled), 47 partagées par les trois images GPU. L'étage `stt-runtimes-builder` est
+  copié-collé ×3. Aucun test ne vérifie que les copies restent synchrones.
+- **Chaque SHA épinglée existe en 5 exemplaires** : `AUDIOCPP_REF`/`PARAKEETCPP_REF` en
+  ARG dans 3 Dockerfiles + la constante des phases Python (source de vérité déclarée). La
+  dérive n'est pas théorique : **le 2026-07-13, la SHA parakeet des trois Dockerfiles
+  était fausse** (même préfixe court, suite inventée) — attrapée uniquement par un build
+  réel. `LLAMA_CPP_REF` est dupliqué ×2. (`CUDA_IMAGE` diffère LÉGITIMEMENT :
+  cu126 pour les all-in-one, cu130+vLLM pour le nœud.)
+- **`.dockerignore` sans garde** : le même jour, `runtimes/` (5,5 Go de clones locaux)
+  manquait → couche `COPY . /app` gonflée de 6 Go, vue seulement à l'inspection manuelle
+  des tailles de couches.
+- **Asymétrie de validation** : la CI ne build QUE `allinone-gpu` (publish) ; `bundled`
+  est un rituel manuel (build + vérification du contenu conteneur + push GHCR) non
+  scripté ; `resource-node` n'est jamais buildé en CI. Un Dockerfile modifié peut donc
+  être poussé sans avoir jamais été parsé (vécu : le COPY injecté dans un commentaire de
+  la bundled, découvert au build local).
+
 ## 4. Diagnostic
 
 Le mécanisme d'accumulation : une feature = une route + une phase + une étape → chacune
@@ -385,6 +416,7 @@ disponibles, du moins cher au plus cher :
 | C4 app/tests | ✔ | ✔ | ✔ | — | — | — |
 | C5 | ✔ | — | ✔ (1 run final) | — | — | — |
 | C6 install | ✔ | — | — | — | — | — + `test_install_e2e` + build Docker resource-node |
+| C7 docker | ✔ (gardes texte) | — | — | — | — | build local des Dockerfiles touchés + script bundled |
 
 Lecture : C1 est la vague la plus « topologique » (elle touche le routage
 `_should_use_remote_stt` — un backend servi n'a PAS de builder local et doit rester
@@ -747,10 +779,36 @@ reste des consommateurs transitoires) ; install.sh n'appelle plus que `installer
 (grep = 0 appel direct legacy) ; les 42 appels Python d'install.sh documentés dans
 l'en-tête du script ; test_install_e2e vert ; build Docker resource-node vert.
 
+#### C7 — Docker : gardes de synchronisation et rituel scripté *(effort M)*
+
+Quatre livrables, du moins cher au plus structurant (état des lieux §3.9) :
+
+1. **`tests/test_docker_sync.py`** — gardes pures texte, exécutées en CI sans Docker :
+   (a) les ARG `*_REF` des 3 Dockerfiles GPU == les constantes Python
+   (`AUDIOCPP_PINNED_COMMIT`, `PARAKEETCPP_PINNED_COMMIT` — la classe de bug du
+   2026-07-13 meurt) ; (b) les blocs `stt-runtimes-builder` des 3 fichiers sont
+   IDENTIQUES (diff structurel) ; (c) les répertoires lourds connus (`models/`,
+   `runtimes/`, `venv/`, caches HF) matchent un motif de `.dockerignore`.
+2. **`scripts/release_bundled.sh`** — scripte le rituel aujourd'hui mémoriel : build
+   (tags `:bundled` + `:vX.Y.Z-bundled`), **vérification du contenu dans le conteneur**
+   (version Python du paquet, `/opt/runtimes/*/COMMIT` == constantes, site MOSS présent,
+   poids attendus, absence de `/app/runtimes`), puis push GHCR sur flag explicite
+   (`--push`). Le login reste `gh auth token | docker login`.
+3. **Règle de release** (AGENTS.md + checklist annexe C) : **tout Dockerfile modifié est
+   buildé avant le tag** — au minimum `docker build --target <étage modifié>` ; la CI ne
+   parse ni bundled ni resource-node (leçon des deux bugs du 2026-07-13).
+4. **Étudié, décision différée** : reconstruire `bundled` FROM l'image gpu (elle y est
+   incluse à ~98 %) — écarté pour l'instant car le design de cache actuel (couches
+   modèles AVANT `COPY . /app`, un patch de code ne re-télécharge pas 12,5 Go) serait
+   inversé ; la duplication est le prix du cache, la garde (1b) la rend sûre.
+
+**DoD** : les 3 gardes rouges sur mutation volontaire (test du test) ; release bundled
+rejouée via le script sur la prochaine version ; zéro copie de SHA non gardée.
+
 ## 7. Séquencement et efforts
 
 ```
-A0 (S) ──► A1 (S) ──► A2 (L) ─────────────► C2 (M) ─► C5 (M) ─► C6 (L)
+A0 (S) ──► A1 (S) ──► A2 (L) ─────────────► C2 (M) ─► C5 (M) ─► C6 (L) ; C7 (M) indépendante, à tout moment après A0
              │                                  ▲
              └──► B0 (M) ──► B1 (XL) ──► B2 (L) ┴─► C1 (M) ─► C4 (M) ─► B3 (M)
                                                         └──► C3 (M, étalé)
@@ -857,6 +915,8 @@ l'annexe C.
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
 | Modules install legacy à la racine | 13 (4 641 l.) | 0 (hors messages) | C6 |
 | Appels directs install.sh → legacy | 26 | 0 | C6 |
+| Copies de chaque SHA épinglée (Dockerfiles+Python) | 5 sans garde | 5 gardées par test (1 source de vérité) | C7 |
+| Dockerfiles buildables sans jamais être parsés par la CI | 3 (bundled, resource-node, worker) | 0 non couvert par garde ou rituel | C7 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
