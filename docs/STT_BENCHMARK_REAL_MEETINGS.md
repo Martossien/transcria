@@ -186,19 +186,24 @@ from private meetings is reproduced here):
 
 ## Bonus round — C++ runtimes and unified models (served, whole-window protocol)
 
-We also pointed the harness at engines served over HTTP by external runtimes:
+We also pointed the harness at engines served by external runtimes:
 [audio.cpp](https://github.com/0xShug0/audio.cpp) (a young ggml-based C++ audio
-engine — think "llama.cpp for audio") and Microsoft's
+engine — think "llama.cpp for audio"),
+[parakeet.cpp](https://github.com/mudler/parakeet.cpp) (ggml inference for
+NVIDIA's Parakeet/Nemotron families, by the LocalAI author — CLI, C API and an
+OpenAI-compatible server), and Microsoft's
 [VibeVoice-ASR](https://huggingface.co/microsoft/VibeVoice-ASR) (9B, MIT, joint
 speaker+timestamp+text) via its official vLLM plugin. **Protocol difference,
-stated plainly:** these engines transcribed each 5-minute window in one pass over
-HTTP, while our in-pipeline engines used diarization-turn chunking. Same
-reference, same scorer, different serving path.
+stated plainly:** these engines transcribed each 5-minute window in one pass
+(HTTP or CLI), while our in-pipeline engines used diarization-turn chunking.
+Same reference, same scorer, different serving path.
 
 | Engine (runtime) | Mean WER ↓ | Wall/5-min window | GPU footprint | Notes |
 |---|---:|---:|---|---|
 | Qwen3-ASR-0.6B (audio.cpp, CUDA) | 0.56 *(0.42 excl. one window)* | **7–10 s** | one 24 GB card, small | over-generated ×2 on one chaotic multi-speaker opening; healthy elsewhere |
 | Nemotron 3.5 ASR 0.6B (audio.cpp) | 0.51 *(7/8 windows)* | **1–3 s** | one card, small | needs a server restart per request today (session-reuse bug we reported); one window came back empty even so |
+| Nemotron 3.5 ASR 0.6B (parakeet.cpp, f16 GGUF, `--lang fr`) | **0.49** *(8/8, zero empty)* | **7–8 s** (CLI, incl. model load) | one card, ~1.4 GB weights | same model, different runtime: no session bug (3 identical back-to-back server replies), no empty windows, 0 % EN drift — best small-model result of the whole test |
+| Parakeet TDT 0.6B v3 (parakeet.cpp, auto language) | 0.93 *(8/8, heavy truncation)* | 5 s | one card, small | its automatic language detection drifted to English on ~all windows (11–36 % EN function words) and there is no way to force a language on this model — unusable on narrowband French |
 | VibeVoice-ASR 9B (vLLM, TP=4) | raw: 4.09 *(8/8 repetition loops)* — with the official auto-recovery client: 0.23–0.48 on 5/8 windows, 3 empty | 20–70 s | 4 × 24 GB | best CER of the whole test on its good windows, plus native speaker+timestamp structure (it under-counted speakers: 3–7 found vs 5–11 in reference) |
 
 What we take away:
@@ -215,6 +220,17 @@ What we take away:
   timestamps nobody else provides — but it completed only 5 of 8. On short clean
   speech it produced the best transcription of the entire test. One to re-test
   as it matures, not one to deploy today.
+- **Same model, two runtimes — the runtime is part of the result.** Nemotron
+  3.5 ASR 0.6B scored 0.51 with per-request restarts and an empty window under
+  one runtime, and a clean 0.49 on 8/8 with stable repeated serving under
+  another (parakeet.cpp). The session-reuse bug we chased is therefore a
+  *runtime* bug, not a model defect — benchmark the pair, never the model alone.
+- **Automatic language detection is the model-side twin of our trap #1.** The
+  multilingual Parakeet TDT v3 silently drifted to English on narrowband French
+  meetings (WER 0.93), and unlike our pipeline trap there is no config fix:
+  the model exposes no language forcing. Prompt-conditioned models (Nemotron
+  `--lang fr`) or explicit language pinning are the only safe options on
+  real-world audio.
 - **Deployment traps collected on the way** (all reproducible): a hardcoded
   `max_tokens` in the vendor's own test client silently returning empty results
   on capped-context servers; the audio encoder allocating *outside* vLLM's
