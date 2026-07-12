@@ -1408,3 +1408,120 @@ class TestSegmentReliabilitySparseSpeechRate:
             cfg={"sparse_words_per_second": 0},
         )
         assert "debit_parole_anormal" not in scored[0].get("reliability_reasons", [])
+
+
+class TestKrokoTranscriber:
+    """Backend CPU pur Kroko-ASR (zipformer2/sherpa-onnx) : conteneur .data,
+    segmentation par tokens horodatés, résolution de variante, 0 Mo de VRAM."""
+
+    def _make_container(self, path, header=None, members=4):
+        import json as _json
+        import struct as _struct
+
+        blocks = [_json.dumps(header or {"id": "t", "type": "zipformer2"}).encode()]
+        blocks += [f"payload-{i}".encode() for i in range(members)]
+        with open(path, "wb") as fh:
+            for block in blocks:
+                fh.write(_struct.pack("<I", len(block)))
+                fh.write(block)
+
+    def test_kroko_backend_is_available_in_factory(self):
+        assert "kroko" in list_available_backends()
+
+    def test_create_kroko_transcriber_from_config(self):
+        from transcria.stt.kroko_transcriber import KrokoTranscriber
+
+        config = {
+            "models": {"stt_backend": "kroko"},
+            "kroko": {"model_dir": "./models/kroko", "variant": "64", "num_threads": 4},
+        }
+        transcriber = create_transcriber(config, backend="kroko", device="cuda:3")
+        assert isinstance(transcriber, KrokoTranscriber)
+        assert transcriber.variant == "64"
+        assert transcriber.num_threads == 4
+
+    def test_kroko_vram_is_zero(self):
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        assert get_backend_vram_mb("kroko", {}) == 0
+
+    def test_kroko_language_mapping(self):
+        from transcria.stt.kroko_transcriber import KrokoTranscriber
+
+        t = KrokoTranscriber()
+        assert t._language_code("fr") == "fr"
+        assert t._language_code("french") == "fr"
+        assert t._language_code("hebrew") == "iw"
+        assert t._language_code("he") == "iw"  # code moderne → legacy des fichiers
+        assert t._language_code("klingon") == "fr"  # repli sûr
+
+    def test_extract_container_roundtrip(self, tmp_path):
+        from transcria.stt.kroko_transcriber import extract_container
+
+        data = tmp_path / "model.data"
+        self._make_container(data)
+        out = tmp_path / "out"
+        header = extract_container(data, out)
+        assert header["type"] == "zipformer2"
+        for name in ("header.json", "encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt"):
+            assert (out / name).exists()
+        assert (out / "encoder.onnx").read_bytes() == b"payload-0"
+        assert (out / "tokens.txt").read_bytes() == b"payload-3"
+
+    def test_extract_container_is_idempotent(self, tmp_path):
+        from transcria.stt.kroko_transcriber import extract_container
+
+        data = tmp_path / "model.data"
+        self._make_container(data)
+        out = tmp_path / "out"
+        extract_container(data, out)
+        (out / "encoder.onnx").write_bytes(b"deja-extrait")
+        extract_container(data, out)  # ne réécrit pas
+        assert (out / "encoder.onnx").read_bytes() == b"deja-extrait"
+
+    def test_extract_container_rejects_truncated(self, tmp_path):
+        from transcria.stt.kroko_transcriber import KrokoContainerError, extract_container
+
+        data = tmp_path / "model.data"
+        self._make_container(data, members=1)  # bloque avant joiner/tokens
+        with pytest.raises(KrokoContainerError):
+            extract_container(data, tmp_path / "out")
+
+    def test_extract_container_rejects_wrong_type(self, tmp_path):
+        from transcria.stt.kroko_transcriber import KrokoContainerError, extract_container
+
+        data = tmp_path / "model.data"
+        self._make_container(data, header={"type": "whisper"})
+        with pytest.raises(KrokoContainerError):
+            extract_container(data, tmp_path / "out")
+
+    def test_resolve_data_path_variant_fallback(self, tmp_path):
+        from transcria.stt.kroko_transcriber import KrokoTranscriber, data_filename
+
+        # seul le 64 existe (cas suédois) → repli 128 → 64 sans réseau
+        self._make_container(tmp_path / data_filename("sv", "64"))
+        t = KrokoTranscriber(model_dir=str(tmp_path), variant="128")
+        path, variant = t._resolve_data_path("sv")
+        assert variant == "64"
+        assert path.name == data_filename("sv", "64")
+
+    def test_segments_from_tokens_splits_on_gap_and_length(self):
+        from transcria.stt.kroko_transcriber import KrokoTranscriber
+
+        t = KrokoTranscriber(segment_max_gap_s=0.8, segment_max_len_s=15.0)
+        tokens = [" Bonjour", " à", " tous", ".", " On", " commence", "."]
+        stamps = [0.2, 0.5, 0.8, 1.0, 3.0, 3.4, 3.7]  # gap 2 s après « . »
+        segments = t._segments_from_tokens(tokens, stamps, total_duration=10.0)
+        assert len(segments) == 2
+        assert segments[0]["text"] == "Bonjour à tous."
+        assert segments[1]["text"] == "On commence."
+        assert segments[0]["start"] == 0.2
+        assert segments[1]["start"] == 3.0
+        assert segments[1]["end"] <= 10.0
+
+    def test_segments_from_tokens_empty_or_mismatched(self):
+        from transcria.stt.kroko_transcriber import KrokoTranscriber
+
+        t = KrokoTranscriber()
+        assert t._segments_from_tokens([], [], 5.0) == []
+        assert t._segments_from_tokens([" a"], [], 5.0) == []

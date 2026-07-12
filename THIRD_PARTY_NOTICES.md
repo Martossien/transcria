@@ -50,6 +50,7 @@ le code de TranscrIA reste sous Apache-2.0 sans contamination.
 | `librosa` | ISC | Analyse audio |
 | `transformers`, `accelerate`, `huggingface_hub`, `datasets`, `vllm`, `nemo_toolkit`, `pyannote.audio` | **Apache-2.0** | STT/diarisation/serving — leur fichier `NOTICE` est conservé dans le venv (`site-packages`) ; obligation Apache-2.0 §4 respectée |
 | `faster-whisper`, `demucs`, `pyannote.*` | MIT | STT de repli, débruitage, diarisation |
+| `sherpa-onnx` | **Apache-2.0** | Runtime du backend STT `kroko` (zipformer2 streaming, CPU) |
 | `lameenc` | **LGPL-3.0** | Encodeur MP3 (via `demucs`) — lié dynamiquement, redistribué tel quel (le code appelant n'est pas dérivé) |
 | `certifi` | **MPL-2.0** | Bundle d'autorités de certification (copyleft *au fichier*, redistribué tel quel) |
 | `text-unidecode` | Artistic-1.0 | Translittération (via `inflect`) |
@@ -90,6 +91,7 @@ accepter avant usage :
 | `pyannote/speaker-diarization-community-1` (+ segmentation/embeddings) | Diarisation | *gated* — MIT, conditions d'accès pyannote |
 | `faster-whisper large-v3` | STT de repli | MIT |
 | Qwen3.6 (LLM d'arbitrage, ex. `Qwen/Qwen3.6-27B-FP8`) | Résumé/correction LLM | licence de la carte de modèle Qwen (cf. Hugging Face) — servie hors image (endpoint externe) |
+| `Banafo/Kroko-ASR` (modèles community, un par langue) | STT `kroko` (CPU pur) | **CC-BY-SA** (community) — attribution : Banafo (<https://kroko.ai/>) ; des variantes commerciales existent chez l'éditeur |
 
 > TranscrIA ne distribue aucun de ces poids : il s'interface avec eux. Vérifiez et acceptez la
 > licence de chaque modèle que vous déployez.

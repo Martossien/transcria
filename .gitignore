@@ -100,3 +100,4 @@ backups/
 # + entrypoint + install), jamais un binaire périmé en git. On versionne uniquement les .po.
 transcria/web/translations/messages.pot
 transcria/web/translations/**/*.mo
+models/kroko/

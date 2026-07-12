@@ -180,7 +180,7 @@ Exemples :
 
     # ── STT ─────────────────────────────────────────────────────────────────
     parser.add_argument(
-        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"], default="cohere",
+        "--stt-backend", choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko"], default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "
             "Le backend effectif est tracé dans metadata/transcription_metadata.json."

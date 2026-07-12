@@ -187,10 +187,16 @@ upload -> diagnostic audio -> synthèse rapide (STT + LLM) -> contexte, particip
 
 - **Moteurs STT** (interchangeables) : Cohere transcribe (défaut), Whisper large-v3 /
   faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
-  Parakeet TDT (expérimental) — servis en local ou par un serveur distant compatible
-  OpenAI (vLLM, SGLang). Nous les benchons sur de **vraies réunions françaises** contre
-  une transcription humaine professionnelle — WER, détecteur de dérive en traduction,
-  juge LLM multi-passes et lecture humaine des modes d'échec :
+  Parakeet TDT (expérimental), et **Kroko-ASR — l'option sans GPU** : modèles Zipformer
+  streaming par langue (~155 Mo) sur sherpa-onnx, au niveau de nos meilleurs moteurs GPU
+  sur réunions réelles, **sur CPU seul**. Tous peuvent aussi être servis par un serveur
+  distant compatible OpenAI (vLLM, SGLang) — et nous avons vérifié que de jeunes runtimes
+  C++ comme [audio.cpp](https://github.com/0xShug0/audio.cpp) et
+  [parakeet.cpp](https://github.com/mudler/parakeet.cpp) se branchent sur ce même
+  endpoint distant **sans une ligne de code, configuration seule**, avec de très bonnes
+  surprises en qualité comme en vitesse. Nous benchons tout cela sur de **vraies réunions
+  françaises** contre une transcription humaine professionnelle — WER, détecteur de
+  dérive en traduction, juge LLM multi-passes et lecture humaine des modes d'échec :
   [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (anglais).
 - **Moteurs de diarisation** : pyannote.audio (défaut) ou NVIDIA Sortformer via NeMo.
 - **LLM d'arbitrage** : un serveur local compatible OpenAI (Ollama / llama.cpp / vLLM),
@@ -350,6 +356,7 @@ d'entrée :
 - [docs/DOCKER.md](docs/DOCKER.md) — déploiement conteneurisé
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, base de données
 - [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) — référence complète de `config.yaml`
+- [docs/EXTERNAL_STT_RUNTIMES.md](docs/EXTERNAL_STT_RUNTIMES.md) — brancher des serveurs STT C++ externes (audio.cpp, parakeet.cpp), configuration seule
 
 ## Licence
 

@@ -17,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 class _NoReservationSession:
-    """Session GPU no-op pour une phase servie à distance (aucune VRAM locale).
+    """Session GPU no-op : phase servie à distance OU backend CPU pur (0 Mo VRAM).
 
-    Expose `gpu_index` (device de repli/fallback éventuel) sans rien réserver ni
-    décharger — la VRAM est sur le serveur distant.
+    Expose `gpu_index` (device de repli/fallback éventuel ; None = CPU) sans rien
+    réserver ni décharger — la VRAM est ailleurs (serveur distant) ou inutile.
     """
 
-    def __init__(self, gpu_index: int) -> None:
+    def __init__(self, gpu_index: int | None) -> None:
         self.gpu_index = gpu_index
         self.acquired = True
 
@@ -136,6 +136,10 @@ class WorkflowRunner:
         if self._phase_runs_remotely(phase):
             logger.info("Phase %s servie à distance — session GPU sans réservation locale", phase)
             return _NoReservationSession(self._default_remote_gpu_index())
+        if required_mb <= 0:
+            # Backend CPU pur (ex. kroko) : rien à réserver (marcherait aussi sans GPU).
+            logger.info("Phase %s sur CPU (0 Mo VRAM) — session GPU sans réservation", phase)
+            return _NoReservationSession(None)
         if not self.allocator.get_gpu_info():
             return GPUSession(self.vram, model_name, required_mb)
         try:
@@ -155,6 +159,11 @@ class WorkflowRunner:
         if self._phase_runs_remotely(phase):
             logger.info("Phase %s servie à distance — aucune réservation VRAM locale", phase)
             return SimpleNamespace(gpu_index=self._default_remote_gpu_index()), False
+        if required_mb <= 0:
+            # Backend CPU pur (ex. kroko) : aucune VRAM requise ⇒ aucune réservation,
+            # sinon on bloquerait un slot GPU (ou la machine sans GPU) pour rien.
+            logger.info("Phase %s sur CPU (0 Mo VRAM) — aucune réservation GPU", phase)
+            return SimpleNamespace(gpu_index=None), False
         reservation = self.allocator.try_reserve(job.id, required_mb, phase)
         if reservation is not None:
             return reservation, True
@@ -2394,9 +2403,12 @@ class WorkflowRunner:
             try:
                 import librosa
 
-                transcriber = create_transcriber(
-                    config, backend=secondary, device=f"cuda:{reservation.gpu_index}"
+                # gpu_index=None = backend CPU pur (aucune réservation) → device None
+                # (le transcriber choisit ; kroko l'ignore de toute façon).
+                secondary_device = (
+                    f"cuda:{reservation.gpu_index}" if reservation.gpu_index is not None else None
                 )
+                transcriber = create_transcriber(config, backend=secondary, device=secondary_device)
                 audio, _sr = librosa.load(audio_path, sr=16000, mono=True)
                 sr = int(_sr)
                 pad = float(ms_cfg.get("padding_s", 0.2))

@@ -257,6 +257,32 @@ Activer avec `models.stt_backend=voxtral`.
 
 **VRAM :** `gpu.voxtral_vram_mb` (défaut `11000`).
 
+### `kroko`
+
+Backend STT **Kroko-ASR** (Banafo, community CC-BY-SA, non-gated) — le **seul
+backend 100 % CPU** : modèles Zipformer2 streaming **par langue** (~155 Mo,
+10 langues dont FR/EN) exécutés par `sherpa-onnx`. Aucun GPU requis, aucune
+réservation VRAM. Au niveau des meilleurs moteurs GPU sur notre corpus de
+réunions réelles (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`). La langue du job
+choisit le modèle ; la page « Modèles » télécharge le snapshot complet (~3,2 Go).
+Activer avec `models.stt_backend=kroko`.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Marqueur d'activation (le backend effectif reste `models.stt_backend`) |
+| `model_dir` | string | `"./models/kroko"` | Dossier des conteneurs `.data` et des modèles extraits |
+| `repo_id` | string | `"Banafo/Kroko-ASR"` | Repo HF des modèles (cache/téléchargement à la demande) |
+| `variant` | string | `"128"` | Variante de latence (`128` ou `64` ; repli automatique 128 → 64) |
+| `num_threads` | int | `8` | Threads CPU du décodage |
+| `decoding_method` | string | `"greedy_search"` | `greedy_search` ou `modified_beam_search` |
+| `tail_padding_s` | float | `0.66` | Silence ajouté en fin de flux (vide le contexte droit du zipformer) |
+| `segment_max_gap_s` | float | `0.8` | Silence entre tokens qui ouvre un nouveau segment |
+| `segment_max_len_s` | float | `15.0` | Durée maximale d'un segment |
+| `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives (rares sur un transducer) |
+| `repetition_loop_*` | int | `4` / `10` / `2` | Réglages de la réduction de boucles (mêmes sémantiques que les autres backends) |
+
+**VRAM :** aucune (0 Mo — pas de clé `gpu.*`).
+
 ### `granite`
 
 Backend STT expérimental IBM Granite Speech 4.1 2B. Il reste désactivé par défaut

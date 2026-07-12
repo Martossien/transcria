@@ -201,6 +201,7 @@ transcria/
       granite_transcriber.py# GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
       parakeet_transcriber.py# ParakeetTranscriber — NVIDIA Parakeet TDT 0.6B v3 expérimental (NeMo, auto-détection langue, timestamps natifs)
       voxtral_transcriber.py# VoxtralTranscriber — Mistral Voxtral Mini 3B expérimental (Apache-2.0, non-gated, langue forcée nativement, mistral-common)
+      kroko_transcriber.py  # KrokoTranscriber — Kroko-ASR zipformer2 streaming par langue (sherpa-onnx, CPU PUR : vram_mb=0, aucune réservation GPU ; conteneur .data extrait au 1er chargement)
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
       contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session

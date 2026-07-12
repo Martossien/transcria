@@ -31,7 +31,7 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         "help": _l("Choix des moteurs de transcription et de diarisation."),
         "fields": [
             {"path": "models.stt_backend", "label": _l("Backend STT"), "type": "select",
-             "options": ["cohere", "whisper", "granite", "parakeet", "voxtral", "remote"],
+             "options": ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "remote"],
              "help": _l("Moteur de transcription par défaut (cohere recommandé).")},
             {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
              "options": ["pyannote", "sortformer", "remote"],

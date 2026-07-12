@@ -37,6 +37,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_whisper(cfg.get("whisper", {}), result)
     _check_granite(cfg.get("granite", {}), result)
     _check_voxtral(cfg.get("voxtral", {}), result)
+    _check_kroko(cfg.get("kroko", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
@@ -286,7 +287,7 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
 
 
 def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
-    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"}
+    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko"}
     backend = mod.get("stt_backend", "cohere")
     if not isinstance(backend, str) or backend not in valid:
         r.add_error(
@@ -748,6 +749,30 @@ def _check_voxtral(voxtral: dict, r: ValidationResult) -> None:
     _check_int_range(voxtral, "repetition_loop_keep_repeats", "voxtral.repetition_loop_keep_repeats", 1, 20, r)
 
 
+def _check_kroko(kroko: dict, r: ValidationResult) -> None:
+    if not kroko:
+        return
+    if not isinstance(kroko, dict):
+        r.add_error("kroko: doit être un objet YAML")
+        return
+    _check_bool(kroko, "enabled", "kroko.enabled", r)
+    _check_str(kroko, "model_dir", "kroko.model_dir", r)
+    _check_str(kroko, "repo_id", "kroko.repo_id", r)
+    variant = kroko.get("variant")
+    if variant is not None and str(variant) not in {"64", "128"}:
+        r.add_error("kroko.variant: valeurs acceptées 64, 128")
+    _check_int_range(kroko, "num_threads", "kroko.num_threads", 1, 128, r)
+    method = kroko.get("decoding_method")
+    if isinstance(method, str) and method not in {"greedy_search", "modified_beam_search"}:
+        r.add_error("kroko.decoding_method: valeurs acceptées greedy_search, modified_beam_search")
+    for key in ("tail_padding_s", "segment_max_gap_s", "segment_max_len_s"):
+        _check_optional_number(kroko, key, f"kroko.{key}", r)
+    _check_bool(kroko, "collapse_repetition_loops", "kroko.collapse_repetition_loops", r)
+    _check_int_range(kroko, "repetition_loop_min_repeats", "kroko.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(kroko, "repetition_loop_max_phrase_words", "kroko.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(kroko, "repetition_loop_keep_repeats", "kroko.repetition_loop_keep_repeats", 1, 20, r)
+
+
 def _check_multi_stt(cfg: dict, r: ValidationResult) -> None:
     if not cfg:
         return
@@ -757,9 +782,11 @@ def _check_multi_stt(cfg: dict, r: ValidationResult) -> None:
     _check_bool(cfg, "enabled", "workflow.multi_stt.enabled", r)
     _check_str(cfg, "secondary_backend", "workflow.multi_stt.secondary_backend", r)
     secondary = cfg.get("secondary_backend")
-    if isinstance(secondary, str) and secondary not in {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral"}:
+    if isinstance(secondary, str) and secondary not in {
+        "cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko"
+    }:
         r.add_error(
-            "workflow.multi_stt.secondary_backend: valeurs acceptées cohere, cohere_tf5, whisper, granite, parakeet, voxtral"
+            "workflow.multi_stt.secondary_backend: valeurs acceptées cohere, cohere_tf5, whisper, granite, parakeet, voxtral, kroko"
         )
     _check_int_range(cfg, "max_segments", "workflow.multi_stt.max_segments", 1, 500, r)
     for key in ("min_segment_s", "padding_s"):

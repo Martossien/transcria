@@ -29,6 +29,9 @@ _STT_SOURCES: dict[str, dict] = {
                 "license_url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b", "est_gb": 4.6},
     "parakeet": {"repo": "nvidia/parakeet-tdt-0.6b-v3", "gated": False, "license": "CC-BY-4.0",
                  "license_url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", "est_gb": 2.5},
+    # Snapshot complet = les 10 langues community (~155 Mo chacune) ; seul backend CPU (sans GPU).
+    "kroko": {"repo": "Banafo/Kroko-ASR", "gated": False, "license": "CC-BY-SA (community)",
+              "license_url": "https://huggingface.co/Banafo/Kroko-ASR", "est_gb": 3.2},
 }
 _DIAR_SOURCES: dict[str, dict] = {
     "pyannote": {"repo": PYANNOTE_MODEL_ID, "gated": True,

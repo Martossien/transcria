@@ -33,6 +33,9 @@ faster-whisper>=1.2,<2.0
 nemo_toolkit[asr]>=2.7,<3.0
 # Tokenizer audio du backend STT expérimental Voxtral (Mistral, Apache-2.0).
 mistral-common[audio]>=1.8,<2.0
+# Backend STT kroko (Banafo Kroko-ASR, zipformer2 streaming) : seul backend 100 % CPU —
+# fonctionne sans GPU. Wheel autonome (onnxruntime embarqué), ~20 Mo.
+sherpa-onnx>=1.12,<2.0
 
 # Speaker diarization
 pyannote.audio>=4.0,<5.0

@@ -96,6 +96,7 @@ transcria/
 │   │   ├── whisper_transcriber.py # WhisperTranscriber (faster-whisper large-v3 qualité)
 │   │   ├── granite_transcriber.py # GraniteTranscriber — IBM Granite Speech 4.1 2B expérimental
 │   │   ├── voxtral_transcriber.py # VoxtralTranscriber — Mistral Voxtral Mini 3B expérimental (Apache-2.0)
+│   │   ├── kroko_transcriber.py   # KrokoTranscriber — Kroko-ASR zipformer2 par langue (sherpa-onnx, CPU pur)
 │   │   ├── anti_hallucination.py  # Réduction boucles ASR répétitives
 │   │   ├── forced_alignment.py    # Alignement CTC natif torchaudio optionnel
 │   │   ├── speaker_realignment.py # Réalignement locuteur/ponctuation au niveau mot
@@ -350,6 +351,8 @@ Granite Speech 4.1 2B est intégré comme backend expérimental `granite`, désa
 Mistral **Voxtral Mini 3B** (`voxtral`, Apache-2.0, non-gated) est intégré comme backend expérimental via `VoxtralForConditionalGeneration` (transformers ≥ 4.57) + `mistral-common[audio]`. Mode « pure transcription » du modèle avec **langue forcée nativement** (`apply_transcription_request` — piège : un `ndarray` exige `format=["wav"]` et `return_tensors="pt"`). Modèle local `models/voxtral-mini-3b-2507/` si présent, sinon repli automatique sur l'identifiant HF (cache) — la page « Modèles » sait le télécharger (catalogue non-gated, ~9,3 Go). Sur le corpus de réunions réelles (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`), meilleur WER des quatre backends contre référence humaine. Comme les autres backends LLM-STT, il n'émet ni `no_speech_prob` ni confiance mot : le garde-fou `debit_parole_anormal` de `segment_reliability` signale ses remplissages éventuels sur audio quasi muet (segment long à débit absurde), sans jamais supprimer de texte.
 
 **Fallback automatique Granite sur audio dégradé :** `PipelineService._config_for_mode()` bascule de `granite` vers le backend de production configuré dans `self.config` (ou `cohere` si celui-ci est aussi `granite`) quand `audio_quality_decision.json` indique `level=degrade` ou que `audio_preflight.json` contient le flag `audio_tres_faible`. Le backend de fallback effectivement utilisé est logué et tracé dans `metadata/transcription_metadata.json`.
+
+**Kroko-ASR** (`kroko_transcriber.py`, backend `kroko`) est le **seul backend 100 % CPU** — il fonctionne sans aucun GPU (`vram_mb = 0`, aucune réservation GPU : garde `required_mb <= 0` dans `_reserve_gpu_phase`/`_gpu_session`). Modèles Zipformer2 **streaming par langue** de Banafo (community CC-BY-SA, ~155 Mo/langue, 10 langues dont FR/EN), exécutés par `sherpa-onnx` (wheel autonome). Sur le corpus de réunions réelles, la variante FR-128 égale les meilleurs moteurs GPU (cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`), sortie ponctuée et casée. Les poids sont publiés dans un conteneur `.data` maison (blocs préfixés par longueur uint32 LE : en-tête JSON + encoder/decoder/joiner ONNX + tokens.txt) : `extract_container()` l'extrait au premier chargement dans `kroko.model_dir`. Résolution du `.data` : dossier local → cache HF → téléchargement HF à la demande ; repli de variante 128 → 64 (certaines langues n'existent qu'en 64). La page « Modèles » télécharge le snapshot complet (~3,2 Go, les 10 langues, non-gated). Segments construits depuis les **timestamps par token** du transducer (coupe sur silence > `segment_max_gap_s` ou durée > `segment_max_len_s`). La langue du job choisit le modèle ; un recognizer est chargé par langue (~3,6 s) et gardé en cache.
 
 **Parakeet TDT 0.6B v3** (`parakeet_transcriber.py`) est intégré comme backend expérimental `parakeet`, utilisant NeMo (`nemo_toolkit[asr]`). Il utilise `ASRModel.from_pretrained()` au lieu du pipeline Transformers `generate()`. Particularités vs les autres backends : auto-détection de langue (25 langues), ponctuation et timestamps natifs, `rel_pos_local_attn` pour l'audio long (jusqu'à 3h). NeMo ignore `device_map` → `ParakeetTranscriber.load()` appelle `torch.cuda.set_device()` avant chargement. Pas de word boosting possible (pas d'équivalent hotwords/biasing). Documenté dans `docs/PARAKEET_STT_INTEGRATION.md`.
 
@@ -760,7 +763,7 @@ Constantes : `_COHERE_MODEL_REPO = "CohereLabs/cohere-transcribe-03-2026"`, `_SU
 **`transcriber_factory.py` — `TranscriberFactory`**
 | Méthode | Description |
 |---|---|
-| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet` ou `voxtral`) |
+| `create_transcriber(config, backend, device) -> BaseTranscriber` | Instancie le transcriber selon le backend demandé (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral` ou `kroko`) |
 | `list_available_backends()` | Liste les backends disponibles |
 | `get_backend_vram_mb(backend)` | VRAM estimée pour un backend |
 

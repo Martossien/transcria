@@ -6,6 +6,32 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [Unreleased]
+
+### Added
+- **Backend STT Kroko-ASR (`kroko`) — le premier backend 100 % CPU** : modèles Zipformer2
+  streaming **par langue** de Banafo (community CC-BY-SA, ~155 Mo/langue, 10 langues dont
+  FR/EN) exécutés par `sherpa-onnx`. **Aucun GPU requis, aucune réservation VRAM** (garde
+  `0 Mo` dans le runner). Sur le corpus de réunions réelles, la variante FR égale les
+  meilleurs moteurs GPU du banc (WER 0,43 vs 0,427 pour le leader — cf.
+  `docs/STT_BENCHMARK_REAL_MEETINGS.md`), sortie ponctuée et casée, ~30× temps réel sur
+  8 threads CPU. La langue du job choisit le modèle ; conteneur `.data` extrait au premier
+  chargement ; résolution dossier local → cache HF → téléchargement à la demande (repli de
+  variante 128 → 64). Téléchargeable depuis la page « Modèles » (snapshot ~3,2 Go, les
+  10 langues) ou `hf download Banafo/Kroko-ASR`. Nouvelle dépendance `sherpa-onnx`
+  (wheel autonome ~20 Mo, installée par `pip install -r requirements.txt`). Utilisable
+  aussi comme secondaire multi-STT à coût VRAM nul
+  (`workflow.multi_stt.secondary_backend: kroko`).
+- **`docs/EXTERNAL_STT_RUNTIMES.md`** : recette de branchement des runtimes STT C++
+  externes ([audio.cpp](https://github.com/0xShug0/audio.cpp),
+  [parakeet.cpp](https://github.com/mudler/parakeet.cpp)) sur l'endpoint distant
+  OpenAI-compatible existant — **configuration seule, zéro code** ; qualifiés sur le corpus
+  réel avec de très bonnes surprises (section « Bonus round » du benchmark).
+- Benchmark réunions réelles enrichi : parakeet.cpp (Nemotron 0,49 — 8/8), Kroko-ASR
+  (0,43 sur CPU seul), VibeVoice-ASR (vLLM), et enseignements transverses (le runtime fait
+  partie du résultat ; la détection automatique de langue est le jumeau côté modèle du piège
+  de la traduction silencieuse).
+
 ## [0.3.4] — 2026-07-11
 
 Version **moteurs STT & benchmarks**. Le choix des moteurs de transcription cesse d'être une

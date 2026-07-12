@@ -5,7 +5,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral")
+_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko")
 
 
 def create_transcriber(
@@ -43,6 +43,8 @@ def create_transcriber(
         return _create_parakeet(config, device)
     elif backend == "voxtral":
         return _create_voxtral(config, device)
+    elif backend == "kroko":
+        return _create_kroko(config, device)
 
     return _create_cohere(config, device)
 
@@ -230,6 +232,33 @@ def _effective_voxtral_config(config: dict) -> dict:
     return _deep_merge(defaults, current)
 
 
+def _create_kroko(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.kroko_transcriber import KrokoTranscriber
+
+    kroko_cfg = _effective_kroko_config(config)
+    return KrokoTranscriber(
+        model_dir=kroko_cfg.get("model_dir"),
+        repo_id=kroko_cfg.get("repo_id"),
+        variant=kroko_cfg.get("variant", "128"),
+        device=device,  # ignoré (CPU pur) — gardé pour le contrat commun
+        num_threads=kroko_cfg.get("num_threads", 8),
+        decoding_method=kroko_cfg.get("decoding_method", "greedy_search"),
+        tail_padding_s=kroko_cfg.get("tail_padding_s", 0.66),
+        segment_max_gap_s=kroko_cfg.get("segment_max_gap_s", 0.8),
+        segment_max_len_s=kroko_cfg.get("segment_max_len_s", 15.0),
+        collapse_repetition_loops=kroko_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=kroko_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=kroko_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=kroko_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def _effective_kroko_config(config: dict) -> dict:
+    current = config.get("kroko", {})
+    defaults = get_default_config()["kroko"]
+    return _deep_merge(defaults, current)
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 
@@ -263,4 +292,6 @@ def get_backend_vram_mb(backend: str, config: dict) -> int:
         return int(config.get("gpu", {}).get("parakeet_vram_mb", get_default_config()["gpu"]["parakeet_vram_mb"]))
     elif backend == "voxtral":
         return int(config.get("gpu", {}).get("voxtral_vram_mb", get_default_config()["gpu"]["voxtral_vram_mb"]))
+    elif backend == "kroko":
+        return 0  # CPU pur (sherpa-onnx) — aucune VRAM, aucune réservation GPU
     return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))

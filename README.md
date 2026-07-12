@@ -176,8 +176,14 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
 
 - **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 /
   faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
-  Parakeet TDT (experimental) — served locally or by a remote OpenAI-compatible server
-  (vLLM, SGLang). We benchmark them on **real French meeting recordings** against a
+  Parakeet TDT (experimental), and **Kroko-ASR — the no-GPU option**: per-language
+  streaming Zipformer models (~155 MB) on sherpa-onnx that matched our best GPU engines
+  on real meetings, **CPU only**. All can also be served by a remote OpenAI-compatible
+  server (vLLM, SGLang) — and we verified that young C++ runtimes like
+  [audio.cpp](https://github.com/0xShug0/audio.cpp) and
+  [parakeet.cpp](https://github.com/mudler/parakeet.cpp) plug into that same remote
+  endpoint with **zero code, configuration only**, with very good surprises on quality
+  and speed. We benchmark everything on **real French meeting recordings** against a
   professional human transcript — WER, an English-drift detector, a multi-run LLM judge
   and human reading of the failure modes:
   [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (English).
@@ -336,6 +342,7 @@ Full documentation lives in [`docs/`](docs/README.md) (French). A few entry poin
 - [docs/DOCKER.md](docs/DOCKER.md) — containerized deployment
 - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, pipeline, API, database
 - [docs/CONFIG_REFERENCE.md](docs/CONFIG_REFERENCE.md) — complete `config.yaml` reference
+- [docs/EXTERNAL_STT_RUNTIMES.md](docs/EXTERNAL_STT_RUNTIMES.md) — plugging external C++ STT servers (audio.cpp, parakeet.cpp), configuration only
 
 ## License
 
