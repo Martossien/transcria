@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.3.4** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.3.5** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.3.5** | **Nouveaux moteurs & éditeur plus malin** — backend MOSS-Transcribe-Diarize (transcription + locuteurs + timestamps en une passe, meilleur WER texte de notre benchmark) et Kroko-ASR, le backend **sans GPU** (155 Mo par langue, CPU seul, au niveau de nos moteurs GPU sur réunions réelles) ; après édition du SRT, l'éditeur propose un **DOCX rapide** ou une **synthèse mise à jour par la LLM** (proposée, jamais automatique, versionnée) |
 | **0.3.4** | **Moteurs STT & benchmarks** — moteurs mesurés sur de vraies réunions françaises contre référence humaine ([résultats publiés](docs/STT_BENCHMARK_REAL_MEETINGS.md)) ; nouveau backend Mistral Voxtral Mini 3B (Apache-2.0, meilleur WER mesuré) ; multi-STT ciblé **activé par défaut** (retranscription arbitrée des seuls segments dégradés — coût nul sur audio sain, best-effort) |
 | **0.3.3** | Finitions — les dernières poches de français en interface anglaise fermées ; la langue des livrables suit désormais le choix d'interface |
 | **0.3.2** | **Bilingue français / anglais de bout en bout** — interface web, livrables générés (compte-rendu, corrections, DOCX, rapports), installateur, `doctor`, PDF de consentement vocal. Le défaut reste le français ; l'anglais est un choix explicite (sélecteur dans la barre de navigation, préférence par utilisateur, langue des livrables par job, question à l'installation). Ajouter d'autres langues ne demande aucune refonte |

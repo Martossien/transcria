@@ -6,7 +6,17 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [Unreleased]
+## [0.3.5] — 2026-07-12
+
+Version **nouveaux moteurs & éditeur plus malin**. Deux backends STT rejoignent le catalogue
+après qualification sur le corpus de réunions réelles : **Kroko-ASR**, le premier backend
+**100 % CPU** (aucun GPU requis, au niveau des moteurs GPU sur nos mesures), et
+**MOSS-Transcribe-Diarize**, la seule LLM audio unifiée du banc qui tient les réunions
+réelles — transcription + locuteurs + timestamps **en une passe** (meilleur WER texte
+mesuré). Côté utilisateur, l'éditeur SRT propose désormais, après corrections, de
+**resynchroniser la synthèse** par une passe LLM au choix — jamais automatique, toujours
+versionnée. **Aucune migration de base de données** ; une nouvelle dépendance Python
+(`sherpa-onnx`) est installée par `pip install -r requirements.txt`.
 
 ### Added
 - **Éditeur SRT → DOCX au choix : rapide ou synthèse resynchronisée.** Après « Enregistrer

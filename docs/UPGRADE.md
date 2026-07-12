@@ -139,6 +139,17 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.4 → 0.3.5** : deux nouveaux backends STT (`kroko` — CPU pur, sans GPU ; `moss` —
+  transcription + locuteurs + timestamps en une passe) et l'éditeur SRT qui propose la
+  **resynchronisation de la synthèse** après corrections (passe LLM au choix, jamais
+  automatique, versionnée). **Aucune migration Alembic**, aucun changement de schéma. Une
+  nouvelle dépendance Python (`sherpa-onnx`, wheel autonome ~20 Mo) : relancer
+  `venv/bin/pip install -r requirements.txt` (fait automatiquement par `install.sh` et les
+  images Docker). Les modèles restent opt-in : Kroko via la page « Modèles » (~3,2 Go les
+  10 langues) ; MOSS via la page « Modèles » (~3,7 Go) **plus** son site Transformers 5
+  isolé — `venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site`
+  (l'image `:bundled` bake les deux). Un `config.yaml` existant reste valide (nouvelles
+  sections avec défauts sûrs).
 - **0.3.3 → 0.3.4** : moteurs STT & benchmarks (backend Voxtral, multi-STT ciblé expérimental,
   benchmark publié). **Aucune migration Alembic**, aucun changement de schéma. Une nouvelle
   dépendance Python (`mistral-common[audio]`) est requise : relancer
