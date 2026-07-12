@@ -80,3 +80,35 @@ def test_engines_endpoint_requires_api_key():
     client, _ = _client(EnsureResult("ready", 3, "x"))
     r = client.post("/engines/ensure", json={"engine": "cohere"})  # sans clé
     assert r.status_code == 401
+
+
+def test_ensure_moteur_servi_avec_health_path_custom():
+    """Topologie nœud de ressources : un moteur runtime C++ (health_path/health_mode
+    du manifeste) est résolu et transmis au superviseur avec ses champs santé."""
+    app = create_app(
+        config={
+            "inference": {"auth": {"api_key": "secret"}},
+            "resource_node": {"engines": [
+                {"name": "nemotron", "script": "scripts/launch_stt_nemotron.sh",
+                 "gpu": 5, "gpu_mem": 0.10, "port": 8022,
+                 "health_path": "/health", "health_mode": "http_2xx"},
+            ]},
+            "voice_enrollment": {"embedding": {"device": "cpu"}},
+        },
+        engine=_FakeEngine(), diarize_engine=_FakeEngine(),
+    )
+
+    seen = {}
+
+    class _Sup:
+        def ensure_ready(self, spec):
+            seen["spec"] = spec
+            return EnsureResult("launched", 5, "ok")
+
+    app.extensions["stt_supervisor"] = _Sup()
+    app.config.update({"TESTING": True})
+    client = app.test_client()
+    r = client.post("/engines/ensure", json={"engine": "nemotron"}, headers=_AUTH)
+    assert r.status_code == 200
+    assert seen["spec"].health_url.endswith(":8022/health")
+    assert seen["spec"].health_mode == "http_2xx"
