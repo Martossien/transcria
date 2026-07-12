@@ -1525,3 +1525,108 @@ class TestKrokoTranscriber:
         t = KrokoTranscriber()
         assert t._segments_from_tokens([], [], 5.0) == []
         assert t._segments_from_tokens([" a"], [], 5.0) == []
+
+
+class TestMossTranscriber:
+    """Backend MOSS-TD (worker Transformers 5 isolé) : disponibilité par
+    moss_site, garde des trous inter-segments (omission silencieuse SIGNALÉE
+    jamais corrigée), locuteurs une-passe en métadonnée, 4000 Mo de VRAM."""
+
+    def _transcriber(self, tmp_path, **kw):
+        from transcria.stt.moss_transcriber import MossTranscriber
+
+        site = tmp_path / "site"
+        site.mkdir(exist_ok=True)
+        return MossTranscriber(moss_site=str(site), **kw)
+
+    def test_moss_backend_is_available_in_factory(self):
+        assert "moss" in list_available_backends()
+
+    def test_create_moss_transcriber_from_config(self, tmp_path):
+        from transcria.stt.moss_transcriber import MossTranscriber
+
+        config = {"moss": {"moss_site": str(tmp_path), "max_new_tokens": 4096, "gap_alert_s": 5.0}}
+        transcriber = create_transcriber(config, backend="moss", device="cuda:2")
+        assert isinstance(transcriber, MossTranscriber)
+        assert transcriber.max_new_tokens == 4096
+        assert transcriber.gap_alert_s == 5.0
+
+    def test_moss_vram_from_config(self):
+        from transcria.stt.transcriber_factory import get_backend_vram_mb
+
+        assert get_backend_vram_mb("moss", {}) == 4000
+        assert get_backend_vram_mb("moss", {"gpu": {"moss_vram_mb": 6000}}) == 6000
+
+    def test_unavailable_without_site(self):
+        from transcria.stt.moss_transcriber import MossTranscriber
+
+        t = MossTranscriber(moss_site="/chemin/inexistant")
+        assert not t.available
+        out = t.transcribe(None, audio_array=None)
+        assert out and "error" in out[0]
+
+    def test_gap_guard_flags_silent_omission(self, tmp_path):
+        t = self._transcriber(tmp_path, gap_alert_s=10.0)
+        segments = [
+            {"start": 0.0, "end": 188.4, "text": "avant"},
+            {"start": 210.4, "end": 220.0, "text": "après"},
+        ]
+        gaps = t._detect_gaps(segments)
+        assert gaps == [{"from": 188.4, "to": 210.4, "gap_s": 22.0}]
+        # le segment aval est MARQUÉ, aucun texte modifié ni inséré
+        assert segments[1]["transcription_gap_before_s"] == 22.0
+        assert segments[0]["text"] == "avant" and segments[1]["text"] == "après"
+
+    def test_gap_guard_quiet_on_contiguous_segments(self, tmp_path):
+        t = self._transcriber(tmp_path, gap_alert_s=10.0)
+        segments = [
+            {"start": 0.0, "end": 5.0, "text": "a"},
+            {"start": 5.2, "end": 9.0, "text": "b"},
+        ]
+        assert t._detect_gaps(segments) == []
+        assert "transcription_gap_before_s" not in segments[1]
+
+    def test_gap_guard_disabled(self, tmp_path):
+        t = self._transcriber(tmp_path, gap_alert_s=0)
+        assert t._detect_gaps([{"start": 0, "end": 1, "text": "a"},
+                               {"start": 100, "end": 101, "text": "b"}]) == []
+
+    def test_worker_output_parsing_and_speakers(self, tmp_path, monkeypatch):
+        import json as _json
+        import subprocess as _subprocess
+        from types import SimpleNamespace as _NS
+
+        t = self._transcriber(tmp_path, gap_alert_s=10.0)
+        response = {"segments": [
+            {"start": 0.0, "end": 4.0, "speaker": "S01", "text": "Bonjour à tous."},
+            {"start": 30.0, "end": 34.0, "speaker": "S02", "text": "On commence."},
+        ]}
+
+        def fake_run(cmd, **kwargs):
+            out = next(a for i, a in enumerate(cmd) if cmd[i - 1] == "--output")
+            from pathlib import Path as _P
+            _P(out).write_text(_json.dumps(response), encoding="utf-8")
+            return _NS(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(_subprocess, "run", fake_run)
+        wav = tmp_path / "a.wav"
+        wav.write_bytes(b"RIFF")
+        segments = t.transcribe(wav, language="fr")
+        assert [s["text"] for s in segments] == ["Bonjour à tous.", "On commence."]
+        # fichier entier → étiquettes une-passe posées en speaker ET moss_speaker
+        assert segments[0]["speaker"] == "S01" and segments[0]["moss_speaker"] == "S01"
+        # trou de 26 s entre les deux → signalé
+        assert segments[1]["transcription_gap_before_s"] == 26.0
+        assert t.get_metadata()["transcription_gaps"] == [{"from": 4.0, "to": 30.0, "gap_s": 26.0}]
+
+    def test_worker_failure_returns_error_segment(self, tmp_path, monkeypatch):
+        import subprocess as _subprocess
+        from types import SimpleNamespace as _NS
+
+        t = self._transcriber(tmp_path)
+        monkeypatch.setattr(_subprocess, "run",
+                            lambda *a, **k: _NS(returncode=1, stdout="", stderr="boom"))
+        wav = tmp_path / "a.wav"
+        wav.write_bytes(b"RIFF")
+        out = t.transcribe(wav)
+        assert out and "error" in out[0]

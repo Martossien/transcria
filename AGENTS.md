@@ -202,6 +202,8 @@ transcria/
       parakeet_transcriber.py# ParakeetTranscriber — NVIDIA Parakeet TDT 0.6B v3 expérimental (NeMo, auto-détection langue, timestamps natifs)
       voxtral_transcriber.py# VoxtralTranscriber — Mistral Voxtral Mini 3B expérimental (Apache-2.0, non-gated, langue forcée nativement, mistral-common)
       kroko_transcriber.py  # KrokoTranscriber — Kroko-ASR zipformer2 streaming par langue (sherpa-onnx, CPU PUR : vram_mb=0, aucune réservation GPU ; conteneur .data extrait au 1er chargement)
+      moss_transcriber.py   # MossTranscriber — MOSS-TD 0,9B expérimental : ASR+locuteurs+timestamps UNE PASSE (Apache-2.0) ; worker subprocess Transformers 5 isolé (moss_site), garde d'omission silencieuse gap_alert_s
+      _moss_worker.py       # Worker MOSS (PYTHONPATH → moss.moss_site ; 2 modes : fichier entier / tours pyannote batchés)
       anti_hallucination.py # Détection/réduction boucles répétitives ASR
       lexicon_hotwords.py   # Construction hotwords Whisper depuis lexique de session (option expérimentale)
       contextual_biasing.py # Trie/LogitsProcessor expérimental Cohere depuis lexique de session

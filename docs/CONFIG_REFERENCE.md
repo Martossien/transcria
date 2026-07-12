@@ -283,6 +283,36 @@ Activer avec `models.stt_backend=kroko`.
 
 **VRAM :** aucune (0 Mo — pas de clé `gpu.*`).
 
+### `moss`
+
+Backend STT expérimental **MOSS-Transcribe-Diarize 0,9B** (OpenMOSS, Apache-2.0,
+non-gated) : transcription + **étiquettes locuteur + timestamps fins en une
+passe**. Meilleur WER texte de notre banc de réunions réelles
+(cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`). Exige Transformers 5.x → worker
+subprocess sur un site isolé (même patron que `cohere_tf5`) :
+
+```bash
+pip install --target /srv/transcria_moss_site "transformers>=5,<6" \
+    git+https://github.com/OpenMOSS/MOSS-Transcribe-Diarize.git
+```
+
+Activer avec `models.stt_backend=moss`. Pas de forçage de langue (le modèle
+transcrit dans la langue source). Son défaut mesuré est l'**omission
+silencieuse** (parole sautée sans anomalie visible) — d'où la garde de trous.
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Marqueur d'activation (le backend effectif reste `models.stt_backend`) |
+| `model_path` | string | `"OpenMOSS-Team/MOSS-Transcribe-Diarize"` | Identifiant HF ou chemin local |
+| `moss_site` | string | `"/tmp/transcria_moss_site"` | Site-packages isolé Transformers 5 + paquet moss (cf. commande ci-dessus) |
+| `timeout_s` | int | `7200` | Timeout du worker subprocess |
+| `max_new_tokens` | int | `8192` | Budget de génération (suffisant pour ~5 min d'audio ; monter pour du long-forme) |
+| `gap_alert_s` | float | `10.0` | Trou inter-segments qui déclenche le signalement d'omission (`transcription_gap_before_s` sur le segment aval + métadonnées) ; `0` désactive |
+| `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives après génération |
+| `repetition_loop_*` | int | `4` / `10` / `2` | Réglages de la réduction de boucles (mêmes sémantiques que les autres backends) |
+
+**VRAM :** `gpu.moss_vram_mb` (défaut `4000`).
+
 ### `granite`
 
 Backend STT expérimental IBM Granite Speech 4.1 2B. Il reste désactivé par défaut

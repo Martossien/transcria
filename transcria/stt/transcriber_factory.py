@@ -5,7 +5,7 @@ from transcria.stt.base_transcriber import BaseTranscriber
 
 logger = logging.getLogger(__name__)
 
-_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko")
+_STT_BACKENDS = ("cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss")
 
 
 def create_transcriber(
@@ -45,6 +45,8 @@ def create_transcriber(
         return _create_voxtral(config, device)
     elif backend == "kroko":
         return _create_kroko(config, device)
+    elif backend == "moss":
+        return _create_moss(config, device)
 
     return _create_cohere(config, device)
 
@@ -259,6 +261,30 @@ def _effective_kroko_config(config: dict) -> dict:
     return _deep_merge(defaults, current)
 
 
+def _create_moss(config: dict, device: str | None) -> BaseTranscriber:
+    from transcria.stt.moss_transcriber import MossTranscriber
+
+    moss_cfg = _effective_moss_config(config)
+    return MossTranscriber(
+        model_path=moss_cfg.get("model_path"),
+        device=device,
+        moss_site=moss_cfg.get("moss_site"),
+        timeout_s=moss_cfg.get("timeout_s", 7200),
+        max_new_tokens=moss_cfg.get("max_new_tokens", 8192),
+        gap_alert_s=moss_cfg.get("gap_alert_s", 10.0),
+        collapse_repetition_loops=moss_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=moss_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=moss_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=moss_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def _effective_moss_config(config: dict) -> dict:
+    current = config.get("moss", {})
+    defaults = get_default_config()["moss"]
+    return _deep_merge(defaults, current)
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 
@@ -294,4 +320,6 @@ def get_backend_vram_mb(backend: str, config: dict) -> int:
         return int(config.get("gpu", {}).get("voxtral_vram_mb", get_default_config()["gpu"]["voxtral_vram_mb"]))
     elif backend == "kroko":
         return 0  # CPU pur (sherpa-onnx) — aucune VRAM, aucune réservation GPU
+    elif backend == "moss":
+        return int(config.get("gpu", {}).get("moss_vram_mb", get_default_config()["gpu"]["moss_vram_mb"]))
     return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))

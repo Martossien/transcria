@@ -38,6 +38,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_granite(cfg.get("granite", {}), result)
     _check_voxtral(cfg.get("voxtral", {}), result)
     _check_kroko(cfg.get("kroko", {}), result)
+    _check_moss(cfg.get("moss", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
@@ -228,6 +229,7 @@ def _check_gpu(gpu: dict, r: ValidationResult) -> None:
     _check_int_range(gpu, "llm_vram_mb", "gpu.llm_vram_mb", 1000, 500000, r)
     _check_int_range(gpu, "granite_vram_mb", "gpu.granite_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "voxtral_vram_mb", "gpu.voxtral_vram_mb", 1000, 100000, r)
+    _check_int_range(gpu, "moss_vram_mb", "gpu.moss_vram_mb", 1000, 100000, r)
     _check_int_range(gpu, "min_free_vram_mb", "gpu.min_free_vram_mb", 100, 50000, r)
     indices = gpu.get("llm_gpu_indices")
     if indices is not None:
@@ -287,7 +289,7 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
 
 
 def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
-    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko"}
+    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"}
     backend = mod.get("stt_backend", "cohere")
     if not isinstance(backend, str) or backend not in valid:
         r.add_error(
@@ -747,6 +749,24 @@ def _check_voxtral(voxtral: dict, r: ValidationResult) -> None:
     _check_int_range(voxtral, "repetition_loop_min_repeats", "voxtral.repetition_loop_min_repeats", 2, 100, r)
     _check_int_range(voxtral, "repetition_loop_max_phrase_words", "voxtral.repetition_loop_max_phrase_words", 1, 100, r)
     _check_int_range(voxtral, "repetition_loop_keep_repeats", "voxtral.repetition_loop_keep_repeats", 1, 20, r)
+
+
+def _check_moss(moss: dict, r: ValidationResult) -> None:
+    if not moss:
+        return
+    if not isinstance(moss, dict):
+        r.add_error("moss: doit être un objet YAML")
+        return
+    _check_bool(moss, "enabled", "moss.enabled", r)
+    _check_str(moss, "model_path", "moss.model_path", r)
+    _check_str(moss, "moss_site", "moss.moss_site", r)
+    _check_int_range(moss, "timeout_s", "moss.timeout_s", 60, 86400, r)
+    _check_int_range(moss, "max_new_tokens", "moss.max_new_tokens", 256, 65536, r)
+    _check_optional_number(moss, "gap_alert_s", "moss.gap_alert_s", r)
+    _check_bool(moss, "collapse_repetition_loops", "moss.collapse_repetition_loops", r)
+    _check_int_range(moss, "repetition_loop_min_repeats", "moss.repetition_loop_min_repeats", 2, 100, r)
+    _check_int_range(moss, "repetition_loop_max_phrase_words", "moss.repetition_loop_max_phrase_words", 1, 100, r)
+    _check_int_range(moss, "repetition_loop_keep_repeats", "moss.repetition_loop_keep_repeats", 1, 20, r)
 
 
 def _check_kroko(kroko: dict, r: ValidationResult) -> None:

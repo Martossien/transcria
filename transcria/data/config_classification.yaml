@@ -102,6 +102,7 @@ deferred:
 - gpu.parakeet_vram_mb
 - gpu.pyannote_vram_mb
 - gpu.sortformer_vram_mb
+- gpu.moss_vram_mb
 - gpu.voxtral_vram_mb
 - granite.chunk_length_s
 - granite.collapse_repetition_loops
@@ -159,6 +160,16 @@ deferred:
 - kroko.segment_max_len_s
 - kroko.tail_padding_s
 - kroko.variant
+- moss.collapse_repetition_loops
+- moss.enabled
+- moss.gap_alert_s
+- moss.max_new_tokens
+- moss.model_path
+- moss.moss_site
+- moss.repetition_loop_keep_repeats
+- moss.repetition_loop_max_phrase_words
+- moss.repetition_loop_min_repeats
+- moss.timeout_s
 - models.cohere_model_path
 - models.cohere_model_revision
 - models.default_stt_model

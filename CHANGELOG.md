@@ -9,6 +9,17 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
 ## [Unreleased]
 
 ### Added
+- **Backend STT expérimental MOSS-Transcribe-Diarize (`moss`)** — OpenMOSS 0,9B, Apache-2.0 :
+  transcription + **étiquettes locuteur + timestamps fins en une seule passe**, meilleur WER
+  texte de notre banc de réunions réelles (0,41 — cf. `docs/STT_BENCHMARK_REAL_MEETINGS.md`),
+  seule LLM audio unifiée qui tient les fenêtres de 5 min sans boucler. Désactivé par défaut
+  (`models.stt_backend=moss` pour l'essayer). Exige Transformers 5.x → worker subprocess sur
+  site isolé `moss.moss_site` (même patron que `cohere_tf5`, venv projet intact) ; voie
+  batchée `transcribe_prechunked` (modèle chargé une fois pour tous les tours pyannote).
+  **Garde d'omission silencieuse** : son seul vice mesuré (saut de ~22 s de parole, invisible
+  au WER) est détecté par trou inter-segments (`moss.gap_alert_s`) et SIGNALÉ
+  (`transcription_gap_before_s` + métadonnées) — jamais corrigé automatiquement.
+  Téléchargeable depuis la page « Modèles » (snapshot ~2,5 Go, non-gated).
 - **Backend STT Kroko-ASR (`kroko`) — le premier backend 100 % CPU** : modèles Zipformer2
   streaming **par langue** de Banafo (community CC-BY-SA, ~155 Mo/langue, 10 langues dont
   FR/EN) exécutés par `sherpa-onnx`. **Aucun GPU requis, aucune réservation VRAM** (garde

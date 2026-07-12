@@ -187,7 +187,9 @@ upload -> diagnostic audio -> synthèse rapide (STT + LLM) -> contexte, particip
 
 - **Moteurs STT** (interchangeables) : Cohere transcribe (défaut), Whisper large-v3 /
   faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
-  Parakeet TDT (expérimental), et **Kroko-ASR — l'option sans GPU** : modèles Zipformer
+  Parakeet TDT (expérimental), **MOSS-Transcribe-Diarize** (expérimental — transcription,
+  locuteurs et timestamps fins en une seule passe ; meilleur WER texte de notre benchmark),
+  et **Kroko-ASR — l'option sans GPU** : modèles Zipformer
   streaming par langue (~155 Mo) sur sherpa-onnx, au niveau de nos meilleurs moteurs GPU
   sur réunions réelles, **sur CPU seul**. Tous peuvent aussi être servis par un serveur
   distant compatible OpenAI (vLLM, SGLang) — et nous avons vérifié que de jeunes runtimes

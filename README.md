@@ -176,7 +176,9 @@ upload -> audio diagnosis -> quick summary (STT + LLM) -> context, participants,
 
 - **STT backends** (interchangeable): Cohere transcribe (default), Whisper large-v3 /
   faster-whisper, Mistral Voxtral Mini 3B (Apache-2.0), IBM Granite Speech, NVIDIA
-  Parakeet TDT (experimental), and **Kroko-ASR — the no-GPU option**: per-language
+  Parakeet TDT (experimental), **MOSS-Transcribe-Diarize** (experimental — transcription,
+  speaker labels and fine timestamps in a single pass; best text WER of our benchmark),
+  and **Kroko-ASR — the no-GPU option**: per-language
   streaming Zipformer models (~155 MB) on sherpa-onnx that matched our best GPU engines
   on real meetings, **CPU only**. All can also be served by a remote OpenAI-compatible
   server (vLLM, SGLang) — and we verified that young C++ runtimes like
