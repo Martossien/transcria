@@ -18,7 +18,7 @@
 4. [Diagnostic](#4-diagnostic)
 5. [Architecture cible, étoile polaire et invariants d'exploitation](#5-architecture-cible)
    (topologies, base de données, concurrence, i18n — §5.3 à §5.7)
-6. [Plan d'action détaillé — matrice de validation + vagues A0→C7](#6-plan-daction-détaillé)
+6. [Plan d'action détaillé — matrice de validation + vagues A0→C8](#6-plan-daction-détaillé)
 7. [Séquencement, dépendances, efforts](#7-séquencement-et-efforts)
 8. [Garde-fous permanents](#8-garde-fous-permanents)
 9. [Propositions écartées, avec justification](#9-ce-quon-ne-fait-pas)
@@ -269,6 +269,23 @@ Les problèmes, mesurés :
   + pilotage réel pour les features (l'éditeur SRT et la sync-summary ont été validés
   ainsi) — c'est le filet à préserver.
 
+### 3.11 La documentation d'API — une table manuelle qui dérive
+
+Inventaire : **122 déclarations de routes** dans 9 fichiers (web, editor, queue, voice,
+meeting_types, central_lexicon, auth, audit, i18n) ; **24 fonctions de route sur 109 ont
+une docstring**. La seule documentation d'API est la table de `TECHNICAL.md` §4.11 —
+**maintenue à la main**, donc structurellement en retard sur le code (le patron exact que
+le projet a éliminé pour la config en générant `CONFIG_REFERENCE.md` depuis le schéma,
+avec garde CI). Pas d'OpenAPI, pas de doc dédiée.
+
+Trois contrats d'API distincts, aux enjeux différents :
+
+| Contrat | Consommateur | Garde actuelle |
+|---|---|---|
+| `/api/...` interne (37 routes web) | notre propre JS (34 fetch) | aucune (→ A3 en crée une) |
+| API inter-nœuds (`inference_service` : `/diarize`, `/voice_embed`, `/capabilities`, `/engines/ensure`) | les topologies split — **le contrat le plus critique** | prose dans SERVICE_RESSOURCES_GPU.md + tests |
+| Sous-ensemble scriptable (upload → process → status → download) | les auto-hébergeurs qui scriptent | rien ne le distingue de l'interne |
+
 ## 4. Diagnostic
 
 Le mécanisme d'accumulation : une feature = une route + une phase + une étape → chacune
@@ -440,6 +457,7 @@ disponibles, du moins cher au plus cher :
 | C5 | ✔ | — | ✔ (1 run final) | — | — | — |
 | C6 install | ✔ | — | — | — | — | — + `test_install_e2e` + build Docker resource-node |
 | C7 docker | ✔ (gardes texte) | — | — | — | — | build local des Dockerfiles touchés + script bundled |
+| C8 doc API | ✔ (génération+diff) | — | — | — | — | — |
 
 Lecture : C1 est la vague la plus « topologique » (elle touche le routage
 `_should_use_remote_stt` — un backend servi n'a PAS de builder local et doit rester
@@ -855,10 +873,43 @@ Quatre livrables, du moins cher au plus structurant (état des lieux §3.9) :
 **DoD** : les 3 gardes rouges sur mutation volontaire (test du test) ; release bundled
 rejouée via le script sur la prochaine version ; zéro copie de SHA non gardée.
 
+#### C8 — Référence d'API générée, jamais manuelle *(effort M)*
+
+Reproduire le patron qui a marché pour la config (schéma → `CONFIG_REFERENCE.md` + garde
+CI) sur la surface HTTP (état des lieux §3.11) :
+
+1. **`scripts/generate_api_reference.py`** : construit l'app (`create_app(...,
+   start_background_services=False)` — dépend de C4), parcourt `app.url_map` et émet
+   `docs/API_REFERENCE.md` — pour chaque règle : URL, méthodes, module d'origine,
+   exigences d'auth (détectées sur les décorateurs `login_required`/permissions),
+   première ligne de docstring. Sections par blueprint + une section dédiée
+   **inference_service** (même génération sur son app Flask — le contrat inter-nœuds
+   cesse d'être de la prose).
+2. **Garde CI** : régénération + diff (comme `i18n_check` et la classification config) —
+   une route ajoutée sans docstring ou non régénérée = CI rouge.
+3. **Prérequis docstrings** (85 routes muettes) : comblé PAR la vague A2 — chaque route
+   déplacée reçoit sa ligne au passage ; d'ici là, la garde tolère les manquantes en
+   **ratchet** (le compte ne peut que baisser).
+4. **Marquage du sous-ensemble scriptable** : les routes du parcours
+   upload→process→status→download portent un marqueur (`__api_stable__ = True` ou
+   décorateur) rendu dans la référence — les auto-hébergeurs savent ce qui est un
+   contrat et ce qui est interne.
+5. La table manuelle de `TECHNICAL.md` §4.11 devient un **pointeur** vers le fichier
+   généré (la dérive meurt à la source).
+
+**Non retenu, avec raison** : rétrofit OpenAPI (flask-smorest/apispec) — imposerait de
+réécrire les 122 routes pour des consommateurs qui sont notre propre JS et des scripts
+d'opérateurs, pas des générateurs de SDK. Si un vrai besoin externe émerge, le script (1)
+collecte déjà les métadonnées nécessaires pour émettre un JSON OpenAPI en plus du Markdown.
+
+**DoD** : `API_REFERENCE.md` généré et gardé en CI ; section inference_service présente ;
+ratchet docstrings actif ; TECHNICAL.md §4.11 réduit au pointeur ; sous-ensemble stable
+marqué et rendu.
+
 ## 7. Séquencement et efforts
 
 ```
-A0 (S) ──► A1 (S) ──► A2 (L) ──► A3 (M) ──► C2 (M) ─► C5 (M) ─► C6 (L) ; C7 (M) indépendante, à tout moment après A0
+A0 (S) ──► A1 (S) ──► A2 (L) ──► A3 (M) ──► C2 (M) ─► C5 (M) ─► C6 (L) ; C7 (M) indépendante, à tout moment après A0 ; C8 (M) après C4 (et profite d'A2)
              │                                  ▲
              └──► B0 (M) ──► B1 (XL) ──► B2 (L) ┴─► C1 (M) ─► C4 (M) ─► B3 (M)
                                                         └──► C3 (M, étalé)
@@ -970,6 +1021,8 @@ l'annexe C.
 | JS inline dans les templates | 548 l. | 0 (hors init 1 ligne) | A3 |
 | Contrat JS↔routes (34 fetch) | aucune garde | test de contrat en CI | A3 |
 | Plus gros template | job_wizard.html : 1 110 l. | < 400 l. | A3 |
+| Doc API | table manuelle driftante (TECHNICAL §4.11) | générée de url_map + garde CI | C8 |
+| Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
