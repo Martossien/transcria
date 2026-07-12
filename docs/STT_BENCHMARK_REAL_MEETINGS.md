@@ -207,6 +207,7 @@ Same reference, same scorer, different serving path.
 | Nemotron 3.5 ASR 0.6B (parakeet.cpp, f16 GGUF, `--lang fr`) | **0.49** *(8/8, zero empty)* | **7–8 s** (CLI, incl. model load) | one card, ~1.4 GB weights | same model, different runtime: no session bug (3 identical back-to-back server replies), no empty windows, 0 % EN drift — best small-model result of the whole test |
 | Parakeet TDT 0.6B v3 (parakeet.cpp, auto language) | 0.93 *(8/8, heavy truncation)* | 5 s | one card, small | its automatic language detection drifted to English on ~all windows (11–36 % EN function words) and there is no way to force a language on this model — unusable on narrowband French |
 | Kroko-ASR FR Community 128 (sherpa-onnx, **CPU only**, 8 threads) | **0.43** *(8/8, zero empty)* | **10 s** | **no GPU at all**, 155 MB weights | French-dedicated streaming Zipformer; punctuated, cased output; best single-window score of the entire test (0.20); the low-latency FR-64 variant scores the same (0.43) |
+| NVIDIA Audex 30B-A3B (official vLLM plugin, TP=8, ASR recipe) | 4.74 *(7/8 windows loop to the token cap)* | 7–50 s | **8 × 24 GB**, 67 GB weights | unified audio LLM, non-commercial license (bench only); with default settings it leaks its English reasoning scratchpad instead of transcribing; with the official recipe (`enable_thinking:false` + placeholder tokens blocked) it produces good French but loops on every real 5-min window except one — on a 30 s excerpt the transcription is excellent, so the failure is length-induced, VibeVoice-style |
 | VibeVoice-ASR 9B (vLLM, TP=4) | raw: 4.09 *(8/8 repetition loops)* — with the official auto-recovery client: 0.23–0.48 on 5/8 windows, 3 empty | 20–70 s | 4 × 24 GB | best CER of the whole test on its good windows, plus native speaker+timestamp structure (it under-counted speakers: 3–7 found vs 5–11 in reference) |
 
 What we take away:
@@ -244,6 +245,14 @@ What we take away:
   the model exposes no language forcing. Prompt-conditioned models (Nemotron
   `--lang fr`) or explicit language pinning are the only safe options on
   real-world audio.
+- **Unified audio LLMs keep failing the same exam.** Audex 30B-A3B is the
+  second joint audio-text giant (after VibeVoice-ASR) that transcribes
+  clip-sized excerpts beautifully and then loops without recovery on real
+  5-minute meeting windows. Both also need their vendor's exact client recipe
+  to behave at all (thinking disabled, special tokens blocked, temperature
+  escalation…). Until one of them survives a full window, a 155 MB dedicated
+  transducer remains the better meeting engine — by three orders of magnitude
+  less compute.
 - **Deployment traps collected on the way** (all reproducible): a hardcoded
   `max_tokens` in the vendor's own test client silently returning empty results
   on capped-context servers; the audio encoder allocating *outside* vLLM's
