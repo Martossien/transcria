@@ -170,11 +170,8 @@ moteur**, à chaque fois.
   `transcria.web.i18n.select_locale` ; `queue/routes.py:20` importe
   `transcria.web.i18n_js.N_` — trois paquets métier dépendent du paquet d'interface ;
 - `web/editor_routes.py:61` importe la **privée** `_get_job_for_api` de `web/routes.py` ;
-- double génération d'installeur : `install_postgres.py` (761 l.), `install_arbitrage.py`
-  (747 l.), `install_models.py` (526 l.) à la racine, ET `transcria/installer/*_phase.py` ;
-  consommations restantes du legacy : `models_catalog.py:18,118`,
-  `installer/summary_phase.py:20`, `installer/postgres_phase.py:34`,
-  `deploy/entrypoint.py:335` ;
+- double génération d'installeur — voir l'inventaire complet au §3.8 (le legacy fait
+  **13 modules / 4 641 lignes**, pas trois fichiers) ;
 - `tests/conftest.py:94` : `poll_interval_s: 300` (max du schéma) pour neutraliser le
   scheduler pendant les tests — symptôme que `create_app()` ne sait pas démarrer **sans**
   ses services d'arrière-plan.
@@ -183,6 +180,41 @@ moteur**, à chaque fois.
 
 `jobs/filesystem` (importé par 29 modules), `jobs/models` (28), `database` (24),
 `auth/models` (16), `jobs/store` (12), `stt/base_transcriber` (11).
+
+### 3.8 La surface d'installation — deux générations qui cohabitent
+
+Trois étages, mesurés :
+
+| Étage | Volume | État |
+|---|---:|---|
+| `install.sh` (bash) | 1 489 l. | orchestrateur : bootstrap, invites, résumé — et **42 appels Python** : 16× `installer.cli` (nouvelle génération) + 26× modules legacy en direct |
+| `transcria/installer/` (nouvelle génération) | 14 modules, 2 838 l. | **le patron sain** : une phase = un module (dataclass gelée, runner injecté, erreurs typées, idempotence), 13 fichiers de tests dédiés — c'est le modèle du chantier, pas un chantier |
+| `transcria/install_*.py` racine (legacy) | **13 modules, 4 641 l.** | l'ancienne génération, encore vivante |
+
+Détail du legacy et de ses consommateurs (relevé exact) :
+
+| Module legacy | Lignes | Consommateurs Python | Appels install.sh |
+|---|---:|---:|---:|
+| `install_messages` | 498 | **13** (catalogue FR/EN de toute la surface install — patron sain type doctor_messages) | — |
+| `install_postgres` | 761 | 1 (`installer/postgres_phase` — déjà en cours de fonte) | 2 |
+| `install_arbitrage` | 747 | 2 (`models_catalog`, `deploy/entrypoint`) | 2 |
+| `install_models` | 526 | 2 (`models_catalog`, `installer/summary_phase`) | **10** |
+| `install_systemd` | 402 | 1 | — |
+| `install_profiles` | 399 | 1 | 2 |
+| `install_opencode` | 382 | 2 | — |
+| `install_prerequisites` | 226 | 2 | 6 |
+| `install_torch` | 190 | 1 | — |
+| `install_paths` | 144 | 1 | 2 |
+| `install_summary` | 139 | 2 | 1 |
+| `install_imports` | 132 | 0 | 1 |
+| `install_hardware` | 95 | 0 | 2 |
+
+Le filet existe déjà : `tests/test_install_e2e.py` (installation réelle avec leak-check),
+`test_verify_install_matrix.py`, `bash -n` en CI, et **les Dockerfiles exécutent
+`install.sh` au build** (l'image resource-node est une preuve d'installation à chaque
+build). `installer/cli.py` (643 l., fan-out 15, 17 imports différés) est l'entrée de la
+nouvelle génération — ses différés relèvent en partie de l'exception §8.3(c) (point
+d'entrée), à justifier un par un.
 
 ## 4. Diagnostic
 
@@ -351,7 +383,8 @@ disponibles, du moins cher au plus cher :
 | C2 opencode | ✔ | — | ✔ (phases LLM réelles) | — | — | — |
 | C3 vues config | ✔ | — | au fil des adoptions | — | — | — |
 | C4 app/tests | ✔ | ✔ | ✔ | — | — | — |
-| C5/C6 | ✔ | — | ✔ (1 run final) | — | — | — |
+| C5 | ✔ | — | ✔ (1 run final) | — | — | — |
+| C6 install | ✔ | — | — | — | — | — + `test_install_e2e` + build Docker resource-node |
 
 Lecture : C1 est la vague la plus « topologique » (elle touche le routage
 `_should_use_remote_stt` — un backend servi n'a PAS de builder local et doit rester
@@ -684,24 +717,48 @@ Règle du §8.3 appliquée à l'arbre entier ; plafond final ≤ 40, tous justif
 commentaire ; mypy `--check-untyped-defs` activé **paquet par paquet** en commençant par la
 couche 1 (la plus importée = meilleur rendement d'erreurs attrapées), puis 2, 3, 4.
 
-#### C6 — Fonte des vieux `install_*.py` *(effort S)*
+#### C6 — Achever la fonte de l'installation *(effort L — réévalué : 13 modules / 4 641 l., pas 3)*
 
-Les 4 consommations restantes (§3.6) migrent : `find_hf_cache_model` + constantes modèles →
-`installer/models_lib.py` ; `get_tier_metadata`/`recommend_tier` → `installer/tiers.py` ;
-`render_model_summary` → déjà côté installer. Le reste des ~2 000 l. passe à l'audit code
-mort (méthode éprouvée : vérifier l'usage prod en incluant `app.py` racine et `scripts/`
-hors transcria/ — piège `ensure_admin` documenté).
+La doctrine existe déjà et a fait ses preuves (chantier « fonte install.sh ») : **la
+logique métier descend dans une phase testée de `transcria/installer/`, install.sh ne
+garde que le bootstrap minimal, les invites et le résumé final.** C6 la mène au bout,
+module par module (inventaire complet §3.8) :
+
+| Legacy | Devenir |
+|---|---|
+| `install_messages` (498 l., 13 consommateurs) | **reste** — c'est le catalogue FR/EN de la surface install, patron sain (comme doctor_messages) ; déménage en `installer/messages.py` quand plus rien d'autre ne vit à la racine |
+| `install_models` (10 appels shell + catalogue) | phase `installer/models_phase.py` + `installer/models_lib.py` (`find_hf_cache_model`, constantes — consommés par `models_catalog`) |
+| `install_arbitrage` | phase `installer/arbitrage_phase.py` + `installer/tiers.py` (`get_tier_metadata`/`recommend_tier` — consommés par catalogue et entrypoint) |
+| `install_prerequisites` (6 appels shell) | phase `installer/prerequisites_phase.py` (c'est déjà une vérification pure → phase triviale) |
+| `install_profiles`, `install_paths`, `install_hardware`, `install_imports` | phases/checks `installer/` (hardware et imports n'ont AUCUN consommateur Python — purs outils shell → candidats à fusion dans une phase `preflight`) |
+| `install_torch`, `install_opencode`, `install_systemd`, `install_summary` | déjà doublés par `python_env`/`opencode_phase`/`systemd_phase`/`summary_phase` — **diff des deux implémentations, garder la testée, tuer l'autre** (audit code mort : vérifier l'usage prod en incluant `app.py` racine et `scripts/` hors transcria/ — piège `ensure_admin`) |
+| `install_postgres` (761 l.) | `installer/postgres_phase` l'importe déjà — absorber le restant appelé, supprimer le reste |
+
+**Procédure** : une PR par ligne du tableau (le patron de phase est rodé : plan gelé,
+runner injecté, marqueur d'idempotence, erreurs typées, sous-commande CLI) ; à chaque PR,
+les appels directs d'install.sh au module legacy basculent sur `installer.cli`.
+**Validation spécifique install** (en plus des gates) : `bash -n install.sh` (déjà en CI),
+`tests/test_install_e2e.py` (installation réelle + leak-check), et **un build Docker
+resource-node** — le Dockerfile exécute `install.sh --profile resource-node` au build,
+c'est l'E2E d'installation le plus réaliste dont on dispose.
+
+**DoD** : zéro module `transcria/install_*.py` à la racine (hors `install_messages` s'il
+reste des consommateurs transitoires) ; install.sh n'appelle plus que `installer.cli`
+(grep = 0 appel direct legacy) ; les 42 appels Python d'install.sh documentés dans
+l'en-tête du script ; test_install_e2e vert ; build Docker resource-node vert.
 
 ## 7. Séquencement et efforts
 
 ```
-A0 (S) ──► A1 (S) ──► A2 (L) ─────────────► C2 (M) ─► C5 (M) ─► C6 (S)
+A0 (S) ──► A1 (S) ──► A2 (L) ─────────────► C2 (M) ─► C5 (M) ─► C6 (L)
              │                                  ▲
              └──► B0 (M) ──► B1 (XL) ──► B2 (L) ┴─► C1 (M) ─► C4 (M) ─► B3 (M)
                                                         └──► C3 (M, étalé)
 ```
 
 Ordre recommandé : **A0 → A1 → B0 → A2 → B1 → C1 → B2 → C3 → C2/C4/C5 → B3 → C6.**
+(C6 peut aussi avancer indépendamment par petites PR — il ne touche aucun module des
+pistes A/B ; seule contrainte : pas en même temps qu'une release.)
 Justification : A0/A1 posent les gardes sur de petits périmètres ; B0 sécurise toutes les
 vagues suivantes ; A2 est le gain de confort quotidien et peut avancer en parallèle de B ;
 B1 est le cœur ; B3 en dernier (le plus risqué, et il bénéficie de tous les filets posés
@@ -798,6 +855,8 @@ l'annexe C.
 | Inversions de couche | 3 (`web.i18n`) + `editor→routes` + installeur | 0 | A1/A2/C6 |
 | Implémentations de sonde GPU / kill_patterns | 3 / 2 | 1 / 1 | B3 |
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
+| Modules install legacy à la racine | 13 (4 641 l.) | 0 (hors messages) | C6 |
+| Appels directs install.sh → legacy | 26 | 0 | C6 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
