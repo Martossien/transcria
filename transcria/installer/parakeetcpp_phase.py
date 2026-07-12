@@ -18,8 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from transcria.installer.audiocpp_phase import resolve_runtimes_dir  # même racine runtimes/
-
 # Commit épinglé = l'état QUALIFIÉ sur notre benchmark (Nemotron 0,492 WER 8/8,
 # 3 requêtes consécutives identiques — pas de bug de session).
 PARAKEETCPP_REPO = "https://github.com/mudler/parakeet.cpp"
