@@ -884,11 +884,30 @@ exporté), plutôt que de compter sur le téléchargement au premier job :
 | Cohere ASR / Granite / Parakeet / Sortformer | `$HF_HOME/hub` | `hf download <model_id>` |
 | Voxtral Mini 3B (Apache-2.0, non-gated) | `$HF_HOME/hub` (ou `models/voxtral-mini-3b-2507/`) | `hf download mistralai/Voxtral-Mini-3B-2507` — aussi téléchargeable depuis la page « Modèles » de l'UI |
 | Kroko-ASR (CC-BY-SA community, non-gated) — **backend CPU, aucun GPU requis** | `$HF_HOME/hub` (ou `models/kroko/`) | `hf download Banafo/Kroko-ASR` (les 10 langues, ~3,2 Go) — aussi téléchargeable depuis la page « Modèles » ; à défaut, le fichier de la langue du job (~155 Mo) est récupéré à la demande |
+| Qwen3-ASR-1.7B (Apache-2.0) — runtime servi audio.cpp | `runtimes/audiocpp/src/models/` | `venv/bin/python -m transcria.installer.cli audiocpp --with-model` (build épinglé + modèle) — aussi via la page « Modèles » |
+| Nemotron 3.5 ASR GGUF (NVIDIA OML) — runtime servi parakeet.cpp | `models/parakeet-cpp/` | `venv/bin/python -m transcria.installer.cli parakeetcpp` puis GGUF via la page « Modèles » ou `hf download mudler/parakeet-cpp-gguf nemotron-3.5-asr-streaming-0.6b-f16.gguf --local-dir models/parakeet-cpp` |
 | MOSS-Transcribe-Diarize (Apache-2.0, non-gated) — une passe ASR+locuteurs | `$HF_HOME/hub` | `hf download OpenMOSS-Team/MOSS-Transcribe-Diarize` (~3,7 Go) — aussi téléchargeable depuis la page « Modèles » ; nécessite AUSSI le site isolé Transformers 5 : `venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site` |
 | pyannote (diarisation + empreintes) | `$HF_HOME/hub` | `hf download pyannote/speaker-diarization-community-1` (HF_TOKEN requis) |
 | Whisper (faster-whisper) | `$HF_HOME/hub` | `hf download Systran/faster-whisper-large-v3` |
 | SQUIM (préflight) | `~/.cache/torch/hub/torchaudio/models/` | `curl -o ~/.cache/torch/hub/torchaudio/models/squim_objective_dns2020.pth https://download.pytorch.org/torchaudio/models/squim_objective_dns2020.pth` |
 | LLM d'arbitrage (GGUF) | chemin du script de lancement | `hf download <repo_gguf>` puis adapter `scripts/launch_arbitrage.sh` |
+
+### Runtimes STT servis (opt-in, 0.3.6)
+
+Deux runtimes C++ peuvent servir le STT avec un cycle de vie géré par TranscrIA
+(démarrage à la demande avant les jobs, santé, admission VRAM) :
+
+```bash
+venv/bin/python -m transcria.installer.cli audiocpp --with-model   # qwen3asr (port 8021)
+venv/bin/python -m transcria.installer.cli parakeetcpp             # nemotron (port 8022)
+```
+
+Ou en une fois à l'installation : `./install.sh … --with-stt-runtimes` (opt-in, profils GPU).
+
+Builds **épinglés** et idempotents (`--force` pour reconstruire), binaires sous
+`runtimes/` (`TRANSCRIA_RUNTIMES_DIR`). Configuration complète (backends, manifeste
+`resource_node.engines`, démarrage automatique, santé par moteur) :
+**`docs/EXTERNAL_STT_RUNTIMES.md`**.
 
 **3. Vérifier avant le premier job** : `venv/bin/python scripts/doctor.py` comporte
 un check « Modèles locaux (cache) » qui liste, selon la config active, les modèles
@@ -944,7 +963,7 @@ services:
     - 8000
 
 models:
-  stt_backend: "cohere"                     # ou "whisper", "voxtral" (Apache-2.0), "granite", "parakeet", "kroko" (CPU pur, sans GPU), "moss" (une passe ASR+locuteurs)
+  stt_backend: "cohere"                     # ou "whisper", "voxtral" (Apache-2.0), "granite", "parakeet", "kroko" (CPU pur, sans GPU), "moss" (une passe ASR+locuteurs), "qwen3asr"/"nemotron" (runtimes servis — cf. docs/EXTERNAL_STT_RUNTIMES.md)
   default_stt_model: "cohere-transcribe-03-2026"
   cohere_model_path: "./models/cohere-asr/cohere-transcribe-03-2026"
   pyannote_model: "pyannote/speaker-diarization-community-1"

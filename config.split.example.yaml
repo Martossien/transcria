@@ -36,6 +36,10 @@ inference:
       # STT Cohere servi par le vLLM du nœud (lancé à la demande sur :8003).
       # base_url DOIT finir par /v1 (AsrClient poste {url}/audio/transcriptions) — sans /v1 → 404.
       cohere: { url: "http://resource-node:8003/v1", model: "cohere-transcribe", response_format: "json" }
+      # Runtimes C++ servis par le nœud (0.3.6 — déclarer aussi le moteur côté nœud,
+      # cf. docs/EXTERNAL_STT_RUNTIMES.md). fallback_backend = repli NATIF explicite.
+      # qwen3asr: { url: "http://resource-node:8021/v1", model: "qwen3-asr-1.7b", response_format: "json", fallback_backend: "whisper" }
+      # nemotron: { url: "http://resource-node:8022/v1", model: "nemotron",       response_format: "json", fallback_backend: "parakeet" }
 
 # ── LLM d'arbitrage : pointer opencode sur le vLLM du nœud ────────────────────
 # `entrypoint.provision_opencode()` lit ces clés au démarrage du scheduler et écrit
@@ -69,3 +73,5 @@ resource_node:
     auto_relocate: false
   engines:
     - { name: cohere, script: scripts/launch_stt_cohere.sh, gpu: 4, gpu_mem: 0.50, port: 8003, idle_timeout_s: 0 }
+    # - { name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 5, gpu_mem: 0.25, port: 8021 }
+    # - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 5, gpu_mem: 0.10, port: 8022, health_path: /health }

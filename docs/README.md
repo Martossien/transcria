@@ -59,7 +59,7 @@ example results and the user journey.
 | [PARAKEET_STT_INTEGRATION.md](PARAKEET_STT_INTEGRATION.md) | NVIDIA Parakeet STT backend integration |
 | [VAD_OR_NOT.md](VAD_OR_NOT.md) | Voice-activity-detection decision record and tuning |
 | [STT_CORPUS.md](STT_CORPUS.md) | Contextual-biasing corpus format and use |
-| [EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md) | Plugging external C++ STT servers (audio.cpp, parakeet.cpp) into the remote endpoint — configuration only |
+| [EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md) | **Served STT runtimes** — audio.cpp (`qwen3asr`) and parakeet.cpp (`nemotron`) as first-class engines: pinned installer builds, on-demand start before jobs, per-engine health, native fallback |
 
 ## Benchmarking and validation
 

@@ -29,6 +29,10 @@ resource_node:
   engines:
     - { name: cohere,  script: scripts/launch_stt_cohere.sh,  gpu: 0, gpu_mem: 0.85, port: 8003, idle_timeout_s: 0 }
     - { name: whisper, script: scripts/launch_stt_whisper.sh, gpu: 1, gpu_mem: 0.85, port: 8005, idle_timeout_s: 0 }
+    # Runtimes C++ servis (0.3.6, opt-in — provisionner : installer.cli audiocpp/parakeetcpp,
+    # cf. docs/EXTERNAL_STT_RUNTIMES.md). gpu_mem = ADMISSION seulement (STT_GPU_MEM ignoré).
+    # - { name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 0, gpu_mem: 0.25, port: 8021 }
+    # - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 1, gpu_mem: 0.10, port: 8022, health_path: /health }
 
 # Chemins des modèles présents sur CE nœud (cf. docs/INSTALL.md §6 pour le téléchargement).
 models:

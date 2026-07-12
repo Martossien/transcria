@@ -70,6 +70,13 @@ Au-delà du venv Python, les images applicatives embarquent :
 - **opencode** (agent LLM des phases résumé/correction/relecture) — installé via l'installateur
   officiel SST. Licence **MIT** (projet `sst/opencode`) ; embarque ses propres modules npm, eux-mêmes
   sous licences permissives (MIT/ISC/BSD), avec leurs fichiers `LICENSE` conservés dans `node_modules`.
+- **audio.cpp** (`audiocpp_server`, runtime STT servi `qwen3asr`) — binaire compilé depuis un
+  commit ÉPINGLÉ de <https://github.com/0xShug0/audio.cpp> (© ShugoAI LLC), licence
+  **Apache-2.0** (texte : `/app/LICENSE`, identique au projet). Baké sous `/opt/runtimes/`
+  dans les images GPU (0.3.6) ; le commit exact est dans `/opt/runtimes/audiocpp/COMMIT`.
+- **parakeet.cpp** (`parakeet-server`, runtime STT servi `nemotron`) — binaire compilé depuis
+  un commit ÉPINGLÉ de <https://github.com/mudler/parakeet.cpp>, licence **MIT**
+  (texte : `licenses/MIT-parakeet.cpp.txt`). Baké sous `/opt/runtimes/` (0.3.6).
 - **ffmpeg** (décodage audio, paquet Debian `ffmpeg` installé par `apt`) — **GPL-2.0+ / LGPL-2.1+**
   selon les composants (build Debian). TranscrIA **invoque** ffmpeg en sous-processus (aucune liaison
   de code) ; le binaire est redistribué **inchangé** tel que packagé par Debian, dont les **sources
@@ -91,6 +98,8 @@ accepter avant usage :
 | `pyannote/speaker-diarization-community-1` (+ segmentation/embeddings) | Diarisation | *gated* — MIT, conditions d'accès pyannote |
 | `faster-whisper large-v3` | STT de repli | MIT |
 | Qwen3.6 (LLM d'arbitrage, ex. `Qwen/Qwen3.6-27B-FP8`) | Résumé/correction LLM | licence de la carte de modèle Qwen (cf. Hugging Face) — servie hors image (endpoint externe) |
+| `Qwen/Qwen3-ASR-1.7B-hf` | STT servi `qwen3asr` (audio.cpp) | **Apache-2.0** |
+| `mudler/parakeet-cpp-gguf` (GGUF Nemotron 3.5 ASR) | STT servi `nemotron` (parakeet.cpp) | conversion MIT ; **poids sous NVIDIA Open Model License** (carte du modèle NVIDIA à respecter) |
 | `Banafo/Kroko-ASR` (modèles community, un par langue) | STT `kroko` (CPU pur) | **CC-BY-SA** (community) — attribution : Banafo (<https://kroko.ai/>) ; des variantes commerciales existent chez l'éditeur |
 
 > TranscrIA ne distribue aucun de ces poids : il s'interface avec eux. Vérifiez et acceptez la

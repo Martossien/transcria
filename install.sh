@@ -20,6 +20,10 @@
 #   --hf-token TOKEN   Token HuggingFace (pour télécharger pyannote)
 #   --force-config     Régénérer config.yaml même s'il existe déjà
 #   --non-interactive  Pas de prompts (CI/scripts)
+#   --with-stt-runtimes  Provisionner aussi les runtimes STT servis (opt-in) :
+#                      audio.cpp (backend qwen3asr, + modèle Qwen3-ASR-1.7B) et
+#                      parakeet.cpp (backend nemotron) — builds CUDA épinglés,
+#                      profils GPU uniquement (cf. docs/EXTERNAL_STT_RUNTIMES.md)
 #   --skip-doctor      Ne pas lancer scripts/doctor.py en fin d'installation
 #   --strict-doctor    Lancer doctor.py en mode strict (warnings = échec)
 #   --postgres         Configurer PostgreSQL (local : crée rôle/base ; distant : utilise une base existante)
@@ -146,6 +150,7 @@ LOCALE_EXPLICIT=false   # --locale ou env fournis → pas de question interactiv
 FORCE_CONFIG=false
 NON_INTERACTIVE=false
 SKIP_DOCTOR=false
+WITH_STT_RUNTIMES=false   # --with-stt-runtimes : phases audiocpp+parakeetcpp (opt-in, GPU)
 STRICT_DOCTOR=false
 PYTHON_BIN=""
 SETUP_PG=""            # "" = à décider (prompt) ; true/false = explicite
@@ -192,6 +197,7 @@ while [[ $# -gt 0 ]]; do
         --force-config)    FORCE_CONFIG=true; shift ;;
         --non-interactive) NON_INTERACTIVE=true; shift ;;
         --skip-doctor)     SKIP_DOCTOR=true; shift ;;
+        --with-stt-runtimes) WITH_STT_RUNTIMES=true; shift ;;
         --strict-doctor)   STRICT_DOCTOR=true; shift ;;
         --postgres)        SETUP_PG=true; shift ;;
         --sqlite-dev|--allow-sqlite-dev|--no-postgres)
@@ -1440,6 +1446,18 @@ elif [[ -x "$VENV/bin/python" && -f "$INSTALL_DIR/scripts/doctor.py" ]]; then
 else
     DOCTOR_STATUS="non disponible"
     log_config_setup_event doctor-unavailable
+fi
+
+# ── Runtimes STT servis (opt-in --with-stt-runtimes) ────────────────────────
+# Délégation pure aux phases épinglées (transcria/installer/{audiocpp,parakeetcpp}_phase.py).
+# Jamais dans le flux par défaut : builds CUDA de plusieurs minutes + ~4 Go de modèle.
+if [[ "$WITH_STT_RUNTIMES" = true ]]; then
+    log "Runtimes STT servis : provisionnement audio.cpp (qwen3asr) + parakeet.cpp (nemotron)…"
+    python_module transcria.installer.cli audiocpp --runtimes-dir "$INSTALL_DIR/runtimes" --with-model \
+        || warn "Provisionnement audio.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli audiocpp --with-model)"
+    python_module transcria.installer.cli parakeetcpp --runtimes-dir "$INSTALL_DIR/runtimes" \
+        || warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
+    log "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
 fi
 
 # ============================================================================

@@ -182,6 +182,68 @@ def test_remote_stt_control_plane_warns_when_mode_is_local():
     assert "inference.mode=local" in res.detail
 
 
+def test_served_stt_runtimes_ok_when_none_declared():
+    res = doc.check_served_stt_runtimes({"resource_node": {"engines": [
+        {"name": "cohere", "script": "s.sh", "gpu": 3, "port": 8003},
+    ]}})
+    assert res.status == doc.OK
+    assert "aucun moteur runtime servi" in res.detail
+
+
+def test_served_stt_runtimes_warns_when_not_provisioned(monkeypatch, tmp_path):
+    monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+    cfg = {"resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "s.sh", "gpu": 5, "port": 8021},
+        {"name": "nemotron", "script": "s.sh", "gpu": 5, "port": 8022},
+    ]}}
+    res = doc.check_served_stt_runtimes(cfg)
+    assert res.status == doc.WARN
+    assert "nemotron" in res.detail and "qwen3asr" in res.detail
+    assert res.hint is not None
+    assert "audiocpp" in res.hint and "parakeetcpp" in res.hint
+
+
+def test_served_stt_runtimes_warns_on_stale_commit(monkeypatch, tmp_path):
+    monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+    home = tmp_path / "audiocpp"
+    (home / "bin").mkdir(parents=True)
+    binary = home / "bin" / "audiocpp_server"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    (home / "COMMIT").write_text("deadbeef\n")  # ≠ commit épinglé
+    cfg = {"resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "s.sh", "gpu": 5, "port": 8021},
+    ]}}
+    res = doc.check_served_stt_runtimes(cfg)
+    assert res.status == doc.WARN
+    assert "qwen3asr" in res.detail
+    assert res.hint is not None and "--force" in res.hint
+
+
+def test_served_stt_runtimes_ok_when_provisioned_at_pinned_commit(monkeypatch, tmp_path):
+    from transcria.installer.audiocpp_phase import AUDIOCPP_PINNED_COMMIT
+    from transcria.installer.parakeetcpp_phase import PARAKEETCPP_PINNED_COMMIT
+
+    monkeypatch.setenv("TRANSCRIA_RUNTIMES_DIR", str(tmp_path))
+    for sub, binname, commit in (
+        ("audiocpp", "audiocpp_server", AUDIOCPP_PINNED_COMMIT),
+        ("parakeetcpp", "parakeet-server", PARAKEETCPP_PINNED_COMMIT),
+    ):
+        home = tmp_path / sub
+        (home / "bin").mkdir(parents=True)
+        binary = home / "bin" / binname
+        binary.write_text("#!/bin/sh\n")
+        binary.chmod(0o755)
+        (home / "COMMIT").write_text(commit + "\n")
+    cfg = {"resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "s.sh", "gpu": 5, "port": 8021},
+        {"name": "nemotron", "script": "s.sh", "gpu": 5, "port": 8022},
+    ]}}
+    res = doc.check_served_stt_runtimes(cfg)
+    assert res.status == doc.OK
+    assert "qwen3asr" in res.detail and "nemotron" in res.detail
+
+
 def test_resource_node_auth_ok_from_env(monkeypatch):
     monkeypatch.setenv("TRANSCRIA_INFERENCE_API_KEY", "secret")
     res = doc.check_resource_node_auth({"inference": {"auth": {"api_key_env": "TRANSCRIA_INFERENCE_API_KEY"}}})

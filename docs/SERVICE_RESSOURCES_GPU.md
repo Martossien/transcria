@@ -91,6 +91,18 @@ TOUT-EN-UN (une machine)                  SPLIT (frontale + ressources)
 
 ---
 
+## 1 bis. All-in-one = son propre nœud de ressources (0.3.6)
+
+Depuis les runtimes STT servis (audio.cpp/parakeet.cpp — `docs/EXTERNAL_STT_RUNTIMES.md`),
+la section `resource_node.engines[]` vaut AUSSI pour l'all-in-one : une URL de backend
+loopback + un moteur homonyme déclaré ⇒ le **pré-vol des jobs lance le moteur en process**
+(`resource_gate._ensure_local_served_stt` → `build_stt_supervisor().ensure_ready()`, même
+cycle A/B/C que `/engines/ensure`) — aucun nœud de contrôle requis, aucun faux WARN doctor.
+Le chemin split est INCHANGÉ : dès qu'un `inference.url`/`inference.nodes` existe, il prime
+(le nœud assure ses moteurs lui-même). Santé par moteur : `health_path` (défaut `/v1/models`)
+et `health_mode` (`http_2xx` défaut ; `http_any` = toute réponse HTTP prouve la vie, réservé
+aux serveurs mono-modèle qui chargent leurs poids AVANT de binder — jamais pour un vLLM).
+
 ## 2. Placement (admin) vs cycle de vie (service)
 
 C'est le point qui garantit la non-intrusivité.

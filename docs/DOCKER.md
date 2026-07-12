@@ -44,6 +44,13 @@ scripts/docker_quickstart.sh --down
 > depuis l'image (élimine le `[Errno 17] File exists` ci-dessous). Dans les deux cas,
 > pyannote/Cohere restent en opt-in `HF_TOKEN` (et Kroko-ASR via la page « Modèles »).
 >
+> **Runtimes STT servis dans les images GPU (0.3.6).** Les images `:latest`/`:bundled` et
+> `resource-node` embarquent les binaires ÉPINGLÉS d'audio.cpp (`qwen3asr`) et parakeet.cpp
+> (`nemotron`) sous `/opt/runtimes` (`TRANSCRIA_RUNTIMES_DIR`). Les modèles restent par
+> **volume** : `hf download Qwen/Qwen3-ASR-1.7B-hf` (snapshot pur) et le GGUF Nemotron via
+> la page « Modèles » — pointer `STT_MODEL` du lanceur sur le chemin monté. Configuration :
+> `docs/EXTERNAL_STT_RUNTIMES.md`.
+>
 > **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque le palier 12 Go
 > (Qwen3.5-9B), mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :
 > passer `TRANSCRIA_LLM_TIER=16|24|32|48|64` (ou télécharger depuis **Administration → Modèles**)

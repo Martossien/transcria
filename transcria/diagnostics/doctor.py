@@ -547,6 +547,47 @@ def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
     return CheckResult(name, OK, _t("stt_ok", n=len(remote_backends), m=len(urls)))
 
 
+def check_served_stt_runtimes(cfg: dict) -> CheckResult:
+    """Runtimes STT servis déclarés (qwen3asr/nemotron) : binaire provisionné + commit épinglé.
+
+    Le manifeste `resource_node.engines` peut déclarer un moteur dont le runtime n'a
+    jamais été construit (ou l'a été sur un ancien SHA après une montée de version) —
+    le lanceur échouerait au premier job. On vérifie ici, avec la commande de reprise."""
+    name = _t("chk_served_runtimes")
+    engines = ((cfg.get("resource_node", {}) or {}).get("engines") or [])
+    declared = {str(e.get("name")) for e in engines if isinstance(e, dict)}
+
+    from transcria.installer.audiocpp_phase import (
+        AUDIOCPP_PINNED_COMMIT,
+        audiocpp_home,
+        audiocpp_is_complete,
+        resolve_runtimes_dir,
+    )
+    from transcria.installer.parakeetcpp_phase import (
+        PARAKEETCPP_PINNED_COMMIT,
+        parakeetcpp_home,
+        parakeetcpp_is_complete,
+    )
+
+    runtimes_dir = resolve_runtimes_dir()
+    known = {
+        "qwen3asr": ("audiocpp", lambda: audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)),
+        "nemotron": ("parakeetcpp", lambda: parakeetcpp_is_complete(parakeetcpp_home(runtimes_dir), PARAKEETCPP_PINNED_COMMIT)),
+    }
+    concerned = sorted(declared & set(known))
+    if not concerned:
+        return CheckResult(name, OK, _t("served_rt_none"))
+    missing = [e for e in concerned if not known[e][1]()]
+    if missing:
+        cli_names = ", ".join(known[e][0] for e in missing)
+        return CheckResult(
+            name, WARN,
+            _t("served_rt_missing", engines=", ".join(missing)),
+            hint=_t("served_rt_hint", cli=cli_names),
+        )
+    return CheckResult(name, OK, _t("served_rt_ok", engines=", ".join(concerned)))
+
+
 def _caps_reports_gpu(capabilities: dict) -> bool:
     """True si `/capabilities` énumère au moins un GPU avec un `free_mb` lisible."""
     for gpu in capabilities.get("gpus", []) or []:
@@ -1270,6 +1311,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_opencode_model_resolution,
     check_inference_nodes,
     check_remote_stt_control_plane,
+    check_served_stt_runtimes,
     check_inference_node_gpus,
     check_local_models,
     check_storage,
@@ -1292,6 +1334,7 @@ _PROFILE_CHECKS: dict[str, tuple[Callable[[dict], CheckResult], ...]] = {
     "resource-node": (
         check_resource_node_auth,
         check_resource_node_engines,
+        check_served_stt_runtimes,
         check_resource_node_ports,
         check_local_models,
     ),

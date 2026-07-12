@@ -78,6 +78,9 @@ tête des scripts de lancement).
 - **Santé** : `health_path`/`health_mode` par moteur dans le manifeste ; le warning
   `AsrClient.health` (« modèle absent de /models ») est attendu et non bloquant pour
   parakeet-server.
+- **Doctor** : `python -m transcria.diagnostics.doctor` vérifie que tout moteur
+  `qwen3asr`/`nemotron` déclaré a son runtime provisionné **au commit épinglé**
+  (binaire + `COMMIT`) — WARN avec la commande de provisionnement sinon.
 - **Épinglage** : les commits qualifiés vivent dans
   `transcria/installer/{audiocpp,parakeetcpp}_phase.py` — monter de version = changer le
   SHA, reconstruire (`--force`), **re-qualifier sur le benchmark** avant de pousser.

@@ -66,6 +66,20 @@ Topologie frontale + ressources distantes (serveurs lancés à part) :
         --gpu 0 --mode quality \\
         --remote-stt http://192.168.1.59:8005/v1 --stt-backend whisper \\
         --remote-inference http://192.168.1.59:8002 --skip-llm
+
+Runtimes STT SERVIS (0.3.6 — audio.cpp/parakeet.cpp, cf. docs/EXTERNAL_STT_RUNTIMES.md) :
+    # (a) frontale : moteur déjà lancé (launch_stt_qwen3asr.sh / nemotron), consommé par URL
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 \\
+        --stt-backend qwen3asr --remote-stt http://127.0.0.1:8021/v1 \\
+        --config-override 'inference.url='
+    # (b) all-in-one GATE : moteur ÉTEINT au départ — le pré-vol le lance lui-même
+    #     (piège : vider inference.url si la config du dépôt en garde un résiduel)
+    venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --stt-backend nemotron \\
+        --config-override 'inference.mode=hybrid' --config-override 'inference.url=' \\
+        --config-override 'inference.stt.backends.nemotron.url=http://127.0.0.1:8022/v1' \\
+        --config-override 'inference.stt.backends.nemotron.model=nemotron' \\
+        --config-override 'inference.stt.backends.nemotron.response_format=json' \\
+        --config-override 'resource_node.engines=[{"name":"nemotron","script":"scripts/launch_stt_nemotron.sh","gpu":5,"gpu_mem":0.10,"port":8022,"health_path":"/health"}]'
 """
 
 from __future__ import annotations

@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.3.5** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.3.6** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.3.6** | **Runtimes STT servis** — audio.cpp et parakeet.cpp deviennent des moteurs de première classe : builds épinglés par l'installeur, démarrage à la demande avant les jobs (all-in-one et nœud GPU), santé par moteur, admission VRAM, repli natif — qualifiés sur le benchmark de réunions réelles (`qwen3asr` 0,421 WER, `nemotron` 0,492 à ~2 s/fenêtre de 5 min) |
 | **0.3.5** | **Nouveaux moteurs & éditeur plus malin** — backend MOSS-Transcribe-Diarize (transcription + locuteurs + timestamps en une passe, meilleur WER texte de notre benchmark) et Kroko-ASR, le backend **sans GPU** (155 Mo par langue, CPU seul, au niveau de nos moteurs GPU sur réunions réelles) ; après édition du SRT, l'éditeur propose un **DOCX rapide** ou une **synthèse mise à jour par la LLM** (proposée, jamais automatique, versionnée) |
 | **0.3.4** | **Moteurs STT & benchmarks** — moteurs mesurés sur de vraies réunions françaises contre référence humaine ([résultats publiés](docs/STT_BENCHMARK_REAL_MEETINGS.md)) ; nouveau backend Mistral Voxtral Mini 3B (Apache-2.0, meilleur WER mesuré) ; multi-STT ciblé **activé par défaut** (retranscription arbitrée des seuls segments dégradés — coût nul sur audio sain, best-effort) |
 | **0.3.3** | Finitions — les dernières poches de français en interface anglaise fermées ; la langue des livrables suit désormais le choix d'interface |
@@ -193,11 +194,14 @@ upload -> diagnostic audio -> synthèse rapide (STT + LLM) -> contexte, particip
   et **Kroko-ASR — l'option sans GPU** : modèles Zipformer
   streaming par langue (~155 Mo) sur sherpa-onnx, au niveau de nos meilleurs moteurs GPU
   sur réunions réelles, **sur CPU seul**. Tous peuvent aussi être servis par un serveur
-  distant compatible OpenAI (vLLM, SGLang) — et nous avons vérifié que de jeunes runtimes
-  C++ comme [audio.cpp](https://github.com/0xShug0/audio.cpp) et
-  [parakeet.cpp](https://github.com/mudler/parakeet.cpp) se branchent sur ce même
-  endpoint distant **sans une ligne de code, configuration seule**, avec de très bonnes
-  surprises en qualité comme en vitesse. Nous benchons tout cela sur de **vraies réunions
+  distant compatible OpenAI (vLLM, SGLang). Plus loin encore, deux **runtimes de service
+  C++ sont des moteurs de première classe** : [audio.cpp](https://github.com/0xShug0/audio.cpp)
+  (`qwen3asr` — Qwen3-ASR-1.7B, 2ᵉ meilleur WER de tout notre benchmark) et
+  [parakeet.cpp](https://github.com/mudler/parakeet.cpp) (`nemotron` — ~2 s par fenêtre de
+  5 minutes). TranscrIA les installe épinglés (une commande chacun), **les démarre à la
+  demande avant les jobs**, surveille leur santé et les arrête — la même discipline de
+  cycle de vie que la LLM d'arbitrage locale
+  (cf. [docs/EXTERNAL_STT_RUNTIMES.md](docs/EXTERNAL_STT_RUNTIMES.md)). Nous benchons tout cela sur de **vraies réunions
   françaises** contre une transcription humaine professionnelle — WER, détecteur de
   dérive en traduction, juge LLM multi-passes et lecture humaine des modes d'échec :
   [docs/STT_BENCHMARK_REAL_MEETINGS.md](docs/STT_BENCHMARK_REAL_MEETINGS.md) (anglais).

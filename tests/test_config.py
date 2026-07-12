@@ -918,3 +918,30 @@ class TestBinaryResolution:
         monkeypatch.setattr(sd.shutil, "which", lambda name: None)
         monkeypatch.setattr(sd, "_BINARY_FALLBACK_GLOBS", {"nvcc": ["/nonexistent/nvcc"]})
         assert sd.SystemDetector._resolve_binary("nvcc") is None
+
+
+class TestServedSttBackendSchema:
+    """models.stt_backend accepte un backend SERVI (qwen3asr/nemotron) UNIQUEMENT
+    s'il est routé (url dans inference.stt.backends) — sinon erreur explicite
+    (le factory retomberait silencieusement sur cohere). Leçon revue 0.3.6."""
+
+    def test_backend_servi_route_accepte(self):
+        from transcria.config.config_schema import validate_config
+
+        cfg = {"models": {"stt_backend": "qwen3asr"},
+               "inference": {"mode": "hybrid",
+                             "stt": {"backends": {"qwen3asr": {"url": "http://127.0.0.1:8021/v1"}}}}}
+        assert not [e for e in validate_config(cfg).errors if "stt_backend" in e]
+
+    def test_backend_servi_sans_url_rejete(self):
+        from transcria.config.config_schema import validate_config
+
+        cfg = {"models": {"stt_backend": "nemotron"}}
+        errs = [e for e in validate_config(cfg).errors if "stt_backend" in e]
+        assert errs and "SERVI" in errs[0]
+
+    def test_backends_natifs_inchanges(self):
+        from transcria.config.config_schema import validate_config
+
+        assert not [e for e in validate_config({"models": {"stt_backend": "kroko"}}).errors
+                    if "stt_backend" in e]

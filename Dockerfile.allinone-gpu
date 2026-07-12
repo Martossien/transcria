@@ -64,6 +64,48 @@ RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/
 # sinon le serveur ne démarre pas au runtime (.so introuvables).
 
 # ── Étage final : venv projet (install.sh) + llama-server + opencode ────────────
+
+# ── Étage stt-runtimes-builder : runtimes STT servis ÉPINGLÉS (0.3.6) ────────────────────────
+# Source de vérité des SHA : transcria/installer/{audiocpp,parakeetcpp}_phase.py
+# (*_PINNED_COMMIT) — garder synchronisés. Arch CUDA en dur (image multi-cibles).
+# Binaires SEULS (/opt/runtimes) — modèles par VOLUME (snapshot HF pur pour
+# Qwen3-ASR-1.7B-hf : `hf download` suffit ; pointer STT_MODEL sur le chemin monté).
+FROM ${CUDA_IMAGE} AS stt-runtimes-builder
+ARG AUDIOCPP_REF=3982dfb29ff0b37a26b799045f85732b20a0bdef
+ARG PARAKEETCPP_REF=e8acc6172a94e20a952cf1843decace5d771a94b
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git cmake build-essential ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
+    && git -C /tmp/audiocpp checkout "${AUDIOCPP_REF}" \
+    && cmake -S /tmp/audiocpp -B /tmp/audiocpp/build \
+        -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+    && cmake --build /tmp/audiocpp/build -j "$(nproc)" --target audiocpp_server \
+    && mkdir -p /opt/runtimes/audiocpp/bin \
+    && cp /tmp/audiocpp/build/bin/audiocpp_server /opt/runtimes/audiocpp/bin/ \
+    && echo "${AUDIOCPP_REF}" > /opt/runtimes/audiocpp/COMMIT \
+    && rm -rf /tmp/audiocpp
+# Stubs driver CUDA : l'exécutable lie libcuda.so.1 (symboles VMM cuMem* de ggml) absent
+# d'une image devel sans GPU — on lie contre le stub, le vrai driver est injecté au runtime.
+RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 \
+    && export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs \
+    && git clone --recursive https://github.com/mudler/parakeet.cpp /tmp/parakeetcpp \
+    && git -C /tmp/parakeetcpp checkout "${PARAKEETCPP_REF}" \
+    && git -C /tmp/parakeetcpp submodule update --init --recursive \
+    && cmake -S /tmp/parakeetcpp -B /tmp/parakeetcpp/build \
+        -DCMAKE_BUILD_TYPE=Release -DPARAKEET_GGML_CUDA=ON \
+        -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
+        -DCMAKE_EXE_LINKER_FLAGS='-Wl,-rpath,$ORIGIN/../lib' \
+        -DCMAKE_SHARED_LINKER_FLAGS='-Wl,-rpath,$ORIGIN' \
+    && cmake --build /tmp/parakeetcpp/build -j "$(nproc)" \
+    && mkdir -p /opt/runtimes/parakeetcpp/bin /opt/runtimes/parakeetcpp/lib \
+    && cp /tmp/parakeetcpp/build/examples/server/parakeet-server /opt/runtimes/parakeetcpp/bin/ \
+    && find /tmp/parakeetcpp/build -name 'libggml*.so*' -exec cp -P {} /opt/runtimes/parakeetcpp/lib/ \; \
+    && echo "${PARAKEETCPP_REF}" > /opt/runtimes/parakeetcpp/COMMIT \
+    && rm -rf /tmp/parakeetcpp
+
 FROM ${CUDA_IMAGE}
 ARG TORCH_CUDA_TAG
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -91,6 +133,7 @@ RUN echo /opt/llama/bin > /etc/ld.so.conf.d/llama.conf && ldconfig \
 
 WORKDIR /app
 COPY . /app
+COPY --from=stt-runtimes-builder /opt/runtimes /opt/runtimes
 
 # DSN baké : pointe sur le service compose `db`, sans effet au runtime (override par
 # TRANSCRIA_DATABASE_URL). Surchargeable au build (--build-arg PG_DSN_*).
@@ -128,6 +171,7 @@ RUN if ldd /usr/local/bin/llama-server | grep "not found" | grep -v "libcuda\.so
 # PATH = venv PROJET (gunicorn, inférence in-process). Le rôle est fourni par TRANSCRIA_ROLE.
 # LLAMA_SERVER : chemin canonique pour la génération du wrapper d'arbitrage (quickstart/entrypoint).
 ENV PATH="/app/venv/bin:$PATH" \
+    TRANSCRIA_RUNTIMES_DIR=/opt/runtimes \
     LLAMA_SERVER=/usr/local/bin/llama-server \
     TRANSCRIA_ROLE=all
 ENTRYPOINT ["/app/venv/bin/python", "-m", "transcria.deploy.entrypoint"]

@@ -41,6 +41,16 @@ ci-dessous. L'application TranscrIA elle-même est sous **Apache-2.0** (`/app/LI
   dans `/opt/transcria-moss-site` (paquets pip sous leurs licences respectives, `dist-info`
   conservés) et symlinké au démarrage sur le défaut de configuration.
 
+## 2 quater. Runtimes STT servis (binaires, 0.3.6)
+
+- **audio.cpp** (`/opt/runtimes/audiocpp/bin/audiocpp_server`) — © ShugoAI LLC,
+  **Apache License 2.0** (texte : `/app/LICENSE`). Commit épinglé : `/opt/runtimes/audiocpp/COMMIT`.
+- **parakeet.cpp** (`/opt/runtimes/parakeetcpp/bin/parakeet-server`) — **MIT**
+  (texte : `MIT-parakeet.cpp.txt`, ce répertoire). Commit épinglé : `/opt/runtimes/parakeetcpp/COMMIT`.
+- Aucun POIDS de modèle de ces runtimes n'est baké : Qwen3-ASR-1.7B (Apache-2.0) et le GGUF
+  Nemotron (NVIDIA Open Model License) se téléchargent au runtime, sous les licences de leurs
+  cartes de modèle respectives.
+
 ## 3. Diarisation — NVIDIA Streaming Sortformer 4spk v2.1
 
 - **Dépôt** : `nvidia/diar_streaming_sortformer_4spk-v2.1`

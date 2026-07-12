@@ -67,6 +67,7 @@ Options utiles :
 - `--pipeline-mode {fast,quality}`, `--whisper-model-size …`, `--skip-diarization`.
 - `--config-override CLE=VALEUR` — surcharger n'importe quelle clé de config pour un run.
 - `--remote-stt URL` / `--remote-inference URL` — mesurer une topologie **frontale / nœud GPU**
+- `--stt-backend qwen3asr|nemotron` — mesurer un **runtime servi** (audio.cpp/parakeet.cpp) : moteur pré-lancé + `--remote-stt`, ou chemin « gate » all-in-one par `--config-override` (exemples complets en tête de `tests/test_e2e_workflow.py`)
   (split) au lieu du tout-en-un local.
 - `--output-dir … --resume` — reprendre un banc interrompu (saute les combos déjà faits).
 

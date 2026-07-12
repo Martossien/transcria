@@ -6,7 +6,16 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
-## [Unreleased]
+## [0.3.6] — 2026-07-12
+
+Version **runtimes STT servis**. audio.cpp et parakeet.cpp deviennent des **moteurs de
+première classe**, gérés avec la même discipline de cycle de vie que la LLM d'arbitrage
+locale : builds épinglés par l'installeur, **démarrage à la demande avant les jobs** dans
+les deux topologies (all-in-one et nœud GPU — vérifié E2E moteur éteint), santé par moteur,
+admission VRAM, repli natif configurable. Qualifiés sur le benchmark de réunions réelles.
+**Aucune migration de base de données, aucune nouvelle dépendance Python** — les runtimes
+sont opt-in (une commande d'installeur chacun) et les images Docker GPU embarquent
+désormais leurs binaires épinglés (`/opt/runtimes`).
 
 ### Added
 - **Runtimes STT servis de première classe : audio.cpp (`qwen3asr`) et parakeet.cpp
@@ -23,6 +32,23 @@ modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu
   sans repli échoue explicitement, jamais de chargement Cohere implicite. Qualifiés sur le
   benchmark réel : qwen3asr **0,421 WER (2ᵉ du banc)**, nemotron **0,492 à ~2 s/fenêtre**.
   Doc : `docs/EXTERNAL_STT_RUNTIMES.md` (réécrite — fini le squat de la clé whisper).
+- **`install.sh --with-stt-runtimes`** : provisionne les deux runtimes en fin
+  d'installation (opt-in, non bloquant en cas d'échec de build).
+- **Images Docker GPU** : étage `stt-runtimes-builder` épinglé dans
+  `Dockerfile.{resource-node,allinone-gpu,allinone-bundled}` — binaires bakés sous
+  `/opt/runtimes` (`TRANSCRIA_RUNTIMES_DIR`), modèles en volume, licences tracées
+  (`THIRD_PARTY_NOTICES.md` : audio.cpp Apache-2.0, parakeet.cpp MIT).
+- **Doctor** : nouveau check « Runtimes STT servis » — moteur `qwen3asr`/`nemotron`
+  déclaré sans binaire provisionné (ou commit périmé) ⇒ WARN avec la commande de
+  reprise ; couvert en all-in-one/scheduler et sur le profil resource-node.
+
+### Fixed
+- **Schéma de config** : `models.stt_backend`/`stt_secondary` acceptent un backend
+  SERVI (nom arbitraire) dès lors qu'il est routé (`inference.stt.backends.<nom>.url`) —
+  la validation le rejetait alors que la factory le routait correctement.
+- **Réservation VRAM fantôme** : `get_backend_vram_mb` retourne 0 pour tout backend
+  routé distant (l'ancien défaut réservait 6 Go « cohere » pour un moteur servi hors
+  process).
 
 ## [0.3.5] — 2026-07-12
 

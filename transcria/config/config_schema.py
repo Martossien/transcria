@@ -31,7 +31,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_auth(cfg.get("auth", {}), result)
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
-    _check_models(cfg.get("models", {}), result)
+    _check_models(cfg.get("models", {}), result, cfg)
     _check_cohere(cfg.get("cohere", {}), result)
     _check_cohere_tf5(cfg.get("cohere_tf5", {}), result)
     _check_whisper(cfg.get("whisper", {}), result)
@@ -270,8 +270,8 @@ def _check_services(svc: dict, r: ValidationResult) -> None:
             r.add_error(f"services.{key}: chemin de script non défini")
 
 
-def _check_models(mod: dict, r: ValidationResult) -> None:
-    _check_stt_backend(mod, r)
+def _check_models(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
+    _check_stt_backend(mod, r, cfg)
     _check_str(mod, "default_stt_model", "models.default_stt_model", r)
     _check_str(mod, "fallback_stt_model", "models.fallback_stt_model", r)
     _check_str(mod, "cohere_model_path", "models.cohere_model_path", r)
@@ -288,14 +288,23 @@ def _check_models(mod: dict, r: ValidationResult) -> None:
         )
 
 
-def _check_stt_backend(mod: dict, r: ValidationResult) -> None:
+def _check_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
     valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"}
     backend = mod.get("stt_backend", "cohere")
-    if not isinstance(backend, str) or backend not in valid:
-        r.add_error(
-            f"models.stt_backend='{backend}' invalide. "
-            f"Valeurs acceptées: {', '.join(sorted(valid))}"
-        )
+    if isinstance(backend, str) and backend in valid:
+        return
+    # Backend SERVI (runtimes C++, ex. qwen3asr/nemotron) : n'importe quel nom est
+    # accepté s'il est ROUTÉ — url non vide dans inference.stt.backends.<nom>
+    # (cf. docs/EXTERNAL_STT_RUNTIMES.md). Sans URL, l'erreur reste (le factory
+    # retomberait silencieusement sur cohere — piège utilisateur).
+    routed = (((cfg or {}).get("inference", {}) or {}).get("stt", {}) or {}).get("backends", {}) or {}
+    if isinstance(backend, str) and str((routed.get(backend) or {}).get("url") or "").strip():
+        return
+    r.add_error(
+        f"models.stt_backend='{backend}' invalide. "
+        f"Valeurs acceptées: {', '.join(sorted(valid))} — ou un backend SERVI déclaré "
+        f"avec une url dans inference.stt.backends.<nom> (runtimes audio.cpp/parakeet.cpp)"
+    )
 
 
 def _check_workflow(wf: dict, r: ValidationResult) -> None:

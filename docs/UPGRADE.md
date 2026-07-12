@@ -139,6 +139,15 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.5 → 0.3.6** : runtimes STT servis (audio.cpp `qwen3asr`, parakeet.cpp `nemotron`)
+  gérés par le produit — démarrage à la demande, santé, admission VRAM, repli natif.
+  **Aucune migration Alembic, aucune nouvelle dépendance Python.** Tout est opt-in :
+  `venv/bin/python -m transcria.installer.cli audiocpp --with-model` et/ou `parakeetcpp`,
+  puis les blocs de config commentés de `config.example.yaml` (backends + manifeste
+  `resource_node.engines`). Les images Docker GPU embarquent les binaires épinglés
+  (`/opt/runtimes`, `TRANSCRIA_RUNTIMES_DIR`) — modèles par volume. Un `config.yaml`
+  existant reste valide (nouveaux champs facultatifs `health_path`/`health_mode`/
+  `fallback_backend`). Cf. `docs/EXTERNAL_STT_RUNTIMES.md`.
 - **0.3.4 → 0.3.5** : deux nouveaux backends STT (`kroko` — CPU pur, sans GPU ; `moss` —
   transcription + locuteurs + timestamps en une passe) et l'éditeur SRT qui propose la
   **resynchronisation de la synthèse** après corrections (passe LLM au choix, jamais
