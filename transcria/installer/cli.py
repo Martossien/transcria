@@ -548,6 +548,46 @@ def _cmd_audiocpp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_parakeetcpp_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "parakeetcpp",
+        help="Provisionne le runtime STT servi parakeet.cpp (backend nemotron — clone épinglé + build CUDA, opt-in).",
+    )
+    p.add_argument("--runtimes-dir", default="./runtimes",
+                   help="Racine des runtimes (défaut ./runtimes, surchargeable TRANSCRIA_RUNTIMES_DIR)")
+    p.add_argument("--commit", default=None, help="Commit épinglé (défaut : celui qualifié sur le benchmark)")
+    p.add_argument("--force", action="store_true", help="Reconstruire même si le runtime semble complet")
+
+
+def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
+    import subprocess
+
+    from transcria.installer.audiocpp_phase import resolve_runtimes_dir
+    from transcria.installer.parakeetcpp_phase import (
+        PARAKEETCPP_PINNED_COMMIT,
+        ParakeetcppPhaseError,
+        ParakeetcppPlan,
+        apply_parakeetcpp,
+    )
+
+    console = Console()
+
+    def _runner(cmd: list[str], *, cwd: str | None = None) -> None:
+        subprocess.run(cmd, check=True, cwd=cwd)
+
+    plan = ParakeetcppPlan(
+        runtimes_dir=resolve_runtimes_dir(args.runtimes_dir),
+        commit=args.commit or PARAKEETCPP_PINNED_COMMIT,
+        force=bool(args.force),
+    )
+    try:
+        apply_parakeetcpp(plan, console=console, runner=_runner)
+    except ParakeetcppPhaseError as exc:
+        console.error(str(exc))
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="transcria-install", description="Installateur TranscrIA piloté en Python.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -564,6 +604,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_recommend_llm_parser(sub)
     _add_moss_site_parser(sub)
     _add_audiocpp_parser(sub)
+    _add_parakeetcpp_parser(sub)
     args = parser.parse_args(argv)
 
     if args.command == "python-env":
@@ -592,6 +633,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_moss_site(args)
     if args.command == "audiocpp":
         return _cmd_audiocpp(args)
+    if args.command == "parakeetcpp":
+        return _cmd_parakeetcpp(args)
     parser.error(f"commande inconnue : {args.command}")  # pragma: no cover - argparse garde l'exhaustivité
     return 2
 
