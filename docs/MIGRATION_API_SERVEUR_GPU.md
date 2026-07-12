@@ -74,7 +74,7 @@ Le code a déjà les bonnes coutures pour brancher des implémentations « remot
 
 ### 2.2 STT via vLLM — deux familles de modèles, deux endpoints
 
-vLLM sert **trois des quatre backends STT** du projet, mais via **deux mécanismes différents** qu'il faut bien distinguer car ils n'ont pas le même contrat de réponse.
+vLLM sert **trois des backends STT historiques** du projet (cohere, whisper, parakeet — le projet en compte davantage depuis), mais via **deux mécanismes différents** qu'il faut bien distinguer car ils n'ont pas le même contrat de réponse.
 
 #### Famille A — ASR dédiés → `/v1/audio/transcriptions`
 Modèles spécialisés transcription, exposés sur l'endpoint OpenAI Audio.

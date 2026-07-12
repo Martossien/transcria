@@ -301,7 +301,7 @@ pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétiq
 #### Image `:bundled` — modèles embarqués (zéro-download, hors-ligne)
 
 Variante de l'all-in-one GPU qui **embarque les modèles par défaut non gated** au lieu de les
-télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, activé par le quickstart `--bundled`), la
+télécharger au runtime : whisper large-v3 (MIT), Sortformer 4spk (NVIDIA Open Model License), Voxtral Mini 3B (Apache-2.0 — secondaire du multi-STT ciblé, **activé par défaut** depuis 0.3.4), la
 LLM d'arbitrage Qwen3.5-9B Q5_K_M (Apache-2.0) **et** le modèle de qualification audio **SQUIM**
 (torchaudio, ~29 Mo) — seul modèle que le pipeline téléchargeait encore au runtime (DNSMOS est déjà
 un `.onnx` versionné dans le dépôt). Résultat : **aucun téléchargement au 1ᵉ run** (validé E2E).

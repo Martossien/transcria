@@ -295,7 +295,7 @@ What we take away:
 
 ## Limits
 
-- One meeting family per window set; French only; 3 engines.
+- One meeting family per window set; French only. The in-pipeline Set-L compares 4 engines under identical chunking; the bonus round adds externally served engines under a whole-window protocol (stated where it applies — don't mix the two columns).
 - WER against an edited human transcript over-penalises verbatim engines
   (fillers, restarts) — treat deltas, not absolutes.
 - LLM-as-judge has real run-to-run variance; we report the **median of

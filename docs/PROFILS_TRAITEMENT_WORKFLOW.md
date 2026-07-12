@@ -1156,8 +1156,8 @@ derniers correctifs de concurrence.
 #### STT et strategie CPU/remote
 
 - `transcria/stt/transcriber_factory.py`
-  - Selectionne `cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, ou remote selon config.
-  - `get_backend_vram_mb()` est aujourd'hui backend-based ; il devra tenir compte d'une strategie CPU explicite.
+  - Selectionne `cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko`, `moss`, ou remote selon config.
+  - `get_backend_vram_mb()` est backend-based ; la strategie CPU existe depuis `kroko` (0 Mo ⇒ aucune reservation GPU dans le runner).
 
 - `transcria/stt/whisper_transcriber.py`
   - Supporte `device="cpu"` et `compute_type` adapte.

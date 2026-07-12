@@ -125,7 +125,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
-| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite` ou `parakeet`) |
+| `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko` — CPU pur — ou `moss`) |
 | `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
@@ -802,7 +802,7 @@ complètes par fenêtres).
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Active l'étape `multi_stt_review` (profils avec correction LLM uniquement ; coût nul sur audio sain, best-effort si VRAM/modèle manquent) |
-| `secondary_backend` | string | `"voxtral"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`) ; s'il égale le backend principal, bascule automatique sur un autre. Voxtral recommandé : langue forcée nativement → candidats jamais traduits |
+| `secondary_backend` | string | `"voxtral"` | Second moteur STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko`) ; s'il égale le backend principal, bascule automatique sur un autre. Voxtral recommandé : langue forcée nativement → candidats jamais traduits. `kroko` = alternative à coût VRAM nul (CPU) |
 | `levels` | list[string] | `["degrade"]` | Niveaux de la `difficulty_map` déclenchant la retranscription (`degrade`, `suspect`) |
 | `max_segments` | int | `20` | Plafond de segments retranscrits (les plus sévères d'abord) |
 | `min_segment_s` | float | `0.8` | Durée minimale d'un segment candidat |
