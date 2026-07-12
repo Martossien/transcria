@@ -240,7 +240,26 @@ class TestAudioEtPics:
 
 class TestSyncSummary:
     """Choix DOCX rapide vs synthèse resynchronisée : suggestion à la sauvegarde,
-    enfilage d'une demande refine `apply` composée serveur, gardes anti-double."""
+    enfilage d'une demande refine `apply` composée serveur, gardes anti-double.
+
+    La disponibilité dépend de `workflow.arbitration_llm.enabled` (défaut False —
+    c'est le config.yaml local qui l'active en dev) : les tests FORCENT l'état
+    voulu pour être déterministes quel que soit l'environnement (leçon CI 0.3.5)."""
+
+    @pytest.fixture(autouse=True)
+    def _llm_enabled(self, app):
+        from transcria.config import get_config
+
+        with app.app_context():
+            cfg = get_config()
+        llm = cfg.setdefault("workflow", {}).setdefault("arbitration_llm", {})
+        previous = llm.get("enabled")
+        llm["enabled"] = True
+        yield
+        if previous is None:
+            llm.pop("enabled", None)
+        else:
+            llm["enabled"] = previous
 
     def test_save_suggere_la_mise_a_jour(self, admin_client, editor_job):
         state = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
@@ -297,17 +316,13 @@ class TestSyncSummary:
             store = RefineStore(jobs_dir=get_config()["storage"]["jobs_dir"], job_id=editor_job)
             store.consume_request()  # nettoyage
 
-    def test_sync_refuse_si_llm_desactivee(self, admin_client, app, editor_job, monkeypatch):
+    def test_sync_refuse_si_llm_desactivee(self, admin_client, app, editor_job):
         from transcria.config import get_config
         with app.app_context():
             cfg = get_config()
-        monkeypatch.setitem(cfg.setdefault("workflow", {}).setdefault("arbitration_llm", {}),
-                            "enabled", False)
-        try:
-            r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary", json={})
-            assert r.status_code == 409
-        finally:
-            cfg["workflow"]["arbitration_llm"].pop("enabled", None)
+        cfg["workflow"]["arbitration_llm"]["enabled"] = False  # la fixture autouse restaurera
+        r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary", json={})
+        assert r.status_code == 409
 
     def test_message_compose_localise(self):
         from transcria.web.editor_routes import _sync_summary_message
