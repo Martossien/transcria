@@ -315,7 +315,43 @@ des livrables** — un job-fixture figé → DOCX/SRT/ZIP générés → structu
 (sections du DOCX, entrées du ZIP, index SRT) — posé en **B0** avec les autres goldens,
 c'est LA garde transverse de « livrables identiques » promise au §5.7.
 
-### 3.13 Couverture du périmètre — la carte de complétude
+### 3.13 Configuration (chaîne complète), page système, maintenance
+
+**La chaîne de configuration** (schéma → formulaire → page admin) :
+
+| Brique | Taille | Couv. | État |
+|---|---:|---:|---|
+| `config/config_schema.py` (validation, 423 clés) | 1 319 l. | **80 %** | **le point faible** : 205 lignes de validateurs `_check_*` non testées — le gardien des configs utilisateur est la partie la moins gardée de sa propre chaîne |
+| `config/loader.py` (défauts + commentaires) | 892 l. | 93 % | sain (surtout des données) |
+| `config/system_detector.py`, `env_file`, `llm_profiles`, `yaml_file`, `resource_node_manifest`, `gpu_calibration` | 1 058 l. | — | modules à une responsabilité, sains |
+| `web/config_form.py` (formulaire admin) | 236 l. | 94 % | sain ; rejoint `admin_routes` en A2 |
+| `services/config_service.py` | 122 l. | 91 % | sain |
+| garde CI de classification + `CONFIG_REFERENCE.md` généré | — | — | le patron modèle (repris par C7/C8) |
+
+→ ajout au périmètre de **C3** : compléter les tests des validateurs `_check_*`
+(cible ≥ 90 % sur config_schema.py) — chaque validateur non testé est un message d'erreur
+de config jamais vérifié, donc potentiellement faux le jour où l'utilisateur le voit.
+
+**La page système** (`/system`, `/api/system/status`, `/api/resources/status`,
+`dashboard_status.html` 175 l.) : vues minces sur l'état GPU/file — saines. Leur seul
+enjeu est **B3** : elles doivent lire le MÊME snapshot GPU que le scheduler et le workflow
+(c'est déjà dans la DoD de B3), et leurs endpoints entrent dans la référence **C8**.
+
+**La maintenance** (backup/restore/upgrade/planification) :
+
+| Brique | Taille | Couv. | État |
+|---|---:|---:|---|
+| `maintenance/backup.py` / `restore.py` / `upgrade.py` / `schedule.py` / `restore_service.py` | 963 l. | 78-96 % | sains (E2E réels SQLite + PostgreSQL passés) |
+| `web/maintenance_service.py` | 81 l. | **100 %** | sain |
+| `maintenance/cli.py` | 352 l. | **38 %** | **la pire couverture de toutes les surfaces auditées** (142/228 lignes mortes aux tests) + 18 imports différés |
+
+→ le remède pour `maintenance/cli.py` n'est PAS « écrire des tests de CLI » : c'est
+**amincir la CLI** (le patron installer.cli/C6) — toute logique qui y vit descend dans les
+modules testés, la CLI ne garde que le parsing et la délégation ; sa couverture devient
+mécaniquement haute. Rattaché à **C6**. Piège documenté : `resolve_database_url` honore
+`TRANSCRIA_DATABASE_URL` sinon vise la base par défaut — les goldens de backup fixent l'env.
+
+### 3.14 Couverture du périmètre — la carte de complétude
 
 Toutes les surfaces du produit ont été auditées ; chacune a son état des lieux et sa
 vague (ou son motif de non-action) :
@@ -332,7 +368,9 @@ vague (ou son motif de non-action) :
 | Interface (templates, JS, contrat front↔back) | §3.10 | A3 |
 | Documentation d'API (3 contrats) | §3.11 | C8 |
 | Livrables / éditeur SRT / affinage / documents | §3.12 | sain — goldens en B0, restes portés par B1/A3/C8 |
-| Config (schéma, classification) | §3.3, C3 | vues typées, schéma souverain |
+| Config (schéma, validateurs, formulaire admin) | §3.3, §3.13 | C3 (+ tests validateurs), A2 (formulaire) |
+| Page système / dashboards | §3.13 | B3 (snapshot unique) + C8 |
+| Maintenance (backup/restore/upgrade/CLI) | §3.13 | C6 (amincir la CLI) |
 | Tests (conftest, fakes, contrats) | §3.6, C4 | C4 |
 
 ## 4. Diagnostic
@@ -849,7 +887,9 @@ class GpuView:
 Règle d'adoption : une vue par sous-système qui consomme ≥ 5 clés (`GpuView`, `QueueView`,
 `WorkflowView`, `SttView` en premier — ce sont les 216 chaînes qui fondent) ; interdiction
 ratchet de **nouvelles** chaînes profondes ; le stock existant fond par opportunité (quand
-une vague touche un fichier), jamais par campagne dédiée.
+une vague touche un fichier), jamais par campagne dédiée. S'y ajoute (§3.13) : **compléter
+les tests des validateurs `_check_*` de config_schema.py** (205 lignes non testées,
+cible ≥ 90 %) — le schéma est le seul rempart des configs utilisateur.
 
 #### C4 — Composition de l'app et des tests *(effort M)*
 
@@ -892,6 +932,9 @@ les appels directs d'install.sh au module legacy basculent sur `installer.cli`.
 `tests/test_install_e2e.py` (installation réelle + leak-check), et **un build Docker
 resource-node** — le Dockerfile exécute `install.sh --profile resource-node` au build,
 c'est l'E2E d'installation le plus réaliste dont on dispose.
+
+**Extension (§3.13)** : `maintenance/cli.py` (352 l., **38 %** de couverture) reçoit le
+même traitement — amincir en descendant la logique dans les modules testés.
 
 **DoD** : zéro module `transcria/install_*.py` à la racine (hors `install_messages` s'il
 reste des consommateurs transitoires) ; install.sh n'appelle plus que `installer.cli`
@@ -1074,6 +1117,8 @@ l'annexe C.
 | Plus gros template | job_wizard.html : 1 110 l. | < 400 l. | A3 |
 | Doc API | table manuelle driftante (TECHNICAL §4.11) | générée de url_map + garde CI | C8 |
 | Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
+| Couverture config_schema.py (validateurs) | 80 % (205 l. mortes) | ≥ 90 % | C3 |
+| Couverture maintenance/cli.py | **38 %** | ≥ 80 % (par amincissement) | C6 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |
 | Singletons `get_instance` | 10 sites | 0 nouveau, stock ↓ | B1/C4 |
 | Fonctions > 150 lignes | 8 | 0 | B1/B2/A2 |
