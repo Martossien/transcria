@@ -145,7 +145,7 @@ def list_meeting_types():
     ``manageable_ids`` et ``share_targets`` alimentent l'éditeur (lot E) :
     quels types je peux modifier/partager, et vers quels groupes.
     """
-    from transcria.web.i18n import select_locale
+    from transcria.i18n import select_locale
     templates = MeetingTypeStore.gallery_templates_for_user(current_user)
     manageable = {t.id for t in MeetingTypeStore.list_manageable(current_user)}
     # Affichage traduit dans la locale de l'INTERFACE (axe A) : les types intégrés ne

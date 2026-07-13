@@ -1089,7 +1089,7 @@ def job_wizard(job_id: str):
     # Le profil pilote la disposition du wizard (étapes affichées/masquées, numérotation).
     # Profil sélectionné = celui persisté sur le job, sinon le recommandé (présélection du
     # curseur) ; None ⇒ comportement complet (legacy/aucun profil dispo).
-    from transcria.web.i18n import select_locale as _select_locale_for_profiles
+    from transcria.i18n import select_locale as _select_locale_for_profiles
     profiles_view = compute_profiles_view(cfg, _select_locale_for_profiles())
     selected_profile = profile_for_job(job)
 
@@ -1112,7 +1112,7 @@ def job_wizard(job_id: str):
     # `name` reste la CLÉ (value de l'<option>, posté en meeting_type, lookups/comparaisons) ;
     # seule l'étiquette visible est localisée. Custom = déjà dans la langue de l'auteur.
     from transcria.context.meeting_type_catalog import localized_type_display
-    from transcria.web.i18n import select_locale
+    from transcria.i18n import select_locale
     _ui_locale = select_locale()
     meeting_type_display = {
         mt: localized_type_display(mt, _ui_locale, "name", mt) for mt in builtin_meeting_types
@@ -2376,7 +2376,7 @@ def _live_eta(job, progress) -> dict | None:
 @login_required
 def api_profiles_availability():
     """Profils de traitement disponibles + profil recommandé (source unique pour le wizard)."""
-    from transcria.web.i18n import select_locale
+    from transcria.i18n import select_locale
     from transcria.workflow.profile_availability import compute_profiles_view
 
     return jsonify(compute_profiles_view(get_config(), select_locale()))
@@ -2964,8 +2964,8 @@ def system_status():
 
 def _render_config_form(config_yaml: str, config_path: str, validation_errors: list[str] | None = None,
                         status: int = 200, values: dict | None = None):
+    from transcria.i18n import select_locale
     from transcria.web import prompt_files
-    from transcria.web.i18n import select_locale
 
     cfg_now = ConfigService.get_singleton()
     if values is None:
@@ -3013,8 +3013,8 @@ def admin_config():
     elif request.method == "POST" and request.form.get("_mode") == "prompts":
         # Édition des prompts LLM : liste FERMÉE de fichiers connus (prompt_files),
         # garde non-vide + backup .bak — voir docs/archive/REFONTE_UI.md.
+        from transcria.i18n import select_locale
         from transcria.web import prompt_files
-        from transcria.web.i18n import select_locale
 
         prompt_lang = select_locale()
         saved = 0

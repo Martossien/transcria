@@ -212,7 +212,7 @@ def create_app(config_path: str | None = None) -> Flask:
         # Affichage localisé des priorités de lexique (value = clé FR canonique inchangée) :
         # « critique » → « critical » en UI EN. Le menu était systématiquement FR sinon.
         from transcria.context.lexicon import localized_priority
-        from transcria.web.i18n import select_locale
+        from transcria.i18n import select_locale
         return localized_priority(key, select_locale())
 
     @app.after_request

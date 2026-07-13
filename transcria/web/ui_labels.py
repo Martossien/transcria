@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from flask_babel import gettext
 
-from transcria.web.i18n_js import N_
+from transcria.i18n import N_
 
 # État JobState → libellé utilisateur. Les états « en cours » portent une ellipse. Les valeurs
 # sont marquées `N_` (extraites par babel, source FR inchangée) et TRADUITES au rendu dans

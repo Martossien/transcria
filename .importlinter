@@ -27,13 +27,17 @@ forbidden_modules =
 ignore_imports =
     transcria.logging_setup -> flask
 
-# A0 (2026-07-13) — l'interface web n'est pas une dépendance : aucun domaine ni le noyau
-# ne l'importe. (context/voice/queue manquent ENCORE à cette liste — leur import de
-# web.i18n meurt en vague A1, qui les ajoutera ici.)
+# A0 (2026-07-13), élargi en A1 (2026-07-13) — l'interface web n'est pas une dépendance :
+# PERSONNE ne l'importe (l'inversion web.i18n de context/voice/queue est morte en A1,
+# la résolution de locale vit dans transcria.i18n).
 [importlinter:contract:web-pas-une-dependance]
 name = Les domaines et le noyau n'importent pas transcria.web
 type = forbidden
 source_modules =
+    transcria.context
+    transcria.voice
+    transcria.queue
+    transcria.i18n
     transcria.stt
     transcria.audio
     transcria.gpu

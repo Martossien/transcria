@@ -11,13 +11,13 @@ from transcria.auth.models import Role
 from transcria.auth.permissions import Permission, requires
 from transcria.config import get_config
 from transcria.database import db
+from transcria.i18n import N_
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.calendar import SchedulingCalendar, SchedulingWindowStore
 from transcria.queue.store import QueueStore
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
-from transcria.web.i18n_js import N_
 from transcria.workflow.transitions import get_execution_status, mark_execution_cancelled, request_execution_cancel
 
 queue_pages_bp = Blueprint("queue_pages", __name__)

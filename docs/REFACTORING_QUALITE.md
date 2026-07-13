@@ -2,6 +2,9 @@
 
 > **Statut** : en cours d'exécution. ✅ **A0 livrée (2026-07-13)** — audit_imports.py +
 > ratchet quality_baseline.json + .importlinter (3 contrats) + étape CI + section AGENTS.md.
+> ✅ **A1 livrée (2026-07-13)** — `transcria/i18n/` (locale + js_catalog), shims datés dans
+> web/, 11 sites consommateurs réécrits, contrat « web n'est une dépendance de personne »
+> élargi à context/voice/queue/i18n.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -622,7 +625,7 @@ le préflight distant (`_preflight_remote_stt`) et la couture du gate.
 
 **DoD** : CI verte avec les trois gardes actives ; baseline versionnée ; zéro code déplacé.
 
-#### A1 — `transcria/i18n/` *(effort S ; la vague-école)*
+#### ✅ A1 — `transcria/i18n/` *(LIVRÉE 2026-07-13)*
 
 **Inventaire exact du déplacement** :
 
