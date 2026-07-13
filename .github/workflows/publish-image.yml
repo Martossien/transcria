@@ -25,7 +25,13 @@ on:
 jobs:
   build-push:
     runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    # 0.3.6 : les étages CUDA épinglés (llama.cpp + audio.cpp + parakeet.cpp) dépassent
+    # 3 h sur le runner 2 cœurs (kill vécu à 180 min pile). Ils viennent désormais du
+    # CACHE REGISTRE (refs :buildcache*, semées depuis une machine locale via
+    # `docker buildx build --target <étage> --cache-to type=registry,...` — cf.
+    # docs/DOCKER.md § Publication). Le timeout large ne sert que si le cache est froid
+    # (bump d'un SHA épinglé) ; run nominal ≈ 1 h.
+    timeout-minutes: 350
     permissions:
       contents: read
       packages: write
@@ -75,3 +81,10 @@ jobs:
           # toujours l'image — seules des entrées « unknown/unknown » apparaissent dans l'UI.
           provenance: mode=max
           sbom: true
+          # Cache registre : étages CUDA épinglés semés localement (llama/runtimes) +
+          # cache général entretenu par la CI elle-même à chaque publish réussi.
+          cache-from: |
+            type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache
+            type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache-runtimes
+            type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache-llama
+          cache-to: type=registry,ref=ghcr.io/martossien/transcria-allinone:buildcache,mode=max

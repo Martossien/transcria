@@ -399,6 +399,20 @@ TRANSCRIA_ALLINONE_IMAGE=ghcr.io/<owner>/transcria-allinone:vX.Y.Z scripts/docke
 >
 > *Validé E2E (2026-06-23, 8× RTX 3090) : pipeline complet, qualité 97/100, livrables SRT/ZIP/DOCX.*
 
+**Cache de build registre (0.3.6)** : les étages CUDA épinglés (llama.cpp, audio.cpp,
+parakeet.cpp) dépassent le budget du runner GitHub s'ils compilent à froid (kill vécu à
+180 min). Le workflow lit les refs `:buildcache`, `:buildcache-runtimes`,
+`:buildcache-llama` et entretient `:buildcache` à chaque publish réussi. Après un **bump
+d'un SHA épinglé**, re-semer le cache depuis une machine costaude AVANT de pousser le tag :
+
+```bash
+docker buildx create --name seedcache --driver docker-container   # une fois
+docker buildx build --builder seedcache --target stt-runtimes-builder -f Dockerfile.allinone-gpu \
+  --cache-to type=registry,ref=ghcr.io/<owner>/transcria-allinone:buildcache-runtimes,mode=max .
+docker buildx build --builder seedcache --target llama-builder -f Dockerfile.allinone-gpu \
+  --cache-to type=registry,ref=ghcr.io/<owner>/transcria-allinone:buildcache-llama,mode=max .
+```
+
 #### Publication de l'image `:bundled` (build local + push manuel)
 
 L'image `:bundled` (~40 Go avec les poids) **dépasse le disque d'un runner GitHub standard** → elle
