@@ -20,7 +20,9 @@ from transcria.notifications.admin_alerts import alert_admin_vram_wait
 from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QueueStore
+from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
+from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 from transcria.workflow.transitions import (
     is_cancel_requested,
     mark_execution_cancelled,
@@ -37,9 +39,9 @@ from transcria.workflow.transitions import (
 # VRAM-aware + re-queue), mais `_run_process` y exécute le runner d'étape au lieu du
 # pipeline complet — le runner gère lui-même l'état du job, l'exécuteur ne libère que la
 # file (pas de COMPLETED/FAILED de pipeline, pas d'e-mail propriétaire).
-SUMMARY_MODE = "summary"
-SPEAKER_MODE = "speakers"
-REFINE_MODE = "refine"
+SUMMARY_MODE = ExecutionMode.SUMMARY.value
+SPEAKER_MODE = ExecutionMode.SPEAKER_DETECTION.value
+REFINE_MODE = ExecutionMode.REFINEMENT.value
 STEP_MODES = (SUMMARY_MODE, SPEAKER_MODE, REFINE_MODE)
 
 
@@ -183,7 +185,7 @@ class JobExecutorService:
                 # relançable) plutôt que de produire un résultat sans entrées.
                 artifact_store.pull_job_files(self.config, job_id)
 
-                is_step_mode = mode in STEP_MODES
+                is_step_mode = ExecutionMode.from_string(mode).is_step
                 if is_step_mode:
                     # Étape GPU synchrone routée vers le worker (frontal sans GPU / reprise
                     # serveur) : le runner gère lui-même l'état du job (SUMMARY_DONE /
@@ -210,30 +212,36 @@ class JobExecutorService:
                 # Un échec doit remonter : un résultat non durable n'est pas un résultat.
                 artifact_store.push_job_files(self.config, job_id)
 
-                if result.get("cancelled"):
+                # Contrat typé (vague B0) : les producteurs historiques renvoient encore
+                # des dicts — l'adaptateur encode la priorité (goldens :
+                # test_job_executor_outcomes_golden.py). Disparaît quand les producteurs
+                # renverront PhaseOutcome nativement (vague B2).
+                outcome = PhaseOutcome.from_legacy_dict(result)
+
+                if outcome.kind is OutcomeKind.CANCELLED:
                     QueueStore.dequeue(job_id, status="cancelled")
                     mark_execution_cancelled(job_id)
                     JobStore.update_state(job_id, JobState.CANCELLED)
                     if not is_step_mode:
                         self._purge_input_blobs(job_id, sl)
-                elif result.get("deferred"):
+                elif outcome.kind is OutcomeKind.DEFERRED:
                     # Mode dégradé §7.2 : ressources distantes injoignables (transitoire).
                     # On replanifie au lieu d'échouer (terminaison garantie par la fenêtre
                     # max_unavailable_s côté pré-vol). Pas d'état terminal, pas de notif.
-                    retry_after = int(result.get("retry_after_s", 30))
+                    retry_after = outcome.retry_after_s or 30
                     scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
                     QueueStore.requeue_later(job_id, scheduled_at)
                     mark_execution_queued(job_id, mode)
                     sl.info("Job différé (ressources distantes) — nouvelle tentative dans %ds",
-                            retry_after, job_id=job_id, reason=result.get("reason"))
-                elif result.get("vram_wait"):
+                            retry_after, job_id=job_id, reason=outcome.reason)
+                elif outcome.kind is OutcomeKind.WAITING_VRAM:
                     # VRAM locale momentanément insuffisante (transitoire) : on re-queue
                     # au lieu d'échouer (reprise auto par le scheduler dès libération).
                     # Pas d'état terminal, pas de mail d'échec propriétaire. L'admin est
                     # alerté UNE seule fois (premier passage en attente).
-                    required_mb = int(result.get("required_mb") or 0)
-                    phase = result.get("phase") or "stt"
-                    retry_after = int(result.get("retry_after_s", 30))
+                    required_mb = outcome.required_vram_mb or 0
+                    phase = outcome.phase or "stt"
+                    retry_after = outcome.retry_after_s or 30
                     scheduled_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
                     QueueStore.requeue_later(job_id, scheduled_at)
                     first_wait = mark_execution_waiting_vram(job_id, required_mb=required_mb, phase=phase)
@@ -241,16 +249,17 @@ class JobExecutorService:
                                retry_after, job_id=job_id, required_vram_mb=required_mb, phase=phase)
                     if first_wait:
                         alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
-                elif result.get("error"):
+                elif outcome.kind is OutcomeKind.FAILED:
+                    error = outcome.reason or "Erreur inconnue"
                     QueueStore.dequeue(job_id, status="failed")
-                    mark_execution_failed(job_id, result["error"])
+                    mark_execution_failed(job_id, error)
                     if is_step_mode:
                         # Le runner d'étape a déjà posé l'état FAILED réel ; ce n'est pas le
                         # livrable final, on ne notifie pas le propriétaire par e-mail.
-                        sl.warning("Étape GPU (worker) en échec", job_id=job_id, mode=mode, error=result["error"])
+                        sl.warning("Étape GPU (worker) en échec", job_id=job_id, mode=mode, error=error)
                     else:
-                        JobStore.update_state(job_id, JobState.FAILED, result["error"])
-                        _notify(self.config, job, "failed", result["error"])
+                        JobStore.update_state(job_id, JobState.FAILED, error)
+                        _notify(self.config, job, "failed", error)
                         self._purge_input_blobs(job_id, sl)
                 elif is_step_mode:
                     # Succès d'une étape GPU (résumé / détection) : le runner a déjà posé
@@ -267,7 +276,7 @@ class JobExecutorService:
                     # (lien vers /result). Best-effort côté collecte des faits.
                     try:
                         from transcria.notifications.job_facts import completed_facts
-                        facts = completed_facts(self.config, job, result.get("processing_seconds"))
+                        facts = completed_facts(self.config, job, outcome.processing_seconds)
                     except Exception:  # noqa: BLE001
                         facts = None
                     _notify(self.config, job, "completed", facts=facts)

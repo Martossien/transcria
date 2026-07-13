@@ -5,6 +5,12 @@
 > ✅ **A1 livrée (2026-07-13)** — `transcria/i18n/` (locale + js_catalog), shims datés dans
 > web/, 11 sites consommateurs réécrits, contrat « web n'est une dépendance de personne »
 > élargi à context/voice/queue/i18n.
+> ✅ **B0 livrée (2026-07-13)** — `workflow/outcomes.py` (PhaseOutcome/OutcomeKind +
+> adaptateurs) + `services/execution.py` (ExecutionMode/ExecutionCommand) ; 7 goldens
+> dict→décision posés AVANT migration ; l'exécuteur décide sur `outcome.kind`, les 4
+> sorties de frontière du pipeline (gate distant ×2, vram_wait normalisé, exception)
+> construisent des PhaseOutcome. Les dicts INTERNES de `_run_pipeline_steps` restent le
+> périmètre de B2, comme prévu.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -715,7 +721,7 @@ SRT réels inchangés ; `job_wizard.html` < 400 l.
 
 ### Piste B — orchestration (contrats d'abord ; la dette principale)
 
-#### B0 — Les contrats typés *(effort M ; sécurise tout le reste)*
+#### ✅ B0 — Les contrats typés *(LIVRÉE 2026-07-13 — frontière typée ; dicts internes des étapes → B2)*
 
 Nouveau module `transcria/workflow/outcomes.py` — le contrat couvre **exactement** les 9
 clés relevées (§3.3), ni plus ni moins :

@@ -9,6 +9,7 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.workflow.concurrency_profile import StageMetrics
+from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.transitions import is_cancel_requested
 
@@ -126,7 +127,7 @@ class PipelineService:
             sl.exception("ÉCHEC pipeline %s", mode, job_id=job.id)
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc), "step": "pipeline"}
+            return PhaseOutcome(OutcomeKind.FAILED, phase="pipeline", reason=str(exc)).to_legacy_dict()
 
     @staticmethod
     def _vram_wait_result(phase_result: dict, *, step: str) -> dict:
@@ -135,14 +136,13 @@ class PipelineService:
         Conserve le motif/la VRAM requise et un délai de re-tentative ; l'exécuteur
         re-queue alors le job (reprise auto), comme pour le mode `deferred` (§7.2).
         """
-        return {
-            "vram_wait": True,
-            "required_mb": int(phase_result.get("required_mb") or 0),
-            "phase": phase_result.get("phase") or step,
-            "reason": phase_result.get("reason") or phase_result.get("error") or "VRAM insuffisante",
-            "retry_after_s": int(phase_result.get("retry_after_s", 30)),
-            "step": step,
-        }
+        return PhaseOutcome(
+            OutcomeKind.WAITING_VRAM,
+            phase=phase_result.get("phase") or step,
+            reason=phase_result.get("reason") or phase_result.get("error") or "VRAM insuffisante",
+            required_vram_mb=int(phase_result.get("required_mb") or 0),
+            retry_after_s=int(phase_result.get("retry_after_s", 30)),
+        ).to_legacy_dict()
 
     def _remote_resource_gate(self, job: Job, sl) -> dict | None:
         """Pré-vol des ressources distantes (admission §7.2 + auto-lancement STT).
@@ -179,16 +179,20 @@ class PipelineService:
             return None
         if verdict.action == "fail":
             sl.warning("Pré-vol ressources : ÉCHEC — %s", verdict.reason, job_id=job.id)
-            return {"error": f"ressources_distantes_indisponibles: {verdict.reason}", "step": "preflight"}
+            return PhaseOutcome(
+                OutcomeKind.FAILED,
+                phase="preflight",
+                reason=f"ressources_distantes_indisponibles: {verdict.reason}",
+            ).to_legacy_dict()
         # defer (transitoire) — re-queue différé (§7.2) : le job patiente puis re-tente.
         sl.warning("Pré-vol ressources : indisponibles (transitoire) — mise en file différée (%s)",
                    verdict.reason, job_id=job.id)
-        return {
-            "deferred": True,
-            "retry_after_s": verdict.retry_after_s,
-            "reason": verdict.reason,
-            "step": "preflight",
-        }
+        return PhaseOutcome(
+            OutcomeKind.DEFERRED,
+            phase="preflight",
+            reason=verdict.reason,
+            retry_after_s=verdict.retry_after_s,
+        ).to_legacy_dict()
 
     def _execute_pipeline(
         self,
