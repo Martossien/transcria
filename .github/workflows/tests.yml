@@ -71,6 +71,14 @@ jobs:
       - name: i18n — catalogues à jour, complets et compilés
         run: python scripts/i18n_check.py
 
+      - name: Architecture — ratchet + contrats d'imports
+        # Ratchet : aucune métrique de quality_baseline.json ne peut se dégrader
+        # (imports différés, fan-out, chaînes de config, cycles). Contrats : .importlinter.
+        # Doctrine et procédure : docs/REFACTORING_QUALITE.md (vague A0).
+        run: |
+          python scripts/audit_imports.py --check-baseline quality_baseline.json
+          lint-imports
+
       - name: Run test suite with coverage
         env:
           TRANSCRIA_TEST_PG_HOST: 127.0.0.1

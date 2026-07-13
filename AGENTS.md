@@ -338,6 +338,28 @@ transcria/
 
 ## Conventions de code
 
+### Architecture — où va le code neuf (garde-fous CI actifs)
+
+Plan directeur : `docs/REFACTORING_QUALITE.md`. Deux gardes tournent en CI :
+`scripts/audit_imports.py --check-baseline quality_baseline.json` (RATCHET — imports
+différés, fan-out par module, chaînes `get().get()` de config, fonctions > 150 lignes,
+cycles : rien ne peut se dégrader) et `lint-imports` (contrats `.importlinter` — cliquet :
+on n'y met QUE des contrats vrais, chaque vague ajoute le sien).
+
+- **Une nouvelle route** → le blueprint de son domaine (jamais `web/routes.py` par
+  défaut) ; les modules de routes ne s'importent JAMAIS entre eux.
+- **Une nouvelle phase de workflow / étape de pipeline** → son propre module (cible :
+  `workflow/phases/`, `services/pipeline_steps/` — cf. vagues B1/B2 du plan).
+- **Un nouvel import interne** → en TÊTE de fichier. Différé UNIQUEMENT si : dépendance
+  lourde au boot (torch, transformers, nemo, vllm, pyannote), dépendance optionnelle par
+  topologie, ou point d'entrée à erreur lisible (doctor, entrypoint) — avec un commentaire
+  d'une ligne qui le justifie.
+- **Un résultat inter-couches** → objet typé (`PhaseOutcome`…), jamais un dict de forme
+  libre. **Une lecture de config** → clé simple ou vue typée, jamais une nouvelle chaîne
+  `get("a", {}).get("b")`.
+- Si une vague AMÉLIORE les chiffres : re-générer `quality_baseline.json`
+  (`--write-baseline`) dans le même commit.
+
 ### Style
 - Indentation : 4 espaces
 - Longueur de lignes : pas de limite stricte, rester lisible

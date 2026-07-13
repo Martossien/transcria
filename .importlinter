@@ -1,0 +1,65 @@
+# Contrats d'architecture (import-linter, exécuté en CI — cf. docs/REFACTORING_QUALITE.md).
+#
+# DOCTRINE DU CLIQUET : ce fichier ne porte QUE des contrats VRAIS au moment où ils sont
+# ajoutés — jamais d'aspiration. Chaque vague du plan ajoute le contrat qu'elle vient de
+# rendre vrai (avec sa date). Les violations CONNUES restantes sont listées dans le plan
+# (§3.4/3.6 : vram_manager→queue, package_builder/analyzer/job_facts→orchestration,
+# jobs/models+timing_store→workflow, web.i18n importé par context/voice/queue → vague A1).
+
+[importlinter]
+root_packages =
+    transcria
+    inference_service
+include_external_packages = True
+
+# A0 (2026-07-13) — le cœur du workflow ne connaît pas Flask : les phases doivent rester
+# exécutables hors serveur web (étoile polaire du plan, §5.2).
+[importlinter:contract:workflow-sans-flask]
+name = transcria.workflow n'importe pas Flask
+type = forbidden
+source_modules =
+    transcria.workflow
+forbidden_modules =
+    flask
+# logging_setup importe flask en DIFFÉRÉ GARDÉ (try/except ImportError — fonctionne sans
+# Flask) pour enrichir les logs du correlation_id en contexte requête : exception §8.3
+# du plan, pas une dépendance.
+ignore_imports =
+    transcria.logging_setup -> flask
+
+# A0 (2026-07-13) — l'interface web n'est pas une dépendance : aucun domaine ni le noyau
+# ne l'importe. (context/voice/queue manquent ENCORE à cette liste — leur import de
+# web.i18n meurt en vague A1, qui les ajoutera ici.)
+[importlinter:contract:web-pas-une-dependance]
+name = Les domaines et le noyau n'importent pas transcria.web
+type = forbidden
+source_modules =
+    transcria.stt
+    transcria.audio
+    transcria.gpu
+    transcria.exports
+    transcria.quality
+    transcria.notifications
+    transcria.jobs
+    transcria.auth
+    transcria.config
+    transcria.audit
+    transcria.workflow
+    transcria.services
+forbidden_modules =
+    transcria.web
+
+# A0 (2026-07-13) — pureté (partielle) du noyau : auth/config/audit n'importent pas
+# l'orchestration. (jobs/ a deux imports de constantes workflow connus — hors contrat
+# tant qu'ils vivent, cf. plan.)
+[importlinter:contract:noyau-sans-orchestration]
+name = auth/config/audit n'importent pas l'orchestration
+type = forbidden
+source_modules =
+    transcria.auth
+    transcria.config
+    transcria.audit
+forbidden_modules =
+    transcria.workflow
+    transcria.queue
+    transcria.services

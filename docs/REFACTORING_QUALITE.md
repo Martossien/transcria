@@ -1,6 +1,7 @@
 # Refactorisation qualité — plan directeur et playbook d'exécution
 
-> **Statut** : cadrage validé — aucune vague lancée. Chaque vague sera cochée ici.
+> **Statut** : en cours d'exécution. ✅ **A0 livrée (2026-07-13)** — audit_imports.py +
+> ratchet quality_baseline.json + .importlinter (3 contrats) + étape CI + section AGENTS.md.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -169,6 +170,12 @@ moteur**, à chaque fois.
 - `context/meeting_type_routes.py:148` et `voice/routes.py:48` importent
   `transcria.web.i18n.select_locale` ; `queue/routes.py:20` importe
   `transcria.web.i18n_js.N_` — trois paquets métier dépendent du paquet d'interface ;
+- relevées par import-linter en A0 (mon grep direct les manquait — imports transitifs et
+  variantes) : `gpu/vram_manager`, `exports/package_builder`, `audio/analyzer`,
+  `notifications/job_facts` importent l'orchestration (couche 2 → couche 3), et
+  `jobs/models` + `jobs/timing_store` importent des constantes de `workflow` (couche 1 →
+  couche 3) — six dettes de couche supplémentaires, à résorber quand les vagues B les
+  touchent (les contrats correspondants s'activeront à ce moment-là) ;
 - `web/editor_routes.py:61` importe la **privée** `_get_job_for_api` de `web/routes.py` ;
 - double génération d'installeur — voir l'inventaire complet au §3.8 (le legacy fait
   **13 modules / 4 641 lignes**, pas trois fichiers) ;
@@ -587,7 +594,7 @@ le préflight distant (`_preflight_remote_stt`) et la couture du gate.
 
 ### Piste A — interface (mécanique, risque faible)
 
-#### A0 — Les filets *(effort S ; prérequis de tout le reste)*
+#### ✅ A0 — Les filets *(LIVRÉE 2026-07-13)*
 
 **Livrables** :
 1. `scripts/audit_imports.py` — le script d'analyse AST (annexe A) : fan-out/fan-in par
