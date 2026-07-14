@@ -1,9 +1,8 @@
 import json
 import logging
 import time
-from types import SimpleNamespace
 
-from transcria.gpu.gpu_session import GPUSession, GPUSessionError
+from transcria.gpu.gpu_session import GPUSessionError
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.gpu.vram_manager import VRAMManager
@@ -11,27 +10,13 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.queue.allocator import GPUAllocator
+from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSession ré-exporté (tests historiques)
+    GpuPhaseSession,
+    _NoReservationSession,
+)
 from transcria.workflow.progress import WorkflowProgressReporter
 
 logger = logging.getLogger(__name__)
-
-
-class _NoReservationSession:
-    """Session GPU no-op : phase servie à distance OU backend CPU pur (0 Mo VRAM).
-
-    Expose `gpu_index` (device de repli/fallback éventuel ; None = CPU) sans rien
-    réserver ni décharger — la VRAM est ailleurs (serveur distant) ou inutile.
-    """
-
-    def __init__(self, gpu_index: int | None) -> None:
-        self.gpu_index = gpu_index
-        self.acquired = True
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
 
 
 # Messages utilisateur du chat d'affinage (Axe B) — dans la langue des livrables du job.
@@ -128,85 +113,47 @@ class WorkflowRunner:
     def __init__(self, store: type[JobStore] | JobStore, config: dict | None = None):
         self.store = store
         self.config = config or {}
-        self.vram = VRAMManager(config=self.config)
-        self.allocator = GPUAllocator.get_instance(self.config)
+        self.gpu = GpuPhaseSession(self.config)
         self.progress = WorkflowProgressReporter(self.config)
 
+    # `vram`/`allocator` : vues write-through sur la session GPU — les tests
+    # historiques patchent `runner.vram.*` ou REMPLACENT `runner.allocator`,
+    # et la session doit voir la même chose que le runner.
+    @property
+    def vram(self) -> VRAMManager:
+        return self.gpu.vram
+
+    @vram.setter
+    def vram(self, value) -> None:
+        self.gpu.vram = value
+
+    @property
+    def allocator(self) -> GPUAllocator:
+        return self.gpu.allocator
+
+    @allocator.setter
+    def allocator(self, value) -> None:
+        self.gpu.allocator = value
+
+    # Délégations session GPU (corps extraits vers workflow/gpu_phase.py — B1 lot 1).
+    # Conservées comme coutures : les tests substituent `runner._gpu_session` & co.
     def _gpu_session(self, job: Job, model_name: str, required_mb: int, phase: str):
-        if self._phase_runs_remotely(phase):
-            logger.info("Phase %s servie à distance — session GPU sans réservation locale", phase)
-            return _NoReservationSession(self._default_remote_gpu_index())
-        if required_mb <= 0:
-            # Backend CPU pur (ex. kroko) : rien à réserver (marcherait aussi sans GPU).
-            logger.info("Phase %s sur CPU (0 Mo VRAM) — session GPU sans réservation", phase)
-            return _NoReservationSession(None)
-        if not self.allocator.get_gpu_info():
-            return GPUSession(self.vram, model_name, required_mb)
-        try:
-            return GPUSession(
-                self.allocator,
-                model_name,
-                required_mb,
-                job_id=job.id,
-                phase=phase,
-            )
-        except TypeError:
-            # Compatibilité avec certains tests qui remplacent GPUSession par
-            # un fake historique à trois paramètres.
-            return GPUSession(self.vram, model_name, required_mb)
+        return self.gpu.session(job, model_name, required_mb, phase)
 
     def _reserve_gpu_phase(self, job: Job, required_mb: int, phase: str):
-        if self._phase_runs_remotely(phase):
-            logger.info("Phase %s servie à distance — aucune réservation VRAM locale", phase)
-            return SimpleNamespace(gpu_index=self._default_remote_gpu_index()), False
-        if required_mb <= 0:
-            # Backend CPU pur (ex. kroko) : aucune VRAM requise ⇒ aucune réservation,
-            # sinon on bloquerait un slot GPU (ou la machine sans GPU) pour rien.
-            logger.info("Phase %s sur CPU (0 Mo VRAM) — aucune réservation GPU", phase)
-            return SimpleNamespace(gpu_index=None), False
-        reservation = self.allocator.try_reserve(job.id, required_mb, phase)
-        if reservation is not None:
-            return reservation, True
-
-        # Les tests unitaires historiques mockent VRAMManager.ensure_free()
-        # plutôt que l'allocateur. En production, ce fallback retourne None si
-        # aucun GPU réel n'est visible.
-        gpu = self.vram.ensure_free(required_mb)
-        if gpu is None:
-            return None, False
-
-        return SimpleNamespace(gpu_index=gpu), False
+        return self.gpu.reserve_phase(job, required_mb, phase)
 
     def _release_gpu_phase(self, job: Job, phase: str, managed_by_allocator: bool) -> None:
-        if managed_by_allocator:
-            self.allocator.release_phase(job.id, phase)
-        else:
-            self.vram.offload_all()
+        self.gpu.release_phase(job, phase, managed_by_allocator)
 
     def _should_reserve_llm_vram(self) -> bool:
-        return bool(self.allocator.get_gpu_info())
+        return self.gpu.should_reserve_llm_vram()
 
     def _phase_runs_remotely(self, phase: str) -> bool:
-        """True si la capacité de cette phase est servie à distance → 0 VRAM locale.
-
-        Évite la réservation fantôme observée en mode distant (un run 100 % distant
-        réservait quand même `phase=stt vram=6000` localement, d'où fausse contention
-        VRAM / rejets à tort). Cf. docs/SERVICE_RESSOURCES_GPU.md §9.
-        """
-        if phase in ("stt", "summary_stt"):
-            from transcria.stt.transcriber_factory import _should_use_remote_stt
-
-            backend = self.config.get("models", {}).get("stt_backend", "cohere")
-            return _should_use_remote_stt(self.config, backend)
-        if phase == "diarization":
-            return self.config.get("models", {}).get("diarization_backend") == "remote"
-        return False
+        return self.gpu.phase_runs_remotely(phase)
 
     def _default_remote_gpu_index(self) -> int:
-        """Index GPU « device » fourni aux adaptateurs distants (utilisé seulement
-        pour un éventuel fallback local ; aucune VRAM n'est réservée)."""
-        pg = getattr(self.allocator, "preferred_gpu", None)
-        return int(pg) if pg is not None else 0
+        return self.gpu.default_remote_gpu_index()
 
     def _pyannote_progress_callback(self, job: Job, step: str):
         def callback(pyannote_step: str, pyannote_percent: float | None) -> None:
@@ -228,11 +175,7 @@ class WorkflowRunner:
 
     @staticmethod
     def _cuda_available() -> bool:
-        try:
-            import torch
-            return bool(torch.cuda.is_available())
-        except Exception:
-            return False
+        return GpuPhaseSession.cuda_available()
 
     def run_analyze(self, job: Job, audio_path: str) -> dict:
         from pathlib import Path
@@ -431,15 +374,7 @@ class WorkflowRunner:
         }
 
     def _reclaim_vram_from_idle_arbitrage_llm(self, sl) -> bool:
-        """Libère la VRAM en arrêtant NOTRE LLM d'arbitrage inactive (catégorie 1).
-
-        Délègue au helper partagé `stop_idle_arbitrage_llm` (mutualisé avec l'admission
-        du scheduler). N'arrête la LLM que si elle tourne et que le verrou LLM est libre
-        (aucun job ne l'utilise). Jamais un process tiers.
-        """
-        from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
-
-        return stop_idle_arbitrage_llm(self.allocator, self.vram, log=sl)
+        return self.gpu.reclaim_idle_arbitrage_llm(sl)
 
     @staticmethod
     def _get_fs(config: dict, job_id: str):

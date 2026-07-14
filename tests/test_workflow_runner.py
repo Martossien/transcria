@@ -717,10 +717,11 @@ class TestWorkflowRunnerRunSummary:
                 def __exit__(self, exc_type, exc, tb):
                     return False
 
-            from transcria.workflow import runner as runner_module
+            from transcria.workflow import gpu_phase as gpu_phase_module
             from transcria.stt.summary import SummaryGenerator
 
-            monkeypatch.setattr(runner_module, "GPUSession", FakeSession)
+            # B1 : la session GPU vit dans workflow/gpu_phase.py — substitution à la source.
+            monkeypatch.setattr(gpu_phase_module, "GPUSession", FakeSession)
             monkeypatch.setattr(
                 SummaryGenerator,
                 "generate_quick_summary",
