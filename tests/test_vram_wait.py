@@ -153,7 +153,7 @@ def test_api_summary_vram_wait_sets_waiting_and_alerts(app, monkeypatch):
             submits.append({"mode": mode, "vram_profile": kwargs.get("vram_profile")})
             return {"accepted": True}
 
-    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
+    monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
@@ -208,7 +208,7 @@ def test_api_summary_routes_to_worker_when_role_web(app, monkeypatch):
             submits.append(mode)
             return {"accepted": True}
 
-    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
+    monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)
@@ -256,7 +256,7 @@ def test_api_speakers_detect_routes_to_worker_when_role_web(app, monkeypatch):
             submits.append(mode)
             return {"accepted": True}
 
-    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _StubExecutor())
+    monkeypatch.setattr("transcria.web.wizard_api.get_job_executor", lambda: _StubExecutor())
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)

@@ -142,7 +142,7 @@ def test_reprocess_route_resets_resume_state(app, monkeypatch):
             submits.append(mode)
             return {"accepted": True}
 
-    monkeypatch.setattr("transcria.web.routes.get_job_executor", lambda: _Stub())
+    monkeypatch.setattr("transcria.web.processing_api.get_job_executor", lambda: _Stub())
 
     client = app.test_client()
     client.post("/login", data={"username": "admin", "password": "admin-change-me"}, follow_redirects=True)

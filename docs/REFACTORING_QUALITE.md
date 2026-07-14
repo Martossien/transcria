@@ -11,6 +11,14 @@
 > sorties de frontière du pipeline (gate distant ×2, vram_wait normalisé, exception)
 > construisent des PhaseOutcome. Les dicts INTERNES de `_run_pipeline_steps` restent le
 > périmètre de B2, comme prévu.
+> ✅ **A2 livrée (2026-07-14)** — `web/routes.py` (3 330 l., fan-out 63) éclaté en 8 modules
+> de routes sur UN blueprint partagé (`web/blueprint.py`), plus 4 modules de helpers publics
+> (`job_access`, `request_helpers`, `lexicon_views`, `refine_shared`) ; routes.py résiduel =
+> 99 l. (hooks pg + filtres) ; zéro endpoint renommé (56/56 routes identiques, `url_for`
+> vérifiés) ; `editor_routes` n'importe plus de privée ; contrat « routes indépendantes »
+> actif ; imports différés 535 → 432. Exception documentée : pages_routes (32), wizard_api
+> (30) et processing_api (22) portent le fan-out hérité du wizard god-feature — enregistrés
+> dans la baseline (cliquet : plus jamais pire), à résorber avec A3/B1.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -653,7 +661,15 @@ suivante : supprimer les shims.
 **DoD** : plus aucun `from transcria.web` hors de `transcria/web/` ; contrat « web est une
 feuille » actif ; `i18n_check` vert ; comportement identique (bascule FR/EN testée).
 
-#### A2 — Éclater `web/routes.py` en blueprints par domaine *(effort L)*
+#### ✅ A2 — Éclater `web/routes.py` en blueprints par domaine *(LIVRÉE 2026-07-14)*
+
+> **Écarts assumés au plan initial** (mécanique identique par ailleurs) :
+> `/metrics` vit avec `/health`,`/ready` dans `health_routes.py` (ils partagent le
+> healthcheck DB — les modules de routes ne s'important pas entre eux) ; les helpers
+> partagés vivent dans des modules PUBLICS dédiés (`request_helpers`, `lexicon_views`,
+> `refine_shared`) plutôt que dans routes.py résiduel (évite de recréer des imports de
+> privées) ; certains imports de fonctions sont PAR MODULE (`models_download.start_download`)
+> pour rester substituables par les tests à la source.
 
 **Mécanisme de non-régression des URLs** : les templates utilisent `url_for('web.xxx')` —
 le nom de blueprint `web` doit survivre. Un seul `Blueprint("web", …)` défini dans
@@ -1151,13 +1167,13 @@ l'annexe C.
 
 | Métrique | 2026-07-13 (départ) | Cible | Vague |
 |---|---:|---:|---|
-| Plus gros fichier (hors §9) | routes.py : 3 330 l. | < 900 l. | A2 |
+| Plus gros fichier (hors §9) | ~~routes.py : 3 330 l.~~ → runner.py : 2 867 l. (web ≤ 744) | < 900 l. | ✅ A2 (web) ; B1 (runner) |
 | Plus grosse classe | WorkflowRunner : 46 méth. / 2 740 l. | < 500 l. | B1 |
-| Fan-out max | 63 (routes.py) | ≤ 20 | A2 |
-| Imports différés internes (arbre) | 427 (dont 96 routes.py) | ≤ 40 justifiés | C5 |
+| Fan-out max | ~~63 (routes.py)~~ → 38 (runner.py ; web ≤ 32, exceptions baselinées) | ≤ 20 | ✅ A2 (web) ; A3/B1 (reste) |
+| Imports différés internes (arbre) | ~~535~~ → 432 (mesure audit_imports ; web/ purgé en A2) | ≤ 40 justifiés | C5 |
 | Chaînes de config profondes | 216 | 0 nouvelle, stock ↓ | C3 |
 | Dicts de résultat inter-couches | pipeline/executor entiers | 0 | B0 |
-| Inversions de couche | 3 (`web.i18n`) + `editor→routes` + installeur | 0 | A1/A2/C6 |
+| Inversions de couche | ~~3 (`web.i18n`)~~ ✅ A1 + ~~`editor→routes`~~ ✅ A2 + installeur | 0 | C6 (restant) |
 | Implémentations de sonde GPU / kill_patterns | 3 / 2 | 1 / 1 | B3 |
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
 | Modules install legacy à la racine | 13 (4 641 l.) | 0 (hors messages) | C6 |

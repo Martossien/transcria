@@ -192,7 +192,7 @@ def create_app(config_path: str | None = None) -> Flask:
     from transcria.queue.routes import queue_api_bp, queue_pages_bp
     from transcria.services.job_executor import init_job_executor
     from transcria.voice.routes import voice_bp
-    from transcria.web.routes import web_bp
+    from transcria.web import web_bp  # importe le paquet = accroche tous les modules de routes (A2)
 
     @app.template_global("asset_url")
     def asset_url(filename: str) -> str:

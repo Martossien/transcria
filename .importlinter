@@ -53,6 +53,23 @@ source_modules =
 forbidden_modules =
     transcria.web
 
+# A2 (2026-07-14) — les modules de routes web ne s'importent JAMAIS entre eux : tout
+# helper partagé vit dans un module dédié (job_access, request_helpers, lexicon_views,
+# refine_shared) ou dans routes.py (câblage transverse : hooks/filtres).
+[importlinter:contract:routes-independantes]
+name = Les modules de routes web sont indépendants entre eux
+type = independence
+modules =
+    transcria.web.pages_routes
+    transcria.web.wizard_api
+    transcria.web.lexicon_api
+    transcria.web.processing_api
+    transcria.web.downloads_api
+    transcria.web.refine_api
+    transcria.web.admin_routes
+    transcria.web.health_routes
+    transcria.web.editor_routes
+
 # A0 (2026-07-13) — pureté (partielle) du noyau : auth/config/audit n'importent pas
 # l'orchestration. (jobs/ a deux imports de constantes workflow connus — hors contrat
 # tant qu'ils vivent, cf. plan.)

@@ -29,6 +29,8 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.config import get_config
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.web.job_access import get_job_for_api
+from transcria.web.refine_shared import refine_running
 from transcria.workflow.refine_store import RefineStore
 from transcria.workflow.srt_editor import (
     SrtParseError,
@@ -58,9 +60,7 @@ def _fs(job_id: str) -> JobFilesystem:
 
 def _get_job(job_id: str):
     """Accès identique au reste des pages job (propriétaire/groupes/admin)."""
-    from transcria.web.routes import _get_job_for_api
-
-    return _get_job_for_api(job_id)
+    return get_job_for_api(job_id)
 
 
 def _effective_srt_text(fs: JobFilesystem) -> str | None:
@@ -394,9 +394,8 @@ def editor_sync_summary(job_id: str):
 
     cfg = get_config()
     store = RefineStore(jobs_dir=cfg["storage"]["jobs_dir"], job_id=job.id)
-    from transcria.web.routes import _refine_running
 
-    if store.has_active_request() or _refine_running(job):
+    if store.has_active_request() or refine_running(job):
         return jsonify({"error": "Une demande d'affinage est déjà en cours pour ce job."}), 409
 
     from transcria.services.job_executor import REFINE_MODE, get_job_executor

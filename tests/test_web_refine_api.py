@@ -41,7 +41,7 @@ class _FakeExecutor:
 @pytest.fixture
 def fake_executor(monkeypatch):
     fake = _FakeExecutor()
-    import transcria.web.routes as routes
+    import transcria.web.refine_api as routes
     monkeypatch.setattr(routes, "get_job_executor", lambda: fake)
     return fake
 
@@ -95,7 +95,7 @@ class TestRefineSubmit:
 
     def test_rejected_enqueue_cleans_request(self, admin_client, app, refine_job, monkeypatch):
         fake = _FakeExecutor(accepted=False)
-        import transcria.web.routes as routes
+        import transcria.web.refine_api as routes
         monkeypatch.setattr(routes, "get_job_executor", lambda: fake)
         r = admin_client.post(f"/api/jobs/{refine_job}/refine", json={"kind": "apply", "message": "x"})
         assert r.status_code == 409

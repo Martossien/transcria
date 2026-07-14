@@ -503,7 +503,7 @@ class TestApiDownloads:
             out.write_bytes(b"wav")
             return out
 
-        monkeypatch.setattr("transcria.web.routes.AudioExcerptService.build_excerpt", fake_build)
+        monkeypatch.setattr("transcria.audio.excerpts.AudioExcerptService.build_excerpt", fake_build)
 
         r = admin_client.get(
             f"/api/jobs/{job_id}/audio/excerpt"
@@ -620,9 +620,9 @@ class TestApiDownloads:
 
 
     def test_audit_origin_strips_url_credentials(self):
-        from transcria.web.routes import _audit_origin_from_url
+        from transcria.web.request_helpers import audit_origin_from_url
 
-        assert _audit_origin_from_url("https://user:secret@example.org:9443/path") == "example.org:9443"
+        assert audit_origin_from_url("https://user:secret@example.org:9443/path") == "example.org:9443"
 
 
 class TestApiContextEndpoints:

@@ -78,7 +78,7 @@ def test_upload_rejects_beyond_max_documents(admin_client, app, monkeypatch):
         from transcria.config import get_config
         real = get_config()
     patched = {**real, "security": {**real["security"], "max_documents_per_job": 2}}
-    monkeypatch.setattr("transcria.web.routes.get_config", lambda: patched)
+    monkeypatch.setattr("transcria.web.wizard_api.get_config", lambda: patched)
 
     for i in range(2):
         r = admin_client.post(

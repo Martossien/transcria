@@ -15,7 +15,7 @@ import copy
 
 from flask_babel import lazy_gettext as _l
 
-# Marqueur d'un secret masqué côté UI (aligné sur web.routes.CONFIG_SECRET_SENTINEL).
+# Marqueur d'un secret masqué côté UI (aligné sur web.admin_routes.CONFIG_SECRET_SENTINEL).
 SECRET_SENTINEL = "********"
 
 # Spécification déclarative des sections et champs. `path` = chemin pointé dans

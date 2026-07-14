@@ -5,7 +5,7 @@ Via le test client authentifié. Le client d'inférence est mocké (pas de rése
 from __future__ import annotations
 
 from transcria.inference.client import InferenceUnavailable
-from transcria.web import routes as web_routes
+from transcria.web import processing_api as web_routes
 
 
 def _patch_client(monkeypatch, *, caps=None, raises=False, counter=None):

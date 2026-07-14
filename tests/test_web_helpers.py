@@ -1,15 +1,17 @@
 """Tests des helpers d'affichage web."""
 
-from transcria.web.routes import (
+from transcria.web.lexicon_views import (
+    enrich_lexicon_context_audio as _enrich_lexicon_context_audio,
+    resolve_context_audio_range as _resolve_context_audio_range,
+)
+from transcria.web.pages_routes import (
     _audio_diagnostic_view,
     _build_difficulty_frise,
-    _enrich_lexicon_context_audio,
     _fill_missing_speaker_genders,
-    _normalize_speaker_hint,
     _processing_diagnostic_view,
     _recover_summary_speaker_hints,
-    _resolve_context_audio_range,
 )
+from transcria.web.wizard_api import _normalize_speaker_hint
 
 
 def test_normalize_speaker_hint_keeps_valid_range():

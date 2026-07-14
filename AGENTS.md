@@ -284,7 +284,20 @@ transcria/
       routes.py             # voice_bp : /admin/voices + consentements + vectorisation
       consent_form.py       # PDF vierge de consentement (sans dépendance) — texte + nom de fichier bilingues fr/en (suit la locale UI) ; form_version = clé de consentement, non localisée
     web/
-      routes.py             # web_bp : pages + API JSON, dont /admin/maintenance (backups + planification + restore) et /admin/models (télécharger + activer les modèles)
+      blueprint.py          # LE Blueprint("web") unique — chaque module de routes l'importe et y accroche les siennes (A2)
+      routes.py             # câblage transverse SEUL : filtres state_label/state_badge, context processor VRAM, hooks pg pull/push des fichiers de jobs
+      pages_routes.py       # pages HTML : accueil, wizard (job_wizard + helpers de vue), résultat, /system, suppression
+      wizard_api.py         # API du parcours : upload, analyze, summary, speaker-hint, meeting-invite (+documents), context, participants, speakers/*, profile
+      lexicon_api.py        # API lexique de session : save, promote, debug, available-/selected-lexicons
+      processing_api.py     # API traitement : process/cancel, status (+ETA), reprocess, quality, export, /api/resources/status (cache court), /api/system/status
+      downloads_api.py      # téléchargements : SRT, package ZIP, audio, DOCX, extraits audio, clips locuteurs
+      refine_api.py         # chat d'affinage : submit, chat (polling), render-options, revert
+      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models
+      health_routes.py      # /health, /ready, /metrics (Prometheus)
+      job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job
+      request_helpers.py    # json_body (corps JSON typé/tolérant), clean_job_title, audit_origin_from_url
+      lexicon_views.py      # vues lexique partagées wizard/API : promote_*_view, enrich_lexicon_context_audio, resolve_context_audio_range
+      refine_shared.py      # état d'affinage partagé refine_api/éditeur : refine_running, refine_store_for
       maintenance_service.py # orchestration LÉGÈRE de la page Maintenance (listing archives, lancement backup en sous-process détaché, garde anti path-traversal)
       ui_labels.py          # libellés FR des états de job (filtres Jinja state_label/state_badge) — JAMAIS d'état brut à l'écran
       i18n.py               # i18n INTERFACE (Flask-Babel) : select_locale (?lang > user.locale > Accept-Language > défaut), init_app, route /i18n/messages.js
@@ -413,7 +426,7 @@ on n'y met QUE des contrats vrais, chaque vague ajoute le sien).
 - **Config** : toujours via `get_config()`, jamais hardcoded. Les fonctions reçoivent `config: dict` en paramètre.
 - **JobFilesystem** : créé à chaque opération (`fs = JobFilesystem(jobs_dir, job_id)`), pas de cache. `save_json()`/`save_text()` sont **atomiques** (fichier temporaire unique → `fsync` → `os.replace`) : un lecteur concurrent voit toujours l'ancien fichier complet ou le nouveau, jamais un contenu tronqué. Ne pas revenir à un `open(path, "w")` direct.
 - **Store** : classes statiques (`JobStore.create_job()`, `UserStore.get_by_id()`), pas d'instances.
-- **Routes web** : dans `web/routes.py` sur `web_bp`. Routes auth dans `auth/routes.py` sur `auth_bp`.
+- **Routes web** : dans le module de leur DOMAINE (`web/pages_routes.py`, `wizard_api.py`, `lexicon_api.py`, `processing_api.py`, `downloads_api.py`, `refine_api.py`, `admin_routes.py`, `health_routes.py`), tous accrochés au `web_bp` UNIQUE de `web/blueprint.py` (endpoints `web.xxx` inchangés). Les modules de routes ne s'importent JAMAIS entre eux (contrat import-linter) — un helper partagé va dans `web/job_access.py`, `web/request_helpers.py`, `web/lexicon_views.py` ou `web/refine_shared.py`. Routes auth dans `auth/routes.py` sur `auth_bp`.
 - **Blueprints** : `auth_bp` (prefix `/`), `web_bp` (prefix `/`)
 - **Templates** : héritent de `base.html`, blocs `title`, `content`, `extra_head`
 
