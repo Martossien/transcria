@@ -92,32 +92,6 @@
   </div>
 </div>
 
-<script>
-(function () {
-  var GO = {{ _('Go')|tojson }};
-  function human(n) { return (n / 1e9).toFixed(1) + " " + GO; }
-  var bars = document.querySelectorAll("[data-progress-role]");
-  bars.forEach(function (el) {
-    var role = el.getAttribute("data-progress-role");
-    var label = document.querySelector('[data-progress-label="' + role + '"]');
-    var timer = setInterval(function () {
-      fetch("/admin/models/progress/" + encodeURIComponent(role))
-        .then(function (r) { return r.json(); })
-        .then(function (p) {
-          var bar = el.querySelector(".progress-bar");
-          if (p.status === "done") { clearInterval(timer); location.reload(); return; }
-          if (p.status === "error" || p.status === "absent") { clearInterval(timer); location.reload(); return; }
-          if (p.pct !== null && p.pct !== undefined) {
-            bar.style.width = p.pct + "%";
-            bar.textContent = p.pct + "%";
-            if (label) label.textContent = human(p.downloaded_bytes || 0) + " / " + human(p.total_bytes || 0);
-          } else if (label) {
-            label.textContent = {{ _('téléchargement…')|tojson }} + " " + human(p.downloaded_bytes || 0);
-          }
-        })
-        .catch(function () {});
-    }, 2000);
-  });
-})();
-</script>
+{# Progression des téléchargements : JS extrait (vague A3) — admin_models_page.js. #}
+<script src="{{ asset_url('js/admin_models_page.js') }}"></script>
 {% endblock %}

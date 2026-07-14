@@ -225,6 +225,47 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('Écouter ce segment'),
     N_('⇤ suivants −500 ms'),
     N_('✂ — couper au curseur · ⧉ — fusionner avec le précédent'),
+    # job_result_page.js — panneau d'affinage (msgid inchangés, ex-bloc inline A3)
+    N_('Proposition'),
+    N_('Appliquer cette proposition'),
+    N_('Version'),
+    N_('Affinage appliqué (version v{v}) — les documents ci-dessus sont régénérés à chaque téléchargement et incluent vos modifications.'),
+    N_("Décrivez la modification à appliquer, ou cliquez « Appliquer cette proposition » sous une réponse de l'assistant."),
+    N_("Écrivez d'abord votre demande."),
+    N_('Appliquer aux documents :'),
+    N_('Une version restaurable sera créée (retour arrière possible).'),
+    N_('Erreur'),
+    N_('Erreur réseau — réessayez.'),
+    N_('Options invalides'),
+    N_('Restaurer la version v{v} ? Les documents reviendront à cet état.'),
+    N_('Restauration impossible'),
+    # schedule_page.js — page Planification (msgid inchangés, ex-bloc inline A3)
+    N_("Impossible de modifier l'agenda."),
+    N_('Modification impossible.'),
+    N_('Sélectionne au moins un jour.'),
+    N_('Supprimer ce créneau ?'),
+    # queue_page.js — page File d'attente (msgid inchangés, ex-bloc inline A3)
+    N_('Action impossible sur ce job.'),
+    N_('Annuler ce job ?'),
+    N_('La priorité doit être comprise entre 1 et 100.'),
+    N_('Supprimer tous les jobs de test ?'),
+    N_('Les jobs en cours seront ignorés.'),
+    N_('Nettoyage impossible.'),
+    N_('job(s) de test supprimé(s).'),
+    # dashboard_status_page.js — page /system (msgid inchangés, ex-bloc inline A3)
+    N_('tout local'),
+    N_('Aucune ressource distante configurée (tout intégré).'),
+    N_('injoignable'),
+    N_('Nœud de ressources injoignable — les transcriptions distantes sont mises en file. Requis : {reqs}.'),
+    N_('distant'),
+    N_('GPU :'),
+    N_('GPU {i} — libre {free} / {total} Mo'),
+    N_('Aucun moteur déclaré.'),
+    N_('erreur'),
+    N_('Statut indisponible ({e}).'),
+    # admin_models_page.js — page Modèles (msgid inchangés, ex-bloc inline A3)
+    N_('Go'),
+    N_('téléchargement…'),
 )
 
 
