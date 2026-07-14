@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 219,
- "deferred_internal_imports": 432,
+ "deferred_internal_imports": 431,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -151,12 +151,13 @@
   "transcria.web.wizard_api": 30,
   "transcria.workflow": 3,
   "transcria.workflow.concurrency_profile": 1,
+  "transcria.workflow.gpu_phase": 6,
   "transcria.workflow.multi_stt_review": 1,
   "transcria.workflow.profile_availability": 5,
   "transcria.workflow.progress": 1,
   "transcria.workflow.refine_llm": 2,
   "transcria.workflow.refine_store": 1,
-  "transcria.workflow.runner": 38,
+  "transcria.workflow.runner": 37,
   "transcria.workflow.states": 2,
   "transcria.workflow.steps": 1,
   "transcria.workflow.timing_service": 2,
