@@ -77,6 +77,7 @@ jobs:
         # Doctrine et procédure : docs/REFACTORING_QUALITE.md (vague A0).
         run: |
           python scripts/audit_imports.py --check-baseline quality_baseline.json
+          python scripts/audit_front.py --check-baseline quality_baseline_front.json
           lint-imports
 
       - name: Run test suite with coverage

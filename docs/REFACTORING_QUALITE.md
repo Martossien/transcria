@@ -19,6 +19,13 @@
 > actif ; imports différés 535 → 432. Exception documentée : pages_routes (32), wizard_api
 > (30) et processing_api (22) portent le fan-out hérité du wizard god-feature — enregistrés
 > dans la baseline (cliquet : plus jamais pire), à résorber avec A3/B1.
+> ✅ **A3 livrée (2026-07-14)** — garde du contrat front↔back (`tests/test_js_api_contract.py`,
+> 112 littéraux d'URL vérifiés contre url_map, concaténations du wizard résolues) ; 515 lignes
+> de JS inline extraites vers 6 fichiers `static/js/<page>.js` (t()/window.I18N, msgid intacts,
+> îlots JSON conservés, inits window.* d'une ligne) ; `job_wizard.html` découpé en 9 includes
+> (1 110 → 135 l., HTML rendu identique) ; ratchet front (`scripts/audit_front.py` +
+> `quality_baseline_front.json` : 0 JS inline logique, template ≤ 400, JS ≤ 900) en CI.
+> `wizard.js`/`srt_editor.js` non découpés (règle d'opportunité, baselinés).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -706,7 +713,7 @@ appellent les endpoints, pas les fonctions.
 import différé non justifié dans web/ ; `url_for` inchangés (grep `url_for('web.` sur les
 templates = zéro diff nécessaire) ; ratchet abaissé.
 
-#### A3 — Interface utilisateur : sortir le JS des templates, garder le contrat (effort M)
+#### ✅ A3 — Interface utilisateur : sortir le JS des templates, garder le contrat *(LIVRÉE 2026-07-14)*
 
 Après A2 (les routes), le pendant front (état des lieux §3.10) — même philosophie
 mécanique, **aucune réécriture, pas de SPA, pas de toolchain node** :
@@ -1180,9 +1187,9 @@ l'annexe C.
 | Appels directs install.sh → legacy | 26 | 0 | C6 |
 | Copies de chaque SHA épinglée (Dockerfiles+Python) | 5 sans garde | 5 gardées par test (1 source de vérité) | C7 |
 | Dockerfiles buildables sans jamais être parsés par la CI | 3 (bundled, resource-node, worker) | 0 non couvert par garde ou rituel | C7 |
-| JS inline dans les templates | 548 l. | 0 (hors init 1 ligne) | A3 |
-| Contrat JS↔routes (34 fetch) | aucune garde | test de contrat en CI | A3 |
-| Plus gros template | job_wizard.html : 1 110 l. | < 400 l. | A3 |
+| JS inline dans les templates | ~~548 l.~~ → **0** (hors inits window.* et îlots JSON) | 0 (hors init 1 ligne) | ✅ A3 |
+| Contrat JS↔routes (34 fetch) | ~~aucune garde~~ → test_js_api_contract (112 littéraux) | test de contrat en CI | ✅ A3 |
+| Plus gros template | ~~job_wizard.html : 1 110 l.~~ → schedule.html : 240 l. | < 400 l. | ✅ A3 |
 | Doc API | table manuelle driftante (TECHNICAL §4.11) | générée de url_map + garde CI | C8 |
 | Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
 | Couverture config_schema.py (validateurs) | 80 % (205 l. mortes) | ≥ 90 % | C3 |

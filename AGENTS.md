@@ -304,9 +304,9 @@ transcria/
       i18n_js.py            # catalogue des chaînes JS (window.I18N) — même source gettext ; JS_MESSAGES enrichi vague après vague
       prompt_files.py       # édition web des prompts LLM (liste FERMÉE de 3 fichiers, .bak, atomique) + scripts en LECTURE SEULE (décision sécurité) ; LANGUE-AWARE : édite configs/prompts/<lang>/ selon la locale UI (racine pour fr) ; libellés lazy_gettext
       config_form.py        # spec déclarative du formulaire /admin/config ; libellés/aides marqués lazy_gettext (résolus à la locale UI ; logique = path/type/options)
-      templates/            # base.html (navbar à menus déroulants) + templates par étape
+      templates/            # base.html (navbar à menus déroulants) + templates par étape ; wizard/_step_*.html = les 9 étapes du wizard (includes AVEC contexte, statuts hoistés dans job_wizard.html)
       static/css/           # transcria.css (tokens + composants — docs/archive/REFONTE_UI.md ; pas de styles inline)
-      static/js/            # wizard.js, wizard-api.js
+      static/js/            # wizard.js, wizard-api.js, srt_editor.js, meeting_types.js + <page>_page.js (JS extrait des templates — A3). RÈGLE : zéro logique JS inline dans un template (ratchet scripts/audit_front.py) — données Jinja via init window.X = …|tojson d'une ligne ou îlot <script type="application/json"> ; chaînes traduites via t() (msgid déclarés dans transcria/i18n/js_catalog.py) ; toute URL en littéral est gardée par tests/test_js_api_contract.py
   inference_service/        # Service Flask « nœud de ressources » (diarize/voice-embed in-process A/B/C)
     app.py                  # create_app() + garde clé API sur /infer/* et /engines/*
     engine.py / diarize_engine.py # moteurs in-process (CAS A/B/C, idle-offload)
