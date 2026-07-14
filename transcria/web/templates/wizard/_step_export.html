@@ -1,0 +1,38 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 10: Export -->
+  {% if qual_status == 'done' %}
+  <div class="step-section {% if exp_status == 'todo' %}current-step{% endif %}">
+    <h3><i class="bi bi-{{ wizard_layout.step_num.export }}-circle-fill step-icon"></i> {{ _('Export et résultats') }}</h3>
+    {% if job.state in ('completed', 'export_ready') %}
+    <!-- Porte d'entrée vers la page de résultats : lecture des livrables + chat d'affinage. -->
+    <div class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+      <span>
+        <i class="bi bi-chat-dots"></i> {% trans %}Relisez vos livrables et <strong>affinez-les avec l'assistant</strong> (reformuler la synthèse, ajuster le document…) sur la page de résultats.{% endtrans %}
+      </span>
+      <a href="/jobs/{{ job.id }}/result" class="btn btn-primary">
+        <i class="bi bi-stars"></i> {{ _('Résultats & affinage') }}
+      </a>
+    </div>
+    {% endif %}
+    {% if srt_content %}
+      <details class="mb-3">
+        <summary class="text-muted">{{ _('Aperçu du SRT généré') }}</summary>
+        <pre class="srt-preview mt-2">{{ srt_content[:3000] }}</pre>
+      </details>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-word"></i> {{ _('Rapport Word (.docx)') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success btn-sm"><i class="bi bi-download"></i> {{ _('Télécharger le SRT') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/package" class="btn btn-outline-secondary btn-sm"><i class="bi bi-archive"></i> {{ _('Package complet') }}</a>
+        <a href="/api/jobs/{{ job.id }}/download/audio" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> {{ _("Télécharger l'audio") }}</a>
+        <a href="/jobs/{{ job.id }}/editor" class="btn btn-outline-info btn-sm"><i class="bi bi-pencil-square"></i> {{ _('Éditer la transcription') }}</a>
+      </div>
+      <p class="text-muted small mt-2">
+        {{ _("L'éditeur intégré permet de corriger le texte, les locuteurs et les timings en écoutant l'audio — vos modifications sont versionnées et les documents régénérés.") }}
+      </p>
+    {% else %}
+      <p class="text-muted">{{ _('Le package final sera disponible après le traitement complet.') }}</p>
+    {% endif %}
+    <div id="export-result" class="mt-3"></div>
+  </div>
+  {% endif %}

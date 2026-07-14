@@ -1,0 +1,111 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 3: Quick summary -->
+  {% if file_status == 'done' and audio_analysis %}
+  {% set _n = wizard_layout.step_num.get('summary') %}
+  <div class="step-section {% if summary_status == 'todo' or summary_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Résumé de contrôle') }}</h3>
+    <div id="workflow-status-banner" class="alert alert-info workflow-status-banner mb-3" data-initial-state="{{ job.state }}" role="status" aria-live="polite"></div>
+    {% if summary and summary.get('summary_text') and summary.summary_text not in ['Résumé de contrôle indisponible (LLM non configurée).', 'Résumé indisponible.'] %}
+      <div class="card bg-light mb-3">
+        <div class="card-body">
+          <h6 class="card-title"><i class="bi bi-magic"></i> {{ _("Résumé généré par l'IA") }}</h6>
+          {% if meeting.get('speaker_count_llm') %}
+          <p class="mb-1"><span class="badge bg-primary">{{ _('%(n)s participants détectés', n=meeting.speaker_count_llm) }}</span></p>
+          {% endif %}
+          <p class="mb-0 small">{{ summary.summary_text[:1500] }}</p>
+          {% if meeting.get('title_suggere') %}
+          <div class="mt-2 small text-muted">
+            <strong>{{ _('Titre suggéré :') }}</strong> {{ meeting.title_suggere }}<br>
+            <strong>{{ _('Type suggéré :') }}</strong> {{ meeting.type_suggere }}<br>
+            <strong>{{ _('Sujet :') }}</strong> {{ meeting.sujet_suggere }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% if summary.get('transcript_short') %}
+      <details class="mb-3">
+        <summary class="text-muted">{{ _('Extrait de transcription (début)') }}</summary>
+        <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
+      </details>
+      {% endif %}
+      <p><strong>{{ _('Est-ce bien le fichier attendu ?') }}</strong></p>
+      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm me-2" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
+      <button class="btn btn-danger btn-sm" onclick="TranscrIA.validateSummary('no')">{{ _('Non, arrêter') }}</button>
+    {% elif summary and summary.get('transcript_short') %}
+      <div class="alert alert-info">
+        {% if meeting.get('speaker_count_llm') %}
+        <span class="badge bg-primary me-2">{{ _('%(n)s participants détectés', n=meeting.speaker_count_llm) }}</span>
+        {% endif %}
+        <strong>{{ _('Résumé :') }}</strong> {{ summary.summary_text }}<br>
+        <small>{{ _('Extrait disponible ci-dessous pour vérifier.') }}</small>
+      </div>
+      <details class="mb-3">
+        <summary class="text-muted">{{ _('Extrait de transcription (début)') }}</summary>
+        <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
+      </details>
+      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
+    {% else %}
+      <p class="text-muted">{{ _('Générez un résumé rapide pour vérifier le contenu du fichier.') }}</p>
+      {% set speaker_hint = job.get_extra_data().get('speaker_hint') or {} %}
+      <div class="card card-body bg-light p-2 mb-2">
+        <label class="form-label small mb-1"><i class="bi bi-people-fill"></i> {{ _('Nombre de locuteurs') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="number" min="1" max="50" id="speaker-min" class="form-control form-control-sm" style="width:6rem" placeholder="{{ _('min') }}" value="{{ speaker_hint.get('min') if speaker_hint.get('min') is not none else '' }}">
+          <span class="text-muted small">{{ _('à') }}</span>
+          <input type="number" min="1" max="50" id="speaker-max" class="form-control form-control-sm" style="width:6rem" placeholder="{{ _('max') }}" value="{{ speaker_hint.get('max') if speaker_hint.get('max') is not none else '' }}">
+          <span class="text-muted small">{{ _('locuteurs') }}</span>
+        </div>
+        <div class="form-text small">{{ _('Laissez vide si inconnu. Cadre la diarisation et accélère pyannote. Si min = max, le nombre exact est utilisé (meilleur résultat). Au-delà de 4, pyannote est utilisé automatiquement.') }}</div>
+      </div>
+      {% set meeting_invite = job.get_extra_data().get('meeting_invite') or {} %}
+      <div class="card card-body bg-light p-2 mb-2">
+        <label for="meeting-invite" class="form-label small mb-1"><i class="bi bi-envelope-paper"></i> {{ _('Invitation de la réunion') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
+        <textarea id="meeting-invite" class="form-control form-control-sm" rows="4" placeholder="{{ _("Copier-coller de l'invitation (objet, corps, ordre du jour, destinataires). Aide la LLM à orthographier les noms et à structurer le résumé.") }}">{{ meeting_invite.get('brief', '') }}</textarea>
+        <div class="form-text small">
+          {{ _('Reste local (jamais transmis à l\'extérieur). Les adresses e-mail servent seulement à orthographier les noms, puis sont supprimées.') }}
+          {% if meeting_invite.get('brief') or meeting_invite.get('names') %}<br><span class="text-success"><i class="bi bi-check"></i> {{ _('Invitation enregistrée') }}{% if meeting_invite.get('names') %} — {{ _('%(n)s nom(s) détecté(s)', n=meeting_invite.get('names')|length) }}{% endif %}. {{ _('Le texte ci-dessus est conservé ; modifiez-le ou recollez pour remplacer.') }}</span>{% endif %}
+        </div>
+        <hr class="my-2">
+        <label class="form-label small mb-1"><i class="bi bi-paperclip"></i> {{ _('Documents présentés') }} <span class="text-muted">{{ _('(optionnel)') }}</span></label>
+        <div class="form-text small mb-1">
+          {{ _('Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé.') }}
+          {% trans %}<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local.{% endtrans %}
+        </div>
+        <input type="file" id="meeting-doc-input" accept=".pdf,.docx,.pptx,.txt" class="d-none" onchange="TranscrIA.handleMeetingDocument(this)">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('meeting-doc-input').click()">
+          <i class="bi bi-upload"></i> {{ _('Joindre un document') }}
+        </button>
+        <span id="meeting-doc-error" class="text-danger small ms-2"></span>
+        <ul id="meeting-doc-list" class="list-unstyled small mt-2 mb-0">
+          {% for doc in meeting_invite.get('documents') or [] %}
+          <li class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1" data-doc-index="{{ loop.index0 }}">
+            <span>
+              <i class="bi bi-file-earmark-text"></i> {{ doc.get('name', 'document') }}
+              <span class="text-muted">— {{ doc.get('format', '')|upper }}{% if doc.get('pages') %}, {{ _('%(n)s page(s)', n=doc.get('pages')) }}{% endif %}{% if doc.get('slides') %}, {{ _('%(n)s diapo(s)', n=doc.get('slides')) }}{% endif %}{% if doc.get('images_skipped') %}, {{ _('%(n)s image(s) ignorée(s)', n=doc.get('images_skipped')) }}{% endif %}{% if doc.get('truncated') %} — {{ _('tronqué') }}{% endif %}</span>
+            </span>
+            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="{{ _('Retirer') }}" onclick="TranscrIA.removeMeetingDocument({{ loop.index0 }})"><i class="bi bi-x-lg"></i></button>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% if job.get_extra_data().get('summary_llm_failed') %}
+      <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle"></i>
+        {% trans %}Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.{% endtrans %}
+      </div>
+      {% endif %}
+      <button class="btn btn-primary" onclick="TranscrIA.generateSummary()">
+        <span id="summary-spinner" class="spinner d-none"></span> {{ _('Générer le résumé') }}
+      </button>
+      <div id="summary-result" class="mt-3"></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if wizard_layout.first_optional == 'context' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
+  {% endif %}

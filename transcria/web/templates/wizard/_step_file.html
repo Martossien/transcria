@@ -1,0 +1,70 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 1: File upload + choix du profil (le profil pilote la suite du parcours) -->
+  <div class="step-section {% if file_status == 'todo' or file_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-{{ wizard_layout.step_num.file }}-circle-fill step-icon"></i> {{ _('Fichier audio & profil de traitement') }}</h3>
+    {% if file_status == 'done' %}
+      <div class="alert alert-success">
+        <i class="bi bi-check-circle"></i> {{ _('Fichier reçu.') }}
+        {% if audio_analysis %}
+          <strong>{{ audio_analysis.get('format', '') }}</strong> —
+          {{ _('%(mb)s Mo', mb=(audio_analysis.get('size_bytes', 0) / (1024*1024))|round(1)) }}
+          {% if audio_analysis.get('duration_seconds') %}
+          — {{ _('%(min)s min', min=(audio_analysis.duration_seconds / 60)|round(1)) }}
+          {% endif %}
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
+      <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg" class="form-control mb-2">
+      <button class="btn btn-primary" onclick="TranscrIA.uploadFile()">
+        <span id="upload-spinner" class="spinner d-none"></span> {{ _('Téléverser') }}
+      </button>
+      <div id="upload-result" class="mt-2"></div>
+    {% endif %}
+
+    <!-- Choix du profil : posé ICI, à l'upload, car il décide quelles étapes suivent.
+         Verrouillé tant que le fichier n'est pas téléversé : on choisit le profil APRÈS l'upload. -->
+    {% set profile_locked = file_status != 'done' %}
+    <hr class="my-3">
+    <p class="text-muted mb-2">
+      {% trans %}<strong>Profil de traitement</strong> — choisissez votre niveau de livrable. Le profil <strong>recommandé</strong> (le plus complet possible sur cette installation) est présélectionné. Vers la gauche = plus rapide et moins d'étapes à valider ; vers la droite = livrable plus riche. Les étapes inutiles à votre profil seront masquées.{% endtrans %}
+    </p>
+    {% if profile_locked %}
+    <div class="alert alert-secondary py-2 small mb-2">
+      <i class="bi bi-lock"></i> {{ _("Téléversez d'abord votre fichier — le choix du profil s'activera ensuite.") }}
+    </div>
+    {% endif %}
+    <div id="profile-selector"
+         class="profile-selector mb-3{% if profile_locked %} opacity-50{% endif %}"
+         data-selected="{{ selected_profile_id }}">
+      <div class="profile-line d-flex flex-wrap gap-2 align-items-stretch" role="group" aria-label="{{ _('Profil de traitement') }}">
+        {% for p in processing_profiles.profiles %}
+        <button type="button"
+                class="profile-pill btn flex-fill {% if p.id == selected_profile_id %}btn-success active{% else %}btn-outline-secondary{% endif %}"
+                data-profile-id="{{ p.id }}"
+                {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"
+                {% elif profile_locked %}disabled aria-disabled="true" title="{{ _('Téléversez d\'abord le fichier audio') }}"{% endif %}
+                onclick="TranscrIA.chooseProfile('{{ p.id }}')">
+          <span class="d-block fw-semibold">{{ p.label }}</span>
+          <span class="d-block small opacity-75">
+            {% if not p.available %}<i class="bi bi-slash-circle"></i> {{ _('indisponible') }}{% else %}{{ _('niveau %(n)s', n=p.level) }}{% endif %}
+          </span>
+        </button>
+        {% endfor %}
+      </div>
+      <div class="d-flex justify-content-between small text-muted mt-1 px-1">
+        <span><i class="bi bi-lightning-charge"></i> {{ _('Rapide') }}</span>
+        <span>{{ _('Complet') }} <i class="bi bi-stars"></i></span>
+      </div>
+    </div>
+    <div id="profile-detail" class="card border-success mb-1">
+      <div class="card-body"><span class="text-muted">{{ _('Sélectionnez un profil…') }}</span></div>
+    </div>
+    {% if not processing_profiles.recommended %}
+    <div class="alert alert-warning mt-2 mb-0">
+      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration.{% endtrans %}
+    </div>
+    {% endif %}
+    <script type="application/json" id="profiles-data">{{ processing_profiles|tojson }}</script>
+  </div>

@@ -1,0 +1,191 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 4: Meeting Context -->
+  {% if summary_status == 'done' %}
+  {% set _n = wizard_layout.step_num.get('context') %}
+  <div class="step-section {% if ctx_status == 'todo' or ctx_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Contexte de la réunion') }}</h3>
+
+    {% if meeting.get('title_suggere') or meeting.get('type_suggere') %}
+    <div class="alert alert-info mb-3 small">
+      <strong><i class="bi bi-magic"></i> {{ _('Champs suggérés :') }}</strong>
+      {% if meeting.get('title_suggere') %}
+        <span class="badge bg-dark me-1">📌 {{ _('Titre') }}</span> {{ meeting.title_suggere }}<br>
+      {% endif %}
+      {% if meeting.get('type_suggere') %}
+        <span class="badge bg-dark me-1">🏷 {{ _('Type') }}</span> {{ meeting.type_suggere }}<br>
+      {% endif %}
+      {% if meeting.get('sujet_suggere') %}
+        <span class="badge bg-dark me-1">📝 {{ _('Sujet') }}</span> {{ meeting.sujet_suggere }}
+      {% endif %}
+      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" onclick="TranscrIA.prefillContext()">{{ _('Appliquer les suggestions') }}</button>
+    </div>
+    {% endif %}
+
+    <form id="context-form">
+      {# Résumé éditable — DOIT rester DANS ce <form> : saveContext() (wizard.js) sérialise
+         FormData(#context-form), donc un champ hors formulaire n'est jamais POSTé. La clé
+         `summary` est l'édition manuelle, prioritaire sur summary_llm dans les livrables
+         (cf. exports/docx_report._meta et workflow/runner._apply_final_review). #}
+      {% if synthese_prefill %}
+      <details class="mb-3" open>
+        <summary class="text-muted fw-bold">{{ _("📋 Résumé de la réunion — modifiez-le avant d'enregistrer") }}</summary>
+        <textarea name="summary" class="form-control form-control-sm mt-2" rows="12"
+                  style="font-size: 0.85rem;">{{ synthese_prefill }}</textarea>
+        <div class="form-text small">{{ _("Ce texte est le résumé généré par l'IA. Vous pouvez le corriger ou le compléter avant de l'enregistrer.") }}</div>
+      </details>
+      {% endif %}
+
+      <div class="row">
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">{{ _('Titre de la réunion') }}</label>
+          <input type="text" name="title" class="form-control form-control-sm" value="{{ meeting.title or meeting.title_suggere or job.title }}">
+        </div>
+        <div class="col-md-3 mb-2">
+          <label class="form-label small">{{ _('Date') }}</label>
+          <input type="date" name="date" class="form-control form-control-sm" value="{{ meeting.date }}">
+        </div>
+        <div class="col-md-3 mb-2">
+          <label class="form-label small">{{ _('Langue') }}</label>
+          <select name="language" class="form-select form-select-sm">
+            <option value="fr" {{ 'selected' if meeting.language == 'fr' }}>Français</option>
+            <option value="en" {{ 'selected' if meeting.language == 'en' }}>English</option>
+            <option value="de" {{ 'selected' if meeting.language == 'de' }}>Deutsch</option>
+            <option value="it" {{ 'selected' if meeting.language == 'it' }}>Italiano</option>
+            <option value="es" {{ 'selected' if meeting.language == 'es' }}>Español</option>
+          </select>
+          <div class="form-text small">{{ _('Langue de la réunion ET des livrables générés (compte-rendu, corrections). Anglais = bêta.') }}</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">{{ _('Type de réunion') }}</label>
+          <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select"
+                  onchange="TranscrIA.updateTypeSpecificFields(this.value)">
+            {% if custom_meeting_types %}
+            <optgroup label="{{ _('Types intégrés') }}">
+              {% for mt in meeting_types %}
+              <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ meeting_type_display.get(mt, mt) }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="{{ _('Mes types & partagés') }}">
+              {% for mt in custom_meeting_types %}
+              <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ mt }}</option>
+              {% endfor %}
+            </optgroup>
+            {% else %}
+            {% for mt in meeting_types %}
+            <option value="{{ mt }}" {{ 'selected' if meeting.meeting_type == mt or meeting.type_suggere == mt }}>{{ meeting_type_display.get(mt, mt) }}</option>
+            {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+        <div class="col-md-6 mb-2">
+          <label class="form-label small">{{ _('Service / Domaine') }}</label>
+          <input type="text" name="service" class="form-control form-control-sm" value="{{ meeting.service }}">
+        </div>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">{{ _('Sujet') }}</label>
+        <input type="text" name="topic" class="form-control form-control-sm" id="topic_input" value="{{ meeting.topic or meeting.sujet_suggere }}">
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">{{ _('Objectif') }}</label>
+        <textarea name="objective" class="form-control form-control-sm" id="objective_input" rows="2">{{ meeting.objective or meeting.objectif_suggere }}</textarea>
+      </div>
+      <div class="mb-2">
+        <label class="form-label small">{{ _('Notes / Ordre du jour') }}</label>
+        <textarea name="notes" class="form-control form-control-sm" id="notes_input" rows="2">{{ meeting.notes or meeting.notes_suggeres }}</textarea>
+      </div>
+
+      <!-- Champs spécifiques au type de réunion — générés dynamiquement par JS -->
+      <div id="type-specific-fields" class="mt-3" style="display:none;">
+        <div class="card border-primary-subtle bg-primary-subtle bg-opacity-10">
+          <div class="card-header py-1 px-3 d-flex align-items-center gap-2 border-primary-subtle">
+            <i class="bi bi-sliders text-primary"></i>
+            <span class="small fw-semibold text-primary" id="type-specific-title">{{ _('Informations complémentaires') }}</span>
+          </div>
+          <div class="card-body py-2 px-3" id="type-specific-body"></div>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveContext()">{{ _('Enregistrer le contexte') }}</button>
+      <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
+    </form>
+
+    {% set sd = meeting.structured_data %}
+    {% set sd_status = meeting.structured_data_parse_status %}
+    {% if sd and (sd.decisions or sd.actions or sd.blocages or sd.reports or sd.votes or sd.resolutions or sd.points_odj or sd.prochaine_date) %}
+    <div class="mt-3">
+      <details>
+        <summary class="fw-semibold text-muted small" style="cursor:pointer;">
+          <i class="bi bi-magic"></i> {{ _("Données enrichies extraites par l'IA") }}
+          {% if sd_status == 'ok' %}
+          <span class="badge bg-success ms-1" style="font-size:.65rem;">OK</span>
+          {% elif sd_status == 'partial' %}
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.65rem;">{{ _('Partiel') }}</span>
+          {% elif sd_status == 'failed' %}
+          <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ _('Échec') }}</span>
+          {% endif %}
+          <span class="text-muted ms-1" style="font-size:.75rem;">{{ _('— apparaîtront dans le rapport Word selon le type de réunion') }}</span>
+        </summary>
+        <div class="mt-2 ps-3 border-start border-2 border-primary-subtle">
+          {% if sd.points_odj %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-list-ol"></i> {{ _('Ordre du jour') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.points_odj %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.decisions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-check2-circle"></i> {{ _('Décisions prises') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.decisions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.actions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-arrow-right-circle"></i> {{ _('Actions à réaliser') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.actions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.blocages %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-warning-emphasis mb-1"><i class="bi bi-exclamation-triangle"></i> {{ _('Points bloquants') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.blocages %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.reports %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-secondary mb-1"><i class="bi bi-clock-history"></i> {{ _('Points reportés') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.reports %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.votes %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-primary-emphasis mb-1"><i class="bi bi-ballot"></i> {{ _('Votes') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.votes %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.resolutions %}
+          <div class="mb-2">
+            <div class="small fw-semibold text-success-emphasis mb-1"><i class="bi bi-clipboard-check"></i> {{ _('Résolutions adoptées') }}</div>
+            <ul class="small mb-0 ps-3">{% for item in sd.resolutions %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+          {% if sd.prochaine_date %}
+          <div class="small text-muted"><i class="bi bi-calendar-event"></i> {{ _('Prochaine réunion :') }} <strong>{{ sd.prochaine_date }}</strong></div>
+          {% endif %}
+          {% if meeting.structured_data_parse_warning %}
+          <div class="mt-1 small text-warning-emphasis"><i class="bi bi-info-circle"></i> {{ meeting.structured_data_parse_warning }}</div>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if wizard_layout.first_optional == 'participants' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
+  {% endif %}

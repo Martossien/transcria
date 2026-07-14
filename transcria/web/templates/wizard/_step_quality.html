@@ -1,0 +1,61 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 9: Quality -->
+  {% if proc_status == 'done' %}
+  <div class="step-section {% if qual_status == 'todo' %}current-step{% endif %}">
+    <h3><i class="bi bi-{{ wizard_layout.step_num.quality }}-circle-fill step-icon"></i> {{ _('Contrôle qualité') }}</h3>
+    {% if processing_diagnostic and processing_diagnostic.backend %}
+    <div class="alert alert-light border small">
+      <strong>{{ _('Traitement réalisé :') }}</strong>
+      backend {{ processing_diagnostic.backend }}
+      {% if processing_diagnostic.chunking_mode %}— {{ processing_diagnostic.chunking_mode }}{% endif %}
+      {% if processing_diagnostic.segments %}— {{ _('%(n)s segments', n=processing_diagnostic.segments) }}{% endif %}
+      {% if processing_diagnostic.vad_final_enabled %}— {{ _('VAD final activé') }}{% endif %}
+      {% if processing_diagnostic.reliability_counts %}
+      <div class="mt-2">
+        {{ _('Fiabilité :') }}
+        {% for level, count in processing_diagnostic.reliability_counts.items() %}
+        <span class="badge text-bg-{{ 'danger' if level == 'degrade' else 'warning' if level == 'suspect' else 'success' }} me-1">{{ level }}={{ count }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if quality_report and quality_report.get('checks') %}
+      <div class="mb-3">
+        <strong>{{ _('Score qualité :') }}</strong>
+        <span class="quality-badge {{ 'quality-ok' if quality_report.quality_score >= 80 else 'quality-warning' if quality_report.quality_score >= 50 else 'quality-error' }}">
+          {{ quality_report.quality_score }}/100
+        </span>
+      </div>
+      <p class="text-muted small">
+        {{ _('Points à vérifier : %(w)s — Termes métier suspects : %(t)s', w=quality_report.warnings, t=quality_report.checks|selectattr('type', 'equalto', 'missing_lexicon_terms')|list|length) }}
+      </p>
+      {% for check in quality_report.checks[:5] %}
+      <div class="small mb-1">
+        <span class="quality-badge {{ 'quality-error' if check.severity == 'error' else 'quality-warning' }}">{{ check.type }}</span>
+        {% if check.count %}({{ check.count }}){% endif %}
+        {% if check.terms %}{{ check.terms[:3]|join(', ') }}{% endif %}
+      </div>
+      {% endfor %}
+      {% if processing_diagnostic and processing_diagnostic.suspect_segments %}
+      <details class="mt-3">
+        <summary class="text-muted">{{ _('Segments à vérifier en priorité (%(n)s)', n=processing_diagnostic.suspect_segments|length) }}</summary>
+        <div class="mt-2">
+          {% for segment in processing_diagnostic.suspect_segments %}
+          <div class="small border-start ps-2 mb-2">
+            <strong>#{{ segment.index }}</strong>
+            <span class="badge text-bg-{{ 'danger' if segment.level == 'degrade' else 'warning' }}">{{ segment.level }}</span>
+            {% if segment.speaker %}<span class="text-muted">{{ segment.speaker }}</span>{% endif %}
+            <div>{{ segment.text }}</div>
+            {% if segment.reasons %}<div class="text-muted">{{ segment.reasons|join(', ') }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">{{ _('Le contrôle qualité sera effectué après le traitement.') }}</p>
+    {% endif %}
+  </div>
+  {% endif %}

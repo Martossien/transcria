@@ -1,0 +1,24 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 7: Launch — le profil a été choisi à l'étape 1 ; ici on récapitule et on lance. -->
+  {% if wizard_layout.launch_ready or proc_status in ['in_progress', 'done', 'error', 'skipped'] %}
+  <div class="step-section {% if proc_status == 'todo' or proc_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-{{ wizard_layout.step_num.processing }}-circle-fill step-icon"></i> {{ _('Lancer le traitement') }}</h3>
+    {% if selected_profile_id %}
+    <p class="text-muted mb-3">
+      {{ _('Profil retenu : <strong>%(label)s</strong>. Pour en changer, revenez à l\'étape 1.', label=(processing_profiles.profiles | selectattr('id', 'equalto', selected_profile_id) | first).label) }}
+    </p>
+    {% else %}
+    <div class="alert alert-warning">
+      {% trans %}Aucun profil n'est lançable avec la configuration actuelle (LLM d'arbitrage non configurée ou mode qualité désactivé). Voir la configuration.{% endtrans %}
+    </div>
+    {% endif %}
+
+    <button id="profile-launch-btn" class="btn btn-success btn-lg"
+            {% if not selected_profile_id %}disabled{% endif %}
+            onclick="TranscrIA.startSelectedProfile()">
+      <i class="bi bi-play-fill"></i> {{ _('Lancer le traitement') }}
+    </button>
+    <div id="processing-result" class="mt-3"></div>
+  </div>
+  {% endif %}

@@ -1,0 +1,149 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 5: Participants & Locuteurs (merged) -->
+  {% if ctx_status == 'done' %}
+  {% set merged_ready = (part_status == 'todo' or part_status == 'in_progress' or spk_status == 'todo' or spk_status == 'in_progress' or spk_status == 'done') %}
+  {% set _n = wizard_layout.step_num.get('participants') %}
+  <div class="step-section {% if part_status in ('todo','in_progress') or spk_status in ('todo','in_progress') %}current-step{% endif %}">
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Participants & Locuteurs') }}</h3>
+    <p class="text-muted small mb-2">{{ _('Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.') }}</p>
+
+    {% if not speakers.get('speakers') %}
+    <button class="btn btn-primary btn-sm mb-3" onclick="TranscrIA.detectSpeakers()">
+      <span id="speaker-spinner" class="spinner d-none"></span> 🔍 {{ _('Détecter les locuteurs') }}
+    </button>
+    <div id="speaker-result" class="mt-2"></div>
+    {% endif %}
+
+    {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
+    <div class="alert alert-success mb-3 small">
+      <strong><i class="bi bi-mic-fill"></i> {{ _('%(n)s locuteur(s) détecté(s)', n=speakers.speakers|length) }}</strong>
+      {% for s in speakers.speakers %}
+        <span class="badge bg-secondary me-1">{{ s.speaker_id }}: {{ (s.speaking_time_seconds / 60)|round(1) }} min</span>
+      {% endfor %}
+    </div>
+    {% if voice_enrollment_enabled %}
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.matchKnownVoices()">
+        <span id="voice-match-spinner" class="spinner d-none"></span>
+        <i class="bi bi-person-bounding-box"></i> {{ _('Rechercher les voix connues') }}
+      </button>
+      <span id="voice-match-result" class="small text-muted">
+        {% if voice_matches.get('available') %}
+          {{ _('%(n)s suggestion(s) disponible(s)', n=voice_matches.matches|length) }}
+        {% elif voice_matches.get('message') %}
+          {{ voice_matches.message }}
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if meeting.get('participants_detectes') and participants|length == 0 %}
+    <div class="alert alert-info mb-3 small">
+      <strong><i class="bi bi-people"></i> {{ _('Participants identifiés dans la transcription :') }}</strong>
+      {% for line in meeting.participants_detectes.split('\n') %}
+        {% if line.strip() %}<span class="me-2">👤 {{ line.strip() }}</span>{% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div id="participants-list">
+      {% if speakers.get('speakers') and speakers.speakers|length > 0 %}
+        {# Indice genre global issu de l'analyse acoustique de scène #}
+        {% set scene_gender = audio_scene.get('gender', {}) if audio_scene else {} %}
+        {% if scene_gender.get('has_gender_data') %}
+        <div class="alert alert-light border py-1 px-2 mb-2 small d-flex align-items-center gap-2">
+          <i class="bi bi-soundwave text-secondary"></i>
+          <span>
+            <strong>{{ _('Analyse acoustique globale :') }}</strong>
+            {{ _('%(m)s%% voix masculine, %(f)s%% voix féminine', m=(scene_gender.male_ratio * 100)|round|int, f=(scene_gender.female_ratio * 100)|round|int) }}
+            {% if scene_gender.dominant == 'male' %}
+              — <span class="text-primary">{{ _('voix masculine dominante') }}</span>
+            {% elif scene_gender.dominant == 'female' %}
+              — <span class="text-danger">{{ _('voix féminine dominante') }}</span>
+            {% endif %}
+          </span>
+        </div>
+        {% endif %}
+        {% for s in speakers.speakers %}
+        {% set voice_hint = namespace(item=None) %}
+        {% for m in voice_matches.get('matches', []) %}
+          {% if m.get('speaker_id') == s.speaker_id and m.get('status') == 'suggested' %}
+            {% set voice_hint.item = m %}
+          {% endif %}
+        {% endfor %}
+        <div class="speaker-item" id="spk-{{ s.speaker_id }}">
+          <strong>{{ s.speaker_id }}</strong>
+          <span class="text-muted small">{{ _('%(s)ss, %(n)s interventions', s=s.speaking_time_seconds|round(0), n=s.turn_count) }}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="TranscrIA.loadClips('{{ s.speaker_id }}')"
+                  aria-label="{{ _('Écouter des extraits de ce locuteur') }}" title="{{ _('Écouter des extraits de ce locuteur') }}"><i class="bi bi-play-fill"></i></button>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle dans la réunion') }}" value="{{ s.mapped_role or '' }}" style="max-width:150px;">
+          <select class="form-select form-select-sm speaker-gender" style="max-width:130px;" title="{{ _('Genre vocal (modifiable)') }}">
+            <option value="" {% if not s.get('gender') %}selected{% endif %}>{{ _('Non déterminé') }}</option>
+            <option value="female" {% if s.get('gender') == 'female' %}selected{% endif %}>{{ _('Féminin ♀') }}</option>
+            <option value="male" {% if s.get('gender') == 'male' %}selected{% endif %}>{{ _('Masculin ♂') }}</option>
+          </select>
+          {% if voice_hint.item %}
+          <button type="button"
+                  class="btn btn-sm btn-outline-success voice-suggestion"
+                  title="{{ _('Suggestion issue des voix enregistrées') }}"
+                  data-speaker="{{ s.speaker_id }}"
+                  data-name="{{ voice_hint.item.get('suggested_name', '') }}"
+                  data-gender="{{ voice_hint.item.get('suggested_gender', '') }}"
+                  onclick="TranscrIA.applyVoiceSuggestion(this)">
+            {{ voice_hint.item.get('suggested_name') }} · {{ (voice_hint.item.get('top_score', 0) * 100)|round|int }}%
+          </button>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% elif participants|length > 0 %}
+        {% for p in participants %}
+        <div class="speaker-item">
+          <span class="text-muted small">{{ _('participant') }}</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ p.name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ p.function }}" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ p.role }}" style="max-width:150px;">
+          {% if p.is_animator %}<span class="badge bg-warning text-dark">{{ _('Animateur') }}</span>{% endif %}
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+        </div>
+        {% endfor %}
+      {% elif meeting.get('participants_detectes') %}
+        {% for line in meeting.participants_detectes.split('\n') %}
+        {% if line.strip() and 'non identifiable' not in line.lower() %}
+        {% set cleaned = line.replace('👤 ', '').strip() %}
+        {% set parts = cleaned.split(':') %}
+        {% set name = parts[0].strip() if parts|length > 0 else cleaned %}
+        {% set role = (parts[1:]|join(':')).strip() if parts|length > 1 else '' %}
+        {% if name.startswith('SPEAKER_') and role %}
+          {% set role_parts = role.split(' — ') %}
+          {% if role_parts|length > 1 %}
+            {% set name = role_parts[0].strip() %}
+            {% set role = (role_parts[1:]|join(' — ')).strip() %}
+          {% endif %}
+        {% endif %}
+        <div class="speaker-item">
+          <span class="text-muted small">{{ _('suggéré') }}</span>
+          <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ name }}" style="max-width:150px;">
+          <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="" style="max-width:130px;">
+          <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ role }}" style="max-width:150px;">
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+        </div>
+        {% endif %}
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addParticipantRow()">{{ _('+ Ajouter un participant') }}</button>
+    <br>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveParticipantsAndSpeakers()">{{ _('Valider participants & locuteurs') }}</button>
+    <span id="participants-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Validé') }}</span>
+  </div>
+  {% endif %}
+
+  {% if wizard_layout.first_optional == 'lexicon' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
+  {% endif %}

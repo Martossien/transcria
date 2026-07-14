@@ -1,0 +1,159 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 6: Lexicon -->
+  {% if part_status == 'done' or spk_status == 'done' %}
+  {% set _n = wizard_layout.step_num.get('lexicon') %}
+  <div class="step-section {% if lex_status == 'todo' or lex_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi {% if _n %}bi-{{ _n }}-circle-fill{% else %}bi-plus-circle{% endif %} step-icon"></i> {{ _('Lexique de session') }}</h3>
+    <p class="text-muted small">{{ _('Validez les formes douteuses proposées par la LLM. Quand une ligne contient des variantes, la forme validée sert de cible de correction en contexte ; une ligne sans variante sert seulement à préserver ou vérifier une forme sensible.') }}</p>
+    {% if central_lexicons %}
+    <div class="alert alert-light border small">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <strong>{{ _('Lexiques utilisés pour ce job') }}</strong>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.applySelectedLexicons()">{{ _('Appliquer la sélection') }}</button>
+      </div>
+      <details class="mt-2" {% if central_lexicons|length <= 8 %}open{% endif %}>
+        <summary class="text-muted">
+          {{ _('%(sel)s / %(avail)s sélectionné(s)', sel=central_lexicon_display.selected_lexicons, avail=central_lexicon_display.available_lexicons) }}
+        </summary>
+        <div class="mt-2 d-flex flex-wrap gap-2">
+          {% for central in central_lexicons %}
+          <label class="border rounded px-2 py-1 bg-white">
+            <input type="checkbox"
+                   class="form-check-input me-1 central-lexicon-toggle"
+                   value="{{ central.id }}"
+                   {% if central.selected %}checked{% endif %}>
+            {{ central.name }} · {{ central.entry_count }}
+          </label>
+          {% endfor %}
+        </div>
+      </details>
+      {% if central_lexicon_display.hidden_central_entries %}
+      <div class="mt-2 text-muted">
+        {{ _('%(n)s terme(s) peu probables sont masqués pour garder la liste lisible.', n=central_lexicon_display.hidden_central_entries) }}
+      </div>
+      {% endif %}
+      {% if session_lexicon_exists %}
+      <div class="mt-1 text-muted">{{ _('Le lexique de session déjà sauvegardé est conservé.') }}</div>
+      {% else %}
+      <div class="mt-1 text-muted">
+        {{ _('TranscrIA prépare %(n)s terme(s) centralisés avec les suggestions du résumé. Vous pouvez tout modifier avant validation.', n=central_lexicon_prefill_count) }}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if meeting.get('termes_suspects_parse_status') %}
+      {% if meeting.termes_suspects_parse_status == 'section_unparsed' %}
+      <div class="alert alert-warning small">
+        {{ _('La LLM a signalé des termes à vérifier, mais le format n\'a pas pu être lu automatiquement. Vous pouvez ajouter les termes importants manuellement.') }}
+      </div>
+      {% elif meeting.termes_suspects_parse_status == 'empty' %}
+      <div class="alert alert-light border small">
+        {{ _('Aucun terme douteux détecté automatiquement.') }}
+      </div>
+      {% endif %}
+    {% endif %}
+    <div id="lexicon-list">
+      {% for t in lexicon %}
+      <div class="lexicon-row lexicon-card">
+        <div class="lexicon-grid">
+          <label class="form-label small mb-1">{{ _('Forme validée') }}</label>
+          <label class="form-label small mb-1">{{ _('Formes suspectes observées') }}</label>
+          <label class="form-label small mb-1">{{ _('Catégorie') }}</label>
+          <label class="form-label small mb-1">{{ _('Priorité') }}</label>
+          <input type="text" class="form-control form-control-sm lex-term" placeholder="{{ _('Ex: Forme validée') }}" value="{{ t.term }}">
+          <input type="text" class="form-control form-control-sm lex-variants" placeholder="{{ _('Ex: Forme douteuse A, forme douteuse B') }}" value="{{ (t.variants or [])|join(', ') }}">
+          <input type="text" class="form-control form-control-sm lex-cat" list="lexicon-cat-list" placeholder="{{ _('Catégorie libre') }}" value="{{ t.category }}">
+          <select class="form-select form-select-sm lex-prio">
+            {% for prio in lexicon_priorities %}
+            <option value="{{ prio }}" {{ 'selected' if t.priority == prio }}>{{ lexicon_priority_label(prio) }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <input type="hidden" class="lex-replace" value="{{ t.replace_by or '' }}">
+        <input type="hidden" class="lex-source" value="{{ t.source or '' }}">
+        <input type="hidden" class="lex-central-entry-id" value="{{ t.central_entry_id or '' }}">
+        <input type="hidden" class="lex-central-lexicon-id" value="{{ t.central_lexicon_id or '' }}">
+        <input type="hidden" class="lex-central-lexicon-name" value="{{ t.central_lexicon_name or '' }}">
+        <input type="hidden" class="lex-display-reason" value="{{ t._display_reason or '' }}">
+        <script type="application/json" class="lex-contexts-json">{{ (t.contexts or [])|tojson }}</script>
+        {% if t.central_lexicon_name %}
+        <div class="mt-2">
+          <span class="badge text-bg-light border">{{ _('Lexique central : %(name)s', name=t.central_lexicon_name) }}</span>
+          {% if t._display_reason == 'term_presence' %}
+          <span class="badge text-bg-light border">{{ _('trouvé dans le texte') }}</span>
+          {% elif t._display_reason == 'variant_presence' %}
+          <span class="badge text-bg-light border">{{ _('variante détectée') }}</span>
+          {% elif t._display_reason == 'priority' %}
+          <span class="badge text-bg-light border">{{ _('priorité %(p)s', p=lexicon_priority_label(t.priority)) }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if t.source == 'document' %}
+        <div class="mt-2 lex-doc-badge">
+          <span class="badge text-bg-info-subtle border text-info-emphasis" title="{{ _('Proposé à partir d\'un document que vous avez joint à la réunion') }}"><i class="bi bi-paperclip"></i> {{ _('issu des documents fournis') }}</span>
+        </div>
+        {% endif %}
+        <textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="{{ _('Pourquoi cette forme doit être validée') }}">{{ t.comment or '' }}</textarea>
+        {% if t.contexts %}
+        <details class="lex-contexts mt-2">
+          <summary class="small text-muted">
+            {{ _('Contexte proposé (%(n)s)', n=t.contexts|length) }}
+            <span class="lex-context-counter" data-listened="{{ t.contexts_listened_count or 0 }}" data-total="{{ t.contexts|length }}">
+              {{ _('· %(listened)s/%(total)s écoutés', listened=t.contexts_listened_count or 0, total=t.contexts|length) }}
+            </span>
+          </summary>
+          <div class="small mt-2">
+            {% for c in t.contexts %}
+            <div class="lex-context-item" data-context-index="{{ loop.index0 }}">
+              <span class="text-muted">{{ c.timecode or _('sans timecode') }}{% if c.speaker %} — {{ c.speaker }}{% endif %}</span>
+              <div>« {{ c.quote }} »</div>
+              {% if c.reason %}<div class="text-muted">{{ c.reason }}</div>{% endif %}
+              <div class="lex-context-actions">
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary lex-context-play"
+                        title="{{ _('Écouter 5 secondes avant et après') }}"
+                        data-timecode="{{ c.timecode or '' }}"
+                        data-quote="{{ c.quote or '' }}"
+                        {% if not c.audio_available %}disabled{% endif %}
+                        onclick="TranscrIA.toggleLexiconContextAudio(this)">
+                  <i class="bi bi-play-fill"></i>
+                </button>
+                <label class="lex-context-listened">
+                  <input type="checkbox"
+                         class="form-check-input lex-context-listened-input"
+                         data-context-index="{{ loop.index0 }}"
+                         {% if c.listened %}checked{% endif %}
+                         onchange="TranscrIA.setLexiconContextListened(this)">
+                  {{ _('Écouté') }}
+                </label>
+                {% if not c.audio_available %}
+                <span class="text-muted">{{ _('Audio indisponible pour ce timecode') }}</span>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        {% if promote_allowed %}
+        <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="{{ _('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') }}"
+                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> {{ _('Au lexique central') }}</button>
+        {% endif %}
+        <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addLexiconTerm()">{{ _('+ Ajouter un terme') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" onclick="TranscrIA.importLexiconFile()">{{ _('+ Importer depuis un fichier .txt') }}</button>
+    <input type="file" id="lexicon-file-input" accept=".txt,.csv" class="d-none" onchange="TranscrIA.handleLexiconFile(this)">
+    <br>
+    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveLexicon()">{{ _('Enregistrer le lexique') }}</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" onclick="TranscrIA.skipLexicon()">{{ _('Continuer sans lexique') }}</button>
+    <span id="lexicon-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
+  </div>
+  {% endif %}
+
+  {% if wizard_layout.optional_prep and file_status == 'done' %}
+  </details>
+  {% endif %}

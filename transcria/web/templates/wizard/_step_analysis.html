@@ -1,0 +1,132 @@
+{# Étape du wizard — extraite de job_wizard.html (vague A3). Contexte hérité du parent
+   (statuses/statuts d'étape, job, meeting, wizard_layout…) : include AVEC contexte. #}
+  <!-- Step 2: Audio analysis -->
+  {% if file_status == 'done' %}
+  <div class="step-section {% if analyze_status == 'todo' or analyze_status == 'in_progress' %}current-step{% endif %}">
+    <h3><i class="bi bi-{{ wizard_layout.step_num.analyze }}-circle-fill step-icon"></i> {{ _('Analyse audio') }}</h3>
+    {% if audio_analysis and audio_analysis.get('duration_seconds') %}
+      {% if audio_diagnostic %}
+      <div class="alert alert-{{ audio_diagnostic.class }} mb-3">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <strong><i class="bi bi-soundwave"></i> {{ audio_diagnostic.label }}</strong>
+          <span>{{ audio_diagnostic.message }}</span>
+        </div>
+        {% if audio_diagnostic.reasons %}
+        <div class="small mt-2">
+          {% for reason in audio_diagnostic.reasons %}
+          <span class="badge text-bg-light me-1">{{ reason }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if audio_diagnostic.advice %}
+        <div class="small mt-2 text-{{ audio_diagnostic.advice.class }}">
+          <i class="bi bi-lightbulb"></i> {{ audio_diagnostic.advice.text }}
+        </div>
+        {% endif %}
+        {% if audio_diagnostic.difficulty %}
+        <div class="small mt-2">
+          {{ _('Passages :') }}
+          <strong>{{ audio_diagnostic.difficulty.degrade }}</strong> {{ _('difficile(s) ·') }}
+          <strong>{{ audio_diagnostic.difficulty.suspect }}</strong> {{ _('à surveiller') }}
+          {{ _('sur %(n)s fenêtre(s) de 5 s.', n=audio_diagnostic.difficulty.windows) }}
+        </div>
+        {% endif %}
+        {% if audio_diagnostic.frise %}
+        {% set _frise_labels = {'ok': _('son exploitable'), 'suspect': _('à surveiller'), 'degrade': _('difficile')} %}
+        {% set _frise_classes = {'ok': 'success', 'suspect': 'warning', 'degrade': 'danger'} %}
+        <div class="mt-2">
+          <div class="small text-muted mb-1">{{ _('Difficulté au fil du temps') }}</div>
+          <div class="d-flex" style="height: 14px; border-radius: 4px; overflow: hidden;"
+               role="img" aria-label="{{ _('Frise temporelle de la difficulté audio') }}">
+            {% for seg in audio_diagnostic.frise %}
+            <div class="bg-{{ _frise_classes[seg.level] }}" style="width: {{ seg.pct }}%;"
+                 title="{{ seg.label }} · {{ _frise_labels[seg.level] }}{% if seg.reasons %} · {{ seg.reasons|join(', ') }}{% endif %}"></div>
+            {% endfor %}
+          </div>
+          <div class="d-flex justify-content-between text-muted mt-1" style="font-size: 0.7rem;">
+            <span>{{ audio_diagnostic.frise[0].label.split('–')[0] }}</span>
+            <span>{{ audio_diagnostic.frise[-1].label.split('–')[1] }}</span>
+          </div>
+          <div class="small mt-1">
+            <span class="badge text-bg-success">&nbsp;</span> {{ _('exploitable') }}
+            <span class="badge text-bg-warning ms-2">&nbsp;</span> {{ _('à surveiller') }}
+            <span class="badge text-bg-danger ms-2">&nbsp;</span> {{ _('difficile') }}
+          </div>
+        </div>
+        {% endif %}
+        <details class="small mt-2">
+          <summary>{{ _('Voir les détails techniques') }}</summary>
+          {% if audio_diagnostic.perceptual.squim or audio_diagnostic.perceptual.dnsmos %}
+          <div class="row mt-2">
+            {% if audio_diagnostic.perceptual.squim %}
+            <div class="col-md-6">
+              <span class="text-muted">SQUIM</span> —
+              STOI {{ audio_diagnostic.perceptual.squim.stoi if audio_diagnostic.perceptual.squim.stoi is not none else '—' }} ·
+              PESQ {{ audio_diagnostic.perceptual.squim.pesq if audio_diagnostic.perceptual.squim.pesq is not none else '—' }} ·
+              SI-SDR {{ audio_diagnostic.perceptual.squim.sisdr if audio_diagnostic.perceptual.squim.sisdr is not none else '—' }} dB
+            </div>
+            {% endif %}
+            {% if audio_diagnostic.perceptual.dnsmos %}
+            <div class="col-md-6">
+              <span class="text-muted">DNSMOS</span> —
+              SIG {{ audio_diagnostic.perceptual.dnsmos.sig if audio_diagnostic.perceptual.dnsmos.sig is not none else '—' }} ·
+              BAK {{ audio_diagnostic.perceptual.dnsmos.bak if audio_diagnostic.perceptual.dnsmos.bak is not none else '—' }} ·
+              OVRL {{ audio_diagnostic.perceptual.dnsmos.ovrl if audio_diagnostic.perceptual.dnsmos.ovrl is not none else '—' }} (MOS 1-5)
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+          <div class="row mt-2">
+            <div class="col-md-3">{{ _('RMS :') }} {{ audio_diagnostic.metrics.rms if audio_diagnostic.metrics.rms is not none else '—' }}</div>
+            <div class="col-md-3">{{ _('SNR estimé :') }} {{ audio_diagnostic.metrics.estimated_snr_db if audio_diagnostic.metrics.estimated_snr_db is not none else '—' }} dB</div>
+            <div class="col-md-3">{{ _('Silence :') }} {{ ((audio_diagnostic.metrics.silence_ratio or 0) * 100)|round(0)|int }}%</div>
+            <div class="col-md-3">{{ _('Bande 95%% :') }} {{ audio_diagnostic.metrics.bandwidth_95_hz if audio_diagnostic.metrics.bandwidth_95_hz is not none else '—' }} Hz</div>
+          </div>
+        </details>
+      </div>
+      {% endif %}
+      <div class="row">
+        <div class="col-md-3"><strong>{{ _('Durée') }}</strong><br>{{ _('%(min)s minutes', min=(audio_analysis.duration_seconds / 60)|round(1)) }}</div>
+        <div class="col-md-2"><strong>{{ _('Format') }}</strong><br>{{ audio_analysis.get('format', '?') }}</div>
+        <div class="col-md-2"><strong>{{ _('Codec') }}</strong><br>{{ audio_analysis.get('codec', '?') }}</div>
+        <div class="col-md-2"><strong>{{ _('Canaux') }}</strong><br>{{ audio_analysis.get('channels', '?') }}</div>
+        <div class="col-md-3"><strong>{{ _('Fréquence') }}</strong><br>{{ audio_analysis.get('sample_rate_hz', '?') }} Hz</div>
+      </div>
+      {% if audio_analysis.get('needs_conversion') %}
+        <div class="alert alert-warning mt-3 mb-0">{{ _('Conversion requise pour le traitement (effectuée automatiquement).') }}</div>
+      {% endif %}
+      {% if timing_estimate and timing_estimate.total_minutes %}
+        {# Estimation CALIBRÉE machine, spécifique au profil choisi (honnête sur sa base). #}
+        <div class="alert alert-info mt-2 mb-0">
+          <strong><i class="bi bi-clock"></i> {{ _('Temps total estimé : ~%(min)s min', min=timing_estimate.total_minutes|round(0)|int) }}</strong>
+          <span class="text-muted small ms-2">
+            {{ _('(traitement machine %(range)s + validation ~%(human)s min)', range=timing_estimate.machine_range, human=timing_estimate.human_minutes) }}
+          </span>
+          {% if timing_estimate.basis == 'measured' %}
+          <span class="badge bg-success ms-2" title="{{ _('Estimation apprise de vos traitements précédents sur cette machine') }}">{{ _('calibré · %(n)s jobs', n=timing_estimate.samples) }}</span>
+          {% else %}
+          <span class="badge bg-secondary ms-2" title="{{ _('Estimation initiale (formule) — s\'affinera après quelques traitements') }}">{{ _('estimation initiale') }}</span>
+          {% endif %}
+        </div>
+      {% elif audio_analysis.get('estimated_total_minutes') %}
+        <div class="alert alert-info mt-2 mb-0">
+          <strong><i class="bi bi-clock"></i> {{ _('Temps total estimé : ~%(min)s min', min=audio_analysis.estimated_total_minutes|round(0)|int) }}</strong>
+          <span class="text-muted small ms-2">
+            {{ _('(traitement machine ~%(machine)s min + validation ~%(human)s min)', machine=audio_analysis.estimated_machine_minutes|round(0)|int, human=audio_analysis.estimated_human_minutes) }}
+          </span>
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="text-muted">{{ _("Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques.") }}</p>
+      <button class="btn btn-primary" onclick="TranscrIA.analyzeAudio()">
+        <span id="analyze-spinner" class="spinner d-none"></span> {{ _('Analyser le fichier') }}
+      </button>
+      <div id="analyze-result" class="mt-2"></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if wizard_layout.first_optional == 'summary' and file_status == 'done' %}
+  <details class="optional-steps mb-4">
+    <summary class="btn btn-outline-secondary btn-sm mb-2"><i class="bi bi-three-dots"></i> {{ _('Étapes optionnelles pour ce profil') }}</summary>
+  {% endif %}
