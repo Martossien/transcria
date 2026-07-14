@@ -26,6 +26,8 @@
 > (1 110 → 135 l., HTML rendu identique) ; ratchet front (`scripts/audit_front.py` +
 > `quality_baseline_front.json` : 0 JS inline logique, template ≤ 400, JS ≤ 900) en CI.
 > `wizard.js`/`srt_editor.js` non découpés (règle d'opportunité, baselinés).
+> ▶ **B1 en cours (démarrée 2026-07-14)** — exécution en **3 lots poussés séparément**,
+> chacun validé par la suite complète + un E2E GPU+LLM réel (voir le plan de lots au §B1).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -852,6 +854,19 @@ en écrivant les tests manquants au moment du déplacement (le contexte est frai
 
 **DoD** : runner.py < 500 l. ; chaque phase < 400 l. et ≥ 80 % ; `WorkflowRunner.__init__`
 ne construit plus d'infrastructure ; scheduler/executor inchangés ; goldens verts.
+
+**Plan de lots (décidé au démarrage, 2026-07-14)** — la vague étant XL et la zone sensible
+(verrou LLM, opencode dans `run_correction`/`run_refine`), elle est poussée en **3 lots
+indépendants**, chacun gaté par la suite complète + un E2E GPU+LLM réel — main reste vert
+entre deux lots et un E2E cassé désigne son lot :
+
+- **Lot 1** (risque faible — les feuilles) : goldens préalables (empreintes de provenance
+  `resume.py`, ordre des notifications) + étapes 1 et 2 ci-dessus (`gpu_phase.py`,
+  `speaker_projection.py`).
+- **Lot 2** (le gros) : étape 3 — les 9 phases dans l'ordre du plan, un commit par phase
+  avec ses tests migrés vers `tests/workflow/test_phase_<nom>.py`.
+- **Lot 3** : étape 4 — façade finale < 500 l., registre de phases, activation du contrat
+  import-linter « l'orchestration n'importe pas Flask », ratchet + docs.
 
 #### B2 — Le moteur d'étapes du pipeline *(effort L)*
 
