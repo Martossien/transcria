@@ -89,6 +89,62 @@ class TestCatalogReadsRegistry:
             }
 
 
+class TestSchemaLockedOnRegistry:
+    """config/ est du noyau et n'importe pas le domaine stt (§8.2) : la garde du
+    schéma reste littérale, et c'est CETTE suite qui la verrouille sur le registre."""
+
+    def test_schema_backend_set_equals_registry(self):
+        from transcria.config.config_schema import _VALID_STT_BACKENDS
+
+        assert set(_VALID_STT_BACKENDS) == set(registry.backends())
+
+    @pytest.mark.parametrize("name", EXPECTED_ORDER)
+    def test_every_registry_backend_accepted_by_schema(self, name):
+        from transcria.config.config_schema import ValidationResult, _check_stt_backend
+
+        result = ValidationResult()
+        _check_stt_backend({"stt_backend": name}, result, {})
+        assert result.errors == []
+
+    def test_unknown_unrouted_backend_refused(self):
+        from transcria.config.config_schema import ValidationResult, _check_stt_backend
+
+        result = ValidationResult()
+        _check_stt_backend({"stt_backend": "qwen3asr"}, result, {})
+        assert any("qwen3asr" in error for error in result.errors)
+
+    def test_served_backend_accepted_when_routed(self):
+        from transcria.config.config_schema import ValidationResult, _check_stt_backend
+
+        cfg = {"inference": {"stt": {"backends": {"qwen3asr": {"url": "http://gpu-node:9800"}}}}}
+        result = ValidationResult()
+        _check_stt_backend({"stt_backend": "qwen3asr"}, result, cfg)
+        assert result.errors == []
+
+    def test_force_stt_backend_whitelist_is_a_registry_subset(self):
+        # Sous-ensemble ASSUMÉ (aptitude à la re-transcription qualité), pas un miroir :
+        # on garde seulement la garantie qu'il ne référence jamais un backend disparu.
+        import re as _re
+        from inspect import getsource
+
+        from transcria.config import config_schema
+
+        source = getsource(config_schema._check_quality_transcription)
+        literal = _re.search(r"backend not in \{([^}]*)\}", source).group(1)
+        whitelist = {part.strip().strip("'\"") for part in literal.split(",")}
+        assert whitelist <= set(registry.backends())
+
+    def test_required_model_guard_matches_descriptor(self):
+        # cohere déclare required_model="models.cohere_model_path" — le schéma porte la
+        # garde correspondante (chemin obligatoire quand le backend est cohere).
+        from transcria.config.config_schema import ValidationResult, _check_models
+
+        assert registry.get("cohere").required_model == "models.cohere_model_path"
+        result = ValidationResult()
+        _check_models({"stt_backend": "cohere", "cohere_model_path": ""}, result, {})
+        assert any("cohere_model_path" in error for error in result.errors)
+
+
 class TestFakeBackendDemo:
     """DoD C1 : la démonstration qu'ajouter un backend = 1 module + 1 enregistrement.
 

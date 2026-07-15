@@ -288,10 +288,15 @@ def _check_models(mod: dict, r: ValidationResult, cfg: dict | None = None) -> No
         )
 
 
+# Backends STT natifs acceptés. Liste LITTÉRALE à dessein : config/ est du noyau et
+# n'importe pas le domaine stt (§8.2) — la cohérence avec stt/registry.py est verrouillée
+# en CI par tests/contracts/test_stt_backend_contract.py (toute dérive casse la suite).
+_VALID_STT_BACKENDS = frozenset({"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"})
+
+
 def _check_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
-    valid = {"cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss"}
     backend = mod.get("stt_backend", "cohere")
-    if isinstance(backend, str) and backend in valid:
+    if isinstance(backend, str) and backend in _VALID_STT_BACKENDS:
         return
     # Backend SERVI (runtimes C++, ex. qwen3asr/nemotron) : n'importe quel nom est
     # accepté s'il est ROUTÉ — url non vide dans inference.stt.backends.<nom>
@@ -302,7 +307,7 @@ def _check_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) 
         return
     r.add_error(
         f"models.stt_backend='{backend}' invalide. "
-        f"Valeurs acceptées: {', '.join(sorted(valid))} — ou un backend SERVI déclaré "
+        f"Valeurs acceptées: {', '.join(sorted(_VALID_STT_BACKENDS))} — ou un backend SERVI déclaré "
         f"avec une url dans inference.stt.backends.<nom> (runtimes audio.cpp/parakeet.cpp)"
     )
 
