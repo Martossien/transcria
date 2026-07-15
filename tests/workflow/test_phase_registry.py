@@ -15,6 +15,9 @@ from transcria.workflow.phases import (
     summary,
     transcription,
 )
+from transcria.jobs.store import JobStore
+from transcria.workflow.gpu_phase import GpuPhaseSession
+from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.runner import WorkflowRunner
 
 EXPECTED = {
@@ -82,3 +85,24 @@ class TestFacadeDispatchesViaRegistry:
         result = getattr(runner, method)(*args)
         assert result == {"ok": True}
         assert calls == [(runner, *args)]
+
+
+class TestRunnerInfrastructureInjection:
+    """DoD B1 : __init__ ne construit plus d'infrastructure — elle est injectable."""
+
+    def test_injected_gpu_and_progress_are_used_as_is(self):
+        gpu = object.__new__(GpuPhaseSession)
+        gpu.vram = object()
+        gpu.allocator = object()
+        progress = object()
+        runner = WorkflowRunner(JobStore, {}, gpu=gpu, progress=progress)
+        assert runner.gpu is gpu
+        assert runner.progress is progress
+        # Les vues write-through vram/allocator suivent la session injectée.
+        assert runner.vram is gpu.vram
+        assert runner.allocator is gpu.allocator
+
+    def test_defaults_build_the_historical_factories(self):
+        runner = WorkflowRunner(JobStore, {})
+        assert isinstance(runner.gpu, GpuPhaseSession)
+        assert isinstance(runner.progress, WorkflowProgressReporter)

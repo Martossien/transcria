@@ -26,11 +26,20 @@ logger = logging.getLogger(__name__)
 
 
 class WorkflowRunner:
-    def __init__(self, store: type[JobStore] | JobStore, config: dict | None = None):
+    def __init__(
+        self,
+        store: type[JobStore] | JobStore,
+        config: dict | None = None,
+        *,
+        gpu: GpuPhaseSession | None = None,
+        progress: WorkflowProgressReporter | None = None,
+    ):
         self.store = store
         self.config = config or {}
-        self.gpu = GpuPhaseSession(self.config)
-        self.progress = WorkflowProgressReporter(self.config)
+        # Infrastructure injectable (DoD B1) ; défauts = factories historiques —
+        # pas de framework DI (plan §9), les appelants existants ne changent pas.
+        self.gpu = gpu if gpu is not None else GpuPhaseSession(self.config)
+        self.progress = progress if progress is not None else WorkflowProgressReporter(self.config)
 
     # `vram`/`allocator` : vues write-through sur la session GPU — les tests
     # historiques patchent `runner.vram.*` ou REMPLACENT `runner.allocator`,
