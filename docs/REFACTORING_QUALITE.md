@@ -43,7 +43,10 @@
 > scheduler/executor inchangés, goldens verts.
 > ✅ **C1 livrée (2026-07-15)** — registre unique des moteurs STT (voir l'encadré au §C1 :
 > factory/VRAM/catalogue lisent `stt/registry.py`, schéma verrouillé par contrat CI).
-> Prochaine vague : **B2** (moteur d'étapes du pipeline).
+> ✅ **B2 livrée (2026-07-15)** — moteur d'étapes du pipeline en 3 lots (voir l'encadré au
+> §B2 : goldens des séquences, étapes audio extraites, CheckpointManager/CancellationToken,
+> pipeline_service.py 1348 → 385 l., reprise mi-parcours validée sur job réel en E2E).
+> Prochaine vague : **C3** (vues de configuration).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -884,7 +887,19 @@ entre deux lots et un E2E cassé désigne son lot :
 - **Lot 3** : étape 4 — façade finale < 500 l., registre de phases, activation du contrat
   import-linter « l'orchestration n'importe pas Flask », ratchet + docs.
 
-#### B2 — Le moteur d'étapes du pipeline *(effort L)*
+#### ✅ B2 — Le moteur d'étapes du pipeline *(effort L — LIVRÉE 2026-07-15, 3 lots)*
+
+> **Réalisation** : lot 0 = goldens des séquences d'étapes (28 séquences : 7 profils ×
+> 4 variantes, sérialisées octet pour octet) ; lot 1 = les 6 étapes audio extraites vers
+> `services/pipeline_steps/` (délégateurs-coutures conservés) ; lot 2 =
+> `workflow/checkpoints.py` (`CheckpointManager`), `workflow/cancellation.py`
+> (`CancellationToken`), et trois extractions de plus pour tenir le DoD :
+> `services/pipeline_config.py` (config effective + lexiques),
+> `services/pipeline_admission.py` (estimateurs VRAM), `services/pipeline_remote_gate.py`
+> (pré-vol distant), `services/pipeline_sequence.py` (l'unique table de séquencement).
+> pipeline_service.py : 1348 → **385 lignes** (façade `run_process` + boucle moteur).
+> Validé : goldens verts, E2E GPU+LLM 13/13, **reprise mi-parcours rejouée sur le job réel**
+> (phases aval démarquées puis re-traitées ; STT/diarisation prouvés sautés).
 
 **Inventaire** : `_run_pipeline_steps` (184 l.) + 6 étapes audio relevées
 (`_run_audio_preflight` 61, `_run_audio_scene_analysis` 106, `_run_source_separation` 90,
