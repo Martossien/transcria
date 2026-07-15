@@ -26,15 +26,21 @@
 > (1 110 → 135 l., HTML rendu identique) ; ratchet front (`scripts/audit_front.py` +
 > `quality_baseline_front.json` : 0 JS inline logique, template ≤ 400, JS ≤ 900) en CI.
 > `wizard.js`/`srt_editor.js` non découpés (règle d'opportunité, baselinés).
-> ▶ **B1 en cours (démarrée 2026-07-14)** — exécution en **3 lots poussés séparément**,
+> ✅ **B1 livrée (2026-07-14 → 2026-07-15)** — exécutée en **3 lots poussés séparément**,
 > chacun validé par la suite complète + un E2E GPU+LLM réel (voir le plan de lots au §B1).
-> Lot 1 livré le 2026-07-14 (goldens, `gpu_phase.py`, `speaker_projection.py`). Lot 2 réalisé
-> le 2026-07-15 : les 9 phases extraites vers `workflow/phases/` (un commit par phase, tests
-> migrés vers `tests/workflow/test_phase_<nom>.py`, chaque module ≥ 80 %) — le runner est déjà
-> une façade de délégateurs (~350 l.) ; `_progress_msg` → `workflow/progress.py`,
-> `_refine_messages` → `phases/refine.py` (ré-exportés) ; `_enrich_stt_corpus_quality` part
-> avec la phase QUALITÉ (son appelant), correction de la cartographie §3.2. Reste le lot 3
-> (registre de phases, contrat import-linter, ratchet + docs).
+> Lot 1 (2026-07-14) : goldens, `gpu_phase.py`, `speaker_projection.py`. Lot 2 (2026-07-15) :
+> les 9 phases extraites vers `workflow/phases/` (un commit par phase, tests migrés vers
+> `tests/workflow/test_phase_<nom>.py`, chaque module ≥ 80 %) ; `_progress_msg` →
+> `workflow/progress.py`, `_refine_messages` → `phases/refine.py` (ré-exportés) ;
+> `_enrich_stt_corpus_quality` part avec la phase QUALITÉ (son appelant), correction de la
+> cartographie §3.2. Lot 3 (2026-07-15) : registre de phases (`phases/__init__.py`, la façade
+> dispatche via `phases.get()` — le `WorkflowContext` figé est écarté sciemment, il
+> court-circuiterait les coutures patchées par les tests) ; contrat import-linter élargi
+> « l'orchestration (workflow, queue, services) n'importe pas Flask » (imports d'annotation
+> sous TYPE_CHECKING, `queue/routes.py` en exception documentée → piste A) ; infrastructure
+> injectable dans `WorkflowRunner.__init__`. **DoD tenu** : runner.py 346 l. (< 500),
+> phases < 400 l. et ≥ 80 %, `__init__` sans construction d'infrastructure obligatoire,
+> scheduler/executor inchangés, goldens verts. Prochaine vague : **C1** (registre STT).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -810,7 +816,7 @@ suivantes réutilisent.
 **DoD** : plus aucun dict de résultat créé dans pipeline_service/job_executor ; golden
 verts avant/après ; mypy sans `type: ignore` ajouté.
 
-#### B1 — `workflow/phases/` : une phase = un module *(effort XL ; le cœur)*
+#### ✅ B1 — `workflow/phases/` : une phase = un module *(effort XL ; le cœur — LIVRÉE 2026-07-15, 3 lots)*
 
 Le contrat, dérivé de ce qui existe déjà de fait (signature commune, provenance par
 empreintes gérée par `workflow/resume.py`, réservation via `try_reserve_llm`) :
