@@ -40,7 +40,10 @@
 > sous TYPE_CHECKING, `queue/routes.py` en exception documentée → piste A) ; infrastructure
 > injectable dans `WorkflowRunner.__init__`. **DoD tenu** : runner.py 346 l. (< 500),
 > phases < 400 l. et ≥ 80 %, `__init__` sans construction d'infrastructure obligatoire,
-> scheduler/executor inchangés, goldens verts. Prochaine vague : **C1** (registre STT).
+> scheduler/executor inchangés, goldens verts.
+> ✅ **C1 livrée (2026-07-15)** — registre unique des moteurs STT (voir l'encadré au §C1 :
+> factory/VRAM/catalogue lisent `stt/registry.py`, schéma verrouillé par contrat CI).
+> Prochaine vague : **B2** (moteur d'étapes du pipeline).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -928,7 +931,16 @@ snapshot identique entre les deux classes sur machine réelle multi-GPU ; campag
 
 ### Piste C — transverses (opportunistes, après A2/B1)
 
-#### C1 — Registre unique des moteurs STT *(effort M ; gros ROI vécu)*
+#### ✅ C1 — Registre unique des moteurs STT *(effort M ; gros ROI vécu — LIVRÉE 2026-07-15)*
+
+> **Réalisation** : 3 commits (factory → catalogue → schéma). `stt/registry.py` porte le
+> contrat (descripteur sans `experimental`/`remote_only` — aucun backend n'en a l'usage,
+> doctrine §9) ; chaque backend déclare son `DESCRIPTOR` dans son module ; factory façade
+> (chaînes if/elif mortes), VRAM et page Modèles lisent le registre. **Déviation assumée**
+> pour le schéma : config/ est du noyau (§8.2) et n'importe pas le domaine stt — la garde
+> `_VALID_STT_BACKENDS` reste littérale, VERROUILLÉE sur le registre par la suite de
+> contrat CI `tests/contracts/test_stt_backend_contract.py` (≈70 tests paramétrés :
+> descripteurs, dispatch, VRAM, catalogue, schéma, gardes topologiques, backend factice).
 
 ```python
 # stt/registry.py
