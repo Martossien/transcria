@@ -46,7 +46,10 @@
 > ✅ **B2 livrée (2026-07-15)** — moteur d'étapes du pipeline en 3 lots (voir l'encadré au
 > §B2 : goldens des séquences, étapes audio extraites, CheckpointManager/CancellationToken,
 > pipeline_service.py 1348 → 385 l., reprise mi-parcours validée sur job réel en E2E).
-> Prochaine vague : **C3** (vues de configuration).
+> ✅ **C3 livrée (2026-07-15)** — vues typées de la config (voir l'encadré au §C3 :
+> validateurs 79 → 99 %, config/views.py verrouillé par contrat à deux goldens, adoption
+> opportuniste — chaînes profondes 216 → 194).
+> Prochaines vagues : **C2/C4/C5**, puis B3 (GPU, en dernier), C6.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -997,7 +1000,20 @@ ensemble** (c'est une seule responsabilité, éprouvée en prod). Pas d'interfac
 **DoD** : parseurs testés sans mock de processus ; opencode_runner.py < 900 l. ;
 comportement LLM identique (les tests E2E GPU réels du chantier refine font foi).
 
-#### C3 — Config : des vues typées, pas une migration *(effort M, étalé)*
+#### ✅ C3 — Config : des vues typées, pas une migration *(effort M — LIVRÉE 2026-07-15, 3 lots)*
+
+> **Réalisation** : lot 0 = suite table-driven des validateurs `_check_*`
+> (`tests/test_config_schema_validators.py`, ~150 mutations paramétrées + cas croisés
+> via `validate_config`) — config_schema.py **79 % → 99 %** (cible ≥ 90 %). Lot 1 =
+> `config/views.py` (GpuView, QueueView, WorkflowView + QualityTranscriptionView, SttView),
+> défauts de repli des consommateurs matérialisés champ par champ (sémantique comprise :
+> arbitration_llm coupée seulement par `false` explicite) et **verrouillés des deux côtés**
+> par `tests/contracts/test_config_views_contract.py` (vue({}) == défauts consommateurs ;
+> vue(défaut) == valeurs loader ; les 3 divergences connues documentées dans le golden).
+> Lot 2 = adoption opportuniste dans les fichiers touchés par B2 (pipeline_sequence,
+> pipeline_admission, pipeline_config, scheduler/job_executor) : chaînes profondes
+> **216 → 194**, imports différés 416 → 408. Le stock restant fond par opportunité,
+> comme prévu ; gpu/ non touché (réservé B3).
 
 Le schéma actuel (423 clés validées par `config_schema.py`, `CONFIG_REFERENCE.md` généré,
 garde de classification CI) **reste la source de vérité**. On ajoute des **vues** :
