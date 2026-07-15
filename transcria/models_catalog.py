@@ -15,27 +15,20 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from transcria.install_models import COHERE_MODEL_ID, PYANNOTE_MODEL_ID, find_hf_cache_model
+from transcria.install_models import PYANNOTE_MODEL_ID, find_hf_cache_model
+from transcria.stt.registry import backends as _stt_backends
 
-# Backends STT non hardcodés côté runtime, mais leur SOURCE HF l'est ici (pour le téléchargement).
-_STT_SOURCES: dict[str, dict] = {
-    "cohere": {"repo": COHERE_MODEL_ID, "gated": True, "license": "Cohere (accès repo requis)",
-               "license_url": "https://huggingface.co/" + COHERE_MODEL_ID, "est_gb": 6.0},
-    "whisper": {"repo": "openai/whisper-large-v3", "gated": False, "license": "MIT",
-                "license_url": "https://huggingface.co/openai/whisper-large-v3", "est_gb": 3.1},
-    "voxtral": {"repo": "mistralai/Voxtral-Mini-3B-2507", "gated": False, "license": "Apache-2.0",
-                "license_url": "https://huggingface.co/mistralai/Voxtral-Mini-3B-2507", "est_gb": 9.3},
-    "granite": {"repo": "ibm-granite/granite-speech-4.1-2b", "gated": False, "license": "Apache-2.0",
-                "license_url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b", "est_gb": 4.6},
-    "parakeet": {"repo": "nvidia/parakeet-tdt-0.6b-v3", "gated": False, "license": "CC-BY-4.0",
-                 "license_url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3", "est_gb": 2.5},
-    # Snapshot complet = les 10 langues community (~155 Mo chacune) ; seul backend CPU (sans GPU).
-    "kroko": {"repo": "Banafo/Kroko-ASR", "gated": False, "license": "CC-BY-SA (community)",
-              "license_url": "https://huggingface.co/Banafo/Kroko-ASR", "est_gb": 3.2},
-    # ASR + locuteurs + timestamps en une passe (0,9B) ; worker Transformers 5 isolé (moss.moss_site).
-    "moss": {"repo": "OpenMOSS-Team/MOSS-Transcribe-Diarize", "gated": False, "license": "Apache-2.0",
-             "license_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize", "est_gb": 3.7},
-}
+
+# Sources HF des backends STT NATIFS — lues du registre (vague C1) : la description
+# d'un moteur n'existe que dans son module (DESCRIPTOR.catalog). Un backend sans
+# entrée catalogue (cohere_tf5 → modèle de cohere) n'a pas de ligne, comme avant.
+def _stt_sources() -> dict[str, dict]:
+    return {
+        name: {"repo": entry.repo, "gated": entry.gated, "license": entry.license,
+               "license_url": entry.license_url, "est_gb": entry.est_gb}
+        for name, descriptor in _stt_backends().items()
+        if (entry := descriptor.catalog) is not None
+    }
 
 # Modèles des MOTEURS STT SERVIS (runtimes C++ — cf. docs/EXTERNAL_STT_RUNTIMES.md), keyés
 # par nom de moteur du manifeste `resource_node.engines`. kind "gguf" = fichier unique via
@@ -129,7 +122,7 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
         except Exception:  # noqa: BLE001 — pas de palier résoluble ⇒ on n'ajoute pas la ligne LLM
             pass
 
-    stt = _STT_SOURCES.get(str(models.get("stt_backend") or "cohere"))
+    stt = _stt_sources().get(str(models.get("stt_backend") or "cohere"))
     if stt:
         specs.append(ModelSpec(
             role="stt", label=f"STT — {models.get('stt_backend')}", repo_id=stt["repo"],

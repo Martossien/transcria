@@ -75,6 +75,20 @@ class TestBackendContract:
         assert local_builders()[name] is registry.get(name).build
 
 
+class TestCatalogReadsRegistry:
+    def test_models_catalog_sources_mirror_registry_entries(self):
+        from transcria.models_catalog import _stt_sources
+
+        sources = _stt_sources()
+        with_catalog = {d.name: d.catalog for d in _descriptors() if d.catalog is not None}
+        assert sorted(sources) == sorted(with_catalog)
+        for name, entry in with_catalog.items():
+            assert sources[name] == {
+                "repo": entry.repo, "gated": entry.gated, "license": entry.license,
+                "license_url": entry.license_url, "est_gb": entry.est_gb,
+            }
+
+
 class TestFakeBackendDemo:
     """DoD C1 : la démonstration qu'ajouter un backend = 1 module + 1 enregistrement.
 

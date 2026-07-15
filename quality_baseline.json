@@ -86,7 +86,7 @@
   "transcria.maintenance.cli": 11,
   "transcria.maintenance.restore": 1,
   "transcria.maintenance.restore_service": 2,
-  "transcria.models_catalog": 2,
+  "transcria.models_catalog": 3,
   "transcria.models_download": 1,
   "transcria.notifications.admin_alerts": 4,
   "transcria.notifications.job_facts": 5,
