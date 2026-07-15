@@ -3,7 +3,7 @@ import logging
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
-from transcria.workflow import speaker_projection
+from transcria.workflow import phases, speaker_projection
 from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSession ré-exporté (tests historiques)
     GpuPhaseSession,
     _NoReservationSession,
@@ -11,16 +11,13 @@ from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSessi
 from transcria.workflow.phases import (
     correction,
     diarization,
-    export,
     final_review,
     quality,
     refine,
     summary,
     summary_llm,
     summary_stt,
-    transcription,
 )
-from transcria.workflow.phases import multi_stt_review as multi_stt_phase
 from transcria.workflow.phases.refine import refine_messages as _refine_messages  # noqa: F401 — ré-exporté (tests historiques)
 from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.progress import progress_msg as _progress_msg  # noqa: F401 — ré-exporté (tests historiques)
@@ -93,8 +90,9 @@ class WorkflowRunner:
     # Phase RÉSUMÉ (corps extraits vers workflow/phases/summary*.py — B1 lot 2).
     # Conservées comme coutures : les tests (goldens, incidents e62295c1, pré-vol STT)
     # substituent ces méthodes à l'instance ou à la classe.
+    # Les méthodes publiques run_* dispatchent via le registre (B1 lot 3).
     def run_summary(self, job: Job, audio_path: str, config: dict) -> dict:
-        return summary.run(self, job, audio_path, config)
+        return phases.get("summary").run(self, job, audio_path, config)
 
     def _load_cached_quick_summary(self, config: dict, job_id: str) -> dict | None:
         return summary.load_cached_quick_summary(self, config, job_id)
@@ -298,21 +296,21 @@ class WorkflowRunner:
 
     # Phase TRANSCRIPTION (corps extrait vers workflow/phases/transcription.py — B1 lot 2).
     def run_transcription(self, job: Job, audio_path: str, config: dict) -> dict:
-        return transcription.run(self, job, audio_path, config)
+        return phases.get("transcription").run(self, job, audio_path, config)
 
     def run_diarization(self, job: Job, audio_path: str, config: dict) -> dict:
-        return diarization.run_diarization(self, job, audio_path, config)
+        return phases.get("diarization").run(self, job, audio_path, config)
 
     # Phase QUALITÉ (corps extraits vers workflow/phases/quality.py — B1 lot 2).
     def _enrich_stt_corpus_quality(self, job: Job, config: dict) -> None:
         quality.enrich_stt_corpus_quality(self, job, config)
 
     def run_quality_checks(self, job: Job, config: dict) -> dict:
-        return quality.run(self, job, config)
+        return phases.get("quality").run(self, job, config)
 
     # Phase CORRECTION (corps extraits vers workflow/phases/correction.py — B1 lot 2).
     def run_correction(self, job: Job, config: dict) -> dict:
-        return correction.run(self, job, config)
+        return phases.get("correction").run(self, job, config)
 
     @staticmethod
     def _corrected_srt_integrity_error(source: str, corrected: str, language: str = "fr") -> str | None:
@@ -320,7 +318,7 @@ class WorkflowRunner:
 
     # Phase RELECTURE FINALE (corps extraits vers workflow/phases/final_review.py — B1 lot 2).
     def run_final_review(self, job: Job, config: dict) -> dict:
-        return final_review.run(self, job, config)
+        return phases.get("final_review").run(self, job, config)
 
     @staticmethod
     def _apply_final_review(fs, result: dict) -> dict:
@@ -331,15 +329,15 @@ class WorkflowRunner:
 
     # Phase MULTI-STT (corps extrait vers workflow/phases/multi_stt_review.py — B1 lot 2).
     def run_multi_stt_review(self, job: Job, audio_path: str, config: dict) -> dict:
-        return multi_stt_phase.run(self, job, audio_path, config)
+        return phases.get("multi_stt_review").run(self, job, audio_path, config)
 
     # Phase AFFINAGE (corps extraits vers workflow/phases/refine.py — B1 lot 2).
     def run_refine(self, job: Job, config: dict) -> dict:
-        return refine.run(self, job, config)
+        return phases.get("refine").run(self, job, config)
 
     def _apply_refine(self, fs, store, workspace, job: Job, config: dict, *, kind: str, max_turns: int) -> dict:
         return refine.apply_refine(self, fs, store, workspace, job, config, kind=kind, max_turns=max_turns)
 
     # Phase EXPORT (corps extrait vers workflow/phases/export.py — B1 lot 2).
     def build_export(self, job: Job, config: dict) -> dict:
-        return export.run(self, job, config)
+        return phases.get("export").run(self, job, config)
