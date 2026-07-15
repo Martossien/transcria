@@ -1,6 +1,5 @@
 import logging
 
-from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -12,7 +11,9 @@ from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSessi
 from transcria.workflow.phases import (
     correction,
     diarization,
+    export,
     final_review,
+    quality,
     refine,
     summary,
     summary_llm,
@@ -302,80 +303,12 @@ class WorkflowRunner:
     def run_diarization(self, job: Job, audio_path: str, config: dict) -> dict:
         return diarization.run_diarization(self, job, audio_path, config)
 
+    # Phase QUALITÉ (corps extraits vers workflow/phases/quality.py — B1 lot 2).
     def _enrich_stt_corpus_quality(self, job: Job, config: dict) -> None:
-        """Remplit `quality_measure` du corpus STT (proxy taux d'édition brut↔corrigé).
-
-        Exécuté en début de qualité, donc **après** correction et relecture finale :
-        le SRT corrigé est définitif. Best-effort : aucune erreur n'affecte la qualité.
-        Sans SRT corrigé (correction désactivée), ne fait rien.
-        """
-        if not config.get("workflow", {}).get("stt_corpus", {}).get("enabled", True):
-            return
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt.corpus import enrich_corpus_with_quality, parse_srt_blocks, summarize_corpus
-
-            fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            corpus = fs.load_json("metadata/stt_corpus.json")
-            raw_segments = fs.load_json("metadata/transcription_segments.json")
-            corrected = fs.load_text("metadata/transcription_corrigee.srt")
-            if not corpus or not raw_segments or not corrected:
-                return
-            filled = enrich_corpus_with_quality(corpus, raw_segments, parse_srt_blocks(corrected))
-            if not filled:
-                return
-            fs.save_json("metadata/stt_corpus.json", corpus)
-            summary = summarize_corpus(corpus)
-            try:
-                self.store.update_extra_data(job.id, lambda extra: {**extra, "stt_corpus_summary": summary})
-            except Exception as exc:
-                logger.warning("Mise à jour stt_corpus_summary (qualité) ignorée: %s", exc)
-            logger.info(
-                "Corpus STT enrichi du proxy qualité (job=%s): %d/%d segments, taux d'édition moyen=%s",
-                job.id, filled, len(corpus), summary.get("quality_measure_mean"),
-            )
-        except Exception as exc:
-            logger.warning("Enrichissement qualité du corpus STT ignoré (job=%s): %s", job.id, exc)
+        quality.enrich_stt_corpus_quality(self, job, config)
 
     def run_quality_checks(self, job: Job, config: dict) -> dict:
-        self.store.update_state(job.id, JobState.QUALITY_CHECKING)
-        self.progress.update(
-            job.id,
-            step="quality",
-            phase="quality_checks",
-            message=_progress_msg(resolve_output_language(job), "quality"),
-            percent=90,
-            force=True,
-        )
-        self._enrich_stt_corpus_quality(job, config)
-        try:
-            from transcria.workflow.profiles import profile_for_job
-
-            profile = profile_for_job(job)
-            if profile is not None and profile.run_quality == "light":
-                # Profil léger : contrôle minimal (invariants SRT), pas le rapport complet.
-                from transcria.quality.light_report import run_light_quality
-
-                result = run_light_quality(job, config)
-            else:
-                # Profil complet OU job legacy (profil absent) → rapport complet (inchangé).
-                from transcria.quality.quality_report import QualityReporter
-
-                result = QualityReporter(config).run_all_checks(job)
-            self.store.update_state(job.id, JobState.QUALITY_CHECKED)
-            self.progress.update(
-                job.id,
-                step="quality",
-                phase="quality_checks",
-                message=_progress_msg(resolve_output_language(job), "quality_done"),
-                percent=92,
-                force=True,
-            )
-            return result
-        except Exception as exc:
-            logger.exception("Échec contrôle qualité")
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc)}
+        return quality.run(self, job, config)
 
     # Phase CORRECTION (corps extraits vers workflow/phases/correction.py — B1 lot 2).
     def run_correction(self, job: Job, config: dict) -> dict:
@@ -407,29 +340,6 @@ class WorkflowRunner:
     def _apply_refine(self, fs, store, workspace, job: Job, config: dict, *, kind: str, max_turns: int) -> dict:
         return refine.apply_refine(self, fs, store, workspace, job, config, kind=kind, max_turns=max_turns)
 
+    # Phase EXPORT (corps extrait vers workflow/phases/export.py — B1 lot 2).
     def build_export(self, job: Job, config: dict) -> dict:
-        self.progress.update(
-            job.id,
-            step="export",
-            phase="package",
-            message=_progress_msg(resolve_output_language(job), "package"),
-            percent=95,
-            force=True,
-        )
-        try:
-            from transcria.exports.package_builder import PackageBuilder
-
-            builder = PackageBuilder(config)
-            result = builder.build_package(job)
-            if isinstance(result, dict) and result.get("error"):
-                self.store.update_state(job.id, JobState.FAILED, result["error"])
-                self.allocator.release(job.id)
-                return result
-            self.store.update_state(job.id, JobState.EXPORT_READY)
-            self.allocator.release(job.id)
-            self.progress.clear(job.id)
-            return result
-        except Exception as exc:
-            logger.exception("Échec construction package")
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc)}
+        return export.run(self, job, config)

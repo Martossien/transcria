@@ -28,6 +28,13 @@
 > `wizard.js`/`srt_editor.js` non découpés (règle d'opportunité, baselinés).
 > ▶ **B1 en cours (démarrée 2026-07-14)** — exécution en **3 lots poussés séparément**,
 > chacun validé par la suite complète + un E2E GPU+LLM réel (voir le plan de lots au §B1).
+> Lot 1 livré le 2026-07-14 (goldens, `gpu_phase.py`, `speaker_projection.py`). Lot 2 réalisé
+> le 2026-07-15 : les 9 phases extraites vers `workflow/phases/` (un commit par phase, tests
+> migrés vers `tests/workflow/test_phase_<nom>.py`, chaque module ≥ 80 %) — le runner est déjà
+> une façade de délégateurs (~350 l.) ; `_progress_msg` → `workflow/progress.py`,
+> `_refine_messages` → `phases/refine.py` (ré-exportés) ; `_enrich_stt_corpus_quality` part
+> avec la phase QUALITÉ (son appelant), correction de la cartographie §3.2. Reste le lot 3
+> (registre de phases, contrat import-linter, ratchet + docs).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).

@@ -396,45 +396,6 @@ class TestPipelineServiceStateRecovery:
             assert updated.state != JobState.COMPLETED.value
 
 
-class TestWorkflowRunnerRunQualityChecks:
-    def test_run_quality_checks_success(self, app, owner_id, monkeypatch, tmp_path):
-        with app.app_context():
-            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
-            job = JobStore.create_job(owner_id, "Quality OK")
-            runner = WorkflowRunner(JobStore, cfg)
-
-            from transcria.quality.quality_report import QualityReporter
-
-            fake_report = {"quality_score": 85, "total_checks": 5, "checks": []}
-            monkeypatch.setattr(QualityReporter, "run_all_checks", lambda self, job: fake_report)
-
-            result = runner.run_quality_checks(job, cfg)
-            assert result["quality_score"] == 85
-
-            updated = JobStore.get_by_id(job.id)
-            assert updated.state == JobState.QUALITY_CHECKED.value
-
-
-class TestWorkflowRunnerBuildExport:
-    def test_build_export_success(self, app, owner_id, monkeypatch, tmp_path):
-        with app.app_context():
-            cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
-            job = JobStore.create_job(owner_id, "Export OK")
-            runner = WorkflowRunner(JobStore, cfg)
-
-            from transcria.exports.package_builder import PackageBuilder
-
-            fake_result = {"zip_path": "/tmp/test.zip", "zip_name": "test.zip", "size_mb": 1.0}
-            monkeypatch.setattr(PackageBuilder, "build_package", lambda self, job: fake_result)
-            monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
-
-            result = runner.build_export(job, cfg)
-            assert "zip_path" in result
-
-            updated = JobStore.get_by_id(job.id)
-            assert updated.state == JobState.EXPORT_READY.value
-
-
 class TestWorkflowStateEdgeCasesExtended:
     def test_compute_statuses_summary_running(self):
         statuses = WorkflowState.compute_statuses("summary_running")
