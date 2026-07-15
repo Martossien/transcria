@@ -5,6 +5,7 @@ Corps extraits de ``PipelineService.estimate_profile_resources`` /
 l'admission (`QueueScheduler`) et les routes wizard via les délégateurs
 statiques du service.
 """
+from transcria.config.views import GpuView, SttView, WorkflowView
 
 
 def estimate_profile_resources(config: dict, profile) -> dict:
@@ -22,19 +23,18 @@ def estimate_profile_resources(config: dict, profile) -> dict:
     from transcria.stt.transcriber_factory import get_backend_vram_mb
     from transcria.workflow.profiles import profile_to_legacy_mode
 
+    stt = SttView.from_config(config)
     rr = profile.resource_requirements
     phases: dict[str, int] = {}
     if rr.needs_stt:
-        backend = config.get("models", {}).get("stt_backend", "cohere")
-        phases["stt"] = get_backend_vram_mb(backend, config)
+        phases["stt"] = get_backend_vram_mb(stt.stt_backend, config)
     if rr.needs_diarization:
-        diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
-        phases["diarization"] = get_diarizer_vram_mb(diar_backend, config)
+        phases["diarization"] = get_diarizer_vram_mb(stt.diarization_backend, config)
     # La LLM (résumé/correction) partage le même serveur d'arbitrage : on conditionne sa
     # réservation au flag global `arbitration_llm.enabled` (comme l'estimateur historique),
     # en plus du besoin du profil.
-    if rr.needs_llm and config.get("workflow", {}).get("arbitration_llm", {}).get("enabled") is not False:
-        phases["llm_arbitration"] = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
+    if rr.needs_llm and WorkflowView.from_config(config).arbitration_llm_enabled:
+        phases["llm_arbitration"] = GpuView.from_config(config).llm_vram_mb
     return {
         "mode": profile_to_legacy_mode(profile),
         "processing_profile_id": profile.id,

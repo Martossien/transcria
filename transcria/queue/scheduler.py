@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestration n'importe pas Flask (§8.2)
     from flask import Flask
 
+from transcria.config.views import QueueView
 from transcria.database import db
 from transcria.inference.client import InferenceClientError, build_client_from_config
 from transcria.inference.resource_status import (
@@ -48,15 +49,15 @@ class QueueScheduler:
         self.app = app
         self.config = config
         self.process_fn = process_fn
-        queue_cfg = config.get("workflow", {}).get("queue", {}) or {}
+        queue_view = QueueView.from_config(config)
         execution_cfg = config.get("workflow", {}).get("execution", {}) or {}
-        self.poll_interval_s = max(1, int(queue_cfg.get("poll_interval_s", 5)))
+        self.poll_interval_s = max(1, queue_view.poll_interval_s)
         # Réveil instantané cross-process via LISTEN/NOTIFY (B9). Désactivé par défaut :
         # le polling suffit en mono-process. Utile en rôles web/scheduler séparés (C1).
-        self.use_listen_notify = bool(queue_cfg.get("use_listen_notify", False))
-        self.aging_enabled = bool(queue_cfg.get("aging_enabled", True))
-        self.aging_interval_minutes = int(queue_cfg.get("aging_interval_minutes", 30))
-        self.aging_max_bonus = int(queue_cfg.get("aging_max_bonus", 49))
+        self.use_listen_notify = queue_view.use_listen_notify
+        self.aging_enabled = queue_view.aging_enabled
+        self.aging_interval_minutes = queue_view.aging_interval_minutes
+        self.aging_max_bonus = queue_view.aging_max_bonus
         self.max_workers = max(1, min(int(execution_cfg.get("max_concurrent_jobs", 1)), 8))
         self.jobs_dir = config.get("storage", {}).get("jobs_dir", "./jobs")
         self.calendar = SchedulingCalendar(config.get("workflow", {}).get("scheduling", {}) or {})
@@ -135,10 +136,9 @@ class QueueScheduler:
         vram_profile: dict | None = None,
         processing_profile_id: str | None = None,
     ) -> dict:
-        queue_cfg = self.config.get("workflow", {}).get("queue", {}) or {}
         entry = QueueStore.enqueue(
             job_id,
-            priority=priority if priority is not None else queue_cfg.get("default_priority", 50),
+            priority=priority if priority is not None else QueueView.from_config(self.config).default_priority,
             scheduled_at=scheduled_at,
             vram_profile=vram_profile,
             mode=mode,

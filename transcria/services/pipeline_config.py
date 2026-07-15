@@ -9,6 +9,7 @@ aucune dépendance au service.
 import logging
 from copy import deepcopy
 
+from transcria.config.views import QualityTranscriptionView, SttView
 from transcria.jobs.models import Job
 
 logger = logging.getLogger(__name__)
@@ -16,15 +17,14 @@ logger = logging.getLogger(__name__)
 
 def config_for_mode(source_config: dict, mode: str, job: Job | None = None) -> dict:
     cfg = deepcopy(source_config)
-    quality_cfg = cfg.get("workflow", {}).get("quality_transcription", {})
-    enabled_modes = quality_cfg.get("enabled_for_modes", [])
-    forced_backend = quality_cfg.get("force_stt_backend")
-    if forced_backend and (
-        mode in enabled_modes
+    quality_view = QualityTranscriptionView.from_config(cfg)
+    if quality_view.force_stt_backend and (
+        mode in quality_view.enabled_for_modes
         or should_force_quality_backend_for_degraded_summary(job, cfg)
     ):
-        cfg.setdefault("models", {})["stt_backend"] = forced_backend
-    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+        cfg.setdefault("models", {})["stt_backend"] = quality_view.force_stt_backend
+    # Vue reconstruite APRÈS la mutation éventuelle du backend forcé.
+    backend = SttView.from_config(cfg).stt_backend
     if backend == "granite" and job is not None:
         from transcria.jobs.filesystem import JobFilesystem
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
@@ -33,7 +33,7 @@ def config_for_mode(source_config: dict, mode: str, job: Job | None = None) -> d
         if quality.get("level") == "degrade" or "audio_tres_faible" in (preflight.get("flags") or []):
             # Granite est expérimental et peu fiable sur audio dégradé ;
             # on revient au backend de production configuré dans la config source.
-            fallback = source_config.get("models", {}).get("stt_backend", "cohere")
+            fallback = SttView.from_config(source_config).stt_backend
             if fallback == "granite":
                 fallback = "cohere"
             logger.info(
@@ -47,7 +47,7 @@ def config_for_mode(source_config: dict, mode: str, job: Job | None = None) -> d
 
 
 def inject_whisper_lexicon_hotwords(cfg: dict, job: Job | None) -> None:
-    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+    backend = SttView.from_config(cfg).stt_backend
     if backend != "whisper" or job is None:
         return
 
@@ -95,7 +95,7 @@ def inject_whisper_lexicon_hotwords(cfg: dict, job: Job | None) -> None:
 
 
 def inject_cohere_lexicon_biasing(cfg: dict, job: Job | None) -> None:
-    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+    backend = SttView.from_config(cfg).stt_backend
     if backend != "cohere" or job is None:
         return
 
@@ -144,7 +144,7 @@ def inject_granite_lexicon_keywords(cfg: dict, job: Job | None) -> None:
     jargon). Miroir de `inject_cohere_lexicon_biasing` : seules les formes
     cibles validées sont poussées.
     """
-    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+    backend = SttView.from_config(cfg).stt_backend
     if backend != "granite" or job is None:
         return
 
@@ -192,15 +192,12 @@ def should_force_quality_backend_for_degraded_summary(job: Job | None, cfg: dict
     if job is None:
         return False
 
-    quality_cfg = cfg.get("workflow", {}).get("quality_transcription", {})
-    if not quality_cfg.get("force_on_degraded_summary", False):
+    quality_view = QualityTranscriptionView.from_config(cfg)
+    if not quality_view.force_on_degraded_summary:
         return False
 
-    degraded_levels = {
-        str(level).strip()
-        for level in quality_cfg.get("degraded_summary_levels", [])
-        if str(level).strip()
-    }
+    # La vue normalise déjà (strip + non vide) — même sémantique qu'historiquement.
+    degraded_levels = set(quality_view.degraded_summary_levels)
     if not degraded_levels:
         return False
 

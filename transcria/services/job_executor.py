@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestration n'importe pas Flask (§8.2)
     from flask import Flask
 
+from transcria.config.views import QueueView
 from transcria.database import db
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
@@ -89,9 +90,7 @@ class JobExecutorService:
             .get("max_concurrent_jobs", 1)
         )
         self.max_workers = max(1, max_workers)
-        self.queue_enabled = bool(
-            config.get("workflow", {}).get("queue", {}).get("enabled", True)
-        )
+        self.queue_enabled = QueueView.from_config(config).enabled
         self._executor = ThreadPoolExecutor(
             max_workers=self.max_workers,
             thread_name_prefix="transcria-worker",

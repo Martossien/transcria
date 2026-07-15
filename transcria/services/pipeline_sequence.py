@@ -9,6 +9,7 @@ l'instance.
 """
 from functools import partial
 
+from transcria.config.views import WorkflowView
 from transcria.jobs.models import Job
 
 
@@ -55,7 +56,7 @@ def define_pipeline_steps_for_profile(svc, job: Job, audio_path: str, profile) -
     conditionnée à `enable_quality_mode`, la correction au flag global `arbitration_llm.enabled`.
     Ainsi `dossier_qualite` reproduit l'ancien `quality` et `legacy_fast` l'ancien `fast`.
     """
-    wf = svc.config.get("workflow", {})
+    wf = WorkflowView.from_config(svc.config)
     steps = []
 
     # Multi-STT EXPÉRIMENTAL : retranscription des segments dégradés par un 2e
@@ -63,22 +64,22 @@ def define_pipeline_steps_for_profile(svc, job: Job, audio_path: str, profile) -
     # du SRT. Gated : flag config explicite ET profil avec correction LLM (les
     # profils express ne touchent jamais à une LLM). Best-effort dans le runner.
     if (
-        (wf.get("multi_stt", {}) or {}).get("enabled", False)
+        wf.multi_stt_enabled
         and profile.run_llm_correction
-        and wf.get("arbitration_llm", {}).get("enabled") is not False
+        and wf.arbitration_llm_enabled
     ):
         steps.append({
             "name": "multi_stt_review",
             "method": partial(svc.runner.run_multi_stt_review, job, audio_path, svc.config),
         })
 
-    if profile.run_diarization and wf.get("enable_quality_mode", True):
+    if profile.run_diarization and wf.enable_quality_mode:
         steps.append({
             "name": "diarization",
             "method": partial(svc.runner.run_diarization, job, audio_path, svc.config),
         })
 
-    if profile.run_llm_correction and wf.get("arbitration_llm", {}).get("enabled") is not False:
+    if profile.run_llm_correction and wf.arbitration_llm_enabled:
         steps.append({
             "name": "correction",
             "method": partial(svc.runner.run_correction, job, svc.config),

@@ -1,7 +1,7 @@
 {
  "cycles": 0,
- "deep_config_chains": 216,
- "deferred_internal_imports": 416,
+ "deep_config_chains": 194,
+ "deferred_internal_imports": 408,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -97,14 +97,25 @@
   "transcria.queue.calendar": 2,
   "transcria.queue.models": 1,
   "transcria.queue.routes": 17,
-  "transcria.queue.scheduler": 16,
+  "transcria.queue.scheduler": 17,
   "transcria.queue.store": 6,
   "transcria.queue.wait_estimate": 4,
   "transcria.services": 3,
   "transcria.services.config_service": 3,
-  "transcria.services.job_executor": 16,
+  "transcria.services.job_executor": 17,
   "transcria.services.job_service": 10,
-  "transcria.services.pipeline_service": 28,
+  "transcria.services.pipeline_admission": 4,
+  "transcria.services.pipeline_config": 6,
+  "transcria.services.pipeline_remote_gate": 5,
+  "transcria.services.pipeline_sequence": 5,
+  "transcria.services.pipeline_service": 25,
+  "transcria.services.pipeline_steps": 1,
+  "transcria.services.pipeline_steps.denoise": 3,
+  "transcria.services.pipeline_steps.normalization": 4,
+  "transcria.services.pipeline_steps.preflight": 3,
+  "transcria.services.pipeline_steps.scene_analysis": 4,
+  "transcria.services.pipeline_steps.scene_filter": 3,
+  "transcria.services.pipeline_steps.source_separation": 3,
   "transcria.stt": 12,
   "transcria.stt.base_diarizer": 2,
   "transcria.stt.cohere_tf5_transcriber": 4,
@@ -151,6 +162,7 @@
   "transcria.web.ui_labels": 1,
   "transcria.web.wizard_api": 30,
   "transcria.workflow": 3,
+  "transcria.workflow.checkpoints": 3,
   "transcria.workflow.concurrency_profile": 1,
   "transcria.workflow.gpu_phase": 6,
   "transcria.workflow.multi_stt_review": 1,
@@ -176,5 +188,5 @@
   "transcria.workflow.timing_service": 2,
   "transcria.workflow.transitions": 4
  },
- "functions_over_150": 10
+ "functions_over_150": 9
 }
