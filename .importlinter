@@ -11,21 +11,36 @@ root_packages =
     transcria
     inference_service
 include_external_packages = True
+# Les imports sous `if TYPE_CHECKING:` ne sont pas des dépendances d'exécution
+# (B1 lot 3 : l'app Flask injectée dans scheduler/job_executor n'est qu'une annotation).
+exclude_type_checking_imports = True
 
-# A0 (2026-07-13) — le cœur du workflow ne connaît pas Flask : les phases doivent rester
-# exécutables hors serveur web (étoile polaire du plan, §5.2).
-[importlinter:contract:workflow-sans-flask]
-name = transcria.workflow n'importe pas Flask
+# A0 (2026-07-13), élargi en B1 lot 3 (2026-07-15) — l'orchestration ne connaît pas
+# Flask : phases, scheduler et exécuteur doivent rester exécutables hors serveur web
+# (étoile polaire du plan, §5.2 ; état final §8.2). L'app Flask est INJECTÉE dans
+# scheduler/job_executor (annotations sous TYPE_CHECKING, app_context() duck-typé).
+[importlinter:contract:orchestration-sans-flask]
+name = L'orchestration (workflow, queue, services) n'importe pas Flask
 type = forbidden
 source_modules =
     transcria.workflow
+    transcria.queue
+    transcria.services
 forbidden_modules =
     flask
-# logging_setup importe flask en DIFFÉRÉ GARDÉ (try/except ImportError — fonctionne sans
-# Flask) pour enrichir les logs du correlation_id en contexte requête : exception §8.3
-# du plan, pas une dépendance.
 ignore_imports =
+    # logging_setup importe flask en DIFFÉRÉ GARDÉ (try/except ImportError — fonctionne
+    # sans Flask) pour enrichir les logs du correlation_id en contexte requête :
+    # exception §8.3 du plan, pas une dépendance.
     transcria.logging_setup -> flask
+    # queue/routes.py est un blueprint web qui vit dans queue/ — son déménagement vers
+    # web/ relève de la piste A (routes), pas de B1 ; ces exceptions meurent avec lui.
+    # (Premiers sauts seulement : les modules cibles restent couverts pour le reste
+    # de l'orchestration.)
+    transcria.queue.routes -> flask
+    transcria.queue.routes -> transcria.audit.decorator
+    transcria.queue.routes -> transcria.auth.permissions
+    transcria.queue.routes -> transcria.i18n
 
 # A0 (2026-07-13), élargi en A1 (2026-07-13) — l'interface web n'est pas une dépendance :
 # PERSONNE ne l'importe (l'inversion web.i18n de context/voice/queue est morte en A1,

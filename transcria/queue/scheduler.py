@@ -7,9 +7,10 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
-from flask import Flask
+if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestration n'importe pas Flask (§8.2)
+    from flask import Flask
 
 from transcria.database import db
 from transcria.inference.client import InferenceClientError, build_client_from_config
