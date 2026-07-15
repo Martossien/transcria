@@ -4,7 +4,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -343,3 +345,46 @@ class VoxtralTranscriber(BaseTranscriber):
         while len(parts) < 3:
             parts.append(0)
         return (parts[0], parts[1], parts[2])
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_voxtral_config(config: dict) -> dict:
+    current = config.get("voxtral", {})
+    defaults = get_default_config()["voxtral"]
+    return _deep_merge(defaults, current)
+
+
+def build(config: dict, device: str | None = None) -> VoxtralTranscriber:
+    voxtral_cfg = _effective_voxtral_config(config)
+    return VoxtralTranscriber(
+        model_path=voxtral_cfg.get("model_id"),
+        device=device,
+        chunk_length_s=voxtral_cfg.get("chunk_length_s", 30),
+        max_new_tokens=voxtral_cfg.get("max_new_tokens", 2000),
+        max_new_tokens_per_second=voxtral_cfg.get("max_new_tokens_per_second", 10.0),
+        min_new_tokens=voxtral_cfg.get("min_new_tokens", 64),
+        torch_dtype=voxtral_cfg.get("torch_dtype", "bfloat16"),
+        collapse_repetition_loops=voxtral_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=voxtral_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=voxtral_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=voxtral_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return int(config.get("gpu", {}).get("voxtral_vram_mb", get_default_config()["gpu"]["voxtral_vram_mb"]))
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="voxtral",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        repo="mistralai/Voxtral-Mini-3B-2507",
+        gated=False,
+        license="Apache-2.0",
+        license_url="https://huggingface.co/mistralai/Voxtral-Mini-3B-2507",
+        est_gb=9.3,
+    ),
+)

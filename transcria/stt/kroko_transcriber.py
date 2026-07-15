@@ -19,7 +19,9 @@ import time as _time
 from pathlib import Path
 from typing import Any
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -375,3 +377,49 @@ class KrokoTranscriber(BaseTranscriber):
             max_phrase_words=self.repetition_loop_max_phrase_words,
             keep_repeats=self.repetition_loop_keep_repeats,
         )
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_kroko_config(config: dict) -> dict:
+    current = config.get("kroko", {})
+    defaults = get_default_config()["kroko"]
+    return _deep_merge(defaults, current)
+
+
+def build(config: dict, device: str | None = None) -> KrokoTranscriber:
+    kroko_cfg = _effective_kroko_config(config)
+    return KrokoTranscriber(
+        model_dir=kroko_cfg.get("model_dir"),
+        repo_id=kroko_cfg.get("repo_id"),
+        variant=kroko_cfg.get("variant", "128"),
+        device=device,  # ignoré (CPU pur) — gardé pour le contrat commun
+        num_threads=kroko_cfg.get("num_threads", 8),
+        decoding_method=kroko_cfg.get("decoding_method", "greedy_search"),
+        tail_padding_s=kroko_cfg.get("tail_padding_s", 0.66),
+        segment_max_gap_s=kroko_cfg.get("segment_max_gap_s", 0.8),
+        segment_max_len_s=kroko_cfg.get("segment_max_len_s", 15.0),
+        collapse_repetition_loops=kroko_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=kroko_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=kroko_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=kroko_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return 0  # CPU pur (sherpa-onnx) — aucune VRAM, aucune réservation GPU
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="kroko",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        # Snapshot complet = les 10 langues community (~155 Mo chacune) ; seul backend CPU (sans GPU).
+        repo="Banafo/Kroko-ASR",
+        gated=False,
+        license="CC-BY-SA (community)",
+        license_url="https://huggingface.co/Banafo/Kroko-ASR",
+        est_gb=3.2,
+    ),
+)

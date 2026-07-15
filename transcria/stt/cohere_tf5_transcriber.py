@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.cohere_transcriber import vram_mb as _cohere_vram_mb
+from transcria.stt.registry import SttBackendDescriptor
 
 if TYPE_CHECKING:
     import numpy
@@ -311,3 +313,46 @@ class CohereTf5Transcriber(BaseTranscriber):
 
         self._last_transcribe_metadata = {}
         gc.collect()
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def build(config: dict, device: str | None = None) -> CohereTf5Transcriber:
+    models_cfg = config.get("models", {})
+    cohere_cfg = config.get("cohere", {})
+    tf5_cfg = config.get("cohere_tf5", {})
+
+    return CohereTf5Transcriber(
+        model_path=tf5_cfg.get("model_path") or models_cfg.get("cohere_model_path"),
+        model_revision=tf5_cfg.get("model_revision") or models_cfg.get("cohere_model_revision"),
+        device=device,
+        tf5_site=tf5_cfg.get("tf5_site"),
+        timeout_s=tf5_cfg.get("timeout_s", 7200),
+        chunk_length_s=tf5_cfg.get("chunk_length_s", cohere_cfg.get("chunk_length_s", 30)),
+        max_new_tokens=tf5_cfg.get("max_new_tokens", cohere_cfg.get("max_new_tokens", 448)),
+        punctuation=tf5_cfg.get("punctuation", cohere_cfg.get("punctuation", True)),
+        batch_size=tf5_cfg.get("batch_size", 96),
+        repetition_penalty=tf5_cfg.get("repetition_penalty", cohere_cfg.get("repetition_penalty", 1.2)),
+        no_repeat_ngram_size=tf5_cfg.get("no_repeat_ngram_size", cohere_cfg.get("no_repeat_ngram_size", 4)),
+        collapse_repetition_loops=tf5_cfg.get("collapse_repetition_loops", cohere_cfg.get("collapse_repetition_loops", True)),
+        repetition_loop_min_repeats=tf5_cfg.get(
+            "repetition_loop_min_repeats", cohere_cfg.get("repetition_loop_min_repeats", 4)
+        ),
+        repetition_loop_max_phrase_words=tf5_cfg.get(
+            "repetition_loop_max_phrase_words", cohere_cfg.get("repetition_loop_max_phrase_words", 10)
+        ),
+        repetition_loop_keep_repeats=tf5_cfg.get(
+            "repetition_loop_keep_repeats", cohere_cfg.get("repetition_loop_keep_repeats", 2)
+        ),
+    )
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="cohere_tf5",
+    build=build,
+    # Même modèle et même empreinte VRAM que cohere (worker Transformers 5 isolé).
+    vram_mb=_cohere_vram_mb,
+    # Réutilise le modèle de cohere (model_path retombe sur models.cohere_model_path) :
+    # pas de source propre — comportement historique de la page « Modèles » préservé.
+    catalog=None,
+)

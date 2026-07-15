@@ -28,7 +28,9 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 if TYPE_CHECKING:
     import numpy
@@ -317,3 +319,46 @@ class MossTranscriber(BaseTranscriber):
 
         self._last_transcribe_metadata = {}
         gc.collect()
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_moss_config(config: dict) -> dict:
+    current = config.get("moss", {})
+    defaults = get_default_config()["moss"]
+    return _deep_merge(defaults, current)
+
+
+def build(config: dict, device: str | None = None) -> MossTranscriber:
+    moss_cfg = _effective_moss_config(config)
+    return MossTranscriber(
+        model_path=moss_cfg.get("model_path"),
+        device=device,
+        moss_site=moss_cfg.get("moss_site"),
+        timeout_s=moss_cfg.get("timeout_s", 7200),
+        max_new_tokens=moss_cfg.get("max_new_tokens", 8192),
+        gap_alert_s=moss_cfg.get("gap_alert_s", 10.0),
+        collapse_repetition_loops=moss_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=moss_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=moss_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=moss_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return int(config.get("gpu", {}).get("moss_vram_mb", get_default_config()["gpu"]["moss_vram_mb"]))
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="moss",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        # ASR + locuteurs + timestamps en une passe (0,9B) ; worker Transformers 5 isolé (moss.moss_site).
+        repo="OpenMOSS-Team/MOSS-Transcribe-Diarize",
+        gated=False,
+        license="Apache-2.0",
+        license_url="https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize",
+        est_gb=3.7,
+    ),
+)

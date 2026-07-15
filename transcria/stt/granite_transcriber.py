@@ -4,7 +4,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -393,3 +395,52 @@ class GraniteTranscriber(BaseTranscriber):
         while len(parts) < 3:
             parts.append(0)
         return (parts[0], parts[1], parts[2])
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_granite_config(config: dict) -> dict:
+    current = config.get("granite", {})
+    defaults = get_default_config()["granite"]
+    return _deep_merge(defaults, current)
+
+
+def build(config: dict, device: str | None = None) -> GraniteTranscriber:
+    granite_cfg = _effective_granite_config(config)
+    return GraniteTranscriber(
+        model_path=granite_cfg.get("model_id"),
+        device=device,
+        chunk_length_s=granite_cfg.get("chunk_length_s", 30),
+        max_new_tokens=granite_cfg.get("max_new_tokens", 2000),
+        max_new_tokens_per_second=granite_cfg.get("max_new_tokens_per_second", 8.0),
+        min_new_tokens=granite_cfg.get("min_new_tokens", 64),
+        torch_dtype=granite_cfg.get("torch_dtype", "bfloat16"),
+        prompt_mode=granite_cfg.get("prompt_mode", "asr_punctuated"),
+        prompt_asr_raw=granite_cfg.get("prompt_asr_raw"),
+        prompt_asr_punctuated=granite_cfg.get("prompt_asr_punctuated"),
+        prompt_keywords=granite_cfg.get("prompt_keywords"),
+        keywords=granite_cfg.get("keywords"),
+        fix_mistral_regex=granite_cfg.get("fix_mistral_regex", True),
+        collapse_repetition_loops=granite_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=granite_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=granite_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=granite_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return int(config.get("gpu", {}).get("granite_vram_mb", get_default_config()["gpu"]["granite_vram_mb"]))
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="granite",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        repo="ibm-granite/granite-speech-4.1-2b",
+        gated=False,
+        license="Apache-2.0",
+        license_url="https://huggingface.co/ibm-granite/granite-speech-4.1-2b",
+        est_gb=4.6,
+    ),
+)

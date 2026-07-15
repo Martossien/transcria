@@ -3,8 +3,11 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from transcria.config.loader import get_default_config
 from transcria.gpu.model_load_lock import model_load_lock
+from transcria.install_models import COHERE_MODEL_ID
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 if TYPE_CHECKING:
     import numpy
@@ -386,3 +389,52 @@ class CohereTranscriber(BaseTranscriber):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             logger.debug("Cache CUDA vidé (Cohere ASR offloadé)")
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def build(config: dict, device: str | None = None) -> CohereTranscriber:
+    models_cfg = config.get("models", {})
+    cohere_cfg = config.get("cohere", {})
+    lexicon_biasing_cfg = cohere_cfg.get("lexicon_biasing", {})
+    if not isinstance(lexicon_biasing_cfg, dict):
+        lexicon_biasing_cfg = {}
+
+    return CohereTranscriber(
+        model_path=models_cfg.get("cohere_model_path"),
+        model_revision=models_cfg.get("cohere_model_revision"),
+        device=device,
+        chunk_length_s=cohere_cfg.get("chunk_length_s", 30),
+        max_new_tokens=cohere_cfg.get("max_new_tokens", 448),
+        punctuation=cohere_cfg.get("punctuation", True),
+        repetition_penalty=cohere_cfg.get("repetition_penalty", 1.2),
+        no_repeat_ngram_size=cohere_cfg.get("no_repeat_ngram_size", 4),
+        collapse_repetition_loops=cohere_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=cohere_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=cohere_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=cohere_cfg.get("repetition_loop_keep_repeats", 2),
+        lexicon_biasing_enabled=lexicon_biasing_cfg.get("enabled", False),
+        lexicon_biasing_terms=cohere_cfg.get("_lexicon_bias_terms", []),
+        lexicon_biasing_boost=lexicon_biasing_cfg.get("boost", 0.2),
+        lexicon_biasing_start_boost=lexicon_biasing_cfg.get("start_boost", 0.05),
+        lexicon_biasing_max_prefix_tokens=lexicon_biasing_cfg.get("max_prefix_tokens", 20),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return int(config.get("gpu", {}).get("cohere_vram_mb", get_default_config()["gpu"]["cohere_vram_mb"]))
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="cohere",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        repo=COHERE_MODEL_ID,
+        gated=True,
+        license="Cohere (accès repo requis)",
+        license_url="https://huggingface.co/" + COHERE_MODEL_ID,
+        est_gb=6.0,
+    ),
+    required_model="models.cohere_model_path",
+)

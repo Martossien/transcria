@@ -4,7 +4,9 @@ import time as _time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 if TYPE_CHECKING:
     import numpy
@@ -374,3 +376,47 @@ class ParakeetTranscriber(BaseTranscriber):
             max_phrase_words=self.repetition_loop_max_phrase_words,
             keep_repeats=self.repetition_loop_keep_repeats,
         )
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_parakeet_config(config: dict) -> dict:
+    current = config.get("parakeet", {})
+    defaults = get_default_config()["parakeet"]
+    return _deep_merge(defaults, current)
+
+
+def build(config: dict, device: str | None = None) -> ParakeetTranscriber:
+    parakeet_cfg = _effective_parakeet_config(config)
+    att_ctx = parakeet_cfg.get("att_context_size", [256, 256])
+    return ParakeetTranscriber(
+        model_path=parakeet_cfg.get("model_id"),
+        device=device,
+        use_local_attention=parakeet_cfg.get("use_local_attention", True),
+        att_context_size=(int(att_ctx[0]), int(att_ctx[1])),
+        decoding_strategy=parakeet_cfg.get("decoding_strategy", "greedy_batch"),
+        decoding_beam_size=parakeet_cfg.get("decoding_beam_size", 2),
+        max_chunk_duration_s=parakeet_cfg.get("max_chunk_duration_s", 1200),
+        collapse_repetition_loops=parakeet_cfg.get("collapse_repetition_loops", True),
+        repetition_loop_min_repeats=parakeet_cfg.get("repetition_loop_min_repeats", 4),
+        repetition_loop_max_phrase_words=parakeet_cfg.get("repetition_loop_max_phrase_words", 10),
+        repetition_loop_keep_repeats=parakeet_cfg.get("repetition_loop_keep_repeats", 2),
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return int(config.get("gpu", {}).get("parakeet_vram_mb", get_default_config()["gpu"]["parakeet_vram_mb"]))
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="parakeet",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        repo="nvidia/parakeet-tdt-0.6b-v3",
+        gated=False,
+        license="CC-BY-4.0",
+        license_url="https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+        est_gb=2.5,
+    ),
+)

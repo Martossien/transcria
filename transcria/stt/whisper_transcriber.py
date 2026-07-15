@@ -2,7 +2,9 @@ import logging
 import time as _time
 from pathlib import Path
 
+from transcria.config.loader import _deep_merge, get_default_config
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -304,3 +306,60 @@ class WhisperTranscriber(BaseTranscriber):
     @classmethod
     def vram_for_size(cls, size: str) -> int:
         return _MODEL_VRAM.get(size, 2000)
+
+
+# --- Enregistrement au registre STT (vague C1) --------------------------------
+
+def _effective_whisper_config(config: dict) -> dict:
+    legacy = config.get("models", {}).get("whisper", {})
+    current = config.get("whisper", {})
+    defaults = get_default_config()["whisper"]
+    return _deep_merge(_deep_merge(defaults, legacy), current)
+
+
+def build(config: dict, device: str | None = None) -> WhisperTranscriber:
+    whisper_cfg = _effective_whisper_config(config)
+
+    return WhisperTranscriber(
+        model_size=whisper_cfg["model_size"],
+        device=device,
+        compute_type=whisper_cfg["compute_type"],
+        cpu_threads=whisper_cfg["cpu_threads"],
+        chunk_length_s=whisper_cfg["chunk_length_s"],
+        beam_size=whisper_cfg["beam_size"],
+        best_of=whisper_cfg["best_of"],
+        vad_filter=whisper_cfg["vad_filter"],
+        word_timestamps=whisper_cfg["word_timestamps"],
+        condition_on_previous_text=whisper_cfg["condition_on_previous_text"],
+        no_speech_threshold=whisper_cfg["no_speech_threshold"],
+        compression_ratio_threshold=whisper_cfg["compression_ratio_threshold"],
+        log_prob_threshold=whisper_cfg["log_prob_threshold"],
+        hallucination_silence_threshold=whisper_cfg["hallucination_silence_threshold"],
+        repetition_penalty=whisper_cfg["repetition_penalty"],
+        no_repeat_ngram_size=whisper_cfg["no_repeat_ngram_size"],
+        suppress_numerals=whisper_cfg["suppress_numerals"],
+        hotwords=whisper_cfg.get("hotwords"),
+        initial_prompt=whisper_cfg.get("initial_prompt"),
+        collapse_repetition_loops=whisper_cfg["collapse_repetition_loops"],
+        repetition_loop_min_repeats=whisper_cfg["repetition_loop_min_repeats"],
+        repetition_loop_max_phrase_words=whisper_cfg["repetition_loop_max_phrase_words"],
+        repetition_loop_keep_repeats=whisper_cfg["repetition_loop_keep_repeats"],
+    )
+
+
+def vram_mb(config: dict) -> int:
+    return WhisperTranscriber.vram_for_size(_effective_whisper_config(config)["model_size"])
+
+
+DESCRIPTOR = SttBackendDescriptor(
+    name="whisper",
+    build=build,
+    vram_mb=vram_mb,
+    catalog=ModelCatalogEntry(
+        repo="openai/whisper-large-v3",
+        gated=False,
+        license="MIT",
+        license_url="https://huggingface.co/openai/whisper-large-v3",
+        est_gb=3.1,
+    ),
+)
