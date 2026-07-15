@@ -12,7 +12,7 @@ from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSessi
     GpuPhaseSession,
     _NoReservationSession,
 )
-from transcria.workflow.phases import summary, summary_llm, summary_stt
+from transcria.workflow.phases import summary, summary_llm, summary_stt, transcription
 from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.progress import progress_msg as _progress_msg  # noqa: F401 — ré-exporté (tests historiques)
 
@@ -412,65 +412,9 @@ class WorkflowRunner:
                 raise
             return detector.detect(job, audio_path, device=device)
 
+    # Phase TRANSCRIPTION (corps extrait vers workflow/phases/transcription.py — B1 lot 2).
     def run_transcription(self, job: Job, audio_path: str, config: dict) -> dict:
-        from pathlib import Path
-
-        self.store.update_state(job.id, JobState.TRANSCRIBING)
-        self.progress.update(
-            job.id,
-            step="processing",
-            phase="transcription",
-            message=_progress_msg(resolve_output_language(job), "transcribe"),
-            percent=35,
-            force=True,
-        )
-
-        from transcria.stt.transcriber_factory import get_backend_vram_mb
-
-        backend = config.get("models", {}).get("stt_backend", "cohere")
-        required_vram_mb = get_backend_vram_mb(backend, config)
-        reservation, managed_by_allocator = self._reserve_gpu_phase(
-            job,
-            required_vram_mb,
-            "stt",
-        )
-        if reservation is None and self._reclaim_vram_from_idle_arbitrage_llm(logger):
-            # VRAM insuffisante mais libérable : on a stoppé notre LLM d'arbitrage inactive,
-            # on retente la réservation une fois.
-            reservation, managed_by_allocator = self._reserve_gpu_phase(job, required_vram_mb, "stt")
-        if reservation is None:
-            # VRAM transitoire : mise en attente + alerte admin (pas FAILED).
-            msg = f"VRAM insuffisante pour la transcription ({required_vram_mb} Mo requis)"
-            logger.warning("[transcription] %s", msg)
-            return {
-                "vram_wait": True,
-                "required_mb": int(required_vram_mb),
-                "phase": "stt",
-                "reason": msg,
-                "error": msg,
-            }
-        gpu = reservation.gpu_index
-
-        try:
-            from transcria.stt.transcription import Transcriber
-
-            transcriber = Transcriber(config, gpu_index=gpu)
-            result = transcriber.transcribe(job, Path(audio_path))
-            self.progress.update(
-                job.id,
-                step="processing",
-                phase="transcription",
-                message=_progress_msg(resolve_output_language(job), "transcribe_done"),
-                percent=55,
-                force=True,
-            )
-            return result
-        except Exception as exc:
-            logger.exception("Échec transcription")
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc)}
-        finally:
-            self._release_gpu_phase(job, "stt", managed_by_allocator)
+        return transcription.run(self, job, audio_path, config)
 
     def run_diarization(self, job: Job, audio_path: str, config: dict) -> dict:
         from pathlib import Path
