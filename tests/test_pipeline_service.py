@@ -967,3 +967,62 @@ class TestPreflightHelpers:
         from transcria.services.pipeline_steps.preflight import compute_rms
 
         assert compute_rms("/chemin/inexistant.wav") is None
+
+
+# ---------------------------------------------------------------------------
+# _config_for_mode — exclusion Granite sur audio dégradé (B2 lot 2)
+# ---------------------------------------------------------------------------
+
+
+class TestConfigForModeGraniteDegradedExclusion:
+    """Granite (expérimental) est exclu quand l'audio est dégradé : repli production."""
+
+    def _svc(self, tmp_path, backend="granite"):
+        return _make_svc({
+            "models": {"stt_backend": backend},
+            "storage": {"jobs_dir": str(tmp_path / "jobs")},
+        })
+
+    def _write_quality(self, tmp_path, job_id, quality=None, preflight=None):
+        from transcria.jobs.filesystem import JobFilesystem
+
+        fs = JobFilesystem(str(tmp_path / "jobs"), job_id)
+        if quality is not None:
+            fs.save_json("metadata/audio_quality_decision.json", quality)
+        if preflight is not None:
+            fs.save_json("metadata/audio_preflight.json", preflight)
+
+    def test_niveau_degrade_bascule_sur_cohere(self, tmp_path):
+        svc = self._svc(tmp_path)
+        job = _job()
+        self._write_quality(tmp_path, job.id, quality={"level": "degrade"})
+
+        effective = svc._config_for_mode("fast", job)
+
+        # Source granite → granite interdit comme repli : cohere (production).
+        assert effective["models"]["stt_backend"] == "cohere"
+
+    def test_flag_audio_tres_faible_bascule_sur_cohere(self, tmp_path):
+        svc = self._svc(tmp_path)
+        job = _job()
+        self._write_quality(tmp_path, job.id, preflight={"flags": ["audio_tres_faible"]})
+
+        effective = svc._config_for_mode("fast", job)
+
+        assert effective["models"]["stt_backend"] == "cohere"
+
+    def test_audio_sain_conserve_granite(self, tmp_path):
+        svc = self._svc(tmp_path)
+        job = _job()
+        self._write_quality(tmp_path, job.id, quality={"level": "ok"}, preflight={"flags": []})
+
+        effective = svc._config_for_mode("fast", job)
+
+        assert effective["models"]["stt_backend"] == "granite"
+
+    def test_sans_job_conserve_granite(self, tmp_path):
+        svc = self._svc(tmp_path)
+
+        effective = svc._config_for_mode("fast", None)
+
+        assert effective["models"]["stt_backend"] == "granite"

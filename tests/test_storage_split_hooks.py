@@ -36,7 +36,8 @@ def recorder(monkeypatch):
             return {"backend": "pg", "pushed": 0, "pulled": 0, "skipped": 0, "bytes": 0}
         return _f
 
-    for mod in ("transcria.services.job_executor", "transcria.services.pipeline_service"):
+    # Le push du checkpoint vit dans CheckpointManager depuis B2 lot 2.
+    for mod in ("transcria.services.job_executor", "transcria.workflow.checkpoints"):
         monkeypatch.setattr(f"{mod}.artifact_store.push_job_files", rec("push"), raising=True)
         monkeypatch.setattr(f"{mod}.artifact_store.pull_job_files", rec("pull"), raising=True)
     monkeypatch.setattr(
@@ -173,7 +174,7 @@ class TestPipelineCheckpoint:
 
         events: list[str] = []
         monkeypatch.setattr(
-            "transcria.services.pipeline_service.artifact_store.push_job_files",
+            "transcria.workflow.checkpoints.artifact_store.push_job_files",
             lambda cfg, job_id, **kw: events.append("push"),
         )
         orig_mark = resume.mark_phase_done
@@ -202,7 +203,7 @@ class TestPipelineCheckpoint:
 
         def boom(cfg, job_id, **kw):
             raise RuntimeError("base injoignable")
-        monkeypatch.setattr("transcria.services.pipeline_service.artifact_store.push_job_files", boom)
+        monkeypatch.setattr("transcria.workflow.checkpoints.artifact_store.push_job_files", boom)
 
         job_id = _make_job(app, owner_id)
         with app.app_context():

@@ -1,13 +1,16 @@
 import logging
 import time
-from copy import deepcopy
-from functools import partial
 from pathlib import Path
 
-from transcria.jobs import artifact_store
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.services import (
+    pipeline_admission,
+    pipeline_config,
+    pipeline_remote_gate,
+    pipeline_sequence,
+)
 from transcria.services.pipeline_steps import (
     denoise,
     normalization,
@@ -16,6 +19,8 @@ from transcria.services.pipeline_steps import (
     scene_filter,
     source_separation,
 )
+from transcria.workflow.cancellation import CancellationToken
+from transcria.workflow.checkpoints import CheckpointManager
 from transcria.workflow.concurrency_profile import StageMetrics
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 from transcria.workflow.progress import WorkflowProgressReporter
@@ -40,58 +45,15 @@ class PipelineService:
             self._progress = reporter
         return reporter
 
+    # Estimation VRAM d'admission (corps extraits vers services/pipeline_admission.py —
+    # B2 lot 2). Délégateurs statiques conservés : routes et scheduler appellent la classe.
     @staticmethod
     def estimate_profile_resources(config: dict, profile) -> dict:
-        """Profil VRAM d'admission, dérivé des phases RÉELLES du profil de traitement.
-
-        Ne réserve que ce que le profil exécute : un profil sans LLM n'expose pas de phase
-        `llm_arbitration` (donc l'admission ne le bloque jamais derrière la LLM — cf.
-        `QueueScheduler._llm_admissible`), un profil sans diarisation pas de phase
-        `diarization`. C'est le mécanisme qui garantit « les profils légers ne sont pas
-        bloqués par les ressources qu'ils n'utilisent pas » sans toucher au scheduler.
-
-        `profile` : un `transcria.workflow.profiles.ProcessingProfile`.
-        """
-        from transcria.stt.diarizer_factory import get_diarizer_vram_mb
-        from transcria.stt.transcriber_factory import get_backend_vram_mb
-        from transcria.workflow.profiles import profile_to_legacy_mode
-
-        rr = profile.resource_requirements
-        phases: dict[str, int] = {}
-        if rr.needs_stt:
-            backend = config.get("models", {}).get("stt_backend", "cohere")
-            phases["stt"] = get_backend_vram_mb(backend, config)
-        if rr.needs_diarization:
-            diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
-            phases["diarization"] = get_diarizer_vram_mb(diar_backend, config)
-        # La LLM (résumé/correction) partage le même serveur d'arbitrage : on conditionne sa
-        # réservation au flag global `arbitration_llm.enabled` (comme l'estimateur historique),
-        # en plus du besoin du profil.
-        if rr.needs_llm and config.get("workflow", {}).get("arbitration_llm", {}).get("enabled") is not False:
-            phases["llm_arbitration"] = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-        return {
-            "mode": profile_to_legacy_mode(profile),
-            "processing_profile_id": profile.id,
-            "peak_vram_mb": max(phases.values()) if phases else 0,
-            "phases": phases,
-            # HÉRITÉ (affichage seulement) : l'admission n'utilise PLUS ce drapeau — elle
-            # interroge la vérité vivante (LLM en marche → partagée ; éteinte → can_host_llm
-            # multi-GPU). Cf. QueueScheduler._llm_admissible et l'audit VRAM du 11/06/2026.
-            "llm_shared": "llm_arbitration" in phases,
-        }
+        return pipeline_admission.estimate_profile_resources(config, profile)
 
     @staticmethod
     def estimate_job_vram(config: dict, mode: str) -> dict:
-        """Estimateur historique mode-based — délègue à `estimate_profile_resources`.
-
-        Conservé pour les appelants qui ne disposent que d'un `mode` legacy (`fast`/`quality`)
-        ou d'un id de profil. Source unique : la sélection des phases vit dans
-        `estimate_profile_resources`. Pour `fast`/`quality` (seuls modes atteignant cet
-        estimateur via les routes), le résultat est identique au comportement antérieur.
-        """
-        from transcria.workflow.profiles import get_profile, resolve_legacy_mode
-
-        return PipelineService.estimate_profile_resources(config, get_profile(resolve_legacy_mode(mode)))
+        return pipeline_admission.estimate_job_vram(config, mode)
 
     def run_process(
         self,
@@ -153,54 +115,8 @@ class PipelineService:
         ).to_legacy_dict()
 
     def _remote_resource_gate(self, job: Job, sl) -> dict | None:
-        """Pré-vol des ressources distantes (admission §7.2 + auto-lancement STT).
-
-        Retourne None si on peut poursuivre ; sinon un dict d'erreur (le job sera
-        marqué FAILED par l'appelant). Aucun coût en mode tout-local (sortie immédiate
-        du gate). Voir docs/SERVICE_RESSOURCES_GPU.md §7.
-        """
-        from transcria.inference.resource_gate import prepare_remote_resources
-        from transcria.inference.resource_status import remote_requirements
-
-        # Tout-local : aucun pré-vol, aucun effet de bord (cas le plus courant).
-        if not remote_requirements(self.config):
-            return None
-
-        try:
-            since = job.get_extra_data().get("_remote_unavailable_since")
-        except Exception:  # noqa: BLE001
-            since = None
-
-        verdict = prepare_remote_resources(self.config, unavailable_since=since)
-
-        # Suivi de la durée d'indisponibilité (best-effort : nécessite un contexte DB).
-        try:
-            from transcria.jobs.store import JobStore
-
-            JobStore.update_extra_data(
-                job.id, lambda d: {**d, "_remote_unavailable_since": verdict.unavailable_since}
-            )
-        except Exception:  # noqa: BLE001 — hors app context (tests) : non bloquant
-            pass
-
-        if verdict.action == "proceed":
-            return None
-        if verdict.action == "fail":
-            sl.warning("Pré-vol ressources : ÉCHEC — %s", verdict.reason, job_id=job.id)
-            return PhaseOutcome(
-                OutcomeKind.FAILED,
-                phase="preflight",
-                reason=f"ressources_distantes_indisponibles: {verdict.reason}",
-            ).to_legacy_dict()
-        # defer (transitoire) — re-queue différé (§7.2) : le job patiente puis re-tente.
-        sl.warning("Pré-vol ressources : indisponibles (transitoire) — mise en file différée (%s)",
-                   verdict.reason, job_id=job.id)
-        return PhaseOutcome(
-            OutcomeKind.DEFERRED,
-            phase="preflight",
-            reason=verdict.reason,
-            retry_after_s=verdict.retry_after_s,
-        ).to_legacy_dict()
+        # Corps extrait vers services/pipeline_remote_gate.py (B2 lot 2).
+        return pipeline_remote_gate.remote_resource_gate(self.config, job, sl)
 
     def _execute_pipeline(
         self,
@@ -238,25 +154,21 @@ class PipelineService:
         sl,
         finalize_job_state: bool = True,
     ) -> dict:
-        if self._is_cancel_requested(job.id):
+        cancellation = CancellationToken(job.id, probe=self._is_cancel_requested)
+        if cancellation.requested:
             if finalize_job_state:
                 JobStore.update_state(job.id, JobState.CANCELLED)
             return {"error": "Traitement annulé", "step": "transcription", "cancelled": True}
 
         effective_config = self._config_for_mode(mode, job)
 
-        # Pipeline REPRENABLE v2 : une phase n'est sautée que si marqueur + artefact +
-        # PROVENANCE intacte (empreintes sha256 de ses entrées, prises au checkpoint).
-        # Quand une phase amont se rejoue, les empreintes des phases aval ne correspondent
-        # plus → elles se ré-exécutent (jamais de rapport/export calculé sur du périmé).
-        # Voir docs/PIPELINE_REPRISE.md. `done`/`recorded_fps` chargés une fois (état du
-        # dispatch courant), tenus à jour en mémoire ET en base à chaque transition.
+        # Pipeline REPRENABLE v2 : les marqueurs/empreintes vivent dans CheckpointManager
+        # (voir transcria/workflow/checkpoints.py et docs/PIPELINE_REPRISE.md).
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.workflow import resume
 
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-        done = set(resume.get_completed_phases(job))
-        recorded_fps = resume.get_phase_fingerprints(job)
+        checkpoints = CheckpointManager(JobStore, self.config, job, fs, sl)
 
         # Modèle de temps calibré machine : profil + durée audio pour historiser CHAQUE
         # étape terminée (source unique des estimations wizard/ETA/file/email). Best-effort.
@@ -268,40 +180,8 @@ class PipelineService:
             (fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0.0
         )
 
-        def _checkpoint(phase: str) -> None:
-            # Empreintes AVANT le push : la provenance décrit les fichiers locaux qui
-            # viennent de servir/d'être produits. Backend `pg` (split) : les artefacts
-            # doivent être DURABLES en base avant le marqueur — sinon un autre tier
-            # croirait la phase faite sans ses fichiers. Si le push échoue, la phase
-            # n'est pas marquée → rejouée au prochain dispatch.
-            fingerprints = resume.compute_input_fingerprints(phase, fs)
-            artifact_store.push_job_files(self.config, job.id)
-            resume.mark_phase_done(JobStore, job.id, phase, fingerprints)
-            done.add(phase)
-            recorded_fps[phase] = fingerprints
-
-        def _done(phase: str) -> bool:
-            if phase in done:
-                if resume.phase_state_valid(phase, fs, recorded_fps.get(phase)):
-                    return True
-                # Provenance invalide (une phase amont s'est rejouée, artefact manquant,
-                # ou marqueur legacy sans empreintes) : on retire le marqueur EN BASE
-                # avant d'exécuter — l'admission VRAM et l'UI restent vraies même si un
-                # vram_wait coupe la chaîne ici. Doute → re-run, jamais de skip périmé.
-                sl.warning("Étape invalidée — entrées modifiées en amont, ré-exécution", step=phase)
-                resume.unmark_phase(JobStore, job.id, phase)
-                done.discard(phase)
-                recorded_fps.pop(phase, None)
-                return False
-            if phase == "transcription" and resume.artifact_exists(phase, fs):
-                # Rétro-remplissage limité à la phase la plus chère, sans entrée
-                # empreintée : SRT présent ⇒ STT fait (run interrompu avant le marqueur).
-                _checkpoint(phase)
-                return True
-            return False
-
         # ── Préprocess (transforms audio) : un seul checkpoint ──
-        preprocess_done = _done("preprocess")
+        preprocess_done = checkpoints.is_done("preprocess")
         resumed_audio = resume.get_processed_audio_path(job) if preprocess_done else None
         if preprocess_done and resumed_audio and not Path(resumed_audio).is_file():
             # Chemin mémorisé absent de CE disque (reprise sur un autre worker / cache
@@ -320,11 +200,11 @@ class PipelineService:
             audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
             audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
             resume.set_processed_audio_path(JobStore, job.id, audio_path)
-            _checkpoint("preprocess")
+            checkpoints.checkpoint("preprocess")
 
         # ── Transcription (STT) ──
         transcribe_result: dict = {}
-        if _done("transcription"):
+        if checkpoints.is_done("transcription"):
             sl.info("Transcription déjà faite — reprise (skip STT)")
         else:
             sl.info("Transcription en cours", step="transcribe")
@@ -352,16 +232,16 @@ class PipelineService:
             # Observabilité du goulot (C7/B8) : mesure best-effort des étapes terminées.
             StageMetrics.get_instance().record("transcribe", transcribe_elapsed)
             self._record_stage_timing(_timing_profile_id, _audio_seconds, "transcribe", transcribe_elapsed)
-            _checkpoint("transcription")
+            checkpoints.checkpoint("transcription")
 
         steps = self._define_pipeline_steps(job, audio_path, mode)
 
         for step_cfg in steps:
             name = step_cfg["name"]
-            if _done(name):
+            if checkpoints.is_done(name):
                 sl.info("Étape déjà faite — reprise (skip)", step=name)
                 continue
-            if self._is_cancel_requested(job.id):
+            if cancellation.requested:
                 if finalize_job_state:
                     JobStore.update_state(job.id, JobState.CANCELLED)
                 return {"error": "Traitement annulé", "step": name, "cancelled": True}
@@ -403,9 +283,9 @@ class PipelineService:
                 # la raison (auditable / surfaçable UI). Le pipeline continue.
                 sl.warning("Étape sautée (cause transitoire) — non marquée faite, rejouée à un re-traitement",
                            step=name, reason=result.get("reason"))
-                resume.mark_phase_skipped(JobStore, job.id, name, result.get("reason") or "transient")
+                checkpoints.mark_skipped(name, result.get("reason") or "transient")
             else:
-                _checkpoint(name)
+                checkpoints.checkpoint(name)
             sl.info("Étape terminée", step=name, duree=round(elapsed, 1))
             self._publish_step_progress(job, name, starting=False)
             StageMetrics.get_instance().record(name, elapsed)
@@ -448,214 +328,23 @@ class PipelineService:
         job = JobStore.get_by_id(job_id)
         return bool(job and is_cancel_requested(job))
 
+    # Config effective (corps extraits vers services/pipeline_config.py — B2 lot 2).
+    # Conservées comme coutures : les tests substituent ces méthodes à l'instance.
     def _config_for_mode(self, mode: str, job: Job | None = None) -> dict:
-        cfg = deepcopy(self.config)
-        quality_cfg = cfg.get("workflow", {}).get("quality_transcription", {})
-        enabled_modes = quality_cfg.get("enabled_for_modes", [])
-        forced_backend = quality_cfg.get("force_stt_backend")
-        if forced_backend and (
-            mode in enabled_modes
-            or self._should_force_quality_backend_for_degraded_summary(job, cfg)
-        ):
-            cfg.setdefault("models", {})["stt_backend"] = forced_backend
-        backend = cfg.get("models", {}).get("stt_backend", "cohere")
-        if backend == "granite" and job is not None:
-            from transcria.jobs.filesystem import JobFilesystem
-            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            quality = fs.load_json("metadata/audio_quality_decision.json") or {}
-            preflight = fs.load_json("metadata/audio_preflight.json") or {}
-            if quality.get("level") == "degrade" or "audio_tres_faible" in (preflight.get("flags") or []):
-                # Granite est expérimental et peu fiable sur audio dégradé ;
-                # on revient au backend de production configuré dans la config source.
-                fallback = self.config.get("models", {}).get("stt_backend", "cohere")
-                if fallback == "granite":
-                    fallback = "cohere"
-                logger.info(
-                    "Granite exclu pour audio dégradé (job=%s), fallback → %s", job.id, fallback
-                )
-                cfg["models"]["stt_backend"] = fallback
-        self._inject_whisper_lexicon_hotwords(cfg, job)
-        self._inject_cohere_lexicon_biasing(cfg, job)
-        self._inject_granite_lexicon_keywords(cfg, job)
-        return cfg
+        return pipeline_config.config_for_mode(self.config, mode, job)
 
     def _inject_whisper_lexicon_hotwords(self, cfg: dict, job: Job | None) -> None:
-        backend = cfg.get("models", {}).get("stt_backend", "cohere")
-        if backend != "whisper" or job is None:
-            return
-
-        whisper_cfg = cfg.setdefault("whisper", {})
-        hotwords_cfg = whisper_cfg.get("lexicon_hotwords", {})
-        if not isinstance(hotwords_cfg, dict) or not hotwords_cfg.get("enabled", False):
-            return
-
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt.lexicon_hotwords import build_whisper_hotwords
-
-            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            lexicon = fs.load_json("context/session_lexicon.json") or []
-            if not isinstance(lexicon, list):
-                logger.warning("Hotwords Whisper lexique ignorés: format lexique inattendu job=%s", job.id)
-                return
-
-            hotwords, stats = build_whisper_hotwords(
-                lexicon,
-                enabled=True,
-                priorities=hotwords_cfg.get("priorities"),
-                max_terms=hotwords_cfg.get("max_terms", 50),
-                max_chars=hotwords_cfg.get("max_chars", 900),
-                max_tokens=hotwords_cfg.get("max_tokens", 200),
-                prefix=hotwords_cfg.get("prefix", "Termes importants :"),
-                existing_hotwords=whisper_cfg.get("hotwords"),
-                tokenizer_model=hotwords_cfg.get("tokenizer_model") or "openai/whisper-large-v3",
-            )
-            whisper_cfg["hotwords"] = hotwords
-            fs.save_json("metadata/whisper_hotwords.json", stats)
-            logger.info(
-                "Hotwords Whisper depuis lexique: job=%s candidats=%d injectés=%d exclus=%d tokens=%s/%s méthode=%s priorités=%s",
-                job.id,
-                stats.get("candidate_terms", 0),
-                stats.get("injected_terms", 0),
-                stats.get("excluded_terms", 0),
-                stats.get("token_count", 0),
-                stats.get("max_tokens", 0),
-                stats.get("token_count_method", "none"),
-                ",".join(stats.get("priorities", [])),
-            )
-        except Exception as exc:
-            logger.warning("Hotwords Whisper depuis lexique indisponibles: job=%s error=%s", job.id, exc)
+        pipeline_config.inject_whisper_lexicon_hotwords(cfg, job)
 
     def _inject_cohere_lexicon_biasing(self, cfg: dict, job: Job | None) -> None:
-        backend = cfg.get("models", {}).get("stt_backend", "cohere")
-        if backend != "cohere" or job is None:
-            return
-
-        cohere_cfg = cfg.setdefault("cohere", {})
-        biasing_cfg = cohere_cfg.get("lexicon_biasing", {})
-        if not isinstance(biasing_cfg, dict) or not biasing_cfg.get("enabled", False):
-            return
-
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt.contextual_biasing import select_lexicon_bias_terms
-
-            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            lexicon = fs.load_json("context/session_lexicon.json") or []
-            if not isinstance(lexicon, list):
-                logger.warning("Biasing Cohere lexique ignoré: format lexique inattendu job=%s", job.id)
-                return
-
-            terms, stats = select_lexicon_bias_terms(
-                lexicon,
-                enabled=True,
-                priorities=biasing_cfg.get("priorities"),
-                max_terms=biasing_cfg.get("max_terms", 300),
-            )
-            stats["boost"] = biasing_cfg.get("boost", 0.2)
-            stats["start_boost"] = biasing_cfg.get("start_boost", 0.05)
-            stats["max_prefix_tokens"] = biasing_cfg.get("max_prefix_tokens", 20)
-            cohere_cfg["_lexicon_bias_terms"] = terms
-            fs.save_json("metadata/cohere_lexicon_biasing.json", stats)
-            logger.info(
-                "Biasing Cohere depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
-                job.id,
-                stats.get("candidate_terms", 0),
-                stats.get("injected_terms", 0),
-                stats.get("excluded_terms", 0),
-                ",".join(stats.get("priorities", [])),
-            )
-        except Exception as exc:
-            logger.warning("Biasing Cohere depuis lexique indisponible: job=%s error=%s", job.id, exc)
+        pipeline_config.inject_cohere_lexicon_biasing(cfg, job)
 
     def _inject_granite_lexicon_keywords(self, cfg: dict, job: Job | None) -> None:
-        """Injecte le lexique de session dans le prompt Granite « Keywords: ».
-
-        C'est le mécanisme de biasing officiel IBM (noms propres, acronymes,
-        jargon). Miroir de `_inject_cohere_lexicon_biasing` : seules les formes
-        cibles validées sont poussées.
-        """
-        backend = cfg.get("models", {}).get("stt_backend", "cohere")
-        if backend != "granite" or job is None:
-            return
-
-        granite_cfg = cfg.setdefault("granite", {})
-        keywords_cfg = granite_cfg.get("lexicon_keywords", {})
-        if not isinstance(keywords_cfg, dict) or not keywords_cfg.get("enabled", False):
-            return
-
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt.contextual_biasing import select_lexicon_bias_terms
-
-            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            lexicon = fs.load_json("context/session_lexicon.json") or []
-            if not isinstance(lexicon, list):
-                logger.warning("Keywords Granite lexique ignorés: format lexique inattendu job=%s", job.id)
-                return
-
-            terms, stats = select_lexicon_bias_terms(
-                lexicon,
-                enabled=True,
-                priorities=keywords_cfg.get("priorities"),
-                max_terms=keywords_cfg.get("max_terms", 50),
-            )
-            if not terms:
-                logger.info("Keywords Granite depuis lexique: job=%s aucun terme retenu", job.id)
-                return
-            granite_cfg["keywords"] = terms
-            granite_cfg["prompt_mode"] = "keywords"
-            stats["prompt_mode"] = "keywords"
-            fs.save_json("metadata/granite_keywords.json", stats)
-            logger.info(
-                "Keywords Granite depuis lexique: job=%s candidats=%d injectés=%d exclus=%d priorités=%s",
-                job.id,
-                stats.get("candidate_terms", 0),
-                stats.get("injected_terms", 0),
-                stats.get("excluded_terms", 0),
-                ",".join(stats.get("priorities", [])),
-            )
-        except Exception as exc:
-            logger.warning("Keywords Granite depuis lexique indisponibles: job=%s error=%s", job.id, exc)
+        pipeline_config.inject_granite_lexicon_keywords(cfg, job)
 
     @staticmethod
     def _should_force_quality_backend_for_degraded_summary(job: Job | None, cfg: dict) -> bool:
-        if job is None:
-            return False
-
-        quality_cfg = cfg.get("workflow", {}).get("quality_transcription", {})
-        if not quality_cfg.get("force_on_degraded_summary", False):
-            return False
-
-        degraded_levels = {
-            str(level).strip()
-            for level in quality_cfg.get("degraded_summary_levels", [])
-            if str(level).strip()
-        }
-        if not degraded_levels:
-            return False
-
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.quality.audio_quality import AudioQualityEvaluator
-
-            fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-            summary = fs.load_json("summary/summary.json") or {}
-            audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
-            preflight = fs.load_json("metadata/audio_preflight.json") or {}
-            evaluation = AudioQualityEvaluator(cfg).evaluate(audio_analysis, summary, preflight=preflight)
-            fs.save_json("metadata/audio_quality_decision.json", evaluation)
-            level = str((summary.get("diagnostics") or {}).get("level", "")).strip()
-            if level in degraded_levels or evaluation.get("force_quality_backend"):
-                logger.info(
-                    "[pipeline] Qualité audio '%s' (%s): backend STT forcé par configuration",
-                    evaluation.get("level"),
-                    ", ".join(evaluation.get("reasons", [])),
-                )
-                return True
-        except Exception as exc:
-            logger.warning("[pipeline] Diagnostic résumé indisponible: %s", exc)
-        return False
+        return pipeline_config.should_force_quality_backend_for_degraded_summary(job, cfg)
 
     # Étapes audio (corps extraits vers services/pipeline_steps/ — B2 lot 1).
     # Conservées comme coutures : les tests substituent ces méthodes à l'instance.
@@ -680,110 +369,17 @@ class PipelineService:
     def _run_audio_normalization(self, job: Job, audio_path: str, mode: str, sl, audio_preflight: dict | None = None) -> str:
         return normalization.run(self, job, audio_path, mode, sl, audio_preflight)
 
+    # Séquencement (corps extraits vers services/pipeline_sequence.py — B2 lot 2).
+    # `define_pipeline_steps_for_profile` y reste l'unique table de séquencement ;
+    # coutures conservées : les tests substituent ces méthodes à l'instance.
     def _resolve_profile(self, job: Job, mode: str):
-        """Profil de traitement effectif du job.
-
-        Priorité au profil persisté à l'enfilage (`extra_data.execution.processing_profile_id`,
-        cf. Phase 2) ; à défaut, dérivé du `mode` legacy (fast/quality). Repli ultime sur le
-        profil de `fast` pour un mode/étape inconnu (jamais d'exception ici).
-        """
-        from transcria.workflow import profiles
-
-        try:
-            pid = (job.get_extra_data().get("execution", {}) or {}).get("processing_profile_id")
-        except Exception:  # noqa: BLE001 — job non-DB en test : on retombe sur le mode
-            pid = None
-        if pid and profiles.is_profile(pid):
-            return profiles.get_profile(pid)
-        try:
-            return profiles.get_profile(profiles.resolve_legacy_mode(mode))
-        except (KeyError, ValueError):
-            return profiles.get_profile(profiles.resolve_legacy_mode("fast"))
+        return pipeline_sequence.resolve_profile(job, mode)
 
     def _job_has_type_extract_fields(self, job) -> bool:
-        """Le job a-t-il un type de réunion perso matérialisé AVEC des extract_fields ?
-        (garde de la micro-étape « champs du type » — évite tout coût quand inutile)."""
-        try:
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.workflow.type_field_extraction import extract_fields_from_type
+        return pipeline_sequence.job_has_type_extract_fields(self.config, job)
 
-            fs = JobFilesystem(self.config["storage"]["jobs_dir"], job.id)
-            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
-            custom_type = meeting_ctx.get("custom_type")
-            return bool(extract_fields_from_type(custom_type if isinstance(custom_type, dict) else None))
-        except Exception:  # noqa: BLE001 — une garde ne doit jamais casser la construction du pipeline
-            return False
+    def _define_pipeline_steps_for_profile(self, job: Job, audio_path: str, profile) -> list[dict]:
+        return pipeline_sequence.define_pipeline_steps_for_profile(self, job, audio_path, profile)
 
-    def _define_pipeline_steps_for_profile(
-        self, job: Job, audio_path: str, profile
-    ) -> list[dict]:
-        """Étapes machine du pipeline À PARTIR DU PROFIL (gating par flags du profil).
-
-        Parité stricte avec l'ancien gating mode-based (golden) : la diarisation reste aussi
-        conditionnée à `enable_quality_mode`, la correction au flag global `arbitration_llm.enabled`.
-        Ainsi `dossier_qualite` reproduit l'ancien `quality` et `legacy_fast` l'ancien `fast`.
-        """
-        wf = self.config.get("workflow", {})
-        steps = []
-
-        # Multi-STT EXPÉRIMENTAL : retranscription des segments dégradés par un 2e
-        # moteur + arbitrage LLM. Juste après la transcription, avant tout consommateur
-        # du SRT. Gated : flag config explicite ET profil avec correction LLM (les
-        # profils express ne touchent jamais à une LLM). Best-effort dans le runner.
-        if (
-            (wf.get("multi_stt", {}) or {}).get("enabled", False)
-            and profile.run_llm_correction
-            and wf.get("arbitration_llm", {}).get("enabled") is not False
-        ):
-            steps.append({
-                "name": "multi_stt_review",
-                "method": partial(self.runner.run_multi_stt_review, job, audio_path, self.config),
-            })
-
-        if profile.run_diarization and wf.get("enable_quality_mode", True):
-            steps.append({
-                "name": "diarization",
-                "method": partial(self.runner.run_diarization, job, audio_path, self.config),
-            })
-
-        if profile.run_llm_correction and wf.get("arbitration_llm", {}).get("enabled") is not False:
-            steps.append({
-                "name": "correction",
-                "method": partial(self.runner.run_correction, job, self.config),
-            })
-            # Relecture finale (A+C+D+G) : harmonisation synthèse, cohérence/variantes
-            # du SRT corrigé, audit des données structurées. Après correction (besoin
-            # du SRT corrigé complet) et avant la qualité (pour que le score reflète le
-            # SRT relu). Best-effort : n'interrompt pas le pipeline.
-            if profile.run_final_review:
-                steps.append({
-                    "name": "final_review",
-                    "method": partial(self.runner.run_final_review, job, self.config),
-                })
-        # Micro-étape « champs du type » : SEULEMENT si le profil ne fait PAS de relecture
-        # finale (qui les extrait déjà) ET qu'un type perso avec extract_fields est choisi
-        # (trou macro Word structuré). Coût GPU nul sinon — cf. type_field_extraction.
-        if (not profile.run_final_review and profile.requires_summary
-                and self._job_has_type_extract_fields(job)):
-            steps.append({
-                "name": "type_fields",
-                "method": partial(self.runner.run_type_field_extraction, job, self.config),
-            })
-        if profile.run_quality != "none":
-            steps.append({
-                "name": "quality",
-                "method": partial(self.runner.run_quality_checks, job, self.config),
-            })
-        if profile.docx_level != "none" or profile.zip_level != "none":
-            steps.append({
-                "name": "export",
-                "method": partial(self.runner.build_export, job, self.config),
-            })
-
-        return steps
-
-    def _define_pipeline_steps(
-        self, job: Job, audio_path: str, mode: str
-    ) -> list[dict]:
-        """Entrée legacy mode-based : résout le profil et délègue (source unique du gating)."""
-        return self._define_pipeline_steps_for_profile(job, audio_path, self._resolve_profile(job, mode))
+    def _define_pipeline_steps(self, job: Job, audio_path: str, mode: str) -> list[dict]:
+        return pipeline_sequence.define_pipeline_steps(self, job, audio_path, mode)
