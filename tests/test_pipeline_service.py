@@ -842,3 +842,128 @@ class TestInjectGraniteLexiconKeywords:
 
         assert cfg["granite"]["keywords"] == []
         assert cfg["granite"]["prompt_mode"] == "asr_punctuated"
+
+
+# ---------------------------------------------------------------------------
+# Branches des modules d'étapes audio (B2 lot 1) — chemins forcés et replis
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizationForcedPaths:
+    """Chemins forcés de la normalisation : loudnorm auto (silence) et replis."""
+
+    def _svc(self, tmp_path):
+        return _make_svc({"storage": {"jobs_dir": str(tmp_path / "jobs")}})
+
+    def test_auto_loudnorm_forced_when_rms_below_threshold(self, tmp_path, monkeypatch):
+        from pathlib import Path
+
+        from transcria.audio.normalization import AudioNormalizationService
+
+        svc = self._svc(tmp_path)
+        monkeypatch.setattr(AudioNormalizationService, "should_normalize",
+                            lambda self, mode: (False, ["mode_sans_normalisation"], []))
+        monkeypatch.setattr(AudioNormalizationService, "weak_voice_filters",
+                            lambda self, preflight: (False, [], []))
+        applied = {}
+
+        def fake_apply(self, in_path, out_path, filters):
+            applied["filters"] = filters
+            return out_path
+
+        monkeypatch.setattr(AudioNormalizationService, "apply", fake_apply)
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"fake")
+        result = svc._run_audio_normalization(
+            _job(), str(audio), "quality", MagicMock(), audio_preflight={"rms": 0.001}
+        )
+
+        assert Path(result).name == "normalized.wav"
+        assert applied["filters"] == ["loudnorm=I=-23:TP=-2:LRA=11"]
+        import json
+        meta = json.loads((tmp_path / "jobs" / "test-job-001" / "metadata" /
+                           "audio_normalization.json").read_text())
+        assert meta["forced"] is True
+        assert any(r.startswith("rms=") for r in meta["reasons"])
+
+    def test_standard_path_kept_when_apply_returns_input(self, tmp_path, monkeypatch):
+        from transcria.audio.normalization import AudioNormalizationService
+
+        svc = self._svc(tmp_path)
+        monkeypatch.setattr(AudioNormalizationService, "should_normalize",
+                            lambda self, mode: (True, ["profil"], ["loudnorm"]))
+        monkeypatch.setattr(AudioNormalizationService, "apply",
+                            lambda self, in_path, out_path, filters: in_path)
+
+        audio = tmp_path / "audio.wav"
+        audio.write_bytes(b"fake")
+        result = svc._run_audio_normalization(_job(), str(audio), "quality", MagicMock())
+
+        assert result == str(audio)
+
+    def test_save_metadata_swallows_errors(self, monkeypatch):
+        from transcria.services.pipeline_steps import normalization
+
+        monkeypatch.setattr(normalization, "job_fs",
+                            lambda config, job_id: (_ for _ in ()).throw(OSError("disque plein")))
+        # Best-effort : jamais d'exception, même si le filesystem est indisponible.
+        normalization.save_metadata({}, _job(), "in.wav", "out.wav", "quality", [], [])
+
+
+class TestPreflightHelpers:
+    """Lectures du signal préflight : artefact, RMS, replis silencieux."""
+
+    def test_empty_analysis_returns_empty_dict(self, tmp_path, monkeypatch):
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+
+        svc = _make_svc({"storage": {"jobs_dir": str(tmp_path / "jobs")}})
+        monkeypatch.setattr(AudioPreflightAnalyzer, "analyze", lambda self, p: {})
+
+        assert svc._run_audio_preflight(_job(), str(tmp_path / "a.wav"), MagicMock()) == {}
+
+    def test_save_failure_still_returns_preflight(self, tmp_path, monkeypatch):
+        from transcria.audio.preflight import AudioPreflightAnalyzer
+        from transcria.services.pipeline_steps import preflight as preflight_step
+
+        svc = _make_svc({"storage": {"jobs_dir": str(tmp_path / "jobs")}})
+        payload = {"rms": 0.5, "risk_level": "ok"}
+        monkeypatch.setattr(AudioPreflightAnalyzer, "analyze", lambda self, p: payload)
+        monkeypatch.setattr(preflight_step, "job_fs",
+                            lambda config, job_id: (_ for _ in ()).throw(OSError("disque plein")))
+
+        assert svc._run_audio_preflight(_job(), str(tmp_path / "a.wav"), MagicMock()) == payload
+
+    def test_load_audio_preflight_swallows_errors(self, monkeypatch):
+        from transcria.services.pipeline_steps import preflight as preflight_step
+
+        monkeypatch.setattr(preflight_step, "job_fs",
+                            lambda config, job_id: (_ for _ in ()).throw(OSError("boom")))
+        assert preflight_step.load_audio_preflight({}, _job()) == {}
+
+    def test_rms_from_preflight_edge_cases(self):
+        from transcria.services.pipeline_steps.preflight import rms_from_preflight
+
+        assert rms_from_preflight(None) is None
+        assert rms_from_preflight({}) is None
+        assert rms_from_preflight({"rms": "pas-un-nombre"}) is None
+        assert rms_from_preflight({"rms": None}) is None
+        assert rms_from_preflight({"rms": "0.25"}) == 0.25
+
+    def test_compute_rms_on_real_wav(self, tmp_path):
+        import numpy as np
+        import soundfile as sf
+
+        from transcria.services.pipeline_steps.preflight import compute_rms
+
+        path = tmp_path / "tone.wav"
+        samples = 0.5 * np.sin(2 * np.pi * 440 * np.linspace(0, 0.1, 1600))
+        sf.write(path, samples.astype("float32"), 16000)
+
+        rms = compute_rms(str(path))
+        assert rms == pytest.approx(0.5 / np.sqrt(2), rel=0.05)
+
+    def test_compute_rms_returns_none_on_error(self):
+        from transcria.services.pipeline_steps.preflight import compute_rms
+
+        assert compute_rms("/chemin/inexistant.wav") is None
