@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 
 from transcria.gpu.gpu_session import GPUSessionError
 from transcria.gpu.opencode_runner import resolve_output_language
@@ -13,7 +12,9 @@ from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSessi
     GpuPhaseSession,
     _NoReservationSession,
 )
+from transcria.workflow.phases import summary, summary_llm, summary_stt
 from transcria.workflow.progress import WorkflowProgressReporter
+from transcria.workflow.progress import progress_msg as _progress_msg  # noqa: F401 — ré-exporté (tests historiques)
 
 logger = logging.getLogger(__name__)
 
@@ -63,49 +64,6 @@ _REFINE_MESSAGES: dict[str, dict[str, str]] = {
 def _refine_messages(language: str | None) -> dict[str, str]:
     """Messages du chat d'affinage pour ``language`` (repli français)."""
     return _REFINE_MESSAGES.get((language or "fr"), _REFINE_MESSAGES["fr"])
-
-
-# Messages de progression du pipeline (barre d'avancement, vus par l'utilisateur) —
-# dans la langue des livrables du job (Axe B). Repli français.
-_PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
-    "fr": {
-        "summary_stt": "Résumé : transcription rapide en cours",
-        "summary_stt_load": "Résumé : chargement STT {backend}",
-        "summary_scene": "Résumé : analyse acoustique de la réunion",
-        "summary_diar": "Résumé : détection des locuteurs en cours",
-        "summary_llm": "Résumé : génération LLM en cours",
-        "summary_stt_done": "Résumé : transcription rapide terminée",
-        "transcribe": "Transcription finale en cours",
-        "transcribe_done": "Transcription finale terminée",
-        "diar": "Diarisation finale en cours", "diar_done": "Diarisation finale terminée",
-        "quality": "Contrôle qualité en cours", "quality_done": "Contrôle qualité terminé",
-        "correction": "Correction LLM du sous-titrage en cours",
-        "correction_off": "Correction LLM désactivée", "correction_done": "Correction LLM terminée",
-        "review": "Relecture finale : cohérence et fidélité", "review_done": "Relecture finale terminée",
-        "package": "Préparation du paquet final",
-    },
-    "en": {
-        "summary_stt": "Summary: quick transcription in progress",
-        "summary_stt_load": "Summary: loading STT {backend}",
-        "summary_scene": "Summary: acoustic analysis of the meeting",
-        "summary_diar": "Summary: speaker detection in progress",
-        "summary_llm": "Summary: LLM generation in progress",
-        "summary_stt_done": "Summary: quick transcription complete",
-        "transcribe": "Final transcription in progress",
-        "transcribe_done": "Final transcription complete",
-        "diar": "Final diarization in progress", "diar_done": "Final diarization complete",
-        "quality": "Quality check in progress", "quality_done": "Quality check complete",
-        "correction": "LLM subtitle correction in progress",
-        "correction_off": "LLM correction disabled", "correction_done": "LLM correction complete",
-        "review": "Final review: consistency and fidelity", "review_done": "Final review complete",
-        "package": "Preparing the final package",
-    },
-}
-
-
-def _progress_msg(language: str | None, key: str) -> str:
-    """Message de progression localisé (repli français, puis clé brute)."""
-    return _PROGRESS_MESSAGES.get((language or "fr"), _PROGRESS_MESSAGES["fr"]).get(key, key)
 
 
 class WorkflowRunner:
@@ -185,192 +143,14 @@ class WorkflowRunner:
         self.store.update(job.id, state=JobState.ANALYZED.value)
         return result
 
+    # Phase RÉSUMÉ (corps extraits vers workflow/phases/summary*.py — B1 lot 2).
+    # Conservées comme coutures : les tests (goldens, incidents e62295c1, pré-vol STT)
+    # substituent ces méthodes à l'instance ou à la classe.
     def run_summary(self, job: Job, audio_path: str, config: dict) -> dict:
-        sl = get_structured_logger(__name__)
-        sl.set_context(job_id=job.id, step="summary")
-
-        # État avant le résumé : restauré tel quel si la VRAM manque (le job n'échoue
-        # pas, il revient à l'étape « Générer le résumé » prêt à reprendre).
-        prior_state = job.state
-        self.store.update_state(job.id, JobState.SUMMARY_RUNNING)
-        self.progress.update(
-            job.id,
-            step="summary",
-            phase="summary_stt",
-            message=_progress_msg(resolve_output_language(job), "summary_stt"),
-            percent=5,
-            force=True,
-        )
-        t0 = time.monotonic()
-        sl.info("━━━ DÉBUT résumé ━━━")
-
-        backend = config.get("models", {}).get("stt_backend", "cohere")
-        # Relance bon marché : si un transcript rapide valide existe déjà (ex. après un
-        # échec LLM relançable, ou une régénération), on le réutilise au lieu de relancer
-        # le STT GPU. La transcription est déterministe sur le même audio.
-        cached = self._load_cached_quick_summary(config, job.id)
-        if cached is not None:
-            sl.info("[1/3] STT rapide — réutilisation du transcript en cache (pas de GPU)",
-                    backend=backend, segments=cached.get("segment_count", 0))
-            result = cached
-        else:
-            sl.info("[1/3] STT rapide — chargement GPU", backend=backend)
-            result = self._run_quick_transcription(job, audio_path, config, sl)
-        sl.info(
-            "[1/3] STT rapide terminé — %d segments, %.1fs",
-            result.get("segment_count", 0),
-            time.monotonic() - t0,
-            backend=backend,
-        )
-        if result.get("vram_wait"):
-            # VRAM transitoire pour le STT rapide : on n'échoue pas, on remonte le signal.
-            # L'appelant (api_summary) met le job en attente, alerte l'admin et laisse
-            # le client relancer automatiquement. On restaure l'état pré-résumé pour ne
-            # pas laisser le job bloqué en SUMMARY_RUNNING.
-            sl.warning("[1/3] STT rapide en attente de VRAM — résumé reporté",
-                       required_vram_mb=result.get("required_mb"), backend=backend)
-            try:
-                self.store.update_state(job.id, JobState(prior_state))
-            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
-                pass
-            return result
-        if result.get("error") and not result.get("transcript_text"):
-            sl.error("[1/3] STT rapide ÉCHEC — abandon résumé", error=result["error"], backend=backend)
-            # _run_quick_transcription pose déjà FAILED sur exception ; on garantit ici
-            # qu'aucun échec STT ne laisse le job bloqué en SUMMARY_RUNNING.
-            current = JobStore.get_by_id(job.id)
-            if current is None or current.state != JobState.FAILED.value:
-                self.store.update_state(job.id, JobState.FAILED, result["error"])
-            return result
-
-        sl.info("[2/4] Analyse de scène audio — début")
-        self.progress.update(
-            job.id,
-            step="summary",
-            phase="audio_scene",
-            message=_progress_msg(resolve_output_language(job), "summary_scene"),
-            percent=35,
-            force=True,
-        )
-        self._run_audio_scene_before_participants(job, audio_path, config, sl)
-
-        sl.info("[3/4] Pyannote diarization — début")
-        self.progress.update(
-            job.id,
-            step="summary",
-            phase="pyannote",
-            message=_progress_msg(resolve_output_language(job), "summary_diar"),
-            percent=50,
-            force=True,
-        )
-        self._run_pyannote_after_transcription(job, audio_path, config)
-        sl.info("[3/4] Pyannote diarization terminé, %.1fs écoulées", time.monotonic() - t0)
-
-        sl.info("[4/4] LLM résumé via arbitrage — début")
-        self.progress.update(
-            job.id,
-            step="summary",
-            phase="summary_llm",
-            message=_progress_msg(resolve_output_language(job), "summary_llm"),
-            percent=80,
-            force=True,
-        )
-        self._run_llm_summary(job, result, config, sl)
-        sl.info("[4/4] LLM résumé terminé, %.1fs écoulées", time.monotonic() - t0)
-
-        if result.get("vram_wait"):
-            # VRAM/verrou transitoire pour la LLM du résumé : même contrat que le STT
-            # rapide — restaurer l'état pré-résumé et remonter le signal (mise en
-            # attente + reprise auto). STT/diarisation restent en cache : la reprise
-            # ne rejouera que la phase LLM.
-            sl.warning("[4/4] LLM résumé en attente de VRAM — résumé reporté",
-                       required_vram_mb=result.get("required_mb"))
-            try:
-                self.store.update_state(job.id, JobState(prior_state))
-            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
-                pass
-            self.progress.clear(job.id)
-            return result
-
-        if result.get("summary_llm_failed"):
-            # La LLM n'a rien produit après retries : on NE valide PAS le résumé (pas de
-            # SUMMARY_DONE, meeting_context non corrompu). Le job revient à son état
-            # pré-résumé → relançable via « Générer le résumé » (STT réutilisé du cache).
-            from transcria.workflow.transitions import utcnow_iso
-
-            self.store.update_extra_data(
-                job.id,
-                lambda extra: {**extra, "summary_llm_failed": {"attempts": 3, "at": utcnow_iso()}},
-            )
-            try:
-                self.store.update_state(job.id, JobState(prior_state))
-            except Exception:  # noqa: BLE001 — état inconnu : on n'aggrave pas
-                pass
-            self.progress.clear(job.id)
-            sl.info("━━━ FIN résumé (LLM non produite — relançable) ━━━ (%.1fs total)",
-                    time.monotonic() - t0)
-            return result
-
-        # Succès : effacer un éventuel drapeau d'échec antérieur, puis valider le résumé.
-        self.store.update_extra_data(
-            job.id, lambda extra: {k: v for k, v in extra.items() if k != "summary_llm_failed"}
-        )
-        self.store.update_state(job.id, JobState.SUMMARY_DONE)
-        self.progress.clear(job.id)
-        summary_elapsed = time.monotonic() - t0
-        sl.info("━━━ FIN résumé ━━━ (%.1fs total)", summary_elapsed,
-                transcript_chars=len(result.get("transcript_text", "")))
-        # Modèle de temps calibré machine : historiser la phase RÉSUMÉ (STT+diarisation+
-        # LLM) — best-effort, jamais bloquant. Alimente l'estimation totale du wizard.
-        try:
-            from transcria.jobs.timing_store import JobTimingStore
-            from transcria.workflow.profiles import profile_for_job
-
-            audio_s = float(
-                (self._get_fs(config, job.id).load_json("metadata/audio_analysis.json") or {})
-                .get("duration_seconds") or 0.0
-            )
-            prof = profile_for_job(job)
-            JobTimingStore.record(prof.id if prof is not None else "", "summary",
-                                  audio_s, summary_elapsed)
-        except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
-            pass
-        # Email « pré-analyse prête, à vous de jouer » : point UNIQUE (couvre le résumé
-        # synchrone via la route ET le worker). L'utilisateur parti est rappelé quand son
-        # attention redevient utile — cf. revue macro emails.
-        try:
-            from transcria.notifications.job_facts import notify_summary_ready
-
-            notify_summary_ready(config, job)
-        except Exception:  # noqa: BLE001 — notification best-effort
-            pass
-        return result
+        return summary.run(self, job, audio_path, config)
 
     def _load_cached_quick_summary(self, config: dict, job_id: str) -> dict | None:
-        """Reconstruit le résultat du STT rapide depuis le disque, ou None si absent.
-
-        Permet de relancer un résumé (ex. après un échec LLM) sans refaire le STT GPU :
-        la transcription est déterministe sur le même audio. Exige un transcript ET des
-        segments non vides pour être considérée valide.
-        """
-        try:
-            fs = self._get_fs(config, job_id)
-            transcript_text = fs.load_text("summary/quick_transcript.txt")
-            summary_json = fs.load_json("summary/summary.json") or {}
-        except Exception:  # noqa: BLE001 — disque illisible : on refera le STT
-            return None
-        segments = summary_json.get("segments") if isinstance(summary_json, dict) else None
-        if not transcript_text or not segments:
-            return None
-        transcript_short = "\n".join(
-            seg.get("text", seg.get("error", "")) for seg in segments[:50]
-        )
-        return {
-            "transcript_text": transcript_text,
-            "transcript_short": transcript_short,
-            "segment_count": len(segments),
-            "_from_cache": True,
-        }
+        return summary.load_cached_quick_summary(self, config, job_id)
 
     def _reclaim_vram_from_idle_arbitrage_llm(self, sl) -> bool:
         return self.gpu.reclaim_idle_arbitrage_llm(sl)
@@ -385,420 +165,33 @@ class WorkflowRunner:
     def _run_audio_scene_before_participants(
         self, job: Job, audio_path: str, config: dict, sl
     ) -> dict:
-        """Produit audio_scene.json avant l'étape participants si la scène est activée."""
-        from pathlib import Path
-
-        scene_cfg = config.get("workflow", {}).get("audio_scene", {}) or {}
-        if not scene_cfg.get("enabled", False):
-            sl.debug("[summary] Analyse de scène désactivée")
-            return {}
-
-        fs = self._get_fs(config, job.id)
-        existing = fs.load_json("metadata/audio_scene.json") or {}
-        if existing:
-            sl.info("[summary] Analyse de scène déjà disponible")
-            return existing
-
-        try:
-            from transcria.audio.scene_analyzer import AudioSceneAnalyzer
-            from transcria.quality.audio_quality import AudioQualityEvaluator
-
-            analyzer = AudioSceneAnalyzer(config)
-            scene = analyzer.analyze(Path(audio_path))
-            if not scene:
-                sl.warning("[summary] Analyse de scène indisponible")
-                return {}
-
-            fs.save_json("metadata/audio_scene.json", scene)
-            summary = fs.load_json("summary/summary.json") or {}
-            audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}
-            preflight = fs.load_json("metadata/audio_preflight.json") or {}
-            evaluation = AudioQualityEvaluator(config).evaluate(
-                audio_analysis,
-                summary,
-                audio_scene=scene,
-                preflight=preflight,
-            )
-            fs.save_json("metadata/audio_quality_decision.json", evaluation)
-            sl.info(
-                "[summary] Analyse de scène terminée",
-                has_gender_data=(scene.get("gender") or {}).get("has_gender_data"),
-                gender_segments=len(scene.get("gender_segments") or []),
-                quality_level=evaluation.get("level"),
-            )
-            return scene
-        except Exception as exc:
-            sl.warning("[summary] Analyse de scène ignorée", error=str(exc))
-            return {}
+        return summary.run_audio_scene_before_participants(self, job, audio_path, config, sl)
 
     def _preflight_remote_stt(self, config: dict, sl) -> dict | None:
-        """Pré-vol STT distant pour le RÉSUMÉ (exécuté HORS du pipeline principal).
-
-        Le pipeline principal (`PipelineService._remote_resource_gate`) demande au nœud
-        d'ASSURER le moteur STT distant avant de transcrire. La transcription rapide du
-        résumé tourne en dehors de ce pipeline (`job_executor` → `runner.run_summary`) :
-        sans ce pré-vol, **rien ne déclenche `/engines/ensure`** → sur un nœud frais, le
-        moteur cohere n'est jamais lancé et le STT échoue en « connection refused » sans
-        fallback (l'utilisateur ne s'en sort pas). On réutilise le MÊME gate (admission §7.2
-        + auto-lancement STT, qui BLOQUE jusqu'à ce que le moteur soit sain). Retourne None
-        si on peut transcrire ; sinon un signal au contrat déjà géré par `run_summary` :
-        `vram_wait` (transitoire → re-queue) pour un `defer`, `error` pour un `fail`.
-        """
-        from transcria.inference.resource_gate import prepare_remote_resources
-
-        verdict = prepare_remote_resources(config)
-        if verdict.action == "proceed":
-            return None
-        if verdict.action == "defer":
-            sl.warning("Pré-vol STT distant : moteur en préparation — résumé différé (%s)",
-                       verdict.reason)
-            return {
-                "vram_wait": True,
-                "required_mb": 0,
-                "phase": "summary_stt",
-                "reason": verdict.reason,
-                "retry_after_s": verdict.retry_after_s or 30,
-                "error": verdict.reason,
-                "transcript_text": "",
-                "summary_text": "Résumé indisponible.",
-            }
-        sl.error("Pré-vol STT distant : nœud de ressources indisponible — %s", verdict.reason)
-        return {
-            "error": f"ressources_distantes_indisponibles: {verdict.reason}",
-            "transcript_text": "",
-            "summary_text": "Résumé indisponible.",
-        }
+        return summary_stt.preflight_remote_stt(config, sl)
 
     def _run_quick_transcription(
         self, job: Job, audio_path: str, config: dict, sl
     ) -> dict:
-        from pathlib import Path
-
-        from transcria.stt.summary import SummaryGenerator
-        from transcria.stt.transcriber_factory import get_backend_vram_mb
-
-        backend = config.get("models", {}).get("stt_backend", "cohere")
-        vram_mb = get_backend_vram_mb(backend, config)
-        self.progress.update(
-            job.id,
-            step="summary",
-            phase="summary_stt",
-            message=_progress_msg(resolve_output_language(job), "summary_stt_load").format(backend=backend),
-            percent=10,
-            force=True,
-        )
-        # STT du résumé servi à distance (topologie split, inference.mode remote/hybrid) :
-        # aucune VRAM locale à réserver. On saute le GPUSession (sinon réservation fantôme
-        # de `summary_stt` localement → fausse contention / attente VRAM à tort sur un tier
-        # sans GPU). Cf. docs/SERVICE_RESSOURCES_GPU.md §9 et §7.2-bis.
-        runs_remote = self._phase_runs_remotely("summary_stt")
-
-        # En distant : ASSURER le moteur STT (lance cohere à la demande, attend qu'il soit
-        # sain) AVANT de transcrire. Sans ça, un nœud frais refuse la connexion (cf.
-        # _preflight_remote_stt). En local, le GPUSession ci-dessous gère la VRAM.
-        if runs_remote:
-            preflight = self._preflight_remote_stt(config, sl)
-            if preflight is not None:
-                return preflight
-
-        def _attempt() -> dict:
-            generator = SummaryGenerator(config)
-            if runs_remote:
-                return generator.generate_quick_summary(
-                    job, Path(audio_path), gpu_index=self._default_remote_gpu_index()
-                )
-            with self._gpu_session(
-                job,
-                f"{backend}-summary",
-                vram_mb,
-                "summary_stt",
-            ) as gs:
-                return generator.generate_quick_summary(
-                    job, Path(audio_path), gpu_index=gs.gpu_index
-                )
-
-        try:
-            try:
-                result = _attempt()
-            except GPUSessionError:
-                # VRAM insuffisante (chemin local) : si NOTRE LLM d'arbitrage inactive la
-                # bloque, on la stoppe pour libérer la VRAM puis on retente UNE fois.
-                if self._reclaim_vram_from_idle_arbitrage_llm(sl):
-                    result = _attempt()
-                else:
-                    raise
-            self.progress.update(
-                job.id,
-                step="summary",
-                phase="summary_stt",
-                message=_progress_msg(resolve_output_language(job), "summary_stt_done"),
-                percent=30,
-                force=True,
-            )
-            sl.info(
-                "STT rapide OK",
-                backend=backend,
-                remote=runs_remote,
-                segments=result.get("segment_count", 0),
-                transcript_chars=len(result.get("transcript_text", "")),
-            )
-        except GPUSessionError as exc:
-            # VRAM momentanément indisponible (transitoire) : pas un échec terminal.
-            # On remonte un signal `vram_wait` ; l'appelant met le job en attente et
-            # alerte l'admin au lieu de marquer FAILED. Voir docs/SERVICE_RESSOURCES_GPU.md.
-            sl.warning("VRAM insuffisante pour le STT rapide", backend=backend, required_vram_mb=vram_mb, error=str(exc))
-            return {
-                "vram_wait": True,
-                "required_mb": int(vram_mb),
-                "phase": "summary_stt",
-                "reason": str(exc),
-                "error": str(exc),
-                "transcript_text": "",
-                "summary_text": "Résumé indisponible.",
-            }
-        except Exception as exc:
-            sl.exception("Échec STT rapide", backend=backend)
-            self.allocator.release(job.id)
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {
-                "error": str(exc),
-                "transcript_text": "",
-                "summary_text": "Résumé indisponible.",
-            }
-
-        return result
+        return summary_stt.run_quick_transcription(self, job, audio_path, config, sl)
 
     def _run_pyannote_after_transcription(
         self, job: Job, audio_path: str, config: dict
     ) -> None:
-        if not config.get("workflow", {}).get("enable_speaker_detection", True):
-            return
-
-        try:
-            speakers_result = self.run_speaker_detection(
-                job, audio_path, config, update_state=False
-            )
-            if not speakers_result.get("available") or not speakers_result.get("speakers"):
-                return
-
-            fs = self._get_fs(config, job.id)
-            meeting_ctx = fs.load_json("context/meeting_context.json") or {}
-            meeting_ctx["speaker_count_pyannote"] = len(speakers_result["speakers"])
-            fs.save_json("context/meeting_context.json", meeting_ctx)
-            audio_scene = fs.load_json("metadata/audio_scene.json") or {}
-            speaker_genders = self._inject_speaker_genders(fs, audio_scene)
-            self._write_diarization_context(
-                fs, speakers_result, audio_scene, speaker_genders
-            )
-
-            logger.info("pyannote: %d locuteurs détectés",
-                        len(speakers_result["speakers"]))
-        except Exception as exc:
-            logger.warning("pyannote après transcription ignoré: %s", exc)
+        summary.run_pyannote_after_transcription(self, job, audio_path, config)
 
     def _run_llm_summary(
         self, job: Job, result: dict, config: dict, sl
     ) -> None:
-        llm_config = config.get("workflow", {}).get("summary_llm", {})
-        if not llm_config.get("enabled"):
-            sl.info("LLM résumé désactivé dans la config")
-            return
-        if not result.get("transcript_text"):
-            sl.warning("LLM résumé sauté — transcription vide")
-            return
-
-        from transcria.gpu.opencode_runner import OpenCodeRunner
-
-        fs = self._get_fs(config, job.id)
-
-        api_model_id = config.get("services", {}).get("arbitrage_api_model_id")
-        arbitrage_port = resolve_arbitrage_endpoint(config)[1]  # backend-aware (Ollama=11434, llama.cpp=8080)
-        sl.info(
-            "LLM résumé: vérification LLM d'arbitrage (modèle attendu: %s, port %d)",
-            api_model_id or "non contraint",
-            arbitrage_port,
-        )
-        if not self.allocator.try_acquire_llm(job.id, timeout_s=300):
-            # LLM occupée par un autre job (transitoire) : attente + reprise, JAMAIS un
-            # SUMMARY_DONE silencieux avec le placeholder (doctrine vram_wait).
-            sl.warning("LLM résumé en attente — verrou LLM occupé par un autre job")
-            result.update({
-                "vram_wait": True, "required_mb": 0, "phase": "summary_llm",
-                "reason": "verrou LLM occupé (un autre traitement utilise la LLM d'arbitrage)",
-            })
-            return
-
-        llm_phase_reserved = False
-        try:
-            if self._should_reserve_llm_vram() and not self.vram.is_arbitrage_llm_running():
-                llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
-                # Réservation MULTI-GPU : la LLM s'étale sur les cartes du script
-                # (gpu.llm_gpu_indices) — total ÷ nb de GPU par carte, tout-ou-rien.
-                # (L'ancien try_reserve mono-GPU était insatisfaisable par construction.)
-                if not self.allocator.try_reserve_llm(job.id, llm_vram_mb, "summary_llm"):
-                    # Pénurie VRAM transitoire : signal vram_wait (mise en attente +
-                    # reprise auto). L'ancien skip silencieux concluait SUMMARY_DONE
-                    # avec le placeholder — invisible pour l'utilisateur.
-                    sl.warning("LLM résumé en attente de VRAM", required_vram_mb=llm_vram_mb)
-                    result.update({
-                        "vram_wait": True, "required_mb": int(llm_vram_mb),
-                        "phase": "summary_llm",
-                        "reason": f"VRAM insuffisante pour la LLM d'arbitrage ({llm_vram_mb} Mo requis)",
-                    })
-                    return
-                llm_phase_reserved = True
-
-            launched = self.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id)
-
-            if not launched:
-                # Panne de lancement LLM : même famille que « 0 texte » (e62295c1) —
-                # signaler + bloquer relançable, pas de SUMMARY_DONE avec placeholder.
-                sl.warning("LLM d'arbitrage non disponible — résumé signalé en échec (relançable)")
-                result["summary_llm_failed"] = True
-                return
-
-            model_id = llm_config.get("model_id")
-            opencode_bin = config.get("workflow", {}).get(
-                "arbitration_llm", {}
-            ).get("opencode_bin")
-            # Isolation : l'agent ne tourne plus dans summary/ (canonique) mais dans un
-            # scratch avec des copies — cf. AgentWorkspace. Le summary.md canonique est
-            # écrit par le runner (_apply_llm_suggestions), jamais par l'agent.
-            from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
-
-            invite_path = self._materialize_meeting_invite(fs, job)
-            workspace = AgentWorkspace(fs, "summary", work_root=resolve_agent_work_root(config))
-            staged_transcript = workspace.stage("summary/quick_transcript.txt")
-            staged_context = workspace.stage("context/job_context.yaml")
-            staged_diar_ctx = workspace.stage("summary/diarization_context.md")
-            staged_invite = str(workspace.stage("summary/meeting_invite.md")) if invite_path else None
-            runner = OpenCodeRunner(
-                str(workspace.scratch_dir),
-                model=model_id,
-                opencode_bin=opencode_bin,
-                config=config,
-            )
-            # Variables de prompts des types de réunion (lot D) : liste + indices des
-            # types visibles du PROPRIÉTAIRE, et champs d'extraction du type CHOISI
-            # (fiche matérialisée — présent aux RELANCES seulement, P1). Best-effort :
-            # toute erreur ⇒ catalogue intégré seul, jamais un échec du résumé.
-            prompt_subs: dict[str, str] = {}
-            extract_keys: tuple[str, ...] = ()
-            try:
-                from transcria.auth.store import UserStore
-                from transcria.context.meeting_type_prompts import build_prompt_substitutions
-
-                meeting_ctx_now = fs.load_json("context/meeting_context.json") or {}
-                chosen_type = meeting_ctx_now.get("custom_type")
-                chosen_type = chosen_type if isinstance(chosen_type, dict) else None
-                prompt_subs = build_prompt_substitutions(
-                    UserStore.get_by_id(job.owner_id), chosen_type
-                )
-                extract_keys = tuple(
-                    f["key"] for f in (chosen_type or {}).get("extract_fields") or []
-                    if isinstance(f, dict) and f.get("key")
-                )
-            except Exception:  # noqa: BLE001 — repli : placeholders depuis le catalogue intégré
-                from transcria.context.meeting_type_prompts import build_prompt_substitutions
-
-                prompt_subs = build_prompt_substitutions(None, None)
-            # La LLM peut « réussir » (opencode exit 0) sans rien produire (0 texte,
-            # summary.md non réécrit — typiquement contexte trop long). On retente la
-            # SEULE sous-étape LLM jusqu'à 3 fois (LLM déjà chargée : pas de re-STT, pas
-            # de re-réservation). Après 3 échecs : on ne corrompt pas meeting_context et
-            # on signale `summary_llm_failed` (l'appelant rend le job relançable).
-            max_llm_attempts = 3
-            parsed = {}
-            for attempt in range(1, max_llm_attempts + 1):
-                parsed = runner.run_summary(
-                    str(staged_transcript),
-                    str(staged_context),
-                    str(staged_diar_ctx),
-                    staged_invite,
-                    prompt_substitutions=prompt_subs,
-                    extra_structured_keys=extract_keys,
-                    output_language=resolve_output_language(job),
-                )
-                if self._summary_usable(parsed):
-                    if attempt > 1:
-                        sl.info("LLM résumé produit à la tentative %d/%d", attempt, max_llm_attempts)
-                    break
-                if attempt < max_llm_attempts:
-                    # « produit mais inexploitable » (gabarit non suivi, reasoning déversé →
-                    # aucun champ critique extrait) est traité comme un échec de production :
-                    # on retente plutôt que d'accepter un résumé que tout le parsing aval
-                    # rejette (constat batch E2E 2026-07-05).
-                    reason = "malformé (aucun champ critique)" if parsed.get("_summary_produced") else "sans production"
-                    sl.warning("LLM résumé %s (tentative %d/%d) — nouvel essai",
-                               reason, attempt, max_llm_attempts)
-                    # Robustesse (constat E2E 2026-07-04) : « LLM déjà chargée » est une
-                    # HYPOTHÈSE — si le serveur est mort entre-temps (SIGTERM one-off
-                    # observé), les tentatives suivantes parlaient dans le vide pendant
-                    # tout le timeout opencode. On RE-VÉRIFIE (et relance au besoin)
-                    # avant chaque nouvel essai.
-                    try:
-                        if not self.vram.ensure_arbitrage_llm_ready(api_model_id):
-                            sl.warning("LLM d'arbitrage injoignable avant la tentative %d — relance échouée",
-                                       attempt + 1)
-                    except Exception:  # noqa: BLE001 — le retry reste tenté quoi qu'il arrive
-                        sl.warning("Re-vérification LLM avant retry en erreur", exc_info=True)
-
-            workspace.verify_and_restore_sources()
-            if self._summary_usable(parsed):
-                self._apply_llm_suggestions(fs, result, parsed, sl)
-                workspace.cleanup(success=True)
-            else:
-                failure_kind = parsed.get("_failure_kind") or (
-                    "unparseable_output" if parsed.get("_summary_produced") else "empty_output"
-                )
-                sl.error("LLM résumé non produit après %d tentatives (cause=%s : %s) — meeting_context "
-                         "préservé, résumé marqué indisponible (relançable)", max_llm_attempts,
-                         failure_kind, parsed.get("_failure_detail", ""))
-                result["summary_llm_failed"] = True
-                result["summary_llm_error_kind"] = failure_kind
-                workspace.cleanup(success=False)
-        except Exception as exc:
-            logger.warning("Erreur opencode: %s", exc)
-        finally:
-            if llm_phase_reserved:
-                self.allocator.release_phase(job.id, "summary_llm")
-            self.allocator.release_llm(job.id)
+        summary_llm.run_llm_summary(self, job, result, config, sl)
 
     @staticmethod
     def _materialize_meeting_invite(fs, job: Job) -> str | None:
-        """Écrit le brief d'invitation (facultatif) dans le dossier de résumé.
-
-        Lit l'invitation déjà nettoyée stockée dans ``extra_data["meeting_invite"]``
-        (``{"brief", "names"}`` sans adresse e-mail) et la rend en Markdown pour la
-        LLM. Retourne le chemin du fichier, ou ``None`` si aucune invitation
-        exploitable n'a été fournie (cas normal).
-        """
-        invite_data = (job.get_extra_data() or {}).get("meeting_invite")
-        if not isinstance(invite_data, dict):
-            return None
-        from transcria.context.invite_parser import render_invite_markdown
-
-        markdown = render_invite_markdown(invite_data)
-        if not markdown:
-            return None
-        invite_file = fs.job_dir / "summary" / "meeting_invite.md"
-        invite_file.parent.mkdir(parents=True, exist_ok=True)
-        invite_file.write_text(markdown, encoding="utf-8")
-        return str(invite_file)
+        return summary_llm.materialize_meeting_invite(fs, job)
 
     @staticmethod
     def _summary_usable(parsed: dict) -> bool:
-        """Résumé EXPLOITABLE : produit ET au moins un champ critique extrait
-        (titre / type / sujet). Un résumé « produit » mais malformé (gabarit non suivi,
-        reasoning déversé) donne des champs critiques tous vides et fait échouer tout le
-        parsing aval — on le traite comme non produit pour déclencher un retry, plutôt que
-        de l'accepter et de casser la relecture finale / le DOCX."""
-        if not parsed.get("_summary_produced"):
-            return False
-        return any(
-            str(parsed.get(k) or "").strip()
-            for k in ("title_suggere", "type_suggere", "sujet_suggere")
-        )
+        return summary_llm.summary_usable(parsed)
 
     @staticmethod
     def _apply_llm_suggestions(fs, result: dict, parsed: dict, sl) -> None:

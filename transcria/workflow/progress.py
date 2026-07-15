@@ -106,6 +106,49 @@ class WorkflowProgressReporter:
         return round(min(100.0, max(0.0, pct)), 1)
 
 
+# Messages de progression du pipeline (barre d'avancement, vus par l'utilisateur) —
+# dans la langue des livrables du job (Axe B). Repli français.
+_PROGRESS_MESSAGES: dict[str, dict[str, str]] = {
+    "fr": {
+        "summary_stt": "Résumé : transcription rapide en cours",
+        "summary_stt_load": "Résumé : chargement STT {backend}",
+        "summary_scene": "Résumé : analyse acoustique de la réunion",
+        "summary_diar": "Résumé : détection des locuteurs en cours",
+        "summary_llm": "Résumé : génération LLM en cours",
+        "summary_stt_done": "Résumé : transcription rapide terminée",
+        "transcribe": "Transcription finale en cours",
+        "transcribe_done": "Transcription finale terminée",
+        "diar": "Diarisation finale en cours", "diar_done": "Diarisation finale terminée",
+        "quality": "Contrôle qualité en cours", "quality_done": "Contrôle qualité terminé",
+        "correction": "Correction LLM du sous-titrage en cours",
+        "correction_off": "Correction LLM désactivée", "correction_done": "Correction LLM terminée",
+        "review": "Relecture finale : cohérence et fidélité", "review_done": "Relecture finale terminée",
+        "package": "Préparation du paquet final",
+    },
+    "en": {
+        "summary_stt": "Summary: quick transcription in progress",
+        "summary_stt_load": "Summary: loading STT {backend}",
+        "summary_scene": "Summary: acoustic analysis of the meeting",
+        "summary_diar": "Summary: speaker detection in progress",
+        "summary_llm": "Summary: LLM generation in progress",
+        "summary_stt_done": "Summary: quick transcription complete",
+        "transcribe": "Final transcription in progress",
+        "transcribe_done": "Final transcription complete",
+        "diar": "Final diarization in progress", "diar_done": "Final diarization complete",
+        "quality": "Quality check in progress", "quality_done": "Quality check complete",
+        "correction": "LLM subtitle correction in progress",
+        "correction_off": "LLM correction disabled", "correction_done": "LLM correction complete",
+        "review": "Final review: consistency and fidelity", "review_done": "Final review complete",
+        "package": "Preparing the final package",
+    },
+}
+
+
+def progress_msg(language: str | None, key: str) -> str:
+    """Message de progression localisé (repli français, puis clé brute)."""
+    return _PROGRESS_MESSAGES.get((language or "fr"), _PROGRESS_MESSAGES["fr"]).get(key, key)
+
+
 def get_workflow_progress(job) -> dict | None:
     """Retourne la progression UI courante si elle est correctement formée."""
     try:
