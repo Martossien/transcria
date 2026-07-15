@@ -1,7 +1,6 @@
 import json
 import logging
 
-from transcria.gpu.gpu_session import GPUSessionError
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job, JobState
@@ -12,7 +11,7 @@ from transcria.workflow.gpu_phase import (  # noqa: F401 — _NoReservationSessi
     GpuPhaseSession,
     _NoReservationSession,
 )
-from transcria.workflow.phases import summary, summary_llm, summary_stt, transcription
+from transcria.workflow.phases import diarization, summary, summary_llm, summary_stt, transcription
 from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.progress import progress_msg as _progress_msg  # noqa: F401 — ré-exporté (tests historiques)
 
@@ -113,22 +112,7 @@ class WorkflowRunner:
         return self.gpu.default_remote_gpu_index()
 
     def _pyannote_progress_callback(self, job: Job, step: str):
-        def callback(pyannote_step: str, pyannote_percent: float | None) -> None:
-            message = f"Diarisation pyannote : {pyannote_step}"
-            percent = None
-            if pyannote_percent is not None:
-                base = 50.0 if step == "summary" else 60.0
-                span = 20.0 if step == "summary" else 10.0
-                percent = base + (span * pyannote_percent / 100.0)
-            self.progress.update(
-                job.id,
-                step=step,
-                phase="pyannote",
-                message=message,
-                percent=percent,
-            )
-
-        return callback
+        return diarization.pyannote_progress_callback(self, job, step)
 
     @staticmethod
     def _cuda_available() -> bool:
@@ -337,193 +321,24 @@ class WorkflowRunner:
             fs.save_text("summary/diarization_context.md", content)
         return content
 
+    # Phase DIARISATION (corps extraits vers workflow/phases/diarization.py — B1 lot 2).
     def run_speaker_detection(
         self, job: Job, audio_path: str, config: dict, update_state: bool = True
     ) -> dict:
-        """Détecte les locuteurs via pyannote.
-
-        `update_state=True` (étape wizard autonome) publie les états globaux
-        `SPEAKER_DETECTION_RUNNING`/`DONE`/`FAILED`. `update_state=False` (sous-phase
-        de `run_summary`) ne touche pas à l'état du job : le résumé reste `SUMMARY_RUNNING`
-        jusqu'à `SUMMARY_DONE`, et la diarisation y est best-effort (échec → résumé
-        poursuit sans écraser l'état). Le résultat est toujours retourné via le dict.
-        """
-        from pathlib import Path
-
-        if update_state:
-            self.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
-        try:
-            from transcria.stt.diarizer_factory import apply_speaker_hint
-            from transcria.stt.speaker_detection import SpeakerDetector
-
-            config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
-            detector = SpeakerDetector(config)
-            progress_callback = self._pyannote_progress_callback(
-                job, "summary" if not update_state else "speakers"
-            )
-            if self._cuda_available():
-                with self._gpu_session(
-                    job,
-                    "pyannote",
-                    self.vram.pyannote_vram_mb,
-                    "speaker_detection",
-                ) as gpu:
-                    device = f"cuda:{gpu.gpu_index}"
-                    logger.info(
-                        "[speaker_detection] GPU sélectionné: %s (%d Mo réservés)",
-                        device, self.vram.pyannote_vram_mb,
-                    )
-                    result = self._detect_speakers(
-                        detector, job, Path(audio_path), device=device, progress_callback=progress_callback
-                    )
-            else:
-                logger.info("[speaker_detection] CUDA indisponible — pyannote sur CPU")
-                device = "cpu"
-                result = self._detect_speakers(
-                    detector, job, Path(audio_path), device=device, progress_callback=progress_callback
-                )
-            if update_state:
-                self.store.update_state(job.id, JobState.SPEAKER_DETECTION_DONE)
-            return result
-        except GPUSessionError as exc:
-            # VRAM transitoire : on n'échoue pas, on remonte `vram_wait` (mise en attente
-            # + alerte admin par l'appelant). vram_mb pyannote = self.vram.pyannote_vram_mb.
-            logger.error("[speaker_detection] VRAM insuffisante: %s", exc)
-            return {
-                "vram_wait": True,
-                "required_mb": int(self.vram.pyannote_vram_mb),
-                "phase": "speaker_detection",
-                "reason": str(exc),
-                "error": str(exc),
-                "speakers": [],
-            }
-        except Exception as exc:
-            logger.exception("Échec détection locuteurs")
-            if update_state:
-                self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc), "speakers": []}
+        return diarization.run_speaker_detection(self, job, audio_path, config, update_state)
 
     @staticmethod
     def _detect_speakers(detector, job: Job, audio_path, *, device: str, progress_callback):
-        try:
-            return detector.detect(job, audio_path, device=device, progress_callback=progress_callback)
-        except TypeError as exc:
-            if "progress_callback" not in str(exc):
-                raise
-            return detector.detect(job, audio_path, device=device)
+        return diarization.detect_speakers(
+            detector, job, audio_path, device=device, progress_callback=progress_callback
+        )
 
     # Phase TRANSCRIPTION (corps extrait vers workflow/phases/transcription.py — B1 lot 2).
     def run_transcription(self, job: Job, audio_path: str, config: dict) -> dict:
         return transcription.run(self, job, audio_path, config)
 
     def run_diarization(self, job: Job, audio_path: str, config: dict) -> dict:
-        from pathlib import Path
-
-        self.store.update_state(job.id, JobState.DIARIZING)
-        self.progress.update(
-            job.id,
-            step="processing",
-            phase="diarization",
-            message=_progress_msg(resolve_output_language(job), "diar"),
-            percent=60,
-            force=True,
-        )
-        try:
-            from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
-
-            config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
-            diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
-            diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)
-
-            # Diarisation servie à distance (nœud de ressources, backend `remote`) :
-            # aucune VRAM locale à réserver. On saute le GPUSession (sinon réservation
-            # fantôme de `diarization` Mo localement — et pire, le reclaim pourrait
-            # stopper la LLM à tort pour une phase qui tourne à distance).
-            runs_remote = self._phase_runs_remotely("diarization")
-
-            def _attempt_cuda() -> dict:
-                with self._gpu_session(
-                    job,
-                    diar_backend,
-                    diar_vram_mb,
-                    "diarization",
-                ) as gpu:
-                    device = f"cuda:{gpu.gpu_index}"
-                    logger.info(
-                        "[diarization] backend=%s, GPU sélectionné: %s (%d Mo réservés)",
-                        diar_backend, device, diar_vram_mb,
-                    )
-                    diarizer = create_diarizer(
-                        config,
-                        device=device,
-                        progress_callback=self._pyannote_progress_callback(job, "processing"),
-                    )
-                    res = diarizer.diarize(job, Path(audio_path))
-                    diarizer.offload()
-                    return res
-
-            if runs_remote:
-                logger.info("[diarization] backend distant — aucune réservation VRAM locale")
-                diarizer = create_diarizer(
-                    config,
-                    device=None,
-                    progress_callback=self._pyannote_progress_callback(job, "processing"),
-                )
-                try:
-                    result = diarizer.diarize(job, Path(audio_path))
-                finally:
-                    diarizer.offload()
-            elif self._cuda_available():
-                try:
-                    result = _attempt_cuda()
-                except GPUSessionError:
-                    # VRAM bloquée par notre LLM d'arbitrage inactive : on la stoppe et on
-                    # retente une fois avant de basculer en attente VRAM.
-                    if self._reclaim_vram_from_idle_arbitrage_llm(logger):
-                        result = _attempt_cuda()
-                    else:
-                        raise
-            else:
-                logger.info("[diarization] CUDA indisponible — %s sur CPU", diar_backend)
-                diarizer = create_diarizer(
-                    config,
-                    device="cpu",
-                    progress_callback=self._pyannote_progress_callback(job, "processing"),
-                )
-                try:
-                    result = diarizer.diarize(job, Path(audio_path))
-                finally:
-                    diarizer.offload()
-
-            # Attribution genre par locuteur — audio_scene.json disponible à ce stade
-            # (PipelineService le produit avant d'appeler run_diarization)
-            fs = self._get_fs(config, job.id)
-            audio_scene = fs.load_json("metadata/audio_scene.json") or {}
-            self._inject_speaker_genders(fs, audio_scene)
-            self.progress.update(
-                job.id,
-                step="processing",
-                phase="diarization",
-                message=_progress_msg(resolve_output_language(job), "diar_done"),
-                percent=70,
-                force=True,
-            )
-
-            return result
-        except GPUSessionError as exc:
-            # VRAM transitoire : mise en attente + alerte admin (pas FAILED).
-            logger.error("[diarization] VRAM insuffisante: %s", exc)
-            return {
-                "vram_wait": True,
-                "required_mb": int(diar_vram_mb),
-                "phase": "diarization",
-                "reason": str(exc),
-                "error": str(exc),
-            }
-        except Exception as exc:
-            logger.exception("Échec diarisation")
-            self.store.update_state(job.id, JobState.FAILED, str(exc))
-            return {"error": str(exc)}
+        return diarization.run_diarization(self, job, audio_path, config)
 
     def _enrich_stt_corpus_quality(self, job: Job, config: dict) -> None:
         """Remplit `quality_measure` du corpus STT (proxy taux d'édition brut↔corrigé).
