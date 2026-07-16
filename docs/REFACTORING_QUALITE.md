@@ -55,7 +55,10 @@
 > ✅ **C4 livrée (2026-07-16)** — composition de l'app et des tests (voir l'encadré au §C4 :
 > create_app(config, start_background_services), app_services.py, hack poll_interval_s mort,
 > tests/builders + tests/fakes, test étoile polaire §5.2 VERT, marqueur gpu_real + smoke réel).
-> Prochaines vagues : **C5**, puis B3 (GPU, en dernier), C6.
+> ✅ **C5 livrée (2026-07-16)** — imports différés 408 → **39 tous justifiés** (plafond ≤ 40
+> atteint, voir l'encadré au §C5 : garde init_cycles ajoutée à l'audit, 13 coutures de tests
+> re-pointées vers le consommateur, mypy check_untyped_defs actif en gate).
+> Prochaines vagues : **B3** (GPU, en dernier — son filet gpu_real est posé), puis C6.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -1082,11 +1085,34 @@ cible ≥ 90 %) — le schéma est le seul rempart des configs utilisateur.
   officialiser les fakes qui existent déjà en les rendant importables partout ;
   `tests/contracts/` accueille la suite STT de C1.
 
-#### C5 — Résorption des imports différés + typage *(effort M, étalé)*
+#### ✅ C5 — Résorption des imports différés + typage *(effort M — LIVRÉE 2026-07-16, 4 lots)*
 
 Règle du §8.3 appliquée à l'arbre entier ; plafond final ≤ 40, tous justifiés en
 commentaire ; mypy `--check-untyped-defs` activé **paquet par paquet** en commençant par la
 couche 1 (la plus importée = meilleur rendement d'erreurs attrapées), puis 2, 3, 4.
+
+> **Réalisation (2026-07-16)** — 408 → **39 noms différés** (métrique audit_imports),
+> tous justifiés : cycles documentés (registre STT ×8, jobs.models↔workflow.steps,
+> factory↔remote_transcriber, __init__ gpu↔context et workflow↔audio/exports/
+> notifications, timing_store), chaîne pyannote à la demande (diarize_engine), points
+> d'entrée §8.3(c) compactés en imports de module (installer.cli 9 — top vérifié
+> importable par le python SYSTÈME, contrainte python-env sur distro vierge ;
+> entrypoint 5 ; doctor 3), annotation TYPE_CHECKING (×1).
+> **Découverte structurante** : deux bombes d'ordre d'import via les `__init__` de
+> paquets (workflow↔audio cassait la collecte pytest, gpu↔queue latente) — INVISIBLES
+> au graphe module-à-module. Doctrine appliquée : les arêtes MONTANTES (couche basse →
+> orchestration) re-différées ; l'audit gagne la métrique **init_cycles** (cycles
+> inter-paquets comptant l'exécution des `__init__` ancêtres, toujours 0, ratchet CI)
+> + tests recto-verso. **13 coutures de tests re-pointées vers le consommateur**
+> (doctrine B2) : chat_completion ×3 phases, create_transcriber/diarizer,
+> prepare_remote_resources ×2, notify_summary_ready, Transcriber, DiarizerService,
+> http_health_prober, opencode-upgrade, editor sync-summary.
+> **Typage** : la mesure préalable n'a révélé que 7 erreurs sur 294 modules →
+> `check_untyped_defs = true` activé d'un coup dans `[tool.mypy]` (déviation assumée
+> du « paquet par paquet », devenu inutile), corrections locales sans changement de
+> comportement. Arête notée pour plus tard : `jobs/timing_store` importe
+> `workflow.timing_model` en tête (WINDOW en défaut de paramètre — couche 1→3
+> pré-existante, contournée côté phase).
 
 #### C6 — Achever la fonte de l'installation *(effort L — réévalué : 13 modules / 4 641 l., pas 3)*
 
@@ -1282,7 +1308,7 @@ l'annexe C.
 | Plus gros fichier (hors §9) | ~~routes.py : 3 330 l.~~ → runner.py : 2 867 l. (web ≤ 744) | < 900 l. | ✅ A2 (web) ; B1 (runner) |
 | Plus grosse classe | WorkflowRunner : 46 méth. / 2 740 l. | < 500 l. | B1 |
 | Fan-out max | ~~63 (routes.py)~~ → 38 (runner.py ; web ≤ 32, exceptions baselinées) | ≤ 20 | ✅ A2 (web) ; A3/B1 (reste) |
-| Imports différés internes (arbre) | ~~535~~ → 432 (mesure audit_imports ; web/ purgé en A2) | ≤ 40 justifiés | C5 |
+| Imports différés internes (arbre) | ~~535~~ → ~~432~~ → **39, tous justifiés** | ≤ 40 justifiés | ✅ C5 |
 | Chaînes de config profondes | 216 | 0 nouvelle, stock ↓ | C3 |
 | Dicts de résultat inter-couches | pipeline/executor entiers | 0 | B0 |
 | Inversions de couche | ~~3 (`web.i18n`)~~ ✅ A1 + ~~`editor→routes`~~ ✅ A2 + installeur | 0 | C6 (restant) |
