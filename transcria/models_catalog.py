@@ -5,7 +5,7 @@ configuré + palier LLM recommandé pour le VRAM). Sert la page « Modèles » :
 taille sur disque, caractère *gated* (token HF + licence), estimation de taille, place disque.
 
 Pur et sans réseau (le téléchargement vit ailleurs). Réutilise les primitives de
-``install_models`` (cache HF) et ``install_arbitrage`` (palier GGUF).
+``installer/models_lib`` (cache HF) et ``installer/tiers`` (palier GGUF).
 """
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from transcria.install_arbitrage import get_tier_metadata, recommend_tier
-from transcria.install_models import PYANNOTE_MODEL_ID, find_hf_cache_model
+from transcria.installer.models_lib import PYANNOTE_MODEL_ID, find_hf_cache_model
+from transcria.installer.tiers import get_tier_metadata, recommend_tier
 from transcria.stt.registry import backends as _stt_backends
 
 

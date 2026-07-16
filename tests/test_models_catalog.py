@@ -72,7 +72,7 @@ def test_find_hf_cache_model_unreadable_dir_returns_none(tmp_path: Path):
 
     import pytest
 
-    from transcria.install_models import find_hf_cache_model
+    from transcria.installer.models_lib import find_hf_cache_model
 
     if os.geteuid() == 0:
         pytest.skip("root ignore les permissions de fichier")

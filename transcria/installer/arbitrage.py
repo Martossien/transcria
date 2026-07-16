@@ -22,15 +22,18 @@ from transcria.gpu.llm_placement import (
 from transcria.install_messages import t
 from transcria.installer.prerequisites import first_available
 
-
-@dataclass(frozen=True)
-class LlmTierMetadata:
-    tier: str
-    repo: str
-    file: str
-    directory: str
-    label: str
-    context: int = 0
+# Paliers extraits vers installer/tiers.py (vague C6) — ré-exportés ici : les
+# consommateurs historiques (models_catalog, entrypoint, tests) importaient chez nous.
+from transcria.installer.tiers import (  # noqa: F401 — ré-exports
+    LLM_TIERS,
+    TIER_GPU_INDICES,
+    TIER_VRAM_MB,
+    LlmTierMetadata,
+    _build_llamacpp_tables,
+    _llamacpp_engine,
+    get_tier_metadata,
+    recommend_tier,
+)
 
 
 @dataclass(frozen=True)
@@ -52,53 +55,8 @@ class PlacementRecommendation:
     warnings: tuple[str, ...] = ()
 
 
-# Les paliers llama.cpp viennent du CATALOGUE DE DONNÉES (plus de littéraux hardcodés) :
-# transcria/data/llm_profiles.yaml (engine=llamacpp). On reconstruit les 3 tables héritées
-# en préservant leurs conventions de clés : LLM_TIERS = "12".."64" ; TIER_VRAM_MB /
-# TIER_GPU_INDICES = "12gb".."64gb". Le libellé est généré SANS taille (dérivée ailleurs).
-def _llamacpp_engine() -> dict:
-    return load_llm_profiles()["engines"]["llamacpp"]
-
-
-def _build_llamacpp_tables() -> tuple[dict[str, int], dict[str, list[int]], dict[str, LlmTierMetadata]]:
-    vram: dict[str, int] = {}
-    gpu_idx: dict[str, list[int]] = {}
-    meta: dict[str, LlmTierMetadata] = {}
-    for tier in _llamacpp_engine()["tiers"]:
-        tid = str(tier["id"])
-        key = f"{tid}gb"
-        vram[key] = int(tier["vram_budget_mb"])
-        gpu_idx[key] = list(range(int(tier.get("gpus", 1))))
-        m = tier["model"]
-        ctx = int(tier.get("context", 0))
-        meta[tid] = LlmTierMetadata(
-            tier=tid, repo=m["repo"], file=m["file"], directory=m["dir"],
-            label=f"{Path(m['file']).stem} ({ctx // 1024}K ctx)", context=ctx,
-        )
-    return vram, gpu_idx, meta
-
-
-TIER_VRAM_MB, TIER_GPU_INDICES, LLM_TIERS = _build_llamacpp_tables()
-
 # Octets/élément du KV llama.cpp (cache-type q8_0) — pour la dérivation d'empreinte.
 _LLAMACPP_KV_BYTES: int = int(_llamacpp_engine().get("kv_dtype_bytes", 1))
-
-
-def recommend_tier(total_vram_mb: int) -> str:
-    """Recommande un palier LLM depuis la VRAM totale, avec marge de sécurité."""
-    if total_vram_mb >= 60000:
-        return "64"
-    if total_vram_mb >= 46000:
-        return "48"
-    if total_vram_mb >= 31000:
-        return "32"
-    if total_vram_mb >= 23000:
-        return "24"
-    if total_vram_mb >= 15500:
-        return "16"
-    if total_vram_mb >= 11500:
-        return "12"
-    return "0"
 
 
 def parse_gpu_sizes_csv(value: str) -> list[int]:
@@ -164,13 +122,6 @@ def apply_placement_calibration(*, gpu_sizes_csv: str, tier: str, config_path: P
         vram_mb_per_gpu=placement.vram_mb_per_gpu,
     )
     return placement
-
-
-def get_tier_metadata(tier: str) -> LlmTierMetadata:
-    try:
-        return LLM_TIERS[tier]
-    except KeyError as exc:
-        raise ValueError(f"palier LLM inconnu : {tier}") from exc
 
 
 def render_tier_metadata_shell(tier: str) -> str:
@@ -417,7 +368,7 @@ def render_wrapper(
 ) -> str:
     lines = [
         "#!/usr/bin/env bash",
-        "# Fichier généré localement par transcria.install_arbitrage.",
+        "# Fichier généré localement par transcria.installer.arbitrage.",
         "# Ne pas versionner : modifier la source dans scripts/arbitrage_profiles/ ou régénérer.",
         "set -euo pipefail",
     ]

@@ -28,7 +28,7 @@ CONFIG_PATH="${CONFIG_PATH:-config.yaml}"
 TIER="${1:-status}"
 
 args=(
-  -m transcria.install_arbitrage
+  -m transcria.installer.cli arbitrage
   "$TIER"
   --repo-root "."
   --config "$CONFIG_PATH"

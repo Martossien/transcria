@@ -6,7 +6,7 @@ GPU-free et SANS réseau : on teste la logique PURE de sélection d'artefact (po
 """
 import hashlib
 
-from transcria.install_arbitrage import (
+from transcria.installer.arbitrage import (
     normalize_arch,
     parse_prebuilt_artifact,
     prebuilt_artifact_name,

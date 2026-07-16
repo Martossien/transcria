@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from transcria.install_arbitrage import (
+from transcria.installer.arbitrage import (
     DownloadClient,
     LlamaFallback,
     PlacementRecommendation,
@@ -283,7 +283,7 @@ def test_render_tier_metadata_shell_is_filterable():
 
 def test_select_download_client_prefers_hf(monkeypatch):
     monkeypatch.setattr(
-        "transcria.install_arbitrage.first_available",
+        "transcria.installer.arbitrage.first_available",
         lambda names: type("Check", (), {"name": names[0], "path": Path("/usr/bin/hf")})(),
     )
 
@@ -291,7 +291,7 @@ def test_select_download_client_prefers_hf(monkeypatch):
 
 
 def test_select_download_client_handles_missing_client(monkeypatch):
-    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+    monkeypatch.setattr("transcria.installer.arbitrage.first_available", lambda _names: None)
 
     assert select_download_client() == DownloadClient(name="", path=None)
 
@@ -308,13 +308,13 @@ def test_select_llama_fallback_uses_user_tree_when_path_missing(monkeypatch, tmp
     server.parent.mkdir(parents=True)
     server.write_text("#!/bin/sh\n", encoding="utf-8")
     server.chmod(0o755)
-    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+    monkeypatch.setattr("transcria.installer.arbitrage.first_available", lambda _names: None)
 
     assert select_llama_fallback(user_home=tmp_path) == LlamaFallback(server=server)
 
 
 def test_select_llama_fallback_handles_missing_server(monkeypatch, tmp_path: Path):
-    monkeypatch.setattr("transcria.install_arbitrage.first_available", lambda _names: None)
+    monkeypatch.setattr("transcria.installer.arbitrage.first_available", lambda _names: None)
 
     assert select_llama_fallback(user_home=tmp_path) == LlamaFallback(server=None)
 
@@ -332,7 +332,7 @@ def test_run_llama_detector_is_non_blocking(monkeypatch, tmp_path: Path):
         calls.append(cmd)
         return subprocess.CompletedProcess(cmd, 2, stdout='LLAMA_FOUND=0\nLLAMA_SERVER=""\n', stderr="introuvable\n")
 
-    monkeypatch.setattr("transcria.install_arbitrage.subprocess.run", fake_run)
+    monkeypatch.setattr("transcria.installer.arbitrage.subprocess.run", fake_run)
 
     stdout, stderr = run_llama_detector(repo_root=tmp_path, python_bin="/venv/bin/python")
 

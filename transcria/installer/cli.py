@@ -15,7 +15,7 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
-from transcria.installer import hardware, imports_check, paths, prerequisites, profiles
+from transcria.installer import hardware, imports_check, models, paths, prerequisites, profiles
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -594,6 +594,14 @@ def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
     return 0
 
 
+def _forward_arbitrage(rest: list[str] | None) -> int:
+    # Différé §8.3(c) : tire PyYAML (catalogue de paliers) — python-env (pré-venv,
+    # python système) ne doit pas le charger.
+    from transcria.installer import arbitrage
+
+    return arbitrage.main(rest)
+
+
 # Helpers d'installation à CLI propre (vague C6 — ex-modules transcria/install_*.py
 # racine, fondus dans installer/). Transférés AVANT argparse : chacun garde son
 # argparse interne (testé), et REMAINDER d'argparse mange mal les options en tête.
@@ -603,6 +611,8 @@ _FORWARDED_HELPERS: dict[str, Callable[[list[str] | None], int]] = {
     "paths": paths.main,
     "profiles": profiles.main,
     "check-imports": imports_check.main,
+    "models": models.main,
+    "arbitrage": _forward_arbitrage,
 }
 
 

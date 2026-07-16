@@ -330,7 +330,7 @@ def provision_arbitrage_model(
     try:
         # Différés §8.3(c) : point d'entrée best-effort — l'ImportError est un cas géré.
         from transcria.config import load_config
-        from transcria.install_arbitrage import get_tier_metadata
+        from transcria.installer.tiers import get_tier_metadata
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort
         print(f"[WARN] provisioning modèle d'arbitrage ignoré ({type(exc).__name__}: {exc})", file=sys.stderr, flush=True)
         return False

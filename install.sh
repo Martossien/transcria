@@ -337,9 +337,9 @@ eval_named_shell_assignments() {
 
 python_module() { PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"; }
 
-postgres_helper() { python_module transcria.install_postgres "$@"; }
+postgres_helper() { python_module transcria.install_postgres "$@"; }  # lot 6 : bascule avec l'absorption
 
-arbitrage_helper() { python_module transcria.install_arbitrage "$@"; }
+arbitrage_helper() { python_module transcria.installer.cli arbitrage "$@"; }
 
 
 install_paths_helper() {
@@ -372,7 +372,7 @@ load_install_profile_plan() {
 }
 
 print_model_detection_table() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models detection-table \
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models detection-table \
         --cohere-ok "$COHERE_OK" \
         --cohere-path "${COHERE_PATH:-}" \
         --pyannote-ok "$PYANNOTE_OK" \
@@ -908,7 +908,7 @@ log_section "$(t sec_models)"
 
 log_model_status_event() {
     local event="$1" value="${2:-}"
-    emit_rendered_log "modèle : $event" -m transcria.install_models status-log \
+    emit_rendered_log "modèle : $event" -m transcria.installer.cli models status-log \
         --event "$event" \
         --value "$value" \
         --profile "$INSTALL_PROFILE"
@@ -916,19 +916,19 @@ log_model_status_event() {
 
 log_cohere_setup_event() {
     local event="$1" value="${2:-}"
-    emit_rendered_log "Cohere : $event" -m transcria.install_models cohere-setup-log \
+    emit_rendered_log "Cohere : $event" -m transcria.installer.cli models cohere-setup-log \
         --event "$event" \
         --value "$value"
 }
 
 log_pyannote_setup_event() {
     local event="$1"
-    emit_rendered_log "pyannote : $event" -m transcria.install_models pyannote-setup-log \
+    emit_rendered_log "pyannote : $event" -m transcria.installer.cli models pyannote-setup-log \
         --event "$event"
 }
 
 if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]]; then
-    MODEL_DETECTION=$(python_module transcria.install_models detect-local \
+    MODEL_DETECTION=$(python_module transcria.installer.cli models detect-local \
         --cohere-path "$(yaml_get "models.cohere_model_path")" \
         --install-dir "$INSTALL_DIR" \
         --hf-cache "${HF_HOME:-$HOME/.cache/huggingface}/hub" \
@@ -1011,7 +1011,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
     log_cohere_setup_event missing
     log_cohere_setup_event current-path "$(yaml_get 'models.cohere_model_path')"
     if [[ "$NON_INTERACTIVE" = false ]]; then
-        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models cohere-setup-prompt
+        PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models cohere-setup-prompt
         read -r COHERE_CHOICE
         case "$COHERE_CHOICE" in
             1)
@@ -1026,7 +1026,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$COHERE_OK" = false ]]; then
                 fi
                 ;;
             2)
-                COHERE_DOWNLOAD_PLAN=$(python_module transcria.install_models cohere-download-plan --install-dir "$INSTALL_DIR")
+                COHERE_DOWNLOAD_PLAN=$(python_module transcria.installer.cli models cohere-download-plan --install-dir "$INSTALL_DIR")
                 eval_named_shell_assignments "$COHERE_DOWNLOAD_PLAN" COHERE_DEST COHERE_CLI COHERE_CLI_PATH COHERE_MODEL_ID
                 install_paths_helper --path "$COHERE_DEST" >/dev/null
                 log_cohere_setup_event download-start
@@ -1067,7 +1067,7 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$PYANNOTE_OK" = false ]]; then
         log_pyannote_setup_event create-token-url
         log_pyannote_setup_event accept-terms-url
         if [[ "$NON_INTERACTIVE" = false ]]; then
-            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-token-prompt
+            PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models pyannote-token-prompt
             read -rs CURRENT_HF_TOKEN; echo ""
         fi
     fi
@@ -1076,10 +1076,10 @@ if [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true && "$PYANNOTE_OK" = false ]]; then
         env_set "HF_TOKEN" "$CURRENT_HF_TOKEN"
         log_pyannote_setup_event token-saved
 
-        PYANNOTE_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models pyannote-download-prompt)
+        PYANNOTE_DOWNLOAD_PROMPT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models pyannote-download-prompt)
         if ask_yn "$PYANNOTE_DOWNLOAD_PROMPT"; then
             log_pyannote_setup_event download-start
-            if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_models download-pyannote \
+            if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli models download-pyannote \
                     --hf-token "$CURRENT_HF_TOKEN" >/dev/null; then
                 log_pyannote_setup_event download-ok
                 PYANNOTE_OK=true
@@ -1145,7 +1145,7 @@ log_section "$(t sec_llm)"
 
 log_llm_setup_event() {
     local event="$1" value="${2:-}" profile="${3:-}" gpu_count="${4:-}" max_mb="${5:-}" tier="${6:-}" label="${7:-}"
-    emit_rendered_log "LLM : $event" -m transcria.install_arbitrage --setup-log \
+    emit_rendered_log "LLM : $event" -m transcria.installer.cli arbitrage --setup-log \
         --event "$event" \
         --value "$value" \
         --profile "$profile" \

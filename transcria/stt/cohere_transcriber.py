@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from transcria.config.loader import get_default_config
 from transcria.gpu.model_load_lock import model_load_lock
-from transcria.install_models import COHERE_MODEL_ID
+from transcria.installer.models_lib import COHERE_MODEL_ID
 from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.contextual_biasing import build_cohere_lexicon_processor

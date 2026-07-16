@@ -245,7 +245,7 @@ def test_install_script_delegates_final_summary_to_installer_cli():
     assert "print_model_summary" not in content
     assert "print_database_summary" not in content
     assert "print_configuration_summary" not in content
-    assert "-m transcria.install_models summary" not in content
+    assert "-m transcria.installer.cli models summary" not in content
     assert "python_module transcria.install_summary database" not in content
     assert "python_module transcria.install_summary configuration" not in content
     assert 'echo -e "${BOLD}Lancer le nœud de ressources' not in content
@@ -256,7 +256,7 @@ def test_install_script_uses_model_detection_table_renderer():
     content = _INSTALL.read_text(encoding="utf-8")
 
     assert "print_model_detection_table" in content
-    assert "-m transcria.install_models detection-table" in content
+    assert "-m transcria.installer.cli models detection-table" in content
     assert "┌─────────────────────────────────" not in content
     assert 'printf "  │ %-31s' not in content
 
@@ -264,7 +264,7 @@ def test_install_script_uses_model_detection_table_renderer():
 def test_install_script_delegates_model_status_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_models status-log" in content
+    assert "-m transcria.installer.cli models status-log" in content
     assert "log_model_status_event" in content
     assert "Cohere ASR       : $COHERE_PATH" not in content
     assert "pyannote cache   : $(basename" not in content
@@ -276,8 +276,8 @@ def test_install_script_delegates_model_status_logs():
 def test_install_script_delegates_cohere_setup_logs_and_prompt():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_models cohere-setup-log" in content
-    assert "-m transcria.install_models cohere-setup-prompt" in content
+    assert "-m transcria.installer.cli models cohere-setup-log" in content
+    assert "-m transcria.installer.cli models cohere-setup-prompt" in content
     assert "log_cohere_setup_event" in content
     assert "Le modèle Cohere ASR est introuvable" not in content
     assert "Chemin actuel dans config.yaml" not in content
@@ -293,9 +293,9 @@ def test_install_script_delegates_cohere_setup_logs_and_prompt():
 def test_install_script_delegates_pyannote_setup_logs_and_prompts():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_models pyannote-setup-log" in content
-    assert "-m transcria.install_models pyannote-token-prompt" in content
-    assert "-m transcria.install_models pyannote-download-prompt" in content
+    assert "-m transcria.installer.cli models pyannote-setup-log" in content
+    assert "-m transcria.installer.cli models pyannote-token-prompt" in content
+    assert "-m transcria.installer.cli models pyannote-download-prompt" in content
     assert "log_pyannote_setup_event" in content
     assert "HF_TOKEN manquant — requis pour télécharger pyannote" not in content
     assert "https://huggingface.co/settings/tokens" not in content
@@ -348,7 +348,7 @@ def test_install_script_recovers_opencode_bin_from_config_after_phase():
 def test_install_script_delegates_llm_selection_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_arbitrage --setup-log" in content
+    assert "-m transcria.installer.cli arbitrage --setup-log" in content
     assert "nvidia-smi --query-gpu=memory.total" not in content
     assert "scripts/plan_llm_placement.py" not in content
     assert "--placement-plan" in content
@@ -639,12 +639,12 @@ def test_install_script_delegates_torch_detection_to_installer():
 def test_install_script_checks_models_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "python_module transcria.install_models detect-local" in content
+    assert "python_module transcria.installer.cli models detect-local" in content
     assert "eval_named_shell_assignments \"$MODEL_DETECTION\"" in content
-    assert "-m transcria.install_models cohere-ok" not in content
-    assert "-m transcria.install_models pyannote-cache" not in content
-    assert "-m transcria.install_models first-gguf" not in content
-    assert "-m transcria.install_models download-pyannote" in content
+    assert "-m transcria.installer.cli models cohere-ok" not in content
+    assert "-m transcria.installer.cli models pyannote-cache" not in content
+    assert "-m transcria.installer.cli models first-gguf" not in content
+    assert "-m transcria.installer.cli models download-pyannote" in content
     assert "from pathlib import Path; import sys" not in content
     assert "Pipeline.from_pretrained('pyannote/speaker-diarization-community-1'" not in content
     assert 'find "$HF_CACHE"' not in content

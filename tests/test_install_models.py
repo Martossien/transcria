@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from transcria.install_models import (
+from transcria.installer.models import (
     COHERE_MODEL_ID,
     PYANNOTE_MODEL_ID,
     CohereDownloadPlan,
@@ -180,7 +180,7 @@ def test_plan_cohere_download_prefers_hf_cli(monkeypatch, tmp_path: Path):
         seen["names"] = list(names)
         return type("Check", (), {"name": names[0], "path": Path(f"/usr/bin/{names[0]}")})()
 
-    monkeypatch.setattr("transcria.install_models.first_available", fake_first_available)
+    monkeypatch.setattr("transcria.installer.models.first_available", fake_first_available)
 
     plan = plan_cohere_download(install_dir=tmp_path)
 
@@ -490,7 +490,7 @@ def test_install_models_cli_download_pyannote_prints_status(capsys, monkeypatch)
     def fake_download(token: str, *, model_id: str):
         calls.append((token, model_id))
 
-    monkeypatch.setattr("transcria.install_models.download_pyannote_pipeline", fake_download)
+    monkeypatch.setattr("transcria.installer.models.download_pyannote_pipeline", fake_download)
 
     assert main(["download-pyannote", "--hf-token", "hf_secret", "--model-id", "custom/model"]) == 0
 

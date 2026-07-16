@@ -61,13 +61,13 @@ set -uo pipefail
 # Défauts (modèle / TP / max_len) résolus depuis le CATALOGUE DE PROFILS (source unique,
 # transcria/data/llm_profiles.yaml) selon le matériel — plus de hardcode dispersé. Best-effort :
 # l'override par env gagne toujours ; si le résolveur n'est pas joignable, on retombe sur les
-# valeurs de référence ci-dessous (dernier recours). Cf. `install_arbitrage --vllm-env`.
+# valeurs de référence ci-dessous (dernier recours). Cf. `installer.cli arbitrage --vllm-env`.
 if [[ -z "${ARBITRAGE_MODEL:-}" ]]; then
     _py="${TRANSCRIA_PYTHON:-/app/venv/bin/python}"
     if [[ -x "$_py" ]]; then
         _gc=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | grep -c . || echo 1)
         _tot=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | awk '{s+=$1} END{print s+0}')
-        eval "$("$_py" -m transcria.install_arbitrage --vllm-env --gpu-count "${_gc:-1}" --total-vram-mb "${_tot:-0}" 2>/dev/null)" || true
+        eval "$("$_py" -m transcria.installer.cli arbitrage --vllm-env --gpu-count "${_gc:-1}" --total-vram-mb "${_tot:-0}" 2>/dev/null)" || true
     fi
 fi
 
