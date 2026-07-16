@@ -6,6 +6,7 @@ import time
 from typing import IO
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
+from transcria.gpu import inventory
 from transcria.gpu._port_utils import generation_confirmed
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.cuda_visible import (
@@ -144,25 +145,8 @@ class VRAMManager:
     # ── GPU Info ──────────────────────────────────────────
 
     def get_gpu_info(self) -> list[dict]:
-        # Source LOCALE (C2.3) : l'ancien détour par le dashboard externe est retiré —
-        # torch.cuda.mem_get_info était déjà la vraie source sur toute machine sans lui.
-        return self._get_gpu_info_local()
-
-    def _get_gpu_info_local(self) -> list[dict]:
-        gpus = []
-        try:
-            import torch
-            if torch.cuda.is_available():
-                for i in range(torch.cuda.device_count()):
-                    free, total = torch.cuda.mem_get_info(i)
-                    gpus.append({
-                        "id": i, "name": torch.cuda.get_device_name(i),
-                        "cuda_visible_remapped": True,
-                        "memory": {"used": (total-free)/(1024**3), "free": free/(1024**3), "total": total/(1024**3)},
-                    })
-        except ImportError:
-            pass
-        return gpus
+        # Délégation à l'unique sonde de l'arbre (B3) — même vision que GPUAllocator.
+        return inventory.legacy_gpu_info()
 
     def get_free_vram_mb(self, gpu_index: int = 0) -> int:
         visible_devices = parse_cuda_visible_devices()
@@ -174,14 +158,6 @@ class VRAMManager:
             ) == gpu_index:
                 return int(g.get("memory", {}).get("free", 0) * 1024)
         return 0
-
-    @staticmethod
-    def _visible_cuda_device_count() -> int | None:
-        """Retourne le nombre de GPUs CUDA visibles via CUDA_VISIBLE_DEVICES, ou None si non contraint."""
-        visible = parse_cuda_visible_devices()
-        if visible is None:
-            return None
-        return len(visible)
 
     def get_best_gpu(self, required_mb: int) -> int | None:
         visible_devices = parse_cuda_visible_devices()

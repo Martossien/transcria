@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from transcria.gpu import inventory
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,27 +59,17 @@ def _gpus() -> list[dict]:
     except Exception:  # noqa: BLE001 — NVML absent (frontale CPU) : repli torch
         pass
 
-    try:
-        import torch
-
-        if not torch.cuda.is_available():
-            return []
-        gpus = []
-        for i in range(torch.cuda.device_count()):
-            free, total = torch.cuda.mem_get_info(i)
-            gpus.append({
-                "id": i,
-                "name": torch.cuda.get_device_name(i),
-                "memory": {
-                    "used": round((total - free) / (1024 ** 3), 1),
-                    "free": round(free / (1024 ** 3), 1),
-                    "total": round(total / (1024 ** 3), 1),
-                },
-            })
-        return gpus
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("GPU locaux illisibles : %s", exc)
-        return []
+    # Repli : l'unique sonde de l'arbre (B3) — la page système lit alors le MÊME
+    # snapshot que l'admission du scheduler et le workflow.
+    return [{
+        "id": state.id,
+        "name": state.name,
+        "memory": {
+            "used": round(state.used_gib, 1),
+            "free": round(state.free_gib, 1),
+            "total": round(state.total_gib, 1),
+        },
+    } for state in inventory.snapshot()]
 
 
 def get_system_status() -> dict:

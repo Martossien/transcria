@@ -11,6 +11,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+from transcria.gpu import inventory
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
@@ -114,39 +115,8 @@ class GPUAllocator:
             return 0
 
     def get_gpu_info(self) -> list[dict]:
-        # Source LOCALE (C2.3) : détour dashboard externe retiré (repli = vraie source).
-        return self._get_gpu_info_local()
-
-    def _get_gpu_info_local(self) -> list[dict]:
-        gpus: list[dict] = []
-        try:
-            import torch
-
-            if torch.cuda.is_available():
-                for idx in range(torch.cuda.device_count()):
-                    free, total = torch.cuda.mem_get_info(idx)
-                    gpus.append(
-                        {
-                            "id": idx,
-                            "name": torch.cuda.get_device_name(idx),
-                            "cuda_visible_remapped": True,
-                            "memory": {
-                                "used": (total - free) / (1024**3),
-                                "free": free / (1024**3),
-                                "total": total / (1024**3),
-                            },
-                        }
-                    )
-        except Exception:
-            pass
-        return gpus
-
-    @staticmethod
-    def _visible_cuda_device_count() -> int | None:
-        visible = parse_cuda_visible_devices()
-        if visible is None:
-            return None
-        return len(visible)
+        # Délégation à l'unique sonde de l'arbre (B3) — même vision que VRAMManager.
+        return inventory.legacy_gpu_info()
 
     def _reserved_vram_mb_locked(self, gpu_index: int, exclude_job_phase: tuple[str, str] | None = None) -> int:
         total = 0

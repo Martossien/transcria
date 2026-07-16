@@ -82,6 +82,26 @@ def test_allocator_snapshot_matches_real_nvidia_smi(tmp_path):
         assert abs(gpu["memory"]["free"] * 1024 - smi["free_mb"]) < 3072
 
 
+def test_manager_and_allocator_share_one_real_snapshot(tmp_path):
+    """DoD B3 : snapshot identique entre les deux classes sur la machine multi-GPU réelle.
+
+    Identité et capacité doivent être STRICTEMENT égales ; la mémoire libre peut
+    fluctuer entre les deux lectures (autres process) — marge de quelques centaines
+    de Mo."""
+    from transcria.gpu.vram_manager import VRAMManager
+    from transcria.queue.allocator import GPUAllocator
+
+    cfg = make_config(jobs_dir=tmp_path / "jobs")
+    manager_view = VRAMManager(cfg).get_gpu_info()
+    allocator_view = GPUAllocator(cfg).get_gpu_info()
+
+    assert len(manager_view) == len(allocator_view) >= 1
+    for m, a in zip(manager_view, allocator_view):
+        assert (m["id"], m["name"]) == (a["id"], a["name"])
+        assert m["memory"]["total"] == a["memory"]["total"]
+        assert abs(m["memory"]["free"] - a["memory"]["free"]) * 1024 < 512  # Mo
+
+
 def test_vram_manager_kills_real_listening_process(tmp_path):
     """`_kill_port` (le chemin « processus réel » mort aux tests à fakes) tue
     réellement un processus qui écoute — SIGTERM puis SIGKILL au besoin."""

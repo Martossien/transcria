@@ -18,6 +18,7 @@ import logging
 import threading
 from typing import Any
 
+from transcria.gpu import inventory
 from transcria.gpu.model_load_lock import model_load_lock
 
 logger = logging.getLogger(__name__)
@@ -61,27 +62,16 @@ def _resolve_device(device: str) -> str:
 
 def _free_cuda_devices(required_mb: float) -> list[int]:
     """Ordinaux CUDA *visibles* ayant ≥ ``required_mb`` de VRAM libre, triés du plus
-    libre au moins libre. Lecture seule (``torch.cuda.mem_get_info``) : ne tue jamais
-    aucun process et ne touche pas au GPU du LLM — on se contente de le contourner.
-    Respecte ``CUDA_VISIBLE_DEVICES`` (torch ne voit que les GPU autorisés)."""
-    try:
-        import torch
-
-        if not torch.cuda.is_available():
-            return []
-        scored: list[tuple[float, int]] = []
-        for i in range(torch.cuda.device_count()):
-            try:
-                free, _total = torch.cuda.mem_get_info(i)
-            except Exception:  # noqa: BLE001 — device illisible → ignoré
-                continue
-            free_mb = free / (1024 * 1024)
-            if free_mb >= required_mb:
-                scored.append((free_mb, i))
-        scored.sort(reverse=True)
-        return [idx for _free, idx in scored]
-    except Exception:  # noqa: BLE001 — torch absent/cassé
-        return []
+    libre au moins libre. Lecture seule (l'unique sonde de l'arbre — B3) : ne tue
+    jamais aucun process et ne touche pas au GPU du LLM — on se contente de le
+    contourner. Respecte ``CUDA_VISIBLE_DEVICES`` (la sonde ne voit que les GPU
+    autorisés ; les cartes illisibles sont ignorées, les saines restent)."""
+    scored = sorted(
+        ((state.free_gib * 1024, state.id) for state in inventory.snapshot()
+         if state.free_gib * 1024 >= required_mb),
+        reverse=True,
+    )
+    return [idx for _free, idx in scored]
 
 
 def pick_device(device: str, required_mb: float = _SQUIM_VRAM_MB) -> str:

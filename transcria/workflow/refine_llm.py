@@ -15,6 +15,7 @@ import logging
 import re
 
 from transcria.config.llm_profiles import load_llm_profiles, select_profile
+from transcria.gpu import inventory
 from transcria.gpu.llm_backend import create_llm_backend
 
 logger = logging.getLogger(__name__)
@@ -42,12 +43,11 @@ def compute_transcript_budget_chars(config: dict) -> int:
     if explicit is not None:
         return int(explicit)
     try:
-        import torch
-
-        if torch.cuda.is_available():
-            count = torch.cuda.device_count()
-            per_card = min(torch.cuda.mem_get_info(i)[1] for i in range(count)) // (1024 * 1024)
-            total = sum(torch.cuda.mem_get_info(i)[1] for i in range(count)) // (1024 * 1024)
+        states = inventory.snapshot()
+        if states:
+            count = len(states)
+            per_card = int(min(state.total_gib for state in states) * 1024)
+            total = int(sum(state.total_gib for state in states) * 1024)
             backend = str(config.get("services", {}).get("backend") or "")
             engine = "ollama" if backend == "ollama" else "llamacpp"
             choice = select_profile(load_llm_profiles(config), engine,
