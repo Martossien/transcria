@@ -83,15 +83,6 @@ def _test_config(database_url: str):
             "enable_speaker_detection": False,
             "enable_quality_mode": False,
             "summary_llm": {"enabled": False},
-            # Le scheduler global démarré par create_app() poll la DB de test partagée.
-            # Avec le défaut (5 s) sa boucle de fond dispatche/dequeue les jobs que les
-            # tests de scheduler enfilent (jobs_dir ≠ tmp_path → audio introuvable →
-            # dequeue "failed"), ce qui rend ces tests flaky. 300 s (= max du schéma) le
-            # rend dormant pendant un test (< 1 s) : les tests pilotent eux-mêmes
-            # `_dispatch_iteration()`. NB : valeur **schéma-valide** (1-300) pour que le
-            # test de sauvegarde `/admin/config` (qui valide la config fusionnée) passe
-            # de façon déterministe. (use_listen_notify=False → pas de réveil par NOTIFY.)
-            "queue": {"poll_interval_s": 300},
         },
     }
 
@@ -119,12 +110,14 @@ def app(_pg_database):
     cfg = load_config()
     cfg = _deep_merge(cfg, _test_config(_pg_database))
 
-    from transcria.config import set_config
-    set_config(cfg)
-
     from app import create_app as _create_app
     os.chdir(_ORIG_CWD)
-    app = _create_app()
+    # C4 : aucun service de fond pendant les tests — le thread du scheduler ne démarre
+    # pas (les tests pilotent eux-mêmes `_dispatch_iteration()`) et la réconciliation
+    # des jobs interrompus n'est pas jouée. Remplace l'ancien hack `poll_interval_s: 300`
+    # (scheduler « dormant ») : plus de boucle de fond qui dispatche/dequeue les jobs
+    # des tests de scheduler (jobs_dir ≠ tmp_path → audio introuvable → flakiness).
+    app = _create_app(config=cfg, start_background_services=False)
     app.config.update({"TESTING": True, "WTF_CSRF_ENABLED": False})
 
     with app.app_context():

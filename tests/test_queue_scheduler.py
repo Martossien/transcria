@@ -457,18 +457,28 @@ def test_scheduler_defers_when_remote_vram_is_insufficient(app, owner_id, tmp_pa
 
 
 def test_second_scheduler_does_not_start_when_lock_held(app, owner_id, tmp_path):
-    """Garde-fou « ordonnanceur unique » (C1) : le scheduler global de la fixture
-    `app` détient déjà le verrou consultatif → un nouveau start() ne démarre PAS de
-    thread (sinon double-dispatch)."""
+    """Garde-fou « ordonnanceur unique » (C1) : un premier scheduler démarré détient
+    le verrou consultatif → un second start() ne démarre PAS de thread (sinon
+    double-dispatch). (C4 : la fixture `app` ne démarre plus de scheduler global —
+    le premier détenteur est posé explicitement par le test.)"""
+    from transcria.queue.scheduler_lock import SchedulerLock
+
     with app.app_context():
         cfg = _config(tmp_path)
-        sched = QueueScheduler(app, cfg, lambda *_: None)
-        sched.start()
+        # Détenteur posé via la primitive réelle (sans thread : pas de drainage de la
+        # file de test pendant que le verrou est tenu).
+        holder = SchedulerLock(db.engine)
+        assert holder.try_acquire() is True
         try:
-            assert sched.has_singleton_lock is False
-            assert sched._thread is None
+            sched = QueueScheduler(app, cfg, lambda *_: None)
+            sched.start()
+            try:
+                assert sched.has_singleton_lock is False
+                assert sched._thread is None
+            finally:
+                sched.stop()
         finally:
-            sched.stop()
+            holder.release()
 
 
 def test_web_role_executor_enqueues_without_starting_scheduler(app, owner_id, tmp_path):
