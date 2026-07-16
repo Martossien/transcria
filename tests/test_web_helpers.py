@@ -1,4 +1,7 @@
 """Tests des helpers d'affichage web."""
+import json
+
+from fakes import InMemoryJobFilesystem
 
 from transcria.web.lexicon_views import (
     enrich_lexicon_context_audio as _enrich_lexicon_context_audio,
@@ -147,28 +150,17 @@ def test_audio_diagnostic_view_clean_audio_has_no_advice_or_difficulty():
 
 
 def test_recover_summary_speaker_hints_repairs_missing_llm_fields():
-    class FakeFilesystem:
-        def __init__(self):
-            self.saved = None
-
-        @staticmethod
-        def load_text(path):
-            assert path == "summary/summary.md"
-            return """## Participants probables
+    fs = InMemoryJobFilesystem()
+    fs.save_text("summary/summary.md", """## Participants probables
 
 - SPEAKER_00 [Alex Dupont] : personne s'identifiant dans un extrait vocal (rôle non identifiable au-delà de l'auto-désignation)
-"""
+""")
 
-        def save_json(self, path, data):
-            assert path == "context/meeting_context.json"
-            self.saved = data
-
-    fs = FakeFilesystem()
     recovered = _recover_summary_speaker_hints(fs, {})
 
     assert recovered["speaker_roles_llm"]["SPEAKER_00"]["label"] == "Alex Dupont"
     assert "Alex Dupont" in recovered["participants_detectes"]
-    assert fs.saved == recovered
+    assert json.loads(fs.files["context/meeting_context.json"]) == recovered
 
 
 def test_processing_diagnostic_view_counts_reliability_and_limits_segments():

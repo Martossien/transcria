@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from fakes import FakeConsole
+
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -13,20 +15,6 @@ from transcria.installer.audiocpp_phase import (
     audiocpp_server_config,
     resolve_runtimes_dir,
 )
-
-
-class FakeConsole:
-    def info(self, m):
-        pass
-
-    def ok(self, m):
-        pass
-
-    def warn(self, m):
-        pass
-
-    def error(self, m):
-        pass
 
 
 def _make_complete(home: Path, commit: str) -> None:

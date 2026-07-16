@@ -13,17 +13,12 @@ from transcria.config import _deep_merge, load_config
 # binaire périmé en git). Garantit que les tests d'interface disposent des traductions sans
 # étape manuelle, en local comme en CI (où la CI compile aussi avant pytest).
 try:
+    from fakes import FakeConsole
     from transcria.installer.i18n_phase import I18nPlan, apply_i18n
-
-    class _SilentConsole:
-        def info(self, m: str) -> None: ...
-        def ok(self, m: str) -> None: ...
-        def warn(self, m: str) -> None: ...
-        def error(self, m: str) -> None: ...
 
     apply_i18n(
         I18nPlan(translations_dir=Path(__file__).resolve().parents[1] / "transcria" / "web" / "translations"),
-        console=_SilentConsole(),
+        console=FakeConsole(),
     )
 except Exception:  # noqa: BLE001 — l'absence de traductions ne doit pas casser la collecte des tests
     pass

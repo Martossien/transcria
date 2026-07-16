@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from fakes import FakeConsole
+
 from transcria.installer.moss_site_phase import (
     MOSS_SITE_SPEC,
     MossSiteError,
@@ -10,23 +12,6 @@ from transcria.installer.moss_site_phase import (
     apply_moss_site,
     site_is_complete,
 )
-
-
-class FakeConsole:
-    def __init__(self):
-        self.messages = []
-
-    def info(self, m):
-        self.messages.append(("info", m))
-
-    def ok(self, m):
-        self.messages.append(("ok", m))
-
-    def warn(self, m):
-        self.messages.append(("warn", m))
-
-    def error(self, m):
-        self.messages.append(("error", m))
 
 
 def _make_complete_site(site: Path) -> None:

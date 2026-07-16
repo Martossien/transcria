@@ -4,23 +4,14 @@ from pathlib import Path
 
 import pytest
 
+from fakes import FakeConsole
+
 from transcria.installer.parakeetcpp_phase import (
     PARAKEETCPP_PINNED_COMMIT,
     ParakeetcppPhaseError,
     ParakeetcppPlan,
     apply_parakeetcpp,
 )
-
-
-class FakeConsole:
-    def info(self, m):
-        pass
-
-    def ok(self, m):
-        pass
-
-    def error(self, m):
-        pass
 
 
 def _complete(home: Path, commit: str) -> None:
