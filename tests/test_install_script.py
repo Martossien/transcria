@@ -246,8 +246,8 @@ def test_install_script_delegates_final_summary_to_installer_cli():
     assert "print_database_summary" not in content
     assert "print_configuration_summary" not in content
     assert "-m transcria.installer.cli models summary" not in content
-    assert "python_module transcria.install_summary database" not in content
-    assert "python_module transcria.install_summary configuration" not in content
+    assert "summary-log database" not in content
+    assert "summary-log configuration" not in content
     assert 'echo -e "${BOLD}Lancer le nœud de ressources' not in content
     assert 'echo -e "${BOLD}Modèles IA' not in content
 
@@ -420,7 +420,7 @@ def test_install_script_has_no_inline_final_status_rendering():
 def test_install_script_delegates_configuration_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_summary setup-log" in content
+    assert "-m transcria.installer.cli summary-log setup-log" in content
     assert "log_config_setup_event" in content
     assert "config.yaml existant conservé" not in content
     assert "Ancien config.yaml sauvegardé" not in content

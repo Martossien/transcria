@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from transcria.install_systemd import (
+from transcria.installer.systemd_lib import (
     SystemdRenderContext,
     build_unit_plan,
     install_rendered_unit,

@@ -15,7 +15,7 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
-from transcria.installer import hardware, imports_check, models, paths, prerequisites, profiles
+from transcria.installer import hardware, imports_check, models, paths, prerequisites, profiles, summary_lib
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -613,6 +613,9 @@ _FORWARDED_HELPERS: dict[str, Callable[[list[str] | None], int]] = {
     "check-imports": imports_check.main,
     "models": models.main,
     "arbitrage": _forward_arbitrage,
+    # « summary » est la PHASE (bilan final) ; « summary-log » est le helper de rendu
+    # des messages de configuration (ex-install_summary setup-log).
+    "summary-log": summary_lib.main,
 }
 
 

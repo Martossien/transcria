@@ -7,7 +7,7 @@ template, préparation/chown des répertoires de logs, rendu depuis le template 
 et installation privilégiée (copie + `daemon-reload` + `enable`, ou écriture d'un fichier
 `.adapted` quand `sudo` manque).
 
-La logique métier (plan, rendu, installation) vit déjà dans `transcria.install_systemd`
+La logique métier (plan, rendu, installation) vit déjà dans `transcria.installer.systemd_lib`
 (fonctions pures + `install_rendered_unit` à runner injectable) : cette phase l'appelle
 **en process** au lieu de la piloter via des lignes `|` reparsées par le shell. Les
 opérations système (systemctl, chown récursif, existence d'utilisateur, création de
@@ -26,7 +26,8 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from transcria.install_messages import t
-from transcria.install_systemd import (
+from transcria.installer.paths import directory_specs_for_kind, ensure_directories
+from transcria.installer.systemd_lib import (
     SystemdRenderContext,
     SystemdUnitPlan,
     build_unit_plan,
@@ -36,7 +37,6 @@ from transcria.install_systemd import (
     render_setup_log,
     render_split_unit,
 )
-from transcria.installer.paths import directory_specs_for_kind, ensure_directories
 
 Runner = Callable[..., subprocess.CompletedProcess]
 SystemctlEnabled = Callable[[str], bool]

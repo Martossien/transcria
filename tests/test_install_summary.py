@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from transcria.install_summary import (
+from transcria.installer.summary_lib import (
     main,
     parse_non_negative_int,
     render_configuration_summary,

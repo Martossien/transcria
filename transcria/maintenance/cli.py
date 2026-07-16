@@ -20,7 +20,7 @@ from pathlib import Path
 from transcria import __version__
 from transcria.audit.store import AuditStore
 from transcria.config.loader import get_config_path, load_config
-from transcria.install_opencode import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
+from transcria.installer.opencode_lib import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
 from transcria.jobs.store import JobStore
 from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
 from transcria.maintenance.restore import describe_restore, restore_backup

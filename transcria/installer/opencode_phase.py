@@ -3,7 +3,7 @@
 Troisième tranche fondue depuis `install.sh` (SECTION 9). Orchestration :
 détecter le binaire opencode → s'il manque, proposer (interactif) de le télécharger
 → configurer le provider local via `setup_opencode.py`. Réutilise en process les
-primitives de `transcria.install_opencode` (détection, install réseau, PATH, chown
+primitives de `transcria.installer.opencode_lib` (détection, install réseau, PATH, chown
 best-effort) et son texte de log audité.
 
 Tourne sous le **python du venv** (importe `config.yaml_file` / PyYAML) ; le `cli`
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
-from transcria.install_opencode import (
+from transcria.installer.opencode_lib import (
     OPENCODE_INSTALL_URL,
     OpencodeDetection,
     _best_effort_chown_tree,

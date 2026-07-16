@@ -13,7 +13,7 @@ déterministe et testable de cette phase.
 Contrairement à la phase environnement Python (pré-venv, interpréteur système), cette
 phase tourne sous le **python du venv** : elle importe `config.yaml_file` (PyYAML) et
 lance `bootstrap_config.py` (dépendances du projet). Les messages reprennent au mot
-près ceux de `transcria.install_summary` (texte audité et déjà testé).
+près ceux de `transcria.installer.summary_lib` (texte audité et déjà testé).
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from transcria.config.env_file import (
     update_env_file,
 )
 from transcria.config.yaml_file import backup_yaml_file, set_yaml_file_value
-from transcria.install_summary import render_setup_log
+from transcria.installer.summary_lib import render_setup_log
 
 Runner = Callable[..., Any]
 _INFERENCE_KEY_COMMENT = "Clé API du service inference_service (/infer/* et /engines/*)."

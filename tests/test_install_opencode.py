@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from transcria.install_opencode import (
+from transcria.installer.opencode_lib import (
     OpencodeDetection,
     classify_opencode_install,
     detect_opencode,
@@ -141,7 +141,7 @@ def test_opencode_version_reads_stderr_when_stdout_empty():
 
 
 def test_install_opencode_cli_prints_version(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_opencode.opencode_version", lambda _binary: "opencode 1.2.3")
+    monkeypatch.setattr("transcria.installer.opencode_lib.opencode_version", lambda _binary: "opencode 1.2.3")
 
     assert main(["--version", "--bin", "/opt/opencode"]) == 0
 
@@ -205,7 +205,7 @@ def test_find_opencode_binary_returns_none_when_missing(tmp_path: Path):
 def test_install_opencode_cli_finds_binary(capsys, monkeypatch, tmp_path: Path):
     candidate = tmp_path / "opencode"
     monkeypatch.setattr(
-        "transcria.install_opencode.find_opencode_binary",
+        "transcria.installer.opencode_lib.find_opencode_binary",
         lambda **_kwargs: candidate,
     )
 
@@ -216,8 +216,8 @@ def test_install_opencode_cli_finds_binary(capsys, monkeypatch, tmp_path: Path):
 
 def test_detect_opencode_returns_binary_and_version(monkeypatch, tmp_path: Path):
     candidate = tmp_path / "opencode"
-    monkeypatch.setattr("transcria.install_opencode.find_opencode_binary", lambda **_kwargs: candidate)
-    monkeypatch.setattr("transcria.install_opencode.opencode_version", lambda binary: f"{binary.name} 1.0")
+    monkeypatch.setattr("transcria.installer.opencode_lib.find_opencode_binary", lambda **_kwargs: candidate)
+    monkeypatch.setattr("transcria.installer.opencode_lib.opencode_version", lambda binary: f"{binary.name} 1.0")
 
     detection = detect_opencode(opencode_home=tmp_path, user_home=tmp_path)
 
@@ -234,7 +234,7 @@ def test_render_opencode_detection_shell_is_filterable(tmp_path: Path):
 def test_install_opencode_cli_detects_binary(capsys, monkeypatch, tmp_path: Path):
     candidate = tmp_path / "opencode"
     monkeypatch.setattr(
-        "transcria.install_opencode.detect_opencode",
+        "transcria.installer.opencode_lib.detect_opencode",
         lambda **_kwargs: OpencodeDetection(binary=candidate, version="opencode 1.2.3"),
     )
 
@@ -340,7 +340,7 @@ def test_install_opencode_cli_installs_binary(capsys, monkeypatch, tmp_path: Pat
     home = tmp_path / "home"
 
     monkeypatch.setattr(
-        "transcria.install_opencode.install_opencode_binary",
+        "transcria.installer.opencode_lib.install_opencode_binary",
         lambda **kwargs: kwargs["opencode_home"] == home and kwargs["service_user"] == "transcria",
     )
 

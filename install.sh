@@ -681,7 +681,7 @@ log_section "$(t sec_config)"
 
 log_config_setup_event() {
     local event="$1" value="${2:-}"
-    emit_rendered_log "configuration : $event" -m transcria.install_summary setup-log \
+    emit_rendered_log "configuration : $event" -m transcria.installer.cli summary-log setup-log \
         --event "$event" \
         --profile "$INSTALL_PROFILE" \
         --runtime-role "${INSTALL_RUNTIME_ROLE:-}" \

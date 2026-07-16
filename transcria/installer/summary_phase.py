@@ -17,7 +17,6 @@ from typing import Protocol
 
 from transcria.config.yaml_file import count_text_occurrences
 from transcria.install_messages import t
-from transcria.install_summary import render_configuration_summary, render_database_summary
 from transcria.installer.models import render_model_summary
 from transcria.installer.profiles import (
     SummaryRenderContext,
@@ -25,6 +24,7 @@ from transcria.installer.profiles import (
     render_profile_summary_text,
     resolve_install_plan,
 )
+from transcria.installer.summary_lib import render_configuration_summary, render_database_summary
 
 
 class _ConsoleLike(Protocol):

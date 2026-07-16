@@ -4,7 +4,7 @@ Première tranche d'orchestration migrée de `install.sh` (SECTION 2-4) vers
 l'installateur Python. Comportement **préservé à l'identique** : le venv est créé
 avec l'interpréteur système (jamais re-pointé vers le venv dans `install.sh`), la
 détection de PyTorch s'appuie donc sur ce même interpréteur (via
-`transcria.install_torch.build_install_plan`), et les commandes `pip` ciblent
+`transcria.installer.torch_env.build_install_plan`), et les commandes `pip` ciblent
 explicitement le `python` du venv (équivalent du `pip` activé côté shell).
 
 Le runner de sous-processus est injectable pour des tests sans réseau ni venv réel.
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Protocol
 
 from transcria.install_messages import t
-from transcria.install_torch import build_install_plan
+from transcria.installer.torch_env import build_install_plan
 
 Runner = Callable[..., Any]
 

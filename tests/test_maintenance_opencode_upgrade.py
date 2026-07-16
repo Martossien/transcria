@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import transcria.maintenance.cli as cli
-from transcria.install_opencode import OpencodeDetection, OpencodeUpgradeResult
+from transcria.installer.opencode_lib import OpencodeDetection, OpencodeUpgradeResult
 
 
 def _patch_common(monkeypatch, detection: OpencodeDetection):

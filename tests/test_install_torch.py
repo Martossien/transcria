@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from transcria.install_torch import (
+from transcria.installer.torch_env import (
     TorchInstallPlan,
     build_install_plan,
     detect_installed_torch_cuda_version,
@@ -76,7 +76,7 @@ def test_install_torch_cli_outputs_warning_in_shell_assignments(capsys):
 
 
 def test_install_torch_cli_outputs_installed_cuda(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "12.6")
+    monkeypatch.setattr("transcria.installer.torch_env.detect_installed_torch_cuda_version", lambda: "12.6")
 
     assert main(["--installed-cuda"]) == 0
 
@@ -84,7 +84,7 @@ def test_install_torch_cli_outputs_installed_cuda(capsys, monkeypatch):
 
 
 def test_install_torch_cli_outputs_nothing_when_torch_missing(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "")
+    monkeypatch.setattr("transcria.installer.torch_env.detect_installed_torch_cuda_version", lambda: "")
 
     assert main(["--installed-cuda"]) == 0
 
@@ -120,7 +120,7 @@ def test_detect_installed_torch_cuda_version_uses_subprocess(monkeypatch):
         calls.append(cmd)
         return SimpleNamespace(returncode=0, stdout="12.6\n")
 
-    monkeypatch.setattr("transcria.install_torch.subprocess.run", fake_run)
+    monkeypatch.setattr("transcria.installer.torch_env.subprocess.run", fake_run)
 
     assert detect_installed_torch_cuda_version() == "12.6"
     assert calls[0][1] == "-c"
@@ -137,7 +137,7 @@ def test_render_install_plan_shell_is_filterable():
 
 
 def test_install_torch_cli_outputs_install_plan(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_torch.detect_installed_torch_cuda_version", lambda: "")
+    monkeypatch.setattr("transcria.installer.torch_env.detect_installed_torch_cuda_version", lambda: "")
 
     assert main(["--install-plan", "--install-torch", "true", "--cuda-version", "12.4"]) == 0
 
