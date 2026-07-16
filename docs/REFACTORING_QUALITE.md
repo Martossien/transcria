@@ -52,7 +52,10 @@
 > ✅ **C2 livrée (2026-07-15)** — découpe d'opencode_runner (voir l'encadré au §C2 :
 > prompt_locator.py + llm_parsing.py, 1543 → 812 l., délégateurs/ré-exports — zéro site
 > d'appel modifié).
-> Prochaines vagues : **C4/C5**, puis B3 (GPU, en dernier), C6.
+> ✅ **C4 livrée (2026-07-16)** — composition de l'app et des tests (voir l'encadré au §C4 :
+> create_app(config, start_background_services), app_services.py, hack poll_interval_s mort,
+> tests/builders + tests/fakes, test étoile polaire §5.2 VERT, marqueur gpu_real + smoke réel).
+> Prochaines vagues : **C5**, puis B3 (GPU, en dernier), C6.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -1051,7 +1054,24 @@ une vague touche un fichier), jamais par campagne dédiée. S'y ajoute (§3.13) 
 les tests des validateurs `_check_*` de config_schema.py** (205 lignes non testées,
 cible ≥ 90 %) — le schéma est le seul rempart des configs utilisateur.
 
-#### C4 — Composition de l'app et des tests *(effort M)*
+#### ✅ C4 — Composition de l'app et des tests *(effort M — LIVRÉE 2026-07-16, 3 lots)*
+
+> **Réalisation** : lot 1 = `create_app(config=None, *, start_background_services=True)`
+> (config : None | chemin | dict) ; les fabriques `configure_*`/`build_*`/`register_*`
+> vivent dans `transcria/app_services.py` (compté par les gates — app.py racine ne l'était
+> pas), app.py ré-exporte les résolveurs purs (zéro site de test modifié). Le conftest
+> passe `start_background_services=False` : le hack `poll_interval_s: 300` est mort, plus
+> aucune boucle de fond ne touche la base de test (le test du verrou d'ordonnanceur pose
+> désormais son propre détenteur via `SchedulerLock`). Lot 2 = `tests/builders/` (config
+> déterministe sur les défauts du loader, jobs DB + `JobStub` détaché, artefacts canoniques)
+> et `tests/fakes/` (console, filesystem mémoire, GPU, LLM, store, `FakeWorkflowRunner` qui
+> écrit les artefacts de ses phases) ; doublons migrés (FakeConsole ×4, FakeFilesystem) ;
+> **le test étoile polaire du §5.2 est VERT** (`tests/test_pipeline_no_infra.py` : pipeline
+> complet + reprise + échec d'étape sans Flask/PG/GPU, < 1 s — couture restante assumée :
+> `JobStore` référence de module, injectée par monkeypatch à la source jusqu'au moteur B3).
+> Lot 3 = marqueur `gpu_real` + `tests/test_gpu_real_smoke.py` (§3.14 : allocateur vs
+> nvidia-smi réel, kill réel, superviseur lance/arrête un stub réel) — 3/3 sur les 2× RTX
+> 5090, sauté partout ailleurs. C'est le filet outillé de B3.
 
 - `create_app(config=None, *, start_background_services=True)` : les tests passent
   `False` → **supprime le hack `poll_interval_s: 300`** du conftest (le scheduler ne
