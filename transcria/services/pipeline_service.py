@@ -2,8 +2,11 @@ import logging
 import time
 from pathlib import Path
 
+from transcria.database import db
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
+from transcria.jobs.timing_store import JobTimingStore
 from transcria.logging_setup import get_structured_logger
 from transcria.services import (
     pipeline_admission,
@@ -19,11 +22,14 @@ from transcria.services.pipeline_steps import (
     scene_filter,
     source_separation,
 )
+from transcria.workflow import resume
 from transcria.workflow.cancellation import CancellationToken
 from transcria.workflow.checkpoints import CheckpointManager
 from transcria.workflow.concurrency_profile import StageMetrics
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
+from transcria.workflow.profiles import profile_for_job
 from transcria.workflow.progress import WorkflowProgressReporter
+from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import is_cancel_requested
 
 logger = logging.getLogger(__name__)
@@ -33,7 +39,6 @@ class PipelineService:
 
     def __init__(self, config: dict):
         self.config = config
-        from transcria.workflow.runner import WorkflowRunner
         self.runner = WorkflowRunner(JobStore, config)  # type: ignore[arg-type]
         self._progress = WorkflowProgressReporter(config)
 
@@ -137,11 +142,9 @@ class PipelineService:
         d'écriture ne doit JAMAIS interrompre le pipeline)."""
         try:
             if audio_seconds and audio_seconds > 0:
-                from transcria.jobs.timing_store import JobTimingStore
                 JobTimingStore.record(profile_id, stage, audio_seconds, elapsed)
         except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
             try:
-                from transcria.database import db
                 db.session.rollback()
             except Exception:  # noqa: BLE001
                 pass
@@ -164,15 +167,12 @@ class PipelineService:
 
         # Pipeline REPRENABLE v2 : les marqueurs/empreintes vivent dans CheckpointManager
         # (voir transcria/workflow/checkpoints.py et docs/PIPELINE_REPRISE.md).
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.workflow import resume
 
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         checkpoints = CheckpointManager(JobStore, self.config, job, fs, sl)
 
         # Modèle de temps calibré machine : profil + durée audio pour historiser CHAQUE
         # étape terminée (source unique des estimations wizard/ETA/file/email). Best-effort.
-        from transcria.workflow.profiles import profile_for_job
 
         _timing_profile = profile_for_job(job)
         _timing_profile_id = _timing_profile.id if _timing_profile is not None else (mode or "")

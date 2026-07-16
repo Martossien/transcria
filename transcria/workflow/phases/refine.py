@@ -1,15 +1,20 @@
 """Phase AFFINAGE — chat de raffinement des livrables (vague B1, lot 2).
 
-Corps extraits de ``WorkflowRunner``. Attention aux coutures : les tests
-substituent ``OpenCodeRunner`` au niveau du MODULE ``opencode_runner`` — les
-imports différés dans ``run``/``apply_refine`` doivent le rester (résolution
-au moment de l'appel).
+Corps extraits de ``WorkflowRunner``. Coutures : les tests substituent
+``OpenCodeRunner`` et ``chat_completion`` ICI (attributs de CE module),
+les imports étant faits en tête (vague C5).
 """
 import json
 import logging
 
-from transcria.gpu.opencode_runner import resolve_output_language
+from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES, _sanitize_render_options
+from transcria.exports.package_builder import PackageBuilder
+from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language, resolve_prompt_file
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
+from transcria.workflow.refine_llm import build_discuss_messages, chat_completion, compute_transcript_budget_chars, truncate_transcript
+from transcria.workflow.refine_store import RefineStore, extract_proposal
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +87,6 @@ def run(runner, job: Job, config: dict) -> dict:
     """
     # Différé : les tests substituent OpenCodeRunner au niveau du module — la
     # résolution doit se faire à l'appel, pas à l'import de cette phase.
-    from transcria.gpu.opencode_runner import OpenCodeRunner
-    from transcria.jobs.filesystem import JobFilesystem
-    from transcria.workflow.refine_store import RefineStore
 
     refine_cfg = config.get("workflow", {}).get("refine_chat", {}) or {}
     if refine_cfg.get("enabled", True) is False:
@@ -152,7 +154,6 @@ def run(runner, job: Job, config: dict) -> dict:
         structured_json = json.dumps(
             meeting_ctx.get("structured_data") or {}, ensure_ascii=False, indent=2,
         )
-        from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES
 
         current_options = fs.load_json("context/render_options.json") or {}
         options_json = json.dumps({
@@ -168,9 +169,6 @@ def run(runner, job: Job, config: dict) -> dict:
 
         if kind == "discuss":
             # Lecture seule → complétion DIRECTE (pas d'opencode, pas de workspace).
-            from transcria.gpu.opencode_runner import resolve_prompt_file
-            from transcria.workflow.refine_llm import build_discuss_messages, chat_completion
-            from transcria.workflow.refine_store import extract_proposal
 
             prompt_path = resolve_prompt_file(config, "refine_discuss_prompt.txt", output_language)
             with open(prompt_path, encoding="utf-8") as fh:
@@ -178,10 +176,6 @@ def run(runner, job: Job, config: dict) -> dict:
             srt_text = (
                 fs.load_text("metadata/transcription_corrigee.srt")
                 or fs.load_text("metadata/transcription.srt") or ""
-            )
-            from transcria.workflow.refine_llm import (
-                compute_transcript_budget_chars,
-                truncate_transcript,
             )
 
             budget = compute_transcript_budget_chars(config)
@@ -217,8 +211,6 @@ def run(runner, job: Job, config: dict) -> dict:
             store.append_turn(role="assistant", kind=kind, text=answer,
                               max_turns=max_turns, proposal=proposal)
             return {"success": True, "kind": "discuss"}
-
-        from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 
         workspace = AgentWorkspace(fs, "refine", work_root=resolve_agent_work_root(config))
         staged_srt = workspace.stage("metadata/transcription_corrigee.srt")
@@ -281,10 +273,8 @@ def apply_refine(runner, fs, store, workspace, job: Job, config: dict, *, kind: 
     tour assistant explicatif, zéro effet ; 3) snapshot de version (état AVANT) ;
     4) write-back ; 5) reconstruction du package (best-effort) ; 6) tour assistant.
     """
-    from transcria.exports.docx_report import _sanitize_render_options
 
     # Différé : OpenCodeRunner est substitué au niveau du module par les tests.
-    from transcria.gpu.opencode_runner import OpenCodeRunner
 
     rmsg = refine_messages(resolve_output_language(job))
 
@@ -357,8 +347,6 @@ def apply_refine(runner, fs, store, workspace, job: Job, config: dict, *, kind: 
         applied["render_options_updated"] = True
 
     try:
-        from transcria.exports.package_builder import PackageBuilder
-
         PackageBuilder(config).build_package(job)
     except Exception:
         logger.warning("Affinage : reconstruction du package échouée (le DOCX est "

@@ -7,7 +7,6 @@ from transcria.context.meeting_context import MeetingContextManager
 from transcria.exports.docx_report import generate_docx_report
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
-from transcria.workflow.profiles import profile_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +25,10 @@ class PackageBuilder:
 
         # Niveaux selon le profil (Phase 7). Job legacy / sans profil → comportement complet
         # (full), strictement identique à l'historique : aucune régression de livrable.
+
+        # Différé : cycle d'__init__ — workflow/ (phases export/refine) importe exports/ ;
+        # une couche basse ne tire jamais l'orchestration en tête.
+        from transcria.workflow.profiles import profile_for_job
 
         profile = profile_for_job(job)
         zip_level = profile.zip_level if profile is not None else "full"

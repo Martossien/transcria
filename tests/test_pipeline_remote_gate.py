@@ -24,8 +24,9 @@ _REMOTE_CFG = {
 def _service(monkeypatch, verdict):
     svc = PipelineService.__new__(PipelineService)   # sans __init__ (pas de WorkflowRunner)
     svc.config = dict(_REMOTE_CFG)
+    # C5 : le pré-vol importe la gate en tête — patcher le consommateur.
     monkeypatch.setattr(
-        "transcria.inference.resource_gate.prepare_remote_resources",
+        "transcria.services.pipeline_remote_gate.prepare_remote_resources",
         lambda config, **kw: verdict,
     )
     return svc

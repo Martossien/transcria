@@ -16,6 +16,13 @@ from transcria.gpu.opencode_runner import (
 from transcria.jobs.models import Job
 from transcria.workflow.agent_workspace import AgentWorkspace, resolve_agent_work_root
 from transcria.workflow.progress import progress_msg
+from transcria.workflow.refine_llm import chat_completion
+from transcria.workflow.type_field_extraction import (
+    build_extraction_messages,
+    extract_fields_from_type,
+    merge_into_structured_data,
+    parse_extracted_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -216,14 +223,6 @@ def run_type_field_extraction(runner, job: Job, config: dict) -> dict:
     Ne tourne que si un type avec ``extract_fields`` est matérialisé dans le job —
     coût GPU nul pour tous les autres cas (le pipeline ne l'insère que si nécessaire).
     """
-    # Différé : n'est utile que si un type personnalisé matérialise des extract_fields.
-    from transcria.workflow.type_field_extraction import (
-        build_extraction_messages,
-        extract_fields_from_type,
-        merge_into_structured_data,
-        parse_extracted_fields,
-    )
-
     fs = runner._get_fs(config, job.id)
     meeting_ctx = fs.load_json("context/meeting_context.json") or {}
     custom_type = meeting_ctx.get("custom_type")
@@ -257,9 +256,6 @@ def run_type_field_extraction(runner, job: Job, config: dict) -> dict:
         if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
             logger.warning("extract_type_fields: LLM d'arbitrage indisponible — champs de type non extraits")
             return {"success": True, "skipped": True, "reason": "llm_unavailable"}
-
-        # Différé : client HTTP du chat d'affinage, réutilisé pour l'appel direct.
-        from transcria.workflow.refine_llm import chat_completion
 
         messages = build_extraction_messages(transcript=transcript, extract_fields=fields)
         try:

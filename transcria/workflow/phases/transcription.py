@@ -9,6 +9,8 @@ from pathlib import Path
 
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.stt.transcriber_factory import get_backend_vram_mb
+from transcria.stt.transcription import Transcriber
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)
@@ -26,7 +28,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
     )
 
     # Différé : la factory STT tire la chaîne config+catalogues (~0,6 s).
-    from transcria.stt.transcriber_factory import get_backend_vram_mb
 
     backend = config.get("models", {}).get("stt_backend", "cohere")
     required_vram_mb = get_backend_vram_mb(backend, config)
@@ -54,7 +55,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
 
     try:
         # Différé : le transcripteur charge la chaîne STT (torch) — rien à faire au boot.
-        from transcria.stt.transcription import Transcriber
 
         transcriber = Transcriber(config, gpu_index=gpu)
         result = transcriber.transcribe(job, Path(audio_path))

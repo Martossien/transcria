@@ -127,12 +127,15 @@ def env(tmp_path, monkeypatch):
     runner.vram = _FakeVram()
     runner.progress = _FakeProgress()
 
-    import transcria.gpu.opencode_runner as ocr
-    monkeypatch.setattr(ocr, "OpenCodeRunner", _FakeOpenCode)
+    # C5 : les phases importent OpenCodeRunner et chat_completion en tête — patcher les consommateurs
+    # (refine pour discuss/apply, final_review pour l'extraction des champs de type).
+    import transcria.workflow.phases.final_review as final_review_mod
+    import transcria.workflow.phases.refine as refine_mod
+    monkeypatch.setattr(refine_mod, "OpenCodeRunner", _FakeOpenCode)
     _FakeOpenCode.outputs, _FakeOpenCode.seen = {}, {}
 
-    import transcria.workflow.refine_llm as rllm
-    monkeypatch.setattr(rllm, "chat_completion", _FakeChat.call)
+    monkeypatch.setattr(refine_mod, "chat_completion", _FakeChat.call)
+    monkeypatch.setattr(final_review_mod, "chat_completion", _FakeChat.call)
     _FakeChat.answer, _FakeChat.seen = "", {}
 
     job = SimpleNamespace(id="j1", title="Réunion test")
@@ -228,12 +231,12 @@ class TestRunRefineDiscuss:
     def test_llm_call_failure_gives_feedback_turn(self, env, monkeypatch):
         env.store.write_request(kind="discuss", message="?")
 
-        import transcria.workflow.refine_llm as rllm
+        import transcria.workflow.phases.refine as refine_mod
 
         def _boom(config, messages, **kwargs):
             raise RuntimeError("LLM injoignable")
 
-        monkeypatch.setattr(rllm, "chat_completion", _boom)
+        monkeypatch.setattr(refine_mod, "chat_completion", _boom)
         result = env.runner.run_refine(env.job, env.config)
         assert result["success"] is True                   # best-effort
         assert env.store.load_turns()[-1]["role"] == "assistant"
@@ -245,8 +248,8 @@ class TestRunRefineDiscuss:
             def run_refine(self, **kwargs):
                 raise RuntimeError("opencode indisponible")
 
-        import transcria.gpu.opencode_runner as ocr
-        ocr.OpenCodeRunner = _Boom
+        import transcria.workflow.phases.refine as refine_mod
+        refine_mod.OpenCodeRunner = _Boom
         result = env.runner.run_refine(env.job, env.config)
         assert result["success"] is True                   # best-effort
         assert env.store.load_turns()[-1]["role"] == "assistant"

@@ -7,13 +7,14 @@ Remplace le `1800 s` forfaitaire historique de `QueueStore.estimate_wait_time`. 
 """
 from __future__ import annotations
 
+from transcria.jobs.filesystem import JobFilesystem
+from transcria.workflow.profiles import get_profile, is_profile
+from transcria.workflow.timing_model import format_duration_fr, legacy_machine_seconds
+from transcria.workflow.timing_service import estimate_queue_wait_seconds
+
 
 def queue_wait_estimates(config: dict, entries: list) -> dict[str, dict]:
     """Renvoie ``{job_id: {"seconds", "text"}}`` pour chaque entrée EN ATTENTE."""
-    from transcria.jobs.filesystem import JobFilesystem
-    from transcria.workflow.profiles import get_profile, is_profile
-    from transcria.workflow.timing_model import format_duration_fr, legacy_machine_seconds
-    from transcria.workflow.timing_service import estimate_queue_wait_seconds
 
     jobs_dir = config.get("storage", {}).get("jobs_dir", "./jobs")
 

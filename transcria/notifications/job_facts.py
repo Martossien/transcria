@@ -10,9 +10,6 @@ import logging
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.notifications.mailer import send_job_notification_async
-from transcria.workflow.profiles import profile_for_job
-from transcria.workflow.timing_model import format_duration_fr, format_range_fr
-from transcria.workflow.timing_service import estimate_processing
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +34,12 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
     audio_s = _audio_seconds(config, job.id)
 
     facts: list[tuple[str, str]] = []
+    # Différés : cycle d'__init__ — workflow/ (phase summary) importe notifications/ ;
+    # une couche basse ne tire jamais l'orchestration en tête.
+    from transcria.workflow.profiles import profile_for_job
+    from transcria.workflow.timing_model import format_duration_fr, format_range_fr
+    from transcria.workflow.timing_service import estimate_processing
+
     detected = ctx.get("meeting_type") or ctx.get("type_suggere")
     if detected:
         facts.append((N_("Type détecté"), str(detected)))
@@ -58,6 +61,9 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
 def completed_facts(config: dict, job, processing_seconds: float | None = None) -> list[tuple[str, str]]:
     """Temps réel de traitement, score qualité, nombre de points à vérifier — pour
     l'email « transcription terminée »."""
+
+    # Différé : cycle d'__init__ — workflow/ (phase summary) importe notifications/.
+    from transcria.workflow.timing_model import format_duration_fr
 
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     facts: list[tuple[str, str]] = []

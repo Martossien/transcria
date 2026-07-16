@@ -10,11 +10,16 @@ import logging
 import time
 from pathlib import Path
 
+from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.notifications.job_facts import notify_summary_ready
+from transcria.quality.audio_quality import AudioQualityEvaluator
+from transcria.workflow.profiles import profile_for_job
 from transcria.workflow.progress import progress_msg
+from transcria.workflow.transitions import utcnow_iso
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +129,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         # La LLM n'a rien produit après retries : on NE valide PAS le résumé (pas de
         # SUMMARY_DONE, meeting_context non corrompu). Le job revient à son état
         # pré-résumé → relançable via « Générer le résumé » (STT réutilisé du cache).
-        from transcria.workflow.transitions import utcnow_iso
 
         runner.store.update_extra_data(
             job.id,
@@ -162,25 +166,24 @@ def _finalize_success(runner, job: Job, result: dict, config: dict, sl, t0: floa
     # Modèle de temps calibré machine : historiser la phase RÉSUMÉ (STT+diarisation+
     # LLM) — best-effort, jamais bloquant. Alimente l'estimation totale du wizard.
     try:
-        from transcria.jobs.timing_store import JobTimingStore
-        from transcria.workflow.profiles import profile_for_job
-
         audio_s = float(
             (runner._get_fs(config, job.id).load_json("metadata/audio_analysis.json") or {})
             .get("duration_seconds") or 0.0
         )
         prof = profile_for_job(job)
+        # Différé : cycle d'__init__ — timing_store importe workflow.timing_model en tête
+        # (WINDOW en défaut de paramètre) ; cette phase est DANS la chaîne d'init de workflow/.
+        from transcria.jobs.timing_store import JobTimingStore
+
         JobTimingStore.record(prof.id if prof is not None else "", "summary",
                               audio_s, summary_elapsed)
     except Exception:  # noqa: BLE001 — observabilité, jamais bloquant
         pass
     # Email « pré-analyse prête, à vous de jouer » : point UNIQUE (couvre le résumé
     # synchrone via la route ET le worker). L'utilisateur parti est rappelé quand son
-    # attention redevient utile — cf. revue macro emails. Import différé : les goldens
-    # substituent notify_summary_ready À LA SOURCE (job_facts), au moment de l'appel.
+    # attention redevient utile — cf. revue macro emails. Les goldens substituent
+    # notify_summary_ready ICI (chez le consommateur), l'import étant en tête (C5).
     try:
-        from transcria.notifications.job_facts import notify_summary_ready
-
         notify_summary_ready(config, job)
     except Exception:  # noqa: BLE001 — notification best-effort
         pass
@@ -228,8 +231,6 @@ def run_audio_scene_before_participants(runner, job: Job, audio_path: str, confi
 
     try:
         # Différés : la chaîne audio (librosa/torch) n'a rien à faire au boot du workflow.
-        from transcria.audio.scene_analyzer import AudioSceneAnalyzer
-        from transcria.quality.audio_quality import AudioQualityEvaluator
 
         analyzer = AudioSceneAnalyzer(config)
         scene = analyzer.analyze(Path(audio_path))

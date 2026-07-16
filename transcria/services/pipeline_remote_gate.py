@@ -1,11 +1,13 @@
 """Pré-vol des ressources distantes du pipeline (vague B2, lot 2).
 
 Corps extrait de ``PipelineService._remote_resource_gate`` (admission §7.2 +
-auto-lancement STT). L'import de ``prepare_remote_resources`` reste différé
-DANS la fonction : les tests substituent le pré-vol à sa source
-(``transcria.inference.resource_gate``).
+auto-lancement STT). Les tests substituent ``prepare_remote_resources`` ICI
+(chez le consommateur), l'import étant fait en tête (vague C5).
 """
+from transcria.inference.resource_gate import prepare_remote_resources
+from transcria.inference.resource_status import remote_requirements
 from transcria.jobs.models import Job
+from transcria.jobs.store import JobStore
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
 
 
@@ -14,8 +16,6 @@ def remote_resource_gate(config: dict, job: Job, sl) -> dict | None:
     marqué FAILED par l'appelant). Aucun coût en mode tout-local (sortie immédiate
     du gate). Voir docs/SERVICE_RESSOURCES_GPU.md §7.
     """
-    from transcria.inference.resource_gate import prepare_remote_resources
-    from transcria.inference.resource_status import remote_requirements
 
     # Tout-local : aucun pré-vol, aucun effet de bord (cas le plus courant).
     if not remote_requirements(config):
@@ -30,8 +30,6 @@ def remote_resource_gate(config: dict, job: Job, sl) -> dict | None:
 
     # Suivi de la durée d'indisponibilité (best-effort : nécessite un contexte DB).
     try:
-        from transcria.jobs.store import JobStore
-
         JobStore.update_extra_data(
             job.id, lambda d: {**d, "_remote_unavailable_since": verdict.unavailable_since}
         )

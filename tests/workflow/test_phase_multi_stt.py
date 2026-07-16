@@ -65,10 +65,11 @@ class TestRunMultiSttReview:
         monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
         if fake_transcriber is not None:
-            from transcria.stt import transcriber_factory
+            # C5 : la phase importe create_transcriber en tête — patcher le consommateur.
+            from transcria.workflow.phases import multi_stt_review
 
             monkeypatch.setattr(
-                transcriber_factory, "create_transcriber",
+                multi_stt_review, "create_transcriber",
                 lambda config, backend=None, device=None: fake_transcriber,
             )
             import librosa
@@ -128,10 +129,11 @@ class TestRunMultiSttReview:
             fake = _FakeTranscriber(text="segment retranscrit")
             job, runner, fs = self._prepared(cfg, owner_id, monkeypatch, fake_transcriber=fake)
 
-            from transcria.workflow import refine_llm
+            # C5 : la phase importe chat_completion en tête — patcher le consommateur.
+            from transcria.workflow.phases import multi_stt_review
 
             monkeypatch.setattr(
-                refine_llm, "chat_completion",
+                multi_stt_review, "chat_completion",
                 lambda config, messages, timeout_s=120, max_tokens=16: "B",
             )
 
@@ -152,10 +154,11 @@ class TestRunMultiSttReview:
             fake = _FakeTranscriber(text="segment retranscrit")
             job, runner, fs = self._prepared(cfg, owner_id, monkeypatch, fake_transcriber=fake)
 
-            from transcria.workflow import refine_llm
+            # C5 : la phase importe chat_completion en tête — patcher le consommateur.
+            from transcria.workflow.phases import multi_stt_review
 
             monkeypatch.setattr(
-                refine_llm, "chat_completion",
+                multi_stt_review, "chat_completion",
                 lambda config, messages, timeout_s=120, max_tokens=16: "réponse illisible",
             )
 

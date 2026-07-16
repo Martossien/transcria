@@ -64,6 +64,33 @@ class TestMetrics:
         })
         assert audit.collect_metrics(base)["cycles"] == 0
 
+    def test_init_cycle_between_packages_detected(self, tmp_path):
+        # C5 : importer un sous-module exécute les __init__ ancêtres — un cycle
+        # inter-paquets médié par un __init__ est invisible au graphe module-à-module
+        # mais casse à l'import selon l'ordre d'entrée (bombes gpu↔context, workflow↔audio).
+        base = _make_tree(tmp_path, {
+            "transcria/pa/__init__.py": "from transcria.pa.a import A\n",
+            "transcria/pa/a.py": "from transcria.pb.b import B\n\nA = 1\n",
+            "transcria/pa/c.py": "C = 1\n",
+            "transcria/pb/__init__.py": "from transcria.pb.b import B\n",
+            # pb.b n'importe PAS pa.a : module-à-module le graphe est acyclique.
+            # Mais importer pa.c exécute pa/__init__ → pa.a (partiel) → bombe d'ordre.
+            "transcria/pb/b.py": "from transcria.pa.c import C\n\nB = 1\n",
+        })
+        metrics = audit.collect_metrics(base)
+        assert metrics["cycles"] == 0          # le graphe module-à-module ne voit rien…
+        assert metrics["init_cycles"] >= 1     # …la garde init-aware, si.
+
+    def test_self_package_init_is_not_a_cycle(self, tmp_path):
+        # Un paquet qui importe ses propres sous-modules (lesquels importent des
+        # frères via le paquet) est le fonctionnement NORMAL de Python — pas un cycle.
+        base = _make_tree(tmp_path, {
+            "transcria/pa/__init__.py": "from transcria.pa.a import A\nfrom transcria.pa.b import B\n",
+            "transcria/pa/a.py": "from transcria.pa.b import B\n\nA = 1\n",
+            "transcria/pa/b.py": "B = 1\n",
+        })
+        assert audit.collect_metrics(base)["init_cycles"] == 0
+
     def test_deep_chains_and_long_functions(self, tmp_path):
         long_fn = "def f(cfg):\n" + "    x = 1\n" * 151 + '    cfg.get("gpu", {}).get("x")\n'
         base = _make_tree(tmp_path, {"transcria/a.py": long_fn})
@@ -121,6 +148,10 @@ class TestRealTree:
     def test_no_toplevel_import_cycles(self, repo_root):
         metrics = audit.collect_metrics(repo_root)
         assert metrics["cycles"] == 0, metrics["cycles_detail"]
+
+    def test_no_cross_package_init_cycles(self, repo_root):
+        metrics = audit.collect_metrics(repo_root)
+        assert metrics["init_cycles"] == 0, metrics["init_cycles_detail"]
 
     def test_versioned_baseline_is_respected(self, repo_root):
         baseline_path = repo_root / "quality_baseline.json"

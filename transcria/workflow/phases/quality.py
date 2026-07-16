@@ -8,6 +8,10 @@ import logging
 
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.quality.light_report import run_light_quality
+from transcria.quality.quality_report import QualityReporter
+from transcria.stt.corpus import enrich_corpus_with_quality, parse_srt_blocks, summarize_corpus
+from transcria.workflow.profiles import profile_for_job
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)
@@ -25,17 +29,13 @@ def run(runner, job: Job, config: dict) -> dict:
     )
     runner._enrich_stt_corpus_quality(job, config)
     try:
-        from transcria.workflow.profiles import profile_for_job
-
         profile = profile_for_job(job)
         if profile is not None and profile.run_quality == "light":
             # Profil léger : contrôle minimal (invariants SRT), pas le rapport complet.
-            from transcria.quality.light_report import run_light_quality
 
             result = run_light_quality(job, config)
         else:
             # Profil complet OU job legacy (profil absent) → rapport complet (inchangé).
-            from transcria.quality.quality_report import QualityReporter
 
             result = QualityReporter(config).run_all_checks(job)
         runner.store.update_state(job.id, JobState.QUALITY_CHECKED)
@@ -64,8 +64,6 @@ def enrich_stt_corpus_quality(runner, job: Job, config: dict) -> None:
     if not config.get("workflow", {}).get("stt_corpus", {}).get("enabled", True):
         return
     try:
-        from transcria.stt.corpus import enrich_corpus_with_quality, parse_srt_blocks, summarize_corpus
-
         fs = runner._get_fs(config, job.id)
         corpus = fs.load_json("metadata/stt_corpus.json")
         raw_segments = fs.load_json("metadata/transcription_segments.json")

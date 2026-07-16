@@ -117,6 +117,44 @@ def find_cycles(edges: dict[str, set[str]]) -> list[list[str]]:
     return cycles
 
 
+def find_init_cycles(modules: dict[str, Path], top_edges: dict[str, set[str]]) -> list[str]:
+    """Cycles inter-paquets EN COMPTANT les __init__ (vague C5).
+
+    Importer ``a.b.c`` exécute ``a/__init__`` puis ``a/b/__init__`` : le graphe réel
+    a des arêtes importeur→ancêtres(cible). Le graphe module-à-module les ignore —
+    c'est ce qui a laissé passer les bombes d'ordre d'import gpu↔context et
+    workflow↔audio pendant C5. On ne signale que les cycles traversant AU MOINS
+    deux paquets : un paquet qui importe ses propres sous-modules est le
+    fonctionnement normal de Python.
+    """
+    def ancestors(mod: str) -> list[str]:
+        parts = mod.split(".")
+        return [".".join(parts[:i]) for i in range(1, len(parts) + 1) if ".".join(parts[:i]) in modules]
+
+    edges: dict[str, set[str]] = defaultdict(set)
+    for src, targets in top_edges.items():
+        for target in targets:
+            for hop in ancestors(target):
+                if hop != src:
+                    edges[src].add(hop)
+
+    def package(mod: str) -> str:
+        # Unité de regroupement : les sous-paquets de transcria (transcria.gpu, …) ;
+        # inference_service est plat — c'est lui-même l'unité.
+        parts = mod.split(".")
+        return ".".join(parts[:2]) if parts[0] == "transcria" else parts[0]
+
+    seen: set[frozenset] = set()
+    findings: list[str] = []
+    for cycle in find_cycles(edges):
+        key = frozenset(cycle)
+        if key in seen or len({package(m) for m in cycle}) < 2:
+            continue
+        seen.add(key)
+        findings.append(" -> ".join(cycle))
+    return findings
+
+
 def count_deep_chains(modules: dict[str, Path]) -> int:
     return sum(len(DEEP_CHAIN_RE.findall(p.read_text(encoding="utf-8"))) for p in modules.values())
 
@@ -137,9 +175,12 @@ def collect_metrics(base: Path) -> dict:
     modules = iter_modules(base)
     fanout, deferred, top_edges = build_graph(modules)
     cycles = find_cycles(top_edges)
+    init_cycles = find_init_cycles(modules, top_edges)
     return {
         "cycles": len(cycles),
         "cycles_detail": [" -> ".join(c) for c in cycles],
+        "init_cycles": len(init_cycles),
+        "init_cycles_detail": init_cycles,
         "deferred_internal_imports": sum(deferred.values()),
         "deep_config_chains": count_deep_chains(modules),
         "functions_over_150": len(functions_over_limit(modules)),
@@ -152,6 +193,10 @@ def check_baseline(current: dict, baseline: dict) -> list[str]:
     problems: list[str] = []
     if current["cycles"]:
         problems.append(f"CYCLES d'imports top-level détectés ({current['cycles']}) : " + "; ".join(current["cycles_detail"]))
+    if current.get("init_cycles"):
+        problems.append(
+            f"CYCLES inter-paquets via __init__ détectés ({current['init_cycles']}) : " + "; ".join(current["init_cycles_detail"])
+        )
     for key in ("deferred_internal_imports", "deep_config_chains", "functions_over_150"):
         if current[key] > baseline.get(key, 0):
             problems.append(f"{key} : {current[key]} > baseline {baseline.get(key)}")
@@ -175,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     metrics = collect_metrics(args.base)
 
     if args.write_baseline:
-        payload = {k: v for k, v in metrics.items() if k != "cycles_detail"}
+        payload = {k: v for k, v in metrics.items() if k not in ("cycles_detail", "init_cycles_detail")}
         args.write_baseline.write_text(json.dumps(payload, indent=1, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"[audit] baseline écrite : {args.write_baseline}")
         return 0
@@ -198,6 +243,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     print(f"cycles top-level          : {metrics['cycles']}")
+    print(f"cycles inter-paquets init : {metrics['init_cycles']}")
     print(f"imports internes différés : {metrics['deferred_internal_imports']}")
     print(f"chaînes config profondes  : {metrics['deep_config_chains']}")
     print(f"fonctions > 150 lignes    : {metrics['functions_over_150']}")

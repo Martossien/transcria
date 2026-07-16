@@ -14,6 +14,8 @@ if TYPE_CHECKING:  # annotation seule — l'app Flask est injectée, l'orchestra
 
 from transcria.config.views import QueueView
 from transcria.database import db
+from transcria.gpu.vram_manager import VRAMManager
+from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.inference.client import InferenceClientError, build_client_from_config
 from transcria.inference.resource_status import (
     available_remote_slots,
@@ -21,6 +23,7 @@ from transcria.inference.resource_status import (
     remote_requirements,
     remote_vram_admits,
 )
+from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -29,6 +32,7 @@ from transcria.queue.calendar import SchedulingCalendar
 from transcria.queue.notify_listener import QueueNotifyListener
 from transcria.queue.scheduler_lock import SchedulerLock
 from transcria.queue.store import QueueStore
+from transcria.workflow.resume import get_completed_phases
 from transcria.workflow.transitions import get_execution_status, is_cancel_requested, mark_execution_queued
 
 logger = logging.getLogger(__name__)
@@ -255,7 +259,6 @@ class QueueScheduler:
 
         Retourne le chemin audio, ou None (backend `fs`, blob absent, ou erreur — loguée :
         le dequeue `failed` qui suit reste visible et relançable)."""
-        from transcria.jobs import artifact_store
 
         if not artifact_store.is_pg_backend(self.config):
             return None
@@ -317,8 +320,6 @@ class QueueScheduler:
         Best-effort : ne bloque jamais le dispatch.
         """
         try:
-            from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
-
             return stop_idle_arbitrage_llm(self.allocator, self._vram_manager(), log=logger)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Reclaim LLM d'arbitrage (admission) impossible: %s", exc)
@@ -328,8 +329,6 @@ class QueueScheduler:
         """VRAMManager paresseux (config seule, sans effet GPU à la construction)."""
         vram = getattr(self, "_vram", None)
         if vram is None:
-            from transcria.gpu.vram_manager import VRAMManager
-
             vram = VRAMManager(self.config)
             self._vram = vram
         return vram
@@ -347,8 +346,6 @@ class QueueScheduler:
         Voir docs/PIPELINE_REPRISE.md.
         """
         try:
-            from transcria.workflow.resume import get_completed_phases
-
             job = JobStore.get_by_id(job_id)
             if job is None:
                 return set()

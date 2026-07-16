@@ -4,13 +4,13 @@ Corps extrait de ``PipelineService._run_audio_scene_filter``.
 """
 from pathlib import Path
 
+from transcria.audio.scene_filter import AudioSceneFilterService
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
 
 
 def run(svc, job: Job, audio_path: str, mode: str, audio_scene: dict, sl) -> str:
     """Met en silence certaines zones de scène sans changer la durée audio."""
-    from transcria.audio.scene_filter import AudioSceneFilterService
 
     service = AudioSceneFilterService(svc.config)
     should, reasons, intervals = service.should_filter(mode, audio_scene or None)

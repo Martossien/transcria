@@ -8,7 +8,10 @@ from pathlib import Path
 
 from transcria.gpu.gpu_session import GPUSessionError
 from transcria.gpu.opencode_runner import resolve_output_language
+from transcria.inference.resource_gate import prepare_remote_resources
 from transcria.jobs.models import Job, JobState
+from transcria.stt.summary import SummaryGenerator
+from transcria.stt.transcriber_factory import get_backend_vram_mb
 from transcria.workflow.progress import progress_msg
 
 
@@ -26,7 +29,6 @@ def preflight_remote_stt(config: dict, sl) -> dict | None:
     `vram_wait` (transitoire → re-queue) pour un `defer`, `error` pour un `fail`.
     """
     # Différé : la chaîne inference (client du nœud de ressources) ne sert qu'en split.
-    from transcria.inference.resource_gate import prepare_remote_resources
 
     verdict = prepare_remote_resources(config)
     if verdict.action == "proceed":
@@ -54,8 +56,6 @@ def preflight_remote_stt(config: dict, sl) -> dict | None:
 
 def run_quick_transcription(runner, job: Job, audio_path: str, config: dict, sl) -> dict:
     # Différés : la factory STT tire la chaîne config+catalogues (~0,6 s).
-    from transcria.stt.summary import SummaryGenerator
-    from transcria.stt.transcriber_factory import get_backend_vram_mb
 
     backend = config.get("models", {}).get("stt_backend", "cohere")
     vram_mb = get_backend_vram_mb(backend, config)

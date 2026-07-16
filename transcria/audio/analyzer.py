@@ -4,8 +4,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from transcria.workflow.timing_model import human_review_minutes, legacy_machine_seconds
-
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +84,10 @@ class AudioAnalyzer:
         """Retourne (machine_minutes, human_minutes) — formule historique de démarrage à
         froid, SOURCE UNIQUE dans `transcria.workflow.timing_model` (le modèle de temps
         calibré s'en sert aussi comme repli). Sert à pré-remplir `audio_analysis.json`."""
+
+        # Différé : cycle d'__init__ — workflow/ exécute le runner, qui importe audio/ ;
+        # une couche basse ne tire jamais l'orchestration en tête.
+        from transcria.workflow.timing_model import human_review_minutes, legacy_machine_seconds
 
         duration = info.get("duration_seconds", 0)
         if duration <= 0:

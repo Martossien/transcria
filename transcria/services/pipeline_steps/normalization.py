@@ -7,6 +7,7 @@ Corps extraits de ``PipelineService._run_audio_normalization`` et
 import logging
 from pathlib import Path
 
+from transcria.audio.normalization import AudioNormalizationService
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
 from transcria.services.pipeline_steps import preflight as preflight_step
@@ -16,7 +17,6 @@ logger = logging.getLogger(__name__)
 
 def run(svc, job: Job, audio_path: str, mode: str, sl, audio_preflight: dict | None = None) -> str:
     """Applique une normalisation légère sans changer la durée audio."""
-    from transcria.audio.normalization import AudioNormalizationService
 
     service = AudioNormalizationService(svc.config)
     should, reasons, filters = service.should_normalize(mode)

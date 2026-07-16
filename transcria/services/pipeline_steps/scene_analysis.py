@@ -6,7 +6,9 @@ Corps extraits de ``PipelineService._run_audio_scene_analysis`` et
 import time
 from pathlib import Path
 
+from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 from transcria.jobs.models import Job
+from transcria.quality.audio_quality import AudioQualityEvaluator
 from transcria.services.pipeline_steps import job_fs
 
 
@@ -17,7 +19,6 @@ def run(svc, job: Job, audio_path: str, sl) -> dict:
     ratios non vocaux, gender, segments horodatés) ou ``{}`` si désactivée,
     indisponible ou en échec.
     """
-    from transcria.audio.scene_analyzer import AudioSceneAnalyzer
 
     analyzer = AudioSceneAnalyzer(svc.config)
     if not analyzer.enabled:
@@ -80,8 +81,6 @@ def refresh_audio_quality_with_scene(svc, job: Job, audio_scene: dict, sl) -> No
         return
 
     try:
-        from transcria.quality.audio_quality import AudioQualityEvaluator
-
         fs = job_fs(svc.config, job.id)
         summary = fs.load_json("summary/summary.json") or {}
         audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}

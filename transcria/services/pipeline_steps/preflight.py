@@ -6,13 +6,13 @@ signal (artefact préflight, RMS) consommées par la normalisation.
 import time
 from pathlib import Path
 
+from transcria.audio.preflight import AudioPreflightAnalyzer
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
 
 
 def run(svc, job: Job, audio_path: str, sl) -> dict:
     """Calcule et sauvegarde les signaux acoustiques pré-STT non bloquants."""
-    from transcria.audio.preflight import AudioPreflightAnalyzer
 
     analyzer = AudioPreflightAnalyzer(svc.config)
     if not analyzer.enabled:

@@ -276,7 +276,8 @@ def test_run_transcription_reclaims_then_succeeds(app, owner_id, monkeypatch, tm
         monkeypatch.setattr(runner, "_release_gpu_phase", lambda *a, **k: None)
         monkeypatch.setattr(WorkflowRunner, "_reclaim_vram_from_idle_arbitrage_llm", lambda self, sl: True)
 
-        import transcria.stt.transcription as tr
+        # C5 : la phase importe Transcriber en tête — patcher le consommateur.
+        import transcria.workflow.phases.transcription as tr
         monkeypatch.setattr(tr, "Transcriber", lambda config, gpu_index=0: SimpleNamespace(
             transcribe=lambda job, path: {"segments": [{"text": "ok"}]}))
 
@@ -325,8 +326,9 @@ def test_run_diarization_skips_local_gpu_when_remote(app, owner_id, monkeypatch,
         monkeypatch.setattr(runner, "_gpu_session", _boom)
         monkeypatch.setattr(runner, "_cuda_available", lambda: True)  # même avec CUDA, le distant skippe
         monkeypatch.setattr(WorkflowRunner, "_inject_speaker_genders", lambda self, fs, scene: {})
+        # C5 : la phase importe create_diarizer en tête — patcher le consommateur.
         monkeypatch.setattr(
-            "transcria.stt.diarizer_factory.create_diarizer",
+            "transcria.workflow.phases.diarization.create_diarizer",
             lambda config, device=None, progress_callback=None: SimpleNamespace(
                 diarize=lambda job, path: {"available": True, "speakers": [{"speaker_id": "SPEAKER_00"}]},
                 offload=lambda: None,

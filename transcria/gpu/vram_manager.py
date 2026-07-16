@@ -15,7 +15,6 @@ from transcria.gpu.cuda_visible import (
 )
 from transcria.gpu.llm_backend import create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
-from transcria.queue.allocator import GPUAllocator
 
 logger = logging.getLogger(__name__)
 
@@ -526,6 +525,10 @@ class VRAMManager:
             )
             self._arbitrage_llm_pid = proc.pid
             try:
+                # Différé : cycle d'__init__ — queue/allocator importe gpu/ ;
+                # une couche basse ne tire jamais l'orchestration en tête.
+                from transcria.queue.allocator import GPUAllocator
+
                 GPUAllocator.get_instance(self.config).register_pid(
                     proc.pid, "arbitrage_llm"
                 )
@@ -698,6 +701,9 @@ class VRAMManager:
         port_ok = self._kill_port(self.arbitrage_llm_port)
         if self._arbitrage_llm_pid is not None:
             try:
+                # Différé : cycle d'__init__ — queue/allocator importe gpu/ (voir plus haut).
+                from transcria.queue.allocator import GPUAllocator
+
                 GPUAllocator.get_instance(self.config).unregister_pid(
                     self._arbitrage_llm_pid
                 )

@@ -4,6 +4,7 @@ Corps extrait de ``PipelineService._run_source_separation``.
 """
 from pathlib import Path
 
+from transcria.audio.source_separation import SourceSeparationDecider, SourceSeparationService
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
 
@@ -14,7 +15,6 @@ def run(svc, job: Job, audio_path: str, audio_scene: dict, sl) -> str:
     Retourne le chemin audio à utiliser pour la transcription : soit le chemin
     d'origine (séparation refusée ou échouée), soit le chemin de la piste vocale.
     """
-    from transcria.audio.source_separation import SourceSeparationDecider, SourceSeparationService
 
     audio_analysis: dict = {}
     audio_quality: dict = {}

@@ -17,14 +17,18 @@ le matériel), en respectant un éventuel défaut configuré s'il est disponible
 """
 from __future__ import annotations
 
+from transcria.inference.resource_status import remote_requirements
 from transcria.workflow.profiles import (
     DEFAULT_PROFILE_ID,
     ProcessingProfile,
     list_profiles,
     profile_deliverables,
+    profile_required_steps_ordered,
     profile_validations,
 )
 from transcria.workflow.profiles_i18n import localize_profile_text
+from transcria.workflow.states import StepStatus
+from transcria.workflow.steps import WorkflowSteps
 
 _AVAILABLE_STATUSES = ("available", "available_remote")
 
@@ -41,8 +45,6 @@ def _quality_mode_enabled(config: dict) -> bool:
 def _remote_configured(config: dict) -> bool:
     """Une topologie distante (nœud de ressources) est-elle configurée ?"""
     try:
-        from transcria.inference.resource_status import remote_requirements
-
         return bool(remote_requirements(config))
     except Exception:  # noqa: BLE001 — best-effort : à défaut, on suppose le local
         return False
@@ -141,9 +143,6 @@ def compute_wizard_layout(profile: ProcessingProfile | None, statuses: dict) -> 
     ``profile`` à None (job legacy/sans profil) ⇒ comportement complet : toutes les étapes de
     préparation sont requises (rétro-compatibilité, aucun parcours existant n'est raccourci).
     """
-    from transcria.workflow.profiles import profile_required_steps_ordered
-    from transcria.workflow.states import StepStatus
-    from transcria.workflow.steps import WorkflowSteps
 
     if profile is None:
         required_prep = list(PREP_STEPS)

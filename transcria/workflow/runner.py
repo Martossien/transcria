@@ -1,5 +1,7 @@
 import logging
 
+from transcria.audio.analyzer import AudioAnalyzer
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
@@ -90,8 +92,6 @@ class WorkflowRunner:
     def run_analyze(self, job: Job, audio_path: str) -> dict:
         from pathlib import Path
 
-        from transcria.audio.analyzer import AudioAnalyzer
-
         result = AudioAnalyzer.analyze(Path(audio_path))
         self.store.update(job.id, state=JobState.ANALYZED.value)
         return result
@@ -111,7 +111,6 @@ class WorkflowRunner:
 
     @staticmethod
     def _get_fs(config: dict, job_id: str):
-        from transcria.jobs.filesystem import JobFilesystem
         return JobFilesystem(
             config.get("storage", {}).get("jobs_dir", "./jobs"), job_id
         )

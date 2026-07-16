@@ -8,6 +8,7 @@ anti-gel opencode, garde déterministe d'intégrité. Les coutures runner
 """
 import logging
 
+from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
 from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
@@ -168,9 +169,6 @@ def _prefilter_lexicon(fs, job: Job):
     Retourne le chemin du lexique à transmettre à la correction (filtré si possible,
     sinon l'original).
     """
-    # Différé : le service de lexique central n'est utile qu'à la correction.
-    from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
-
     lexicon_path = fs.job_dir / "context" / "session_lexicon.json"
     filtered_lexicon_path = fs.job_dir / "context" / "session_lexicon_filtered.json"
 

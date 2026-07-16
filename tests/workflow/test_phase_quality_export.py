@@ -75,12 +75,12 @@ class TestQualityPhaseBranches:
 
             from types import SimpleNamespace
 
-            from transcria.quality import light_report
-            from transcria.workflow import profiles
+            # C5 : la phase importe profil et rapport léger en tête — patcher le consommateur.
+            from transcria.workflow.phases import quality as quality_mod
 
-            monkeypatch.setattr(profiles, "profile_for_job",
+            monkeypatch.setattr(quality_mod, "profile_for_job",
                                 lambda job: SimpleNamespace(run_quality="light"))
-            monkeypatch.setattr(light_report, "run_light_quality",
+            monkeypatch.setattr(quality_mod, "run_light_quality",
                                 lambda job, config: {"success": True, "mode": "light"})
 
             result = runner.run_quality_checks(job, cfg)
@@ -107,7 +107,9 @@ class TestEnrichSttCorpusQuality:
             runner = WorkflowRunner(JobStore, cfg)
 
             from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt import corpus as corpus_module
+
+            # C5 : la phase importe les fonctions corpus en tête — patcher le consommateur.
+            from transcria.workflow.phases import quality as quality_mod
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_json("metadata/stt_corpus.json", [{"text": "bonjour"}])
@@ -115,13 +117,13 @@ class TestEnrichSttCorpusQuality:
             fs.save_text("metadata/transcription_corrigee.srt",
                          "1\n00:00:00,000 --> 00:00:02,000\nBonjour\n")
 
-            monkeypatch.setattr(corpus_module, "parse_srt_blocks", lambda text: [{"text": "Bonjour"}])
+            monkeypatch.setattr(quality_mod, "parse_srt_blocks", lambda text: [{"text": "Bonjour"}])
             monkeypatch.setattr(
-                corpus_module, "enrich_corpus_with_quality",
+                quality_mod, "enrich_corpus_with_quality",
                 lambda corpus, raw, blocks: 1,
             )
             monkeypatch.setattr(
-                corpus_module, "summarize_corpus",
+                quality_mod, "summarize_corpus",
                 lambda corpus: {"quality_measure_mean": 0.12},
             )
 

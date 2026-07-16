@@ -8,6 +8,9 @@ restent le point de passage : les tests d'incident les substituent à la classe.
 """
 import logging
 
+from transcria.auth.store import UserStore
+from transcria.context.invite_parser import render_invite_markdown
+from transcria.context.meeting_type_prompts import build_prompt_substitutions
 from transcria.gpu.opencode_runner import OpenCodeRunner, resolve_output_language
 from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
 from transcria.jobs.models import Job
@@ -141,8 +144,6 @@ def _prompt_substitutions(fs, job: Job) -> tuple[dict[str, str], tuple[str, ...]
     """
     try:
         # Différés : UserStore tire la chaîne auth/DB — inutile hors de ce best-effort.
-        from transcria.auth.store import UserStore
-        from transcria.context.meeting_type_prompts import build_prompt_substitutions
 
         meeting_ctx_now = fs.load_json("context/meeting_context.json") or {}
         chosen_type = meeting_ctx_now.get("custom_type")
@@ -156,8 +157,6 @@ def _prompt_substitutions(fs, job: Job) -> tuple[dict[str, str], tuple[str, ...]
         )
         return prompt_subs, extract_keys
     except Exception:  # noqa: BLE001 — repli : placeholders depuis le catalogue intégré
-        from transcria.context.meeting_type_prompts import build_prompt_substitutions
-
         return build_prompt_substitutions(None, None), ()
 
 
@@ -217,7 +216,6 @@ def materialize_meeting_invite(fs, job: Job) -> str | None:
     if not isinstance(invite_data, dict):
         return None
     # Différé : le parseur d'invitation ne sert que si une invitation a été fournie.
-    from transcria.context.invite_parser import render_invite_markdown
 
     markdown = render_invite_markdown(invite_data)
     if not markdown:

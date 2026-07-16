@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 195,
- "deferred_internal_imports": 269,
+ "deferred_internal_imports": 141,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -190,5 +190,6 @@
   "transcria.workflow.timing_service": 2,
   "transcria.workflow.transitions": 4
  },
- "functions_over_150": 9
+ "functions_over_150": 9,
+ "init_cycles": 0
 }

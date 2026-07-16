@@ -161,15 +161,15 @@ class TestSummaryNotificationGolden:
                 },
             )
 
-            # Import différé dans run_summary → substitution À LA SOURCE (job_facts).
+            # C5 : la phase importe la notification en tête — patcher le consommateur.
             states_at_call: list[str] = []
 
             def fake_notify(config, notified_job):
                 states_at_call.append(JobStore.get_by_id(notified_job.id).state)
 
-            from transcria.notifications import job_facts
+            from transcria.workflow.phases import summary as summary_phase
 
-            monkeypatch.setattr(job_facts, "notify_summary_ready", fake_notify)
+            monkeypatch.setattr(summary_phase, "notify_summary_ready", fake_notify)
 
             audio_path = tmp_path / "test.wav"
             audio_path.write_text("fake")
@@ -202,9 +202,9 @@ class TestSummaryNotificationGolden:
             monkeypatch.setattr(runner, "_gpu_session", fake_gpu_session)
 
             calls: list = []
-            from transcria.notifications import job_facts
+            from transcria.workflow.phases import summary as summary_phase
 
-            monkeypatch.setattr(job_facts, "notify_summary_ready", lambda *a: calls.append(a))
+            monkeypatch.setattr(summary_phase, "notify_summary_ready", lambda *a: calls.append(a))
 
             result = runner.run_summary(job, "/tmp/fake.wav", cfg)
 

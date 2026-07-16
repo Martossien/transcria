@@ -7,9 +7,12 @@ et `timing_model` (logique pure). Voir [[timing_model]].
 """
 from __future__ import annotations
 
+from transcria.jobs.timing_store import JobTimingStore
 from transcria.workflow.timing_model import (
     Estimate,
     estimate_machine,
+    format_duration_fr,
+    format_range_fr,
     human_review_minutes,
     legacy_machine_seconds,
 )
@@ -38,8 +41,6 @@ def processing_stages(profile) -> list[str]:
 
 
 def _estimate_stages(profile_id: str, stages: list[str], audio_seconds: float) -> Estimate:
-    from transcria.jobs.timing_store import JobTimingStore
-
     samples = JobTimingStore.samples_for_stages(profile_id, stages)
     return estimate_machine(stages, samples, audio_seconds)
 
@@ -76,7 +77,6 @@ def estimate_total_machine(profile, audio_seconds: float) -> Estimate:
 def estimate_remaining(profile, audio_seconds: float, percent: float | None) -> dict:
     """Temps de TRAITEMENT restant (ETA live) : estimation calibrée × fraction restante
     d'après ``percent`` de progression. Renvoie un dict prêt pour le polling de statut."""
-    from transcria.workflow.timing_model import format_duration_fr
 
     est = estimate_processing(profile, audio_seconds)
     frac = max(0.0, min(1.0, 1.0 - (float(percent or 0) / 100.0)))
@@ -100,7 +100,6 @@ def estimate_total_with_human(profile, audio_seconds: float) -> dict:
     Renvoie un dict prêt pour le template : minutes totales, fourchette lisible, base de
     confiance (« measured »/« initial ») — pour un affichage honnête.
     """
-    from transcria.workflow.timing_model import format_range_fr
 
     machine = estimate_total_machine(profile, audio_seconds)
     human_min = human_review_minutes(audio_seconds)

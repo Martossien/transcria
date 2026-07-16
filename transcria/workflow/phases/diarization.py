@@ -11,6 +11,8 @@ from pathlib import Path
 from transcria.gpu.gpu_session import GPUSessionError
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
+from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
+from transcria.stt.speaker_detection import SpeakerDetector
 from transcria.workflow.progress import progress_msg
 
 logger = logging.getLogger(__name__)
@@ -49,10 +51,6 @@ def run_speaker_detection(
     if update_state:
         runner.store.update_state(job.id, JobState.SPEAKER_DETECTION_RUNNING)
     try:
-        # Différés : la chaîne pyannote (torch) n'a rien à faire au boot du workflow.
-        from transcria.stt.diarizer_factory import apply_speaker_hint
-        from transcria.stt.speaker_detection import SpeakerDetector
-
         config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
         detector = SpeakerDetector(config)
         progress_callback = runner._pyannote_progress_callback(
@@ -121,9 +119,6 @@ def run_diarization(runner, job: Job, audio_path: str, config: dict) -> dict:
         force=True,
     )
     try:
-        # Différés : la factory de diarisation tire la chaîne pyannote/torch.
-        from transcria.stt.diarizer_factory import apply_speaker_hint, create_diarizer, get_diarizer_vram_mb
-
         config = apply_speaker_hint(config, job.get_extra_data().get("speaker_hint"))
         diar_backend = config.get("models", {}).get("diarization_backend", "pyannote")
         diar_vram_mb = get_diarizer_vram_mb(diar_backend, config)

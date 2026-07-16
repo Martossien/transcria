@@ -20,12 +20,14 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger, inject_correlation_id
 from transcria.notifications.admin_alerts import alert_admin_vram_wait
+from transcria.notifications.job_facts import completed_facts
 from transcria.notifications.mailer import send_job_notification_async
 from transcria.queue.scheduler import QueueScheduler
 from transcria.queue.store import QueueStore
 from transcria.services.execution import ExecutionMode
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow.outcomes import OutcomeKind, PhaseOutcome
+from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
     is_cancel_requested,
     mark_execution_cancelled,
@@ -191,7 +193,6 @@ class JobExecutorService:
                     # Étape GPU synchrone routée vers le worker (frontal sans GPU / reprise
                     # serveur) : le runner gère lui-même l'état du job (SUMMARY_DONE /
                     # SPEAKER_DETECTION_DONE / FAILED). L'exécuteur ne libère que la file.
-                    from transcria.workflow.runner import WorkflowRunner
 
                     runner = WorkflowRunner(JobStore, self.config)  # type: ignore[arg-type]
                     if mode == SUMMARY_MODE:
@@ -276,7 +277,6 @@ class JobExecutorService:
                     # Email « terminé » enrichi : temps réel + score qualité + points
                     # (lien vers /result). Best-effort côté collecte des faits.
                     try:
-                        from transcria.notifications.job_facts import completed_facts
                         facts = completed_facts(self.config, job, outcome.processing_seconds)
                     except Exception:  # noqa: BLE001
                         facts = None

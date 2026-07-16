@@ -10,7 +10,11 @@ import logging
 from copy import deepcopy
 
 from transcria.config.views import QualityTranscriptionView, SttView
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.quality.audio_quality import AudioQualityEvaluator
+from transcria.stt.contextual_biasing import select_lexicon_bias_terms
+from transcria.stt.lexicon_hotwords import build_whisper_hotwords
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +30,6 @@ def config_for_mode(source_config: dict, mode: str, job: Job | None = None) -> d
     # Vue reconstruite APRÈS la mutation éventuelle du backend forcé.
     backend = SttView.from_config(cfg).stt_backend
     if backend == "granite" and job is not None:
-        from transcria.jobs.filesystem import JobFilesystem
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         quality = fs.load_json("metadata/audio_quality_decision.json") or {}
         preflight = fs.load_json("metadata/audio_preflight.json") or {}
@@ -57,9 +60,6 @@ def inject_whisper_lexicon_hotwords(cfg: dict, job: Job | None) -> None:
         return
 
     try:
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.stt.lexicon_hotwords import build_whisper_hotwords
-
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         lexicon = fs.load_json("context/session_lexicon.json") or []
         if not isinstance(lexicon, list):
@@ -105,9 +105,6 @@ def inject_cohere_lexicon_biasing(cfg: dict, job: Job | None) -> None:
         return
 
     try:
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.stt.contextual_biasing import select_lexicon_bias_terms
-
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         lexicon = fs.load_json("context/session_lexicon.json") or []
         if not isinstance(lexicon, list):
@@ -154,9 +151,6 @@ def inject_granite_lexicon_keywords(cfg: dict, job: Job | None) -> None:
         return
 
     try:
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.stt.contextual_biasing import select_lexicon_bias_terms
-
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         lexicon = fs.load_json("context/session_lexicon.json") or []
         if not isinstance(lexicon, list):
@@ -202,9 +196,6 @@ def should_force_quality_backend_for_degraded_summary(job: Job | None, cfg: dict
         return False
 
     try:
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.quality.audio_quality import AudioQualityEvaluator
-
         fs = JobFilesystem(cfg.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         summary = fs.load_json("summary/summary.json") or {}
         audio_analysis = fs.load_json("metadata/audio_analysis.json") or {}

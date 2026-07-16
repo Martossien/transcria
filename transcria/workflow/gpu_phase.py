@@ -19,6 +19,7 @@ from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.jobs.models import Job
 from transcria.queue.allocator import GPUAllocator
+from transcria.stt.transcriber_factory import _should_use_remote_stt
 
 logger = logging.getLogger(__name__)
 
@@ -117,10 +118,6 @@ class GpuPhaseSession:
         VRAM / rejets à tort). Cf. docs/SERVICE_RESSOURCES_GPU.md §9.
         """
         if phase in ("stt", "summary_stt"):
-            # Différé : la factory STT tire la chaîne config+catalogues (~0,6 s),
-            # inutile pour les phases non-STT et pour la construction de la session.
-            from transcria.stt.transcriber_factory import _should_use_remote_stt
-
             backend = self.config.get("models", {}).get("stt_backend", "cohere")
             return _should_use_remote_stt(self.config, backend)
         if phase == "diarization":

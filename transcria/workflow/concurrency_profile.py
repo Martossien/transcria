@@ -21,6 +21,8 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 
+from transcria.inference.resource_status import remote_requirements
+
 SERIAL = "serial"
 DELEGATED = "delegated"
 
@@ -40,7 +42,6 @@ _DEFAULT_STAGE = {"class": SERIAL, "resource": "gpu"}
 
 def _stt_is_delegated(config: dict) -> bool:
     """Le STT est-il servi à distance (vLLM/SGLang `concurrent_safe`) → délégué ?"""
-    from transcria.inference.resource_status import remote_requirements
 
     return "stt" in remote_requirements(config)
 

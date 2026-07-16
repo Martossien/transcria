@@ -4,6 +4,7 @@ Corps extrait de ``WorkflowRunner.build_export``.
 """
 import logging
 
+from transcria.exports.package_builder import PackageBuilder
 from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job, JobState
 from transcria.workflow.progress import progress_msg
@@ -21,9 +22,6 @@ def run(runner, job: Job, config: dict) -> dict:
         force=True,
     )
     try:
-        # Différé : la chaîne exports (python-docx) n'a rien à faire au boot du workflow.
-        from transcria.exports.package_builder import PackageBuilder
-
         builder = PackageBuilder(config)
         result = builder.build_package(job)
         if isinstance(result, dict) and result.get("error"):

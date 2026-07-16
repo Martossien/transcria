@@ -1,5 +1,6 @@
 import enum
 
+from transcria.jobs.models import JobState
 from transcria.workflow.steps import WORKFLOW_STEPS
 
 
@@ -23,7 +24,6 @@ class WorkflowState:
     def compute_statuses(
         cls, job_state: str, last_non_terminal_state: str | None = None
     ) -> dict[str, StepStatus]:
-        from transcria.jobs.models import JobState
 
         statuses: dict[str, StepStatus] = {
             str(s["id"]): StepStatus.TODO for s in cls.STEPS

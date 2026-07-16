@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import transcria.inference.resource_gate as gate_mod
+# C5 : la phase importe la gate en tête — patcher le consommateur.
+import transcria.workflow.phases.summary_stt as summary_stt_mod
 from transcria.inference.resource_gate import GateVerdict
 from transcria.workflow.runner import WorkflowRunner
 
@@ -21,7 +22,7 @@ def _runner():
 
 
 def _patch_verdict(monkeypatch, verdict):
-    monkeypatch.setattr(gate_mod, "prepare_remote_resources", lambda *a, **k: verdict)
+    monkeypatch.setattr(summary_stt_mod, "prepare_remote_resources", lambda *a, **k: verdict)
 
 
 def test_preflight_proceed_returns_none(monkeypatch):

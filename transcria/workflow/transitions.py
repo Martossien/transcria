@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
+from transcria.workflow.profiles import profile_required_steps
+from transcria.workflow.states import StepStatus, WorkflowState
 
 PROCESSING_RETRY_STATES = {
     JobState.READY_TO_PROCESS.value,
@@ -49,8 +51,6 @@ def can_start_profile(job_state: str, profile) -> bool:
     """
     if job_state in PROCESSING_RETRY_STATES:
         return True
-    from transcria.workflow.profiles import profile_required_steps
-    from transcria.workflow.states import StepStatus, WorkflowState
 
     statuses = WorkflowState.compute_statuses(job_state)
     if statuses.get("file") != StepStatus.DONE or statuses.get("analyze") != StepStatus.DONE:

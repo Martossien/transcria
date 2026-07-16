@@ -14,8 +14,10 @@ from transcria.database import db
 from transcria.i18n import N_
 from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
-from transcria.queue.calendar import SchedulingCalendar, SchedulingWindowStore
+from transcria.queue.calendar import DAY_TO_INDEX, SchedulingCalendar, SchedulingWindowStore
 from transcria.queue.store import QueueStore
+from transcria.queue.wait_estimate import queue_wait_estimates
+from transcria.services.config_service import ConfigService
 from transcria.services.job_executor import get_job_executor
 from transcria.services.job_service import JobService
 from transcria.workflow.transitions import get_execution_status, mark_execution_cancelled, request_execution_cancel
@@ -82,7 +84,6 @@ def queue_page():
     runtime = executor.get_runtime_snapshot() if executor else {"healthy": False}
     cfg = get_config()
     calendar = SchedulingCalendar(cfg.get("workflow", {}).get("scheduling", {}) or {})
-    from transcria.queue.wait_estimate import queue_wait_estimates
 
     wait_estimates = queue_wait_estimates(cfg, entries)
     return render_template(
@@ -105,7 +106,6 @@ def _week_strip_segments(windows) -> list[dict]:
     """Segments de la frise hebdomadaire 7 j × 24 h, calculés SERVEUR (aucun JS) :
     par jour et par créneau, position/largeur en % de la journée — les fenêtres à
     cheval sur minuit produisent deux segments (soir + matin du lendemain)."""
-    from transcria.queue.calendar import DAY_TO_INDEX
 
     def _minutes(hhmm: str) -> int:
         h, m = hhmm.split(":", 1)
@@ -198,7 +198,6 @@ def api_schedule_toggle():
     """Activer/désactiver l'AGENDA ENTIER depuis la page (constat audit C3.6 : on
     pouvait créer des créneaux alors que l'agenda était éteint en config, sans
     aucun contrôle visible). Écrit la config via le circuit validé."""
-    from transcria.services.config_service import ConfigService
 
     body = request.get_json(silent=True) or {}
     enabled = bool(body.get("enabled"))

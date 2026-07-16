@@ -7,7 +7,17 @@ GPU/LLM, via les coutures du runner.
 """
 import logging
 
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.models import Job
+from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
+from transcria.workflow.multi_stt_review import (
+    apply_secondary_texts,
+    build_arbitration_messages,
+    parse_arbitration_choice,
+    select_review_segments,
+    texts_equivalent,
+)
+from transcria.workflow.refine_llm import chat_completion
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +32,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
     segments dégradés sont retraités. BEST-EFFORT : n'interrompt jamais le
     pipeline ; tout empêchement (VRAM, LLM occupée…) → étape sautée.
     """
-    from transcria.workflow.multi_stt_review import (
-        apply_secondary_texts,
-        build_arbitration_messages,
-        parse_arbitration_choice,
-        select_review_segments,
-        texts_equivalent,
-    )
 
     ms_cfg = config.get("workflow", {}).get("multi_stt", {}) or {}
     if not ms_cfg.get("enabled", False):
@@ -54,7 +57,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
             secondary = "whisper" if primary_backend != "whisper" else "cohere"
 
         # ── 1) Retranscription ciblée par le moteur secondaire ────────────
-        from transcria.stt.transcriber_factory import create_transcriber, get_backend_vram_mb
 
         required_vram_mb = get_backend_vram_mb(secondary, config)
         reservation, managed = runner._reserve_gpu_phase(job, required_vram_mb, "multi_stt")
@@ -63,8 +65,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
         if reservation is None:
             logger.warning("multi_stt: VRAM insuffisante pour le backend secondaire — étape sautée")
             return {"success": True, "skipped": True, "reason": "vram_insufficient"}
-
-        from transcria.gpu.opencode_runner import resolve_output_language
 
         language = resolve_output_language(job)
         secondary_texts: dict[int, str] = {}
@@ -130,8 +130,6 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
             if not runner.vram.ensure_arbitrage_llm_ready(expected_model_id=api_model_id):
                 logger.warning("multi_stt: LLM d'arbitrage indisponible — arbitrage sauté")
                 return {"success": True, "skipped": True, "reason": "llm_unavailable"}
-
-            from transcria.workflow.refine_llm import chat_completion
 
             for cand in candidates:
                 index = cand["index"]

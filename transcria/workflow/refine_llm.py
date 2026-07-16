@@ -14,6 +14,9 @@ from __future__ import annotations
 import logging
 import re
 
+from transcria.config.llm_profiles import load_llm_profiles, select_profile
+from transcria.gpu.llm_backend import create_llm_backend
+
 logger = logging.getLogger(__name__)
 
 _TRUNCATION_NOTE = "\n[… transcription tronquée : la fin n'est pas montrée ici …]"
@@ -40,8 +43,6 @@ def compute_transcript_budget_chars(config: dict) -> int:
         return int(explicit)
     try:
         import torch
-
-        from transcria.config.llm_profiles import load_llm_profiles, select_profile
 
         if torch.cuda.is_available():
             count = torch.cuda.device_count()
@@ -139,7 +140,6 @@ def chat_completion(
     Lève en cas d'erreur HTTP/réseau — l'appelant (``run_refine``) est best-effort et
     transforme toute exception en tour assistant explicatif.
     """
-    from transcria.gpu.llm_backend import create_llm_backend
 
     backend = create_llm_backend(config)
     model = backend.model_id or "arbitrage"

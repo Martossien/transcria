@@ -4,13 +4,13 @@ Corps extrait de ``PipelineService._run_audio_denoise``.
 """
 from pathlib import Path
 
+from transcria.audio.denoise import AudioDenoiseService
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
 
 
 def run(svc, job: Job, audio_path: str, mode: str, audio_preflight: dict, sl) -> str:
     """Applique un débruitage expérimental sans changer la durée audio."""
-    from transcria.audio.denoise import AudioDenoiseService
 
     service = AudioDenoiseService(svc.config)
     should, reasons, filters = service.should_denoise(mode, audio_preflight)

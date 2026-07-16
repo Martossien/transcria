@@ -6,6 +6,9 @@ l'admission (`QueueScheduler`) et les routes wizard via les délégateurs
 statiques du service.
 """
 from transcria.config.views import GpuView, SttView, WorkflowView
+from transcria.stt.diarizer_factory import get_diarizer_vram_mb
+from transcria.stt.transcriber_factory import get_backend_vram_mb
+from transcria.workflow.profiles import get_profile, profile_to_legacy_mode, resolve_legacy_mode
 
 
 def estimate_profile_resources(config: dict, profile) -> dict:
@@ -19,9 +22,6 @@ def estimate_profile_resources(config: dict, profile) -> dict:
 
     `profile` : un `transcria.workflow.profiles.ProcessingProfile`.
     """
-    from transcria.stt.diarizer_factory import get_diarizer_vram_mb
-    from transcria.stt.transcriber_factory import get_backend_vram_mb
-    from transcria.workflow.profiles import profile_to_legacy_mode
 
     stt = SttView.from_config(config)
     rr = profile.resource_requirements
@@ -55,6 +55,5 @@ def estimate_job_vram(config: dict, mode: str) -> dict:
     `estimate_profile_resources`. Pour `fast`/`quality` (seuls modes atteignant cet
     estimateur via les routes), le résultat est identique au comportement antérieur.
     """
-    from transcria.workflow.profiles import get_profile, resolve_legacy_mode
 
     return estimate_profile_resources(config, get_profile(resolve_legacy_mode(mode)))

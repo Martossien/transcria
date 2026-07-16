@@ -1,10 +1,16 @@
 import logging
 from pathlib import Path
 
+from transcria.audio.analyzer import AudioAnalyzer
+from transcria.audio.preflight import AudioPreflightAnalyzer
+from transcria.config import get_config
+from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.quality.audio_quality import AudioQualityEvaluator
+from transcria.workflow.agent_workspace import AgentWorkspace
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +26,6 @@ class JobService:
 
     @staticmethod
     def upload(job_id: str, file_data: bytes, filename: str, jobs_dir: str) -> dict:
-
         job = JobStore.get_by_id(job_id)
         if job is None:
             return {"error": "Job introuvable"}
@@ -31,8 +36,6 @@ class JobService:
         # Backend `pg` (split sans filesystem partagé) : l'audio doit être durable en base
         # AVANT de déclarer l'upload réussi — sinon le worker ne le verra jamais. Une
         # erreur ici doit remonter (l'utilisateur saura que l'upload a échoué).
-        from transcria.config import get_config
-        from transcria.jobs import artifact_store
         artifact_store.push_job_files(get_config(), job.id, prefixes=("input/",))
 
         stem = Path(filename).stem or filename
@@ -50,10 +53,6 @@ class JobService:
 
     @staticmethod
     def analyze(job_id: str, jobs_dir: str, config: dict) -> dict:
-        from transcria.audio.analyzer import AudioAnalyzer
-        from transcria.audio.preflight import AudioPreflightAnalyzer
-        from transcria.quality.audio_quality import AudioQualityEvaluator
-
         job = JobStore.get_by_id(job_id)
         if job is None:
             return {"error": "Job introuvable"}
@@ -146,11 +145,9 @@ class JobService:
         # donc non couvert par rmtree(job_dir) ci-dessus — purge explicite pour éviter
         # les orphelins sous agent_work_dir. No-op si rien à supprimer (cas nominal :
         # cleanup(success) a déjà purgé).
-        from transcria.workflow.agent_workspace import AgentWorkspace
         AgentWorkspace.purge_job(agent_work_dir, job.id)
         # Purge explicite des blobs (la FK CASCADE est une ceinture supplémentaire ;
         # inconditionnel : la table peut contenir des lignes d'une période en backend pg).
-        from transcria.jobs import artifact_store
         artifact_store.delete_job_files(job.id)
         JobStore.delete_job(job.id)
         logger.info("Job supprimé: %s", job.id)

@@ -10,7 +10,10 @@ l'instance.
 from functools import partial
 
 from transcria.config.views import WorkflowView
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.workflow import profiles
+from transcria.workflow.type_field_extraction import extract_fields_from_type
 
 
 def resolve_profile(job: Job, mode: str):
@@ -20,7 +23,6 @@ def resolve_profile(job: Job, mode: str):
     cf. Phase 2) ; à défaut, dérivé du `mode` legacy (fast/quality). Repli ultime sur le
     profil de `fast` pour un mode/étape inconnu (jamais d'exception ici).
     """
-    from transcria.workflow import profiles
 
     try:
         pid = (job.get_extra_data().get("execution", {}) or {}).get("processing_profile_id")
@@ -38,9 +40,6 @@ def job_has_type_extract_fields(config: dict, job) -> bool:
     """Le job a-t-il un type de réunion perso matérialisé AVEC des extract_fields ?
     (garde de la micro-étape « champs du type » — évite tout coût quand inutile)."""
     try:
-        from transcria.jobs.filesystem import JobFilesystem
-        from transcria.workflow.type_field_extraction import extract_fields_from_type
-
         fs = JobFilesystem(config["storage"]["jobs_dir"], job.id)
         meeting_ctx = fs.load_json("context/meeting_context.json") or {}
         custom_type = meeting_ctx.get("custom_type")
