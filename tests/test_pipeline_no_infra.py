@@ -111,3 +111,35 @@ def test_pipeline_stops_on_failed_step_without_infra(tmp_path, monkeypatch):
     assert "final_review" not in svc.runner.calls
     assert "export" not in svc.runner.calls
     assert any(state is JobState.FAILED for _, state, _ in store.state_updates)
+
+
+def test_end_of_pipeline_llm_stop_skipped_when_another_job_holds_the_lock(tmp_path, monkeypatch):
+    """Course arrêt-vs-lancement (campagne de charge B3) : un job qui finit son
+    pipeline ne doit PAS arrêter la LLM d'arbitrage qu'un autre job détient (il la
+    lançait — SIGTERM en plein chargement, exit 143, vécu en rafale de 3 jobs)."""
+    job = make_job_stub()
+    store = FakeJobStore(job)
+    svc = _make_service(tmp_path, monkeypatch, store)
+    svc.runner.vram.arbitrage_running = True
+
+    assert svc.runner.allocator.try_acquire_llm("job-concurrent") is True
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 0                       # arrêt sauté
+    assert svc.runner.allocator.owner == "job-concurrent"        # verrou intact
+    svc.runner.allocator.release_llm("job-concurrent")
+
+
+def test_end_of_pipeline_llm_stop_holds_the_lock_while_stopping(tmp_path, monkeypatch):
+    """Verrou libre → l'arrêt a lieu SOUS le verrou (aucun lancement concurrent
+    possible pendant), puis le verrou est rendu."""
+    job = make_job_stub()
+    store = FakeJobStore(job)
+    svc = _make_service(tmp_path, monkeypatch, store)
+    svc.runner.vram.arbitrage_running = True
+
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 1
+    assert svc.runner.allocator.owner is None                    # verrou rendu
+    assert svc.runner.allocator.acquire_calls == ["__pipeline_stop__"]

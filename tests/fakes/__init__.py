@@ -7,7 +7,7 @@ Patron d'import identique à ``net_helpers`` (le répertoire ``tests/`` est sur
 """
 from fakes.console import FakeConsole  # noqa: F401
 from fakes.filesystem import InMemoryJobFilesystem  # noqa: F401
-from fakes.gpu import FakeArbitrageVram, fake_gpu_info  # noqa: F401
+from fakes.gpu import FakeArbitrageVram, FakeLlmLockAllocator, fake_gpu_info  # noqa: F401
 from fakes.llm import FakeLlmExecutor  # noqa: F401
 from fakes.store import FakeJobStore  # noqa: F401
 from fakes.workflow import FakeWorkflowRunner  # noqa: F401

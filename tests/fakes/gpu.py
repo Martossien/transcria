@@ -36,3 +36,24 @@ class FakeArbitrageVram:
     def stop_arbitrage_llm(self) -> None:
         self.stop_calls += 1
         self.arbitrage_running = False
+
+
+class FakeLlmLockAllocator:
+    """Le verrou LLM de l'allocateur, réduit à sa sémantique (B3) : un seul
+    détenteur, acquisitions non bloquantes, release à propriété stricte."""
+
+    def __init__(self):
+        self.owner: str | None = None
+        self.acquire_calls: list[str] = []
+
+    def try_acquire_llm(self, job_id: str = "", timeout_s: float = 0) -> bool:
+        self.acquire_calls.append(job_id)
+        if self.owner is not None:
+            return False
+        self.owner = job_id or None
+        return True
+
+    def release_llm(self, job_id: str | None = None) -> None:
+        if job_id and self.owner != job_id:
+            return
+        self.owner = None

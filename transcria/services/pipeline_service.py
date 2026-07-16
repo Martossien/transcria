@@ -316,12 +316,28 @@ class PipelineService:
             force=True,
         )
 
+    # Propriétaire sentinelle du verrou LLM pendant l'arrêt de fin de pipeline.
+    _LLM_STOP_OWNER = "__pipeline_stop__"
+
     def _release_arbitrage_llm(self) -> None:
-        if self.runner.vram.is_arbitrage_llm_running():
-            logger.info("[pipeline] Arrêt LLM arbitrage en fin de pipeline")
-            self.runner.vram.stop_arbitrage_llm()
-        else:
-            logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
+        # Course arrêt-vs-lancement (débusquée par la campagne de charge B3) : un AUTRE
+        # job peut détenir le verrou LLM — correction/relecture en cours, voire serveur
+        # en plein chargement (SIGTERM en plein create_tensor → exit 143, vécu en rafale
+        # de 3 jobs). L'arrêt n'a lieu que s'il PREND le verrou : détenu ailleurs → on
+        # saute (le détenteur ou le prochain pipeline arrêtera) ; pris → aucun job ne
+        # peut lancer la LLM pendant l'arrêt (il patiente sur le verrou puis relance).
+        allocator = self.runner.allocator
+        if not allocator.try_acquire_llm(self._LLM_STOP_OWNER):
+            logger.info("[pipeline] LLM arbitrage utilisée par un autre job — arrêt de fin de pipeline sauté")
+            return
+        try:
+            if self.runner.vram.is_arbitrage_llm_running():
+                logger.info("[pipeline] Arrêt LLM arbitrage en fin de pipeline")
+                self.runner.vram.stop_arbitrage_llm()
+            else:
+                logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
+        finally:
+            allocator.release_llm(self._LLM_STOP_OWNER)
 
     @staticmethod
     def _is_cancel_requested(job_id: str) -> bool:

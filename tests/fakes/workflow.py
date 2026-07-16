@@ -4,13 +4,14 @@ Chaque ``run_*`` réussit, s'enregistre dans ``calls`` et ÉCRIT l'artefact non
 ambigu de sa phase (mêmes chemins que ``workflow/resume._PHASE_ARTIFACT``) :
 les checkpoints et la reprise se comportent comme en production.
 """
-from fakes.gpu import FakeArbitrageVram
+from fakes.gpu import FakeArbitrageVram, FakeLlmLockAllocator
 
 
 class FakeWorkflowRunner:
     def __init__(self, config: dict):
         self.config = config
         self.vram = FakeArbitrageVram()
+        self.allocator = FakeLlmLockAllocator()
         self.calls: list[str] = []
 
     def _fs(self, job):
