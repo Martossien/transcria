@@ -52,7 +52,7 @@ RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/
 # ── Étage model-fetch : télécharge les 3 modèles NON gated (aucun token) ────────────────────
 # Léger (python slim) : seul huggingface_hub est requis. HF_HOME=/baked/hf reproduit la structure
 # `hub/models--…` que faster_whisper et NeMo (from_pretrained) lisent au runtime ; le GGUF va
-# dans /baked/models/<dir>/<file> (mêmes repo/fichier/dir que transcria/install_arbitrage.py).
+# dans /baked/models/<dir>/<file> (mêmes repo/fichier/dir que transcria/installer/tiers.py).
 FROM python:3.12-slim AS model-fetch
 ENV HF_HOME=/baked/hf \
     PIP_DISABLE_PIP_VERSION_CHECK=1
