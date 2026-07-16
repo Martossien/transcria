@@ -1,13 +1,11 @@
-import json
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from transcria.context.meeting_context import MeetingContextManager, MEETING_TYPES
-from transcria.context.participants import ParticipantsManager
-from transcria.context.lexicon import LexiconManager, LEXICON_CATEGORIES, LEXICON_PRIORITIES
 from transcria.context.job_context_builder import JobContextBuilder
+from transcria.context.lexicon import LEXICON_CATEGORIES, LEXICON_PRIORITIES, LexiconManager
+from transcria.context.meeting_context import MEETING_TYPES, MeetingContextManager
+from transcria.context.participants import ParticipantsManager
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
 

@@ -1,4 +1,3 @@
-import io
 import json
 import os
 import tempfile
@@ -330,8 +329,8 @@ class TestJobWizard:
         if not job_id:
             return
         with app.app_context():
-            from transcria.jobs.store import JobStore
             from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
             JobStore.update_state(job_id, JobState.SUMMARY_RUNNING)
 
         r = admin_client.post(f"/api/jobs/{job_id}/summary")
@@ -344,8 +343,8 @@ class TestJobWizard:
         if not job_id:
             return
         with app.app_context():
-            from transcria.jobs.store import JobStore
             from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
             JobStore.update_state(job_id, JobState.SPEAKER_DETECTION_RUNNING)
 
         r = admin_client.post(f"/api/jobs/{job_id}/speakers/detect")
@@ -355,8 +354,8 @@ class TestJobWizard:
     def _advance_to_participants_done(self, app, job_id):
         """Force l'état du job à PARTICIPANTS_DONE pour débloquer la section lexique."""
         with app.app_context():
-            from transcria.jobs.store import JobStore
             from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
             JobStore.update_state(job_id, JobState.PARTICIPANTS_DONE)
 
     def test_wizard_renders_lexicon_contexts(self, admin_client, app):
@@ -515,8 +514,7 @@ class TestApiDownloads:
         assert r.mimetype == "audio/wav"
         assert r.data == b"wav"
         with admin_client.application.app_context():
-            from transcria.audit.models import AuditAction
-            from transcria.audit.models import AuditLog
+            from transcria.audit.models import AuditAction, AuditLog
 
             row = AuditLog.query.filter_by(action=AuditAction.JOB_DOWNLOAD.value, target_id=job_id).order_by(AuditLog.timestamp.desc()).first()
             assert row is not None
@@ -555,8 +553,7 @@ class TestApiDownloads:
         assert r.status_code == 200
         assert r.mimetype == "audio/wav"
         with admin_client.application.app_context():
-            from transcria.audit.models import AuditAction
-            from transcria.audit.models import AuditLog
+            from transcria.audit.models import AuditAction, AuditLog
 
             row = AuditLog.query.filter_by(action=AuditAction.JOB_DOWNLOAD.value, target_id=job_id).order_by(AuditLog.timestamp.desc()).first()
             assert row is not None

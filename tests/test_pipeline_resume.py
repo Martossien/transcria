@@ -5,8 +5,6 @@ Vérifie que `_run_pipeline_steps` saute les phases déjà faites (marqueur
 """
 from __future__ import annotations
 
-import pytest
-
 from transcria.jobs.store import JobStore
 from transcria.services.pipeline_service import PipelineService
 from transcria.workflow import resume

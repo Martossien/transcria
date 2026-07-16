@@ -10,10 +10,8 @@ Couvre :
   - ZIP PackageBuilder intègre le DOCX
 """
 import zipfile
-from pathlib import Path
 
 import pytest
-
 
 # ── Fixtures communes ─────────────────────────────────────────────────────────
 
@@ -164,8 +162,9 @@ class TestDocxDownload:
 
     def test_docx_contient_sections_attendues(self, admin_client, job_with_docx_data, tmp_path):
         pytest.importorskip("docx")
-        from docx import Document
         import io
+
+        from docx import Document
 
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
         doc = Document(io.BytesIO(r.data))
@@ -180,8 +179,9 @@ class TestDocxDownload:
 
     def test_docx_contient_noms_participants(self, admin_client, job_with_docx_data):
         pytest.importorskip("docx")
-        from docx import Document
         import io
+
+        from docx import Document
 
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
         doc = Document(io.BytesIO(r.data))
@@ -192,8 +192,9 @@ class TestDocxDownload:
 
     def test_docx_contient_transcription(self, admin_client, job_with_docx_data):
         pytest.importorskip("docx")
-        from docx import Document
         import io
+
+        from docx import Document
 
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
         doc = Document(io.BytesIO(r.data))
@@ -206,9 +207,10 @@ class TestDocxDownload:
     def test_docx_pourcentages_temps_parole(self, admin_client, job_with_docx_data):
         """40s + 20s → Alice 67%, Bob 33% — doit apparaître dans le tableau."""
         pytest.importorskip("docx")
-        from docx import Document
         import io
         import re
+
+        from docx import Document
 
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
         doc = Document(io.BytesIO(r.data))
@@ -220,8 +222,9 @@ class TestDocxDownload:
     def test_docx_sans_section_qualite_si_score_ok(self, admin_client, job_with_docx_data):
         """Score 90, pas de flags → le titre de section '4.' absent du document."""
         pytest.importorskip("docx")
-        from docx import Document
         import io
+
+        from docx import Document
 
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
         doc = Document(io.BytesIO(r.data))
@@ -232,10 +235,12 @@ class TestDocxDownload:
     def test_docx_section_qualite_si_coverage_faible(self, admin_client, app):
         """Coverage 70% → section 'Points à vérifier' présente."""
         pytest.importorskip("docx")
+        import io
+
         from docx import Document
+
         from transcria.config import get_config
         from transcria.jobs.filesystem import JobFilesystem
-        import io
 
         # Nouveau job avec coverage faible
         job_id = _make_job_id(admin_client)
@@ -268,9 +273,9 @@ class TestDocxDownload:
 
     def test_docx_cached_sur_disque(self, admin_client, app, job_with_docx_data):
         """Deux appels successifs → le fichier est mis en cache dans exports/."""
+
         from transcria.config import get_config
         from transcria.jobs.filesystem import JobFilesystem
-        import re as _re
 
         # Premier appel
         r1 = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")

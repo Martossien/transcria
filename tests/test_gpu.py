@@ -6,12 +6,12 @@ import time
 
 import pytest
 
-from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.cuda_visible import (
     parse_cuda_visible_devices,
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.vram_manager import VRAMManager
 
 
 def _default_config(**overrides):

@@ -3,7 +3,9 @@ import inspect
 
 import pytest
 
+from transcria.jobs.store import JobStore
 from transcria.workflow import phases
+from transcria.workflow.gpu_phase import GpuPhaseSession
 from transcria.workflow.phases import (
     correction,
     diarization,
@@ -15,8 +17,6 @@ from transcria.workflow.phases import (
     summary,
     transcription,
 )
-from transcria.jobs.store import JobStore
-from transcria.workflow.gpu_phase import GpuPhaseSession
 from transcria.workflow.progress import WorkflowProgressReporter
 from transcria.workflow.runner import WorkflowRunner
 

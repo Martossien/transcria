@@ -5,15 +5,8 @@ import numpy as np
 
 from transcria.config import load_config
 from transcria.config.config_schema import validate_config
-from transcria.voice.embedding import cosine_raw
-from transcria.voice.embedding import deserialize_embedding
-from transcria.voice.embedding import serialize_embedding
-from transcria.voice.models import VoiceConsent
-from transcria.voice.models import VoiceConsentStatus
-from transcria.voice.models import VoiceMatch
-from transcria.voice.models import VoiceProfile
-from transcria.voice.models import VoiceProfileStatus
-from transcria.voice.models import VoiceSubject
+from transcria.voice.embedding import cosine_raw, deserialize_embedding, serialize_embedding
+from transcria.voice.models import VoiceConsent, VoiceConsentStatus, VoiceMatch, VoiceProfile, VoiceProfileStatus, VoiceSubject
 
 
 class TestVoiceConfig:
@@ -52,8 +45,7 @@ class TestVoiceStore:
     def test_create_subject_requires_group_when_global_disabled(self, app):
         with app.app_context():
             from transcria.auth.store import UserStore
-            from transcria.voice.store import VoiceStore
-            from transcria.voice.store import VoiceValidationError
+            from transcria.voice.store import VoiceStore, VoiceValidationError
 
             admin = UserStore.get_by_username("admin")
             try:
@@ -101,8 +93,8 @@ class TestVoiceStore:
         with app.app_context():
             from transcria.auth.groups import GroupStore
             from transcria.auth.store import UserStore
-            from transcria.jobs.store import JobStore
             from transcria.config import get_config
+            from transcria.jobs.store import JobStore
             from transcria.voice.embedding import VoiceEmbedding
             from transcria.voice.store import VoiceStore
 
@@ -309,7 +301,6 @@ class TestVoiceWeb:
         with app.app_context():
             from transcria.auth.groups import GroupStore
             from transcria.auth.store import UserStore
-            from transcria.voice.embedding import VoiceEmbedding
             from transcria.voice.store import VoiceStore
 
             admin = UserStore.get_by_username("admin")

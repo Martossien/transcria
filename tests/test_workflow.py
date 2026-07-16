@@ -1,9 +1,8 @@
-import pytest
 
-from transcria.workflow.states import WorkflowState, StepStatus
-from transcria.workflow.steps import WorkflowSteps
 from transcria.jobs.models import JobState
 from transcria.workflow.runner import WorkflowRunner
+from transcria.workflow.states import StepStatus, WorkflowState
+from transcria.workflow.steps import WorkflowSteps
 from transcria.workflow.transitions import can_start_processing, next_preprocessing_state
 
 

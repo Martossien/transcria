@@ -1,10 +1,11 @@
-import pytest
 from datetime import datetime, timedelta, timezone
 
-from transcria.jobs.store import JobStore
-from transcria.jobs.models import JobState
-from transcria.auth.store import UserStore
+import pytest
+
 from transcria.auth.models import Role
+from transcria.auth.store import UserStore
+from transcria.jobs.models import JobState
+from transcria.jobs.store import JobStore
 
 
 @pytest.fixture

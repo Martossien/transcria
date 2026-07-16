@@ -75,6 +75,7 @@ class TestHttpGetJsonResult:
 
     def test_throttle_des_logs(self, caplog):
         import logging
+
         from transcria.gpu.llm_backend import LLMBackend
         LLMBackend._NETWORK_ERROR_LOGGED.clear()
         with caplog.at_level(logging.WARNING):

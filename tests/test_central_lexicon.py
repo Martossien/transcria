@@ -2,15 +2,14 @@ import json
 import uuid
 
 from transcria.context.central_lexicon_models import GroupLexiconEntry
-from transcria.context.central_lexicon_service import filter_lexicon_by_srt_presence
-from transcria.context.central_lexicon_service import merge_lexicon_entries
-from transcria.context.central_lexicon_service import prefilter_lexicon_entries_for_display
-from transcria.context.central_lexicon_store import CentralLexiconAccessError
-from transcria.context.central_lexicon_store import CentralLexiconStore
-from transcria.context.central_lexicon_store import CentralLexiconValidationError
+from transcria.context.central_lexicon_service import (
+    filter_lexicon_by_srt_presence,
+    merge_lexicon_entries,
+    prefilter_lexicon_entries_for_display,
+)
+from transcria.context.central_lexicon_store import CentralLexiconAccessError, CentralLexiconStore, CentralLexiconValidationError
 from transcria.context.lexicon import LexiconManager
-from transcria.context.lexicon_audit import lexicon_entries_audit_summary
-from transcria.context.lexicon_audit import looks_like_person_name
+from transcria.context.lexicon_audit import lexicon_entries_audit_summary, looks_like_person_name
 
 
 def _name(prefix: str) -> str:
@@ -36,8 +35,7 @@ class TestCentralLexiconStore:
     def test_group_admin_cannot_create_global_lexicon(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
 
             user = UserStore.create_user(username=_name("group-admin"), password="test12345", role=Role.OPERATOR)
@@ -54,8 +52,7 @@ class TestCentralLexiconStore:
     def test_group_admin_can_create_group_lexicon(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
 
             user = UserStore.create_user(username=_name("group-admin"), password="test12345", role=Role.OPERATOR)
@@ -70,8 +67,7 @@ class TestCentralLexiconStore:
     def test_group_member_cannot_manage_group_lexicon(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
 
             admin = UserStore.get_by_username("admin")
@@ -124,8 +120,7 @@ class TestCentralLexiconStore:
     def test_accessible_lexicons_for_job_use_job_owner_groups(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
             from transcria.jobs.store import JobStore
 
@@ -378,9 +373,8 @@ class TestCentralLexiconWeb:
 
     def test_lexicon_term_audit_does_not_store_raw_term(self, app, admin_client):
         with app.app_context():
+            from transcria.audit.models import AuditAction, AuditLog
             from transcria.auth.groups import GroupStore
-            from transcria.audit.models import AuditAction
-            from transcria.audit.models import AuditLog
 
             group = GroupStore.create_group(_name("audit-lexicon-group"))
             group_id = group.id
@@ -413,10 +407,9 @@ class TestCentralLexiconWeb:
 
     def test_lexicon_export_is_audited_without_raw_terms(self, app, admin_client):
         with app.app_context():
+            from transcria.audit.models import AuditAction, AuditLog
             from transcria.auth.groups import GroupStore
             from transcria.auth.store import UserStore
-            from transcria.audit.models import AuditAction
-            from transcria.audit.models import AuditLog
 
             admin = UserStore.get_by_username("admin")
             group = GroupStore.create_group(_name("export-lexicon-group"))
@@ -439,11 +432,9 @@ class TestCentralLexiconWeb:
     def test_lexicon_export_can_be_restricted_to_global_admins(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
-            from transcria.config import get_config
-            from transcria.config import set_config
+            from transcria.config import get_config, set_config
 
             cfg = get_config()
             original_security = dict(cfg.get("security", {}))
@@ -465,8 +456,7 @@ class TestCentralLexiconWeb:
             assert response.status_code == 403
         finally:
             with app.app_context():
-                from transcria.config import get_config
-                from transcria.config import set_config
+                from transcria.config import get_config, set_config
 
                 cfg = get_config()
                 cfg["security"] = original_security
@@ -475,8 +465,7 @@ class TestCentralLexiconWeb:
     def test_group_admin_can_manage_own_group_lexicon(self, app):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
 
             user = UserStore.create_user(username=_name("web-group-admin"), password="test12345", role=Role.OPERATOR)
@@ -499,8 +488,7 @@ class TestCentralLexiconWeb:
     def test_available_lexicons_api_uses_job_owner_scope(self, app, admin_client):
         with app.app_context():
             from transcria.auth.groups import GroupStore
-            from transcria.auth.models import GroupRole
-            from transcria.auth.models import Role
+            from transcria.auth.models import GroupRole, Role
             from transcria.auth.store import UserStore
             from transcria.jobs.store import JobStore
 
@@ -561,8 +549,7 @@ class TestCentralLexiconWeb:
             updated = db.session.get(GroupLexiconEntry, entry_id)
             assert updated.usage_count == 1
 
-            from transcria.audit.models import AuditAction
-            from transcria.audit.models import AuditLog
+            from transcria.audit.models import AuditAction, AuditLog
             row = AuditLog.query.filter_by(action=AuditAction.JOB_LEXICON_SAVE.value).order_by(AuditLog.timestamp.desc()).first()
             assert row is not None
             details = json.loads(row.details_json)

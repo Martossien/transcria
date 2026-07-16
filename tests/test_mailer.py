@@ -3,9 +3,7 @@
 import threading
 import time
 from types import SimpleNamespace
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from transcria.notifications.mailer import (
     EmailConfig,
@@ -121,8 +119,9 @@ def test_base_url_trailing_slash_stripped():
 
 def test_build_html_success_english_locale():
     """L'email est rendu dans la langue du destinataire (Vague 3)."""
-    from transcria.installer.i18n_phase import I18nPlan, apply_i18n
     from pathlib import Path
+
+    from transcria.installer.i18n_phase import I18nPlan, apply_i18n
 
     class _C:
         def info(self, m): ...

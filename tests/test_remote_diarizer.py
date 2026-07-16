@@ -1,6 +1,5 @@
 """RemoteDiarizer : transmission de la fourchette de locuteurs par job au nœud distant."""
 
-from pathlib import Path
 from types import SimpleNamespace
 
 from transcria.stt.remote_diarizer import RemoteDiarizer

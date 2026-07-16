@@ -3,7 +3,6 @@ config JSON) — idempotence par COMMIT, submodules, arch CUDA native."""
 from pathlib import Path
 
 import pytest
-
 from fakes import FakeConsole
 
 from transcria.installer.parakeetcpp_phase import (

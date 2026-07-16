@@ -20,12 +20,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 from flask import Flask, jsonify, request
-
 from net_helpers import free_port, primary_lan_ip, serve_flask
+
 from transcria.inference.client import (
     InferenceClient,
     InferenceRequestError,
-    InferenceUnavailable,
     build_client_from_config,
 )
 from transcria.voice.embedding import (

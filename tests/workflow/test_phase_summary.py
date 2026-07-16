@@ -6,10 +6,10 @@ restent les points de substitution.
 """
 import pytest  # noqa: F401 — parité d'environnement avec test_workflow_runner.py
 
-from transcria.workflow.runner import WorkflowRunner
+from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState  # noqa: F401
 from transcria.jobs.store import JobStore
-from transcria.jobs.filesystem import JobFilesystem
+from transcria.workflow.runner import WorkflowRunner
 
 
 def _default_config(**overrides):
@@ -65,8 +65,8 @@ class TestWorkflowRunnerRunSummaryOpencodeConfig:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.jobs.filesystem import JobFilesystem
             from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.jobs.filesystem import JobFilesystem
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("summary/quick_transcript.txt", "Bonjour")
@@ -95,8 +95,9 @@ class TestWorkflowRunnerRunSummary:
         restaure l'état pré-résumé au lieu de marquer FAILED. L'appelant (api_summary)
         met alors le job en attente et le client relance automatiquement.
         """
-        from transcria.gpu.gpu_session import GPUSessionError
         import contextlib
+
+        from transcria.gpu.gpu_session import GPUSessionError
 
         with app.app_context():
             cfg = _default_config(storage={"jobs_dir": str(tmp_path / "jobs")})
@@ -184,8 +185,8 @@ class TestWorkflowRunnerRunSummary:
                 def __exit__(self, exc_type, exc, tb):
                     return False
 
-            from transcria.workflow import gpu_phase as gpu_phase_module
             from transcria.stt.summary import SummaryGenerator
+            from transcria.workflow import gpu_phase as gpu_phase_module
 
             # B1 : la session GPU vit dans workflow/gpu_phase.py — substitution à la source.
             monkeypatch.setattr(gpu_phase_module, "GPUSession", FakeSession)
@@ -214,7 +215,6 @@ class TestWorkflowRunnerRunSummary:
             job = JobStore.create_job(owner_id, "Summary LLM OK")
             runner = WorkflowRunner(JobStore, cfg)
 
-            from transcria.jobs.filesystem import JobFilesystem as _JFS
 
             monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
             monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
@@ -225,9 +225,9 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.vram, "is_arbitrage_llm_running", lambda: True)
             monkeypatch.setattr(runner.vram, "ensure_arbitrage_llm_ready", lambda expected_model_id=None: True)
 
-            from transcria.stt.summary import SummaryGenerator
             from transcria.gpu.opencode_runner import OpenCodeRunner
             from transcria.stt.speaker_detection import SpeakerDetector
+            from transcria.stt.summary import SummaryGenerator
 
             fake_summary_result = {
                 "transcript_text": "[0s->60s] Discussion sur le budget",
@@ -281,9 +281,10 @@ class TestWorkflowRunnerRunSummary:
     def _llm_phase_runner(self, cfg, job, monkeypatch, tmp_path):
         """Mocks communs pour atteindre la sous-étape LLM du résumé sans GPU réel."""
         runner = WorkflowRunner(JobStore, cfg)
+        import torch
+
         from transcria.stt.speaker_detection import SpeakerDetector
         from transcria.stt.summary import SummaryGenerator
-        import torch
 
         monkeypatch.setattr(runner.vram, "ensure_free", lambda required_mb: 0)
         monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
@@ -434,8 +435,8 @@ class TestWorkflowRunnerRunSummary:
             monkeypatch.setattr(runner.vram, "untrack_model", lambda name: None)
             monkeypatch.setattr(runner.vram, "offload_all", lambda: None)
 
-            from transcria.stt.summary import SummaryGenerator
             from transcria.stt.speaker_detection import SpeakerDetector
+            from transcria.stt.summary import SummaryGenerator
 
             fake_summary_result = {
                 "transcript_text": "[0s->5s] Bonjour",

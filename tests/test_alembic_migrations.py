@@ -19,6 +19,7 @@ from alembic import command  # noqa: E402
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+
 from transcria.database import db
 
 

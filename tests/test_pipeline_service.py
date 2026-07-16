@@ -1,7 +1,7 @@
 """Tests PipelineService : intégration AudioSceneAnalyzer + SourceSeparationService."""
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -717,6 +717,7 @@ class TestTypeFieldsGating:
 
     def _steps(self, profile_id, has_type_fields):
         from unittest.mock import patch
+
         from transcria.workflow.profiles import get_profile
         svc = _make_svc({"workflow": {"enable_quality_mode": True, "arbitration_llm": {"enabled": True}}})
         job = _job()

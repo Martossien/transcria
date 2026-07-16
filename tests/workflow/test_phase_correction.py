@@ -1,10 +1,9 @@
 """Tests de la phase CORRECTION (workflow/phases/correction.py) — migrés de test_workflow_runner.py (B1 lot 2)."""
 import json  # noqa: F401 — utilisé par les tests de prompting
 
-from transcria.workflow.runner import WorkflowRunner
-from transcria.jobs.models import JobState
-from transcria.jobs.store import JobStore
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.jobs.store import JobStore
+from transcria.workflow.runner import WorkflowRunner
 
 
 def _default_config(**overrides):
@@ -48,8 +47,8 @@ class TestWorkflowRunnerRunCorrectionPrompting:
             job = JobStore.create_job(owner_id, "Correction Partial Timeout")
             runner = WorkflowRunner(JobStore, cfg)
 
-            from transcria.jobs.filesystem import JobFilesystem
             from transcria.gpu.opencode_runner import OpenCodeRunner
+            from transcria.jobs.filesystem import JobFilesystem
 
             fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
             fs.save_text("metadata/transcription.srt", "1\n00:00:00,000 --> 00:00:05,000\nBonjour\n")

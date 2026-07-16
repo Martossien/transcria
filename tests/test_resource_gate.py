@@ -4,8 +4,6 @@ Pur : client injecté via client_factory, horloge via `now`.
 """
 from __future__ import annotations
 
-import pytest
-
 from transcria.inference.client import InferenceRequestError, InferenceUnavailable
 from transcria.inference.resource_gate import prepare_remote_resources
 

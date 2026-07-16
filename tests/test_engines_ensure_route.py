@@ -4,8 +4,6 @@ Superviseur factice injecté via app.extensions → aucun GPU ni subprocess.
 """
 from __future__ import annotations
 
-import pytest
-
 from inference_service.app import create_app
 from transcria.gpu.stt_engine_supervisor import EnsureResult
 

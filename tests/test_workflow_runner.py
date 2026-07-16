@@ -1,13 +1,11 @@
 """Tests for WorkflowRunner — success paths for all steps, VRAM cycle, GPU allocation, state transitions."""
-import json
 import pytest
 
-from transcria.workflow.runner import WorkflowRunner
-from transcria.workflow.states import WorkflowState, StepStatus
-from transcria.jobs.models import Job, JobState
-from transcria.jobs.store import JobStore
-from transcria.gpu.vram_manager import VRAMManager
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.jobs.models import JobState
+from transcria.jobs.store import JobStore
+from transcria.workflow.runner import WorkflowRunner
+from transcria.workflow.states import StepStatus, WorkflowState
 
 
 def _default_config(**overrides):

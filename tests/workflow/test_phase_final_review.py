@@ -1,6 +1,6 @@
 """Tests de la phase RELECTURE FINALE (workflow/phases/final_review.py) — migrés de test_workflow_runner.py (B1 lot 2)."""
-from transcria.workflow.runner import WorkflowRunner
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.workflow.runner import WorkflowRunner
 
 
 class TestApplyFinalReviewStructuredDataNormalisation:

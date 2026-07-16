@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
-from transcria.benchmarks.stt_concurrency_estimator import BenchMeasurement
-from transcria.benchmarks.stt_concurrency_estimator import collect_measurements
-from transcria.benchmarks.stt_concurrency_estimator import estimate_local_concurrency
-from transcria.benchmarks.stt_concurrency_estimator import write_estimates
+from transcria.benchmarks.stt_concurrency_estimator import (
+    BenchMeasurement,
+    collect_measurements,
+    estimate_local_concurrency,
+    write_estimates,
+)
 
 
 def _write_result(run_dir, combo_id="S01", *, chunk_metrics=None):

@@ -37,6 +37,7 @@ class TestJobFacts:
     def test_completed_facts_lit_temps_qualite_points(self, app, tmp_path):
         with app.app_context():
             from types import SimpleNamespace
+
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.notifications.job_facts import completed_facts
             cfg = {"storage": {"jobs_dir": str(tmp_path)}}
@@ -51,6 +52,7 @@ class TestJobFacts:
     def test_summary_ready_facts_type_et_estimation(self, app, tmp_path, _clean):
         with app.app_context():
             from types import SimpleNamespace
+
             from transcria.jobs.filesystem import JobFilesystem
             from transcria.notifications.job_facts import summary_ready_facts
             cfg = {"storage": {"jobs_dir": str(tmp_path)}}

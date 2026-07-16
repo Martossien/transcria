@@ -870,6 +870,7 @@ class TestRunnerThemeTracking:
         """
         import importlib.util
         import json as _json
+
         from transcria.config import get_config
 
         spec = importlib.util.spec_from_file_location(

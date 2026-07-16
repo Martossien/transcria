@@ -1,9 +1,8 @@
 from types import SimpleNamespace
 
-import pytest
 from werkzeug.security import check_password_hash
 
-from transcria.auth.models import Role, ROLE_HIERARCHY, User
+from transcria.auth.models import ROLE_HIERARCHY, Role, User
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.routes import _is_safe_next_url, _removes_last_active_admin
 

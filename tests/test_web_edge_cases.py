@@ -1,7 +1,7 @@
 """Edge case and error handling tests for Web API."""
+import copy
 import io
 import json
-import copy
 import uuid
 
 
@@ -51,9 +51,10 @@ class TestAuthEdgeCases:
 
     def test_login_deactivated_user(self, app, client):
         with app.app_context():
-            from transcria.auth.store import UserStore
-            from transcria.auth.models import Role
             import uuid
+
+            from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
             uname = f"deact_{uuid.uuid4().hex[:6]}"
             u = UserStore.create_user(username=uname, password="pw", role=Role.OPERATOR)
             UserStore.deactivate_user(u.id)
@@ -77,8 +78,8 @@ class TestAuthEdgeCases:
 class TestUserManagementEdgeCases:
     def test_create_duplicate_user(self, admin_client, app):
         with app.app_context():
-            from transcria.auth.store import UserStore
             from transcria.auth.models import Role
+            from transcria.auth.store import UserStore
             existing = UserStore.get_by_username("duptest")
             if not existing:
                 UserStore.create_user(username="duptest", password="pw", role=Role.OPERATOR)
@@ -545,8 +546,7 @@ class TestPipelineErrors:
         from transcria.jobs.models import JobState
         from transcria.jobs.store import JobStore
         from transcria.queue.store import QueueStore
-        from transcria.workflow.transitions import get_execution_status
-        from transcria.workflow.transitions import mark_execution_queued
+        from transcria.workflow.transitions import get_execution_status, mark_execution_queued
 
         jid = self._create_uploaded_job(admin_client)
         with app.app_context():

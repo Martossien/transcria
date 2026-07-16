@@ -16,7 +16,6 @@ from transcria.workflow.transitions import (
     mark_execution_waiting_vram,
 )
 
-
 # ---------------------------------------------------------------------------
 # mark_execution_waiting_vram — anti-spam admin
 # ---------------------------------------------------------------------------

@@ -3,10 +3,7 @@ import uuid
 
 import numpy as np
 
-from transcria.voice.models import VoiceMatch
-from transcria.voice.models import VoiceProfile
-from transcria.voice.models import VoiceProfileStatus
-from transcria.voice.models import VoiceSubject
+from transcria.voice.models import VoiceMatch, VoiceProfile, VoiceProfileStatus, VoiceSubject
 
 
 class TestVoiceEnrollmentE2E:

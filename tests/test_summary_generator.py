@@ -3,7 +3,6 @@ import sys
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from transcria.stt.summary import SummaryGenerator
 
@@ -23,10 +22,10 @@ class TestSummaryGeneratorGenerateQuickSummary:
     def test_generate_quick_summary_saves_files_and_returns(self, app, owner_id, tmp_path, monkeypatch):
         with app.app_context():
             cfg = _default_cfg(tmp_path)
-            from transcria.jobs.store import JobStore
-            from transcria.jobs.filesystem import JobFilesystem
-            from transcria.stt.cohere_transcriber import CohereTranscriber
             from transcria.audio.vad import SileroVAD
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.jobs.store import JobStore
+            from transcria.stt.cohere_transcriber import CohereTranscriber
             monkeypatch.setitem(
                 sys.modules,
                 "librosa",

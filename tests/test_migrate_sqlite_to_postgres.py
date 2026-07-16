@@ -14,6 +14,8 @@ import tempfile
 from datetime import datetime, timezone
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from pytest_postgresql.janitor import DatabaseJanitor
 from sqlalchemy import create_engine, text
 
@@ -23,8 +25,6 @@ import transcria.context.central_lexicon_models  # noqa: F401
 import transcria.jobs.models  # noqa: F401
 import transcria.queue.models  # noqa: F401
 import transcria.voice.models  # noqa: F401
-from alembic import command
-from alembic.config import Config
 from transcria.database import db
 
 # Charger le script de migration directement depuis le fichier (scripts/ n'est pas un package)

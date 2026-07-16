@@ -99,6 +99,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Mise en place GPU AVANT tout import CUDA/torch/pyannote/faster-whisper
 # CUDA_VISIBLE_DEVICES doit être positionné avant que ces bibliothèques
@@ -1832,7 +1833,7 @@ def print_summary(args: argparse.Namespace) -> None:
     if failed:
         print(f"  Échecs    : {failed}")
     if ERRORS:
-        print(f"\n  Erreurs détaillées :")
+        print("\n  Erreurs détaillées :")
         for err in ERRORS:
             print(f"    - {err}")
 
@@ -1855,7 +1856,7 @@ def main() -> int:
     audio_size_mb = audio_file.stat().st_size / 1024 / 1024
 
     print(f"\n{'#' * 72}")
-    print(f"  TranscrIA — E2E workflow production")
+    print("  TranscrIA — E2E workflow production")
     print(f"  {'─' * 68}")
     print(f"  Audio        : {audio_file} ({audio_size_mb:.1f} Mo)")
     print(f"  Démarré      : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")

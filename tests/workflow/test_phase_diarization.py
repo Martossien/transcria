@@ -1,7 +1,7 @@
 """Tests de la phase DIARISATION (workflow/phases/diarization.py) — migrés de test_workflow_runner.py (B1 lot 2)."""
-from transcria.workflow.runner import WorkflowRunner
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
+from transcria.workflow.runner import WorkflowRunner
 
 
 def _default_config(**overrides):

@@ -7,11 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from transcria.config import config_schema
 from transcria.web import i18n as web_i18n
-
 
 # --- Config : available_locales / default_locale -----------------------------------------
 
@@ -170,9 +167,10 @@ def test_i18n_phase_missing_dir_is_not_error(tmp_path: Path):
 
 def test_user_locale_column_and_to_dict(app):
     with app.app_context():
+        import uuid
+
         from transcria.auth.models import Role
         from transcria.auth.store import UserStore
-        import uuid
 
         u = UserStore.create_user(username=f"loc_{uuid.uuid4().hex[:6]}", password="pw", role=Role.OPERATOR)
         assert "locale" in u.to_dict()

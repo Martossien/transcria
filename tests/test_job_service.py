@@ -2,9 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from transcria.jobs.models import JobState
 from transcria.services.job_service import (
@@ -13,7 +11,6 @@ from transcria.services.job_service import (
     _merge_speakers_with_participants,
     _quality_summary_from_preflight,
 )
-
 
 # ---------------------------------------------------------------------------
 # _quality_summary_from_preflight (conservés depuis l'ancienne version)

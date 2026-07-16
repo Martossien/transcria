@@ -323,7 +323,7 @@ class TestRenduDocx:
 
     def test_fiche_alteree_ne_plante_jamais(self):
         pytest.importorskip("docx")
-        from transcria.exports.docx_report import DocxReport, _THEME_DEFAULT
+        from transcria.exports.docx_report import _THEME_DEFAULT, DocxReport
 
         ctx = self._ctx()
         ctx["custom_type"]["palette"] = {"primary": "pas-un-hex"}

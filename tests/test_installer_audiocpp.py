@@ -1,10 +1,8 @@
 """Phase installeur audiocpp : idempotence par COMMIT, séquence épinglée, erreurs typées,
 helper de config serveur (JSON pur, consommé par le lanceur bash)."""
-import os
 from pathlib import Path
 
 import pytest
-
 from fakes import FakeConsole
 
 from transcria.installer.audiocpp_phase import (

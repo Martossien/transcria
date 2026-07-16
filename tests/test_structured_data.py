@@ -1,7 +1,6 @@
 """Tests pour le parseur de données structurées LLM (3 niveaux de fallback)."""
 import pytest
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _parse(text: str):
@@ -178,9 +177,11 @@ def test_parse_structured_summary_sans_section_retourne_missing():
 
 def test_docx_avec_decisions_affiche_section():
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     sd = {"decisions": ["Budget approuvé"], "actions": [], "blocages": [],
           "reports": [], "votes": [], "resolutions": [], "points_odj": [], "prochaine_date": ""}
@@ -199,9 +200,11 @@ def test_docx_avec_decisions_affiche_section():
 def test_docx_actions_affichees_si_presentes():
     """Toute donnée extraite non vide s'affiche, quel que soit le type."""
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     sd = {"decisions": [], "actions": ["Bob : faire quelque chose"], "blocages": [],
           "reports": [], "votes": [], "resolutions": [], "points_odj": [], "prochaine_date": ""}
@@ -218,9 +221,11 @@ def test_docx_actions_affichees_si_presentes():
 
 def test_docx_votes_present_pour_cse():
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     sd = {"decisions": [], "actions": [], "blocages": [],
           "reports": [], "votes": ["Budget : 12 pour, 2 contre — adopté"],
@@ -241,9 +246,11 @@ def test_docx_votes_affiches_hors_cse():
     """Régression mairie : des votes extraits doivent s'afficher même si le type
     n'est pas CSE (conseil municipal, AG, copropriété…)."""
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     sd = {"decisions": [], "actions": [], "blocages": [],
           "reports": [], "votes": ["Budget : 12 pour — adopté"],
@@ -263,9 +270,11 @@ def test_docx_numerotation_sections_avec_enrichissement():
     """Avec des données enrichies, les sections Participants/Transcription/Qualité
     doivent être numérotées après les sections enrichies."""
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     sd = {"decisions": ["D1"], "actions": ["A1"], "blocages": [],
           "reports": [], "votes": [], "resolutions": [], "points_odj": [], "prochaine_date": ""}
@@ -284,9 +293,11 @@ def test_docx_numerotation_sections_avec_enrichissement():
 
 def test_docx_entretien_individuel_auto_confidentiel():
     pytest.importorskip("docx")
-    from docx import Document
-    from transcria.exports.docx_report import DocxReport
     import io
+
+    from docx import Document
+
+    from transcria.exports.docx_report import DocxReport
 
     report = DocxReport({"title": "Test", "meeting_type": "Entretien individuel"}, [], {}, {}, "")
     doc = report.build()

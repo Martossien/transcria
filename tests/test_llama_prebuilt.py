@@ -5,7 +5,6 @@ GPU-free et SANS réseau : on teste la logique PURE de sélection d'artefact (po
 (install_prebuilt_llama) est exercée à l'E2E GPU, pas ici.
 """
 import hashlib
-from pathlib import Path
 
 from transcria.install_arbitrage import (
     normalize_arch,

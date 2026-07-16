@@ -1,10 +1,8 @@
 """Tests pour les champs type-spécifiques par type de réunion."""
 import io
 import json
-from pathlib import Path
 
 import pytest
-
 
 # ── Tests données (meeting_context.py) ────────────────────────────────────────
 
@@ -26,9 +24,9 @@ class TestTypeSpecificFields:
                 assert f["type"] in ("text", "number", "textarea"), f"Type inconnu dans {t!r}"
 
     def test_type_specific_data_preserve_par_save(self, tmp_path):
+        from transcria.context.meeting_context import MeetingContextManager
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.jobs.models import Job, JobState
-        from transcria.context.meeting_context import MeetingContextManager
 
         fs = JobFilesystem(str(tmp_path), "test-ts")
         fs.save_json("context/meeting_context.json", {
@@ -54,10 +52,9 @@ class TestTypeSpecificFields:
 
 class TestJobContextBuilder:
     def test_type_specific_data_dans_yaml(self, tmp_path):
-        import yaml
+        from transcria.context.job_context_builder import JobContextBuilder
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.jobs.models import Job, JobState
-        from transcria.context.job_context_builder import JobContextBuilder
 
         job_id = "test-jcb"
         fs = JobFilesystem(str(tmp_path), job_id)
@@ -84,9 +81,9 @@ class TestJobContextBuilder:
         assert ts["membres_presents"] == 8
 
     def test_sans_type_specific_data_yaml_propre(self, tmp_path):
+        from transcria.context.job_context_builder import JobContextBuilder
         from transcria.jobs.filesystem import JobFilesystem
         from transcria.jobs.models import Job, JobState
-        from transcria.context.job_context_builder import JobContextBuilder
 
         job_id = "test-jcb-empty"
         fs = JobFilesystem(str(tmp_path), job_id)
@@ -108,6 +105,7 @@ class TestDocxTypeSpecific:
     def _make_report(self, meeting_type: str, ts_data: dict):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import DocxReport
 
         ctx = {"title": "Test", "meeting_type": meeting_type,
@@ -225,7 +223,6 @@ class TestTypeSpecificAPI:
 
     def test_type_specific_fields_exported_to_json(self):
         from transcria.context.meeting_context import TYPE_SPECIFIC_FIELDS
-        import json
         serialized = json.dumps(TYPE_SPECIFIC_FIELDS, ensure_ascii=False)
         restored = json.loads(serialized)
         assert restored["CSE"][0]["key"] == "president_seance"
@@ -233,10 +230,11 @@ class TestTypeSpecificAPI:
     def test_docx_http_avec_type_specific_data(self, admin_client, app):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.config import get_config
         from transcria.jobs.filesystem import JobFilesystem
-        from transcria.jobs.store import JobStore
         from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
 
         job_id = self._make_job(admin_client)
         assert job_id

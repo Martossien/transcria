@@ -5,7 +5,6 @@ save = snapshot pool commun + recalcul stats (A2) + purge du brouillon + audit,
 restauration CROISÉE éditeur↔affinage, stream Range (206), mode sans audio (A1),
 pics (404 sans audio / 202 puis 200).
 """
-import io
 import json
 import wave
 

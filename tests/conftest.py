@@ -14,6 +14,7 @@ from transcria.config import _deep_merge, load_config
 # étape manuelle, en local comme en CI (où la CI compile aussi avant pytest).
 try:
     from fakes import FakeConsole
+
     from transcria.installer.i18n_phase import I18nPlan, apply_i18n
 
     apply_i18n(

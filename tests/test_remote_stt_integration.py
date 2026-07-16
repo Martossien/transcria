@@ -15,10 +15,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from flask import Flask, jsonify, request
-
 from net_helpers import free_port as _free_port
 from net_helpers import primary_lan_ip as _primary_lan_ip
 from net_helpers import serve_flask
+
 from transcria.inference.asr_client import AsrClient, build_asr_client_from_config
 from transcria.inference.client import InferenceRequestError
 from transcria.stt.remote_transcriber import RemoteTranscriber

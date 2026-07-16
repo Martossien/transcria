@@ -2,7 +2,6 @@
 from pathlib import Path
 
 import pytest
-
 from fakes import FakeConsole
 
 from transcria.installer.moss_site_phase import (

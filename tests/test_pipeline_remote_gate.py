@@ -13,7 +13,6 @@ import pytest
 from transcria.inference.resource_gate import GateVerdict
 from transcria.services.pipeline_service import PipelineService
 
-
 # Config distante → remote_requirements non vide → le gate appelle bien le pré-vol.
 _REMOTE_CFG = {
     "models": {"stt_backend": "cohere"},

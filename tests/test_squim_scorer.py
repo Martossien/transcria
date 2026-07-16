@@ -5,7 +5,6 @@ import numpy as np
 
 from transcria.audio.squim_scorer import iter_windows, score_global, score_segments
 
-
 # ── iter_windows (pur) ────────────────────────────────────────────────────────
 
 def test_iter_windows_basic():
@@ -136,6 +135,7 @@ def test_resolve_device_cpu_passthrough():
 
 def test_resolve_device_auto_falls_back_to_cpu_without_cuda(monkeypatch):
     import torch
+
     from transcria.audio.squim_scorer import _resolve_device
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
@@ -145,6 +145,7 @@ def test_resolve_device_auto_falls_back_to_cpu_without_cuda(monkeypatch):
 
 def test_resolve_device_auto_uses_cuda_when_available(monkeypatch):
     import torch
+
     from transcria.audio.squim_scorer import _resolve_device
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
@@ -192,6 +193,7 @@ def test_pick_device_cpu_passthrough():
 
 def test_pick_device_cpu_without_cuda(monkeypatch):
     import torch
+
     from transcria.audio.squim_scorer import pick_device
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
@@ -201,6 +203,7 @@ def test_pick_device_cpu_without_cuda(monkeypatch):
 
 def test_pick_device_respects_explicit_index(monkeypatch):
     import torch
+
     from transcria.audio.squim_scorer import pick_device
 
     # Index explicite : respecté tel quel, sans interroger la VRAM (choix opérateur).

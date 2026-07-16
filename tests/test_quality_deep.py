@@ -1,16 +1,13 @@
 """Tests approfondis pour le module qualité avec SRT réel."""
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from transcria.quality.srt_checks import SRTChecker
-from transcria.quality.lexicon_checks import LexiconChecker
-from transcria.quality.review_points import ReviewPoints
-from transcria.quality.quality_report import QualityReporter, compute_quality_score
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
-
+from transcria.quality.lexicon_checks import LexiconChecker
+from transcria.quality.quality_report import QualityReporter, compute_quality_score
+from transcria.quality.srt_checks import SRTChecker
 
 REAL_SRT = """1
 00:00:00,000 --> 00:00:05,000

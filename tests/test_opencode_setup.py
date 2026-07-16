@@ -13,7 +13,6 @@ from transcria.gpu.opencode_setup import (
     resolve_arbitrage_endpoint,
 )
 
-
 # ── find_opencode_binary ──────────────────────────────────────────────────────
 
 def test_find_prefers_config_bin_when_valid():

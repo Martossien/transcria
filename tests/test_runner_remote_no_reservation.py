@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from transcria.workflow.runner import WorkflowRunner, _NoReservationSession
 
 

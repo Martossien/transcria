@@ -5,7 +5,6 @@ et on vérifie la SÉMANTIQUE de préemption : pour un serveur mono-modèle (lla
 « joignable » ⇔ « chargé » ; pour le démon Ollama, le port reste ouvert modèle déchargé,
 donc `is_loaded` doit interroger /api/ps (empreinte VRAM), pas le port.
 """
-import json
 
 import pytest
 import requests

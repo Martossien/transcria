@@ -8,7 +8,6 @@ from transcria.audio.difficulty_map import (
     summarize_difficulty,
 )
 
-
 # ── squim_window_signals ──────────────────────────────────────────────────────
 
 def test_squim_signals_all_good_is_empty():

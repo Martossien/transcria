@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ── Données synthétiques (reproduisent la structure réelle d'un job) ──────────
 
 _CTX = {
@@ -213,6 +212,7 @@ def test_genere_avec_structured_data_non_dict(tmp_path):
 def test_genere_avec_sensitivity_high(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
+
     from transcria.exports.docx_report import DocxReport
 
     out = tmp_path / "confidentiel.docx"
@@ -290,7 +290,7 @@ def test_merge_participants_calcule_pourcentages():
 # ── Tests système de thèmes visuels ──────────────────────────────────────────
 
 def test_theme_cse_est_institutionnel():
-    from transcria.exports.docx_report import _get_theme, _THEMES
+    from transcria.exports.docx_report import _THEMES, _get_theme
     theme = _get_theme("CSE")
     assert theme is _THEMES["CSE"]
     assert "PROCÈS-VERBAL" in theme.banner_text
@@ -306,7 +306,7 @@ def test_theme_point_projet_distinct_de_cse():
 
 
 def test_theme_inconnu_retourne_default():
-    from transcria.exports.docx_report import _get_theme, _THEME_DEFAULT
+    from transcria.exports.docx_report import _THEME_DEFAULT, _get_theme
     theme = _get_theme("Type qui n'existe pas")
     assert theme is _THEME_DEFAULT
     assert theme.banner_text == "COMPTE-RENDU DE TRANSCRIPTION"
@@ -323,6 +323,7 @@ def test_tous_les_types_majeurs_ont_un_theme():
 def test_docx_applique_le_theme_du_type(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
+
     from transcria.exports.docx_report import DocxReport
 
     out = tmp_path / "cse.docx"
@@ -336,6 +337,7 @@ def test_docx_applique_le_theme_du_type(tmp_path):
 def test_docx_crise_affiche_badge_situation_de_crise(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
+
     from transcria.exports.docx_report import DocxReport
 
     out = tmp_path / "crise.docx"
@@ -348,6 +350,7 @@ def test_docx_crise_affiche_badge_situation_de_crise(tmp_path):
 def test_docx_cover_quorum_atteint(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
+
     from transcria.exports.docx_report import DocxReport
 
     out = tmp_path / "cse_quorum.docx"
@@ -362,6 +365,7 @@ def test_docx_cover_quorum_atteint(tmp_path):
 def test_docx_cover_sous_titre_projet(tmp_path):
     pytest.importorskip("docx")
     from docx import Document
+
     from transcria.exports.docx_report import DocxReport
 
     out = tmp_path / "projet.docx"
@@ -403,6 +407,7 @@ class TestMarkdownRendering:
     def test_add_markdown_runs_sets_bold_flag(self):
         pytest.importorskip("docx")
         from docx import Document
+
         from transcria.exports.docx_report import _add_markdown_runs
 
         doc = Document()

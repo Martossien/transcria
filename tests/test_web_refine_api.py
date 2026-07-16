@@ -5,7 +5,6 @@ Le POST /refine écrit ``refine/request.json`` puis enfile un tour ``mode=refine
 ``test_run_refine.py``). Le GET /refine/chat est l'endpoint de polling unique de l'UI
 (tours + busy + versions + options de rendu courantes).
 """
-import json
 
 import pytest
 from test_docx_route import _seed_job_files

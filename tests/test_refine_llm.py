@@ -180,8 +180,9 @@ class TestBudgetEtTroncatureHonnete:
         assert compute_transcript_budget_chars(cfg) == 12345
 
     def test_budget_par_defaut_sans_gpu(self, monkeypatch):
-        import transcria.workflow.refine_llm as m
         # simuler l'absence de GPU (frontale) : le défaut honnête s'applique
         import torch
+
+        import transcria.workflow.refine_llm as m
         monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
         assert m.compute_transcript_budget_chars({}) == m.DEFAULT_MAX_TRANSCRIPT_CHARS
