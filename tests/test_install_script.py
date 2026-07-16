@@ -613,7 +613,7 @@ def test_install_script_backs_up_sqlite_through_python_phase():
     # (run_sqlite_migration), plus par un cp inline ni un helper appelé du shell.
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_postgres" in content  # bootstrap local (rôle/base/pg_hba)
+    assert "-m transcria.installer.cli postgres-tools" in content  # bootstrap local (rôle/base/pg_hba)
     assert 'cp "$sqlite_db" "$backup"' not in content
 
 

@@ -15,7 +15,7 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
-from transcria.installer import hardware, imports_check, models, paths, prerequisites, profiles, summary_lib
+from transcria.installer import hardware, imports_check, models, paths, postgres_lib, prerequisites, profiles, summary_lib
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -602,6 +602,8 @@ def _forward_arbitrage(rest: list[str] | None) -> int:
     return arbitrage.main(rest)
 
 
+
+
 # Helpers d'installation à CLI propre (vague C6 — ex-modules transcria/install_*.py
 # racine, fondus dans installer/). Transférés AVANT argparse : chacun garde son
 # argparse interne (testé), et REMAINDER d'argparse mange mal les options en tête.
@@ -616,6 +618,9 @@ _FORWARDED_HELPERS: dict[str, Callable[[list[str] | None], int]] = {
     # « summary » est la PHASE (bilan final) ; « summary-log » est le helper de rendu
     # des messages de configuration (ex-install_summary setup-log).
     "summary-log": summary_lib.main,
+    # « postgres » est la PHASE ; « postgres-tools » est le helper CLI historique
+    # (setup-log, requêtes d'état, pg_hba…) piloté par install.sh.
+    "postgres-tools": postgres_lib.main,
 }
 
 

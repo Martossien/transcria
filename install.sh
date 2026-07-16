@@ -337,7 +337,7 @@ eval_named_shell_assignments() {
 
 python_module() { PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m "$@"; }
 
-postgres_helper() { python_module transcria.install_postgres "$@"; }  # lot 6 : bascule avec l'absorption
+postgres_helper() { python_module transcria.installer.cli postgres-tools "$@"; }
 
 arbitrage_helper() { python_module transcria.installer.cli arbitrage "$@"; }
 
@@ -771,7 +771,7 @@ _setup_postgres() {
 
     log_postgres_setup_event() {
         local event="$1"
-        emit_rendered_log "PostgreSQL : $event" -m transcria.install_postgres \
+        emit_rendered_log "PostgreSQL : $event" -m transcria.installer.cli postgres-tools \
             --setup-log \
             --event "$event" \
             --db "$db" \

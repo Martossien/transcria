@@ -16,7 +16,7 @@ SQLAlchemy/psycopg (dépendance dure de l'application) plutôt que par le client
 Le chemin « base existante / distante » n'exige donc plus le binaire `psql` — seul le
 bootstrap local (resté en shell) en dépend. Cette phase tourne sous le python du venv.
 
-Les messages reprennent au mot près `transcria.install_postgres` (texte audité, testé).
+Les messages reprennent au mot près `transcria.installer.postgres_lib` (texte audité, testé).
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from typing import Callable, Protocol
 
 from transcria.config.env_file import update_env_file
 from transcria.install_messages import t
-from transcria.install_postgres import (
+from transcria.installer.postgres_lib import (
     build_pg_dsn,
     decide_schema_action,
     decide_sqlite_migration_action,
@@ -395,7 +395,7 @@ def _default_admin_pg_hba_rewrite(plan: PostgresBootstrapPlan) -> AdminPgHbaRewr
     def run(path: str) -> tuple[int, str]:
         if not plan.admin_python_cmd:
             return (127, "")
-        cp = subprocess.run([*plan.admin_python_cmd, "transcria.install_postgres", path], capture_output=True, text=True, check=False)
+        cp = subprocess.run([*plan.admin_python_cmd, "transcria.installer.postgres_lib", path], capture_output=True, text=True, check=False)
         return (cp.returncode, cp.stdout)
 
     return run

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from transcria.install_postgres import (
+from transcria.installer.postgres_lib import (
     backup_sqlite_database,
     build_pg_dsn,
     decide_schema_action,
@@ -112,7 +112,7 @@ def test_run_sqlite_migration_backs_up_and_runs_script(tmp_path, capsys, monkeyp
         calls.append((cmd, kwargs["env"]))
         return SimpleNamespace(returncode=0, stdout="migrated\n", stderr="")
 
-    monkeypatch.setattr("transcria.install_postgres.subprocess.run", fake_run)
+    monkeypatch.setattr("transcria.installer.postgres_lib.subprocess.run", fake_run)
 
     assert run_sqlite_migration(
         dsn="postgresql+psycopg://u:p@h/db",
@@ -145,7 +145,7 @@ def test_run_sqlite_migration_reports_script_failure(tmp_path, capsys, monkeypat
     def fake_run(cmd: list[str], **kwargs):
         return SimpleNamespace(returncode=7, stdout="", stderr="migration failed\n")
 
-    monkeypatch.setattr("transcria.install_postgres.subprocess.run", fake_run)
+    monkeypatch.setattr("transcria.installer.postgres_lib.subprocess.run", fake_run)
 
     result = run_sqlite_migration(
         dsn="postgresql+psycopg://u:p@h/db",
