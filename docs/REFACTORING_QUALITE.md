@@ -63,8 +63,11 @@
 > campagne de charge 3/3 P0 après correctif de la course arrêt-vs-lancement du verrou LLM).
 > ✅ **C6 livrée (2026-07-16)** — fonte de l'installation achevée (voir l'encadré au §C6 :
 > ZÉRO install_*.py à la racine, install.sh n'invoque plus que installer.cli,
-> maintenance/cli 43→85 %). Restent les vagues transverses **C7** (gardes Docker) et
-> **C8** (référence d'API générée).
+> maintenance/cli 43→85 %).
+> ✅ **C7 livrée (2026-07-16)** — gardes Docker pures texte en CI (un bug latent réel
+> débusqué à la première exécution : ENV d'étage builder non propagé dans resource-node),
+> scripts/release_bundled.sh, règle de release. Reste **C8** (référence d'API générée) —
+> dernière vague du chantier.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -1198,7 +1201,21 @@ reste des consommateurs transitoires) ; install.sh n'appelle plus que `installer
 (grep = 0 appel direct legacy) ; les 42 appels Python d'install.sh documentés dans
 l'en-tête du script ; test_install_e2e vert ; build Docker resource-node vert.
 
-#### C7 — Docker : gardes de synchronisation et rituel scripté *(effort M)*
+#### ✅ C7 — Docker : gardes de synchronisation et rituel scripté *(effort M — LIVRÉE 2026-07-16)*
+
+> **Réalisation (2026-07-16)** — (1) `tests/test_docker_sync.py` : les 3 gardes pures
+> texte, chacune recto-verso (passe sur l'arbre réel ET rougit sur mutation synthétique).
+> **Première exécution : bug latent réel débusqué** — `Dockerfile.resource-node` posait
+> `TRANSCRIA_RUNTIMES_DIR` dans l'étage BUILDER (un ENV d'étage ne se propage pas) : le
+> nœud ressource ne trouvait pas `/opt/runtimes` au runtime ; corrigé (ENV → étage final,
+> blocs réalignés). (2) `scripts/release_bundled.sh` : gardes préalables + build
+> (`:bundled` + `:v<version>-bundled`) + vérification bloquante du contenu conteneur
+> (version, COMMIT des runtimes == constantes, site MOSS, poids /app/models + /hf/hub,
+> absence de /app/runtimes) + push GHCR sur `--push` explicite. (3) Règle de release dans
+> AGENTS.md + checklist annexe C. (4) reconstruire bundled FROM gpu : décision différée,
+> inchangée (le design de cache prime).
+
+*(Spécification d'origine ci-dessous.)*
 
 Quatre livrables, du moins cher au plus structurant (état des lieux §3.9) :
 
@@ -1367,8 +1384,8 @@ l'annexe C.
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
 | Modules install legacy à la racine | ~~13 (4 641 l.)~~ → **0** (messages inclus) | 0 (hors messages) | ✅ C6 |
 | Appels directs install.sh → legacy | ~~26~~ → **0** (47 appels via installer.cli) | 0 | ✅ C6 |
-| Copies de chaque SHA épinglée (Dockerfiles+Python) | 5 sans garde | 5 gardées par test (1 source de vérité) | C7 |
-| Dockerfiles buildables sans jamais être parsés par la CI | 3 (bundled, resource-node, worker) | 0 non couvert par garde ou rituel | C7 |
+| Copies de chaque SHA épinglée (Dockerfiles+Python) | ~~5 sans garde~~ → gardées par test_docker_sync | 5 gardées par test (1 source de vérité) | ✅ C7 |
+| Dockerfiles buildables sans jamais être parsés par la CI | ~~3 sans garde~~ → gardes texte CI + release_bundled.sh + règle de build avant tag | 0 non couvert par garde ou rituel | ✅ C7 |
 | JS inline dans les templates | ~~548 l.~~ → **0** (hors inits window.* et îlots JSON) | 0 (hors init 1 ligne) | ✅ A3 |
 | Contrat JS↔routes (34 fetch) | ~~aucune garde~~ → test_js_api_contract (112 littéraux) | test de contrat en CI | ✅ A3 |
 | Plus gros template | ~~job_wizard.html : 1 110 l.~~ → schedule.html : 240 l. | < 400 l. | ✅ A3 |
@@ -1513,6 +1530,9 @@ forbidden_modules = flask
 [ ] Aucun des 6 fichiers de primitives de concurrence (§5.4) modifié (hors B3)
 [ ] Verrous déplacés AVEC leurs structures (§5.5) ; aucune section critique élargie/rétrécie
 [ ] Pour B1/B2 : E2E GPU réel rejoué ; pour B3 : campagne de charge rejouée
+[ ] Tout Dockerfile modifié est BUILDÉ avant le tag (au minimum `docker build --target
+    <étage modifié>`) — la CI ne parse ni bundled ni resource-node (règle C7 ; leçon des
+    deux bugs du 2026-07-13). Release bundled : via scripts/release_bundled.sh uniquement
 ```
 
 ---
