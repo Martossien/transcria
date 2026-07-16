@@ -136,16 +136,20 @@ transcria/
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque ; _resolve_binary = PATH + emplacements connus hors PATH (nvcc/llama-server introuvables via PATH réduit du service root)
       loader.py (i18n)      # override env TRANSCRIA_DEFAULT_LOCALE → i18n.default_locale (ergonomie Docker/CI)
     cli_i18n.py             # i18n des sorties CLI HORS-web (installateur + doctor) : resolve_cli_locale (env TRANSCRIA_DEFAULT_LOCALE, défaut fr) + make_translator(catalogue fr/en) ; sans dépendance, distinct de Flask-Babel (web)
-    install_messages.py     # catalogue fr/en des messages installateur (partagé install_*.py + installer/*) ; fr = libellés historiques mot pour mot (défaut octet-pour-octet inchangé)
     database.py             # db = SQLAlchemy()
     diagnostics/
       doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers — sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
       doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
-    installer/              # Logique métier d'installation fondue depuis install.sh (modules testés, runner injectable)
-      cli.py                # `python -m transcria.installer.cli <phase>` — 13 phases : python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, moss-site, audiocpp, parakeetcpp (+ recommend-llm)
+    installer/              # TOUTE la logique d'installation (C6 : plus aucun install_*.py à la racine)
+      cli.py                # `python -m transcria.installer.cli <phase|helper>` — SEUL point d'entrée Python d'install.sh : 14 phases (python-env, i18n-compile, config, config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd, summary, recommend-llm, moss-site, audiocpp, parakeetcpp) + 9 helpers transférés (prerequisites, hardware, paths, profiles, check-imports, models, arbitrage, summary-log, postgres-tools). Tête stdlib-pure : python-env tourne AVANT requirements avec le python système
       console.py            # Rendu [OK]/[INFO]/[WARN]/[ERROR] fidèle au shell (ANSI auto-off hors TTY)
+      messages.py           # catalogue fr/en des messages installateur ; fr = libellés historiques mot pour mot
       python_env.py / i18n_phase.py / config_phase.py / opencode_phase.py / ollama_phase.py / postgres_phase.py / systemd_phase.py / summary_phase.py
       moss_site_phase.py / audiocpp_phase.py / parakeetcpp_phase.py # phases OPT-IN : site Transformers 5 du backend moss ; runtimes STT servis ÉPINGLÉS (clone SHA complet + build CUDA arch native — pièges vécus : SHA court refusé par git fetch, arch 75 par défaut ⇒ SIGABRT ggml)
+      prerequisites.py / hardware.py / paths.py / profiles.py / imports_check.py # helpers pré-venv (stdlib-purs, python système)
+      models.py / models_lib.py # CLI+rendu modèles ; models_lib = ids et cache HF consommés au RUNTIME (models_catalog, cohere_transcriber)
+      arbitrage.py / tiers.py   # CLI LLM d'arbitrage (paliers, placement, prebuilt ai-dock) ; tiers = paliers llama.cpp consommés au RUNTIME (models_catalog, entrypoint)
+      torch_env.py / systemd_lib.py / summary_lib.py / opencode_lib.py / postgres_lib.py # bibliothèques des phases (plans torch/unités systemd/rendus/primitives opencode/PostgreSQL)
     deploy/                 # Déploiement conteneurisé (P5)
       entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
     maintenance/            # Backup/restore/upgrade LOCAL + planification + one-shot restore (opérateur)
@@ -155,7 +159,6 @@ transcria/
       cli.py                # `python -m transcria.maintenance.cli` : backup, backup-verify, restore, upgrade, schedule, opencode-upgrade, model-download, restore-apply, purge
     models_catalog.py       # catalogue des modèles requis par l'install (palier LLM VRAM + STT/diarisation config) : statut, taille, gated (token HF)
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
-    install_arbitrage.py / install_models.py / install_opencode.py / install_systemd.py / install_prerequisites.py / install_paths.py / install_profiles.py / install_postgres.py # primitives d'install (paliers GGUF, download HF, opencode, systemd, prérequis, chemins, profils, PostgreSQL) — sortie bilingue via install_messages.py (préfixes OK:/INFO:/WARN:/ERROR: NON localisés = lus par install.sh)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
       models.py             # User, Role, Group, GroupMembership, GroupRole
@@ -723,7 +726,7 @@ Les fiches `/admin/lexicons/<id>` affichent les statistiques d'usage et les cont
 `get_config()` retourne un singleton chargé une fois au démarrage. `set_config()` le met à jour en mémoire. `save_config()` écrit sur disque. Les modules qui capturent `get_config()` au démarrage ne voient pas les mises à jour ultérieures.
 
 ### Installation et bootstrap
-`install.sh` ne porte plus la logique métier : il fait le **bootstrap** (prérequis, choix de l'interpréteur, activation du venv) puis **délègue** chaque phase à `python -m transcria.installer.cli <phase>` (8 phases testées, à runner sous-processus injectable). Toute évolution de la logique d'installation va dans `transcria/installer/`, pas dans le shell. `scripts/bootstrap_config.py` génère `config.yaml` en fusionnant `config.example.yaml` avec les valeurs auto-détectées (`SystemDetector` : GPUs, binaires, chemins). Le fichier `.env` porte les secrets (`TRANSCRIA_SECRET`, `HF_TOKEN`).
+`install.sh` ne porte plus la logique métier : il fait le **bootstrap** (prérequis, choix de l'interpréteur, activation du venv) puis **délègue** chaque phase à `python -m transcria.installer.cli <phase|helper>` (14 phases + 9 helpers testés, à runner sous-processus injectable — l'unique point d'entrée Python du script depuis C6). Toute évolution de la logique d'installation va dans `transcria/installer/`, pas dans le shell. `scripts/bootstrap_config.py` génère `config.yaml` en fusionnant `config.example.yaml` avec les valeurs auto-détectées (`SystemDetector` : GPUs, binaires, chemins). Le fichier `.env` porte les secrets (`TRANSCRIA_SECRET`, `HF_TOKEN`).
 
 ### Déploiement conteneurisé (Docker, P5)
 Un conteneur ne lance **jamais** `install.sh` : l'entrypoint applicatif est `python -m transcria.deploy.entrypoint <role>` (web|scheduler|resource-node|migrate|all) — il valide les invariants (config présente, PostgreSQL obligatoire, SQLite refusé), attend la base, puis `exec` le serveur du rôle. `migrate` est un job one-shot ; `all` = tout-en-un de test. L'accès GPU passe par **CDI** (`--device nvidia.com/gpu=…`, pas `--gpus all`) ; activation hôte via `scripts/setup_docker_gpu.sh`. Détails : `docs/DOCKER.md`.

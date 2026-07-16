@@ -61,7 +61,10 @@
 > ✅ **B3 livrée (2026-07-16)** — sonde GPU et kill patterns uniques (voir l'encadré au §B3 :
 > llm_backend 94 %, inventory.py + kill_patterns.py, deux divergences réelles corrigées,
 > campagne de charge 3/3 P0 après correctif de la course arrêt-vs-lancement du verrou LLM).
-> Prochaine vague : **C6** (fonte de l'installation) — dernière du chantier.
+> ✅ **C6 livrée (2026-07-16)** — fonte de l'installation achevée (voir l'encadré au §C6 :
+> ZÉRO install_*.py à la racine, install.sh n'invoque plus que installer.cli,
+> maintenance/cli 43→85 %). Restent les vagues transverses **C7** (gardes Docker) et
+> **C8** (référence d'API générée).
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -1138,7 +1141,31 @@ couche 1 (la plus importée = meilleur rendement d'erreurs attrapées), puis 2, 
 > `workflow.timing_model` en tête (WINDOW en défaut de paramètre — couche 1→3
 > pré-existante, contournée côté phase).
 
-#### C6 — Achever la fonte de l'installation *(effort L — réévalué : 13 modules / 4 641 l., pas 3)*
+#### ✅ C6 — Achever la fonte de l'installation *(effort L — LIVRÉE 2026-07-16, 7 lots)*
+
+> **Réalisation (2026-07-16)** — **ZÉRO module `transcria/install_*.py` à la racine**
+> (les 13, install_messages compris — sa condition « plus rien d'autre à la racine »
+> étant remplie, il ferme la marche en `installer/messages.py`). install.sh n'invoque
+> plus que `transcria.installer.cli` (grep = 0 appel legacy ; 47 appels via cli),
+> ses appels Python sont documentés dans l'en-tête. **Patron retenu** (déviation
+> assumée des noms `*_phase` du tableau) : les helpers à CLI propre gardent leur
+> argparse testé et sont TRANSFÉRÉS par cli.py (`_FORWARDED_HELPERS`, interception
+> avant argparse — REMAINDER mange mal les options en tête) : prerequisites,
+> hardware, paths, profiles, check-imports, models, arbitrage (différé §8.3c, PyYAML),
+> summary-log, postgres-tools. Bibliothèques runtime extraites : `models_lib`
+> (ids + cache HF → models_catalog, cohere_transcriber), `tiers` (paliers llama.cpp
+> → models_catalog, entrypoint). Correction du relevé §3.8 : torch/opencode/systemd/
+> summary n'étaient PAS des doublons morts — les phases les consomment comme
+> bibliothèques (→ torch_env/opencode_lib/systemd_lib/summary_lib) ; la cartographie
+> morte/vivante d'install_postgres (27 défs) n'a trouvé AUCUN code mort (→ postgres_lib).
+> Contrainte C5 préservée partout : tête de cli.py stdlib-pure (python-env pré-venv,
+> python système — vérifié). **Extension §3.13** : maintenance/cli 43 → **85 %**
+> (18 tests de câblage, la logique vivait déjà dans les modules testés).
+> Validation locale : 487 tests install verts, bash -n, suite complète + E2E réel ;
+> les validations Docker (test_install_e2e, build resource-node) restent à rejouer
+> par l'opérateur (Docker absent de la machine de dev).
+
+*(Spécification d'origine ci-dessous.)*
 
 La doctrine existe déjà et a fait ses preuves (chantier « fonte install.sh ») : **la
 logique métier descend dans une phase testée de `transcria/installer/`, install.sh ne
@@ -1338,8 +1365,8 @@ l'annexe C.
 | Inversions de couche | ~~3 (`web.i18n`)~~ ✅ A1 + ~~`editor→routes`~~ ✅ A2 + installeur | 0 | C6 (restant) |
 | Implémentations de sonde GPU / kill_patterns | ~~3 / 2~~ → **1 / 1** (inventory.py / kill_patterns.py) | 1 / 1 | ✅ B3 |
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
-| Modules install legacy à la racine | 13 (4 641 l.) | 0 (hors messages) | C6 |
-| Appels directs install.sh → legacy | 26 | 0 | C6 |
+| Modules install legacy à la racine | ~~13 (4 641 l.)~~ → **0** (messages inclus) | 0 (hors messages) | ✅ C6 |
+| Appels directs install.sh → legacy | ~~26~~ → **0** (47 appels via installer.cli) | 0 | ✅ C6 |
 | Copies de chaque SHA épinglée (Dockerfiles+Python) | 5 sans garde | 5 gardées par test (1 source de vérité) | C7 |
 | Dockerfiles buildables sans jamais être parsés par la CI | 3 (bundled, resource-node, worker) | 0 non couvert par garde ou rituel | C7 |
 | JS inline dans les templates | ~~548 l.~~ → **0** (hors inits window.* et îlots JSON) | 0 (hors init 1 ligne) | ✅ A3 |
@@ -1348,7 +1375,7 @@ l'annexe C.
 | Doc API | table manuelle driftante (TECHNICAL §4.11) | générée de url_map + garde CI | C8 |
 | Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
 | Couverture config_schema.py (validateurs) | 80 % (205 l. mortes) | ≥ 90 % | C3 |
-| Couverture maintenance/cli.py | **38 %** | ≥ 80 % (par amincissement) | C6 |
+| Couverture maintenance/cli.py | ~~38 %~~ → **85 %** (tests de câblage, logique déjà dans les modules) | ≥ 80 % (par amincissement) | ✅ C6 |
 | Couverture gpu/llm_backend.py | **56 %** | ≥ 75 % (coutures injectées) | prépa B3 |
 | Frontière tests fakes ↔ GPU réel | non formalisée | marqueur `gpu_real` + suite smoke | C4 |
 | Couverture runner/phases | 71 % | ≥ 80 % par module | B1 |

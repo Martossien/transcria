@@ -44,6 +44,21 @@
 #                        (n'installe PAS le service web TranscrIA principal)
 #
 # Le script doit être lancé depuis le répertoire du dépôt TranscrIA.
+#
+# ── Appels Python (vague C6 : plus AUCUN module legacy transcria/install_*.py) ──
+# Toute la logique métier vit dans transcria/installer/ (testée) ; ce script ne
+# fait que le bootstrap, les invites et le résumé. Il n'invoque Python que via :
+#   - transcria.installer.cli <phase>    : python-env, i18n-compile, config,
+#       config-proxy, opencode, ollama, postgres, postgres-bootstrap, systemd,
+#       summary, recommend-llm, moss-site, audiocpp, parakeetcpp ;
+#   - transcria.installer.cli <helper>   : prerequisites, hardware, paths,
+#       profiles, check-imports, models, arbitrage, summary-log, postgres-tools
+#       (helpers à CLI propre, transférés tels quels par cli.py) ;
+#   - transcria.config.yaml_file         : helpers yaml_get/yaml_set ;
+#   - scripts/bootstrap_config.py, scripts/doctor.py.
+# Contrainte : PYTHON_BIN reste le python SYSTÈME tout du long — installer.cli
+# et les helpers pré-venv (prerequisites, hardware, paths, profiles) doivent
+# rester importables sans dépendance tierce (stdlib seulement).
 # ============================================================================
 
 set -euo pipefail
