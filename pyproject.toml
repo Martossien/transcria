@@ -42,4 +42,7 @@ markers = [
     # E2E réel exigeant Docker + GPU NVIDIA (install.sh en distro vierge → livrables).
     # Collecté partout, mais SKIPPÉ sauf TRANSCRIA_GPU_E2E=1 (machine GPU de l'opérateur).
     "gpu_e2e: E2E réel Docker+GPU (skip hors machine GPU)",
+    # Smoke GPU RÉEL (C4, plan §3.14) : la frontière fakes ↔ matériel formalisée.
+    # Collecté partout, SKIPPÉ sauf TRANSCRIA_GPU_REAL=1 (machine de dev GPU — PAS la CI).
+    "gpu_real: smoke GPU réel (skip sauf TRANSCRIA_GPU_REAL=1)",
 ]
