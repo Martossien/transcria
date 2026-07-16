@@ -58,7 +58,10 @@
 > ✅ **C5 livrée (2026-07-16)** — imports différés 408 → **39 tous justifiés** (plafond ≤ 40
 > atteint, voir l'encadré au §C5 : garde init_cycles ajoutée à l'audit, 13 coutures de tests
 > re-pointées vers le consommateur, mypy check_untyped_defs actif en gate).
-> Prochaines vagues : **B3** (GPU, en dernier — son filet gpu_real est posé), puis C6.
+> ✅ **B3 livrée (2026-07-16)** — sonde GPU et kill patterns uniques (voir l'encadré au §B3 :
+> llm_backend 94 %, inventory.py + kill_patterns.py, deux divergences réelles corrigées,
+> campagne de charge 3/3 P0 après correctif de la course arrêt-vs-lancement du verrou LLM).
+> Prochaine vague : **C6** (fonte de l'installation) — dernière du chantier.
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -931,7 +934,28 @@ séquencement** (elle l'est presque).
 **DoD** : pipeline_service.py < 400 l. (façade `run_process` + boucle du moteur) ; étapes
 testées hors GPU avec les fakes existants ; goldens verts ; E2E reprise vert.
 
-#### B3 — GPU : une seule source de vérité *(effort M ; zone à haut risque — EN DERNIER)*
+#### ✅ B3 — GPU : une seule source de vérité *(effort M — LIVRÉE 2026-07-16, 3 lots + fix de charge)*
+
+> **Réalisation (2026-07-16)** — lot 1 : prérequis §3.14 tenu, `llm_backend.py` 56 → **94 %**
+> (33 tests des chemins « processus réel », coutures substituées au consommateur —
+> Popen/os.kill/lsof/requests). Lot 2 : `gpu/inventory.py` (`snapshot() -> tuple[GpuState, ...]`
+> + `legacy_gpu_info()`) — divergence d'erreur corrigée (l'allocateur tolérait tout, le manager
+> plantait sur RuntimeError CUDA), politique par carte (une carte illisible est ignorée) ;
+> les 2 classes délèguent, `_visible_cuda_device_count` SUPPRIMÉ des deux (zéro appelant) ;
+> au-delà du §3.4, system_status (page système → même snapshot que l'admission, DoD §3.13),
+> squim_scorer et refine_llm convergent aussi — **grep mem_get_info = 1 site strict**.
+> Lot 3 : `gpu/kill_patterns.py` — divergence exacte prédite par le §3.4 : le manager
+> protégeait Ollama (_NEVER_KILL), l'allocateur NON ; unification au sens protecteur.
+> **Campagne de charge (obligatoire)** : rafale 3 jobs all-in-one sur les 2× RTX 5090 —
+> 1ʳᵉ passe **2/3** : course arrêt-vs-lancement pré-existante débusquée (cb6f916 2026-05-17 :
+> l'arrêt LLM de fin de pipeline ignorait le verrou LLM → SIGTERM exit 143 en plein
+> create_tensor du job concurrent ; invisible au banc de juin, verrou no-op en distant).
+> Correctif §5.5 (le verrou existant, propriétaire sentinelle `__pipeline_stop__`) ;
+> campagne rejouée **3/3 P0**, le garde-fou a paré la course 2 fois pendant le run vert,
+> 0 orphelin GPU. DoD tenu : sonde et patterns à 1 site, snapshot identique entre les
+> deux classes sur machine réelle (test gpu_real 4/4), campagne verte.
+
+*(Spécification d'origine ci-dessous.)*
 
 Cible **volontairement modeste** (pas de fusion des classes, pas de redécoupage en 8
 modules — §9) :
@@ -1312,7 +1336,7 @@ l'annexe C.
 | Chaînes de config profondes | 216 | 0 nouvelle, stock ↓ | C3 |
 | Dicts de résultat inter-couches | pipeline/executor entiers | 0 | B0 |
 | Inversions de couche | ~~3 (`web.i18n`)~~ ✅ A1 + ~~`editor→routes`~~ ✅ A2 + installeur | 0 | C6 (restant) |
-| Implémentations de sonde GPU / kill_patterns | 3 / 2 | 1 / 1 | B3 |
+| Implémentations de sonde GPU / kill_patterns | ~~3 / 2~~ → **1 / 1** (inventory.py / kill_patterns.py) | 1 / 1 | ✅ B3 |
 | Fichiers centraux touchés par backend STT | 5-6 | 1 | C1 |
 | Modules install legacy à la racine | 13 (4 641 l.) | 0 (hors messages) | C6 |
 | Appels directs install.sh → legacy | 26 | 0 | C6 |
