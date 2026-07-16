@@ -36,3 +36,13 @@ def audit_origin_from_url(value: str | None) -> str:
     if parsed.port:
         return f"{parsed.hostname}:{parsed.port}"
     return parsed.hostname
+
+
+def api_stable(view):
+    """Marque une route comme CONTRAT scriptable (vague C8).
+
+    Le parcours upload → process → status → download est ce que les
+    auto-hébergeurs peuvent scripter : rendu ⭐ dans docs/API_REFERENCE.md.
+    Tout le reste est interne et peut bouger sans préavis."""
+    view.__api_stable__ = True
+    return view

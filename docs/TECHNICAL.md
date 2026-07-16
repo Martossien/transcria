@@ -1159,106 +1159,15 @@ Le binaire opencode vient de `workflow.arbitration_llm.opencode_bin` ou de `TRAN
 
 ### 4.11 Web (`transcria/web/`)
 
-**`routes.py` — Routes**
+Les routes (pages + API) vivent dans les modules `web/*_routes.py` / `web/*_api.py`
+(un blueprint partagé, vague A2). Les routes liées aux jobs passent par
+`get_job_for_api()` / `require_job_access()` (propriétaire ou admin).
 
-Le fichier contient les routes pages + API. Les routes liées aux jobs passent par `_require_job_access()` ou `_get_job_for_api()` pour vérifier que l'utilisateur est propriétaire du job ou admin.
-
-| Route | Méthode | Auth | Description |
-|---|---|---|---|
-| `/health` | GET | Publique | Statut service + base de données |
-| `/ready` | GET | Publique | Préparation du worker interne |
-| `/metrics` | GET | Publique | Métriques Prometheus (`transcria_up`, `transcria_jobs_total`, `transcria_jobs_state`, `transcria_queue_entries`) |
-| `/` | GET | login_required | Accueil (liste des traitements) |
-| `/jobs/new` | POST | login_required + CREATE_JOBS | Création traitement |
-| `/jobs/<id>` | GET | login_required + owner check | Assistant wizard 9 étapes |
-| `/jobs/<id>/result` | GET | login_required + owner check | Page résultat |
-| `/jobs/<id>/delete` | POST | login_required + DELETE_JOBS | Suppression traitement |
-| `/system` | GET | login_required + ACCESS_SYSTEM | État technique (GPU dashboard) |
-| `/admin/config` | GET, POST | login_required + MANAGE_CONFIG | Édition de la configuration : formulaires des réglages courants (onglet Réglages) + YAML complet (onglet avancé) |
-| `/admin/queue` | GET | admin global ou admin de groupe | Vue de la file persistante et actions par job |
-| `/admin/schedule` | GET | MANAGE_SCHEDULE | Gestion des créneaux de planification |
-| `/admin/voices/consent-form.pdf` | GET | admin ou admin groupe | Formulaire PDF vierge de consentement vocal |
-| `/admin/voices/<subject_id>/metadata` | POST | admin ou admin groupe autorisé | Mise à jour nom, genre validé, email et référence interne |
-| `/admin/voices/<subject_id>/consent-proof/<consent_id>` | GET | admin ou admin groupe autorisé | Consultation de la preuve signée stockée sous `voices/` |
-| `/admin/lexicons` | GET | admin ou admin groupe | Liste des lexiques centralisés administrables |
-| `/admin/lexicons/new` | GET, POST | admin ou admin groupe | Création d'un lexique global ou de groupe selon droits |
-| `/admin/lexicons/<id>` | GET | admin ou admin groupe autorisé | Détail, ajout, import et édition des entrées |
-| `/api/jobs/<id>/upload` | POST | login_required + owner/admin check | Upload fichier audio |
-| `/api/jobs/<id>/analyze` | POST | login_required + owner/admin check | Analyse ffprobe |
-| `/api/jobs/<id>/summary` | POST | login_required + owner/admin check | Résumé rapide |
-| `/api/jobs/<id>/context` | POST | login_required + owner/admin check | Sauvegarde contexte |
-| `/api/jobs/<id>/participants` | POST | login_required + owner/admin check | Sauvegarde participants |
-| `/api/jobs/<id>/lexicon` | POST | login_required + owner/admin check | Sauvegarde lexique |
-| `/api/jobs/<id>/available-lexicons` | GET | login_required + owner/admin check | Lexiques centralisés accessibles au job |
-| `/api/jobs/<id>/selected-lexicons` | POST | login_required + owner/admin check | Sauvegarde les lexiques cochés pour le préremplissage du job |
-| `/api/jobs/<id>/audio/excerpt` | GET | login_required + owner check | Extrait WAV temporisé pour valider un contexte de lexique, audité comme `job_download` |
-| `/api/jobs/<id>/speakers/detect` | POST | login_required + owner/admin check | Détection locuteurs |
-| `/api/jobs/<id>/speakers/voice-match` | POST | login_required + owner/admin check | Suggestions depuis les voix enregistrées accessibles au job |
-| `/api/jobs/<id>/speakers/map` | POST | login_required + owner/admin check | Mapping SPEAKER_XX |
-| `/api/jobs/<id>/speakers/clips` | GET | login_required + owner check | Liste extraits audio |
-| `/api/jobs/<id>/speakers/clip/<name>` | GET | login_required + owner check | Fichier WAV d'un extrait, audité comme `job_download` |
-| `/api/jobs/<id>/process` | POST | login_required + owner/admin check | Traitement complet |
-| `/api/jobs/<id>/quality` | POST | login_required + owner/admin check | Rapport qualité |
-| `/api/jobs/<id>/export` | POST | login_required + owner/admin check | Construction package |
-| `/api/jobs/<id>/download/srt` | GET | login_required + owner check | Téléchargement SRT |
-| `/api/jobs/<id>/download/package` | GET | login_required + owner check | Téléchargement ZIP |
-| `/api/jobs/<id>/download/audio` | GET | login_required + owner check | Téléchargement audio |
-| `/api/jobs/<id>/push-to-editor` | POST | login_required + owner/admin check | Envoi vers SRT Editor EASY, audité comme `job_external_push` |
-| `/api/jobs/<id>/lexicon/debug` | GET | login_required + owner check | Diagnostic détaillé du lexique : `audio_available`, timecodes bruts/normalisés, notes de réparation par contexte |
-| `/api/jobs/<id>/status` | GET | login_required + owner check | Statut job JSON (polling) |
-| `/api/jobs/<id>/reprocess` | POST | login_required + owner/admin check | Relance le traitement |
-| `/api/jobs/<id>/refine` | POST | login_required + owner check | Soumet un tour du chat d'affinage (`kind` ∈ `discuss`/`apply`) : écrit `refine/request.json` puis enfile en mode `refine` (202 ; 409 si occupé ou job non terminé) |
-| `/api/jobs/<id>/refine/chat` | GET | login_required + owner check | Endpoint de polling unique du panneau : tours, `busy`, versions, options de rendu et thèmes |
-| `/api/jobs/<id>/refine/render-options` | POST | login_required + owner check | Options de rendu du rapport (thème, sections) — déterministe, SANS LLM, instantané |
-| `/api/jobs/<id>/refine/revert` | POST | login_required + owner check | Restaure un snapshot `refine/versions/v<N>/` (les fichiers créés par l'apply sont supprimés) |
-| `/meeting-types` | GET | login_required | Page « Types de réunion » (galerie + éditeur) |
-| `/api/meeting-types` | GET, POST | login_required | Catalogue (intégrés + personnalisés visibles) / création d'un type PRIVÉ |
-| `/api/meeting-types/<id>` | PUT, DELETE | créateur ou admin de portée | Édition (active un import « à relire ») / suppression (les jobs passés gardent leur fiche matérialisée) |
-| `/api/meeting-types/<id>/scope` | POST | admin de groupe (ses groupes) / admin global | Partage : `private` ↔ `group` ↔ `global`, audité |
-| `/api/meeting-types/<id>/logo` | POST, DELETE | créateur ou admin de portée | Logo PNG/JPEG ≤ 500 Ko, re-encodé Pillow (600×200, EXIF supprimé) |
-| `/api/meeting-types/preview.docx` | POST | login_required | Word d'exemple de la fiche EN COURS D'ÉDITION (données factices, zéro GPU) |
-| `/api/meeting-types/<id>/preview.docx` | GET | type visible/géré | Word d'exemple d'un type enregistré (avec son logo) |
-| `/api/meeting-types/<id>/export` | GET | type visible/géré | Fichier d'échange `.transcria-type.json` (sans branding), audité |
-| `/api/meeting-types/import` | POST | login_required | Import → type privé INACTIF « à relire » (refus explicites : enveloppe/version/branding) |
-| `/jobs/<id>/editor` | GET | owner/admin, SRT requis | Atelier d'édition de la transcription (plein écran) |
-| `/api/jobs/<id>/editor/state` | GET | owner/admin | Chunks + locuteurs + brouillon (conflit) + points qualité ancrés + audio + lecture seule — UN appel |
-| `/api/jobs/<id>/editor/draft` | GET, PUT, DELETE | owner/admin | Brouillon anti-crash (PUT : 409 si `revision` périmée — un autre onglet a la main) |
-| `/api/jobs/<id>/editor/save` | POST | owner/admin | « Enregistrer une version » : snapshot pool commun + write-back + recalcul stats + audit (422 = forme invalide) |
-| `/api/jobs/<id>/audio/stream` | GET | owner/admin | Audio original inline avec Range (seek) ; 404 propre si non matérialisable |
-| `/api/jobs/<id>/editor/peaks` | GET | owner/admin | Pics de waveform (binaire + méta en en-tête ; 202 pendant la génération) |
-| `/api/system/status` | GET | `ACCESS_SYSTEM` | État système JSON |
-| `/api/queue/status` | GET | login_required | Snapshot runtime de la file |
-| `/api/queue/<id>/move-up` | POST | admin global ou admin de groupe sur périmètre | Remonte un job dans la file |
-| `/api/queue/<id>/move-down` | POST | admin global ou admin de groupe sur périmètre | Descend un job dans la file |
-| `/api/queue/<id>/pause` | POST | admin global ou admin de groupe sur périmètre | Met en pause une entrée de file |
-| `/api/queue/<id>/resume` | POST | admin global ou admin de groupe sur périmètre | Reprend une entrée de file |
-| `/api/queue/<id>/priority` | POST | admin global ou admin de groupe sur périmètre | Modifie la priorité |
-| `/api/queue/<id>/cancel` | POST | admin global ou admin de groupe sur périmètre | Annule un job en file ou demande l'annulation |
-| `/api/queue/e2e-test-jobs/purge` | POST | admin global | Supprime les jobs de test dont le titre commence par `E2E workflow`, hors jobs en cours |
-| `/api/schedule/windows` | GET, POST | MANAGE_SCHEDULE | Liste ou crée des créneaux |
-| `/api/schedule/windows/<id>` | PUT, DELETE | MANAGE_SCHEDULE | Modifie ou supprime un créneau |
-
-**Templates** (`web/templates/`)
-| Template | Description |
-|---|---|
-| `base.html` | Layout principal (navbar Bootstrap 5, flash messages, permissions) |
-| `login.html` | Page de connexion |
-| `change_password.html` | Formulaire changement de mot de passe utilisateur |
-| `index.html` | Accueil : liste des traitements + bouton nouveau |
-| `job_wizard.html` | Assistant 9 étapes avec formulaires interactifs (JS fetch API) |
-| `meeting_types.html` | « Mes types de réunion » : galerie de cartes (bandeau réel, pastilles de palette, portée), éditeur dupliquer-d'abord avec aperçu vivant de la page de garde (mini-A4, contraste vérifié), palettes dérivées des thèmes intégrés, sections réordonnables, partage, import/export — JS `static/js/meeting_types.js` |
-| `srt_editor.html` | Atelier d'édition : liste de cartes (le texte EST le champ, icônes au survol), lecteur synchronisé (pause auto à la frappe), fresque ↔ lanes par locuteur (bascule), bande zoomée waveform avec poignées de retiming, repères, recherche, sélection multiple (barre flottante : fusionner/attribuer/supprimer), solo locuteur, tiroir « À vérifier » ancré, jauge de relecture — JS `static/js/srt_editor.js` |
-| `job_result.html` | Résultats & affinage : SRT (aperçu = version corrigée), qualité, exports, lien SRT Editor, **panneau du chat d'affinage** (fil de discussion, propositions applicables en un clic, versions restaurables, options de rendu, note « documents à jour ») — atteignable depuis l'étape Export du wizard et l'accueil |
-| `admin_config.html` | Éditeur YAML de configuration admin |
-| `users.html` | Liste des utilisateurs (admin) |
-| `user_form.html` | Formulaire création/édition utilisateur |
-| `groups.html` | Liste des groupes (admin global + admins de groupe) |
-| `group_form.html` | Formulaire création/édition groupe + membres |
-| `dashboard_status.html` | État technique (GPU, CPU, RAM, services) |
-| `queue.html` | File persistante, runtime scheduler et actions admin |
-| `schedule.html` | Administration des créneaux calendrier |
-
----
+**La table des routes n'est plus maintenue ici** : elle est **générée** dans
+[`docs/API_REFERENCE.md`](API_REFERENCE.md) par `scripts/generate_api_reference.py`
+(vague C8, gardée en CI par `tests/test_api_reference.py` — la dérive meurt à la
+source). Les routes du parcours scriptable upload → process → status → download y
+sont marquées ⭐ (`__api_stable__`) : c'est le contrat des auto-hébergeurs.
 
 ### 4.12 Queue et scheduling (`transcria/queue/`)
 

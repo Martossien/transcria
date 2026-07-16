@@ -21,6 +21,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api
 from transcria.web.lexicon_views import resolve_context_audio_range
+from transcria.web.request_helpers import api_stable
 from transcria.workflow.profiles import profile_for_job
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,9 @@ def _resolve_speaker_clip(samples_dir: Path, raw_clip: str) -> tuple[str, Path] 
 
 @web_bp.route("/api/jobs/<job_id>/download/srt", methods=["GET"])
 @login_required
+@api_stable
 def api_download_srt(job_id: str):
+    """Télécharge le sous-titrage corrigé (SRT — contrat scriptable)."""
     cfg = get_config()
     job, error_response = get_job_for_api(job_id)
     if error_response:
@@ -67,7 +70,9 @@ def api_download_srt(job_id: str):
 
 @web_bp.route("/api/jobs/<job_id>/download/package", methods=["GET"])
 @login_required
+@api_stable
 def api_download_package(job_id: str):
+    """Télécharge le paquet complet des livrables (ZIP — contrat scriptable)."""
     cfg = get_config()
     job, error_response = get_job_for_api(job_id)
     if error_response:
@@ -113,7 +118,9 @@ def api_download_audio(job_id: str):
 
 @web_bp.route("/api/jobs/<job_id>/download/docx", methods=["GET"])
 @login_required
+@api_stable
 def api_download_docx(job_id: str):
+    """Télécharge le compte rendu Word (DOCX — contrat scriptable)."""
     cfg = get_config()
     job, error_response = get_job_for_api(job_id)
     if error_response:

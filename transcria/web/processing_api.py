@@ -31,6 +31,7 @@ from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import can_manage_queue_job, get_job_for_api
+from transcria.web.request_helpers import api_stable
 from transcria.workflow import profiles
 from transcria.workflow.concurrency_profile import summarize_concurrency
 from transcria.workflow.profiles import profile_for_job
@@ -151,7 +152,9 @@ def api_resources_status():
 
 @web_bp.route("/api/jobs/<job_id>/process", methods=["POST"])
 @login_required
+@api_stable
 def api_process(job_id: str):
+    """Lance le traitement complet du job (mise en file — contrat scriptable)."""
     cfg = get_config()
     job, error_response = get_job_for_api(job_id)
     if error_response:
@@ -275,8 +278,9 @@ def api_process(job_id: str):
 
 @web_bp.route("/api/jobs/<job_id>/status", methods=["GET"])
 @login_required
+@api_stable
 def api_job_status(job_id: str):
-    """Endpoint léger de polling — état courant du job pendant le traitement."""
+    """Endpoint léger de polling — état courant du job pendant le traitement (contrat scriptable)."""
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response

@@ -155,6 +155,28 @@ def find_init_cycles(modules: dict[str, Path], top_edges: dict[str, set[str]]) -
     return findings
 
 
+def count_routes_missing_docstring(modules: dict[str, Path]) -> int:
+    """Routes Flask (décorateur ``.route(...)``) sans docstring — ratchet C8.
+
+    La référence d'API (docs/API_REFERENCE.md) rend la première ligne de docstring
+    de chaque route : une route muette y apparaît « (docstring manquante) ». Le
+    stock hérité (~96) ne peut que baisser ; toute route NOUVELLE arrive documentée.
+    """
+    missing = 0
+    for path in modules.values():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            is_route = any(
+                isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute) and dec.func.attr == "route"
+                for dec in node.decorator_list
+            )
+            if is_route and not ast.get_docstring(node):
+                missing += 1
+    return missing
+
+
 def count_deep_chains(modules: dict[str, Path]) -> int:
     return sum(len(DEEP_CHAIN_RE.findall(p.read_text(encoding="utf-8"))) for p in modules.values())
 
@@ -182,6 +204,7 @@ def collect_metrics(base: Path) -> dict:
         "init_cycles": len(init_cycles),
         "init_cycles_detail": init_cycles,
         "deferred_internal_imports": sum(deferred.values()),
+        "routes_missing_docstring": count_routes_missing_docstring(modules),
         "deep_config_chains": count_deep_chains(modules),
         "functions_over_150": len(functions_over_limit(modules)),
         "fanout": {m: len(s) for m, s in sorted(fanout.items())},
@@ -197,7 +220,7 @@ def check_baseline(current: dict, baseline: dict) -> list[str]:
         problems.append(
             f"CYCLES inter-paquets via __init__ détectés ({current['init_cycles']}) : " + "; ".join(current["init_cycles_detail"])
         )
-    for key in ("deferred_internal_imports", "deep_config_chains", "functions_over_150"):
+    for key in ("deferred_internal_imports", "routes_missing_docstring", "deep_config_chains", "functions_over_150"):
         if current[key] > baseline.get(key, 0):
             problems.append(f"{key} : {current[key]} > baseline {baseline.get(key)}")
     base_fanout: dict[str, int] = baseline.get("fanout", {})
@@ -245,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"cycles top-level          : {metrics['cycles']}")
     print(f"cycles inter-paquets init : {metrics['init_cycles']}")
     print(f"imports internes différés : {metrics['deferred_internal_imports']}")
+    print(f"routes sans docstring     : {metrics['routes_missing_docstring']}")
     print(f"chaînes config profondes  : {metrics['deep_config_chains']}")
     print(f"fonctions > 150 lignes    : {metrics['functions_over_150']}")
     top = sorted(metrics["fanout"].items(), key=lambda kv: -kv[1])[:10]
