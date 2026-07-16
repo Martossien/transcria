@@ -55,10 +55,14 @@ venv/bin/python -m pytest tests/test_auth.py -v
 #             TRANSCRIA_TEST_PG_USER=postgres TRANSCRIA_TEST_PG_PASSWORD=...
 #    (le serveur doit autoriser CREATE DATABASE ; chaque run crée/détruit une base jetable).
 
-# CI (.github/workflows/tests.yml) — 3 gates, reproductibles en local :
+# CI (.github/workflows/tests.yml) — les gates, reproductibles en local :
 ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
-mypy transcria/ inference_service/ --ignore-missing-imports
-venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75   # seuil 75 % (actuel ~80 %)
+mypy transcria/ inference_service/ --ignore-missing-imports               # check_untyped_defs actif via pyproject (C5)
+venv/bin/python scripts/i18n_check.py                                     # catalogues fr/en complets + compilés
+python scripts/audit_imports.py --check-baseline quality_baseline.json    # RATCHET architecture (cf. section Architecture)
+python scripts/audit_front.py --check-baseline quality_baseline_front.json # RATCHET front (JS inline, tailles)
+lint-imports                                                              # contrats de couches (.importlinter)
+venv/bin/python -m pytest tests/ -q --cov=transcria --cov=inference_service --cov-fail-under=80  # seuil 80 % (actuel ~83 %)
 # Tests réseau (faux serveurs sur vrai socket) : marqueur "integration" → -m integration / -m "not integration"
 # ⚠️  Tests E2E : TOUJOURS utiliser le python du venv (pyannote et Cohere n'y sont que là)
 venv/bin/python tests/test_e2e_workflow.py --skip-llm               # E2E rapide (1 GPU)
@@ -79,7 +83,11 @@ Leçons durement acquises (beta.8/beta.9), NON négociables :
 set -o pipefail   # OBLIGATOIRE : `mypy … | tail -1` a déjà laissé passer une CI rouge
 venv/bin/python -m ruff check transcria/ inference_service/ --line-length 140 --select E,W,F,I
 venv/bin/python -m mypy transcria/ inference_service/ --ignore-missing-imports
-venv/bin/python -m pytest tests/ -q --cov=transcria --cov-fail-under=75
+venv/bin/python scripts/i18n_check.py
+python scripts/audit_imports.py --check-baseline quality_baseline.json
+python scripts/audit_front.py --check-baseline quality_baseline_front.json
+lint-imports
+venv/bin/python -m pytest tests/ -q --cov=transcria --cov=inference_service --cov-fail-under=80
 ```
 
 1. **Jamais de pipe qui masque un code de sortie** sur un gate (`cmd | tail` → l'échec
@@ -420,6 +428,10 @@ routes sans docstring : rien ne peut se dégrader) et `lint-imports` (contrats
   `venv/bin/python scripts/generate_api_reference.py` (garde CI `test_api_reference`).
 - **Une nouvelle phase de workflow / étape de pipeline** → son propre module (cible :
   `workflow/phases/`, `services/pipeline_steps/` — cf. vagues B1/B2 du plan).
+- **Un nouveau backend STT** → UN module dans `stt/` qui déclare son `DESCRIPTOR`
+  (`SttBackendDescriptor`) + son enregistrement dans `stt/registry.py` — rien d'autre :
+  factory, VRAM, catalogue et schéma lisent le registre, et la suite de contrat
+  `tests/contracts/test_stt_backend_contract.py` le prouve (vague C1).
 - **Un nouvel import interne** → en TÊTE de fichier. Différé UNIQUEMENT si : dépendance
   lourde au boot (torch, transformers, nemo, vllm, pyannote), dépendance optionnelle par
   topologie, ou point d'entrée à erreur lisible (doctor, entrypoint) — avec un commentaire
@@ -511,7 +523,7 @@ L'application tourne sur un serveur avec plusieurs GPUs NVIDIA. Les modèles ne 
 - **CAS B** : LLM active mais mauvais modèle → redémarrage (warning logué)
 - **CAS C** : LLM absente ou non saine → libération GPU + lancement depuis zéro
 
-**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui vérifie d'abord `is_arbitrage_llm_running()` avant d'agir. `is_arbitrage_llm_running()` doit tester l'API OpenAI-compatible (`/v1/models` + inférence) avant tout fallback port/PID : `lsof` seul peut produire de faux négatifs sous systemd/sandbox. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
+**Cycle de vie LLM** : chaque étape appelle uniquement `ensure_arbitrage_llm_ready()`. L'arrêt (`stop_arbitrage_llm()`) est fait **une seule fois** en fin de pipeline par `PipelineService._release_arbitrage_llm()`, qui **prend d'abord le verrou LLM de l'allocateur** (propriétaire sentinelle `__pipeline_stop__` — correctif B3, campagne de charge 2026-07-16) : détenu par un autre job (sa correction utilise ou LANCE la LLM) → arrêt SAUTÉ (sinon SIGTERM en plein `create_tensor`, exit 143, job concurrent en échec — vécu en rafale de 3 jobs) ; pris → aucun lancement concurrent possible pendant l'arrêt. Puis vérifie `is_arbitrage_llm_running()` avant d'agir. `is_arbitrage_llm_running()` doit tester l'API OpenAI-compatible (`/v1/models` + inférence) avant tout fallback port/PID : `lsof` seul peut produire de faux négatifs sous systemd/sandbox. Ainsi la LLM reste vivante entre le résumé et la correction (CAS A garanti pour la correction si le résumé l'a démarrée).
 
 **LLM d'arbitrage DISTANTE** (`services.arbitrage_llm_host` ≠ `127.0.0.1`/`localhost`, topologie split) : `vram_manager` honore l'hôte configuré pour TOUTES ses sondes (`_is_remote_arbitrage()`), et ne gère **PAS** le cycle de vie d'une LLM distante — il ne la lance/arrête jamais localement, il la **consomme** si saine (sinon échec explicite : c'est au nœud de la démarrer). Idem pour l'admission du scheduler (`is_arbitrage_llm_running` distant ⇒ `_llm_admissible` True, aucune VRAM locale exigée pour la LLM). Ne JAMAIS recâbler une sonde/un lancement sur `127.0.0.1` en dur (régression historique : worker CPU qui croit la LLM éteinte → boucle de dispatch différé). **Source unique** de l'hôte/port : `opencode_setup.resolve_arbitrage_endpoint` / `is_remote_arbitrage` (env > config > 127.0.0.1), partagée par `vram_manager`, `GPUAllocator` et `provision_opencode`. **Concurrence (test de charge 2026-06-23, `docs/PLAN_TEST_CHARGE.md`)** : pour une LLM **distante** (vLLM qui batche), (1) le **verrou LLM de l'allocator est no-op** (`GPUAllocator._arbitrage_remote` ; le sérialiser étranglait le débit + faisait échouer `correction`), (2) `stop_arbitrage_llm` est **no-op**, (3) le health-check `ensure_arbitrage_llm_ready` se contente de `/v1/models` (pas de test-inférence qui sature sous charge), (4) `run_correction` remonte `vram_wait` (re-queue gracieux) si la LLM distante est transitoirement indisponible — JAMAIS un échec dur. Capacité d'admission du nœud = `resource_node.max_concurrent_jobs` (annoncée dans `/capabilities`) ; les moteurs in-process sérialisés (diar/voice-embed) ne bornent pas l'admission. Sweet spot ≈ 4 sur 4×3090/27B.
 
@@ -875,7 +887,15 @@ Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exc
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
 
 ### tests/ couvre le métier, moins les intégrations GPU
-La suite pytest dans les modules `test_*.py` (plus E2E) couvre stores, config, contexte, qualité, exports, routes Flask et workflow. Le nombre de tests varie avec les ajouts ; la plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+La suite pytest dans les modules `test_*.py` (plus E2E) couvre stores, config, contexte, qualité, exports, routes Flask et workflow (~4 100 tests). La plupart mockent les dépendances GPU/LLM. `test_e2e_workflow.py` requiert un vrai GPU.
+
+**Conventions posées par les vagues C4/C5 (à SUIVRE pour tout nouveau test) :**
+- **Doublures officielles** : `tests/builders/` (`make_config` sur les défauts du loader + `_deep_merge`, `make_job`, `make_job_stub`, seeders d'artefacts) et `tests/fakes/` (`FakeConsole`, `InMemoryJobFilesystem`, `fake_gpu_info`, `FakeArbitrageVram`, `FakeLlmLockAllocator`, `FakeLlmExecutor`, `FakeJobStore`, `FakeWorkflowRunner`) — import top-level `from builders import …` / `from fakes import …` (tests/ est sur sys.path). NE PAS recréer de doublure locale si une officielle existe.
+- **Piège de config** : le loader active `workflow.multi_stt.enabled: true` par défaut — le COUPER explicitement dans les configs de test de pipeline (divergence documentée C3).
+- **Patcher LE CONSOMMATEUR, jamais la source** : les imports internes sont en tête (C5), donc `monkeypatch.setattr(module_consommateur, "symbole", fake)` — un patch sur le module SOURCE ne porte plus (13 coutures re-pointées pendant C5 en témoignent). Exceptions patchées à la source : attributs de CLASSE (`WorkflowRunner.run_summary`) et accès PAR MODULE explicites (`from x import y as module` + `module.attr`).
+- **Test étoile polaire** (`tests/test_pipeline_no_infra.py`) : le pipeline complet + reprise + échec tournent SANS Flask/PG/GPU en < 1 s — le garder vert et l'imiter pour tester de l'orchestration.
+- **Marqueurs** : `integration` (vrais sockets TCP), `gpu_e2e` (Docker+GPU, TRANSCRIA_GPU_E2E=1), `gpu_real` (smoke matériel RÉEL, TRANSCRIA_GPU_REAL=1, jamais en CI — filet du refactor GPU : `tests/test_gpu_real_smoke.py` doit rester vert sur la machine avant/après tout changement gpu/).
+- **Charge GPU** : tout changement de concurrence GPU/verrous rejoue la campagne (`scripts/load_test.py --jobs 3` en all-in-one, cf. `docs/PLAN_TEST_CHARGE.md`) — elle a attrapé 5 vrais bugs de concurrence à ce jour.
 
 ### `_inject_speaker_genders` — ordre d'appel et prérequis disque
 `_inject_speaker_genders(fs, audio_scene)` lit `speakers/speaker_turns.json` directement sur le filesystem du job. Elle doit donc être appelée **après** que la diarisation ait écrit ce fichier. Dans le flow résumé (`_run_pyannote_after_transcription`), ce fichier est écrit par `run_speaker_detection` juste avant — ordre garanti. Dans le pipeline qualité (`run_diarization`), ce fichier est écrit par `DiarizerService.diarize()` juste avant l'appel — ordre garanti. `audio_scene` peut être un dict vide (la méthode retourne `{}` sans erreur si `gender_segments` est absent).
