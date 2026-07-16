@@ -66,8 +66,10 @@
 > maintenance/cli 43→85 %).
 > ✅ **C7 livrée (2026-07-16)** — gardes Docker pures texte en CI (un bug latent réel
 > débusqué à la première exécution : ENV d'étage builder non propagé dans resource-node),
-> scripts/release_bundled.sh, règle de release. Reste **C8** (référence d'API générée) —
-> dernière vague du chantier.
+> scripts/release_bundled.sh, règle de release.
+> ✅ **C8 livrée (2026-07-16)** — référence d'API générée + garde CI + ratchet docstrings
+> + contrat scriptable ⭐.
+> **🏁 CHANTIER COMPLET : les 15 vagues du plan (A0→A3, B0→B3, C1→C8) sont livrées.**
 > **Version 3** : playbook complet — cartographies méthode par méthode, contrats en code,
 > procédures pas à pas, outillage en annexes. Intègre une revue croisée externe dont chaque
 > affirmation a été **vérifiée contre le code** (celles écartées le sont au §9).
@@ -1241,7 +1243,17 @@ Quatre livrables, du moins cher au plus structurant (état des lieux §3.9) :
 **DoD** : les 3 gardes rouges sur mutation volontaire (test du test) ; release bundled
 rejouée via le script sur la prochaine version ; zéro copie de SHA non gardée.
 
-#### C8 — Référence d'API générée, jamais manuelle *(effort M)*
+#### ✅ C8 — Référence d'API générée, jamais manuelle *(effort M — LIVRÉE 2026-07-16)*
+
+> **Réalisation (2026-07-16)** — `scripts/generate_api_reference.py` (url_map des DEUX
+> apps → `docs/API_REFERENCE.md`, 122 + 7 routes ; auth lue sur la source dé-wrappée) ;
+> garde CI `tests/test_api_reference.py` (régénéré == commité, patron i18n_check) ;
+> ratchet `routes_missing_docstring` dans audit_imports (96 au gel, AST pur) ;
+> marqueur ⭐ `__api_stable__` (décorateur `web/request_helpers.api_stable`) sur les
+> 6 routes du parcours upload→process→status→download, toutes documentées ;
+> TECHNICAL.md §4.11 réduit au pointeur. OpenAPI non retenu, comme prévu.
+
+*(Spécification d'origine ci-dessous.)*
 
 Reproduire le patron qui a marché pour la config (schéma → `CONFIG_REFERENCE.md` + garde
 CI) sur la surface HTTP (état des lieux §3.11) :
@@ -1389,8 +1401,8 @@ l'annexe C.
 | JS inline dans les templates | ~~548 l.~~ → **0** (hors inits window.* et îlots JSON) | 0 (hors init 1 ligne) | ✅ A3 |
 | Contrat JS↔routes (34 fetch) | ~~aucune garde~~ → test_js_api_contract (112 littéraux) | test de contrat en CI | ✅ A3 |
 | Plus gros template | ~~job_wizard.html : 1 110 l.~~ → schedule.html : 240 l. | < 400 l. | ✅ A3 |
-| Doc API | table manuelle driftante (TECHNICAL §4.11) | générée de url_map + garde CI | C8 |
-| Routes avec docstring | 24/109 | 109/109 (ratchet) | A2+C8 |
+| Doc API | ~~table manuelle driftante~~ → générée (API_REFERENCE.md) + garde CI | générée de url_map + garde CI | ✅ C8 |
+| Routes avec docstring | ~~24/109~~ → 33/129 (ratchet routes_missing_docstring actif : 96 muettes, ↓ seulement) | 109/109 (ratchet) | A2+✅C8 (ratchet posé) |
 | Couverture config_schema.py (validateurs) | 80 % (205 l. mortes) | ≥ 90 % | C3 |
 | Couverture maintenance/cli.py | ~~38 %~~ → **85 %** (tests de câblage, logique déjà dans les modules) | ≥ 80 % (par amincissement) | ✅ C6 |
 | Couverture gpu/llm_backend.py | **56 %** | ≥ 75 % (coutures injectées) | prépa B3 |
