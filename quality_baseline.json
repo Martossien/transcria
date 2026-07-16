@@ -1,6 +1,6 @@
 {
  "cycles": 0,
- "deep_config_chains": 195,
+ "deep_config_chains": 194,
  "deferred_internal_imports": 39,
  "fanout": {
   "inference_service": 1,
@@ -57,7 +57,7 @@
   "transcria.gpu.llm_parsing": 1,
   "transcria.gpu.opencode_runner": 4,
   "transcria.gpu.stt_engine_supervisor": 2,
-  "transcria.gpu.vram_manager": 7,
+  "transcria.gpu.vram_manager": 8,
   "transcria.i18n": 2,
   "transcria.i18n.locale": 2,
   "transcria.inference": 1,
@@ -96,7 +96,7 @@
   "transcria.quality": 4,
   "transcria.quality.light_report": 4,
   "transcria.quality.quality_report": 6,
-  "transcria.queue.allocator": 3,
+  "transcria.queue.allocator": 4,
   "transcria.queue.calendar": 2,
   "transcria.queue.models": 1,
   "transcria.queue.routes": 17,

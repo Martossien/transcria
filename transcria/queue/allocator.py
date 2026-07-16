@@ -17,6 +17,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.opencode_setup import is_remote_arbitrage
 
 logger = logging.getLogger(__name__)
@@ -49,22 +50,8 @@ class GPUAllocator:
 
         self.min_free_mb = int(gpu_cfg.get("min_free_vram_mb", 4000))
         self.preferred_gpu = self._resolve_preferred_gpu()
-        self._kill_patterns = [
-            str(item).lower()
-            for item in scheduling_cfg.get(
-                "kill_patterns",
-                [
-                    "vllm",
-                    "llama-server",
-                    "text-generation-server",
-                    "aphrodite",
-                    "sglang",
-                    "lmdeploy",
-                    "exllamav2",
-                ],
-            )
-            if str(item).strip()
-        ]
+        # Patterns de préemption : l'UNIQUE construction de l'arbre (B3).
+        self._kill_patterns = kill_patterns_from_config(config)
 
         default_pid_file = Path(
             config.get("storage", {}).get("jobs_dir", ".")
@@ -561,8 +548,9 @@ class GPUAllocator:
             return None
 
     def _match_kill_pattern(self, process_name: str) -> bool:
-        lower = process_name.lower()
-        return any(pattern in lower for pattern in self._kill_patterns)
+        # Délégation à l'unique correspondance de l'arbre (B3). L'allocateur gagne la
+        # protection Ollama que seul le manager portait — unification au sens protecteur.
+        return matches_kill_pattern(process_name, self._kill_patterns)
 
     def get_snapshot(self) -> dict:
         with self._alloc_lock:

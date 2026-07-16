@@ -14,6 +14,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.kill_patterns import kill_patterns_from_config, matches_kill_pattern
 from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 
@@ -40,7 +41,6 @@ class VRAMManager:
         self.config = config
         services = config.get("services", {})
         gpu_cfg = config.get("gpu", {})
-        scheduling_cfg = config.get("workflow", {}).get("scheduling", {}) or {}
         # Endpoint de la LLM d'arbitrage via la source UNIQUE de résolution (partagée avec
         # provision_opencode). 127.0.0.1 = LLM locale (le service gère son cycle de vie :
         # sonde, arrêt, lancement via arbitrage_script). Un hôte DISTANT (topologie split :
@@ -56,22 +56,8 @@ class VRAMManager:
         self.pyannote_vram_mb: int = gpu_cfg.get("pyannote_vram_mb", 2000)
         self.llm_vram_mb: int = gpu_cfg.get("llm_vram_mb", 60000)
         self.min_free_mb: int = gpu_cfg.get("min_free_vram_mb", 4000)
-        self._kill_patterns = [
-            str(item).lower()
-            for item in scheduling_cfg.get(
-                "kill_patterns",
-                [
-                    "vllm",
-                    "llama-server",
-                    "text-generation-server",
-                    "aphrodite",
-                    "sglang",
-                    "lmdeploy",
-                    "exllamav2",
-                ],
-            )
-            if str(item).strip()
-        ]
+        # Patterns de préemption : l'UNIQUE construction de l'arbre (B3).
+        self._kill_patterns = kill_patterns_from_config(config)
         _env_gpu = os.environ.get("TRANSCRIA_PREFERRED_GPU")
         self.preferred_gpu: int = int(_env_gpu) if _env_gpu else 0
         self.arbitrage_script: str = os.environ.get(
@@ -303,16 +289,9 @@ class VRAMManager:
         except Exception:
             pass
 
-    # Démon(s) persistants qu'on ne SIGKILL JAMAIS, même si un pattern les recouvrait :
-    # tuer le démon Ollama est vain (systemd le relance) et destructeur (il peut servir
-    # d'autres modèles) — la VRAM se libère par déchargement HTTP (unload()), pas par kill.
-    _NEVER_KILL = ("ollama",)
-
     def _matches_kill_pattern(self, process_name: str) -> bool:
-        lower = process_name.lower()
-        if any(protected in lower for protected in self._NEVER_KILL):
-            return False
-        return any(pattern in lower for pattern in self._kill_patterns)
+        # Délégation à l'unique correspondance de l'arbre (B3) — protection Ollama incluse.
+        return matches_kill_pattern(process_name, self._kill_patterns)
 
     # ── Model tracking ────────────────────────────────────
 
