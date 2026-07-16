@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from transcria.install_messages import t
-from transcria.install_paths import directory_specs_for_kind, ensure_directories
 from transcria.install_systemd import (
     SystemdRenderContext,
     SystemdUnitPlan,
@@ -37,6 +36,7 @@ from transcria.install_systemd import (
     render_setup_log,
     render_split_unit,
 )
+from transcria.installer.paths import directory_specs_for_kind, ensure_directories
 
 Runner = Callable[..., subprocess.CompletedProcess]
 SystemctlEnabled = Callable[[str], bool]

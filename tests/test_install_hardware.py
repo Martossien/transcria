@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-from transcria.install_hardware import (
+from transcria.installer.hardware import (
     detect_nvidia,
     detect_nvidia_vram,
     main,
@@ -84,8 +84,8 @@ def test_detect_nvidia_vram_handles_missing_binary():
 
 
 def test_install_hardware_cli_shell_output(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_hardware.detect_nvidia", lambda: (3, "13.0", None))
-    monkeypatch.setattr("transcria.install_hardware.detect_nvidia_vram", lambda: (73728, 49152, "24576,49152"))
+    monkeypatch.setattr("transcria.installer.hardware.detect_nvidia", lambda: (3, "13.0", None))
+    monkeypatch.setattr("transcria.installer.hardware.detect_nvidia_vram", lambda: (73728, 49152, "24576,49152"))
 
     assert main(["--format", "shell"]) == 0
 

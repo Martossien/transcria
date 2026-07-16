@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import ModuleType, SimpleNamespace
 
-from transcria.install_imports import check_install_imports
+from transcria.installer.imports_check import check_install_imports
 
 
 def _module(name: str, version: str = "1.0") -> ModuleType:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from transcria.install_paths import (
+from transcria.installer.paths import (
     directory_specs_for_kind,
     ensure_runtime_directories,
     explicit_directory_specs,

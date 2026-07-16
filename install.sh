@@ -275,7 +275,7 @@ fi
 print_install_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
-        -m transcria.install_profiles
+        -m transcria.installer.cli profiles
         --profile "$INSTALL_PROFILE"
         --format text
         --install-dir "$INSTALL_DIR"
@@ -343,13 +343,13 @@ arbitrage_helper() { python_module transcria.install_arbitrage "$@"; }
 
 
 install_paths_helper() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.install_paths --install-dir "$INSTALL_DIR" "$@"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$VENV/bin/python" -m transcria.installer.cli paths --install-dir "$INSTALL_DIR" "$@"
 }
 
 load_install_profile_plan() {
     local python_bin="${PYTHON_BIN:-python3}"
     local args=(
-        -m transcria.install_profiles
+        -m transcria.installer.cli profiles
         --profile "$INSTALL_PROFILE"
         --format shell
     )
@@ -395,7 +395,7 @@ VENV="$INSTALL_DIR/venv"
 CONFIG_PATH="$INSTALL_DIR/config.yaml"
 ENV_FILE="$INSTALL_DIR/.env"
 resolve_user_home() {
-    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "${PYTHON_BIN:-python3}" -m transcria.install_prerequisites user-home --user "$1"
+    PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "${PYTHON_BIN:-python3}" -m transcria.installer.cli prerequisites user-home --user "$1"
 }
 if id "$SERVICE_USER" &>/dev/null 2>&1; then
     SERVICE_HOME_GLOBAL=$(resolve_user_home "$SERVICE_USER")
@@ -564,7 +564,7 @@ log_section "$(t sec_prereq)"
 
 log_prerequisite_event() {
     local event="$1" name="${2:-}" value="${3:-}" path="${4:-}"
-    emit_rendered_log "prérequis : $event" -m transcria.install_prerequisites setup-log \
+    emit_rendered_log "prérequis : $event" -m transcria.installer.cli prerequisites setup-log \
         --event "$event" \
         --name "$name" \
         --value "$value" \
@@ -580,13 +580,13 @@ log_prerequisite_event() {
 # déjà fourni : couche build Docker / venv existant).
 if [[ "$SKIP_DEPS" != true ]]; then
     if ! PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" \
-            -m transcria.install_prerequisites check-venv >/dev/null 2>&1; then
+            -m transcria.installer.cli prerequisites check-venv >/dev/null 2>&1; then
         log_prerequisite_event venv-missing
         exit 1
     fi
 fi
 
-SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+SYSTEM_CAPABILITIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
     system-capabilities --format shell)
 eval_named_shell_assignments "$SYSTEM_CAPABILITIES_OUT" \
     HAVE_NVIDIA_SMI HAVE_RUNUSER HAVE_SERVICE HAVE_SUDO HAVE_SYSTEMCTL
@@ -597,7 +597,7 @@ NVIDIA_WARNING=""
 GPU_VRAM_TOTAL_MB=0
 GPU_VRAM_MAX_MB=0
 GPU_SIZES_CSV=""
-NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_hardware --format shell)
+NVIDIA_DETECT_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli hardware --format shell)
 eval_named_shell_assignments "$NVIDIA_DETECT_OUT" \
     GPU_COUNT CUDA_VER_FROM_SMI NVIDIA_WARNING GPU_VRAM_TOTAL_MB GPU_VRAM_MAX_MB GPU_SIZES_CSV
 if [[ -z "$NVIDIA_WARNING" ]]; then
@@ -606,7 +606,7 @@ else
     log_prerequisite_event nvidia-missing
 fi
 
-PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+PREREQ_BINARIES_OUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
     check-binaries \
     --required ffmpeg \
     --required ffprobe \
@@ -638,7 +638,7 @@ log_section "$(t sec_python)"
 
 log_local_setup_event() {
     local event="$1" value="${2:-}"
-    emit_rendered_log "locale : $event" -m transcria.install_paths \
+    emit_rendered_log "locale : $event" -m transcria.installer.cli paths \
         --install-dir "$INSTALL_DIR" \
         --setup-log \
         --event "$event" \
@@ -839,7 +839,7 @@ _setup_postgres() {
 }
 
 PSQL_AVAILABLE=false
-if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_prerequisites \
+if PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli prerequisites \
         check-binaries --required psql >/dev/null; then
     PSQL_AVAILABLE=true
 fi
@@ -1165,7 +1165,7 @@ if [[ "$PROFILE_NEEDS_LLM" != true ]]; then
     log_llm_setup_event profile-skipped "" "$INSTALL_PROFILE"
 else
 
-# GPU_SIZES_CSV = tailles PAR carte (Mio), calculé par transcria.install_hardware
+# GPU_SIZES_CSV = tailles PAR carte (Mio), calculé par transcria.installer.hardware
 # pour raisonner par placement réel et non sur la simple somme.
 if (( GPU_VRAM_TOTAL_MB < 11500 )); then
     log_llm_setup_event vram-too-low "$GPU_VRAM_TOTAL_MB"
@@ -1390,7 +1390,7 @@ fi
 # ============================================================================
 log_section "$(t sec_imports)"
 
-IMPORT_OUTPUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.install_imports --profile "$INSTALL_PROFILE" 2>&1 || true)
+IMPORT_OUTPUT=$(PYTHONPATH="$INSTALL_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" -m transcria.installer.cli check-imports --profile "$INSTALL_PROFILE" 2>&1 || true)
 while IFS= read -r line; do
     log_prefixed_line "imports Python" "$line" ok
 done <<< "$IMPORT_OUTPUT"

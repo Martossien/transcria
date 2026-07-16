@@ -20,7 +20,7 @@ from transcria.gpu.llm_placement import (
     recommend,
 )
 from transcria.install_messages import t
-from transcria.install_prerequisites import first_available
+from transcria.installer.prerequisites import first_available
 
 
 @dataclass(frozen=True)

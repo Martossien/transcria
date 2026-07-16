@@ -2,7 +2,7 @@
 
 Dernière tranche de `install.sh` : le bilan de fin d'installation (en-tête du profil,
 état des modèles IA, base de données, configuration restante, commandes de démarrage).
-Tout le rendu vit déjà dans `transcria.install_profiles` / `install_models` /
+Tout le rendu vit déjà dans `transcria.installer.profiles` / `install_models` /
 `install_summary` (fonctions pures, testées) ; cette phase les appelle **en process** —
 une seule invocation au lieu des ~6 sous-processus `python -m` que le shell enchaînait —
 et calcule les CHANGE-ME résiduels via `transcria.config.yaml_file`.
@@ -18,13 +18,13 @@ from typing import Protocol
 from transcria.config.yaml_file import count_text_occurrences
 from transcria.install_messages import t
 from transcria.install_models import render_model_summary
-from transcria.install_profiles import (
+from transcria.install_summary import render_configuration_summary, render_database_summary
+from transcria.installer.profiles import (
     SummaryRenderContext,
     render_profile_next_steps_text,
     render_profile_summary_text,
     resolve_install_plan,
 )
-from transcria.install_summary import render_configuration_summary, render_database_summary
 
 
 class _ConsoleLike(Protocol):

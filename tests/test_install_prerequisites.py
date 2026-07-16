@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from transcria.install_prerequisites import (
+from transcria.installer.prerequisites import (
     check_binaries,
     detect_system_capabilities,
     first_available,
@@ -80,7 +80,7 @@ def test_install_prerequisites_cli_check_binaries_success(capsys, monkeypatch):
     def fake_check_binaries(required: list[str], optional: list[str]):
         return check_binaries(required, optional, which=lambda name: f"/bin/{name}")
 
-    monkeypatch.setattr("transcria.install_prerequisites.check_binaries", fake_check_binaries)
+    monkeypatch.setattr("transcria.installer.prerequisites.check_binaries", fake_check_binaries)
 
     assert main(["check-binaries", "--required", "ffmpeg", "--optional", "lsof"]) == 0
 
@@ -91,7 +91,7 @@ def test_install_prerequisites_cli_check_binaries_fails_on_required_missing(caps
     def fake_check_binaries(required: list[str], optional: list[str]):
         return check_binaries(required, optional, which=lambda _name: None)
 
-    monkeypatch.setattr("transcria.install_prerequisites.check_binaries", fake_check_binaries)
+    monkeypatch.setattr("transcria.installer.prerequisites.check_binaries", fake_check_binaries)
 
     assert main(["check-binaries", "--required", "ffmpeg", "--optional", "lsof"]) == 1
 
@@ -102,7 +102,7 @@ def test_install_prerequisites_cli_first_available_success(capsys, monkeypatch):
     def fake_first_available(names: list[str]):
         return first_available(names, which=lambda name: f"/bin/{name}")
 
-    monkeypatch.setattr("transcria.install_prerequisites.first_available", fake_first_available)
+    monkeypatch.setattr("transcria.installer.prerequisites.first_available", fake_first_available)
 
     assert main(["first-available", "--name", "hf", "--name", "huggingface-cli", "--format", "tsv"]) == 0
 
@@ -110,7 +110,7 @@ def test_install_prerequisites_cli_first_available_success(capsys, monkeypatch):
 
 
 def test_install_prerequisites_cli_first_available_missing(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_prerequisites.first_available", lambda names: None)
+    monkeypatch.setattr("transcria.installer.prerequisites.first_available", lambda names: None)
 
     assert main(["first-available", "--name", "hf"]) == 1
 
@@ -119,7 +119,7 @@ def test_install_prerequisites_cli_first_available_missing(capsys, monkeypatch):
 
 def test_install_prerequisites_cli_system_capabilities(capsys, monkeypatch):
     monkeypatch.setattr(
-        "transcria.install_prerequisites.detect_system_capabilities",
+        "transcria.installer.prerequisites.detect_system_capabilities",
         lambda: {"HAVE_SUDO": True, "HAVE_SYSTEMCTL": False},
     )
 
@@ -129,7 +129,7 @@ def test_install_prerequisites_cli_system_capabilities(capsys, monkeypatch):
 
 
 def test_install_prerequisites_cli_user_home_success(capsys, monkeypatch):
-    monkeypatch.setattr("transcria.install_prerequisites.resolve_user_home", lambda user: f"/home/{user}")
+    monkeypatch.setattr("transcria.installer.prerequisites.resolve_user_home", lambda user: f"/home/{user}")
 
     assert main(["user-home", "--user", "transcria"]) == 0
 
@@ -140,7 +140,7 @@ def test_install_prerequisites_cli_user_home_missing(capsys, monkeypatch):
     def missing_user(_user: str) -> str:
         raise KeyError("missing")
 
-    monkeypatch.setattr("transcria.install_prerequisites.resolve_user_home", missing_user)
+    monkeypatch.setattr("transcria.installer.prerequisites.resolve_user_home", missing_user)
 
     assert main(["user-home", "--user", "missing"]) == 1
 
@@ -193,9 +193,9 @@ def test_python_venv_supported_swallows_find_spec_errors():
 
 
 def test_install_prerequisites_cli_check_venv(monkeypatch):
-    monkeypatch.setattr("transcria.install_prerequisites.python_venv_supported", lambda: True)
+    monkeypatch.setattr("transcria.installer.prerequisites.python_venv_supported", lambda: True)
     assert main(["check-venv"]) == 0
-    monkeypatch.setattr("transcria.install_prerequisites.python_venv_supported", lambda: False)
+    monkeypatch.setattr("transcria.installer.prerequisites.python_venv_supported", lambda: False)
     assert main(["check-venv"]) == 1
 
 

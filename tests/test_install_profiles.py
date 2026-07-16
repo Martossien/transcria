@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from transcria.install_profiles import (
+from transcria.installer.profiles import (
     PlanRenderContext,
     SummaryRenderContext,
     get_profile_spec,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from transcria.install_profiles import resolve_install_plan
+from transcria.installer.profiles import resolve_install_plan
 
 _ROOT = Path(__file__).resolve().parents[1]
 _INSTALL = _ROOT / "install.sh"
@@ -69,7 +69,7 @@ def test_install_script_does_not_eval_interactive_answers():
 def test_install_script_resolves_user_home_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "transcria.install_prerequisites user-home" in content
+    assert "transcria.installer.cli prerequisites user-home" in content
     assert "pwd.getpwnam" not in content
     assert "python3 -c" not in content
 
@@ -77,7 +77,7 @@ def test_install_script_resolves_user_home_through_python_helper():
 def test_install_script_delegates_prerequisite_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_prerequisites setup-log" in content
+    assert "-m transcria.installer.cli prerequisites setup-log" in content
     assert "log_prerequisite_event" in content
     assert "Python $version :" not in content
     assert "Python 3.11+ requis. Installer avec: apt install python3.11" in content
@@ -117,7 +117,7 @@ def test_install_script_delegates_systemd_phase_to_installer_cli():
 def test_install_script_delegates_local_setup_logs():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_paths" in content
+    assert "-m transcria.installer.cli paths" in content
     assert "--setup-log" in content
     assert "log_local_setup_event" in content
     assert "Venv existant :" not in content
@@ -578,7 +578,7 @@ def test_install_script_uses_requirements_as_runtime_dependency_source():
 def test_install_script_delegates_common_runtime_directories_to_python():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_paths" in content
+    assert "-m transcria.installer.cli paths" in content
     assert 'mkdir -p "$INSTALL_DIR/jobs" "$INSTALL_DIR/models/cohere-asr" "$INSTALL_DIR/instance"' not in content
 
 
@@ -654,7 +654,7 @@ def test_install_script_checks_models_through_python_helper():
 def test_install_script_checks_runtime_binaries_through_python_helper():
     content = _INSTALL.read_text(encoding="utf-8")
 
-    assert "-m transcria.install_prerequisites" in content
+    assert "-m transcria.installer.cli prerequisites" in content
     assert "--required ffmpeg" in content
     assert "--required ffprobe" in content
     assert "--optional lsof" in content

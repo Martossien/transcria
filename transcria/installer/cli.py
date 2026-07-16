@@ -15,6 +15,7 @@ from pathlib import Path
 # sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
 # tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
 # les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
+from transcria.installer import hardware, imports_check, paths, prerequisites, profiles
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     AudiocppPhaseError,
@@ -593,7 +594,23 @@ def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
     return 0
 
 
+# Helpers d'installation à CLI propre (vague C6 — ex-modules transcria/install_*.py
+# racine, fondus dans installer/). Transférés AVANT argparse : chacun garde son
+# argparse interne (testé), et REMAINDER d'argparse mange mal les options en tête.
+_FORWARDED_HELPERS: dict[str, Callable[[list[str] | None], int]] = {
+    "prerequisites": prerequisites.main,
+    "hardware": hardware.main,
+    "paths": paths.main,
+    "profiles": profiles.main,
+    "check-imports": imports_check.main,
+}
+
+
 def main(argv: list[str] | None = None) -> int:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    if args_list and args_list[0] in _FORWARDED_HELPERS:
+        return _FORWARDED_HELPERS[args_list[0]](args_list[1:])
+
     parser = argparse.ArgumentParser(prog="transcria-install", description="Installateur TranscrIA piloté en Python.")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_python_env_parser(sub)

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from transcria.install_messages import t
-from transcria.install_prerequisites import first_available
+from transcria.installer.prerequisites import first_available
 
 PYANNOTE_MODEL_ID = "pyannote/speaker-diarization-community-1"
 SQUIM_RELATIVE_PATH = Path("hub") / "torchaudio" / "models" / "squim_objective_dns2020.pth"
