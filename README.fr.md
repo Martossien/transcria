@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.3.6** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.3.7** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.3.7** | **Qualité & durcissement** — le chantier qualité (15 vagues) livré de bout en bout : architecture en couches verrouillée par cliquets CI, sonde GPU unique et kill patterns unifiés, zéro module d'install legacy, **référence d'API générée** avec contrat scriptable marqué (⭐ upload → process → status → download), et de vrais bugs de concurrence/déploiement débusqués et corrigés en chemin (course LLM entre jobs simultanés, env des runtimes du nœud GPU, chemins d'`audiocpp --with-model`) |
 | **0.3.6** | **Runtimes STT servis** — audio.cpp et parakeet.cpp deviennent des moteurs de première classe : builds épinglés par l'installeur, démarrage à la demande avant les jobs (all-in-one et nœud GPU), santé par moteur, admission VRAM, repli natif — qualifiés sur le benchmark de réunions réelles (`qwen3asr` 0,421 WER, `nemotron` 0,492 à ~2 s/fenêtre de 5 min) |
 | **0.3.5** | **Nouveaux moteurs & éditeur plus malin** — backend MOSS-Transcribe-Diarize (transcription + locuteurs + timestamps en une passe, meilleur WER texte de notre benchmark) et Kroko-ASR, le backend **sans GPU** (155 Mo par langue, CPU seul, au niveau de nos moteurs GPU sur réunions réelles) ; après édition du SRT, l'éditeur propose un **DOCX rapide** ou une **synthèse mise à jour par la LLM** (proposée, jamais automatique, versionnée) |
 | **0.3.4** | **Moteurs STT & benchmarks** — moteurs mesurés sur de vraies réunions françaises contre référence humaine ([résultats publiés](docs/STT_BENCHMARK_REAL_MEETINGS.md)) ; nouveau backend Mistral Voxtral Mini 3B (Apache-2.0, meilleur WER mesuré) ; multi-STT ciblé **activé par défaut** (retranscription arbitrée des seuls segments dégradés — coût nul sur audio sain, best-effort) |

@@ -6,6 +6,70 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.7] — 2026-07-16
+
+Version **qualité & durcissement**. Le chantier de refactorisation qualité
+(`docs/REFACTORING_QUALITE.md`) est livré **en intégralité — 15 vagues** : le code est
+réorganisé en couches gardées par la CI, et la campagne a débusqué puis corrigé des
+**bugs réels** de concurrence et de déploiement. **Aucune migration de base de données,
+aucune nouvelle dépendance Python, aucun changement de clé de configuration** — un
+`config.yaml` existant reste valide tel quel.
+
+### Fixed
+- **Jobs simultanés : la LLM d'arbitrage n'est plus tuée sous le pied d'un job
+  concurrent.** Un job finissant son pipeline arrêtait la LLM sans vérifier le verrou —
+  si un autre job la LANÇAIT pour sa correction au même moment (SIGTERM en plein
+  chargement), ce job échouait « LLM d'arbitrage non disponible ». L'arrêt de fin de
+  pipeline prend désormais le verrou LLM (sinon il saute son tour). Débusqué et validé
+  par la campagne de charge (rafale de 3 jobs : 2/3 → **3/3**).
+- **Image Docker `resource-node` : les runtimes STT servis étaient introuvables au
+  runtime** — `TRANSCRIA_RUNTIMES_DIR` était posé dans l'étage de BUILD (un `ENV`
+  d'étage ne se propage pas à l'image finale). Débusqué par la nouvelle garde de
+  synchronisation Docker à sa première exécution.
+- **`installer.cli audiocpp --with-model` échouait après un build CUDA réussi** (#7) —
+  chemin du venv outils résolu relativement au mauvais répertoire ; tous les chemins du
+  runtime sont désormais absolus (parakeetcpp durci par symétrie).
+- **Sonde GPU : deux visions divergentes de la même carte.** `VRAMManager` plantait sur
+  un `RuntimeError` CUDA là où `GPUAllocator` tolérait tout ; la sonde unique
+  (`gpu/inventory.py`) est tolérante PAR CARTE (une carte illisible est ignorée, les
+  saines restent).
+- **Kill patterns : l'allocateur pouvait tuer le démon Ollama** que le manager
+  protégeait — protection `NEVER_KILL` unifiée (`gpu/kill_patterns.py`).
+
+### Added
+- **Référence d'API générée** : `docs/API_REFERENCE.md` (129 routes, auth, description),
+  produite de `app.url_map` et **gardée en CI** — la dérive de doc d'API meurt à la
+  source. Les routes du parcours scriptable upload → process → status → download sont
+  marquées ⭐ (`__api_stable__`) : c'est le **contrat** des auto-hébergeurs, le reste est
+  interne.
+- **Gardes de synchronisation Docker en CI** (`tests/test_docker_sync.py`, sans Docker) :
+  SHAs épinglés des runtimes == constantes Python, blocs de build identiques entre les
+  3 images GPU, répertoires lourds couverts par `.dockerignore`.
+- **`scripts/release_bundled.sh`** : le rituel de release de l'image `:bundled` scripté —
+  gardes préalables, build (`:bundled` + `:vX.Y.Z-bundled`), **vérification bloquante du
+  contenu dans le conteneur** (version, commits des runtimes, site MOSS, poids bakés),
+  push GHCR sur `--push` explicite.
+- **Marqueur `gpu_real`** : suite smoke sur GPU RÉEL (`tests/test_gpu_real_smoke.py`,
+  hors CI) — allocateur vs nvidia-smi, kill de port réel, superviseur STT réel, snapshot
+  identique entre les deux classes GPU.
+
+### Changed
+- **Chantier qualité 15/15** (A0→A3, B0→B3, C1→C8) : god-modules découpés (runner
+  2 303 → 346 l., pipeline 1 348 → 385 l., opencode_runner 1 543 → 812 l.) ; registre
+  unique des moteurs STT ; vues typées de la config ; composition d'app explicite
+  (`create_app(config, start_background_services=False)`) ; imports différés 535 → **39
+  tous justifiés** ; **zéro module `install_*.py` à la racine** — `installer.cli` est le
+  SEUL point d'entrée Python d'`install.sh` ; sonde GPU et kill patterns uniques ;
+  `mypy check_untyped_defs` en gate ; couverture 80,6 → **83,6 %** (+487 tests, dont le
+  test « étoile polaire » : pipeline complet + reprise sans Flask/PG/GPU en < 1 s).
+  **Tout est verrouillé par cliquet CI** (cycles — y compris via les `__init__` de
+  paquets —, imports différés, fan-out, fonctions géantes, routes sans docstring) :
+  rien ne peut se re-dégrader silencieusement.
+- **Documentation révisée contre le code** (contrôles exécutables : 482/482 clés de
+  config, 19/19 tables, chemins/liens/symboles) ; 4 documents historiques archivés dans
+  `docs/archive/` ; `AGENTS.md` réaligné (arborescence complète, gates réels,
+  conventions de test).
+
 ## [0.3.6] — 2026-07-12
 
 Version **runtimes STT servis**. audio.cpp et parakeet.cpp deviennent des **moteurs de

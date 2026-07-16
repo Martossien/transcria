@@ -33,7 +33,7 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ## Project status
 
-**Current release: 0.3.6** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.3.7** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -45,6 +45,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.3.7** | **Quality & hardening** — the 15-wave code-quality campaign delivered end to end: layered architecture locked by CI ratchets, a single GPU probe and unified kill patterns, zero legacy install modules, a **generated API reference** with a marked scriptable contract (⭐ upload → process → status → download), and real concurrency/deployment bugs found and fixed along the way (concurrent-job LLM race, resource-node runtimes env, `audiocpp --with-model` paths) |
 | **0.3.6** | **Served STT runtimes** — audio.cpp and parakeet.cpp become first-class engines: pinned installer builds, on-demand start before jobs (all-in-one and GPU-node topologies), per-engine health checks, VRAM admission, native fallback — qualified on the real-meeting benchmark (`qwen3asr` 0.421 WER, `nemotron` 0.492 at ~2 s/5-min window) |
 | **0.3.5** | **New engines & smarter editor** — MOSS-Transcribe-Diarize backend (transcription + speakers + timestamps in one pass, best text WER of our benchmark) and Kroko-ASR, the **no-GPU** backend (155 MB per language, CPU only, matches our GPU engines on real meetings); after editing the SRT, the editor now offers a **quick DOCX** or an **LLM-updated synthesis** (proposed, never automatic, versioned) |
 | **0.3.4** | **STT engines & benchmarks** — engines measured on real French meetings against a human reference ([published results](docs/STT_BENCHMARK_REAL_MEETINGS.md)); new Mistral Voxtral Mini 3B backend (Apache-2.0, best measured WER); targeted multi-STT **on by default** (arbitrated re-transcription of degraded segments only — zero cost on clean audio, best-effort) |
