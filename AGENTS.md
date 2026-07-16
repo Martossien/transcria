@@ -136,8 +136,14 @@ transcria/
       llm_profiles.py       # catalogue de profils LLM (data/llm_profiles.yaml) + select_profile piloté matériel (mono/multi) ; cf. docs/LLM_BACKENDS.md
       system_detector.py    # SystemDetector.detect() — GPUs, binaires, RAM, disque ; _resolve_binary = PATH + emplacements connus hors PATH (nvcc/llama-server introuvables via PATH réduit du service root)
       loader.py (i18n)      # override env TRANSCRIA_DEFAULT_LOCALE → i18n.default_locale (ergonomie Docker/CI)
+      views.py              # C3 : vues typées gelées de la config (GpuView/QueueView/WorkflowView/SttView — from_config = l'UNIQUE endroit des .get() en chaîne)
+      yaml_file.py          # helpers yaml get/set CLI (install.sh yaml_get/yaml_set) — round-trip préservant
+      env_file.py           # update_env_file() — écriture idempotente du .env
+      gpu_calibration.py    # apply_gpu_calibration() — écrit gpu.llm_vram_mb/llm_gpu_indices (ruamel non destructif)
+      resource_node_manifest.py # manifeste resource_node.engines (specs des moteurs STT servis)
     cli_i18n.py             # i18n des sorties CLI HORS-web (installateur + doctor) : resolve_cli_locale (env TRANSCRIA_DEFAULT_LOCALE, défaut fr) + make_translator(catalogue fr/en) ; sans dépendance, distinct de Flask-Babel (web)
     database.py             # db = SQLAlchemy()
+    app_services.py         # C4 : fabriques explicites de create_app (resolve_app_config, configure_*, build_*, register_*, start_runtime) — create_app(config=None|chemin|dict, start_background_services=False pour tests/outils
     diagnostics/
       doctor.py             # Préflight GPU-free : config, schéma DB (compare_metadata), script/serveur LLM, opencode, nœuds, dossiers — sortie 100 % bilingue (_t = make_translator(DOCTOR_MESSAGES))
       doctor_messages.py    # catalogue fr/en du doctor (noms de vérifs, détails, hints, rapport, aide CLI)
@@ -153,6 +159,8 @@ transcria/
       torch_env.py / systemd_lib.py / summary_lib.py / opencode_lib.py / postgres_lib.py # bibliothèques des phases (plans torch/unités systemd/rendus/primitives opencode/PostgreSQL)
     deploy/                 # Déploiement conteneurisé (P5)
       entrypoint.py         # Entrypoint Docker par rôle (jamais install.sh) : attente DB, garde PostgreSQL, exec du serveur du rôle
+      distro_bootstrap.py   # amorçage des prérequis OS pour tester install.sh en conteneurs vierges
+      gpu_preflight.py / gpu_probe.py # preflight GPU du quickstart Docker ; sondes E2E des topologies
     maintenance/            # Backup/restore/upgrade LOCAL + planification + one-shot restore (opérateur)
       backup.py / restore.py / upgrade.py # sauvegarde (pg_dump -Fc / sqlite .backup + manifeste), restauration gardée (refus base vivante), montée de version outillée
       schedule.py           # timer systemd de backup planifié (rendu PUR + install/remove/status) ; User = service principal (résolu via systemctl — piège root/admin_ia)
@@ -167,24 +175,44 @@ transcria/
       store.py              # UserStore — méthodes statiques
       groups.py             # GroupStore — groupes, membres, admins de groupe
       routes.py             # auth_bp : /login, /logout, /admin/users, /admin/groups
+      rate_limit.py         # login_rate_limiter — anti-bourrinage des connexions (C3.3), singleton process
     jobs/
       models.py             # Job, JobState (20 états)
       store.py              # JobStore — méthodes statiques
       filesystem.py         # JobFilesystem — arborescence disque par job
+      artifact_store.py     # synchronisation base↔disque des fichiers de jobs (backend pg, cf. docs/STOCKAGE_PARTAGE_JOBS.md)
+      timing_store.py       # JobTimingStore — historique des durées réelles (modèle de temps calibré machine)
     queue/
       allocator.py          # GPUAllocator — réservations GPU atomiques par job/phase + verrou LLM + PID tracking
       store.py              # QueueStore — file persistante, priorités, pause/reprise, aging
       scheduler.py          # QueueScheduler — dispatch en arrière-plan selon capacité/calendrier
       calendar.py           # SchedulingCalendar — pause_queue, limit_concurrency, force_gpu
       routes.py             # /admin/queue, /admin/schedule, /api/queue/*, /api/schedule/*
+      notify_listener.py    # réveil instantané du scheduler via PostgreSQL LISTEN/NOTIFY (Phase B)
+      wait_estimate.py      # temps d'attente estimé des jobs en file (cumul calibré machine)
     workflow/
       states.py             # WorkflowState.compute_statuses()
       steps.py              # WORKFLOW_STEPS (9 étapes)
       progress.py           # WorkflowProgressReporter — progression UI persistée dans jobs.extra_data_json["workflow_progress"]
-      runner.py             # WorkflowRunner — exécution des étapes (dont run_refine : chat d'affinage post-workflow)
+      runner.py             # WorkflowRunner — FAÇADE d'exécution (346 l. après B1) : délègue aux phases via le registre, infrastructure injectable (gpu/progress keyword-only)
+      phases/               # B1 : les 11 phases extraites du runner (transcription, diarization, correction, final_review, multi_stt_review, quality, export, refine, summary, summary_llm, summary_stt) + __init__.py = REGISTRE (PhaseSpec, phases.get())
+      outcomes.py           # B0 : PhaseOutcome/OutcomeKind — le résultat TYPÉ inter-couches (l'exécuteur décide sur outcome.kind)
+      checkpoints.py        # B2 : CheckpointManager — push durable AVANT marqueur de phase (reprise fiable)
+      cancellation.py       # B2 : CancellationToken — annulation coopérative du pipeline
+      resume.py             # reprise mi-parcours : PIPELINE_PHASES, artefacts non ambigus, empreintes sha256 (goldens B1)
+      profiles.py           # profils de traitement (get_profile/profile_for_job) — quelles étapes chaque profil exécute
+      profile_availability.py # disponibilité des profils pour l'UI (Phase 6)
+      speaker_projection.py # B1 : projection locuteurs — service PUR
+      gpu_phase.py          # B1 : réservation/session GPU d'une phase (GPUSession, _should_use_remote_stt)
+      agent_workspace.py    # scratch HORS dépôt des agents opencode (stage/write_input/verify_and_restore_sources)
+      srt_editor.py         # parsing/écriture SRT de l'éditeur intégré (chunks, révisions)
+      timing_model.py       # modèle de temps CALIBRÉ MACHINE — source unique des estimations de durée
+      timing_service.py     # façade du modèle de temps : profil → étapes → estimation
+      type_field_extraction.py # extraction LÉGÈRE des champs sur-mesure d'un type (logique pure)
+      concurrency_profile.py # profil de concurrence du workflow + observabilité du goulot
       refine_store.py       # RefineStore — chat d'affinage : historique refine/chat.json, demande request.json, versions/v<N>/ (snapshots restaurables), extract_proposal (label contractuel tolérant)
       refine_llm.py         # Appel LLM DIRECT du mode discuss (build_discuss_messages + chat_completion : /v1/chat/completions, thinking désactivé, filtre <think>)
-      multi_stt_review.py   # Multi-STT ciblé — segments sur fenêtres dégradées (difficulty_map) retranscrits par un 2e moteur + arbitrage LLM A/B (workflow.multi_stt, ON par défaut depuis 0.3.4, best-effort)
+      multi_stt_review.py   # Multi-STT ciblé — LOGIQUE PURE (sélection/arbitrage/application) ; l'orchestration vit dans phases/multi_stt_review.py (workflow.multi_stt, ON par défaut depuis 0.3.4, best-effort)
       transitions.py        # logique lancement / annulation / reprise ; statuts d'exécution (queued/running/waiting_vram/terminal) + mark_execution_waiting_vram()
     audio/
       analyzer.py           # AudioAnalyzer (ffprobe)
@@ -199,6 +227,10 @@ transcria/
       denoise.py             # AudioDenoiseService — débruitage ffmpeg expérimental (afftdn, désactivé par défaut)
       normalization.py       # AudioNormalizationService — normalisation ffmpeg optionnelle, auto-loudnorm si RMS < seuil, weak_voice
       source_separation.py  # SourceSeparationDecider + SourceSeparationService — separation vocaux/instrumentaux (demucs, désactivé par défaut)
+      acoustic_metrics.py   # métriques acoustiques par fenêtre (numpy/scipy seuls)
+      dnsmos_scorer.py / squim_scorer.py # scoring perceptif DNSMOS P.835 ; SQUIM torchaudio (choix de device via l'inventaire GPU)
+      difficulty_map.py     # carte de difficulté par fenêtres (nourrit le multi-STT ciblé)
+      excerpts.py           # AudioExcerptService — extraits audio à la demande (contexte lexique, clips)
     stt/
       base_transcriber.py   # BaseTranscriber (ABC)
       cohere_transcriber.py # CohereTranscriber — Cohere ASR (AutoModelForSpeechSeq2Seq, numpy array)
@@ -216,7 +248,9 @@ transcria/
       speaker_realignment.py# Réalignement locuteur/ponctuation au niveau mot
       reliability.py          # SegmentReliabilityScorer — scoring fiabilité post-STT (ok/suspect/degrade)
       corpus.py               # Corpus difficulté↔qualité par segment (brique 2 calibration) : difficulty_for_range/build_segment_corpus/summarize_corpus (purs)
-      transcriber_factory.py# TranscriberFactory — sélection backend selon config
+      registry.py           # C1 : REGISTRE unique des moteurs STT (SttBackendDescriptor : build/vram_mb/catalog/required_model) — chaque backend déclare son DESCRIPTOR dans son module ; factory/VRAM/catalogue/schéma verrouillés par tests/contracts/test_stt_backend_contract.py
+      transcriber_factory.py# façade du registre — create_transcriber()/local_builders()/get_backend_vram_mb()
+      cohere_tf5_transcriber.py / _cohere_tf5_worker.py # variante Cohere sous Transformers 5 (worker subprocess isolé)
       transcription.py      # Transcriber — chunking pyannote/30s + alignement + realignment + _cleanup_transcription_segments() (artefacts + micro-segments)
       base_diarizer.py      # BaseDiarizer (ABC) — interface commune + méthodes partagées (cache, clips, embeddings, fingerprint)
       diarization.py        # DiarizerService(BaseDiarizer) — backend pyannote + preload audio + batch sizes + cache PCM optionnel + hook progress logué + exclusive_speaker_diarization + pipeline_params expérimentaux + checkpoints
@@ -237,12 +271,15 @@ transcria/
       central_lexicon_service.py# Fusion session/LLM/central + filtrage avant correction
       central_lexicon_routes.py # Routes admin /admin/lexicons
       job_context_builder.py# JobContextBuilder — assemble job_context.yaml/json
+      lexicon_audit.py      # journal d'audit des actions lexique
+      meeting_type_models.py / meeting_type_store.py / meeting_type_catalog.py / meeting_type_routes.py / meeting_type_prompts.py # types de réunion PERSONNALISÉS (modèle SQL, store RBAC/quotas, catalogue fusionné 18 types+customs, API /api/meeting-types, variables de prompts) — cf. docs/TYPES_REUNION_PERSONNALISES.md
     quality/
       audio_quality.py      # AudioQualityEvaluator — décision Cohere/Whisper selon diagnostics
       quality_report.py     # QualityReporter (16 checks, score /100)
       srt_checks.py         # Checks sur le SRT
       lexicon_checks.py     # Checks sur le lexique
       review_points.py      # Points de relecture
+      light_report.py       # contrôle qualité LÉGER (profils srt_*) — invariants de base du SRT
     exports/
       package_builder.py    # PackageBuilder — ZIP final (inclut le rapport DOCX)
       docx_report.py        # DocxReport — rapport Word pro adapté au type : extraction structurée (décisions/actions/votes…),
@@ -271,16 +308,25 @@ transcria/
       __init__.py
       mailer.py             # EmailConfig, build_email_config(), send_job_notification_async(), send_admin_vram_alert_async() — SMTP fire-and-forget daemon thread
       admin_alerts.py       # get_admin_emails() + alert_admin_vram_wait() — alerte ADMIN « job en attente de VRAM » (e-mail + log WARNING), best-effort
+      job_facts.py          # faits d'un job pour les emails (type détecté, locuteurs, durée, estimé/réel)
     services/
       job_executor.py       # JobExecutorService — worker interne (thread) + _notify() hook email après COMPLETED/FAILED
       job_service.py        # JobService
       pipeline_service.py   # PipelineService — preflight, scene, quality refresh, source sep, filter, denoise, norm avant STT
       config_service.py     # ConfigService
+      execution.py          # B0 : ExecutionMode/ExecutionCommand — décisions typées de l'exécuteur
+      pipeline_sequence.py  # B2 : l'UNIQUE table de séquencement des étapes du pipeline
+      pipeline_admission.py # B2 : estimation VRAM d'admission d'un traitement
+      pipeline_config.py    # B2 : config effective d'un traitement (mode, garde qualité, lexiques)
+      pipeline_remote_gate.py # B2 : pré-vol des ressources distantes (admission §7.2 + auto-lancement STT)
+      pipeline_steps/       # B2 : les 6 étapes audio extraites (preflight, scene_analysis, scene_filter, denoise, normalization, source_separation)
     audit/
       models.py             # AuditAction + AuditLog (SQLAlchemy)
       store.py              # AuditStore — log(), query(), count(), purge_expired()
       decorator.py          # audit_log() + @audit_action — capture auto current_user + IP
       routes.py             # audit_bp : /admin/audit (filtres + export CSV)
+    benchmarks/
+      stt_concurrency_estimator.py # estimateur de concurrence STT — projette le débit local depuis un bench_audio (cf. docs/BENCHMARKING.md)
     voice/
       models.py             # SQLAlchemy voix enregistrées, consentements, profils, matches, audit
       store.py              # VoiceStore — périmètre groupe, consentements, profils, audit
@@ -298,6 +344,7 @@ transcria/
       processing_api.py     # API traitement : process/cancel, status (+ETA), reprocess, quality, export, /api/resources/status (cache court), /api/system/status
       downloads_api.py      # téléchargements : SRT, package ZIP, audio, DOCX, extraits audio, clips locuteurs
       refine_api.py         # chat d'affinage : submit, chat (polling), render-options, revert
+      editor_routes.py      # éditeur SRT intégré : state (un appel), draft (verrou optimiste 409), save (snapshot pool commun), stream Range, peaks — cf. docs/EDITEUR_SRT_INTEGRE.md
       admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models
       health_routes.py      # /health, /ready, /metrics (Prometheus)
       job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job

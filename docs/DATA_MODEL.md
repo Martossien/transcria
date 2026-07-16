@@ -15,6 +15,7 @@
 | `is_active` | Boolean | NOT NULL, default=True | Compte actif |
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
 | `last_login` | DateTime | nullable | Dernière connexion |
+| `locale` | String(8) | nullable | Langue préférée de l'INTERFACE (BCP-47 court, ex. `fr`/`en`) ; NULL = suivre le navigateur / la locale de l'instance — distinct de la langue des livrables (réglage par job), cf. `I18N_MULTILANGUE.md` |
 
 **Relations :** `User.jobs` → liste de jobs (backref)
 
@@ -425,6 +426,7 @@ jobs/<job_id>/
 │   ├── transcription_segments.json # Segments Cohere [{start, end, text, speaker}]
 │   ├── transcription_metadata.json # Métadonnées de transcription (backend, chunking_mode, chunking_forced_30s_reason, gpu_index, language, segments, speaker_count, vad_final_enabled, difficulty_corpus)
 │   ├── stt_corpus.json             # Corpus difficulté↔qualité par segment (brique 2 calibration) : [{start, end, backend, n_words, avg_logprob, no_speech_prob, word_conf_mean, low_word_conf_ratio, reliability, reliability_reasons, difficulty, difficulty_signals, quality_measure}]. quality_measure = proxy taux d'édition (brut↔corrigé) rempli en phase qualité ; None si pas de SRT corrigé. Écrit si workflow.stt_corpus.enabled (défaut true).
+│   ├── multi_stt.json             # Trace du multi-STT ciblé : fenêtres dégradées retranscrites, décisions d'arbitrage A/B, remplacements appliqués (workflow.multi_stt)
 │   ├── whisper_hotwords.json      # Audit hotwords Whisper issus du lexique si option expérimentale activée
 │   ├── cohere_lexicon_biasing.json # Audit biasing Trie Cohere issu du lexique si option expérimentale activée
   │   ├── granite.json               # Métadonnées backend Granite si utilisé
