@@ -28,7 +28,8 @@ example results and the user journey.
 
 | Document | What it covers |
 |---|---|
-| [TECHNICAL.md](TECHNICAL.md) | Architecture, pipeline, modules, HTTP API, GPU orchestration, timing model, database |
+| [TECHNICAL.md](TECHNICAL.md) | Architecture, pipeline, modules, GPU orchestration, timing model, database |
+| [API_REFERENCE.md](API_REFERENCE.md) | **Generated** HTTP API reference (all routes, auth, ⭐ scriptable contract) — regenerate with `scripts/generate_api_reference.py`, guarded in CI |
 | [CONFIG_REFERENCE.md](CONFIG_REFERENCE.md) | Complete `config.yaml` reference (generated from the schema) |
 | [DATA_MODEL.md](DATA_MODEL.md) | Database schema, job states, per-job files |
 | [LLM_TIERS.md](LLM_TIERS.md) | **In English** — the benchmarked arbitration-LLM VRAM tiers (12 → 64 GB): validated model, quant and context per tier, backend recommendation |
@@ -56,9 +57,6 @@ example results and the user journey.
 | Document | What it covers |
 |---|---|
 | [STT_ADAPTATIF_ET_HYBRIDE.md](STT_ADAPTATIF_ET_HYBRIDE.md) | Adaptive and hybrid STT: quality-driven backend selection |
-| [PARAKEET_STT_INTEGRATION.md](PARAKEET_STT_INTEGRATION.md) | NVIDIA Parakeet STT backend integration |
-| [VAD_OR_NOT.md](VAD_OR_NOT.md) | Voice-activity-detection decision record and tuning |
-| [STT_CORPUS.md](STT_CORPUS.md) | Contextual-biasing corpus format and use |
 | [EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md) | **Served STT runtimes** — audio.cpp (`qwen3asr`) and parakeet.cpp (`nemotron`) as first-class engines: pinned installer builds, on-demand start before jobs, per-engine health, native fallback |
 
 ## Benchmarking and validation
@@ -68,15 +66,13 @@ example results and the user journey.
 | [BENCHMARKING.md](BENCHMARKING.md) | How to run a reproducible bench: the `bench_audio.py` matrix runner and its four analyzers (metrics, LLM quality, WER vs reference, concurrency) |
 | [STT_BENCHMARK_REAL_MEETINGS.md](STT_BENCHMARK_REAL_MEETINGS.md) | **In English** — published STT benchmark on real French meetings vs a professional human transcript: all engines and external runtimes, traps, failure modes |
 | [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md) | Per-VRAM-tier model benchmarks (the source for tier selection) |
-| [LLM_PROFILS_VALIDATION.md](LLM_PROFILS_VALIDATION.md) | Validation records for the LLM tier profiles |
 
 ## Concurrency, scale, and distributed inference
 
 | Document | What it covers |
 |---|---|
-| [CONCURRENCE_ET_CHARGE_PHASE_B.md](CONCURRENCE_ET_CHARGE_PHASE_B.md) | PostgreSQL concurrency model: atomic claim, single scheduler, `LISTEN/NOTIFY` |
-| [MIGRATION_API_SERVEUR_GPU.md](MIGRATION_API_SERVEUR_GPU.md) | Remote GPU resource-node HTTP API (`inference_service`) |
-| [PLAN_TEST_CHARGE.md](PLAN_TEST_CHARGE.md) | Load-test procedure and campaigns |
+| [MIGRATION_API_SERVEUR_GPU.md](MIGRATION_API_SERVEUR_GPU.md) | Remote GPU resource-node HTTP API semantics (`inference_service`) — route list lives in [API_REFERENCE.md](API_REFERENCE.md) |
+| [PLAN_TEST_CHARGE.md](PLAN_TEST_CHARGE.md) | Load-test procedure and campaigns (mandatory net for GPU-concurrency changes) |
 | [PLAN_TEST_SPLIT_VLLM.md](PLAN_TEST_SPLIT_VLLM.md) | Split-topology (vLLM) validation procedure |
 
 ## Engineering plans
@@ -88,5 +84,12 @@ example results and the user journey.
 ## History
 
 Superseded planning documents, benchmarks, and analyses are kept under
-[`archive/`](archive/) for provenance — including the `0.2.0` release plan. They do not
-describe current behaviour; use the documents above instead.
+[`archive/`](archive/) for provenance. They do not describe current behaviour; use the
+documents above instead. Recently archived (2026-07-16): the Phase B concurrency plan
+([CONCURRENCE_ET_CHARGE_PHASE_B.md](archive/CONCURRENCE_ET_CHARGE_PHASE_B.md), delivered —
+decisions absorbed into `AGENTS.md`), the Parakeet integration scoping
+([PARAKEET_STT_INTEGRATION.md](archive/PARAKEET_STT_INTEGRATION.md), superseded by
+[EXTERNAL_STT_RUNTIMES.md](EXTERNAL_STT_RUNTIMES.md)), the VAD study
+([VAD_OR_NOT.md](archive/VAD_OR_NOT.md), decision record) and the LLM tier validation
+records ([LLM_PROFILS_VALIDATION.md](archive/LLM_PROFILS_VALIDATION.md) — the living
+protocol is [BENCH_LLM_PALIERS.md](BENCH_LLM_PALIERS.md)).

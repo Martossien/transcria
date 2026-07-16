@@ -250,11 +250,13 @@ transcria/
                             #   champs type-spécifiques, thèmes visuels par type (_DocxTheme), quorum CSE auto.
                             #   generate_docx_report(job_id, jobs_dir, output_path). Exclu de mypy (python-docx sans stubs).
     gpu/
+      inventory.py          # B3 : L'UNIQUE sonde GPU de l'arbre — snapshot() -> tuple[GpuState,...] + legacy_gpu_info() (VRAMManager, GPUAllocator, system_status, squim, refine_llm délèguent tous ici ; panne de sonde = inventaire vide, carte illisible ignorée)
+      kill_patterns.py      # B3 : patterns de préemption uniques (kill_patterns_from_config + matches_kill_pattern, protection NEVER_KILL Ollama) — même clé de config, plus deux copies divergentes
       vram_manager.py       # VRAMManager — orchestration cycle GPU + recalage VRAM mesuré au 1er load (Ollama /api/ps)
       gpu_session.py        # GPUSession — context manager
       llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded()/measured_vram_mb() ; cf. docs/LLM_BACKENDS.md
       llm_footprint.py      # empreinte VRAM DÉRIVÉE (poids réel du fichier + KV calculé archi×contexte) — jamais de taille en dur
-      opencode_runner.py    # OpenCodeRunner — exécute opencode CLI
+      opencode_runner.py    # OpenCodeRunner — exécute opencode CLI (prompts → prompt_locator.py, parsing pur → llm_parsing.py, vague C2)
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
@@ -357,14 +359,18 @@ transcria/
 
 ### Architecture — où va le code neuf (garde-fous CI actifs)
 
-Plan directeur : `docs/REFACTORING_QUALITE.md`. Deux gardes tournent en CI :
+Plan directeur : `docs/REFACTORING_QUALITE.md` (🏁 les 15 vagues sont livrées — les
+garde-fous restent actifs à vie). Gardes en CI :
 `scripts/audit_imports.py --check-baseline quality_baseline.json` (RATCHET — imports
-différés, fan-out par module, chaînes `get().get()` de config, fonctions > 150 lignes,
-cycles : rien ne peut se dégrader) et `lint-imports` (contrats `.importlinter` — cliquet :
-on n'y met QUE des contrats vrais, chaque vague ajoute le sien).
+différés ≤ 40 tous justifiés, fan-out par module, chaînes `get().get()` de config,
+fonctions > 150 lignes, cycles top-level ET inter-paquets via __init__,
+routes sans docstring : rien ne peut se dégrader) et `lint-imports` (contrats
+`.importlinter` — cliquet : on n'y met QUE des contrats vrais).
 
 - **Une nouvelle route** → le blueprint de son domaine (jamais `web/routes.py` par
-  défaut) ; les modules de routes ne s'importent JAMAIS entre eux.
+  défaut) ; les modules de routes ne s'importent JAMAIS entre eux ; elle arrive AVEC
+  sa docstring (ratchet C8) et on régénère la référence :
+  `venv/bin/python scripts/generate_api_reference.py` (garde CI `test_api_reference`).
 - **Une nouvelle phase de workflow / étape de pipeline** → son propre module (cible :
   `workflow/phases/`, `services/pipeline_steps/` — cf. vagues B1/B2 du plan).
 - **Un nouvel import interne** → en TÊTE de fichier. Différé UNIQUEMENT si : dépendance
@@ -516,7 +522,7 @@ Ces étapes s'exécutent dans cet ordre, avant `Transcriber.transcribe()`. Le su
 
 **VAD Silero :** `SummaryGenerator` utilise `SileroVAD` (via `faster_whisper`) pour ne soumettre au backend STT configuré que les zones de parole détectées en phase résumé (`workflow.vad.enabled_summary=true`). `AdaptiveVADConfig` ajuste les seuils depuis `metadata/audio_quality_decision.json` si `workflow.vad.adaptive=true`. La transcription finale a le VAD désactivé par défaut (`workflow.vad.enabled_final=false`) car les tours pyannote servent déjà de VAD implicite et le VAD final dégrade la qualité sur parole faible/chuchotée. Fallback transparent si `faster_whisper` est indisponible (chunking 30s).
 
-**VAD final auto sur audio dégradé :** désactivé par défaut (`workflow.vad.auto_enable_final_on_degraded=false`) car le VAD supprime trop de parole réelle. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète.
+**VAD final auto sur audio dégradé :** désactivé par défaut (`workflow.vad.auto_enable_final_on_degraded=false`) car le VAD supprime trop de parole réelle. Voir `docs/archive/VAD_OR_NOT.md` pour l'analyse complète.
 
 **VAD interne Whisper :** `whisper.vad_filter=false` par défaut. Le VAD interne de faster-whisper est trop agressif pour la parole française en condition réelle (pertes d'audio observées). Whisper a déjà `no_speech_threshold`, `compression_ratio_threshold` et `log_prob_threshold` pour filtrer les segments non-parole en aval.
 
@@ -654,7 +660,7 @@ centralisés). Règles pour tout agent de codage :
 ### Modèle service/worker
 `/api/jobs/<id>/process` planifie le traitement ; `JobExecutorService` l'exécute en arrière-plan. Par défaut, `workflow.queue.enabled=true` crée une entrée `job_queue` persistante et `QueueScheduler` dispatch les jobs selon priorité, calendrier et capacité (`workflow.execution.max_concurrent_jobs`, défaut 1). Supervision : `/health`, `/ready`, `/metrics`, `/api/queue/status`.
 
-**Montée en charge (Phase B, PostgreSQL requis)** : un **rôle** sépare le tier HTTP de l'orchestrateur — `runtime.role`/`TRANSCRIA_ROLE` ∈ `all` (défaut, tout-en-un) | `web` (gunicorn -w N, n'exécute pas la file) | `scheduler` (process unique qui draine la file). Garde-fous : claim de job atomique (`QueueStore.claim`, `FOR UPDATE SKIP LOCKED`), **ordonnanceur unique** par verrou consultatif PG (`scheduler_lock.py`), réveil optionnel `LISTEN/NOTIFY` (`workflow.queue.use_listen_notify`, sinon polling), **failover actif/passif** des nœuds de ressources (`inference.nodes`). Détail : `docs/CONCURRENCE_ET_CHARGE_PHASE_B.md`. Ne jamais lancer le tier `web` avec un contexte GPU : le GPU reste dans l'orchestrateur/le nœud.
+**Montée en charge (Phase B, PostgreSQL requis)** : un **rôle** sépare le tier HTTP de l'orchestrateur — `runtime.role`/`TRANSCRIA_ROLE` ∈ `all` (défaut, tout-en-un) | `web` (gunicorn -w N, n'exécute pas la file) | `scheduler` (process unique qui draine la file). Garde-fous : claim de job atomique (`QueueStore.claim`, `FOR UPDATE SKIP LOCKED`), **ordonnanceur unique** par verrou consultatif PG (`scheduler_lock.py`), réveil optionnel `LISTEN/NOTIFY` (`workflow.queue.use_listen_notify`, sinon polling), **failover actif/passif** des nœuds de ressources (`inference.nodes`). Détail : `docs/archive/CONCURRENCE_ET_CHARGE_PHASE_B.md`. Ne jamais lancer le tier `web` avec un contexte GPU : le GPU reste dans l'orchestrateur/le nœud.
 
 **Notifications email** : `JobExecutorService._run_process()` appelle `_notify(config, job, event, error)` juste après chaque `JobStore.update_state(COMPLETED)` ou `JobStore.update_state(FAILED)`. `_notify` délègue à `send_job_notification_async()` (module `transcria/notifications/mailer.py`) qui envoie l'email en daemon thread — jamais bloquant, absorbe toute exception. La configuration SMTP est dans `notifications.email` (`enabled`, `smtp_host`, `smtp_port`, `use_starttls`, `use_ssl`, `from_address`, `base_url`). Si `enabled=false` ou si l'adresse email de l'utilisateur est vide, aucune notification n'est envoyée. **Alerte admin VRAM** : à part du flux propriétaire ci-dessus, `notifications/admin_alerts.alert_admin_vram_wait()` prévient les comptes **ADMIN** actifs (`send_admin_vram_alert_async`) quand un job entre en attente de VRAM — une seule fois par épisode (cf. contrat d'état VRAM ci-dessus).
 
@@ -709,7 +715,7 @@ Règles de périmètre :
 - Si `context/session_lexicon.json` existe déjà et contient des entrées, il reste l'autorité UI ; les lexiques centraux disponibles sont seulement affichés comme contexte.
 
 Flux étape 6 :
-1. `web.routes._central_lexicon_context()` charge les lexiques accessibles au job.
+1. `web.pages_routes._central_lexicon_context()` charge les lexiques accessibles au job.
 2. `context/selected_lexicons.json` limite les lexiques cochés pour ce job. Si le fichier est absent, tous les lexiques accessibles sont sélectionnés.
 3. `prefilter_lexicon_entries_for_display()` réduit les entrées centrales affichées : terme/variante détecté dans le transcript ou résumé, priorité `critique`/`importante`, limite douce d'affichage. Chaque entrée gardée reçoit `_display_reason` pour l'explication UI.
 4. `merge_lexicon_entries()` fusionne central filtré + termes suspects LLM ; une session existante garde la priorité.
@@ -816,7 +822,7 @@ Lors du tout premier job, `speaker_turns.json` n'existe pas encore quand la tran
 Si `audio_path=None` et `audio_array=None`, `librosa.load(None)` lèvera une exception. Toujours fournir l'un ou l'autre. Le mode `audio_array` est réservé au chunking interne — les appels externes utilisent `audio_path`.
 
 ### VAD Silero — fallback transparent et activation séparée
-`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé aussi (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est également désactivé par défaut. Voir `docs/VAD_OR_NOT.md` pour l'analyse complète. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur.
+`SileroVAD` est utilisé en pré-transcription par `SummaryGenerator` si `workflow.vad.enabled_summary=true`. La transcription finale a le VAD désactivé par défaut (`enabled_final=false`) et l'auto-activation sur audio dégradé aussi (`auto_enable_final_on_degraded=false`). Le VAD interne de Whisper (`vad_filter`) est également désactivé par défaut. Voir `docs/archive/VAD_OR_NOT.md` pour l'analyse complète. Si `faster_whisper` n'est pas installé, `SileroVAD.available` retourne `False` et les appelants basculent en chunking 30s fixe sans erreur.
 
 ### Qualité SRT — garde-fous déterministes
 `QualityReporter` signale maintenant une charge de relecture (`review_load`) avec noms de locuteurs modifiés, segments marqués étrangers, segments non latins et segments courts suspects. Les marqueurs courts de bruit ASR sont configurables via `quality.asr_noise_markers`; ne pas ajouter de phrases métier ou de cas client dans le code pour ces heuristiques.
@@ -879,7 +885,7 @@ Le Python système (3.13, `/usr/bin/python`) n'a pas accès aux packages du venv
 | `docs/TECHNICAL.md` | Architecture détaillée, flux de données, API REST, pipeline GPU |
 | `docs/DATA_MODEL.md` | Schéma de données, états, transitions, arborescence disque |
 | `docs/CONFIG_REFERENCE.md` | Référence complète des paramètres config.yaml |
-| `docs/VAD_OR_NOT.md` | Analyse des systèmes VAD, tests comparatifs, recommandations par type de fichier |
-| `docs/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |
+| `docs/archive/VAD_OR_NOT.md` | Analyse des systèmes VAD, tests comparatifs, recommandations par type de fichier |
+| `docs/archive/PARAKEET_STT_INTEGRATION.md` | Intégration du backend Parakeet TDT 0.6B v3 (NeMo) |
 | `docs/SERVICE_RESSOURCES_GPU.md` | Inférence distante v1 : topologies frontale/ressources, autonomie VRAM du STT (A/B/C), `/capabilities`, mode dégradé |
 | `docs/MIGRATION_API_SERVEUR_GPU.md` | Contrat d'API du nœud de ressources distant (implémenté ; renvois §4bis depuis `inference_service/`) |

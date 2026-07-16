@@ -16,8 +16,9 @@
 >    compilent en CI/build/entrypoint.
 > 2. **Livrables** : dossier `configs/prompts/<xx>/` (traductions des prompts) + entrées `<xx>`
 >    dans les tables d'affichage (`_TYPE_DISPLAY_I18N`, `_DOCX_LABELS`, marqueurs de résumé…).
-> 3. **CLI/installateur/doctor** : ajouter la clé `<xx>` aux catalogues `transcria/install_messages.py`,
->    `transcria/diagnostics/doctor_messages.py` et à `_AVAILABLE` dans `transcria/cli_i18n.py`.
+> 3. **CLI/installateur/doctor** : ajouter la clé `<xx>` aux catalogues `transcria/installer/messages.py`
+>    (ex-`install_messages`, vague C6), `transcria/diagnostics/doctor_messages.py` et à
+>    `_AVAILABLE` dans `transcria/cli_i18n.py`.
 > Un `<xx>` incomplet retombe proprement sur le français (jamais de crash).
 
 ## 0. Décisions verrouillées (arbitrages utilisateur)

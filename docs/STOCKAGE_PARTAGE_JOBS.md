@@ -200,7 +200,7 @@ absente ; WARN si rôles séparés en backend `fs`.
   depuis la base ; aucune identité de nœud dans le schéma ; manifeste local par machine.
 - **N workers** : le pull au dispatch + push au checkpoint rendent la reprise **portable
   entre workers** (un job peut être repris par un autre worker que celui qui a commencé).
-  Il restera à généraliser l'admission multi-nœud (cf. `CONCURRENCE_ET_CHARGE_PHASE_B.md`).
+  Il restera à généraliser l'admission multi-nœud (cf. `archive/CONCURRENCE_ET_CHARGE_PHASE_B.md`).
 - **Volumétrie massive** : l'interface `artifact_store` est le seul point de contact —
   brancher S3/MinIO se fera sans retoucher les points d'accroche.
 - **Règle d'or** : tout nouveau fichier nécessaire à un autre tier DOIT vivre sous un préfixe

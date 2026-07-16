@@ -85,7 +85,7 @@ python app.py --no-debug
 
 ### `runtime`
 
-Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md).
+Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](archive/CONCURRENCE_ET_CHARGE_PHASE_B.md).
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -211,7 +211,7 @@ peut les activer automatiquement via `workflow.quality_transcription`.
 | `chunk_length_s` | int | `30` | Taille de chunk Whisper |
 | `beam_size` | int | `5` | Beam search |
 | `best_of` | int | `5` | Nombre de candidats |
-| `vad_filter` | bool | `false` | VAD interne faster-whisper, désactivé par défaut (trop agressif pour le français, voir `docs/VAD_OR_NOT.md`) |
+| `vad_filter` | bool | `false` | VAD interne faster-whisper, désactivé par défaut (trop agressif pour le français, voir `docs/archive/VAD_OR_NOT.md`) |
 | `word_timestamps` | bool | `true` | Timestamps mot-à-mot natifs faster-whisper |
 | `condition_on_previous_text` | bool | `false` | Désactivé pour limiter les boucles/hallucinations |
 | `no_speech_threshold` | float/null | `0.2` | Seuil non-parole |
@@ -363,7 +363,7 @@ défaut : Cohere reste le backend production normal. Activé via
 
 Limites connues : pas de word boosting ; l'ITN NeMo peut écrire les nombres
 en lettres ; la détection automatique de langue peut basculer sur l'anglais
-avec des accents ou hésitations. Documenté dans `docs/PARAKEET_STT_INTEGRATION.md`.
+avec des accents ou hésitations. Documenté dans `docs/archive/PARAKEET_STT_INTEGRATION.md`.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -499,7 +499,7 @@ global alors que le résumé et la transcription finale n'ont pas les mêmes ris
 |---|---|---|---|
 | `enabled_summary` | bool | `true` | Active le VAD avant la transcription rapide Cohere du résumé |
 | `enabled_final` | bool | `false` | Active un filtrage VAD supplémentaire sur les chunks pyannote de la transcription finale |
-| `auto_enable_final_on_degraded` | bool | `false` | Active automatiquement le VAD final si la décision qualité est dans `auto_enable_final_levels` (désactivé par défaut, voir `docs/VAD_OR_NOT.md`) |
+| `auto_enable_final_on_degraded` | bool | `false` | Active automatiquement le VAD final si la décision qualité est dans `auto_enable_final_levels` (désactivé par défaut, voir `docs/archive/VAD_OR_NOT.md`) |
 | `auto_enable_final_levels` | list | `["degrade"]` | Niveaux de qualité qui déclenchent le VAD final automatique |
 | `threshold_final_degraded` | float | `0.6` | Seuil VAD utilisé quand le VAD final est activé automatiquement sur audio dégradé |
 | `adaptive` | bool | `true` | Ajuste les seuils VAD selon `metadata/audio_quality_decision.json` |
@@ -958,7 +958,7 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 **B8 — observabilité du goulot.** Surcharges déclaratives de la classe d'une étape du workflow,
 exposées dans `GET /api/resources/status` (clé `concurrency` : % sériel, étape goulot, attente
 estimée). Vide = la classe est **dérivée automatiquement** (STT distant `concurrent_safe` =
-*delegated*, sinon *serial*). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md) §C7.
+*delegated*, sinon *serial*). Voir [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](archive/CONCURRENCE_ET_CHARGE_PHASE_B.md) §C7.
 
 | Clé | Type | Description |
 |---|---|---|

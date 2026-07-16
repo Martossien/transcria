@@ -413,18 +413,20 @@ docker buildx build --builder seedcache --target llama-builder -f Dockerfile.all
   --cache-to type=registry,ref=ghcr.io/<owner>/transcria-allinone:buildcache-llama,mode=max .
 ```
 
-#### Publication de l'image `:bundled` (build local + push manuel)
+#### Publication de l'image `:bundled` (rituel SCRIPTÉ — vague C7)
 
 L'image `:bundled` (~40 Go avec les poids) **dépasse le disque d'un runner GitHub standard** → elle
 n'est **pas** construite en CI (le workflow `publish-image.yml` ne publie que le slim). On la
-construit et la pousse **depuis une machine GPU** :
+construit et la pousse **depuis une machine GPU**, exclusivement via le script (qui enchaîne :
+gardes `test_docker_sync`, build `:bundled` + `:v<version>-bundled`, **vérification bloquante du
+contenu dans le conteneur** — version du paquet, `COMMIT` des runtimes == constantes Python,
+site MOSS, poids bakés, absence de `/app/runtimes` — puis push GHCR sur demande explicite) :
 
 ```bash
-# 1. Construire (télécharge ~21 Go de poids NON gated au build — réseau requis, aucun token) :
-docker build -f Dockerfile.allinone-bundled -t ghcr.io/<owner>/transcria-allinone:bundled .
-# 2. S'authentifier sur GHCR (token avec scope write:packages) puis pousser :
-echo "$GHCR_TOKEN" | docker login ghcr.io -u <owner> --password-stdin
-docker push ghcr.io/<owner>/transcria-allinone:bundled
+# 1. Construire et vérifier (réseau requis : ~21 Go de poids NON gated, aucun token) :
+scripts/release_bundled.sh
+# 2. Pousser (login GHCR via `gh auth token`) :
+scripts/release_bundled.sh --skip-build --push
 # 3. Rendre le package PUBLIC une fois (Settings → Packages → Change visibility).
 ```
 

@@ -199,7 +199,7 @@ taille en dur ; surchargeable via `workflow.arbitration_llm.profiles_file`). En 
 
 La **réservation VRAM** (`gpu.llm_vram_mb`) est **dérivée de la taille RÉELLE du modèle** (poids +
 KV calculé) puis **recalée par la mesure au 1ᵉʳ chargement**. Détails et recommandation par palier :
-**[docs/LLM_BACKENDS.md](LLM_BACKENDS.md)** ; validation E2E : **[docs/LLM_PROFILS_VALIDATION.md](LLM_PROFILS_VALIDATION.md)**.
+**[docs/LLM_BACKENDS.md](LLM_BACKENDS.md)** ; validation E2E : **[docs/archive/LLM_PROFILS_VALIDATION.md](archive/LLM_PROFILS_VALIDATION.md)**.
 
 ### Sélection automatique du palier llama.cpp selon la VRAM
 
@@ -1551,7 +1551,7 @@ Placer le tier web derrière **nginx** (TLS, statique, gros uploads) :
   automatiquement** vers le suivant si le principal tombe (failover actif/passif) ; aucune
   coordination VRAM inter-hôtes. Un `inference.url` seul reste accepté (un seul nœud).
 
-Référence complète : [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](CONCURRENCE_ET_CHARGE_PHASE_B.md).
+Référence complète : [`CONCURRENCE_ET_CHARGE_PHASE_B.md`](archive/CONCURRENCE_ET_CHARGE_PHASE_B.md).
 
 ---
 

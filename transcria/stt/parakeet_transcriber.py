@@ -34,7 +34,7 @@ class ParakeetTranscriber(BaseTranscriber):
     model.transcribe() plutot que le pipeline Transformers generate().
     La diarisation reste portee par pyannote dans le pipeline TranscrIA.
 
-    Limites connues documentees (cf. docs/PARAKEET_STT_INTEGRATION.md) :
+    Limites connues documentees (cf. docs/archive/PARAKEET_STT_INTEGRATION.md) :
     - Pas de word boosting / hotwords (contrairement a Whisper/Cohere)
     - ITN FR peut transcrire des nombres en lettres (ex: 09:30 → neuf heures trente)
     - Consommation VRAM proportionnelle a la duree audio (pre-chunking integre)

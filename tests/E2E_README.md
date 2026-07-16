@@ -192,7 +192,7 @@ dans `metadata/cohere_tf5.json` puis reprises sous `cohere_tf5_data`.
 via NeMo. Nécessite `nemo_toolkit[asr]`. Les métadonnées de chargement et
 décodage sont sauvegardées dans `metadata/parakeet.json` puis reprises dans
 le JSON de sortie sous `parakeet_data`. Documenté dans
-`docs/PARAKEET_STT_INTEGRATION.md`.
+`docs/archive/PARAKEET_STT_INTEGRATION.md`.
 
 Quand `--enable-whisper-lexicon-hotwords` est utilisé, l'audit est écrit dans
 `metadata/whisper_hotwords.json` et repris dans le JSON de sortie sous

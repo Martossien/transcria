@@ -8,7 +8,7 @@ C'est la brique qui garantit qu'un déploiement sur une « petite » carte (12/1
 ou une topo multi-GPU étroite sélectionne le bon modèle — et pas un modèle trop gros
 qui OOM au 1ᵉʳ load.
 
-Couvre les manques identifiés dans docs/LLM_PROFILS_VALIDATION.md :
+Couvre les manques identifiés dans docs/archive/LLM_PROFILS_VALIDATION.md :
   - sélectivité par palier (12/16/24/32) pour les 3 moteurs ;
   - cartes hétérogènes et ``llm_vram_mb_per_gpu`` ≠ parts égales ;
   - chemin « transcription brute » (< 12 Go) pour les 3 moteurs ;
