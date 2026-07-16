@@ -6,6 +6,7 @@ modules de routes ne s'importent jamais entre eux).
 """
 import logging
 import time
+from typing import Any
 
 from flask import Response, jsonify
 from sqlalchemy import func
@@ -98,7 +99,7 @@ def _render_prometheus_metrics() -> str:
 @web_bp.route("/health")
 def health():
     db_ok, db_error = _check_database_health()
-    payload = {
+    payload: dict[str, Any] = {
         "status": "ok" if db_ok else "degraded",
         "service": "transcria",
         "database": {
@@ -116,7 +117,7 @@ def ready():
     executor = get_job_executor()
     runtime = executor.get_runtime_snapshot() if executor else None
     ready_ok = db_ok and executor is not None
-    payload = {
+    payload: dict[str, Any] = {
         "status": "ready" if ready_ok else "not_ready",
         "service": "transcria",
         "database": {"status": "ok" if db_ok else "error"},

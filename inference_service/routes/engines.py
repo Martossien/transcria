@@ -26,7 +26,7 @@ _HTTP_BY_STATUS = {"ready": 200, "launched": 200, "busy": 503, "error": 502}
 def ensure_engine():
     config = current_app.config["TRANSCRIA_CONFIG"]
     body = request.get_json(silent=True) or {}
-    name = body.get("engine")
+    name = str(body.get("engine") or "")
 
     specs = {s.name: s for s in engine_specs_from_config(config)}
     spec = specs.get(name)

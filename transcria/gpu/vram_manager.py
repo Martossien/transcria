@@ -13,7 +13,7 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
-from transcria.gpu.llm_backend import create_llm_backend
+from transcria.gpu.llm_backend import LLMBackend, create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
 
 logger = logging.getLogger(__name__)
@@ -91,10 +91,10 @@ class VRAMManager:
         # Backend LLM construit à la demande : sert à DÉLÉGUER le cycle de vie des moteurs
         # dont la sémantique diffère de « lancer/tuer un process » (Ollama = démon persistant,
         # on décharge le modèle via HTTP). llama.cpp/vLLM gardent le chemin script/PID ci-dessous.
-        self._backend = None
+        self._backend: LLMBackend | None = None
         self._llm_vram_recalibrated = False   # « vérif au 1ᵉʳ load » : recalage VRAM mesuré, une fois
 
-    def _arbitrage_backend(self):
+    def _arbitrage_backend(self) -> LLMBackend:
         if self._backend is None:
             self._backend = create_llm_backend(self.config)
         return self._backend

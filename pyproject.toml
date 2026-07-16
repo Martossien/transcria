@@ -15,6 +15,9 @@ known-third-party = ["alembic"]
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
+# C5 : les corps des fonctions non annotées sont vérifiés aussi (plan §C5). Prévu
+# « paquet par paquet » — l'arbre entier ne portait que 7 erreurs, activé d'un coup.
+check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = [

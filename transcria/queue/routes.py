@@ -147,7 +147,8 @@ def schedule_page():
 
     # « Qui utilise quoi MAINTENANT ? » — jobs en cours + en attente, TITRES inclus.
     entries = QueueStore.get_ordered_queue(limit=50, include_running=True)
-    running, pending = [], []
+    running: list[dict] = []
+    pending: list[dict] = []
     for entry in entries:
         job = JobStore.get_by_id(entry.job_id)
         item = {"title": (job.title if job else entry.job_id[:8]), "entry": entry}

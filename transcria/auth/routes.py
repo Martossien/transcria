@@ -91,7 +91,7 @@ def login():
             else:
                 session.pop("default_password_warning", None)
             next_url = request.args.get("next")
-            if _is_safe_next_url(next_url):
+            if next_url and _is_safe_next_url(next_url):
                 return redirect(next_url)
             return redirect(url_for("web.index"))
         block_s = login_rate_limiter.record_failure(client_ip, username)
