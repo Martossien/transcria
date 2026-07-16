@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 WhichFn = Callable[[str], str | None]
 UserHomeFn = Callable[[str], str]

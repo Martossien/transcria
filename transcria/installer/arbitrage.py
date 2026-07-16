@@ -19,7 +19,7 @@ from transcria.gpu.llm_placement import (
     plan_for_tier,
     recommend,
 )
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.prerequisites import first_available
 
 # Paliers extraits vers installer/tiers.py (vague C6) — ré-exportés ici : les

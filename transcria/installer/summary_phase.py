@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from transcria.config.yaml_file import count_text_occurrences
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.models import render_model_summary
 from transcria.installer.profiles import (
     SummaryRenderContext,

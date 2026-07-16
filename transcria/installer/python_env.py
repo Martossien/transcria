@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.torch_env import build_install_plan
 
 Runner = Callable[..., Any]

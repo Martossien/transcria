@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 DEFAULT_INSTALL_DIR = "/home/admin_ia/transcria"
 DEFAULT_SERVICE_USER = "admin_ia"

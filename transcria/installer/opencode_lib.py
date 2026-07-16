@@ -11,7 +11,7 @@ from pathlib import Path
 from shutil import which
 from typing import Callable
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 WhichFn = Callable[[str], str | None]
 RunFn = Callable[..., subprocess.CompletedProcess[str]]

@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 from transcria.config.env_file import update_env_file
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.postgres_lib import (
     build_pg_dsn,
     decide_schema_action,

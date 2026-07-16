@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 VALID_INSTALL_PROFILES = ("all-in-one", "web", "scheduler", "resource-node", "migrate")
 

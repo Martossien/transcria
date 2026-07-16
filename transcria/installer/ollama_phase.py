@@ -27,7 +27,7 @@ from typing import Any, Protocol
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.config.yaml_file import set_yaml_file_value
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 Runner = Callable[..., Any]
 ConfirmFn = Callable[[str], bool]

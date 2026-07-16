@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.paths import directory_specs_for_kind, ensure_directories
 from transcria.installer.systemd_lib import (
     SystemdRenderContext,

@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 
 
 @dataclass(frozen=True)

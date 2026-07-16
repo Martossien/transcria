@@ -12,8 +12,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
-from transcria.install_messages import t
-from transcria.install_messages import t as _t_hba
+from transcria.installer.messages import t
+from transcria.installer.messages import t as _t_hba
 
 _LOCAL_TCP_PEER_RE = re.compile(
     r"^(?P<prefix>\s*host\s+(?:all|replication)\s+all\s+(?:127\.0\.0\.1/32|::1/128)\s+)(?:ident|peer)(?P<suffix>\s*(?:#.*)?)$"

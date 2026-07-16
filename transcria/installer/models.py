@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from transcria.install_messages import t
+from transcria.installer.messages import t
 from transcria.installer.models_lib import (  # noqa: F401 — ré-exports historiques
     COHERE_DEFAULT_RELATIVE_PATH,
     COHERE_MODEL_ID,
