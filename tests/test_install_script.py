@@ -6,7 +6,9 @@ sans lancer l'installation réelle.
 """
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 from transcria.installer.profiles import resolve_install_plan
@@ -898,3 +900,33 @@ def test_plan_accepts_pg_existing():
 
     assert result.returncode == 0
     assert "profile=web" in result.stdout
+
+
+def test_installer_cli_is_importable_without_third_party_packages():
+    # install.sh exécute `installer.cli` avec le python SYSTÈME avant `pip install
+    # -r requirements` : sa fermeture d'imports au chargement doit rester stdlib-pure.
+    # Régression v0.3.7 : postgres_phase → config.env_file exécutait le __init__ de
+    # transcria.config, qui importe loader → yaml (absent d'un python nu).
+    probe = """
+import importlib.abc, sys
+
+BLOCKED = {"yaml", "flask", "psycopg2", "requests", "torch", "numpy", "sqlalchemy"}
+
+class _Bloqueur(importlib.abc.MetaPathFinder):
+    def find_spec(self, name, path=None, target=None):
+        if name.split(".")[0] in BLOCKED:
+            raise ImportError(f"{name} indisponible (simulation python systeme nu)")
+
+sys.meta_path.insert(0, _Bloqueur())
+import transcria.installer.cli  # noqa: F401
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=_ROOT,
+        env={**os.environ, "PYTHONPATH": str(_ROOT)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr

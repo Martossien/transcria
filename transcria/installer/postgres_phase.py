@@ -29,7 +29,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Protocol
 
-from transcria.config.env_file import update_env_file
 from transcria.installer.messages import t
 from transcria.installer.postgres_lib import (
     build_pg_dsn,
@@ -213,6 +212,10 @@ def _best_effort_chown(path: Path, service_user: str) -> None:
 
 
 def _write_dsn(plan: PostgresPlan, console: _ConsoleLike, dsn: str, chown: Chown, result: PostgresResult) -> None:
+    # Différé (§8.3 c — point d'entrée pré-venv) : installer.cli tourne avec le python
+    # SYSTÈME avant requirements ; le `__init__` de transcria.config exécute loader → yaml.
+    from transcria.config.env_file import update_env_file
+
     # update_env_file écrit déjà en 0o600 (atomic_write_text) ; le chown service reproduit
     # secure_env_file pour que le service systemd (souvent root) lise le DSN.
     update_env_file(plan.env_file, "TRANSCRIA_DATABASE_URL", dsn, backup=False)
