@@ -123,6 +123,7 @@ def get_state_order(state: JobState) -> int:
 
 
 def get_step_for_state(state: JobState | str) -> dict | None:
+    # Différé : cycle — workflow.steps importe JobState d'ici ; seul sens possible.
     from transcria.workflow.steps import WORKFLOW_STEPS
 
     state_val = state.value if isinstance(state, JobState) else state

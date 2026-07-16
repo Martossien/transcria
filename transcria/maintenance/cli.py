@@ -17,11 +17,20 @@ import argparse
 import sys
 from pathlib import Path
 
+from transcria import __version__
+from transcria.audit.store import AuditStore
+from transcria.config.loader import get_config_path, load_config
+from transcria.install_opencode import classify_opencode_install, detect_opencode, opencode_upgrade_command, upgrade_opencode
+from transcria.jobs.store import JobStore
+from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
+from transcria.maintenance.restore import describe_restore, restore_backup
+from transcria.maintenance.restore_service import apply_pending_restore
+from transcria.maintenance.schedule import BackupSchedule, backup_schedule_status, install_backup_schedule, remove_backup_schedule
+from transcria.maintenance.upgrade import UpgradeError, build_plan, changelog_excerpt, default_ready_check, run_plan
+from transcria.models_download import download_from_args
+
 
 def _load_cfg_and_meta(config_path: str | None):
-    from transcria import __version__
-    from transcria.config.loader import get_config_path, load_config
-
     resolved = get_config_path(config_path)
     cfg = load_config(config_path)
     revision = _current_alembic_revision(cfg)
@@ -44,8 +53,6 @@ def _current_alembic_revision(cfg: dict) -> str | None:
 
 
 def _cmd_backup(args: argparse.Namespace) -> int:
-    from transcria.maintenance.backup import create_backup, rotate_backups
-
     cfg, resolved, version, revision = _load_cfg_and_meta(args.config)
     env_path = Path(args.env) if args.env else Path(".env")
     dest = Path(args.dest)
@@ -67,8 +74,6 @@ def _cmd_backup(args: argparse.Namespace) -> int:
 
 
 def _cmd_backup_verify(args: argparse.Namespace) -> int:
-    from transcria.maintenance.backup import read_manifest, verify_backup
-
     archive = Path(args.archive)
     problems = verify_backup(archive)
     if problems:
@@ -84,9 +89,6 @@ def _cmd_backup_verify(args: argparse.Namespace) -> int:
 
 
 def _cmd_restore(args: argparse.Namespace) -> int:
-    from transcria.maintenance.backup import BackupError
-    from transcria.maintenance.restore import describe_restore, restore_backup
-
     cfg, resolved, _version, _revision = _load_cfg_and_meta(args.config)
     cfg["_config_path"] = resolved
     archive = Path(args.archive)
@@ -116,15 +118,6 @@ def _cmd_restore(args: argparse.Namespace) -> int:
 
 def _cmd_upgrade(args: argparse.Namespace) -> int:
     from pathlib import Path
-
-    from transcria.maintenance.backup import create_backup, rotate_backups
-    from transcria.maintenance.upgrade import (
-        UpgradeError,
-        build_plan,
-        changelog_excerpt,
-        default_ready_check,
-        run_plan,
-    )
 
     cfg, resolved, version, revision = _load_cfg_and_meta(args.config)
     units = [u for u in (args.units or "transcria.service").split(",") if u]
@@ -164,13 +157,6 @@ def _cmd_upgrade(args: argparse.Namespace) -> int:
 def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
     """Met à jour opencode en détectant son type d'install (npm / officiel / brew).
     ``--check`` affiche la commande sans l'exécuter."""
-    from transcria.config.loader import load_config
-    from transcria.install_opencode import (
-        classify_opencode_install,
-        detect_opencode,
-        opencode_upgrade_command,
-        upgrade_opencode,
-    )
 
     cfg = load_config(args.config)
     configured_bin = cfg.get("workflow", {}).get("arbitration_llm", {}).get("opencode_bin")
@@ -197,7 +183,6 @@ def _cmd_opencode_upgrade(args: argparse.Namespace) -> int:
 def _cmd_model_download(args: argparse.Namespace) -> int:
     """[interne] Télécharge un modèle en sous-process (appelé par la page « Modèles »).
     Publie sa progression dans le fichier de statut ; le token HF vient de l'ENV."""
-    from transcria.models_download import download_from_args
 
     return download_from_args(role=args.role, repo=args.repo, kind=args.kind,
                               file=args.file, subdir=args.subdir or "")
@@ -207,8 +192,6 @@ def _cmd_restore_apply(args: argparse.Namespace) -> int:
     """Applique une restauration en attente (appelé par l'unité oneshot transcria-restore).
     Arrête le service → restaure (force) → rechown → redémarre. NE PAS lancer à la main sur
     une instance vivante : c'est le rôle du oneshot privilégié déclenché par l'UI."""
-    from transcria.maintenance.backup import BackupError
-    from transcria.maintenance.restore_service import apply_pending_restore
 
     cfg, resolved, _version, _revision = _load_cfg_and_meta(args.config)
     cfg["_config_path"] = resolved
@@ -224,13 +207,6 @@ def _cmd_restore_apply(args: argparse.Namespace) -> int:
 
 def _cmd_schedule(args: argparse.Namespace) -> int:
     """Planifie les sauvegardes via un timer systemd (--enable / --disable / défaut = statut)."""
-    from transcria.config.loader import get_config_path, load_config
-    from transcria.maintenance.schedule import (
-        BackupSchedule,
-        backup_schedule_status,
-        install_backup_schedule,
-        remove_backup_schedule,
-    )
 
     if args.disable:
         actions = remove_backup_schedule()
@@ -254,16 +230,12 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
 def _cmd_purge(args: argparse.Namespace) -> int:
     """Purge des données expirées selon la politique de rétention (C3.10).
     ``--dry-run`` COMPTE sans rien supprimer."""
-    from transcria.config.loader import load_config
 
     cfg = load_config(args.config)
     from app import create_app
 
     app = create_app(args.config)
     with app.app_context():
-        from transcria.audit.store import AuditStore
-        from transcria.jobs.store import JobStore
-
         sec = cfg.get("security", {})
         jobs_dir = cfg["storage"]["jobs_dir"]
         job_count = JobStore.purge_expired_jobs(sec.get("retention_days"), jobs_dir, dry_run=args.dry_run)

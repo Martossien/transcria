@@ -280,7 +280,8 @@ class TestSyncSummary:
         assert r.get_json()["summary_update_suggested"] is False
 
     def test_sync_enfile_une_demande_apply_composee(self, admin_client, app, editor_job, monkeypatch):
-        import transcria.services.job_executor as executor_mod
+        # C5 : la route importe get_job_executor en tête — patcher le consommateur.
+        import transcria.web.editor_routes as editor_mod
 
         submitted = {}
 
@@ -289,7 +290,7 @@ class TestSyncSummary:
                 submitted.update(job_id=job_id, mode=mode)
                 return {"accepted": True}
 
-        monkeypatch.setattr(executor_mod, "get_job_executor", lambda: FakeExecutor())
+        monkeypatch.setattr(editor_mod, "get_job_executor", lambda: FakeExecutor())
         r = admin_client.post(f"/api/jobs/{editor_job}/editor/sync-summary",
                               json={"edited_count": 3, "new_speakers_count": 1})
         assert r.status_code == 202, r.get_json()

@@ -51,6 +51,8 @@ class DiarizeEngine:
         )
 
     def _default_backend_factory(self) -> object:
+        # Différé §8.3(a) : la chaîne diarisation (pyannote/torch) se charge au premier
+        # appel — le nœud ressource boote sans toucher la pile.
         from transcria.stt.diarization import DiarizerService
         return DiarizerService(self.config, device=self.device)
 

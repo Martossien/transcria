@@ -33,8 +33,19 @@ from pathlib import Path
 from typing import Any, Callable
 
 from transcria.cli_i18n import make_translator
-from transcria.database import MODEL_MODULES
+from transcria.database import MODEL_MODULES, db
 from transcria.diagnostics.doctor_messages import DOCTOR_MESSAGES
+from transcria.installer.audiocpp_phase import (
+    AUDIOCPP_PINNED_COMMIT,
+    audiocpp_home,
+    audiocpp_is_complete,
+    resolve_runtimes_dir,
+)
+from transcria.installer.parakeetcpp_phase import (
+    PARAKEETCPP_PINNED_COMMIT,
+    parakeetcpp_home,
+    parakeetcpp_is_complete,
+)
 
 # Traducteur FR/EN des sorties du doctor (locale résolue depuis TRANSCRIA_DEFAULT_LOCALE,
 # exporté par install.sh ; défaut fr ⇒ sortie historique inchangée). `_t(clé, **vars)`.
@@ -123,8 +134,6 @@ def diff_live_schema(database_uri: str) -> list[tuple[str, str]]:
     from alembic.autogenerate import compare_metadata
     from alembic.migration import MigrationContext
     from sqlalchemy import create_engine
-
-    from transcria.database import db
 
     _register_models()
     engine = create_engine(database_uri)
@@ -287,6 +296,7 @@ def check_opencode(
 
     config_bin = workflow.get("arbitration_llm", {}).get("opencode_bin")
     if finder is None:
+        # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
         from transcria.gpu.opencode_setup import find_opencode_binary
 
         finder = find_opencode_binary
@@ -429,6 +439,7 @@ def check_opencode_smoke(
         )
 
     if runner_factory is None:
+        # Différé §8.3(c) : repli du seam injectable — chargé seulement si ce check tourne.
         from transcria.gpu.opencode_runner import OpenCodeRunner
 
         runner_factory = OpenCodeRunner
@@ -556,18 +567,6 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
     name = _t("chk_served_runtimes")
     engines = ((cfg.get("resource_node", {}) or {}).get("engines") or [])
     declared = {str(e.get("name")) for e in engines if isinstance(e, dict)}
-
-    from transcria.installer.audiocpp_phase import (
-        AUDIOCPP_PINNED_COMMIT,
-        audiocpp_home,
-        audiocpp_is_complete,
-        resolve_runtimes_dir,
-    )
-    from transcria.installer.parakeetcpp_phase import (
-        PARAKEETCPP_PINNED_COMMIT,
-        parakeetcpp_home,
-        parakeetcpp_is_complete,
-    )
 
     runtimes_dir = resolve_runtimes_dir()
     known = {
@@ -1364,6 +1363,7 @@ def run_doctor(
     `llm_smoke=True` ajoute le test réel opencode→LLM→texte (opt-in, non GPU-free)."""
     _load_env_for_doctor(config_path)
     if loader is None:
+        # Différé §8.3(c) : repli du seam injectable (PyYAML) — erreur lisible si absent.
         from transcria.config.loader import load_config
 
         loader = load_config

@@ -16,6 +16,7 @@ from flask_login import login_required
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.config import get_config
+from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES, _sanitize_render_options
 from transcria.exports.package_builder import PackageBuilder
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.services.job_executor import REFINE_MODE, get_job_executor
@@ -82,7 +83,6 @@ def api_refine_chat(job_id: str):
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response
-    from transcria.exports.docx_report import _RENDER_SECTIONS, _THEMES  # différé : python-docx sans stubs (module exclu de mypy)
 
     store = refine_store_for(cfg, job.id)
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
@@ -113,8 +113,6 @@ def api_refine_render_options(job_id: str):
         return error_response
     if job.state not in REFINE_READY_STATES:
         return jsonify({"error": "Options disponibles une fois le traitement terminé"}), 409
-
-    from transcria.exports.docx_report import _sanitize_render_options  # différé : python-docx sans stubs (module exclu de mypy)
 
     cleaned = _sanitize_render_options(request.get_json(silent=True) or {})
     if not cleaned:

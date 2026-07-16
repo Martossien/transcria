@@ -11,8 +11,35 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+# Le module doit rester importable par le python SYSTÈME sur distro vierge : la
+# sous-commande python-env (celle qui CRÉE le venv et installe requirements.txt)
+# tourne avant toute dépendance tierce. Seuls des imports stdlib-purs en tête ;
+# les phases qui tirent PyYAML restent différées dans leur handler (§8.3c).
+from transcria.installer.audiocpp_phase import (
+    AUDIOCPP_PINNED_COMMIT,
+    AudiocppPhaseError,
+    AudiocppPlan,
+    apply_audiocpp,
+    resolve_runtimes_dir,
+)
 from transcria.installer.console import Console
+from transcria.installer.i18n_phase import I18nError, I18nPlan, apply_i18n
+from transcria.installer.moss_site_phase import MossSiteError, MossSitePlan, apply_moss_site
+from transcria.installer.parakeetcpp_phase import (
+    PARAKEETCPP_PINNED_COMMIT,
+    ParakeetcppPhaseError,
+    ParakeetcppPlan,
+    apply_parakeetcpp,
+)
+from transcria.installer.postgres_phase import (
+    PostgresBootstrapPlan,
+    PostgresPhaseError,
+    PostgresPlan,
+    apply_postgres,
+    apply_postgres_bootstrap,
+)
 from transcria.installer.python_env import PythonEnvError, PythonEnvPlan, apply_python_env
+from transcria.installer.systemd_phase import SystemdPlan, apply_systemd
 
 
 def _add_python_env_parser(sub: argparse._SubParsersAction) -> None:
@@ -38,8 +65,6 @@ def _add_i18n_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def _cmd_i18n(args: argparse.Namespace) -> int:
-    from transcria.installer.i18n_phase import I18nError, I18nPlan, apply_i18n
-
     console = Console()
     plan = I18nPlan(translations_dir=Path(args.translations_dir), force=bool(args.force))
     try:
@@ -207,10 +232,11 @@ def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
 
 
 def _cmd_opencode(args: argparse.Namespace) -> int:
-    from transcria.installer.opencode_phase import OpencodePlan, apply_opencode
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.installer import opencode_phase
 
     console = Console()
-    plan = OpencodePlan(
+    plan = opencode_phase.OpencodePlan(
         install_dir=Path(args.install_dir),
         config_path=Path(args.config),
         opencode_home=Path(args.opencode_home),
@@ -222,13 +248,14 @@ def _cmd_opencode(args: argparse.Namespace) -> int:
         current_path=args.current_path,
         rc_files=tuple(Path(p) for p in args.rc_file),
     )
-    apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
+    opencode_phase.apply_opencode(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0
 
 
 def _cmd_ollama(args: argparse.Namespace) -> int:
-    from transcria.config.llm_profiles import load_llm_profiles, select_profile
-    from transcria.installer.ollama_phase import OllamaPlan, apply_ollama
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.config import llm_profiles
+    from transcria.installer import ollama_phase
 
     console = Console()
     # Modèle/contexte/spread résolus depuis le catalogue de données selon le MATÉRIEL
@@ -236,8 +263,8 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
     model, context, spread = args.model, 0, False
     gpu_indices: tuple[int, ...] = ()
     if not model:
-        choice = select_profile(
-            load_llm_profiles(_load_config_safe(args.config)), "ollama",
+        choice = llm_profiles.select_profile(
+            llm_profiles.load_llm_profiles(_load_config_safe(args.config)), "ollama",
             gpu_count=args.gpu_count, per_card_vram_mb=args.per_card_vram_mb,
             total_vram_mb=args.total_vram_mb,
         )
@@ -250,7 +277,7 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
             gpu_indices = tuple(range(args.gpu_count))
         else:
             gpu_indices = (0,)
-    plan = OllamaPlan(
+    plan = ollama_phase.OllamaPlan(
         config_path=Path(args.config),
         model=model,
         context=context,
@@ -261,25 +288,27 @@ def _cmd_ollama(args: argparse.Namespace) -> int:
         pin_version=args.pin_version,
         gpu_indices=gpu_indices,
     )
-    apply_ollama(plan, console=console, confirm=_make_confirm(plan.interactive))
+    ollama_phase.apply_ollama(plan, console=console, confirm=_make_confirm(plan.interactive))
     return 0
 
 
 def _load_config_safe(path: str) -> dict:
     """Charge config.yaml pour l'override éventuel du catalogue de profils (best-effort)."""
-    from transcria.config.yaml_file import load_yaml_file
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.config import yaml_file
 
     try:
-        return load_yaml_file(Path(path))
+        return yaml_file.load_yaml_file(Path(path))
     except Exception:
         return {}
 
 
 def _cmd_summary(args: argparse.Namespace) -> int:
-    from transcria.installer.summary_phase import SummaryPlan, apply_summary
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.installer import summary_phase
 
     console = Console()
-    plan = SummaryPlan(
+    plan = summary_phase.SummaryPlan(
         profile=args.profile,
         install_dir=Path(args.install_dir),
         venv=Path(args.venv),
@@ -296,15 +325,13 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         opencode_bin=args.opencode_bin,
         systemd=not args.no_systemd,
     )
-    apply_summary(plan, console=console)
+    summary_phase.apply_summary(plan, console=console)
     return 0
 
 
 def _cmd_postgres_bootstrap(args: argparse.Namespace) -> int:
     import os
     import shlex
-
-    from transcria.installer.postgres_phase import PostgresBootstrapPlan, PostgresPhaseError, apply_postgres_bootstrap
 
     console = Console()
     plan = PostgresBootstrapPlan(
@@ -330,8 +357,6 @@ def _cmd_postgres_bootstrap(args: argparse.Namespace) -> int:
 def _cmd_systemd(args: argparse.Namespace) -> int:
     import os
 
-    from transcria.installer.systemd_phase import SystemdPlan, apply_systemd
-
     console = Console()
     plan = SystemdPlan(
         profile=args.profile,
@@ -351,12 +376,8 @@ def _cmd_systemd(args: argparse.Namespace) -> int:
 
 
 def _cmd_postgres(args: argparse.Namespace) -> int:
-    # Import différé : cette phase importe SQLAlchemy/psycopg et ne tourne que sous le
-    # python du venv (la phase python-env pré-venv ne doit pas la charger).
     import os
     import shlex
-
-    from transcria.installer.postgres_phase import PostgresPhaseError, PostgresPlan, apply_postgres
 
     console = Console()
     plan = PostgresPlan(
@@ -386,12 +407,11 @@ def _cmd_postgres(args: argparse.Namespace) -> int:
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
-    # Import différé : cette phase importe PyYAML (config.yaml_file) et n'est lancée
-    # que sous le python du venv ; la phase python-env (pré-venv) ne doit pas la charger.
-    from transcria.installer.config_phase import ConfigPlan, apply_config
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.installer import config_phase
 
     console = Console()
-    plan = ConfigPlan(
+    plan = config_phase.ConfigPlan(
         install_dir=Path(args.install_dir),
         config_path=Path(args.config),
         env_file=Path(args.env_file),
@@ -403,17 +423,18 @@ def _cmd_config(args: argparse.Namespace) -> int:
         install_inference=args.install_inference,
         force_config=args.force_config,
     )
-    apply_config(plan, console=console)
+    config_phase.apply_config(plan, console=console)
     return 0
 
 
 def _cmd_config_proxy(args: argparse.Namespace) -> int:
     import os
 
-    from transcria.installer.config_phase import ProxyPlan, apply_proxy
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.installer import config_phase
 
     console = Console()
-    plan = ProxyPlan(
+    plan = config_phase.ProxyPlan(
         env_file=Path(args.env_file),
         proxy_https=args.proxy_https,
         proxy_http=args.proxy_http,
@@ -422,7 +443,7 @@ def _cmd_config_proxy(args: argparse.Namespace) -> int:
         is_root=os.geteuid() == 0,
         interactive=not args.non_interactive,
     )
-    apply_proxy(plan, console=console)
+    config_phase.apply_proxy(plan, console=console)
     return 0
 
 
@@ -457,15 +478,17 @@ def _cmd_recommend_llm(args: argparse.Namespace) -> int:
     """Affiche la recommandation (lignes humaines) et termine par ``ENGINE=<moteur>``
     (ligne machine, consommée par install.sh). Ne choisit jamais À LA PLACE de
     l'utilisateur — C2.1 : recommander ET expliquer."""
-    from transcria.config.llm_profiles import load_llm_profiles, recommend_engine
+    # Différé §8.3(c) : tire PyYAML — python-env (pré-venv, python système) ne doit pas le charger.
+    from transcria.config import llm_profiles
 
     cfg = None
     if args.config:
+        # Différé §8.3(c) : idem — le loader tire PyYAML.
         from transcria.config.loader import load_config
 
         cfg = load_config(args.config)
-    profiles = load_llm_profiles(cfg)
-    rec = recommend_engine(profiles,
+    profiles = llm_profiles.load_llm_profiles(cfg)
+    rec = llm_profiles.recommend_engine(profiles,
                            gpu_count=args.gpu_count,
                            per_card_vram_mb=args.per_card_vram_mb,
                            total_vram_mb=args.total_vram_mb)
@@ -489,8 +512,6 @@ def _add_moss_site_parser(sub: argparse._SubParsersAction) -> None:
 
 def _cmd_moss_site(args: argparse.Namespace) -> int:
     import subprocess
-
-    from transcria.installer.moss_site_phase import MossSiteError, MossSitePlan, apply_moss_site
 
     console = Console()
     plan = MossSitePlan(site_dir=Path(args.dir), python_bin=Path(args.python), force=bool(args.force))
@@ -520,14 +541,6 @@ def _add_audiocpp_parser(sub: argparse._SubParsersAction) -> None:
 
 def _cmd_audiocpp(args: argparse.Namespace) -> int:
     import subprocess
-
-    from transcria.installer.audiocpp_phase import (
-        AUDIOCPP_PINNED_COMMIT,
-        AudiocppPhaseError,
-        AudiocppPlan,
-        apply_audiocpp,
-        resolve_runtimes_dir,
-    )
 
     console = Console()
 
@@ -561,14 +574,6 @@ def _add_parakeetcpp_parser(sub: argparse._SubParsersAction) -> None:
 
 def _cmd_parakeetcpp(args: argparse.Namespace) -> int:
     import subprocess
-
-    from transcria.installer.audiocpp_phase import resolve_runtimes_dir
-    from transcria.installer.parakeetcpp_phase import (
-        PARAKEETCPP_PINNED_COMMIT,
-        ParakeetcppPhaseError,
-        ParakeetcppPlan,
-        apply_parakeetcpp,
-    )
 
     console = Console()
 

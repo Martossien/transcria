@@ -28,7 +28,10 @@ from flask_login import login_required
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.config import get_config
+from transcria.exports.package_builder import PackageBuilder
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
+from transcria.services.job_executor import REFINE_MODE, get_job_executor
 from transcria.web.job_access import get_job_for_api
 from transcria.web.refine_shared import refine_running
 from transcria.workflow.refine_store import RefineStore
@@ -308,8 +311,6 @@ def editor_save(job_id: str):
     # Reconstruction du package (best-effort, comme le changement d'options de rendu) :
     # sans elle, le ZIP servi contiendrait un DOCX antérieur aux corrections.
     try:
-        from transcria.exports.package_builder import PackageBuilder
-
         PackageBuilder(get_config()).build_package(job)
     except Exception:
         logger.warning("Éditeur SRT : reconstruction du package échouée (best-effort) — job=%s",
@@ -398,13 +399,9 @@ def editor_sync_summary(job_id: str):
     if store.has_active_request() or refine_running(job):
         return jsonify({"error": "Une demande d'affinage est déjà en cours pour ce job."}), 409
 
-    from transcria.services.job_executor import REFINE_MODE, get_job_executor
-
     executor = get_job_executor()
     if executor is None:
         return jsonify({"error": "Worker de traitement indisponible"}), 503
-
-    from transcria.gpu.opencode_runner import resolve_output_language
 
     data = request.get_json(silent=True) or {}
     edited = _client_int(data.get("edited_count"))

@@ -87,9 +87,9 @@ class AudioAnalyzer:
 
         # Différé : cycle d'__init__ — workflow/ exécute le runner, qui importe audio/ ;
         # une couche basse ne tire jamais l'orchestration en tête.
-        from transcria.workflow.timing_model import human_review_minutes, legacy_machine_seconds
+        from transcria.workflow import timing_model
 
         duration = info.get("duration_seconds", 0)
         if duration <= 0:
             return None, 0
-        return round(legacy_machine_seconds(duration) / 60, 1), human_review_minutes(duration)
+        return round(timing_model.legacy_machine_seconds(duration) / 60, 1), timing_model.human_review_minutes(duration)

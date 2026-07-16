@@ -1,8 +1,8 @@
 """API JSON du parcours de création (wizard) : upload → analyse → résumé → contexte
 → participants → locuteurs → profil.
 
-Vague A2 — routes déplacées telles quelles depuis ``web/routes.py``. Les imports
-lourds par topologie (WorkflowRunner, voix) restent différés, justifiés en ligne.
+Vague A2 — routes déplacées telles quelles depuis ``web/routes.py`` ;
+imports remontés en tête en vague C5 (le boot du serveur charge déjà l'orchestration).
 """
 import logging
 from pathlib import Path
@@ -35,11 +35,14 @@ from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, Qu
 from transcria.services.job_executor import SPEAKER_MODE, SUMMARY_MODE, get_job_executor
 from transcria.services.job_service import JobService
 from transcria.stt.speaker_detection import SpeakerDetector
+from transcria.stt.transcriber_factory import get_backend_vram_mb
+from transcria.voice.matching import VoiceMatchingService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api
 from transcria.web.request_helpers import DEFAULT_JOB_TITLE, clean_job_title, json_body
 from transcria.workflow import profiles, resume
 from transcria.workflow.profile_availability import compute_profiles_view
+from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.transitions import (
     advance_preprocessing_state,
     mark_execution_waiting_vram,
@@ -97,7 +100,6 @@ def _summary_vram_profile(cfg: dict) -> dict:
     Le résumé ne charge que le STT rapide ; l'admission ne dispatchera l'entrée que
     lorsque cette VRAM est réellement libre (sinon le job patiente en file).
     """
-    from transcria.stt.transcriber_factory import get_backend_vram_mb  # différé : la factory STT touche les backends lourds
 
     backend = cfg.get("models", {}).get("stt_backend", "cohere")
     summary_vram = int(get_backend_vram_mb(backend, cfg))
@@ -190,8 +192,6 @@ def api_summary(job_id: str):
             job.id, str(audio_path), SUMMARY_MODE, vram_profile=_summary_vram_profile(cfg)
         )
         return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
-
-    from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
 
     runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.run_summary(job, str(audio_path), cfg)
@@ -565,8 +565,6 @@ def api_speakers_detect(job_id: str):
         )
         return jsonify({"queued": True, "message": _SPEAKER_QUEUED_MESSAGE})
 
-    from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
-
     runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.run_speaker_detection(job, str(audio_path), cfg)
     return jsonify(result)
@@ -583,7 +581,6 @@ def api_speakers_map(job_id: str):
     mapping, _json_err = json_body(dict)
     if _json_err:
         return _json_err
-    from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
 
     SpeakerDetector.save_mapping(job.id, cfg["storage"]["jobs_dir"], mapping)
     JobContextBuilder.build(job, cfg["storage"]["jobs_dir"])
@@ -610,8 +607,6 @@ def api_speakers_voice_match(job_id: str):
 
     if not cfg.get("voice_enrollment", {}).get("enabled", False):
         return jsonify({"error": "Voix enregistrées désactivées dans la configuration."}), 400
-
-    from transcria.voice.matching import VoiceMatchingService  # différé : chaîne d'empreintes vocales (pyannote) lourde
 
     service = VoiceMatchingService(cfg, device="cpu")
     result = service.match_job_speakers(job, current_user)

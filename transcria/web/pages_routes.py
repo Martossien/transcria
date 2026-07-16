@@ -28,6 +28,7 @@ from transcria.context.meeting_type_catalog import localized_type_display, meeti
 from transcria.context.meeting_type_store import MeetingTypeStore
 from transcria.context.participants import ParticipantsManager
 from transcria.diagnostics.system_status import get_system_status
+from transcria.gpu.opencode_runner import _SUMMARY_MARKERS, OpenCodeRunner, resolve_output_language, summary_markers
 from transcria.i18n import select_locale
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
@@ -47,6 +48,7 @@ from transcria.web.request_helpers import clean_job_title
 from transcria.workflow.agent_workspace import resolve_agent_work_root
 from transcria.workflow.profile_availability import compute_profiles_view, compute_wizard_layout
 from transcria.workflow.profiles import get_profile, is_profile, profile_for_job
+from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.states import WorkflowState
 from transcria.workflow.timing_service import estimate_total_with_human
 
@@ -236,8 +238,6 @@ def _recover_summary_speaker_hints(fs: JobFilesystem, meeting: dict) -> dict:
     summary_text = meeting.get("summary_llm") or fs.load_text("summary/summary.md") or ""
     if not summary_text.strip():
         return meeting
-
-    from transcria.gpu.opencode_runner import OpenCodeRunner  # différé : paquet gpu chargé à la demande hors phase LLM
 
     parsed = OpenCodeRunner._parse_structured_summary(summary_text, language=meeting.get("language", "fr"))
     speaker_roles = parsed.get("speaker_roles") or {}
@@ -433,8 +433,6 @@ def _fill_missing_speaker_genders(
         return changed
 
     try:
-        from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
-
         speaker_genders = WorkflowRunner._assign_speaker_genders(gender_segments, turns)
     except Exception:
         return changed
@@ -465,7 +463,6 @@ def _wizard_synthese_prefill(meeting: dict) -> str:
     llm = str((meeting or {}).get("summary_llm") or "")
     if not llm.strip():
         return ""
-    from transcria.gpu.opencode_runner import _SUMMARY_MARKERS, summary_markers  # différé : paquet gpu chargé à la demande
 
     headings = [summary_markers(meeting.get("language"))["summary_heading"]]
     headings += [m["summary_heading"] for m in _SUMMARY_MARKERS.values()]
@@ -557,8 +554,6 @@ def job_wizard(job_id: str):
     # sélectionnait aucune option quand meeting.language était vide → le navigateur retombait
     # sur la 1re (Français) → l'utilisateur enregistrait « fr » et forçait des livrables FR.
     if not meeting.get("language"):
-        from transcria.gpu.opencode_runner import resolve_output_language  # différé : paquet gpu chargé à la demande
-
         meeting["language"] = resolve_output_language(job)
     # Pré-remplissage du champ « Résumé » (étape 4) : synthèse SEULE, langue-aware (le template
     # testait « ## Synthèse » en dur → markdown brut affiché pour un résumé anglais).
@@ -591,8 +586,6 @@ def job_wizard(job_id: str):
                     if pname and not pname.upper().startswith("SPEAKER_"):
                         s["mapped_name"] = pname
     elif speaker_role_hints:
-        from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
-
         for s in speakers_data.get("speakers", []):
             speaker_id = s.get("speaker_id")
             hint = speaker_role_hints.get(speaker_id)

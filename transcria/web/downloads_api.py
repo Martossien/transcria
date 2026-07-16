@@ -14,6 +14,7 @@ from transcria.audio.excerpts import AudioExcerptService
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.config import get_config
+from transcria.exports.docx_report import generate_docx_report
 from transcria.exports.package_builder import PackageBuilder
 from transcria.jobs import artifact_store
 from transcria.jobs.filesystem import JobFilesystem
@@ -118,7 +119,6 @@ def api_download_docx(job_id: str):
     if error_response:
         return error_response
 
-    from transcria.exports.docx_report import generate_docx_report  # différé : python-docx sans stubs (module exclu de mypy)
 
     # Le DOCX n'est un livrable que si le profil le promet (docx_level != none). Un profil SRT
     # (srt_express/srt_locuteurs) ne doit pas voir un DOCX généré à la demande → 404 propre.

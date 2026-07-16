@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Sequence
 
+from transcria.installer.i18n_phase import I18nPlan, apply_i18n
+from transcria.installer.postgres_phase import _default_query
+
 # Rôles conteneurisables et ceux qui exigent une base applicative PostgreSQL.
 #   all          : tout-en-un (UI web + scheduler + inférence GPU in-process) — le plus
 #                  simple pour tester le projet dans un seul conteneur ;
@@ -130,8 +133,6 @@ def _default_exec(file: str, args: Sequence[str]) -> None:
 
 def _default_db_probe(database_url: str) -> bool:
     # Réutilise la sonde de la phase PostgreSQL (SQLAlchemy/psycopg, sans dépendre de psql).
-    from transcria.installer.postgres_phase import _default_query
-
     return _default_query(database_url, "SELECT 1") == "1"
 
 
@@ -216,16 +217,14 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
     if plan.role not in _LLM_ROLES:
         return
     try:
+        # Différés §8.3(c) : point d'entrée best-effort — un échec d'import (image slim,
+        # dépendance absente) produit le WARN lisible ci-dessous, jamais un crash du rôle.
         from transcria.config import load_config
-        from transcria.gpu.opencode_setup import (
-            default_base_url,
-            ensure_agent_permissions,
-            ensure_local_provider,
-        )
-        from transcria.workflow.agent_workspace import resolve_agent_work_root
+        from transcria.gpu import opencode_setup
+        from transcria.workflow import agent_workspace
 
         cfg = load_config()
-        base_url = default_base_url(cfg)
+        base_url = opencode_setup.default_base_url(cfg)
         llm = (cfg.get("workflow", {}) or {}).get("arbitration_llm", {}) or {}
         model = llm.get("model_id") or "arbitrage"
         if "/" in model:  # "local/arbitrage" → clé modèle "arbitrage"
@@ -233,11 +232,11 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
         config_path = env.get("OPENCODE_CONFIG") or os.path.expanduser(
             os.path.join("~", ".config", "opencode", "opencode.json")
         )
-        ensure_local_provider(config_path, base_url, model)
+        opencode_setup.ensure_local_provider(config_path, base_url, model)
         # Politique headless : `external_directory` déterministe (allow sur l'arbre de scratch
         # des agents, deny ailleurs) — sinon le défaut opencode `ask` suspend `opencode run`.
-        work_root = resolve_agent_work_root(cfg)
-        ensure_agent_permissions(config_path, work_root)
+        work_root = agent_workspace.resolve_agent_work_root(cfg)
+        opencode_setup.ensure_agent_permissions(config_path, work_root)
         print(f"[INFO] opencode provider 'local' → {base_url} ({config_path}) "
               f"| external_directory allow={work_root}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort, ne bloque jamais le rôle
@@ -285,8 +284,6 @@ def provision_translations(plan: EntrypointPlan, env: dict[str, str]) -> None:
     if plan.role not in _UI_ROLES:
         return
     try:
-        from transcria.installer.i18n_phase import I18nPlan, apply_i18n
-
         app_root = Path(__file__).resolve().parents[2]
         translations_dir = app_root / "transcria" / "web" / "translations"
 
@@ -331,6 +328,7 @@ def provision_arbitrage_model(
     if plan.role != "all":
         return True
     try:
+        # Différés §8.3(c) : point d'entrée best-effort — l'ImportError est un cas géré.
         from transcria.config import load_config
         from transcria.install_arbitrage import get_tier_metadata
     except Exception as exc:  # noqa: BLE001 — provisioning best-effort

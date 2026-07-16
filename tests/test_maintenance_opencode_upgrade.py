@@ -8,18 +8,19 @@ from transcria.install_opencode import OpencodeDetection, OpencodeUpgradeResult
 
 
 def _patch_common(monkeypatch, detection: OpencodeDetection):
-    monkeypatch.setattr("transcria.config.loader.load_config",
+    # C5 : le CLI importe ses dépendances en tête — patcher le consommateur.
+    monkeypatch.setattr("transcria.maintenance.cli.load_config",
                         lambda _p=None: {"workflow": {"arbitration_llm": {"opencode_bin": "opencode"}}})
-    monkeypatch.setattr("transcria.install_opencode.detect_opencode",
+    monkeypatch.setattr("transcria.maintenance.cli.detect_opencode",
                         lambda **_kw: detection)
 
 
 def test_opencode_upgrade_check_prints_plan_without_running(monkeypatch, capsys):
     binary = Path("/opt/node_modules/opencode-ai/bin/opencode.exe")
     _patch_common(monkeypatch, OpencodeDetection(binary=binary, version="opencode 1.17.4"))
-    monkeypatch.setattr("transcria.install_opencode.classify_opencode_install", lambda _b: "npm")
+    monkeypatch.setattr("transcria.maintenance.cli.classify_opencode_install", lambda _b: "npm")
     called = {"upgrade": False}
-    monkeypatch.setattr("transcria.install_opencode.upgrade_opencode",
+    monkeypatch.setattr("transcria.maintenance.cli.upgrade_opencode",
                         lambda **_kw: called.__setitem__("upgrade", True))
 
     rc = cli.main(["opencode-upgrade", "--check"])
@@ -32,8 +33,8 @@ def test_opencode_upgrade_check_prints_plan_without_running(monkeypatch, capsys)
 def test_opencode_upgrade_runs_and_reports(monkeypatch, capsys):
     binary = Path("/home/x/.opencode/bin/opencode")
     _patch_common(monkeypatch, OpencodeDetection(binary=binary, version="opencode 1.17.13"))
-    monkeypatch.setattr("transcria.install_opencode.classify_opencode_install", lambda _b: "official")
-    monkeypatch.setattr("transcria.install_opencode.upgrade_opencode",
+    monkeypatch.setattr("transcria.maintenance.cli.classify_opencode_install", lambda _b: "official")
+    monkeypatch.setattr("transcria.maintenance.cli.upgrade_opencode",
                         lambda **_kw: OpencodeUpgradeResult("official", True, "opencode 1.17.13",
                                                             "opencode 1.17.14", "mis à jour : opencode 1.17.13 → opencode 1.17.14"))
     rc = cli.main(["opencode-upgrade"])

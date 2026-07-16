@@ -36,9 +36,7 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
     facts: list[tuple[str, str]] = []
     # Différés : cycle d'__init__ — workflow/ (phase summary) importe notifications/ ;
     # une couche basse ne tire jamais l'orchestration en tête.
-    from transcria.workflow.profiles import profile_for_job
-    from transcria.workflow.timing_model import format_duration_fr, format_range_fr
-    from transcria.workflow.timing_service import estimate_processing
+    from transcria.workflow import profiles, timing_model, timing_service
 
     detected = ctx.get("meeting_type") or ctx.get("type_suggere")
     if detected:
@@ -48,13 +46,13 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
     if n_speakers:
         facts.append((N_("Locuteurs"), str(n_speakers)))
     if audio_s > 0:
-        facts.append((N_("Durée audio"), format_duration_fr(audio_s)))
+        facts.append((N_("Durée audio"), timing_model.format_duration_fr(audio_s)))
 
-    profile = profile_for_job(job)
+    profile = profiles.profile_for_job(job)
     if profile is not None and audio_s > 0:
-        est = estimate_processing(profile, audio_s)
+        est = timing_service.estimate_processing(profile, audio_s)
         suffix = "" if est.basis == "measured" else " (estimation initiale)"
-        facts.append((N_("Traitement estimé"), format_range_fr(est) + suffix))
+        facts.append((N_("Traitement estimé"), timing_model.format_range_fr(est) + suffix))
     return facts
 
 
@@ -63,12 +61,12 @@ def completed_facts(config: dict, job, processing_seconds: float | None = None) 
     l'email « transcription terminée »."""
 
     # Différé : cycle d'__init__ — workflow/ (phase summary) importe notifications/.
-    from transcria.workflow.timing_model import format_duration_fr
+    from transcria.workflow import timing_model
 
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     facts: list[tuple[str, str]] = []
     if processing_seconds and processing_seconds > 0:
-        facts.append((N_("Traité en"), format_duration_fr(processing_seconds)))
+        facts.append((N_("Traité en"), timing_model.format_duration_fr(processing_seconds)))
     quality = fs.load_json("quality/quality_report.json") or {}
     score = quality.get("quality_score")
     if score is not None:

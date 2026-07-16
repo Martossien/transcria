@@ -36,6 +36,7 @@ from transcria.workflow.concurrency_profile import summarize_concurrency
 from transcria.workflow.profiles import profile_for_job
 from transcria.workflow.progress import get_workflow_progress
 from transcria.workflow.resume import reset_resume_state
+from transcria.workflow.runner import WorkflowRunner
 from transcria.workflow.timing_service import estimate_remaining
 from transcria.workflow.transitions import (
     can_start_profile,
@@ -394,8 +395,6 @@ def api_quality(job_id: str):
     if error_response:
         return error_response
 
-    from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
-
     runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.run_quality_checks(job, cfg)
     return jsonify(result)
@@ -408,8 +407,6 @@ def api_export(job_id: str):
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response
-
-    from transcria.workflow.runner import WorkflowRunner  # différé : l'orchestrateur GPU n'a rien à charger au boot du web
 
     runner = WorkflowRunner(JobStore, cfg)  # type: ignore[arg-type]
     result = runner.build_export(job, cfg)

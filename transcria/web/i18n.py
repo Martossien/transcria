@@ -11,6 +11,7 @@ import logging
 
 from flask import Flask, Response, current_app
 
+from transcria.i18n.js_catalog import build_js_catalog
 from transcria.i18n.locale import (  # noqa: F401 — shim de dépréciation (vague A1)
     SESSION_LOCALE_KEY,
     available_locales,
@@ -55,7 +56,6 @@ def init_app(app: Flask) -> None:
 
         Source unique de vérité = les mêmes catalogues gettext. Le helper ``t()`` (i18n.js)
         cherche par la chaîne source française (convention gettext : msgid = source)."""
-        from transcria.i18n.js_catalog import build_js_catalog
 
         body = build_js_catalog(str(get_locale()))
         resp = current_app.response_class(body, mimetype="application/javascript")

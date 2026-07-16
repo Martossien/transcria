@@ -24,6 +24,7 @@ from transcria.context.meeting_type_catalog import detection_hints, meeting_type
 from transcria.context.meeting_type_store import MeetingTypeStore
 
 if TYPE_CHECKING:  # pragma: no cover
+    # Différé : import d'annotation seule — jamais exécuté (patron B1, exclu des contrats).
     from transcria.auth.models import User
 
 PLACEHOLDER_TYPES = "{{TYPES_REUNION}}"
