@@ -18,6 +18,8 @@ import logging
 import threading
 from typing import Any
 
+from transcria.gpu.model_load_lock import model_load_lock
+
 logger = logging.getLogger(__name__)
 
 _TARGET_SR = 16000           # SQUIM exige 16 kHz
@@ -130,7 +132,6 @@ def _get_model() -> Any:
     if _MODEL is None:
         import socket
 
-        from transcria.gpu.model_load_lock import model_load_lock
 
         # Verrou d'instanciation + double-check : sérialise le chargement torch (victime
         # potentielle d'un init_empty_weights concurrent → device meta). Cf. model_load_lock.

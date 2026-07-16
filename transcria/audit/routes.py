@@ -9,6 +9,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction, audit_action_label
 from transcria.audit.store import AuditStore
 from transcria.auth.permissions import Permission, requires
+from transcria.auth.store import UserStore
 
 audit_bp = Blueprint("audit", __name__)
 
@@ -44,7 +45,6 @@ def audit_page():
 
     actor_id = None
     if actor:
-        from transcria.auth.store import UserStore
         u = UserStore.get_by_username(actor)
         if u:
             actor_id = u.id

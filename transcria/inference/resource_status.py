@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from transcria.stt.transcriber_factory import _should_use_remote_stt
+
 _DEFAULT_MAX_UNAVAILABLE_S = 600
 
 
@@ -24,8 +26,6 @@ def remote_requirements(config: dict) -> set[str]:
     reqs: set[str] = set()
     inf = config.get("inference", {}) or {}
     mode = inf.get("mode", "local")
-
-    from transcria.stt.transcriber_factory import _should_use_remote_stt
 
     backend = config.get("models", {}).get("stt_backend", "cohere")
     if _should_use_remote_stt(config, backend):

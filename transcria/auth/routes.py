@@ -9,7 +9,9 @@ from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
+from transcria.auth.rate_limit import login_rate_limiter
 from transcria.auth.store import DEFAULT_ADMIN_PASSWORDS, UserStore
+from transcria.config import get_config
 
 logger = logging.getLogger(__name__)
 auth_bp = Blueprint("auth", __name__)
@@ -65,7 +67,6 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         # C3.3 — anti-bourrinage : au-delà du seuil, refus temporaire (429) journalisé.
-        from transcria.auth.rate_limit import login_rate_limiter
 
         client_ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
                      or request.remote_addr or "?")
@@ -385,7 +386,6 @@ def group_edit(group_id: str):
 
 
 def inject_user_context():
-    from transcria.config import get_config
     cfg = get_config()
     if current_user.is_authenticated:
         return {

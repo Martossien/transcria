@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from transcria.config.loader import _deep_merge, get_default_config
+from transcria.gpu.model_load_lock import model_load_lock
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
@@ -146,7 +148,6 @@ class GraniteTranscriber(BaseTranscriber):
             # Verrou d'instanciation : `device_map=` déclenche accelerate.init_empty_weights()
             # (monkeypatch meta GLOBAL non thread-safe) — sérialisé pour ne pas corrompre un
             # chargement de modèle concurrent (ex. pyannote). Cf. transcria.gpu.model_load_lock.
-            from transcria.gpu.model_load_lock import model_load_lock
 
             with model_load_lock():
                 try:
@@ -348,8 +349,6 @@ class GraniteTranscriber(BaseTranscriber):
         return max(1, min(self.max_new_tokens, scaled))
 
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
-
         return collapse_repetition_loops(
             text,
             min_repeats=self.repetition_loop_min_repeats,

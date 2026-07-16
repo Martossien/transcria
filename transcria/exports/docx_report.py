@@ -22,6 +22,7 @@ from transcria.context.meeting_type_catalog import (
     quorum_types,
     theme_specs,
 )
+from transcria.gpu.opencode_runner import summary_markers
 from transcria.jobs.filesystem import JobFilesystem
 
 # ── Palette ──────────────────────────────────────────────────────────────────
@@ -1414,7 +1415,6 @@ def _extract_synthese(text: str, language: str = "fr") -> str:
     Sans langue, cherche « ## Synthèse » (FR historique). En anglais, cherche
     « ## Summary » — sinon le repli déversait TOUT le summary.md (méta + termes +
     bloc JSON) dans le DOCX. Repli final : texte sans les titres markdown."""
-    from transcria.gpu.opencode_runner import summary_markers
     heading = re.escape(summary_markers(language)["summary_heading"].lstrip("# ").strip())
     m = re.search(rf"##\s*{heading}\s*\n(.*?)(?=\n##|\Z)", text, re.DOTALL | re.IGNORECASE)
     if m:

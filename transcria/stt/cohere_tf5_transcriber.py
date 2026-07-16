@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.cohere_transcriber import vram_mb as _cohere_vram_mb
 from transcria.stt.registry import SttBackendDescriptor
@@ -297,7 +298,6 @@ class CohereTf5Transcriber(BaseTranscriber):
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
         if not self.collapse_repetition_loops:
             return text, []
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
         return collapse_repetition_loops(
             text,
             min_repeats=self.repetition_loop_min_repeats,

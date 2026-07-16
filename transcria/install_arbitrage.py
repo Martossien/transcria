@@ -10,13 +10,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from transcria.config.gpu_calibration import apply_gpu_calibration
+from transcria.config.llm_profiles import load_llm_profiles, select_profile
 from transcria.config.yaml_file import get_yaml_value, load_yaml_file, set_yaml_file_value
+from transcria.gpu.llm_footprint import derive_footprint_mb, read_gguf_arch
 from transcria.gpu.llm_placement import (
     DEFAULT_SAFETY_MARGIN_MB,
     Placement,
     plan_for_tier,
     recommend,
 )
+from transcria.install_messages import t
 from transcria.install_prerequisites import first_available
 
 
@@ -54,8 +57,6 @@ class PlacementRecommendation:
 # en préservant leurs conventions de clés : LLM_TIERS = "12".."64" ; TIER_VRAM_MB /
 # TIER_GPU_INDICES = "12gb".."64gb". Le libellé est généré SANS taille (dérivée ailleurs).
 def _llamacpp_engine() -> dict:
-    from transcria.config.llm_profiles import load_llm_profiles
-
     return load_llm_profiles()["engines"]["llamacpp"]
 
 
@@ -63,13 +64,13 @@ def _build_llamacpp_tables() -> tuple[dict[str, int], dict[str, list[int]], dict
     vram: dict[str, int] = {}
     gpu_idx: dict[str, list[int]] = {}
     meta: dict[str, LlmTierMetadata] = {}
-    for t in _llamacpp_engine()["tiers"]:
-        tid = str(t["id"])
+    for tier in _llamacpp_engine()["tiers"]:
+        tid = str(tier["id"])
         key = f"{tid}gb"
-        vram[key] = int(t["vram_budget_mb"])
-        gpu_idx[key] = list(range(int(t.get("gpus", 1))))
-        m = t["model"]
-        ctx = int(t.get("context", 0))
+        vram[key] = int(tier["vram_budget_mb"])
+        gpu_idx[key] = list(range(int(tier.get("gpus", 1))))
+        m = tier["model"]
+        ctx = int(tier.get("context", 0))
         meta[tid] = LlmTierMetadata(
             tier=tid, repo=m["repo"], file=m["file"], directory=m["dir"],
             label=f"{Path(m['file']).stem} ({ctx // 1024}K ctx)", context=ctx,
@@ -486,7 +487,6 @@ def _derive_llamacpp_vram_mb(tier: str, models_dir: str | None) -> int | None:
     ``tier`` peut être ``"24"`` ou ``"24gb"`` (LLM_TIERS est clé sans suffixe)."""
     if not models_dir:
         return None
-    from transcria.gpu.llm_footprint import derive_footprint_mb, read_gguf_arch
 
     tid = tier[:-2] if tier.endswith("gb") else tier
     meta = LLM_TIERS.get(tid)
@@ -527,7 +527,6 @@ def render_setup_log(
 ) -> str:
     """Rend les messages de sélection de la LLM d'arbitrage locale (FR/EN ; préfixe et
     lignes de commande scripts/*.sh non localisés)."""
-    from transcria.install_messages import t
 
     if event == "profile-skipped":
         return f"INFO:{t('arb_profile_skipped', profile=profile)}\n"
@@ -588,7 +587,6 @@ def render_setup_log(
 
 def render_prompt(*, prompt: str, label: str = "", repo: str = "") -> str:
     """Rend les questions interactives du choix de LLM d'arbitrage (FR/EN)."""
-    from transcria.install_messages import t
 
     if prompt == "tier":
         return t("arb_prompt_tier")
@@ -680,8 +678,6 @@ def main(argv: list[str] | None = None) -> int:
             print(stderr, end="", file=sys.stderr)
             return 0
         if args.vllm_env:
-            from transcria.config.llm_profiles import load_llm_profiles, select_profile
-
             gpu_count = int(args.gpu_count) if str(args.gpu_count).isdigit() else 1
             choice = select_profile(
                 load_llm_profiles(), "vllm",

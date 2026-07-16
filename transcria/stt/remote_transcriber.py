@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 from transcria.audio.converter import AudioConverter
 from transcria.inference.asr_client import AsrClient, build_asr_client_from_config
 from transcria.inference.client import InferenceRequestError, InferenceUnavailable
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 
 if TYPE_CHECKING:
@@ -220,7 +221,6 @@ class RemoteTranscriber(BaseTranscriber):
         """Applique l'anti-boucle (parité avec les transcripteurs locaux)."""
         if not self.collapse_loops or not item.get("text"):
             return item
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
 
         cleaned, loops = collapse_repetition_loops(item["text"])
         if loops:
@@ -259,6 +259,8 @@ class RemoteTranscriber(BaseTranscriber):
     def _resolve_fallback_builder(self):
         """Builder natif de repli : `fallback_backend` configuré, sinon le backend
         lui-même s'il est natif, sinon None (backend servi pur → pas de repli implicite)."""
+
+        # Différé : cycle — la factory importe ce backend en tête ; le prédicat de repli est consommé à l'appel.
         from transcria.stt.transcriber_factory import local_builders
 
         builders = local_builders()

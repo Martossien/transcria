@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from transcria.maintenance.backup import BackupError
+from transcria.maintenance.restore import restore_backup
 
 RESTORE_UNIT = "transcria-restore.service"
 REQUEST_PATH = Path("/run/transcria-restore.request")
@@ -133,7 +134,6 @@ def apply_pending_restore(
     arbres restaurés vers leur propriétaire d'origine (root a écrit) → redémarre. Idempotent sur
     la demande (consommée). Lève ``BackupError`` si rien en attente / archive invalide."""
     if restore_fn is None:
-        from transcria.maintenance.restore import restore_backup
         restore_fn = restore_backup
 
     if not request_path.exists():

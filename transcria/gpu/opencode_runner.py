@@ -14,7 +14,9 @@ import subprocess
 import time
 from pathlib import Path
 
+from transcria.context.meeting_type_prompts import substitute_placeholders
 from transcria.gpu import llm_parsing
+from transcria.gpu.opencode_setup import find_opencode_binary, resolve_arbitrage_endpoint
 
 # Politique de langue et résolution des prompts extraites vers gpu/prompt_locator.py
 # (vague C2). Ré-exportées ici : les consommateurs historiques (phases, web, exports,
@@ -136,8 +138,6 @@ class OpenCodeRunner:
         try:
             import requests
 
-            from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
-
             host, port = resolve_arbitrage_endpoint(self._config)
             base = f"http://{host}:{port}"
 
@@ -189,8 +189,6 @@ class OpenCodeRunner:
         if not self._config:
             return None
         try:
-            from transcria.gpu.opencode_setup import resolve_arbitrage_endpoint
-
             host, port = resolve_arbitrage_endpoint(self._config)
         except Exception:  # noqa: BLE001 — endpoint indéterminé → pas de pré-garde
             return None
@@ -296,7 +294,6 @@ class OpenCodeRunner:
             # emplacements d'install connus (~/.opencode/bin officiel, npm, brew…). Évite un
             # échec dur quand opencode EST installé mais que `opencode_bin` est générique
             # (ex. "opencode" hors PATH) ou pointe un chemin obsolète.
-            from transcria.gpu.opencode_setup import find_opencode_binary
 
             opencode_path = find_opencode_binary(config_bin=self.opencode_bin)
         if not opencode_path:
@@ -462,7 +459,6 @@ class OpenCodeRunner:
         erreur de lecture rend le fichier d'origine : la substitution n'est jamais
         une cause d'échec du résumé.
         """
-        from transcria.context.meeting_type_prompts import substitute_placeholders
 
         try:
             text = Path(prompt_file).read_text(encoding="utf-8")

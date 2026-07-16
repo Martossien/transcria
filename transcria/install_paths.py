@@ -5,6 +5,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from transcria.install_messages import t
+
 
 @dataclass(frozen=True)
 class DirectorySpec:
@@ -76,7 +78,6 @@ def render_setup_log(*, event: str, value: str = "") -> str:
 
     Le PRÉFIXE (``OK:``/``INFO:``) est lu par ``install.sh`` (non localisé) ; seul le
     message suit la langue (``TRANSCRIA_DEFAULT_LOCALE``, défaut fr = inchangé)."""
-    from transcria.install_messages import t
 
     if event == "venv-existing":
         return f"OK:{t('path_venv_existing', value=value)}\n"

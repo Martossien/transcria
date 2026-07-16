@@ -18,6 +18,7 @@ from transcria.inference.client import (
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.stt.base_diarizer import BaseDiarizer
+from transcria.stt.diarization import DiarizerService
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,6 @@ class RemoteDiarizer(BaseDiarizer):
     def _fallback_or_fail(self, job: Job, audio_path: Path, fs: JobFilesystem, *, reason: str) -> dict:
         if self.fallback_local:
             logger.warning("Diarization (remote): bascule sur le diariseur local (%s)", reason)
-            from transcria.stt.diarization import DiarizerService
             return DiarizerService(self.config, device=self.device).diarize(job, audio_path)
         logger.error("Diarization (remote): échec sans fallback (%s)", reason)
         result = {"available": False, "turns": [], "speakers": [], "error": f"service_indisponible: {reason}"}

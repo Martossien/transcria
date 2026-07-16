@@ -7,6 +7,8 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from transcria.install_messages import t
+
 VALID_INSTALL_PROFILES = ("all-in-one", "web", "scheduler", "resource-node", "migrate")
 
 
@@ -198,7 +200,6 @@ def render_install_plan_shell(plan: InstallPlan) -> str:
 
 def render_profile_summary_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
     """Rend le bloc d'en-tête du résumé final (FR/EN ; commandes/ports littéraux)."""
-    from transcria.install_messages import t
 
     lines_by_profile = {
         "resource-node": [
@@ -224,7 +225,6 @@ def render_profile_summary_text(plan: InstallPlan, context: SummaryRenderContext
 
 def render_profile_next_steps_text(plan: InstallPlan, context: SummaryRenderContext) -> str:
     """Rend les commandes de démarrage adaptées au profil (FR/EN ; systemctl/URLs littéraux)."""
-    from transcria.install_messages import t
 
     lines_by_profile = {
         "resource-node": [

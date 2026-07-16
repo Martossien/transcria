@@ -11,6 +11,8 @@ from pathlib import Path
 from shutil import which
 from typing import Callable
 
+from transcria.install_messages import t
+
 WhichFn = Callable[[str], str | None]
 RunFn = Callable[..., subprocess.CompletedProcess[str]]
 
@@ -110,7 +112,6 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
     """Rend les messages d'installation opencode utilisés par install.sh (FR/EN).
 
     Préfixe lu par install.sh (non localisé) ; lignes de commande curl/npm littérales."""
-    from transcria.install_messages import t
 
     if event == "found":
         return f"OK:{t('oc_found', value=value)}\n"
@@ -149,7 +150,6 @@ def render_setup_log(*, event: str, value: str = "", profile: str = "") -> str:
 
 def render_install_prompt(*, opencode_home: Path) -> str:
     """Rend la question d'installation interactive opencode (FR/EN)."""
-    from transcria.install_messages import t
 
     return t("oc_install_prompt", home=opencode_home)
 

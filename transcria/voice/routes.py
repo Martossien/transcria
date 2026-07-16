@@ -11,6 +11,7 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
 from transcria.config import get_config
+from transcria.i18n import select_locale
 from transcria.voice.consent_form import build_voice_consent_pdf, consent_form_filename
 from transcria.voice.embedding import VoiceEmbeddingError
 from transcria.voice.enrollment import VoiceEnrollmentService
@@ -45,7 +46,6 @@ def voice_list():
 def voice_consent_form():
     if not _require_voice_admin():
         return ("Accès interdit", 403)
-    from transcria.i18n import select_locale
     cfg = get_config()
     form_version = cfg.get("voice_enrollment", {}).get("consent", {}).get("current_form_version", "voice-consent-v1")
     # Le formulaire vierge suit la langue de l'interface (le `form_version` reste la clé

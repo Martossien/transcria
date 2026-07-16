@@ -29,6 +29,8 @@ from transcria.context.meeting_type_store import (
     MeetingTypeStore,
     MeetingTypeValidationError,
 )
+from transcria.exports.docx_report import DocxReport
+from transcria.i18n import select_locale
 
 meeting_type_bp = Blueprint("meeting_types", __name__)
 logger = logging.getLogger(__name__)
@@ -80,7 +82,6 @@ _PREVIEW_SRT = ("1\n00:00:00,000 --> 00:00:04,000\nPhrase d'exemple pour l'aper�
 def _preview_docx(definition: dict | None, meeting_type: str, sample_fields: dict,
                   logo_bytes: bytes | None = None) -> io.BytesIO:
     """Rapport DOCX d'exemple (zéro GPU, zéro job) — l'aperçu qui « vend » un type."""
-    from transcria.exports.docx_report import DocxReport
 
     ctx: dict = dict(_PREVIEW_CTX)
     ctx["meeting_type"] = meeting_type
@@ -145,7 +146,6 @@ def list_meeting_types():
     ``manageable_ids`` et ``share_targets`` alimentent l'éditeur (lot E) :
     quels types je peux modifier/partager, et vers quels groupes.
     """
-    from transcria.i18n import select_locale
     templates = MeetingTypeStore.gallery_templates_for_user(current_user)
     manageable = {t.id for t in MeetingTypeStore.list_manageable(current_user)}
     # Affichage traduit dans la locale de l'INTERFACE (axe A) : les types intégrés ne

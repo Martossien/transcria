@@ -15,6 +15,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from transcria.install_arbitrage import get_tier_metadata, recommend_tier
 from transcria.install_models import PYANNOTE_MODEL_ID, find_hf_cache_model
 from transcria.stt.registry import backends as _stt_backends
 
@@ -108,8 +109,6 @@ def build_catalog(cfg: dict, *, total_vram_mb: int | None = None) -> list[ModelS
     # LLM d'arbitrage : palier GGUF recommandé pour le VRAM (best-effort).
     if total_vram_mb:
         try:
-            from transcria.install_arbitrage import get_tier_metadata, recommend_tier
-
             tier = recommend_tier(total_vram_mb)
             meta = get_tier_metadata(tier)
             specs.append(ModelSpec(

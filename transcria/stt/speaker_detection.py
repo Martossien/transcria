@@ -4,6 +4,7 @@ from pathlib import Path
 
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.stt.diarizer_factory import create_diarizer
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,9 @@ class SpeakerDetector:
 
         diar_result = fs.load_json("speakers/speaker_turns.json")
         if diar_result is None:
-            from transcria.stt.diarizer_factory import create_diarizer
-
             ds = create_diarizer(self.config, device=device, progress_callback=progress_callback)
             diar_result = ds.diarize(job, audio_path)
         elif diar_result.get("available") and fs.load_json("speakers/speaker_clips.json") is None:
-            from transcria.stt.diarizer_factory import create_diarizer
-
             ds = create_diarizer(self.config, device=device)
             ds._extract_clips(
                 audio_path,

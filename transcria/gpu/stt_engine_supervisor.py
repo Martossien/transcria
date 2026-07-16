@@ -24,6 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from transcria.gpu.stt_vram_planner import SttVramPlanner
+from transcria.gpu.vram_manager import VRAMManager
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +84,6 @@ def build_stt_supervisor(config: dict, *, auto_relocate: bool | None = None) -> 
     """Superviseur câblé en production : planificateur (VRAMManager) + sonde HTTP +
     lanceur de script. `auto_relocate` défaut = `resource_node.vram.auto_relocate`.
     """
-    from transcria.gpu.stt_vram_planner import SttVramPlanner
-    from transcria.gpu.vram_manager import VRAMManager
 
     rn = config.get("resource_node", {}) or {}
     if auto_relocate is None:

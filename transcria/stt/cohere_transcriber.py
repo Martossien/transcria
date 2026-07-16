@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Any
 from transcria.config.loader import get_default_config
 from transcria.gpu.model_load_lock import model_load_lock
 from transcria.install_models import COHERE_MODEL_ID
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.contextual_biasing import build_cohere_lexicon_processor
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
 if TYPE_CHECKING:
@@ -336,8 +338,6 @@ class CohereTranscriber(BaseTranscriber):
         if self._lexicon_logits_processor is not None:
             return self._lexicon_logits_processor
 
-        from transcria.stt.contextual_biasing import build_cohere_lexicon_processor
-
         processor, stats = build_cohere_lexicon_processor(
             self.lexicon_biasing_terms,
             self._processor.tokenizer,
@@ -365,7 +365,6 @@ class CohereTranscriber(BaseTranscriber):
         """Collapse repetition loops in text. Returns (cleaned_text, loops_metadata)."""
         if not self.collapse_repetition_loops:
             return text, []
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
         return collapse_repetition_loops(
             text,
             min_repeats=self.repetition_loop_min_repeats,

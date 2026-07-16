@@ -14,6 +14,9 @@ import logging
 from flask import request, session
 from flask_login import current_user
 
+from transcria.auth.store import UserStore
+from transcria.config import get_config
+
 logger = logging.getLogger(__name__)
 
 # Clé de session où l'on mémorise un override explicite (?lang=xx).
@@ -23,8 +26,6 @@ SESSION_LOCALE_KEY = "ui_locale"
 def available_locales(cfg: dict | None = None) -> list[str]:
     """Allowlist des locales proposées (config ``i18n.available_locales``)."""
     if cfg is None:
-        from transcria.config import get_config
-
         cfg = get_config()
     locales = (cfg.get("i18n", {}) or {}).get("available_locales") or ["fr"]
     # Défensif : garantir des str non vides et l'unicité en préservant l'ordre.
@@ -38,8 +39,6 @@ def available_locales(cfg: dict | None = None) -> list[str]:
 def default_locale(cfg: dict | None = None) -> str:
     """Locale par défaut de l'instance (config ``i18n.default_locale``)."""
     if cfg is None:
-        from transcria.config import get_config
-
         cfg = get_config()
     default = (cfg.get("i18n", {}) or {}).get("default_locale") or "fr"
     allowed = available_locales(cfg)
@@ -98,8 +97,6 @@ def capture_lang_override() -> None:
     session[SESSION_LOCALE_KEY] = lang
     try:
         if current_user and current_user.is_authenticated and getattr(current_user, "locale", None) != lang:
-            from transcria.auth.store import UserStore
-
             UserStore.update_user(current_user.get_id(), locale=lang)
     except Exception:  # noqa: BLE001 — la persistance de préférence ne doit jamais casser une requête
         logger.debug("Persistance de la locale utilisateur impossible", exc_info=True)

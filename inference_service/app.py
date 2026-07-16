@@ -15,6 +15,14 @@ from flask import Flask, jsonify
 from inference_service.diarize_engine import DiarizeEngine
 from inference_service.engine import VoiceEmbedEngine
 from inference_service.errors import InferenceError
+from inference_service.routes.capabilities import capabilities_bp
+from inference_service.routes.diarize import diarize_bp
+from inference_service.routes.engines import engines_bp
+from inference_service.routes.health import health_bp
+from inference_service.routes.voice_embed import voice_embed_bp
+from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
+from transcria.config import load_config
+from transcria.gpu.stt_engine_supervisor import build_stt_supervisor
 
 logger = logging.getLogger("inference_service")
 
@@ -56,12 +64,10 @@ def create_app(
     app = Flask("transcria_inference")
 
     if config is None:
-        from transcria.config import load_config
         config = load_config()
     app.config["TRANSCRIA_CONFIG"] = config
 
     # Sécurité des flux (proportionnée Phase 0) — voir inference_service/security.py
-    from inference_service.security import enforce_api_key, expected_api_key, max_upload_bytes
 
     app.config["MAX_CONTENT_LENGTH"] = max_upload_bytes(config)
     if expected_api_key(config):
@@ -80,14 +86,7 @@ def create_app(
     app.extensions["voice_engine"] = engine or VoiceEmbedEngine(config)
     app.extensions["diarize_engine"] = diarize_engine or DiarizeEngine(config)
     # Superviseur STT singleton : mémorise le « dernier usage » par moteur (idle-stop).
-    from transcria.gpu.stt_engine_supervisor import build_stt_supervisor
     app.extensions["stt_supervisor"] = build_stt_supervisor(config)
-
-    from inference_service.routes.capabilities import capabilities_bp
-    from inference_service.routes.diarize import diarize_bp
-    from inference_service.routes.engines import engines_bp
-    from inference_service.routes.health import health_bp
-    from inference_service.routes.voice_embed import voice_embed_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(capabilities_bp)

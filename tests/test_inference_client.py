@@ -358,7 +358,8 @@ def test_remote_diarizer_fallback_local(tmp_path, monkeypatch):
             called["yes"] = True
             return {"available": True, "turns": [], "speakers": ["LOCAL"], "stats": {}}
 
-    monkeypatch.setattr("transcria.stt.diarization.DiarizerService", _FakeLocal)
+    # C5 : remote_diarizer importe DiarizerService en tête — patcher le consommateur.
+    monkeypatch.setattr("transcria.stt.remote_diarizer.DiarizerService", _FakeLocal)
     diar = _remote(cfg, client)
     out = diar.diarize(_job(), tmp_path / "a.wav")
     assert called.get("yes") is True

@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 from urllib.parse import quote
 
+from transcria.install_messages import t
+from transcria.install_messages import t as _t_hba
+
 _LOCAL_TCP_PEER_RE = re.compile(
     r"^(?P<prefix>\s*host\s+(?:all|replication)\s+all\s+(?:127\.0\.0\.1/32|::1/128)\s+)(?:ident|peer)(?P<suffix>\s*(?:#.*)?)$"
 )
@@ -193,7 +196,6 @@ def render_connection_failure(*, db: str, user: str, host: str, port: str, local
 
 def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int, alembic_version: str) -> str:
     """Rend le résumé d'état PostgreSQL affiché avant décision Alembic."""
-    from transcria.install_messages import t
 
     schema_count = parse_non_negative_int(has_schema, name="has_schema")
     data_count = parse_non_negative_int(has_data, name="has_data")
@@ -202,7 +204,6 @@ def render_state_summary(*, db: str, has_schema: str | int, has_data: str | int,
 
 def render_schema_action_log(*, db: str, action: str) -> str:
     """Rend le message initial associé à une action Alembic (FR/EN)."""
-    from transcria.install_messages import t
 
     if action == "keep":
         return f"OK:{t('pg_schema_keep', db=db)}\n"
@@ -221,13 +222,11 @@ def render_pg_hba_rewrite_result(result: str) -> str:
     changed = int(match.group("count"))
     if changed == 0:
         return "ACTION:none\n"
-    from transcria.install_messages import t as _t_hba
     return f"INFO:{_t_hba('pg_hba_update')}\nACTION:reload\n"
 
 
 def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
     """Rend les messages de bootstrap PostgreSQL local/distant (FR/EN)."""
-    from transcria.install_messages import t
 
     if event == "local-check":
         return f"INFO:{t('pg_local_check', user=user, db=db)}\n"
@@ -250,7 +249,6 @@ def render_setup_log(*, event: str, db: str, user: str, host: str) -> str:
 
 def render_alembic_log(*, event: str, action: str = "") -> str:
     """Rend les messages de résultat Alembic PostgreSQL (FR/EN)."""
-    from transcria.install_messages import t
 
     if event == "upgrade-ok":
         return f"OK:{t('pg_alembic_upgrade_ok')}\n"
@@ -273,7 +271,6 @@ def render_alembic_log(*, event: str, action: str = "") -> str:
 
 def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "", backup_path: str = "") -> str:
     """Rend les messages liés à la migration SQLite vers PostgreSQL (FR/EN)."""
-    from transcria.install_messages import t
 
     if event == "detected":
         return f"INFO:{t('pg_sqlite_detected', sqlite_db=sqlite_db)}\n"
@@ -300,7 +297,6 @@ def render_sqlite_migration_log(*, event: str, sqlite_db: str, action: str = "",
 
 def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str, host: str, port: str) -> str:
     """Rend le prompt interactif de migration SQLite vers PostgreSQL (FR/EN)."""
-    from transcria.install_messages import t
 
     return "\n".join([
         "",
@@ -317,7 +313,6 @@ def render_sqlite_migration_prompt(*, sqlite_db: str, sqlite_size: str, db: str,
 
 def render_database_setup_log(*, event: str, user: str = "", db: str = "", host: str = "", port: str = "") -> str:
     """Rend les messages du choix global SQLite/PostgreSQL (FR/EN ; commandes dnf/apt littérales)."""
-    from transcria.install_messages import t
 
     if event == "sqlite-kept":
         return f"OK:{t('pg_db_sqlite_kept')}\n"

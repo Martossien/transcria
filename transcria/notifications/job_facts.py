@@ -8,6 +8,12 @@ from __future__ import annotations
 
 import logging
 
+from transcria.jobs.filesystem import JobFilesystem
+from transcria.notifications.mailer import send_job_notification_async
+from transcria.workflow.profiles import profile_for_job
+from transcria.workflow.timing_model import format_duration_fr, format_range_fr
+from transcria.workflow.timing_service import estimate_processing
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,8 +24,6 @@ def N_(s: str) -> str:
 
 
 def _audio_seconds(config: dict, job_id: str) -> float:
-    from transcria.jobs.filesystem import JobFilesystem
-
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job_id)
     return float((fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0.0)
 
@@ -27,10 +31,6 @@ def _audio_seconds(config: dict, job_id: str) -> float:
 def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
     """Type détecté, nombre de locuteurs, durée audio, temps de TRAITEMENT estimé
     (calibré machine) — pour l'email « pré-analyse prête »."""
-    from transcria.jobs.filesystem import JobFilesystem
-    from transcria.workflow.profiles import profile_for_job
-    from transcria.workflow.timing_model import format_duration_fr, format_range_fr
-    from transcria.workflow.timing_service import estimate_processing
 
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     ctx = fs.load_json("context/meeting_context.json") or {}
@@ -58,8 +58,6 @@ def summary_ready_facts(config: dict, job) -> list[tuple[str, str]]:
 def completed_facts(config: dict, job, processing_seconds: float | None = None) -> list[tuple[str, str]]:
     """Temps réel de traitement, score qualité, nombre de points à vérifier — pour
     l'email « transcription terminée »."""
-    from transcria.jobs.filesystem import JobFilesystem
-    from transcria.workflow.timing_model import format_duration_fr
 
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
     facts: list[tuple[str, str]] = []
@@ -79,8 +77,6 @@ def notify_summary_ready(config: dict, job) -> None:
     """Envoie l'email « pré-analyse prête » (best-effort, jamais bloquant). Point unique
     appelé par run_summary : couvre le chemin synchrone (route) ET worker."""
     try:
-        from transcria.notifications.mailer import send_job_notification_async
-
         owner = getattr(job, "owner", None)
         to_email = getattr(owner, "email", "") if owner else ""
         if not to_email:

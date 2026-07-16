@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
+from transcria.inference.client import InferenceRequestError, InferenceUnavailable, build_client_from_config
+
 logger = logging.getLogger(__name__)
 
 EMBEDDING_VERSION = "v1"
@@ -166,13 +168,10 @@ class RemoteVoiceEmbeddingBackend:
             (inf.get("voice_embed", {}) or {}).get("fallback_local", inf.get("fallback_local", True))
         )
         if client is None:
-            from transcria.inference.client import build_client_from_config
             client = build_client_from_config(config)
         self._client = client
 
     def extract_reference_embedding(self, audio_path: Path) -> VoiceEmbedding:
-        from transcria.inference.client import InferenceRequestError, InferenceUnavailable
-
         if self._client is None:
             return self._fallback_or_raise(audio_path, "aucun client distant configuré")
         try:

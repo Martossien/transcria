@@ -2,9 +2,13 @@ import logging
 import re
 from pathlib import Path
 
+from transcria.audio.vad import SileroVAD
+from transcria.audio.vad_adaptive import AdaptiveVADConfig
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.logging_setup import get_structured_logger
+from transcria.stt.transcriber_factory import create_transcriber
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +24,6 @@ class SummaryGenerator:
     def generate_quick_summary(self, job: Job, audio_path: Path, gpu_index: int = 0) -> dict:
         import librosa
 
-        from transcria.audio.vad import SileroVAD
-        from transcria.audio.vad_adaptive import AdaptiveVADConfig
-        from transcria.stt.transcriber_factory import create_transcriber
-
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="quick_summary")
@@ -33,7 +33,6 @@ class SummaryGenerator:
         # Langue de transcription = langue des livrables du job (Axe B). Défaut « fr »
         # (comportement historique). Sans ça, le STT rapide forçait le français et
         # transcrivait un audio anglais en charabia phonétique franco-anglais.
-        from transcria.gpu.opencode_runner import resolve_output_language
         stt_language = resolve_output_language(job)
         sl.info("━━━ DÉBUT transcription rapide ━━━ backend=%s gpu=%s langue=%s", backend, gpu_index, stt_language)
 

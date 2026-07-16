@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.config.yaml_file import set_yaml_file_value
 from transcria.install_messages import t
 
@@ -144,8 +145,6 @@ def _write_backend_config(plan: OllamaPlan) -> None:
         set_yaml_file_value(plan.config_path, f"workflow.{block}.api_base", api_base)
     # Calibration VRAM : empreinte fournie par l'appelant (dérivée de la taille Ollama).
     if plan.llm_vram_mb > 0:
-        from transcria.config.gpu_calibration import apply_gpu_calibration
-
         indices = list(plan.gpu_indices) if plan.gpu_indices else [0]
         per_gpu = [plan.llm_vram_mb // len(indices)] * len(indices)
         per_gpu[-1] += plan.llm_vram_mb - sum(per_gpu)

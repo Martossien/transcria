@@ -13,6 +13,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from transcria.audio import acoustic_metrics, dnsmos_scorer, squim_scorer
+from transcria.audio.difficulty_map import build_difficulty_map, summarize_difficulty
+
 logger = logging.getLogger(__name__)
 
 
@@ -134,9 +137,6 @@ class AudioPreflightAnalyzer:
         jamais le diagnostic de base)."""
         import time as _time
 
-        from transcria.audio import squim_scorer
-        from transcria.audio.difficulty_map import build_difficulty_map, summarize_difficulty
-
         t0 = _time.monotonic()
 
         # DNSMOS global d'abord : indépendant de SQUIM, peut relever le risque et donc
@@ -205,7 +205,6 @@ class AudioPreflightAnalyzer:
     def _augment_dnsmos_global(self, result: dict, signal, sample_rate: int) -> None:
         """Ajoute les scores DNSMOS globaux (SIG/BAK/OVRL) et le flag associé.
         Best effort : indisponibilité = aucun ajout."""
-        from transcria.audio import dnsmos_scorer
 
         glob = dnsmos_scorer.score_global(signal, sample_rate)
         if glob is None:
@@ -224,8 +223,6 @@ class AudioPreflightAnalyzer:
 
         if self.acoustic_enabled:
             try:
-                from transcria.audio import acoustic_metrics
-
                 for m in acoustic_metrics.score_segments(signal, sample_rate, windows):
                     sigs = acoustic_metrics.window_signals(
                         m,
@@ -240,8 +237,6 @@ class AudioPreflightAnalyzer:
 
         if self.dnsmos_enabled:
             try:
-                from transcria.audio import dnsmos_scorer
-
                 for m in dnsmos_scorer.score_segments(signal, sample_rate, windows) or []:
                     sigs = dnsmos_scorer.window_signals(
                         m["sig"], m["bak"], m["ovrl"],

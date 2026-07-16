@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from transcria.models_catalog import ModelSpec, disk_free_bytes, resolve_hf_home, resolve_models_dir
+from transcria.models_catalog import ModelSpec, disk_free_bytes, resolve_hf_home, resolve_models_dir, resolve_runtimes_dir
 
 STATUS_DIRNAME = ".downloads"
 
@@ -31,8 +31,6 @@ def target_dir_for(spec: ModelSpec, *, hf_home: Path, models_dir: Path) -> Path:
     if spec.kind == "gguf":
         return models_dir / spec.target_subdir
     if spec.kind == "runtime":
-        from transcria.models_catalog import resolve_runtimes_dir
-
         return resolve_runtimes_dir() / spec.target_subdir
     return hf_home / "hub" / ("models--" + spec.repo_id.replace("/", "--"))
 
@@ -104,7 +102,6 @@ def run_download(
             # Poids gérés par le runtime servi (audio.cpp) : téléchargement DÉLÉGUÉ à
             # SON model_manager (venv dédié, provisionnés par `installer.cli audiocpp`).
             # spec.file porte l'id du paquet chez eux (cf. _SERVED_STT_SOURCES).
-            from transcria.models_catalog import resolve_runtimes_dir
 
             home = resolve_runtimes_dir() / "audiocpp"
             manager = home / "src" / "tools" / "model_manager.py"

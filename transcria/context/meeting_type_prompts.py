@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from transcria.context.meeting_type_catalog import detection_hints, meeting_type_names
+from transcria.context.meeting_type_store import MeetingTypeStore
 
 if TYPE_CHECKING:  # pragma: no cover
     from transcria.auth.models import User
@@ -46,8 +47,6 @@ def build_prompt_substitutions(owner: "User | None" = None,
     names = list(meeting_type_names())
     hints: dict[str, list[str]] = dict(detection_hints())
     if owner is not None:
-        from transcria.context.meeting_type_store import MeetingTypeStore
-
         for template in MeetingTypeStore.visible_templates_for_user(owner):
             names.append(template.name)
             template_hints = template.definition.get("detection_hints") or []

@@ -5,9 +5,17 @@ from pathlib import Path
 
 import numpy as np
 
+from transcria.audio.vad import SileroVAD
+from transcria.audio.vad_adaptive import AdaptiveVADConfig
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
+from transcria.stt.corpus import build_segment_corpus, summarize_corpus
+from transcria.stt.forced_alignment import ForcedAlignmentService
+from transcria.stt.reliability import SegmentReliabilityScorer
+from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
 from transcria.stt.transcriber_factory import create_transcriber
 
 logger = logging.getLogger(__name__)
@@ -89,7 +97,6 @@ class Transcriber:
         sl = get_structured_logger(__name__)
         sl.set_context(job_id=job.id, step="transcribe")
 
-        from transcria.gpu.opencode_runner import resolve_output_language
         lang = resolve_output_language(job)
         backend = self.config.get("models", {}).get("stt_backend", "cohere")
 
@@ -98,8 +105,6 @@ class Transcriber:
 
         sl.info("DÉBUT transcription", backend=backend, gpu=self.gpu_index)
         self._last_chunk_metrics = None
-
-        from transcria.audio.vad_adaptive import AdaptiveVADConfig
 
         vad_cfg = self.config.get("workflow", {}).get("vad", {})
         audio_quality = fs.load_json("metadata/audio_quality_decision.json") or {}
@@ -571,7 +576,6 @@ class Transcriber:
         Exécuté une seule fois sur l'audio complet (déjà chargé) — pas de surcoût I/O.
         Si VAD indisponible ou aucune zone détectée, retourne les chunks inchangés.
         """
-        from transcria.audio.vad import SileroVAD
 
         vad_cfg = vad_cfg or {}
         vad = SileroVAD(
@@ -813,8 +817,6 @@ class Transcriber:
         if backend != "whisper":
             return segments
         try:
-            from transcria.stt.forced_alignment import ForcedAlignmentService
-
             device = f"cuda:{self.gpu_index}" if self.gpu_index is not None else "cpu"
             aligner = ForcedAlignmentService(self.config, device=device)
             aligned = aligner.align_segments(audio_path, segments, language=language)
@@ -833,8 +835,6 @@ class Transcriber:
         sl,
     ) -> list[dict]:
         try:
-            from transcria.stt.speaker_realignment import SpeakerPunctuationRealigner
-
             realigned = SpeakerPunctuationRealigner(self.config).realign(
                 segments, speaker_turns, speaker_mapping
             )
@@ -848,8 +848,6 @@ class Transcriber:
     def _score_segment_reliability(self, segments: list[dict], fs: JobFilesystem, sl) -> list[dict]:
         """Ajoute un score de fiabilité par segment sans modifier le texte."""
         try:
-            from transcria.stt.reliability import SegmentReliabilityScorer
-
             preflight = fs.load_json("metadata/audio_preflight.json") or {}
             scored = SegmentReliabilityScorer(self.config).score_segments(segments, preflight)
             counts: dict[str, int] = {}
@@ -874,8 +872,6 @@ class Transcriber:
         if not corpus_cfg.get("enabled", True):
             return None
         try:
-            from transcria.stt.corpus import build_segment_corpus, summarize_corpus
-
             preflight = fs.load_json("metadata/audio_preflight.json") or {}
             corpus = build_segment_corpus(segments, backend, preflight.get("difficulty_map") or [])
             fs.save_json("metadata/stt_corpus.json", corpus)
@@ -886,8 +882,6 @@ class Transcriber:
                 by_difficulty={k: v.get("count") for k, v in (summary.get("by_difficulty") or {}).items()},
             )
             try:
-                from transcria.jobs.store import JobStore
-
                 JobStore.update_extra_data(job.id, lambda extra: {**extra, "stt_corpus_summary": summary})
             except Exception as exc:
                 logger.warning("Promotion stt_corpus_summary en base ignorée: %s", exc)

@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from transcria.gpu.stt_engine_supervisor import build_stt_supervisor, engine_specs_from_config
 from transcria.inference.client import (
     InferenceClient,
     InferenceRequestError,
@@ -77,7 +78,6 @@ def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> "GateV
     if target is None:
         return None
     backend, _host = target
-    from transcria.gpu.stt_engine_supervisor import build_stt_supervisor, engine_specs_from_config
 
     spec = next((s for s in engine_specs_from_config(config) if s.name == backend), None)
     if spec is None:

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from transcria.install_messages import t
+
 WhichFn = Callable[[str], str | None]
 UserHomeFn = Callable[[str], str]
 FindSpecFn = Callable[[str], object | None]
@@ -132,7 +134,6 @@ def render_setup_log(*, event: str, name: str = "", value: str = "", path: str =
 
     Le PRÉFIXE (``OK:``/``ERROR:``/``WARN:``) est lu par ``install.sh`` (non localisé) ;
     seul le message suit la langue (``TRANSCRIA_DEFAULT_LOCALE``, défaut fr = inchangé)."""
-    from transcria.install_messages import t
 
     if event == "python-ok":
         return f"OK:{t('pre_python_ok', value=value, path=path)}\n"

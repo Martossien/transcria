@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from transcria.config.loader import _deep_merge, get_default_config
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
@@ -369,8 +370,6 @@ class KrokoTranscriber(BaseTranscriber):
         return "fr"
 
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
-
         return collapse_repetition_loops(
             text,
             min_repeats=self.repetition_loop_min_repeats,

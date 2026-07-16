@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from transcria.install_messages import t
 from transcria.install_prerequisites import first_available
 
 PYANNOTE_MODEL_ID = "pyannote/speaker-diarization-community-1"
@@ -195,7 +196,6 @@ def render_model_summary(
     opencode_bin: str,
 ) -> str:
     """Rend le bilan final des modèles à partir des états déjà détectés (FR/EN)."""
-    from transcria.install_messages import t
 
     lines = [t("mdl_sum_title")]
     if needs_local_models:
@@ -231,7 +231,6 @@ def render_model_detection_table(
     squim_ok: bool,
 ) -> str:
     """Rend le tableau de vérification des modèles locaux (FR/EN)."""
-    from transcria.install_messages import t
 
     rows = [
         (
@@ -268,7 +267,6 @@ def render_model_detection_table(
 
 def render_model_status_log(*, event: str, value: str = "", profile: str = "") -> str:
     """Rend une ligne de statut de vérification locale des modèles (FR/EN ; préfixe non localisé)."""
-    from transcria.install_messages import t
 
     if event == "cohere-ok":
         return f"OK:{t('mdl_st_cohere_ok', value=value)}\n"
@@ -295,7 +293,6 @@ def render_model_status_log(*, event: str, value: str = "", profile: str = "") -
 
 def render_cohere_setup_log(*, event: str, value: str = "") -> str:
     """Rend les messages interactifs de configuration du modèle Cohere (FR/EN)."""
-    from transcria.install_messages import t
 
     if event == "missing":
         return f"WARN:{t('coh_missing')}\n"
@@ -324,7 +321,6 @@ def render_cohere_setup_log(*, event: str, value: str = "") -> str:
 
 def render_cohere_setup_prompt() -> str:
     """Rend le prompt interactif de configuration Cohere (FR/EN)."""
-    from transcria.install_messages import t
 
     return "\n".join([
         "",
@@ -339,7 +335,6 @@ def render_cohere_setup_prompt() -> str:
 
 def render_pyannote_setup_log(*, event: str) -> str:
     """Rend les messages interactifs de configuration pyannote (FR/EN ; URLs littérales)."""
-    from transcria.install_messages import t
 
     if event == "missing-token":
         return f"WARN:{t('pya_missing_token')}\n"
@@ -360,14 +355,12 @@ def render_pyannote_setup_log(*, event: str) -> str:
 
 def render_pyannote_token_prompt() -> str:
     """Rend le prompt de saisie silencieuse du token HuggingFace (FR/EN)."""
-    from transcria.install_messages import t
 
     return t("pya_token_prompt")
 
 
 def render_pyannote_download_prompt() -> str:
     """Rend la question de préchargement pyannote (FR/EN)."""
-    from transcria.install_messages import t
 
     return t("pya_download_prompt")
 

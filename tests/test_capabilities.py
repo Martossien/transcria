@@ -131,8 +131,9 @@ def test_capabilities_route_includes_stt_supervisor_load(monkeypatch):
         "transcria.gpu.vram_manager.VRAMManager.get_gpu_info",
         lambda self: [{"id": 0, "memory": {"free": 24.0, "total": 24.0}}],
     )
+    # C5 : la route importe la sonde en tête — patcher le consommateur.
     monkeypatch.setattr(
-        "transcria.gpu.stt_engine_supervisor.http_health_prober",
+        "inference_service.routes.capabilities.http_health_prober",
         lambda url, timeout=2.0: True,
     )
 

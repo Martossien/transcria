@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from transcria.install_messages import t
+
 DEFAULT_INSTALL_DIR = "/home/admin_ia/transcria"
 DEFAULT_SERVICE_USER = "admin_ia"
 DEFAULT_SERVICE_HOME = "/home/admin_ia"
@@ -199,7 +201,6 @@ def render_setup_log(*, event: str, unit: str = "", adapted: str = "", dst: str 
 
     Préfixe (``OK:``/``INFO:``/``WARN:``) lu par install.sh, non localisé ; les lignes de
     commande (``sudo cp``/``systemctl``) restent littérales, seul le texte suit la langue."""
-    from transcria.install_messages import t
 
     if event == "skipped":
         return f"INFO:{t('sys_skipped', unit=unit)}\n"

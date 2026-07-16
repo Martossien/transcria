@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from transcria.config.loader import _deep_merge, get_default_config
+from transcria.gpu.model_load_lock import model_load_lock
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
@@ -126,7 +128,6 @@ class ParakeetTranscriber(BaseTranscriber):
                 logger.info("Parakeet STT: CUDA device force sur %s", self.device)
 
             load_t0 = _time.time()
-            from transcria.gpu.model_load_lock import model_load_lock
 
             with model_load_lock():  # sérialise l'instanciation (cf. model_load_lock)
                 self._model = ASRModel.from_pretrained(self.model_path)
@@ -368,7 +369,6 @@ class ParakeetTranscriber(BaseTranscriber):
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
         if not self.collapse_repetition_loops:
             return text, []
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
 
         return collapse_repetition_loops(
             text,

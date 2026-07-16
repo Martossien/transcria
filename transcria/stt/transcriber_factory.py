@@ -10,6 +10,7 @@ import logging
 from transcria.config.loader import get_default_config
 from transcria.stt import registry
 from transcria.stt.base_transcriber import BaseTranscriber
+from transcria.stt.remote_transcriber import RemoteTranscriber
 from transcria.stt.whisper_transcriber import _effective_whisper_config  # noqa: F401 — ré-exporté (tests historiques)
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,6 @@ def create_transcriber(
         backend = config.get("models", {}).get("stt_backend", "cohere")
 
     if _should_use_remote_stt(config, backend):
-        from transcria.stt.remote_transcriber import RemoteTranscriber
-
         logger.info("Transcription : backend distant '%s' (inference.stt)", backend)
         return RemoteTranscriber(config, backend=backend, device=device)
 

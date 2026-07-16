@@ -2,9 +2,11 @@ import logging
 import re
 from typing import Any
 
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.quality.lexicon_checks import LexiconChecker
+from transcria.quality.review_points import ReviewPoints as _RP
 from transcria.quality.srt_checks import SRTChecker
 
 logger = logging.getLogger(__name__)
@@ -186,7 +188,6 @@ class QualityReporter:
 
     def run_all_checks(self, job: Job) -> dict:
         fs = JobFilesystem(self.config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-        from transcria.gpu.opencode_runner import resolve_output_language
         self._lang = resolve_output_language(job)
         self.S = _qr_strings(self._lang)
 
@@ -745,7 +746,6 @@ class QualityReporter:
         md = self._format_markdown(report)
         fs.save_text("quality/quality_report.md", md)
         fs.save_json("quality/review_points.json", review_points)
-        from transcria.quality.review_points import ReviewPoints as _RP
         fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report, getattr(self, "_lang", "fr")))
 
         return report

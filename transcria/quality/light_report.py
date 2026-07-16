@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import logging
 
+from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.quality.review_points import ReviewPoints as _RP
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,6 @@ _REVIEW_LOAD_ZERO = {
 def run_light_quality(job: Job, config: dict) -> dict:
     """Exécute le contrôle léger et écrit `quality/quality_report.{json,md}` + review_points."""
     fs = JobFilesystem(config.get("storage", {}).get("jobs_dir", "./jobs"), job.id)
-    from transcria.gpu.opencode_runner import resolve_output_language
     lang = resolve_output_language(job)
     S = _strings(lang)
     srt_content = fs.load_text("metadata/transcription.srt") or ""
@@ -124,7 +125,6 @@ def run_light_quality(job: Job, config: dict) -> dict:
     fs.save_json("quality/quality_report.json", report)
     fs.save_text("quality/quality_report.md", _format_markdown(report, S))
     fs.save_json("quality/review_points.json", review_points)
-    from transcria.quality.review_points import ReviewPoints as _RP
     fs.save_json("quality/review_points_anchors.json", _RP.generate_anchors(report, lang))
     logger.info("Rapport qualité LÉGER job %s: score %d/100, %d checks, %d warnings",
                 job.id, quality_score, total_checks, warnings)

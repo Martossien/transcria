@@ -4,8 +4,10 @@ import zipfile
 from pathlib import Path
 
 from transcria.context.meeting_context import MeetingContextManager
+from transcria.exports.docx_report import generate_docx_report
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
+from transcria.workflow.profiles import profile_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,6 @@ class PackageBuilder:
 
         # Niveaux selon le profil (Phase 7). Job legacy / sans profil → comportement complet
         # (full), strictement identique à l'historique : aucune régression de livrable.
-        from transcria.workflow.profiles import profile_for_job
 
         profile = profile_for_job(job)
         zip_level = profile.zip_level if profile is not None else "full"
@@ -133,7 +134,6 @@ class PackageBuilder:
         safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]
         docx_path = fs.job_dir / "exports" / f"rapport_{safe_title}.docx"
         try:
-            from transcria.exports.docx_report import generate_docx_report
             generate_docx_report(job.id, jobs_dir, docx_path)
             zf.write(docx_path, f"rapport_{safe_title}.docx")
         except Exception:

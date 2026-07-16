@@ -7,6 +7,8 @@ from typing import Any, Callable
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+from transcria.audio.diarization_pcm import DiarizationPcmPreparer
+from transcria.audio.squim_scorer import pick_device
 from transcria.gpu.model_load_lock import model_load_lock
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
@@ -163,8 +165,6 @@ class DiarizerService(BaseDiarizer):
 
     def _prepare_diarization_audio(self, fs: JobFilesystem, audio_path: Path) -> Path:
         try:
-            from transcria.audio.diarization_pcm import DiarizationPcmPreparer
-
             prepared = DiarizationPcmPreparer(self.config).prepare(fs, audio_path)
             if prepared != audio_path:
                 logger.info("Diarization: audio optimisé pyannote utilisé (%s)", prepared.name)
@@ -206,7 +206,6 @@ class DiarizerService(BaseDiarizer):
             # prises par l'arbitrage/le STT — au lieu du défaut `cuda:0` qui tombait sur le GPU
             # du LLM → OOM (finding F13). Un index explicite (`cuda:N`) est respecté tel quel ;
             # repli CPU propre si rien d'éligible. Lecture seule, ne tue/évince aucun process.
-            from transcria.audio.squim_scorer import pick_device
 
             required_mb = float((self.config.get("gpu", {}) or {}).get("pyannote_vram_mb", 3000) or 3000)
             resolved = pick_device(self.device, required_mb=required_mb)

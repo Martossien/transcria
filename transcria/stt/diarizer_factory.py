@@ -2,6 +2,9 @@ import logging
 from copy import deepcopy
 
 from transcria.stt.base_diarizer import BaseDiarizer
+from transcria.stt.diarization import DiarizerService
+from transcria.stt.remote_diarizer import RemoteDiarizer
+from transcria.stt.sortformer_diarizer import SortformerDiarizer
 
 logger = logging.getLogger(__name__)
 
@@ -101,14 +104,11 @@ def create_diarizer(config: dict, device: str | None = None, progress_callback=N
         kwargs["device"] = device
 
     if backend == "remote":
-        from transcria.stt.remote_diarizer import RemoteDiarizer
         return RemoteDiarizer(**kwargs)
 
     if backend == "sortformer":
-        from transcria.stt.sortformer_diarizer import SortformerDiarizer
         return SortformerDiarizer(**kwargs)
 
-    from transcria.stt.diarization import DiarizerService
     if progress_callback is not None:
         kwargs["progress_callback"] = progress_callback
     return DiarizerService(**kwargs)

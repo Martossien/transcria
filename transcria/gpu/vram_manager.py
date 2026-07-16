@@ -5,6 +5,7 @@ import subprocess
 import time
 from typing import IO
 
+from transcria.config.gpu_calibration import apply_gpu_calibration
 from transcria.gpu._port_utils import generation_confirmed
 from transcria.gpu._port_utils import is_port_open as _check_port_open
 from transcria.gpu.cuda_visible import (
@@ -12,7 +13,9 @@ from transcria.gpu.cuda_visible import (
     to_nvidia_smi_gpu_index,
     to_visible_device_index,
 )
+from transcria.gpu.llm_backend import create_llm_backend
 from transcria.gpu.opencode_setup import is_remote_arbitrage, resolve_arbitrage_endpoint
+from transcria.queue.allocator import GPUAllocator
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +97,6 @@ class VRAMManager:
 
     def _arbitrage_backend(self):
         if self._backend is None:
-            from transcria.gpu.llm_backend import create_llm_backend
             self._backend = create_llm_backend(self.config)
         return self._backend
 
@@ -136,8 +138,6 @@ class VRAMManager:
         indices = list((self.config.get("gpu", {}) or {}).get("llm_gpu_indices") or [0])
         per_gpu = [vram_mb // len(indices)] * len(indices)
         try:
-            from transcria.config.gpu_calibration import apply_gpu_calibration
-
             apply_gpu_calibration(config_path, vram_mb=vram_mb, gpu_indices=indices, vram_mb_per_gpu=per_gpu)
         except Exception:
             logger.debug("Persistance gpu.llm_vram_mb ignorée", exc_info=True)
@@ -526,8 +526,6 @@ class VRAMManager:
             )
             self._arbitrage_llm_pid = proc.pid
             try:
-                from transcria.queue.allocator import GPUAllocator
-
                 GPUAllocator.get_instance(self.config).register_pid(
                     proc.pid, "arbitrage_llm"
                 )
@@ -700,8 +698,6 @@ class VRAMManager:
         port_ok = self._kill_port(self.arbitrage_llm_port)
         if self._arbitrage_llm_pid is not None:
             try:
-                from transcria.queue.allocator import GPUAllocator
-
                 GPUAllocator.get_instance(self.config).unregister_pid(
                     self._arbitrage_llm_pid
                 )

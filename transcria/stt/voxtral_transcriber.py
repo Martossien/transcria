@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from transcria.config.loader import _deep_merge, get_default_config
+from transcria.gpu.model_load_lock import model_load_lock
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
@@ -140,7 +142,6 @@ class VoxtralTranscriber(BaseTranscriber):
             local_only = self._is_local_model_path(self.model_path)
             # Même verrou que Granite/pyannote : device_map= passe par
             # accelerate.init_empty_weights (monkeypatch meta global non thread-safe).
-            from transcria.gpu.model_load_lock import model_load_lock
 
             with model_load_lock():
                 self._processor = AutoProcessor.from_pretrained(
@@ -298,8 +299,6 @@ class VoxtralTranscriber(BaseTranscriber):
         return max(1, min(self.max_new_tokens, scaled))
 
     def _apply_loop_collapse(self, text: str) -> tuple[str, list[dict]]:
-        from transcria.stt.anti_hallucination import collapse_repetition_loops
-
         return collapse_repetition_loops(
             text,
             min_repeats=self.repetition_loop_min_repeats,

@@ -3,6 +3,7 @@ import time as _time
 from pathlib import Path
 
 from transcria.config.loader import _deep_merge, get_default_config
+from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
 from transcria.stt.registry import ModelCatalogEntry, SttBackendDescriptor
 
@@ -227,8 +228,6 @@ class WhisperTranscriber(BaseTranscriber):
             text = seg.text.strip()
             loops: list = []
             if self.collapse_repetition_loops and text:
-                from transcria.stt.anti_hallucination import collapse_repetition_loops
-
                 text, loops = collapse_repetition_loops(
                     text,
                     min_repeats=self.repetition_loop_min_repeats,
