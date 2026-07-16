@@ -121,3 +121,38 @@ class TestServerConfigHelper:
         assert audiocpp_phase._emit_config_main() == 0
         out = json.loads(capsys.readouterr().out)
         assert out["models"][0]["id"] == "abc" and out["port"] == 8021
+
+
+def test_issue_7_runtimes_dir_relatif_donne_des_chemins_absolus(tmp_path, monkeypatch):
+    """Régression issue #7 : avec le défaut RELATIF `./runtimes`, l'appel
+    model_manager (cwd=src) résolvait `runtimes/audiocpp/venv/bin/python`
+    DEPUIS src → FileNotFoundError après un build CUDA complet, COMMIT jamais
+    écrit, idempotence caduque. Le plan doit produire des chemins ABSOLUS."""
+    monkeypatch.chdir(tmp_path)
+    home = tmp_path / "runtimes" / "audiocpp"
+    calls = []
+
+    def runner(cmd, cwd=None):
+        calls.append((cmd, cwd))
+        if cmd[0] == "cmake" and "--build" in cmd:
+            built = home / "src" / "build" / "bin" / "audiocpp_server"
+            built.parent.mkdir(parents=True, exist_ok=True)
+            built.write_bytes(b"bin")
+            built.chmod(0o755)
+        if cmd[:2] == ["python3", "-m"]:
+            (home / "venv" / "bin").mkdir(parents=True, exist_ok=True)
+            (home / "venv" / "bin" / "python").write_bytes(b"")
+
+    apply_audiocpp(AudiocppPlan(runtimes_dir=Path("./runtimes"), with_model=True),
+                   console=FakeConsole(), runner=runner)
+
+    manager_calls = [(c, cwd) for c, cwd in calls if any("model_manager.py" in str(x) for x in c)]
+    assert len(manager_calls) == 1
+    cmd, cwd = manager_calls[0]
+    python_path = Path(cmd[0])
+    # Le python du venv outils est ABSOLU : il survit au cwd=src du gestionnaire.
+    assert python_path.is_absolute(), f"chemin venv relatif (issue #7) : {cmd[0]}"
+    assert python_path == home / "venv" / "bin" / "python"
+    assert Path(cwd).is_absolute()
+    # Et le marqueur d'idempotence a bien été écrit.
+    assert (home / "COMMIT").is_file()

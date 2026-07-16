@@ -100,7 +100,10 @@ def audiocpp_server_config(
 
 
 def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
-    home = audiocpp_home(plan.runtimes_dir.expanduser())
+    # ABSOLU obligatoire (issue #7) : le défaut `./runtimes` donnait des chemins
+    # relatifs, et l'appel model_manager (cwd=src) résolvait alors le python du
+    # venv outils DEPUIS src → FileNotFoundError après un build CUDA complet.
+    home = audiocpp_home(plan.runtimes_dir.expanduser().resolve())
     if not plan.force and audiocpp_is_complete(home, plan.commit):
         console.ok(f"audio.cpp déjà provisionné : {home} (commit {plan.commit[:12]} — --force pour reconstruire)")
         return

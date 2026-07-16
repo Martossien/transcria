@@ -61,7 +61,9 @@ def parakeetcpp_is_complete(home: Path, commit: str) -> bool:
 
 
 def apply_parakeetcpp(plan: ParakeetcppPlan, *, console, runner: Runner) -> None:
-    home = parakeetcpp_home(plan.runtimes_dir.expanduser())
+    # ABSOLU par symétrie avec audiocpp (issue #7) : immunise tout futur appel
+    # à cwd contre la résolution relative des chemins du runtime.
+    home = parakeetcpp_home(plan.runtimes_dir.expanduser().resolve())
     if not plan.force and parakeetcpp_is_complete(home, plan.commit):
         console.ok(f"parakeet.cpp déjà provisionné : {home} (commit {plan.commit[:12]} — --force pour reconstruire)")
         return
