@@ -43,8 +43,7 @@ ARG VLLM_VERSION=0.23.0
 FROM ${CUDA_IMAGE} AS stt-runtimes-builder
 ARG AUDIOCPP_REF=3982dfb29ff0b37a26b799045f85732b20a0bdef
 ARG PARAKEETCPP_REF=e8acc6172a94e20a952cf1843decace5d771a94b
-ENV DEBIAN_FRONTEND=noninteractive \
-    TRANSCRIA_RUNTIMES_DIR=/opt/runtimes
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential ca-certificates \
     && rm -rf /var/lib/apt/lists/*
@@ -123,7 +122,8 @@ RUN python3.12 -m venv /opt/vllm-venv \
 ENV PATH="/app/venv/bin:$PATH" \
     VLLM_BIN=/opt/vllm-venv/bin/vllm \
     STT_BIN=/opt/vllm-venv/bin/vllm \
-    TRANSCRIA_ROLE=resource-node
+    TRANSCRIA_ROLE=resource-node \
+    TRANSCRIA_RUNTIMES_DIR=/opt/runtimes
 
 # Flask :8002 (diar/voice/superviseur). Le STT vLLM (:8003) est lancé À LA DEMANDE par
 # /engines/ensure (resource_node.engines). L'arbitrage vLLM (:8080) est un service séparé.
