@@ -8,6 +8,9 @@
 # Options :
 #   --profile NAME     Profil d'installation: all-in-one, web, scheduler, resource-node, migrate
 #   --plan             Afficher le plan d'installation puis sortir sans effet de bord
+#   --dry-run          Alias de --plan
+#   --locale LANG      Langue (fr|en) : interface, livrables ET sortie de l'installateur
+#   --help, -h         Afficher cette aide
 #   --no-service       Ne pas installer le service systemd
 #   --no-torch         Sauter l'installation de PyTorch (déjà installé)
 #   --skip-deps        Ne pas créer le venv ni installer les dépendances pip

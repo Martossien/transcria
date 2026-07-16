@@ -122,6 +122,7 @@ cd transcria
 ./install.sh --skip-deps           # Venv/dépendances déjà fournis (couche build Docker, venv existant) : ne touche pas à pip (implique --no-torch)
 ./install.sh --cuda cu124          # Forcer la version CUDA (cu121 / cu124 / cu126)
 ./install.sh --user monuser        # Utilisateur pour le service systemd (défaut: $USER)
+./install.sh --install-dir /opt/x  # Répertoire d'installation (défaut : répertoire courant)
 ./install.sh --hf-token hf_xxx     # Token HuggingFace (pour pyannote, sauvegardé dans .env)
 ./install.sh --force-config        # Régénérer config.yaml même s'il existe déjà
 ./install.sh --non-interactive     # Mode CI/automatisation (pas de prompts ; installe opencode automatiquement si le profil requiert le LLM)
@@ -154,6 +155,7 @@ proposées (`["fr", "en"]`). En Docker/CI non interactif, passer `TRANSCRIA_DEFA
 ./install.sh --pg-host 127.0.0.1 --pg-port 5432 --pg-db transcria --pg-user transcria --pg-password "mon_mot_de_passe" --pg-migrate
 # PostgreSQL distant : créer d'abord rôle/base côté serveur, puis fournir --pg-host/--pg-user/--pg-password.
 ./install.sh --postgres --pg-existing --pg-host db --pg-user transcria --pg-password "..."  # Base déjà provisionnée (Docker, base distante, migrate) : écrit DSN + alembic, sans bootstrap privilégié
+./install.sh --postgres --pg-defer  # Écrit le DSN SANS se connecter ni migrer (build d'image hermétique ; le schéma est appliqué au runtime par le job migrate)
 
 # Nœud de ressources GPU
 ./install.sh --inference-service    # Installer le nœud de ressources GPU seul (ne PAS installer le service web)

@@ -223,6 +223,7 @@ Responsabilités ajoutées :
 ```
 inference_service (étendu)
 ├── /health         ← feu vert/rouge par moteur, VRAM         (libre)
+├── /ready          ← prêt à servir (200 même modèles déchargés — CAS B = chargeable) (libre)
 ├── /capabilities   ← inventaire ressources & moteurs          (libre)
 ├── /infer/diarize        (existant)
 ├── /infer/voice-embed    (existant)

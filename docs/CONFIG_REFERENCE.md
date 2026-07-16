@@ -102,6 +102,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | `enabled` | bool | `true` | Toujours normalisé à `true` : le mode sans authentification n'est pas supporté |
 | `first_admin_username` | string | `"admin"` | Login du premier admin créé si la base est vide |
 | `first_admin_password` | string | `"CHANGE-ME"` | Mot de passe du premier admin |
+| `session_lifetime_hours` | int | `12` | Durée de vie de la session Flask (cookie « remember ») — appliquée par `app_services.configure_security()` |
 
 **Redémarrage requis :** non pour le premier admin (lu une seule fois si la base est vide). `enabled=false` est ignoré et réécrit en `true` par `load_config()` / `save_config()`.
 
@@ -130,6 +131,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
 | `cohere_model_path` | string | `"./models/cohere-asr/cohere-transcribe-03-2026"` | Chemin vers le modèle Cohere ASR local |
+| `cohere_model_revision` | string | `""` | Révision HF épinglée du modèle Cohere (vide = tête du repo) — transmise à `from_pretrained(model_revision=…)` (partagée par les backends `cohere` et `cohere_tf5`) |
 | `pyannote_model` | string | `"pyannote/speaker-diarization-community-1"` | Nom du modèle pyannote HuggingFace |
 
 **Redémarrage requis :** non — les chemins sont lus à chaque transcription/diarization.
@@ -1129,6 +1131,10 @@ partagent (groupe/global). Les 18 types intégrés vivent dans
 | `audit_retention_days` | int | `1095` | Durée de rétention des logs d'audit (3 ans). Distinct de `retention_days` qui concerne les jobs. |
 | `lexicon_export_admin_only` | bool | `false` | Réserve l'export CSV des lexiques centralisés aux admins globaux. Les admins de groupe peuvent toujours gérer les entrées de leur périmètre. |
 | `audit_retention_by_family` | dict | toutes familles à `1095` | Surcharge optionnelle de rétention par famille d'audit : `auth`, `job`, `lexicon`, `voice`, `config`, `other`. |
+| `allowed_document_extensions` | list[str] | `[".pdf", ".docx", ".pptx", ".txt"]` | Extensions autorisées pour les **documents présentés** joints à l'invitation (formats XML modernes uniquement — `.doc`/`.ppt` binaires refusés) |
+| `max_document_size_mb` | int | `25` | Taille maximale d'un document présenté (le binaire n'est jamais conservé — seul le texte extrait l'est) |
+| `max_document_chars` | int | `12000` | Plafond de texte extrait conservé par document (troncature au-delà) |
+| `max_documents_per_job` | int | `15` | Nombre maximal de documents présentés par job (borne schéma : 1..100) |
 
 **Redémarrage requis :** oui pour `max_upload_size_mb` (chargé dans `create_app()`), non pour `retention_days`, `allow_job_delete`, `allowed_upload_extensions`, `audit_retention_days`, `lexicon_export_admin_only` et `audit_retention_by_family` qui sont vérifiés à l'exécution.
 
@@ -1179,6 +1185,8 @@ Référentiel local de voix connues avec consentement explicite. Désactivé par
 | `high_confidence_threshold` | float | `0.86` | Score à partir duquel la suggestion est marquée haute confiance |
 | `min_top2_margin` | float | `0.05` | Écart minimal entre le premier et le deuxième candidat |
 | `max_candidates_per_speaker` | int | `2` | Nombre maximal de candidats conservés pour audit et diagnostic |
+| `audit.log_match_suggestions` | bool | `true` | Journalise (audit `voice`) chaque suggestion de correspondance voix proposée à validation |
+| `audit.log_match_scores` | bool | `true` | Journalise les scores de similarité des correspondances (diagnostic ; désactivable par posture de minimisation) |
 | `stale_profiles_are_matchable` | bool | `false` | Autorise exceptionnellement les profils périmés ; désactivé par défaut |
 
 #### `voice_enrollment.consent`
