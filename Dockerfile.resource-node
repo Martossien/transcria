@@ -44,7 +44,9 @@ FROM ${CUDA_IMAGE} AS stt-runtimes-builder
 ARG AUDIOCPP_REF=3982dfb29ff0b37a26b799045f85732b20a0bdef
 ARG PARAKEETCPP_REF=e8acc6172a94e20a952cf1843decace5d771a94b
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
@@ -88,7 +90,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Prérequis système d'install.sh (cf. transcria/install_prerequisites.py) : python3.12+venv,
 # ffmpeg (+ libav* pour torchcodec), iproute2 (ss : vérifs de port des lanceurs), build tools,
 # git/curl/sudo (détection llama, installateur opencode — non utilisé ici mais inoffensif).
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         python3.12 python3.12-venv python3.12-dev \
         build-essential libpq-dev \
         ffmpeg iproute2 procps lsof git curl sudo ca-certificates \

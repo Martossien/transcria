@@ -38,9 +38,11 @@ if [[ -z "$OWNER" ]]; then
     OWNER=$(git remote get-url origin 2>/dev/null | sed -E 's#.*[:/]([^/]+)/[^/]+(\.git)?$#\1#' || true)
 fi
 [[ -n "$OWNER" ]] || { echo "ERREUR : owner GHCR indéterminé (utilisez --owner)." >&2; exit 1; }
+# Docker exige des noms de dépôt en minuscules (GHCR accepte les deux à l'affichage).
+OWNER_LC=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
 
 VERSION=$(python3 -c "import re; print(re.search(r'__version__ = \"([^\"]+)\"', open('transcria/__init__.py').read()).group(1))")
-IMAGE="ghcr.io/${OWNER}/transcria-allinone"
+IMAGE="ghcr.io/${OWNER_LC}/transcria-allinone"
 TAG_LATEST="${IMAGE}:bundled"
 TAG_VERSION="${IMAGE}:v${VERSION}-bundled"
 

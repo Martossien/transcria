@@ -34,7 +34,9 @@ ARG LLAMA_CPP_REF=b9816
 FROM ${CUDA_IMAGE} AS llama-builder
 ARG LLAMA_CPP_REF
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential libgomp1 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "${LLAMA_CPP_REF}" https://github.com/ggml-org/llama.cpp /tmp/llama.cpp \
@@ -85,7 +87,9 @@ FROM ${CUDA_IMAGE} AS stt-runtimes-builder
 ARG AUDIOCPP_REF=3982dfb29ff0b37a26b799045f85732b20a0bdef
 ARG PARAKEETCPP_REF=e8acc6172a94e20a952cf1843decace5d771a94b
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         git cmake build-essential ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
@@ -125,7 +129,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     TRANSCRIA_CONFIG=/app/config.yaml \
     CUDA_HOME=/usr/local/cuda
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         python3.12 python3.12-venv python3.12-dev \
         build-essential libpq-dev postgresql-client \
         ffmpeg iproute2 procps lsof git curl sudo ca-certificates \
