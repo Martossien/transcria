@@ -1,6 +1,6 @@
 {
  "cycles": 0,
- "deep_config_chains": 195,
+ "deep_config_chains": 193,
  "deferred_internal_imports": 41,
  "fanout": {
   "inference_service": 1,
@@ -63,7 +63,7 @@
   "transcria.i18n.locale": 2,
   "transcria.inference": 1,
   "transcria.inference.asr_client": 1,
-  "transcria.inference.resource_gate": 3,
+  "transcria.inference.resource_gate": 4,
   "transcria.inference.resource_status": 1,
   "transcria.installer.arbitrage": 8,
   "transcria.installer.cli": 24,

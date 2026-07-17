@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-17 17:54+0000\n"
+"POT-Creation-Date: 2026-07-17 19:54+0000\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -606,7 +606,9 @@ msgstr "starting imminently"
 msgid ""
 "⚠ L'attente GPU dépasse la limite configurée — vous pouvez patienter ou "
 "soumettre en profil express (moins de ressources)"
-msgstr "⚠ GPU wait has exceeded the configured limit — you can keep waiting or submit with an express profile (fewer resources)"
+msgstr ""
+"⚠ GPU wait has exceeded the configured limit — you can keep waiting or "
+"submit with an express profile (fewer resources)"
 
 #: transcria/i18n/js_catalog.py:109
 msgid "nouveau"
@@ -1716,91 +1718,103 @@ msgid "Moteur de transcription par défaut (cohere recommandé)."
 msgstr "Default transcription engine (cohere recommended)."
 
 #: transcria/web/config_form.py:36
+msgid "Backend STT du résumé"
+msgstr "Summary STT backend"
+
+#: transcria/web/config_form.py:40
+msgid ""
+"Moteur dédié à la transcription rapide de la phase résumé — vide = même "
+"moteur que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron "
+"exigent le runtime servi audio.cpp/parakeet.cpp (cf. "
+"docs/EXTERNAL_STT_RUNTIMES.md)."
+msgstr "Engine dedicated to the summary phase quick transcription — empty = same engine as the pipeline. kroko = pure CPU (zero VRAM); qwen3asr/nemotron require the audio.cpp/parakeet.cpp served runtime (see docs/EXTERNAL_STT_RUNTIMES.md)."
+
+#: transcria/web/config_form.py:43
 msgid "Backend diarisation"
 msgstr "Diarization backend"
 
-#: transcria/web/config_form.py:38
+#: transcria/web/config_form.py:45
 msgid "Détection des locuteurs (pyannote recommandé)."
 msgstr "Speaker detection (pyannote recommended)."
 
-#: transcria/web/config_form.py:42
+#: transcria/web/config_form.py:49
 msgid "LLM d'arbitrage"
 msgstr "Arbitration LLM"
 
-#: transcria/web/config_form.py:43
+#: transcria/web/config_form.py:50
 msgid "Résumé et correction par la LLM locale OpenAI-compatible."
 msgstr "Summary and correction by the local OpenAI-compatible LLM."
 
-#: transcria/web/config_form.py:45
+#: transcria/web/config_form.py:52
 msgid "Activer la correction LLM"
 msgstr "Enable LLM correction"
 
-#: transcria/web/config_form.py:46
+#: transcria/web/config_form.py:53
 msgid "Désactiver pour produire un SRT brut sans correction."
 msgstr "Disable to produce a raw SRT without correction."
 
-#: transcria/web/config_form.py:47
+#: transcria/web/config_form.py:54
 msgid "Modèle de résumé"
 msgstr "Summary model"
 
-#: transcria/web/config_form.py:48
+#: transcria/web/config_form.py:55
 msgid "Identifiant opencode, ex. local/arbitrage."
 msgstr "opencode identifier, e.g. local/arbitrage."
 
-#: transcria/web/config_form.py:49
+#: transcria/web/config_form.py:56
 msgid "Modèle de correction"
 msgstr "Correction model"
 
-#: transcria/web/config_form.py:50
+#: transcria/web/config_form.py:57
 msgid "Identifiant opencode du modèle de correction du SRT."
 msgstr "opencode identifier of the SRT correction model."
 
-#: transcria/web/config_form.py:51
+#: transcria/web/config_form.py:58
 msgid "Port du serveur LLM"
 msgstr "LLM server port"
 
-#: transcria/web/config_form.py:52
+#: transcria/web/config_form.py:59
 msgid "Port du backend OpenAI-compatible (llama-server par défaut : 8080)."
 msgstr "Port of the OpenAI-compatible backend (llama-server default: 8080)."
 
-#: transcria/web/config_form.py:53
+#: transcria/web/config_form.py:60
 msgid "Alias modèle rapporté par le serveur"
 msgstr "Model alias reported by the server"
 
-#: transcria/web/config_form.py:54
+#: transcria/web/config_form.py:61
 msgid "Doit correspondre à l'alias servi (cf. scripts/check_arbitrage_llm.sh)."
 msgstr "Must match the served alias (see scripts/check_arbitrage_llm.sh)."
 
-#: transcria/web/config_form.py:58
+#: transcria/web/config_form.py:65
 msgid "File & exécution"
 msgstr "Queue & execution"
 
-#: transcria/web/config_form.py:59
+#: transcria/web/config_form.py:66
 msgid "File GPU persistante et parallélisme des jobs."
 msgstr "Persistent GPU queue and job parallelism."
 
-#: transcria/web/config_form.py:61
+#: transcria/web/config_form.py:68
 msgid "File persistante activée"
 msgstr "Persistent queue enabled"
 
-#: transcria/web/config_form.py:62
+#: transcria/web/config_form.py:69
 msgid "Mise en file des traitements (recommandé)."
 msgstr "Queue processing jobs (recommended)."
 
-#: transcria/web/config_form.py:63 transcria/web/templates/schedule.html:160
+#: transcria/web/config_form.py:70 transcria/web/templates/schedule.html:160
 msgid "Jobs simultanés max"
 msgstr "Max concurrent jobs"
 
-#: transcria/web/config_form.py:64
+#: transcria/web/config_form.py:71
 msgid "Concurrence par défaut (1 = comportement historique)."
 msgstr "Default concurrency (1 = legacy behavior)."
 
-#: transcria/web/config_form.py:65
+#: transcria/web/config_form.py:72
 #: transcria/web/templates/dashboard_status.html:84
 msgid "Stockage des fichiers de jobs"
 msgstr "Job file storage"
 
-#: transcria/web/config_form.py:67
+#: transcria/web/config_form.py:74
 msgid ""
 "fs (défaut) : disque local — suffisant en tout-en-un ou avec un jobs_dir "
 "partagé (NFS). pg : fichiers répliqués via PostgreSQL — REQUIS quand la "
@@ -1812,19 +1826,19 @@ msgstr ""
 "front-end (role=web) and the worker (role=scheduler) run on two machines "
 "without a shared filesystem (see docs/STOCKAGE_PARTAGE_JOBS.md)."
 
-#: transcria/web/config_form.py:74
+#: transcria/web/config_form.py:81
 msgid "Ressources GPU"
 msgstr "GPU resources"
 
-#: transcria/web/config_form.py:75
+#: transcria/web/config_form.py:82
 msgid "Récupération de la VRAM quand un job est bloqué faute de mémoire GPU."
 msgstr "Reclaiming VRAM when a job is stuck for lack of GPU memory."
 
-#: transcria/web/config_form.py:77
+#: transcria/web/config_form.py:84
 msgid "Politique de préemption VRAM"
 msgstr "VRAM preemption policy"
 
-#: transcria/web/config_form.py:79
+#: transcria/web/config_form.py:86
 msgid ""
 "own-only (recommandé) : n'arrête que NOS process gérés inactifs (LLM "
 "d'arbitrage), jamais un process tiers. aggressive : préempte aussi les "
@@ -1836,138 +1850,138 @@ msgstr ""
 " third-party inference servers, only within the “force_gpu” calendar "
 "window — reserve for a GPU dedicated to TranscrIA."
 
-#: transcria/web/config_form.py:83
+#: transcria/web/config_form.py:90
 msgid "VRAM libre minimale (Mo)"
 msgstr "Minimum free VRAM (MB)"
 
-#: transcria/web/config_form.py:84
+#: transcria/web/config_form.py:91
 msgid "Marge libre exigée en plus du besoin d'une phase avant de l'allouer."
 msgstr "Free margin required on top of a phase's need before allocating it."
 
-#: transcria/web/config_form.py:88
+#: transcria/web/config_form.py:95
 msgid "Sécurité & upload"
 msgstr "Security & upload"
 
-#: transcria/web/config_form.py:89
+#: transcria/web/config_form.py:96
 msgid "Limites d'upload et suppression des jobs."
 msgstr "Upload limits and job deletion."
 
-#: transcria/web/config_form.py:91
+#: transcria/web/config_form.py:98
 msgid "Taille max d'upload (Mo)"
 msgstr "Max upload size (MB)"
 
-#: transcria/web/config_form.py:92
+#: transcria/web/config_form.py:99
 msgid "Taille maximale d'un fichier déposé."
 msgstr "Maximum size of an uploaded file."
 
-#: transcria/web/config_form.py:93
+#: transcria/web/config_form.py:100
 msgid "Extensions autorisées"
 msgstr "Allowed extensions"
 
-#: transcria/web/config_form.py:94
+#: transcria/web/config_form.py:101
 msgid "Liste séparée par des virgules, ex. mp3, wav, mp4, m4a."
 msgstr "Comma-separated list, e.g. mp3, wav, mp4, m4a."
 
-#: transcria/web/config_form.py:95
+#: transcria/web/config_form.py:102
 msgid "Autoriser la suppression de jobs"
 msgstr "Allow job deletion"
 
-#: transcria/web/config_form.py:96
+#: transcria/web/config_form.py:103
 msgid "Permet aux admins de supprimer un job et ses fichiers."
 msgstr "Lets admins delete a job and its files."
 
-#: transcria/web/config_form.py:100
+#: transcria/web/config_form.py:107
 msgid "Notifications email"
 msgstr "Email notifications"
 
-#: transcria/web/config_form.py:101
+#: transcria/web/config_form.py:108
 msgid ""
 "Email de fin de traitement (SMTP). Requiert une adresse dans le profil "
 "utilisateur."
 msgstr "End-of-processing email (SMTP). Requires an address in the user profile."
 
-#: transcria/web/config_form.py:103
+#: transcria/web/config_form.py:110
 msgid "Activer les emails"
 msgstr "Enable emails"
 
-#: transcria/web/config_form.py:104
+#: transcria/web/config_form.py:111
 msgid "Envoie un email au propriétaire à la fin (succès/échec)."
 msgstr "Sends an email to the owner at the end (success/failure)."
 
-#: transcria/web/config_form.py:105
+#: transcria/web/config_form.py:112
 msgid "Serveur SMTP"
 msgstr "SMTP server"
 
-#: transcria/web/config_form.py:106
+#: transcria/web/config_form.py:113
 msgid "Port SMTP"
 msgstr "SMTP port"
 
-#: transcria/web/config_form.py:107
+#: transcria/web/config_form.py:114
 msgid "Ex. 587 (STARTTLS) ou 465 (SSL)."
 msgstr "E.g. 587 (STARTTLS) or 465 (SSL)."
 
-#: transcria/web/config_form.py:108
+#: transcria/web/config_form.py:115
 msgid "STARTTLS"
 msgstr "STARTTLS"
 
-#: transcria/web/config_form.py:109
+#: transcria/web/config_form.py:116
 msgid "SSL/SMTPS"
 msgstr "SSL/SMTPS"
 
-#: transcria/web/config_form.py:110
+#: transcria/web/config_form.py:117
 msgid "Adresse expéditeur"
 msgstr "Sender address"
 
-#: transcria/web/config_form.py:111
+#: transcria/web/config_form.py:118
 msgid "URL de base du portail"
 msgstr "Portal base URL"
 
-#: transcria/web/config_form.py:112
+#: transcria/web/config_form.py:119
 msgid "Utilisée dans les liens des emails, ex. http://localhost:7870."
 msgstr "Used in email links, e.g. http://localhost:7870."
 
-#: transcria/web/config_form.py:116 transcria/web/templates/base.html:58
+#: transcria/web/config_form.py:123 transcria/web/templates/base.html:58
 #: transcria/web/templates/voices.html:2 transcria/web/templates/voices.html:6
 msgid "Voix enregistrées"
 msgstr "Enrolled voices"
 
-#: transcria/web/config_form.py:117
+#: transcria/web/config_form.py:124
 msgid "Référentiel de voix connues (consentement requis)."
 msgstr "Repository of known voices (consent required)."
 
-#: transcria/web/config_form.py:119
+#: transcria/web/config_form.py:126
 msgid "Activer les voix enregistrées"
 msgstr "Enable enrolled voices"
 
-#: transcria/web/config_form.py:120
+#: transcria/web/config_form.py:127
 msgid "Répertoire de stockage"
 msgstr "Storage directory"
 
-#: transcria/web/config_form.py:121
+#: transcria/web/config_form.py:128
 msgid "Stockage local protégé des voix et consentements."
 msgstr "Protected local storage of voices and consents."
 
-#: transcria/web/config_form.py:125
+#: transcria/web/config_form.py:132
 msgid "Serveur & compte admin"
 msgstr "Server & admin account"
 
-#: transcria/web/config_form.py:126
+#: transcria/web/config_form.py:133
 msgid "Écoute du portail et mot de passe du premier administrateur."
 msgstr "Portal binding and password of the first administrator."
 
-#: transcria/web/config_form.py:128
+#: transcria/web/config_form.py:135
 msgid "Hôte d'écoute"
 msgstr "Listen host"
 
-#: transcria/web/config_form.py:129
+#: transcria/web/config_form.py:136
 msgid "Port d'écoute"
 msgstr "Listen port"
 
-#: transcria/web/config_form.py:130
+#: transcria/web/config_form.py:137
 msgid "Mot de passe admin initial"
 msgstr "Initial admin password"
 
-#: transcria/web/config_form.py:132
+#: transcria/web/config_form.py:139
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Change the default value before any real use."
 

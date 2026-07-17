@@ -46,10 +46,14 @@ scripts/docker_quickstart.sh --down
 >
 > **Runtimes STT servis dans les images GPU (0.3.6).** Les images `:latest`/`:bundled` et
 > `resource-node` embarquent les binaires ÉPINGLÉS d'audio.cpp (`qwen3asr`) et parakeet.cpp
-> (`nemotron`) sous `/opt/runtimes` (`TRANSCRIA_RUNTIMES_DIR`). Les modèles restent par
-> **volume** : `hf download Qwen/Qwen3-ASR-1.7B-hf` (snapshot pur) et le GGUF Nemotron via
-> la page « Modèles » — pointer `STT_MODEL` du lanceur sur le chemin monté. Configuration :
-> `docs/EXTERNAL_STT_RUNTIMES.md`.
+> (`nemotron`) sous `/opt/runtimes` (`TRANSCRIA_RUNTIMES_DIR`). Dans `:latest`/`resource-node`,
+> les modèles restent par **volume** : `hf download Qwen/Qwen3-ASR-1.7B-hf` (snapshot pur) et
+> le GGUF Nemotron via la page « Modèles » — pointer `STT_MODEL` du lanceur sur le chemin
+> monté. **Depuis 0.3.8, `:bundled` embarque AUSSI les poids Qwen3-ASR-1.7B** au chemin par
+> défaut du lanceur (`/opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf`) :
+> `scripts/launch_stt_qwen3asr.sh` fonctionne sans variable, et
+> `models.summary_stt_backend: qwen3asr` (phase résumé ×2,4, meilleure qualité au bench)
+> est « pull & run ». Configuration : `docs/EXTERNAL_STT_RUNTIMES.md`.
 >
 > **Monter en gamme de LLM depuis l'image `:bundled`.** L'image embarque le palier 12 Go
 > (Qwen3.5-9B), mais `MODELS_DIR` (volume `models`) et `/hf` sont des **volumes inscriptibles** :

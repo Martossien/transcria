@@ -33,6 +33,13 @@ CONFIG_FORM_SECTIONS: list[dict] = [
             {"path": "models.stt_backend", "label": _l("Backend STT"), "type": "select",
              "options": ["cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss", "remote"],
              "help": _l("Moteur de transcription par défaut (cohere recommandé).")},
+            {"path": "models.summary_stt_backend", "label": _l("Backend STT du résumé"), "type": "select",
+             "nullable": True,
+             "options": ["", "cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
+                         "qwen3asr", "nemotron"],
+             "help": _l("Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur "
+                        "que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron exigent le "
+                        "runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
             {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
              "options": ["pyannote", "sortformer", "remote"],
              "help": _l("Détection des locuteurs (pyannote recommandé).")},
@@ -185,7 +192,12 @@ def coerce_value(field: dict, raw):
             return None
     if ftype == "csv":
         return [item.strip() for item in (raw or "").split(",") if item.strip()]
-    return (raw or "").strip() if isinstance(raw, str) else raw
+    value = (raw or "").strip() if isinstance(raw, str) else raw
+    # Champ `nullable` (ex. select avec option vide « défaut ») : la valeur vide
+    # signifie EXPLICITEMENT null — elle sera écrite (pas ignorée) au save.
+    if field.get("nullable") and value == "":
+        return None
+    return value
 
 
 def build_partial_config(form, sections: list[dict]) -> dict:
@@ -203,7 +215,9 @@ def build_partial_config(form, sections: list[dict]) -> dict:
             if path not in form:
                 continue
             value = coerce_value(field, form.get(path))
-            if value is None:
+            # None = « ne pas toucher » (int vide) — SAUF champ nullable, où None
+            # est une valeur légitime à écrire (retour au défaut « comme le pipeline »).
+            if value is None and not field.get("nullable"):
                 continue
         set_dotted(partial, path, value)
     return partial

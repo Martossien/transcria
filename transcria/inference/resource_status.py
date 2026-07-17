@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from transcria.stt.transcriber_factory import _should_use_remote_stt
+from transcria.stt.transcriber_factory import _should_use_remote_stt, summary_backend
 
 _DEFAULT_MAX_UNAVAILABLE_S = 600
 
@@ -27,8 +27,10 @@ def remote_requirements(config: dict) -> set[str]:
     inf = config.get("inference", {}) or {}
     mode = inf.get("mode", "local")
 
+    # Le backend PRINCIPAL et celui de la PHASE RÉSUMÉ (lot 2) peuvent différer :
+    # l'un ou l'autre servi à distance suffit à exiger la capacité « stt ».
     backend = config.get("models", {}).get("stt_backend", "cohere")
-    if _should_use_remote_stt(config, backend):
+    if _should_use_remote_stt(config, backend) or _should_use_remote_stt(config, summary_backend(config)):
         reqs.add("stt")
     if config.get("models", {}).get("diarization_backend") == "remote":
         reqs.add("diarize")

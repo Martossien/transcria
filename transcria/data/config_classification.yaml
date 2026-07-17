@@ -9,6 +9,7 @@ exposed:
 - i18n.default_locale
 - models.diarization_backend
 - models.stt_backend
+- models.summary_stt_backend
 - notifications.email.base_url
 - notifications.email.enabled
 - notifications.email.from_address
@@ -176,7 +177,6 @@ deferred:
 - models.default_stt_model
 - models.fallback_stt_model
 - models.pyannote_model
-- models.summary_stt_backend
 - notifications.email.from_name
 - notifications.email.smtp_password
 - notifications.email.smtp_username

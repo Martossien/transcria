@@ -115,6 +115,14 @@ models:
   # Docker all-in-one bascule sur les défauts NON gated (stt_backend "whisper" +
   # diarization_backend "sortformer") quand HF_TOKEN est absent → test sans token (cf. docs/DOCKER.md).
   stt_backend: "cohere"
+  # Moteur DÉDIÉ à la transcription rapide de la PHASE RÉSUMÉ (wizard) — null =
+  # même moteur que le pipeline. Bench sur réunions réelles (docs/PISTES_AMELIORATION.md) :
+  #   "kroko"    → CPU pur, zéro VRAM, aucun prérequis (qualité ≈ cohere)
+  #   "qwen3asr" → meilleure qualité + ×2,4 (runtime audio.cpp requis,
+  #                cf. docs/EXTERNAL_STT_RUNTIMES.md : install --with-stt-runtimes,
+  #                lanceur scripts/launch_stt_qwen3asr.sh + bloc inference.stt.backends)
+  #   "nemotron" → ×13, qualité « aperçu » (runtime servi requis)
+  summary_stt_backend: null
   diarization_backend: "pyannote"   # "pyannote" (défaut, illimité, gated) ou "sortformer" (≤4 loc., non gated)
   default_stt_model: "cohere-transcribe-03-2026"
   fallback_stt_model: "large-v3"

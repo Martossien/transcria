@@ -26,6 +26,7 @@ from transcria.inference.client import (
     build_client_from_config,
 )
 from transcria.inference.resource_status import assess_admission, remote_requirements
+from transcria.stt.transcriber_factory import _should_use_remote_stt, summary_backend
 
 logger = logging.getLogger(__name__)
 
@@ -51,21 +52,22 @@ def _probe_reachable(client: InferenceClient) -> bool:
         return True   # le service répond (4xx) → joignable
 
 
-def _stt_backend_loopback_url(config: dict) -> "tuple[str, str] | None":
-    """(backend, host) si le backend STT configuré est routé vers une URL loopback.
-    Détection par urlparse, sans résolution DNS."""
+def _stt_loopback_backends(config: dict) -> "list[str]":
+    """Backends STT routés vers une URL loopback, parmi le PRINCIPAL et celui de la
+    PHASE RÉSUMÉ (lot 2 — ils peuvent différer : ex. cohere natif + qwen3asr servi
+    pour le résumé). Détection par urlparse, sans résolution DNS."""
     from urllib.parse import urlparse
 
-    backend = str(config.get("models", {}).get("stt_backend", "cohere"))
-    spec = (((config.get("inference", {}) or {}).get("stt", {}) or {})
-            .get("backends", {}) or {}).get(backend, {}) or {}
-    url = str(spec.get("url") or "")
-    if not url:
-        return None
-    host = urlparse(url).hostname or ""
-    if host in ("127.0.0.1", "localhost", "::1"):
-        return backend, host
-    return None
+    models = config.get("models", {})
+    candidates = [str(models.get("stt_backend", "cohere")), str(summary_backend(config))]
+    backends_cfg = (((config.get("inference", {}) or {}).get("stt", {}) or {})
+                    .get("backends", {}) or {})
+    loopback: list[str] = []
+    for backend in dict.fromkeys(candidates):  # dédupliqué, ordre stable
+        url = str((backends_cfg.get(backend, {}) or {}).get("url") or "")
+        if url and (urlparse(url).hostname or "") in ("127.0.0.1", "localhost", "::1"):
+            loopback.append(backend)
+    return loopback
 
 
 def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> "GateVerdict | None":
@@ -74,27 +76,31 @@ def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> "GateV
     Ne s'active QUE si l'URL du backend pointe loopback ET qu'un moteur homonyme est
     déclaré dans `resource_node.engines` — sinon None (comportement historique).
     busy/error → defer (transitoire, jamais fail dur) ; ready/launched → proceed."""
-    target = _stt_backend_loopback_url(config)
-    if target is None:
+    backends = _stt_loopback_backends(config)
+    if not backends:
         return None
-    backend, _host = target
 
-    spec = next((s for s in engine_specs_from_config(config) if s.name == backend), None)
-    if spec is None:
-        return None
+    specs = {s.name: s for s in engine_specs_from_config(config)}
     factory = supervisor_factory or build_stt_supervisor
-    try:
-        result = factory(config).ensure_ready(spec)
-    except Exception as exc:  # noqa: BLE001 — le gate ne doit jamais faire échouer un job
-        logger.warning("[gate] ensure local du moteur '%s' impossible (%s) — defer", backend, exc)
-        return GateVerdict("defer", f"moteur servi local '{backend}' : {exc}",
-                           retry_after_s=_DEFAULT_RETRY_AFTER_S)
-    if result.ok:
-        return GateVerdict("proceed", f"moteur servi local '{backend}' {result.status} "
-                                      f"(GPU {result.gpu_index})")
-    logger.warning("[gate] moteur servi local '%s' %s : %s", backend, result.status, result.reason)
-    return GateVerdict("defer", f"moteur servi local '{backend}' {result.status} : {result.reason}",
-                       retry_after_s=_DEFAULT_RETRY_AFTER_S)
+    statuses: list[str] = []
+    for backend in backends:
+        spec = specs.get(backend)
+        if spec is None:
+            continue  # loopback sans moteur déclaré : résilience au niveau requête
+        try:
+            result = factory(config).ensure_ready(spec)
+        except Exception as exc:  # noqa: BLE001 — le gate ne doit jamais faire échouer un job
+            logger.warning("[gate] ensure local du moteur '%s' impossible (%s) — defer", backend, exc)
+            return GateVerdict("defer", f"moteur servi local '{backend}' : {exc}",
+                               retry_after_s=_DEFAULT_RETRY_AFTER_S)
+        if not result.ok:
+            logger.warning("[gate] moteur servi local '%s' %s : %s", backend, result.status, result.reason)
+            return GateVerdict("defer", f"moteur servi local '{backend}' {result.status} : {result.reason}",
+                               retry_after_s=_DEFAULT_RETRY_AFTER_S)
+        statuses.append(f"'{backend}' {result.status} (GPU {result.gpu_index})")
+    if not statuses:
+        return None
+    return GateVerdict("proceed", "moteur(s) servi(s) local(aux) " + ", ".join(statuses))
 
 
 def prepare_remote_resources(
@@ -140,13 +146,19 @@ def prepare_remote_resources(
         logger.warning("Pré-vol ressources : mise en file — %s", admission.reason)
         return GateVerdict("defer", admission.reason, _DEFAULT_RETRY_AFTER_S, new_since)
 
-    # Admis : assurer le moteur STT à la demande (CAS B) si STT est distant.
+    # Admis : assurer le(s) moteur(s) STT à la demande (CAS B) si STT est distant —
+    # backend principal ET backend du résumé s'il diffère (lot 2).
     if "stt" in reqs:
-        backend = config.get("models", {}).get("stt_backend", "cohere")
+        models = config.get("models", {})
+        candidates = [str(models.get("stt_backend", "cohere")), str(summary_backend(config))]
+        backend = ""
         try:
-            res = client.ensure_engine(backend)
-            logger.info("Pré-vol ressources : moteur STT '%s' → %s (gpu=%s)",
-                        backend, res.get("status"), res.get("gpu_index"))
+            for backend in dict.fromkeys(candidates):
+                if not _should_use_remote_stt(config, backend):
+                    continue
+                res = client.ensure_engine(backend)
+                logger.info("Pré-vol ressources : moteur STT '%s' → %s (gpu=%s)",
+                            backend, res.get("status"), res.get("gpu_index"))
         except InferenceUnavailable as exc:
             # 503 busy (CAS C) ou injoignable juste après le probe → on diffère.
             logger.warning("Pré-vol ressources : moteur STT '%s' indisponible — file (%s)", backend, exc)

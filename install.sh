@@ -1477,6 +1477,7 @@ if [[ "$WITH_STT_RUNTIMES" = true ]]; then
     python_module transcria.installer.cli parakeetcpp --runtimes-dir "$INSTALL_DIR/runtimes" \
         || warn "Provisionnement parakeet.cpp échoué (relancer : venv/bin/python -m transcria.installer.cli parakeetcpp)"
     log "Runtimes servis : configurer ensuite les backends (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
+    log "Astuce : models.summary_stt_backend: qwen3asr accélère la phase résumé ×2,4 avec une meilleure qualité (bench docs/PISTES_AMELIORATION.md)."
 fi
 
 # ============================================================================

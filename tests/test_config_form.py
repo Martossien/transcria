@@ -131,3 +131,35 @@ def test_admin_config_page_renders_form_fields(admin_client):
     assert 'name="services.arbitrage_llm_port"' in body
     # le mot de passe admin est masqué (sentinelle), jamais en clair
     assert SECRET_SENTINEL in body
+
+
+class TestChampNullable:
+    """Champ `nullable` (lot 2, summary_stt_backend) : l'option vide du select
+    signifie EXPLICITEMENT null — écrite au save (retour au « comme le pipeline »),
+    contrairement aux int vides qui signifient « ne pas toucher »."""
+
+    def _field(self):
+        from transcria.web.config_form import CONFIG_FORM_SECTIONS, iter_fields
+        return next(f for f in iter_fields(CONFIG_FORM_SECTIONS)
+                    if f["path"] == "models.summary_stt_backend")
+
+    def test_le_champ_est_declare_nullable_avec_option_vide(self):
+        field = self._field()
+        assert field.get("nullable") is True
+        assert "" in field["options"]
+        assert "kroko" in field["options"] and "qwen3asr" in field["options"]
+
+    def test_valeur_vide_coerce_en_none(self):
+        from transcria.web.config_form import coerce_value
+        assert coerce_value(self._field(), "") is None
+        assert coerce_value(self._field(), "qwen3asr") == "qwen3asr"
+
+    def test_le_save_ecrit_null_pour_revenir_au_defaut(self):
+        from transcria.web.config_form import CONFIG_FORM_SECTIONS, build_partial_config
+        partial = build_partial_config({"models.summary_stt_backend": ""}, CONFIG_FORM_SECTIONS)
+        assert partial["models"]["summary_stt_backend"] is None
+
+    def test_les_int_vides_restent_ignores(self):
+        from transcria.web.config_form import CONFIG_FORM_SECTIONS, build_partial_config
+        partial = build_partial_config({"server.port": ""}, CONFIG_FORM_SECTIONS)
+        assert "server" not in partial or "port" not in partial.get("server", {})

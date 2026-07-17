@@ -89,6 +89,11 @@ in_image "ls /app/models/*/*.gguf >/dev/null && test -d /hf/hub && test -n \"\$(
     || { echo "ÉCHEC : poids /app/models ou cache HF /hf/hub manquants" >&2; exit 1; }
 echo "OK"
 
+echo -n "   poids Qwen3-ASR au chemin du lanceur audio.cpp… "
+in_image "test -n \"\$(ls -A /opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf)\"" \
+    || { echo "ÉCHEC : /opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf vide ou absent" >&2; exit 1; }
+echo "OK"
+
 echo -n "   /app/runtimes ABSENT (les runtimes vivent dans /opt)… "
 in_image "test ! -e /app/runtimes" || { echo "ÉCHEC : /app/runtimes présent" >&2; exit 1; }
 echo "OK"

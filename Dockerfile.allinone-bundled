@@ -75,6 +75,11 @@ snapshot_download("OpenMOSS-Team/MOSS-Transcribe-Diarize")
 # LLM d'arbitrage (Apache-2.0), palier 12 Go — chemin attendu par l'entrypoint/les profils.
 hf_hub_download("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q5_K_M.gguf",
                 local_dir="/baked/models/Qwen3.5-9B-Q5_K_M")
+# Qwen3-ASR-1.7B (Apache-2.0, ~3,9 Go) : poids du runtime servi audio.cpp, bakés au
+# chemin par DÉFAUT du lanceur (scripts/launch_stt_qwen3asr.sh) — « pull & run » pour
+# models.summary_stt_backend=qwen3asr (bench : meilleure qualité, ×2,4 vs cohere).
+snapshot_download("Qwen/Qwen3-ASR-1.7B-hf",
+                  local_dir="/baked/runtimes-models/Qwen3-ASR-1.7B-hf")
 print("modèles bakés OK")
 PY
 
@@ -155,6 +160,9 @@ COPY licenses/ /licenses/
 WORKDIR /app
 COPY . /app
 COPY --from=stt-runtimes-builder /opt/runtimes /opt/runtimes
+# Poids Qwen3-ASR au chemin par défaut du lanceur ($AUDIOCPP_HOME/src/models/…) :
+# lancer scripts/launch_stt_qwen3asr.sh dans le conteneur fonctionne sans variable.
+COPY --from=model-fetch /baked/runtimes-models/Qwen3-ASR-1.7B-hf /opt/runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf
 
 ARG PG_DSN_HOST=db
 ARG PG_DSN_PORT=5432

@@ -109,3 +109,49 @@ def test_avec_noeud_de_controle_l_ensure_local_est_ignore():
         supervisor_factory=lambda _cfg: sup,
     )
     assert sup.calls == []
+
+
+# ── Backend du RÉSUMÉ ≠ backend principal (lot 2, models.summary_stt_backend) ─
+
+def _config_summary_servi() -> dict:
+    """Pipeline cohere NATIF + résumé qwen3asr servi en loopback : le gate doit
+    assurer le moteur du RÉSUMÉ (sinon « connection refused » au premier wizard)."""
+    return {
+        "models": {"stt_backend": "cohere", "summary_stt_backend": "qwen3asr"},
+        "inference": {
+            "mode": "hybrid",
+            "stt": {"backends": {"qwen3asr": {"url": "http://127.0.0.1:8021/v1",
+                                              "model": "qwen3-asr-1.7b"}}},
+        },
+        "resource_node": {"engines": [{
+            "name": "qwen3asr", "script": "scripts/launch_stt_qwen3asr.sh",
+            "gpu": 0, "port": 8021,
+        }]},
+    }
+
+
+def test_backend_resume_servi_est_assure_meme_si_le_principal_est_natif():
+    supervisor = FakeSupervisor(status="launched")
+    verdict = _gate(_config_summary_servi(), supervisor)
+
+    assert verdict.action == "proceed"
+    assert [s.name for s in supervisor.calls] == ["qwen3asr"]
+
+
+def test_backend_resume_identique_au_principal_un_seul_ensure():
+    cfg = _config("http://127.0.0.1:8021/v1")
+    cfg["models"]["summary_stt_backend"] = "qwen3asr"  # identique → dédupliqué
+    supervisor = FakeSupervisor()
+
+    verdict = _gate(cfg, supervisor)
+
+    assert verdict.action == "proceed"
+    assert len(supervisor.calls) == 1
+
+
+def test_resume_servi_en_echec_devient_defer():
+    supervisor = FakeSupervisor(status="busy", reason="chargement en cours")
+    verdict = _gate(_config_summary_servi(), supervisor)
+
+    assert verdict.action == "defer"
+    assert "qwen3asr" in verdict.reason

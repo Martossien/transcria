@@ -37,6 +37,11 @@ un défaut inadapté produit des kernels qui plantent à l'inférence).
 ```yaml
 models:
   stt_backend: qwen3asr            # ou nemotron
+  # OU : garder le pipeline sur cohere et ne servir que la PHASE RÉSUMÉ (lot 2) —
+  # bench réunions réelles : qwen3asr = meilleure qualité + ×2,4 vs cohere.
+  # Le pré-vol assure AUSSI le moteur du résumé (all-in-one : auto-lancement ;
+  # split : /engines/ensure) — mêmes topologies que le backend principal.
+  # summary_stt_backend: qwen3asr
 
 inference:
   mode: hybrid                     # STT servi, reste du pipeline local
@@ -75,6 +80,11 @@ tête des scripts de lancement).
 - **Langue** : audio.cpp accepte `language` ; parakeet-server le tolère sans l'utiliser
   (Nemotron sort la langue source — surveiller la colonne EN % du protocole de bench sur
   audio très dégradé).
+- **Nemotron via audio.cpp** (alternative au parakeet-server, ~4× plus rapide au bench :
+  ~2 s / fenêtre de 5 min) : même lanceur avec la famille dédiée —
+  `STT_FAMILY=nemotron_asr STT_MODEL=…/nemotron-3.5-asr-streaming-0.6b STT_SERVED_NAME=nemotron
+  STT_PORT=8022 ./scripts/launch_stt_qwen3asr.sh` (modèle : `model_manager.py install nemotron_asr`
+  dans le venv du runtime). L'API expose alors `/v1/models` (pas besoin de `health_path`).
 - **Santé** : `health_path`/`health_mode` par moteur dans le manifeste ; le warning
   `AsrClient.health` (« modèle absent de /models ») est attendu et non bloquant pour
   parakeet-server.
