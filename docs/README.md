@@ -80,6 +80,7 @@ example results and the user journey.
 | Document | What it covers |
 |---|---|
 | [REFACTORING_QUALITE.md](REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
+| [PISTES_AMELIORATION.md](PISTES_AMELIORATION.md) | Post-0.3.7 improvement analysis: measured time breakdown, engine choices, CPU-fallback trade-offs, UX and operations gaps, suggested roadmap |
 
 ## History
 
