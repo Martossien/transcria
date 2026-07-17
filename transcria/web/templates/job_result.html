@@ -46,11 +46,18 @@
 {% endif %}
 
 <div class="d-flex flex-wrap gap-2 mb-4">
-  {# R1 (revue macro) : ne montrer un bouton que si le livrable existe réellement —
-     un profil SRT-only ne produit ni Word ni package (has_docx/has_package). #}
+  {# R1 (revue macro) : le bouton reflète le livrable réel — rapport complet si le
+     profil le promet, sinon DOCX VERBATIM à la demande (PISTES_AMELIORATION §5.1 :
+     un utilisateur SRT qui a édité sa transcription peut l'emporter en Word ; le
+     ZIP du profil reste minimal, aucune passe LLM déclenchée). #}
   {% if has_docx %}
   <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-primary">
     <i class="bi bi-file-earmark-word"></i> {{ _('Rapport Word (.docx)') }}
+  </a>
+  {% else %}
+  <a href="/api/jobs/{{ job.id }}/download/docx" class="btn btn-outline-primary"
+     title="{{ _('Document Word généré à la demande depuis la transcription (sans synthèse — ce profil ne fait pas tourner la LLM)') }}">
+    <i class="bi bi-file-earmark-word"></i> {{ _('Word verbatim (.docx)') }}
   </a>
   {% endif %}
   <a href="/api/jobs/{{ job.id }}/download/srt" class="btn btn-success">

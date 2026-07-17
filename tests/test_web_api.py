@@ -861,9 +861,10 @@ class TestJobResultRobustness:
         assert f"/jobs/{job_id}" in r.headers["Location"]
         assert "/result" not in r.headers["Location"]
 
-    def test_result_page_srt_only_hides_word_button(self, app, admin_client):
-        """R1 (revue macro) : un profil SRT-only (docx_level/zip_level == none) ne montre
-        NI « Rapport Word » NI « Package complet », mais toujours le SRT."""
+    def test_result_page_srt_only_shows_verbatim_word_button(self, app, admin_client):
+        """R1 + PISTES_AMELIORATION §5.1 : un profil SRT-only montre le SRT, le package
+        minimal, et — depuis 0.3.8 — le bouton « Word verbatim » (DOCX à la demande),
+        distinct du « Rapport Word » complet des profils Word."""
         with app.app_context():
             from transcria.auth.store import UserStore
             from transcria.jobs.models import JobState
@@ -878,7 +879,9 @@ class TestJobResultRobustness:
 
         html = admin_client.get(f"/jobs/{job_id}/result").data.decode("utf-8")
         assert "/download/srt" in html                     # SRT toujours proposé
-        assert "/download/docx" not in html                # docx_level=none → pas de Word
+        assert "/download/docx" in html                    # DOCX verbatim à la demande
+        assert "Word verbatim" in html                     # libellé distinct du rapport complet
+        assert "Rapport Word" not in html                  # pas le bouton « rapport complet »
         assert "/download/package" in html                 # zip_level=minimal → package OK
 
 

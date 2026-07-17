@@ -22,7 +22,6 @@ from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api
 from transcria.web.lexicon_views import resolve_context_audio_range
 from transcria.web.request_helpers import api_stable
-from transcria.workflow.profiles import profile_for_job
 
 logger = logging.getLogger(__name__)
 
@@ -120,19 +119,23 @@ def api_download_audio(job_id: str):
 @login_required
 @api_stable
 def api_download_docx(job_id: str):
-    """Télécharge le compte rendu Word (DOCX — contrat scriptable)."""
+    """Télécharge le compte rendu Word (DOCX — contrat scriptable).
+
+    Profils SRT (docx_level "none") : DOCX VERBATIM généré à la demande — le
+    générateur dégrade proprement les sections sans artefact (pas de synthèse
+    sans LLM, pas de tableau locuteurs sans diarisation). Le ZIP du profil
+    reste minimal : seule cette route produit le document, rien n'est promis
+    par le pipeline (PISTES_AMELIORATION §5.1).
+    """
     cfg = get_config()
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response
 
-
-    # Le DOCX n'est un livrable que si le profil le promet (docx_level != none). Un profil SRT
-    # (srt_express/srt_locuteurs) ne doit pas voir un DOCX généré à la demande → 404 propre.
-    # Job legacy / sans profil → comportement complet (DOCX disponible).
-    profile = profile_for_job(job)
-    if profile is not None and profile.docx_level == "none":
-        abort(404)
+    # Historique : les profils SRT recevaient un 404 ici. Depuis 0.3.8, la
+    # génération à la demande est PERMISE (capacité additive : l'utilisateur qui a
+    # édité son SRT dans l'éditeur peut emporter un DOCX verbatim) — les LIVRABLES
+    # du profil (ZIP minimal, aucune passe LLM) ne changent pas.
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
     safe_title = re.sub(r"[^\w\-]", "_", job.title or "rapport")[:50]

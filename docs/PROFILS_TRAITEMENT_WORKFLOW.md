@@ -288,8 +288,8 @@ Le DOCX peut deja fonctionner avec des donnees partielles, mais il faut formalis
 
 | Profil | Libelle UI | Objectif | Validations | Ressources principales | Livrables garantis |
 |---|---|---|---|---|---|
-| `srt_express` | SRT express | Obtenir vite une transcription | Aucune ou validation fichier | STT | SRT brut, segments JSON |
-| `srt_locuteurs` | SRT avec locuteurs | Obtenir une transcription attribuee aux locuteurs | Validation locuteurs | STT + diarisation | SRT speakerise, mapping locuteurs |
+| `srt_express` | SRT express | Obtenir vite une transcription | Aucune ou validation fichier | STT | SRT brut, segments JSON (+ DOCX verbatim a la demande depuis 0.3.8) |
+| `srt_locuteurs` | SRT avec locuteurs | Obtenir une transcription attribuee aux locuteurs | Validation locuteurs | STT + diarisation | SRT speakerise, mapping locuteurs (+ DOCX verbatim a la demande depuis 0.3.8) |
 | `word_rapide` | Word rapide | Obtenir vite un compte rendu presentable | Resume/contexte minimal | STT + LLM resume + DOCX | DOCX template partiellement rempli, SRT brut |
 | `word_structure` | Word structure | Obtenir un Word template avec participants et structure reunion | Resume, contexte, participants/locuteurs | STT + diarisation + extraction LLM, sans correction SRT | DOCX template rempli, SRT speakerise |
 | `word_corrige` | Word corrige | Obtenir Word + SRT propres sans workflow qualite complet | Contexte, participants, lexique optionnel | STT + diarisation + correction LLM | DOCX enrichi, SRT corrige, rapport correction |
@@ -2205,3 +2205,10 @@ Cette evolution est reussie si :
 - les profils complets conservent la degradation gracieuse sous saturation distante ;
 - le batching STT/LLM distant reste exploite en topologie split ;
 - la documentation, Docker, install et doctor racontent la meme histoire.
+
+
+> **DOCX verbatim a la demande (0.3.8, PISTES_AMELIORATION §5.1).** Les profils SRT ne
+> PRODUISENT toujours aucun DOCX (ZIP minimal, aucune passe LLM), mais la route
+> `/download/docx` le genere desormais a la demande — utile apres une edition dans
+> l'editeur SRT. Le generateur degrade proprement les sections sans artefact (pas de
+> synthese sans LLM, pas de tableau locuteurs sans diarisation).

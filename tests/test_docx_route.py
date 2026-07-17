@@ -110,8 +110,10 @@ class TestDocxAuth:
         r = admin_client.get("/api/jobs/nonexistent-uuid-docx/download/docx")
         assert r.status_code == 404
 
-    def test_download_docx_404_pour_profil_sans_docx(self, admin_client, app, job_with_docx_data):
-        # Profil SRT (docx_level == none) : le DOCX n'est pas un livrable → 404, pas de génération.
+    def test_download_docx_verbatim_pour_profil_srt(self, admin_client, app, job_with_docx_data):
+        # Profil SRT (docx_level == none) : depuis 0.3.8, DOCX VERBATIM généré à la
+        # demande (PISTES_AMELIORATION §5.1) — capacité additive, les livrables du
+        # profil (ZIP minimal, aucune passe LLM) ne changent pas.
         from transcria.jobs.store import JobStore
         with app.app_context():
             JobStore.update_extra_data(
@@ -119,7 +121,37 @@ class TestDocxAuth:
                 lambda d: {**d, "execution": {"processing_profile_id": "srt_express"}},
             )
         r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/docx")
-        assert r.status_code == 404
+        assert r.status_code == 200
+        assert r.data[:4] == b"PK\x03\x04"  # DOCX = zip valide
+
+    def test_download_docx_verbatim_degrade_sans_artefacts_llm(self, admin_client, app):
+        # Job SRT MINIMAL (aucun artefact LLM/diarisation : ni synthèse, ni
+        # participants, ni stats locuteurs) : le générateur dégrade proprement —
+        # jamais de 500, un document lisible avec le verbatim.
+        from transcria.jobs.filesystem import JobFilesystem
+        from transcria.jobs.models import JobState
+        from transcria.jobs.store import JobStore
+
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            jobs_dir = get_config()["storage"]["jobs_dir"]
+            owner = UserStore.get_by_username("admin")
+            job = JobStore.create_job(owner.id, "SRT express nu")
+            JobStore.update_state(job.id, JobState.COMPLETED)
+            JobStore.update_extra_data(
+                job.id,
+                lambda d: {**d, "execution": {"processing_profile_id": "srt_express"}},
+            )
+            fs = JobFilesystem(jobs_dir, job.id)
+            fs.save_text("metadata/transcription.srt",
+                         "1\n00:00:00,000 --> 00:00:02,000\nBonjour à tous.\n\n"
+                         "2\n00:00:02,500 --> 00:00:04,000\nOn commence.\n")
+            job_id = job.id
+
+        r = admin_client.get(f"/api/jobs/{job_id}/download/docx")
+        assert r.status_code == 200
+        assert r.data[:4] == b"PK\x03\x04"
 
     def test_download_docx_200_pour_profil_word(self, admin_client, app, job_with_docx_data):
         # Profil Word (docx_level != none) : le DOCX reste un livrable.

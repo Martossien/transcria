@@ -890,7 +890,12 @@ le 2ᵉ job d'une rafale (keep_warm actif) ; gain du WAV canonique chiffré via 
 timings `preprocess_*` avant activation par défaut.*
 
 **Lot 3 — parcours et produit (M/L)**
-12. §5.1 DOCX à la demande pour profils SRT (voire promotion de profil).
+12. ✅ §5.1 DOCX à la demande pour profils SRT — LIVRÉ le 2026-07-17 (route ⭐
+    `/download/docx` : DOCX VERBATIM généré pour les profils `docx_level=none`,
+    générateur vérifié dégradant proprement sans artefacts LLM/diarisation ;
+    boutons page résultat + étape export — ce dernier pointait un 404 latent.
+    Les livrables des profils sont INCHANGÉS : ZIP minimal, aucune passe LLM.
+    La « promotion de profil » reste une piste séparée).
 13. §5.6 résumé lancé dès l'upload.
 14. §5.2/5.3 fraîcheur synthèse + ZIP local.
 15. §6.4 reset admin.
