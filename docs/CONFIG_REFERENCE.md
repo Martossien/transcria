@@ -127,6 +127,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `stt_backend` | string | `"cohere"` | Backend STT (`cohere`, `cohere_tf5`, `whisper`, `granite`, `parakeet`, `voxtral`, `kroko` — CPU pur — ou `moss`) |
+| `summary_stt_backend` | string \| null | `null` | Backend dédié à la transcription rapide de la PHASE RÉSUMÉ (`null` = même backend que `stt_backend`). Mêmes valeurs acceptées que `stt_backend` (backends servis routés inclus). `kroko` rend la phase résumé 100 % CPU : zéro réservation VRAM, plus de reclaim du LLM d'arbitrage par le résumé |
 | `diarization_backend` | string | `"pyannote"` | Backend de diarisation (`pyannote` ou `sortformer`) — sélectionné par `create_diarizer()` dans `diarizer_factory.py` |
 | `default_stt_model` | string | `"cohere-transcribe-03-2026"` | Modèle STT par défaut |
 | `fallback_stt_model` | string | `"large-v3"` | Modèle fallback |
@@ -952,6 +953,18 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 |---|---|---|---|
 | `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne (borné 1-8). En split, le dispatch est en plus plafonné par `resource_node.max_concurrent_jobs` (annoncé par le nœud). Le surplus **attend en file** (claim atomique, rien perdu). Test de charge (`docs/PLAN_TEST_CHARGE.md`) : sweet spot ≈ 4 sur 4×3090 pour une LLM 27B (au-delà, le LLM sature → latence sans gain de débit). All-in-one : laisser à 1 (LLM locale sérialisée). |
 
+#### `workflow.vram_wait`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `max_wait_s` | int | `0` | Borne d'attente VRAM locale (0 = illimité, comportement historique). Au-delà : dépassement marqué **une fois par épisode** — ERROR journalisé, ré-alerte admin, drapeau `vram_wait_exceeded` exposé au propriétaire dans `GET /api/jobs/<id>/status` et affiché dans la bannière du wizard. Le job **continue d'attendre** (jamais de bascule automatique de backend — changer de moteur/profil reste un choix utilisateur). Symétrique de `inference.max_unavailable_s` côté distant |
+
+#### `workflow.audio_canonical_16k`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Produit **une fois** `input/audio_16k.wav` (ffmpeg mono 16 kHz s16) juste après le préflight ; toute la chaîne aval (scène, VAD, STT, diarisation) lit ce fichier au lieu de re-décoder l'original 5 à 8 fois. Opt-in : les resamplers ffmpeg/librosa ne sont pas bit-identiques (sortie STT marginalement différente possible) — activation par défaut après bench. Purgé avec le job. Échec de conversion = chaîne sur l'original (best-effort) |
+
 **Redémarrage requis :** oui — le worker est instancié au démarrage de l’application.
 
 **Note :** la valeur par défaut `1` est volontaire sur un service GPU partagé. Monter plus haut sans revoir la stratégie VRAM augmentera fortement le risque de contention et d’échec.
@@ -1075,6 +1088,8 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `api_base` | string | `"http://127.0.0.1:8080/v1"` | URL de base de l'API |
 | `timeout_seconds` | int | `600` | Timeout de la correction SRT via opencode |
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
+| `keep_warm` | bool | `false` | Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en file : le suivant la réutilise chaude (CAS A, ~17 s de démarrage llama.cpp économisées ; **fortement recommandé en vLLM local** où chaque relance coûte des minutes). Décision prise sous le verrou LLM (pas de course avec un lancement concurrent) ; file vide → arrêt comme avant |
+| `prelaunch_at_analyze` | bool | `false` | Pré-lancer la LLM dès l'étape ANALYSE du wizard (thread best-effort, sous verrou, jamais de préemption VRAM) : le démarrage s'absorbe pendant la saisie des étapes suivantes |
 
 **Redémarrage requis :** non.
 

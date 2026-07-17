@@ -301,6 +301,7 @@ transcria/
       gpu_session.py        # GPUSession — context manager
       llm_backend.py        # LLMBackend (script/ollama/http) + cycle de vie unifié unload()/is_loaded()/measured_vram_mb() ; cf. docs/LLM_BACKENDS.md
       llm_footprint.py      # empreinte VRAM DÉRIVÉE (poids réel du fichier + KV calculé archi×contexte) — jamais de taille en dur
+      llm_prelaunch.py      # lot 2 : pré-lancement opt-in de la LLM à l'étape analyse (sous verrou LLM, jamais de préemption)
       opencode_runner.py    # OpenCodeRunner — exécute opencode CLI (prompts → prompt_locator.py, parsing pur → llm_parsing.py, vague C2)
       opencode_setup.py     # find_opencode_binary() + ensure_local_provider() — config opencode.json fiable/idempotente
       _port_utils.py        # is_port_open() partagé entre vram_manager et llm_backend
@@ -327,7 +328,7 @@ transcria/
       pipeline_admission.py # B2 : estimation VRAM d'admission d'un traitement
       pipeline_config.py    # B2 : config effective d'un traitement (mode, garde qualité, lexiques)
       pipeline_remote_gate.py # B2 : pré-vol des ressources distantes (admission §7.2 + auto-lancement STT)
-      pipeline_steps/       # B2 : les 6 étapes audio extraites (preflight, scene_analysis, scene_filter, denoise, normalization, source_separation)
+      pipeline_steps/       # B2 : les étapes audio extraites (preflight, canonical_audio [lot 2, opt-in], scene_analysis, scene_filter, denoise, normalization, source_separation)
     audit/
       models.py             # AuditAction + AuditLog (SQLAlchemy)
       store.py              # AuditStore — log(), query(), count(), purge_expired()

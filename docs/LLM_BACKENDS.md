@@ -56,6 +56,18 @@ d'ailleurs **exclu** des chemins de kill agressifs (`VRAMManager._NEVER_KILL`).
 | 32-64 Go (multi-GPU) | Ollama ou llama.cpp | 35b Q4_K_M Ollama validé (Tests 1/5/8, 98/100) ; llama.cpp Q8 = 97/100 |
 | Split (frontale + nœud) | **vLLM** | TP auto, FP8, batching, 100/100 (Test 4) |
 
+### Cycle de vie : garder la LLM chaude (`workflow.arbitration_llm.keep_warm`)
+
+Par défaut, la fin de chaque pipeline **arrête** la LLM (restitution de VRAM). Avec
+`keep_warm: true`, l'arrêt est sauté tant que des jobs attendent en file — le
+suivant réutilise l'instance chaude (CAS A). Le coût d'un redémarrage dépend du
+moteur : **~17 s** en llama.cpp (mesuré), **des minutes** en vLLM local piloté par
+script (init moteur + graphes CUDA + poids) — `keep_warm: true` est donc
+**fortement recommandé avec vLLM local**. Ollama recharge seulement le modèle
+(démon persistant) ; la LLM `http` distante n'est jamais arrêtée par TranscrIA.
+S'ajoute `prelaunch_at_analyze: true` (pré-lancement dès l'étape analyse du
+wizard) pour absorber le démarrage pendant la saisie.
+
 ## Configuration (`services`)
 
 ```yaml

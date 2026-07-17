@@ -809,17 +809,50 @@ sauvegarde créée à l'étape 1 ») — point clos sans changement.
 base seule < 30 s (vérifié en continu par l'E2E) ; chaque étape preprocess a un
 P50/P95 mesuré sur jobs réels.*
 
-**Lot 2 — le cœur vitesse (M, à valider par les mesures du lot 1)**
-8. §2.1 backend résumé dédié (Kroko par défaut, runtimes C++ en option turbo).
-9. §2.3 + §4.3-1 cycle de vie LLM : gardé chaud si file non vide, politique
-   indexée sur le backend (seuil d'inactivité long en vLLM), pré-lancement à
-   l'upload.
-10. §2.6 WAV 16 kHz canonique.
-11. §3-b borne d'attente VRAM avec proposition explicite à l'utilisateur.
+**Lot 2 — le cœur vitesse — ✅ LIVRÉ le 2026-07-17** (tout opt-in, défauts inchangés)
+8. ✅ §2.1 `models.summary_stt_backend` (défaut `null` = backend principal) —
+   résolution unique (`transcriber_factory.summary_backend`), consommée par la
+   génération rapide, la réservation VRAM ET la détection « phase distante » ;
+   kroko = phase résumé 100 % CPU, zéro réservation, plus de reclaim LLM.
+9. ✅ §2.3 + §4.3 cycle de vie LLM : `keep_warm` (pas d'arrêt si file non vide,
+   décidé sous le verrou B3 ; recommandé en vLLM local — doc LLM_BACKENDS) +
+   `prelaunch_at_analyze` (pré-lancement à l'étape ANALYSE — choisie plutôt que
+   l'upload : moins de GPU dépensé sur les abandons précoces ; sous verrou,
+   jamais de préemption).
+10. ✅ §2.6 `workflow.audio_canonical_16k.enabled` (défaut false) — WAV canonique
+    produit après le préflight (l'empreinte §2.5 reste opérante), chaîne aval
+    mécaniquement couverte, best-effort.
+11. ✅ §3-b `workflow.vram_wait.max_wait_s` (défaut 0 = illimité) — dépassement
+    marqué une fois par épisode : ERROR + ré-alerte admin + drapeau
+    `vram_wait_exceeded` exposé au propriétaire (statut ⭐ + bannière wizard).
+    Jamais de bascule automatique de backend.
 
-*Critères de succès : phase résumé < 30 s sur 1 h d'audio (vs minutes aujourd'hui) ;
-zéro démarrage LLM sur le 2ᵉ job d'une rafale (CAS A systématique) ; un seul
-décodage complet du fichier par job (hors prétraitements actifs).*
+**Bench Kroko vs cohere (phase résumé) — 4 réunions réelles anonymisées, lu et
+pas seulement scoré :**
+
+| Réunion | Durée | cohere (s) | kroko (s) | Gain | Niveau diag (les 2 moteurs, après correctif) |
+|---|---:|---:|---:|---:|---|
+| R1 | 1,2 min | 10,9 | 7,4 | ×1,5 | ok / ok |
+| R2 | 17,4 min | 69,5 | 41,3 | ×1,7 | suspect / suspect |
+| R3 | 46,2 min | 179,2 | 105,3 | ×1,7 | suspect / suspect |
+| R4 | 62,5 min | 245,6 | 119,2 | ×2,1 | ok / ok |
+
+Verdict de LECTURE (transcriptions ouvertes côte à côte) : le texte kroko est
+suffisant pour nourrir le résumé (sujets, livrables, échéances, lexique tous
+extractibles) ; ses défauts réels sont des tours courts perdus et des coupures de
+mots aux frontières de segments (style streaming) — cohere reste plus fluide et
+mieux ponctué, avec ses propres bourdes sur les noms propres. **Trouvaille du
+bench** : la fragmentation kroko (~15 % de segments < 1 s sains) déclenchait à
+tort le critère « segments courts nombreux » → faux `degrade` → escalade qualité
+à tort ; critère rendu RELATIF (≥ 20 absolu ET ≥ 20 % du total), validé sur les
+8 sorties (niveaux cohere inchangés partout, accord kroko/cohere rétabli).
+S'ajoute le vrai bénéfice : **zéro VRAM** pour la phase résumé (plus de
+contention ni de reclaim du LLM). La bascule du défaut vers kroko reste à
+décider après usage réel (décision utilisateur).
+
+*Critères de succès restants à observer en exploitation : zéro démarrage LLM sur
+le 2ᵉ job d'une rafale (keep_warm actif) ; gain du WAV canonique chiffré via les
+timings `preprocess_*` avant activation par défaut.*
 
 **Lot 3 — parcours et produit (M/L)**
 12. §5.1 DOCX à la demande pour profils SRT (voire promotion de profil).
