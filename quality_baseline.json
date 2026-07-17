@@ -1,6 +1,6 @@
 {
  "cycles": 0,
- "deep_config_chains": 193,
+ "deep_config_chains": 192,
  "deferred_internal_imports": 41,
  "fanout": {
   "inference_service": 1,
@@ -180,7 +180,7 @@
   "transcria.workflow.phases.multi_stt_review": 5,
   "transcria.workflow.phases.quality": 7,
   "transcria.workflow.phases.refine": 8,
-  "transcria.workflow.phases.summary": 11,
+  "transcria.workflow.phases.summary": 12,
   "transcria.workflow.phases.summary_llm": 7,
   "transcria.workflow.phases.summary_stt": 7,
   "transcria.workflow.phases.transcription": 5,

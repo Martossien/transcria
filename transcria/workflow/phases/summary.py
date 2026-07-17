@@ -17,6 +17,7 @@ from transcria.jobs.store import JobStore
 from transcria.logging_setup import get_structured_logger
 from transcria.notifications.job_facts import notify_summary_ready
 from transcria.quality.audio_quality import AudioQualityEvaluator
+from transcria.stt.transcriber_factory import summary_backend
 from transcria.workflow.profiles import profile_for_job
 from transcria.workflow.progress import progress_msg
 from transcria.workflow.transitions import utcnow_iso
@@ -43,7 +44,9 @@ def run(runner, job: Job, audio_path: str, config: dict) -> dict:
     t0 = time.monotonic()
     sl.info("━━━ DÉBUT résumé ━━━")
 
-    backend = config.get("models", {}).get("stt_backend", "cohere")
+    # Backend RÉSOLU de la phase résumé (models.summary_stt_backend sinon principal) :
+    # les logs doivent refléter le moteur réellement utilisé.
+    backend = summary_backend(config)
     # Relance bon marché : si un transcript rapide valide existe déjà (ex. après un
     # échec LLM relançable, ou une régénération), on le réutilise au lieu de relancer
     # le STT GPU. La transcription est déterministe sur le même audio.
