@@ -26,7 +26,22 @@ venv/bin/python -m transcria.maintenance.cli backup --dest ./backups --keep 7
 
 # Sans les audios originaux (archives plus légères) :
 venv/bin/python -m transcria.maintenance.cli backup --exclude-audio
+
+# Base SEULE (dump pg_dump -Fc / copie SQLite à chaud) — quelques secondes,
+# idéal en quotidien ; l'archive porte le scope dans son nom (…-db-…) :
+venv/bin/python -m transcria.maintenance.cli backup --db-only --keep 30
+
+# Fichiers seuls (jobs/voix/prompts/config), le complément pour une stratégie
+# à deux fréquences (base : quotidien ; fichiers : hebdomadaire) :
+venv/bin/python -m transcria.maintenance.cli backup --files-only --keep 8
 ```
+
+La **restauration est pilotée par le manifeste** : restaurer une archive `--db-only`
+ne touche que la base (les fichiers en place sont conservés), et inversement. La
+rotation `--keep` est comptée **par scope** : une rafale d'archives base-seule ne
+peut pas expulser une sauvegarde complète. Attention en backend `pg` avec
+`job_files` en base : `--db-only` embarque alors AUSSI les artefacts des jobs (ils
+vivent dans la base) — une seule archive, mais un dump plus lourd.
 
 **Toujours vérifier une sauvegarde** (une sauvegarde non testée n'existe pas) :
 
@@ -57,6 +72,18 @@ sudo venv/bin/python -m transcria.maintenance.cli schedule --disable
 Le service oneshot appelle la CLI `backup` (rotation `--keep`, `--exclude-audio` selon config) ;
 le timer utilise `Persistent=true` (une exécution manquée pendant une coupure est rattrapée).
 Pilotable aussi depuis **Administration → Maintenance** (carte « Sauvegarde planifiée »).
+
+La **purge de rétention** se planifie de la même façon avec `--purge` (unités
+`transcria-purge.{service,timer}`, cadence `maintenance.schedule.purge_on_calendar`,
+défaut 03:30 — après la sauvegarde, pour n'effacer qu'une fois l'archive du jour
+produite). Sans ce timer, la purge ne tourne qu'au chargement de la page d'accueil
+ou à la main :
+
+```bash
+sudo HOME=/root venv/bin/python -m transcria.maintenance.cli schedule --enable --purge
+venv/bin/python -m transcria.maintenance.cli schedule            # statut des DEUX timers
+sudo venv/bin/python -m transcria.maintenance.cli schedule --disable --purge
+```
 
 ## Restaurer
 

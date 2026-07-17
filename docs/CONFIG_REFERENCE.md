@@ -581,6 +581,7 @@ Le preflight peut être enrichi par trois qualifications optionnelles (sous-sect
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
 | `enabled` | bool | `true` | Activer l'analyse pré-diagnostic acoustique avant le pipeline |
+| `reuse_analysis` | bool | `true` | Réutiliser le préflight calculé à la phase analyze du wizard si l'audio n'a pas changé (empreinte chemin+taille+mtime) — sortie identique, zéro recalcul ; `false` = recalcul systématique dans le pipeline |
 | `frame_ms` | float | `30` | Durée en ms des trames d'analyse RMS |
 | `low_rms_threshold` | float | `0.02` | Seuil RMS en dessous duquel l'audio est signalé `audio_faible` |
 | `very_low_rms_threshold` | float | `0.008` | Seuil RMS en dessous duquel l'audio est signalé `audio_tres_faible` |
@@ -1523,3 +1524,4 @@ Outillage opérateur (sauvegardes + planification), piloté par la page *Adminis
 | `maintenance.schedule.on_calendar` | `*-*-* 02:00:00` | Cadence systemd `OnCalendar` du backup planifié (`Persistent=true`) |
 | `maintenance.schedule.keep` | `7` | Rotation : nombre d'archives conservées |
 | `maintenance.schedule.exclude_audio` | `false` | Sauvegardes planifiées sans les audios originaux (archives plus légères) |
+| `maintenance.schedule.purge_on_calendar` | `*-*-* 03:30:00` | Cadence systemd du timer de PURGE de rétention (`maintenance schedule --enable --purge`) — décalée après la sauvegarde pour n'effacer qu'une fois l'archive du jour produite |

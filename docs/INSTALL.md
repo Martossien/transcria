@@ -183,6 +183,13 @@ proposées (`["fr", "en"]`). En Docker/CI non interactif, passer `TRANSCRIA_DEFA
 
 Ces étapes sont documentées dans les sections suivantes.
 
+> **Téléchargements accélérés** : les poids Hugging Face sont récupérés via
+> `hf_transfer` (multi-flux Rust, dans `requirements.txt`) avec **repli
+> automatique** sur la voie Python classique en cas d'échec — aucun réglage
+> requis. Pour forcer la voie classique (proxy capricieux, débogage) :
+> `TRANSCRIA_NO_HF_TRANSFER=1`. Le résumé final d'installation affiche la
+> **durée totale** (métrique « time-to-first-job »).
+
 ### Choix du backend LLM (Ollama / llama.cpp / vLLM)
 
 Depuis la v0.1.0-beta.7, la LLM d'arbitrage est **multi-backend**, et le choix « palier VRAM →

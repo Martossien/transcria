@@ -786,17 +786,28 @@ deuxième artefact d'installation à maintenir.
 
 ## 8. Feuille de route suggérée
 
-**Lot 1 — vite fait, très visible (S, cumulé ~2-3 jours)**
-1. §5.4 position de file + estimation dans le statut job (l'existant, exposé).
-2. §6.1 `backup --db-only` / `--files-only`.
-3. §2.5 dé-doublonnage du préflight.
-4. §2.7-1 instrumentation du bloc preprocess (préalable aux décisions chiffrées).
-5. §5.5 les 4 chaînes i18n.
-6. §6.2 timer de purge.
-7. §6.6 `hf_transfer` + time-to-first-job affiché en fin d'install.
+**Lot 1 — vite fait, très visible — ✅ LIVRÉ le 2026-07-17**
+1. ✅ §5.4 position de file + estimation dans le statut job (champs additifs
+   `queue_position`/`wait_estimate` du contrat ⭐, affichés dans la bannière wizard).
+2. ✅ §6.1 `backup --db-only` / `--files-only` (manifeste avec `scope`, restauration
+   pilotée par le contenu, rotation par scope).
+3. ✅ §2.5 dé-doublonnage du préflight (`workflow.audio_preflight.reuse_analysis`,
+   empreinte source dans `audio_preflight.json`).
+4. ✅ §2.7-1 instrumentation du bloc preprocess (`preprocess` + 6 étapes détaillées
+   dans StageMetrics et le modèle de temps ; hors formule ETA).
+5. ✅ §5.5 les 4 chaînes i18n EN (+ 0 fuzzy dans les deux catalogues).
+6. ✅ §6.2 timer de purge (`schedule --enable --purge`,
+   `maintenance.schedule.purge_on_calendar`, défaut 03:30 après la sauvegarde).
+7. ✅ §6.6 `hf_transfer` (repli automatique, kill-switch `TRANSCRIA_NO_HF_TRANSFER=1`)
+   + durée totale affichée au résumé final d'install.
+
+Note de vérification : la phrase de rollback envisagée en §6.3 existait déjà
+(`docs/UPGRADE.md`, « Le rollback en cas de pépin, c'est la restauration de la
+sauvegarde créée à l'étape 1 ») — point clos sans changement.
 
 *Critères de succès : l'utilisateur en file voit position + estimation ; un backup
-base seule < 30 s ; chaque étape preprocess a un P50/P95 mesuré sur jobs réels.*
+base seule < 30 s (vérifié en continu par l'E2E) ; chaque étape preprocess a un
+P50/P95 mesuré sur jobs réels.*
 
 **Lot 2 — le cœur vitesse (M, à valider par les mesures du lot 1)**
 8. §2.1 backend résumé dédié (Kroko par défaut, runtimes C++ en option turbo).
