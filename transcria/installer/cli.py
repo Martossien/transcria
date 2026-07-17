@@ -217,6 +217,8 @@ def _add_summary_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--pyannote-ok", action="store_true")
     p.add_argument("--qwen-ok", action="store_true")
     p.add_argument("--opencode-bin", default="")
+    p.add_argument("--elapsed-seconds", type=int, default=0,
+                   help="durée totale de l'installation (métrique time-to-first-job)")
 
 
 def _make_confirm(interactive: bool) -> "Callable[[str], bool]":
@@ -325,6 +327,7 @@ def _cmd_summary(args: argparse.Namespace) -> int:
         qwen_ok=args.qwen_ok,
         opencode_bin=args.opencode_bin,
         systemd=not args.no_systemd,
+        elapsed_seconds=max(0, args.elapsed_seconds),
     )
     summary_phase.apply_summary(plan, console=console)
     return 0

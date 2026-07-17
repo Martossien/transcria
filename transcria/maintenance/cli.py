@@ -5,7 +5,7 @@ Sous-commandes :
     backup-verify     vérifie l'intégrité d'une archive (sha256 + ouverture réelle)
     restore           restaure une archive (garde-fous : base vide sauf --force, dry-run)
     upgrade           mise à niveau outillée (sauvegarde → code → migration → restart → santé)
-    schedule          planifie les sauvegardes via un timer systemd (--enable/--disable)
+    schedule          planifie sauvegardes et purge via timers systemd (--enable/--disable [--purge])
     opencode-upgrade  met à jour opencode (détecte npm / officiel / brew)
     purge             purge les données expirées (rétention DPO)
 
@@ -25,7 +25,16 @@ from transcria.jobs.store import JobStore
 from transcria.maintenance.backup import BackupError, create_backup, read_manifest, rotate_backups, verify_backup
 from transcria.maintenance.restore import describe_restore, restore_backup
 from transcria.maintenance.restore_service import apply_pending_restore
-from transcria.maintenance.schedule import BackupSchedule, backup_schedule_status, install_backup_schedule, remove_backup_schedule
+from transcria.maintenance.schedule import (
+    BackupSchedule,
+    PurgeSchedule,
+    backup_schedule_status,
+    install_backup_schedule,
+    install_purge_schedule,
+    purge_schedule_status,
+    remove_backup_schedule,
+    remove_purge_schedule,
+)
 from transcria.maintenance.upgrade import UpgradeError, build_plan, changelog_excerpt, default_ready_check, run_plan
 from transcria.models_download import download_from_args
 
@@ -56,17 +65,20 @@ def _cmd_backup(args: argparse.Namespace) -> int:
     cfg, resolved, version, revision = _load_cfg_and_meta(args.config)
     env_path = Path(args.env) if args.env else Path(".env")
     dest = Path(args.dest)
+    scope = "db" if args.db_only else ("files" if args.files_only else "full")
     archive = create_backup(
         cfg, resolved, dest,
         app_version=version,
         alembic_revision=revision,
         include_audio=not args.exclude_audio,
+        scope=scope,
         env_path=env_path if env_path.exists() else None,
     )
     size_mb = archive.stat().st_size / (1024 * 1024)
-    print(f"✅ Sauvegarde créée : {archive}  ({size_mb:.1f} Mo)")
+    label = {"db": " (base seule)", "files": " (fichiers seuls)"}.get(scope, "")
+    print(f"✅ Sauvegarde créée{label} : {archive}  ({size_mb:.1f} Mo)")
     if args.keep:
-        removed = rotate_backups(dest, args.keep)
+        removed = rotate_backups(dest, args.keep, scope=scope)
         if removed:
             print(f"   Rotation : {len(removed)} ancienne(s) archive(s) supprimée(s).")
     print("   Vérifiez-la : python -m transcria.maintenance.cli backup-verify " + str(archive))
@@ -206,24 +218,37 @@ def _cmd_restore_apply(args: argparse.Namespace) -> int:
 
 
 def _cmd_schedule(args: argparse.Namespace) -> int:
-    """Planifie les sauvegardes via un timer systemd (--enable / --disable / défaut = statut)."""
+    """Planifie sauvegardes et purge via des timers systemd (--enable / --disable / défaut = statut).
+
+    ``--purge`` cible le timer de PURGE de rétention au lieu du timer de sauvegarde."""
 
     if args.disable:
-        actions = remove_backup_schedule()
-        print("✅ Backup planifié désactivé : " + ", ".join(actions))
+        if args.purge:
+            actions = remove_purge_schedule()
+            print("✅ Purge planifiée désactivée : " + ", ".join(actions))
+        else:
+            actions = remove_backup_schedule()
+            print("✅ Backup planifié désactivé : " + ", ".join(actions))
         return 0
     if args.enable:
         cfg = load_config(args.config)
         config_path = get_config_path(args.config)
+        if args.purge:
+            purge = PurgeSchedule.from_config(cfg, config_path, service_user=args.user)
+            actions = install_purge_schedule(purge)
+            print(f"✅ Purge planifiée activée (OnCalendar={purge.on_calendar}, "
+                  f"user={purge.service_user}) : " + ", ".join(actions))
+            print("   Vérifiez : systemctl list-timers transcria-purge.timer")
+            return 0
         schedule = BackupSchedule.from_config(cfg, config_path, service_user=args.user)
         actions = install_backup_schedule(schedule)
         print(f"✅ Backup planifié activé (OnCalendar={schedule.on_calendar}, keep={schedule.keep}, "
               f"user={schedule.service_user}) : " + ", ".join(actions))
         print("   Vérifiez : systemctl list-timers transcria-backup.timer")
         return 0
-    status = backup_schedule_status()
-    print(f"Timer {status['unit']} : enabled={status['enabled'] or 'absent'} · active={status['active'] or 'absent'}")
-    print("   --enable pour installer/activer depuis la config ; --disable pour retirer.")
+    for status in (backup_schedule_status(), purge_schedule_status()):
+        print(f"Timer {status['unit']} : enabled={status['enabled'] or 'absent'} · active={status['active'] or 'absent'}")
+    print("   --enable pour installer/activer depuis la config ; --disable pour retirer ; --purge pour le timer de purge.")
     return 0
 
 
@@ -260,8 +285,13 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("backup", help="créer une archive de sauvegarde")
     b.add_argument("--dest", default="./backups", help="dossier des archives (défaut ./backups)")
     b.add_argument("--exclude-audio", action="store_true", help="ne pas embarquer les audios originaux")
-    b.add_argument("--keep", type=int, default=0, help="rotation : ne garder que N archives")
+    b.add_argument("--keep", type=int, default=0, help="rotation : ne garder que N archives (par scope)")
     b.add_argument("--env", default=None, help="chemin du .env (empreinte au manifeste ; défaut ./.env)")
+    b_scope = b.add_mutually_exclusive_group()
+    b_scope.add_argument("--db-only", action="store_true",
+                         help="base seule (rapide, quotidien) — la restauration d'une telle archive ne touche pas les fichiers")
+    b_scope.add_argument("--files-only", action="store_true",
+                         help="fichiers seuls (jobs/voix/prompts/config), sans la base")
     b.set_defaults(func=_cmd_backup)
 
     v = sub.add_parser("backup-verify", help="vérifier l'intégrité d'une archive")
@@ -299,9 +329,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="services systemd à arrêter/redémarrer autour de la restauration")
     ra.set_defaults(func=_cmd_restore_apply)
 
-    sc = sub.add_parser("schedule", help="planifier les sauvegardes (timer systemd)")
+    sc = sub.add_parser("schedule", help="planifier sauvegardes et purge (timers systemd)")
     sc.add_argument("--enable", action="store_true", help="installer + activer le timer depuis la config")
     sc.add_argument("--disable", action="store_true", help="désactiver + retirer le timer")
+    sc.add_argument("--purge", action="store_true",
+                    help="cibler le timer de purge de rétention (défaut : timer de sauvegarde)")
     sc.add_argument("--user", default=None,
                     help="utilisateur du service oneshot (défaut : propriétaire du dossier d'install)")
     sc.set_defaults(func=_cmd_schedule)

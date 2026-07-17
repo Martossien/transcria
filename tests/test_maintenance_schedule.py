@@ -10,9 +10,12 @@ from transcria.maintenance.schedule import (
     SERVICE_UNIT,
     TIMER_UNIT,
     BackupSchedule,
+    PurgeSchedule,
     backup_schedule_status,
     install_backup_schedule,
+    install_purge_schedule,
     remove_backup_schedule,
+    remove_purge_schedule,
 )
 
 
@@ -131,3 +134,71 @@ def test_schema_rejects_bad_maintenance_types():
     result = validate_config(cfg)
     joined = " ".join(result.errors)
     assert "maintenance.schedule.keep" in joined and "maintenance.schedule.enabled" in joined
+
+
+# ── Timer de purge (PISTES_AMELIORATION §6.2) ────────────────────────────────
+
+def _purge_sched(**overrides) -> PurgeSchedule:
+    base = dict(
+        install_dir="/opt/transcria",
+        service_user="transcria",
+        python_bin="/opt/transcria/venv/bin/python",
+        config_path="/opt/transcria/config.yaml",
+        env_file="/opt/transcria/.env",
+        on_calendar="*-*-* 03:30:00",
+    )
+    base.update(overrides)
+    return PurgeSchedule(**base)
+
+
+class TestPurgeSchedule:
+    def test_render_service_lance_la_cli_purge(self):
+        text = _purge_sched().render_service()
+        assert "ExecStart=/opt/transcria/venv/bin/python -m transcria.maintenance.cli " \
+               "--config /opt/transcria/config.yaml purge" in text
+        assert "User=transcria" in text
+        assert "Type=oneshot" in text
+
+    def test_render_timer_oncalendar(self):
+        text = _purge_sched(on_calendar="*-*-* 04:00:00").render_timer()
+        assert "OnCalendar=*-*-* 04:00:00" in text
+        assert "Persistent=true" in text
+
+    def test_from_config_lit_purge_on_calendar(self):
+        cfg = {"maintenance": {"schedule": {"purge_on_calendar": "Sun *-*-* 05:00:00"}}}
+        sched = PurgeSchedule.from_config(cfg, "/x/config.yaml", install_dir="/x",
+                                          service_user="svc", python_bin="/x/venv/bin/python")
+        assert sched.on_calendar == "Sun *-*-* 05:00:00"
+
+    def test_from_config_defaut_apres_le_backup(self):
+        # Décalé APRÈS la sauvegarde de 02:00 : on n'efface qu'une fois l'archive du jour produite.
+        sched = PurgeSchedule.from_config({}, "/x/config.yaml", install_dir="/x",
+                                          service_user="svc", python_bin="/x/venv/bin/python")
+        assert sched.on_calendar == "*-*-* 03:30:00"
+
+    def test_install_ecrit_les_unites_purge(self, tmp_path: Path):
+        calls = []
+        written = {}
+        actions = install_purge_schedule(
+            _purge_sched(),
+            units_dir=tmp_path,
+            run=lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+            write=lambda path, content: written.update({path.name: content}),
+        )
+        assert "transcria-purge.service" in written
+        assert "transcria-purge.timer" in written
+        assert ["systemctl", "enable", "--now", "transcria-purge.timer"] in calls
+        assert any("transcria-purge.timer" in a for a in actions)
+
+    def test_remove_supprime_les_unites_purge(self, tmp_path: Path):
+        (tmp_path / "transcria-purge.service").write_text("x")
+        (tmp_path / "transcria-purge.timer").write_text("x")
+        calls = []
+        actions = remove_purge_schedule(
+            units_dir=tmp_path,
+            run=lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+        )
+        assert not (tmp_path / "transcria-purge.service").exists()
+        assert not (tmp_path / "transcria-purge.timer").exists()
+        assert ["systemctl", "disable", "--now", "transcria-purge.timer"] in calls
+        assert any("supprimé" in a for a in actions)

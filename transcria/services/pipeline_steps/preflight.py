@@ -6,9 +6,29 @@ signal (artefact préflight, RMS) consommées par la normalisation.
 import time
 from pathlib import Path
 
-from transcria.audio.preflight import AudioPreflightAnalyzer
+from transcria.audio.preflight import AudioPreflightAnalyzer, source_fingerprint
 from transcria.jobs.models import Job
 from transcria.services.pipeline_steps import job_fs
+
+
+def _reusable_stored_preflight(svc, job: Job, audio_path: str, *, reuse: bool) -> dict:
+    """Préflight déjà calculé (phase analyze du wizard) réutilisable tel quel.
+
+    Sortie-équivalent : le JSON stocké EST la sortie d'un calcul sur ce même
+    fichier (empreinte chemin+taille+mtime identique). `reuse_analysis: false`
+    force le recalcul systématique (comportement d'avant 0.3.8).
+    """
+    if not reuse:
+        return {}
+    stored = load_audio_preflight(svc.config, job)
+    if not stored:
+        return {}
+    try:
+        if stored.get("source_fingerprint") == source_fingerprint(Path(audio_path)):
+            return stored
+    except OSError:
+        return {}
+    return {}
 
 
 def run(svc, job: Job, audio_path: str, sl) -> dict:
@@ -18,6 +38,15 @@ def run(svc, job: Job, audio_path: str, sl) -> dict:
     if not analyzer.enabled:
         sl.debug("[pipeline] Pré-diagnostic audio désactivé", step="audio_preflight")
         return {}
+
+    stored = _reusable_stored_preflight(svc, job, audio_path, reuse=analyzer.reuse_analysis)
+    if stored:
+        sl.info(
+            "[pipeline] Pré-diagnostic audio réutilisé (phase analyze, audio inchangé)",
+            step="audio_preflight",
+            risk_level=stored.get("risk_level"),
+        )
+        return stored
 
     t0 = time.monotonic()
     sl.info("[pipeline] Pré-diagnostic audio en cours", step="audio_preflight")

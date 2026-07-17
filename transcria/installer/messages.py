@@ -258,6 +258,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
                                   "({user}@{db}) — bootstrap local sauté.",
         "phase_systemd_section": "Services systemd",
         "phase_summary_section": "Résumé de l'installation",
+        "phase_summary_elapsed": "⏱  Durée totale de l'installation : {minutes} min {seconds} s",
     },
     "en": {
         "path_venv_existing": "Existing venv: {value}",
@@ -490,6 +491,7 @@ INSTALL_MESSAGES: dict[str, dict[str, str]] = {
                                   "({user}@{db}) — local bootstrap skipped.",
         "phase_systemd_section": "systemd services",
         "phase_summary_section": "Installation summary",
+        "phase_summary_elapsed": "⏱  Total installation time: {minutes} min {seconds} s",
     },
 }
 

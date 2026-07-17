@@ -170,6 +170,7 @@ NON_INTERACTIVE=false
 SKIP_DOCTOR=false
 WITH_STT_RUNTIMES=false   # --with-stt-runtimes : phases audiocpp+parakeetcpp (opt-in, GPU)
 STRICT_DOCTOR=false
+INSTALL_STARTED_AT=$(date +%s)   # métrique time-to-first-job, affichée au résumé final
 PYTHON_BIN=""
 SETUP_PG=""            # "" = à décider (prompt) ; true/false = explicite
 PG_HOST="127.0.0.1"
@@ -1497,6 +1498,7 @@ SUMMARY_CLI_ARGS=(
     --db-backend "$DB_BACKEND"
     --doctor-status "$DOCTOR_STATUS"
     --opencode-bin "${OPENCODE_BIN:-}"
+    --elapsed-seconds "$(( $(date +%s) - INSTALL_STARTED_AT ))"
 )
 [[ "$INSTALL_SYSTEMD" != true ]]           && SUMMARY_CLI_ARGS+=(--no-systemd)
 [[ "$PROFILE_NEEDS_LOCAL_MODELS" = true ]] && SUMMARY_CLI_ARGS+=(--needs-local-models)

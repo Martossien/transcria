@@ -1032,9 +1032,9 @@ var TranscrIA = window.TranscrIA || {};
         return t('mis à jour il y a %(n)sh', { n: Math.floor(minutes / 60) });
     }
 
-    function _renderWorkflowStatusBanner(banner, state, progress) {
+    function _renderWorkflowStatusBanner(banner, state, progress, queueInfo) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
-        if (!isLive && !(progress && progress.message)) {
+        if (!isLive && !(progress && progress.message) && !(queueInfo && queueInfo.position)) {
             banner.classList.remove('is-visible');
             banner.innerHTML = '';
             return;
@@ -1042,6 +1042,15 @@ var TranscrIA = window.TranscrIA || {};
 
         var label = _STATE_LABELS[state] ? t(_STATE_LABELS[state]) : (state || t('Traitement en cours'));
         var message = progress && progress.message ? progress.message : label;
+        if (queueInfo && queueInfo.position) {
+            var queueText = t('Position %(n)s dans la file', { n: queueInfo.position });
+            if (queueInfo.estimate && queueInfo.estimate.text) {
+                queueText += ' — ' + (queueInfo.estimate.seconds > 0
+                    ? t('démarrage estimé dans ~%(d)s', { d: queueInfo.estimate.text })
+                    : t('démarrage imminent'));
+            }
+            message = message ? (message + ' · ' + queueText) : queueText;
+        }
         var phase = progress && progress.phase ? progress.phase : '';
         var pct = progress && typeof progress.percent === 'number' ? Math.max(0, Math.min(100, progress.percent)) : null;
         var age = progress ? _formatProgressAge(progress.updated_at) : '';
@@ -1079,7 +1088,10 @@ var TranscrIA = window.TranscrIA || {};
                 }
                 var state = r.data.state;
                 var progress = r.data.progress || null;
-                _renderWorkflowStatusBanner(banner, state, progress);
+                var queueInfo = r.data.queue_position
+                    ? { position: r.data.queue_position, estimate: r.data.wait_estimate || null }
+                    : null;
+                _renderWorkflowStatusBanner(banner, state, progress, queueInfo);
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
                     // Phase active (résumé, traitement…) : rafraîchissement rapide.
                     setTimeout(poll, 4000);

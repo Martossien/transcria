@@ -70,6 +70,51 @@ def _repo_total_bytes(spec: ModelSpec, token: str | None) -> int:
                if spec.file is None or s.rfilename == spec.file)
 
 
+def _configure_hf_transfer() -> bool:
+    """Active le téléchargement multi-flux Rust (hf_transfer) si le paquet est présent.
+
+    À appeler AVANT tout import de huggingface_hub : la constante
+    ``HF_HUB_ENABLE_HF_TRANSFER`` y est figée à l'import. Kill-switch :
+    ``TRANSCRIA_NO_HF_TRANSFER=1`` (proxies capricieux, débogage).
+    """
+    if os.environ.get("TRANSCRIA_NO_HF_TRANSFER"):
+        return False
+    try:
+        import hf_transfer  # noqa: F401
+    except ImportError:
+        return False
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+    return True
+
+
+def _disable_hf_transfer_runtime() -> None:
+    """Coupe hf_transfer APRÈS import de huggingface_hub (repli sur la voie classique)."""
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+    try:
+        from huggingface_hub import constants
+
+        constants.HF_HUB_ENABLE_HF_TRANSFER = False
+    except Exception:  # noqa: BLE001 — repli best-effort, le retry échouera de lui-même sinon
+        pass
+
+
+def _fetch_with_hf_transfer_fallback(fetch: Callable[[], None], hf_fast: bool) -> None:
+    """Un essai en voie rapide, puis repli UNE fois en voie classique.
+
+    hf_transfer est moins tolérant que la voie Python (proxies, reprises
+    partielles) : son échec ne doit jamais coûter un téléchargement qui aurait
+    réussi sans lui.
+    """
+    if not hf_fast:
+        fetch()
+        return
+    try:
+        fetch()
+    except Exception:  # noqa: BLE001 — tout échec de la voie rapide déclenche le repli
+        _disable_hf_transfer_runtime()
+        fetch()
+
+
 def run_download(
     spec: ModelSpec,
     *,
@@ -82,6 +127,7 @@ def run_download(
 ) -> dict:
     """Effectue le téléchargement BLOQUANT (dans le sous-process) en publiant le statut."""
     started = datetime.now(timezone.utc).isoformat()
+    hf_fast = _configure_hf_transfer()
 
     def _base(**extra) -> dict:
         # kind/subdir/file rendent le statut AUTO-SUFFISANT : l'endpoint de progression calcule
@@ -116,16 +162,24 @@ def run_download(
             subprocess.run([str(py), str(manager), "install", spec.file],
                            check=True, cwd=str(home / "src"))
         elif spec.kind == "gguf":
-            from huggingface_hub import hf_hub_download
-
             if not spec.file:
                 raise ValueError("modèle GGUF sans nom de fichier")
-            hf_hub_download(repo_id=spec.repo_id, filename=spec.file,
-                            local_dir=str(models_dir / spec.target_subdir), token=token or None)
-        else:
-            from huggingface_hub import snapshot_download
+            gguf_file: str = spec.file  # figé après la garde (mypy ne narrowe pas dans la closure)
 
-            snapshot_download(repo_id=spec.repo_id, token=token or None)  # → cache HF_HOME
+            def _fetch() -> None:
+                from huggingface_hub import hf_hub_download
+
+                hf_hub_download(repo_id=spec.repo_id, filename=gguf_file,
+                                local_dir=str(models_dir / spec.target_subdir), token=token or None)
+
+            _fetch_with_hf_transfer_fallback(_fetch, hf_fast)
+        else:
+            def _fetch() -> None:
+                from huggingface_hub import snapshot_download
+
+                snapshot_download(repo_id=spec.repo_id, token=token or None)  # → cache HF_HOME
+
+            _fetch_with_hf_transfer_fallback(_fetch, hf_fast)
     except Exception as exc:  # noqa: BLE001 — on RAPPORTE l'échec dans le statut (repris par l'UI)
         _write_status(status_file, _base(status="error", total_bytes=total, message=str(exc)[:400]))
         return {"ok": False, "error": str(exc)}

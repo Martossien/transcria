@@ -27,7 +27,7 @@ class TestBackup:
         archive = tmp_path / "transcria_20260716.tar.gz"
         archive.write_bytes(b"x" * 2048)
         monkeypatch.setattr(cli, "create_backup", lambda *a, **kw: archive)
-        monkeypatch.setattr(cli, "rotate_backups", lambda dest, keep: ["vieux.tar.gz"])
+        monkeypatch.setattr(cli, "rotate_backups", lambda dest, keep, scope="full": ["vieux.tar.gz"])
 
         rc = cli.main(["backup", "--dest", str(tmp_path), "--keep", "3"])
         out = capsys.readouterr().out

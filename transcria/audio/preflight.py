@@ -6,6 +6,7 @@ stable qui alimente les logs, le rapport qualité et les futures décisions
 conditionnelles.
 """
 
+import hashlib
 import logging
 import math
 import shutil
@@ -19,6 +20,19 @@ from transcria.audio.difficulty_map import build_difficulty_map, summarize_diffi
 logger = logging.getLogger(__name__)
 
 
+def source_fingerprint(audio_path: Path | str) -> str:
+    """Empreinte du fichier source (chemin + taille + mtime) — même patron que le
+    checkpoint de diarisation (base_diarizer._audio_fingerprint) : suffisante pour
+    détecter un remplacement du fichier, sans lire son contenu."""
+    path = Path(audio_path)
+    stat = path.stat()
+    h = hashlib.sha256()
+    h.update(str(path.resolve()).encode("utf-8"))
+    h.update(str(stat.st_size).encode("ascii"))
+    h.update(str(int(stat.st_mtime)).encode("ascii"))
+    return h.hexdigest()
+
+
 class AudioPreflightAnalyzer:
     """Calcule des métriques pré-STT légères à partir du signal audio."""
 
@@ -26,6 +40,9 @@ class AudioPreflightAnalyzer:
         cfg = config.get("workflow", {}).get("audio_preflight", {}) or {}
         self.cfg = cfg
         self.enabled = bool(cfg.get("enabled", True))
+        # Réutilisation du préflight de la phase analyze par le pipeline si
+        # l'empreinte source concorde (PISTES_AMELIORATION §2.5) ; false = recalcul.
+        self.reuse_analysis = bool(cfg.get("reuse_analysis", True))
         self.frame_ms = int(cfg.get("frame_ms", 30))
         self.low_rms_threshold = float(cfg.get("low_rms_threshold", 0.02))
         self.very_low_rms_threshold = float(cfg.get("very_low_rms_threshold", 0.008))
@@ -118,6 +135,7 @@ class AudioPreflightAnalyzer:
                 **bandwidth,
                 "flags": flags,
                 "risk_level": _risk_level(flags),
+                "source_fingerprint": source_fingerprint(path),
             }
             if self.squim_enabled or self.dnsmos_enabled:
                 self._augment_with_squim(result, signal, int(sample_rate))

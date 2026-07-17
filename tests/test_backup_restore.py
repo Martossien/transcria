@@ -207,3 +207,97 @@ class TestRevueQualite:
         monkeypatch.setattr(r, "_service_responds", lambda url, timeout=2.0: True)
         with pytest.raises(BackupError, match="répond encore"):
             restore_backup(cfg, archive, force=False)
+
+
+class TestBackupScope:
+    """Sauvegardes partielles (PISTES_AMELIORATION §6.1) : base seule / fichiers seuls."""
+
+    def test_db_only_ne_contient_que_la_base(self, instance, tmp_path):
+        cfg, config_path, _ = instance
+        archive = create_backup(cfg, config_path, tmp_path / "b", app_version="0.1.0",
+                                alembic_revision=None, scope="db")
+        assert "-db-" in archive.name
+        with tarfile.open(archive) as tar:
+            names = tar.getnames()
+        assert "database.sqlite" in names
+        assert not any(n.startswith("jobs/") for n in names)
+        assert "config.yaml" not in names
+        manifest = read_manifest(archive)
+        assert manifest["scope"] == "db"
+        assert manifest["entries"]["trees"] == []
+
+    def test_files_only_ne_contient_pas_la_base(self, instance, tmp_path):
+        cfg, config_path, _ = instance
+        archive = create_backup(cfg, config_path, tmp_path / "b", app_version="0.1.0",
+                                alembic_revision=None, scope="files")
+        assert "-files-" in archive.name
+        with tarfile.open(archive) as tar:
+            names = tar.getnames()
+        assert "database.sqlite" not in names and "database.dump" not in names
+        assert any(n.startswith("jobs/") for n in names)
+        manifest = read_manifest(archive)
+        assert manifest["scope"] == "files"
+        assert "database" not in manifest["entries"]
+
+    def test_scope_inconnu_leve(self, instance, tmp_path):
+        cfg, config_path, _ = instance
+        with pytest.raises(BackupError):
+            create_backup(cfg, config_path, tmp_path / "b", app_version="0.1.0",
+                          alembic_revision=None, scope="tout")
+
+    def test_rotation_par_scope_isole_les_pots(self, tmp_path):
+        dest = tmp_path / "b"
+        dest.mkdir()
+        (dest / "transcria-backup-20260101-000000.tar.gz").write_bytes(b"x")
+        for stamp in ("20260101-000000", "20260102-000000", "20260103-000000"):
+            (dest / f"transcria-backup-db-{stamp}.tar.gz").write_bytes(b"x")
+        removed = rotate_backups(dest, keep=2, scope="db")
+        assert len(removed) == 1
+        # la sauvegarde COMPLÈTE n'est jamais expulsée par la rotation du scope db
+        assert (dest / "transcria-backup-20260101-000000.tar.gz").exists()
+        assert not (dest / "transcria-backup-db-20260101-000000.tar.gz").exists()
+
+    def test_restore_files_only_ne_touche_pas_la_base(self, instance, tmp_path):
+        cfg, config_path, _ = instance
+        archive = create_backup(cfg, config_path, tmp_path / "b", app_version="0.1.0",
+                                alembic_revision=None, scope="files")
+
+        target = tmp_path / "target"
+        target.mkdir()
+        target_db = target / "app.db"
+        _make_sqlite(target_db, rows=7)  # base cible NON vide, à préserver
+        target_cfg = {
+            "storage": {"database_url": f"sqlite:///{target_db}", "jobs_dir": str(target / "jobs")},
+            "voice_enrollment": {"storage_dir": str(target / "voices")},
+        }
+        report = restore_backup(target_cfg, archive, force=True)
+        assert report["database_restored"] is False
+        assert report["scope"] == "files"
+        # les fichiers sont restaurés, la base cible est intacte (7 lignes seedées)
+        assert (target / "jobs" / "job1" / "metadata" / "transcription.srt").exists()
+        conn = sqlite3.connect(str(target_db))
+        count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        conn.close()
+        assert count == 7
+
+    def test_restore_db_only_ne_touche_pas_les_fichiers(self, instance, tmp_path):
+        cfg, config_path, _ = instance
+        archive = create_backup(cfg, config_path, tmp_path / "b", app_version="0.1.0",
+                                alembic_revision=None, scope="db")
+
+        target = tmp_path / "target"
+        (target / "jobs" / "jobX").mkdir(parents=True)
+        sentinel = target / "jobs" / "jobX" / "keep.txt"
+        sentinel.write_text("garde")
+        target_db = target / "app.db"
+        target_cfg = {
+            "storage": {"database_url": f"sqlite:///{target_db}", "jobs_dir": str(target / "jobs")},
+            "voice_enrollment": {"storage_dir": str(target / "voices")},
+        }
+        report = restore_backup(target_cfg, archive, force=True)
+        assert report["database_restored"] is True
+        conn = sqlite3.connect(str(target_db))
+        count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        conn.close()
+        assert count == 3
+        assert sentinel.read_text() == "garde"  # aucun fichier touché

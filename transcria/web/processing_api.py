@@ -27,6 +27,7 @@ from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import JobState
 from transcria.jobs.store import JobStore
 from transcria.queue.store import QueueStore
+from transcria.queue.wait_estimate import queue_wait_estimates
 from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
@@ -285,12 +286,34 @@ def api_job_status(job_id: str):
     if error_response:
         return error_response
     progress = get_workflow_progress(job)
-    return jsonify({
+    payload = {
         "state": job.state,
         "execution_status": get_execution_status(job) if is_execution_active(job) else "idle",
         "progress": progress,
         "eta": _live_eta(job, progress),
-    })
+    }
+    # Champs ADDITIFS du contrat ⭐ (0.3.8) : présents seulement quand le job attend
+    # son tour en file — position 1-based et estimation calibrée machine (mêmes
+    # calculs que /admin/queue, agrégat sans détail des jobs des autres).
+    queue_info = _queue_wait_info(job)
+    if queue_info:
+        payload.update(queue_info)
+    return jsonify(payload)
+
+
+def _queue_wait_info(job) -> dict | None:
+    try:
+        position = QueueStore.get_position(job.id)
+        if position is None:
+            return None
+        entries = QueueStore.get_ordered_queue(limit=10000, include_running=True)
+        estimate = queue_wait_estimates(get_config(), entries).get(job.id)
+        info: dict = {"queue_position": position}
+        if estimate:
+            info["wait_estimate"] = estimate
+        return info
+    except Exception:  # noqa: BLE001 — enrichissement best-effort, jamais bloquant
+        return None
 
 
 def _live_eta(job, progress) -> dict | None:

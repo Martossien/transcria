@@ -49,6 +49,7 @@ class SummaryPlan:
     qwen_ok: bool = False
     opencode_bin: str = ""
     systemd: bool = True
+    elapsed_seconds: int = 0
 
 
 def _count_change_me(config_path: Path) -> int:
@@ -88,6 +89,11 @@ def apply_summary(plan: SummaryPlan, *, console: _ConsoleLike) -> None:
         ),
         render_profile_next_steps_text(install_plan, context),
     ]
+    # Durée totale = la métrique « time-to-first-job » de référence pour juger
+    # toute optimisation d'installation (PISTES_AMELIORATION §6.6).
+    if plan.elapsed_seconds > 0:
+        minutes, seconds = divmod(int(plan.elapsed_seconds), 60)
+        blocks.append(t("phase_summary_elapsed", minutes=minutes, seconds=seconds))
     # Reproduit l'espacement du shell (echo "" autour de chaque bloc).
     for block in blocks:
         console.write()

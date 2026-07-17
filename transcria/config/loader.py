@@ -286,6 +286,9 @@ _DEFAULT_CONFIG = {
         },
         "audio_preflight": {
             "enabled": True,
+            # Réutilise le préflight de la phase analyze si l'audio n'a pas changé
+            # (sortie-équivalent) ; false = recalcul systématique dans le pipeline.
+            "reuse_analysis": True,
             "frame_ms": 30,
             "low_rms_threshold": 0.02,
             "very_low_rms_threshold": 0.008,
@@ -745,6 +748,9 @@ _DEFAULT_CONFIG = {
             "on_calendar": "*-*-* 02:00:00",   # syntaxe systemd OnCalendar (défaut : 02h00)
             "keep": 7,                         # rotation : nombre d'archives conservées
             "exclude_audio": False,            # sauvegardes planifiées sans les audios
+            # Timer de PURGE de rétention (schedule --enable --purge) : décalé après la
+            # sauvegarde pour n'effacer qu'une fois l'archive du jour produite.
+            "purge_on_calendar": "*-*-* 03:30:00",
         },
     },
     # Internationalisation de l'INTERFACE (chrome applicatif). Distinct de la langue des

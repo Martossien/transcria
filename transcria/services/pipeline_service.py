@@ -136,6 +136,46 @@ class PipelineService:
         finally:
             self._release_arbitrage_llm()
 
+    def _run_preprocess_transforms(self, job: Job, audio_path: str, mode: str, sl,
+                                   timing_profile_id: str, audio_seconds: float) -> str:
+        """Les transforms audio pré-STT, chacune historisée individuellement.
+
+        Les noms `preprocess_*` (StageMetrics + modèle de temps) ne sont PAS dans la
+        liste des étapes des estimations (timing_service.processing_stages) — pure
+        observabilité, aucun effet sur les ETA tant qu'ils n'y sont pas ajoutés.
+        """
+        def _timed(stage: str, fn):
+            t0 = time.monotonic()
+            out = fn()
+            elapsed = time.monotonic() - t0
+            StageMetrics.get_instance().record(stage, elapsed)
+            self._record_stage_timing(timing_profile_id, audio_seconds, stage, elapsed)
+            return out
+
+        started = time.monotonic()
+        audio_preflight = _timed(
+            "preprocess_preflight", lambda: self._run_audio_preflight(job, audio_path, sl))
+        audio_scene = _timed(
+            "preprocess_scene", lambda: self._run_audio_scene_analysis(job, audio_path, sl))
+        self._refresh_audio_quality_with_scene(job, audio_scene, sl)
+        audio_path = _timed(
+            "preprocess_separation",
+            lambda: self._run_source_separation(job, audio_path, audio_scene, sl))
+        audio_path = _timed(
+            "preprocess_scene_filter",
+            lambda: self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl))
+        audio_path = _timed(
+            "preprocess_denoise",
+            lambda: self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl))
+        audio_path = _timed(
+            "preprocess_normalization",
+            lambda: self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight))
+        elapsed = time.monotonic() - started
+        StageMetrics.get_instance().record("preprocess", elapsed)
+        self._record_stage_timing(timing_profile_id, audio_seconds, "preprocess", elapsed)
+        sl.info("Préprocess terminé", step="preprocess", duree=round(elapsed, 1))
+        return audio_path
+
     def _record_stage_timing(self, profile_id: str, audio_seconds: float,
                              stage: str, elapsed: float) -> None:
         """Historise une étape terminée pour le modèle de temps (best-effort : une panne
@@ -192,13 +232,8 @@ class PipelineService:
             audio_path = resumed_audio or audio_path
             sl.info("Préprocess déjà fait — reprise (skip transforms audio)", audio=audio_path)
         else:
-            audio_preflight = self._run_audio_preflight(job, audio_path, sl)
-            audio_scene = self._run_audio_scene_analysis(job, audio_path, sl)
-            self._refresh_audio_quality_with_scene(job, audio_scene, sl)
-            audio_path = self._run_source_separation(job, audio_path, audio_scene, sl)
-            audio_path = self._run_audio_scene_filter(job, audio_path, mode, audio_scene, sl)
-            audio_path = self._run_audio_denoise(job, audio_path, mode, audio_preflight, sl)
-            audio_path = self._run_audio_normalization(job, audio_path, mode, sl, audio_preflight)
+            audio_path = self._run_preprocess_transforms(
+                job, audio_path, mode, sl, _timing_profile_id, _audio_seconds)
             resume.set_processed_audio_path(JobStore, job.id, audio_path)
             checkpoints.checkpoint("preprocess")
 

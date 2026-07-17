@@ -2359,6 +2359,78 @@ def main() -> int:
                 fail("--force-source-separation actif mais vocals.wav absent — "
                      "vérifier que Demucs est installé (pip install demucs)")
 
+            # ── Lot 1 (0.3.8) : instrumentation preprocess, réutilisation
+            #    préflight, sauvegarde base seule ────────────────────────────
+            section("Optimisations lot 1 (instrumentation, préflight, backup)")
+
+            # 1. Le préflight porte l'empreinte de son fichier source : c'est la
+            #    clé de la réutilisation analyze→pipeline (zéro recalcul).
+            from transcria.audio.preflight import source_fingerprint
+
+            pf = fs.load_json("metadata/audio_preflight.json") or {}
+            original = fs.get_original_audio_path()
+            if pf.get("source_fingerprint") and original is not None:
+                if pf["source_fingerprint"] == source_fingerprint(original):
+                    ok("préflight : source_fingerprint présent et conforme à l'audio original "
+                       "(réutilisation analyze→pipeline opérante)")
+                    RESULTS["preflight_fingerprint"] = True
+                else:
+                    RESULTS["preflight_fingerprint"] = False
+                    fail("préflight : source_fingerprint ne correspond pas à l'audio original")
+            elif not args.disable_audio_preflight:
+                RESULTS["preflight_fingerprint"] = False
+                fail("préflight : source_fingerprint absent d'audio_preflight.json")
+
+            # 2. Chaque étape preprocess est historisée dans le modèle de temps
+            #    machine (préalable des décisions chiffrées du lot 2).
+            from transcria.jobs.timing_store import JobTimingStore
+            from transcria.workflow.profiles import profile_for_job as _pfj
+
+            _job_now = JobStore.get_by_id(job_id)
+            _prof = _pfj(_job_now)
+            if _prof is not None:
+                samples = JobTimingStore.samples_for_stages(
+                    _prof.id, ["preprocess", "preprocess_preflight", "preprocess_scene"])
+                missing = [s for s, pts in samples.items() if not pts]
+                if not missing:
+                    ok(f"timings preprocess historisés pour le profil {_prof.id} "
+                       f"(preprocess + étapes détaillées)")
+                    RESULTS["preprocess_timings"] = True
+                else:
+                    RESULTS["preprocess_timings"] = False
+                    fail(f"timings preprocess absents du modèle de temps : {missing}")
+
+            # 3. Sauvegarde base seule RÉELLE contre la base de cette instance
+            #    (critère lot 1 : < 30 s), vérifiée puis jetée.
+            import tempfile as _tempfile
+
+            from transcria.maintenance.backup import (
+                create_backup as _create_backup,
+                read_manifest as _read_manifest,
+                verify_backup as _verify_backup,
+            )
+
+            try:
+                with _tempfile.TemporaryDirectory() as _bdir:
+                    _t0 = time.monotonic()
+                    _archive = _create_backup(
+                        cfg, None, Path(_bdir),
+                        app_version="e2e", alembic_revision=None, scope="db")
+                    _elapsed = time.monotonic() - _t0
+                    _manifest = _read_manifest(_archive)
+                    _problems = _verify_backup(_archive)
+                    if _manifest.get("scope") == "db" and not _problems and _elapsed < 30:
+                        ok(f"backup --db-only : archive saine en {_elapsed:.1f}s "
+                           f"({_archive.stat().st_size / 1024:.0f} Ko)")
+                        RESULTS["backup_db_only"] = True
+                    else:
+                        RESULTS["backup_db_only"] = False
+                        fail(f"backup --db-only : scope={_manifest.get('scope')}, "
+                             f"problèmes={_problems}, durée={_elapsed:.1f}s")
+            except Exception as exc:  # noqa: BLE001 — l'échec du backup est un échec du check
+                RESULTS["backup_db_only"] = False
+                fail("backup --db-only impossible", exc)
+
             # ── Genre par locuteur ───────────────────────────────────────────
             section("Genre vocal par locuteur (attribution acoustique)")
 

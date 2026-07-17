@@ -168,33 +168,44 @@ def create_backup(
     app_version: str,
     alembic_revision: str | None,
     include_audio: bool = True,
+    scope: str = "full",
     env_path: Path | None = None,
     runner=subprocess.run,
     now: datetime | None = None,
 ) -> Path:
-    """Crée une archive tar.gz horodatée + manifeste. Renvoie le chemin de l'archive."""
+    """Crée une archive tar.gz horodatée + manifeste. Renvoie le chemin de l'archive.
+
+    ``scope`` : ``full`` (défaut, base + fichiers), ``db`` (base seule — sauvegarde
+    rapide quotidienne) ou ``files`` (jobs/voix/prompts/config, sans la base). La
+    restauration est pilotée par le manifeste : une archive partielle ne restaure
+    que ce qu'elle contient.
+    """
+    if scope not in ("full", "db", "files"):
+        raise BackupError(f"scope inconnu : {scope!r} (attendu : full, db ou files)")
     plan = plan_from_config(cfg, config_path, include_audio=include_audio)
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%d-%H%M%S")
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         staging = Path(tmp)
+        entries: dict = {"trees": []}
         # 1. base D'ABORD (cohérence : la fenêtre est côté fichiers, jamais côté base).
-        db_file = staging / ("database.sqlite" if plan.db_kind == "sqlite" else "database.dump")
-        db_entry = _dump_database(plan, db_file, runner=runner)
+        if scope != "files":
+            db_file = staging / ("database.sqlite" if plan.db_kind == "sqlite" else "database.dump")
+            entries["database"] = _dump_database(plan, db_file, runner=runner)
 
         # 2. fichiers.
-        trees: list[str] = []
-        entries: dict = {"database": db_entry, "trees": trees}
-        for label, path in [("jobs", plan.jobs_dir), ("voices", plan.voices_dir),
-                            ("prompts", plan.prompts_dir)]:
-            if path and path.exists():
-                out = staging / label
-                _copy_tree(path, out, include_audio=plan.include_audio)
-                trees.append(label)
-        if plan.config_path:
-            shutil.copy2(plan.config_path, staging / "config.yaml")
-            entries["config"] = "config.yaml"
+        if scope != "db":
+            trees: list[str] = entries["trees"]
+            for label, path in [("jobs", plan.jobs_dir), ("voices", plan.voices_dir),
+                                ("prompts", plan.prompts_dir)]:
+                if path and path.exists():
+                    out = staging / label
+                    _copy_tree(path, out, include_audio=plan.include_audio)
+                    trees.append(label)
+            if plan.config_path:
+                shutil.copy2(plan.config_path, staging / "config.yaml")
+                entries["config"] = "config.yaml"
 
         # 3. manifeste (traçabilité + garde de restauration).
         manifest = {
@@ -204,6 +215,7 @@ def create_backup(
             "alembic_revision": alembic_revision,
             "db_kind": plan.db_kind,
             "include_audio": include_audio,
+            "scope": scope,
             "entries": entries,
             "env_sha256": _sha256_file(env_path) if (env_path and env_path.exists()) else None,
             "notes": plan.extra_notes,
@@ -211,7 +223,8 @@ def create_backup(
         (staging / MANIFEST_NAME).write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        archive = dest_dir / f"transcria-backup-{stamp}.tar.gz"
+        infix = "" if scope == "full" else f"{scope}-"
+        archive = dest_dir / f"transcria-backup-{infix}{stamp}.tar.gz"
         with tarfile.open(archive, "w:gz") as tar:
             for item in sorted(staging.rglob("*")):
                 if item.is_file():
@@ -304,11 +317,17 @@ class RestorePlan:
     config_path: Path | None
 
 
-def rotate_backups(dest_dir: Path, keep: int) -> list[Path]:
-    """Supprime les archives les plus anciennes au-delà de ``keep``. Renvoie les supprimées."""
+def rotate_backups(dest_dir: Path, keep: int, *, scope: str = "full") -> list[Path]:
+    """Supprime les archives les plus anciennes au-delà de ``keep``. Renvoie les supprimées.
+
+    La rotation est PAR SCOPE (les archives ``db``/``files`` portent leur scope dans le
+    nom) : une rafale de sauvegardes base-seule ne peut pas expulser la sauvegarde
+    complète du pot commun.
+    """
     if keep <= 0:
         return []
-    archives = sorted(dest_dir.glob("transcria-backup-*.tar.gz"))
+    pattern = "transcria-backup-[0-9]*.tar.gz" if scope == "full" else f"transcria-backup-{scope}-*.tar.gz"
+    archives = sorted(dest_dir.glob(pattern))
     to_delete = archives[:-keep] if len(archives) > keep else []
     for path in to_delete:
         path.unlink()

@@ -104,6 +104,8 @@ def _check_maintenance(cfg: dict, r: ValidationResult) -> None:
         _check_int_range(sched, "keep", "maintenance.schedule.keep", 0, 10_000, r)
     if "on_calendar" in sched:
         _check_str(sched, "on_calendar", "maintenance.schedule.on_calendar", r)
+    if "purge_on_calendar" in sched:
+        _check_str(sched, "purge_on_calendar", "maintenance.schedule.purge_on_calendar", r)
 
 
 def _check_required_keys(cfg: dict, r: ValidationResult) -> None:
@@ -613,6 +615,7 @@ def _check_audio_preflight(cfg: dict, r: ValidationResult) -> None:
         r.add_error("workflow.audio_preflight: doit être un objet YAML")
         return
     _check_bool(cfg, "enabled", "workflow.audio_preflight.enabled", r)
+    _check_bool(cfg, "reuse_analysis", "workflow.audio_preflight.reuse_analysis", r)
     for key in (
         "frame_ms", "low_rms_threshold", "very_low_rms_threshold",
         "silence_rms_threshold", "low_snr_db_threshold",

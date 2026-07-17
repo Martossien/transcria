@@ -143,8 +143,13 @@ def restore_backup(
 
     manifest = read_manifest(archive)
     db_kind = manifest.get("db_kind", "")
+    # Restauration pilotée par le manifeste : une archive partielle (scope db/files)
+    # ne restaure que ce qu'elle contient — la garde base-vide ne s'applique que si
+    # l'archive contient effectivement une base.
+    entries = manifest.get("entries", {}) or {}
+    has_database = bool(entries.get("database"))
 
-    if not force and not database_is_empty(cfg):
+    if has_database and not force and not database_is_empty(cfg):
         raise BackupError(
             "la base cible n'est pas vide — restauration refusée. "
             "Utilisez force=True (CLI : --force) pour écraser les données existantes.")
@@ -159,7 +164,8 @@ def restore_backup(
         with tarfile.open(archive, "r:gz") as tar:
             tar.extractall(staging, filter="data")  # noqa: S202 — archive de confiance
 
-        _restore_database(cfg, staging, db_kind, runner=runner)
+        if has_database:
+            _restore_database(cfg, staging, db_kind, runner=runner)
         _restore_tree(staging, "jobs", jobs_dir)
         if voices_dir:
             _restore_tree(staging, "voices", voices_dir)
@@ -179,5 +185,7 @@ def restore_backup(
         "app_version": manifest.get("app_version"),
         "alembic_revision": manifest.get("alembic_revision"),
         "db_kind": db_kind,
+        "scope": manifest.get("scope", "full"),
+        "database_restored": has_database,
         "trees": manifest.get("entries", {}).get("trees", []),
     }

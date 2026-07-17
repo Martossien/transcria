@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from transcria.models_catalog import ModelSpec
 from transcria.models_download import (
     check_space,
@@ -125,3 +127,43 @@ def test_download_from_args_builds_spec_and_runs(monkeypatch, tmp_path: Path):
                         or {"ok": True})
     rc = download_from_args(role="stt", repo="x/y", kind="hf_cache", file=None, subdir="")
     assert rc == 0 and seen == {"repo": "x/y", "kind": "hf_cache", "file": None}
+
+
+# ── hf_transfer : voie rapide avec repli (PISTES_AMELIORATION §6.6) ──────────
+
+def test_fallback_reessaie_en_voie_classique(monkeypatch):
+    from transcria import models_download as md
+
+    attempts: list[str] = []
+    disabled: list[bool] = []
+    monkeypatch.setattr(md, "_disable_hf_transfer_runtime", lambda: disabled.append(True))
+
+    def fetch():
+        attempts.append("x")
+        if len(attempts) == 1:
+            raise RuntimeError("hf_transfer: connexion coupée")
+
+    md._fetch_with_hf_transfer_fallback(fetch, hf_fast=True)
+    assert len(attempts) == 2      # 1 essai rapide + 1 repli classique
+    assert disabled == [True]      # la voie rapide a bien été coupée avant le retry
+
+
+def test_sans_voie_rapide_un_seul_essai_et_lechec_remonte(monkeypatch):
+    from transcria import models_download as md
+
+    attempts: list[str] = []
+
+    def fetch():
+        attempts.append("x")
+        raise RuntimeError("réseau")
+
+    with pytest.raises(RuntimeError):
+        md._fetch_with_hf_transfer_fallback(fetch, hf_fast=False)
+    assert len(attempts) == 1
+
+
+def test_kill_switch_env_desactive_la_voie_rapide(monkeypatch):
+    from transcria import models_download as md
+
+    monkeypatch.setenv("TRANSCRIA_NO_HF_TRANSFER", "1")
+    assert md._configure_hf_transfer() is False
