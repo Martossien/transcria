@@ -47,6 +47,8 @@ imaginerait spontanément :
 | 3 | Politique de repli CPU encadrée (résumé seulement, opt-in) | jobs courts traités pendant les pics GPU | M/L | **P2** |
 | 2.5–2.7 | Dé-doublonner le préflight, mutualiser le décodage 16 kHz, instrumenter le bloc preprocess | −10 à −30 s par job + visibilité sur les coûts réels | M | **P2** |
 | 6.2 | Purge planifiée (timer systemd) + garde-fou de quota disque | plus de croissance silencieuse de `jobs/` | S | **P2** |
+| 4.3 | Politique de cycle de vie LLM par backend (keep-warm agressif en vLLM) + réutilisation de préfixe de prompt | indispensable avant tout déploiement vLLM local ; TTFT réduit passes 2-3 | M | **P2** |
+| 6.6 | `hf_transfer` + téléchargements modèles parallèles à l'installation | installation nue ×3-5 plus rapide sur le poste modèles | S | **P2** |
 | 2.4 | Réduire le coût des passes LLM (prompts, lots, paliers de modèles) | le poste n°1 du pipeline, mais le plus risqué qualité | L | **P3** |
 
 Le détail, les contreparties et les pistes écartées suivent.
@@ -454,13 +456,49 @@ réutilisation ; la pleine passe reste raisonnable sur GPU).
 - si un besoin temps-réel émerge (transcription live), sortformer streaming est
   déjà là.
 
-### 4.3 LLM d'arbitrage
+### 4.3 LLM d'arbitrage : le backend et le modèle comptent autant que le cycle de vie
 
-Voir 2.3 (cycle de vie) et 2.4 (coût des passes). S'y ajoute une piste de confort :
-**pré-lancer le LLM dès l'upload** (le temps que l'utilisateur remplisse les étapes
-du wizard, les 17 s de démarrage sont absorbées). Oui, mais : au premier upload
-seulement — s'il est déjà chaud (CAS A) c'est gratuit ; et ne pas le faire si un
-job pipeline est sur le point de réclamer toute la VRAM. Effort S si couplé à 2.3.
+**État actuel.** L'arbitrage est agnostique du moteur (API compatible OpenAI) avec
+**quatre backends au cycle de vie très différent**, abstraction `LLMBackend`
+documentée dans `docs/LLM_BACKENDS.md` :
+
+| Backend | Coût d'un démarrage | Coût d'un déchargement/rechargement |
+|---|---|---|
+| llama.cpp (défaut all-in-one) | **17 s mesurées** (chargement GGUF + port) | idem à chaque cycle |
+| **vLLM** (topologie split, nœud GPU) | **minutes** (init moteur, compilation graphes CUDA, poids) | le plus pénalisé : `unload` tue `EngineCore`/`Worker_TP`, tout est à refaire |
+| Ollama | démon persistant ; charge/décharge le **modèle** seulement | rechargement = chargement modèle (pas de redémarrage démon) |
+| http distant | géré ailleurs ; `unload` = **no-op** | jamais déchargé par TranscrIA |
+
+Les mesures du §1.1 (2 démarrages par job) concernent llama.cpp — **avec vLLM, le
+même comportement coûterait des minutes par job**, pas 34 s. Le mode distant est
+déjà protégé (no-op) ; le risque vLLM concerne le vLLM *local piloté par script*
+(`launch_arbitrage_vllm.sh`).
+
+**Pistes.**
+1. **Politique de cycle de vie par backend** : le keep-warm de 2.3 (« ne pas
+   arrêter si la file n'est pas vide ») devrait être *plus agressif encore* pour
+   vLLM — ne décharger qu'après N minutes d'inactivité réelle (le coût de relance
+   change la rentabilité du seuil). Le backend expose déjà son type
+   (`llm_backend.py`) : la politique peut s'y indexer sans toucher aux appelants.
+2. **Vitesse de génération : le palier de modèle est le levier n°1.** Les paliers
+   validés existent (`docs/LLM_TIERS.md` : Qwen3.5-9B → Qwen3.6-35B selon la VRAM)
+   mais un seul modèle sert les trois passes. Piste : **un palier par phase** —
+   le résumé (tâche d'extraction, tolérante) sur un modèle petit et rapide, la
+   correction SRT (la valeur ajoutée) sur le gros. Oui, mais : deux modèles
+   résidents = VRAM double ou rechargements (contradiction directe avec 2.3) —
+   n'a de sens qu'en Ollama (bascule de modèle bon marché) ou avec beaucoup de
+   VRAM ; à instruire avec le banc LLM, pas en défaut.
+3. **Vitesse de prompt : réutilisation du préfixe.** Les trois passes partagent de
+   longs préfixes stables (prompt système, SRT complet). llama.cpp
+   (`--cache-reuse`, prompt caching) et vLLM (prefix caching automatique) savent
+   ne pas re-traiter le préfixe déjà vu — à condition que la LLM ne soit pas
+   redémarrée entre les passes (encore 2.3) et que les prompts soient construits
+   préfixe-stable-d'abord. Gain potentiellement important sur le *time-to-first-token*
+   des passes 2 et 3 d'un même job ; à mesurer avant/après sur le banc.
+4. **Pré-lancement dès l'upload** : le temps que l'utilisateur remplisse les
+   étapes du wizard, les 17 s (llama.cpp) sont absorbées. Oui, mais : ne pas le
+   faire si un job pipeline est sur le point de réclamer toute la VRAM. Effort S
+   si couplé à 2.3.
 
 ---
 
@@ -654,6 +692,53 @@ peut pas attendre.
   GPU supportés se réduit un jour — le coût n'est payé qu'aux changements de
   Dockerfile.
 
+### 6.6 Installation : où part le temps, et les leviers — **P2/P3**
+
+**État actuel.** `install.sh` orchestre des phases Python
+(`transcria/installer/*`), chacune horodatée (`result.record(...)`,
+`python_env.py:114`). Les deux postes dominants d'une installation nue :
+1. **pip** : `python -m pip install` standard sur le venv (`python_env.py:112-121`),
+   dont le plan torch CUDA (`torch_env.build_install_plan`) — plusieurs Go de
+   wheels (torch cu126 + bibliothèques NVIDIA), résolution pip classique.
+2. **Modèles** : `snapshot_download` de huggingface_hub, un modèle à la fois,
+   chacun dans un sous-process dédié avec suivi de progression
+   (`models_download.py:73-128`, `maintenance/cli.py:288-294`). **`hf_transfer`
+   n'est pas activé** (vérifié : aucune référence) : les téléchargements HF
+   plafonnent au débit d'un client Python mono-flux.
+
+**Pistes, par rentabilité décroissante.**
+- **Activer `hf_transfer`** (`HF_HUB_ENABLE_HF_TRANSFER=1` + le paquet éponyme) :
+  téléchargements HF multi-flux en Rust, gain typique ×3-5 sur les gros poids
+  (le LLM d'arbitrage seul pèse plusieurs Go). Oui, mais : barres de progression
+  moins fines (le suivi actuel par taille de répertoire, `models_download.py:38-46`,
+  continue de fonctionner) ; une dépendance de plus, à mettre dans requirements.
+  **Effort S, quick win.**
+- **Paralléliser les téléchargements de modèles entre eux** : les sous-process
+  existent déjà, ils sont simplement lancés en séquence. Deux à trois flux
+  concurrents saturent la liaison sans complexifier le suivi (chaque modèle a déjà
+  son fichier de statut). Oui, mais : sur les liaisons lentes, le parallélisme
+  n'apporte rien (le lien est le goulot) et brouille l'affichage — le borner à 2-3.
+  Effort S/M.
+- **`uv` à la place de pip** : résolution et installation nettement plus rapides.
+  Oui, mais : un outil de plus à installer *avant* le venv (bootstrap), un
+  comportement proxy/miroir d'entreprise à re-valider (l'épisode des index apt
+  périmés de la 0.3.7 a montré la sensibilité de ces environnements), et
+  `install.sh` garde sa garantie « python système nu » — à évaluer, pas urgent.
+  Effort M.
+- **Le vrai raccourci existe déjà : les images Docker.** L'image bundled est
+  précisément la réponse « installation en minutes » (pull & run, tout embarqué) ;
+  l'installation native reste la voie flexible. La doc d'installation gagnerait à
+  ouvrir sur ce choix (« pressé ? → bundled ; sur-mesure ? → install.sh ») plutôt
+  que de le mentionner en passant. Effort S (doc).
+- **Mesurer le time-to-first-job** : les phases sont déjà horodatées
+  individuellement ; agréger et afficher le total en fin d'install (et le
+  consigner dans le résumé d'installation) donnerait la métrique de référence pour
+  juger tout le reste. Effort S.
+
+**Non retenu ici** : un mode `--offline` à wheelhouse pré-constituée pour les
+sites sans accès internet — l'image bundled couvre déjà ce besoin sans créer un
+deuxième artefact d'installation à maintenir.
+
 ---
 
 ## 7. Pistes envisagées et écartées
@@ -678,38 +763,44 @@ peut pas attendre.
 4. §2.7-1 instrumentation du bloc preprocess (préalable aux décisions chiffrées).
 5. §5.5 les 4 chaînes i18n.
 6. §6.2 timer de purge.
+7. §6.6 `hf_transfer` + time-to-first-job affiché en fin d'install.
 
 *Critères de succès : l'utilisateur en file voit position + estimation ; un backup
 base seule < 30 s ; chaque étape preprocess a un P50/P95 mesuré sur jobs réels.*
 
 **Lot 2 — le cœur vitesse (M, à valider par les mesures du lot 1)**
-7. §2.1 backend résumé dédié (Kroko par défaut, runtimes C++ en option turbo).
-8. §2.3 LLM d'arbitrage gardé chaud si file non vide + pré-lancement à l'upload.
-9. §2.6 WAV 16 kHz canonique.
-10. §3-b borne d'attente VRAM avec proposition explicite à l'utilisateur.
+8. §2.1 backend résumé dédié (Kroko par défaut, runtimes C++ en option turbo).
+9. §2.3 + §4.3-1 cycle de vie LLM : gardé chaud si file non vide, politique
+   indexée sur le backend (seuil d'inactivité long en vLLM), pré-lancement à
+   l'upload.
+10. §2.6 WAV 16 kHz canonique.
+11. §3-b borne d'attente VRAM avec proposition explicite à l'utilisateur.
 
 *Critères de succès : phase résumé < 30 s sur 1 h d'audio (vs minutes aujourd'hui) ;
 zéro démarrage LLM sur le 2ᵉ job d'une rafale (CAS A systématique) ; un seul
 décodage complet du fichier par job (hors prétraitements actifs).*
 
 **Lot 3 — parcours et produit (M/L)**
-11. §5.1 DOCX à la demande pour profils SRT (voire promotion de profil).
-12. §5.6 résumé lancé dès l'upload.
-13. §5.2/5.3 fraîcheur synthèse + ZIP local.
-14. §6.4 reset admin.
+12. §5.1 DOCX à la demande pour profils SRT (voire promotion de profil).
+13. §5.6 résumé lancé dès l'upload.
+14. §5.2/5.3 fraîcheur synthèse + ZIP local.
+15. §6.4 reset admin.
 
 *Critères de succès : un utilisateur `srt_express` obtient un DOCX verbatim après
 édition sans re-soumettre ; plus aucun téléchargement d'artefact périmé possible.*
 
 **Chantier de fond (L, sur mesures)**
-15. §2.4 coût des passes LLM (prompts, fusion correction+relecture, paliers).
-16. §4.1 profil MOSS single-pass avec garde-fou de saut silencieux.
-17. §2.9 concurrence STT locale (voie servie d'abord).
+16. §2.4 coût des passes LLM (prompts, fusion correction+relecture, paliers) —
+    y compris §4.3-2/3 : palier par phase et réutilisation de préfixe, à valider
+    au banc LLM.
+17. §4.1 profil MOSS single-pass avec garde-fou de saut silencieux.
+18. §2.9 concurrence STT locale (voie servie d'abord).
 
-**Dépendances entre pistes** : 4 (instrumentation) éclaire 9, 15 et 17 — le faire
-en premier ; 7 (résumé Kroko) neutralise mécaniquement le reclaim LLM intra-job et
-simplifie 8 ; 10 réutilise la reprise par phases qu'exploite aussi 11 (promotion de
-profil) — les concevoir ensemble.
+**Dépendances entre pistes** : 4 (instrumentation) éclaire 10, 16 et 18 — le faire
+en premier ; 8 (résumé Kroko) neutralise mécaniquement le reclaim LLM intra-job et
+simplifie 9 ; la réutilisation de préfixe (§4.3-3) suppose 9 (LLM non redémarré
+entre passes) ; 11 réutilise la reprise par phases qu'exploite aussi 12 (promotion
+de profil) — les concevoir ensemble.
 
 ---
 
