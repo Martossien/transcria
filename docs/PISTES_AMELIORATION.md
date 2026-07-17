@@ -17,6 +17,36 @@
 - **Priorité** — P1 : gain majeur ou irritant utilisateur direct ; P2 : gain net,
   non urgent ; P3 : opportuniste.
 
+## Principes d'implémentation (opposables à chaque lot)
+
+Toute piste retenue de ce document s'implémente sous six règles non négociables :
+
+1. **Paramétrable, défaut inchangé.** Chaque changement de comportement vit
+   derrière une clé `config.yaml` dont le **défaut reproduit le comportement
+   actuel** ; la clé est validée par le schéma et documentée dans
+   `CONFIG_REFERENCE.md` (garde de couverture existante). Un défaut ne bascule
+   vers le nouveau comportement qu'à une version ultérieure, après validation —
+   jamais dans le lot qui l'introduit.
+2. **L'ossature ne bouge pas.** Les pistes réutilisent les coutures existantes
+   (allocateur, profils, reprise par phases, `LLMBackend`, registre STT) ; aucune
+   nouvelle couche, aucun contournement d'abstraction. Les ratchets CI du chantier
+   qualité (cycles, imports différés, fan-out, fonctions géantes) en sont les
+   garants mécaniques.
+3. **Amélioration prouvée, pas supposée.** Mesure avant/après pour toute
+   optimisation (d'où l'instrumentation en tête du lot 1) ; banc de validation LLM
+   pour tout ce qui touche la qualité de sortie. Ce qui n'est pas mesurable reste
+   opt-in.
+4. **Prévu dans l'installation.** Toute nouvelle clé entre dans la génération de
+   config de l'installeur ; tout nouveau composant a sa phase de provisionnement
+   et son check `doctor` ; `test_install_script`/`test_install_e2e` couvrent le
+   chaînage.
+5. **Code maintenable.** Mêmes exigences que la campagne 0.3.7 : couverture
+   ≥ 80 %, ratchet de docstrings, docs synchronisées par contrôles exécutables,
+   suite complète + E2E réel verts avant tout push.
+6. **Gérable par l'utilisateur.** `config.yaml` pour l'opérateur ; exposition dans
+   l'UI d'administration quand c'est une décision d'exploitation (backend du
+   résumé, seuils d'attente…) ; i18n FR/EN pour toute nouvelle chaîne visible.
+
 Sommaire : [0. Résumé exécutif](#0-résumé-exécutif) ·
 [1. Données de référence](#1-méthode-et-données-de-référence) ·
 [2. Vitesse du pipeline](#2-vitesse-du-pipeline) ·
