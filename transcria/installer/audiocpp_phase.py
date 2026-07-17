@@ -78,12 +78,16 @@ def audiocpp_server_config(
     *, port: int, device: int = 0, host: str = "0.0.0.0",
     model_id: str = "qwen3-asr-1.7b",
     model_path: str | Path = "",
+    family: str = "qwen3_asr",
 ) -> dict:
     """Config JSON du serveur audio.cpp — helper PUR et testable (le lanceur bash
     l'appelle via `python -m transcria.installer.audiocpp_phase --emit-config`).
 
     `device` est un index RELATIF : le lanceur exporte CUDA_VISIBLE_DEVICES=STT_GPU,
-    donc le seul GPU visible du serveur est toujours 0."""
+    donc le seul GPU visible du serveur est toujours 0. `family` sélectionne le
+    loader audio.cpp (underscore obligatoire — « qwen3-asr » est rejeté) :
+    `qwen3_asr` par défaut, `nemotron_asr` pour servir Nemotron via audio.cpp
+    (~2 s / 5 min au benchmark, le plus rapide du banc)."""
     return {
         "host": host,
         "port": int(port),
@@ -91,7 +95,7 @@ def audiocpp_server_config(
         "device": int(device),
         "models": [{
             "id": str(model_id),
-            "family": "qwen3_asr",  # underscore — "qwen3-asr" est rejeté (family hint)
+            "family": str(family),
             "path": str(model_path),
             "task": "asr",
             "mode": "offline",
@@ -187,9 +191,12 @@ def _emit_config_main() -> int:
     parser.add_argument("--model-id", default="qwen3-asr-1.7b")
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--family", default="qwen3_asr",
+                        help="loader audio.cpp (qwen3_asr, nemotron_asr, …)")
     args = parser.parse_args()
     print(json.dumps(audiocpp_server_config(
         port=args.port, model_id=args.model_id, model_path=args.model_path, host=args.host,
+        family=args.family,
     ), indent=2))
     return 0
 

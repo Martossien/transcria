@@ -850,6 +850,41 @@ S'ajoute le vrai bénéfice : **zéro VRAM** pour la phase résumé (plus de
 contention ni de reclaim du LLM). La bascule du défaut vers kroko reste à
 décider après usage réel (décision utilisateur).
 
+**Bench ÉTENDU aux runtimes audio.cpp** (mêmes 4 réunions, même protocole
+chunk-par-chunk de la phase résumé, serveurs servis en loopback) :
+
+| Réunion | cohere | kroko (CPU) | qwen3asr (audio.cpp) | nemotron (audio.cpp) |
+|---|---:|---:|---:|---:|
+| R1 (1,2 min) | 10,9 s | 7,4 s | 3,5 s | **0,7 s** |
+| R2 (17,4 min) | 69,5 s | 41,3 s | 29,7 s | **4,8 s** |
+| R3 (46,2 min) | 179 s | 105 s | 77 s | **12,6 s** |
+| R4 (62,5 min) | 246 s | 119 s | 100 s | **18,2 s** |
+
+Verdict de LECTURE des deux nouveaux moteurs :
+- **qwen3asr** : la MEILLEURE qualité des quatre sur les passages difficiles lus
+  (« framework PHP » là où cohere/kroko/nemotron déraillent, « livrables »
+  correct, hésitations rendues naturellement) — cohérent avec son WER 0.42 au
+  banc CLI. **Défaut réel, vu à la lecture** : 5 micro-segments dérivent en
+  chinois sur des interjections < 1,2 s de R4 (« 嗯。», « 对。») — le critère
+  « hallucinations non latines » l'a correctement classé `degrade` (vrai
+  positif, contrairement au cas kroko). Négligeable pour un résumé ; à filtrer
+  avant tout usage comme backend PRINCIPAL (les segments partiraient dans le
+  SRT). ×2,4 vs cohere en mode chunk-par-chunk (l'appel HTTP par micro-chunk
+  VAD limite le gain — le banc CLI fenêtres 5 min montait à ×6-8).
+- **nemotron (audio.cpp)** : **×13 vs cohere** (18 s pour 62 min d'audio !),
+  VRAM ~1,5 Go. Qualité nettement en dessous sur l'audio difficile lu
+  (« dibras », « le cran P H P », noms propres phonétisés) mais la STRUCTURE
+  (livrables, échéances, contraintes) reste extractible — le candidat « aperçu
+  éclair ». Servi via la même famille de lanceur (`STT_FAMILY=nemotron_asr`,
+  paramètre ajouté à cette occasion).
+
+Menu opérateur pour `models.summary_stt_backend`, du plus sobre au plus rapide :
+`kroko` (zéro GPU, aucun prérequis), `qwen3asr` (meilleure qualité + ×2,4,
+runtime audio.cpp requis), `nemotron` via audio.cpp (×13, qualité aperçu).
+Piste ouverte pour le PIPELINE PRINCIPAL : qwen3asr comme alternative à cohere
+(meilleur WER, Apache-2.0 non gated, ×2,4 minimum) — à condition d'un garde-fou
+filtrant les micro-segments non latins avant écriture du SRT.
+
 *Critères de succès restants à observer en exploitation : zéro démarrage LLM sur
 le 2ᵉ job d'une rafale (keep_warm actif) ; gain du WAV canonique chiffré via les
 timings `preprocess_*` avant activation par défaut.*

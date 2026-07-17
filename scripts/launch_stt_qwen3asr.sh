@@ -43,6 +43,10 @@ STT_PORT="$(_stt_default STT_PORT VLLM_PORT 8021)"
 STT_HOST="${STT_HOST:-0.0.0.0}"
 STT_MODEL="${STT_MODEL:-$AUDIOCPP_HOME/src/models/Qwen3-ASR-1.7B-hf}"
 STT_SERVED_NAME="${STT_SERVED_NAME:-qwen3-asr-1.7b}"
+# Famille du loader audio.cpp — permet de servir un AUTRE modèle du même runtime :
+#   STT_FAMILY=nemotron_asr STT_MODEL=…/nemotron-3.5-asr-streaming-0.6b \
+#     STT_SERVED_NAME=nemotron STT_PORT=8023 ./scripts/launch_stt_qwen3asr.sh
+STT_FAMILY="${STT_FAMILY:-qwen3_asr}"
 
 if [[ ! -x "$AUDIOCPP_HOME/bin/audiocpp_server" ]]; then
     echo "[$STT_LABEL] ERREUR : $AUDIOCPP_HOME/bin/audiocpp_server absent." >&2
@@ -60,7 +64,8 @@ CFG_JSON="$AUDIOCPP_HOME/etc/server_${STT_PORT}.json"
 mkdir -p "$AUDIOCPP_HOME/etc"
 "$REPO_ROOT/venv/bin/python" -m transcria.installer.audiocpp_phase \
     --emit-config --port "$STT_PORT" --host "$STT_HOST" \
-    --model-id "$STT_SERVED_NAME" --model-path "$STT_MODEL" > "$CFG_JSON"
+    --model-id "$STT_SERVED_NAME" --model-path "$STT_MODEL" \
+    --family "$STT_FAMILY" > "$CFG_JSON"
 
 STT_SERVE_CMD=("$AUDIOCPP_HOME/bin/audiocpp_server" --config "$CFG_JSON")
 STT_RESERVE_PORTS=("$STT_PORT")

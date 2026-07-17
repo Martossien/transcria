@@ -156,3 +156,15 @@ def test_issue_7_runtimes_dir_relatif_donne_des_chemins_absolus(tmp_path, monkey
     assert Path(cwd).is_absolute()
     # Et le marqueur d'idempotence a bien été écrit.
     assert (home / "COMMIT").is_file()
+
+
+def test_emit_config_family_selectionne_le_loader():
+    """`--family nemotron_asr` : servir Nemotron via audio.cpp (bench : ~2 s / 5 min).
+
+    Le défaut reste qwen3_asr (comportement historique du lanceur)."""
+    from transcria.installer.audiocpp_phase import audiocpp_server_config
+
+    cfg = audiocpp_server_config(port=8023, model_id="nemotron",
+                                 model_path="/x/nemotron-3.5", family="nemotron_asr")
+    assert cfg["models"][0]["family"] == "nemotron_asr"
+    assert audiocpp_server_config(port=8021, model_path="/x/q")["models"][0]["family"] == "qwen3_asr"
