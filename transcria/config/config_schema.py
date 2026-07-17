@@ -274,6 +274,7 @@ def _check_services(svc: dict, r: ValidationResult) -> None:
 
 def _check_models(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
     _check_stt_backend(mod, r, cfg)
+    _check_summary_stt_backend(mod, r, cfg)
     _check_str(mod, "default_stt_model", "models.default_stt_model", r)
     _check_str(mod, "fallback_stt_model", "models.fallback_stt_model", r)
     _check_str(mod, "cohere_model_path", "models.cohere_model_path", r)
@@ -314,17 +315,45 @@ def _check_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) 
     )
 
 
+def _check_summary_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:
+    """`models.summary_stt_backend` : null (= backend principal) ou même règle que
+    `stt_backend` (natif du registre, ou servi routé avec url)."""
+    backend = mod.get("summary_stt_backend")
+    if backend is None:
+        return
+    if isinstance(backend, str) and backend in _VALID_STT_BACKENDS:
+        return
+    routed = (((cfg or {}).get("inference", {}) or {}).get("stt", {}) or {}).get("backends", {}) or {}
+    if isinstance(backend, str) and str((routed.get(backend) or {}).get("url") or "").strip():
+        return
+    r.add_error(
+        f"models.summary_stt_backend='{backend}' invalide. "
+        f"null (= backend principal), l'un de : {', '.join(sorted(_VALID_STT_BACKENDS))}, "
+        f"ou un backend SERVI déclaré avec une url dans inference.stt.backends.<nom>"
+    )
+
+
 def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_quick_summary", "workflow.enable_quick_summary", r)
     _check_bool(wf, "enable_speaker_detection", "workflow.enable_speaker_detection", r)
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
     _check_progress_section(wf.get("progress", {}), r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
+    vram_wait = wf.get("vram_wait", {})
+    if isinstance(vram_wait, dict):
+        _check_int_range(vram_wait, "max_wait_s", "workflow.vram_wait.max_wait_s", 0, 604800, r)
+    elif vram_wait:
+        r.add_error("workflow.vram_wait: doit être un objet YAML")
     _check_queue_section(wf.get("queue", {}), r)
     _check_scheduling_section(wf.get("scheduling", {}), r)
     _check_audio_quality(wf.get("audio_quality", {}), r)
     _check_quality_transcription(wf.get("quality_transcription", {}), r)
     _check_audio_preflight(wf.get("audio_preflight", {}), r)
+    canonical = wf.get("audio_canonical_16k", {})
+    if isinstance(canonical, dict):
+        _check_bool(canonical, "enabled", "workflow.audio_canonical_16k.enabled", r)
+    elif canonical:
+        r.add_error("workflow.audio_canonical_16k: doit être un objet YAML")
     _check_segment_reliability(wf.get("segment_reliability", {}), r)
     _check_pyannote_chunking(wf.get("pyannote_chunking", {}), r)
     _check_vad_section(wf.get("vad", {}), r)
@@ -1055,6 +1084,9 @@ def _check_llm_section(
     llm: dict, prefix: str, r: ValidationResult, is_summary: bool = False
 ) -> None:
     _check_bool(llm, "enabled", f"{prefix}.enabled", r)
+    # Cycle de vie (lot 2) : booléens valides même LLM désactivée (posés à l'avance).
+    _check_bool(llm, "keep_warm", f"{prefix}.keep_warm", r)
+    _check_bool(llm, "prelaunch_at_analyze", f"{prefix}.prelaunch_at_analyze", r)
 
     if not llm.get("enabled"):
         return

@@ -298,6 +298,14 @@ def api_job_status(job_id: str):
     queue_info = _queue_wait_info(job)
     if queue_info:
         payload.update(queue_info)
+    # Additif (lot 2, §3-b) : l'attente VRAM a dépassé la borne configurée
+    # (workflow.vram_wait.max_wait_s) — le propriétaire doit le voir sans attendre
+    # qu'un admin lise ses e-mails.
+    try:
+        if (job.get_extra_data() or {}).get("vram_wait_exceeded"):
+            payload["vram_wait_exceeded"] = True
+    except Exception:  # noqa: BLE001 — enrichissement best-effort
+        pass
     return jsonify(payload)
 
 

@@ -143,3 +143,67 @@ def test_end_of_pipeline_llm_stop_holds_the_lock_while_stopping(tmp_path, monkey
     assert svc.runner.vram.stop_calls == 1
     assert svc.runner.allocator.owner is None                    # verrou rendu
     assert svc.runner.allocator.acquire_calls == ["__pipeline_stop__"]
+
+
+# ── Keep-warm de fin de pipeline (PISTES_AMELIORATION lot 2, §2.3) ────────────
+
+def _keep_warm_service(tmp_path, monkeypatch, *, keep_warm, waiting_entries):
+    job = make_job_stub()
+    store = FakeJobStore(job)
+    svc = _make_service(tmp_path, monkeypatch, store)
+    svc.config["workflow"]["arbitration_llm"]["keep_warm"] = keep_warm
+    svc.runner.vram.arbitrage_running = True
+    monkeypatch.setattr(
+        pipeline_service.QueueStore, "get_next_candidates",
+        staticmethod(lambda limit=16: waiting_entries),
+    )
+    return svc
+
+
+def test_keep_warm_saute_l_arret_quand_des_jobs_attendent(tmp_path, monkeypatch):
+    """keep_warm actif + file non vide → la LLM reste chaude (CAS A pour le suivant),
+    décision prise sous le verrou, verrou rendu."""
+    svc = _keep_warm_service(tmp_path, monkeypatch, keep_warm=True,
+                             waiting_entries=[object()])
+
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 0                       # gardée chaude
+    assert svc.runner.allocator.owner is None                    # verrou rendu
+    assert svc.runner.allocator.acquire_calls == ["__pipeline_stop__"]
+
+
+def test_keep_warm_arrete_quand_la_file_est_vide(tmp_path, monkeypatch):
+    svc = _keep_warm_service(tmp_path, monkeypatch, keep_warm=True, waiting_entries=[])
+
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 1                       # personne n'attend → VRAM rendue
+
+
+def test_sans_keep_warm_comportement_historique(tmp_path, monkeypatch):
+    """Défaut (keep_warm absent/false) : arrêt systématique, la file n'est même pas lue."""
+    svc = _keep_warm_service(tmp_path, monkeypatch, keep_warm=False,
+                             waiting_entries=[object()])
+
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 1
+
+
+def test_keep_warm_erreur_de_file_retombe_sur_l_arret(tmp_path, monkeypatch):
+    """Base indisponible pendant la décision → défaut sûr = arrêt (comportement historique)."""
+    job = make_job_stub()
+    store = FakeJobStore(job)
+    svc = _make_service(tmp_path, monkeypatch, store)
+    svc.config["workflow"]["arbitration_llm"]["keep_warm"] = True
+    svc.runner.vram.arbitrage_running = True
+
+    def _boom(limit=16):
+        raise RuntimeError("base indisponible")
+
+    monkeypatch.setattr(pipeline_service.QueueStore, "get_next_candidates", staticmethod(_boom))
+
+    svc._release_arbitrage_llm()
+
+    assert svc.runner.vram.stop_calls == 1

@@ -8,7 +8,7 @@ from transcria.gpu.opencode_runner import resolve_output_language
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job
 from transcria.logging_setup import get_structured_logger
-from transcria.stt.transcriber_factory import create_transcriber
+from transcria.stt.transcriber_factory import create_transcriber, summary_backend
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class SummaryGenerator:
         sl.set_context(job_id=job.id, step="quick_summary")
 
         device = f"cuda:{gpu_index}" if gpu_index is not None else None
-        backend = self.config.get("models", {}).get("stt_backend", "cohere")
+        backend = summary_backend(self.config)
         # Langue de transcription = langue des livrables du job (Axe B). Défaut « fr »
         # (comportement historique). Sans ça, le STT rapide forçait le français et
         # transcrivait un audio anglais en charabia phonétique franco-anglais.
@@ -67,7 +67,7 @@ class SummaryGenerator:
                 100 * sum(c["end"] - c["start"] for c in vad_chunks) / max(total_duration, 0.001))
 
         sl.info("[summary] Chargement du transcripteur %s sur %s", backend, device)
-        transcriber = create_transcriber(self.config, device=device)
+        transcriber = create_transcriber(self.config, backend=backend, device=device)
         segments = []
 
         for chunk in vad_chunks:
@@ -144,7 +144,14 @@ class SummaryGenerator:
             flags.append("vad_peu_selectif")
         if len(non_latin_segments) >= 3:
             flags.append("hallucinations_non_latines")
-        if len(short_segments) >= 20:
+        # Critère RELATIF (lot 2) : l'intention est de détecter les « confettis »
+        # d'hallucination (rafales de segments minuscules), pas de punir le style de
+        # segmentation d'un moteur streaming (bench réel : kroko produit ~15 % de
+        # segments < 1 s sur un texte sain, cohere < 3 % ; une vraie rafale
+        # d'hallucinations dépasse largement 20 %). Le seuil absolu seul classait
+        # « degrade » des transcriptions parfaitement exploitables.
+        short_ratio = len(short_segments) / max(len(segments), 1)
+        if len(short_segments) >= 20 and short_ratio >= 0.2:
             flags.append("segments_courts_nombreux")
 
         if "hallucinations_non_latines" in flags or "segments_courts_nombreux" in flags:

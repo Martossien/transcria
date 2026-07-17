@@ -105,6 +105,7 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('Position %(n)s dans la file'),
     N_('démarrage estimé dans ~%(d)s'),
     N_('démarrage imminent'),
+    N_("⚠ L'attente GPU dépasse la limite configurée — vous pouvez patienter ou soumettre en profil express (moins de ressources)"),
     N_('nouveau'),
     N_('requête impossible'),
     N_('sans timecode'),

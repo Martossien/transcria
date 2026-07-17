@@ -36,6 +36,8 @@ from transcria.workflow.transitions import (
     mark_execution_queued,
     mark_execution_started,
     mark_execution_waiting_vram,
+    mark_vram_wait_exceeded,
+    vram_wait_elapsed_s,
 )
 
 # Modes de file dédiés aux ÉTAPES GPU synchrones routées vers le worker (frontal `web`
@@ -251,6 +253,8 @@ class JobExecutorService:
                                retry_after, job_id=job_id, required_vram_mb=required_mb, phase=phase)
                     if first_wait:
                         alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
+                    else:
+                        self._check_vram_wait_bound(job, job_id, required_mb, phase, sl)
                 elif outcome.kind is OutcomeKind.FAILED:
                     error = outcome.reason or "Erreur inconnue"
                     QueueStore.dequeue(job_id, status="failed")
@@ -296,6 +300,32 @@ class JobExecutorService:
             raise
         finally:
             self._finalize_tracking(job_id)
+
+    def _check_vram_wait_bound(self, job, job_id: str, required_mb: int, phase: str, sl) -> None:
+        """Borne d'attente VRAM (PISTES_AMELIORATION lot 2, §3-b) — jamais bloquant.
+
+        `workflow.vram_wait.max_wait_s` (0 = illimité, défaut) : au-delà, un
+        dépassement est marqué UNE fois par épisode — ré-alerte admin, drapeau
+        `vram_wait_exceeded` exposé au propriétaire par l'API de statut. Le job
+        continue d'attendre (jamais de bascule automatique de backend : changer de
+        moteur/profil est un choix utilisateur)."""
+        try:
+            vram_wait_cfg = self.config.get("workflow", {}).get("vram_wait", {}) or {}
+            max_wait_s = int(vram_wait_cfg.get("max_wait_s") or 0)
+            if max_wait_s <= 0:
+                return
+            elapsed = vram_wait_elapsed_s(job_id)
+            if elapsed < max_wait_s:
+                return
+            if mark_vram_wait_exceeded(job_id):
+                sl.error(
+                    "Attente VRAM au-delà de la borne configurée — le job continue d'attendre",
+                    job_id=job_id, elapsed_s=round(elapsed), max_wait_s=max_wait_s,
+                    required_vram_mb=required_mb, phase=phase,
+                )
+                alert_admin_vram_wait(self.config, job, required_mb=required_mb, phase=phase)
+        except Exception:  # noqa: BLE001 — la borne est de l'observabilité, jamais un risque
+            sl.warning("Contrôle de borne d'attente VRAM impossible (non bloquant)", job_id=job_id)
 
     def _purge_input_blobs(self, job_id: str, sl) -> None:
         """Purge les blobs `input/` (backend `pg`) à l'état terminal du pipeline complet.

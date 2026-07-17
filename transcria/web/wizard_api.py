@@ -24,6 +24,7 @@ from transcria.context.meeting_context import MeetingContextManager
 from transcria.context.meeting_type_catalog import meeting_type_names
 from transcria.context.meeting_type_store import MeetingTypeStore
 from transcria.context.participants import ParticipantsManager
+from transcria.gpu import llm_prelaunch
 from transcria.i18n import select_locale
 from transcria.jobs.filesystem import JobFilesystem
 from transcria.jobs.models import Job, JobState
@@ -35,7 +36,7 @@ from transcria.queue.store import QUEUE_PAUSED, QUEUE_RUNNING, QUEUE_WAITING, Qu
 from transcria.services.job_executor import SPEAKER_MODE, SUMMARY_MODE, get_job_executor
 from transcria.services.job_service import JobService
 from transcria.stt.speaker_detection import SpeakerDetector
-from transcria.stt.transcriber_factory import get_backend_vram_mb
+from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backend
 from transcria.voice.matching import VoiceMatchingService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api
@@ -101,7 +102,7 @@ def _summary_vram_profile(cfg: dict) -> dict:
     lorsque cette VRAM est réellement libre (sinon le job patiente en file).
     """
 
-    backend = cfg.get("models", {}).get("stt_backend", "cohere")
+    backend = summary_backend(cfg)
     summary_vram = int(get_backend_vram_mb(backend, cfg))
     return {
         "mode": "summary",
@@ -148,6 +149,9 @@ def api_analyze(job_id: str):
     result = JobService.analyze(job.id, cfg["storage"]["jobs_dir"], cfg)
     if result.get("error"):
         return jsonify(result), 400
+    # Pré-lancement opt-in de la LLM d'arbitrage (lot 2, §4.3-4) : détail et
+    # discipline de verrou dans gpu/llm_prelaunch.py — best-effort, thread.
+    llm_prelaunch.maybe_prelaunch_arbitrage_llm(cfg)
     return jsonify(result)
 
 

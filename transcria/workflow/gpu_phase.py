@@ -19,7 +19,7 @@ from transcria.gpu.vram_manager import VRAMManager
 from transcria.gpu.vram_reclaim import stop_idle_arbitrage_llm
 from transcria.jobs.models import Job
 from transcria.queue.allocator import GPUAllocator
-from transcria.stt.transcriber_factory import _should_use_remote_stt
+from transcria.stt.transcriber_factory import _should_use_remote_stt, summary_backend
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,10 @@ class GpuPhaseSession:
         VRAM / rejets à tort). Cf. docs/SERVICE_RESSOURCES_GPU.md §9.
         """
         if phase in ("stt", "summary_stt"):
-            backend = self.config.get("models", {}).get("stt_backend", "cohere")
+            # La phase résumé peut avoir son propre backend (models.summary_stt_backend,
+            # ex. kroko local) : sa « distance » se juge sur CE backend, pas le principal.
+            backend = (summary_backend(self.config) if phase == "summary_stt"
+                       else self.config.get("models", {}).get("stt_backend", "cohere"))
             return _should_use_remote_stt(self.config, backend)
         if phase == "diarization":
             return self.config.get("models", {}).get("diarization_backend") == "remote"

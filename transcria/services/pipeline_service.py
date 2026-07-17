@@ -8,6 +8,7 @@ from transcria.jobs.models import Job, JobState
 from transcria.jobs.store import JobStore
 from transcria.jobs.timing_store import JobTimingStore
 from transcria.logging_setup import get_structured_logger
+from transcria.queue.store import QueueStore
 from transcria.services import (
     pipeline_admission,
     pipeline_config,
@@ -15,6 +16,7 @@ from transcria.services import (
     pipeline_sequence,
 )
 from transcria.services.pipeline_steps import (
+    canonical_audio,
     denoise,
     normalization,
     preflight,
@@ -155,6 +157,10 @@ class PipelineService:
         started = time.monotonic()
         audio_preflight = _timed(
             "preprocess_preflight", lambda: self._run_audio_preflight(job, audio_path, sl))
+        # APRÈS le préflight (qui mesure l'original, même empreinte que la phase
+        # analyze) et AVANT tout le reste : la chaîne aval lit le WAV canonique.
+        audio_path = _timed(
+            "preprocess_canonical", lambda: self._run_audio_canonical(job, audio_path, sl))
         audio_scene = _timed(
             "preprocess_scene", lambda: self._run_audio_scene_analysis(job, audio_path, sl))
         self._refresh_audio_quality_with_scene(job, audio_scene, sl)
@@ -366,13 +372,30 @@ class PipelineService:
             logger.info("[pipeline] LLM arbitrage utilisée par un autre job — arrêt de fin de pipeline sauté")
             return
         try:
-            if self.runner.vram.is_arbitrage_llm_running():
+            if not self.runner.vram.is_arbitrage_llm_running():
+                logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
+            elif self._keep_llm_warm_for_queue():
+                # Décision prise SOUS le verrou (même fenêtre que l'arrêt, pas de course) :
+                # des jobs attendent → le suivant réutilise l'instance chaude (CAS A),
+                # ~17 s de démarrage llama.cpp économisées par job (minutes en vLLM).
+                logger.info("[pipeline] LLM arbitrage gardée chaude — des jobs attendent en file")
+            else:
                 logger.info("[pipeline] Arrêt LLM arbitrage en fin de pipeline")
                 self.runner.vram.stop_arbitrage_llm()
-            else:
-                logger.debug("[pipeline] LLM arbitrage déjà arrêtée, rien à faire")
         finally:
             allocator.release_llm(self._LLM_STOP_OWNER)
+
+    def _keep_llm_warm_for_queue(self) -> bool:
+        """True si `workflow.arbitration_llm.keep_warm` est actif ET que la file
+        contient au moins un job en attente. Toute erreur (base indisponible…)
+        retombe sur False = comportement historique (arrêt)."""
+        llm_cfg = self.config.get("workflow", {}).get("arbitration_llm", {}) or {}
+        if not llm_cfg.get("keep_warm", False):
+            return False
+        try:
+            return bool(QueueStore.get_next_candidates(limit=1))
+        except Exception:  # noqa: BLE001 — en cas de doute, restituer la VRAM (défaut sûr)
+            return False
 
     @staticmethod
     def _is_cancel_requested(job_id: str) -> bool:
@@ -401,6 +424,9 @@ class PipelineService:
     # Conservées comme coutures : les tests substituent ces méthodes à l'instance.
     def _run_audio_preflight(self, job: Job, audio_path: str, sl) -> dict:
         return preflight.run(self, job, audio_path, sl)
+
+    def _run_audio_canonical(self, job: Job, audio_path: str, sl) -> str:
+        return canonical_audio.run(self, job, audio_path, sl)
 
     def _run_audio_scene_analysis(self, job: Job, audio_path: str, sl) -> dict:
         return scene_analysis.run(self, job, audio_path, sl)

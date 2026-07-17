@@ -86,6 +86,11 @@ _DEFAULT_CONFIG = {
     },
     "models": {
         "stt_backend": "cohere",
+        # Backend dédié à la PHASE RÉSUMÉ (transcription rapide du wizard) :
+        # null = même backend que le pipeline (comportement historique). Un moteur
+        # rapide (ex. "kroko", CPU pur) accélère la phase la plus visible sans
+        # toucher à la qualité du SRT final. Bascule du défaut : après bench.
+        "summary_stt_backend": None,
         "diarization_backend": "pyannote",
         "default_stt_model": "cohere-transcribe-03-2026",
         "fallback_stt_model": "large-v3",
@@ -284,6 +289,10 @@ _DEFAULT_CONFIG = {
             "force_on_degraded_summary": False,
             "degraded_summary_levels": ["degrade"],
         },
+        # WAV 16 kHz canonique produit une fois apres le preflight (opt-in §2.6) :
+        # la chaine aval (scene, VAD, STT, diarisation) lit ce fichier au lieu de
+        # re-decoder l'original. false = comportement historique.
+        "audio_canonical_16k": {"enabled": False},
         "audio_preflight": {
             "enabled": True,
             # Réutilise le préflight de la phase analyze si l'audio n'a pas changé
@@ -524,6 +533,11 @@ _DEFAULT_CONFIG = {
             "punctuation_chars": ".,;:!?)]}»",
         },
         "execution": {"max_concurrent_jobs": 1},
+        # Borne d'attente VRAM locale (0 = illimité, comportement historique). Au-delà :
+        # dépassement marqué une fois par épisode (ré-alerte admin + drapeau exposé au
+        # propriétaire via l'API de statut) — le job continue d'attendre, jamais de
+        # bascule automatique de backend. Symétrique de inference.max_unavailable_s.
+        "vram_wait": {"max_wait_s": 0},
         # Profil de concurrence (C7/B8) : surcharges déclaratives de la classe d'une étape.
         # Ex. {"transcribe": {"class": "delegated", "resource": "stt_backend"}}. Vide = la
         # classe est dérivée automatiquement (STT distant = délégué, sinon sériel).
@@ -565,6 +579,14 @@ _DEFAULT_CONFIG = {
             "api_base": "http://127.0.0.1:8080/v1",
             "timeout_seconds": 600,
             "opencode_bin": "opencode",
+            # Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en
+            # file : le suivant la réutilise chaude (~17 s de démarrage llama.cpp
+            # économisées ; en vLLM, des minutes — recommandé true dans ce cas).
+            # false = comportement historique (arrêt systématique).
+            "keep_warm": False,
+            # Pré-lancer la LLM dès l'étape ANALYSE du wizard : les secondes de
+            # démarrage s'absorbent pendant la saisie. false = comportement historique.
+            "prelaunch_at_analyze": False,
         },
     },
     "quality": {

@@ -168,10 +168,43 @@ def mark_execution_waiting_vram(job_id: str, *, required_mb: int, phase: str) ->
         extra["execution"] = execution
         should_alert["value"] = not extra.get("vram_alert_sent")
         extra["vram_alert_sent"] = True
+        # Début d'ÉPISODE (posé une fois, réarmé aux transitions terminales) : sert à
+        # borner l'attente (workflow.vram_wait.max_wait_s) — `waiting_since` du bloc
+        # execution est, lui, réécrit à chaque passage.
+        extra.setdefault("vram_waiting_since", utcnow_iso())
         return extra
 
     JobStore.update_extra_data(job_id, updater)
     return should_alert["value"]
+
+
+def mark_vram_wait_exceeded(job_id: str) -> bool:
+    """Marque le dépassement de la borne d'attente VRAM (workflow.vram_wait.max_wait_s).
+
+    Retourne True la PREMIÈRE fois de l'épisode (déclenche l'alerte), False ensuite.
+    Réarmé aux transitions terminales avec les autres drapeaux d'épisode."""
+    first = {"value": False}
+
+    def updater(extra: dict) -> dict:
+        first["value"] = not extra.get("vram_wait_exceeded")
+        extra["vram_wait_exceeded"] = True
+        return extra
+
+    JobStore.update_extra_data(job_id, updater)
+    return first["value"]
+
+
+def vram_wait_elapsed_s(job_id: str) -> float:
+    """Durée écoulée depuis le début de l'ÉPISODE d'attente VRAM courant (0 si aucun)."""
+    job = JobStore.get_by_id(job_id)
+    raw = (job.get_extra_data() if job else {}).get("vram_waiting_since")
+    if not raw:
+        return 0.0
+    try:
+        since = datetime.fromisoformat(str(raw))
+        return max(0.0, (datetime.now(timezone.utc) - since).total_seconds())
+    except ValueError:
+        return 0.0
 
 
 def request_execution_cancel(job_id: str) -> None:
@@ -209,6 +242,8 @@ def _merge_execution(job_id: str, updates: dict) -> None:
         # pas, sinon chaque re-dispatch d'un job en attente re-spammerait.)
         if updates.get("status") in EXECUTION_TERMINAL_STATUSES:
             extra["vram_alert_sent"] = False
+            extra.pop("vram_waiting_since", None)   # fin d'épisode : borne réarmée
+            extra.pop("vram_wait_exceeded", None)
         return extra
 
     JobStore.update_extra_data(job_id, updater)

@@ -49,6 +49,18 @@ def local_builders() -> dict:
     return {name: descriptor.build for name, descriptor in registry.backends().items()}
 
 
+def summary_backend(config: dict) -> str:
+    """Backend STT de la PHASE RÉSUMÉ : `models.summary_stt_backend` si défini,
+    sinon le backend principal.
+
+    Point de résolution UNIQUE (PISTES_AMELIORATION §2.1) : la phase résumé peut
+    utiliser un moteur rapide (ex. kroko, CPU pur → zéro réservation VRAM) sans
+    toucher au pipeline principal. Défaut `null` = comportement historique.
+    """
+    models = config.get("models", {})
+    return models.get("summary_stt_backend") or models.get("stt_backend", "cohere")
+
+
 def _should_use_remote_stt(config: dict, backend: str) -> bool:
     """True si le STT doit passer par un serveur vLLM distant pour ce backend.
 

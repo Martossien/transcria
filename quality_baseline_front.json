@@ -11,7 +11,7 @@
   "transcria/web/static/js/schedule_page.js": 112,
   "transcria/web/static/js/srt_editor.js": 1309,
   "transcria/web/static/js/wizard-api.js": 59,
-  "transcria/web/static/js/wizard.js": 1280
+  "transcria/web/static/js/wizard.js": 1289
  },
  "template_lines": {
   "transcria/web/templates/_central_lexicon_entry_fields.html": 31,

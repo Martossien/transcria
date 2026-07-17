@@ -1034,7 +1034,8 @@ var TranscrIA = window.TranscrIA || {};
 
     function _renderWorkflowStatusBanner(banner, state, progress, queueInfo) {
         var isLive = _LIVE_STATUS_STATES.indexOf(state) !== -1;
-        if (!isLive && !(progress && progress.message) && !(queueInfo && queueInfo.position)) {
+        if (!isLive && !(progress && progress.message) &&
+            !(queueInfo && (queueInfo.position || queueInfo.vramWaitExceeded))) {
             banner.classList.remove('is-visible');
             banner.innerHTML = '';
             return;
@@ -1050,6 +1051,10 @@ var TranscrIA = window.TranscrIA || {};
                     : t('démarrage imminent'));
             }
             message = message ? (message + ' · ' + queueText) : queueText;
+        }
+        if (queueInfo && queueInfo.vramWaitExceeded) {
+            var vramText = t("⚠ L'attente GPU dépasse la limite configurée — vous pouvez patienter ou soumettre en profil express (moins de ressources)");
+            message = message ? (message + ' · ' + vramText) : vramText;
         }
         var phase = progress && progress.phase ? progress.phase : '';
         var pct = progress && typeof progress.percent === 'number' ? Math.max(0, Math.min(100, progress.percent)) : null;
@@ -1091,6 +1096,10 @@ var TranscrIA = window.TranscrIA || {};
                 var queueInfo = r.data.queue_position
                     ? { position: r.data.queue_position, estimate: r.data.wait_estimate || null }
                     : null;
+                if (r.data.vram_wait_exceeded) {
+                    queueInfo = queueInfo || {};
+                    queueInfo.vramWaitExceeded = true;
+                }
                 _renderWorkflowStatusBanner(banner, state, progress, queueInfo);
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
                     // Phase active (résumé, traitement…) : rafraîchissement rapide.

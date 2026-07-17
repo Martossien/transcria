@@ -314,3 +314,98 @@ def test_invite_no_badge_when_empty(app):
     with app.test_request_context():
         html = render_template_string(_INVITE_SNIPPET, meeting_invite={})
     assert "Invitation enregistrée" not in html
+
+
+# ---------------------------------------------------------------------------
+# Borne d'attente VRAM (PISTES_AMELIORATION lot 2, §3-b)
+# ---------------------------------------------------------------------------
+
+def test_episode_vram_waiting_since_pose_une_fois_et_purge_en_terminal(app, owner_id):
+    from transcria.workflow.transitions import (
+        mark_execution_completed,
+        vram_wait_elapsed_s,
+    )
+
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Borne")
+        assert vram_wait_elapsed_s(job.id) == 0.0
+
+        mark_execution_waiting_vram(job.id, required_mb=6000, phase="stt")
+        since_1 = job_extra(job.id)["vram_waiting_since"]
+        assert vram_wait_elapsed_s(job.id) >= 0.0
+
+        # re-passage en attente : le début d'ÉPISODE ne bouge pas
+        mark_execution_waiting_vram(job.id, required_mb=6000, phase="stt")
+        assert job_extra(job.id)["vram_waiting_since"] == since_1
+
+        # transition terminale : épisode clos, borne réarmée
+        mark_execution_completed(job.id)
+        extra = job_extra(job.id)
+        assert "vram_waiting_since" not in extra
+        assert "vram_wait_exceeded" not in extra
+        assert vram_wait_elapsed_s(job.id) == 0.0
+
+
+def test_mark_vram_wait_exceeded_une_fois_par_episode(app, owner_id):
+    from transcria.workflow.transitions import mark_vram_wait_exceeded
+
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Borne2")
+        assert mark_vram_wait_exceeded(job.id) is True    # 1er dépassement → alerte
+        assert mark_vram_wait_exceeded(job.id) is False   # anti-spam
+        assert job_extra(job.id)["vram_wait_exceeded"] is True
+
+
+def job_extra(job_id):
+    return JobStore.get_by_id(job_id).get_extra_data() or {}
+
+
+class _BoundSl:
+    def __init__(self):
+        self.errors = []
+
+    def error(self, msg, **kw):
+        self.errors.append(kw)
+
+    def warning(self, msg, **kw):
+        pass
+
+
+def test_check_vram_wait_bound_alerte_une_fois_au_dela(app, owner_id, monkeypatch):
+    """max_wait_s dépassé → ERROR + ré-alerte admin UNE fois ; jamais d'échec du job."""
+    from transcria.services import job_executor as je
+
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Borne3")
+        mark_execution_waiting_vram(job.id, required_mb=6000, phase="stt")
+
+        executor = je.JobExecutorService.__new__(je.JobExecutorService)
+        executor.config = {"workflow": {"vram_wait": {"max_wait_s": 60}}}
+        alerts = []
+        monkeypatch.setattr(je, "alert_admin_vram_wait",
+                            lambda cfg, j, **kw: alerts.append(kw))
+        monkeypatch.setattr(je, "vram_wait_elapsed_s", lambda job_id: 120.0)
+
+        sl = _BoundSl()
+        executor._check_vram_wait_bound(job, job.id, 6000, "stt", sl)
+        executor._check_vram_wait_bound(job, job.id, 6000, "stt", sl)  # anti-spam
+
+        assert len(alerts) == 1
+        assert len(sl.errors) == 1
+        assert sl.errors[0]["max_wait_s"] == 60
+
+
+def test_check_vram_wait_bound_inactif_par_defaut(app, owner_id, monkeypatch):
+    """max_wait_s=0 (défaut) : aucune lecture d'horloge, aucun marquage — comportement historique."""
+    from transcria.services import job_executor as je
+
+    with app.app_context():
+        job = JobStore.create_job(owner_id, "Borne4")
+        executor = je.JobExecutorService.__new__(je.JobExecutorService)
+        executor.config = {}
+        monkeypatch.setattr(je, "vram_wait_elapsed_s",
+                            lambda job_id: (_ for _ in ()).throw(AssertionError("ne doit pas être lu")))
+
+        executor._check_vram_wait_bound(job, job.id, 6000, "stt", _BoundSl())
+
+        assert "vram_wait_exceeded" not in job_extra(job.id)
