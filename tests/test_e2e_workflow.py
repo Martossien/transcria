@@ -2382,23 +2382,25 @@ def main() -> int:
                 fail("préflight : source_fingerprint absent d'audio_preflight.json")
 
             # 2. Chaque étape preprocess est historisée dans le modèle de temps
-            #    machine (préalable des décisions chiffrées du lot 2).
+            #    machine (préalable des décisions chiffrées du lot 2). Même
+            #    résolution d'identifiant que le pipeline : profil s'il existe,
+            #    sinon le mode (jobs legacy sans profil, comme cet E2E).
             from transcria.jobs.timing_store import JobTimingStore
             from transcria.workflow.profiles import profile_for_job as _pfj
 
             _job_now = JobStore.get_by_id(job_id)
             _prof = _pfj(_job_now)
-            if _prof is not None:
-                samples = JobTimingStore.samples_for_stages(
-                    _prof.id, ["preprocess", "preprocess_preflight", "preprocess_scene"])
-                missing = [s for s, pts in samples.items() if not pts]
-                if not missing:
-                    ok(f"timings preprocess historisés pour le profil {_prof.id} "
-                       f"(preprocess + étapes détaillées)")
-                    RESULTS["preprocess_timings"] = True
-                else:
-                    RESULTS["preprocess_timings"] = False
-                    fail(f"timings preprocess absents du modèle de temps : {missing}")
+            _timing_id = _prof.id if _prof is not None else args.mode
+            samples = JobTimingStore.samples_for_stages(
+                _timing_id, ["preprocess", "preprocess_preflight", "preprocess_scene"])
+            missing = [s for s, pts in samples.items() if not pts]
+            if not missing:
+                ok(f"timings preprocess historisés (id={_timing_id} : "
+                   f"preprocess + étapes détaillées)")
+                RESULTS["preprocess_timings"] = True
+            else:
+                RESULTS["preprocess_timings"] = False
+                fail(f"timings preprocess absents du modèle de temps (id={_timing_id}) : {missing}")
 
             # 3. Sauvegarde base seule RÉELLE contre la base de cette instance
             #    (critère lot 1 : < 30 s), vérifiée puis jetée.
