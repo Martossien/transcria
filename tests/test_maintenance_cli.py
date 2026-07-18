@@ -177,24 +177,29 @@ class TestResetAdminPassword:
         return cli.main(["reset-admin-password", username])
 
     def test_reinitialise_affiche_une_fois_et_audite(self, app, monkeypatch, capsys):
+        # Compte DÉDIÉ au test : réinitialiser « admin » casserait le login des
+        # fixtures de toute la session (vécu : 165 échecs en cascade).
         from transcria.audit.models import AuditLog
+        from transcria.auth.models import Role
         from transcria.auth.store import UserStore
         from transcria.database import db
 
         with app.app_context():
-            admin = UserStore.get_by_username("admin")
-            old_hash = admin.password_hash
+            target = UserStore.get_by_username("reset-cible")
+            if target is None:
+                target = UserStore.create_user("reset-cible", "AncienMdp#1", role=Role.OPERATOR)
+            old_hash = target.password_hash
 
-        rc = self._run(app, monkeypatch, "admin")
+        rc = self._run(app, monkeypatch, "reset-cible")
         out = capsys.readouterr().out
 
         assert rc == 0
         assert "TEMPORAIRE" in out and "IMMÉDIATEMENT" in out
         with app.app_context():
-            admin = UserStore.get_by_username("admin")
-            assert admin.password_hash != old_hash          # mot de passe bien changé
+            target = UserStore.get_by_username("reset-cible")
+            assert target.password_hash != old_hash         # mot de passe bien changé
             entry = db.session.execute(
-                db.select(AuditLog).filter_by(target_label="admin")
+                db.select(AuditLog).filter_by(target_label="reset-cible")
                 .order_by(AuditLog.timestamp.desc())).scalars().first()
             assert entry is not None
             import json as _json

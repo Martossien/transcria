@@ -109,8 +109,11 @@ def api_download_package(job_id: str):
         # Backend fichiers local (§5.3) : même honnêteté qu'en `pg` — le zip servi ne
         # doit jamais être plus vieux que les artefacts sources (édition SRT dont la
         # reconstruction best-effort a échoué, artefact modifié hors reconstruction).
-        stale = (not zip_path.is_file()) or (
-            zip_path.stat().st_mtime_ns < _local_newest_artifact_mtime_ns(cfg, job.id)
+        # Un job SANS artefact source (newest == 0) reste un 404 franc : rien à
+        # reconstruire, ne pas transformer l'absence en 500 de PackageBuilder.
+        newest = _local_newest_artifact_mtime_ns(cfg, job.id)
+        stale = (newest > 0) and (
+            (not zip_path.is_file()) or zip_path.stat().st_mtime_ns < newest
         )
     if stale:
         build = PackageBuilder(cfg).build_package(job)
