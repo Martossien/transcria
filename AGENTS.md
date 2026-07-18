@@ -148,6 +148,7 @@ transcria/
       yaml_file.py          # helpers yaml get/set CLI (install.sh yaml_get/yaml_set) — round-trip préservant
       env_file.py           # update_env_file() — écriture idempotente du .env
       gpu_calibration.py    # apply_gpu_calibration() — écrit gpu.llm_vram_mb/llm_gpu_indices (ruamel non destructif)
+      stt_instances_config.py # apply_stt_instances() — écrit engines/extra_urls/concurrency (ruamel non destructif)
       resource_node_manifest.py # manifeste resource_node.engines (specs des moteurs STT servis)
     cli_i18n.py             # i18n des sorties CLI HORS-web (installateur + doctor) : resolve_cli_locale (env TRANSCRIA_DEFAULT_LOCALE, défaut fr) + make_translator(catalogue fr/en) ; sans dépendance, distinct de Flask-Babel (web)
     database.py             # db = SQLAlchemy()
@@ -308,6 +309,8 @@ transcria/
       cuda_visible.py       # parse_cuda_visible_devices(), to_visible_device_index(), to_nvidia_smi_gpu_index()
       stt_vram_planner.py   # SttVramPlanner — pré-check VRAM (fraction×total vLLM) + relocalisation GPU
       stt_engine_supervisor.py # SttEngineSupervisor — cycle de vie A/B/C des moteurs STT distants (+ /engines/ensure)
+      stt_instance_planner.py # plan_stt_instances() PUR — instances STT servies par carte (VRAM − LLM − marge, §2.9)
+      hardware_advisor.py   # cartes de préconisation matériel (page /admin/hardware) — scan GPU vs config
     inference/
       client.py             # InferenceClient — service Flask distant (diarize/voice-embed, /capabilities, /engines/ensure)
       asr_client.py         # AsrClient — endpoint OpenAI /v1/audio/transcriptions (vLLM/SGLang, non hardcodé)
@@ -354,7 +357,7 @@ transcria/
       downloads_api.py      # téléchargements : SRT, package ZIP, audio, DOCX, extraits audio, clips locuteurs
       refine_api.py         # chat d'affinage : submit, chat (polling), render-options, revert
       editor_routes.py      # éditeur SRT intégré : state (un appel), draft (verrou optimiste 409), save (snapshot pool commun), stream Range, peaks — cf. docs/EDITEUR_SRT_INTEGRE.md
-      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models
+      admin_routes.py       # /admin/config (formulaire + YAML + prompts), /admin/maintenance (backups/planification/restore), /admin/models, /admin/hardware (préconisations matériel, apply multi-instance STT)
       health_routes.py      # /health, /ready, /metrics (Prometheus)
       job_access.py         # contrôle d'accès jobs PUBLIC partagé : get_job_for_api, require_job_access, can_manage_queue_job
       request_helpers.py    # json_body (corps JSON typé/tolérant), clean_job_title, audit_origin_from_url
@@ -394,6 +397,8 @@ transcria/
     bench_eval.py           # Évaluation LLM des SRTs (nécessite la LLM d'arbitrage)
     _stt_serve_lib.sh       # Lib commune des lanceurs STT (moteur non hardcodé : STT_ENGINE vllm|sglang|custom)
     launch_stt_cohere.sh / launch_stt_whisper.sh / launch_stt_granite.sh # Lanceurs moteurs STT (vLLM par défaut)
+    launch_stt_qwen3asr.sh / launch_stt_nemotron.sh # Lanceurs runtimes servis audio.cpp (STT_FAMILY, STT_GPU/STT_PORT)
+    plan_stt_instances.py   # plan [--apply] multi-instance STT (même moteur que /admin/hardware)
     stop_stt.sh             # Arrêt par port via ss (groupe de process), liste STT_STOP_PORTS
     test_stt.sh             # Smoke endpoint STT (auto-convertit MP3→WAV)
     smoke_remote_stt.py     # Smoke E2E RemoteTranscriber contre un vrai serveur STT

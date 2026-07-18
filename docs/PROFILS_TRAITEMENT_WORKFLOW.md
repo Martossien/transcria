@@ -298,36 +298,36 @@ Le DOCX peut deja fonctionner avec des donnees partielles, mais il faut formalis
 
 ### Matrice fonctionnelle
 
-| Capacite | srt_express | srt_locuteurs | word_rapide | word_structure | word_corrige | dossier_qualite |
-|---|---:|---:|---:|---:|---:|---:|
-| Analyse audio initiale | oui | oui | oui | oui | oui | oui |
-| Resume de controle LLM | non | optionnel/minimal | oui | oui | oui | oui |
-| Diarisation du resume / pre-remplissage locuteurs | non | optionnelle | optionnelle best-effort | oui best-effort | oui best-effort | oui best-effort |
-| Validation contexte | non | non | minimale | oui | oui | oui |
-| Validation participants | non | optionnelle | optionnelle | oui | oui | oui |
-| Validation locuteurs | non | oui | non | oui | oui | oui |
-| Lexique de session | non | non | non | non | optionnel | requis ou valide vide |
-| Preprocess audio | minimal | minimal | minimal | standard | standard | complet selon config |
-| Transcription | oui | oui | oui | oui | oui | oui |
-| Diarisation finale | non | oui | non | oui | oui | oui |
-| Correction LLM SRT | non | non | non | non | oui | oui |
-| Final review | non | non | non | non | oui | oui |
-| Qualite | non ou light | light | light | light | light | full |
-| DOCX | non | non | template basic | template structured | template enriched | template full |
-| ZIP | minimal | minimal | minimal/standard | standard | standard | full |
+| Capacite | srt_express | srt_locuteurs | srt_moss | word_rapide | word_structure | word_corrige | dossier_qualite |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Analyse audio initiale | oui | oui | oui | oui | oui | oui | oui |
+| Resume de controle LLM | non | optionnel/minimal | non | oui | oui | oui | oui |
+| Diarisation du resume / pre-remplissage locuteurs | non | optionnelle | non | optionnelle best-effort | oui best-effort | oui best-effort | oui best-effort |
+| Validation contexte | non | non | non | minimale | oui | oui | oui |
+| Validation participants | non | optionnelle | non | optionnelle | oui | oui | oui |
+| Validation locuteurs | non | oui | non (locuteurs du STT) | non | oui | oui | oui |
+| Lexique de session | non | non | non | non | non | optionnel | requis ou valide vide |
+| Preprocess audio | minimal | minimal | minimal | minimal | standard | standard | complet selon config |
+| Transcription | oui | oui | oui (MOSS impose, <= single_pass_max_s) | oui | oui | oui | oui |
+| Diarisation finale | non | oui | non (une passe) | non | oui | oui | oui |
+| Correction LLM SRT | non | non | non | non | non | oui | oui |
+| Final review | non | non | non | non | non | oui | oui |
+| Qualite | non ou light | light | light + gardes trous/troncature | light | light | light | full |
+| DOCX | non | non | non (verbatim a la demande) | template basic | template structured | template enriched | template full |
+| ZIP | minimal | minimal | minimal | minimal/standard | standard | standard | full |
 
 ### Matrice voix et lexique
 
 Ces deux sujets ne sont pas seulement ergonomiques : ils touchent au consentement, aux
 donnees de groupe et aux prompts LLM. Le comportement doit donc etre explicite.
 
-| Fonction | srt_express | srt_locuteurs | word_rapide | word_structure | word_corrige | dossier_qualite |
-|---|---:|---:|---:|---:|---:|---:|
-| Matching voix enregistrees | non | oui, si clips locuteurs produits | non | oui, si clips locuteurs produits | oui, si clips locuteurs produits | oui, si clips locuteurs produits |
-| Section voix dans l'UI | masquee | visible apres diarisation | masquee | visible apres validation locuteurs | visible apres validation locuteurs | visible apres validation locuteurs |
-| Lexique centralise visible | non | non | lecture possible pour Word, sans correction | lecture possible pour Word, sans correction | oui | oui |
-| Etape lexique wizard | masquee | masquee | masquee | optionnelle/masquee selon template | optionnelle avec validation vide | requise ou valide vide |
-| Lexique transmis a la correction LLM | non | non | non | non | oui si valide | oui |
+| Fonction | srt_express | srt_locuteurs | srt_moss | word_rapide | word_structure | word_corrige | dossier_qualite |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Matching voix enregistrees | non | oui, si clips locuteurs produits | non | non | oui, si clips locuteurs produits | oui, si clips locuteurs produits | oui, si clips locuteurs produits |
+| Section voix dans l'UI | masquee | visible apres diarisation | masquee | masquee | visible apres validation locuteurs | visible apres validation locuteurs | visible apres validation locuteurs |
+| Lexique centralise visible | non | non | non | lecture possible pour Word, sans correction | lecture possible pour Word, sans correction | oui | oui |
+| Etape lexique wizard | masquee | masquee | masquee | masquee | optionnelle/masquee selon template | optionnelle avec validation vide | requise ou valide vide |
+| Lexique transmis a la correction LLM | non | non | non | non | non | oui si valide | oui |
 
 Regles :
 
@@ -2112,7 +2112,7 @@ Risque : trop de profils ou de variantes configurables.
 
 Mitigation :
 
-- 6 profils maximum au lancement ;
+- 7 profils maximum au lancement (srt_moss ajouté en 0.3.8, opt-in) ;
 - profils codes comme presets stables ;
 - configuration limitee a activation/desactivation et politique d'affichage.
 

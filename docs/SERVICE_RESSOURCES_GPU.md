@@ -189,8 +189,9 @@ Deux axes de concurrence, tous deux exploitant le batching continu de vLLM :
 pipelines en parallèle (pool borné 1-8), plafonné par la **capacité d'admission du nœud**
 `resource_node.max_concurrent_jobs` (annoncée dans `/capabilities`, défaut 1). Les moteurs in-process
 sérialisés (diarisation/voice-embed) **ne bornent plus l'admission** : ils s'auto-sérialisent via leur
-verrou moteur (les jobs en surplus y font la queue), tandis que STT et LLM d'arbitrage (vLLM) **batchent**
-les requêtes concurrentes. Le **verrou LLM de l'allocator est no-op pour une LLM distante** (elle batche
+verrou moteur (les jobs en surplus y font la queue), tandis que la LLM d'arbitrage (vLLM) **batche**
+les requêtes concurrentes — pour le STT servi, cela dépend du runtime : vLLM batche,
+audiocpp_server SÉRIALISE (cf. §5 intra-job, multi-instance). Le **verrou LLM de l'allocator est no-op pour une LLM distante** (elle batche
 seule ; le sérialiser l'étranglerait).
 
 **Intra-job (STT par tour)** — `inference.stt.concurrency` (>1) transcrit les tours de parole d'un

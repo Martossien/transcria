@@ -6,6 +6,67 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.8] — 2026-07-18
+
+Version **vitesse & expérience opérateur**, entièrement mesurée sur réunions réelles
+(45 min à 3 h 50). **Aucune migration de base de données.** Tous les nouveaux
+comportements sont **opt-in** : les défauts reproduisent 0.3.7, sauf deux défauts
+durcis par la mesure (voir « Modifié »).
+
+### Ajouté
+
+- **Multi-instance STT servie** (piste §2.9) : le serveur audio.cpp sérialisant
+  l'inférence (mesuré), le débit vient d'un **pool d'instances** —
+  `inference.stt.backends.<nom>.extra_urls` (client : affinité par worker, bascule
+  sur instances vivantes) + `resource_node.engines[].backend` (« assurer X »
+  démarre toutes les instances, all-in-one et nœud GPU). Gains mesurés :
+  réunion de 2 h 313 s → 171 s (×3 instances), 3 h 50 575 s → 361 s ; **2 instances
+  sur la même carte battent le bi-GPU** — les mono-GPU en profitent aussi.
+- **Page admin `/admin/hardware`** (« Préconisations matériel », FR/EN) : scan des
+  GPU réels vs config — plan multi-instance STT applicable **en un clic** (écriture
+  ruamel ciblée, auditée), cartes consultatives palier LLM et concurrency. Pendant
+  CLI : `scripts/plan_stt_instances.py plan [--apply]` ; check doctor
+  `check_stt_instances_vram`. Pour l'utilisateur qui améliore son PC après l'install.
+- **Profil `srt_moss`** (7e, opt-in via `moss.enabled`) : SRT + locuteurs en UNE
+  passe GPU, zéro étape wizard. Gardé par la mesure : enveloppe
+  `moss.single_pass_max_s` (défaut 600 s — au-delà, troncature silencieuse mesurée),
+  alerte qualité « trou anormal » (relais du marqueur MOSS) et « fin tronquée ».
+- **Résumé auto-démarré à l'upload** (`workflow.summary_autostart.enabled`,
+  défaut false) : l'analyse et la synthèse s'enchaînent dès le dépôt du fichier —
+  zéro clic, l'attente du wizard disparaît.
+- **Fraîcheur des exports** : bannière « synthèse périmée » après édition du SRT
+  (levée par l'affinage), mention dans le DOCX, ZIP local jamais servi plus vieux
+  que ses artefacts ; **DOCX verbatim à la demande** pour les profils SRT.
+- **Garde anti-dérive non-latine** (`workflow.transcription_cleanup.
+  non_latin_short_max_s`, défaut 0 = off) : filtre les interjections
+  mono-caractère CJK des micro-segments (26/26 attrapées, 0 faux positif sur
+  réunion réelle de 62 min) — le prérequis à qwen3asr en backend principal est levé.
+- **`reset-admin-password`** (CLI de maintenance) : réinitialisation hors UI,
+  auditée, par le chemin officiel UserStore.
+- Vitesse pipeline (lots 1-2, opt-in) : backend STT dédié du résumé
+  (`models.summary_stt_backend`, ex. qwen3asr servi), LLM d'arbitrage gardée
+  chaude entre jobs (`keep_warm`), pré-lancement à l'analyse, WAV canonique 16 k
+  partagé, attente VRAM bornée, préflight audio réutilisé, purge planifiée.
+
+### Modifié
+
+- `moss.moss_site` : défaut `./runtimes/moss_site` (persistant) au lieu de
+  `/tmp/...` — un site sous /tmp disparaissait au reboot (avertissement de
+  validation ajouté ; les configs existantes gardent leur valeur).
+- `opencode_first_contact_grace_s` : défaut 45 → **120 s** — le boot opencode
+  nominal mesuré est de 12-17 s sur machine rapide ; 45 s provoquait des kills
+  en boucle sur machines lentes ou sous pression IO (le vrai deadlock « port LLM
+  fermé » est bloqué en amont par la pré-garde TCP).
+- Image Docker `:bundled` : poids **Qwen3-ASR-1.7B bakés** au chemin du lanceur
+  (backend servi prêt au premier run) ; site MOSS symlinké hors /tmp.
+
+### Corrigé
+
+- Le rapport qualité light relaie désormais les marqueurs d'omission du backend
+  (aucun faux positif sur les autres moteurs) ; régression d'état `analyze`
+  (un job analysé ne peut plus revenir en arrière) ; bannière synthèse périmée
+  affichée aussi pour les profils SRT.
+
 ## [0.3.7] — 2026-07-16
 
 Version **qualité & durcissement**. Le chantier de refactorisation qualité

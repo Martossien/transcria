@@ -935,7 +935,7 @@ annulation, provenance, réplication PG des fichiers, métriques de timing.
 de reprise) ; l'annulation devient un `CancellationToken` passé dans le contexte (au lieu
 du re-test disséminé). `_define_pipeline_steps_for_profile` **reste l'unique table de
 séquencement** (elle l'est presque).
-**Test golden clé** : pour chacun des 6 profils, la séquence d'étapes générée est identique
+**Test golden clé** : pour chacun des 7 profils, la séquence d'étapes générée est identique
 **octet pour octet** avant/après ; reprise mi-parcours rejouée sur un job réel en E2E GPU
 (le filet `PIPELINE_REPRISE` existe).
 

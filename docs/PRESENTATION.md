@@ -83,7 +83,7 @@ nécessaires :
 8. **Contrôle qualité** — points à vérifier, signalés explicitement ;
 9. **Export** — Word, transcription, archive complète.
 
-Du plus rapide au plus soigné, **six profils** dosent l'effort : *SRT express* (la
+Du plus rapide au plus soigné, **sept profils** dosent l'effort : *SRT express* (la
 transcription brute, au plus vite, aucune validation), *SRT avec locuteurs*, *Word
 rapide*, *Word structuré*, *Word corrigé*, jusqu'au *Dossier qualité complet* (toutes les
 validations, tous les rapports). Une réunion informelle ne mérite pas le même soin qu'un

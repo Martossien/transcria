@@ -633,7 +633,7 @@ ensure_arbitrage_llm_ready(api_model_id) → opencode run
 L'arrêt de la LLM est délégué à `PipelineService._release_arbitrage_llm()` via `finally` en fin de pipeline.
 
 **`profiles.py` — profils de traitement** (remplacent le binaire `fast`/`quality`)
-Contrat produit central et immuable : 6 profils nommés (`srt_express`, `srt_locuteurs`,
+Contrat produit central et immuable : 7 profils nommés (`srt_express`, `srt_locuteurs`, `srt_moss` — opt-in,
 `word_rapide`, `word_structure`, `word_corrige`, `dossier_qualite`) + `legacy_fast` transitoire.
 Chaque `ProcessingProfile` (frozen) déclare ses étapes humaines (`requires_*`), ses phases
 machine (`run_diarization`, `run_llm_correction`, `run_quality`…), ses livrables

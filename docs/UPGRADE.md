@@ -157,6 +157,26 @@ venv/bin/python -m transcria.maintenance.cli upgrade
 Si une étape échoue, la mise à niveau **s'arrête** et affiche les étapes déjà faites ;
 restaurez la sauvegarde initiale pour revenir en arrière.
 
+### Notes spécifiques 0.3.7 → 0.3.8
+
+Aucune migration de base. Tout est opt-in, trois points d'attention :
+
+1. **Site MOSS** : le défaut `moss.moss_site` devient `./runtimes/moss_site`
+   (persistant). Si votre config pointait `/tmp/transcria_moss_site` (ancien
+   défaut), déplacez le site puis mettez la clé à jour — sinon il disparaîtra au
+   prochain reboot (la validation de config vous en avertit désormais).
+   Regénération au besoin :
+   `venv/bin/python -m transcria.installer.cli moss-site --dir ./runtimes/moss_site`.
+2. **Watchdog opencode** : le défaut `opencode_first_contact_grace_s` passe de
+   45 à 120 s (kills en boucle mesurés sur machines lentes). Si vous aviez posé
+   une valeur explicite, elle est respectée.
+3. **Nouveautés à activer si souhaitées** : `workflow.summary_autostart.enabled`
+   (résumé dès l'upload), `moss.enabled` (profil `srt_moss`),
+   `inference.stt.backends.<nom>.extra_urls` + page **/admin/hardware** pour le
+   multi-instance STT (préconisation et application en un clic),
+   `workflow.transcription_cleanup.non_latin_short_max_s: 2.0` recommandé avec
+   un backend servi qwen3asr.
+
 ## Mettre à jour opencode
 
 opencode s'installe de plusieurs façons (installateur officiel dans `~/.opencode/bin`, `npm i -g

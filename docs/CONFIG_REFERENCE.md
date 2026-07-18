@@ -440,7 +440,7 @@ Paramètres contrôlant les fonctionnalités du workflow.
 #### `workflow.profiles`
 
 Profils de traitement présentés à l'utilisateur après l'upload (remplacent le binaire
-`fast`/`quality`). Les 6 profils sont **codés en dur** (contrat stable) ; la config ne fait
+`fast`/`quality`). Les 7 profils (dont `srt_moss`, opt-in via `moss.enabled`) sont **codés en dur** (contrat stable) ; la config ne fait
 qu'activer/restreindre et n'altère jamais leur sémantique. Voir
 `docs/PROFILS_TRAITEMENT_WORKFLOW.md`.
 
@@ -1104,6 +1104,9 @@ Configuration du LLM d'arbitrage/correction SRT.
 | `opencode_bin` | string | `"opencode"` | Chemin vers le binaire opencode |
 | `keep_warm` | bool | `false` | Ne pas arrêter la LLM en fin de pipeline tant que des jobs attendent en file : le suivant la réutilise chaude (CAS A, ~17 s de démarrage llama.cpp économisées ; **fortement recommandé en vLLM local** où chaque relance coûte des minutes). Décision prise sous le verrou LLM (pas de course avec un lancement concurrent) ; file vide → arrêt comme avant |
 | `prelaunch_at_analyze` | bool | `false` | Pré-lancer la LLM dès l'étape ANALYSE du wizard (thread best-effort, sous verrou, jamais de préemption VRAM) : le démarrage s'absorbe pendant la saisie des étapes suivantes |
+| `opencode_first_contact_grace_s` | float | `120` | Watchdog pré-session : délai sans AUCUN événement opencode ni sollicitation LLM avant de conclure au gel (kill + retry). Monté de 45 à 120 s en 0.3.8 (boot opencode nominal mesuré 12-17 s sur machine rapide ; machines lentes chroniques à 45 s). Le deadlock « port LLM fermé » est bloqué en amont par la pré-garde TCP |
+| `opencode_idle_grace_s` | float | `120` | Watchdog d'inactivité en session : silence opencode ET LLM idle avant kill |
+| `opencode_watchdog_poll_s` | float | `5` | Période de sonde du watchdog |
 
 **Redémarrage requis :** non.
 

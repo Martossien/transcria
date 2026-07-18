@@ -33,7 +33,7 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ## Project status
 
-**Current release: 0.3.7** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.3.8** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -45,6 +45,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.3.8** | **Speed & operator experience** — served STT goes parallel: **multi-instance pools** (`extra_urls` + one-click plan on the new **`/admin/hardware`** page — real-meeting gains up to **3.7×** on a 2 h recording, single-GPU machines benefit too); summary **auto-starts at upload** (opt-in); a new one-pass **`srt_moss` profile** (transcription + speakers, zero wizard step, guarded against silent skips and truncation — short meetings); freshness guarantees for exports (stale-synthesis banner, always-fresh ZIP); `reset-admin-password` CLI; a **non-Latin drift guard** that clears qwen3asr for primary-backend use; safer defaults measured in production (persistent MOSS site, 120 s opencode watchdog grace) |
 | **0.3.7** | **Quality & hardening** — the 15-wave code-quality campaign delivered end to end: layered architecture locked by CI ratchets, a single GPU probe and unified kill patterns, zero legacy install modules, a **generated API reference** with a marked scriptable contract (⭐ upload → process → status → download), and real concurrency/deployment bugs found and fixed along the way (concurrent-job LLM race, resource-node runtimes env, `audiocpp --with-model` paths) |
 | **0.3.6** | **Served STT runtimes** — audio.cpp and parakeet.cpp become first-class engines: pinned installer builds, on-demand start before jobs (all-in-one and GPU-node topologies), per-engine health checks, VRAM admission, native fallback — qualified on the real-meeting benchmark (`qwen3asr` 0.421 WER, `nemotron` 0.492 at ~2 s/5-min window) |
 | **0.3.5** | **New engines & smarter editor** — MOSS-Transcribe-Diarize backend (transcription + speakers + timestamps in one pass, best text WER of our benchmark) and Kroko-ASR, the **no-GPU** backend (155 MB per language, CPU only, matches our GPU engines on real meetings); after editing the SRT, the editor now offers a **quick DOCX** or an **LLM-updated synthesis** (proposed, never automatic, versioned) |
@@ -158,6 +159,7 @@ only the GPU/LLM — that the chosen profile actually needs.
 |---|---|---|
 | **Express SRT** | Plain subtitles | STT only |
 | **SRT with speakers** | Speaker-attributed subtitles | STT + diarization |
+| **Single-pass speaker SRT (MOSS)** | Speaker-attributed subtitles, zero wizard step | One MOSS pass (opt-in, short meetings — guarded against silent skips) |
 | **Quick Word** | Basic Word report | STT + summary |
 | **Structured Word** | Structured Word (context, participants) | STT + diarization + LLM extraction |
 | **Corrected Word** | Corrected, enriched Word | + LLM correction and final review |

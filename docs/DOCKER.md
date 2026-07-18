@@ -297,7 +297,7 @@ curl -fsS http://localhost:7870/health     # → 200
   gated**) téléchargé au runtime dans le volume `models`. opencode (agent) est inclus ; son
   `provider.local` est pointé sur `127.0.0.1:8080` au démarrage.
 
-→ **Sans aucun token**, les 6 profils fonctionnent (locuteurs via Sortformer ≤4). Un **token HF
+→ **Sans aucun token**, les 7 profils fonctionnent (locuteurs via Sortformer ≤4). Un **token HF
 gratuit** (+ conditions des deux modèles) bascule sur la **qualité de référence** (Cohere +
 pyannote, locuteurs illimités). Aucun poids n'est dans l'image (build hermétique).
 
