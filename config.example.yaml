@@ -504,6 +504,12 @@ workflow:
     non_latin_char_pattern: "[\\u0400-\\u04FF\\u0600-\\u06FF\\u0750-\\u077F\\u4E00-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF]"
     non_latin_min_chars: 2
     non_latin_min_ratio: 0.25
+    # Anti-dérive micro-segments (qwen3asr : interjections < 1,2 s transcrites en
+    # CJK mono-caractère, sous le seuil ci-dessus). 0 = désactivé (défaut).
+    # Recommandé avec un backend servi qwen3asr : 2.0 (26 dérives attrapées,
+    # 0 faux positif sur réunion réelle de 62 min). Jamais actif si la langue
+    # de sortie du job n'est pas à écriture latine.
+    non_latin_short_max_s: 0
     generic_hallucination_languages: ["fr"]
     generic_hallucination_patterns: []  # vide → défauts intégrés (thank you/bye isolés sur réunions FR)
     isolated_noise_artifact_words: ["501"]

@@ -976,6 +976,19 @@ timings `preprocess_*` avant activation par défaut.*
     VRAM déclaré = WARN). Cas moteur : l'utilisateur qui améliore son PC après
     l'installation. Rien n'est jamais appliqué sans clic explicite.
 
+20. ✅ garde-fou anti-dérive non-latine qwen3asr — **LIVRÉ le 2026-07-18**,
+    prérequis levé pour qwen3asr en backend PRINCIPAL. Faille identifiée : le
+    filtre non-latin existant (`transcription_cleanup`, seuil 2 caractères)
+    laissait passer les dérives MONO-caractère CJK des interjections courtes.
+    Nouvelle règle `non_latin_short_max_s` (défaut 0 = OFF, historique intact) :
+    sous cette durée, seuil abaissé à 1 caractère (ratio ≥ 0,5), conditionnée à
+    une langue de sortie à écriture LATINE (jamais active sur réunion
+    chinoise/arabe). **Validé sur R4 (62 min, rejeu qwen3asr, diff hors-ligne
+    déterministe)** : seuil 2,0 s → 26 dérives attrapées (嗯/对/是…, 0,32-1,79 s),
+    0 faux positif latin, les phrases françaises mixtes conservées (ratio).
+    La bascule de `models.stt_backend` vers qwen3asr reste une DÉCISION
+    utilisateur (défaut cohere inchangé) — le verrou technique est levé.
+
 **Dépendances entre pistes** : 4 (instrumentation) éclaire 10, 16 et 18 — le faire
 en premier ; 8 (résumé Kroko) neutralise mécaniquement le reclaim LLM intra-job et
 simplifie 9 ; la réutilisation de préfixe (§4.3-3) suppose 9 (LLM non redémarré

@@ -69,6 +69,10 @@ _DEFAULT_NON_LATIN_CHAR_PATTERN = (
     r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
     r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
 )
+# Langues de sortie à écriture LATINE (miroir de _KNOWN_LOCALES du schéma) :
+# seule condition d'activation du filtre anti-dérive courte (_is_short_non_latin_drift).
+_LATIN_SCRIPT_LANGUAGES = frozenset({"fr", "en", "es", "de", "it", "pt", "nl"})
+
 _DEFAULT_GENERIC_HALLUCINATION_PATTERNS = [
     # Segments isolés observés sur silences/bruits de réunions françaises.
     re.compile(r"^\s*thank\s+you\s*[.!?…]*\s*$", re.IGNORECASE),
@@ -287,6 +291,9 @@ class Transcriber:
             ):
                 removed_hallucinations += 1
                 continue
+            if self._is_short_non_latin_drift(text, segment, cfg, non_latin_re, language=language):
+                removed_hallucinations += 1
+                continue
 
             current = dict(segment)
             current["text"] = text
@@ -395,6 +402,42 @@ class Transcriber:
             return any(pattern.search(text) for pattern in generic_patterns)
 
         return False
+
+    @staticmethod
+    def _is_short_non_latin_drift(
+        text: str,
+        segment: dict,
+        cfg: dict,
+        non_latin_re: re.Pattern,
+        *,
+        language: str | None = None,
+    ) -> bool:
+        """Dérive non-latine sur MICRO-segment (garde-fou qwen3asr, piste §4.1 bis).
+
+        Mesuré au banc (réunion R4, 62 min) : qwen3asr transcrit des interjections
+        < 1,2 s en CJK MONO-caractère — sous le seuil `non_latin_min_chars=2` du
+        filtre général, donc écrit tel quel dans le SRT. Cette règle abaisse le
+        seuil à 1 caractère (ratio ≥ 0,5) mais UNIQUEMENT :
+          - si `non_latin_short_max_s` > 0 (opt-in — défaut 0 = comportement
+            historique inchangé) ;
+          - pour un segment plus court que ce plafond ;
+          - quand la langue de SORTIE du job est à écriture latine — jamais
+            actif sur une réunion chinoise/arabe/etc. (l'allowlist reflète
+            `_KNOWN_LOCALES` du schéma, toutes latines).
+        """
+        max_s = float(cfg.get("non_latin_short_max_s", 0) or 0)
+        if max_s <= 0:
+            return False
+        root = str(language or cfg.get("expected_language") or "fr").lower().split("-")[0].split("_")[0]
+        if root not in _LATIN_SCRIPT_LANGUAGES:
+            return False
+        try:
+            duration = float(segment.get("end") or 0) - float(segment.get("start") or 0)
+        except (TypeError, ValueError):
+            return False
+        if duration <= 0 or duration >= max_s:
+            return False
+        return Transcriber._is_non_latin_hallucination(text, non_latin_re, 1, 0.5)
 
     @staticmethod
     def _is_non_latin_hallucination(text: str, non_latin_re: re.Pattern, min_chars: int, min_ratio: float) -> bool:

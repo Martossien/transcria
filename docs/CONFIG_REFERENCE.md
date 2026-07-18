@@ -772,6 +772,7 @@ observées sur les bancs audio, et fusionne les micro-segments courts d'un même
 | `non_latin_char_pattern` | string | regex Unicode | Regex des caractères considérés hors alphabet latin attendu |
 | `non_latin_min_chars` | int | `2` | Nombre minimal de caractères non latins avant filtrage |
 | `non_latin_min_ratio` | float | `0.25` | Ratio minimal caractères non latins / lettres du segment pour supprimer |
+| `non_latin_short_max_s` | float | `0` | Anti-dérive micro-segments (qwen3asr) : sous cette durée, le seuil non-latin tombe à 1 caractère (ratio ≥ 0,5). `0` = désactivé (historique). Jamais actif si la langue de sortie n'est pas à écriture latine |
 | `generic_hallucination_languages` | list[string] | `["fr"]` | Langues de job où les phrases génériques anglaises isolées sont considérées comme hallucinations |
 | `generic_hallucination_patterns` | list[regex] | `[]` | Liste de patterns regex. Liste vide = utiliser les patterns intégrés (`thank you`, `bye`, etc. isolés) |
 | `isolated_noise_artifact_words` | list[string] | `["501"]` | Tokens isolés connus à supprimer seulement comme segment court autonome |

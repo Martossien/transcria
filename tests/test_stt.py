@@ -1630,3 +1630,46 @@ class TestMossTranscriber:
         wav.write_bytes(b"RIFF")
         out = t.transcribe(wav)
         assert out and "error" in out[0]
+
+
+class TestShortNonLatinDrift:
+    """Anti-dérive micro-segments (qwen3asr : interjections CJK mono-caractère).
+
+    Opt-in strict : sans `non_latin_short_max_s` la faille historique demeure
+    (mono-caractère sous le seuil min_chars=2) — c'est le comportement par défaut,
+    inchangé. Jamais actif pour une langue de sortie non latine."""
+
+    def _run(self, texts_with_times, *, max_s=1.5, language="fr"):
+        t = Transcriber.__new__(Transcriber)
+        t.config = {"workflow": {"transcription_cleanup": {
+            "enabled": True,
+            "merge_short_segments": False,
+            "non_latin_short_max_s": max_s,
+        }}}
+        segs = [{"start": a, "end": b, "text": txt} for txt, a, b in texts_with_times]
+        return [s["text"] for s in t._cleanup_transcription_segments(segs, language=language)]
+
+    def test_interjection_cjk_courte_supprimee(self):
+        """Le cas mesuré au banc : « 嗯。 » sur 0,8 s → filtré."""
+        result = self._run([("嗯。", 10.0, 10.8), ("Bonjour à tous.", 11.0, 13.5)])
+        assert result == ["Bonjour à tous."]
+
+    def test_defaut_off_comportement_historique(self):
+        """Sans la clé (défaut 0) : le mono-caractère CJK passe — historique intact."""
+        result = self._run([("嗯。", 10.0, 10.8)], max_s=0)
+        assert result == ["嗯。"]
+
+    def test_segment_long_cjk_non_touche_par_cette_regle(self):
+        """Au-dessus du plafond de durée, cette règle ne s'applique pas (le filtre
+        général min_chars=2 garde sa juridiction)."""
+        result = self._run([("嗯。", 10.0, 13.0)])
+        assert result == ["嗯。"]
+
+    def test_jamais_actif_pour_une_langue_non_latine(self):
+        """Réunion en chinois : une interjection courte légitime est CONSERVÉE."""
+        result = self._run([("嗯。", 10.0, 10.8)], language="zh")
+        assert result == ["嗯。"]
+
+    def test_interjection_latine_courte_conservee(self):
+        result = self._run([("Oui.", 10.0, 10.4), ("On continue.", 11.0, 12.5)])
+        assert result == ["Oui.", "On continue."]
