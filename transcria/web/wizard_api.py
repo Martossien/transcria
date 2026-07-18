@@ -5,6 +5,7 @@ Vague A2 — routes déplacées telles quelles depuis ``web/routes.py`` ;
 imports remontés en tête en vague C5 (le boot du serveur charge déjà l'orchestration).
 """
 import logging
+import threading
 from pathlib import Path
 
 from flask import current_app, jsonify, request
@@ -135,7 +136,62 @@ def api_upload(job_id: str):
     info = JobService.upload(job.id, file.read(), file.filename, cfg["storage"]["jobs_dir"])
     if job.title == DEFAULT_JOB_TITLE:
         job.title = clean_job_title(Path(file.filename).stem or file.filename)
+    # §5.6 (opt-in) : enchaîner analyse → mise en file du résumé pendant que
+    # l'utilisateur remplit le wizard — l'attente perçue de l'étape résumé fond.
+    _maybe_autostart_summary(cfg, job.id)
     return jsonify(info)
+
+
+def _maybe_autostart_summary(cfg: dict, job_id: str) -> None:
+    """Autostart du résumé dès la fin de l'upload (PISTES_AMELIORATION §5.6).
+
+    Opt-in `workflow.summary_autostart.enabled` (défaut false = comportement
+    historique). Enchaîne en THREAD : analyse (CPU, quelques secondes — le résumé
+    a besoin de ses artefacts pour le VAD adaptatif) puis mise en FILE du résumé
+    (SUMMARY_MODE) — le même véhicule que la reprise serveur : admission VRAM par
+    le scheduler, exécution locale en all-in-one, par le worker GPU en frontal.
+    Best-effort : n'affecte jamais la réponse d'upload ; toute étape déjà faite
+    ou en cours est respectée (mêmes gardes qu'api_summary).
+    """
+    autostart_cfg = cfg.get("workflow", {}).get("summary_autostart") or {}
+    if not autostart_cfg.get("enabled", False):
+        return
+    # Patron Flask canonique : current_app est un LocalProxy, _get_current_object
+    # rend la vraie app pour le thread de fond.
+    app_obj = current_app._get_current_object()  # type: ignore[attr-defined]
+
+    def _run() -> None:
+        try:
+            with app_obj.app_context():
+                job = JobStore.get_by_id(job_id)
+                if job is None or job.state != JobState.UPLOADED.value:
+                    return  # supprimé, ou déjà analysé/résumé par ailleurs
+                result = JobService.analyze(job_id, cfg["storage"]["jobs_dir"], cfg)
+                if result.get("error"):
+                    logger.warning("[autostart] Analyse impossible — résumé non enfilé (job=%s : %s)",
+                                   job_id, result["error"])
+                    return
+                job = JobStore.get_by_id(job_id)
+                if job is None or job.state != JobState.ANALYZED.value:
+                    return
+                pending = QueueStore.get_entry(job_id)
+                if (pending is not None and pending.mode == SUMMARY_MODE
+                        and pending.status in {QUEUE_WAITING, QUEUE_RUNNING, QUEUE_PAUSED}):
+                    return  # déjà en file (double upload rapide, reprise…)
+                fs = JobFilesystem(cfg["storage"]["jobs_dir"], job_id)
+                audio_path = fs.get_original_audio_path()
+                executor = get_job_executor()
+                if audio_path is None or executor is None:
+                    return
+                executor.submit_process(
+                    job_id, str(audio_path), SUMMARY_MODE,
+                    vram_profile=_summary_vram_profile(cfg),
+                )
+                logger.info("[autostart] Résumé enfilé dès l'upload (job=%s)", job_id)
+        except Exception:  # noqa: BLE001 — opportuniste, jamais bloquant pour l'upload
+            logger.debug("[autostart] Autostart du résumé abandonné (job=%s)", job_id, exc_info=True)
+
+    threading.Thread(target=_run, name="summary-autostart", daemon=True).start()
 
 
 @web_bp.route("/api/jobs/<job_id>/analyze", methods=["POST"])
@@ -145,6 +201,15 @@ def api_analyze(job_id: str):
     job, error_response = get_job_for_api(job_id)
     if error_response:
         return error_response
+
+    # Garde d'état (§5.6) : au-delà d'ANALYZED (résumé en cours/fait — ex. lancé par
+    # l'autostart), re-analyser RÉGRESSERAIT l'état du wizard (JobService.analyze pose
+    # ANALYZED sans condition). On renvoie l'analyse déjà calculée, idempotent.
+    if job.state not in (JobState.UPLOADED.value, JobState.ANALYZED.value):
+        fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+        stored = fs.load_json("metadata/audio_analysis.json")
+        if stored is not None:
+            return jsonify(stored)
 
     result = JobService.analyze(job.id, cfg["storage"]["jobs_dir"], cfg)
     if result.get("error"):

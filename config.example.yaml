@@ -352,6 +352,11 @@ gpu:
   min_free_vram_mb: 4000
 
 workflow:
+  # Autostart du résumé (§5.6) : dès la fin de l'upload, analyse + résumé partent en
+  # tâche de fond (file SUMMARY_MODE) pendant que l'utilisateur remplit le wizard.
+  # summary_autostart:
+  #   enabled: true
+
   enable_quick_summary: true
   enable_speaker_detection: true
   enable_quality_mode: true

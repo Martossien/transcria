@@ -374,3 +374,39 @@ class TestRunTypeFieldExtraction:
         assert result["success"] is True and result["fields_added"] == []
         sd = env.fs.load_json("context/meeting_context.json").get("structured_data", {})
         assert "deliberations" not in sd                          # rien inventé
+
+
+class TestSummaryStaleMarkerCleared:
+    """§5.2 : la resynchronisation LLM (apply qui réécrit la synthèse) lève le
+    marqueur « synthèse périmée » posé par l'éditeur SRT."""
+
+    def test_apply_avec_synthese_leve_le_marqueur(self, env, monkeypatch):
+        import transcria.exports.package_builder as pb
+        monkeypatch.setattr(pb.PackageBuilder, "build_package", lambda self, job: {})
+
+        env.fs.save_json("metadata/summary_stale.json", {"since": "2026-07-18", "reason": "srt_edited"})
+        env.store.write_request(kind="apply", message="Mets à jour la synthèse")
+        _FakeOpenCode.outputs = {
+            "summary_refined.md": "Synthèse resynchronisée.",
+            "refine_report.md": "Synthèse mise à jour.",
+        }
+
+        result = env.runner.run_refine(env.job, env.config)
+
+        assert result["success"] is True
+        assert not (env.fs.job_dir / "metadata" / "summary_stale.json").exists()
+
+    def test_apply_sans_synthese_garde_le_marqueur(self, env, monkeypatch):
+        import transcria.exports.package_builder as pb
+        monkeypatch.setattr(pb.PackageBuilder, "build_package", lambda self, job: {})
+
+        env.fs.save_json("metadata/summary_stale.json", {"since": "2026-07-18"})
+        env.store.write_request(kind="apply", message="Masque la transcription")
+        _FakeOpenCode.outputs = {
+            "render_options_refined.json": '{"sections": {"transcript": false}}',
+            "refine_report.md": "Transcription masquée.",
+        }
+
+        env.runner.run_refine(env.job, env.config)
+
+        assert (env.fs.job_dir / "metadata" / "summary_stale.json").exists()

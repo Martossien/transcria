@@ -939,3 +939,26 @@ class TestLexiconPromote:
         job_id = self._job(admin_client)
         r = admin_client.post(f"/api/jobs/{job_id}/lexicon/promote", json={"term": "  "})
         assert r.status_code == 400
+
+    def test_result_page_montre_la_banniere_synthese_perimee_meme_en_profil_srt(self, app, admin_client):
+        """§5.2 — attrapé par le test UI réel : un job SRT peut avoir une synthèse
+        (autostart du wizard) ; le marqueur « périmée » doit s'afficher aussi pour lui."""
+        with app.app_context():
+            from transcria.auth.store import UserStore
+            from transcria.config import get_config
+            from transcria.jobs.filesystem import JobFilesystem
+            from transcria.jobs.models import JobState
+            from transcria.jobs.store import JobStore
+
+            admin = UserStore.get_by_username("admin")
+            job = JobStore.create_job(admin.id, "Job SRT avec synthèse")
+            JobStore.update_extra_data(
+                job.id, lambda d: {**d, "execution": {"processing_profile_id": "srt_express"}})
+            JobStore.update_state(job.id, JobState.COMPLETED)
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job.id)
+            fs.save_json("metadata/summary_stale.json", {"since": "2026-07-18", "reason": "srt_edited"})
+            job_id = job.id
+
+        html = admin_client.get(f"/jobs/{job_id}/result").data.decode("utf-8")
+        assert "verbatim a été édité" in html
+        assert "Mettre à jour la synthèse depuis l" in html

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-17 21:03+0000\n"
+"POT-Creation-Date: 2026-07-18 07:58+0000\n"
 "PO-Revision-Date: 2026-07-07 18:59+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -914,7 +914,7 @@ msgstr "Participants & speakers"
 #: transcria/i18n/js_catalog.py:178 transcria/notifications/job_facts.py:76
 #: transcria/web/templates/job_result.html:20
 #: transcria/web/templates/job_result.html:37
-#: transcria/web/templates/job_result.html:141
+#: transcria/web/templates/job_result.html:150
 msgid "Points à vérifier"
 msgstr "Points to review"
 
@@ -991,7 +991,7 @@ msgstr "Always present"
 msgid "TranscrIA · Réunion d'exemple · Page 1/4"
 msgstr "TranscrIA · Sample meeting · Page 1/4"
 
-#: transcria/i18n/js_catalog.py:197 transcria/web/templates/job_result.html:137
+#: transcria/i18n/js_catalog.py:197 transcria/web/templates/job_result.html:146
 msgid "Transcription"
 msgstr "Transcript"
 
@@ -2117,7 +2117,7 @@ msgstr "Telephone-type bandwidth detected (codec)."
 msgid "Nouveau traitement créé."
 msgstr "New job created."
 
-#: transcria/web/pages_routes.py:736
+#: transcria/web/pages_routes.py:740
 msgid "Traitement supprimé."
 msgstr "Job deleted."
 
@@ -3335,7 +3335,7 @@ msgid "Aucun groupe accessible."
 msgstr "No accessible group."
 
 #: transcria/web/templates/index.html:2
-#: transcria/web/templates/job_result.html:152
+#: transcria/web/templates/job_result.html:161
 msgid "Accueil"
 msgstr "Home"
 
@@ -3381,55 +3381,67 @@ msgstr "Result"
 msgid "Contrôles"
 msgstr "Checks"
 
-#: transcria/web/templates/job_result.html:55
+#: transcria/web/templates/job_result.html:52
+msgid ""
+"Le verbatim a été édité après la génération de la synthèse : le résumé du"
+" rapport Word peut être en retard sur vos corrections."
+msgstr "The transcript was edited after the summary was generated: the Word report summary may lag behind your corrections."
+
+#: transcria/web/templates/job_result.html:53
+msgid "Mettre à jour la synthèse depuis l'éditeur"
+msgstr "Update the summary from the editor"
+
+#: transcria/web/templates/job_result.html:64
 #: transcria/web/templates/wizard/_step_export.html:24
 msgid "Rapport Word (.docx)"
 msgstr "Word report (.docx)"
 
-#: transcria/web/templates/job_result.html:59
+#: transcria/web/templates/job_result.html:68
 msgid ""
 "Document Word généré à la demande depuis la transcription (sans synthèse "
 "— ce profil ne fait pas tourner la LLM)"
-msgstr "Word document generated on demand from the transcript (no summary — this profile does not run the LLM)"
+msgstr ""
+"Word document generated on demand from the transcript (no summary — this "
+"profile does not run the LLM)"
 
-#: transcria/web/templates/job_result.html:60
+#: transcria/web/templates/job_result.html:69
 msgid "Word verbatim (.docx)"
 msgstr "Verbatim Word (.docx)"
 
-#: transcria/web/templates/job_result.html:64
+#: transcria/web/templates/job_result.html:73
 #: transcria/web/templates/wizard/_step_export.html:25
 msgid "Télécharger le SRT"
 msgstr "Download SRT"
 
-#: transcria/web/templates/job_result.html:68
+#: transcria/web/templates/job_result.html:77
 #: transcria/web/templates/wizard/_step_export.html:26
 msgid "Package complet"
 msgstr "Full package"
 
-#: transcria/web/templates/job_result.html:72
+#: transcria/web/templates/job_result.html:81
 #: transcria/web/templates/wizard/_step_export.html:27
 msgid "Télécharger l'audio"
 msgstr "Download audio"
 
-#: transcria/web/templates/job_result.html:75
+#: transcria/web/templates/job_result.html:84
 #: transcria/web/templates/srt_editor.html:2
 #: transcria/web/templates/wizard/_step_export.html:28
 msgid "Éditer la transcription"
 msgstr "Edit transcript"
 
-#: transcria/web/templates/job_result.html:86
+#: transcria/web/templates/job_result.html:95
 msgid "Aperçu du SRT"
 msgstr "SRT preview"
 
-#: transcria/web/templates/job_result.html:94
+#: transcria/web/templates/job_result.html:103
 msgid "Affiner les livrables avec l'assistant"
 msgstr "Refine deliverables with the assistant"
 
-#: transcria/web/templates/job_result.html:97
+#: transcria/web/templates/job_result.html:106
 msgid "L'assistant travaille (30 s à 2 min)…"
 msgstr "The assistant is working (30 s to 2 min)…"
 
-#: transcria/web/templates/job_result.html:102
+#: transcria/web/templates/job_result.html:111
 msgid ""
 "Discutez du résultat (question, vérification, demande de reformulation), "
 "puis <strong>appliquez</strong> quand la proposition vous convient : les "
@@ -3441,7 +3453,7 @@ msgstr ""
 "regenerated and each application creates a <strong>restorable "
 "version</strong>."
 
-#: transcria/web/templates/job_result.html:108
+#: transcria/web/templates/job_result.html:117
 msgid ""
 "Ex. : « Raccourcis la synthèse et mets en avant les décisions » — ou "
 "posez une question sur le contenu"
@@ -3449,39 +3461,39 @@ msgstr ""
 "E.g.: \"Shorten the summary and highlight the decisions\" — or ask a "
 "question about the content"
 
-#: transcria/web/templates/job_result.html:112
+#: transcria/web/templates/job_result.html:121
 msgid "Discuter"
 msgstr "Discuss"
 
-#: transcria/web/templates/job_result.html:115
+#: transcria/web/templates/job_result.html:124
 msgid "Appliquer les modifications"
 msgstr "Apply changes"
 
-#: transcria/web/templates/job_result.html:120
+#: transcria/web/templates/job_result.html:129
 msgid "Restaurer"
 msgstr "Restore"
 
-#: transcria/web/templates/job_result.html:125
+#: transcria/web/templates/job_result.html:134
 msgid "Options du document (sans assistant — immédiat)"
 msgstr "Document options (no assistant — instant)"
 
-#: transcria/web/templates/job_result.html:128
+#: transcria/web/templates/job_result.html:137
 msgid "Thème du rapport"
 msgstr "Report theme"
 
-#: transcria/web/templates/job_result.html:129
+#: transcria/web/templates/job_result.html:138
 msgid "(selon le type)"
 msgstr "(by type)"
 
-#: transcria/web/templates/job_result.html:133
+#: transcria/web/templates/job_result.html:142
 msgid "Participants"
 msgstr "Participants"
 
-#: transcria/web/templates/job_result.html:143
+#: transcria/web/templates/job_result.html:152
 msgid "Appliquer les options"
 msgstr "Apply options"
 
-#: transcria/web/templates/job_result.html:151
+#: transcria/web/templates/job_result.html:160
 msgid "Retour au traitement"
 msgstr "Back to job"
 

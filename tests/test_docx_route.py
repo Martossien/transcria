@@ -362,3 +362,54 @@ class TestZipIncludesDocx:
             names = zf.namelist()
             docx_files = [n for n in names if n.endswith(".docx")]
             assert docx_files, f"Aucun .docx dans le ZIP. Contenu: {names}"
+
+
+class TestPackageLocalFreshness:
+    """§5.3 : en backend fichiers LOCAL, le ZIP servi n'est jamais plus vieux que
+    les artefacts sources — reconstruit au téléchargement s'il est périmé (même
+    honnêteté que le backend pg)."""
+
+    def test_zip_perime_est_reconstruit_au_download(self, admin_client, app, job_with_docx_data):
+        import os
+        import time
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_with_docx_data)
+        zip_path = fs.job_dir / "exports" / f"transcrIA_job_{job_with_docx_data}.zip"
+
+        # 1er téléchargement : construit le zip (absent → périmé par définition).
+        assert admin_client.get(f"/api/jobs/{job_with_docx_data}/download/package").status_code == 200
+        assert zip_path.is_file()
+
+        # Vieillir le zip puis modifier un artefact source (édition SRT simulée).
+        old = time.time() - 3600
+        os.utime(zip_path, (old, old))
+        stale_mtime = zip_path.stat().st_mtime_ns
+        (fs.job_dir / "metadata" / "transcription_corrigee.srt").write_text(
+            "1\n00:00:00,000 --> 00:00:02,000\nTexte corrigé après coup.\n", encoding="utf-8")
+
+        r = admin_client.get(f"/api/jobs/{job_with_docx_data}/download/package")
+
+        assert r.status_code == 200
+        assert zip_path.stat().st_mtime_ns > stale_mtime      # reconstruit, pas servi périmé
+        import io
+        import zipfile
+        names = zipfile.ZipFile(io.BytesIO(r.data)).namelist()
+        assert any(n.endswith(".srt") for n in names)
+
+    def test_zip_a_jour_nest_pas_reconstruit(self, admin_client, app, job_with_docx_data):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job_with_docx_data)
+        zip_path = fs.job_dir / "exports" / f"transcrIA_job_{job_with_docx_data}.zip"
+
+        assert admin_client.get(f"/api/jobs/{job_with_docx_data}/download/package").status_code == 200
+        fresh_mtime = zip_path.stat().st_mtime_ns
+
+        assert admin_client.get(f"/api/jobs/{job_with_docx_data}/download/package").status_code == 200
+        assert zip_path.stat().st_mtime_ns == fresh_mtime     # zip frais servi tel quel

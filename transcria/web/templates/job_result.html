@@ -45,6 +45,15 @@
 </div>
 {% endif %}
 
+{% if summary_stale %}
+<div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+  <i class="bi bi-exclamation-triangle"></i>
+  <div>
+    {{ _("Le verbatim a été édité après la génération de la synthèse : le résumé du rapport Word peut être en retard sur vos corrections.") }}
+    <a href="/jobs/{{ job.id }}/editor" class="alert-link">{{ _("Mettre à jour la synthèse depuis l'éditeur") }}</a>
+  </div>
+</div>
+{% endif %}
 <div class="d-flex flex-wrap gap-2 mb-4">
   {# R1 (revue macro) : le bouton reflète le livrable réel — rapport complet si le
      profil le promet, sinon DOCX VERBATIM à la demande (PISTES_AMELIORATION §5.1 :

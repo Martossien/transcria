@@ -1,0 +1,6 @@
+[
+  {"term": "Kubernetes", "variants": ["Kubernetis", "Kubernetese"], "priority": "critique"},
+  {"term": "Grafana", "variants": ["Grafanna", "Graphana"], "priority": "importante"},
+  {"term": "wiki", "variants": ["wikki"], "priority": "normale"},
+  {"term": "Sarah", "variants": [], "_preservation_only": true}
+]

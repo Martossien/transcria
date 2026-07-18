@@ -8,6 +8,7 @@ Sous-commandes :
     schedule          planifie sauvegardes et purge via timers systemd (--enable/--disable [--purge])
     opencode-upgrade  met à jour opencode (détecte npm / officiel / brew)
     purge             purge les données expirées (rétention DPO)
+    reset-admin-password  réinitialise le mot de passe d'un compte (local, audité)
 
 La logique métier est dans backup.py / restore.py (pur, testé) ; ce module est le runner.
 """
@@ -252,6 +253,50 @@ def _cmd_schedule(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_reset_admin_password(args: argparse.Namespace) -> int:
+    """Réinitialise le mot de passe d'un compte (PISTES_AMELIORATION §6.4).
+
+    Exécution LOCALE uniquement (accès shell = autorité) : sort un admin seul de
+    l'impasse du mot de passe perdu sans manipuler la base à la main. Un mot de
+    passe temporaire FORT est généré et affiché UNE fois ; l'action est auditée.
+    Pas de « changement forcé au premier login » (aucune migration de schéma) :
+    la consigne de changement immédiat est affichée."""
+    import secrets
+
+    from app import create_app
+
+    app = create_app(args.config)
+    with app.app_context():
+        from transcria.audit.models import AuditAction
+        from transcria.audit.store import AuditStore
+        from transcria.auth.store import UserStore
+
+        user = UserStore.get_by_username(args.username)
+        if user is None:
+            print(f"❌ Utilisateur inconnu : {args.username}", file=sys.stderr)
+            return 1
+        if not user.is_active:
+            print(f"❌ Compte désactivé : {args.username} (réactiver d'abord via l'UI)", file=sys.stderr)
+            return 1
+
+        temp_password = secrets.token_urlsafe(12)
+        if not UserStore.change_password(user.id, temp_password):
+            print("❌ Réinitialisation impossible (base indisponible ?)", file=sys.stderr)
+            return 1
+        AuditStore.log(
+            action=AuditAction.USER_MODIFY,
+            actor_username="maintenance-cli",
+            target_type="user",
+            target_id=user.id,
+            target_label=user.username,
+            details={"operation": "reset-password", "via": "maintenance.cli"},
+        )
+        print(f"✅ Mot de passe réinitialisé pour « {user.username} ».")
+        print(f"   Mot de passe TEMPORAIRE (affiché une seule fois) : {temp_password}")
+        print("   ⚠ Le changer IMMÉDIATEMENT après connexion (menu utilisateur → mot de passe).")
+    return 0
+
+
 def _cmd_purge(args: argparse.Namespace) -> int:
     """Purge des données expirées selon la politique de rétention (C3.10).
     ``--dry-run`` COMPTE sans rien supprimer."""
@@ -343,6 +388,11 @@ def main(argv: list[str] | None = None) -> int:
     oc.add_argument("--opencode-home", default=None,
                     help="HOME contenant .opencode (défaut : HOME courant — root pour le service)")
     oc.set_defaults(func=_cmd_opencode_upgrade)
+
+    rap = sub.add_parser("reset-admin-password",
+                         help="réinitialise le mot de passe d'un compte (exécution locale, audité)")
+    rap.add_argument("username", help="nom d'utilisateur du compte à réinitialiser")
+    rap.set_defaults(func=_cmd_reset_admin_password)
 
     pg = sub.add_parser("purge", help="purger les données expirées (rétention DPO)")
     pg.add_argument("--dry-run", action="store_true", help="compter sans supprimer")

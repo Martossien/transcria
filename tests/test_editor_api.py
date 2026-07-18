@@ -334,3 +334,64 @@ class TestSyncSummary:
         # jamais de contenu réel : instruction abstraite uniquement
         for msg in (fr, en):
             assert "SPEAKER_" not in msg
+
+
+class TestSummaryStaleMarker:
+    """Marqueur persistant « synthèse périmée » (PISTES_AMELIORATION §5.2) : posé au
+    save quand la resync est suggérée, mentionné dans le DOCX, levé par apply_refine."""
+
+    @pytest.fixture(autouse=True)
+    def _llm_enabled(self, app):
+        from transcria.config import get_config
+
+        with app.app_context():
+            cfg = get_config()
+        llm = cfg.setdefault("workflow", {}).setdefault("arbitration_llm", {})
+        previous = llm.get("enabled")
+        llm["enabled"] = True
+        yield
+        if previous is None:
+            llm.pop("enabled", None)
+        else:
+            llm["enabled"] = previous
+
+    def _marker(self, app, editor_job):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], editor_job)
+        return fs.job_dir / "metadata" / "summary_stale.json"
+
+    def test_save_avec_edition_pose_le_marqueur(self, admin_client, app, editor_job):
+        state = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        chunks = state["chunks"]
+        chunks[0]["text"] = "Texte corrigé."
+        admin_client.post(f"/api/jobs/{editor_job}/editor/save",
+                          json={"chunks": chunks, "edited_count": 1, "new_speakers": []})
+        assert self._marker(app, editor_job).exists()
+
+    def test_save_sans_edition_ne_pose_rien(self, admin_client, app, editor_job):
+        state = admin_client.get(f"/api/jobs/{editor_job}/editor/state").get_json()
+        admin_client.post(f"/api/jobs/{editor_job}/editor/save",
+                          json={"chunks": state["chunks"], "edited_count": 0, "new_speakers": []})
+        assert not self._marker(app, editor_job).exists()
+
+    def test_le_docx_mentionne_la_synthese_perimee(self, admin_client, app, editor_job):
+        import zipfile
+        from io import BytesIO
+
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], editor_job)
+            fs.save_json("context/meeting_context.json",
+                         {"title": "T", "language": "fr", "summary": "Synthèse initiale."})
+            fs.save_json("metadata/summary_stale.json", {"since": "2026-07-18", "reason": "srt_edited"})
+
+        r = admin_client.get(f"/api/jobs/{editor_job}/download/docx")
+        assert r.status_code == 200
+        xml = zipfile.ZipFile(BytesIO(r.data)).read("word/document.xml").decode("utf-8")
+        assert "antérieure à la dernière édition" in xml
+

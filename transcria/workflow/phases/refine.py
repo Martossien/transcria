@@ -339,6 +339,12 @@ def apply_refine(runner, fs, store, workspace, job: Job, config: dict, *, kind: 
         applied["structured_data_updated"] = True
     if applied["summary_updated"] or applied["structured_data_updated"]:
         fs.save_json("context/meeting_context.json", meeting_ctx)
+    if applied["summary_updated"]:
+        # La synthèse vient d'être réécrite : lever le marqueur « périmée » posé
+        # par l'éditeur SRT (§5.2 — page résultat et DOCX cessent d'avertir).
+        stale_marker = fs.job_dir / "metadata" / "summary_stale.json"
+        if stale_marker.exists():
+            stale_marker.unlink()
     if srt_out:
         fs.save_text("metadata/transcription_corrigee.srt", srt_out)
         applied["srt_updated"] = True

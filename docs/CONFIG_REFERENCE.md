@@ -953,6 +953,12 @@ Configuration du worker interne qui exécute les traitements longs hors requête
 |---|---|---|---|
 | `max_concurrent_jobs` | int | `1` | Nombre maximal de jobs exécutés en parallèle par le worker interne (borné 1-8). En split, le dispatch est en plus plafonné par `resource_node.max_concurrent_jobs` (annoncé par le nœud). Le surplus **attend en file** (claim atomique, rien perdu). Test de charge (`docs/PLAN_TEST_CHARGE.md`) : sweet spot ≈ 4 sur 4×3090 pour une LLM 27B (au-delà, le LLM sature → latence sans gain de débit). All-in-one : laisser à 1 (LLM locale sérialisée). |
 
+#### `workflow.summary_autostart`
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Dès la fin de l'upload, enchaîne en tâche de fond analyse → mise en FILE du résumé (SUMMARY_MODE : admission VRAM par le scheduler, exécution locale en all-in-one, worker GPU en frontal). L'attente perçue de l'étape résumé du wizard fond pendant la saisie. Les gardes d'`api_summary` s'appliquent (jamais de doublon) |
+
 #### `workflow.vram_wait`
 
 | Paramètre | Type | Défaut | Description |

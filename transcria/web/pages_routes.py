@@ -684,6 +684,11 @@ def job_result(job_id: str):
     profile = profile_for_job(job)
     has_docx = profile is None or profile.docx_level != "none"
     has_package = profile is None or profile.zip_level != "none"
+    # §5.2 : marqueur posé par l'éditeur SRT quand la synthèse LLM n'a pas été
+    # resynchronisée après une édition du verbatim (levé par apply_refine). Ne PAS
+    # le conditionner au profil : un job SRT peut avoir une synthèse (autostart du
+    # wizard) et son DOCX verbatim la mentionne aussi — attrapé par le test UI réel.
+    summary_stale = fs.load_json("metadata/summary_stale.json") or {}
 
     return render_template(
         "job_result.html",
@@ -693,6 +698,7 @@ def job_result(job_id: str):
         srt_content=srt_content,
         has_package=has_package,
         has_docx=has_docx,
+        summary_stale=bool(summary_stale),
     )
 
 

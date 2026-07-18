@@ -538,6 +538,9 @@ _DEFAULT_CONFIG = {
         # propriétaire via l'API de statut) — le job continue d'attendre, jamais de
         # bascule automatique de backend. Symétrique de inference.max_unavailable_s.
         "vram_wait": {"max_wait_s": 0},
+        # Autostart du résumé dès la fin de l'upload (§5.6) : analyse + mise en file
+        # du résumé en tâche de fond pendant la saisie du wizard. false = historique.
+        "summary_autostart": {"enabled": False},
         # Profil de concurrence (C7/B8) : surcharges déclaratives de la classe d'une étape.
         # Ex. {"transcribe": {"class": "delegated", "resource": "stt_backend"}}. Vide = la
         # classe est dérivée automatiquement (STT distant = délégué, sinon sériel).

@@ -53,6 +53,8 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "service": "Service", "language": "Langue", "topic": "Sujet",
         "objective": "Objectif", "notes": "Notes / Ordre du jour",
         "sec_context": "Contexte de la réunion", "synthese": "Synthèse",
+        "summary_stale_note": "⚠ Synthèse antérieure à la dernière édition du verbatim — "
+                              "à resynchroniser depuis l'éditeur pour refléter les corrections.",
         "sec_specific": "Informations spécifiques",
         "sec_participants": "Participants & Locuteurs",
         "sec_transcription": "Transcription", "sec_review": "Points à vérifier",
@@ -104,6 +106,8 @@ _DOCX_LABELS: dict[str, dict[str, str]] = {
         "service": "Department", "language": "Language", "topic": "Topic",
         "objective": "Objective", "notes": "Notes / Agenda",
         "sec_context": "Meeting context", "synthese": "Summary",
+        "summary_stale_note": "⚠ Summary predates the latest transcript edits — "
+                              "resynchronize from the editor to reflect the corrections.",
         "sec_specific": "Specific information",
         "sec_participants": "Participants & Speakers",
         "sec_transcription": "Transcription", "sec_review": "Points to review",
@@ -465,8 +469,12 @@ class DocxReport:
         structured_data: dict | None = None,
         render_options: dict | None = None,
         logo_bytes: bytes | None = None,
+        summary_stale: bool = False,
     ):
         self.logo_bytes = logo_bytes
+        # §5.2 : verbatim édité APRÈS la génération de la synthèse (marqueur posé par
+        # l'éditeur SRT) → mention honnête dans le document, levée à la resync LLM.
+        self.summary_stale = bool(summary_stale)
         self.ctx = ctx
         # Langue des livrables (Axe B) : pilote les libellés de chrome du DOCX.
         self.language: str = (ctx or {}).get("language") or "fr"
@@ -929,6 +937,11 @@ class DocxReport:
             self._section_type_specific(doc)
 
     def _render_synthese_body(self, doc: DocumentT, summary: str) -> None:
+        if self.summary_stale:
+            note = doc.add_paragraph()
+            run = note.add_run(self.L["summary_stale_note"])
+            run.italic = True
+            run.font.size = Pt(9)
         # Extraire juste le paragraphe "Synthèse" si présent dans un markdown
         synth = _extract_synthese(summary, self.language)
         for raw in synth.splitlines():
@@ -1499,8 +1512,10 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
         except OSError:
             logo_bytes = None
 
+    summary_stale = bool(fs.load_json("metadata/summary_stale.json") or {})
     report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
-                        render_options=render_options, logo_bytes=logo_bytes)
+                        render_options=render_options, logo_bytes=logo_bytes,
+                        summary_stale=summary_stale)
     doc = report.build()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

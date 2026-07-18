@@ -896,17 +896,40 @@ timings `preprocess_*` avant activation par défaut.*
     boutons page résultat + étape export — ce dernier pointait un 404 latent.
     Les livrables des profils sont INCHANGÉS : ZIP minimal, aucune passe LLM.
     La « promotion de profil » reste une piste séparée).
-13. §5.6 résumé lancé dès l'upload.
-14. §5.2/5.3 fraîcheur synthèse + ZIP local.
-15. §6.4 reset admin.
+13. ✅ §5.6 résumé lancé dès l'upload — LIVRÉ le 2026-07-18
+    (`workflow.summary_autostart.enabled`, défaut false) : dès la fin de l'upload,
+    analyse + mise en FILE du résumé (SUMMARY_MODE — admission VRAM, all-in-one ET
+    frontal) pendant la saisie du wizard. Validé en RÉEL sur cette machine :
+    summary_running 10 s après l'upload, summary_done sans aucun clic. Garde
+    ajoutée : la route analyze ne régresse plus l'état d'un job dont le résumé
+    est en cours (bug latent rendu probable par l'autostart).
+14. ✅ §5.2/5.3 fraîcheur des exports — LIVRÉ le 2026-07-18 : marqueur persistant
+    « synthèse périmée » posé à l'édition SRT (bannière page résultat + mention
+    italique dans le DOCX, levé à la resynchronisation LLM) ; ZIP local reconstruit
+    au téléchargement s'il est plus vieux que les artefacts (parité avec le
+    backend pg). Le test UI RÉEL a attrapé un bug de la première implémentation
+    (bannière conditionnée au profil — or un job SRT peut avoir une synthèse via
+    l'autostart) : corrigé + test de non-régression.
+15. ✅ §6.4 reset admin — LIVRÉ le 2026-07-18 : `maintenance reset-admin-password
+    <utilisateur>` (local, mot de passe temporaire affiché une fois, audité ;
+    pas de changement forcé au premier login = aucune migration).
 
 *Critères de succès : un utilisateur `srt_express` obtient un DOCX verbatim après
 édition sans re-soumettre ; plus aucun téléchargement d'artefact périmé possible.*
 
 **Chantier de fond (L, sur mesures)**
-16. §2.4 coût des passes LLM (prompts, fusion correction+relecture, paliers) —
-    y compris §4.3-2/3 : palier par phase et réutilisation de préfixe, à valider
-    au banc LLM.
+16. §2.4 coût des passes LLM — **ENTAMÉ le 2026-07-18 (expérimental, RIEN en
+    production)** : 2 variantes du prompt correction parquées dans
+    `configs/prompts/experimental/` (jamais chargées — noms non résolubles par le
+    locator) avec harnais reproductible + protocole + premiers runs sur réunions
+    réelles : V2_BUDGET = **255 s vs 580 s prod (−56 %)** sur la réunion R2
+    (17 min, 144 segments, structure et fidélité vérifiées par LECTURE — la prod
+    corrige plus d'entités mais a aussi réécrit un segment hors verbatim que la
+    variante a correctement traité). Runs uniques : la LONGUE campagne (variance,
+    rappel/précision, réunions 1 h+, paliers LLM, EN réel) reste à mener — plan
+    dans `configs/prompts/experimental/PROTOCOLE_ET_RESULTATS.md`. Restent aussi :
+    fusion correction+relecture, palier par phase, réutilisation de préfixe
+    (§4.3-2/3).
 17. §4.1 profil MOSS single-pass avec garde-fou de saut silencieux.
 18. §2.9 concurrence STT locale (voie servie d'abord).
 

@@ -164,3 +164,43 @@ class TestSchedule:
         monkeypatch.setattr(cli, "remove_backup_schedule", lambda: ["timer retiré"])
         assert cli.main(["schedule", "--disable"]) == 0
         assert "désactivé" in capsys.readouterr().out
+
+
+class TestResetAdminPassword:
+    """`maintenance reset-admin-password` (PISTES_AMELIORATION §6.4) : sortir un
+    admin seul de l'impasse du mot de passe perdu, sans toucher la base à la main."""
+
+    def _run(self, app, monkeypatch, username):
+        import transcria.maintenance.cli as cli
+
+        monkeypatch.setattr("app.create_app", lambda cfg=None: app)
+        return cli.main(["reset-admin-password", username])
+
+    def test_reinitialise_affiche_une_fois_et_audite(self, app, monkeypatch, capsys):
+        from transcria.audit.models import AuditLog
+        from transcria.auth.store import UserStore
+        from transcria.database import db
+
+        with app.app_context():
+            admin = UserStore.get_by_username("admin")
+            old_hash = admin.password_hash
+
+        rc = self._run(app, monkeypatch, "admin")
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert "TEMPORAIRE" in out and "IMMÉDIATEMENT" in out
+        with app.app_context():
+            admin = UserStore.get_by_username("admin")
+            assert admin.password_hash != old_hash          # mot de passe bien changé
+            entry = db.session.execute(
+                db.select(AuditLog).filter_by(target_label="admin")
+                .order_by(AuditLog.timestamp.desc())).scalars().first()
+            assert entry is not None
+            import json as _json
+            assert _json.loads(entry.details_json or "{}").get("operation") == "reset-password"
+
+    def test_utilisateur_inconnu_echec_propre(self, app, monkeypatch, capsys):
+        rc = self._run(app, monkeypatch, "fantome")
+        assert rc == 1
+        assert "inconnu" in capsys.readouterr().err

@@ -327,6 +327,12 @@ def editor_save(job_id: str):
     # téléchargement) ; la SYNTHÈSE, elle, ne se resynchronise que par une passe
     # LLM — on la PROPOSE (jamais automatique) dès qu'un contenu a changé.
     suggest = bool(edited or new_speakers_count) and _sync_summary_available(job)
+    if suggest:
+        # Marqueur PERSISTANT « synthèse périmée » (§5.2) : affiché sur la page
+        # résultat et mentionné dans le DOCX tant qu'une resynchronisation LLM
+        # n'a pas réécrit la synthèse (effacé par apply_refine).
+        fs.save_json("metadata/summary_stale.json",
+                     {"since": datetime.now(timezone.utc).isoformat(), "reason": "srt_edited"})
     return jsonify({
         "version": version,
         "warnings": warnings,

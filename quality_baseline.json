@@ -1,7 +1,7 @@
 {
  "cycles": 0,
- "deep_config_chains": 192,
- "deferred_internal_imports": 41,
+ "deep_config_chains": 193,
+ "deferred_internal_imports": 44,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -88,7 +88,7 @@
   "transcria.jobs.models": 2,
   "transcria.jobs.store": 5,
   "transcria.jobs.timing_store": 2,
-  "transcria.maintenance.cli": 11,
+  "transcria.maintenance.cli": 13,
   "transcria.maintenance.restore": 1,
   "transcria.maintenance.restore_service": 2,
   "transcria.models_catalog": 3,
@@ -151,7 +151,7 @@
   "transcria.voice.store": 5,
   "transcria.web": 10,
   "transcria.web.admin_routes": 16,
-  "transcria.web.downloads_api": 13,
+  "transcria.web.downloads_api": 12,
   "transcria.web.editor_routes": 13,
   "transcria.web.health_routes": 6,
   "transcria.web.i18n": 2,

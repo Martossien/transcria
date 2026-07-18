@@ -1,0 +1,47 @@
+1
+00:00:01,000 --> 00:00:05,200
+SPEAKER_00(Sarah): Good morning everyone, lets get started with the projet review.
+
+2
+00:00:05,800 --> 00:00:11,400
+SPEAKER_01(Tom): Thanks sarah. So, uh, the migration to the new Kubernetis cluster is basically done.
+
+3
+00:00:12,000 --> 00:00:17,600
+SPEAKER_01(Tom): We still have, you know, two servises that needs to be moved before friday.
+
+4
+00:00:18,200 --> 00:00:23,000
+SPEAKER_00(Sarah): OK. And what about the data base backups, are they runing on the new setup?
+
+5
+00:00:23,600 --> 00:00:29,800
+SPEAKER_01(Tom): Yes, the backups run every night at two AM, and we tested the restore prosedure yesterday.
+
+6
+00:00:30,400 --> 00:00:35,200
+SPEAKER_02(Priya): Quick question — did we updated the runbook for the on call team?
+
+7
+00:00:35,800 --> 00:00:41,000
+SPEAKER_01(Tom): Uh, not yet, I will do it this afternoon and share it on the wikki.
+
+8
+00:00:41,600 --> 00:00:47,400
+SPEAKER_00(Sarah): Perfect. Priya, any news on the Grafanna dashboards for the new cluster?
+
+9
+00:00:48,000 --> 00:00:54,200
+SPEAKER_02(Priya): Yes, the dashboards are ready, I just need to add the alerting rules for the disk usage.
+
+10
+00:00:54,800 --> 00:00:59,600
+SPEAKER_00(Sarah): Great. Lets meet again thursday to check the last two servises, ok?
+
+11
+00:01:00,200 --> 00:01:04,000
+SPEAKER_01(Tom): Works for me. I'll send the invite after this call.
+
+12
+00:01:04,600 --> 00:01:07,800
+SPEAKER_00(Sarah): Thanks everyone, have a good day.

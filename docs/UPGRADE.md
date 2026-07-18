@@ -73,6 +73,18 @@ Le service oneshot appelle la CLI `backup` (rotation `--keep`, `--exclude-audio`
 le timer utilise `Persistent=true` (une exécution manquée pendant une coupure est rattrapée).
 Pilotable aussi depuis **Administration → Maintenance** (carte « Sauvegarde planifiée »).
 
+### Mot de passe admin perdu
+
+`maintenance reset-admin-password <utilisateur>` (exécution **locale** : l'accès
+shell fait autorité) génère un mot de passe temporaire fort, affiché **une seule
+fois**, et journalise l'action dans l'audit. Le changer immédiatement après
+connexion — il n'y a pas de changement forcé au premier login (aucune migration
+de schéma).
+
+```bash
+venv/bin/python -m transcria.maintenance.cli reset-admin-password admin
+```
+
 La **purge de rétention** se planifie de la même façon avec `--purge` (unités
 `transcria-purge.{service,timer}`, cadence `maintenance.schedule.purge_on_calendar`,
 défaut 03:30 — après la sauvegarde, pour n'effacer qu'une fois l'archive du jour

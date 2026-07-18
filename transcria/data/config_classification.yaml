@@ -35,6 +35,7 @@ exposed:
 - workflow.arbitration_llm.model_id
 - workflow.execution.max_concurrent_jobs
 - workflow.queue.enabled
+- workflow.summary_autostart.enabled
 - workflow.summary_llm.model_id
 internal:
   maintenance.backup_dir: dossier des sauvegardes — géré via la page Maintenance / CLI

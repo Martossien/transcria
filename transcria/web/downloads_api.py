@@ -26,6 +26,26 @@ from transcria.web.request_helpers import api_stable
 logger = logging.getLogger(__name__)
 
 
+def _local_newest_artifact_mtime_ns(cfg: dict, job_id: str) -> int:
+    """mtime (ns) le plus récent des artefacts SOURCES du package, backend local.
+
+    Périmètre = les répertoires que PackageBuilder lit (metadata, context, speakers,
+    summary, quality) — exports/ exclu (c'est la sortie). 0 si rien de lisible."""
+    job_dir = Path(cfg["storage"]["jobs_dir"]) / job_id
+    newest = 0
+    for sub in ("metadata", "context", "speakers", "summary", "quality"):
+        base = job_dir / sub
+        if not base.is_dir():
+            continue
+        for item in base.rglob("*"):
+            try:
+                if item.is_file():
+                    newest = max(newest, item.stat().st_mtime_ns)
+            except OSError:
+                continue
+    return newest
+
+
 def _resolve_speaker_clip(samples_dir: Path, raw_clip: str) -> tuple[str, Path] | None:
     """Résout une référence d'extrait locuteur sans exposer les chemins disque."""
     raw_clip = (raw_clip or "").strip()
@@ -85,12 +105,19 @@ def api_download_package(job_id: str):
         stale = (not zip_path.is_file()) or (
             zip_path.stat().st_mtime_ns < artifact_store.newest_synced_mtime_ns(cfg, job.id)
         )
-        if stale:
-            build = PackageBuilder(cfg).build_package(job)
-            if build.get("error"):
-                logger.error("Reconstruction locale du package impossible: job=%s erreur=%s",
-                             job.id, build["error"])
-                abort(500)
+    else:
+        # Backend fichiers local (§5.3) : même honnêteté qu'en `pg` — le zip servi ne
+        # doit jamais être plus vieux que les artefacts sources (édition SRT dont la
+        # reconstruction best-effort a échoué, artefact modifié hors reconstruction).
+        stale = (not zip_path.is_file()) or (
+            zip_path.stat().st_mtime_ns < _local_newest_artifact_mtime_ns(cfg, job.id)
+        )
+    if stale:
+        build = PackageBuilder(cfg).build_package(job)
+        if build.get("error"):
+            logger.error("Reconstruction locale du package impossible: job=%s erreur=%s",
+                         job.id, build["error"])
+            abort(500)
     if not zip_path.is_file():
         abort(404)
 

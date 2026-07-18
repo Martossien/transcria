@@ -1,0 +1,8 @@
+# Kit de test SYNTHÉTIQUE (bench prompts EN) — aucune donnée réelle.
+title: "Weekly infrastructure review (synthetic test)"
+language: en
+participants:
+  - { name: Sarah, role: "engineering manager" }
+  - { name: Tom, role: "platform engineer" }
+  - { name: Priya, role: "observability engineer" }
+notes: "Synthetic meeting fabricated for prompt benchmarking."

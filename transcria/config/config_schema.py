@@ -339,6 +339,11 @@ def _check_workflow(wf: dict, r: ValidationResult) -> None:
     _check_bool(wf, "enable_quality_mode", "workflow.enable_quality_mode", r)
     _check_progress_section(wf.get("progress", {}), r)
     _check_execution_section(wf.get("execution", {}), "workflow.execution", r)
+    autostart = wf.get("summary_autostart", {})
+    if isinstance(autostart, dict):
+        _check_bool(autostart, "enabled", "workflow.summary_autostart.enabled", r)
+    elif autostart:
+        r.add_error("workflow.summary_autostart: doit être un objet YAML")
     vram_wait = wf.get("vram_wait", {})
     if isinstance(vram_wait, dict):
         _check_int_range(vram_wait, "max_wait_s", "workflow.vram_wait.max_wait_s", 0, 604800, r)
