@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Préconisations matériel') }}{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 900px;">
+  <h1 class="h3 mb-1"><i class="bi bi-cpu me-2"></i>{{ _('Préconisations matériel') }}</h1>
+  <p class="text-muted">{{ _('Le matériel détecté est comparé à la configuration courante — utile après un changement de carte graphique. Rien n\'est modifié sans votre clic.') }}</p>
+
+  {% if no_gpu %}
+    <div class="alert alert-secondary">{{ _('Aucun GPU détecté (nvidia-smi indisponible) — préconisations impossibles sur cette machine.') }}</div>
+  {% else %}
+    <div class="mb-3">
+      <span class="text-muted">{{ _('GPU détectés :') }}</span>
+      {% for idx, total in gpu_totals.items() %}
+        <span class="badge text-bg-light border me-1">GPU {{ idx }} — {{ (total / 1024) | round(1) }} {{ _('Go') }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% for card in cards %}
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+          <h2 class="h5 mb-2">
+            {% if card.kind == 'stt_instances' %}<i class="bi bi-collection me-2"></i>{{ _('Instances STT servies (transcription parallèle)') }}
+            {% elif card.kind == 'llm_tier' %}<i class="bi bi-motherboard me-2"></i>{{ _('Palier de la LLM d\'arbitrage') }}
+            {% elif card.kind == 'concurrency' %}<i class="bi bi-diagram-3 me-2"></i>{{ _('Concurrence de transcription') }}
+            {% endif %}
+          </h2>
+          {% if card.status == 'ok' %}<span class="badge text-bg-success">{{ _('Conforme au matériel') }}</span>
+          {% elif card.status == 'improve' %}<span class="badge text-bg-warning">{{ _('Amélioration possible') }}</span>
+          {% else %}<span class="badge text-bg-secondary">{{ _('Information') }}</span>{% endif %}
+        </div>
+        <dl class="row mb-2">
+          <dt class="col-sm-3">{{ _('Actuellement') }}</dt><dd class="col-sm-9">{{ card.current }}</dd>
+          <dt class="col-sm-3">{{ _('Préconisation') }}</dt><dd class="col-sm-9">{{ card.recommended }}</dd>
+        </dl>
+        <p class="text-muted small mb-2">{{ card.detail }}</p>
+        {% if card.applicable %}
+          <form method="post" class="mb-0">
+            <input type="hidden" name="_action" value="apply_stt">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-check2-circle me-1"></i>{{ _('Appliquer cette configuration') }}
+            </button>
+            <span class="text-muted small ms-2">{{ _('Un redémarrage du service sera nécessaire.') }}</span>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  {% endfor %}
+
+  {% if not cards and not no_gpu %}
+    <div class="alert alert-secondary">{{ _('Aucune préconisation : aucun backend STT servi n\'est configuré (voir la documentation des moteurs servis).') }}</div>
+  {% endif %}
+</div>
+{% endblock %}

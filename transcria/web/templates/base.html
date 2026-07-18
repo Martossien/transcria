@@ -67,6 +67,8 @@
                 <i class="bi bi-hdd-stack me-2"></i>{{ _('Maintenance') }}</a></li>
               <li><a class="dropdown-item {% if path.startswith('/admin/models') %}active{% endif %}" href="/admin/models">
                 <i class="bi bi-boxes me-2"></i>{{ _('Modèles') }}</a></li>
+              <li><a class="dropdown-item {% if path.startswith('/admin/hardware') %}active{% endif %}" href="/admin/hardware">
+                <i class="bi bi-cpu me-2"></i>{{ _('Préconisations matériel') }}</a></li>
               {% endif %}
               {% if Permission.ACCESS_SYSTEM in user_permissions %}
               <li><a class="dropdown-item {% if path.startswith('/admin/audit') %}active{% endif %}" href="/admin/audit">

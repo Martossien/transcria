@@ -355,3 +355,49 @@ def admin_maintenance_download(name: str):
         abort(404)
     return send_file(archive, as_attachment=True, download_name=archive.name,
                      mimetype="application/gzip")
+
+
+@web_bp.route("/admin/hardware", methods=["GET", "POST"])
+@login_required
+@requires(Permission.MANAGE_CONFIG)
+def admin_hardware():
+    """Préconisations matériel (lot conseiller) : scan GPU vs config courante.
+
+    GET : cartes de conseil (multi-instance STT applicable, palier LLM et
+    concurrency consultatives). POST apply_stt : applique le plan multi-instance
+    par l'écriture ruamel ciblée (jamais d'office — clic explicite), puis
+    signale le redémarrage service requis. Le plan est RECALCULÉ au POST (jamais
+    pris du formulaire : l'état matériel/config peut avoir bougé entre-temps)."""
+    from transcria.config.stt_instances_config import apply_stt_instances
+    from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
+
+    cfg = ConfigService.get_singleton()
+    config_path = ConfigService.get_path()
+
+    if request.method == "POST" and request.form.get("_action") == "apply_stt":
+        cards, totals = build_advice(cfg)
+        card = stt_instances_card(cfg, totals)
+        if card is None or not card.applicable:
+            flash(_("Rien à appliquer : le plan n'est plus d'actualité."), "warning")
+            return redirect(url_for("web.admin_hardware"))
+        try:
+            apply_stt_instances(config_path, **card.apply_payload)
+        except (ValueError, FileNotFoundError, RuntimeError) as exc:
+            flash(_("Échec de l'application du plan : %(err)s", err=str(exc)), "error")
+            return redirect(url_for("web.admin_hardware"))
+        audit_log(AuditAction.CONFIG_EDIT, target_type="config",
+                  target_label=Path(config_path).name,
+                  details={"operation": "apply_stt_instances",
+                           "instances": len(card.apply_payload["engines"])})
+        flash(_("Plan multi-instance appliqué (%(n)s instance(s)). Redémarrez le "
+                "service pour l'appliquer : sudo systemctl restart transcria",
+                n=len(card.apply_payload["engines"])), "success")
+        return redirect(url_for("web.admin_hardware"))
+
+    cards, totals = build_advice(cfg)
+    return render_template(
+        "admin_hardware.html",
+        cards=cards,
+        gpu_totals=totals,
+        no_gpu=not totals,
+    )
