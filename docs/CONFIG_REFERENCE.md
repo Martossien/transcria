@@ -296,7 +296,7 @@ subprocess sur un site isolé (même patron que `cohere_tf5`), provisionné par
 l'installeur (idempotent, ~800 Mo, sans torch — celui du venv est réutilisé) :
 
 ```bash
-venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site
+venv/bin/python -m transcria.installer.cli moss-site --dir ./runtimes/moss_site
 ```
 
 (L'image Docker `:bundled` bake ce site dans `/opt/transcria-moss-site` et le
@@ -316,7 +316,7 @@ tronquée » du rapport qualité.
 |---|---|---|---|
 | `enabled` | bool | `false` | Marqueur d'activation (le backend effectif reste `models.stt_backend`) |
 | `model_path` | string | `"OpenMOSS-Team/MOSS-Transcribe-Diarize"` | Identifiant HF ou chemin local |
-| `moss_site` | string | `"/tmp/transcria_moss_site"` | Site-packages isolé Transformers 5 + paquet moss (cf. commande ci-dessus) |
+| `moss_site` | string | `"./runtimes/moss_site"` | Site-packages isolé Transformers 5 + paquet moss (cf. commande ci-dessus) |
 | `timeout_s` | int | `7200` | Timeout du worker subprocess |
 | `max_new_tokens` | int | `8192` | Budget de génération (suffisant pour ~5 min d'audio ; monter pour du long-forme) |
 | `gap_alert_s` | float | `10.0` | Trou inter-segments qui déclenche le signalement d'omission (`transcription_gap_before_s` sur le segment aval + métadonnées) ; `0` désactive |

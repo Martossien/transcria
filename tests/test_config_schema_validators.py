@@ -443,3 +443,19 @@ class TestSttServedPools:
             }]),
         )
         assert not any("ne correspond à aucun backend" in w for w in result.warnings)
+
+
+class TestMossSitePersistence:
+    """0.3.8 : moss.moss_site sous /tmp (purgé au reboot) = avertissement explicite."""
+
+    def test_site_sous_tmp_avec_moss_active_avertit(self):
+        result = _validate_mutated(("moss.enabled", True), ("moss.moss_site", "/tmp/transcria_moss_site"))
+        assert any("purgé au reboot" in w for w in result.warnings)
+
+    def test_site_persistant_sans_avertissement(self):
+        result = _validate_mutated(("moss.enabled", True), ("moss.moss_site", "./runtimes/moss_site"))
+        assert not any("purgé au reboot" in w for w in result.warnings)
+
+    def test_moss_desactive_pas_d_avertissement_meme_sous_tmp(self):
+        result = _validate_mutated(("moss.moss_site", "/tmp/transcria_moss_site"))
+        assert not any("purgé au reboot" in w for w in result.warnings)

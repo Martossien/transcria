@@ -291,12 +291,12 @@ moss:
   # Backend STT expérimental MOSS-Transcribe-Diarize 0,9B (OpenMOSS, Apache-2.0) :
   # transcription + locuteurs + timestamps fins EN UNE PASSE. Exige Transformers 5.x
   # → worker subprocess sur site isolé (venv projet intact) :
-  #   venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site
+  #   venv/bin/python -m transcria.installer.cli moss-site --dir ./runtimes/moss_site
   # Activer via models.stt_backend: "moss". gap_alert_s = garde d'omission silencieuse
   # (trou inter-segments signalé, jamais corrigé automatiquement).
   enabled: false
   model_path: "OpenMOSS-Team/MOSS-Transcribe-Diarize"
-  moss_site: "/tmp/transcria_moss_site"
+  moss_site: "./runtimes/moss_site"
   timeout_s: 7200
   max_new_tokens: 8192
   gap_alert_s: 10.0

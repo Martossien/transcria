@@ -1526,6 +1526,11 @@ opencode a un **bug amont connu** (anomalyco/opencode#17516 : « run hangs after
 
 Le process est tué (et relancé par le retry appelant) si :
 - silence opencode > `opencode_idle_grace_s` (défaut 120 s) **ET** la LLM est idle ;
+- pré-session : aucun événement ET LLM jamais sollicitée depuis
+  `opencode_first_contact_grace_s` (défaut **120 s** — monté de 45 s le
+  2026-07-18 : le boot opencode nominal mesuré est de 12-17 s sur machine
+  rapide, davantage sur machine lente ; le vrai deadlock « port LLM fermé »
+  est bloqué en amont par la pré-garde TCP) ;
 - repli : silence seul > `opencode_pure_idle_cap_s` (défaut 600 s) ;
 - garde-fou absolu : le `timeout` passé (comportement historique).
 

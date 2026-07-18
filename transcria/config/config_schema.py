@@ -837,6 +837,12 @@ def _check_moss(moss: dict, r: ValidationResult) -> None:
         r.add_error("moss: doit être un objet YAML")
         return
     _check_bool(moss, "enabled", "moss.enabled", r)
+    if moss.get("enabled") and str(moss.get("moss_site") or "").startswith("/tmp"):
+        r.add_warning(
+            "moss.moss_site pointe sous /tmp (purgé au reboot) — le backend moss "
+            "disparaîtra au redémarrage ; déplacer vers ./runtimes/moss_site et "
+            "relancer `installer.cli moss-site --dir ./runtimes/moss_site` au besoin"
+        )
     _check_str(moss, "model_path", "moss.model_path", r)
     _check_str(moss, "moss_site", "moss.moss_site", r)
     _check_int_range(moss, "timeout_s", "moss.timeout_s", 60, 86400, r)

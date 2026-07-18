@@ -227,7 +227,13 @@ class OpenCodeRunner:
         llm_cfg = (self._config or {}).get("workflow", {}).get("arbitration_llm", {}) or {}
         idle_grace_s = float(llm_cfg.get("opencode_idle_grace_s", 120))
         pure_idle_cap_s = float(llm_cfg.get("opencode_pure_idle_cap_s", 600))
-        first_contact_grace_s = float(llm_cfg.get("opencode_first_contact_grace_s", 45))
+        # Défaut 45→120 s (2026-07-18, MESURÉ) : le boot opencode nominal est de
+        # 12-17 s sur une machine RAPIDE (2×5090/NVMe) — 45 s ne laissait que ~3×
+        # de marge, dépassée 6 fois de suite sous pression IO post-suite, et une
+        # machine lente (banc 3×3090) y est chronique. Le vrai deadlock (port LLM
+        # fermé) est bloqué en AMONT par la pré-garde TCP : cette grace ne coûte
+        # que sur un gel réel, rare (bug amont futex).
+        first_contact_grace_s = float(llm_cfg.get("opencode_first_contact_grace_s", 120))
         poll_s = float(llm_cfg.get("opencode_watchdog_poll_s", 5))
 
         out_lines: list[str] = []

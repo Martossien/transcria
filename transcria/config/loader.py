@@ -216,7 +216,7 @@ _DEFAULT_CONFIG = {
     "moss": {
         "enabled": False,
         "model_path": "OpenMOSS-Team/MOSS-Transcribe-Diarize",
-        "moss_site": "/tmp/transcria_moss_site",
+        "moss_site": "./runtimes/moss_site",  # persistant — JAMAIS /tmp (purgé au reboot)
         "timeout_s": 7200,
         "max_new_tokens": 8192,
         "gap_alert_s": 10.0,

@@ -195,7 +195,7 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
   `venv/bin/pip install -r requirements.txt` (fait automatiquement par `install.sh` et les
   images Docker). Les modèles restent opt-in : Kroko via la page « Modèles » (~3,2 Go les
   10 langues) ; MOSS via la page « Modèles » (~3,7 Go) **plus** son site Transformers 5
-  isolé — `venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site`
+  isolé — `venv/bin/python -m transcria.installer.cli moss-site --dir ./runtimes/moss_site`
   (l'image `:bundled` bake les deux). Un `config.yaml` existant reste valide (nouvelles
   sections avec défauts sûrs).
 - **0.3.3 → 0.3.4** : moteurs STT & benchmarks (backend Voxtral, multi-STT ciblé expérimental,

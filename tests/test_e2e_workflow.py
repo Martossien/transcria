@@ -40,7 +40,7 @@ Documents présentés joints (feature « support de réunion → résumé + corr
 
 Backends récents (0.3.4-0.3.5) :
     # kroko = CPU pur (aucun GPU réservé pour le STT) ; moss = une passe ASR+locuteurs
-    # (requiert le site isolé : venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_site)
+    # (requiert le site isolé : venv/bin/python -m transcria.installer.cli moss-site --dir ./runtimes/moss_site)
     venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --stt-backend kroko
     venv/bin/python tests/test_e2e_workflow.py --audio tests/test2.mp3 --stt-backend moss
 

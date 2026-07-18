@@ -244,7 +244,7 @@ def provision_opencode(plan: EntrypointPlan, env: dict[str, str]) -> None:
 
 
 _MOSS_SITE_BAKED = Path("/opt/transcria-moss-site")
-_MOSS_SITE_DEFAULT = Path("/tmp/transcria_moss_site")
+_MOSS_SITE_DEFAULT = Path("./runtimes/moss_site")
 
 
 def provision_moss_site_link(
@@ -252,9 +252,10 @@ def provision_moss_site_link(
 ) -> None:
     """Symlinke le défaut config du site moss vers le site baké de l'image bundled.
 
-    Le site Transformers 5 isolé est baké à un chemin STABLE (/opt) — jamais /tmp,
-    qu'un tmpfs runtime purgerait. Le défaut de ``moss.moss_site`` étant
-    /tmp/transcria_moss_site, on pose le lien à CHAQUE démarrage (idempotent) :
+    Le site Transformers 5 isolé est baké à un chemin STABLE (/opt). Le défaut de
+    ``moss.moss_site`` étant ./runtimes/moss_site (persistant depuis 0.3.8 —
+    l'ancien défaut /tmp était purgé au reboot), on pose le lien à CHAQUE
+    démarrage (idempotent) :
     une config non modifiée trouve le site sans réglage. Image slim (site absent)
     ou chemin déjà occupé par un vrai site ⇒ no-op. Best-effort, ne bloque jamais.
     """
@@ -267,6 +268,7 @@ def provision_moss_site_link(
             default.unlink()
         elif default.exists():
             return  # un site réel existe déjà à cet emplacement — on n'y touche pas
+        default.parent.mkdir(parents=True, exist_ok=True)  # ./runtimes/ peut ne pas exister (image slim)
         default.symlink_to(baked)
         print(f"[INFO] site moss baké : {default} → {baked}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 — best-effort, ne bloque jamais le démarrage
