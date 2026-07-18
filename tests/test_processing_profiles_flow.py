@@ -153,7 +153,7 @@ def test_endpoint_disponibilite_profils(admin_client):
     r = admin_client.get("/api/profiles/availability")
     assert r.status_code == 200
     body = r.get_json()
-    assert len(body["profiles"]) == 6
+    assert len(body["profiles"]) == 7  # 6 historiques + srt_moss (§4.1)
     ids = {p["id"] for p in body["profiles"]}
     assert "dossier_qualite" in ids and "srt_express" in ids
     for p in body["profiles"]:

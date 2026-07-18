@@ -132,6 +132,12 @@ class ProcessingProfile:
     # `legacy_fast` est transitoire (compatibilité `fast`) et exclu des listes produit.
     legacy: bool = False
 
+    # Backend STT imposé par le profil (piste §4.1 : MOSS single-pass). None =
+    # backend de la config (`models.stt_backend`) — comportement historique de
+    # TOUS les profils existants. Un profil qui le fixe devient indisponible si
+    # le backend ne l'est pas (cf. profile_availability).
+    stt_backend: str | None = None
+
 
 # ── Registre des profils (codés en dur = contrat stable, cf. doc § Risques) ──--
 
@@ -186,6 +192,38 @@ _PROFILES: dict[str, ProcessingProfile] = {
         lexicon_step="hidden",
         central_lexicon_usage="none",
         quality_endpoint_policy="light",
+    ),
+    "srt_moss": ProcessingProfile(
+        id="srt_moss",
+        label="SRT locuteurs une passe (MOSS)",
+        description=(
+            "Transcription ET locuteurs en une seule passe GPU (MOSS), réservée aux "
+            "réunions courtes (10 min par défaut). Aucune validation wizard : la voie "
+            "la plus directe pour un SRT attribué. Omissions et troncatures du modèle "
+            "surveillées (alertes qualité)."
+        ),
+        level=2,
+        requires_summary=False,
+        requires_context="none",
+        requires_participants="none",
+        # Une passe : les locuteurs viennent du STT MOSS lui-même — ni détection
+        # pyannote wizard, ni phase diarisation pipeline (cf. spike srt_locuteurs).
+        requires_speaker_validation="none",
+        requires_lexicon="none",
+        run_preprocess="minimal",
+        run_transcription=True,
+        run_diarization=False,
+        run_llm_correction=False,
+        run_final_review=False,
+        run_quality="light",
+        docx_level="none",
+        zip_level="minimal",
+        resource_requirements=ResourceRequirements(needs_stt=True, needs_diarization=False, needs_llm=False),
+        voice_matching_eligible=False,
+        lexicon_step="hidden",
+        central_lexicon_usage="none",
+        quality_endpoint_policy="light",
+        stt_backend="moss",
     ),
     "word_rapide": ProcessingProfile(
         id="word_rapide",

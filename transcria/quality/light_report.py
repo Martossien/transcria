@@ -31,6 +31,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Segments très courts (< 0,5s) : {n} — envisager la fusion.",
         "long": "Segments très longs (> 60s) : {n} — envisager le découpage.",
         "missing_srt": "SRT absent ou vide — la transcription a échoué.",
+        "gaps": ("Trous de transcription anormaux : {n} (max {max_s:.0f}s vers {at}) — "
+                 "le moteur a pu omettre un passage, réécouter ces zones."),
+        "tail": ("Fin de réunion possiblement tronquée : dernière parole à {at} pour un "
+                 "audio de {dur} — vérifier les dernières minutes."),
         "md_title": "# Rapport qualité (contrôle léger)",
         "md_score": "Score qualité : {s}/100",
         "md_checks": "Contrôles : {c} · avertissements : {w}",
@@ -42,6 +46,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "short": "Very short segments (< 0.5s): {n} — consider merging.",
         "long": "Very long segments (> 60s): {n} — consider splitting.",
         "missing_srt": "SRT missing or empty — transcription failed.",
+        "gaps": ("Abnormal transcription gaps: {n} (max {max_s:.0f}s around {at}) — "
+                 "the engine may have skipped a passage, re-listen to these areas."),
+        "tail": ("Meeting end possibly truncated: last speech at {at} for an audio of "
+                 "{dur} — check the final minutes."),
         "md_title": "# Quality report (light check)",
         "md_score": "Quality score: {s}/100",
         "md_checks": "Checks: {c} · warnings: {w}",
@@ -110,7 +118,45 @@ def run_light_quality(job: Job, config: dict) -> dict:
         review_points.append(S["long"].format(n=len(very_long)))
         warnings += len(very_long)
 
-    quality_score = _light_score(srt_content, segments, empty, very_short, very_long)
+    # Garde-fou « saut silencieux » (§4.1) : le backend MOSS marque d'un
+    # `transcription_gap_before_s` tout segment précédé d'un trou anormal (seuil
+    # `moss.gap_alert_s`, timestamps pourtant monotones — invisible au WER, cf.
+    # STT_BENCHMARK saut de 22 s). On RELAIE le marqueur, on n'invente rien :
+    # aucun marqueur (autres backends, VAD) → aucun nouveau point (défaut inchangé).
+    gapped = [s for s in segments if float(s.get("transcription_gap_before_s") or 0) > 0]
+    total_checks += 1
+    if gapped:
+        worst = max(gapped, key=lambda s: float(s.get("transcription_gap_before_s") or 0))
+        worst_gap = float(worst.get("transcription_gap_before_s") or 0)
+        at = int(float(worst.get("start", 0)))
+        checks.append({"type": "transcription_gaps", "count": len(gapped),
+                       "max_gap_s": round(worst_gap, 1), "severity": "warning"})
+        review_points.append(S["gaps"].format(n=len(gapped), max_s=worst_gap,
+                                              at=f"{at // 60:02d}:{at % 60:02d}"))
+        warnings += len(gapped)
+
+    # Défense en profondeur MOSS : fin d'audio jamais transcrite = troncature
+    # probable (mur de génération mesuré : coupe au milieu d'un mot, sans erreur).
+    # Conditionné à la présence de metadata/moss.json — aucun effet sur les autres
+    # backends (une réunion finissant en silence n'alerte pas ailleurs).
+    truncated_tail = False
+    if fs.load_json("metadata/moss.json") is not None and segments:
+        duration = float((fs.load_json("metadata/audio_analysis.json") or {}).get("duration_seconds") or 0)
+        last_end = max(float(s.get("end") or 0) for s in segments)
+        tail_tolerance_s = max(30.0, float(config.get("moss", {}).get("gap_alert_s", 10.0)))
+        if duration and duration - last_end > tail_tolerance_s:
+            truncated_tail = True
+            checks.append({"type": "truncated_tail", "last_end_s": round(last_end, 1),
+                           "duration_s": round(duration, 1), "severity": "warning"})
+            la, ld = int(last_end), int(duration)
+            review_points.append(S["tail"].format(at=f"{la // 60:02d}:{la % 60:02d}",
+                                                  dur=f"{ld // 60:02d}:{ld % 60:02d}"))
+            warnings += 1
+    total_checks += 1
+
+    quality_score = _light_score(srt_content, segments, empty, very_short, very_long, gapped)
+    if truncated_tail:
+        quality_score = min(quality_score, 40)  # une fin perdue invalide le livrable
 
     report = {
         "total_checks": total_checks,
@@ -131,7 +177,7 @@ def run_light_quality(job: Job, config: dict) -> dict:
     return report
 
 
-def _light_score(srt_content, segments, empty, very_short, very_long) -> int:
+def _light_score(srt_content, segments, empty, very_short, very_long, gapped=()) -> int:
     """Score indicatif simple (100 − pénalités bornées). 0 si pas de SRT."""
     if not srt_content.strip() or not segments:
         return 0
@@ -140,6 +186,7 @@ def _light_score(srt_content, segments, empty, very_short, very_long) -> int:
     penalty += 40 * len(empty) / n          # segments vides = grave
     penalty += 20 * len(very_short) / n
     penalty += 15 * len(very_long) / n
+    penalty += 30 * len(gapped) / n         # omission probable = grave (§4.1)
     return max(0, min(100, round(100 - penalty)))
 
 

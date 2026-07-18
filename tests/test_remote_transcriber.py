@@ -227,8 +227,10 @@ def test_pool_affinite_par_thread_round_robin(monkeypatch):
 
     t1 = threading.Thread(target=worker, args=("t1",))
     t2 = threading.Thread(target=worker, args=("t2",))
-    t1.start(); t1.join()
-    t2.start(); t2.join()
+    t1.start()
+    t1.join()
+    t2.start()
+    t2.join()
 
     assert picked["t1"][0] is picked["t1"][1]  # affinité stable
     assert picked["t2"][0] is picked["t2"][1]

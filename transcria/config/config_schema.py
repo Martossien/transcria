@@ -841,6 +841,7 @@ def _check_moss(moss: dict, r: ValidationResult) -> None:
     _check_str(moss, "moss_site", "moss.moss_site", r)
     _check_int_range(moss, "timeout_s", "moss.timeout_s", 60, 86400, r)
     _check_int_range(moss, "max_new_tokens", "moss.max_new_tokens", 256, 65536, r)
+    _check_int_range(moss, "single_pass_max_s", "moss.single_pass_max_s", 60, 7200, r)
     _check_optional_number(moss, "gap_alert_s", "moss.gap_alert_s", r)
     _check_bool(moss, "collapse_repetition_loops", "moss.collapse_repetition_loops", r)
     _check_int_range(moss, "repetition_loop_min_repeats", "moss.repetition_loop_min_repeats", 2, 100, r)

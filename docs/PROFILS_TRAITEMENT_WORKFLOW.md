@@ -290,6 +290,7 @@ Le DOCX peut deja fonctionner avec des donnees partielles, mais il faut formalis
 |---|---|---|---|---|---|
 | `srt_express` | SRT express | Obtenir vite une transcription | Aucune ou validation fichier | STT | SRT brut, segments JSON (+ DOCX verbatim a la demande depuis 0.3.8) |
 | `srt_locuteurs` | SRT avec locuteurs | Obtenir une transcription attribuee aux locuteurs | Validation locuteurs | STT + diarisation | SRT speakerise, mapping locuteurs (+ DOCX verbatim a la demande depuis 0.3.8) |
+| `srt_moss` | SRT locuteurs une passe (MOSS) | SRT attribue sans aucune validation (briefs courts) | Aucune | STT MOSS seul (ASR + locuteurs en une passe, backend impose par le profil) | SRT speakerise, segments JSON ; garde anti-omission (trou anormal) + alerte fin tronquee. **Enveloppe `moss.single_pass_max_s` (defaut 10 min)** : refus avant GPU au-dela (mur de troncature mesure ~17 min). Indisponible si `moss.enabled` est faux |
 | `word_rapide` | Word rapide | Obtenir vite un compte rendu presentable | Resume/contexte minimal | STT + LLM resume + DOCX | DOCX template partiellement rempli, SRT brut |
 | `word_structure` | Word structure | Obtenir un Word template avec participants et structure reunion | Resume, contexte, participants/locuteurs | STT + diarisation + extraction LLM, sans correction SRT | DOCX template rempli, SRT speakerise |
 | `word_corrige` | Word corrige | Obtenir Word + SRT propres sans workflow qualite complet | Contexte, participants, lexique optionnel | STT + diarisation + correction LLM | DOCX enrichi, SRT corrige, rapport correction |

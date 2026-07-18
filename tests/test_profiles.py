@@ -30,6 +30,7 @@ from transcria.workflow.profiles import (
 _USER_FACING_IDS = [
     "srt_express",
     "srt_locuteurs",
+    "srt_moss",       # §4.1 — single-pass MOSS, niveau partagé avec srt_locuteurs
     "word_rapide",
     "word_structure",
     "word_corrige",
@@ -39,10 +40,11 @@ _USER_FACING_IDS = [
 
 # ── Registre ─────────────────────────────────────────────────────────────────-
 
-def test_six_profils_produit_dans_lordre_des_niveaux():
+def test_sept_profils_produit_dans_lordre_des_niveaux():
     profiles = list_profiles()
     assert [p.id for p in profiles] == _USER_FACING_IDS
-    assert [p.level for p in profiles] == [1, 2, 3, 4, 5, 6]
+    # srt_moss partage le niveau 2 (tri stable : srt_locuteurs d'abord, historique).
+    assert [p.level for p in profiles] == [1, 2, 2, 3, 4, 5, 6]
 
 
 def test_legacy_fast_exclu_par_defaut_mais_present_si_demande():
@@ -286,3 +288,29 @@ def test_profils_sont_des_processingprofile_avec_id_coherent():
         assert isinstance(p, ProcessingProfile)
         assert p.id == pid
         assert p.run_transcription is True  # STT obligatoire pour tous
+
+
+# ── srt_moss (§4.1 : single-pass MOSS) ──────────────────────────────────────────
+
+
+def test_srt_moss_phases_sans_diarisation():
+    """Une passe : mêmes phases que srt_express — les locuteurs viennent du STT."""
+    p = get_profile("srt_moss")
+    assert profile_active_phases(p) == ["preprocess", "transcription", "quality", "export"]
+    assert p.run_diarization is False
+    assert p.requires_speaker_validation == "none"
+
+
+def test_srt_moss_backend_impose():
+    assert get_profile("srt_moss").stt_backend == "moss"
+
+
+def test_tous_les_autres_profils_sans_backend_impose():
+    """Garde historique : AUCUN profil existant n'impose de backend (config-driven)."""
+    for pid in _USER_FACING_IDS:
+        if pid != "srt_moss":
+            assert get_profile(pid).stt_backend is None, pid
+
+
+def test_srt_moss_ne_consomme_ni_llm_ni_diarisation():
+    assert profile_required_remote_phases(get_profile("srt_moss")) == {"stt"}

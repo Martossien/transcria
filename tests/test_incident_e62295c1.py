@@ -278,7 +278,7 @@ def test_run_transcription_reclaims_then_succeeds(app, owner_id, monkeypatch, tm
 
         # C5 : la phase importe Transcriber en tête — patcher le consommateur.
         import transcria.workflow.phases.transcription as tr
-        monkeypatch.setattr(tr, "Transcriber", lambda config, gpu_index=0: SimpleNamespace(
+        monkeypatch.setattr(tr, "Transcriber", lambda config, gpu_index=0, backend=None: SimpleNamespace(
             transcribe=lambda job, path: {"segments": [{"text": "ok"}]}))
 
         result = runner.run_transcription(job, str(tmp_path / "a.wav"), cfg)

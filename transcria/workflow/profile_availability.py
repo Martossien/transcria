@@ -58,9 +58,22 @@ def _enabled_ids(config: dict) -> set[str] | None:
     return None
 
 
+def _profile_backend_available(profile: ProcessingProfile, config: dict) -> bool:
+    """Un profil à backend STT imposé (§4.1) exige que ce backend soit activé.
+
+    Aujourd'hui seul MOSS est imposable : sa section config porte `enabled`.
+    Un backend imposé inconnu = indisponible (jamais de repli silencieux)."""
+    if profile.stt_backend is None:
+        return True
+    section = config.get(profile.stt_backend, {}) or {}
+    return bool(section.get("enabled"))
+
+
 def profile_status(profile: ProcessingProfile, config: dict) -> tuple[str, list[str]]:
     """Statut structurel d'un profil + raisons (FR) le cas échéant."""
     rr = profile.resource_requirements
+    if not _profile_backend_available(profile, config):
+        return "unavailable", [f"Backend STT '{profile.stt_backend}' non activé dans la configuration"]
     if rr.needs_llm and not _llm_reachable(config):
         return "unavailable", ["LLM d'arbitrage non configurée"]
     if rr.needs_diarization and not _quality_mode_enabled(config):

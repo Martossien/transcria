@@ -220,6 +220,10 @@ _DEFAULT_CONFIG = {
         "timeout_s": 7200,
         "max_new_tokens": 8192,
         "gap_alert_s": 10.0,
+        # Enveloppe du profil single-pass srt_moss (§4.1) : au-delà, la génération
+        # unique TRONQUE silencieusement (mur mesuré ~17 min) — le job est refusé
+        # AVANT toute dépense GPU. Ne concerne PAS models.stt_backend=moss (historique).
+        "single_pass_max_s": 600,
         "collapse_repetition_loops": True,
         "repetition_loop_min_repeats": 4,
         "repetition_loop_max_phrase_words": 10,

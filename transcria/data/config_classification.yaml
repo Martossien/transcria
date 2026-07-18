@@ -170,6 +170,7 @@ deferred:
 - moss.model_path
 - moss.moss_site
 - moss.repetition_loop_keep_repeats
+- moss.single_pass_max_s
 - moss.repetition_loop_max_phrase_words
 - moss.repetition_loop_min_repeats
 - moss.timeout_s

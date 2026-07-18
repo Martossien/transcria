@@ -81,10 +81,12 @@ _DEFAULT_GENERIC_HALLUCINATION_PATTERNS = [
 
 
 class Transcriber:
-    def __init__(self, config: dict, gpu_index: int = 0):
+    def __init__(self, config: dict, gpu_index: int = 0, backend: str | None = None):
+        """`backend` : imposé par le profil (§4.1, ex. "moss") ; None = config."""
         self.config = config
         device = f"cuda:{gpu_index}" if gpu_index is not None else "cuda:0"
-        self.transcriber = create_transcriber(config, device=device)
+        self.backend = backend or config.get("models", {}).get("stt_backend", "cohere")
+        self.transcriber = create_transcriber(config, backend=self.backend, device=device)
         self.gpu_index = gpu_index
         self._last_chunk_metrics: dict | None = None
 
@@ -98,7 +100,7 @@ class Transcriber:
         sl.set_context(job_id=job.id, step="transcribe")
 
         lang = resolve_output_language(job)
-        backend = self.config.get("models", {}).get("stt_backend", "cohere")
+        backend = self.backend
 
         speaker_turns = fs.load_json("speakers/speaker_turns.json")
         speaker_mapping = fs.load_json("speakers/speaker_mapping.json")

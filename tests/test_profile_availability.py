@@ -15,10 +15,26 @@ def _by_id(view):
 
 def test_tout_disponible_recommande_le_maximum():
     view = compute_profiles_view(_FULL)
-    assert len(view["profiles"]) == 6
-    assert all(p["available"] for p in view["profiles"])
+    assert len(view["profiles"]) == 7
+    # srt_moss est le SEUL indisponible ici : son backend imposé (moss) n'est pas
+    # activé dans cette config — tous les profils historiques restent disponibles.
+    by_id = _by_id(view)
+    assert by_id["srt_moss"]["available"] is False
+    assert all(p["available"] for p in view["profiles"] if p["id"] != "srt_moss")
     # Recommandé = profil disponible de plus haut niveau.
     assert view["recommended"] == "dossier_qualite"
+
+
+def test_srt_moss_disponible_quand_moss_active():
+    cfg = {**_FULL, "moss": {"enabled": True}}
+    by_id = _by_id(compute_profiles_view(cfg))
+    assert by_id["srt_moss"]["available"] is True
+
+
+def test_srt_moss_indisponible_sans_moss_avec_raison():
+    by_id = _by_id(compute_profiles_view(_FULL))
+    assert by_id["srt_moss"]["status"] == "unavailable"
+    assert any("moss" in r for r in by_id["srt_moss"]["reasons"])
 
 
 def test_llm_desactivee_rend_les_profils_llm_indisponibles():

@@ -302,9 +302,15 @@ venv/bin/python -m transcria.installer.cli moss-site --dir /tmp/transcria_moss_s
 (L'image Docker `:bundled` bake ce site dans `/opt/transcria-moss-site` et le
 symlinke au démarrage sur le défaut ci-dessous — rien à faire en conteneur.)
 
-Activer avec `models.stt_backend=moss`. Pas de forçage de langue (le modèle
-transcrit dans la langue source). Son défaut mesuré est l'**omission
-silencieuse** (parole sautée sans anomalie visible) — d'où la garde de trous.
+Activer avec `models.stt_backend=moss`, ou via le **profil `srt_moss`** (§4.1 :
+SRT + locuteurs en une passe, sans diarisation pyannote — `moss.enabled: true`
+suffit à rendre le profil disponible). Pas de forçage de langue (le modèle
+transcrit dans la langue source). Ses défauts mesurés : l'**omission
+silencieuse** (parole sautée sans anomalie visible — d'où la garde de trous) et,
+en passe unique fichier entier, la **troncature silencieuse au-delà de ~17 min**
+(couverture coupée au milieu d'un mot, aucune erreur — mesuré sur réunion réelle
+le 2026-07-18) — d'où l'enveloppe `single_pass_max_s` et l'alerte « fin
+tronquée » du rapport qualité.
 
 | Paramètre | Type | Défaut | Description |
 |---|---|---|---|
@@ -314,6 +320,7 @@ silencieuse** (parole sautée sans anomalie visible) — d'où la garde de trous
 | `timeout_s` | int | `7200` | Timeout du worker subprocess |
 | `max_new_tokens` | int | `8192` | Budget de génération (suffisant pour ~5 min d'audio ; monter pour du long-forme) |
 | `gap_alert_s` | float | `10.0` | Trou inter-segments qui déclenche le signalement d'omission (`transcription_gap_before_s` sur le segment aval + métadonnées) ; `0` désactive |
+| `single_pass_max_s` | int | `600` | Enveloppe du profil `srt_moss` UNIQUEMENT : au-delà de cette durée d'audio, le job est refusé AVANT toute dépense GPU (mur de troncature mesuré ~17 min ; RTF ~0,4). Sans effet sur `models.stt_backend=moss` global |
 | `collapse_repetition_loops` | bool | `true` | Réduit les boucles répétitives après génération |
 | `repetition_loop_*` | int | `4` / `10` / `2` | Réglages de la réduction de boucles (mêmes sémantiques que les autres backends) |
 

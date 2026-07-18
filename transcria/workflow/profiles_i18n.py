@@ -20,6 +20,7 @@ _EN: dict[str, str] = {
     # Libellés de profil (profile.label).
     "SRT express": "Express SRT",
     "SRT avec locuteurs": "SRT with speakers",
+    "SRT locuteurs une passe (MOSS)": "Single-pass speaker SRT (MOSS)",
     "Word rapide": "Quick Word",
     "Word structuré": "Structured Word",
     "Word corrigé": "Corrected Word",
@@ -29,6 +30,14 @@ _EN: dict[str, str] = {
         "Raw transcription, as fast as possible. No validation.",
     "Transcription attribuée aux locuteurs. Validation des locuteurs.":
         "Transcription attributed to speakers. Speaker validation.",
+    "Transcription ET locuteurs en une seule passe GPU (MOSS), réservée aux "
+    "réunions courtes (10 min par défaut). Aucune validation wizard : la voie "
+    "la plus directe pour un SRT attribué. Omissions et troncatures du modèle "
+    "surveillées (alertes qualité).":
+        "Transcription AND speakers in a single GPU pass (MOSS), reserved for "
+        "short meetings (10 min by default). No wizard validation: the most "
+        "direct route to an attributed SRT. Model omissions and truncations are "
+        "monitored (quality alerts).",
     "Compte rendu Word présentable rapidement, validation minimale.":
         "Presentable Word minutes, quickly, with minimal validation.",
     "Word template avec participants et structure de réunion, sans correction SRT.":
@@ -55,6 +64,8 @@ _EN: dict[str, str] = {
     "Lexique (optionnel)": "Glossary (optional)",
     # Raisons d'indisponibilité (profile_status).
     "LLM d'arbitrage non configurée": "Arbitration LLM not configured",
+    "Backend STT 'moss' non activé dans la configuration":
+        "STT backend 'moss' not enabled in the configuration",
     "Mode qualité désactivé dans la configuration": "Quality mode disabled in the configuration",
     "Profil désactivé dans la configuration": "Profile disabled in the configuration",
 }

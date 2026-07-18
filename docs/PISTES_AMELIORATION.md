@@ -930,8 +930,39 @@ timings `preprocess_*` avant activation par défaut.*
     dans `configs/prompts/experimental/PROTOCOLE_ET_RESULTATS.md`. Restent aussi :
     fusion correction+relecture, palier par phase, réutilisation de préfixe
     (§4.3-2/3).
-17. §4.1 profil MOSS single-pass avec garde-fou de saut silencieux.
-18. §2.9 concurrence STT locale (voie servie d'abord).
+17. ✅ §4.1 profil MOSS single-pass — **LIVRÉ le 2026-07-18 avec enveloppe mesurée**.
+    Nouveau profil `srt_moss` (7e, niveau 2) : SRT + locuteurs en UNE passe GPU,
+    zéro validation wizard, zéro diarisation pyannote — champ `stt_backend` sur le
+    profil (None = config, tous les profils historiques inchangés), disponibilité
+    conditionnée à `moss.enabled`, i18n FR/EN. Garde-fous LIVRÉS et testés en réel :
+    (a) relais du marqueur de trou MOSS dans le rapport qualité light (position
+    mm:ss du pire trou, pénalité de score — vérifié sur réunion réelle : trou de
+    29,6 s correctement signalé, qui était bien un quasi-silence à la lecture) ;
+    (b) **mur de troncature MESURÉ** : en passe unique, couverture coupée à 1053 s
+    sur un audio de 1200 s (au milieu d'un mot, AUCUNE erreur émise) → enveloppe
+    `moss.single_pass_max_s` (défaut 600) refusant le job AVANT toute dépense GPU
+    (message actionnable, vérifié en vif sur le service), + alerte « fin tronquée »
+    (score plafonné 40) en défense en profondeur. Vitesse mesurée : RTF ~0,4
+    (5 min → 119 s) — créneau réel = briefs courts attribués sans aucun clic ;
+    le cas dominant 45 min+ reste servi par les profils pyannote. Job réel de
+    bout en bout via le service : SRT bi-locuteurs correct, qualité 100.
+18. ✅ §2.9 concurrence STT — **LIVRÉ le 2026-07-18 (voie servie multi-instance)**.
+    Mesure préalable décisive : le serveur audio.cpp SÉRIALISE l'inférence (mutex
+    global par modèle, ratio concurrent/séquentiel = 1,02-1,04 mesuré) — l'hypothèse
+    « batching vLLM » ne tenait pas pour ce runtime, `concurrency` seul ne gagnait
+    RIEN (138 s vs 140 s sur réunion R-49min). Livré : pool multi-instance de bout
+    en bout — `inference.stt.backends.<nom>.extra_urls` (client : affinité par
+    worker, bascule sur instances vivantes), `resource_node.engines[].backend`
+    (plusieurs entrées moteur pour un backend ; « assurer X » les démarre toutes,
+    pré-vol all-in-one ET /engines/ensure), validation schéma, docs. Défauts
+    inchangés (mono-instance, mono-GPU intacts). **Mesures réunions réelles**
+    (qwen3asr servi, chunking pyannote de prod, zéro erreur, segments stables) :
+    R-49min 296 s (cohere local) → 140 s (servi ×1) → 84 s (×2 même GPU, 1,66×) ;
+    R-118min 630 → 313 → 171 s (×3, 3,7× cumulé) ; R-230min 1142 → 575 → 361 s
+    (×3, 3,2×). Le ×2 MÊME GPU bat le ×2 bi-GPU (84 vs 95 s) : les petits chunks
+    ne saturent pas une carte moderne — le mono-GPU en profite aussi. Réserve :
+    chaque instance = ~6,2 Go VRAM ; avec une grosse LLM résidente, dimensionner
+    ou réserver aux topologies à nœud GPU dédié.
 
 **Dépendances entre pistes** : 4 (instrumentation) éclaire 10, 16 et 18 — le faire
 en premier ; 8 (résumé Kroko) neutralise mécaniquement le reclaim LLM intra-job et
