@@ -77,6 +77,13 @@ Les sections ci-dessous détaillent chaque étape pour un contrôle manuel.
 
 ## Prérequis (ce qu'un utilisateur doit faire)
 
+> **Version de Docker : ≥ 25 requise** pour le chemin GPU documenté (CDI) — le
+> `docker.io` 20.10 des dépôts Ubuntu/Debian ne suffit pas (installer Docker CE).
+> Hôtes contraints (démon ancien, LXC imbriqué où runc ≥ 1.3 est bloqué) : le mode
+> legacy fonctionne — surcharge compose remplaçant les `devices` CDI par
+> `runtime: nvidia` (`devices: !reset []` + `NVIDIA_VISIBLE_DEVICES: all`, avec
+> `no-cgroups = true` dans `/etc/nvidia-container-runtime/config.toml` en LXC).
+
 **1. Accès GPU dans Docker** — n'est PAS géré par `requirements.txt` (dépendances Python)
 ni par `install.sh` (installation native) : c'est une configuration de l'hôte Docker,
 isolée dans un script dédié, idempotent :

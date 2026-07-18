@@ -184,7 +184,9 @@ if [[ "$MODE" == "gpu" ]]; then
     # publiée) et répond → pull ; sinon build local (logique pull-or-build).
     ALLINONE_IMAGE="${TRANSCRIA_ALLINONE_IMAGE:-transcria-allinone:latest}"
     export TRANSCRIA_ALLINONE_IMAGE="$ALLINONE_IMAGE"
-    if [[ "$ALLINONE_IMAGE" == *"/"*"/"* || "$ALLINONE_IMAGE" == *.*/* ]] && docker pull "$ALLINONE_IMAGE" 2>/dev/null; then
+    if docker image inspect "$ALLINONE_IMAGE" >/dev/null 2>&1; then
+        ok "Image GPU déjà présente localement : $ALLINONE_IMAGE."
+    elif [[ "$ALLINONE_IMAGE" == *"/"*"/"* || "$ALLINONE_IMAGE" == *.*/* ]] && docker pull "$ALLINONE_IMAGE" 2>/dev/null; then
         ok "Image GPU récupérée : $ALLINONE_IMAGE (pull)."
     elif [[ "$BUNDLED" == "1" ]]; then
         # Repli build BUNDLED : compose pointe sur Dockerfile.allinone-gpu (slim) → on construit

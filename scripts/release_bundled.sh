@@ -55,7 +55,9 @@ venv/bin/python -m pytest tests/test_docker_sync.py -q
 # ── 1. Build ──────────────────────────────────────────────────────────────────
 if [[ "$SKIP_BUILD" = false ]]; then
     echo "— Build de l'image (réseau requis : ~21 Go de poids)…"
-    docker build -f Dockerfile.allinone-bundled -t "$TAG_LATEST" -t "$TAG_VERSION" .
+    # BuildKit REQUIS : le Dockerfile utilise des heredocs (RUN <<'PY') — le builder
+    # classique échoue avec « FROM requires either one or three arguments » (vécu 0.3.8).
+    DOCKER_BUILDKIT=1 docker build -f Dockerfile.allinone-bundled -t "$TAG_LATEST" -t "$TAG_VERSION" .
 else
     echo "— Build sauté (--skip-build) : vérification de l'image existante."
 fi
