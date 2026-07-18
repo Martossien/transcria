@@ -964,6 +964,18 @@ timings `preprocess_*` avant activation par défaut.*
     chaque instance = ~6,2 Go VRAM ; avec une grosse LLM résidente, dimensionner
     ou réserver aux topologies à nœud GPU dédié.
 
+19. ✅ conseiller matériel — **LIVRÉ le 2026-07-18** (extension utilisateur des
+    pistes 17/18) : planificateur PUR d'instances STT (budgets VRAM par carte −
+    réservation LLM déclarée − marge 1500 Mo, remplissage carte par carte, plafond
+    3, agnostique du modèle de GPU — parcs hétérogènes couverts), écriture ruamel
+    ciblée (`stt_instances_config`), CLI `scripts/plan_stt_instances.py plan
+    [--apply]`, **page admin `/admin/hardware`** (FR/EN) : scan GPU vs config,
+    carte multi-instance STT applicable EN UN CLIC (plan recalculé au POST, audit,
+    rappel restart), cartes CONSULTATIVES palier LLM (recommend() vs calibration
+    déclarée) et concurrency. Check doctor `check_stt_instances_vram` (dépassement
+    VRAM déclaré = WARN). Cas moteur : l'utilisateur qui améliore son PC après
+    l'installation. Rien n'est jamais appliqué sans clic explicite.
+
 **Dépendances entre pistes** : 4 (instrumentation) éclaire 10, 16 et 18 — le faire
 en premier ; 8 (résumé Kroko) neutralise mécaniquement le reclaim LLM intra-job et
 simplifie 9 ; la réutilisation de préfixe (§4.3-3) suppose 9 (LLM non redémarré

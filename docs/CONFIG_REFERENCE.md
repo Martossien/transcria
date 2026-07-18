@@ -1304,6 +1304,10 @@ backend: qwen3asr, gpu: 0, port: 8022}`. « Assurer qwen3asr » (pré-vol all-in
 (defer si indisponible), les suivantes sont best-effort (une panne dégrade le débit,
 pas le job). Côté frontale, déclarer les URLs supplémentaires dans
 `inference.stt.backends.<nom>.extra_urls` et monter `inference.stt.concurrency`.
+Le plan peut être calculé et appliqué automatiquement : page admin
+**`/admin/hardware`** (préconisations matériel, application en un clic) ou
+`venv/bin/python scripts/plan_stt_instances.py plan [--apply]` ; cohérence
+vérifiée par le doctor (`check_stt_instances_vram`).
 
 `./install.sh --profile resource-node` génère ce manifeste pour Cohere et Whisper
 lors de la création initiale de `config.yaml`, si des GPU et les scripts

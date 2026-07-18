@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Callable
 
+from transcria.gpu.llm_placement import recommend
 from transcria.gpu.stt_instance_planner import (
     GpuBudget,
     InstancePlan,
@@ -101,8 +102,6 @@ def stt_instances_card(config: dict, gpu_totals_mb: dict[int, int]) -> AdviceCar
 
 def llm_tier_card(config: dict, gpu_totals_mb: dict[int, int]) -> AdviceCard | None:
     """Carte palier LLM — CONSULTATIVE (recommend() de llm_placement vs déclaré)."""
-    from transcria.gpu.llm_placement import recommend
-
     declared_mb = int((config.get("gpu", {}) or {}).get("llm_vram_mb") or 0)
     if not gpu_totals_mb:
         return None

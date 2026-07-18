@@ -19,6 +19,8 @@ from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, requires
 from transcria.config import _deep_merge
+from transcria.config.stt_instances_config import apply_stt_instances
+from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
 from transcria.i18n import select_locale
 
 # Accès PAR MODULE (pas `from … import fonction`) : les tests substituent ces
@@ -368,9 +370,6 @@ def admin_hardware():
     par l'écriture ruamel ciblée (jamais d'office — clic explicite), puis
     signale le redémarrage service requis. Le plan est RECALCULÉ au POST (jamais
     pris du formulaire : l'état matériel/config peut avoir bougé entre-temps)."""
-    from transcria.config.stt_instances_config import apply_stt_instances
-    from transcria.gpu.hardware_advisor import build_advice, stt_instances_card
-
     cfg = ConfigService.get_singleton()
     config_path = ConfigService.get_path()
 

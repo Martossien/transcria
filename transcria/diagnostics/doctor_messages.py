@@ -184,6 +184,12 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "rna_missing": "aucune clé API configurée ({env} absent et inference.auth.api_key vide)",
         "rna_missing_hint": "Ajouter {env}=<secret long> dans .env ou renseigner inference.auth.api_key.",
         # check_resource_node_engines
+        "chk_stt_instances_vram": "VRAM des instances STT servies",
+        "stt_inst_nothing": "aucune instance servie déclarée ou GPU indétectable — rien à vérifier",
+        "stt_inst_ok": "{n} instance(s) servie(s) cohérente(s) avec la VRAM détectée",
+        "stt_inst_overflow": "GPU {gpu} : {need} Mo requis (instances + LLM + marge) > {total} Mo",
+        "stt_inst_unknown_gpu": "GPU {gpu} déclaré mais non détecté par nvidia-smi",
+        "stt_inst_hint": "Revoir le plan via /admin/hardware ou scripts/plan_stt_instances.py plan.",
         "rne_no_engine": "aucun moteur STT déclaré dans resource_node.engines",
         "rne_no_engine_hint": "Déclarer les moteurs STT attendus (ex. cohere/whisper) ou ignorer "
                               "si ce nœud ne sert que diarize/voice-embed.",
@@ -384,6 +390,12 @@ DOCTOR_MESSAGES: dict[str, dict[str, str]] = {
         "rna_src_config": "config inference.auth.api_key",
         "rna_missing": "no API key configured ({env} absent and inference.auth.api_key empty)",
         "rna_missing_hint": "Add {env}=<long secret> in .env or set inference.auth.api_key.",
+        "chk_stt_instances_vram": "Served STT instances VRAM",
+        "stt_inst_nothing": "no served instance declared or GPU undetectable — nothing to verify",
+        "stt_inst_ok": "{n} served instance(s) consistent with detected VRAM",
+        "stt_inst_overflow": "GPU {gpu}: {need} MB required (instances + LLM + margin) > {total} MB",
+        "stt_inst_unknown_gpu": "GPU {gpu} declared but not detected by nvidia-smi",
+        "stt_inst_hint": "Review the plan via /admin/hardware or scripts/plan_stt_instances.py plan.",
         "rne_no_engine": "no STT engine declared in resource_node.engines",
         "rne_no_engine_hint": "Declare the expected STT engines (e.g. cohere/whisper) or ignore "
                               "if this node only does diarize/voice-embed.",

@@ -35,6 +35,12 @@ from typing import Any, Callable
 from transcria.cli_i18n import make_translator
 from transcria.database import MODEL_MODULES, db
 from transcria.diagnostics.doctor_messages import DOCTOR_MESSAGES
+from transcria.gpu.hardware_advisor import _detect_gpu_totals_mb
+from transcria.gpu.stt_instance_planner import (
+    DEFAULT_INSTANCE_VRAM_MB,
+    DEFAULT_SAFETY_MARGIN_MB,
+    llm_reserved_by_gpu,
+)
 from transcria.installer.audiocpp_phase import (
     AUDIOCPP_PINNED_COMMIT,
     audiocpp_home,
@@ -1301,6 +1307,45 @@ def _redact_uri(uri: str) -> str:
 
 # ── Orchestration / rendu ─────────────────────────────────────────────────
 
+def check_stt_instances_vram(
+    cfg: dict,
+    *,
+    gpu_totals_provider: Callable[[], dict[int, int]] | None = None,
+) -> CheckResult:
+    """Cohérence VRAM des instances STT servies déclarées (lot conseiller matériel).
+
+    Somme, par carte, les instances audiocpp déclarées (~6,5 Go pièce) + la
+    réservation LLM déclarée + la marge : un dépassement du total de la carte
+    = WARN (le pré-vol refusera ou thrashera en production). Sans GPU détectable
+    ou sans instance servie : OK silencieux (rien à vérifier ici)."""
+    name = _t("chk_stt_instances_vram")
+    provider = gpu_totals_provider or _detect_gpu_totals_mb
+    totals = provider()
+    engines = ((cfg.get("resource_node") or {}).get("engines") or [])
+    served = [e for e in engines if isinstance(e, dict) and any(
+        marker in str(e.get("script") or "")
+        for marker in ("qwen3asr", "nemotron", "parakeet", "audiocpp"))]
+    if not totals or not served:
+        return CheckResult(name, OK, _t("stt_inst_nothing"))
+
+    per_gpu: dict[int, int] = {}
+    for e in served:
+        per_gpu[int(e.get("gpu", 0))] = per_gpu.get(int(e.get("gpu", 0)), 0) + 1
+    reserved = llm_reserved_by_gpu(cfg)
+    overflows: list[str] = []
+    for gpu_index, count in sorted(per_gpu.items()):
+        total = totals.get(gpu_index)
+        if total is None:
+            overflows.append(_t("stt_inst_unknown_gpu", gpu=gpu_index))
+            continue
+        need = count * DEFAULT_INSTANCE_VRAM_MB + reserved.get(gpu_index, 0) + DEFAULT_SAFETY_MARGIN_MB
+        if need > total:
+            overflows.append(_t("stt_inst_overflow", gpu=gpu_index, need=need, total=total))
+    if overflows:
+        return CheckResult(name, WARN, " ; ".join(overflows), hint=_t("stt_inst_hint"))
+    return CheckResult(name, OK, _t("stt_inst_ok", n=len(served)))
+
+
 _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_database,
     check_database_encoding,
@@ -1311,6 +1356,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_inference_nodes,
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
+    check_stt_instances_vram,
     check_inference_node_gpus,
     check_local_models,
     check_storage,
@@ -1451,3 +1497,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

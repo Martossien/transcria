@@ -128,6 +128,7 @@
 |---|---|---|---|---|
 | `/` | GET | connexion requise | _(docstring manquante)_ | `transcria.web.pages_routes` |
 | `/admin/config` | GET,POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
+| `/admin/hardware` | GET,POST | connexion + Permission.MANAGE_CONFIG | Préconisations matériel (lot conseiller) : scan GPU vs config courante. | `transcria.web.admin_routes` |
 | `/admin/maintenance` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup` | POST | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
 | `/admin/maintenance/backup/<name>/download` | GET | connexion + Permission.MANAGE_CONFIG | _(docstring manquante)_ | `transcria.web.admin_routes` |
@@ -183,7 +184,7 @@
 | `/ready` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
 
-_Portail TranscrIA (app principale) : 122 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 123 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 
