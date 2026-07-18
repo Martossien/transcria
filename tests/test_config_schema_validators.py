@@ -395,3 +395,51 @@ class TestWarningsEtBranchesSilencieuses:
     def test_regex_liste_nulle_toleree(self):
         result = _validate_mutated(("workflow.segment_reliability.generic_hallucination_patterns", None))
         assert result.is_valid
+
+
+class TestSttServedPools:
+    """Pools multi-instance §2.9 : extra_urls + resource_node.engines[].backend."""
+
+    def test_extra_urls_valides_acceptees(self):
+        result = _validate_mutated(
+            ("inference.stt.backends", {"qwen3asr": {
+                "url": "http://127.0.0.1:8021/v1",
+                "extra_urls": ["http://127.0.0.1:8022/v1"],
+            }}),
+        )
+        assert not [e for e in result.errors if "extra_urls" in e]
+
+    def test_extra_urls_non_liste_erreur(self):
+        result = _validate_mutated(
+            ("inference.stt.backends", {"qwen3asr": {
+                "url": "http://127.0.0.1:8021/v1", "extra_urls": "http://x",
+            }}),
+        )
+        _assert_error(result, "extra_urls doit être une liste d'URLs")
+
+    def test_extra_urls_entree_non_http_erreur(self):
+        result = _validate_mutated(
+            ("inference.stt.backends", {"qwen3asr": {
+                "url": "http://127.0.0.1:8021/v1", "extra_urls": ["127.0.0.1:8022"],
+            }}),
+        )
+        _assert_error(result, "extra_urls doit être une liste d'URLs")
+
+    def test_engine_backend_inconnu_avertit(self):
+        result = _validate_mutated(
+            ("resource_node.engines", [{
+                "name": "qwen3asr-gpu0", "backend": "qwen3asr",
+                "script": "s.sh", "gpu": 0, "port": 8022,
+            }]),
+        )
+        assert any("ne correspond à aucun backend" in w for w in result.warnings)
+
+    def test_engine_backend_declare_sans_avertissement(self):
+        result = _validate_mutated(
+            ("inference.stt.backends", {"qwen3asr": {"url": "http://127.0.0.1:8021/v1"}}),
+            ("resource_node.engines", [{
+                "name": "qwen3asr-gpu0", "backend": "qwen3asr",
+                "script": "s.sh", "gpu": 0, "port": 8022,
+            }]),
+        )
+        assert not any("ne correspond à aucun backend" in w for w in result.warnings)

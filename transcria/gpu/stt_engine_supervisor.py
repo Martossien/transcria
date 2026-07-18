@@ -40,6 +40,11 @@ class EngineSpec:
     port: int            # port HTTP
     health_url: str      # ex. http://host:port/v1/models (dérivée de health_path)
     idle_timeout_s: float = 0.0  # > 0 : arrêt après inactivité (idle-stop). 0 = jamais
+    # Backend STT servi par ce moteur (piste §2.9, multi-instance) : plusieurs
+    # entrées peuvent servir le MÊME backend sous des noms distincts, ex.
+    # {name: qwen3asr, …} + {name: qwen3asr-gpu0, backend: qwen3asr, port: 8022}.
+    # Défaut = name (comportement historique : appariement par nom exact).
+    backend: str = ""
     # Sonde de vie : certains runtimes C++ n'exposent pas /v1/models.
     # health_mode "http_2xx" (défaut) = 200 requis ; "http_any" = TOUTE réponse HTTP
     # prouve la vie (valide pour un serveur mono-modèle qui charge ses poids AVANT de
@@ -114,9 +119,10 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
                 logger.warning("[stt-sup] health_mode inconnu %r (moteur %s) — repli http_2xx",
                                health_mode, entry.get("name"))
                 health_mode = "http_2xx"
+            name = str(entry["name"])
             specs.append(
                 EngineSpec(
-                    name=str(entry["name"]),
+                    name=name,
                     script=str(entry["script"]),
                     gpu=int(entry["gpu"]),
                     gpu_mem=float(entry.get("gpu_mem", 0.85)),
@@ -124,11 +130,19 @@ def engine_specs_from_config(config: dict) -> list[EngineSpec]:
                     health_url=f"http://{host}:{port}{health_path}",
                     idle_timeout_s=float(entry.get("idle_timeout_s", 0) or 0),
                     health_mode=health_mode,
+                    backend=str(entry.get("backend") or name),
                 )
             )
         except (KeyError, TypeError, ValueError) as exc:
             logger.warning("[stt-sup] entrée resource_node.engines ignorée (%s) : %r", exc, entry)
     return specs
+
+
+def specs_for_backend(specs: "list[EngineSpec]", backend: str) -> "list[EngineSpec]":
+    """Moteurs servant `backend` : nom exact OU champ `backend` (multi-instance §2.9).
+
+    L'appariement historique par nom reste couvert (backend défaut = name)."""
+    return [s for s in specs if s.backend == backend or s.name == backend]
 
 
 class SttEngineSupervisor:

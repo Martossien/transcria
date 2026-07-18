@@ -390,3 +390,28 @@ class TestHealthPathAndMode:
 
         assert probe_engine_health(modern, spec) and seen["mode"] == "http_any"
         assert probe_engine_health(legacy, spec)
+
+
+def test_engine_spec_backend_defaut_nom_et_champ_explicite():
+    """`backend` : défaut = name (appariement historique) ; champ explicite honoré."""
+    config = {"resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "s.sh", "gpu": 1, "port": 8021},
+        {"name": "qwen3asr-gpu0", "backend": "qwen3asr", "script": "s.sh", "gpu": 0, "port": 8022},
+    ]}}
+    specs = engine_specs_from_config(config)
+    assert specs[0].backend == "qwen3asr"
+    assert specs[1].backend == "qwen3asr"
+
+
+def test_specs_for_backend_nom_ou_champ():
+    from transcria.gpu.stt_engine_supervisor import specs_for_backend
+
+    config = {"resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "s.sh", "gpu": 1, "port": 8021},
+        {"name": "qwen3asr-gpu0", "backend": "qwen3asr", "script": "s.sh", "gpu": 0, "port": 8022},
+        {"name": "parakeet", "script": "p.sh", "gpu": 0, "port": 8023},
+    ]}}
+    specs = engine_specs_from_config(config)
+    assert [s.name for s in specs_for_backend(specs, "qwen3asr")] == ["qwen3asr", "qwen3asr-gpu0"]
+    assert [s.name for s in specs_for_backend(specs, "parakeet")] == ["parakeet"]
+    assert specs_for_backend(specs, "inconnu") == []

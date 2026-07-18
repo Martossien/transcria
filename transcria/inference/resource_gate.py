@@ -18,7 +18,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from transcria.gpu.stt_engine_supervisor import build_stt_supervisor, engine_specs_from_config
+from transcria.gpu.stt_engine_supervisor import (
+    build_stt_supervisor,
+    engine_specs_from_config,
+    specs_for_backend,
+)
 from transcria.inference.client import (
     InferenceClient,
     InferenceRequestError,
@@ -80,24 +84,37 @@ def _ensure_local_served_stt(config: dict, *, supervisor_factory=None) -> "GateV
     if not backends:
         return None
 
-    specs = {s.name: s for s in engine_specs_from_config(config)}
+    all_specs = engine_specs_from_config(config)
     factory = supervisor_factory or build_stt_supervisor
     statuses: list[str] = []
     for backend in backends:
-        spec = specs.get(backend)
-        if spec is None:
+        # Multi-instance (§2.9) : toutes les entrées servant ce backend. La
+        # PREMIÈRE doit être prête (defer sinon) ; les instances SUPPLÉMENTAIRES
+        # sont best-effort — une instance en panne dégrade le débit, pas le job
+        # (le pool client bascule sur les instances vivantes).
+        matched = specs_for_backend(all_specs, backend)
+        if not matched:
             continue  # loopback sans moteur déclaré : résilience au niveau requête
-        try:
-            result = factory(config).ensure_ready(spec)
-        except Exception as exc:  # noqa: BLE001 — le gate ne doit jamais faire échouer un job
-            logger.warning("[gate] ensure local du moteur '%s' impossible (%s) — defer", backend, exc)
-            return GateVerdict("defer", f"moteur servi local '{backend}' : {exc}",
-                               retry_after_s=_DEFAULT_RETRY_AFTER_S)
-        if not result.ok:
-            logger.warning("[gate] moteur servi local '%s' %s : %s", backend, result.status, result.reason)
-            return GateVerdict("defer", f"moteur servi local '{backend}' {result.status} : {result.reason}",
-                               retry_after_s=_DEFAULT_RETRY_AFTER_S)
-        statuses.append(f"'{backend}' {result.status} (GPU {result.gpu_index})")
+        for rank, spec in enumerate(matched):
+            try:
+                result = factory(config).ensure_ready(spec)
+            except Exception as exc:  # noqa: BLE001 — le gate ne doit jamais faire échouer un job
+                if rank > 0:
+                    logger.warning("[gate] instance secondaire '%s' de '%s' non assurée (%s) — poursuite",
+                                   spec.name, backend, exc)
+                    continue
+                logger.warning("[gate] ensure local du moteur '%s' impossible (%s) — defer", backend, exc)
+                return GateVerdict("defer", f"moteur servi local '{backend}' : {exc}",
+                                   retry_after_s=_DEFAULT_RETRY_AFTER_S)
+            if not result.ok:
+                if rank > 0:
+                    logger.warning("[gate] instance secondaire '%s' de '%s' %s : %s — poursuite",
+                                   spec.name, backend, result.status, result.reason)
+                    continue
+                logger.warning("[gate] moteur servi local '%s' %s : %s", backend, result.status, result.reason)
+                return GateVerdict("defer", f"moteur servi local '{backend}' {result.status} : {result.reason}",
+                                   retry_after_s=_DEFAULT_RETRY_AFTER_S)
+            statuses.append(f"'{spec.name}' {result.status} (GPU {result.gpu_index})")
     if not statuses:
         return None
     return GateVerdict("proceed", "moteur(s) servi(s) local(aux) " + ", ".join(statuses))

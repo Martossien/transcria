@@ -169,6 +169,18 @@ def build_asr_client_from_config(config: dict, backend: str) -> AsrClient | None
 
     Retourne None si aucune URL n'est configurée pour ce backend (→ mode local).
     """
+    clients = build_asr_clients_from_config(config, backend)
+    return clients[0] if clients else None
+
+
+def build_asr_clients_from_config(config: dict, backend: str) -> list[AsrClient]:
+    """Construit le POOL de clients pour `backend` : `url` puis `extra_urls`.
+
+    `extra_urls` (piste §2.9, multi-instance) : instances SUPPLÉMENTAIRES du même
+    moteur (mêmes modèle/auth/format), typiquement une par GPU — le serveur
+    audio.cpp sérialise l'inférence sous mutex, seul le multi-instance parallélise
+    réellement. Liste vide ou absente = pool d'un seul client (historique).
+    """
     import os
 
     inf = config.get("inference", {}) or {}
@@ -177,7 +189,14 @@ def build_asr_client_from_config(config: dict, backend: str) -> AsrClient | None
     spec = backends.get(backend, {}) or {}
     url = spec.get("url")
     if not url:
-        return None
+        return []
+
+    extra = spec.get("extra_urls") or []
+    if not isinstance(extra, list):
+        logger.warning("inference.stt.backends.%s.extra_urls ignoré (liste attendue, reçu %s)",
+                       backend, type(extra).__name__)
+        extra = []
+    urls = [str(url)] + [str(u) for u in extra if u and str(u) != str(url)]
 
     auth = stt.get("auth", {}) or {}
     api_key = None
@@ -189,11 +208,14 @@ def build_asr_client_from_config(config: dict, backend: str) -> AsrClient | None
     # p.ex. Cohere Transcribe sur vLLM → 400). Repli sur la valeur globale.
     response_format = spec.get("response_format") or stt.get("response_format", "verbose_json")
 
-    return AsrClient(
-        url,
-        model=spec.get("model") or backend,
-        api_key=api_key,
-        response_format=response_format,
-        timeout_s=int(stt.get("timeout_s", _DEFAULT_TIMEOUT_S)),
-        retries=int(stt.get("retries", _DEFAULT_RETRIES)),
-    )
+    return [
+        AsrClient(
+            u,
+            model=spec.get("model") or backend,
+            api_key=api_key,
+            response_format=response_format,
+            timeout_s=int(stt.get("timeout_s", _DEFAULT_TIMEOUT_S)),
+            retries=int(stt.get("retries", _DEFAULT_RETRIES)),
+        )
+        for u in urls
+    ]

@@ -196,6 +196,32 @@ seule ; le sérialiser l'étranglerait).
 **Intra-job (STT par tour)** — `inference.stt.concurrency` (>1) transcrit les tours de parole d'un
 même job en parallèle (`ThreadPoolExecutor`, backends `concurrent_safe`).
 
+⚠️ **Le batching dépend du runtime serveur** : vLLM batche les requêtes concurrentes, mais
+`audiocpp_server` (qwen3asr/nemotron servis) les **sérialise** sous un mutex global par modèle
+(mesuré : 2 requêtes concurrentes = 2× le temps d'une seule). Sur audio.cpp, monter `concurrency`
+seul ne gagne que le recouvrement I/O ; le parallélisme réel s'obtient en **multi-instance** :
+
+```yaml
+resource_node:
+  engines:
+  - {name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 1, port: 8021}
+  - {name: qwen3asr-gpu0, backend: qwen3asr,          # 2e instance du MÊME backend
+     script: scripts/launch_stt_qwen3asr.sh, gpu: 0, port: 8022}
+inference:
+  stt:
+    concurrency: 4                                    # ≥ nombre d'instances
+    backends:
+      qwen3asr:
+        url: http://127.0.0.1:8021/v1
+        extra_urls: [http://127.0.0.1:8022/v1]
+```
+
+« Assurer qwen3asr » (pré-vol all-in-one comme `/engines/ensure` en split) démarre toutes les
+instances ; la première porte le verdict, les autres sont best-effort. Côté client, chaque worker
+STT garde son instance (affinité) et bascule sur les vivantes si la sienne tombe. Mono-GPU :
+laisser une seule instance (défaut inchangé) — deux instances sur la même carte se partagent le
+même moteur de calcul, gain à mesurer avant d'en mettre.
+
 **Validation (test de charge, `docs/PLAN_TEST_CHARGE.md`, 8×RTX 3090)** : split **robuste jusqu'à 8 jobs
 concurrents** (0 échec serveur), débit qui scale 1→4 puis le **LLM 27B sature** (compute-bound, GPU à
 100 %). **Sweet spot ≈ 4** sur ce matériel : régler `max_concurrent_jobs` (frontale **et** nœud) au sweet

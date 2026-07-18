@@ -19,13 +19,14 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import threading
 import time
 import wave
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from transcria.audio.converter import AudioConverter
-from transcria.inference.asr_client import AsrClient, build_asr_client_from_config
+from transcria.inference.asr_client import AsrClient, build_asr_clients_from_config
 from transcria.inference.client import InferenceRequestError, InferenceUnavailable
 from transcria.stt.anti_hallucination import collapse_repetition_loops
 from transcria.stt.base_transcriber import BaseTranscriber
@@ -49,7 +50,11 @@ class RemoteTranscriber(BaseTranscriber):
     """
 
     vram_mb = 0  # rien chargé localement
-    concurrent_safe = True  # HTTP indépendants ; le serveur (vLLM) batche les requêtes
+    # HTTP indépendants côté client. ATTENTION côté serveur : vLLM batche les
+    # requêtes concurrentes, mais audiocpp_server les SÉRIALISE sous un mutex
+    # global par modèle (runtime.cpp, mesuré : ratio mur/somme = 1,02) — sur ce
+    # runtime, le parallélisme réel vient du POOL d'instances (`extra_urls`).
+    concurrent_safe = True
 
     def __init__(
         self,
@@ -65,7 +70,18 @@ class RemoteTranscriber(BaseTranscriber):
         stt = inf.get("stt", {}) or {}
         self.fallback_local: bool = bool(stt.get("fallback_local", inf.get("fallback_local", True)))
         self.collapse_loops: bool = bool(stt.get("collapse_repetition_loops", True))
-        self._client = client or build_asr_client_from_config(config, backend)
+        # Pool d'instances (piste §2.9) : [url] + extra_urls. Un client injecté
+        # (tests) reste un pool d'un seul élément — comportement historique.
+        self._clients: list[AsrClient] = (
+            [client] if client is not None else build_asr_clients_from_config(config, backend)
+        )
+        self._client = self._clients[0] if self._clients else None
+        # Affinité par thread : chaque worker STT (`stt-chunk-N`) reçoit UNE instance
+        # au premier appel (round-robin) et la garde — l'équilibrage de charge vient
+        # du pool de chunks (un worker libre prend le chunk suivant), pas du routage.
+        self._thread_client = threading.local()
+        self._rr_lock = threading.Lock()
+        self._rr_next = 0
         self._local: BaseTranscriber | None = None  # transcripteur local (fallback), à la demande
         # Distinct du local : évite toute confusion de cache/metadata entre modes.
         served = self._client.model if self._client else self.backend
@@ -80,9 +96,20 @@ class RemoteTranscriber(BaseTranscriber):
         if self._client is None:
             logger.warning("RemoteTranscriber: aucun endpoint ASR configuré pour '%s'", self.backend)
             return False
-        if not self._client.health():
-            logger.warning("RemoteTranscriber: serveur %s injoignable au load (fallback au besoin)", self._client.base_url)
+        for c in self._clients:
+            if not c.health():
+                logger.warning("RemoteTranscriber: serveur %s injoignable au load (fallback au besoin)", c.base_url)
         return True
+
+    def _pick_client(self) -> AsrClient:
+        """Instance du pool pour CE thread (affinité posée au premier appel)."""
+        picked = getattr(self._thread_client, "client", None)
+        if picked is None or picked not in self._clients:
+            with self._rr_lock:
+                picked = self._clients[self._rr_next % len(self._clients)]
+                self._rr_next += 1
+            self._thread_client.client = picked
+        return picked
 
     def offload(self) -> None:
         # Rien à libérer côté frontale : la VRAM est sur le serveur.
@@ -116,9 +143,7 @@ class RemoteTranscriber(BaseTranscriber):
             )
 
         try:
-            logger.info("RemoteTranscriber: envoi %s à %s (model=%s)",
-                        wav_path.name, self._client.base_url, self._client.model)
-            payload = self._client.transcribe(wav_path, language=language)
+            payload = self._transcribe_with_pool(wav_path, language)
         except InferenceUnavailable as exc:
             logger.warning("RemoteTranscriber: serveur indisponible — %s", exc)
             return self._fallback_or_error(
@@ -139,6 +164,24 @@ class RemoteTranscriber(BaseTranscriber):
         logger.info("RemoteTranscriber: %d segment(s) en %.2fs (backend=%s)",
                     len(segments), time.time() - t0, self.backend)
         return segments
+
+    def _transcribe_with_pool(self, wav_path: Path, language: str) -> dict:
+        """Envoie au client du thread ; si CETTE instance est injoignable, tente
+        chacune des autres UNE fois avant de laisser remonter (→ repli local).
+        Une instance tombée ne coûte donc qu'un détour, pas le pool entier."""
+        primary = self._pick_client()
+        last_exc: InferenceUnavailable | None = None
+        for client in [primary] + [c for c in self._clients if c is not primary]:
+            try:
+                logger.info("RemoteTranscriber: envoi %s à %s (model=%s)",
+                            wav_path.name, client.base_url, client.model)
+                return client.transcribe(wav_path, language=language)
+            except InferenceUnavailable as exc:
+                last_exc = exc
+                if len(self._clients) > 1:
+                    logger.warning("RemoteTranscriber: instance %s indisponible (%s) — essai suivant",
+                                   client.base_url, exc)
+        raise last_exc if last_exc is not None else InferenceUnavailable("pool ASR vide")
 
     # ── Préparation audio ───────────────────────────────────────────────────--
 

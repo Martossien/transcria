@@ -40,6 +40,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_kroko(cfg.get("kroko", {}), result)
     _check_moss(cfg.get("moss", {}), result)
     _check_workflow(cfg.get("workflow", {}), result)
+    _check_stt_served_pools(cfg, result)
     _check_diarization(cfg.get("diarization", {}), result)
     _check_quality(cfg.get("quality", {}), result)
     _check_security(cfg.get("security", {}), result)
@@ -313,6 +314,33 @@ def _check_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) 
         f"Valeurs acceptées: {', '.join(sorted(_VALID_STT_BACKENDS))} — ou un backend SERVI déclaré "
         f"avec une url dans inference.stt.backends.<nom> (runtimes audio.cpp/parakeet.cpp)"
     )
+
+
+def _check_stt_served_pools(cfg: dict, r: ValidationResult) -> None:
+    """Pools multi-instance (§2.9) : `inference.stt.backends.<nom>.extra_urls` doit
+    être une liste d'URLs http(s) ; `resource_node.engines[].backend` doit référencer
+    un backend servi déclaré (sinon l'instance ne serait jamais assurée)."""
+    stt = ((cfg.get("inference", {}) or {}).get("stt", {}) or {})
+    backends = stt.get("backends", {}) or {}
+    for name, spec in backends.items():
+        extra = (spec or {}).get("extra_urls")
+        if extra is None:
+            continue
+        if not isinstance(extra, list) or not all(
+            isinstance(u, str) and u.strip().startswith(("http://", "https://")) for u in extra
+        ):
+            r.add_error(
+                f"inference.stt.backends.{name}.extra_urls doit être une liste d'URLs "
+                f"http(s) (instances supplémentaires du même moteur)"
+            )
+    for entry in (cfg.get("resource_node", {}) or {}).get("engines", []) or []:
+        declared = str((entry or {}).get("backend") or "").strip()
+        if declared and declared not in backends:
+            r.add_warning(
+                f"resource_node.engines['{(entry or {}).get('name')}'].backend='{declared}' "
+                f"ne correspond à aucun backend de inference.stt.backends — l'instance "
+                f"ne sera jamais sollicitée par le pool client"
+            )
 
 
 def _check_summary_stt_backend(mod: dict, r: ValidationResult, cfg: dict | None = None) -> None:

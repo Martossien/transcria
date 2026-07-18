@@ -155,3 +155,52 @@ def test_resume_servi_en_echec_devient_defer():
 
     assert verdict.action == "defer"
     assert "qwen3asr" in verdict.reason
+
+
+# ── Multi-instance (§2.9) : plusieurs moteurs pour un même backend ──────────────
+
+
+class FakeSupervisorParMoteur:
+    """Résultat scripté PAR NOM de moteur (multi-instance)."""
+
+    def __init__(self, results: dict):
+        self.calls: list = []
+        self._results = results
+
+    def ensure_ready(self, spec):
+        self.calls.append(spec.name)
+        status = self._results.get(spec.name, "ready")
+        return SimpleNamespace(status=status, gpu_index=spec.gpu, reason="",
+                               ok=status in ("ready", "launched"))
+
+
+def _config_deux_instances(statuses: dict) -> tuple[dict, FakeSupervisorParMoteur]:
+    cfg = _config("http://127.0.0.1:8021/v1")
+    cfg["resource_node"]["engines"].append({
+        "name": "qwen3asr-gpu0", "backend": "qwen3asr",
+        "script": "scripts/launch_stt_qwen3asr.sh", "gpu": 1, "port": 8022,
+    })
+    return cfg, FakeSupervisorParMoteur(statuses)
+
+
+def test_multi_instance_les_deux_assurees():
+    cfg, sup = _config_deux_instances({"qwen3asr": "ready", "qwen3asr-gpu0": "launched"})
+    verdict = _gate(cfg, sup)
+    assert verdict.action == "proceed"
+    assert sup.calls == ["qwen3asr", "qwen3asr-gpu0"]
+
+
+def test_multi_instance_secondaire_busy_reste_proceed():
+    """Une instance secondaire indisponible dégrade le débit, pas le job."""
+    cfg, sup = _config_deux_instances({"qwen3asr": "ready", "qwen3asr-gpu0": "busy"})
+    verdict = _gate(cfg, sup)
+    assert verdict.action == "proceed"
+    assert sup.calls == ["qwen3asr", "qwen3asr-gpu0"]
+
+
+def test_multi_instance_primaire_busy_defer():
+    """La PREMIÈRE instance porte le verdict : busy → defer (contrat historique)."""
+    cfg, sup = _config_deux_instances({"qwen3asr": "busy"})
+    verdict = _gate(cfg, sup)
+    assert verdict.action == "defer"
+    assert sup.calls == ["qwen3asr"]  # pas d'ensure secondaire après defer

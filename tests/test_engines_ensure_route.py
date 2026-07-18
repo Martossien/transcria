@@ -110,3 +110,50 @@ def test_ensure_moteur_servi_avec_health_path_custom():
     assert r.status_code == 200
     assert seen["spec"].health_url.endswith(":8022/health")
     assert seen["spec"].health_mode == "http_2xx"
+
+
+# ── Multi-instance (§2.9) : « assure X » déplie toutes les instances de X ───────
+
+
+_CONFIG_MULTI = {
+    "inference": {"auth": {"api_key": "secret"}},
+    "resource_node": {"engines": [
+        {"name": "qwen3asr", "script": "scripts/launch_stt_qwen3asr.sh", "gpu": 1, "port": 8021},
+        {"name": "qwen3asr-gpu0", "backend": "qwen3asr",
+         "script": "scripts/launch_stt_qwen3asr.sh", "gpu": 0, "port": 8022},
+    ]},
+    "voice_enrollment": {"embedding": {"device": "cpu"}},
+}
+
+
+def _client_multi(result: EnsureResult):
+    app = create_app(config=_CONFIG_MULTI, engine=_FakeEngine(), diarize_engine=_FakeEngine())
+    sup = _FakeSupervisor(result)
+    app.extensions["stt_supervisor"] = sup
+    app.config.update({"TESTING": True})
+    return app.test_client(), sup
+
+
+def test_ensure_backend_deplie_les_instances():
+    client, sup = _client_multi(EnsureResult(status="ready", gpu_index=1, reason="ok"))
+    resp = client.post("/engines/ensure", json={"engine": "qwen3asr"}, headers=_AUTH)
+    assert resp.status_code == 200
+    assert sup.calls == ["qwen3asr", "qwen3asr-gpu0"]
+    body = resp.get_json()
+    assert body["engine"] == "qwen3asr"
+    assert [i["engine"] for i in body["instances"]] == ["qwen3asr-gpu0"]  # champ additif
+
+
+def test_ensure_mono_instance_sans_champ_instances():
+    """Contrat historique : pas de champ `instances` quand il n'y a qu'un moteur."""
+    client, sup = _client_multi(EnsureResult(status="ready", gpu_index=1, reason="ok"))
+    resp = client.post("/engines/ensure", json={"engine": "qwen3asr-gpu0"}, headers=_AUTH)
+    assert resp.status_code == 200
+    assert "instances" not in resp.get_json()
+
+
+def test_ensure_primaire_busy_pas_d_ensure_secondaire():
+    client, sup = _client_multi(EnsureResult(status="busy", gpu_index=None, reason="vram"))
+    resp = client.post("/engines/ensure", json={"engine": "qwen3asr"}, headers=_AUTH)
+    assert resp.status_code == 503
+    assert sup.calls == ["qwen3asr"]

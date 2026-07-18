@@ -1253,7 +1253,7 @@ STT via un serveur compatible OpenAI (`/v1/audio/transcriptions`) — moteur **n
 | `fallback_local` | bool | `true` | Bascule sur le transcripteur local si le serveur STT tombe |
 | `response_format` | string | `"verbose_json"` | Défaut global ; `verbose_json` (segments) \| `json` (texte). Surchargeable par backend |
 | `collapse_repetition_loops` | bool | `true` | Anti-hallucination (parité avec les backends locaux) |
-| `concurrency` | int | `1` | Tours transcrits en parallèle (>1 = distant uniquement, exploite le batching vLLM). 1 = séquentiel |
+| `concurrency` | int | `1` | Tours transcrits en parallèle (>1 = distant uniquement). 1 = séquentiel. **Attention au runtime** : vLLM batche les requêtes concurrentes ; `audiocpp_server` les SÉRIALISE (mutex global par modèle, mesuré) — sur audio.cpp, le gain réel vient d'un pool d'instances (`extra_urls`, une par GPU), avec `concurrency` ≥ nombre d'instances |
 | `timeout_s` | int | `600` | Timeout par requête STT |
 | `retries` | int | `2` | Tentatives sur erreur transitoire |
 | `auth.api_key_env` / `auth.api_key` | string | `"TRANSCRIA_STT_API_KEY"` / `""` | Clé API du serveur STT (si lancé avec `--api-key`) |
@@ -1267,6 +1267,7 @@ Un endpoint par moteur logique (`cohere`, `whisper`). **`url` vide = ce moteur r
 | `url` | string | `""` / `""` | Racine OpenAI, ex. `http://127.0.0.1:8003/v1`. **DOIT finir par `/v1`** (l'`AsrClient` poste `{url}/audio/transcriptions` → sans `/v1` = `404` silencieux ⇒ transcript vide). Vide = local |
 | `model` | string | `cohere-transcribe` / `whisper-large-v3` | `served-model-name` attendu par le serveur |
 | `response_format` | string | `json` / `verbose_json` | Cohere Transcribe (vLLM) refuse `verbose_json` (400) → `json` |
+| `extra_urls` | list | absent | Instances SUPPLÉMENTAIRES du même moteur (multi-instance §2.9), mêmes règles que `url`. Chaque worker STT reçoit une instance (affinité) ; une instance en panne = détour vers les vivantes, pas d'échec. Ne parallélise que si `concurrency` > 1. Voir `resource_node.engines[].backend` pour le lancement automatique |
 
 #### `resource_node` (config du nœud de ressources uniquement)
 
@@ -1277,7 +1278,7 @@ Manifeste lu côté nœud (pas dans les défauts ; absent = aucun moteur géré)
 | `max_concurrent_jobs` | int | `1` | **Capacité d'admission** du nœud : nb de pipelines de jobs que la frontale peut lancer concurremment contre ce nœud (annoncé dans `/capabilities`, borné 1-8). Découplé de la mono-capacité des moteurs in-process sérialisés (diar/voice-embed s'auto-sérialisent, ne bornent plus l'admission) ; STT/LLM vLLM batchent. Défaut 1 = séquentiel. À aligner avec `workflow.execution.max_concurrent_jobs`. Sweet spot ≈ 4 (cf. `docs/PLAN_TEST_CHARGE.md`). |
 | `vram.preflight` | bool | `true` | Pré-check VRAM avant lancement (refuse proprement au lieu d'OOM) |
 | `vram.auto_relocate` | bool | `false` | Repli sur un autre GPU si l'assigné est plein (log bruyant) |
-| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s, health_path, health_mode}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
+| `engines[]` | list | `[]` | Moteurs déclarés : `{name, script, gpu, gpu_mem, port, idle_timeout_s, health_path, health_mode, backend}` (placement = admin). `gpu_mem` (0 < x ≤ 1) **pilote l'admission ET le lancement réel** (transmis au lanceur via `STT_GPU_MEM` → `--gpu-memory-utilization` vLLM) : pour un ASR léger (Cohere ~4 Go) mettre bas (ex. `0.5`), sinon vLLM réserve ~`gpu_mem`×VRAM d'une carte. `idle_timeout_s > 0` active l'idle-stop opportuniste (défaut `0` = résident) |
 
 `health_path` (défaut `/v1/models`) et `health_mode` (`http_2xx` défaut \| `http_any`)
 règlent la sonde de vie par moteur — `http_any` accepte toute réponse HTTP (runtimes C++
@@ -1287,6 +1288,15 @@ routé vers une URL loopback avec un moteur homonyme déclaré ici est **démarr
 automatiquement en process** par le pré-vol des jobs (aucun nœud de contrôle requis).
 `inference.stt.backends.<nom>.fallback_backend` désigne le backend NATIF de repli d'un
 backend servi (sans lui : erreur explicite, jamais de repli implicite vers Cohere).
+
+**Multi-instance (§2.9)** : `backend` (défaut = `name`) rattache une entrée moteur à un
+backend logique — plusieurs entrées peuvent servir le MÊME backend sur des ports/GPU
+distincts, ex. `{name: qwen3asr, gpu: 1, port: 8021}` + `{name: qwen3asr-gpu0,
+backend: qwen3asr, gpu: 0, port: 8022}`. « Assurer qwen3asr » (pré-vol all-in-one ou
+`/engines/ensure`) démarre alors TOUTES les instances : la première porte le verdict
+(defer si indisponible), les suivantes sont best-effort (une panne dégrade le débit,
+pas le job). Côté frontale, déclarer les URLs supplémentaires dans
+`inference.stt.backends.<nom>.extra_urls` et monter `inference.stt.concurrency`.
 
 `./install.sh --profile resource-node` génère ce manifeste pour Cohere et Whisper
 lors de la création initiale de `config.yaml`, si des GPU et les scripts

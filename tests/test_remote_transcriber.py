@@ -190,3 +190,92 @@ def test_hybrid_is_mix_by_capability():
     }}}}
     assert _should_use_remote_stt(cfg, "cohere") is True
     assert _should_use_remote_stt(cfg, "whisper") is False
+
+
+# ── Pool multi-instance (§2.9) ──────────────────────────────────────────────────
+
+
+class _PoolClient(_FakeClient):
+    """Fake distinguable par URL pour tracer la distribution du pool."""
+
+    def __init__(self, behavior, base_url):
+        super().__init__(behavior)
+        self.base_url = base_url
+
+
+def _rt_with_pool(monkeypatch, clients):
+    monkeypatch.setattr(
+        "transcria.stt.remote_transcriber.build_asr_clients_from_config",
+        lambda _cfg, _backend: clients,
+    )
+    return RemoteTranscriber(_cfg(), backend="cohere")
+
+
+def test_pool_affinite_par_thread_round_robin(monkeypatch):
+    """Chaque thread reçoit UNE instance (round-robin) et la garde."""
+    a = _PoolClient({"text": "a"}, "http://a/v1")
+    b = _PoolClient({"text": "b"}, "http://b/v1")
+    rt = _rt_with_pool(monkeypatch, [a, b])
+
+    import threading
+
+    picked: dict[str, list] = {"t1": [], "t2": []}
+
+    def worker(key):
+        picked[key].append(rt._pick_client())
+        picked[key].append(rt._pick_client())  # 2e appel : la même instance
+
+    t1 = threading.Thread(target=worker, args=("t1",))
+    t2 = threading.Thread(target=worker, args=("t2",))
+    t1.start(); t1.join()
+    t2.start(); t2.join()
+
+    assert picked["t1"][0] is picked["t1"][1]  # affinité stable
+    assert picked["t2"][0] is picked["t2"][1]
+    assert picked["t1"][0] is not picked["t2"][0]  # instances distinctes
+
+
+def test_pool_bascule_sur_instance_vivante(monkeypatch):
+    """Instance du thread en panne → les AUTRES instances sont tentées avant
+    tout repli local (une panne dégrade le débit, pas le job)."""
+    down = _PoolClient(InferenceUnavailable("connexion refusée"), "http://down/v1")
+    up = _PoolClient({"segments": [{"start": 0.0, "end": 1.0, "text": "ok"}]}, "http://up/v1")
+    rt = _rt_with_pool(monkeypatch, [down, up])
+
+    segs = rt.transcribe(audio_path=None, audio_array=np.zeros(1600, dtype=np.float32), sample_rate=16000)
+
+    assert segs == [{"start": 0.0, "end": 1.0, "text": "ok"}]
+    assert len(down.sent_wavs) == 1 and len(up.sent_wavs) == 1  # détour unique
+
+
+def test_pool_toutes_instances_mortes_repli_local(monkeypatch):
+    """Pool entier injoignable → chemin de repli local historique."""
+    down1 = _PoolClient(InferenceUnavailable("down1"), "http://d1/v1")
+    down2 = _PoolClient(InferenceUnavailable("down2"), "http://d2/v1")
+    rt = _rt_with_pool(monkeypatch, [down1, down2])
+
+    class _Local:
+        def transcribe(self, *a, **k):
+            return [{"start": 0.0, "end": 1.0, "text": "local"}]
+
+    rt._local = _Local()
+    segs = rt.transcribe(audio_path=None, audio_array=np.zeros(1600, dtype=np.float32), sample_rate=16000)
+    assert segs == [{"start": 0.0, "end": 1.0, "text": "local"}]
+    assert len(down1.sent_wavs) == 1 and len(down2.sent_wavs) == 1
+
+
+def test_build_asr_clients_pool_depuis_config():
+    """`url` + `extra_urls` → pool ordonné, URL primaire dédupliquée, non-liste ignorée."""
+    from transcria.inference.asr_client import build_asr_clients_from_config
+
+    cfg = {"inference": {"stt": {"backends": {"qwen3asr": {
+        "url": "http://127.0.0.1:8021/v1",
+        "extra_urls": ["http://127.0.0.1:8022/v1", "http://127.0.0.1:8021/v1"],
+        "model": "qwen3-asr-1.7b",
+    }}}}}
+    clients = build_asr_clients_from_config(cfg, "qwen3asr")
+    assert [c.base_url for c in clients] == ["http://127.0.0.1:8021/v1", "http://127.0.0.1:8022/v1"]
+    assert all(c.model == "qwen3-asr-1.7b" for c in clients)
+
+    cfg["inference"]["stt"]["backends"]["qwen3asr"]["extra_urls"] = "pas-une-liste"
+    assert len(build_asr_clients_from_config(cfg, "qwen3asr")) == 1
