@@ -91,6 +91,34 @@ def merge_llm_suggestions(meeting_ctx: dict, parsed: dict) -> list[str]:
     return empty_fields
 
 
+def substitute_speaker_names(text: str, mapping: dict | None) -> str:
+    """Remplace les jetons SPEAKER_XX d'un texte LIBRE (synthèse, notes LLM) par les
+    noms VALIDÉS par l'utilisateur — au RENDU uniquement, l'artefact stocké reste
+    intact (fonctionne donc aussi pour les jobs existants).
+
+    Vécu 2026-07-19 : la synthèse est rédigée par la LLM au résumé (autostart),
+    AVANT la validation des locuteurs — le DOCX parlait de « SPEAKER_00 » alors que
+    les noms étaient connus. Prudence : seuls les jetons EXACTS dont le mapping
+    fournit un nom non vide et différent du jeton sont substitués."""
+    if not text or not mapping:
+        return text
+    entries = mapping.get("mapping", mapping) if isinstance(mapping, dict) else {}
+    names: dict[str, str] = {}
+    for token, info in (entries or {}).items():
+        name = str((info or {}).get("name") or "").strip() if isinstance(info, dict) else str(info or "").strip()
+        if name and name != token and not name.startswith("SPEAKER_"):
+            names[str(token)] = name
+    if not names:
+        return text
+    import re as _re
+
+    return _re.sub(
+        r"\bSPEAKER_\d{2}\b",
+        lambda m: names.get(m.group(0), m.group(0)),
+        text,
+    )
+
+
 def render_summary_markdown(summary_text: str, transcript_short: str, language: str | None) -> str:
     """Contenu de ``summary/summary.md`` : résumé LLM + extrait de transcription.
 

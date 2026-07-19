@@ -1,7 +1,7 @@
 {
   "cycles": 0,
   "deep_config_chains": 196,
-  "deferred_internal_imports": 49,
+  "deferred_internal_imports": 51,
   "fanout": {
     "inference_service": 1,
     "inference_service.__main__": 1,
@@ -50,7 +50,7 @@
     "transcria.diagnostics.doctor": 10,
     "transcria.diagnostics.system_status": 1,
     "transcria.exports": 2,
-    "transcria.exports.docx_report": 3,
+    "transcria.exports.docx_report": 4,
     "transcria.exports.package_builder": 5,
     "transcria.gpu": 3,
     "transcria.gpu.llm_backend": 1,

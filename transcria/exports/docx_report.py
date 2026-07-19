@@ -893,12 +893,18 @@ class DocxReport:
     def _summary_text(self) -> str:
         # Priorité : édition manuelle (étape 4) > synthèse harmonisée sur le glossaire
         # validé (post-correction) > synthèse brute de la LLM (pré-correction).
-        return (
+        text = (
             self.ctx.get("summary")
             or self.ctx.get("summary_harmonized")
             or self.ctx.get("summary_llm")
             or ""
         ).strip()
+        # Rédigée AVANT la validation des locuteurs (autostart) : les jetons
+        # SPEAKER_XX sont remplacés au RENDU par les noms validés (artefact intact).
+        # Différé : arête MONTANTE exports→workflow (cycle d'__init__ via phases/export).
+        from transcria.workflow.speaker_projection import substitute_speaker_names
+
+        return substitute_speaker_names(text, self.ctx.get("speaker_mapping"))
 
     def _section_context(self, doc: DocumentT, number: str = "1.",
                          include_synthese: bool = True, include_champs: bool = True) -> None:
@@ -1091,7 +1097,13 @@ class DocxReport:
             if isinstance(val, str):
                 return [val.strip()] if val.strip() else []
             if isinstance(val, (list, tuple)):
-                return [s for s in (str(item).strip() for item in val) if s]
+                # Textes rédigés par la LLM (souvent AVANT la validation des
+                # locuteurs) : mêmes substitutions de noms que la synthèse.
+                from transcria.workflow.speaker_projection import substitute_speaker_names
+
+                mapping = self.ctx.get("speaker_mapping")
+                return [substitute_speaker_names(s, mapping)
+                        for s in (str(item).strip() for item in val) if s]
             return []
 
         # (label, items) dans l'ordre PV — chaque section affichée si non vide
@@ -1491,6 +1503,7 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
     ctx           = fs.load_json("context/meeting_context.json") or {}
     participants  = fs.load_json("context/participants.json") or []
     speaker_stats = fs.load_json("speakers/speaker_stats.json") or {}
+    speaker_map   = fs.load_json("speakers/speaker_mapping.json") or {}
     quality       = fs.load_json("quality/quality_report.json") or {}
     structured_data = ctx.get("structured_data") or {}
 
@@ -1513,6 +1526,9 @@ def generate_docx_report(job_id: str, jobs_dir: str, output_path: Path) -> Path:
             logo_bytes = None
 
     summary_stale = bool(fs.load_json("metadata/summary_stale.json") or {})
+    # Mapping locuteurs validé → substitution des jetons SPEAKER_XX au rendu de la
+    # synthèse (le ctx est le canal de données du rapport ; l'artefact reste intact).
+    ctx["speaker_mapping"] = speaker_map
     report = DocxReport(ctx, participants, speaker_stats, quality, srt_text, structured_data,
                         render_options=render_options, logo_bytes=logo_bytes,
                         summary_stale=summary_stale)
