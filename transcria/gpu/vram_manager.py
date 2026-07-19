@@ -121,10 +121,24 @@ class VRAMManager:
         config_path = os.environ.get("TRANSCRIA_CONFIG")
         if not config_path or not os.access(config_path, os.W_OK):
             return
-        indices = list((self.config.get("gpu", {}) or {}).get("llm_gpu_indices") or [0])
+        indices = list((self.config.get("gpu", {}) or {}).get("llm_gpu_indices") or [])
+        if not indices:
+            # JAMAIS inventer un placement : sans llm_gpu_indices explicites, écrire
+            # `[0]` écraserait une calibration bi-GPU réelle (vécu 2026-07-19 : la
+            # calibration 49000/[0,1] du 35B remplacée par 14700/[0] — admission VRAM
+            # faussée d'un facteur 3). La mesure recale la valeur EN MÉMOIRE seulement.
+            logger.warning(
+                "Recalibrage VRAM non persisté : llm_gpu_indices absent de la config "
+                "(mesure %d Mo gardée en mémoire uniquement, %s intact)", vram_mb, config_path,
+            )
+            return
         per_gpu = [vram_mb // len(indices)] * len(indices)
         try:
             apply_gpu_calibration(config_path, vram_mb=vram_mb, gpu_indices=indices, vram_mb_per_gpu=per_gpu)
+            logger.warning(
+                "Recalibrage VRAM PERSISTÉ dans %s : llm_vram_mb=%d, indices=%s "
+                "(mesure au 1er load — vérifier si inattendu)", config_path, vram_mb, indices,
+            )
         except Exception:
             logger.debug("Persistance gpu.llm_vram_mb ignorée", exc_info=True)
 

@@ -125,3 +125,40 @@ def test_daemon_never_a_kill_target_even_if_pattern_configured():
     assert vm._matches_kill_pattern("/usr/local/bin/ollama") is False
     # Les vrais moteurs mono-modèle restent des cibles légitimes.
     assert vm._matches_kill_pattern("vllm serve") is True
+
+
+class TestPersistPlacementGuard:
+    """Vécu 2026-07-19 : _persist_llm_vram_mb inventait `[0]` sans llm_gpu_indices,
+    écrasant une calibration bi-GPU réelle (49000/[0,1] → 14700/[0])."""
+
+    def test_sans_indices_ne_persiste_jamais(self, tmp_path, monkeypatch):
+        import yaml as pyyaml
+
+        from transcria.gpu.vram_manager import VRAMManager
+
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("gpu:\n  llm_vram_mb: 49000\n", encoding="utf-8")
+        monkeypatch.setenv("TRANSCRIA_CONFIG", str(cfg_file))
+
+        vm = VRAMManager({"gpu": {"llm_vram_mb": 49000}})   # PAS d'indices déclarés
+        vm._persist_llm_vram_mb(14700)
+
+        data = pyyaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+        assert data["gpu"]["llm_vram_mb"] == 49000           # fichier INTACT
+        assert "llm_gpu_indices" not in data["gpu"]
+
+    def test_avec_indices_persiste_et_repartit(self, tmp_path, monkeypatch):
+        import yaml as pyyaml
+
+        from transcria.gpu.vram_manager import VRAMManager
+
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("gpu:\n  llm_vram_mb: 10000\n  llm_gpu_indices: [0, 1]\n", encoding="utf-8")
+        monkeypatch.setenv("TRANSCRIA_CONFIG", str(cfg_file))
+
+        vm = VRAMManager({"gpu": {"llm_vram_mb": 10000, "llm_gpu_indices": [0, 1]}})
+        vm._persist_llm_vram_mb(14700)
+
+        data = pyyaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+        assert data["gpu"]["llm_vram_mb"] == 14700
+        assert data["gpu"]["llm_gpu_indices"] == [0, 1]      # placement PRÉSERVÉ
