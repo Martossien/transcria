@@ -78,7 +78,12 @@ def run(runner, job: Job, config: dict) -> dict:
             # Réservation MULTI-GPU (cf. correction) : le try_reserve mono-GPU était un
             # piège LATENT ici (jamais déclenché car la LLM est déjà chargée par la
             # correction) — mis au jour par la phase d'affinage, corrigé partout.
-            if not runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "final_review"):
+            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "final_review")
+            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "final_review")
+            if not _llm_reserved:
                 logger.warning("Relecture finale sautée — VRAM insuffisante (job=%s)", job.id)
                 return {"success": True, "skipped": True, "retryable": True, "reason": "vram_insufficient"}
             llm_phase_reserved = True
@@ -247,7 +252,12 @@ def run_type_field_extraction(runner, job: Job, config: dict) -> dict:
             llm_vram_mb = int(config.get("gpu", {}).get("llm_vram_mb", 60000))
             # Réservation MULTI-GPU tout-ou-rien (comme correction/refine) : la LLM
             # est déchargée en fin de job, cette micro-étape doit pouvoir la relancer.
-            if not runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "type_fields"):
+            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "type_fields")
+            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "type_fields")
+            if not _llm_reserved:
                 logger.warning("extract_type_fields: VRAM insuffisante — champs de type non extraits")
                 return {"success": True, "skipped": True, "reason": "vram_insufficient"}
             llm_phase_reserved = True

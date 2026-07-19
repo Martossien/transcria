@@ -76,7 +76,12 @@ def run(runner, job: Job, config: dict) -> dict:
             # Réservation MULTI-GPU (total ÷ nb de GPU du placement, tout-ou-rien) —
             # cf. GPUAllocator.try_reserve_llm. L'ancien try_reserve mono-GPU rendait
             # la relance de la LLM après reclaim IMPOSSIBLE (deadlock vram_wait).
-            if not runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "llm_arbitration"):
+            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "llm_arbitration")
+            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "llm_arbitration")
+            if not _llm_reserved:
                 # VRAM transitoire : pas de FAILED. On remonte `vram_wait` → re-queue ;
                 # au redispatch, la reprise saute STT/diarisation (déjà sur disque) et
                 # l'admission exige la VRAM LLM (seule phase restante) → ni boucle de

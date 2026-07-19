@@ -146,7 +146,15 @@ if [[ ! -f "config.yaml" ]]; then
             32) _llm_vram=32000 ;; 48) _llm_vram=48000 ;; 64) _llm_vram=60000 ;;
             *)  _llm_vram=12000 ;;
         esac
-        sed -i "s/^\(\s*llm_vram_mb:\s*\).*/\1${_llm_vram}/" config.yaml
+        # UNIQUEMENT si la config vient d'être générée depuis l'exemple (llm_vram_mb
+        # au défaut 60000 du palier 64) : ne JAMAIS écraser la calibration d'une
+        # config EXISTANTE (vécu 2026-07-19 : quickstart lancé dans un dépôt de dev
+        # → calibration bi-GPU réelle écrasée silencieusement).
+        if grep -qE "^\s*llm_vram_mb:\s*60000\s*$" config.yaml; then
+            sed -i "s/^\(\s*llm_vram_mb:\s*\).*/\1${_llm_vram}/" config.yaml
+        else
+            ok "Calibration LLM existante conservée (config non générée par ce script)."
+        fi
         ok "LLM d'arbitrage embarquée (palier ${TRANSCRIA_LLM_TIER:-12} Go, llm_vram_mb=${_llm_vram}) → résumé/correction/qualité actifs."
     elif [[ -n "${TRANSCRIA_ARBITRAGE_LLM_HOST:-}" ]]; then
         ok "LLM d'arbitrage externe déclarée (TRANSCRIA_ARBITRAGE_LLM_HOST=${TRANSCRIA_ARBITRAGE_LLM_HOST})."

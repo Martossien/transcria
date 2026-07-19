@@ -131,7 +131,12 @@ def run(runner, job: Job, config: dict) -> dict:
             # Réservation MULTI-GPU (total ÷ GPU du placement, tout-ou-rien) — comme la
             # correction. Le try_reserve mono-GPU échouerait TOUJOURS ici : la LLM est
             # déchargée en fin de job (reclaim), donc l'affinage doit pouvoir la relancer.
-            if not runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine"):
+            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "refine")
+            if not _llm_reserved:
                 store.append_turn(
                     role="assistant", kind=kind, max_turns=max_turns,
                     text=rmsg["vram"],

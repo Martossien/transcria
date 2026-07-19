@@ -60,7 +60,12 @@ def run_llm_summary(runner, job: Job, result: dict, config: dict, sl) -> None:
             # Réservation MULTI-GPU : la LLM s'étale sur les cartes du script
             # (gpu.llm_gpu_indices) — total ÷ nb de GPU par carte, tout-ou-rien.
             # (L'ancien try_reserve mono-GPU était insatisfaisable par construction.)
-            if not runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "summary_llm"):
+            _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "summary_llm")
+            if not _llm_reserved and runner.gpu.reclaim_idle_stt_engines_for_llm(None):
+                # Un moteur STT servi inactif occupait un GPU du placement LLM : libéré,
+                # on retente UNE fois (miroir du reclaim LLM→STT ; vécu 2026-07-19).
+                _llm_reserved = runner.allocator.try_reserve_llm(job.id, llm_vram_mb, "summary_llm")
+            if not _llm_reserved:
                 # Pénurie VRAM transitoire : signal vram_wait (mise en attente +
                 # reprise auto). L'ancien skip silencieux concluait SUMMARY_DONE
                 # avec le placeholder — invisible pour l'utilisateur.

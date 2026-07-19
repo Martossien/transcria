@@ -1,7 +1,7 @@
 {
   "cycles": 0,
   "deep_config_chains": 196,
-  "deferred_internal_imports": 46,
+  "deferred_internal_imports": 49,
   "fanout": {
     "inference_service": 1,
     "inference_service.__main__": 1,
@@ -170,7 +170,7 @@
     "transcria.workflow": 3,
     "transcria.workflow.checkpoints": 3,
     "transcria.workflow.concurrency_profile": 1,
-    "transcria.workflow.gpu_phase": 6,
+    "transcria.workflow.gpu_phase": 7,
     "transcria.workflow.multi_stt_review": 1,
     "transcria.workflow.phases": 9,
     "transcria.workflow.phases.correction": 6,

@@ -141,6 +141,56 @@ class GpuPhaseSession:
         except Exception:
             return False
 
+    def reclaim_idle_stt_engines_for_llm(self, sl, *, min_idle_s: float = 5.0) -> bool:
+        """Libère la VRAM des moteurs STT SERVIS locaux inactifs sur les GPU du
+        placement LLM — MIROIR de `reclaim_idle_arbitrage_llm` (vécu 2026-07-19 :
+        sur machine serrée, le moteur qwen3asr auto-lancé par le résumé occupait
+        le GPU 1 quand la LLM 48 Go voulait s'y placer → refus comptable à ~800 Mo
+        près, alors que le moteur avait FINI de servir et se relance à la demande).
+
+        Prudence : uniquement les moteurs du manifeste local et vivants. Le garde
+        `min_idle_s` (dernier usage connu) est PAR INSTANCE de superviseur — dans le
+        process workflow il est souvent vide, donc best-effort : la vraie sécurité
+        pour un job concurrent est en aval (retries de l'AsrClient + bascule du pool
+        multi-instance + relance à la demande par le pré-vol, cycle A/B/C). Retourne
+        True si au moins un moteur a été arrêté (l'appelant retente UNE fois)."""
+        from transcria.gpu.stt_engine_supervisor import (
+            build_stt_supervisor,
+            engine_specs_from_config,
+            probe_engine_health,
+        )
+
+        config = self.config or {}
+        llm_indices = set((config.get("gpu", {}) or {}).get("llm_gpu_indices") or [])
+        if not llm_indices:
+            return False
+        try:
+            supervisor = build_stt_supervisor(config)
+        except Exception:  # noqa: BLE001 — jamais bloquant pour une phase LLM
+            return False
+        import time as _time
+
+        stopped_any = False
+        for spec in engine_specs_from_config(config):
+            if spec.gpu not in llm_indices:
+                continue
+            try:
+                if not probe_engine_health(supervisor._health, spec):
+                    continue  # pas vivant → rien à libérer
+                last = supervisor._last_used_for(spec.name)
+                if last is not None and (_time.monotonic() - last) < min_idle_s:
+                    continue  # utilisé à l'instant (job concurrent) → protégé
+                if supervisor.stop_engine(spec):
+                    stopped_any = True
+                    (sl or logger).info(
+                        "[gpu] Moteur STT servi '%s' arrêté pour libérer le GPU %d "
+                        "à la LLM (relancé à la demande au prochain besoin)",
+                        spec.name, spec.gpu,
+                    )
+            except Exception:  # noqa: BLE001 — best-effort par moteur
+                continue
+        return stopped_any
+
     def reclaim_idle_arbitrage_llm(self, sl) -> bool:
         """Libère la VRAM en arrêtant NOTRE LLM d'arbitrage inactive (catégorie 1).
 
