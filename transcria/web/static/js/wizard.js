@@ -909,6 +909,7 @@ var TranscrIA = window.TranscrIA || {};
     };
 
     var _STATE_LABELS = {
+        'summary_running':  'Résumé de contrôle en cours de génération (lancé automatiquement)…',
         'ready_to_process': 'Démarrage…',
         'transcribing':     'Transcription ASR en cours…',
         'diarizing':        'Identification des locuteurs…',
@@ -1101,6 +1102,17 @@ var TranscrIA = window.TranscrIA || {};
                     queueInfo.vramWaitExceeded = true;
                 }
                 _renderWorkflowStatusBanner(banner, state, progress, queueInfo);
+                var initialState = banner.dataset ? banner.dataset.initialState : null;
+                if (state === 'summary_done' && initialState && initialState !== 'summary_done'
+                        && _TERMINAL_STATES.indexOf(initialState) === -1) {
+                    // Le résumé (autostart ou serveur) vient de se terminer alors que la
+                    // page a été rendue AVANT : recharger pour afficher le résumé au lieu
+                    // de laisser un bouton « Générer » périmé (source de double lancement).
+                    location.reload();
+                    return;
+                }
+                var genBtn = document.querySelector('[onclick="TranscrIA.generateSummary()"]');
+                if (genBtn) { genBtn.disabled = (state === 'summary_running'); }
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
                     // Phase active (résumé, traitement…) : rafraîchissement rapide.
                     setTimeout(poll, 4000);

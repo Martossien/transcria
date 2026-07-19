@@ -96,6 +96,7 @@ JS_MESSAGES: tuple[str, ...] = (
     N_('Traitement relancé. Transcription ASR en cours… (0s écoulées)'),
     N_('Traitement terminé en %(elapsed)s. Chargement…'),
     N_('Transcription ASR en cours…'),
+    N_('Résumé de contrôle en cours de génération (lancé automatiquement)…'),
     N_("VRAM insuffisante : l'administrateur a été prévenu. Le résumé reprendra automatiquement dès que la mémoire GPU sera libérée."),
     N_('Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)'),
     N_('issu des documents fournis'),
