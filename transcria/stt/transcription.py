@@ -67,6 +67,9 @@ _DEFAULT_ISOLATED_NOISE_ARTIFACTS = {
 }
 _DEFAULT_NON_LATIN_CHAR_PATTERN = (
     r"[\u0400-\u04FF\u0600-\u06FF\u0750-\u077F"
+    # Devanagari + thaï : dérives observées en LECTURE sur réunion réelle (campagne
+    # 2026-07-19 : « वह। » émis par qwen3asr sur une interjection française).
+    r"\u0900-\u097F\u0E00-\u0E7F"
     r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]"
 )
 # Langues de sortie à écriture LATINE (miroir de _KNOWN_LOCALES du schéma) :

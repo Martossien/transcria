@@ -1673,3 +1673,15 @@ class TestShortNonLatinDrift:
     def test_interjection_latine_courte_conservee(self):
         result = self._run([("Oui.", 10.0, 10.4), ("On continue.", 11.0, 12.5)])
         assert result == ["Oui.", "On continue."]
+
+
+def test_derive_devanagari_courte_supprimee():
+    """Campagne 2026-07-19 : qwen3asr a émis « वह। » (devanagari) sur une
+    interjection française — le pattern par défaut doit couvrir ce bloc."""
+    t = Transcriber.__new__(Transcriber)
+    t.config = {"workflow": {"transcription_cleanup": {
+        "enabled": True, "merge_short_segments": False, "non_latin_short_max_s": 2.0}}}
+    segs = [{"start": 1.0, "end": 1.4, "text": "वह।"},
+            {"start": 2.0, "end": 4.0, "text": "On continue."}]
+    out = [s["text"] for s in t._cleanup_transcription_segments(segs, language="fr")]
+    assert out == ["On continue."]
