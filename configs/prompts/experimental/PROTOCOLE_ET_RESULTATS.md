@@ -79,3 +79,52 @@ trois variantes (R2) ; aucun fichier tronqué.
 
 Harnais : `bench_prompt_correction.py` (scratchpad de session — à recopier ici
 au lancement de la campagne) ; voir README.md pour la mécanique `prompts_dir`.
+
+---
+
+## CAMPAGNE COMPLÈTE (2026-07-19) — 8 réunions réelles ≥ 45 min, verdicts
+
+Corpus : 8 réunions distinctes (46 min à 3 h 50, 518 à 2 094 segments), chacune
+avec sa transcription brute d'époque ET sa correction humaine validée. Grilles de
+référence extraites par diff (587 corrections attendues au total), échantillons
+relus. Note de méthode : la référence est un PLANCHER — la lecture a montré des
+corrections « hors grille » légitimes que l'humain avait manquées.
+
+### Axe prompts — VERDICT : GARDER LA PROD
+
+| Variante | Dépistage 8 réunions (1 run) + contre-épreuves | Verdict |
+|---|---|---|
+| prod v3.0 | corrige PARTOUT, jamais zéro ; rappel 12/17 à 52/91 ; 2 h 45 cumulées | ✅ seule fiable |
+| V1_DIRECT | zéro-correction DÉTERMINISTE sur 3 réunions (2 runs), 2 segments perdus sur une 4e | ❌ disqualifiée |
+| V2_BUDGET | meilleure que prod quand elle travaille (14/17 vs 12/17) et ~3× plus vite, MAIS copie blanche aléatoire (0 ou 145 changements selon le run sur la même réunion) | ❌ non fiable |
+| V3_SCAN (budget + scan anti-zéro + entités) | zéros persistants dès ~100 Ko de SRT | ❌ le scan ne répare pas |
+| V4_BLOCS (blocs sans délégation) | INTESTABLE : le contenu du prompt gèle le boot opencode 8/8 (bug amont, consigné enquête gel) | ❌ |
+
+**Cause racine des copies blanches (lue, pas supposée)** : la session s'achève
+sans AUCUNE écriture (pas même le rapport) quand le SRT dépasse ~90-100 Ko lu/écrit
+en une fois — ce n'est pas un « refus de corriger ». La fiabilité de la prod vient
+de son travail par blocs + délégation. Le mur de troncature du Write unique, lui,
+ne s'est PAS matérialisé (2 094 segments tenus 1:1 quand la session aboutit).
+
+### Axe backend STT — VERDICT : COHERE RESTE PRINCIPAL, qwen3asr reste RÉSUMÉ
+
+Correction prod rejouée sur les SRT qwen3asr régénérés (filtre non-latin actif)
+de 4 réunions étagées : intégrité 4/4. MAIS la lecture comparée sur fenêtres
+identiques tranche : sur les passages difficiles (débit rapide, chevauchements),
+qwen3asr se dégrade nettement là où la référence cohere+prod reste propre
+(« cahier des charges » → « guichet des charges »/« prix des charges »), et dérive
+vers l'anglais ET le devanagari sur les interjections. Les fenêtres de 5 min du
+banc initial ne généralisaient pas aux réunions complètes. Prise produit
+immédiate : bloc devanagari+thaï ajouté au pattern non-latin par défaut.
+
+### Recommandation 0.3.9 (décision utilisateur)
+
+1. Prompts : AUCUN changement — la prod est le seul contrat fiable au palier 35B.
+   Le coût (≈ 2-3× plus lent que les variantes directes) est le prix de la
+   fiabilité, mesuré et documenté.
+2. Backend principal : GARDER cohere. qwen3asr conserve la phase résumé (vitesse,
+   qualité suffisante) et le multi-instance délivre déjà son gain là où il compte.
+3. Pistes restantes documentées : variante directe à re-tester sur un palier LLM
+   supérieur ou après correction du bug amont opencode (gel par contenu de
+   prompt) ; convention [INCERTAIN:…] de certaines références à intégrer au
+   prompt prod si souhaitée.
