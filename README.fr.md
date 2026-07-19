@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.3.8** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.3.8.1** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de

@@ -6,6 +6,41 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.8.1] — 2026-07-19
+
+Micro-correctif né de l'usage réel de la 0.3.8 (chaque point vécu, corrigé et
+prouvé sur les jobs mêmes qui l'ont révélé). Aucune migration, aucun défaut de
+comportement modifié.
+
+### Corrigé
+
+- **Double résumé** : un résumé fait et frais est RESSERVI par l'étape wizard
+  (18 ms mesurées au lieu d'une passe LLM complète) ; `{"force": true}`
+  régénère sciemment. Côté interface, l'autostart devient transparent :
+  libellé « lancé automatiquement », rechargement à la fin, bouton neutralisé
+  pendant le run.
+- **Calibration VRAM protégée** : l'auto-recalibrage ne peut plus inventer un
+  placement mono-GPU (une mesure partielle écrasait une calibration bi-GPU
+  réelle — admission faussée ×3) ; toute persistance est journalisée en
+  WARNING. Le quickstart Docker ne réécrit plus `llm_vram_mb` d'une config
+  EXISTANTE.
+- Filtre non-latin : blocs devanagari + thaï couverts (dérive vécue).
+
+### Ajouté
+
+- **Reclaim des moteurs STT servis** : quand la LLM manque de VRAM parce qu'un
+  moteur servi inactif occupe un GPU de son placement, les 5 phases LLM
+  l'arrêtent et retentent (miroir du reclaim existant ; le moteur se relance à
+  la demande) — rend viable la cohabitation grosse LLM + moteur servi sur
+  machines serrées.
+- **Noms de locuteurs dans le DOCX** : la synthèse et les blocs PV
+  (décisions/actions/blocages) substituent au RENDU les jetons `SPEAKER_XX`
+  par les noms validés — effectif aussi pour les jobs existants en
+  re-téléchargeant le document.
+- Dossier complet de la campagne prompts/backend (§2.4) : verdicts mesurés sur
+  8 réunions réelles — prod et cohere confirmés, conditions de réouverture
+  documentées (`configs/prompts/experimental/PROTOCOLE_ET_RESULTATS.md`).
+
 ## [0.3.8] — 2026-07-18
 
 Version **vitesse & expérience opérateur**, entièrement mesurée sur réunions réelles
