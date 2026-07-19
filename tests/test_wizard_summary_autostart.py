@@ -158,3 +158,43 @@ class TestAnalyzeStateGuard:
         assert r.get_json()["duration_seconds"] == 42.0        # analyse stockée servie
         with app.app_context():
             assert JobStore.get_by_id(job_id).state == JobState.SUMMARY_RUNNING.value
+
+
+class TestSummaryAlreadyDoneGuard:
+    """Vécu 2026-07-19 : l'autostart finissait le résumé et le passage de
+    l'utilisateur sur l'étape wizard relançait une passe LLM COMPLÈTE. La route
+    doit resservir un résumé fait et frais — `force` régénère sciemment."""
+
+    def test_summary_done_est_resservi_sans_recalcul(self, app, admin_client, owner_id):
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            job = make_job(owner_id, state=JobState.SUMMARY_DONE)
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job.id)
+            fs.save_json("summary/summary.json", {"segments": [{"text": "a"}, {"text": "b"}]})
+            job_id = job.id
+
+        r = admin_client.post(f"/api/jobs/{job_id}/summary")
+
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["already_done"] is True          # aucun pipeline relancé
+        assert body["segment_count"] == 2
+
+    def test_force_contourne_la_garde(self, app, admin_client, owner_id, monkeypatch):
+        """`{"force": true}` doit passer la garde (le pipeline répond ensuite —
+        ici l'absence d'audio suffit à prouver que la garde a été contournée)."""
+        from transcria.config import get_config
+        from transcria.jobs.filesystem import JobFilesystem
+
+        with app.app_context():
+            job = make_job(owner_id, state=JobState.SUMMARY_DONE)
+            fs = JobFilesystem(get_config()["storage"]["jobs_dir"], job.id)
+            fs.save_json("summary/summary.json", {"segments": []})
+            job_id = job.id
+
+        r = admin_client.post(f"/api/jobs/{job_id}/summary", json={"force": True})
+
+        assert r.status_code == 400                  # « Aucun fichier audio » : la
+        assert "audio" in r.get_json()["error"]      # garde n'a PAS court-circuité

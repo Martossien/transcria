@@ -246,6 +246,21 @@ def api_summary(job_id: str):
         return jsonify({"queued": True, "message": _SUMMARY_QUEUED_MESSAGE})
 
     fs = JobFilesystem(cfg["storage"]["jobs_dir"], job.id)
+
+    # Résumé DÉJÀ produit et validé (autostart du lot 3, ou passage précédent) : le
+    # resservir au lieu de recalculer — vécu le 2026-07-19 : l'autostart finissait à
+    # 15:39:40 et le passage de l'utilisateur sur l'étape wizard relançait une passe
+    # LLM complète à 15:40:00. Le front recharge la page en cas de succès, qui rend
+    # le résumé existant. `{"force": true}` régénère sciemment (relance délibérée).
+    force = bool((request.get_json(silent=True) or {}).get("force"))
+    existing_summary = fs.load_json("summary/summary.json")
+    if job.state == JobState.SUMMARY_DONE.value and not force and existing_summary is not None:
+        logger.info("[summary] Résumé existant resservi sans recalcul (job=%s)", job.id)
+        return jsonify({
+            "already_done": True,
+            "segment_count": len(existing_summary.get("segments") or []),
+        })
+
     audio_path = fs.get_original_audio_path()
     if audio_path is None:
         return jsonify({"error": "Aucun fichier audio"}), 400
