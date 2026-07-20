@@ -87,69 +87,221 @@ permissions, sessions, audit et ownership des jobs inchangés.
 
 ### 3.1 Backend d'identité enfichable
 
-```yaml
-auth:
-  backend: local          # défaut INCHANGÉ ; local | oidc | ldap | proxy
-  # Chaque connecteur a sa section, inerte tant que backend ne le désigne pas.
+Nouveau paquet `transcria/auth/identity/` (l'ossature existante ne bouge pas) :
+
+```
+transcria/auth/identity/
+  __init__.py      # get_identity_backend(config) -> IdentityBackend (résolution unique)
+  base.py          # contrat + FederatedIdentity (dataclass gelée)
+  local.py         # comportement historique EXTRAIT tel quel (golden sur la route)
+  oidc.py          # lot 1
+  ldap.py          # lot 2
+  proxy.py         # lot 3
 ```
 
-Un module `transcria/auth/identity/` (nouveau, ossature intacte ailleurs) :
-`base.py` (contrat `IdentityBackend.authenticate(...) -> FederatedIdentity |
-None`), `local.py` (comportement historique, extrait sans le modifier),
-`oidc.py`, `ldap.py`, `proxy.py`. La route `login` dispatche selon
-`auth.backend` ; **tous les chemins aboutissent au même `login_user()`**.
+Contrat (`base.py`) — volontairement minimal, tout le reste est commun :
 
-### 3.2 Provisionnement à la volée (JIT)
+```python
+@dataclass(frozen=True)
+class FederatedIdentity:
+    subject: str            # identifiant STABLE chez le fournisseur (sub OIDC,
+                            # objectGUID AD, Remote-User) — JAMAIS l'email
+    username: str           # preferred_username / sAMAccountName / Remote-User
+    display_name: str
+    email: str
+    groups: tuple[str, ...] # claims `groups`, memberOf (DN complets), Remote-Groups
+    source: str             # "oidc" | "ldap" | "proxy"
 
-Au premier login fédéré : création d'un `User` local « projection »
-(`username` = claim stable — `preferred_username`/`sub` préfixé, jamais
-l'email seul ; `password_hash` inutilisable ; marqueur `identity_source`).
-Aux logins suivants : resynchronisation du nom/email/rôle. L'ownership des
-jobs, les groupes locaux, l'audit continuent de fonctionner sans une ligne
-changée — c'est le cœur du choix « projection » plutôt que « session sans
-compte ».
+class IdentityBackend(Protocol):
+    #   None  -> identifiants refusés (message générique, jamais « lequel » a échoué)
+    #   Lever IdentityUnavailable -> fournisseur injoignable (message + break-glass)
+    def authenticate(self, request_ctx) -> FederatedIdentity | None: ...
+```
 
-**Désactivation** : un utilisateur retiré de l'IdP ne peut plus se connecter
-(c'est l'IdP qui refuse). Pour la désactivation *active* (sessions en cours,
-visibilité admin), le lot 5 (SCIM) est la vraie réponse — en attendant, durée
-de session bornée (`auth.session_max_age`) et page admin listant les comptes
-fédérés avec leur dernière connexion.
+Le dispatch vit dans `auth/routes.py` (`login()`, aujourd'hui `:63-84`) : le
+POST local reste inchangé ; `GET /login` affiche le bouton SSO si
+`auth.backend != local`. Les nouvelles routes (lot 1) : `GET /auth/oidc/login`
+(redirection autorize + state/nonce en session serveur), `GET /auth/oidc/callback`
+(échange code→jetons, validation, JIT, `login_user()`), `GET /auth/oidc/logout`.
+Le `LoginRateLimiter` existant (`transcria/auth/rate_limit.py`, C3.3) s'applique
+au callback et au bind LDAP comme au formulaire local — même budget, même bannissement.
 
-### 3.3 Mapping groupes → rôles (commun OIDC/LDAP/proxy)
+### 3.2 Modèle de données (migration Alembic additive, lot 0)
+
+`users` (`transcria/auth/models.py:27`) — colonnes AJOUTÉES, nullable, aucun
+impact sur l'existant :
+
+| Colonne | Type | Rôle |
+|---|---|---|
+| `identity_source` | `String(16)`, défaut `"local"`, indexée | provenance du compte ; les chemins mot-de-passe (change_password, reset CLI) REFUSENT si ≠ local |
+| `external_subject` | `String(255)`, nullable, **unique par (source, subject)** (index composite) | clé de rapprochement JIT — jamais le username, jamais l'email |
+| `last_identity_sync` | `DateTime(tz)`, nullable | dernière resynchronisation des attributs |
+
+`api_tokens` (lot 4, nouvelle table) :
+
+```
+id           String(36) PK
+user_id      FK users.id, indexé, CASCADE delete
+token_id     String(16) unique indexé   -- partie publique du jeton (lookup O(1))
+secret_hash  String(64)                 -- sha256 du secret (comparaison hmac.compare_digest)
+label        String(80)                 -- nom donné par l'utilisateur
+created_at / expires_at (nullable) / last_used_at (mise à jour throttlée à 1/min)
+revoked_at   DateTime(tz) nullable      -- révocation = soft (trace d'audit conservée)
+```
+
+Format du jeton : `tia_<token_id>_<secret 32 octets urlsafe>` — le préfixe
+`tia_` permet aux scanners de secrets (GitHub push protection, gitleaks) d'être
+configurés, `token_id` évite le scan complet de table au lookup.
+
+### 3.3 Flux OIDC détaillé (lot 1)
+
+Authorization Code **+ PKCE (S256)** — même en client confidentiel, coût nul et
+protège le canal :
+
+1. `GET /auth/oidc/login` → génère `state` (32 o), `nonce` (32 o),
+   `code_verifier` ; stockés en **session serveur Flask** (cookie signé
+   existant : `HTTPONLY`/`SameSite=Lax` déjà posés — `app_services.py:174-175`) ;
+   redirection vers `authorization_endpoint` (résolu par la découverte
+   `{issuer}/.well-known/openid-configuration`, cachée en mémoire, TTL 1 h).
+2. Callback : vérifier `state` (comparaison constante, usage unique — supprimé
+   de session immédiatement) ; échange code→jetons (Authlib gère PKCE + auth
+   client) ; **validation de l'ID token** : signature via JWKS (cache Authlib,
+   re-fetch sur `kid` inconnu — c'est la rotation de clés), `iss` exact,
+   `aud == client_id`, `exp/iat` avec `leeway` configurable (défaut 30 s),
+   `nonce` égal à celui de la session.
+3. Claims → `FederatedIdentity` : `sub` obligatoire ; `groups` lu depuis le
+   claim configuré (`auth.oidc.role_mapping.claim`), en tolérant le format
+   Entra ID (IDs de groupes) comme Keycloak (noms) — la comparaison du mapping
+   est une égalité de chaînes, l'admin met ce que son IdP émet.
+4. JIT (§3.5) → `login_user()` → redirection vers la cible initiale
+   (sauvegardée AVANT la redirection IdP, avec validation same-origin stricte —
+   jamais d'open redirect).
+5. **Pas de refresh token en v1** : pas de scope `offline_access`, aucun jeton
+   IdP persisté — la session applicative Flask (durée
+   `PERMANENT_SESSION_LIFETIME`, `app_services.py:161`) est la seule vérité
+   après login. C'est le choix qui évite le stockage chiffré de jetons et la
+   moitié de la surface d'attaque.
+6. Logout : `logout_user()` local puis, si `end_session_endpoint` découvert,
+   redirection RP-initiated logout (`id_token_hint` non conservé → on passe
+   `client_id` + `post_logout_redirect_uri` déclarée).
+
+### 3.4 Flux LDAP/AD détaillé (lot 2)
+
+Deux modes (configurables) :
+
+- **bind direct** (simple) : `bind(userDN construit via template, password)` ;
+- **service + recherche** (recommandé AD) : bind du compte de service, recherche
+  `(&(objectClass=user)(sAMAccountName={username}))` sous `base_dn`, puis
+  re-bind avec le DN trouvé et le mot de passe utilisateur.
+
+Détails d'implémentation qui font la différence en production AD :
+
+- `ldap3.ServerPool` (plusieurs contrôleurs de domaine, stratégie FIRST avec
+  reprise), timeouts connect/receive explicites (défauts 5 s / 10 s) ;
+- **LDAPS obligatoire** par défaut (`use_ssl=true`, CA configurable
+  `tls_ca_file`) ; `allow_plaintext: true` exigé explicitement sinon refus au
+  boot (validation de schéma) ;
+- échappement systématique de l'entrée utilisateur dans les filtres :
+  `ldap3.utils.conv.escape_filter_chars` (injection LDAP) ;
+- groupes : lecture `memberOf` du compte ; option
+  `resolve_nested_groups: false` — si true, recherche
+  `(member:1.2.840.113556.1.4.1941:={userDN})` (OID
+  `LDAP_MATCHING_RULE_IN_CHAIN`, récursif côté serveur AD ; coûteux, documenté) ;
+- codes de résultat AD distingués dans les messages ET l'audit : 49/data 52e
+  (mauvais mot de passe), 533 (compte désactivé), 701 (expiré), 775
+  (verrouillé) — l'utilisateur voit un message générique, l'ADMIN voit la
+  cause dans l'audit ;
+- referrals désactivés (`auto_referrals=False`) — source classique de
+  suspensions mystérieuses contre AD multi-domaines.
+
+### 3.5 Provisionnement JIT — algorithme exact (commun aux 3 connecteurs)
+
+```
+identité = backend.authenticate(...)
+u = UserStore.get_by_external(identité.source, identité.subject)   # nouvelle méthode
+si u existe :
+    resynchroniser display_name/email ; recalculer le rôle via role_mapping
+    (le rôle PEUT baisser — la vérité vient de l'IdP à chaque login) ;
+    si is_active == False → REFUS (un compte désactivé localement le reste,
+    même si l'IdP le connaît encore : la désactivation locale est un veto).
+sinon :
+    rôle = role_mapping(identité.groups) ; si deny → REFUS audité (groupe manquant)
+    username = identité.username ; si collision avec un compte EXISTANT
+    (local ou autre source) → suffixe « @<source> » (jamais d'écrasement,
+    jamais de fusion silencieuse — test dédié) ;
+    créer User(identity_source=source, external_subject=subject,
+               password_hash=UNUSABLE, role=rôle)
+audit(LOGIN_FEDERATED, acteur, source, groupes_décisifs)
+login_user(u)
+```
+
+`UNUSABLE` = valeur sentinelle non vérifiable (`"!"` préfixé) : `check_password`
+retourne False par construction ; `change_password`/`reset-admin-password`
+refusent avec message explicite si `identity_source != local`.
+
+### 3.6 Mapping groupes → rôles (commun) — sémantique précise
 
 ```yaml
 auth:
   role_mapping:
-    claim: groups                    # OIDC : nom du claim ; LDAP : memberOf ; proxy : Remote-Groups
-    rules:                           # premier match gagne, comparaison exacte
-      - group: "CN=transcria-admins,OU=…"   # ou nom court côté OIDC/proxy
+    claim: groups            # OIDC ; ignoré en LDAP (memberOf) et proxy (Remote-Groups)
+    rules:                   # ORDONNÉ, premier match gagne, égalité stricte de chaîne
+      - group: "transcria-admins"
         role: admin
-      - group: "transcria-users"
+      - group: "CN=Transcria Users,OU=Apps,DC=corp,DC=example"
         role: operator
-    default: deny                    # deny | viewer — JAMAIS operator/admin par défaut
+    default: deny            # deny | viewer — validé par le schéma, rien d'autre
 ```
 
-Règles de sécurité : défaut restrictif (`deny`), l'admin DOIT mapper
-explicitement ; un compte fédéré ne peut JAMAIS obtenir un rôle supérieur à son
-mapping (pas d'élévation locale persistante) ; chaque attribution/refus est
-audité avec le groupe déclencheur.
+Invariants (tests dédiés) : un login sans AUCUNE règle applicable suit
+`default` ; `default: deny` → 403 avec message i18n « accès non attribué,
+contactez votre administrateur » + audit du refus AVEC la liste des groupes
+reçus (c'est l'outil de diagnostic n°1 de l'admin) ; le rôle est REMPLACÉ à
+chaque login (jamais max(ancien, nouveau)) ; aucune règle ne peut cibler un
+rôle inexistant (validation de schéma contre `Role`).
 
-### 3.4 Groupes locaux vs groupes fédérés
+### 3.7 En-têtes de proxy de confiance (lot 3) — règles exactes
 
-Les `Group` locaux (partage de lexiques, `groups.py`) restent des objets
-LOCAUX : le mapping fédéré ne produit que des **rôles**, pas des adhésions aux
-groupes locaux (v1). Une synchronisation groupes-fédérés → groupes-locaux est
-notée comme extension (§7) — la faire d'emblée créerait des collisions de
-nommage et des suppressions surprises.
+```yaml
+auth:
+  proxy:
+    trusted_ips: ["127.0.0.1", "10.0.0.5"]   # OBLIGATOIRE, vide = backend refusé au boot
+    user_header: "Remote-User"
+    groups_header: "Remote-Groups"            # séparateur virgule
+    name_header: "Remote-Name"
+    email_header: "Remote-Email"
+    auto_login: true                          # false = bouton « continuer en SSO »
+```
 
-### 3.5 Break-glass (IdP en panne)
+Gardes non négociables : la requête dont `remote_addr` ∉ `trusted_ips` qui
+PORTE ces en-têtes est journalisée en WARNING (tentative d'usurpation) et les
+en-têtes ignorés ; le guide de déploiement montre la directive proxy qui
+**écrase** les en-têtes entrants (`proxy_set_header Remote-User …` côté Nginx —
+jamais de passthrough) ; `ProxyFix` n'est PAS utilisé pour résoudre
+`remote_addr` de cette garde (on compare l'adresse socket réelle, pas
+`X-Forwarded-For`, falsifiable par construction).
 
-Le compte admin LOCAL survit à tous les backends : `auth.backend: oidc`
-n'éteint pas le formulaire local pour les comptes `identity_source=local` de
-rôle admin (route `/login?local=1`, non proposée par défaut sur la page).
-Procédure documentée : `reset-admin-password` (CLI 0.3.8) + ce chemin. Le
-doctor vérifie qu'au moins un admin local actif existe quand un backend fédéré
-est activé.
+### 3.8 Jetons d'API (lot 4) — chemin d'authentification
+
+Nouveau décorateur d'entrée dans `web/request_helpers.py` : si
+`Authorization: Bearer tia_…` présent → lookup `token_id`, comparaison
+`hmac.compare_digest(sha256(secret), secret_hash)`, contrôles
+révocation/expiration/`user.is_active`, puis injection du user dans le contexte
+`flask_login` (login_user(user, remember=False) par requête, sans cookie —
+`session.permanent = False` et session non émise). Périmètre v1 : les routes ⭐
+UNIQUEMENT (liste explicite, pas une regex) ; le jeton porte les permissions de
+son propriétaire (un viewer ne POST pas /process — test dédié). `last_used_at`
+mis à jour au plus 1×/min (éviter une écriture DB par requête de polling).
+
+### 3.9 Break-glass (IdP en panne) — procédure vérifiable
+
+`auth.backend: oidc|ldap|proxy` n'éteint PAS le formulaire local : il reste
+servi sur `GET /login?local=1` (non lié depuis la page SSO), accepte les seuls
+comptes `identity_source == "local"`. Doctor (lot 1) : FAIL si un backend
+fédéré est actif et qu'aucun admin local actif n'existe ; WARN si le mot de
+passe du premier admin est resté à `first_admin_password`. Le scénario complet
+(IdP éteint → login local → reset CLI) fait partie de la matrice §5 et se
+rejoue en session HTTP réelle avant chaque release touchant l'auth.
 
 ## 4. Plan de lots
 
@@ -202,6 +354,32 @@ seule fois, hachage en base, expiration optionnelle, dernier usage affiché) ;
 en-tête `Authorization: Bearer tia_…` accepté sur les routes ⭐ (et elles
 seules, v1) ; le jeton porte les permissions de son propriétaire, jamais plus ;
 audit des usages. Régénérer `docs/API_REFERENCE.md` (garde C8).
+
+### Points d'ancrage dans le code (par lot)
+
+| Lot | Fichiers touchés (créés ➕ / modifiés ✏) |
+|---|---|
+| 0 | ➕ `auth/identity/{__init__,base,local}.py` ; ✏ `auth/routes.py:63` (dispatch), `config/loader.py` (défauts `auth.backend`), `config_schema.py` (+`_check_auth_backend`), `data/config_classification.yaml` |
+| 1 | ➕ `auth/identity/oidc.py` ; ✏ `auth/routes.py` (3 routes), `templates/login.html` (bouton SSO i18n), `diagnostics/doctor.py` (+`check_oidc_provider`, `check_local_admin_exists`), `web/translations` FR/EN, `requirements` (+authlib) |
+| 2 | ➕ `auth/identity/ldap.py` ; ✏ doctor (+`check_ldap_reachable`), requirements (+ldap3) |
+| 3 | ➕ `auth/identity/proxy.py` (~150 lignes gardes comprises) ; ✏ doctor (WARN si trusted_ips contient 0.0.0.0/0) |
+| 4 | ➕ `auth/api_tokens.py` + migration `api_tokens` + page « Mon compte » ; ✏ `web/request_helpers.py` (Bearer), routes ⭐ (aucun changement de code — le décorateur d'entrée est commun), régénération `docs/API_REFERENCE.md` (garde C8) |
+
+Estimations (avec la discipline maison — tests/i18n/doctor/docs compris) :
+lot 0 ≈ 1 j ; lot 1 ≈ 3-4 j ; lot 2 ≈ 2-3 j ; lot 3 ≈ 1 j ; lot 4 ≈ 2 j.
+
+### Modes de panne et comportements (contrat utilisateur)
+
+| Panne | Vu par l'utilisateur | Vu par l'admin (audit/logs) | Comportement |
+|---|---|---|---|
+| IdP OIDC injoignable | « Fournisseur d'identité indisponible » + lien break-glass | WARNING avec cause réseau | aucun retry automatique (c'est un humain devant un écran) |
+| JWKS : `kid` inconnu | transparent (re-fetch) ou échec propre | INFO rotation / WARNING échec | 1 re-fetch, pas de boucle |
+| ID token invalide (iss/aud/exp/nonce) | « Connexion refusée » générique | WARNING détaillé (quel contrôle) | refus sec, jamais de fallback local implicite |
+| Groupes absents du claim | selon `default` | refus audité AVEC groupes reçus | l'admin diagnostique en 1 lecture |
+| LDAP : DC injoignable | « Annuaire indisponible » + break-glass | WARNING par serveur du pool | bascule ServerPool puis échec |
+| AD : compte verrouillé/expiré | message générique | code AD précis dans l'audit | jamais de détail côté formulaire (énumération) |
+| Proxy : en-tête depuis IP non déclarée | 401 | WARNING « usurpation possible » + IP | en-têtes ignorés |
+| Jeton API révoqué/expiré | 401 JSON | audit usage refusé | pas de distinction révoqué/expiré côté client |
 
 ### Ordre conseillé
 
