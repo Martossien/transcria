@@ -37,9 +37,14 @@ au-delà de la rétention ; la purge supprime la ligne en base ET les fichiers d
   (`delete_source_audio_after_embedding`).
 - **Minimisation** : l'audio original peut être exclu des sauvegardes (`--exclude-audio`)
   et est purgé avec le traitement.
-- **Journalisation** : les accès aux données (consultation, téléchargement, édition) et
-  les échecs de connexion sont tracés (voir la liste des 56 actions dans `audit/models.py`,
-  libellés en français sur la page Audit).
+- **Journalisation** : les accès aux données (consultation, téléchargement, édition), les
+  connexions et leurs échecs, et le cycle de vie des jetons d'API personnels
+  (`token_create`/`token_revoke`) sont tracés (voir la liste des 59 actions dans
+  `audit/models.py`, libellés en français sur la page Audit). Les connexions fédérées
+  (OIDC/proxy/LDAP) journalisent la source et le groupe décisif ; un refus de mapping
+  journalise les groupes reçus (diagnostic administrateur) — jamais de mot de passe, de
+  secret de jeton ni d'email dans les détails d'audit. Événements d'authentification et
+  de jetons rangés dans la **famille `auth`** pour la rétention.
 
 ## 3. Suppression d'un utilisateur
 

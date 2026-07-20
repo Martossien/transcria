@@ -77,6 +77,7 @@ class AuditAction(str, enum.Enum):
 
 _VERB_FR = {
     "login": "Connexion", "login_failed": "Échec de connexion", "logout": "Déconnexion",
+    "token_create": "Jeton d'API — création", "token_revoke": "Jeton d'API — révocation",
     "view": "Consultation", "download": "Téléchargement", "delete": "Suppression",
     "create": "Création", "modify": "Modification", "save": "Enregistrement",
     "enqueue": "Mise en file", "dequeue": "Sortie de file", "prioritize": "Priorisation",

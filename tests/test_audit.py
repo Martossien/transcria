@@ -109,6 +109,16 @@ class TestAuditStore:
         assert AuditStore.family_for_action(AuditAction.JOB_LEXICON_SAVE.value) == "job"
         assert AuditStore.family_for_action(AuditAction.VOICE_CONSENT_VIEW.value) == "voice"
         assert AuditStore.family_for_action(AuditAction.AUDIT_EXPORT.value) == "config"
+        # Chantier identité : les jetons d'API sont des événements d'AUTH (rétention).
+        assert AuditStore.family_for_action(AuditAction.TOKEN_CREATE.value) == "auth"
+        assert AuditStore.family_for_action(AuditAction.TOKEN_REVOKE.value) == "auth"
+
+    def test_toute_action_a_une_famille(self):
+        """Garde DPO exhaustive : AUCUNE action ne doit tomber en « other » (sinon
+        rétention par défaut au lieu de la politique par famille). Aurait attrapé le
+        classement erroné des jetons d'API."""
+        for action in AuditAction:
+            assert AuditStore.family_for_action(action.value) != "other", action.value
 
     def test_purge_expired_by_policy_keeps_recent_family_entries(self, app):
         with app.app_context():
@@ -142,6 +152,8 @@ class TestAuditLabelsFR:
     def test_libelles_par_famille(self):
         from transcria.audit.models import audit_action_label
         assert audit_action_label("login_failed") == "Échec de connexion"
+        assert audit_action_label("token_create") == "Jeton d'API — création"
+        assert audit_action_label("token_revoke") == "Jeton d'API — révocation"
         assert audit_action_label("meeting_type_create") == "Type de réunion — création"
         assert audit_action_label("config_edit") == "Configuration — édition"
         assert audit_action_label("lexicon_term_add") == "Lexique — ajout de terme"

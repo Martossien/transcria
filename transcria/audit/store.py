@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 class AuditStore:
     FAMILY_PREFIXES = {
-        "auth": ("login", "login_failed", "logout"),
+        # token_* (jetons d'API personnels) : cycle de vie d'identifiant → famille auth
+        # (rétention des événements de sécurité, pas la rétention par défaut « other »).
+        "auth": ("login", "login_failed", "logout", "token_"),
         "job": ("job_", "queue_", "schedule_"),
         "lexicon": ("lexicon_",),
         "voice": ("voice_",),
-        "config": ("config_", "user_", "group_", "audit_", "meeting_type_"),
+        "config": ("config_", "user_", "group_", "audit_", "meeting_type_", "maintenance_"),
     }
 
 
