@@ -45,13 +45,24 @@ transcria/
 │   ├── diagnostics/               # doctor.py — préflight GPU-free (config, schéma DB, LLM, opencode, nœuds, dossiers) ; `--llm-smoke` opt-in = test réel opencode→LLM→texte
 │   ├── logging_setup.py           # Configuration logging (RotatingFileHandler)
 │   │
-│   ├── auth/                      # Authentification & rôles
+│   ├── auth/                      # Authentification, rôles & identité d'entreprise
 │   │   ├── __init__.py
-│   │   ├── models.py              # User, Group, GroupMembership, Role, GroupRole
+│   │   ├── models.py              # User (+identity_source/external_subject), Group, GroupMembership, Role, GroupRole, ApiToken
 │   │   ├── groups.py              # GroupStore (CRUD groupes, membres, droits admin groupe)
-│   │   ├── store.py               # UserStore (CRUD utilisateurs, count_users, ensure_admin)
+│   │   ├── store.py               # UserStore (CRUD, count_users, ensure_admin, get_by_external)
 │   │   ├── permissions.py         # Permission enum, _ROLE_PERMISSIONS, @requires()
-│   │   └── routes.py              # Routes /login, /logout, /admin/users, /admin/groups
+│   │   ├── rate_limit.py          # login_rate_limiter (anti-bourrinage, clé sur remote_addr)
+│   │   ├── api_tokens.py          # jetons d'API personnels tia_ (Bearer sur les routes ⭐)
+│   │   ├── identity/              # backends d'identité enfichables (GESTION_IDENTITE.md)
+│   │   │   ├── base.py            # FederatedIdentity, IdentityUnavailable, PasswordBackend
+│   │   │   ├── __init__.py        # get_password_backend / get_identity_backend (dispatch)
+│   │   │   ├── local.py           # LocalBackend (défaut historique)
+│   │   │   ├── oidc.py            # connecteur OIDC (Authlib, PKCE) — différé
+│   │   │   ├── proxy.py           # connecteur proxy de confiance (Remote-User)
+│   │   │   ├── ldap.py            # connecteur LDAP/AD (LDAPS, escape_filter_chars) — différé
+│   │   │   ├── mapping.py         # mapping groupes→rôle (pur, commun)
+│   │   │   └── jit.py             # provisionnement JIT (source,subject ; rôle remplacé ; veto)
+│   │   └── routes.py              # /login, /auth/oidc/*, /auth/proxy/login, /logout, /admin/users, /account/tokens
 │   │
 │   ├── jobs/                      # Gestion des traitements
 │   │   ├── __init__.py

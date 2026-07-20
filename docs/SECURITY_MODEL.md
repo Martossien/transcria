@@ -38,7 +38,10 @@ ou `@login_required` ; les tests RBAC couvrent les refus (403) par rôle.
   (`auth.session_lifetime_hours`) — plus de session « jusqu'à fermeture du
   navigateur » imprévisible.
 - **Anti-bourrinage** (`transcria/auth/rate_limit.py`) : 5 échecs par (IP, identifiant)
-  en 5 min → blocage 5 min (429), journalisé en audit (`login_failed` avec motif). En
+  en 5 min → blocage 5 min (429), journalisé en audit (`login_failed` avec motif). La
+  clé repose sur l'**adresse socket** (`request.remote_addr`), JAMAIS sur
+  `X-Forwarded-For` — cet en-tête est client-contrôlé, le faire varier à chaque
+  tentative contournerait le seuil (revue de sécurité, chantier identité). En
   mono-process (déploiement local) le compteur est global ; en multi-process chaque
   worker a le sien (le blocage reste efficace, une même IP se répartit mal).
 - **Échecs de connexion journalisés** (`AuditAction.LOGIN_FAILED`, avec identifiant tenté).
@@ -88,3 +91,36 @@ handlers vers des écouteurs délégués, puis poser une CSP restrictive.
   `600`, propriété de l'utilisateur du service.
 - **Sauvegardes chiffrées au repos** si le disque n'est pas déjà chiffré (les archives
   contiennent config + données).
+
+## 6. Identité d'entreprise (SSO, LDAP/AD, proxy) et jetons d'API
+
+Le portail délègue l'authentification à un fournisseur d'entreprise selon
+`auth.backend` (`docs/GESTION_IDENTITE.md`). Le défaut `local` (comptes du
+portail) ne change pas ; les backends fédérés sont opt-in.
+
+- **Backends** : `oidc` (Authorization Code + PKCE, validation `iss`/`aud`/`exp`/`nonce`,
+  aucun refresh token stocké), `proxy` (en-têtes `Remote-User`/`Remote-Groups` crus
+  UNIQUEMENT depuis l'adresse socket ∈ `auth.proxy.trusted_ips`, jamais
+  `X-Forwarded-For`), `ldap` (LDAP/Active Directory : LDAPS ou StartTLS
+  **obligatoire** avec certificat vérifié — en clair refusé au boot sauf
+  `allow_plaintext` ; entrée échappée `escape_filter_chars` anti-injection ; mot de
+  passe vide refusé avant tout bind ; le compte de service lit, le bind utilisateur
+  prouve le mot de passe).
+- **Provisionnement JIT** commun : rapprochement sur `(source, external_subject)`
+  jamais l'email ; rôle **REMPLACÉ** à chaque login via `role_mapping` (premier match,
+  égalité stricte, `default: deny|viewer` — jamais d'élévation implicite) ;
+  `is_active=False` local est un **veto** ; un refus de mapping est audité AVEC les
+  groupes reçus, l'utilisateur ne voit qu'un message générique (anti-énumération).
+- **Comptes fédérés sans mot de passe local** : `password_hash` sentinelle inutilisable
+  → `check_password` faux par construction ; `change_password`/`reset-admin-password`
+  refusent si `identity_source != local`.
+- **Break-glass** : le formulaire local reste servi sur `/login?local=1` (comptes
+  locaux uniquement) ; le préflight `doctor` met en **FAIL** un backend fédéré actif
+  sans admin local actif (sinon une panne du fournisseur verrouille tout le monde).
+- **Jetons d'API personnels** (`tia_<id>_<secret>`) : seul le SHA-256 du secret en base
+  (comparaison à temps constant `hmac.compare_digest`), révocation/expiration honorées,
+  acceptés via `Authorization: Bearer` sur les routes du contrat scriptable ⭐
+  UNIQUEMENT, sans émettre de cookie ; le jeton porte les permissions de son
+  propriétaire, jamais plus, et meurt avec la désactivation du compte.
+- **Coût nul pour les installations locales** : `authlib` (oidc) et `ldap3` (ldap) sont
+  importés de façon différée — jamais chargés en backend `local`.

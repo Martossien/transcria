@@ -16,8 +16,15 @@
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date de création |
 | `last_login` | DateTime | nullable | Dernière connexion |
 | `locale` | String(8) | nullable | Langue préférée de l'INTERFACE (BCP-47 court, ex. `fr`/`en`) ; NULL = suivre le navigateur / la locale de l'instance — distinct de la langue des livrables (réglage par job), cf. `I18N_MULTILANGUE.md` |
+| `identity_source` | String(16) | NOT NULL, default/server_default="local" | Provenance du compte (chantier identité, `GESTION_IDENTITE.md`) : `local` (mot de passe local) ou `oidc`/`proxy`/`ldap` (fédéré). Les chemins mot-de-passe (change_password, reset CLI) refusent si ≠ `local` |
+| `external_subject` | String(255) | nullable | Identifiant STABLE chez le fournisseur (sub OIDC, objectGUID AD, Remote-User) — clé de rapprochement JIT, jamais l'email |
+| `last_identity_sync` | DateTime | nullable | Dernière resynchronisation des attributs au login fédéré |
 
-**Relations :** `User.jobs` → liste de jobs (backref)
+**Index :** `ix_users_identity_external` — unique PARTIEL sur `(identity_source, external_subject)` où `external_subject IS NOT NULL` (un sujet externe = un compte par source ; les comptes locaux, sujet NULL, sont hors index).
+
+**Relations :** `User.jobs` → liste de jobs (backref) ; `User.api_tokens` → jetons d'API personnels
+
+Note : les comptes fédérés portent un `password_hash` INUTILISABLE (`!federated-account-no-local-password`) — `check_password` est faux par construction ; ils s'authentifient chez le fournisseur (OIDC/proxy/LDAP), jamais par le formulaire local.
 
 ### Table `groups`
 
@@ -41,6 +48,24 @@
 | `created_at` | DateTime | NOT NULL, default=utcnow | Date d'ajout |
 
 **Contraintes :** unicité `(group_id, user_id)`.
+
+### Table `api_tokens`
+
+Jetons d'API personnels (chantier identité lot 4, `GESTION_IDENTITE.md` §3.8). Format servi une seule fois `tia_<token_id>_<secret>` ; seul le SHA-256 du secret est stocké.
+
+| Colonne | Type | Contraintes | Description |
+|---|---|---|---|
+| `id` | String(36) | PK, default=uuid4 | Identifiant unique |
+| `user_id` | String(36) | FK → users.id (ON DELETE CASCADE), NOT NULL, INDEX | Propriétaire du jeton |
+| `token_id` | String(16) | UNIQUE, NOT NULL, INDEX | Partie PUBLIQUE du jeton (lookup O(1)) |
+| `secret_hash` | String(64) | NOT NULL | SHA-256 du secret (comparaison `hmac.compare_digest`) |
+| `label` | String(80) | NOT NULL, default="" | Nom donné par l'utilisateur |
+| `created_at` | DateTime | NOT NULL | Date de création |
+| `expires_at` | DateTime | nullable | Expiration optionnelle |
+| `last_used_at` | DateTime | nullable | Dernier usage (mis à jour au plus 1×/min) |
+| `revoked_at` | DateTime | nullable | Révocation SOFT (la trace d'audit survit) |
+
+Le jeton est accepté via `Authorization: Bearer tia_…` sur les routes du contrat scriptable ⭐ uniquement, et porte les permissions de son propriétaire — jamais plus.
 
 **Relations :** `GroupMembership.group` → Group, `GroupMembership.user` → User.
 
