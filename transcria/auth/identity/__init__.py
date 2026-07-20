@@ -22,7 +22,7 @@ __all__ = [
     "identity_backend_name",
 ]
 
-_IMPLEMENTED = {"local", "oidc", "proxy"}  # étendu lot par lot : ldap (2)
+_IMPLEMENTED = {"local", "oidc", "proxy", "ldap"}
 
 
 def identity_backend_name(config: dict) -> str:
@@ -32,11 +32,18 @@ def identity_backend_name(config: dict) -> str:
 def get_password_backend(config: dict) -> PasswordBackend:
     """Backend du FORMULAIRE identifiant/mot de passe.
 
-    Pour les backends SANS mot de passe (oidc, proxy), le formulaire reste la
-    voie LOCALE — c'est le break-glass du plan (§3.9) : les comptes fédérés y
-    échouent PAR CONSTRUCTION (hachage inutilisable), seuls les comptes locaux
-    passent. Le lot 2 (ldap) sera le premier à retourner autre chose."""
+    - ``ldap`` : le formulaire vérifie les identifiants contre l'annuaire et
+      retourne une ``FederatedIdentity`` (la route la provisionne en JIT) ;
+    - ``local``/``oidc``/``proxy`` : le formulaire reste la voie LOCALE. Pour
+      oidc/proxy c'est le break-glass du plan (§3.9) — les comptes fédérés y
+      échouent PAR CONSTRUCTION (hachage inutilisable), seuls les comptes locaux
+      passent. Le break-glass d'un backend ldap actif passe, lui, par
+      ``?local=1`` que la route résout explicitement vers ``LocalBackend``."""
     name = identity_backend_name(config)
+    if name == "ldap":
+        from transcria.auth.identity.ldap import LdapBackend  # différé : ldap3
+
+        return LdapBackend(config)
     if name in ("local", "oidc", "proxy"):
         return LocalBackend()
     raise ValueError(f"auth.backend='{name}' non disponible pour le formulaire local.")
@@ -44,8 +51,11 @@ def get_password_backend(config: dict) -> PasswordBackend:
 
 def get_identity_backend(config: dict):
     name = identity_backend_name(config)
-    if name == "local":
-        return LocalBackend()
+    if name in ("local", "ldap"):
+        # local et ldap sont des backends à MOT DE PASSE : leur flux vit dans la
+        # route login via get_password_backend — on délègue (LdapBackend pour ldap,
+        # LocalBackend pour local) plutôt que de dupliquer la résolution.
+        return get_password_backend(config)
     if name == "oidc":
         # OIDC n'est pas un backend à mot de passe : son flux vit dans les routes
         # /auth/oidc/* — résoudre ici sert aux gardes (backend actif et valide).

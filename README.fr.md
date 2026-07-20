@@ -223,6 +223,13 @@ que de vraies personnes partagent l'outil, semaine après semaine.
 - **Rôles et groupes.** Quatre rôles (admin, manager, opérateur, lecteur) et des groupes
   avec leurs propres admins ; jobs, lexiques et types de réunion se partagent à un groupe
   ou à toute l'installation.
+- **Identité d'entreprise (SSO).** Authentification unique optionnelle via OIDC (Keycloak,
+  Entra ID…), un proxy d'authentification (Authelia, oauth2-proxy) ou LDAP / Active
+  Directory en direct — avec provisionnement à la volée et mapping groupes→rôles,
+  configurable depuis l'interface d'administration. Des jetons d'API personnels permettent
+  aux scripts d'utiliser l'API stable. Les comptes locaux restent le défaut et un accès
+  local de secours est toujours disponible
+  ([docs/GESTION_IDENTITE.md](docs/GESTION_IDENTITE.md)).
 - **Lexiques centraux.** Des glossaires partagés, à portée de groupe, que les admins
   entretiennent et que les utilisateurs appliquent. Un terme validé sur un job peut être
   promu dans un lexique central, pour que toute l'organisation écrive « SIRET » ou un

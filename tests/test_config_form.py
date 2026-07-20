@@ -181,6 +181,15 @@ class TestSectionIdentiteSSO:
         assert 'name="auth.backend"' in body
         assert 'name="auth.oidc.issuer"' in body
         assert 'name="auth.role_mapping.rules"' in body   # textarea des règles
+        # Champs LDAP (lot 2) présents dans la même section, secret de service masqué.
+        assert 'name="auth.ldap.servers"' in body
+        assert 'name="auth.ldap.bind_mode"' in body
+        assert 'name="auth.ldap.service_password"' in body
+
+    def test_secret_service_ldap_masque(self):
+        assert "auth.ldap.service_password" in secret_paths(CONFIG_FORM_SECTIONS)
+        cfg = {"auth": {"ldap": {"service_password": "topsecret"}}}
+        assert display_values(cfg, CONFIG_FORM_SECTIONS)["auth.ldap.service_password"] == SECRET_SENTINEL
 
 
 class TestChampNullable:

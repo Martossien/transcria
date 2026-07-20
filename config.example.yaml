@@ -88,13 +88,25 @@ auth:
   #   user_header: "Remote-User"
   #   groups_header: "Remote-Groups" # groupes séparés par des virgules
   #   auto_login: true               # false: bouton sur la page de connexion
-  # role_mapping:                    # commun oidc/proxy
-  #   claim: groups                  # OIDC seulement (proxy lit groups_header)
-  #   rules:
+  # ── Variante LDAP / Active Directory direct ──
+  # backend: ldap
+  # ldap:
+  #   servers: ["ldaps://dc1.corp.example", "ldaps://dc2.corp.example"]  # essayés dans l'ordre (HA)
+  #   use_ssl: true                  # LDAPS obligatoire (sinon poser allow_plaintext: true)
+  #   bind_mode: service             # service (recommandé AD) | direct
+  #   service_dn: "CN=svc-transcria,OU=Services,DC=corp,DC=example"
+  #   service_password_env: "TRANSCRIA_LDAP_PASSWORD"   # export dans .env / systemd
+  #   base_dn: "DC=corp,DC=example"
+  #   user_filter: "(&(objectClass=user)(sAMAccountName={username}))"  # {username} échappé
+  #   resolve_nested_groups: false   # true = suit les groupes imbriqués (plus coûteux)
+  #   # tls_ca_file: "/etc/ssl/certs/corp-ca.pem"       # CA interne si besoin
+  # role_mapping:                    # commun oidc/proxy/ldap
+  #   claim: groups                  # OIDC seulement (proxy lit groups_header, LDAP lit memberOf)
+  #   rules:                         # LDAP : écrire les DN de groupes complets
   #     - {group: "transcria-admins", role: admin}
-  #     - {group: "transcria-utilisateurs", role: operator}
+  #     - {group: "CN=Transcria Users,OU=Apps,DC=corp,DC=example", role: operator}
   #   default: deny                  # sans groupe mappé: refus (audité)
-  # Secours (IdP en panne): /login?local=1 + reset-admin-password (CLI maintenance)
+  # Secours (IdP/annuaire en panne): /login?local=1 + reset-admin-password (CLI maintenance)
 
 services:
   # Backend de la LLM d'arbitrage. Absent/omis = auto-détection rétro-compatible

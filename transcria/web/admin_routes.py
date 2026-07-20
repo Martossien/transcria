@@ -58,6 +58,9 @@ def _config_for_display(cfg: dict) -> dict:
     oidc_cfg = auth_cfg.get("oidc") if isinstance(auth_cfg, dict) else None
     if isinstance(oidc_cfg, dict) and oidc_cfg.get("client_secret"):
         oidc_cfg["client_secret"] = CONFIG_SECRET_SENTINEL
+    ldap_cfg = auth_cfg.get("ldap") if isinstance(auth_cfg, dict) else None
+    if isinstance(ldap_cfg, dict) and ldap_cfg.get("service_password"):
+        ldap_cfg["service_password"] = CONFIG_SECRET_SENTINEL
     return display_cfg
 
 
@@ -70,6 +73,9 @@ def _restore_masked_config_secrets(submitted: dict, current_cfg: dict) -> dict:
     oidc_cfg = auth_cfg.get("oidc") if isinstance(auth_cfg, dict) else None
     if isinstance(oidc_cfg, dict) and oidc_cfg.get("client_secret") == CONFIG_SECRET_SENTINEL:
         oidc_cfg["client_secret"] = (current_auth.get("oidc", {}) or {}).get("client_secret", "")
+    ldap_cfg = auth_cfg.get("ldap") if isinstance(auth_cfg, dict) else None
+    if isinstance(ldap_cfg, dict) and ldap_cfg.get("service_password") == CONFIG_SECRET_SENTINEL:
+        ldap_cfg["service_password"] = (current_auth.get("ldap", {}) or {}).get("service_password", "")
     return restored
 
 

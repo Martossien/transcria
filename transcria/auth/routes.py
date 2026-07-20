@@ -7,8 +7,9 @@ from flask_login import current_user, login_required, login_user, logout_user
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
-from transcria.auth.identity import get_password_backend, identity_backend_name
-from transcria.auth.identity.base import IdentityUnavailable
+from transcria.auth.identity import LocalBackend, get_password_backend, identity_backend_name
+from transcria.auth.identity.base import FederatedIdentity, IdentityUnavailable
+from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.rate_limit import login_rate_limiter
@@ -61,52 +62,39 @@ def _password_validation_error(password: str, confirmation: str | None = None) -
     return None
 
 
+def _login_page(status: int = 200, *, force_break_glass: bool = False):
+    """Rendu UNIQUE de la page de connexion — la logique d'affichage vit ici pour
+    qu'aucune branche (GET, 401, 403, 503) ne diverge.
+
+    - ``sso_backend`` (oidc/proxy) → bouton de redirection ;
+    - ``ldap`` → formulaire identifiant/mot de passe NATIF (pas un bouton) qui
+      s'authentifie contre l'annuaire ;
+    - ``break_glass`` (secours local) → le formulaire poste vers ``?local=1`` pour
+      forcer le backend LOCAL, quel que soit le backend fédéré actif (§3.9)."""
+    cfg = get_config()
+    backend = identity_backend_name(cfg)
+    local_requested = request.args.get("local") == "1"
+    is_federated = backend in ("oidc", "proxy", "ldap")
+    break_glass = force_break_glass or (is_federated and local_requested)
+    return render_template(
+        "login.html",
+        sso_backend=backend if backend in ("oidc", "proxy") else None,
+        sso_login_endpoint="auth.proxy_login" if backend == "proxy" else "auth.oidc_login",
+        config_button_label=str(((cfg.get("auth", {}) or {}).get("oidc", {}) or {}).get("button_label") or ""),
+        # Formulaire montré : backend local/ldap (natif) OU secours local demandé.
+        show_local_form=(backend in ("local", "ldap")) or break_glass,
+        break_glass=break_glass,
+        # Formulaire NATIF LDAP (identifiants d'entreprise) — ni local, ni secours.
+        directory_login=(backend == "ldap" and not break_glass),
+    ), status
+
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("web.index"))
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
-        # C3.3 — anti-bourrinage : au-delà du seuil, refus temporaire (429) journalisé.
-
-        client_ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                     or request.remote_addr or "?")
-        blocked_s = login_rate_limiter.is_blocked(client_ip, username)
-        if blocked_s > 0:
-            audit_log(AuditAction.LOGIN_FAILED, target_label=username,
-                      details={"reason": "rate_limited", "retry_after_s": blocked_s})
-            flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
-            return render_template("login.html"), 429
-        # Chantier identité lot 0 : la VÉRIFICATION passe par le backend résolu
-        # (local aujourd'hui — comportement extrait à l'identique). Rate-limit,
-        # audit, session et messages restent ICI, communs à tous les backends.
-        user = get_password_backend(get_config()).authenticate(username, password)
-        if user is not None:
-            login_rate_limiter.record_success(client_ip, username)
-            UserStore.record_login(user)
-            session.permanent = True   # applique PERMANENT_SESSION_LIFETIME (C3.3)
-            login_user(user)
-            audit_log(AuditAction.LOGIN)
-            # Premier run convivial : si l'admin se connecte encore avec un mot de
-            # passe par défaut, on déclenche un bandeau l'invitant à le changer (le
-            # mot de passe en clair est dispo ici → pas de hachage supplémentaire).
-            if password in DEFAULT_ADMIN_PASSWORDS:
-                session["default_password_warning"] = True
-            else:
-                session.pop("default_password_warning", None)
-            next_url = request.args.get("next")
-            if next_url and _is_safe_next_url(next_url):
-                return redirect(next_url)
-            return redirect(url_for("web.index"))
-        block_s = login_rate_limiter.record_failure(client_ip, username)
-        audit_log(AuditAction.LOGIN_FAILED, target_label=username,
-                  details={"blocked": bool(block_s)} if block_s else None)
-        if block_s:
-            flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
-            return render_template("login.html"), 429
-        flash(_("Identifiant ou mot de passe incorrect."), "error")
-        return render_template("login.html"), 401
+        return _handle_login_post()
     cfg = get_config()
     backend = identity_backend_name(cfg)
     # Proxy de confiance en auto-login : GET /login part directement au connecteur
@@ -114,14 +102,95 @@ def login():
     if (backend == "proxy" and request.args.get("local") != "1"
             and ((cfg.get("auth", {}) or {}).get("proxy", {}) or {}).get("auto_login", True)):
         return redirect(url_for("auth.proxy_login", next=request.args.get("next")))
-    return render_template(
-        "login.html",
-        sso_backend=backend if backend != "local" else None,
-        sso_login_endpoint="auth.proxy_login" if backend == "proxy" else "auth.oidc_login",
-        config_button_label=str(((cfg.get("auth", {}) or {}).get("oidc", {}) or {}).get("button_label") or ""),
-        # ?local=1 : chemin break-glass — formulaire local affiché malgré le SSO.
-        show_local_form=(backend == "local") or request.args.get("local") == "1",
-    )
+    return _login_page()
+
+
+def _handle_login_post():
+    """POST du formulaire identifiant/mot de passe — commun à local et ldap.
+
+    Backend résolu : ``?local=1`` force le LOCAL (break-glass) ; sinon le backend
+    configuré (LocalBackend pour local/oidc/proxy, LdapBackend pour ldap). Un
+    LdapBackend renvoie une ``FederatedIdentity`` → provisionnement JIT (mapping,
+    rôle, veto) comme les autres connecteurs. Rate-limit, session, audit ici."""
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    # C3.3 — anti-bourrinage : au-delà du seuil, refus temporaire (429) journalisé.
+    # La clé repose sur l'adresse SOCKET (`request.remote_addr`), JAMAIS sur
+    # `X-Forwarded-For` : cet en-tête est client-contrôlé — le faire varier à
+    # chaque tentative contournerait le seuil (devinette de mot de passe illimitée,
+    # y compris contre l'annuaire LDAP). Même posture que le connecteur proxy.
+    # Derrière un reverse-proxy, toutes les tentatives partagent l'IP du proxy ;
+    # la segmentation par identifiant préserve la défense par compte.
+    client_ip = request.remote_addr or "?"
+    if login_rate_limiter.is_blocked(client_ip, username) > 0:
+        audit_log(AuditAction.LOGIN_FAILED, target_label=username, details={"reason": "rate_limited"})
+        flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
+        return _login_page(429)
+
+    force_local = request.args.get("local") == "1"
+    backend = LocalBackend() if force_local else get_password_backend(get_config())
+    try:
+        result = backend.authenticate(username, password)
+    except IdentityUnavailable:
+        # Annuaire injoignable ≠ mauvais identifiants : pas de comptage anti-bruteforce,
+        # message dédié + secours local (le break-glass reste la porte de sortie).
+        audit_log(AuditAction.LOGIN_FAILED, target_label=username,
+                  details={"reason": "directory_unavailable"})
+        flash(_("Annuaire d'entreprise indisponible. Réessayez plus tard ou utilisez "
+                "le compte local de secours."), "error")
+        return _login_page(503, force_break_glass=True)
+
+    # Backend fédéré à mot de passe (ldap) : identité vérifiée → provisionnement JIT.
+    user = result
+    matched_group = None
+    if isinstance(result, FederatedIdentity):
+        try:
+            user, decision = provision_federated(result, get_config())
+            matched_group = decision.matched_group
+        except FederatedLoginDenied as exc:
+            # Le mot de passe était BON mais l'accès est refusé par le mapping : on
+            # ne pénalise pas l'utilisateur (record_success), l'admin voit les groupes.
+            login_rate_limiter.record_success(client_ip, username)
+            audit_log(AuditAction.LOGIN_FAILED, target_label=username,
+                      details={"reason": "role_mapping_denied",
+                               "received_groups": list(exc.decision.received_groups) if exc.decision else []})
+            flash(_("Accès non attribué : contactez votre administrateur."), "error")
+            return _login_page(403)
+
+    if user is not None:
+        login_rate_limiter.record_success(client_ip, username)
+        UserStore.record_login(user)
+        session.permanent = True   # applique PERMANENT_SESSION_LIFETIME (C3.3)
+        login_user(user)
+        source = getattr(user, "identity_source", "local")
+        audit_log(AuditAction.LOGIN,
+                  details={"source": source, "matched_group": matched_group} if source != "local" else None)
+        # Bandeau « mot de passe par défaut » : concept LOCAL uniquement (un compte
+        # fédéré n'a pas de mot de passe local et ne peut pas être « par défaut »).
+        if source == "local" and password in DEFAULT_ADMIN_PASSWORDS:
+            session["default_password_warning"] = True
+        else:
+            session.pop("default_password_warning", None)
+        next_url = request.args.get("next")
+        if next_url and _is_safe_next_url(next_url):
+            return redirect(next_url)
+        return redirect(url_for("web.index"))
+
+    block_s = login_rate_limiter.record_failure(client_ip, username)
+    details: dict = {}
+    if block_s:
+        details["blocked"] = True
+    # Cause AD précise (compte désactivé/expiré/verrouillé…) pour l'audit admin ;
+    # l'utilisateur ne verra qu'un message générique (anti-énumération).
+    ldap_reason = getattr(backend, "last_failure_reason", None)
+    if ldap_reason:
+        details["ldap_reason"] = ldap_reason
+    audit_log(AuditAction.LOGIN_FAILED, target_label=username, details=details or None)
+    if block_s:
+        flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
+        return _login_page(429)
+    flash(_("Identifiant ou mot de passe incorrect."), "error")
+    return _login_page(401)
 
 
 @auth_bp.route("/auth/oidc/login")
@@ -157,7 +226,6 @@ def oidc_callback():
     from authlib.integrations.base_client.errors import OAuthError
 
     from transcria.auth.identity import oidc as oidc_mod
-    from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
     from transcria.config import get_config
 
     # Déjà connecté (double-clic, callback rejoué après login) : pas de re-JIT ni
@@ -209,7 +277,6 @@ def proxy_login():
     confiance qui PORTE les en-têtes est journalisée (usurpation possible) et
     refusée ; le formulaire local reste le secours."""
     from transcria.auth.identity import proxy as proxy_mod
-    from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
 
     if current_user.is_authenticated:
         return redirect(url_for("web.index"))

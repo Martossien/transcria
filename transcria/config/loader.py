@@ -63,6 +63,18 @@ _DEFAULT_CONFIG = {
              "proxy": {"trusted_ips": [], "user_header": "Remote-User",
                        "groups_header": "Remote-Groups", "name_header": "Remote-Name",
                        "email_header": "Remote-Email", "auto_login": True},
+             # LDAP / Active Directory direct : canal chiffré obligatoire (LDAPS ou
+             # StartTLS) sauf allow_plaintext explicite ; le compte de service lit,
+             # l'utilisateur prouve son mot de passe (docs/GESTION_IDENTITE.md §3.4).
+             "ldap": {"servers": [], "use_ssl": True, "start_tls": False,
+                      "allow_plaintext": False, "tls_ca_file": "",
+                      "bind_mode": "service", "service_dn": "", "service_password": "",
+                      "service_password_env": "", "base_dn": "",
+                      "user_filter": "(&(objectClass=user)(sAMAccountName={username}))",
+                      "user_dn_template": "", "id_attr": "objectGUID",
+                      "username_attr": "sAMAccountName", "display_name_attr": "displayName",
+                      "email_attr": "mail", "resolve_nested_groups": False,
+                      "connect_timeout_s": 5, "receive_timeout_s": 10},
              # Mapping groupes fédérés → rôle (commun oidc/proxy/ldap) — défaut deny.
              "role_mapping": {"claim": "groups", "rules": [], "default": "deny"}},
     "gpu": {

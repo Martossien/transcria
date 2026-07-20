@@ -26,7 +26,13 @@
     {% endif %}
     {% endif %}
     {% if show_local_form or not sso_backend %}
-    <form method="POST" action="/login">
+    {% if directory_login %}
+    <p class="text-muted small text-center mb-3">
+      <i class="bi bi-building me-1"></i>{{ _("Connectez-vous avec vos identifiants d'entreprise.") }}
+    </p>
+    {% endif %}
+    {# Break-glass : le formulaire poste vers ?local=1 pour forcer le backend local. #}
+    <form method="POST" action="{{ url_for('auth.login', local=1) if break_glass|default(false) else url_for('auth.login') }}">
       <div class="mb-3">
         <label for="username" class="form-label">{{ _("Nom d'utilisateur") }}</label>
         <input type="text" class="form-control" id="username" name="username" required autofocus>

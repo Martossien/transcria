@@ -179,8 +179,9 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
 
 ### SSO d'entreprise (post-0.3.8.1)
 
-Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC ou un
-proxy d'authentification (Authelia, oauth2-proxy — `auth.backend: proxy`), voir
+Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC, un
+proxy d'authentification (Authelia, oauth2-proxy — `auth.backend: proxy`) ou un
+annuaire LDAP / Active Directory en direct (`auth.backend: ldap`), voir
 `docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md` ;
 tout est aussi configurable depuis Administration → Configuration. Les jetons
 d'API personnels (`tia_…`, page « Mon compte ») arrivent avec la migration

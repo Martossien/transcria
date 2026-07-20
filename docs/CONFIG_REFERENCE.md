@@ -133,6 +133,34 @@ Le doctor émet un WARN si `trusted_ips` contient un réseau très large (ex.
 identité. Le proxy DOIT écraser les en-têtes entrants (`proxy_set_header` —
 jamais de passthrough), cf. le guide dans `docs/INSTALL.md`.
 
+#### `auth.ldap` (backend `ldap` uniquement — LDAP / Active Directory direct, lot 2 GESTION_IDENTITE)
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `servers` | list | `[]` | Contrôleurs, ex. `["ldaps://dc1.corp", "ldaps://dc2.corp"]`. Essayés dans l'ordre (bascule si injoignable). REQUIS si `backend: ldap` |
+| `use_ssl` | bool | `true` | LDAPS (port 636). Le certificat serveur est **vérifié** (jamais de TLS décoratif) |
+| `start_tls` | bool | `false` | StartTLS sur une connexion `ldap://` (alternative à LDAPS) |
+| `allow_plaintext` | bool | `false` | Autorise un canal NON chiffré. Sans lui, un annuaire ni LDAPS ni StartTLS est REFUSÉ au boot (le mot de passe transiterait en clair) |
+| `tls_ca_file` | string | `""` | Fichier PEM d'une autorité de certification interne (sinon le magasin système) |
+| `bind_mode` | string | `"service"` | `service` (compte de service + recherche, recommandé AD) ou `direct` (bind via gabarit de DN) |
+| `service_dn` | string | `""` | DN du compte de service (lecture). Requis en `bind_mode: service` |
+| `service_password` | string | `""` | Mot de passe du compte de service — préférer `service_password_env` |
+| `service_password_env` | string | `""` | Nom d'une variable d'environnement portant le mot de passe (prioritaire ; jamais en clair dans les logs) |
+| `base_dn` | string | `""` | Racine de recherche des comptes. Requis en `bind_mode: service` |
+| `user_filter` | string | `"(&(objectClass=user)(sAMAccountName={username}))"` | Filtre de recherche ; doit contenir `{username}` (ÉCHAPPÉ automatiquement contre l'injection LDAP) |
+| `user_dn_template` | string | `""` | Gabarit de DN/UPN en `bind_mode: direct`, ex. `{username}@corp.example`. Requis en mode direct |
+| `id_attr` | string | `"objectGUID"` | Attribut de l'identifiant STABLE (subject) — survit aux renommages. `objectGUID` (AD) ou `entryUUID` (OpenLDAP) |
+| `username_attr` | string | `"sAMAccountName"` | Attribut du nom de connexion |
+| `display_name_attr` | string | `"displayName"` | Attribut du nom d'affichage |
+| `email_attr` | string | `"mail"` | Attribut de l'email |
+| `resolve_nested_groups` | bool | `false` | `true` = appartenance transitive via la règle en chaîne AD (`1.2.840.113556.1.4.1941`) — plus complet, plus coûteux |
+| `connect_timeout_s` | int | `5` | Délai de connexion à un contrôleur |
+| `receive_timeout_s` | int | `10` | Délai de réception d'une réponse |
+
+En LDAP, `auth.role_mapping.rules` compare les **DN de groupes** (`memberOf`) —
+écrire les DN complets, l'égalité est stricte. Le doctor sonde chaque contrôleur
+et signale un canal non chiffré. Break-glass local : `/login?local=1`.
+
 #### `auth.role_mapping` (commun aux backends fédérés)
 
 | Paramètre | Type | Défaut | Description |

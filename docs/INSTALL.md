@@ -2053,6 +2053,61 @@ l'identité dans ses en-têtes (`backend: proxy`, cf. le bloc commenté de
 `/login?local=1`. À la déconnexion du portail, la session du PROXY survit :
 l'interface l'explique et la vraie déconnexion se fait chez le proxy.
 
+### LDAP / Active Directory direct
+
+À réserver aux sites qui n'ont **ni** fournisseur OIDC **ni** proxy devant leur
+annuaire : dans la majorité des cas, Keycloak devant l'AD (ci-dessus) ou Entra
+ID sont plus simples et plus sûrs. Le connecteur direct existe pour les
+déploiements qui l'exigent (`backend: ldap`, cf. le bloc commenté de
+`config.example.yaml`).
+
+**Deux modes de connexion :**
+
+- `bind_mode: service` (recommandé AD) — un compte de service *en lecture seule*
+  recherche l'utilisateur puis on valide son mot de passe par un bind jetable.
+  Le compte de service lit les attributs et les groupes ; l'utilisateur ne fait
+  que prouver son mot de passe.
+- `bind_mode: direct` — bind direct via `user_dn_template` (ex.
+  `{username}@corp.example` en UPN, ou un gabarit de DN). Plus simple, sans
+  compte de service, mais les groupes ne sont lus que si `base_dn` est fourni.
+
+**Points de sécurité à respecter :**
+
+1. **Canal chiffré obligatoire.** `use_ssl: true` (LDAPS, port 636) ou
+   `start_tls: true`. Un annuaire en clair est refusé au démarrage sauf
+   `allow_plaintext: true` posé explicitement — à éviter absolument en
+   production (les mots de passe transiteraient en clair). Le certificat du
+   contrôleur est **vérifié** ; fournissez `tls_ca_file` pour une CA interne.
+2. **Secret hors du fichier.** Préférez `service_password_env` (nom d'une
+   variable d'environnement) à `service_password` en clair.
+3. **Haute disponibilité.** Listez plusieurs contrôleurs dans `servers` : ils
+   sont essayés dans l'ordre, avec bascule si le premier est injoignable.
+4. **Mapping par DN de groupe.** En LDAP, `role_mapping.rules` compare les
+   valeurs `memberOf` — écrivez les **DN de groupes complets**
+   (`CN=…,OU=…,DC=…`), l'égalité est stricte. `resolve_nested_groups: true`
+   suit l'appartenance transitive (règle en chaîne AD, plus coûteuse).
+
+Exemple minimal `config.yaml` (mode service, Active Directory) :
+
+```yaml
+auth:
+  backend: ldap
+  ldap:
+    servers: ["ldaps://dc1.corp.example"]
+    service_dn: "CN=svc-transcria,OU=Services,DC=corp,DC=example"
+    service_password_env: "TRANSCRIA_LDAP_PASSWORD"
+    base_dn: "DC=corp,DC=example"
+    user_filter: "(&(objectClass=user)(sAMAccountName={username}))"
+  role_mapping:
+    rules:
+      - {group: "CN=Transcria Admins,OU=Groups,DC=corp,DC=example", role: admin}
+    default: deny
+```
+
+Vérifiez avec `venv/bin/python scripts/doctor.py` (le contrôle « Backend
+d'identité » sonde chaque contrôleur et rappelle qu'un admin local de secours
+doit exister). Le break-glass reste `/login?local=1`.
+
 ## Jetons d'API personnels (scripts)
 
 Chaque utilisateur crée ses jetons dans **Mon compte → Jetons d'API** (menu en

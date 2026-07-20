@@ -135,11 +135,11 @@ CONFIG_FORM_SECTIONS: list[dict] = [
                    "secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."),
         "fields": [
             {"path": "auth.backend", "label": _l("Backend d'identité"), "type": "select",
-             "options": ["local", "oidc", "proxy"],
+             "options": ["local", "oidc", "proxy", "ldap"],
              "help": _l("local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. "
                         "proxy : identité fournie par un proxy d'authentification frontal "
-                        "(Authelia, oauth2-proxy…). Renseignez les champs correspondants "
-                        "avant d'activer.")},
+                        "(Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory "
+                        "en direct. Renseignez les champs correspondants avant d'activer.")},
             {"path": "auth.oidc.issuer", "label": _l("Émetteur (issuer)"), "type": "text",
              "help": _l("URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise "
                         "(la découverte /.well-known est automatique).")},
@@ -166,8 +166,39 @@ CONFIG_FORM_SECTIONS: list[dict] = [
             {"path": "auth.proxy.auto_login", "label": _l("Connexion automatique via le proxy"), "type": "bool",
              "help": _l("Activée : /login connecte directement depuis les en-têtes. "
                         "Désactivée : la page affiche un bouton de connexion.")},
+            {"path": "auth.ldap.servers", "label": _l("Contrôleurs LDAP/AD"), "type": "csv",
+             "help": _l("Backend ldap : un ou plusieurs contrôleurs, ex. ldaps://dc1.corp, "
+                        "ldaps://dc2.corp (essayés dans l'ordre pour la haute disponibilité). "
+                        "LDAPS (ldaps://) fortement recommandé.")},
+            {"path": "auth.ldap.use_ssl", "label": _l("LDAPS (TLS)"), "type": "bool",
+             "help": _l("Chiffre la liaison à l'annuaire. À désactiver seulement avec "
+                        "auth.ldap.allow_plaintext en connaissance de cause (mot de passe en clair).")},
+            {"path": "auth.ldap.bind_mode", "label": _l("Mode de connexion LDAP"), "type": "select",
+             "options": ["service", "direct"],
+             "help": _l("service (recommandé AD) : un compte de service recherche l'utilisateur "
+                        "puis on valide son mot de passe. direct : bind direct via un gabarit de DN.")},
+            {"path": "auth.ldap.service_dn", "label": _l("DN du compte de service"), "type": "text",
+             "help": _l("Mode service : compte de lecture de l'annuaire, ex. "
+                        "CN=svc-transcria,OU=Services,DC=corp,DC=example.")},
+            {"path": "auth.ldap.service_password", "label": _l("Mot de passe du compte de service"),
+             "type": "password", "secret": True,
+             "help": _l("Laissez vide si fourni par variable d'environnement.")},
+            {"path": "auth.ldap.service_password_env", "label": _l("Variable d'environnement du mot de passe de service"),
+             "type": "text",
+             "help": _l("Nom d'une variable d'environnement portant le mot de passe — prioritaire, "
+                        "évite le secret en clair dans config.yaml.")},
+            {"path": "auth.ldap.base_dn", "label": _l("Base de recherche (base DN)"), "type": "text",
+             "help": _l("Racine de recherche des comptes, ex. DC=corp,DC=example.")},
+            {"path": "auth.ldap.user_filter", "label": _l("Filtre de recherche utilisateur"), "type": "text",
+             "help": _l("Doit contenir {username} (échappé automatiquement). AD : "
+                        "(&(objectClass=user)(sAMAccountName={username})).")},
+            {"path": "auth.ldap.resolve_nested_groups", "label": _l("Résoudre les groupes imbriqués (AD)"),
+             "type": "bool",
+             "help": _l("Suit l'appartenance transitive des groupes (règle en chaîne AD). "
+                        "Plus complet mais plus coûteux — laisser désactivé si non nécessaire.")},
             {"path": "auth.role_mapping.claim", "label": _l("Claim des groupes"), "type": "text",
-             "help": _l("Nom du claim OIDC portant les groupes (généralement « groups »).")},
+             "help": _l("Nom du claim OIDC portant les groupes (généralement « groups »). "
+                        "Ignoré en LDAP (memberOf) et proxy (en-tête des groupes).")},
             {"path": "auth.role_mapping.rules", "label": _l("Règles groupe → rôle"), "type": "group_role_rules",
              "help": _l("Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, "
                         "viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : "

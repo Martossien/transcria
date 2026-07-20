@@ -17,9 +17,9 @@ class TestResolution:
 
     def test_backend_inconnu_refuse_jamais_de_repli(self):
         """Un admin qui croit son SSO actif ne doit JAMAIS servir du local sans le savoir."""
-        # oidc est livré (lot 1) — un backend du futur lot reste refusé :
+        # local/oidc/proxy/ldap sont livrés — un backend inconnu reste refusé :
         with pytest.raises(ValueError, match="non disponible"):
-            get_identity_backend({"auth": {"backend": "ldap"}})
+            get_identity_backend({"auth": {"backend": "saml"}})
         with pytest.raises(ValueError):
             get_identity_backend({"auth": {"backend": "n_importe_quoi"}})
 
@@ -30,7 +30,7 @@ class TestResolution:
         from transcria.config.loader import get_default_config
 
         cfg = deepcopy(get_default_config())
-        cfg["auth"]["backend"] = "ldap"
+        cfg["auth"]["backend"] = "saml"
         result = validate_config(cfg)
         assert any("auth.backend" in e for e in result.errors)
 

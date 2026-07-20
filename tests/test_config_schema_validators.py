@@ -500,3 +500,68 @@ class TestAuthProxyValidation:
     def test_backend_local_ignore_le_bloc_proxy(self):
         result = _validate_mutated(("auth.proxy.trusted_ips", []))
         assert not any("trusted_ips" in e for e in result.errors)
+
+
+class TestAuthLdapValidation:
+    """Chantier identité lot 2 : bloc auth.ldap — requis seulement si backend=ldap."""
+
+    _RULES = [{"group": "g", "role": "admin"}]
+    _OK = {"servers": ["ldaps://dc1.corp"], "service_dn": "cn=svc,dc=corp",
+           "service_password": "pw", "base_dn": "dc=corp"}
+
+    def _mut(self, **ldap):
+        base = dict(self._OK)
+        base.update(ldap)
+        muts = [("auth.backend", "ldap"), ("auth.role_mapping.rules", self._RULES)]
+        muts += [(f"auth.ldap.{k}", v) for k, v in base.items()]
+        return _validate_mutated(*muts)
+
+    def test_servers_vide_refuse(self):
+        assert any("servers requis" in e for e in self._mut(servers=[]).errors)
+
+    def test_canal_en_clair_refuse_sauf_allow_plaintext(self):
+        r = self._mut(servers=["ldap://dc1"], use_ssl=False)
+        assert any("canal non chiffré" in e for e in r.errors)
+        r2 = self._mut(servers=["ldap://dc1"], use_ssl=False, allow_plaintext=True)
+        assert not any("canal non chiffré" in e for e in r2.errors)
+
+    def test_start_tls_suffit_comme_chiffrement(self):
+        r = self._mut(servers=["ldap://dc1"], use_ssl=False, start_tls=True)
+        assert not any("canal non chiffré" in e for e in r.errors)
+
+    def test_service_mode_champs_requis(self):
+        assert any("service_dn requis" in e for e in self._mut(service_dn="").errors)
+        assert any("service_password" in e for e in self._mut(service_password="", service_password_env="").errors)
+        assert any("base_dn requis" in e for e in self._mut(base_dn="").errors)
+
+    def test_service_password_env_suffit(self):
+        r = self._mut(service_password="", service_password_env="LDAP_PW")
+        assert not any("service_password" in e for e in r.errors)
+
+    def test_user_filter_doit_contenir_username(self):
+        assert any("{username}" in e for e in self._mut(user_filter="(cn=fixe)").errors)
+
+    def test_direct_mode_exige_template(self):
+        r = self._mut(bind_mode="direct", user_dn_template="")
+        assert any("user_dn_template" in e for e in r.errors)
+        r2 = self._mut(bind_mode="direct", user_dn_template="{username}@corp")
+        assert not any("user_dn_template" in e for e in r2.errors)
+
+    def test_bind_mode_invalide(self):
+        assert any("bind_mode" in e for e in self._mut(bind_mode="magique").errors)
+
+    def test_config_complete_valide(self):
+        assert not self._mut().errors
+
+    def test_mapping_valide_aussi_pour_ldap(self):
+        r = self._validate_bad_role()
+        assert any("inconnu" in e for e in r.errors)
+
+    def _validate_bad_role(self):
+        muts = [("auth.backend", "ldap"),
+                ("auth.role_mapping.rules", [{"group": "g", "role": "superadmin"}])]
+        muts += [(f"auth.ldap.{k}", v) for k, v in self._OK.items()]
+        return _validate_mutated(*muts)
+
+    def test_backend_local_ignore_le_bloc_ldap(self):
+        assert not any("ldap" in e.lower() for e in _validate_mutated(("auth.ldap.servers", [])).errors)

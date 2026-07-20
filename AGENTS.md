@@ -179,12 +179,22 @@ transcria/
     models_download.py      # téléchargement HF en sous-process détaché + fichier de statut auto-suffisant (progression = du(cible)/total repo)
     logging_setup.py        # StructuredLogger (correlation_id, contexte, rotation)
     auth/
-      models.py             # User, Role, Group, GroupMembership, GroupRole
+      models.py             # User (+ identity_source/external_subject/last_identity_sync), Role, Group, GroupMembership, GroupRole, ApiToken
       permissions.py        # Permission (enum), décorateurs de permission
-      store.py              # UserStore — méthodes statiques
+      store.py              # UserStore — méthodes statiques (dont get_by_external pour le JIT fédéré)
       groups.py             # GroupStore — groupes, membres, admins de groupe
-      routes.py             # auth_bp : /login, /logout, /admin/users, /admin/groups
+      routes.py             # auth_bp : /login (+ /auth/oidc/*, /auth/proxy/login), /logout, /admin/users, /admin/groups, /account/tokens
       rate_limit.py         # login_rate_limiter — anti-bourrinage des connexions (C3.3), singleton process
+      api_tokens.py         # jetons d'API personnels tia_ (sha256 en base, Bearer sur les routes ⭐) — chantier identité lot 4
+      identity/             # chantier identité d'entreprise (docs/GESTION_IDENTITE.md) — backends enfichables
+        base.py             # FederatedIdentity, IdentityUnavailable, PasswordBackend (contrat des 3 issues)
+        __init__.py         # get_password_backend / get_identity_backend (dispatch auth.backend, jamais de repli silencieux)
+        local.py            # LocalBackend — comptes locaux (défaut historique, extrait à l'identique)
+        oidc.py             # connecteur OIDC (Authlib PAR APP, PKCE) — lot 1 ; différé (authlib optionnel)
+        proxy.py            # connecteur proxy de confiance (Remote-User, garde adresse socket) — lot 3
+        ldap.py             # connecteur LDAP/AD (LDAPS, escape_filter_chars, codes AD) — lot 2 ; différé (ldap3 optionnel)
+        mapping.py          # mapping groupes→rôle (PUR, commun oidc/proxy/ldap) — premier match, default deny|viewer
+        jit.py              # provisionnement JIT (rapprochement (source,subject), rôle REMPLACÉ, veto is_active local)
     jobs/
       models.py             # Job, JobState (20 états)
       store.py              # JobStore — méthodes statiques
@@ -752,6 +762,17 @@ Les admins globaux (`Role.ADMIN`) créent, renomment et suppriment les groupes. 
 ### Gestion des mots de passe
 Les utilisateurs authentifiés changent leur propre mot de passe via `/account/password`. La route vérifie le mot de passe actuel, la confirmation et une longueur minimale de 8 caractères. Le reset en cas d'oubli passe par l'admin global dans `/admin/users/<id>/edit`; ne pas ajouter de reset email sans configuration SMTP, tokens expirables et protections anti-abus documentées.
 Si `UserStore.ensure_admin()` crée le premier admin avec `admin-change-me`, `CHANGE-ME` ou un mot de passe vide, un warning doit être logué.
+
+### Identité d'entreprise — backends d'authentification enfichables (docs/GESTION_IDENTITE.md)
+`auth.backend` choisit le connecteur : `local` (défaut, comptes du portail — AUCUNE installation existante ne change de comportement), `oidc` (SSO Authorization Code + PKCE, lot 1), `proxy` (en-têtes `Remote-User` d'un proxy de confiance, lot 3), `ldap` (LDAP/Active Directory direct, lot 2). Tout vit dans `transcria/auth/identity/`. **Règles invariantes, ne jamais les contourner** :
+- **Jamais de repli silencieux** : une valeur de backend inconnue est REFUSÉE (schéma + `get_identity_backend`), jamais rabattue sur `local` — un admin qui croit son SSO actif ne doit pas servir du local à son insu.
+- **Break-glass** : un backend fédéré actif n'éteint pas le compte local. Le formulaire local reste servi sur `/login?local=1` (la route force alors `LocalBackend`) ; le doctor `check_identity_backend` met en **FAIL** un backend fédéré sans admin local actif (sinon une panne du fournisseur verrouille tout le monde dehors). Les comptes fédérés ont un `password_hash` INUTILISABLE (`jit.UNUSABLE_PASSWORD_HASH`) : ils échouent au formulaire local par construction, et `change_password`/`reset-admin-password` refusent si `identity_source != local`.
+- **JIT commun** (`identity/jit.py`) : rapprochement sur `(source, external_subject)` — JAMAIS l'email ni le username ; rôle **REMPLACÉ** à chaque login via `identity/mapping.py` (premier match, égalité stricte, `default: deny|viewer` seulement — jamais d'élévation implicite) ; `is_active=False` local est un **veto** ; collision de username → suffixe `@source`, jamais d'écrasement. Un refus de mapping est audité AVEC les groupes reçus (diagnostic n°1 de l'admin), l'utilisateur ne voit qu'un message générique (anti-énumération).
+- **Backends à mot de passe** (`local`, `ldap`) : passent par le formulaire `/login` via `get_password_backend` ; `local` renvoie un `User`, `ldap` une `FederatedIdentity` provisionnée en JIT par la route. **OIDC/proxy** ne sont PAS des backends à mot de passe : leur flux vit dans `/auth/oidc/*` et `/auth/proxy/login`.
+- **LDAP (lot 2)** : canal chiffré OBLIGATOIRE (LDAPS ou StartTLS ; en clair refusé au boot sauf `allow_plaintext`) ; mot de passe VIDE refusé avant tout bind (anti bind non-authentifié RFC 4513) ; entrée utilisateur ÉCHAPPÉE dans les filtres (`escape_filter_chars` — anti-injection) ; le compte de service LIT, le bind utilisateur ne fait que PROUVER le mot de passe ; `auto_referrals=False` ; codes AD (52e/533/701/775…) distingués pour l'audit admin. Tout ldap3 passe par une fabrique de connexion injectable (tests sans socket).
+- **Proxy (lot 3)** : confiance sur l'adresse SOCKET (`request.remote_addr` ∈ `trusted_ips`), JAMAIS `X-Forwarded-For` (falsifiable) ; le proxy doit ÉCRASER les en-têtes entrants (guide INSTALL). Un en-tête reçu hors `trusted_ips` = WARNING usurpation + refus.
+- **Jetons d'API (lot 4)** : `tia_<token_id>_<secret>`, seul le SHA-256 en base (`hmac.compare_digest`), `Authorization: Bearer` accepté sur les routes ⭐ UNIQUEMENT (décorateur `bearer_token_allowed`, aucun cookie émis), page « Mon compte → Jetons d'API ». Le jeton porte les permissions de son propriétaire, jamais plus.
+- **Coûts d'import** : `authlib` (oidc) et `ldap3` (ldap) sont importés de façon DIFFÉRÉE — une installation en backend local ne les charge jamais (comme les autres différés justifiés, doctrine C5). Toute nouvelle clé `auth.*` doit être classée dans `config_classification.yaml` et, si exposée dans `/admin/config`, ajoutée à `config_form.py` (section « Identité d'entreprise (SSO) »).
 
 ### Pré-remplissage des rôles participants (LLM → section 5)
 La phase summary (LLM d'arbitrage) déduit les rôles de chaque SPEAKER_XX depuis la transcription. Le flux :

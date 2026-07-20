@@ -919,3 +919,31 @@ class TestCheckIdentityBackend:
             {"auth": {"backend": "proxy", "proxy": {"trusted_ips": ["127.0.0.1", "10.0.0.0/24"]}}},
             admin_counter=lambda: 1)
         assert res.status == doc.OK
+
+    def test_ldap_controleur_injoignable_warn(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "ldap", "ldap": {"servers": ["ldaps://dc1.corp"]}}},
+            admin_counter=lambda: 1, ldap_prober=lambda host, port: False)
+        assert res.status == doc.WARN
+        assert "dc1.corp" in res.detail
+
+    def test_ldap_nominal_ok_port_deduit(self):
+        seen = {}
+
+        def prober(host, port):
+            seen["host"], seen["port"] = host, port
+            return True
+
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "ldap", "ldap": {"servers": ["ldaps://dc1.corp"]}}},
+            admin_counter=lambda: 1, ldap_prober=prober)
+        assert res.status == doc.OK
+        assert seen == {"host": "dc1.corp", "port": 636}      # LDAPS → 636 déduit
+
+    def test_ldap_plaintext_signale(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "ldap", "ldap": {"servers": ["ldap://dc1.corp"],
+                                                  "use_ssl": False, "allow_plaintext": True}}},
+            admin_counter=lambda: 1, ldap_prober=lambda host, port: True)
+        assert res.status == doc.WARN
+        assert "clair" in res.detail                          # canal non chiffré signalé

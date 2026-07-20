@@ -4,6 +4,15 @@ _doc: 'Classification des clés de configuration (C2.2, RELEASE_0.2.0). TOUTE cl
 exposed:
 - auth.backend
 - auth.first_admin_password
+- auth.ldap.base_dn
+- auth.ldap.bind_mode
+- auth.ldap.resolve_nested_groups
+- auth.ldap.servers
+- auth.ldap.service_dn
+- auth.ldap.service_password
+- auth.ldap.service_password_env
+- auth.ldap.use_ssl
+- auth.ldap.user_filter
 - auth.oidc.button_label
 - auth.oidc.client_id
 - auth.oidc.client_secret
@@ -62,6 +71,16 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
+- auth.ldap.allow_plaintext
+- auth.ldap.connect_timeout_s
+- auth.ldap.display_name_attr
+- auth.ldap.email_attr
+- auth.ldap.id_attr
+- auth.ldap.receive_timeout_s
+- auth.ldap.start_tls
+- auth.ldap.tls_ca_file
+- auth.ldap.user_dn_template
+- auth.ldap.username_attr
 - auth.oidc.leeway_s
 - auth.oidc.scopes
 - auth.proxy.email_header

@@ -212,6 +212,12 @@ once real people share the tool week after week.
 - **Roles and groups.** Four roles (admin, manager, operator, viewer) and groups with
   their own admins; jobs, lexicons, and meeting types can be shared to a group or to the
   whole install.
+- **Enterprise identity (SSO).** Optional single sign-on through OIDC (Keycloak, Entra
+  ID…), an authentication proxy (Authelia, oauth2-proxy), or LDAP / Active Directory
+  directly — with just-in-time provisioning and group-to-role mapping, configurable from
+  the admin UI. Personal API tokens let scripts drive the stable API. Local accounts stay
+  the default and a break-glass local login is always available
+  ([docs/GESTION_IDENTITE.md](docs/GESTION_IDENTITE.md)).
 - **Central lexicons.** Shared, group-scoped glossaries that admins curate and users
   apply. A term validated on one job can be promoted into a central lexicon, so the whole
   organization spells "SIRET" or an internal acronym the same way next time.

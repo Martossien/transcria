@@ -1351,10 +1351,12 @@ def check_identity_backend(
     *,
     discovery_prober: "Callable[[str], bool] | None" = None,
     admin_counter: "Callable[[], int] | None" = None,
+    ldap_prober: "Callable[[str, int], bool] | None" = None,
 ) -> CheckResult:
     """Chantier identité : backend fédéré actif → IdP joignable ET break-glass garanti.
 
     - découverte OIDC (`{issuer}/.well-known/openid-configuration`) sondée en HTTP ;
+    - LDAP : chaque contrôleur sondé au niveau TCP (host:port ouvert) + rappel LDAPS ;
     - au moins UN admin LOCAL actif doit exister (sinon une panne d'IdP verrouille
       tout le monde dehors — FAIL, cf. GESTION_IDENTITE §3.9)."""
     name = _t("chk_identity")
@@ -1402,9 +1404,46 @@ def check_identity_backend(
                 continue  # le schéma de config refuse déjà l'entrée invalide
             if net.num_addresses > 65536:
                 problems.append(_t("idn_proxy_open_network", entry=entry))
+    if backend == "ldap":
+        problems.extend(_check_ldap_reachability(cfg, ldap_prober))
     if problems:
         return CheckResult(name, WARN, " ; ".join(problems), hint=_t("idn_discovery_hint"))
     return CheckResult(name, OK, _t("idn_ok", backend=backend, admins=local_admins))
+
+
+def _check_ldap_reachability(cfg: dict, ldap_prober) -> list[str]:
+    """Sonde TCP de chaque contrôleur LDAP + rappels de sécurité (LDAPS, plaintext).
+
+    On ne tente PAS de bind ici (pas de secret dans le doctor) : on vérifie que
+    l'hôte:port répond, et on signale un canal non chiffré autorisé — c'est le
+    diagnostic le plus utile sans divulguer d'identifiants."""
+    import socket as _socket
+    from urllib.parse import urlparse
+
+    ldap_cfg = ((cfg.get("auth", {}) or {}).get("ldap", {}) or {})
+    problems: list[str] = []
+    servers = ldap_cfg.get("servers") or []
+    if isinstance(servers, str):
+        servers = [servers]
+    use_ssl = bool(ldap_cfg.get("use_ssl", True))
+    if not use_ssl and not bool(ldap_cfg.get("start_tls", False)) and bool(ldap_cfg.get("allow_plaintext", False)):
+        problems.append(_t("idn_ldap_plaintext"))
+
+    if ldap_prober is None:
+        def ldap_prober(host: str, port: int) -> bool:
+            try:
+                with _socket.create_connection((host, port), timeout=5):
+                    return True
+            except OSError:
+                return False
+
+    for uri in servers:
+        parsed = urlparse(str(uri) if "://" in str(uri) else f"ldap://{uri}")
+        host = parsed.hostname or str(uri)
+        port = parsed.port or (636 if (parsed.scheme == "ldaps" or use_ssl) else 389)
+        if not ldap_prober(host, port):
+            problems.append(_t("idn_ldap_unreachable", host=host, port=port))
+    return problems
 
 
 _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (

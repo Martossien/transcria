@@ -32,7 +32,7 @@
   "transcria/web/templates/index.html": 52,
   "transcria/web/templates/job_result.html": 168,
   "transcria/web/templates/job_wizard.html": 135,
-  "transcria/web/templates/login.html": 43,
+  "transcria/web/templates/login.html": 49,
   "transcria/web/templates/meeting_types.html": 178,
   "transcria/web/templates/queue.html": 192,
   "transcria/web/templates/schedule.html": 240,
