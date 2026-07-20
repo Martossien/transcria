@@ -103,7 +103,7 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | `first_admin_username` | string | `"admin"` | Login du premier admin créé si la base est vide |
 | `first_admin_password` | string | `"CHANGE-ME"` | Mot de passe du premier admin |
 | `session_lifetime_hours` | int | `12` | Durée de vie de la session Flask (cookie « remember ») — appliquée par `app_services.configure_security()` |
-| `backend` | string | `"local"` | Backend d'identité (chantier `docs/GESTION_IDENTITE.md`) : `local` = comptes historiques. Les valeurs des lots non livrés (`oidc`, `proxy`, `ldap`) sont REFUSÉES par la validation — jamais de repli silencieux |
+| `backend` | string | `"local"` | Backend d'identité (chantier `docs/GESTION_IDENTITE.md`) : `local` = comptes historiques, `oidc` = SSO d'entreprise (lot 1). Les valeurs des lots non livrés (`proxy`, `ldap`) sont REFUSÉES par la validation — jamais de repli silencieux. Configurable aussi depuis Administration → Configuration, section « Identité d'entreprise (SSO) » |
 
 #### `auth.oidc` (backend `oidc` uniquement — SSO d'entreprise, lot 1 GESTION_IDENTITE)
 

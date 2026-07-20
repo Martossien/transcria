@@ -38,6 +38,7 @@ from transcria.web.config_form import (
     CONFIG_FORM_SECTIONS,
     build_partial_config,
     display_values,
+    get_dotted,
     restore_masked_secrets,
 )
 from transcria.web.maintenance_service import MaintenanceService
@@ -52,6 +53,11 @@ def _config_for_display(cfg: dict) -> dict:
     auth_cfg = display_cfg.get("auth")
     if isinstance(auth_cfg, dict) and auth_cfg.get("first_admin_password"):
         auth_cfg["first_admin_password"] = CONFIG_SECRET_SENTINEL
+    # Chantier identité : le secret client OIDC ne s'affiche jamais en clair
+    # dans l'onglet YAML avancé (même règle que le mot de passe admin).
+    oidc_cfg = auth_cfg.get("oidc") if isinstance(auth_cfg, dict) else None
+    if isinstance(oidc_cfg, dict) and oidc_cfg.get("client_secret"):
+        oidc_cfg["client_secret"] = CONFIG_SECRET_SENTINEL
     return display_cfg
 
 
@@ -61,6 +67,9 @@ def _restore_masked_config_secrets(submitted: dict, current_cfg: dict) -> dict:
     current_auth = current_cfg.get("auth", {})
     if isinstance(auth_cfg, dict) and auth_cfg.get("first_admin_password") == CONFIG_SECRET_SENTINEL:
         auth_cfg["first_admin_password"] = current_auth.get("first_admin_password", "")
+    oidc_cfg = auth_cfg.get("oidc") if isinstance(auth_cfg, dict) else None
+    if isinstance(oidc_cfg, dict) and oidc_cfg.get("client_secret") == CONFIG_SECRET_SENTINEL:
+        oidc_cfg["client_secret"] = (current_auth.get("oidc", {}) or {}).get("client_secret", "")
     return restored
 
 
@@ -106,6 +115,12 @@ def admin_config():
             return _render_config_form(config_yaml, config_path, errors, 400, values=display_values(merged, CONFIG_FORM_SECTIONS))
 
         flash(_("Réglages sauvegardés."), "success")
+        # L'app enregistre son client OIDC au boot (init_oidc) : un changement de
+        # backend d'identité ne prend effet qu'au redémarrage du service.
+        new_backend = get_dotted(partial, "auth.backend")
+        if new_backend and new_backend != get_dotted(cfg, "auth.backend", "local"):
+            flash(_("Backend d'identité modifié : redémarrez le service pour l'appliquer "
+                    "(sudo systemctl restart transcria)."), "warning")
         audit_log(AuditAction.CONFIG_EDIT, target_type="config", target_label=Path(config_path).name)
         cfg = ConfigService.get_singleton()
 

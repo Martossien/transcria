@@ -95,6 +95,10 @@
               {% elif field.type == "csv" %}
               <input type="text" class="form-control" id="f-{{ field.path }}" name="{{ field.path }}"
                      value="{{ (values[field.path] or []) | join(', ') }}">
+              {% elif field.type == "group_role_rules" %}
+              <textarea class="form-control font-monospace" rows="4" id="f-{{ field.path }}"
+                        name="{{ field.path }}" spellcheck="false"
+                        placeholder="transcria-admins = admin&#10;CN=Transcria Users,OU=Apps,DC=corp = operator">{{ values[field.path] if values[field.path] is not none else '' }}</textarea>
               {% elif field.type == "password" %}
               <input type="password" class="form-control" id="f-{{ field.path }}" name="{{ field.path }}"
                      value="{{ values[field.path] if values[field.path] is not none else '' }}" autocomplete="new-password">

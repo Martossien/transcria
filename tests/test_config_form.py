@@ -32,7 +32,7 @@ def test_every_form_path_resolves_in_default_config(field):
 
 
 def test_field_types_are_known():
-    known = {"text", "int", "bool", "csv", "select", "password"}
+    known = {"text", "int", "bool", "csv", "select", "password", "group_role_rules"}
     for field in _ALL_FIELDS:
         assert field["type"] in known
         if field["type"] == "select":
@@ -131,6 +131,56 @@ def test_admin_config_page_renders_form_fields(admin_client):
     assert 'name="services.arbitrage_llm_port"' in body
     # le mot de passe admin est masqué (sentinelle), jamais en clair
     assert SECRET_SENTINEL in body
+
+
+class TestSectionIdentiteSSO:
+    """Chantier identité lot 1 : la section SSO du formulaire — dont le type
+    `group_role_rules` (une règle « groupe = rôle » par ligne)."""
+
+    _FIELD = {"type": "group_role_rules"}
+
+    def test_coerce_regles_simples_et_dn_active_directory(self):
+        # Découpage sur le DERNIER « = » : un DN AD contient des « = ».
+        raw = ("transcria-admins = admin\n"
+               "CN=Transcria Users,OU=Apps,DC=corp = operator\n"
+               "\n"
+               "# commentaire ignoré\n")
+        assert coerce_value(self._FIELD, raw) == [
+            {"group": "transcria-admins", "role": "admin"},
+            {"group": "CN=Transcria Users,OU=Apps,DC=corp", "role": "operator"},
+        ]
+
+    def test_ligne_sans_egal_conservee_pour_la_validation(self):
+        # Jamais de perte muette : la règle invalide part à la validation du
+        # mapping (rôle vide → erreur affichée à la sauvegarde).
+        assert coerce_value(self._FIELD, "groupe-sans-role") == [
+            {"group": "groupe-sans-role", "role": ""}]
+
+    def test_affichage_liste_vers_lignes(self):
+        cfg = {"auth": {"role_mapping": {"rules": [
+            {"group": "transcria-admins", "role": "admin"},
+            {"group": "CN=A,OU=B", "role": "viewer"},
+        ]}}}
+        values = display_values(cfg, CONFIG_FORM_SECTIONS)
+        assert values["auth.role_mapping.rules"] == (
+            "transcria-admins = admin\nCN=A,OU=B = viewer")
+
+    def test_aller_retour_affichage_coercition(self):
+        rules = [{"group": "CN=Transcria Users,OU=Apps,DC=corp", "role": "operator"}]
+        cfg = {"auth": {"role_mapping": {"rules": rules}}}
+        shown = display_values(cfg, CONFIG_FORM_SECTIONS)["auth.role_mapping.rules"]
+        assert coerce_value(self._FIELD, shown) == rules
+
+    def test_secret_client_oidc_masque(self):
+        assert "auth.oidc.client_secret" in secret_paths(CONFIG_FORM_SECTIONS)
+        cfg = {"auth": {"oidc": {"client_secret": "s3cret"}}}
+        assert display_values(cfg, CONFIG_FORM_SECTIONS)["auth.oidc.client_secret"] == SECRET_SENTINEL
+
+    def test_page_admin_rend_la_section_sso(self, admin_client):
+        body = admin_client.get("/admin/config").get_data(as_text=True)
+        assert 'name="auth.backend"' in body
+        assert 'name="auth.oidc.issuer"' in body
+        assert 'name="auth.role_mapping.rules"' in body   # textarea des règles
 
 
 class TestChampNullable:

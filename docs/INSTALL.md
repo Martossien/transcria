@@ -1993,6 +1993,12 @@ Depuis le chantier `docs/GESTION_IDENTITE.md`, le portail peut déléguer
 l'authentification à votre fournisseur d'identité (Keycloak, Authentik, Entra
 ID, Okta…). Les comptes locaux restent le défaut ; le SSO est opt-in.
 
+Tout se configure aussi **sans toucher au YAML** : la page **Administration →
+Configuration** propose une section « Identité d'entreprise (SSO) » (backend,
+émetteur, client, claim et règles groupe → rôle — une règle « groupe = rôle »
+par ligne). Un redémarrage du service reste requis après changement de backend
+(l'interface le rappelle à la sauvegarde).
+
 ### Keycloak devant votre Active Directory (~15 min)
 
 1. Dans Keycloak : créer un client `transcria` (type *confidential*,

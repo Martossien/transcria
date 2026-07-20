@@ -129,6 +129,41 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         ],
     },
     {
+        "title": _l("Identité d'entreprise (SSO)"),
+        "help": _l("Connexion via un fournisseur OIDC (Keycloak, Entra ID, Authentik…). "
+                   "Redémarrage du service requis après changement. Compte local de "
+                   "secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."),
+        "fields": [
+            {"path": "auth.backend", "label": _l("Backend d'identité"), "type": "select",
+             "options": ["local", "oidc"],
+             "help": _l("local (défaut) : comptes de ce portail. oidc : SSO d'entreprise — "
+                        "renseignez les champs ci-dessous avant d'activer.")},
+            {"path": "auth.oidc.issuer", "label": _l("Émetteur (issuer)"), "type": "text",
+             "help": _l("URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise "
+                        "(la découverte /.well-known est automatique).")},
+            {"path": "auth.oidc.client_id", "label": _l("Identifiant client"), "type": "text"},
+            {"path": "auth.oidc.client_secret", "label": _l("Secret client"), "type": "password",
+             "secret": True,
+             "help": _l("Laissez vide si le secret est fourni par variable d'environnement.")},
+            {"path": "auth.oidc.client_secret_env", "label": _l("Variable d'environnement du secret"), "type": "text",
+             "help": _l("Nom d'une variable d'environnement contenant le secret — prioritaire "
+                        "sur le champ précédent, évite le secret en clair dans config.yaml.")},
+            {"path": "auth.oidc.button_label", "label": _l("Libellé du bouton SSO"), "type": "text",
+             "help": _l("Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». "
+                        "Vide = libellé par défaut.")},
+            {"path": "auth.role_mapping.claim", "label": _l("Claim des groupes"), "type": "text",
+             "help": _l("Nom du claim OIDC portant les groupes (généralement « groups »).")},
+            {"path": "auth.role_mapping.rules", "label": _l("Règles groupe → rôle"), "type": "group_role_rules",
+             "help": _l("Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, "
+                        "viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : "
+                        "transcria-admins = admin")},
+            {"path": "auth.role_mapping.default", "label": _l("Rôle par défaut (aucun groupe reconnu)"), "type": "select",
+             "options": ["deny", "viewer"],
+             "help": _l("deny (recommandé) : connexion refusée sans groupe reconnu. "
+                        "viewer : accès en lecture seule.")},
+        ],
+    },
+    {
         "title": _l("Serveur & compte admin"),
         "help": _l("Écoute du portail et mot de passe du premier administrateur."),
         "fields": [
@@ -192,6 +227,22 @@ def coerce_value(field: dict, raw):
             return None
     if ftype == "csv":
         return [item.strip() for item in (raw or "").split(",") if item.strip()]
+    if ftype == "group_role_rules":
+        # Une règle par ligne « groupe = rôle ». Découpage sur le DERNIER « = » :
+        # un DN Active Directory contient des « = » (CN=…,OU=…), jamais le rôle.
+        rules = []
+        for line in (raw or "").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            group, sep, role = line.rpartition("=")
+            if sep:
+                rules.append({"group": group.strip(), "role": role.strip()})
+            else:
+                # Ligne sans « = » : conservée telle quelle pour que la validation
+                # du mapping la signale à la sauvegarde (jamais de perte muette).
+                rules.append({"group": line, "role": ""})
+        return rules
     value = (raw or "").strip() if isinstance(raw, str) else raw
     # Champ `nullable` (ex. select avec option vide « défaut ») : la valeur vide
     # signifie EXPLICITEMENT null — elle sera écrite (pas ignorée) au save.
@@ -237,6 +288,9 @@ def display_values(cfg: dict, sections: list[dict]) -> dict:
         value = get_dotted(cfg, path)
         if path in secrets and value:
             value = SECRET_SENTINEL
+        elif field.get("type") == "group_role_rules" and isinstance(value, list):
+            value = "\n".join(f"{r.get('group', '')} = {r.get('role', '')}"
+                              for r in value if isinstance(r, dict))
         values[path] = value
     return values
 

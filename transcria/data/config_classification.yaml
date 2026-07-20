@@ -2,7 +2,16 @@ _doc: 'Classification des clés de configuration (C2.2, RELEASE_0.2.0). TOUTE cl
   ici (garde CI) : exposed = dans le formulaire admin ; internal = jamais exposée (raison) ; deferred
   = à instruire domaine par domaine (exposer avec aide, ou justifier interne).'
 exposed:
+- auth.backend
 - auth.first_admin_password
+- auth.oidc.button_label
+- auth.oidc.client_id
+- auth.oidc.client_secret
+- auth.oidc.client_secret_env
+- auth.oidc.issuer
+- auth.role_mapping.claim
+- auth.role_mapping.default
+- auth.role_mapping.rules
 - gpu.min_free_vram_mb
 - gpu.preemption
 - i18n.available_locales
@@ -49,17 +58,8 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
-- auth.backend
-- auth.oidc.button_label
-- auth.oidc.client_id
-- auth.oidc.client_secret
-- auth.oidc.client_secret_env
-- auth.oidc.issuer
 - auth.oidc.leeway_s
 - auth.oidc.scopes
-- auth.role_mapping.claim
-- auth.role_mapping.default
-- auth.role_mapping.rules
 - auth.first_admin_username
 - auth.session_lifetime_hours
 - cohere.chunk_length_s
