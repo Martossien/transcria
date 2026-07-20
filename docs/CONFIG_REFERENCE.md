@@ -105,6 +105,31 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | `session_lifetime_hours` | int | `12` | Durée de vie de la session Flask (cookie « remember ») — appliquée par `app_services.configure_security()` |
 | `backend` | string | `"local"` | Backend d'identité (chantier `docs/GESTION_IDENTITE.md`) : `local` = comptes historiques. Les valeurs des lots non livrés (`oidc`, `proxy`, `ldap`) sont REFUSÉES par la validation — jamais de repli silencieux |
 
+#### `auth.oidc` (backend `oidc` uniquement — SSO d'entreprise, lot 1 GESTION_IDENTITE)
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `issuer` | string | `""` | URL de l'IdP (la découverte `/.well-known/openid-configuration` en dérive). Requis si `backend: oidc` |
+| `client_id` | string | `""` | Identifiant du client déclaré chez l'IdP. Requis |
+| `client_secret` | string | `""` | Secret client — préférer `client_secret_env` |
+| `client_secret_env` | string | `""` | Nom d'une variable d'environnement portant le secret (prime sur `client_secret` ; jamais en clair dans les logs) |
+| `scopes` | string | `"openid profile email"` | Scopes demandés. `offline_access` volontairement ABSENT : aucun refresh token n'est stocké (v1) |
+| `leeway_s` | int | `30` | Tolérance d'horloge sur `exp`/`iat` de l'ID token |
+| `button_label` | string | `""` | Libellé du bouton SSO (vide = libellé i18n par défaut) |
+
+#### `auth.role_mapping` (commun aux backends fédérés)
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `claim` | string | `"groups"` | Claim OIDC portant les groupes (LDAP lira `memberOf`, proxy `Remote-Groups`) |
+| `rules` | list | `[]` | Règles ORDONNÉES `{group, role}` — premier match gagne, égalité STRICTE (écrire exactement ce que l'IdP émet). `role` ∈ admin/manager/operator/viewer |
+| `default` | string | `"deny"` | Sans match : `deny` (refus, audité avec les groupes reçus) ou `viewer`. JAMAIS operator/admin implicites |
+
+**Break-glass** : le formulaire local reste servi sur `/login?local=1` (comptes
+`identity_source=local` uniquement — les comptes fédérés y échouent par
+construction). Le doctor REFUSE un backend fédéré sans admin local actif.
+**Redémarrage requis : oui** (le client OIDC s'enregistre au boot).
+
 **Redémarrage requis :** non pour le premier admin (lu une seule fois si la base est vide). `enabled=false` est ignoré et réécrit en `true` par `load_config()` / `save_config()`.
 
 **Sécurité :** `first_admin_password` est stocké dans le YAML et n'est utilisé que si `UserStore.count_users() == 0` (base vide). Après la création du premier admin, le changer dans le YAML n'a aucun effet. Dans l'éditeur `/admin/config`, ce champ est masqué avec `********` et la valeur existante est préservée si la sentinelle est resoumise.

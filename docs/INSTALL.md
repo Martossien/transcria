@@ -1986,3 +1986,41 @@ python app.py
 export VENV="$(pwd)/venv"
 ./start.sh --port 7870
 ```
+
+## Identité d'entreprise (SSO) — OIDC
+
+Depuis le chantier `docs/GESTION_IDENTITE.md`, le portail peut déléguer
+l'authentification à votre fournisseur d'identité (Keycloak, Authentik, Entra
+ID, Okta…). Les comptes locaux restent le défaut ; le SSO est opt-in.
+
+### Keycloak devant votre Active Directory (~15 min)
+
+1. Dans Keycloak : créer un client `transcria` (type *confidential*,
+   redirection `https://votre-portail/auth/oidc/callback`), noter le secret ;
+   activer la *User Federation* LDAP vers votre AD (Keycloak documente
+   l'appairage AD pas-à-pas), et un *mapper* qui émet les groupes dans le
+   claim `groups`.
+2. Dans `config.yaml` : décommenter le bloc `auth` de `config.example.yaml`
+   (`backend: oidc`, `issuer: https://keycloak…/realms/<realm>`, `client_id`,
+   `client_secret_env`), et écrire les règles `role_mapping` avec les noms de
+   groupes EXACTS émis par Keycloak.
+3. `venv/bin/python scripts/doctor.py` — le check « Backend d'identité »
+   vérifie la découverte OIDC ET qu'un admin local de secours existe.
+4. Redémarrer le service. La page de login affiche le bouton SSO ;
+   le formulaire local de secours reste sur `/login?local=1`.
+
+### Entra ID (Azure AD)
+
+Enregistrement d'application (App registration) → URI de redirection *Web*
+`https://votre-portail/auth/oidc/callback` → secret client → dans `config.yaml` :
+`issuer: https://login.microsoftonline.com/<tenant-id>/v2.0`. Pour les groupes,
+activer l'émission des *groups claims* (l'ID des groupes est émis — utilisez ces
+IDs dans `role_mapping.rules`, l'égalité est stricte).
+
+### Panne du fournisseur (break-glass)
+
+`/login?local=1` sert le formulaire local (seuls les comptes locaux y passent).
+Si plus aucun admin local : `venv/bin/python -m transcria.maintenance.cli
+reset-admin-password <admin-local>`. Le doctor refuse d'ailleurs un backend
+fédéré sans admin local actif.
+

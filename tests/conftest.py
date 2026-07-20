@@ -121,6 +121,15 @@ def app(_pg_database):
         db.create_all()
         from transcria.auth.store import UserStore
         UserStore.ensure_admin(cfg)
+        # Robustesse à l'ordre d'exécution : si un autre module (ex. flux OIDC
+        # lot 1, qui crée ses apps AVANT cette fixture de session) a déjà peuplé
+        # la base, ensure_admin saute la création (c'est son contrat). La suite
+        # repose pourtant sur le compte admin/admin-change-me — on le garantit.
+        if UserStore.get_by_username(cfg["auth"]["first_admin_username"]) is None:
+            from transcria.auth.models import Role
+            UserStore.create_user(username=cfg["auth"]["first_admin_username"],
+                                  password=cfg["auth"]["first_admin_password"],
+                                  display_name="Administrateur", role=Role.ADMIN)
 
     yield app
 

@@ -177,6 +177,13 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
    `workflow.transcription_cleanup.non_latin_short_max_s: 2.0` recommandé avec
    un backend servi qwen3asr.
 
+### SSO d'entreprise (post-0.3.8.1)
+
+Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC, voir
+`docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md`.
+La migration de base associée est additive (colonnes `users.identity_source`,
+`external_subject`, `last_identity_sync`) et s'applique au premier redémarrage.
+
 ## Mettre à jour opencode
 
 opencode s'installe de plusieurs façons (installateur officiel dans `~/.opencode/bin`, `npm i -g

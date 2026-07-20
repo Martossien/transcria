@@ -103,3 +103,4 @@ transcria/web/translations/**/*.mo
 models/kroko/
 models/parakeet-cpp/
 runtimes/
+docker-compose.legacy-gpu.yml

@@ -52,8 +52,14 @@ _DEFAULT_CONFIG = {
     "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME",
              "session_lifetime_hours": 12,
              # Backend d'identité (docs/GESTION_IDENTITE.md) : local = historique.
-             # Valeurs futures par lot : oidc, proxy, ldap — REFUSÉES tant que non livrées.
-             "backend": "local"},
+             # Valeurs futures par lot : proxy, ldap — REFUSÉES tant que non livrées.
+             "backend": "local",
+             # Connecteur OIDC (lot 1) — inerte tant que backend != oidc.
+             "oidc": {"issuer": "", "client_id": "", "client_secret": "",
+                      "client_secret_env": "", "scopes": "openid profile email",
+                      "leeway_s": 30, "button_label": ""},
+             # Mapping groupes fédérés → rôle (commun oidc/proxy/ldap) — défaut deny.
+             "role_mapping": {"claim": "groups", "rules": [], "default": "deny"}},
     "gpu": {
         "cohere_vram_mb": 6000,
         "pyannote_vram_mb": 2000,

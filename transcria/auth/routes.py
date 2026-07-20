@@ -7,7 +7,8 @@ from flask_login import current_user, login_required, login_user, logout_user
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
-from transcria.auth.identity import get_identity_backend
+from transcria.auth.identity import get_password_backend, identity_backend_name
+from transcria.auth.identity.base import IdentityUnavailable
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.rate_limit import login_rate_limiter
@@ -80,7 +81,7 @@ def login():
         # Chantier identité lot 0 : la VÉRIFICATION passe par le backend résolu
         # (local aujourd'hui — comportement extrait à l'identique). Rate-limit,
         # audit, session et messages restent ICI, communs à tous les backends.
-        user = get_identity_backend(get_config()).authenticate(username, password)
+        user = get_password_backend(get_config()).authenticate(username, password)
         if user is not None:
             login_rate_limiter.record_success(client_ip, username)
             UserStore.record_login(user)
@@ -106,14 +107,107 @@ def login():
             return render_template("login.html"), 429
         flash(_("Identifiant ou mot de passe incorrect."), "error")
         return render_template("login.html"), 401
-    return render_template("login.html")
+    backend = identity_backend_name(get_config())
+    return render_template(
+        "login.html",
+        sso_backend=backend if backend != "local" else None,
+        config_button_label=str(((get_config().get("auth", {}) or {}).get("oidc", {}) or {}).get("button_label") or ""),
+        # ?local=1 : chemin break-glass — formulaire local affiché malgré le SSO.
+        show_local_form=(backend == "local") or request.args.get("local") == "1",
+    )
+
+
+@auth_bp.route("/auth/oidc/login")
+def oidc_login():
+    """Chantier identité lot 1 : départ du flux Authorization Code + PKCE.
+
+    Refusé si le backend n'est pas oidc (pas de SSO « caché » activable par URL).
+    La cible post-login (?next=) est validée same-origin AVANT d'être posée en
+    session — jamais d'open redirect via l'IdP."""
+    from transcria.auth.identity import oidc as oidc_mod
+    from transcria.config import get_config
+
+    if current_user.is_authenticated:
+        return redirect(url_for("web.index"))
+    cfg = get_config()
+    if identity_backend_name(cfg) != "oidc":
+        return redirect(url_for("auth.login"))
+    next_url = request.args.get("next")
+    if next_url and _is_safe_next_url(next_url):
+        session["oidc_next"] = next_url
+    else:
+        session.pop("oidc_next", None)
+    try:
+        return oidc_mod.authorize_redirect(url_for("auth.oidc_callback", _external=True))
+    except IdentityUnavailable:
+        flash(_("Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."), "error")
+        return render_template("login.html", show_local_form=True), 503
+
+
+@auth_bp.route("/auth/oidc/callback")
+def oidc_callback():
+    """Retour de l'IdP : validation complète, JIT, session — ou refus audité."""
+    from authlib.integrations.base_client.errors import OAuthError
+
+    from transcria.auth.identity import oidc as oidc_mod
+    from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
+    from transcria.config import get_config
+
+    # Déjà connecté (double-clic, callback rejoué après login) : pas de re-JIT ni
+    # de 401 trompeur — retour à l'accueil comme pour /login.
+    if current_user.is_authenticated:
+        return redirect(url_for("web.index"))
+    cfg = get_config()
+    if identity_backend_name(cfg) != "oidc":
+        return redirect(url_for("auth.login"))
+    try:
+        identity = oidc_mod.complete_login(cfg)
+    except IdentityUnavailable:
+        flash(_("Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."), "error")
+        return render_template("login.html", show_local_form=True), 503
+    except OAuthError as exc:
+        audit_log(AuditAction.LOGIN_FAILED, target_label="oidc",
+                  details={"reason": "oidc_validation", "error": str(exc.error)})
+        flash(_("Connexion refusée."), "error")
+        return render_template("login.html"), 401
+
+    try:
+        user, decision = provision_federated(identity, cfg)
+    except FederatedLoginDenied as exc:
+        # L'ADMIN voit les groupes reçus dans l'audit (diagnostic n°1) ; le
+        # navigateur ne voit qu'un message générique.
+        audit_log(AuditAction.LOGIN_FAILED, target_label=identity.username,
+                  details={"reason": "role_mapping_denied",
+                           "received_groups": list(exc.decision.received_groups) if exc.decision else []})
+        flash(_("Accès non attribué : contactez votre administrateur."), "error")
+        return render_template("login.html"), 403
+
+    UserStore.record_login(user)
+    session.permanent = True
+    login_user(user)
+    audit_log(AuditAction.LOGIN, details={"source": "oidc",
+                                          "matched_group": decision.matched_group})
+    next_url = session.pop("oidc_next", None)
+    if next_url and _is_safe_next_url(next_url):
+        return redirect(next_url)
+    return redirect(url_for("web.index"))
 
 
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
+    # Compte OIDC : déconnexion RP-initiated chez l'IdP APRÈS la session locale
+    # (best-effort — sans end_session_endpoint, le logout local suffit).
+    was_oidc = getattr(current_user, "identity_source", "local") == "oidc"
     audit_log(AuditAction.LOGOUT)
     logout_user()
+    if was_oidc:
+        from transcria.auth.identity import oidc as oidc_mod
+        from transcria.config import get_config
+
+        idp_logout = oidc_mod.end_session_url(get_config(), url_for("auth.login", _external=True))
+        if idp_logout:
+            return redirect(idp_logout)
     flash(_("Vous avez été déconnecté."), "info")
     return redirect(url_for("auth.login"))
 

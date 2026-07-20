@@ -75,6 +75,19 @@ auth:
   enabled: true
   first_admin_username: "admin"
   first_admin_password: "CHANGE-ME"
+  # ── SSO d'entreprise (docs/GESTION_IDENTITE.md) — décommenter pour activer ──
+  # backend: oidc                    # défaut: local (comptes historiques)
+  # oidc:
+  #   issuer: "https://keycloak.example.com/realms/entreprise"
+  #   client_id: "transcria"
+  #   client_secret_env: "TRANSCRIA_OIDC_SECRET"   # export dans .env / systemd
+  # role_mapping:
+  #   claim: groups
+  #   rules:
+  #     - {group: "transcria-admins", role: admin}
+  #     - {group: "transcria-utilisateurs", role: operator}
+  #   default: deny                  # sans groupe mappé: refus (audité)
+  # Secours (IdP en panne): /login?local=1 + reset-admin-password (CLI maintenance)
 
 services:
   # Backend de la LLM d'arbitrage. Absent/omis = auto-détection rétro-compatible

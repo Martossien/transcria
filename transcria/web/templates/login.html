@@ -12,6 +12,20 @@
   <div class="card login-card">
     <h2 class="text-center"><i class="bi bi-file-earmark-text"></i> TranscrIA</h2>
     <p class="text-muted text-center mb-4">{{ _('Portail de transcription de réunion') }}</p>
+    {% if sso_backend %}
+    <div class="d-grid mb-3">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.oidc_login', next=request.args.get('next')) }}">
+        <i class="bi bi-shield-lock me-2"></i>{{ config_button_label or _("Se connecter avec l'authentification d'entreprise") }}
+      </a>
+    </div>
+    {% if not show_local_form %}
+    <p class="text-muted small text-center mb-0">
+      {# Break-glass volontairement discret : /login?local=1 (docs/GESTION_IDENTITE.md §3.9) #}
+      {{ _("Compte local de secours :") }} <a href="{{ url_for('auth.login', local=1) }}">{{ _('formulaire local') }}</a>
+    </p>
+    {% endif %}
+    {% endif %}
+    {% if show_local_form or not sso_backend %}
     <form method="POST" action="/login">
       <div class="mb-3">
         <label for="username" class="form-label">{{ _("Nom d'utilisateur") }}</label>
@@ -23,6 +37,7 @@
       </div>
       <button type="submit" class="btn btn-primary w-100">{{ _('Se connecter') }}</button>
     </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

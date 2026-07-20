@@ -7,3 +7,6 @@ types-PyYAML
 types-requests
 playwright>=1.60   # walkthrough UI (scripts/ui_walkthrough.py) — navigateur via `playwright install chromium`
 import-linter>=2.1   # contrats d'architecture (.importlinter) + ratchet scripts/audit_imports.py — cf. docs/REFACTORING_QUALITE.md
+
+# IdP OIDC factice en fixture pytest (chantier identité — tests lot 1).
+oidc-provider-mock>=0.3,<1.0

@@ -1346,6 +1346,55 @@ def check_stt_instances_vram(
     return CheckResult(name, OK, _t("stt_inst_ok", n=len(served)))
 
 
+def check_identity_backend(
+    cfg: dict,
+    *,
+    discovery_prober: "Callable[[str], bool] | None" = None,
+    admin_counter: "Callable[[], int] | None" = None,
+) -> CheckResult:
+    """Chantier identité : backend fédéré actif → IdP joignable ET break-glass garanti.
+
+    - découverte OIDC (`{issuer}/.well-known/openid-configuration`) sondée en HTTP ;
+    - au moins UN admin LOCAL actif doit exister (sinon une panne d'IdP verrouille
+      tout le monde dehors — FAIL, cf. GESTION_IDENTITE §3.9)."""
+    name = _t("chk_identity")
+    backend = str(((cfg.get("auth", {}) or {}).get("backend")) or "local").strip().lower()
+    if backend == "local":
+        return CheckResult(name, OK, _t("idn_local"))
+
+    problems: list[str] = []
+    if admin_counter is None:
+        def admin_counter() -> int:
+            from transcria.auth.models import Role, User
+
+            return User.query.filter_by(role=Role.ADMIN.value, is_active=True,
+                                        identity_source="local").count()
+    try:
+        local_admins = admin_counter()
+    except Exception as exc:  # noqa: BLE001 — base indisponible = diagnostic impossible
+        return CheckResult(name, WARN, _t("idn_db_unavailable", exc=exc))
+    if local_admins == 0:
+        return CheckResult(name, FAIL, _t("idn_no_local_admin", backend=backend),
+                           hint=_t("idn_no_local_admin_hint"))
+
+    if backend == "oidc":
+        issuer = str(((cfg.get("auth", {}) or {}).get("oidc", {}) or {}).get("issuer") or "").rstrip("/")
+        if discovery_prober is None:
+            def discovery_prober(url: str) -> bool:
+                import requests
+
+                try:
+                    return requests.get(url, timeout=5).status_code == 200
+                except Exception:  # noqa: BLE001
+                    return False
+        url = f"{issuer}/.well-known/openid-configuration"
+        if not issuer or not discovery_prober(url):
+            problems.append(_t("idn_discovery_ko", url=url))
+    if problems:
+        return CheckResult(name, WARN, " ; ".join(problems), hint=_t("idn_discovery_hint"))
+    return CheckResult(name, OK, _t("idn_ok", backend=backend, admins=local_admins))
+
+
 _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_database,
     check_database_encoding,
@@ -1357,6 +1406,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_remote_stt_control_plane,
     check_served_stt_runtimes,
     check_stt_instances_vram,
+    check_identity_backend,
     check_inference_node_gpus,
     check_local_models,
     check_storage,

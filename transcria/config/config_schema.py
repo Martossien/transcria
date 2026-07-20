@@ -30,6 +30,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_voice_enrollment(cfg.get("voice_enrollment", {}), result)
     _check_auth(cfg.get("auth", {}), result)
     _check_auth_backend(cfg.get("auth", {}) or {}, result)
+    _check_auth_oidc(cfg.get("auth", {}) or {}, result)
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result, cfg)
@@ -215,7 +216,7 @@ def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:
             _check_bool(audit, "log_match_scores", "voice_enrollment.audit.log_match_scores", r)
 
 
-_IMPLEMENTED_AUTH_BACKENDS = ("local",)  # étendu lot par lot (GESTION_IDENTITE.md)
+_IMPLEMENTED_AUTH_BACKENDS = ("local", "oidc")  # étendu lot par lot (GESTION_IDENTITE.md)
 
 
 def _check_auth_backend(auth: dict, r: ValidationResult) -> None:
@@ -226,6 +227,30 @@ def _check_auth_backend(auth: dict, r: ValidationResult) -> None:
             f"{', '.join(_IMPLEMENTED_AUTH_BACKENDS)} (cf. docs/GESTION_IDENTITE.md) — "
             f"jamais de repli silencieux vers 'local'."
         )
+
+
+def _check_auth_oidc(auth: dict, r: ValidationResult) -> None:
+    """Bloc auth.oidc + role_mapping : requis SEULEMENT si backend=oidc."""
+    if str(auth.get("backend", "local") or "local").strip().lower() != "oidc":
+        return
+    oidc = auth.get("oidc") or {}
+    if not str(oidc.get("issuer") or "").strip().startswith(("https://", "http://")):
+        r.add_error("auth.oidc.issuer requis (URL https de l'IdP) quand auth.backend=oidc")
+    if not str(oidc.get("client_id") or "").strip():
+        r.add_error("auth.oidc.client_id requis quand auth.backend=oidc")
+    if not (str(oidc.get("client_secret") or "").strip() or str(oidc.get("client_secret_env") or "").strip()):
+        r.add_error("auth.oidc.client_secret (ou client_secret_env) requis quand auth.backend=oidc")
+    issuer = str(oidc.get("issuer") or "")
+    if issuer.startswith("http://") and "127.0.0.1" not in issuer and "localhost" not in issuer:
+        r.add_warning("auth.oidc.issuer en HTTP non-loopback : les jetons transitent en clair")
+    # Mapping : validé par le module PUR (mêmes règles pour tous les connecteurs).
+    from transcria.auth.identity.mapping import validate_role_mapping
+
+    for err in validate_role_mapping(auth.get("role_mapping") or {}):
+        r.add_error(err)
+    if not ((auth.get("role_mapping") or {}).get("rules")):
+        r.add_warning("auth.role_mapping.rules vide : personne n'obtiendra mieux que le défaut "
+                      f"('{(auth.get('role_mapping') or {}).get('default', 'deny')}')")
 
 
 def _check_auth(auth: dict, r: ValidationResult) -> None:

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-19 16:12+0000\n"
+"POT-Creation-Date: 2026-07-20 15:49+0000\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -18,150 +18,162 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: transcria/app_services.py:299
+#: transcria/app_services.py:306
 msgid "Accès refusé"
 msgstr "Accès refusé"
 
-#: transcria/app_services.py:299
+#: transcria/app_services.py:306
 msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 msgstr "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 
-#: transcria/app_services.py:300
+#: transcria/app_services.py:307
 msgid "Page introuvable"
 msgstr "Page introuvable"
 
-#: transcria/app_services.py:300
+#: transcria/app_services.py:307
 msgid "La page demandée n'existe pas ou a été déplacée."
 msgstr "La page demandée n'existe pas ou a été déplacée."
 
-#: transcria/app_services.py:301
+#: transcria/app_services.py:308
 msgid "Action non autorisée"
 msgstr "Action non autorisée"
 
-#: transcria/app_services.py:301
+#: transcria/app_services.py:308
 msgid "Cette action n'est pas permise sur cette page."
 msgstr "Cette action n'est pas permise sur cette page."
 
-#: transcria/app_services.py:302
+#: transcria/app_services.py:309
 msgid "Fichier trop volumineux"
 msgstr "Fichier trop volumineux"
 
-#: transcria/app_services.py:302
+#: transcria/app_services.py:309
 msgid "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 msgstr "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 
-#: transcria/app_services.py:304
+#: transcria/app_services.py:311
 msgid "Trop de tentatives"
 msgstr "Trop de tentatives"
 
-#: transcria/app_services.py:304
+#: transcria/app_services.py:311
 msgid "Vous avez fait trop de tentatives. Patientez quelques minutes."
 msgstr "Vous avez fait trop de tentatives. Patientez quelques minutes."
 
-#: transcria/app_services.py:305
+#: transcria/app_services.py:312
 msgid "Erreur interne"
 msgstr "Erreur interne"
 
-#: transcria/app_services.py:305
+#: transcria/app_services.py:312
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 
-#: transcria/auth/routes.py:56
+#: transcria/auth/routes.py:58
 #, python-format
 msgid "Le mot de passe doit contenir au moins %(n)s caractères."
 msgstr "Le mot de passe doit contenir au moins %(n)s caractères."
 
-#: transcria/auth/routes.py:58
+#: transcria/auth/routes.py:60
 msgid "La confirmation du mot de passe ne correspond pas."
 msgstr "La confirmation du mot de passe ne correspond pas."
 
-#: transcria/auth/routes.py:77 transcria/auth/routes.py:101
+#: transcria/auth/routes.py:79 transcria/auth/routes.py:106
 msgid "Trop de tentatives. Réessayez dans quelques minutes."
 msgstr "Trop de tentatives. Réessayez dans quelques minutes."
 
-#: transcria/auth/routes.py:103
+#: transcria/auth/routes.py:108
 msgid "Identifiant ou mot de passe incorrect."
 msgstr "Identifiant ou mot de passe incorrect."
 
-#: transcria/auth/routes.py:113
+#: transcria/auth/routes.py:141 transcria/auth/routes.py:160
+msgid "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
+msgstr "Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."
+
+#: transcria/auth/routes.py:165
+msgid "Connexion refusée."
+msgstr "Connexion refusée."
+
+#: transcria/auth/routes.py:176
+msgid "Accès non attribué : contactez votre administrateur."
+msgstr "Accès non attribué : contactez votre administrateur."
+
+#: transcria/auth/routes.py:205
 msgid "Vous avez été déconnecté."
 msgstr "Vous avez été déconnecté."
 
-#: transcria/auth/routes.py:126
+#: transcria/auth/routes.py:218
 msgid "Mot de passe actuel incorrect."
 msgstr "Mot de passe actuel incorrect."
 
-#: transcria/auth/routes.py:136
+#: transcria/auth/routes.py:228
 msgid "Mot de passe mis à jour."
 msgstr "Mot de passe mis à jour."
 
-#: transcria/auth/routes.py:163
+#: transcria/auth/routes.py:255
 msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
 msgstr "Le nom d'utilisateur et le mot de passe sont obligatoires."
 
-#: transcria/auth/routes.py:167
+#: transcria/auth/routes.py:259
 msgid "Ce nom d'utilisateur existe déjà."
 msgstr "Ce nom d'utilisateur existe déjà."
 
-#: transcria/auth/routes.py:185
+#: transcria/auth/routes.py:277
 #, python-format
 msgid "Utilisateur %(u)s créé."
 msgstr "Utilisateur %(u)s créé."
 
-#: transcria/auth/routes.py:197
+#: transcria/auth/routes.py:289
 msgid "Utilisateur introuvable."
 msgstr "Utilisateur introuvable."
 
-#: transcria/auth/routes.py:219
+#: transcria/auth/routes.py:311
 msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 msgstr "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 
-#: transcria/auth/routes.py:251
+#: transcria/auth/routes.py:343
 msgid "Utilisateur mis à jour."
 msgstr "Utilisateur mis à jour."
 
-#: transcria/auth/routes.py:275 transcria/auth/routes.py:307
+#: transcria/auth/routes.py:367 transcria/auth/routes.py:399
 msgid "Le nom du groupe est obligatoire."
 msgstr "Le nom du groupe est obligatoire."
 
-#: transcria/auth/routes.py:278 transcria/auth/routes.py:309
+#: transcria/auth/routes.py:370 transcria/auth/routes.py:401
 msgid "Ce groupe existe déjà."
 msgstr "Ce groupe existe déjà."
 
-#: transcria/auth/routes.py:285
+#: transcria/auth/routes.py:377
 #, python-format
 msgid "Groupe %(g)s créé."
 msgstr "Groupe %(g)s créé."
 
-#: transcria/auth/routes.py:295
+#: transcria/auth/routes.py:387
 msgid "Groupe introuvable."
 msgstr "Groupe introuvable."
 
-#: transcria/auth/routes.py:316
+#: transcria/auth/routes.py:408
 msgid "Groupe mis à jour."
 msgstr "Groupe mis à jour."
 
-#: transcria/auth/routes.py:335 transcria/auth/routes.py:357
+#: transcria/auth/routes.py:427 transcria/auth/routes.py:449
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "Le groupe doit conserver au moins un admin de groupe."
 
-#: transcria/auth/routes.py:337
+#: transcria/auth/routes.py:429
 msgid "Utilisateur introuvable ou inactif."
 msgstr "Utilisateur introuvable ou inactif."
 
-#: transcria/auth/routes.py:343
+#: transcria/auth/routes.py:435
 msgid "Membre ajouté au groupe."
 msgstr "Membre ajouté au groupe."
 
-#: transcria/auth/routes.py:350
+#: transcria/auth/routes.py:442
 msgid "Un admin de groupe ne peut pas se retirer lui-même."
 msgstr "Un admin de groupe ne peut pas se retirer lui-même."
 
-#: transcria/auth/routes.py:364
+#: transcria/auth/routes.py:456
 msgid "Membre retiré du groupe."
 msgstr "Membre retiré du groupe."
 
-#: transcria/auth/routes.py:373
+#: transcria/auth/routes.py:465
 msgid "Groupe supprimé."
 msgstr "Groupe supprimé."
 
@@ -2654,7 +2666,7 @@ msgstr "Langue de l'interface"
 msgid "Rôle :"
 msgstr "Rôle :"
 
-#: transcria/web/templates/base.html:109 transcria/web/templates/login.html:21
+#: transcria/web/templates/base.html:109 transcria/web/templates/login.html:35
 #: transcria/web/templates/user_form.html:32
 msgid "Mot de passe"
 msgstr "Mot de passe"
@@ -3340,12 +3352,24 @@ msgstr "Connexion"
 msgid "Portail de transcription de réunion"
 msgstr "Portail de transcription de réunion"
 
-#: transcria/web/templates/login.html:17
+#: transcria/web/templates/login.html:18
+msgid "Se connecter avec l'authentification d'entreprise"
+msgstr "Se connecter avec l'authentification d'entreprise"
+
+#: transcria/web/templates/login.html:24
+msgid "Compte local de secours :"
+msgstr "Compte local de secours :"
+
+#: transcria/web/templates/login.html:24
+msgid "formulaire local"
+msgstr "formulaire local"
+
+#: transcria/web/templates/login.html:31
 #: transcria/web/templates/user_form.html:10
 msgid "Nom d'utilisateur"
 msgstr "Nom d'utilisateur"
 
-#: transcria/web/templates/login.html:24
+#: transcria/web/templates/login.html:38
 msgid "Se connecter"
 msgstr "Se connecter"
 

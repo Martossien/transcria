@@ -1,5 +1,7 @@
 flask>=3.0,<4.0
 flask-login>=0.6,<1.0
+# Chantier identité (docs/GESTION_IDENTITE.md) : client OIDC (lot 1).
+authlib>=1.7,<2.0
 flask-sqlalchemy>=3.1,<4.0
 # i18n (interface multilingue FR/EN) : gettext + négociation Accept-Language + formats
 # date/nombre localisés. Pur-Python (tire Babel) → images Docker inchangées. Catalogues

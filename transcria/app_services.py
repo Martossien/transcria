@@ -177,6 +177,13 @@ def configure_security(app: Flask, cfg: dict, *, debug: bool) -> None:
         security.get("session_cookie_secure", False)
     )
 
+    # Chantier identité lot 1 : le client OIDC ne s'enregistre QUE si le backend le
+    # demande — zéro import authlib au boot des installations locales historiques.
+    if str((cfg.get("auth", {}) or {}).get("backend") or "local").strip().lower() == "oidc":
+        from transcria.auth.identity.oidc import init_oidc
+
+        init_oidc(app, cfg)
+
 
 def configure_database(app: Flask, cfg: dict) -> None:
     """Branche SQLAlchemy (DSN, options moteur) et enregistre TOUTES les tables

@@ -50,6 +50,16 @@ internal:
 deferred:
 - auth.enabled
 - auth.backend
+- auth.oidc.button_label
+- auth.oidc.client_id
+- auth.oidc.client_secret
+- auth.oidc.client_secret_env
+- auth.oidc.issuer
+- auth.oidc.leeway_s
+- auth.oidc.scopes
+- auth.role_mapping.claim
+- auth.role_mapping.default
+- auth.role_mapping.rules
 - auth.first_admin_username
 - auth.session_lifetime_hours
 - cohere.chunk_length_s
