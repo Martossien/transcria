@@ -81,6 +81,7 @@ example results and the user journey.
 |---|---|
 | [REFACTORING_QUALITE.md](REFACTORING_QUALITE.md) | Code-quality master plan: measured state (god modules, import graph, hotspots), target layering, refactoring waves and permanent guardrails |
 | [PISTES_AMELIORATION.md](PISTES_AMELIORATION.md) | Post-0.3.7 improvement analysis: measured time breakdown, engine choices, CPU-fallback trade-offs, UX and operations gaps, suggested roadmap |
+| [GESTION_IDENTITE.md](GESTION_IDENTITE.md) | Enterprise identity plan (validated, not yet implemented): pluggable backends — OIDC, direct LDAP/AD, trusted proxy headers, API tokens — group→role mapping, JIT provisioning, break-glass, test matrix |
 
 ## History
 
