@@ -7,6 +7,11 @@
 > **Contrat scriptable** : les routes marquées ⭐ (``__api_stable__``) forment le
 > parcours upload → process → status → download que les auto-hébergeurs peuvent
 > scripter — c'est un contrat ; le reste est interne et peut bouger.
+>
+> **Authentification des routes ⭐** : cookie de session (login) OU jeton d'API
+> personnel `Authorization: Bearer tia_…` (page « Mon compte → Jetons d'API »).
+> Le jeton porte les permissions de son propriétaire, v1 limité aux routes ⭐ —
+> la création du job reste en session. Cf. docs/GESTION_IDENTITE.md §3.8.
 
 
 ## Portail TranscrIA (app principale)
@@ -29,6 +34,8 @@
 | Route | Méthodes | Auth | Description | Module |
 |---|---|---|---|---|
 | `/account/password` | GET,POST | connexion requise | _(docstring manquante)_ | `transcria.auth.routes` |
+| `/account/tokens` | GET,POST | connexion requise | Chantier identité lot 4 : jetons d'API personnels (« Mon compte »). | `transcria.auth.routes` |
+| `/account/tokens/<token_id>/revoke` | POST | connexion requise | Révoque un de MES jetons (soft : revoked_at posé, la trace d'audit reste). | `transcria.auth.routes` |
 | `/admin/groups` | GET | connexion requise | _(docstring manquante)_ | `transcria.auth.routes` |
 | `/admin/groups/<group_id>/edit` | GET,POST | connexion requise | _(docstring manquante)_ | `transcria.auth.routes` |
 | `/admin/groups/new` | GET,POST | connexion + Permission.MANAGE_USERS | _(docstring manquante)_ | `transcria.auth.routes` |
@@ -187,7 +194,7 @@
 | `/ready` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
 
-_Portail TranscrIA (app principale) : 126 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 128 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

@@ -9,6 +9,8 @@ class AuditAction(str, enum.Enum):
     LOGIN = "login"
     LOGIN_FAILED = "login_failed"
     LOGOUT = "logout"
+    TOKEN_CREATE = "token_create"
+    TOKEN_REVOKE = "token_revoke"
 
     JOB_VIEW = "job_view"
     JOB_DOWNLOAD = "job_download"

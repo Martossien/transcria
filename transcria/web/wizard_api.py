@@ -41,7 +41,7 @@ from transcria.stt.transcriber_factory import get_backend_vram_mb, summary_backe
 from transcria.voice.matching import VoiceMatchingService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import get_job_for_api
-from transcria.web.request_helpers import DEFAULT_JOB_TITLE, api_stable, clean_job_title, json_body
+from transcria.web.request_helpers import DEFAULT_JOB_TITLE, api_stable, bearer_token_allowed, clean_job_title, json_body
 from transcria.workflow import profiles, resume
 from transcria.workflow.profile_availability import compute_profiles_view
 from transcria.workflow.runner import WorkflowRunner
@@ -113,6 +113,7 @@ def _summary_vram_profile(cfg: dict) -> dict:
 
 
 @web_bp.route("/api/jobs/<job_id>/upload", methods=["POST"])
+@bearer_token_allowed
 @login_required
 @api_stable
 def api_upload(job_id: str):

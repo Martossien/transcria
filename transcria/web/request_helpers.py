@@ -46,3 +46,38 @@ def api_stable(view):
     Tout le reste est interne et peut bouger sans préavis."""
     view.__api_stable__ = True
     return view
+
+
+def bearer_token_allowed(view):
+    """Accepte `Authorization: Bearer tia_…` sur une route ⭐ (identité lot 4, §3.8).
+
+    À poser AU-DESSUS de ``@login_required`` (il s'exécute donc AVANT) : si un
+    jeton valide est présent, l'utilisateur propriétaire est connecté pour CETTE
+    requête seulement — ``login_user(remember=False)`` puis ``session.modified =
+    False`` : aucun cookie de session n'est émis, chaque appel réauthentifie.
+    Un Bearer `tia_` invalide est un 401 JSON sec (pas de repli silencieux sur
+    le cookie : un script au jeton révoqué doit le savoir). Sans en-tête, le
+    chemin session/cookie historique s'applique tel quel.
+    """
+    import functools
+
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw = auth_header[len("Bearer "):].strip()
+            from transcria.auth.api_tokens import TOKEN_PREFIX, authenticate_token
+
+            if raw.startswith(TOKEN_PREFIX):
+                user = authenticate_token(raw)
+                if user is None:
+                    return jsonify({"error": "Jeton d'API invalide, expiré ou révoqué"}), 401
+                from flask import session
+                from flask_login import login_user
+
+                login_user(user, remember=False)
+                session.permanent = False
+                session.modified = False        # pas de Set-Cookie : jeton ≠ session
+        return view(*args, **kwargs)
+
+    return wrapper

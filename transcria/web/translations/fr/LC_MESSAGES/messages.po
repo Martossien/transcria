@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-20 17:19+0000\n"
+"POT-Creation-Date: 2026-07-20 17:44+0000\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -116,72 +116,88 @@ msgid "Mot de passe mis à jour."
 msgstr "Mot de passe mis à jour."
 
 #: transcria/auth/routes.py:321
+msgid "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
+msgstr "Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."
+
+#: transcria/auth/routes.py:328
+msgid "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
+msgstr "Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."
+
+#: transcria/auth/routes.py:342
+msgid "Jeton introuvable."
+msgstr "Jeton introuvable."
+
+#: transcria/auth/routes.py:347
+msgid "Jeton révoqué."
+msgstr "Jeton révoqué."
+
+#: transcria/auth/routes.py:372
 msgid "Le nom d'utilisateur et le mot de passe sont obligatoires."
 msgstr "Le nom d'utilisateur et le mot de passe sont obligatoires."
 
-#: transcria/auth/routes.py:325
+#: transcria/auth/routes.py:376
 msgid "Ce nom d'utilisateur existe déjà."
 msgstr "Ce nom d'utilisateur existe déjà."
 
-#: transcria/auth/routes.py:343
+#: transcria/auth/routes.py:394
 #, python-format
 msgid "Utilisateur %(u)s créé."
 msgstr "Utilisateur %(u)s créé."
 
-#: transcria/auth/routes.py:355
+#: transcria/auth/routes.py:406
 msgid "Utilisateur introuvable."
 msgstr "Utilisateur introuvable."
 
-#: transcria/auth/routes.py:377
+#: transcria/auth/routes.py:428
 msgid "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 msgstr "Action refusée : ce compte est le dernier administrateur actif. Promouvez d'abord un autre administrateur."
 
-#: transcria/auth/routes.py:409
+#: transcria/auth/routes.py:460
 msgid "Utilisateur mis à jour."
 msgstr "Utilisateur mis à jour."
 
-#: transcria/auth/routes.py:433 transcria/auth/routes.py:465
+#: transcria/auth/routes.py:484 transcria/auth/routes.py:516
 msgid "Le nom du groupe est obligatoire."
 msgstr "Le nom du groupe est obligatoire."
 
-#: transcria/auth/routes.py:436 transcria/auth/routes.py:467
+#: transcria/auth/routes.py:487 transcria/auth/routes.py:518
 msgid "Ce groupe existe déjà."
 msgstr "Ce groupe existe déjà."
 
-#: transcria/auth/routes.py:443
+#: transcria/auth/routes.py:494
 #, python-format
 msgid "Groupe %(g)s créé."
 msgstr "Groupe %(g)s créé."
 
-#: transcria/auth/routes.py:453
+#: transcria/auth/routes.py:504
 msgid "Groupe introuvable."
 msgstr "Groupe introuvable."
 
-#: transcria/auth/routes.py:474
+#: transcria/auth/routes.py:525
 msgid "Groupe mis à jour."
 msgstr "Groupe mis à jour."
 
-#: transcria/auth/routes.py:493 transcria/auth/routes.py:515
+#: transcria/auth/routes.py:544 transcria/auth/routes.py:566
 msgid "Le groupe doit conserver au moins un admin de groupe."
 msgstr "Le groupe doit conserver au moins un admin de groupe."
 
-#: transcria/auth/routes.py:495
+#: transcria/auth/routes.py:546
 msgid "Utilisateur introuvable ou inactif."
 msgstr "Utilisateur introuvable ou inactif."
 
-#: transcria/auth/routes.py:501
+#: transcria/auth/routes.py:552
 msgid "Membre ajouté au groupe."
 msgstr "Membre ajouté au groupe."
 
-#: transcria/auth/routes.py:508
+#: transcria/auth/routes.py:559
 msgid "Un admin de groupe ne peut pas se retirer lui-même."
 msgstr "Un admin de groupe ne peut pas se retirer lui-même."
 
-#: transcria/auth/routes.py:522
+#: transcria/auth/routes.py:573
 msgid "Membre retiré du groupe."
 msgstr "Membre retiré du groupe."
 
-#: transcria/auth/routes.py:531
+#: transcria/auth/routes.py:582
 msgid "Groupe supprimé."
 msgstr "Groupe supprimé."
 
@@ -2240,6 +2256,100 @@ msgstr "Option avancée"
 msgid "Remplacer par"
 msgstr "Remplacer par"
 
+#: transcria/web/templates/account_tokens.html:2
+#: transcria/web/templates/base.html:111
+msgid "Jetons d'API"
+msgstr "Jetons d'API"
+
+#: transcria/web/templates/account_tokens.html:4
+msgid "Jetons d'API personnels"
+msgstr "Jetons d'API personnels"
+
+#: transcria/web/templates/account_tokens.html:8
+msgid "Copiez ce jeton maintenant — il ne sera plus jamais affiché :"
+msgstr "Copiez ce jeton maintenant — il ne sera plus jamais affiché :"
+
+#: transcria/web/templates/account_tokens.html:14
+msgid "Créer un jeton"
+msgstr "Créer un jeton"
+
+#: transcria/web/templates/account_tokens.html:17
+msgid "Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md). Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
+msgstr "Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md). Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
+
+#: transcria/web/templates/account_tokens.html:21
+#: transcria/web/templates/account_tokens.html:43
+msgid "Libellé"
+msgstr "Libellé"
+
+#: transcria/web/templates/account_tokens.html:23
+msgid "ex. script d'archivage"
+msgstr "ex. script d'archivage"
+
+#: transcria/web/templates/account_tokens.html:26
+msgid "Expiration (jours)"
+msgstr "Expiration (jours)"
+
+#: transcria/web/templates/account_tokens.html:28
+msgid "vide = sans"
+msgstr "vide = sans"
+
+#: transcria/web/templates/account_tokens.html:31
+msgid "Créer le jeton"
+msgstr "Créer le jeton"
+
+#: transcria/web/templates/account_tokens.html:38
+msgid "Mes jetons"
+msgstr "Mes jetons"
+
+#: transcria/web/templates/account_tokens.html:43
+msgid "Identifiant"
+msgstr "Identifiant"
+
+#: transcria/web/templates/account_tokens.html:43
+msgid "Créé le"
+msgstr "Créé le"
+
+#: transcria/web/templates/account_tokens.html:44
+msgid "Expire le"
+msgstr "Expire le"
+
+#: transcria/web/templates/account_tokens.html:44
+msgid "Dernier usage"
+msgstr "Dernier usage"
+
+#: transcria/web/templates/account_tokens.html:44
+#: transcria/web/templates/queue.html:96
+#: transcria/web/templates/schedule.html:199
+msgid "État"
+msgstr "État"
+
+#: transcria/web/templates/account_tokens.html:52
+#: transcria/web/templates/account_tokens.html:53
+msgid "jamais"
+msgstr "jamais"
+
+#: transcria/web/templates/account_tokens.html:55
+msgid "révoqué"
+msgstr "révoqué"
+
+#: transcria/web/templates/account_tokens.html:56
+#: transcria/web/templates/queue.html:69 transcria/web/templates/voices.html:40
+msgid "actif"
+msgstr "actif"
+
+#: transcria/web/templates/account_tokens.html:61
+msgid "Révoquer ce jeton ? Les scripts qui l'utilisent cesseront de fonctionner."
+msgstr "Révoquer ce jeton ? Les scripts qui l'utilisent cesseront de fonctionner."
+
+#: transcria/web/templates/account_tokens.html:62
+msgid "Révoquer"
+msgstr "Révoquer"
+
+#: transcria/web/templates/account_tokens.html:71
+msgid "Aucun jeton pour le moment."
+msgstr "Aucun jeton pour le moment."
+
 #: transcria/web/templates/admin_config.html:2
 #: transcria/web/templates/admin_config.html:5
 #: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:65
@@ -2791,22 +2901,22 @@ msgstr "Rôle :"
 msgid "Mot de passe"
 msgstr "Mot de passe"
 
-#: transcria/web/templates/base.html:113
+#: transcria/web/templates/base.html:115
 msgid "Déconnexion"
 msgstr "Déconnexion"
 
-#: transcria/web/templates/base.html:135
+#: transcria/web/templates/base.html:137
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 
-#: transcria/web/templates/base.html:144
+#: transcria/web/templates/base.html:146
 #, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
 
-#: transcria/web/templates/base.html:145
+#: transcria/web/templates/base.html:147
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 
@@ -3717,10 +3827,6 @@ msgstr "En pause manuelle"
 msgid "Scheduler"
 msgstr "Scheduler"
 
-#: transcria/web/templates/queue.html:69 transcria/web/templates/voices.html:40
-msgid "actif"
-msgstr "actif"
-
 #: transcria/web/templates/queue.html:69
 #: transcria/web/templates/schedule.html:96
 #: transcria/web/templates/wizard/_step_file.html:51
@@ -3753,11 +3859,6 @@ msgstr "Mode"
 #: transcria/web/templates/queue.html:95
 msgid "Ressources"
 msgstr "Ressources"
-
-#: transcria/web/templates/queue.html:96
-#: transcria/web/templates/schedule.html:199
-msgid "État"
-msgstr "État"
 
 #: transcria/web/templates/queue.html:97
 msgid "Départ"
@@ -5113,4 +5214,10 @@ msgstr "Générer le résumé"
 
 #~ msgid "Statut indisponible (%(e)s)."
 #~ msgstr "Statut indisponible (%(e)s)."
+
+#~ msgid ""
+#~ "Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du\n"
+#~ "           contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md).\n"
+#~ "           Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé."
+#~ msgstr ""
 

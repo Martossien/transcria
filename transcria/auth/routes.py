@@ -297,6 +297,58 @@ def change_own_password():
     return render_template("change_password.html")
 
 
+@auth_bp.route("/account/tokens", methods=["GET", "POST"])
+@login_required
+def account_tokens():
+    """Chantier identité lot 4 : jetons d'API personnels (« Mon compte »).
+
+    Le secret complet n'est affiché qu'UNE fois, dans la réponse du POST de
+    création — seule sa somme SHA-256 vit en base."""
+    from datetime import datetime, timedelta, timezone
+
+    from transcria.auth.api_tokens import create_token, list_for_user
+
+    new_secret = None
+    if request.method == "POST":
+        expires_at = None
+        raw_days = (request.form.get("expires_days") or "").strip()
+        if raw_days:
+            try:
+                days = int(raw_days)
+            except ValueError:
+                days = 0
+            if not 1 <= days <= 3650:
+                flash(_("Durée de validité invalide (1 à 3650 jours, ou vide = sans expiration)."), "error")
+                return render_template("account_tokens.html",
+                                       tokens=list_for_user(current_user.id), new_secret=None), 400
+            expires_at = datetime.now(timezone.utc) + timedelta(days=days)
+        new_secret, token = create_token(current_user.id, request.form.get("label", ""), expires_at)
+        audit_log(AuditAction.TOKEN_CREATE, target_type="api_token", target_label=token.token_id,
+                  details={"label": token.label, "expires_at": token.expires_at.isoformat() if token.expires_at else None})
+        flash(_("Jeton créé — copiez-le maintenant : il ne sera plus jamais affiché."), "success")
+    return render_template("account_tokens.html",
+                           tokens=list_for_user(current_user.id), new_secret=new_secret)
+
+
+@auth_bp.route("/account/tokens/<token_id>/revoke", methods=["POST"])
+@login_required
+def account_token_revoke(token_id: str):
+    """Révoque un de MES jetons (soft : revoked_at posé, la trace d'audit reste)."""
+    from transcria.auth.api_tokens import list_for_user, revoke_token
+
+    # Périmètre = les jetons de l'utilisateur COURANT : impossible par
+    # construction de révoquer (ou d'énumérer) ceux d'un autre compte.
+    token = next((t for t in list_for_user(current_user.id) if t.token_id == token_id), None)
+    if token is None:
+        flash(_("Jeton introuvable."), "error")
+        return redirect(url_for("auth.account_tokens"))
+    if token.revoked_at is None:
+        revoke_token(token)
+        audit_log(AuditAction.TOKEN_REVOKE, target_type="api_token", target_label=token.token_id)
+        flash(_("Jeton révoqué."), "info")
+    return redirect(url_for("auth.account_tokens"))
+
+
 @auth_bp.route("/admin/users")
 @login_required
 @requires(Permission.MANAGE_USERS)

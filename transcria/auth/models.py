@@ -84,6 +84,44 @@ class User(UserMixin, db.Model):
         }
 
 
+class ApiToken(db.Model):
+    """Jeton d'API personnel (chantier identité lot 4, GESTION_IDENTITE §3.8).
+
+    Format servi une seule fois : ``tia_<token_id>_<secret>``. Seul le SHA-256
+    du secret est stocké (comparaison ``hmac.compare_digest``) — révocation
+    triviale (soft, la trace d'audit reste), contrairement à un JWT auto-signé.
+    """
+
+    __tablename__ = "api_tokens"
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.String(36), db.ForeignKey("users.id", ondelete="CASCADE"),
+                        nullable=False, index=True)
+    # Partie PUBLIQUE du jeton : lookup O(1) sans scanner la table des hachages.
+    token_id = db.Column(db.String(16), unique=True, nullable=False, index=True)
+    secret_hash = db.Column(db.String(64), nullable=False)
+    label = db.Column(db.String(80), nullable=False, default="", server_default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False,
+                           default=lambda: datetime.now(timezone.utc))
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # Mise à jour throttlée (1×/min) : le polling /status ne doit pas écrire à chaque hit.
+    last_used_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    user = db.relationship("User")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "token_id": self.token_id,
+            "label": self.label,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
+            "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
+        }
+
+
 class GroupRole(str, enum.Enum):
     MEMBER = "member"
     GROUP_ADMIN = "group_admin"

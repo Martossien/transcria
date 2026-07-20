@@ -42,6 +42,11 @@ _HEADER = """# Référence d'API — GÉNÉRÉE, ne pas éditer
 > **Contrat scriptable** : les routes marquées ⭐ (``__api_stable__``) forment le
 > parcours upload → process → status → download que les auto-hébergeurs peuvent
 > scripter — c'est un contrat ; le reste est interne et peut bouger.
+>
+> **Authentification des routes ⭐** : cookie de session (login) OU jeton d'API
+> personnel `Authorization: Bearer tia_…` (page « Mon compte → Jetons d'API »).
+> Le jeton porte les permissions de son propriétaire, v1 limité aux routes ⭐ —
+> la création du job reste en session. Cf. docs/GESTION_IDENTITE.md §3.8.
 """
 
 

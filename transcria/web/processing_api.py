@@ -32,7 +32,7 @@ from transcria.services.job_executor import get_job_executor
 from transcria.services.pipeline_service import PipelineService
 from transcria.web.blueprint import web_bp
 from transcria.web.job_access import can_manage_queue_job, get_job_for_api
-from transcria.web.request_helpers import api_stable
+from transcria.web.request_helpers import api_stable, bearer_token_allowed
 from transcria.workflow import profiles
 from transcria.workflow.concurrency_profile import summarize_concurrency
 from transcria.workflow.profiles import profile_for_job
@@ -152,6 +152,7 @@ def api_resources_status():
 
 
 @web_bp.route("/api/jobs/<job_id>/process", methods=["POST"])
+@bearer_token_allowed
 @login_required
 @api_stable
 def api_process(job_id: str):
@@ -278,6 +279,7 @@ def api_process(job_id: str):
 
 
 @web_bp.route("/api/jobs/<job_id>/status", methods=["GET"])
+@bearer_token_allowed
 @login_required
 @api_stable
 def api_job_status(job_id: str):

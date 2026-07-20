@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Jetons d'API") }} — TranscrIA{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">{{ _("Jetons d'API personnels") }}</h1>
+
+{% if new_secret %}
+<div class="alert alert-success">
+  <p class="mb-2"><strong>{{ _('Copiez ce jeton maintenant — il ne sera plus jamais affiché :') }}</strong></p>
+  <code class="user-select-all d-block p-2 bg-body-secondary rounded">{{ new_secret }}</code>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+  <div class="card-header">{{ _('Créer un jeton') }}</div>
+  <div class="card-body">
+    <p class="text-muted small">
+      {{ _("Un jeton s'utilise dans l'en-tête HTTP « Authorization: Bearer tia_… » sur les routes du contrat scriptable (upload, process, status, download — cf. docs/API_REFERENCE.md). Il porte vos permissions, jamais plus, et cesse de fonctionner si votre compte est désactivé.") }}
+    </p>
+    <form method="POST" class="row g-2 align-items-end">
+      <div class="col-md-5">
+        <label class="form-label">{{ _('Libellé') }}</label>
+        <input type="text" name="label" class="form-control" maxlength="80"
+               placeholder="{{ _('ex. script d\'archivage') }}" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">{{ _('Expiration (jours)') }}</label>
+        <input type="number" name="expires_days" class="form-control" min="1" max="3650"
+               placeholder="{{ _('vide = sans') }}">
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary">{{ _('Créer le jeton') }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">{{ _('Mes jetons') }}</div>
+  <div class="card-body p-0">
+    {% if tokens %}
+    <table class="table table-hover mb-0 align-middle">
+      <thead><tr>
+        <th>{{ _('Libellé') }}</th><th>{{ _('Identifiant') }}</th><th>{{ _('Créé le') }}</th>
+        <th>{{ _('Expire le') }}</th><th>{{ _('Dernier usage') }}</th><th>{{ _('État') }}</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for t in tokens %}
+        <tr>
+          <td>{{ t.label or "—" }}</td>
+          <td><code>tia_{{ t.token_id }}_…</code></td>
+          <td class="small">{{ t.created_at.strftime('%Y-%m-%d %H:%M') if t.created_at else "—" }}</td>
+          <td class="small">{{ t.expires_at.strftime('%Y-%m-%d') if t.expires_at else _('jamais') }}</td>
+          <td class="small">{{ t.last_used_at.strftime('%Y-%m-%d %H:%M') if t.last_used_at else _('jamais') }}</td>
+          <td>
+            {% if t.revoked_at %}<span class="badge bg-secondary">{{ _('révoqué') }}</span>
+            {% else %}<span class="badge bg-success">{{ _('actif') }}</span>{% endif %}
+          </td>
+          <td class="text-end">
+            {% if not t.revoked_at %}
+            <form method="POST" action="{{ url_for('auth.account_token_revoke', token_id=t.token_id) }}"
+                  class="m-0" onsubmit="return confirm('{{ _('Révoquer ce jeton ? Les scripts qui l\'utilisent cesseront de fonctionner.') }}');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Révoquer') }}</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted p-3 mb-0">{{ _('Aucun jeton pour le moment.') }}</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

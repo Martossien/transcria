@@ -182,7 +182,9 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
 Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC ou un
 proxy d'authentification (Authelia, oauth2-proxy — `auth.backend: proxy`), voir
 `docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md` ;
-tout est aussi configurable depuis Administration → Configuration.
+tout est aussi configurable depuis Administration → Configuration. Les jetons
+d'API personnels (`tia_…`, page « Mon compte ») arrivent avec la migration
+additive `api_tokens` — appliquée d'elle-même au premier redémarrage.
 La migration de base associée est additive (colonnes `users.identity_source`,
 `external_subject`, `last_identity_sync`) et s'applique au premier redémarrage.
 

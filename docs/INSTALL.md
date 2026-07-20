@@ -2053,6 +2053,22 @@ l'identité dans ses en-têtes (`backend: proxy`, cf. le bloc commenté de
 `/login?local=1`. À la déconnexion du portail, la session du PROXY survit :
 l'interface l'explique et la vraie déconnexion se fait chez le proxy.
 
+## Jetons d'API personnels (scripts)
+
+Chaque utilisateur crée ses jetons dans **Mon compte → Jetons d'API** (menu en
+haut à droite). Le secret `tia_…` n'est affiché qu'une fois ; il s'utilise sur
+les routes du contrat scriptable ⭐ (cf. `docs/API_REFERENCE.md`) :
+
+```bash
+curl -H "Authorization: Bearer tia_<id>_<secret>" \
+     "https://votre-portail/api/jobs/<job_id>/status"
+```
+
+Le jeton porte les permissions de son propriétaire (jamais plus), expire si une
+durée a été donnée, et se révoque d'un clic — les scripts reçoivent alors un
+401 explicite. Aucun paquet supplémentaire : la table `api_tokens` arrive par
+la migration Alembic au premier redémarrage.
+
 ### Panne du fournisseur (break-glass)
 
 `/login?local=1` sert le formulaire local (seuls les comptes locaux y passent).
