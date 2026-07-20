@@ -33,7 +33,7 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ## Project status
 
-**Current release: 0.3.8.1** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.3.9** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).
@@ -45,6 +45,7 @@ Recent milestones, newest first (all on the 0.2.0 stable line):
 
 | Version | What it brought |
 |---|---|
+| **0.3.9** | **Enterprise identity** — delegate authentication to your identity provider: **OIDC** single sign-on (Keycloak, Entra ID…), a **trusted authentication proxy** (Authelia, oauth2-proxy — headers trusted only from the proxy's socket address), and **LDAP / Active Directory** directly (mandatory LDAPS/StartTLS with certificate verification, injection-safe filters, AD result codes in the audit, nested groups). Plus **personal API tokens** (`tia_…`, `Authorization: Bearer`) for scripts. Everything is configurable from the admin UI with just-in-time provisioning and group→role mapping; every authentication path is audited (PSSI/DPO). Opt-in — local accounts stay the default and a break-glass local login is always available |
 | **0.3.8** | **Speed & operator experience** — served STT goes parallel: **multi-instance pools** (`extra_urls` + one-click plan on the new **`/admin/hardware`** page — real-meeting gains up to **3.7×** on a 2 h recording, single-GPU machines benefit too); summary **auto-starts at upload** (opt-in); a new one-pass **`srt_moss` profile** (transcription + speakers, zero wizard step, guarded against silent skips and truncation — short meetings); freshness guarantees for exports (stale-synthesis banner, always-fresh ZIP); `reset-admin-password` CLI; a **non-Latin drift guard** that clears qwen3asr for primary-backend use; safer defaults measured in production (persistent MOSS site, 120 s opencode watchdog grace) |
 | **0.3.7** | **Quality & hardening** — the 15-wave code-quality campaign delivered end to end: layered architecture locked by CI ratchets, a single GPU probe and unified kill patterns, zero legacy install modules, a **generated API reference** with a marked scriptable contract (⭐ upload → process → status → download), and real concurrency/deployment bugs found and fixed along the way (concurrent-job LLM race, resource-node runtimes env, `audiocpp --with-model` paths) |
 | **0.3.6** | **Served STT runtimes** — audio.cpp and parakeet.cpp become first-class engines: pinned installer builds, on-demand start before jobs (all-in-one and GPU-node topologies), per-engine health checks, VRAM admission, native fallback — qualified on the real-meeting benchmark (`qwen3asr` 0.421 WER, `nemotron` 0.492 at ~2 s/5-min window) |

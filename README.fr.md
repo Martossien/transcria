@@ -36,7 +36,7 @@ multi-utilisateur par rôles sont au cœur du produit, pas des ajouts.
 
 ## Statut du projet
 
-**Version actuelle : 0.3.8.1** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Version actuelle : 0.3.9** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). Le pipeline de transcription, l'assistant avec
 validation humaine, la file GPU et sa planification, les exports, l'accès
 multi-utilisateur, ainsi que les déploiements mono-machine et distribués sont validés de
@@ -46,6 +46,7 @@ Jalons récents, du plus récent au plus ancien (tous dans la continuité de la 
 
 | Version | Ce qu'elle apporte |
 |---|---|
+| **0.3.9** | **Identité d'entreprise** — déléguez l'authentification à votre fournisseur d'identité : **SSO OIDC** (Keycloak, Entra ID…), **proxy d'authentification de confiance** (Authelia, oauth2-proxy — en-têtes crus uniquement depuis l'adresse socket du proxy) et **LDAP / Active Directory** en direct (LDAPS/StartTLS obligatoire avec vérification du certificat, filtres protégés contre l'injection, codes de résultat AD à l'audit, groupes imbriqués). Plus des **jetons d'API personnels** (`tia_…`, `Authorization: Bearer`) pour les scripts. Tout se configure depuis l'interface d'administration, avec provisionnement à la volée et mapping groupes→rôles ; chaque chemin d'authentification est audité (PSSI/DPO). Opt-in — les comptes locaux restent le défaut et un accès local de secours est toujours disponible |
 | **0.3.8** | **Vitesse & expérience opérateur** — le STT servi passe au parallèle : **pools multi-instances** (`extra_urls` + plan en un clic sur la nouvelle page **`/admin/hardware`** — gains mesurés sur réunions réelles jusqu'à **3,7×** sur un enregistrement de 2 h, les machines mono-GPU en profitent aussi) ; le résumé **démarre dès l'upload** (opt-in) ; nouveau profil une passe **`srt_moss`** (transcription + locuteurs, zéro étape wizard, gardé contre les omissions silencieuses et la troncature — réunions courtes) ; garanties de fraîcheur des exports (bannière synthèse périmée, ZIP toujours à jour) ; CLI `reset-admin-password` ; **garde anti-dérive non-latine** qui déverrouille qwen3asr comme backend principal ; défauts durcis par la mesure (site MOSS persistant, grace watchdog opencode 120 s) |
 | **0.3.7** | **Qualité & durcissement** — le chantier qualité (15 vagues) livré de bout en bout : architecture en couches verrouillée par cliquets CI, sonde GPU unique et kill patterns unifiés, zéro module d'install legacy, **référence d'API générée** avec contrat scriptable marqué (⭐ upload → process → status → download), et de vrais bugs de concurrence/déploiement débusqués et corrigés en chemin (course LLM entre jobs simultanés, env des runtimes du nœud GPU, chemins d'`audiocpp --with-model`) |
 | **0.3.6** | **Runtimes STT servis** — audio.cpp et parakeet.cpp deviennent des moteurs de première classe : builds épinglés par l'installeur, démarrage à la demande avant les jobs (all-in-one et nœud GPU), santé par moteur, admission VRAM, repli natif — qualifiés sur le benchmark de réunions réelles (`qwen3asr` 0,421 WER, `nemotron` 0,492 à ~2 s/fenêtre de 5 min) |

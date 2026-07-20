@@ -6,6 +6,54 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.9] — 2026-07-20
+
+Identité d'entreprise. TranscrIA peut désormais déléguer l'authentification à un
+fournisseur d'identité d'entreprise. Fonctionnalité **opt-in** : le backend
+`local` reste le défaut, aucune installation existante ne change de
+comportement, et un accès local de secours reste toujours disponible.
+
+### Ajouté
+
+- **Authentification unique OIDC** (Keycloak, Entra ID, Authentik…) : Authorization
+  Code + PKCE, validation `iss`/`aud`/`exp`/`nonce`, aucun refresh token stocké.
+- **Proxy d'authentification de confiance** (Authelia, oauth2-proxy, Pomerium) :
+  en-têtes `Remote-User`/`Remote-Groups` crus uniquement depuis l'adresse socket
+  du proxy déclaré — jamais `X-Forwarded-For`.
+- **LDAP / Active Directory en direct** : modes compte de service + recherche ou
+  bind direct, LDAPS/StartTLS obligatoire avec vérification du certificat, filtres
+  protégés contre l'injection, codes de résultat AD (52e/533/701/775…) remontés à
+  l'audit, résolution des groupes imbriqués.
+- **Jetons d'API personnels** (`tia_…`) : `Authorization: Bearer` sur les routes du
+  contrat scriptable, seul le SHA-256 du secret est stocké, révocables et
+  expirables, depuis une page « Mon compte ».
+- **Provisionnement à la volée (JIT)** commun aux connecteurs fédérés : mapping
+  groupes→rôles (premier match, `default: deny|viewer`), rôle recalculé à chaque
+  connexion, veto de désactivation locale.
+- **Configuration depuis l'interface d'administration** (section « Identité
+  d'entreprise »), diagnostics `doctor` par backend, guides d'installation
+  (Keycloak devant AD, Entra ID, Authelia/oauth2-proxy, LDAP/AD).
+- **Audit complet** de tous les chemins d'authentification (connexion, déconnexion,
+  provisionnement fédéré, cycle de vie et usage échoué des jetons) — famille `auth`
+  pour la rétention PSSI/DPO, jamais de mot de passe/secret/email journalisé.
+
+### Sécurité
+
+- Anti-bourrinage durci : la clé repose sur l'adresse socket (`request.remote_addr`),
+  jamais `X-Forwarded-For` (revue de sécurité adversariale du chantier).
+- LDAPS/StartTLS avec certificat vérifié (chaîne + nom d'hôte) ; canal en clair
+  refusé au boot sauf `allow_plaintext` explicite ; mot de passe vide refusé avant
+  tout bind (anti bind non authentifié).
+
+### Migration
+
+Deux migrations Alembic **additives** : colonnes d'identité sur `users`
+(`identity_source`, `external_subject`, `last_identity_sync`) et table
+`api_tokens`. Appliquées automatiquement au redémarrage du service (ou via le
+service one-shot `migrate` en Docker) ; manuellement : `venv/bin/alembic upgrade
+head`. Nouvelles dépendances runtime `authlib` (BSD) et `ldap3` (LGPL-3.0,
+optionnelle, chargée seulement en backend `ldap`).
+
 ## [0.3.8.1] — 2026-07-19
 
 Micro-correctif né de l'usage réel de la 0.3.8 (chaque point vécu, corrigé et

@@ -106,6 +106,12 @@ board meeting — the choice is one click, right when you drop the file.
 - **Team capitalisation** — shared lexicons, minutes templates per meeting type, groups
   with their own administrators: the second meeting costs less effort than the first,
   and the tool improves as the team uses it.
+- **Enterprise identity (0.3.9)** — sign in through your existing directory: OIDC SSO
+  (Keycloak, Entra ID…), an authentication proxy (Authelia, oauth2-proxy) or LDAP /
+  Active Directory directly, with automatic role assignment from group membership.
+  Personal API tokens allow automation without sharing a password. Every sign-in is
+  audited; a break-glass local login always remains. Users sign in with their usual
+  credentials, IT keeps control.
 - **Bilingual** — interface and deliverables in French or English, each user's choice.
 
 ## What TranscrIA is not

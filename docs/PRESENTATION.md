@@ -105,6 +105,12 @@ CSE — le choix se fait en un clic, au dépôt du fichier.
 - **Capitalisation d'équipe** — lexiques partagés, modèles de compte-rendu par type de
   réunion, groupes avec leurs propres administrateurs : la deuxième réunion coûte moins
   d'effort que la première, et l'outil s'améliore avec l'usage de l'équipe.
+- **Identité d'entreprise (0.3.9)** — connexion via votre annuaire existant : SSO OIDC
+  (Keycloak, Entra ID…), proxy d'authentification (Authelia, oauth2-proxy) ou LDAP /
+  Active Directory en direct, avec attribution automatique des rôles selon les groupes.
+  Des jetons d'API personnels permettent d'automatiser sans partager de mot de passe.
+  Chaque connexion est auditée ; un accès local de secours reste toujours disponible. Les
+  utilisateurs se connectent avec leurs identifiants habituels, la DSI garde la main.
 - **Bilingue** — interface et livrables en français ou en anglais, au choix de chacun.
 
 ## Ce que TranscrIA n'est pas

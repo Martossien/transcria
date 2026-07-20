@@ -177,17 +177,30 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
    `workflow.transcription_cleanup.non_latin_short_max_s: 2.0` recommandé avec
    un backend servi qwen3asr.
 
-### SSO d'entreprise (post-0.3.8.1)
+### Identité d'entreprise (0.3.9)
 
-Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC, un
-proxy d'authentification (Authelia, oauth2-proxy — `auth.backend: proxy`) ou un
-annuaire LDAP / Active Directory en direct (`auth.backend: ldap`), voir
-`docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md` ;
-tout est aussi configurable depuis Administration → Configuration. Les jetons
-d'API personnels (`tia_…`, page « Mon compte ») arrivent avec la migration
-additive `api_tokens` — appliquée d'elle-même au premier redémarrage.
-La migration de base associée est additive (colonnes `users.identity_source`,
-`external_subject`, `last_identity_sync`) et s'applique au premier redémarrage.
+Rien à faire pour une installation existante au-delà du redémarrage :
+`auth.backend: local` reste le défaut et aucun comportement ne change. Pour
+activer l'OIDC, un proxy d'authentification (Authelia, oauth2-proxy —
+`auth.backend: proxy`) ou un annuaire LDAP / Active Directory en direct
+(`auth.backend: ldap`), voir `docs/INSTALL.md` § « Identité d'entreprise » et
+`docs/GESTION_IDENTITE.md` ; tout est aussi configurable depuis Administration →
+Configuration.
+
+**Migration de base (additive).** Cette version ajoute les colonnes d'identité
+sur `users` (`identity_source`, `external_subject`, `last_identity_sync`) et la
+table `api_tokens` (jetons d'API personnels, page « Mon compte »). Elles
+s'appliquent **automatiquement** au redémarrage du service (ou via le service
+one-shot `migrate` en Docker). Pour les appliquer manuellement :
+
+```bash
+venv/bin/alembic upgrade head
+```
+
+**Nouvelles dépendances runtime** : `authlib` (client OIDC, BSD) et `ldap3`
+(connecteur LDAP, LGPL-3.0 — optionnelle, chargée seulement en `auth.backend:
+ldap`). Installées par `pip install -r requirements.txt` (déjà fait par
+l'installeur et les images Docker).
 
 ## Mettre à jour opencode
 
@@ -210,6 +223,12 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.8.1 → 0.3.9** : identité d'entreprise (SSO OIDC, proxy de confiance, LDAP/AD direct,
+  jetons d'API). **Migration Alembic additive** (colonnes d'identité sur `users` + table
+  `api_tokens`) appliquée au redémarrage, ou `venv/bin/alembic upgrade head`. Nouvelles
+  dépendances `authlib` (BSD) et `ldap3` (LGPL-3.0, optionnelle). Opt-in : `auth.backend:
+  local` par défaut, aucun changement de comportement. Détail : § « Identité d'entreprise
+  (0.3.9) » ci-dessus.
 - **0.3.5 → 0.3.6** : runtimes STT servis (audio.cpp `qwen3asr`, parakeet.cpp `nemotron`)
   gérés par le produit — démarrage à la demande, santé, admission VRAM, repli natif.
   **Aucune migration Alembic, aucune nouvelle dépendance Python.** Tout est opt-in :
