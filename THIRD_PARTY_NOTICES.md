@@ -52,6 +52,8 @@ le code de TranscrIA reste sous Apache-2.0 sans contamination.
 | `faster-whisper`, `demucs`, `pyannote.*` | MIT | STT de repli, débruitage, diarisation |
 | `sherpa-onnx` | **Apache-2.0** | Runtime du backend STT `kroko` (zipformer2 streaming, CPU) |
 | `lameenc` | **LGPL-3.0** | Encodeur MP3 (via `demucs`) — lié dynamiquement, redistribué tel quel (le code appelant n'est pas dérivé) |
+| `ldap3` | **LGPL-3.0** | Connecteur LDAP / Active Directory (backend d'identité `ldap`, `GESTION_IDENTITE.md`) — importé dynamiquement (jamais modifié ni lié statiquement, le code appelant n'est pas dérivé), redistribué tel quel ; optionnel (non chargé en backend local/oidc/proxy) |
+| `authlib` | BSD-3-Clause | Client OIDC (backend d'identité `oidc`) — permissive |
 | `certifi` | **MPL-2.0** | Bundle d'autorités de certification (copyleft *au fichier*, redistribué tel quel) |
 | `text-unidecode` | Artistic-1.0 | Translittération (via `inflect`) |
 
