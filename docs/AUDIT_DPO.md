@@ -39,7 +39,7 @@ au-delà de la rétention ; la purge supprime la ligne en base ET les fichiers d
   et est purgé avec le traitement.
 - **Journalisation** : les accès aux données (consultation, téléchargement, édition), les
   connexions et leurs échecs, et le cycle de vie des jetons d'API personnels
-  (`token_create`/`token_revoke`) sont tracés (voir la liste des 59 actions dans
+  (`token_create`/`token_revoke`) sont tracés (voir la liste des 60 actions dans
   `audit/models.py`, libellés en français sur la page Audit). Les connexions fédérées
   (OIDC/proxy/LDAP) journalisent la source et le groupe décisif ; un refus de mapping
   journalise les groupes reçus (diagnostic administrateur) — jamais de mot de passe, de

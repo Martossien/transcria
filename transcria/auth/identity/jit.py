@@ -79,6 +79,15 @@ def provision_federated(identity: FederatedIdentity, config: dict) -> tuple[User
     db.session.commit()
     logger.info("JIT : compte fédéré créé (source=%s, username=%s, role=%s)",
                 identity.source, username, decision.role.value)
+    # Traçabilité PSSI/DPO : un compte apparaît SANS action d'un administrateur
+    # (provisionné depuis l'annuaire) — événement distinct du simple LOGIN.
+    from transcria.audit.decorator import audit_log
+    from transcria.audit.models import AuditAction
+
+    audit_log(AuditAction.USER_PROVISIONED, target_type="user", target_id=user.id,
+              target_label=username, details={"source": identity.source,
+                                              "role": decision.role.value,
+                                              "matched_group": decision.matched_group})
     return user, decision
 
 

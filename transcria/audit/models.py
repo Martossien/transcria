@@ -11,6 +11,7 @@ class AuditAction(str, enum.Enum):
     LOGOUT = "logout"
     TOKEN_CREATE = "token_create"
     TOKEN_REVOKE = "token_revoke"
+    USER_PROVISIONED = "user_provisioned"  # compte fédéré créé à la volée (JIT)
 
     JOB_VIEW = "job_view"
     JOB_DOWNLOAD = "job_download"
@@ -78,6 +79,7 @@ class AuditAction(str, enum.Enum):
 _VERB_FR = {
     "login": "Connexion", "login_failed": "Échec de connexion", "logout": "Déconnexion",
     "token_create": "Jeton d'API — création", "token_revoke": "Jeton d'API — révocation",
+    "user_provisioned": "Compte fédéré provisionné (JIT)",
     "view": "Consultation", "download": "Téléchargement", "delete": "Suppression",
     "create": "Création", "modify": "Modification", "save": "Enregistrement",
     "enqueue": "Mise en file", "dequeue": "Sortie de file", "prioritize": "Priorisation",

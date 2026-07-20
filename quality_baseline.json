@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 71,
+ "deferred_internal_imports": 76,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -29,7 +29,7 @@
   "transcria.auth.groups": 2,
   "transcria.auth.identity": 5,
   "transcria.auth.identity.base": 1,
-  "transcria.auth.identity.jit": 4,
+  "transcria.auth.identity.jit": 6,
   "transcria.auth.identity.ldap": 1,
   "transcria.auth.identity.local": 2,
   "transcria.auth.identity.mapping": 1,
@@ -175,7 +175,7 @@
   "transcria.web.prompt_files": 1,
   "transcria.web.refine_api": 10,
   "transcria.web.refine_shared": 4,
-  "transcria.web.request_helpers": 1,
+  "transcria.web.request_helpers": 3,
   "transcria.web.routes": 6,
   "transcria.web.ui_labels": 1,
   "transcria.web.wizard_api": 31,

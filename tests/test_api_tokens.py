@@ -118,6 +118,24 @@ class TestRoutesEtoile:
         assert r.status_code == 401
         assert "révoqué" in r.get_json()["error"]
 
+    def test_jeton_invalide_est_audite(self, app, token_user):
+        """Traçabilité PSSI : une tentative avec un jeton invalide/révoqué laisse une
+        entrée d'audit (token_id public, jamais le secret) — signal de jeton volé."""
+        user_id, full = token_user
+        with app.app_context():
+            from transcria.auth.api_tokens import list_for_user, revoke_token
+            token_id = list_for_user(user_id)[0].token_id
+            revoke_token(list_for_user(user_id)[0])
+        app.test_client().get("/api/jobs/x/status", headers={"Authorization": f"Bearer {full}"})
+        with app.app_context():
+            from transcria.audit.models import AuditLog
+            row = (AuditLog.query.filter_by(action="login_failed", target_label="api_token")
+                   .order_by(AuditLog.timestamp.desc()).first())
+            assert row is not None
+            assert token_id in (row.details_json or "")
+            secret = full.split("_", 2)[2]
+            assert secret not in (row.details_json or "")   # jamais le secret
+
     def test_bearer_non_tia_ignore_sans_500(self, app):
         r = app.test_client().get("/api/jobs/inexistant/status",
                                   headers={"Authorization": "Bearer eyJhbGciOi.autre.jwt"})

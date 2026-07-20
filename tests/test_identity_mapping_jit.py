@@ -74,6 +74,21 @@ class TestJIT:
                 _identity(subject="sub-resync", username="jit-resync", groups=("CN=Transcria Users,OU=Apps,DC=corp",)), _cfg())
             assert user2.id == user.id and user2.role == "operator"
 
+    def test_creation_jit_est_auditee(self, app):
+        """Traçabilité PSSI/DPO : un compte fédéré apparaît SANS action admin →
+        événement d'audit distinct (user_provisioned), la RESYNCHRONISATION n'en
+        crée pas un second."""
+        with app.app_context():
+            from transcria.audit.models import AuditLog
+            provision_federated(_identity(subject="sub-audit", username="jit-audit"), _cfg())
+            rows = AuditLog.query.filter_by(action="user_provisioned", target_label="jit-audit").all()
+            assert len(rows) == 1
+            assert '"source": "oidc"' in (rows[0].details_json or "")
+            # Un second login (resync) ne crée PAS un nouvel événement de provisionnement.
+            provision_federated(_identity(subject="sub-audit", username="jit-audit"), _cfg())
+            rows2 = AuditLog.query.filter_by(action="user_provisioned", target_label="jit-audit").all()
+            assert len(rows2) == 1
+
     def test_refus_si_aucun_groupe_mappe(self, app):
         with app.app_context():
             with pytest.raises(FederatedLoginDenied) as exc:

@@ -71,6 +71,19 @@ def bearer_token_allowed(view):
             if raw.startswith(TOKEN_PREFIX):
                 user = authenticate_token(raw)
                 if user is None:
+                    # Traçabilité : une tentative avec un jeton invalide/expiré/révoqué
+                    # est un signal de sécurité (jeton volé, sondage). On journalise le
+                    # token_id (partie PUBLIQUE) — jamais le secret. Un usage RÉUSSI n'est
+                    # pas audité par requête (le polling inonderait) : les actions en aval
+                    # portent déjà l'utilisateur, et token.last_used_at trace l'usage.
+                    from transcria.audit.decorator import audit_log
+                    from transcria.audit.models import AuditAction
+                    from transcria.auth.api_tokens import parse_token
+
+                    parsed = parse_token(raw)
+                    audit_log(AuditAction.LOGIN_FAILED, target_label="api_token",
+                              details={"reason": "api_token_invalid",
+                                       "token_id": parsed[0] if parsed else None})
                     return jsonify({"error": "Jeton d'API invalide, expiré ou révoqué"}), 401
                 from flask import session
                 from flask_login import login_user

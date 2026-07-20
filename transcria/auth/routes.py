@@ -216,6 +216,8 @@ def oidc_login():
     try:
         return oidc_mod.authorize_redirect(url_for("auth.oidc_callback", _external=True))
     except IdentityUnavailable:
+        audit_log(AuditAction.LOGIN_FAILED, target_label="oidc",
+                  details={"reason": "provider_unavailable"})
         flash(_("Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."), "error")
         return render_template("login.html", show_local_form=True), 503
 
@@ -238,6 +240,8 @@ def oidc_callback():
     try:
         identity = oidc_mod.complete_login(cfg)
     except IdentityUnavailable:
+        audit_log(AuditAction.LOGIN_FAILED, target_label="oidc",
+                  details={"reason": "provider_unavailable"})
         flash(_("Fournisseur d'identité indisponible. Réessayez plus tard ou utilisez le compte local de secours."), "error")
         return render_template("login.html", show_local_form=True), 503
     except OAuthError as exc:
