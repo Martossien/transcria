@@ -29,6 +29,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_storage(cfg.get("storage", {}), result)
     _check_voice_enrollment(cfg.get("voice_enrollment", {}), result)
     _check_auth(cfg.get("auth", {}), result)
+    _check_auth_backend(cfg.get("auth", {}) or {}, result)
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result, cfg)
@@ -212,6 +213,19 @@ def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:
         else:
             _check_bool(audit, "log_match_suggestions", "voice_enrollment.audit.log_match_suggestions", r)
             _check_bool(audit, "log_match_scores", "voice_enrollment.audit.log_match_scores", r)
+
+
+_IMPLEMENTED_AUTH_BACKENDS = ("local",)  # étendu lot par lot (GESTION_IDENTITE.md)
+
+
+def _check_auth_backend(auth: dict, r: ValidationResult) -> None:
+    backend = str(auth.get("backend", "local") or "local").strip().lower()
+    if backend not in _IMPLEMENTED_AUTH_BACKENDS:
+        r.add_error(
+            f"auth.backend='{backend}' non disponible. Implémentés : "
+            f"{', '.join(_IMPLEMENTED_AUTH_BACKENDS)} (cf. docs/GESTION_IDENTITE.md) — "
+            f"jamais de repli silencieux vers 'local'."
+        )
 
 
 def _check_auth(auth: dict, r: ValidationResult) -> None:

@@ -49,6 +49,7 @@ internal:
   gpu.llm_vram_mb_per_gpu: calibration écrite par le système
 deferred:
 - auth.enabled
+- auth.backend
 - auth.first_admin_username
 - auth.session_lifetime_hours
 - cohere.chunk_length_s

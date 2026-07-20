@@ -51,9 +51,21 @@ class UserStore:
         return user
 
     @staticmethod
+    def get_by_external(source: str, subject: str) -> User | None:
+        """Rapprochement JIT : (identity_source, external_subject) — jamais l'email."""
+        if not source or not subject:
+            return None
+        return User.query.filter_by(identity_source=source, external_subject=subject).first()
+
+    @staticmethod
     def change_password(user_id: str, new_password: str) -> bool:
         user = db.session.get(User, user_id)
         if user is None:
+            return False
+        # Un compte FÉDÉRÉ (oidc/ldap/proxy) n'a pas de mot de passe local : le mot
+        # de passe se gère chez le fournisseur d'identité. Refus explicite plutôt
+        # que d'écrire un hachage qui ne servirait jamais (GESTION_IDENTITE §3.5).
+        if (user.identity_source or "local") != "local":
             return False
         user.set_password(new_password)
         db.session.commit()

@@ -39,6 +39,20 @@ class User(UserMixin, db.Model):
     # navigateur / la locale par défaut de l'instance. Distinct de la langue des livrables
     # (réglage par job). Voir docs/I18N_MULTILANGUE.md et transcria/web/i18n.py.
     locale = db.Column(db.String(8), nullable=True)
+    # Chantier identité (lot 0, docs/GESTION_IDENTITE.md) : provenance du compte et
+    # clé de rapprochement JIT. Un compte fédéré n'a PAS de mot de passe utilisable.
+    identity_source = db.Column(db.String(16), nullable=False, default="local", server_default="local")
+    external_subject = db.Column(db.String(255), nullable=True)
+    last_identity_sync = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Unicité du rapprochement JIT : un sujet externe = un compte, par source
+    # (index PARTIEL : les comptes locaux, external_subject NULL, sont hors index).
+    __table_args__ = (
+        db.Index("ix_users_identity_external", "identity_source", "external_subject",
+                 unique=True,
+                 postgresql_where=db.text("external_subject IS NOT NULL"),
+                 sqlite_where=db.text("external_subject IS NOT NULL")),
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)

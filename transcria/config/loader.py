@@ -50,7 +50,10 @@ _DEFAULT_CONFIG = {
         },
     },
     "auth": {"enabled": True, "first_admin_username": "admin", "first_admin_password": "CHANGE-ME",
-             "session_lifetime_hours": 12},
+             "session_lifetime_hours": 12,
+             # Backend d'identité (docs/GESTION_IDENTITE.md) : local = historique.
+             # Valeurs futures par lot : oidc, proxy, ldap — REFUSÉES tant que non livrées.
+             "backend": "local"},
     "gpu": {
         "cohere_vram_mb": 6000,
         "pyannote_vram_mb": 2000,

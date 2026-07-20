@@ -7,6 +7,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.groups import GroupStore
+from transcria.auth.identity import get_identity_backend
 from transcria.auth.models import GroupRole, Role
 from transcria.auth.permissions import Permission, get_user_permissions, requires
 from transcria.auth.rate_limit import login_rate_limiter
@@ -76,8 +77,11 @@ def login():
                       details={"reason": "rate_limited", "retry_after_s": blocked_s})
             flash(_("Trop de tentatives. Réessayez dans quelques minutes."), "error")
             return render_template("login.html"), 429
-        user = UserStore.get_by_username(username)
-        if user and user.is_active and user.check_password(password):
+        # Chantier identité lot 0 : la VÉRIFICATION passe par le backend résolu
+        # (local aujourd'hui — comportement extrait à l'identique). Rate-limit,
+        # audit, session et messages restent ICI, communs à tous les backends.
+        user = get_identity_backend(get_config()).authenticate(username, password)
+        if user is not None:
             login_rate_limiter.record_success(client_ip, username)
             UserStore.record_login(user)
             session.permanent = True   # applique PERMANENT_SESSION_LIFETIME (C3.3)

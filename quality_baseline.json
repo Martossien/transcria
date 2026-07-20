@@ -28,7 +28,7 @@
     "transcria.auth.groups": 2,
     "transcria.auth.models": 1,
     "transcria.auth.permissions": 1,
-    "transcria.auth.routes": 8,
+    "transcria.auth.routes": 9,
     "transcria.auth.store": 2,
     "transcria.config": 3,
     "transcria.config.llm_profiles": 1,

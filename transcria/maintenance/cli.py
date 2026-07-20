@@ -278,6 +278,10 @@ def _cmd_reset_admin_password(args: argparse.Namespace) -> int:
         if not user.is_active:
             print(f"❌ Compte désactivé : {args.username} (réactiver d'abord via l'UI)", file=sys.stderr)
             return 1
+        if (user.identity_source or "local") != "local":
+            print(f"❌ Compte fédéré ({user.identity_source}) : le mot de passe se gère chez "
+                  f"le fournisseur d'identité, pas ici (cf. docs/GESTION_IDENTITE.md).", file=sys.stderr)
+            return 1
 
         temp_password = secrets.token_urlsafe(12)
         if not UserStore.change_password(user.id, temp_password):
