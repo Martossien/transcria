@@ -107,11 +107,18 @@ def login():
             return render_template("login.html"), 429
         flash(_("Identifiant ou mot de passe incorrect."), "error")
         return render_template("login.html"), 401
-    backend = identity_backend_name(get_config())
+    cfg = get_config()
+    backend = identity_backend_name(cfg)
+    # Proxy de confiance en auto-login : GET /login part directement au connecteur
+    # (sauf break-glass ?local=1) — l'utilisateur ne voit jamais de page intermédiaire.
+    if (backend == "proxy" and request.args.get("local") != "1"
+            and ((cfg.get("auth", {}) or {}).get("proxy", {}) or {}).get("auto_login", True)):
+        return redirect(url_for("auth.proxy_login", next=request.args.get("next")))
     return render_template(
         "login.html",
         sso_backend=backend if backend != "local" else None,
-        config_button_label=str(((get_config().get("auth", {}) or {}).get("oidc", {}) or {}).get("button_label") or ""),
+        sso_login_endpoint="auth.proxy_login" if backend == "proxy" else "auth.oidc_login",
+        config_button_label=str(((cfg.get("auth", {}) or {}).get("oidc", {}) or {}).get("button_label") or ""),
         # ?local=1 : chemin break-glass — formulaire local affiché malgré le SSO.
         show_local_form=(backend == "local") or request.args.get("local") == "1",
     )
@@ -193,21 +200,74 @@ def oidc_callback():
     return redirect(url_for("web.index"))
 
 
+@auth_bp.route("/auth/proxy/login")
+def proxy_login():
+    """Chantier identité lot 3 : connexion par en-têtes de proxy de confiance.
+
+    La confiance repose sur l'adresse SOCKET (`request.remote_addr` ∈
+    `auth.proxy.trusted_ips`) — jamais `X-Forwarded-For`. Une requête hors
+    confiance qui PORTE les en-têtes est journalisée (usurpation possible) et
+    refusée ; le formulaire local reste le secours."""
+    from transcria.auth.identity import proxy as proxy_mod
+    from transcria.auth.identity.jit import FederatedLoginDenied, provision_federated
+
+    if current_user.is_authenticated:
+        return redirect(url_for("web.index"))
+    cfg = get_config()
+    if identity_backend_name(cfg) != "proxy":
+        return redirect(url_for("auth.login"))
+    identity = proxy_mod.extract_identity(request.headers, request.remote_addr, cfg)
+    if identity is None:
+        audit_log(AuditAction.LOGIN_FAILED, target_label="proxy",
+                  details={"reason": "proxy_headers_absent_or_untrusted",
+                           "remote_addr": request.remote_addr})
+        flash(_("Aucune identité transmise par le proxy d'authentification. "
+                "Utilisez le compte local de secours."), "error")
+        return render_template("login.html", show_local_form=True), 401
+    try:
+        user, decision = provision_federated(identity, cfg)
+    except FederatedLoginDenied as exc:
+        audit_log(AuditAction.LOGIN_FAILED, target_label=identity.username,
+                  details={"reason": "role_mapping_denied",
+                           "received_groups": list(exc.decision.received_groups) if exc.decision else []})
+        flash(_("Accès non attribué : contactez votre administrateur."), "error")
+        # show_local_form : sans lui, l'auto-login re-tenterait la même identité
+        # refusée en boucle depuis GET /login.
+        return render_template("login.html", show_local_form=True), 403
+
+    UserStore.record_login(user)
+    session.permanent = True
+    login_user(user)
+    audit_log(AuditAction.LOGIN, details={"source": "proxy",
+                                          "matched_group": decision.matched_group})
+    next_url = request.args.get("next")
+    if next_url and _is_safe_next_url(next_url):
+        return redirect(next_url)
+    return redirect(url_for("web.index"))
+
+
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     # Compte OIDC : déconnexion RP-initiated chez l'IdP APRÈS la session locale
     # (best-effort — sans end_session_endpoint, le logout local suffit).
-    was_oidc = getattr(current_user, "identity_source", "local") == "oidc"
+    source = getattr(current_user, "identity_source", "local")
     audit_log(AuditAction.LOGOUT)
     logout_user()
-    if was_oidc:
+    if source == "oidc":
         from transcria.auth.identity import oidc as oidc_mod
         from transcria.config import get_config
 
         idp_logout = oidc_mod.end_session_url(get_config(), url_for("auth.login", _external=True))
         if idp_logout:
             return redirect(idp_logout)
+    if source == "proxy":
+        # La session du PROXY survit à la nôtre : revenir sur /login relancerait
+        # l'auto-login immédiatement. On atterrit sur le formulaire local avec
+        # l'explication — la vraie déconnexion se fait chez le proxy (Authelia…).
+        flash(_("Session du portail fermée. La session du proxy d'authentification "
+                "reste active : déconnectez-vous aussi du proxy pour changer d'identité."), "info")
+        return redirect(url_for("auth.login", local=1))
     flash(_("Vous avez été déconnecté."), "info")
     return redirect(url_for("auth.login"))
 

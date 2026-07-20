@@ -135,9 +135,11 @@ CONFIG_FORM_SECTIONS: list[dict] = [
                    "secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."),
         "fields": [
             {"path": "auth.backend", "label": _l("Backend d'identité"), "type": "select",
-             "options": ["local", "oidc"],
-             "help": _l("local (défaut) : comptes de ce portail. oidc : SSO d'entreprise — "
-                        "renseignez les champs ci-dessous avant d'activer.")},
+             "options": ["local", "oidc", "proxy"],
+             "help": _l("local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. "
+                        "proxy : identité fournie par un proxy d'authentification frontal "
+                        "(Authelia, oauth2-proxy…). Renseignez les champs correspondants "
+                        "avant d'activer.")},
             {"path": "auth.oidc.issuer", "label": _l("Émetteur (issuer)"), "type": "text",
              "help": _l("URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise "
                         "(la découverte /.well-known est automatique).")},
@@ -151,6 +153,19 @@ CONFIG_FORM_SECTIONS: list[dict] = [
             {"path": "auth.oidc.button_label", "label": _l("Libellé du bouton SSO"), "type": "text",
              "help": _l("Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». "
                         "Vide = libellé par défaut.")},
+            {"path": "auth.proxy.trusted_ips", "label": _l("Adresses de confiance du proxy"), "type": "csv",
+             "help": _l("Backend proxy uniquement : adresses IP ou réseaux CIDR du proxy "
+                        "frontal, ex. 127.0.0.1, 10.0.0.0/24. Les en-têtes d'identité ne "
+                        "sont crus QUE depuis ces adresses (adresse socket réelle, jamais "
+                        "X-Forwarded-For).")},
+            {"path": "auth.proxy.user_header", "label": _l("En-tête utilisateur du proxy"), "type": "text",
+             "help": _l("Nom de l'en-tête portant l'identifiant (convention : Remote-User).")},
+            {"path": "auth.proxy.groups_header", "label": _l("En-tête groupes du proxy"), "type": "text",
+             "help": _l("Nom de l'en-tête portant les groupes, séparés par des virgules "
+                        "(convention : Remote-Groups).")},
+            {"path": "auth.proxy.auto_login", "label": _l("Connexion automatique via le proxy"), "type": "bool",
+             "help": _l("Activée : /login connecte directement depuis les en-têtes. "
+                        "Désactivée : la page affiche un bouton de connexion.")},
             {"path": "auth.role_mapping.claim", "label": _l("Claim des groupes"), "type": "text",
              "help": _l("Nom du claim OIDC portant les groupes (généralement « groups »).")},
             {"path": "auth.role_mapping.rules", "label": _l("Règles groupe → rôle"), "type": "group_role_rules",

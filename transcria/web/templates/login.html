@@ -14,7 +14,7 @@
     <p class="text-muted text-center mb-4">{{ _('Portail de transcription de réunion') }}</p>
     {% if sso_backend %}
     <div class="d-grid mb-3">
-      <a class="btn btn-primary btn-lg" href="{{ url_for('auth.oidc_login', next=request.args.get('next')) }}">
+      <a class="btn btn-primary btn-lg" href="{{ url_for(sso_login_endpoint or 'auth.oidc_login', next=request.args.get('next')) }}">
         <i class="bi bi-shield-lock me-2"></i>{{ config_button_label or _("Se connecter avec l'authentification d'entreprise") }}
       </a>
     </div>

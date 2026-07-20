@@ -117,6 +117,22 @@ Rôle du process pour la montée en charge (Phase B). Voir [`CONCURRENCE_ET_CHAR
 | `leeway_s` | int | `30` | Tolérance d'horloge sur `exp`/`iat` de l'ID token |
 | `button_label` | string | `""` | Libellé du bouton SSO (vide = libellé i18n par défaut) |
 
+#### `auth.proxy` (backend `proxy` uniquement — proxy d'authentification frontal, lot 3 GESTION_IDENTITE)
+
+| Paramètre | Type | Défaut | Description |
+|---|---|---|---|
+| `trusted_ips` | list | `[]` | Adresses IP ou réseaux CIDR du proxy frontal. REQUIS (vide = backend refusé au boot). La garde compare l'**adresse socket** de la requête — jamais `X-Forwarded-For`, falsifiable par construction. Un en-tête d'identité reçu d'une adresse non déclarée est journalisé en WARNING (usurpation) et ignoré |
+| `user_header` | string | `"Remote-User"` | En-tête portant l'identifiant (convention Authelia/oauth2-proxy) |
+| `groups_header` | string | `"Remote-Groups"` | En-tête portant les groupes, séparés par des virgules |
+| `name_header` | string | `"Remote-Name"` | En-tête du nom d'affichage (optionnel) |
+| `email_header` | string | `"Remote-Email"` | En-tête de l'email (optionnel) |
+| `auto_login` | bool | `true` | `true` : `GET /login` connecte directement depuis les en-têtes. `false` : la page de connexion affiche un bouton |
+
+Le doctor émet un WARN si `trusted_ips` contient un réseau très large (ex.
+`0.0.0.0/0`) : toute machine du réseau pourrait usurper n'importe quelle
+identité. Le proxy DOIT écraser les en-têtes entrants (`proxy_set_header` —
+jamais de passthrough), cf. le guide dans `docs/INSTALL.md`.
+
 #### `auth.role_mapping` (commun aux backends fédérés)
 
 | Paramètre | Type | Défaut | Description |

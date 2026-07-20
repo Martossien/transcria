@@ -1390,6 +1390,18 @@ def check_identity_backend(
         url = f"{issuer}/.well-known/openid-configuration"
         if not issuer or not discovery_prober(url):
             problems.append(_t("idn_discovery_ko", url=url))
+    if backend == "proxy":
+        # GESTION_IDENTITE §3.7 : un réseau de confiance trop large = n'importe
+        # quelle machine peut poser Remote-User et devenir n'importe qui.
+        import ipaddress
+
+        for entry in ((cfg.get("auth", {}) or {}).get("proxy", {}) or {}).get("trusted_ips") or []:
+            try:
+                net = ipaddress.ip_network(str(entry).strip(), strict=False)
+            except ValueError:
+                continue  # le schéma de config refuse déjà l'entrée invalide
+            if net.num_addresses > 65536:
+                problems.append(_t("idn_proxy_open_network", entry=entry))
     if problems:
         return CheckResult(name, WARN, " ; ".join(problems), hint=_t("idn_discovery_hint"))
     return CheckResult(name, OK, _t("idn_ok", backend=backend, admins=local_admins))

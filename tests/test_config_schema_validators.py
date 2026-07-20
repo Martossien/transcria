@@ -459,3 +459,44 @@ class TestMossSitePersistence:
     def test_moss_desactive_pas_d_avertissement_meme_sous_tmp(self):
         result = _validate_mutated(("moss.moss_site", "/tmp/transcria_moss_site"))
         assert not any("purgé au reboot" in w for w in result.warnings)
+
+
+class TestAuthProxyValidation:
+    """Chantier identité lot 3 : bloc auth.proxy — requis seulement si backend=proxy."""
+
+    _RULES = [{"group": "g", "role": "admin"}]
+
+    def test_trusted_ips_vide_refuse_au_boot(self):
+        result = _validate_mutated(("auth.backend", "proxy"),
+                                   ("auth.role_mapping.rules", self._RULES))
+        assert any("auth.proxy.trusted_ips requis" in e for e in result.errors)
+
+    def test_entree_invalide_refusee(self):
+        result = _validate_mutated(("auth.backend", "proxy"),
+                                   ("auth.proxy.trusted_ips", ["pas-une-ip"]),
+                                   ("auth.role_mapping.rules", self._RULES))
+        assert any("entrée invalide 'pas-une-ip'" in e for e in result.errors)
+
+    def test_reseau_tres_large_avertit(self):
+        result = _validate_mutated(("auth.backend", "proxy"),
+                                   ("auth.proxy.trusted_ips", ["0.0.0.0/0"]),
+                                   ("auth.role_mapping.rules", self._RULES))
+        assert not result.errors
+        assert any("réseau très large" in w for w in result.warnings)
+
+    def test_user_header_vide_refuse(self):
+        result = _validate_mutated(("auth.backend", "proxy"),
+                                   ("auth.proxy.trusted_ips", ["127.0.0.1"]),
+                                   ("auth.proxy.user_header", ""),
+                                   ("auth.role_mapping.rules", self._RULES))
+        assert any("user_header" in e for e in result.errors)
+
+    def test_mapping_valide_aussi_pour_le_proxy(self):
+        result = _validate_mutated(("auth.backend", "proxy"),
+                                   ("auth.proxy.trusted_ips", ["127.0.0.1"]),
+                                   ("auth.role_mapping.rules", [{"group": "g", "role": "superadmin"}]))
+        assert any("inconnu" in e for e in result.errors)
+
+    def test_backend_local_ignore_le_bloc_proxy(self):
+        result = _validate_mutated(("auth.proxy.trusted_ips", []))
+        assert not any("trusted_ips" in e for e in result.errors)

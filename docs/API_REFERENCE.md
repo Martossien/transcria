@@ -37,6 +37,7 @@
 | `/admin/users/new` | GET,POST | connexion + Permission.MANAGE_USERS | _(docstring manquante)_ | `transcria.auth.routes` |
 | `/auth/oidc/callback` | GET | — | Retour de l'IdP : validation complète, JIT, session — ou refus audité. | `transcria.auth.routes` |
 | `/auth/oidc/login` | GET | — | Chantier identité lot 1 : départ du flux Authorization Code + PKCE. | `transcria.auth.routes` |
+| `/auth/proxy/login` | GET | — | Chantier identité lot 3 : connexion par en-têtes de proxy de confiance. | `transcria.auth.routes` |
 | `/login` | GET,POST | — | _(docstring manquante)_ | `transcria.auth.routes` |
 | `/logout` | POST | connexion requise | _(docstring manquante)_ | `transcria.auth.routes` |
 
@@ -186,7 +187,7 @@
 | `/ready` | GET | — | _(docstring manquante)_ | `transcria.web.health_routes` |
 | `/system` | GET | connexion + Permission.ACCESS_SYSTEM | _(docstring manquante)_ | `transcria.web.pages_routes` |
 
-_Portail TranscrIA (app principale) : 125 routes, 92 sans docstring._
+_Portail TranscrIA (app principale) : 126 routes, 92 sans docstring._
 
 ## Service d'inférence (nœud de ressources)
 

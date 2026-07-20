@@ -179,8 +179,10 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
 
 ### SSO d'entreprise (post-0.3.8.1)
 
-Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC, voir
-`docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md`.
+Rien à faire : `auth.backend: local` reste le défaut. Pour activer l'OIDC ou un
+proxy d'authentification (Authelia, oauth2-proxy — `auth.backend: proxy`), voir
+`docs/INSTALL.md` § « Identité d'entreprise » et `docs/GESTION_IDENTITE.md` ;
+tout est aussi configurable depuis Administration → Configuration.
 La migration de base associée est additive (colonnes `users.identity_source`,
 `external_subject`, `last_identity_sync`) et s'applique au premier redémarrage.
 

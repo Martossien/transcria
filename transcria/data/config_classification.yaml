@@ -9,6 +9,10 @@ exposed:
 - auth.oidc.client_secret
 - auth.oidc.client_secret_env
 - auth.oidc.issuer
+- auth.proxy.auto_login
+- auth.proxy.groups_header
+- auth.proxy.trusted_ips
+- auth.proxy.user_header
 - auth.role_mapping.claim
 - auth.role_mapping.default
 - auth.role_mapping.rules
@@ -60,6 +64,8 @@ deferred:
 - auth.enabled
 - auth.oidc.leeway_s
 - auth.oidc.scopes
+- auth.proxy.email_header
+- auth.proxy.name_header
 - auth.first_admin_username
 - auth.session_lifetime_hours
 - cohere.chunk_length_s

@@ -81,8 +81,15 @@ auth:
   #   issuer: "https://keycloak.example.com/realms/entreprise"
   #   client_id: "transcria"
   #   client_secret_env: "TRANSCRIA_OIDC_SECRET"   # export dans .env / systemd
-  # role_mapping:
-  #   claim: groups
+  # ── Variante proxy de confiance (Authelia, oauth2-proxy, Pomerium) ──
+  # backend: proxy
+  # proxy:
+  #   trusted_ips: ["127.0.0.1"]     # OBLIGATOIRE: IP/CIDR du proxy (adresse socket, jamais XFF)
+  #   user_header: "Remote-User"
+  #   groups_header: "Remote-Groups" # groupes séparés par des virgules
+  #   auto_login: true               # false: bouton sur la page de connexion
+  # role_mapping:                    # commun oidc/proxy
+  #   claim: groups                  # OIDC seulement (proxy lit groups_header)
   #   rules:
   #     - {group: "transcria-admins", role: admin}
   #     - {group: "transcria-utilisateurs", role: operator}

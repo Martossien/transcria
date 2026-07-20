@@ -876,3 +876,46 @@ def test_check_disk_space_fail():
     res = doc.check_disk_space(cfg, usage_fn=lambda p: (1 * 1024**3, 100 * 1024**3))
     assert res.status == doc.FAIL
     assert res.hint
+
+
+# ── check_identity_backend (chantier identité, lots 1 et 3) ───────────────
+
+
+class TestCheckIdentityBackend:
+    def test_backend_local_ok_sans_aucune_sonde(self):
+        res = doc.check_identity_backend({"auth": {"backend": "local"}})
+        assert res.status == doc.OK
+
+    def test_federe_sans_admin_local_actif_fail(self):
+        """Le break-glass (§3.9) : une panne d'IdP sans admin local = tout le
+        monde dehors — c'est un FAIL, pas un warning."""
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "oidc", "oidc": {"issuer": "https://idp.example"}}},
+            discovery_prober=lambda url: True, admin_counter=lambda: 0)
+        assert res.status == doc.FAIL
+
+    def test_oidc_discovery_injoignable_warn(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "oidc", "oidc": {"issuer": "https://idp.example"}}},
+            discovery_prober=lambda url: False, admin_counter=lambda: 1)
+        assert res.status == doc.WARN
+        assert ".well-known/openid-configuration" in res.detail
+
+    def test_oidc_nominal_ok(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "oidc", "oidc": {"issuer": "https://idp.example"}}},
+            discovery_prober=lambda url: True, admin_counter=lambda: 1)
+        assert res.status == doc.OK
+
+    def test_proxy_reseau_tres_large_warn(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "proxy", "proxy": {"trusted_ips": ["0.0.0.0/0"]}}},
+            admin_counter=lambda: 1)
+        assert res.status == doc.WARN
+        assert "0.0.0.0/0" in res.detail
+
+    def test_proxy_adresses_precises_ok(self):
+        res = doc.check_identity_backend(
+            {"auth": {"backend": "proxy", "proxy": {"trusted_ips": ["127.0.0.1", "10.0.0.0/24"]}}},
+            admin_counter=lambda: 1)
+        assert res.status == doc.OK

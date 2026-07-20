@@ -22,7 +22,7 @@ __all__ = [
     "identity_backend_name",
 ]
 
-_IMPLEMENTED = {"local", "oidc"}  # étendu lot par lot : proxy (3), ldap (2)
+_IMPLEMENTED = {"local", "oidc", "proxy"}  # étendu lot par lot : ldap (2)
 
 
 def identity_backend_name(config: dict) -> str:
@@ -52,6 +52,10 @@ def get_identity_backend(config: dict):
         from transcria.auth.identity import oidc as _oidc  # différé : authlib
 
         return _oidc
+    if name == "proxy":
+        from transcria.auth.identity import proxy as _proxy
+
+        return _proxy
     raise ValueError(
         f"auth.backend='{name}' non disponible (implémentés : {', '.join(sorted(_IMPLEMENTED))}). "
         f"Voir docs/GESTION_IDENTITE.md — jamais de repli silencieux vers 'local'."

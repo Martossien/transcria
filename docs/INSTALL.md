@@ -2023,6 +2023,36 @@ Enregistrement d'application (App registration) → URI de redirection *Web*
 activer l'émission des *groups claims* (l'ID des groupes est émis — utilisez ces
 IDs dans `role_mapping.rules`, l'égalité est stricte).
 
+### Proxy d'authentification (Authelia, oauth2-proxy, Pomerium)
+
+Si un proxy authentifiant protège déjà vos applications, TranscrIA lit
+l'identité dans ses en-têtes (`backend: proxy`, cf. le bloc commenté de
+`config.example.yaml`). **Deux règles font toute la sécurité** :
+
+1. `auth.proxy.trusted_ips` = la ou les adresses du proxy (la garde compare
+   l'adresse socket réelle de la requête, jamais `X-Forwarded-For`) ;
+2. le proxy doit **écraser** les en-têtes entrants — jamais les transmettre
+   tels quels. Exemple Nginx devant Authelia :
+
+   ```nginx
+   location / {
+       # auth_request vers Authelia, puis :
+       auth_request_set $user   $upstream_http_remote_user;
+       auth_request_set $groups $upstream_http_remote_groups;
+       proxy_set_header Remote-User   $user;     # ÉCRASE ce que le client envoie
+       proxy_set_header Remote-Groups $groups;
+       proxy_pass http://127.0.0.1:7870;
+   }
+   ```
+
+   Avec oauth2-proxy : `--set-xauthrequest` émet `X-Auth-Request-User` /
+   `X-Auth-Request-Groups` — déclarez ces noms dans `user_header` /
+   `groups_header`.
+
+`auto_login: true` (défaut) connecte dès `GET /login` ; le break-glass reste
+`/login?local=1`. À la déconnexion du portail, la session du PROXY survit :
+l'interface l'explique et la vraie déconnexion se fait chez le proxy.
+
 ### Panne du fournisseur (break-glass)
 
 `/login?local=1` sert le formulaire local (seuls les comptes locaux y passent).

@@ -58,6 +58,11 @@ _DEFAULT_CONFIG = {
              "oidc": {"issuer": "", "client_id": "", "client_secret": "",
                       "client_secret_env": "", "scopes": "openid profile email",
                       "leeway_s": 30, "button_label": ""},
+             # Proxy de confiance (Authelia, oauth2-proxy…) : en-têtes crus
+             # UNIQUEMENT depuis trusted_ips (adresse socket, jamais XFF).
+             "proxy": {"trusted_ips": [], "user_header": "Remote-User",
+                       "groups_header": "Remote-Groups", "name_header": "Remote-Name",
+                       "email_header": "Remote-Email", "auto_login": True},
              # Mapping groupes fédérés → rôle (commun oidc/proxy/ldap) — défaut deny.
              "role_mapping": {"claim": "groups", "rules": [], "default": "deny"}},
     "gpu": {

@@ -31,6 +31,7 @@ def validate_config(cfg: dict) -> ValidationResult:
     _check_auth(cfg.get("auth", {}), result)
     _check_auth_backend(cfg.get("auth", {}) or {}, result)
     _check_auth_oidc(cfg.get("auth", {}) or {}, result)
+    _check_auth_proxy(cfg.get("auth", {}) or {}, result)
     _check_gpu(cfg.get("gpu", {}), result)
     _check_services(cfg.get("services", {}), result)
     _check_models(cfg.get("models", {}), result, cfg)
@@ -216,7 +217,7 @@ def _check_voice_enrollment(cfg: dict, r: ValidationResult) -> None:
             _check_bool(audit, "log_match_scores", "voice_enrollment.audit.log_match_scores", r)
 
 
-_IMPLEMENTED_AUTH_BACKENDS = ("local", "oidc")  # étendu lot par lot (GESTION_IDENTITE.md)
+_IMPLEMENTED_AUTH_BACKENDS = ("local", "oidc", "proxy")  # étendu lot par lot (GESTION_IDENTITE.md)
 
 
 def _check_auth_backend(auth: dict, r: ValidationResult) -> None:
@@ -243,6 +244,36 @@ def _check_auth_oidc(auth: dict, r: ValidationResult) -> None:
     issuer = str(oidc.get("issuer") or "")
     if issuer.startswith("http://") and "127.0.0.1" not in issuer and "localhost" not in issuer:
         r.add_warning("auth.oidc.issuer en HTTP non-loopback : les jetons transitent en clair")
+    _check_role_mapping_federated(auth, r)
+
+
+def _check_auth_proxy(auth: dict, r: ValidationResult) -> None:
+    """Bloc auth.proxy : requis SEULEMENT si backend=proxy (GESTION_IDENTITE §3.7)."""
+    if str(auth.get("backend", "local") or "local").strip().lower() != "proxy":
+        return
+    proxy = auth.get("proxy") or {}
+    trusted = proxy.get("trusted_ips") or []
+    if not trusted:
+        r.add_error("auth.proxy.trusted_ips requis (adresses/CIDR du proxy frontal) quand "
+                    "auth.backend=proxy — liste vide = personne n'est de confiance.")
+    import ipaddress
+
+    for entry in trusted:
+        try:
+            net = ipaddress.ip_network(str(entry).strip(), strict=False)
+        except ValueError:
+            r.add_error(f"auth.proxy.trusted_ips : entrée invalide '{entry}' (adresse IP ou CIDR attendu)")
+            continue
+        if net.num_addresses > 65536:
+            r.add_warning(f"auth.proxy.trusted_ips : '{entry}' couvre un réseau très large — "
+                          "n'importe quelle machine de ce réseau peut se faire passer pour "
+                          "n'importe quel utilisateur.")
+    if not str(proxy.get("user_header") or "").strip():
+        r.add_error("auth.proxy.user_header ne peut pas être vide quand auth.backend=proxy")
+    _check_role_mapping_federated(auth, r)
+
+
+def _check_role_mapping_federated(auth: dict, r: ValidationResult) -> None:
     # Mapping : validé par le module PUR (mêmes règles pour tous les connecteurs).
     from transcria.auth.identity.mapping import validate_role_mapping
 
