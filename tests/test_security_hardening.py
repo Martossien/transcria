@@ -162,6 +162,40 @@ class TestCsrfJetons:
             assert csrf.request_needs_csrf() is False
 
 
+class TestCSP:
+    def test_off_par_defaut_aucun_entete(self, _pg_database):
+        app = _app(_pg_database)
+        r = app.test_client().get("/login")
+        assert "Content-Security-Policy" not in r.headers
+        assert "Content-Security-Policy-Report-Only" not in r.headers
+
+    def test_enforce_pose_lentete(self, _pg_database):
+        app = _app(_pg_database, csp="enforce")
+        r = app.test_client().get("/login")
+        csp = r.headers.get("Content-Security-Policy")
+        assert csp and "default-src 'self'" in csp
+        # Verrouillages forts présents (indépendants des handlers inline).
+        for d in ("object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'", "form-action 'self'"):
+            assert d in csp
+
+    def test_report_only_entete_dedie(self, _pg_database):
+        app = _app(_pg_database, csp="report-only")
+        r = app.test_client().get("/login")
+        assert "Content-Security-Policy-Report-Only" in r.headers
+        assert "Content-Security-Policy" not in [h for h in r.headers.keys() if h == "Content-Security-Policy"]
+
+    def test_valeur_invalide_refusee_par_schema(self):
+        from transcria.config.config_schema import validate_config
+        cfg = deepcopy(get_default_config())
+        cfg["security"]["csp"] = "strict-magique"
+        assert any("security.csp" in e for e in validate_config(cfg).errors)
+
+    def test_modes_module(self):
+        from transcria.web.csp import CSP_MODES, csp_header
+        assert CSP_MODES == ("off", "report-only", "enforce")
+        assert csp_header("off") is None and csp_header("inconnu") is None
+
+
 class TestSchemaEtFormulaire:
     def test_hsts_sans_proxy_avertit(self):
         from transcria.config.config_schema import validate_config
@@ -175,7 +209,8 @@ class TestSchemaEtFormulaire:
         from transcria.web.config_form import CONFIG_FORM_SECTIONS, iter_fields
         paths = {f["path"] for f in iter_fields(CONFIG_FORM_SECTIONS)}
         for p in ("security.behind_tls_proxy", "security.session_cookie_secure",
-                  "security.hsts_enabled", "security.csrf_origin_check", "security.csrf_tokens"):
+                  "security.hsts_enabled", "security.csrf_origin_check", "security.csrf_tokens",
+                  "security.csp"):
             assert p in paths, p
 
 

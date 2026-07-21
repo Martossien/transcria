@@ -751,6 +751,7 @@ _DEFAULT_CONFIG = {
         "hsts_max_age_days": 365,         # durée du HSTS
         "csrf_origin_check": False,       # rejette un POST cookie d'origine croisée (défense CSRF en plus de SameSite)
         "csrf_tokens": False,             # jeton CSRF synchroniseur par requête mutante (défense forte)
+        "csp": "off",                     # Content-Security-Policy : off | report-only | enforce
         "audit_retention_by_family": {
             "auth": 1095,
             "job": 1095,

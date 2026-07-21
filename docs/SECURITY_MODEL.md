@@ -71,11 +71,20 @@ Posés sur toutes les réponses (`app.after_request`) :
   UNIQUEMENT sur une réponse réellement servie en HTTPS (jamais sur du HTTP en clair,
   ce qui piégerait le navigateur) ; durée `security.hsts_max_age_days` (défaut 365).
 
-**CSP (Content-Security-Policy)** — **limitation assumée** : non posée en 0.2.0. Les
-templates utilisent des gestionnaires d'événements inline (`onclick=`) et un bundle
-Bootstrap servi par CDN ; une CSP stricte sans *nonce* casserait l'interface. Plan
-0.3 : soit inliner le bundle et ajouter des nonces par requête, soit migrer les
-handlers vers des écouteurs délégués, puis poser une CSP restrictive.
+**CSP (Content-Security-Policy)** — opt-in `security.csp` (`off` défaut | `report-only`
+| `enforce`), voir `transcria/web/csp.py`. La politique **verrouille** les vecteurs les
+plus dangereux quel que soit l'état des scripts : `object-src 'none'`,
+`base-uri 'self'`, `frame-ancestors 'none'` (anti-framing), `form-action 'self'`
+(anti-détournement de formulaire), `default-src 'self'` (+ CDN Bootstrap listé
+explicitement, seule origine tierce). Déploiement sûr : commencer en `report-only`
+(le navigateur signale les violations sans bloquer), puis `enforce`.
+
+**Limitation assumée (script-src)** : `script-src`/`style-src` gardent `'unsafe-inline'`
+tant que ~59 gestionnaires d'événements inline (`onclick=`) et les îlots de données
+`<script>window.X = …|tojson</script>` vivent dans les templates. La version STRICTE
+(nonces, sans `'unsafe-inline'`) nécessite de migrer ces handlers vers des écouteurs
+délégués et de poser un nonce sur les îlots — chantier à **valider en navigateur**
+(chaque interaction), documenté comme étape suivante.
 
 ## 4. Données et secrets
 
@@ -155,6 +164,7 @@ fonctionnel) et se règle depuis Administration → Configuration → « Durciss
   (§3), émis uniquement sur une réponse HTTPS réelle.
 - `security.csrf_origin_check` (défaut `false`) — contrôle d'origine (§2).
 - `security.csrf_tokens` (défaut `false`) — jetons CSRF synchroniseurs (§2, défense forte).
+- `security.csp` (défaut `off`) — Content-Security-Policy (§3), déployer en `report-only` puis `enforce`.
 
 Le préflight `doctor` (`Transport HTTP(S)`) émet un WARN si un backend d'auth **fédéré**
 (OIDC/proxy/LDAP — identifiants d'entreprise) tourne sans cookie sécurisé ni proxy TLS

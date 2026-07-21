@@ -353,6 +353,11 @@ def register_request_hooks(app: Flask) -> None:
             max_age = int(_sec.get("hsts_max_age_days", 365)) * 86400
             response.headers.setdefault("Strict-Transport-Security",
                                         f"max-age={max_age}; includeSubDomains")
+        # Content-Security-Policy (opt-in `security.csp` : off | report-only | enforce).
+        from transcria.web.csp import csp_header
+        header = csp_header(str(_sec.get("csp", "off")))
+        if header is not None:
+            response.headers.setdefault(header[0], header[1])
         return response
 
 

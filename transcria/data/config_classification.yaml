@@ -43,6 +43,7 @@ exposed:
 - security.allowed_document_extensions
 - security.allowed_upload_extensions
 - security.behind_tls_proxy
+- security.csp
 - security.csrf_origin_check
 - security.csrf_tokens
 - security.hsts_enabled

@@ -1373,6 +1373,10 @@ def _check_security(sec: dict, r: ValidationResult) -> None:
     _check_int_range(sec, "hsts_max_age_days", "security.hsts_max_age_days", 1, 3650, r)
     _check_bool(sec, "csrf_origin_check", "security.csrf_origin_check", r)
     _check_bool(sec, "csrf_tokens", "security.csrf_tokens", r)
+    # CSP : valeurs miroir de transcria.web.csp.CSP_MODES (littéral ici — config = noyau,
+    # n'importe pas la couche web ; verrouillé par test_security_hardening).
+    if str(sec.get("csp", "off")).strip().lower() not in ("off", "report-only", "enforce"):
+        r.add_error(f"security.csp='{sec.get('csp')}' invalide (attendu : off, report-only, enforce)")
     if bool(sec.get("hsts_enabled", False)) and not (bool(sec.get("behind_tls_proxy", False))
                                                      or bool(sec.get("session_cookie_secure", False))):
         r.add_warning("security.hsts_enabled=true sans behind_tls_proxy ni session_cookie_secure : "

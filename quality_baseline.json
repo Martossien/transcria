@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 76,
+ "deferred_internal_imports": 80,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,
@@ -14,7 +14,7 @@
   "inference_service.routes.engines": 1,
   "inference_service.routes.voice_embed": 3,
   "inference_service.security": 1,
-  "transcria.app_services": 20,
+  "transcria.app_services": 22,
   "transcria.audio": 2,
   "transcria.audio.analyzer": 1,
   "transcria.audio.diarization_pcm": 2,

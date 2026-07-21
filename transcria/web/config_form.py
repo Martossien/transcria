@@ -128,6 +128,12 @@ CONFIG_FORM_SECTIONS: list[dict] = [
              "help": _l("Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie "
                         "(injecté automatiquement dans les formulaires et les appels de l'interface). "
                         "Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée.")},
+            {"path": "security.csp", "label": _l("Content-Security-Policy (CSP)"), "type": "select",
+             "options": ["off", "report-only", "enforce"],
+             "help": _l("Politique de sécurité du contenu. off : désactivée. report-only : le "
+                        "navigateur SIGNALE les violations sans rien bloquer (à déployer d'abord, "
+                        "pour observer). enforce : appliquée. Verrouille cadres, objets, base, "
+                        "formulaires et origines des ressources.")},
         ],
     },
     {
