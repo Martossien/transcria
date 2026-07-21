@@ -30,7 +30,7 @@
       {% endif %}
       <div class="small mt-1">{{ _('Vos saisies (contexte, participants, lexique) sont conservées — vous pouvez relancer le traitement.') }}</div>
     </div>
-    <button class="btn btn-outline-danger" onclick="TranscrIA.startProcessing()">
+    <button class="btn btn-outline-danger" data-action="TranscrIA.startProcessing">
       <i class="bi bi-arrow-clockwise"></i> {{ _('Relancer le traitement') }}
     </button>
   </div>
@@ -80,7 +80,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 window.__JOB_ID__ = "{{ job.id }}";
 window.__TYPE_SPECIFIC_FIELDS__ = {{ type_specific_fields_json | safe }};
 window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meeting.type_specific_data else '{}' }};
@@ -126,7 +126,7 @@ window.__WIZARD_LEX_TERMS__ = {{ (meeting.termes_suspects if (meeting.get('terme
         <div class="small text-danger d-none" id="lex-promote-error"></div>
       </div>
       <div class="modal-footer py-2">
-        <button type="button" class="btn btn-sm btn-primary" onclick="TranscrIA.confirmPromoteLexicon()">{{ _('Ajouter') }}</button>
+        <button type="button" class="btn btn-sm btn-primary" data-action="TranscrIA.confirmPromoteLexicon">{{ _('Ajouter') }}</button>
       </div>
     </div>
   </div>

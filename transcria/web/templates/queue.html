@@ -187,6 +187,6 @@
 {% endblock %}
 {% block scripts %}
 {# Données Jinja → JS : init 1 ligne (vague A3) ; la logique vit dans queue_page.js. #}
-<script>window.QUEUE_E2E_TEST_JOB_PREFIX = {{ e2e_test_job_prefix|tojson }};</script>
+<script nonce="{{ csp_nonce() }}">window.QUEUE_E2E_TEST_JOB_PREFIX = {{ e2e_test_job_prefix|tojson }};</script>
 <script src="{{ asset_url('js/queue_page.js') }}"></script>
 {% endblock %}

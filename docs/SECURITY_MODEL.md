@@ -79,12 +79,14 @@ plus dangereux quel que soit l'état des scripts : `object-src 'none'`,
 explicitement, seule origine tierce). Déploiement sûr : commencer en `report-only`
 (le navigateur signale les violations sans bloquer), puis `enforce`.
 
-**Limitation assumée (script-src)** : `script-src`/`style-src` gardent `'unsafe-inline'`
-tant que ~59 gestionnaires d'événements inline (`onclick=`) et les îlots de données
-`<script>window.X = …|tojson</script>` vivent dans les templates. La version STRICTE
-(nonces, sans `'unsafe-inline'`) nécessite de migrer ces handlers vers des écouteurs
-délégués et de poser un nonce sur les îlots — chantier à **valider en navigateur**
-(chaque interaction), documenté comme étape suivante.
+**`script-src` STRICT** : `'self'` + un **nonce par requête** (`transcria/web/csp.get_request_nonce`,
+exposé aux templates via `csp_nonce()`) pour les rares îlots de données inline, SANS
+`'unsafe-inline'`. Rendu possible par la migration de tous les gestionnaires inline
+(`onclick=`…) vers une délégation `data-action` (`static/js/ui_actions.js`) et le passage
+sous nonce des îlots `<script>window.X = …|tojson</script>`. Validé en navigateur
+(Playwright) : mode `enforce` → **zéro violation CSP** sur tous les écrans, interactions
+fonctionnelles. `style-src` garde `'unsafe-inline'` (Bootstrap pose des styles inline via
+JS ; l'injection de STYLE est un risque bien moindre que celle de script).
 
 ## 4. Données et secrets
 

@@ -18,7 +18,7 @@
       {% if meeting.get('sujet_suggere') %}
         <span class="badge bg-dark me-1">📝 {{ _('Sujet') }}</span> {{ meeting.sujet_suggere }}
       {% endif %}
-      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" onclick="TranscrIA.prefillContext()">{{ _('Appliquer les suggestions') }}</button>
+      <button type="button" class="btn btn-sm btn-outline-primary float-end mt-1" data-action="TranscrIA.prefillContext">{{ _('Appliquer les suggestions') }}</button>
     </div>
     {% endif %}
 
@@ -61,7 +61,7 @@
         <div class="col-md-6 mb-2">
           <label class="form-label small">{{ _('Type de réunion') }}</label>
           <select name="meeting_type" class="form-select form-select-sm" id="meeting_type_select"
-                  onchange="TranscrIA.updateTypeSpecificFields(this.value)">
+                  data-action="TranscrIA.updateTypeSpecificFields" data-action-val data-on="change">
             {% if custom_meeting_types %}
             <optgroup label="{{ _('Types intégrés') }}">
               {% for mt in meeting_types %}
@@ -109,7 +109,7 @@
         </div>
       </div>
 
-      <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveContext()">{{ _('Enregistrer le contexte') }}</button>
+      <button type="button" class="btn btn-primary btn-sm mt-2" data-action="TranscrIA.saveContext">{{ _('Enregistrer le contexte') }}</button>
       <span id="context-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
     </form>
 

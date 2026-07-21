@@ -111,7 +111,7 @@ var TranscrIA = window.TranscrIA || {};
                     t('Le résumé n\'a pas pu être généré (LLM sans production après 3 tentatives). La transcription est conservée — vous pouvez relancer.');
                 document.getElementById('summary-result').innerHTML =
                     '<div class="alert alert-warning">' + W.escapeHtml(failMsg) +
-                    '<div class="mt-2"><button class="btn btn-sm btn-primary" onclick="TranscrIA.generateSummary()">' +
+                    '<div class="mt-2"><button class="btn btn-sm btn-primary" data-action="TranscrIA.generateSummary">' +
                     t('Relancer le résumé') + '</button></div></div>';
                 return;
             }
@@ -366,7 +366,7 @@ var TranscrIA = window.TranscrIA || {};
             '<input type="text" class="form-control form-control-sm speaker-name" placeholder="' + t('Nom') + '" style="max-width:150px;">' +
             '<input type="text" class="form-control form-control-sm speaker-func" placeholder="' + t('Fonction') + '" style="max-width:130px;">' +
             '<input type="text" class="form-control form-control-sm speaker-role" placeholder="' + t('Rôle dans la réunion') + '" style="max-width:150px;">' +
-            '<button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>';
+            '<button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>';
         container.appendChild(row);
     };
 
@@ -648,8 +648,8 @@ var TranscrIA = window.TranscrIA || {};
                 '<div class="lex-context-quote"></div>' +
                 (c.reason ? '<div class="text-muted lex-context-reason"></div>' : '') +
                 '<div class="lex-context-actions">' +
-                '<button type="button" class="btn btn-sm btn-outline-primary lex-context-play" title="' + t('Écouter 5 secondes avant et après') + '" onclick="TranscrIA.toggleLexiconContextAudio(this)"><i class="bi bi-play-fill"></i></button>' +
-                '<label class="lex-context-listened"><input type="checkbox" class="form-check-input lex-context-listened-input" onchange="TranscrIA.setLexiconContextListened(this)"> ' + t('Écouté') + '</label>' +
+                '<button type="button" class="btn btn-sm btn-outline-primary lex-context-play" title="' + t('Écouter 5 secondes avant et après') + '" data-action="TranscrIA.toggleLexiconContextAudio" data-action-el><i class="bi bi-play-fill"></i></button>' +
+                '<label class="lex-context-listened"><input type="checkbox" class="form-check-input lex-context-listened-input" data-action="TranscrIA.setLexiconContextListened" data-action-el data-on="change"> ' + t('Écouté') + '</label>' +
                 '</div>' +
                 '</div>';
         });
@@ -717,9 +717,9 @@ var TranscrIA = window.TranscrIA || {};
             '<textarea class="form-control form-control-sm lex-comment mt-2" rows="2" placeholder="' + t('Pourquoi cette forme doit être validée') + '"></textarea>' +
             W.renderLexiconContexts(td.contexts || []) +
             (document.getElementById('lex-promote-modal')
-                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="' + t('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') + '" onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> ' + t('Au lexique central') + '</button>'
+                ? '<button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="' + t('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') + '" data-action="TranscrIA.openPromoteLexicon" data-action-el><i class="bi bi-journal-plus"></i> ' + t('Au lexique central') + '</button>'
                 : '') +
-            '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>';
+            '<button type="button" class="btn btn-sm btn-outline-danger lex-remove" data-action="dom.removeClosest">×</button>';
         container.appendChild(row);
 
         row.querySelector('.lex-term').value = td.term || '';
@@ -965,8 +965,8 @@ var TranscrIA = window.TranscrIA || {};
                 '<strong>' + t('⚠ Le traitement LLM prend plus de temps que prévu (%(elapsed)s).', { elapsed: elapsedStr() }) + '</strong><br>' +
                 t('La LLM est peut-être en boucle. Si les fichiers de correction sont déjà produits, vous pouvez annuler — le job sera récupéré automatiquement au redémarrage du service.') +
                 '<div class="mt-2 d-flex gap-2">' +
-                '<button class="btn btn-sm btn-warning" onclick="TranscrIA.cancelProcessing()">' + t('Annuler le traitement') + '</button>' +
-                '<button class="btn btn-sm btn-outline-secondary" onclick="TranscrIA._resumePolling()">' + t('Continuer à attendre') + '</button>' +
+                '<button class="btn btn-sm btn-warning" data-action="TranscrIA.cancelProcessing">' + t('Annuler le traitement') + '</button>' +
+                '<button class="btn btn-sm btn-outline-secondary" data-action="TranscrIA._resumePolling">' + t('Continuer à attendre') + '</button>' +
                 '</div></div>';
         }
 
@@ -1111,7 +1111,7 @@ var TranscrIA = window.TranscrIA || {};
                     location.reload();
                     return;
                 }
-                var genBtn = document.querySelector('[onclick="TranscrIA.generateSummary()"]');
+                var genBtn = document.querySelector('[data-action="TranscrIA.generateSummary"]');
                 if (genBtn) { genBtn.disabled = (state === 'summary_running'); }
                 if (_LIVE_STATUS_STATES.indexOf(state) !== -1) {
                     // Phase active (résumé, traitement…) : rafraîchissement rapide.
@@ -1162,8 +1162,8 @@ var TranscrIA = window.TranscrIA || {};
                     '<strong>' + t('Ce job a déjà été traité.') + '</strong> ' +
                     t('Voulez-vous relancer le traitement ? (le lexique et les corrections actuels seront appliqués)') +
                     '<div class="mt-2 d-flex gap-2">' +
-                    '<button class="btn btn-sm btn-primary" onclick="TranscrIA.confirmReprocess(\'' + mode + '\')">' + t('Oui, relancer') + '</button>' +
-                    '<button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'processing-result\').innerHTML=\'\'">' + t('Annuler') + '</button>' +
+                    '<button class="btn btn-sm btn-primary" data-action="TranscrIA.confirmReprocess" data-arg="' + mode + '">' + t('Oui, relancer') + '</button>' +
+                    '<button class="btn btn-sm btn-outline-secondary" data-action="dom.clearTarget" data-target="#processing-result">' + t('Annuler') + '</button>' +
                     '</div></div>';
             } else if (r.data.error) {
                 div.innerHTML = '<div class="alert alert-danger">' + t('Erreur : %(e)s', { e: r.data.error }) + '</div>';

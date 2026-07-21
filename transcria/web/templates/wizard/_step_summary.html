@@ -30,9 +30,9 @@
       </details>
       {% endif %}
       <p><strong>{{ _('Est-ce bien le fichier attendu ?') }}</strong></p>
-      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
-      <button class="btn btn-warning btn-sm me-2" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
-      <button class="btn btn-danger btn-sm" onclick="TranscrIA.validateSummary('no')">{{ _('Non, arrêter') }}</button>
+      <button class="btn btn-success btn-sm me-2" data-action="TranscrIA.validateSummary" data-arg="yes">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm me-2" data-action="TranscrIA.validateSummary" data-arg="maybe">{{ _('Continuer quand même') }}</button>
+      <button class="btn btn-danger btn-sm" data-action="TranscrIA.validateSummary" data-arg="no">{{ _('Non, arrêter') }}</button>
     {% elif summary and summary.get('transcript_short') %}
       <div class="alert alert-info">
         {% if meeting.get('speaker_count_llm') %}
@@ -45,8 +45,8 @@
         <summary class="text-muted">{{ _('Extrait de transcription (début)') }}</summary>
         <pre class="srt-preview mt-2">{{ summary.transcript_short[:2000] }}</pre>
       </details>
-      <button class="btn btn-success btn-sm me-2" onclick="TranscrIA.validateSummary('yes')">{{ _('Oui, continuer') }}</button>
-      <button class="btn btn-warning btn-sm" onclick="TranscrIA.validateSummary('maybe')">{{ _('Continuer quand même') }}</button>
+      <button class="btn btn-success btn-sm me-2" data-action="TranscrIA.validateSummary" data-arg="yes">{{ _('Oui, continuer') }}</button>
+      <button class="btn btn-warning btn-sm" data-action="TranscrIA.validateSummary" data-arg="maybe">{{ _('Continuer quand même') }}</button>
     {% else %}
       <p class="text-muted">{{ _('Générez un résumé rapide pour vérifier le contenu du fichier.') }}</p>
       {% set speaker_hint = job.get_extra_data().get('speaker_hint') or {} %}
@@ -74,8 +74,8 @@
           {{ _('Joignez les supports montrés en réunion (PDF, Word .docx, PowerPoint .pptx, texte) : leur texte enrichit le résumé.') }}
           {% trans %}<strong>Les images sont ignorées pour l'instant</strong> — l'analyse visuelle par la LLM viendra plus tard. Les .doc/.ppt anciens ne sont pas gérés (convertissez-les). Le contenu reste local.{% endtrans %}
         </div>
-        <input type="file" id="meeting-doc-input" accept=".pdf,.docx,.pptx,.txt" class="d-none" onchange="TranscrIA.handleMeetingDocument(this)">
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('meeting-doc-input').click()">
+        <input type="file" id="meeting-doc-input" accept=".pdf,.docx,.pptx,.txt" class="d-none" data-action="TranscrIA.handleMeetingDocument" data-action-el data-on="change">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-action="dom.clickTarget" data-target="#meeting-doc-input">
           <i class="bi bi-upload"></i> {{ _('Joindre un document') }}
         </button>
         <span id="meeting-doc-error" class="text-danger small ms-2"></span>
@@ -86,7 +86,7 @@
               <i class="bi bi-file-earmark-text"></i> {{ doc.get('name', 'document') }}
               <span class="text-muted">— {{ doc.get('format', '')|upper }}{% if doc.get('pages') %}, {{ _('%(n)s page(s)', n=doc.get('pages')) }}{% endif %}{% if doc.get('slides') %}, {{ _('%(n)s diapo(s)', n=doc.get('slides')) }}{% endif %}{% if doc.get('images_skipped') %}, {{ _('%(n)s image(s) ignorée(s)', n=doc.get('images_skipped')) }}{% endif %}{% if doc.get('truncated') %} — {{ _('tronqué') }}{% endif %}</span>
             </span>
-            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="{{ _('Retirer') }}" onclick="TranscrIA.removeMeetingDocument({{ loop.index0 }})"><i class="bi bi-x-lg"></i></button>
+            <button type="button" class="btn btn-link btn-sm text-danger p-0" title="{{ _('Retirer') }}" data-action="TranscrIA.removeMeetingDocument" data-arg="{{ loop.index0 }}"><i class="bi bi-x-lg"></i></button>
           </li>
           {% endfor %}
         </ul>
@@ -97,7 +97,7 @@
         {% trans %}Le dernier résumé n'a pas pu être généré : la LLM d'arbitrage n'a produit aucun texte après 3 tentatives (cause fréquente : transcript trop long, modèle ou prompt). La transcription rapide est conservée — relancez le résumé ci-dessous. Diagnostic admin : <code>transcria doctor --llm-smoke</code>.{% endtrans %}
       </div>
       {% endif %}
-      <button class="btn btn-primary" onclick="TranscrIA.generateSummary()">
+      <button class="btn btn-primary" data-action="TranscrIA.generateSummary">
         <span id="summary-spinner" class="spinner d-none"></span> {{ _('Générer le résumé') }}
       </button>
       <div id="summary-result" class="mt-3"></div>

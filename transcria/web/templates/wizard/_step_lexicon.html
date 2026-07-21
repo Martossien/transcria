@@ -10,7 +10,7 @@
     <div class="alert alert-light border small">
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
         <strong>{{ _('Lexiques utilisés pour ce job') }}</strong>
-        <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.applySelectedLexicons()">{{ _('Appliquer la sélection') }}</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" data-action="TranscrIA.applySelectedLexicons">{{ _('Appliquer la sélection') }}</button>
       </div>
       <details class="mt-2" {% if central_lexicons|length <= 8 %}open{% endif %}>
         <summary class="text-muted">
@@ -116,7 +116,7 @@
                         data-timecode="{{ c.timecode or '' }}"
                         data-quote="{{ c.quote or '' }}"
                         {% if not c.audio_available %}disabled{% endif %}
-                        onclick="TranscrIA.toggleLexiconContextAudio(this)">
+                        data-action="TranscrIA.toggleLexiconContextAudio" data-action-el>
                   <i class="bi bi-play-fill"></i>
                 </button>
                 <label class="lex-context-listened">
@@ -124,7 +124,7 @@
                          class="form-check-input lex-context-listened-input"
                          data-context-index="{{ loop.index0 }}"
                          {% if c.listened %}checked{% endif %}
-                         onchange="TranscrIA.setLexiconContextListened(this)">
+                         data-action="TranscrIA.setLexiconContextListened" data-action-el data-on="change">
                   {{ _('Écouté') }}
                 </label>
                 {% if not c.audio_available %}
@@ -138,18 +138,18 @@
         {% endif %}
         {% if promote_allowed %}
         <button type="button" class="btn btn-sm btn-outline-secondary lex-promote" title="{{ _('Ajouter cette forme validée à un lexique central, partagé et réutilisé sur les prochains jobs') }}"
-                onclick="TranscrIA.openPromoteLexicon(this)"><i class="bi bi-journal-plus"></i> {{ _('Au lexique central') }}</button>
+                data-action="TranscrIA.openPromoteLexicon" data-action-el><i class="bi bi-journal-plus"></i> {{ _('Au lexique central') }}</button>
         {% endif %}
-        <button type="button" class="btn btn-sm btn-outline-danger lex-remove" onclick="this.parentElement.remove()">×</button>
+        <button type="button" class="btn btn-sm btn-outline-danger lex-remove" data-action="dom.removeClosest">×</button>
       </div>
       {% endfor %}
     </div>
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addLexiconTerm()">{{ _('+ Ajouter un terme') }}</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" onclick="TranscrIA.importLexiconFile()">{{ _('+ Importer depuis un fichier .txt') }}</button>
-    <input type="file" id="lexicon-file-input" accept=".txt,.csv" class="d-none" onchange="TranscrIA.handleLexiconFile(this)">
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-action="TranscrIA.addLexiconTerm">{{ _('+ Ajouter un terme') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2 ms-2" data-action="TranscrIA.importLexiconFile">{{ _('+ Importer depuis un fichier .txt') }}</button>
+    <input type="file" id="lexicon-file-input" accept=".txt,.csv" class="d-none" data-action="TranscrIA.handleLexiconFile" data-action-el data-on="change">
     <br>
-    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveLexicon()">{{ _('Enregistrer le lexique') }}</button>
-    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" onclick="TranscrIA.skipLexicon()">{{ _('Continuer sans lexique') }}</button>
+    <button type="button" class="btn btn-primary btn-sm mt-2" data-action="TranscrIA.saveLexicon">{{ _('Enregistrer le lexique') }}</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm mt-2 ms-2" data-action="TranscrIA.skipLexicon">{{ _('Continuer sans lexique') }}</button>
     <span id="lexicon-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Enregistré') }}</span>
   </div>
   {% endif %}

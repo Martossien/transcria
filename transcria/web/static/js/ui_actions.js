@@ -10,11 +10,11 @@
 //     → demande window.confirm(...) à la soumission ; annule si refus.
 //
 //  2) Action déléguée — l'ARGUMENT reproduit EXACTEMENT l'appel inline d'origine :
-//       data-action="MT.addField"                        → MT.addField()          (aucun arg)
-//       data-action="TranscrIA.chooseProfile" data-arg=ID → …chooseProfile("ID")   (chaîne)
-//       data-action="MT.toggleAudio" data-action-el       → …toggleAudio(element)   (l'élément)
-//       data-action="TranscrIA.updateType" data-action-val→ …updateType(el.value)   (sa valeur)
-//       data-on="change"|"input"                          → événement déclencheur (défaut click)
+//       action "MT.addField"                            → MT.addField()          (aucun arg)
+//       action "TranscrIA.chooseProfile" + data-arg=ID   → …chooseProfile("ID")   (chaîne)
+//       action + data-action-el                          → …fn(element)           (l'élément)
+//       action + data-action-val                         → …fn(element.value)     (sa valeur)
+//       data-on="change"|"input"                         → événement déclencheur (défaut click)
 //
 // Actions intégrées (sans fonction de page) :
 //   data-action="dom.removeClosest" data-target=".sel"  → retire l'ancêtre correspondant
@@ -61,6 +61,11 @@
     "dom.clickTarget": function (el) {
       var t = document.querySelector(el.dataset.target || "");
       if (t) t.click();
+    },
+    // onclick="document.getElementById('x').innerHTML=''" → data-action="dom.clearTarget" data-target="#x"
+    "dom.clearTarget": function (el) {
+      var t = document.querySelector(el.dataset.target || "");
+      if (t) t.innerHTML = "";
     }
   };
 

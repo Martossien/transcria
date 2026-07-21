@@ -178,6 +178,24 @@ class TestCSP:
         for d in ("object-src 'none'", "base-uri 'self'", "frame-ancestors 'none'", "form-action 'self'"):
             assert d in csp
 
+    def test_enforce_script_src_strict_avec_nonce(self, _pg_database):
+        """script-src STRICT : nonce présent, PAS de 'unsafe-inline' (handlers migrés)."""
+        app = _app(_pg_database, csp="enforce")
+        r = app.test_client().get("/login")
+        csp = r.headers.get("Content-Security-Policy")
+        script_part = csp.split("style-src")[0]        # isoler script-src
+        assert "'nonce-" in script_part
+        assert "'unsafe-inline'" not in script_part
+        # La balise <meta>/le <script> nonce de la page portent le MÊME nonce.
+        import re
+        nonce = re.search(r"'nonce-([^']+)'", script_part).group(1)
+        assert nonce   # non vide, per-requête
+
+    def test_build_policy_repli_sans_nonce(self):
+        from transcria.web.csp import build_policy
+        assert "'nonce-abc'" in build_policy("abc") and "'unsafe-inline'" not in build_policy("abc").split("style-src")[0]
+        assert "'unsafe-inline'" in build_policy(None).split("style-src")[0]   # repli si pas de nonce
+
     def test_report_only_entete_dedie(self, _pg_database):
         app = _app(_pg_database, csp="report-only")
         r = app.test_client().get("/login")

@@ -16,7 +16,7 @@
 
     <button id="profile-launch-btn" class="btn btn-success btn-lg"
             {% if not selected_profile_id %}disabled{% endif %}
-            onclick="TranscrIA.startSelectedProfile()">
+            data-action="TranscrIA.startSelectedProfile">
       <i class="bi bi-play-fill"></i> {{ _('Lancer le traitement') }}
     </button>
     <div id="processing-result" class="mt-3"></div>

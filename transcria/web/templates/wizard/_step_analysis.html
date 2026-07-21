@@ -118,7 +118,7 @@
       {% endif %}
     {% else %}
       <p class="text-muted">{{ _("Lancez l'analyse du fichier pour obtenir ses caractéristiques techniques.") }}</p>
-      <button class="btn btn-primary" onclick="TranscrIA.analyzeAudio()">
+      <button class="btn btn-primary" data-action="TranscrIA.analyzeAudio">
         <span id="analyze-spinner" class="spinner d-none"></span> {{ _('Analyser le fichier') }}
       </button>
       <div id="analyze-result" class="mt-2"></div>

@@ -279,6 +279,11 @@ def register_template_globals(app: Flask) -> None:
     from transcria.web.csrf import get_csrf_token
     app.jinja_env.globals["csrf_token"] = get_csrf_token
 
+    # Nonce CSP (chantier CSP stricte) : à poser sur les rares <script> inline
+    # (îlots de données) via nonce="{{ csp_nonce() }}" pour un script-src sans 'unsafe-inline'.
+    from transcria.web.csp import get_request_nonce
+    app.jinja_env.globals["csp_nonce"] = get_request_nonce
+
 
 def register_i18n(app: Flask) -> None:
     """Internationalisation de l'interface (Flask-Babel) : sélecteur de locale, globals
@@ -354,10 +359,14 @@ def register_request_hooks(app: Flask) -> None:
             response.headers.setdefault("Strict-Transport-Security",
                                         f"max-age={max_age}; includeSubDomains")
         # Content-Security-Policy (opt-in `security.csp` : off | report-only | enforce).
-        from transcria.web.csp import csp_header
-        header = csp_header(str(_sec.get("csp", "off")))
-        if header is not None:
-            response.headers.setdefault(header[0], header[1])
+        # script-src STRICT via un nonce par requête (mêmes valeurs que les balises
+        # <script nonce=…> des templates — voir web/csp.get_request_nonce).
+        csp_mode = str(_sec.get("csp", "off"))
+        if csp_mode != "off":
+            from transcria.web.csp import csp_header, get_request_nonce
+            header = csp_header(csp_mode, get_request_nonce())
+            if header is not None:
+                response.headers.setdefault(header[0], header[1])
         return response
 
 

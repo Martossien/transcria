@@ -9,7 +9,7 @@
     <p class="text-muted small mb-2">{{ _('Les locuteurs détectés sont pré-remplis. Vérifiez, complétez, puis validez.') }}</p>
 
     {% if not speakers.get('speakers') %}
-    <button class="btn btn-primary btn-sm mb-3" onclick="TranscrIA.detectSpeakers()">
+    <button class="btn btn-primary btn-sm mb-3" data-action="TranscrIA.detectSpeakers">
       <span id="speaker-spinner" class="spinner d-none"></span> 🔍 {{ _('Détecter les locuteurs') }}
     </button>
     <div id="speaker-result" class="mt-2"></div>
@@ -24,7 +24,7 @@
     </div>
     {% if voice_enrollment_enabled %}
     <div class="d-flex align-items-center gap-2 mb-2">
-      <button type="button" class="btn btn-sm btn-outline-primary" onclick="TranscrIA.matchKnownVoices()">
+      <button type="button" class="btn btn-sm btn-outline-primary" data-action="TranscrIA.matchKnownVoices">
         <span id="voice-match-spinner" class="spinner d-none"></span>
         <i class="bi bi-person-bounding-box"></i> {{ _('Rechercher les voix connues') }}
       </button>
@@ -76,7 +76,7 @@
         <div class="speaker-item" id="spk-{{ s.speaker_id }}">
           <strong>{{ s.speaker_id }}</strong>
           <span class="text-muted small">{{ _('%(s)ss, %(n)s interventions', s=s.speaking_time_seconds|round(0), n=s.turn_count) }}</span>
-          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="TranscrIA.loadClips('{{ s.speaker_id }}')"
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-1" data-action="TranscrIA.loadClips" data-arg="{{ s.speaker_id }}"
                   aria-label="{{ _('Écouter des extraits de ce locuteur') }}" title="{{ _('Écouter des extraits de ce locuteur') }}"><i class="bi bi-play-fill"></i></button>
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ s.mapped_name or '' }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ s.mapped_func or '' }}" style="max-width:130px;">
@@ -93,7 +93,7 @@
                   data-speaker="{{ s.speaker_id }}"
                   data-name="{{ voice_hint.item.get('suggested_name', '') }}"
                   data-gender="{{ voice_hint.item.get('suggested_gender', '') }}"
-                  onclick="TranscrIA.applyVoiceSuggestion(this)">
+                  data-action="TranscrIA.applyVoiceSuggestion" data-action-el>
             {{ voice_hint.item.get('suggested_name') }} · {{ (voice_hint.item.get('top_score', 0) * 100)|round|int }}%
           </button>
           {% endif %}
@@ -107,7 +107,7 @@
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="{{ p.function }}" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ p.role }}" style="max-width:150px;">
           {% if p.is_animator %}<span class="badge bg-warning text-dark">{{ _('Animateur') }}</span>{% endif %}
-          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>
         </div>
         {% endfor %}
       {% elif meeting.get('participants_detectes') %}
@@ -129,16 +129,16 @@
           <input type="text" class="form-control form-control-sm speaker-name" placeholder="{{ _('Nom') }}" value="{{ name }}" style="max-width:150px;">
           <input type="text" class="form-control form-control-sm speaker-func" placeholder="{{ _('Fonction') }}" value="" style="max-width:130px;">
           <input type="text" class="form-control form-control-sm speaker-role" placeholder="{{ _('Rôle') }}" value="{{ role }}" style="max-width:150px;">
-          <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()">×</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-action="dom.removeClosest">×</button>
         </div>
         {% endif %}
         {% endfor %}
       {% endif %}
     </div>
 
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="TranscrIA.addParticipantRow()">{{ _('+ Ajouter un participant') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary mt-2" data-action="TranscrIA.addParticipantRow">{{ _('+ Ajouter un participant') }}</button>
     <br>
-    <button type="button" class="btn btn-primary btn-sm mt-2" onclick="TranscrIA.saveParticipantsAndSpeakers()">{{ _('Valider participants & locuteurs') }}</button>
+    <button type="button" class="btn btn-primary btn-sm mt-2" data-action="TranscrIA.saveParticipantsAndSpeakers">{{ _('Valider participants & locuteurs') }}</button>
     <span id="participants-saved" class="text-success ms-2 d-none"><i class="bi bi-check"></i> {{ _('Validé') }}</span>
   </div>
   {% endif %}

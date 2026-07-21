@@ -207,7 +207,7 @@
       <div class="col-3"><input class="form-control form-control-sm mt-f-short" maxlength="80"
         placeholder="${_t("Libellé court (Word)")}" value="${esc(f && f.short_label || "")}"></div>
       <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="${_t("Retirer")}"
-        onclick="this.closest('.mt-field-row').remove()"><i class="bi bi-x"></i></button></div>`;
+        data-action="dom.removeClosest" data-target=".mt-field-row"><i class="bi bi-x"></i></button></div>`;
     if (f && f.type) row.querySelector(".mt-f-type").value = f.type;
     row.dataset.key = (f && f.key) || "";
     $("mt-fields").appendChild(row);
@@ -227,7 +227,7 @@
       <div class="col-7"><input class="form-control form-control-sm mt-e-instr" maxlength="200"
         placeholder="${_t("À relever (ex. montants budgétaires explicitement cités)")}" value="${esc(e && e.instruction || "")}"></div>
       <div class="col-1"><button class="btn btn-sm btn-outline-danger" title="${_t("Retirer")}"
-        onclick="this.closest('.mt-extract-row').remove()"><i class="bi bi-x"></i></button></div>`;
+        data-action="dom.removeClosest" data-target=".mt-extract-row"><i class="bi bi-x"></i></button></div>`;
     row.dataset.key = (e && e.key) || "";
     $("mt-extracts").appendChild(row);
   }

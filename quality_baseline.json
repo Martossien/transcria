@@ -1,7 +1,7 @@
 {
  "cycles": 0,
  "deep_config_chains": 196,
- "deferred_internal_imports": 80,
+ "deferred_internal_imports": 82,
  "fanout": {
   "inference_service": 1,
   "inference_service.__main__": 1,

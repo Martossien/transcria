@@ -17,7 +17,7 @@
     {% else %}
       <p class="text-muted">{{ _('Déposez le fichier audio ou vidéo de la réunion.') }}</p>
       <input type="file" id="file-upload" accept=".mp3,.wav,.m4a,.mp4,.flac,.ogg" class="form-control mb-2">
-      <button class="btn btn-primary" onclick="TranscrIA.uploadFile()">
+      <button class="btn btn-primary" data-action="TranscrIA.uploadFile">
         <span id="upload-spinner" class="spinner d-none"></span> {{ _('Téléverser') }}
       </button>
       <div id="upload-result" class="mt-2"></div>
@@ -45,7 +45,7 @@
                 data-profile-id="{{ p.id }}"
                 {% if not p.available %}disabled aria-disabled="true" title="{{ p.reasons|join(' · ') }}"
                 {% elif profile_locked %}disabled aria-disabled="true" title="{{ _('Téléversez d\'abord le fichier audio') }}"{% endif %}
-                onclick="TranscrIA.chooseProfile('{{ p.id }}')">
+                data-action="TranscrIA.chooseProfile" data-arg="{{ p.id }}">
           <span class="d-block fw-semibold">{{ p.label }}</span>
           <span class="d-block small opacity-75">
             {% if not p.available %}<i class="bi bi-slash-circle"></i> {{ _('indisponible') }}{% else %}{{ _('niveau %(n)s', n=p.level) }}{% endif %}

@@ -235,6 +235,6 @@
 {% endblock %}
 {% block scripts %}
 {# Données Jinja → JS : init 1 ligne (vague A3) ; la logique vit dans schedule_page.js. #}
-<script>window.SCHEDULE_ACTION_DESCRIPTIONS = {{ action_descriptions|tojson }};</script>
+<script nonce="{{ csp_nonce() }}">window.SCHEDULE_ACTION_DESCRIPTIONS = {{ action_descriptions|tojson }};</script>
 <script src="{{ asset_url('js/schedule_page.js') }}"></script>
 {% endblock %}
