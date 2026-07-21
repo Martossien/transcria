@@ -42,10 +42,14 @@ exposed:
 - security.allow_job_delete
 - security.allowed_document_extensions
 - security.allowed_upload_extensions
+- security.behind_tls_proxy
+- security.csrf_origin_check
+- security.hsts_enabled
 - security.max_document_chars
 - security.max_document_size_mb
 - security.max_documents_per_job
 - security.max_upload_size_mb
+- security.session_cookie_secure
 - server.host
 - server.port
 - services.arbitrage_api_model_id
@@ -241,6 +245,7 @@ deferred:
 - security.audit_retention_by_family.other
 - security.audit_retention_by_family.voice
 - security.audit_retention_days
+- security.hsts_max_age_days
 - security.lexicon_export_admin_only
 - security.retention_days
 - server.debug

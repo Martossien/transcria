@@ -743,6 +743,13 @@ _DEFAULT_CONFIG = {
         "max_documents_per_job": 15,
         "audit_retention_days": 1095,
         "lexicon_export_admin_only": False,
+        # Durcissement HTTP(S) — tout OPT-IN, défaut = comportement historique inchangé
+        # (dev / all-in-one en HTTP). Détail : docs/SECURITY_MODEL.md.
+        "session_cookie_secure": False,   # cookie de session marqué Secure (HTTPS uniquement)
+        "behind_tls_proxy": False,        # ProxyFix x_proto SEUL (jamais x_for) : connaît HTTPS + auto-Secure
+        "hsts_enabled": False,            # en-tête HSTS, émis UNIQUEMENT sur une réponse HTTPS réelle
+        "hsts_max_age_days": 365,         # durée du HSTS
+        "csrf_origin_check": False,       # rejette un POST cookie d'origine croisée (défense CSRF en plus de SameSite)
         "audit_retention_by_family": {
             "auth": 1095,
             "job": 1095,

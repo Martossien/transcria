@@ -1228,7 +1228,11 @@ partagent (groupe/global). Les 18 types intégrés vivent dans
 |---|---|---|---|
 | `retention_days` | int | `365` | Durée de rétention des jobs terminaux (`completed`, `failed`, `cancelled`) |
 | `allow_job_delete` | bool | `true` | Autorise la suppression de jobs (vérifié dans la route `delete_job`) |
-| `session_cookie_secure` | bool | `false` | Pose l'attribut `Secure` sur le cookie de session (`SESSION_COOKIE_SECURE`). **Mettre `true` derrière HTTPS** (frontale en prod). Laissé `false` par défaut pour ne pas casser le login d'un tier accédé en HTTP (dev / all-in-one / GPU interne). Le cookie est toujours `HttpOnly` + `SameSite=Lax` (anti-CSRF). |
+| `session_cookie_secure` | bool | `false` | Pose l'attribut `Secure` sur le cookie de session. **Mettre `true` derrière HTTPS** (ou activer `behind_tls_proxy` qui l'implique). Laissé `false` par défaut pour ne pas casser le login d'un tier accédé en HTTP (dev / all-in-one / GPU interne). Le cookie est toujours `HttpOnly` + `SameSite=Lax`. |
+| `behind_tls_proxy` | bool | `false` | Un reverse-proxy termine le HTTPS devant TranscrIA : monte `ProxyFix` pour lire le **schéma** (`X-Forwarded-Proto`) → cookie `Secure` automatique + HSTS possible. **Jamais `x_for`** (l'IP reste l'adresse socket, anti-usurpation du rate-limiter). Redémarrage requis. |
+| `hsts_enabled` | bool | `false` | Émet `Strict-Transport-Security`, uniquement sur une réponse HTTPS réelle (nécessite `behind_tls_proxy`). |
+| `hsts_max_age_days` | int | `365` | Durée du HSTS (`max-age`), en jours. |
+| `csrf_origin_check` | bool | `false` | Défense CSRF en profondeur : refuse (403) un POST authentifié par cookie dont l'en-tête `Origin` est croisé. N'affecte ni l'API par jeton `Bearer`, ni les requêtes sans `Origin`. |
 | `max_upload_size_mb` | int | `1024` | Taille maximale d'upload Flask (`MAX_CONTENT_LENGTH`) en Mio |
 | `allowed_upload_extensions` | list[str] | `[".mp3", ".wav", ".m4a", ".mp4", ".flac", ".ogg"]` | Extensions autorisées pour l'upload |
 | `audit_retention_days` | int | `1095` | Durée de rétention des logs d'audit (3 ans). Distinct de `retention_days` qui concerne les jobs. |
@@ -1239,7 +1243,7 @@ partagent (groupe/global). Les 18 types intégrés vivent dans
 | `max_document_chars` | int | `12000` | Plafond de texte extrait conservé par document (troncature au-delà) |
 | `max_documents_per_job` | int | `15` | Nombre maximal de documents présentés par job (borne schéma : 1..100) |
 
-**Redémarrage requis :** oui pour `max_upload_size_mb` (chargé dans `create_app()`), non pour `retention_days`, `allow_job_delete`, `allowed_upload_extensions`, `audit_retention_days`, `lexicon_export_admin_only` et `audit_retention_by_family` qui sont vérifiés à l'exécution.
+**Redémarrage requis :** oui pour `max_upload_size_mb`, `session_cookie_secure` et `behind_tls_proxy` (chargés dans `create_app()`) ; non pour `retention_days`, `allow_job_delete`, `allowed_upload_extensions`, `audit_retention_days`, `lexicon_export_admin_only`, `audit_retention_by_family`, `hsts_enabled`, `hsts_max_age_days` et `csrf_origin_check` qui sont lus à l'exécution.
 
 **Impact si modifié :**
 - `retention_days` : appliqué par `JobStore.purge_expired_jobs()` lors de l'accès à la page d'accueil. Seuls les jobs anciens en état terminal sont supprimés avec leurs fichiers.

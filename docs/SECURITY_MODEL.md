@@ -33,7 +33,8 @@ ou `@login_required` ; les tests RBAC couvrent les refus (403) par rôle.
 
 - Mots de passe hachés (jamais stockés en clair) ; longueur minimale imposée.
 - **Cookie de session** : `HttpOnly`, `SameSite=Lax`, `Secure` activable
-  (`SESSION_COOKIE_SECURE`, à mettre à `true` derrière HTTPS).
+  (`security.session_cookie_secure`, ou automatiquement quand
+  `security.behind_tls_proxy: true` — voir §7).
 - **Durée de session explicite** : `PERMANENT_SESSION_LIFETIME` = 12 h par défaut
   (`auth.session_lifetime_hours`) — plus de session « jusqu'à fermeture du
   navigateur » imprévisible.
@@ -45,11 +46,13 @@ ou `@login_required` ; les tests RBAC couvrent les refus (403) par rôle.
   mono-process (déploiement local) le compteur est global ; en multi-process chaque
   worker a le sien (le blocage reste efficace, une même IP se répartit mal).
 - **Échecs de connexion journalisés** (`AuditAction.LOGIN_FAILED`, avec identifiant tenté).
-- **CSRF** : pas de jeton dédié — la protection repose sur `SameSite=Lax`, qui bloque
-  l'envoi du cookie sur les POST cross-site initiés par un autre site depuis les
-  navigateurs modernes. **Limitation assumée** : les très vieux navigateurs sans
-  support SameSite ne sont pas couverts ; un jeton CSRF explicite est un candidat 0.3
-  si un déploiement l'exige.
+- **CSRF** : `SameSite=Lax` bloque l'envoi du cookie sur les POST cross-site (garde
+  principale). Défense **en profondeur** opt-in `security.csrf_origin_check` : sur une
+  requête mutante authentifiée par cookie, un en-tête `Origin` d'une autre origine que
+  l'hôte est refusé (403) — couvre notamment les vieux navigateurs sans SameSite.
+  L'API par jeton (`Authorization: Bearer`) et les requêtes sans en-tête `Origin` ne
+  sont pas affectées. **Limitation assumée** : pas de jeton CSRF par formulaire (Flask-WTF)
+  — c'est un chantier dédié (chaque formulaire + chaque `fetch` + exemption de l'API ⭐).
 
 ## 3. En-têtes de sécurité (C3.9)
 
@@ -58,7 +61,10 @@ Posés sur toutes les réponses (`app.after_request`) :
 - `X-Content-Type-Options: nosniff` — pas de devinette de type MIME ;
 - `X-Frame-Options: DENY` — anti-clickjacking (l'app ne s'embarque jamais en iframe) ;
 - `Referrer-Policy: strict-origin-when-cross-origin` — ne fuite pas les URLs (jetons
-  `?next=`) vers l'extérieur.
+  `?next=`) vers l'extérieur ;
+- `Strict-Transport-Security` (**HSTS**, opt-in `security.hsts_enabled`) — émis
+  UNIQUEMENT sur une réponse réellement servie en HTTPS (jamais sur du HTTP en clair,
+  ce qui piégerait le navigateur) ; durée `security.hsts_max_age_days` (défaut 365).
 
 **CSP (Content-Security-Policy)** — **limitation assumée** : non posée en 0.2.0. Les
 templates utilisent des gestionnaires d'événements inline (`onclick=`) et un bundle
@@ -124,3 +130,26 @@ portail) ne change pas ; les backends fédérés sont opt-in.
   propriétaire, jamais plus, et meurt avec la désactivation du compte.
 - **Coût nul pour les installations locales** : `authlib` (oidc) et `ldap3` (ldap) sont
   importés de façon différée — jamais chargés en backend `local`.
+
+## 7. Durcissement HTTP(S) (transport) — opt-in
+
+Tout ci-dessous est **désactivé par défaut** (dev / tout-en-un accédé en HTTP reste
+fonctionnel) et se règle depuis Administration → Configuration → « Durcissement HTTP(S) ».
+
+- `security.behind_tls_proxy` (défaut `false`) — à activer quand un reverse-proxy
+  (nginx, Caddy…) termine le HTTPS devant TranscrIA. Monte `ProxyFix` pour lire le
+  **schéma** (`X-Forwarded-Proto`) → l'app sait qu'elle est en HTTPS (cookie `Secure`
+  automatique, HSTS possible). **Point de sécurité crucial** : on n'active JAMAIS
+  `x_for` — laisser `ProxyFix` réécrire `remote_addr` depuis `X-Forwarded-For`
+  (client-contrôlé) rouvrirait le contournement de l'anti-bourrinage. L'IP reste
+  l'adresse socket réelle (cohérent avec le connecteur proxy et le rate-limiter).
+  **Redémarrage requis.**
+- `security.session_cookie_secure` (défaut `false`) — force le flag `Secure` du cookie
+  de session (implicite si `behind_tls_proxy`). **Redémarrage requis.**
+- `security.hsts_enabled` / `security.hsts_max_age_days` (défaut `false` / `365`) — HSTS
+  (§3), émis uniquement sur une réponse HTTPS réelle.
+- `security.csrf_origin_check` (défaut `false`) — contrôle d'origine (§2).
+
+Le préflight `doctor` (`Transport HTTP(S)`) émet un WARN si un backend d'auth **fédéré**
+(OIDC/proxy/LDAP — identifiants d'entreprise) tourne sans cookie sécurisé ni proxy TLS
+déclaré.

@@ -104,6 +104,29 @@ CONFIG_FORM_SECTIONS: list[dict] = [
         ],
     },
     {
+        "title": _l("Durcissement HTTP(S)"),
+        "help": _l("Sécurité du transport. Tout est opt-in (défaut = HTTP, dev/tout-en-un). "
+                   "Le proxy TLS et le cookie sécurisé exigent un redémarrage du service."),
+        "fields": [
+            {"path": "security.behind_tls_proxy", "label": _l("Derrière un proxy TLS (HTTPS)"), "type": "bool",
+             "help": _l("À activer si un reverse-proxy (nginx, Caddy…) termine le HTTPS devant "
+                        "TranscrIA : l'app reconnaît alors HTTPS (via X-Forwarded-Proto), marque le "
+                        "cookie de session Secure et peut émettre le HSTS. L'adresse cliente n'est "
+                        "JAMAIS lue depuis X-Forwarded-For (anti-usurpation). Redémarrage requis.")},
+            {"path": "security.session_cookie_secure", "label": _l("Cookie de session « Secure »"), "type": "bool",
+             "help": _l("Marque le cookie de session Secure (envoyé seulement en HTTPS). Implicite si "
+                        "« Derrière un proxy TLS » est activé. Redémarrage requis.")},
+            {"path": "security.hsts_enabled", "label": _l("HSTS (forcer HTTPS côté navigateur)"), "type": "bool",
+             "help": _l("Émet l'en-tête Strict-Transport-Security, uniquement sur une réponse servie en "
+                        "HTTPS réel (nécessite « Derrière un proxy TLS »). Anti-rétrogradation HTTP.")},
+            {"path": "security.csrf_origin_check", "label": _l("Contrôle d'origine (anti-CSRF renforcé)"),
+             "type": "bool",
+             "help": _l("Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin "
+                        "croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les "
+                        "requêtes sans en-tête Origin.")},
+        ],
+    },
+    {
         "title": _l("Notifications email"),
         "help": _l("Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."),
         "fields": [

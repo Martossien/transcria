@@ -1446,6 +1446,20 @@ def _check_ldap_reachability(cfg: dict, ldap_prober) -> list[str]:
     return problems
 
 
+def check_transport_security(cfg: dict) -> CheckResult:
+    """Posture HTTP(S) : un backend d'auth FÉDÉRÉ (mots de passe d'annuaire, jetons
+    OIDC) sans cookie sécurisé ni proxy TLS déclaré = identifiants d'entreprise sur un
+    transport potentiellement en clair. WARN ciblé (le HTTP reste légitime en dev/local)."""
+    name = _t("chk_transport")
+    sec = (cfg.get("security", {}) or {})
+    backend = str(((cfg.get("auth", {}) or {}).get("backend")) or "local").strip().lower()
+    secure = bool(sec.get("session_cookie_secure", False)) or bool(sec.get("behind_tls_proxy", False))
+    if backend in ("oidc", "proxy", "ldap") and not secure:
+        return CheckResult(name, WARN, _t("transport_federated_insecure", backend=backend),
+                           hint=_t("transport_hint"))
+    return CheckResult(name, OK, _t("transport_ok", secure="oui" if secure else "non (local/HTTP)"))
+
+
 _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_database,
     check_database_encoding,
@@ -1458,6 +1472,7 @@ _CHECKS: tuple[Callable[[dict], CheckResult], ...] = (
     check_served_stt_runtimes,
     check_stt_instances_vram,
     check_identity_backend,
+    check_transport_security,
     check_inference_node_gpus,
     check_local_models,
     check_storage,

@@ -173,9 +173,20 @@ def configure_security(app: Flask, cfg: dict, *, debug: bool) -> None:
     #   casser le login d'un tier accédé en HTTP (dev / all-in-one / GPU interne).
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = bool(
-        security.get("session_cookie_secure", False)
-    )
+
+    # Durcissement HTTP(S) STRUCTUREL (nécessite un redémarrage — voir SECURITY_MODEL.md) :
+    # `behind_tls_proxy` monte ProxyFix pour le SEUL schéma (X-Forwarded-Proto) → l'app
+    # sait qu'elle est servie en HTTPS (cookie Secure, HSTS). On N'ACTIVE JAMAIS x_for :
+    # laisser ProxyFix réécrire remote_addr depuis X-Forwarded-For (client-contrôlé)
+    # rouvrirait le contournement de l'anti-bourrinage — l'IP reste l'adresse socket
+    # (choix de sécurité, cf. auth/routes.py et le connecteur proxy).
+    behind_tls_proxy = bool(security.get("behind_tls_proxy", False))
+    if behind_tls_proxy:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_for=0, x_host=0, x_port=0, x_prefix=0)  # type: ignore[method-assign]
+    # Cookie `Secure` : explicitement demandé OU déduit d'un proxy TLS. Défaut False pour
+    # ne pas casser le login d'un accès HTTP (dev / all-in-one / tier GPU interne).
+    app.config["SESSION_COOKIE_SECURE"] = bool(security.get("session_cookie_secure", False)) or behind_tls_proxy
 
     # Chantier identité lot 1 : le client OIDC ne s'enregistre QUE si le backend le
     # demande — zéro import authlib au boot des installations locales historiques.
@@ -278,6 +289,31 @@ def register_request_hooks(app: Flask) -> None:
     def _assign_correlation_id() -> None:
         inject_correlation_id()
 
+    @app.before_request
+    def _csrf_origin_guard():
+        # Défense CSRF EN PROFONDEUR (opt-in `security.csrf_origin_check`) : sur une
+        # requête mutante authentifiée par COOKIE, si le navigateur envoie un en-tête
+        # `Origin` d'une AUTRE origine que l'hôte, c'est un POST cross-site → 403.
+        # Complète SameSite=Lax (couvre les vieux navigateurs, défense redondante).
+        # - GET/HEAD/OPTIONS : jamais mutants, ignorés.
+        # - Requêtes par jeton d'API (Bearer, scripts) : pas de navigateur → exemptées.
+        # - Origin ABSENT : on ne rejette pas (client non-navigateur / même-origine
+        #   ancien) — SameSite reste la garde ; on ne casse aucun flux légitime.
+        if not bool((get_config().get("security") or {}).get("csrf_origin_check", False)):
+            return
+        if request.method in ("GET", "HEAD", "OPTIONS", "TRACE"):
+            return
+        if request.headers.get("Authorization", "").startswith("Bearer "):
+            return
+        origin = request.headers.get("Origin")
+        if origin:
+            from urllib.parse import urlparse
+            if urlparse(origin).netloc != request.host:
+                from flask import abort
+                logger.warning("CSRF : POST %s d'origine croisée refusé (Origin=%s, host=%s)",
+                               request.path, origin, request.host)
+                abort(403)
+
     @app.after_request
     def _security_headers(response):
         # C3.9 (RELEASE_0.2.0) — en-têtes de sécurité SANS risque de régression :
@@ -290,6 +326,14 @@ def register_request_hooks(app: Flask) -> None:
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # HSTS (opt-in) : émis UNIQUEMENT sur une réponse RÉELLEMENT servie en HTTPS
+        # (`request.is_secure` via ProxyFix x_proto derrière le proxy TLS) — jamais sur
+        # du HTTP en clair, ce qui piégerait le navigateur. Piloté par security.hsts_enabled.
+        _sec = get_config().get("security") or {}
+        if bool(_sec.get("hsts_enabled", False)) and request.is_secure:
+            max_age = int(_sec.get("hsts_max_age_days", 365)) * 86400
+            response.headers.setdefault("Strict-Transport-Security",
+                                        f"max-age={max_age}; includeSubDomains")
         return response
 
 

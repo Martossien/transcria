@@ -868,6 +868,13 @@ security:
   retention_days: 365
   allow_job_delete: true
   max_upload_size_mb: 1024
+  # ── Durcissement HTTP(S) (tout opt-in, défaut = HTTP dev/tout-en-un) ──
+  # behind_tls_proxy: true        # reverse-proxy TLS devant l'app : cookie Secure auto + HSTS possible
+  #                               # (lit X-Forwarded-Proto ; JAMAIS X-Forwarded-For — l'IP reste l'adresse socket)
+  # session_cookie_secure: true   # cookie de session Secure (implicite si behind_tls_proxy)
+  # hsts_enabled: true            # en-tête HSTS (uniquement sur réponse HTTPS réelle)
+  # hsts_max_age_days: 365
+  # csrf_origin_check: true       # refuse un POST cookie d'origine croisée (en plus de SameSite)
   allowed_upload_extensions:
     - ".mp3"
     - ".wav"

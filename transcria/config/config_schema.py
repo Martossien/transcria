@@ -1368,6 +1368,15 @@ def _check_security(sec: dict, r: ValidationResult) -> None:
     _check_int_range(sec, "retention_days", "security.retention_days", 0, 3650, r)
     _check_bool(sec, "allow_job_delete", "security.allow_job_delete", r)
     _check_bool(sec, "session_cookie_secure", "security.session_cookie_secure", r)
+    _check_bool(sec, "behind_tls_proxy", "security.behind_tls_proxy", r)
+    _check_bool(sec, "hsts_enabled", "security.hsts_enabled", r)
+    _check_int_range(sec, "hsts_max_age_days", "security.hsts_max_age_days", 1, 3650, r)
+    _check_bool(sec, "csrf_origin_check", "security.csrf_origin_check", r)
+    if bool(sec.get("hsts_enabled", False)) and not (bool(sec.get("behind_tls_proxy", False))
+                                                     or bool(sec.get("session_cookie_secure", False))):
+        r.add_warning("security.hsts_enabled=true sans behind_tls_proxy ni session_cookie_secure : "
+                      "le HSTS n'est émis que sur une réponse HTTPS réelle — activez behind_tls_proxy "
+                      "(derrière un proxy TLS) pour qu'il prenne effet.")
     _check_int_range(sec, "max_upload_size_mb", "security.max_upload_size_mb", 1, 102400, r)
 
     extensions = sec.get("allowed_upload_extensions", [])
