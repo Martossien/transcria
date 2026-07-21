@@ -177,6 +177,17 @@ Aucune migration de base. Tout est opt-in, trois points d'attention :
    `workflow.transcription_cleanup.non_latin_short_max_s: 2.0` recommandé avec
    un backend servi qwen3asr.
 
+### Durcissement de sécurité (0.3.9.1)
+
+Rien à faire : **aucune migration de base, aucun changement de comportement par
+défaut**. Cette version ajoute des durcissements **opt-in** (section
+« Durcissement HTTP(S) » de Administration → Configuration, ou clés `security.*`) :
+proxy TLS (`behind_tls_proxy`) + cookie `Secure` + HSTS ; protections CSRF
+(`csrf_origin_check`, `csrf_tokens`) ; Content-Security-Policy (`csp: off |
+report-only | enforce`). Détail et ordre de déploiement recommandé (report-only →
+enforce) : `docs/SECURITY_MODEL.md` §§ 2-3 et 7. Corrige aussi une course de
+premier démarrage concurrent (création de l'admin) rendue idempotente.
+
 ### Identité d'entreprise (0.3.9)
 
 Rien à faire pour une installation existante au-delà du redémarrage :
@@ -223,6 +234,10 @@ sudo HOME=/root venv/bin/python -m transcria.maintenance.cli opencode-upgrade
 
 ### Notes de migration par version
 
+- **0.3.9 → 0.3.9.1** : durcissement de sécurité **opt-in** (proxy TLS + cookie Secure + HSTS,
+  protections CSRF `csrf_origin_check`/`csrf_tokens`, Content-Security-Policy `csp`) et fix
+  d'une course de premier démarrage (`ensure_admin` idempotent). **Aucune migration Alembic,
+  aucune nouvelle dépendance, défaut inchangé.** Détail : § « Durcissement de sécurité (0.3.9.1) ».
 - **0.3.8.1 → 0.3.9** : identité d'entreprise (SSO OIDC, proxy de confiance, LDAP/AD direct,
   jetons d'API). **Migration Alembic additive** (colonnes d'identité sur `users` + table
   `api_tokens`) appliquée au redémarrage, ou `venv/bin/alembic upgrade head`. Nouvelles

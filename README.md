@@ -33,7 +33,7 @@ everywhere) — see [docs/I18N_MULTILANGUE.md](docs/I18N_MULTILANGUE.md).*
 
 ## Project status
 
-**Current release: 0.3.9** ([releases](https://github.com/Martossien/transcria/releases) ·
+**Current release: 0.3.9.1** ([releases](https://github.com/Martossien/transcria/releases) ·
 [changelog](CHANGELOG.md)). The transcription pipeline, the human-in-the-loop wizard, the
 GPU queue and scheduler, exports, multi-user access, and both single-box and distributed
 deployments are validated end-to-end (unit and integration suite plus real-GPU runs).

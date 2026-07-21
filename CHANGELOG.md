@@ -6,6 +6,37 @@ Le format suit une logique proche de Keep a Changelog. Les versions suivent le S
 la série `0.x` est une phase de **stabilisation** (l'API, le schéma de configuration et le
 modèle de données peuvent évoluer sans garantie de rétrocompatibilité jusqu'à `1.0.0`).
 
+## [0.3.9.1] — 2026-07-21
+
+Durcissement de sécurité (tout **opt-in**, défaut inchangé) et correctif de
+premier démarrage. Aucune migration de base, aucun changement de comportement
+par défaut.
+
+### Ajouté
+
+- **Durcissement HTTP(S)** (`security.*`, section « Durcissement HTTP(S) » de
+  l'interface) : `behind_tls_proxy` (ProxyFix schéma seul — l'IP reste l'adresse
+  socket, jamais `X-Forwarded-For`), `session_cookie_secure`, `hsts_enabled` /
+  `hsts_max_age_days` (HSTS sur réponse HTTPS réelle).
+- **Protections CSRF** : `csrf_origin_check` (refus des POST cookie d'origine
+  croisée, en plus de SameSite) et `csrf_tokens` (jeton synchroniseur par requête
+  mutante, injecté automatiquement dans les formulaires et les appels de
+  l'interface ; l'API par jeton Bearer reste exemptée).
+- **Content-Security-Policy** (`security.csp` : `off` | `report-only` | `enforce`) :
+  `script-src` STRICT (`'self'` + nonce par requête, sans `'unsafe-inline'`) rendu
+  possible par la migration de tous les gestionnaires d'événements inline vers une
+  délégation ; verrouille cadres, objets, base et formulaires. Déployer d'abord en
+  `report-only`.
+- Préflight `doctor` : contrôle « Transport HTTP(S) » (avertit si un backend d'auth
+  fédéré tourne sans cookie sécurisé ni proxy TLS).
+
+### Corrigé
+
+- **Premier démarrage concurrent** : au tout premier boot sur une base vierge,
+  plusieurs workers gunicorn pouvaient créer l'admin en parallèle → violation
+  d'unicité → le service refusait de démarrer (au redémarrage, l'admin existant
+  faisait passer). `ensure_admin` est désormais idempotent (absorbe la course).
+
 ## [0.3.9] — 2026-07-20
 
 Identité d'entreprise. TranscrIA peut désormais déléguer l'authentification à un
