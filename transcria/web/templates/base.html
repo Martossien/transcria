@@ -156,6 +156,8 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <!-- Protection CSRF : alimente formulaires + fetch. Chargé AVANT tout script de page. -->
   <script src="{{ asset_url('js/csrf.js') }}"></script>
+  <!-- Délégation d'événements CSP-safe (remplace les gestionnaires inline). -->
+  <script src="{{ asset_url('js/ui_actions.js') }}"></script>
   <!-- Catalogue i18n JS (window.I18N pour la locale courante) + helper t() -->
   <script src="/i18n/messages.js?lang={{ get_locale() }}"></script>
   <script src="{{ asset_url('js/i18n.js') }}"></script>

@@ -47,7 +47,7 @@
           {% endif %}
         </span>
       </div>
-      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" onsubmit="return confirm('{{ _('Supprimer ce lexique et toutes ses entrées ?') }}')">
+      <form method="post" action="/admin/lexicons/{{ lexicon.id }}/delete" data-confirm="{{ _('Supprimer ce lexique et toutes ses entrées ?') }}">
         <button class="btn btn-outline-danger" type="submit">{{ _('Supprimer ce lexique') }}</button>
       </form>
       {% endif %}
@@ -149,7 +149,7 @@
         </div>
         {% if lexicon_export_allowed %}
         <form method="post" action="/admin/lexicons/{{ lexicon.id }}/export.csv"
-              onsubmit="return confirm('{{ _('Exporter ce lexique complet ? Cette action sera enregistrée dans l’audit de sécurité.') }}')">
+              data-confirm="{{ _('Exporter ce lexique complet ? Cette action sera enregistrée dans l’audit de sécurité.') }}">
           <button class="btn btn-sm btn-outline-secondary" type="submit">{{ _('Exporter CSV') }}</button>
         </form>
         {% else %}
@@ -216,7 +216,7 @@
               {% endif %}
             </div>
           </form>
-          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" onsubmit="return confirm('{{ _('Supprimer cette entrée ?') }}')">
+          <form method="post" action="/admin/lexicons/{{ lexicon.id }}/entries/{{ entry.id }}/delete" class="mt-2" data-confirm="{{ _('Supprimer cette entrée ?') }}">
             <button class="btn btn-sm btn-outline-danger" type="submit">{{ _('Supprimer') }}</button>
           </form>
         </div>

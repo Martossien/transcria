@@ -450,7 +450,11 @@
     }
   });
 
-  window.MT = {closeEditor, refreshPreview, downloadPreview, save, clearLogo, importFile,
+  // Wrapper CSP-safe pour l'import depuis un <input type=file> (ex-logique inline).
+  function importFromInput(input) {
+    if (input && input.files && input.files[0]) { importFile(input.files[0]); input.value = ''; }
+  }
+  window.MT = {closeEditor, refreshPreview, downloadPreview, save, clearLogo, importFile, importFromInput,
                addField: () => addField(null), addExtract: () => addExtract(null)};
   load();
 })();

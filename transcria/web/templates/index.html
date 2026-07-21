@@ -32,7 +32,7 @@
           {% endif %}
           {% if Permission.DELETE_JOBS in user_permissions %}
           <form method="POST" action="/jobs/{{ job.id }}/delete" class="d-inline"
-                onsubmit="return confirm('{{ _('Supprimer ce traitement ? Cette action est irréversible.') }}')">
+                data-confirm="{{ _('Supprimer ce traitement ? Cette action est irréversible.') }}">
             <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Supprimer') }}</button>
           </form>
           {% endif %}

@@ -58,7 +58,7 @@
           <td class="text-end">
             {% if not t.revoked_at %}
             <form method="POST" action="{{ url_for('auth.account_token_revoke', token_id=t.token_id) }}"
-                  class="m-0" onsubmit="return confirm('{{ _('Révoquer ce jeton ? Les scripts qui l\'utilisent cesseront de fonctionner.') }}');">
+                  class="m-0" data-confirm="{{ _('Révoquer ce jeton ? Les scripts qui l\'utilisent cesseront de fonctionner.') }}">
               <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Révoquer') }}</button>
             </form>
             {% endif %}

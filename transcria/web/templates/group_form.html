@@ -50,7 +50,7 @@
             </span>
           </td>
           <td>
-            <form method="POST" class="d-inline" onsubmit="return confirm('{{ _('Retirer cet utilisateur du groupe ?') }}')">
+            <form method="POST" class="d-inline" data-confirm="{{ _('Retirer cet utilisateur du groupe ?') }}">
               <input type="hidden" name="action" value="remove_member">
               <input type="hidden" name="user_id" value="{{ membership.user_id }}">
               <button type="submit" class="btn btn-sm btn-outline-danger">{{ _('Retirer') }}</button>
@@ -95,7 +95,7 @@
 </div>
 
 {% if Permission.MANAGE_USERS in user_permissions %}
-<form method="POST" onsubmit="return confirm('{{ _('Supprimer ce groupe ? Les utilisateurs ne seront pas supprimés.') }}')">
+<form method="POST" data-confirm="{{ _('Supprimer ce groupe ? Les utilisateurs ne seront pas supprimés.') }}">
   <input type="hidden" name="action" value="delete_group">
   <button type="submit" class="btn btn-outline-danger">{{ _('Supprimer le groupe') }}</button>
 </form>
