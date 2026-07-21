@@ -2,6 +2,7 @@
  "inline_js_lines": 0,
  "js_lines": {
   "transcria/web/static/js/admin_models_page.js": 32,
+  "transcria/web/static/js/csrf.js": 59,
   "transcria/web/static/js/dashboard_status_page.js": 68,
   "transcria/web/static/js/i18n.js": 29,
   "transcria/web/static/js/job_result_page.js": 207,
@@ -21,7 +22,7 @@
   "transcria/web/templates/admin_maintenance.html": 137,
   "transcria/web/templates/admin_models.html": 97,
   "transcria/web/templates/audit.html": 106,
-  "transcria/web/templates/base.html": 161,
+  "transcria/web/templates/base.html": 164,
   "transcria/web/templates/central_lexicon_detail.html": 238,
   "transcria/web/templates/central_lexicons.html": 72,
   "transcria/web/templates/change_password.html": 28,

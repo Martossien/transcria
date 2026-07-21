@@ -124,6 +124,10 @@ CONFIG_FORM_SECTIONS: list[dict] = [
              "help": _l("Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin "
                         "croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les "
                         "requêtes sans en-tête Origin.")},
+            {"path": "security.csrf_tokens", "label": _l("Jetons CSRF (protection forte)"), "type": "bool",
+             "help": _l("Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie "
+                        "(injecté automatiquement dans les formulaires et les appels de l'interface). "
+                        "Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée.")},
         ],
     },
     {

@@ -750,6 +750,7 @@ _DEFAULT_CONFIG = {
         "hsts_enabled": False,            # en-tête HSTS, émis UNIQUEMENT sur une réponse HTTPS réelle
         "hsts_max_age_days": 365,         # durée du HSTS
         "csrf_origin_check": False,       # rejette un POST cookie d'origine croisée (défense CSRF en plus de SameSite)
+        "csrf_tokens": False,             # jeton CSRF synchroniseur par requête mutante (défense forte)
         "audit_retention_by_family": {
             "auth": 1095,
             "job": 1095,

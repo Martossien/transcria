@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: TranscrIA VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-07-21 16:46+0000\n"
+"POT-Creation-Date: 2026-07-21 17:10+0000\n"
 "PO-Revision-Date: 2026-07-07 19:01+0200\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fr\n"
@@ -18,51 +18,51 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: transcria/app_services.py:350
+#: transcria/app_services.py:369
 msgid "Accès refusé"
 msgstr "Accès refusé"
 
-#: transcria/app_services.py:350
+#: transcria/app_services.py:369
 msgid "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 msgstr "Vous n'avez pas les droits nécessaires pour accéder à cette page."
 
-#: transcria/app_services.py:351
+#: transcria/app_services.py:370
 msgid "Page introuvable"
 msgstr "Page introuvable"
 
-#: transcria/app_services.py:351
+#: transcria/app_services.py:370
 msgid "La page demandée n'existe pas ou a été déplacée."
 msgstr "La page demandée n'existe pas ou a été déplacée."
 
-#: transcria/app_services.py:352
+#: transcria/app_services.py:371
 msgid "Action non autorisée"
 msgstr "Action non autorisée"
 
-#: transcria/app_services.py:352
+#: transcria/app_services.py:371
 msgid "Cette action n'est pas permise sur cette page."
 msgstr "Cette action n'est pas permise sur cette page."
 
-#: transcria/app_services.py:353
+#: transcria/app_services.py:372
 msgid "Fichier trop volumineux"
 msgstr "Fichier trop volumineux"
 
-#: transcria/app_services.py:353
+#: transcria/app_services.py:372
 msgid "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 msgstr "Le fichier dépasse la taille maximale autorisée (voir security.max_upload_size_mb). Compressez-le ou augmentez la limite."
 
-#: transcria/app_services.py:355
+#: transcria/app_services.py:374
 msgid "Trop de tentatives"
 msgstr "Trop de tentatives"
 
-#: transcria/app_services.py:355
+#: transcria/app_services.py:374
 msgid "Vous avez fait trop de tentatives. Patientez quelques minutes."
 msgstr "Vous avez fait trop de tentatives. Patientez quelques minutes."
 
-#: transcria/app_services.py:356
+#: transcria/app_services.py:375
 msgid "Erreur interne"
 msgstr "Erreur interne"
 
-#: transcria/app_services.py:356
+#: transcria/app_services.py:375
 msgid "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 msgstr "Une erreur inattendue est survenue. Réessayez ou contactez un administrateur."
 
@@ -1839,277 +1839,285 @@ msgstr "Contrôle d'origine (anti-CSRF renforcé)"
 msgid "Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les requêtes sans en-tête Origin."
 msgstr "Refuse un envoi de formulaire provenant d'un autre site (en-tête Origin croisé), en complément de SameSite. N'affecte ni l'API par jeton, ni les requêtes sans en-tête Origin."
 
-#: transcria/web/config_form.py:130
+#: transcria/web/config_form.py:127
+msgid "Jetons CSRF (protection forte)"
+msgstr "Jetons CSRF (protection forte)"
+
+#: transcria/web/config_form.py:128
+msgid "Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie (injecté automatiquement dans les formulaires et les appels de l'interface). Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée."
+msgstr "Exige un jeton anti-CSRF à chaque requête mutante authentifiée par cookie (injecté automatiquement dans les formulaires et les appels de l'interface). Défense la plus forte ; l'API par jeton Bearer (scripts) reste exemptée."
+
+#: transcria/web/config_form.py:134
 msgid "Notifications email"
 msgstr "Notifications email"
 
-#: transcria/web/config_form.py:131
+#: transcria/web/config_form.py:135
 msgid "Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."
 msgstr "Email de fin de traitement (SMTP). Requiert une adresse dans le profil utilisateur."
 
-#: transcria/web/config_form.py:133
+#: transcria/web/config_form.py:137
 msgid "Activer les emails"
 msgstr "Activer les emails"
 
-#: transcria/web/config_form.py:134
+#: transcria/web/config_form.py:138
 msgid "Envoie un email au propriétaire à la fin (succès/échec)."
 msgstr "Envoie un email au propriétaire à la fin (succès/échec)."
 
-#: transcria/web/config_form.py:135
+#: transcria/web/config_form.py:139
 msgid "Serveur SMTP"
 msgstr "Serveur SMTP"
 
-#: transcria/web/config_form.py:136
+#: transcria/web/config_form.py:140
 msgid "Port SMTP"
 msgstr "Port SMTP"
 
-#: transcria/web/config_form.py:137
+#: transcria/web/config_form.py:141
 msgid "Ex. 587 (STARTTLS) ou 465 (SSL)."
 msgstr "Ex. 587 (STARTTLS) ou 465 (SSL)."
 
-#: transcria/web/config_form.py:138
+#: transcria/web/config_form.py:142
 msgid "STARTTLS"
 msgstr "STARTTLS"
 
-#: transcria/web/config_form.py:139
+#: transcria/web/config_form.py:143
 msgid "SSL/SMTPS"
 msgstr "SSL/SMTPS"
 
-#: transcria/web/config_form.py:140
+#: transcria/web/config_form.py:144
 msgid "Adresse expéditeur"
 msgstr "Adresse expéditeur"
 
-#: transcria/web/config_form.py:141
+#: transcria/web/config_form.py:145
 msgid "URL de base du portail"
 msgstr "URL de base du portail"
 
-#: transcria/web/config_form.py:142
+#: transcria/web/config_form.py:146
 msgid "Utilisée dans les liens des emails, ex. http://localhost:7870."
 msgstr "Utilisée dans les liens des emails, ex. http://localhost:7870."
 
-#: transcria/web/config_form.py:146 transcria/web/templates/base.html:58
+#: transcria/web/config_form.py:150 transcria/web/templates/base.html:59
 #: transcria/web/templates/voices.html:2 transcria/web/templates/voices.html:6
 msgid "Voix enregistrées"
 msgstr "Voix enregistrées"
 
-#: transcria/web/config_form.py:147
+#: transcria/web/config_form.py:151
 msgid "Référentiel de voix connues (consentement requis)."
 msgstr "Référentiel de voix connues (consentement requis)."
 
-#: transcria/web/config_form.py:149
+#: transcria/web/config_form.py:153
 msgid "Activer les voix enregistrées"
 msgstr "Activer les voix enregistrées"
 
-#: transcria/web/config_form.py:150
+#: transcria/web/config_form.py:154
 msgid "Répertoire de stockage"
 msgstr "Répertoire de stockage"
 
-#: transcria/web/config_form.py:151
+#: transcria/web/config_form.py:155
 msgid "Stockage local protégé des voix et consentements."
 msgstr "Stockage local protégé des voix et consentements."
 
-#: transcria/web/config_form.py:155
+#: transcria/web/config_form.py:159
 msgid "Identité d'entreprise (SSO)"
 msgstr "Identité d'entreprise (SSO)"
 
-#: transcria/web/config_form.py:156
+#: transcria/web/config_form.py:160
 msgid "Connexion via un fournisseur OIDC (Keycloak, Entra ID, Authentik…). Redémarrage du service requis après changement. Compte local de secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."
 msgstr "Connexion via un fournisseur OIDC (Keycloak, Entra ID, Authentik…). Redémarrage du service requis après changement. Compte local de secours : /login?local=1 (cf. docs/GESTION_IDENTITE.md)."
 
-#: transcria/web/config_form.py:160
+#: transcria/web/config_form.py:164
 msgid "Backend d'identité"
 msgstr "Backend d'identité"
 
-#: transcria/web/config_form.py:162
+#: transcria/web/config_form.py:166
 msgid "local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. proxy : identité fournie par un proxy d'authentification frontal (Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory en direct. Renseignez les champs correspondants avant d'activer."
 msgstr "local (défaut) : comptes de ce portail. oidc : SSO d'entreprise. proxy : identité fournie par un proxy d'authentification frontal (Authelia, oauth2-proxy…). ldap : annuaire LDAP / Active Directory en direct. Renseignez les champs correspondants avant d'activer."
 
-#: transcria/web/config_form.py:166
+#: transcria/web/config_form.py:170
 msgid "Émetteur (issuer)"
 msgstr "Émetteur (issuer)"
 
-#: transcria/web/config_form.py:167
+#: transcria/web/config_form.py:171
 msgid "URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise (la découverte /.well-known est automatique)."
 msgstr "URL de l'émetteur OIDC, ex. https://sso.exemple.fr/realms/entreprise (la découverte /.well-known est automatique)."
 
-#: transcria/web/config_form.py:169
+#: transcria/web/config_form.py:173
 msgid "Identifiant client"
 msgstr "Identifiant client"
 
-#: transcria/web/config_form.py:170
+#: transcria/web/config_form.py:174
 msgid "Secret client"
 msgstr "Secret client"
 
-#: transcria/web/config_form.py:172
+#: transcria/web/config_form.py:176
 msgid "Laissez vide si le secret est fourni par variable d'environnement."
 msgstr "Laissez vide si le secret est fourni par variable d'environnement."
 
-#: transcria/web/config_form.py:173
+#: transcria/web/config_form.py:177
 msgid "Variable d'environnement du secret"
 msgstr "Variable d'environnement du secret"
 
-#: transcria/web/config_form.py:174
+#: transcria/web/config_form.py:178
 msgid "Nom d'une variable d'environnement contenant le secret — prioritaire sur le champ précédent, évite le secret en clair dans config.yaml."
 msgstr "Nom d'une variable d'environnement contenant le secret — prioritaire sur le champ précédent, évite le secret en clair dans config.yaml."
 
-#: transcria/web/config_form.py:176
+#: transcria/web/config_form.py:180
 msgid "Libellé du bouton SSO"
 msgstr "Libellé du bouton SSO"
 
-#: transcria/web/config_form.py:177
+#: transcria/web/config_form.py:181
 msgid "Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». Vide = libellé par défaut."
 msgstr "Texte du bouton sur la page de connexion, ex. « Connexion Entreprise ». Vide = libellé par défaut."
 
-#: transcria/web/config_form.py:179
+#: transcria/web/config_form.py:183
 msgid "Adresses de confiance du proxy"
 msgstr "Adresses de confiance du proxy"
 
-#: transcria/web/config_form.py:180
+#: transcria/web/config_form.py:184
 msgid "Backend proxy uniquement : adresses IP ou réseaux CIDR du proxy frontal, ex. 127.0.0.1, 10.0.0.0/24. Les en-têtes d'identité ne sont crus QUE depuis ces adresses (adresse socket réelle, jamais X-Forwarded-For)."
 msgstr "Backend proxy uniquement : adresses IP ou réseaux CIDR du proxy frontal, ex. 127.0.0.1, 10.0.0.0/24. Les en-têtes d'identité ne sont crus QUE depuis ces adresses (adresse socket réelle, jamais X-Forwarded-For)."
 
-#: transcria/web/config_form.py:184
+#: transcria/web/config_form.py:188
 msgid "En-tête utilisateur du proxy"
 msgstr "En-tête utilisateur du proxy"
 
-#: transcria/web/config_form.py:185
+#: transcria/web/config_form.py:189
 msgid "Nom de l'en-tête portant l'identifiant (convention : Remote-User)."
 msgstr "Nom de l'en-tête portant l'identifiant (convention : Remote-User)."
 
-#: transcria/web/config_form.py:186
+#: transcria/web/config_form.py:190
 msgid "En-tête groupes du proxy"
 msgstr "En-tête groupes du proxy"
 
-#: transcria/web/config_form.py:187
+#: transcria/web/config_form.py:191
 msgid "Nom de l'en-tête portant les groupes, séparés par des virgules (convention : Remote-Groups)."
 msgstr "Nom de l'en-tête portant les groupes, séparés par des virgules (convention : Remote-Groups)."
 
-#: transcria/web/config_form.py:189
+#: transcria/web/config_form.py:193
 msgid "Connexion automatique via le proxy"
 msgstr "Connexion automatique via le proxy"
 
-#: transcria/web/config_form.py:190
+#: transcria/web/config_form.py:194
 msgid "Activée : /login connecte directement depuis les en-têtes. Désactivée : la page affiche un bouton de connexion."
 msgstr "Activée : /login connecte directement depuis les en-têtes. Désactivée : la page affiche un bouton de connexion."
 
-#: transcria/web/config_form.py:192
+#: transcria/web/config_form.py:196
 msgid "Contrôleurs LDAP/AD"
 msgstr "Contrôleurs LDAP/AD"
 
-#: transcria/web/config_form.py:193
+#: transcria/web/config_form.py:197
 msgid "Backend ldap : un ou plusieurs contrôleurs, ex. ldaps://dc1.corp, ldaps://dc2.corp (essayés dans l'ordre pour la haute disponibilité). LDAPS (ldaps://) fortement recommandé."
 msgstr "Backend ldap : un ou plusieurs contrôleurs, ex. ldaps://dc1.corp, ldaps://dc2.corp (essayés dans l'ordre pour la haute disponibilité). LDAPS (ldaps://) fortement recommandé."
 
-#: transcria/web/config_form.py:196
+#: transcria/web/config_form.py:200
 msgid "LDAPS (TLS)"
 msgstr "LDAPS (TLS)"
 
-#: transcria/web/config_form.py:197
+#: transcria/web/config_form.py:201
 msgid "Chiffre la liaison à l'annuaire. À désactiver seulement avec auth.ldap.allow_plaintext en connaissance de cause (mot de passe en clair)."
 msgstr "Chiffre la liaison à l'annuaire. À désactiver seulement avec auth.ldap.allow_plaintext en connaissance de cause (mot de passe en clair)."
 
-#: transcria/web/config_form.py:199
+#: transcria/web/config_form.py:203
 msgid "Mode de connexion LDAP"
 msgstr "Mode de connexion LDAP"
 
-#: transcria/web/config_form.py:201
+#: transcria/web/config_form.py:205
 msgid "service (recommandé AD) : un compte de service recherche l'utilisateur puis on valide son mot de passe. direct : bind direct via un gabarit de DN."
 msgstr "service (recommandé AD) : un compte de service recherche l'utilisateur puis on valide son mot de passe. direct : bind direct via un gabarit de DN."
 
-#: transcria/web/config_form.py:203
+#: transcria/web/config_form.py:207
 msgid "DN du compte de service"
 msgstr "DN du compte de service"
 
-#: transcria/web/config_form.py:204
+#: transcria/web/config_form.py:208
 msgid "Mode service : compte de lecture de l'annuaire, ex. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 msgstr "Mode service : compte de lecture de l'annuaire, ex. CN=svc-transcria,OU=Services,DC=corp,DC=example."
 
-#: transcria/web/config_form.py:206
+#: transcria/web/config_form.py:210
 msgid "Mot de passe du compte de service"
 msgstr "Mot de passe du compte de service"
 
-#: transcria/web/config_form.py:208
+#: transcria/web/config_form.py:212
 msgid "Laissez vide si fourni par variable d'environnement."
 msgstr "Laissez vide si fourni par variable d'environnement."
 
-#: transcria/web/config_form.py:209
+#: transcria/web/config_form.py:213
 msgid "Variable d'environnement du mot de passe de service"
 msgstr "Variable d'environnement du mot de passe de service"
 
-#: transcria/web/config_form.py:211
+#: transcria/web/config_form.py:215
 msgid "Nom d'une variable d'environnement portant le mot de passe — prioritaire, évite le secret en clair dans config.yaml."
 msgstr "Nom d'une variable d'environnement portant le mot de passe — prioritaire, évite le secret en clair dans config.yaml."
 
-#: transcria/web/config_form.py:213
+#: transcria/web/config_form.py:217
 msgid "Base de recherche (base DN)"
 msgstr "Base de recherche (base DN)"
 
-#: transcria/web/config_form.py:214
+#: transcria/web/config_form.py:218
 msgid "Racine de recherche des comptes, ex. DC=corp,DC=example."
 msgstr "Racine de recherche des comptes, ex. DC=corp,DC=example."
 
-#: transcria/web/config_form.py:215
+#: transcria/web/config_form.py:219
 msgid "Filtre de recherche utilisateur"
 msgstr "Filtre de recherche utilisateur"
 
-#: transcria/web/config_form.py:216
+#: transcria/web/config_form.py:220
 #, python-brace-format
 msgid "Doit contenir {username} (échappé automatiquement). AD : (&(objectClass=user)(sAMAccountName={username}))."
 msgstr "Doit contenir {username} (échappé automatiquement). AD : (&(objectClass=user)(sAMAccountName={username}))."
 
-#: transcria/web/config_form.py:218
+#: transcria/web/config_form.py:222
 msgid "Résoudre les groupes imbriqués (AD)"
 msgstr "Résoudre les groupes imbriqués (AD)"
 
-#: transcria/web/config_form.py:220
+#: transcria/web/config_form.py:224
 msgid "Suit l'appartenance transitive des groupes (règle en chaîne AD). Plus complet mais plus coûteux — laisser désactivé si non nécessaire."
 msgstr "Suit l'appartenance transitive des groupes (règle en chaîne AD). Plus complet mais plus coûteux — laisser désactivé si non nécessaire."
 
-#: transcria/web/config_form.py:222
+#: transcria/web/config_form.py:226
 msgid "Claim des groupes"
 msgstr "Claim des groupes"
 
-#: transcria/web/config_form.py:223
+#: transcria/web/config_form.py:227
 msgid "Nom du claim OIDC portant les groupes (généralement « groups »). Ignoré en LDAP (memberOf) et proxy (en-tête des groupes)."
 msgstr "Nom du claim OIDC portant les groupes (généralement « groups »). Ignoré en LDAP (memberOf) et proxy (en-tête des groupes)."
 
-#: transcria/web/config_form.py:225
+#: transcria/web/config_form.py:229
 msgid "Règles groupe → rôle"
 msgstr "Règles groupe → rôle"
 
-#: transcria/web/config_form.py:226
+#: transcria/web/config_form.py:230
 msgid "Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : transcria-admins = admin"
 msgstr "Une règle par ligne : « groupe = rôle » (rôles : admin, manager, operator, viewer). Premier groupe correspondant gagne, égalité stricte. Ex. : transcria-admins = admin"
 
-#: transcria/web/config_form.py:229
+#: transcria/web/config_form.py:233
 msgid "Rôle par défaut (aucun groupe reconnu)"
 msgstr "Rôle par défaut (aucun groupe reconnu)"
 
-#: transcria/web/config_form.py:231
+#: transcria/web/config_form.py:235
 msgid "deny (recommandé) : connexion refusée sans groupe reconnu. viewer : accès en lecture seule."
 msgstr "deny (recommandé) : connexion refusée sans groupe reconnu. viewer : accès en lecture seule."
 
-#: transcria/web/config_form.py:236
+#: transcria/web/config_form.py:240
 msgid "Serveur & compte admin"
 msgstr "Serveur & compte admin"
 
-#: transcria/web/config_form.py:237
+#: transcria/web/config_form.py:241
 msgid "Écoute du portail et mot de passe du premier administrateur."
 msgstr "Écoute du portail et mot de passe du premier administrateur."
 
-#: transcria/web/config_form.py:239
+#: transcria/web/config_form.py:243
 msgid "Hôte d'écoute"
 msgstr "Hôte d'écoute"
 
-#: transcria/web/config_form.py:240
+#: transcria/web/config_form.py:244
 msgid "Port d'écoute"
 msgstr "Port d'écoute"
 
-#: transcria/web/config_form.py:241
+#: transcria/web/config_form.py:245
 msgid "Mot de passe admin initial"
 msgstr "Mot de passe admin initial"
 
-#: transcria/web/config_form.py:243
+#: transcria/web/config_form.py:247
 msgid "Changez la valeur par défaut avant tout usage réel."
 msgstr "Changez la valeur par défaut avant tout usage réel."
 
@@ -2375,7 +2383,7 @@ msgid "Remplacer par"
 msgstr "Remplacer par"
 
 #: transcria/web/templates/account_tokens.html:2
-#: transcria/web/templates/base.html:111
+#: transcria/web/templates/base.html:112
 msgid "Jetons d'API"
 msgstr "Jetons d'API"
 
@@ -2470,7 +2478,7 @@ msgstr "Aucun jeton pour le moment."
 
 #: transcria/web/templates/admin_config.html:2
 #: transcria/web/templates/admin_config.html:5
-#: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:65
+#: transcria/web/templates/audit.html:34 transcria/web/templates/base.html:66
 msgid "Configuration"
 msgstr "Configuration"
 
@@ -2595,7 +2603,7 @@ msgstr "Sauvegarder le YAML"
 
 #: transcria/web/templates/admin_hardware.html:2
 #: transcria/web/templates/admin_hardware.html:5
-#: transcria/web/templates/base.html:71
+#: transcria/web/templates/base.html:72
 msgid "Préconisations matériel"
 msgstr "Préconisations matériel"
 
@@ -2657,7 +2665,7 @@ msgstr "Aucune préconisation : aucun backend STT servi n'est configuré (voir l
 
 #: transcria/web/templates/admin_maintenance.html:2
 #: transcria/web/templates/admin_maintenance.html:5
-#: transcria/web/templates/base.html:67
+#: transcria/web/templates/base.html:68
 msgid "Maintenance"
 msgstr "Maintenance"
 
@@ -2794,7 +2802,7 @@ msgstr "Aucune archive pour l'instant. Lancez une première sauvegarde ci-dessus
 
 #: transcria/web/templates/admin_models.html:2
 #: transcria/web/templates/admin_models.html:5
-#: transcria/web/templates/base.html:69
+#: transcria/web/templates/base.html:70
 msgid "Modèles"
 msgstr "Modèles"
 
@@ -2919,7 +2927,7 @@ msgstr "Job"
 msgid "Groupe"
 msgstr "Groupe"
 
-#: transcria/web/templates/audit.html:35 transcria/web/templates/base.html:75
+#: transcria/web/templates/audit.html:35 transcria/web/templates/base.html:76
 #: transcria/web/templates/central_lexicon_detail.html:103
 msgid "Audit"
 msgstr "Audit"
@@ -2933,7 +2941,7 @@ msgstr "Lexique"
 msgid "Voix"
 msgstr "Voix"
 
-#: transcria/web/templates/audit.html:38 transcria/web/templates/base.html:81
+#: transcria/web/templates/audit.html:38 transcria/web/templates/base.html:82
 msgid "Système"
 msgstr "Système"
 
@@ -2963,78 +2971,78 @@ msgstr "Aucune entrée d'audit trouvée."
 msgid "%(n)s entrée(s)"
 msgstr "%(n)s entrée(s)"
 
-#: transcria/web/templates/base.html:19
+#: transcria/web/templates/base.html:20
 msgid "Menu"
 msgstr "Menu"
 
-#: transcria/web/templates/base.html:26 transcria/web/templates/index.html:5
+#: transcria/web/templates/base.html:27 transcria/web/templates/index.html:5
 msgid "Traitements"
 msgstr "Traitements"
 
-#: transcria/web/templates/base.html:30
+#: transcria/web/templates/base.html:31
 #: transcria/web/templates/meeting_types.html:2
 msgid "Types de réunion"
 msgstr "Types de réunion"
 
-#: transcria/web/templates/base.html:35
+#: transcria/web/templates/base.html:36
 #: transcria/web/templates/schedule.html:22
 msgctxt "navigation"
 msgid "File"
 msgstr "File"
 
-#: transcria/web/templates/base.html:45
+#: transcria/web/templates/base.html:46
 msgid "Administration"
 msgstr "Administration"
 
-#: transcria/web/templates/base.html:50 transcria/web/templates/users.html:2
+#: transcria/web/templates/base.html:51 transcria/web/templates/users.html:2
 msgid "Utilisateurs"
 msgstr "Utilisateurs"
 
-#: transcria/web/templates/base.html:54 transcria/web/templates/groups.html:2
+#: transcria/web/templates/base.html:55 transcria/web/templates/groups.html:2
 #: transcria/web/templates/groups.html:5
 msgid "Groupes"
 msgstr "Groupes"
 
-#: transcria/web/templates/base.html:56
+#: transcria/web/templates/base.html:57
 #: transcria/web/templates/central_lexicons.html:2
 msgid "Lexiques"
 msgstr "Lexiques"
 
-#: transcria/web/templates/base.html:78 transcria/web/templates/queue.html:31
+#: transcria/web/templates/base.html:79 transcria/web/templates/queue.html:31
 #: transcria/web/templates/schedule.html:2
 #: transcria/web/templates/schedule.html:11
 msgid "Planification"
 msgstr "Planification"
 
-#: transcria/web/templates/base.html:89
+#: transcria/web/templates/base.html:90
 msgid "Langue de l'interface"
 msgstr "Langue de l'interface"
 
-#: transcria/web/templates/base.html:106
+#: transcria/web/templates/base.html:107
 msgid "Rôle :"
 msgstr "Rôle :"
 
-#: transcria/web/templates/base.html:109 transcria/web/templates/login.html:41
+#: transcria/web/templates/base.html:110 transcria/web/templates/login.html:41
 #: transcria/web/templates/user_form.html:32
 msgid "Mot de passe"
 msgstr "Mot de passe"
 
-#: transcria/web/templates/base.html:115
+#: transcria/web/templates/base.html:116
 msgid "Déconnexion"
 msgstr "Déconnexion"
 
-#: transcria/web/templates/base.html:137
+#: transcria/web/templates/base.html:138
 msgid "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 msgstr "Vous utilisez encore le <strong>mot de passe par défaut</strong>. <a href=\"/account/password\" class=\"alert-link\">Changez-le maintenant</a> pour sécuriser votre compte."
 
-#: transcria/web/templates/base.html:146
+#: transcria/web/templates/base.html:147
 #, python-format
 msgid "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgid_plural "<strong>%(count)s</strong> traitements en attente de VRAM."
 msgstr[0] "<strong>%(count)s</strong> traitement en attente de VRAM."
 msgstr[1] "<strong>%(count)s</strong> traitements en attente de VRAM."
 
-#: transcria/web/templates/base.html:147
+#: transcria/web/templates/base.html:148
 msgid "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 msgstr "La mémoire GPU est insuffisante ; ces jobs reprendront automatiquement dès qu'elle sera libérée. Libérez de la VRAM (arrêt d'une LLM, fin d'un autre traitement) pour accélérer la reprise."
 

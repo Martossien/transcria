@@ -875,6 +875,7 @@ security:
   # hsts_enabled: true            # en-tête HSTS (uniquement sur réponse HTTPS réelle)
   # hsts_max_age_days: 365
   # csrf_origin_check: true       # refuse un POST cookie d'origine croisée (en plus de SameSite)
+  # csrf_tokens: true             # jeton CSRF par requête mutante (défense forte ; scripts → jeton d'API Bearer)
   allowed_upload_extensions:
     - ".mp3"
     - ".wav"

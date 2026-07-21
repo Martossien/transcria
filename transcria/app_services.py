@@ -274,6 +274,11 @@ def register_template_globals(app: Flask) -> None:
 
     app.jinja_env.globals["Permission"] = Permission
 
+    # Jeton CSRF (chantier sécurité, opt-in) : exposé aux templates pour la balise
+    # meta lue par static/js/csrf.js. Appeler csrf_token() crée le jeton en session.
+    from transcria.web.csrf import get_csrf_token
+    app.jinja_env.globals["csrf_token"] = get_csrf_token
+
 
 def register_i18n(app: Flask) -> None:
     """Internationalisation de l'interface (Flask-Babel) : sélecteur de locale, globals
@@ -313,6 +318,20 @@ def register_request_hooks(app: Flask) -> None:
                 logger.warning("CSRF : POST %s d'origine croisée refusé (Origin=%s, host=%s)",
                                request.path, origin, request.host)
                 abort(403)
+
+    @app.before_request
+    def _csrf_token_guard():
+        # Protection CSRF par JETON (opt-in `security.csrf_tokens`) : une requête
+        # mutante authentifiée par cookie doit présenter le jeton de session (champ
+        # `csrf_token` ou en-tête `X-CSRFToken`, posés par static/js/csrf.js).
+        # L'API par jeton Bearer et les méthodes sûres sont exemptées (voir web/csrf.py).
+        if not bool((get_config().get("security") or {}).get("csrf_tokens", False)):
+            return
+        from transcria.web.csrf import request_needs_csrf, validate_csrf
+        if request_needs_csrf() and not validate_csrf():
+            from flask import abort
+            logger.warning("CSRF : jeton absent ou invalide sur %s %s", request.method, request.path)
+            abort(403)
 
     @app.after_request
     def _security_headers(response):

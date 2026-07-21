@@ -99,6 +99,69 @@ class TestGardeOrigine:
         assert r.status_code != 403
 
 
+class TestCsrfJetons:
+    def _token(self, client):
+        import re
+        body = client.get("/login").get_data(as_text=True)
+        m = re.search(r'name="csrf-token" content="([^"]+)"', body)
+        assert m, "meta csrf-token absente"
+        return m.group(1)
+
+    def test_meta_token_present_et_stable(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        with app.test_client() as c:
+            assert self._token(c)   # présent
+
+    def test_post_sans_jeton_refuse(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        with app.test_client() as c:
+            self._token(c)          # établit la session
+            r = c.post("/login", data={"username": "admin", "password": "x"})
+            assert r.status_code == 403
+
+    def test_post_avec_jeton_header_ou_champ_passe(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        with app.test_client() as c:
+            tok = self._token(c)
+            r_hdr = c.post("/login", data={"username": "z", "password": "y"}, headers={"X-CSRFToken": tok})
+            r_fld = c.post("/login", data={"username": "z", "password": "y", "csrf_token": tok})
+            assert r_hdr.status_code != 403 and r_fld.status_code != 403   # 401, pas bloqué CSRF
+
+    def test_jeton_falsifie_refuse(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        with app.test_client() as c:
+            self._token(c)
+            r = c.post("/login", data={"username": "z", "password": "y"}, headers={"X-CSRFToken": "FAUX"})
+            assert r.status_code == 403
+
+    def test_bearer_exempt(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        r = app.test_client().post("/api/jobs/x/process", headers={"Authorization": "Bearer tia_a_b"})
+        assert r.status_code != 403
+
+    def test_get_exempt(self, _pg_database):
+        app = _app(_pg_database, csrf_tokens=True)
+        assert app.test_client().get("/login").status_code == 200
+
+    def test_desactive_pas_deffet(self, _pg_database):
+        app = _app(_pg_database)   # csrf_tokens False
+        r = app.test_client().post("/login", data={"username": "admin", "password": "x"})
+        assert r.status_code != 403
+
+    def test_module_pur(self, _pg_database):
+        """Le module de jeton : création, exemption Bearer, validation temps constant."""
+        app = _app(_pg_database, csrf_tokens=True)
+        from transcria.web import csrf
+        with app.test_request_context("/x", method="POST"):
+            t1 = csrf.get_csrf_token()
+            assert t1 and csrf.get_csrf_token() == t1   # idempotent dans la session
+            assert csrf.request_needs_csrf() is True
+        with app.test_request_context("/x", method="GET"):
+            assert csrf.request_needs_csrf() is False
+        with app.test_request_context("/x", method="POST", headers={"Authorization": "Bearer tia_a_b"}):
+            assert csrf.request_needs_csrf() is False
+
+
 class TestSchemaEtFormulaire:
     def test_hsts_sans_proxy_avertit(self):
         from transcria.config.config_schema import validate_config
@@ -112,7 +175,7 @@ class TestSchemaEtFormulaire:
         from transcria.web.config_form import CONFIG_FORM_SECTIONS, iter_fields
         paths = {f["path"] for f in iter_fields(CONFIG_FORM_SECTIONS)}
         for p in ("security.behind_tls_proxy", "security.session_cookie_secure",
-                  "security.hsts_enabled", "security.csrf_origin_check"):
+                  "security.hsts_enabled", "security.csrf_origin_check", "security.csrf_tokens"):
             assert p in paths, p
 
 

@@ -46,13 +46,18 @@ ou `@login_required` ; les tests RBAC couvrent les refus (403) par rôle.
   mono-process (déploiement local) le compteur est global ; en multi-process chaque
   worker a le sien (le blocage reste efficace, une même IP se répartit mal).
 - **Échecs de connexion journalisés** (`AuditAction.LOGIN_FAILED`, avec identifiant tenté).
-- **CSRF** : `SameSite=Lax` bloque l'envoi du cookie sur les POST cross-site (garde
-  principale). Défense **en profondeur** opt-in `security.csrf_origin_check` : sur une
-  requête mutante authentifiée par cookie, un en-tête `Origin` d'une autre origine que
-  l'hôte est refusé (403) — couvre notamment les vieux navigateurs sans SameSite.
-  L'API par jeton (`Authorization: Bearer`) et les requêtes sans en-tête `Origin` ne
-  sont pas affectées. **Limitation assumée** : pas de jeton CSRF par formulaire (Flask-WTF)
-  — c'est un chantier dédié (chaque formulaire + chaque `fetch` + exemption de l'API ⭐).
+- **CSRF** : trois couches, de la plus légère à la plus forte.
+  1. `SameSite=Lax` (toujours actif) — bloque l'envoi du cookie sur les POST cross-site.
+  2. `security.csrf_origin_check` (opt-in) — refuse (403) un POST cookie dont l'en-tête
+     `Origin` est croisé ; couvre les vieux navigateurs sans SameSite.
+  3. `security.csrf_tokens` (opt-in, **défense la plus forte**) — jeton synchroniseur
+     en session, exigé à chaque requête mutante authentifiée par cookie (champ
+     `csrf_token` ou en-tête `X-CSRFToken`). Le jeton est injecté AUTOMATIQUEMENT dans
+     tous les formulaires et tous les `fetch` par `static/js/csrf.js` (aucun formulaire
+     à modifier). `transcria/web/csrf.py` valide en temps constant.
+  L'API par jeton (`Authorization: Bearer`) et les requêtes sans en-tête `Origin`/jeton
+  d'API sont exemptées (elles ont leur propre authentification). Les **scripts** doivent
+  utiliser un jeton d'API (`Bearer`), pas un cookie de session, quand `csrf_tokens` est actif.
 
 ## 3. En-têtes de sécurité (C3.9)
 
@@ -149,6 +154,7 @@ fonctionnel) et se règle depuis Administration → Configuration → « Durciss
 - `security.hsts_enabled` / `security.hsts_max_age_days` (défaut `false` / `365`) — HSTS
   (§3), émis uniquement sur une réponse HTTPS réelle.
 - `security.csrf_origin_check` (défaut `false`) — contrôle d'origine (§2).
+- `security.csrf_tokens` (défaut `false`) — jetons CSRF synchroniseurs (§2, défense forte).
 
 Le préflight `doctor` (`Transport HTTP(S)`) émet un WARN si un backend d'auth **fédéré**
 (OIDC/proxy/LDAP — identifiants d'entreprise) tourne sans cookie sécurisé ni proxy TLS

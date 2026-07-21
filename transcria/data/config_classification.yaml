@@ -44,6 +44,7 @@ exposed:
 - security.allowed_upload_extensions
 - security.behind_tls_proxy
 - security.csrf_origin_check
+- security.csrf_tokens
 - security.hsts_enabled
 - security.max_document_chars
 - security.max_document_size_mb
