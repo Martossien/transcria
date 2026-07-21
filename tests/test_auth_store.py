@@ -138,6 +138,34 @@ class TestUserStore:
             finally:
                 _restore_users(snapshot)
 
+    def test_ensure_admin_idempotent_sous_course_de_premier_boot(self, app, monkeypatch):
+        """Course de PREMIER démarrage : plusieurs workers gunicorn passent tous le
+        `count_users() == 0` puis tentent l'insertion en parallèle. Le perdant reçoit
+        une violation d'unicité — ensure_admin doit l'ABSORBER (rollback + skip), sinon
+        gunicorn (WORKER_BOOT_ERROR) refuse de démarrer le service (bug vécu au 1er boot
+        du bundled)."""
+        from transcria.auth.models import User
+
+        with app.app_context():
+            snapshot = _snapshot_users()
+            _empty_all_tables()
+            try:
+                # Le worker « gagnant » a déjà créé l'admin.
+                UserStore.ensure_admin({"auth": {"first_admin_username": "root", "first_admin_password": "rootpass"}})
+                assert User.query.filter_by(username="root").count() == 1
+
+                # Le worker « perdant » voit encore 0 (fenêtre de course) et retente
+                # l'insertion → UniqueViolation, qui NE DOIT PAS remonter.
+                monkeypatch.setattr(UserStore, "count_users", staticmethod(lambda: 0))
+                UserStore.ensure_admin({"auth": {"first_admin_username": "root", "first_admin_password": "rootpass"}})
+                monkeypatch.undo()
+
+                # Aucune exception, toujours UN seul admin, session utilisable.
+                assert User.query.filter_by(username="root").count() == 1
+                assert UserStore.get_by_username("root") is not None
+            finally:
+                _restore_users(snapshot)
+
 
 class TestGroupStore:
     def test_create_group_and_membership(self, app):

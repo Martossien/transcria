@@ -1,6 +1,7 @@
 import logging
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from transcria.auth.models import Role, User
 from transcria.database import db
@@ -97,7 +98,19 @@ class UserStore:
             return
         username = config.get("auth", {}).get("first_admin_username", "admin")
         password = config.get("auth", {}).get("first_admin_password", "admin-change-me")
-        UserStore.create_user(username=username, password=password, display_name="Administrateur", role=Role.ADMIN)
+        try:
+            UserStore.create_user(username=username, password=password, display_name="Administrateur", role=Role.ADMIN)
+        except IntegrityError:
+            # Course de PREMIER démarrage : au boot sur une base vierge, plusieurs
+            # workers gunicorn (ou instances) passent tous le `count_users() == 0`
+            # puis tentent l'insertion en parallèle. Le perdant reçoit une violation
+            # d'unicité sur le username — c'est bénin et IDEMPOTENT (l'admin existe
+            # déjà). Sans ce filet, gunicorn interprète l'échec du worker comme un
+            # HaltServer et le service refuse de démarrer.
+            db.session.rollback()
+            logger.info("ensure_admin : admin déjà créé en parallèle (course de premier "
+                        "démarrage) — ignoré.")
+            return
         if password in DEFAULT_ADMIN_PASSWORDS:
             logger.warning(
                 "Premier compte admin créé avec un mot de passe par défaut ou vide. "
