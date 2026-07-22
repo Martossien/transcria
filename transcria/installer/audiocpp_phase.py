@@ -24,10 +24,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-# Commit épinglé : inclut le fix de session Nemotron (858074a) et le support
-# Qwen3-ASR-1.7B HF (#43) — l'état QUALIFIÉ sur notre benchmark (0,421 WER).
+# Commit épinglé : conserve qwen3-asr (0,421 WER) et le fix de session Nemotron,
+# et ajoute le support Voxtral realtime GGUF (paquet `voxtral_realtime`, ajouté
+# upstream au commit 6313916). qwen3 re-qualifié par smoke après le bump.
 AUDIOCPP_REPO = "https://github.com/0xShug0/audio.cpp"
-AUDIOCPP_PINNED_COMMIT = "3982dfb29ff0b37a26b799045f85732b20a0bdef"
+AUDIOCPP_PINNED_COMMIT = "edbdf586f2784218db4d7d11e66d1e45629dc8f2"
 # Modèle recommandé (Apache-2.0, ~3,9 Go) — id du paquet dans LEUR model_manager.
 AUDIOCPP_DEFAULT_MODEL_PACKAGE = "qwen3_asr_1_7b_hf"
 AUDIOCPP_DEFAULT_MODEL_DIR = "Qwen3-ASR-1.7B-hf"
@@ -137,8 +138,14 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
     jobs = plan.jobs or (os.cpu_count() or 4)
     console.info(f"Compilation audiocpp_server (CUDA, -j{jobs}) — plusieurs minutes…")
     try:
+        # DEPLOYMENT_BUILD=ON : embarque les model_specs/*.json DANS le binaire.
+        # Depuis edbdf586, le serveur résout le « spec » par famille ; comme on
+        # copie le binaire hors de src/ (bin/, cwd arbitraire ; images Docker : src
+        # jeté), la découverte externe model_specs/ échoue → SEUL le catalogue
+        # compilé rend le binaire auto-suffisant (qwen3/nemotron safetensors + GGUF).
         runner(["cmake", "-S", str(src), "-B", str(src / "build"),
                 "-DCMAKE_BUILD_TYPE=Release", "-DGGML_CUDA=ON",
+                "-DAUDIOCPP_DEPLOYMENT_BUILD=ON",
                 f"-DCMAKE_CUDA_ARCHITECTURES={plan.cuda_archs}"])
         runner(["cmake", "--build", str(src / "build"), "-j", str(jobs),
                 "--target", "audiocpp_server"])

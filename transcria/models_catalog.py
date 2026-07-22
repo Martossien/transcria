@@ -51,6 +51,16 @@ _SERVED_STT_SOURCES: dict[str, dict] = {
         "gated": False, "license": "MIT (runtime) / NVIDIA Open Model License (poids)",
         "license_url": "https://huggingface.co/mudler/parakeet-cpp-gguf", "est_gb": 1.4,
     },
+    # Voxtral Mini 4B Realtime (Mistral) servi par audio.cpp en GGUF Q8_0 — MÊME
+    # runtime/binaire que qwen3asr (famille voxtral_realtime), poids délégués au
+    # model_manager (paquet voxtral_realtime, repo audio-cpp/audio.cpp-gguf).
+    "voxtralrt": {
+        "repo": "audio-cpp/audio.cpp-gguf", "kind": "runtime",
+        "target_subdir": "audiocpp/src/models/Voxtral-Mini-4B-Realtime-2602-GGUF",
+        "file": "voxtral_realtime",
+        "gated": False, "license": "Apache-2.0",
+        "license_url": "https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602", "est_gb": 5.1,
+    },
 }
 
 

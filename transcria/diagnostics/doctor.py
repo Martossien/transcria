@@ -565,7 +565,7 @@ def check_remote_stt_control_plane(cfg: dict) -> CheckResult:
 
 
 def check_served_stt_runtimes(cfg: dict) -> CheckResult:
-    """Runtimes STT servis déclarés (qwen3asr/nemotron) : binaire provisionné + commit épinglé.
+    """Runtimes STT servis déclarés (qwen3asr/voxtralrt/nemotron) : binaire provisionné + commit épinglé.
 
     Le manifeste `resource_node.engines` peut déclarer un moteur dont le runtime n'a
     jamais été construit (ou l'a été sur un ancien SHA après une montée de version) —
@@ -577,6 +577,7 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
     runtimes_dir = resolve_runtimes_dir()
     known = {
         "qwen3asr": ("audiocpp", lambda: audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)),
+        "voxtralrt": ("audiocpp", lambda: audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)),
         "nemotron": ("parakeetcpp", lambda: parakeetcpp_is_complete(parakeetcpp_home(runtimes_dir), PARAKEETCPP_PINNED_COMMIT)),
     }
     concerned = sorted(declared & set(known))

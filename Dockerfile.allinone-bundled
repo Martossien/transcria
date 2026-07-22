@@ -89,8 +89,8 @@ PY
 # Binaires SEULS (/opt/runtimes) — modèles par VOLUME (snapshot HF pur pour
 # Qwen3-ASR-1.7B-hf : `hf download` suffit ; pointer STT_MODEL sur le chemin monté).
 FROM ${CUDA_IMAGE} AS stt-runtimes-builder
-ARG AUDIOCPP_REF=3982dfb29ff0b37a26b799045f85732b20a0bdef
-ARG PARAKEETCPP_REF=e8acc6172a94e20a952cf1843decace5d771a94b
+ARG AUDIOCPP_REF=edbdf586f2784218db4d7d11e66d1e45629dc8f2
+ARG PARAKEETCPP_REF=1da853421de9710cbe894a0110711de5a0516486
 ENV DEBIAN_FRONTEND=noninteractive
 # Miroirs Ubuntu en HTTPS : les caches proxy HTTP d'entreprise servent des index périmés.
 RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
@@ -100,7 +100,7 @@ RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/ubuntu.sources \
 RUN git clone https://github.com/0xShug0/audio.cpp /tmp/audiocpp \
     && git -C /tmp/audiocpp checkout "${AUDIOCPP_REF}" \
     && cmake -S /tmp/audiocpp -B /tmp/audiocpp/build \
-        -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON \
+        -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON -DAUDIOCPP_DEPLOYMENT_BUILD=ON \
         -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90" \
     && cmake --build /tmp/audiocpp/build -j "$(nproc)" --target audiocpp_server \
     && mkdir -p /opt/runtimes/audiocpp/bin \

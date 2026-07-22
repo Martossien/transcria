@@ -1651,8 +1651,8 @@ msgid "Backend STT du résumé"
 msgstr "Summary STT backend"
 
 #: transcria/web/config_form.py:40
-msgid "Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron exigent le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
-msgstr "Engine dedicated to the summary phase quick transcription — empty = same engine as the pipeline. kroko = pure CPU (zero VRAM); qwen3asr/nemotron require the audio.cpp/parakeet.cpp served runtime (see docs/EXTERNAL_STT_RUNTIMES.md)."
+msgid "Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron/voxtralrt exigent le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md)."
+msgstr "Engine dedicated to the summary phase quick transcription — empty = same engine as the pipeline. kroko = pure CPU (zero VRAM); qwen3asr/nemotron/voxtralrt require the audio.cpp/parakeet.cpp served runtime (see docs/EXTERNAL_STT_RUNTIMES.md)."
 
 #: transcria/web/config_form.py:43
 msgid "Backend diarisation"

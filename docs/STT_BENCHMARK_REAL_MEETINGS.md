@@ -205,6 +205,7 @@ Same reference, same scorer, different serving path.
 | Qwen3-ASR-0.6B (audio.cpp, CUDA) | 0.56 *(0.42 excl. one window)* | **7–10 s** | one 24 GB card, small | over-generated ×2 on one chaotic multi-speaker opening; healthy elsewhere |
 | **Qwen3-ASR-1.7B** (audio.cpp, added upstream the day after our tests) | **0.42** *(8/8; 0.35 excl. the same chaotic window)* | 10–14 s | one card, ~4 GB weights | **second-best text WER of the whole benchmark** (between MOSS 0.41 and Voxtral 0.43) and the best single window of the entire test (0.19); its one weakness is stuttering loops on the chaotic multi-speaker opening — contained (0.88 there vs 1.55 for the 0.6B) |
 | Nemotron 3.5 ASR 0.6B (audio.cpp) | ~~0.51 (7/8, restart per request)~~ → **0.49** *(8/8, single session — upstream fixed it within hours of our report)* | **~2 s** | one card, small | we initially hit a session-reuse bug (empty from the 2nd request) and one always-empty window; the author shipped a fix the same day (`Refresh Nemotron offline encoder inputs`) — retested on our full corpus: 8/8 windows, three identical back-to-back replies, now matching parakeet.cpp's score for the same model at a quarter of the wall time. Young runtimes move fast |
+| **Voxtral-Mini-4B-Realtime** (audio.cpp, Q8_0 GGUF) | **not scored yet** *(coverage first — see below)* | ~44 s offline / ~76 s streaming | one card, ~5 GB weights | Mistral's realtime model, added upstream. Whole-file offline **and** streaming (`stream=true` SSE, TTFT ~0.6 s) both transcribe our real meetings in full; the **offline per-chunk** path our pipeline drives returns HTTP 200 with **empty text** on a large fraction of ~25 s VAD segments (no error), silently dropping 15–45 % of a meeting in contiguous holes — the exact same span sent as one longer clip transcribes fine. Also splices the odd non-Latin (Russian) phrase into French on pathological turns, which our automated drift counter scored 0 (only reading caught it). WER pending a whole-file pass |
 | Nemotron 3.5 ASR 0.6B (parakeet.cpp, f16 GGUF, `--lang fr`) | **0.49** *(8/8, zero empty)* | **7–8 s** (CLI, incl. model load) | one card, ~1.4 GB weights | same model, different runtime: no session bug (3 identical back-to-back server replies), no empty windows, 0 % EN drift — best small-model result of the whole test |
 | Parakeet TDT 0.6B v3 (parakeet.cpp, auto language) | 0.93 *(8/8, heavy truncation)* | 5 s | one card, small | its automatic language detection drifted to English on ~all windows (11–36 % EN function words) and there is no way to force a language on this model — unusable on narrowband French |
 | Kroko-ASR FR Community 128 (sherpa-onnx, **CPU only**, 8 threads) | **0.43** *(8/8, zero empty)* | **10 s** | **no GPU at all**, 155 MB weights | French-dedicated streaming Zipformer; punctuated, cased output; best single-window score of the entire test (0.20); the low-latency FR-64 variant scores the same (0.43) |
@@ -241,6 +242,18 @@ What we take away:
   one runtime, and a clean 0.49 on 8/8 with stable repeated serving under
   another (parakeet.cpp). The session-reuse bug we chased is therefore a
   *runtime* bug, not a model defect — benchmark the pair, never the model alone.
+- **Serving *granularity* changes the answer, not just the runtime.**
+  Voxtral-Mini-4B-Realtime (Mistral's realtime model, now in audio.cpp)
+  transcribes our full meetings cleanly via whole-file offline **and** via the
+  streaming SSE endpoint (`stream=true`, TTFT ~0.6 s) — but the *offline
+  per-chunk* path we drive our pipeline with returns HTTP 200 and **empty text**
+  on a big fraction of short (~25 s) VAD segments, silently dropping 15–45 % of a
+  meeting in contiguous holes. Minimal repro: a 25 s clip from a dropped region
+  comes back empty; the exact same audio inside a 150 s clip transcribes. Same
+  model, same runtime, same audio — the request *granularity* flips it. If you
+  chunk by VAD/turn and send per-segment requests (a very common pipeline shape),
+  test that path explicitly; on a realtime model, whole-file or streaming may be
+  the only safe way to serve offline.
 - **Automatic language detection is the model-side twin of our trap #1.** The
   multilingual Parakeet TDT v3 silently drifted to English on narrowband French
   meetings (WER 0.93), and unlike our pipeline trap there is no config fix:
@@ -263,7 +276,12 @@ What we take away:
   `max_tokens` in the vendor's own test client silently returning empty results
   on capped-context servers; the audio encoder allocating *outside* vLLM's
   memory budget (OOM at 92 % utilization on 24 GB cards); and a session-reuse
-  bug making a streaming ASR model return empty text from the second request on.
+  bug making a streaming ASR model return empty text from the second request on;
+  a per-family model spec the server must have compiled in
+  (`-DAUDIOCPP_DEPLOYMENT_BUILD=ON`) or discover on disk, or a binary copied out
+  of its source tree refuses to load with `model package spec not found`; and a
+  *realtime* ASR model returning empty text (HTTP 200, no error) on short
+  single-clip offline requests while whole-file and streaming are clean.
   Young runtimes are qualified with the same harness — that is the point of
   having one.
 

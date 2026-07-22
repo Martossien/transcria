@@ -204,7 +204,7 @@ Exemples :
         "--stt-backend",
         choices=["cohere", "cohere_tf5", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
                  # backends SERVIS (runtimes C++ — nécessitent --remote-stt vers le serveur)
-                 "qwen3asr", "nemotron"],
+                 "qwen3asr", "nemotron", "voxtralrt"],
         default="cohere",
         help=(
             "Backend STT demandé au départ (défaut: cohere). "

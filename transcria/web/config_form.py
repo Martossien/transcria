@@ -36,10 +36,10 @@ CONFIG_FORM_SECTIONS: list[dict] = [
             {"path": "models.summary_stt_backend", "label": _l("Backend STT du résumé"), "type": "select",
              "nullable": True,
              "options": ["", "cohere", "whisper", "granite", "parakeet", "voxtral", "kroko", "moss",
-                         "qwen3asr", "nemotron"],
+                         "qwen3asr", "nemotron", "voxtralrt"],
              "help": _l("Moteur dédié à la transcription rapide de la phase résumé — vide = même moteur "
-                        "que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron exigent le "
-                        "runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
+                        "que le pipeline. kroko = CPU pur (zéro VRAM) ; qwen3asr/nemotron/voxtralrt exigent "
+                        "le runtime servi audio.cpp/parakeet.cpp (cf. docs/EXTERNAL_STT_RUNTIMES.md).")},
             {"path": "models.diarization_backend", "label": _l("Backend diarisation"), "type": "select",
              "options": ["pyannote", "sortformer", "remote"],
              "help": _l("Détection des locuteurs (pyannote recommandé).")},

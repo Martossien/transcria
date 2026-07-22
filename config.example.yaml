@@ -970,6 +970,7 @@ inference:
       # homonyme déclaré dans resource_node.engines ⇒ démarrage géré automatiquement.
       # qwen3asr:  { url: "http://127.0.0.1:8021/v1", model: "qwen3-asr-1.7b", response_format: "json", fallback_backend: "whisper" }
       # nemotron:  { url: "http://127.0.0.1:8022/v1", model: "nemotron",       response_format: "json", fallback_backend: "parakeet" }
+      # voxtralrt: { url: "http://127.0.0.1:8024/v1", model: "voxtral-mini-4b-rt", response_format: "json", fallback_backend: "whisper" }  # Voxtral 4B Mistral, GGUF audio.cpp
 
 # Config du NŒUD DE RESSOURCES — ou de l'ALL-IN-ONE qui sert ses propres moteurs STT
 # (laisser absent côté frontale split).
@@ -988,4 +989,5 @@ inference:
 #     # poids AVANT de binder le port) — ne JAMAIS l'utiliser pour un vLLM.
 #     - { name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 0, gpu_mem: 0.25, port: 8021 }
 #     - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 0, gpu_mem: 0.10, port: 8022, health_mode: http_any }
+#     - { name: voxtralrt, script: scripts/launch_stt_voxtral.sh, gpu: 0, gpu_mem: 0.20, port: 8024 }  # Voxtral 4B (audio.cpp, /v1/models standard)
 #   # idle_timeout_s > 0 : arrêt automatique du moteur après N secondes d'inactivité (idle-stop). 0 = résident.

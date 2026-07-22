@@ -10,6 +10,7 @@ intégrés, **épinglés sur les commits qualifiés** par notre benchmark de ré
 |---|---|---|---|---|
 | `qwen3asr` | [audio.cpp](https://github.com/0xShug0/audio.cpp) (0xShug0) | Qwen3-ASR-1.7B (Apache-2.0, ~3,9 Go) | **WER 0,421 — 2ᵉ du banc entier**, ~12 s/fenêtre de 5 min | 8021 |
 | `nemotron` | [parakeet.cpp](https://github.com/mudler/parakeet.cpp) (mudler, MIT) | Nemotron 3.5 ASR 0.6B (GGUF f16, 1,4 Go) | **WER 0,492 — ~2 s/fenêtre de 5 min** | 8022 |
+| `voxtralrt` | [audio.cpp](https://github.com/0xShug0/audio.cpp) (0xShug0) | Voxtral-Mini-4B-Realtime (Mistral, Apache-2.0, GGUF Q8_0 ~5,1 Go) | transcription cohérente validée (smoke) — **WER réunions réelles à mesurer** | 8024 |
 
 Les backends natifs (whisper, cohere, voxtral, kroko, moss…) restent le repli — les
 runtimes servis sont **additifs, jamais une dépendance dure**.
@@ -17,8 +18,11 @@ runtimes servis sont **additifs, jamais une dépendance dure**.
 ## Installation (une commande par runtime, opt-in)
 
 ```bash
-# audio.cpp : clone épinglé + build CUDA + venv outils (+ modèle recommandé)
+# audio.cpp : clone épinglé + build CUDA + venv outils (+ modèle recommandé qwen3)
 venv/bin/python -m transcria.installer.cli audiocpp --with-model
+# GGUF Voxtral (facultatif, backend voxtralrt) via le model_manager d'audio.cpp :
+#   runtimes/audiocpp/venv/bin/python runtimes/audiocpp/src/tools/model_manager.py \
+#       install voxtral_realtime   (cwd = runtimes/audiocpp/src ; ou page « Modèles »)
 
 # parakeet.cpp : clone épinglé (submodules ggml) + build CUDA
 venv/bin/python -m transcria.installer.cli parakeetcpp
@@ -57,12 +61,18 @@ inference:
         model: "nemotron"
         response_format: "json"
         fallback_backend: "parakeet"
+      voxtralrt:                   # Voxtral-Mini-4B-Realtime (Mistral), même runtime audio.cpp
+        url: "http://127.0.0.1:8024/v1"
+        model: "voxtral-mini-4b-rt"
+        response_format: "json"
+        fallback_backend: "whisper"
 
 resource_node:                     # all-in-one : la machine EST son nœud de ressources
   engines:
     - { name: qwen3asr, script: scripts/launch_stt_qwen3asr.sh, gpu: 5, gpu_mem: 0.25, port: 8021 }
     - { name: nemotron, script: scripts/launch_stt_nemotron.sh, gpu: 5, gpu_mem: 0.10, port: 8022,
         health_path: /health }     # parakeet-server n'a pas de /v1/models
+    - { name: voxtralrt, script: scripts/launch_stt_voxtral.sh, gpu: 5, gpu_mem: 0.20, port: 8024 }
 ```
 
 **Démarrage automatique** : en all-in-one, une URL loopback + un moteur homonyme déclaré
@@ -85,6 +95,15 @@ tête des scripts de lancement).
   `STT_FAMILY=nemotron_asr STT_MODEL=…/nemotron-3.5-asr-streaming-0.6b STT_SERVED_NAME=nemotron
   STT_PORT=8022 ./scripts/launch_stt_qwen3asr.sh` (modèle : `model_manager.py install nemotron_asr`
   dans le venv du runtime). L'API expose alors `/v1/models` (pas besoin de `health_path`).
+- **Voxtral via audio.cpp** (backend `voxtralrt`) : Voxtral-Mini-4B-Realtime (Mistral,
+  Apache-2.0), servi en GGUF Q8_0 par le MÊME binaire audio.cpp (famille `voxtral_realtime`,
+  lanceur dédié `scripts/launch_stt_voxtral.sh`, port 8024). Le modèle supporte le mode
+  `streaming` en amont — non exploité ici (transcription batch), mais utile pour un futur
+  chantier temps réel.
+- **Spec de modèle (audio.cpp ≥ `edbdf586`)** : le serveur résout un « model spec » par
+  famille. Le binaire est donc compilé avec `AUDIOCPP_DEPLOYMENT_BUILD=ON` (specs `.json`
+  embarqués) pour rester auto-suffisant une fois copié hors de `src/` (installeur **et** les
+  3 Dockerfiles) — sinon `model package spec not found for family '<famille>'` au démarrage.
 - **Santé** : `health_path`/`health_mode` par moteur dans le manifeste ; le warning
   `AsrClient.health` (« modèle absent de /models ») est attendu et non bloquant pour
   parakeet-server.
