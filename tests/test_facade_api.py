@@ -150,6 +150,16 @@ class TestTranscriptions:
         assert r.status_code == 413
         assert "/v1/audio/ingest" in r.get_json()["error"]
 
+    def test_enregistrement_trop_long_413(self, client, facade_on, op_token, monkeypatch):
+        # Durée sondée > plafond → 413 (le vrai garde : la taille seule laisserait passer
+        # un opus compressé de plusieurs heures sous 25 Mo).
+        monkeypatch.setattr(facade_api.AudioAnalyzer, "analyze",
+                            staticmethod(lambda p: {"duration_seconds": 99999.0}))
+        r = client.post("/v1/audio/transcriptions", headers=_auth(op_token),
+                        data=_wav(), content_type="multipart/form-data")
+        assert r.status_code == 413
+        assert "/v1/audio/ingest" in r.get_json()["error"]
+
     def test_moteur_indisponible_503(self, client, facade_on, op_token, monkeypatch):
         def _boom(cfg, backend=None):
             raise RuntimeError("modèle absent")

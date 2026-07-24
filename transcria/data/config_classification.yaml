@@ -208,6 +208,7 @@ deferred:
 - kroko.tail_padding_s
 - kroko.variant
 - live.facade.max_sync_audio_mb
+- live.facade.max_sync_duration_s
 - moss.collapse_repetition_loops
 - moss.enabled
 - moss.gap_alert_s

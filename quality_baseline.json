@@ -165,7 +165,7 @@
   "transcria.web.admin_routes": 18,
   "transcria.web.downloads_api": 12,
   "transcria.web.editor_routes": 13,
-  "transcria.web.facade_api": 16,
+  "transcria.web.facade_api": 17,
   "transcria.web.health_routes": 6,
   "transcria.web.i18n": 2,
   "transcria.web.i18n_js": 1,

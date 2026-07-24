@@ -29,6 +29,7 @@ from pathlib import Path
 from flask import Response, jsonify, request
 from flask_login import current_user
 
+from transcria.audio.analyzer import AudioAnalyzer
 from transcria.audit.decorator import audit_log
 from transcria.audit.models import AuditAction
 from transcria.auth.permissions import Permission, get_user_permissions
@@ -81,10 +82,13 @@ def facade_transcriptions():
     if not file or not file.filename:
         return jsonify({"error": "Aucun fichier fourni (champ 'file')"}), 400
 
-    # Garde-fou : l'inférence est SYNCHRONE (elle occupe un worker gunicorn sync).
-    # On borne l'endpoint aux extraits courts ; un enregistrement complet doit passer
-    # par /v1/audio/ingest (asynchrone). Taille lue sans charger le flux en mémoire.
-    max_mb = int(cfg.get("live", {}).get("facade", {}).get("max_sync_audio_mb", 25))
+    # Garde-fou : l'inférence est SYNCHRONE (elle occupe un worker gunicorn sync). On
+    # borne l'endpoint aux extraits COURTS ; un enregistrement complet doit passer par
+    # /v1/audio/ingest (asynchrone). La TAILLE est un garde grossier (lue sans charger le
+    # flux) : nécessaire mais insuffisant — un conteneur opus de 25 Mo décode des heures.
+    # Le VRAI garde est la DURÉE (sondée plus bas, avant l'inférence).
+    facade_cfg = cfg.get("live", {}).get("facade", {})
+    max_mb = int(facade_cfg.get("max_sync_audio_mb", 25))
     file.stream.seek(0, os.SEEK_END)
     size_bytes = file.stream.tell()
     file.stream.seek(0)
@@ -112,6 +116,17 @@ def facade_transcriptions():
     try:
         tmp.write(file.read())
         tmp.close()
+        # Garde de DURÉE (le vrai) : sonde ffprobe avant de lancer l'inférence synchrone.
+        # Best-effort : si ffprobe échoue (format inconnu → duration 0), on laisse passer
+        # (la borne de taille s'applique déjà) plutôt que rejeter un audio pourtant valide.
+        max_duration_s = int(facade_cfg.get("max_sync_duration_s", 600))
+        duration_s = float(AudioAnalyzer.analyze(Path(tmp.name)).get("duration_seconds") or 0.0)
+        if duration_s > max_duration_s:
+            return jsonify({
+                "error": f"Enregistrement trop long pour la transcription synchrone "
+                         f"({int(duration_s)} s > {max_duration_s} s). "
+                         f"Utilisez POST /v1/audio/ingest (asynchrone) pour un enregistrement complet.",
+            }), 413
         transcriber = create_transcriber(cfg, backend=backend)
         segments = transcriber.transcribe(Path(tmp.name), language=language)
     except Exception:  # noqa: BLE001 — moteur indispo/échec → 503 propre, pas un 500 opaque

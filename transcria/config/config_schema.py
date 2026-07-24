@@ -74,6 +74,9 @@ def _check_live(cfg: dict, r: ValidationResult) -> None:
             if "max_sync_audio_mb" in facade:
                 _check_int_range(facade, "max_sync_audio_mb",
                                  "live.facade.max_sync_audio_mb", 1, 500, r)
+            if "max_sync_duration_s" in facade:
+                _check_int_range(facade, "max_sync_duration_s",
+                                 "live.facade.max_sync_duration_s", 1, 86400, r)
 
 
 # Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale

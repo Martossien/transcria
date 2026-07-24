@@ -139,11 +139,15 @@ _DEFAULT_CONFIG = {
         # (404). Rend TranscrIA feedable par les connecteurs de réunion et le micro.
         "facade": {
             "enabled": False,
-            # Plafond de l'endpoint STT SYNCHRONE (/v1/audio/transcriptions) : il
+            # Plafonds de l'endpoint STT SYNCHRONE (/v1/audio/transcriptions) : il
             # occupe un worker gunicorn sync le temps de l'inférence, donc réservé
-            # aux extraits courts (dictée, fenêtre live). Au-delà → 413 + renvoi vers
-            # /v1/audio/ingest (asynchrone, mise en file). 25 Mo = défaut OpenAI.
+            # aux extraits COURTS (dictée, fenêtre live). Au-delà → 413 + renvoi vers
+            # /v1/audio/ingest (asynchrone, mise en file).
+            # - taille : garde grossier (25 Mo = défaut OpenAI) — MAIS un conteneur
+            #   compressé (opus) de 25 Mo peut décoder des heures : proxy insuffisant ;
+            # - durée : le VRAI garde (sonde ffprobe avant inférence). 600 s = 10 min.
             "max_sync_audio_mb": 25,
+            "max_sync_duration_s": 600,
         },
     },
     "cohere": {

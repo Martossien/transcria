@@ -53,3 +53,13 @@ def test_max_sync_audio_non_entier_erreur():
     cfg = get_default_config()
     cfg["live"]["facade"]["max_sync_audio_mb"] = "gros"
     assert _live_errors(cfg)
+
+
+def test_max_sync_duration_defaut_600():
+    assert get_default_config()["live"]["facade"]["max_sync_duration_s"] == 600
+
+
+def test_max_sync_duration_hors_bornes_erreur():
+    cfg = get_default_config()
+    cfg["live"]["facade"]["max_sync_duration_s"] = 0
+    assert _live_errors(cfg)
