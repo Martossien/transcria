@@ -5,7 +5,6 @@ Les helpers privés de ce module ne servent que ses propres pages ; ce qui est
 partagé avec d'autres modules de routes vit dans ``job_access`` / ``lexicon_views``
 / ``request_helpers``.
 """
-import json
 import logging
 import math
 
@@ -647,7 +646,9 @@ def job_wizard(job_id: str):
         meeting_types=builtin_meeting_types,
         meeting_type_display=meeting_type_display,
         custom_meeting_types=custom_meeting_types,
-        type_specific_fields_json=json.dumps(merged_type_fields, ensure_ascii=False),
+        # Dict brut → `| tojson` dans le template (échappe </script> et &, contrairement
+        # à json.dumps|safe qui laissait un XSS stocké via les noms de types de réunion).
+        type_specific_fields=merged_type_fields,
         lexicon_categories=LEXICON_CATEGORIES,
         lexicon_priorities=LEXICON_PRIORITIES,
         promote_lexicons=promote_lexicons_view(),

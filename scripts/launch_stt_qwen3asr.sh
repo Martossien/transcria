@@ -15,7 +15,7 @@
 #   STT_GPU=0            GPU dédié (CUDA_VISIBLE_DEVICES — le JSON serveur vise
 #                        toujours device 0, index RELATIF au masque)
 #   STT_PORT=8021        port HTTP (hors llm_cleanup_ports)
-#   STT_MODEL            chemin du modèle (défaut: runtimes/audiocpp/models/Qwen3-ASR-1.7B-hf)
+#   STT_MODEL            chemin du modèle (défaut: runtimes/audiocpp/src/models/Qwen3-ASR-1.7B-hf)
 #   STT_SERVED_NAME=qwen3-asr-1.7b   id servi (doit matcher inference.stt.backends.qwen3asr.model)
 #
 # BON À SAVOIR
@@ -62,10 +62,14 @@ fi
 # Config serveur générée par le helper Python TESTABLE (pas de heredoc JSON bash).
 CFG_JSON="$AUDIOCPP_HOME/etc/server_${STT_PORT}.json"
 mkdir -p "$AUDIOCPP_HOME/etc"
-"$REPO_ROOT/venv/bin/python" -m transcria.installer.audiocpp_phase \
+if ! "$REPO_ROOT/venv/bin/python" -m transcria.installer.audiocpp_phase \
     --emit-config --port "$STT_PORT" --host "$STT_HOST" \
     --model-id "$STT_SERVED_NAME" --model-path "$STT_MODEL" \
-    --family "$STT_FAMILY" > "$CFG_JSON"
+    --family "$STT_FAMILY" > "$CFG_JSON"; then
+    echo "[$STT_LABEL] ERREUR : émission de la config serveur échouée (venv/import ?)." >&2
+    rm -f "$CFG_JSON"
+    exit 1
+fi
 
 STT_SERVE_CMD=("$AUDIOCPP_HOME/bin/audiocpp_server" --config "$CFG_JSON")
 STT_RESERVE_PORTS=("$STT_PORT")

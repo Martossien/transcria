@@ -215,7 +215,25 @@ class TestEtape4:
         assert f'<option value="{name}"' in html          # dans le sélecteur de l'étape 4
         assert "Mes types & partagés" in html              # optgroup des personnalisés (i18n : gettext rend un & littéral)
         # Les champs du type personnalisé sont câblés pour le JS de l'étape 4.
-        assert "Filiale concernée" in html
+        # Label échappé par |tojson (é → é dans l'îlot, re-décodé côté JS).
+        assert "Filiale concern" in html
+
+    def test_type_specific_fields_json_echappe_les_balises_script(self, admin_client, job_id):
+        # Non-régression XSS : le label d'un champ de type est injecté dans l'îlot
+        # window.__TYPE_SPECIFIC_FIELDS__. Avec json.dumps|safe, un </script> le
+        # rompait ; avec |tojson il est échappé (</script>).
+        name = _name("XSS")
+        payload = "</script><img src=x onerror=alert(1)>"
+        assert admin_client.post(
+            "/api/meeting-types",
+            json=_definition(name, fields=[{"key": "f", "label": payload, "type": "text"}]),
+        ).status_code == 201
+        html = admin_client.get(f"/jobs/{job_id}").data.decode()
+        # La séquence brute qui romprait l'îlot ne doit JAMAIS apparaître.
+        assert "</script><img src=x" not in html
+        # Elle est présente sous forme échappée dans le JSON de l'îlot.
+        assert "__TYPE_SPECIFIC_FIELDS__" in html
+        assert "\\u003c/script\\u003e" in html or "\\u003cimg" in html
 
     def test_context_materialise_la_fiche(self, admin_client, app, job_id):
         name = _name("COMEX")

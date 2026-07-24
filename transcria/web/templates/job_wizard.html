@@ -82,7 +82,7 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce() }}">
 window.__JOB_ID__ = "{{ job.id }}";
-window.__TYPE_SPECIFIC_FIELDS__ = {{ type_specific_fields_json | safe }};
+window.__TYPE_SPECIFIC_FIELDS__ = {{ type_specific_fields | tojson }};
 window.__TYPE_SPECIFIC_DATA__ = {{ (meeting.type_specific_data | tojson) if meeting.type_specific_data else '{}' }};
 window.__WIZARD_LLM_PARTICIPANTS__ = {{ meeting.get('participants_detectes', '').split('\n')|map('trim')|reject('eq', '')|list|tojson }};
 window.__WIZARD_LEX_TERMS__ = {{ (meeting.termes_suspects if (meeting.get('termes_suspects') and lexicon|length == 0) else []) | tojson }};

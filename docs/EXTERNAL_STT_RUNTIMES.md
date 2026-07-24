@@ -32,7 +32,8 @@ venv/bin/python -m transcria.installer.cli parakeetcpp
 ```
 
 Les runtimes vivent sous `runtimes/<nom>/{src,bin,COMMIT}` (surchargeable
-`TRANSCRIA_RUNTIMES_DIR`). Idempotent : relancer = no-op, `--force` reconstruit.
+`TRANSCRIA_RUNTIMES_DIR`). Idempotent : relancer = no-op, `--force` reconstruit le runtime (les modèles
+déjà téléchargés sous `src/models` sont préservés).
 Le build utilise `CMAKE_CUDA_ARCHITECTURES=native` (l'arch du GPU de la machine —
 un défaut inadapté produit des kernels qui plantent à l'inférence).
 

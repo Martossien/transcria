@@ -45,8 +45,14 @@
       var method = (init.method || (typeof input !== "string" && input && input.method) || "GET").toUpperCase();
       if (!(method in UNSAFE)) {
         // N'ajouter le jeton que pour une cible même-origine (jamais l'exfiltrer).
+        // Résolution d'URL réelle (couvre //host, préfixes trompeurs ex. origin.evil.com).
         var url = (typeof input === "string") ? input : (input && input.url) || "";
-        var sameOrigin = !/^https?:\/\//i.test(url) || url.indexOf(window.location.origin) === 0;
+        var sameOrigin;
+        try {
+          sameOrigin = new URL(url, window.location.href).origin === window.location.origin;
+        } catch (err) {
+          sameOrigin = false;
+        }
         if (sameOrigin) {
           var headers = new Headers(init.headers || (typeof input !== "string" && input && input.headers) || {});
           if (!headers.has("X-CSRFToken")) headers.set("X-CSRFToken", TOKEN);

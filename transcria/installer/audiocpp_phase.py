@@ -121,6 +121,14 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
 
     # 1) Sources épinglées (clone frais si le checkout ne correspond pas / --force).
     if plan.force and src.exists():
+        # --force reconstruit le RUNTIME, jamais les POIDS : src/models porte les
+        # modèles téléchargés via le model_manager (Qwen3 ~3,9 Go, Voxtral ~5,1 Go).
+        # Piège vécu : un rmtree(src) nu les supprimait silencieusement.
+        models_keep = home / "models.keep"
+        if (src / "models").exists():
+            if models_keep.exists():
+                shutil.rmtree(models_keep)
+            shutil.move(str(src / "models"), str(models_keep))
         shutil.rmtree(src)
     if not (src / ".git").exists():
         console.info(f"Clone audio.cpp → {src}")
@@ -133,6 +141,18 @@ def apply_audiocpp(plan: AudiocppPlan, *, console, runner: Runner) -> None:
         runner(["git", "-C", str(src), "checkout", plan.commit])
     except Exception as exc:  # noqa: BLE001
         raise AudiocppPhaseError(f"checkout du commit épinglé {plan.commit[:12]} échoué : {exc}") from exc
+
+    # Restaurer les poids préservés par --force (voir plus haut).
+    models_keep = home / "models.keep"
+    if models_keep.exists():
+        target = src / "models"
+        target.mkdir(parents=True, exist_ok=True)
+        for entry in models_keep.iterdir():
+            dest = target / entry.name
+            if not dest.exists():
+                shutil.move(str(entry), str(dest))
+        shutil.rmtree(models_keep, ignore_errors=True)
+        console.ok("Modèles préservés à travers --force (src/models restauré)")
 
     # 2) Compilation CUDA (audiocpp_server uniquement).
     jobs = plan.jobs or (os.cpu_count() or 4)

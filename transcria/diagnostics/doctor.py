@@ -577,7 +577,14 @@ def check_served_stt_runtimes(cfg: dict) -> CheckResult:
     runtimes_dir = resolve_runtimes_dir()
     known = {
         "qwen3asr": ("audiocpp", lambda: audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)),
-        "voxtralrt": ("audiocpp", lambda: audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)),
+        # voxtralrt partage le runtime audiocpp mais exige AUSSI son GGUF : un
+        # runtime provisionné pour qwen3asr sans le paquet voxtral_realtime
+        # donnerait sinon un faux OK (crash au premier lancement du moteur).
+        "voxtralrt": ("audiocpp", lambda: (
+            audiocpp_is_complete(audiocpp_home(runtimes_dir), AUDIOCPP_PINNED_COMMIT)
+            and (audiocpp_home(runtimes_dir) / "src" / "models"
+                 / "Voxtral-Mini-4B-Realtime-2602-GGUF").is_dir()
+        )),
         "nemotron": ("parakeetcpp", lambda: parakeetcpp_is_complete(parakeetcpp_home(runtimes_dir), PARAKEETCPP_PINNED_COMMIT)),
     }
     concerned = sorted(declared & set(known))

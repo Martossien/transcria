@@ -244,9 +244,9 @@ What we take away:
   *runtime* bug, not a model defect — benchmark the pair, never the model alone.
 - **Serving *granularity* changes the answer, not just the runtime.**
   Voxtral-Mini-4B-Realtime (Mistral's realtime model, now in audio.cpp)
-  transcribes our full meetings cleanly via whole-file offline **and** via the
-  streaming SSE endpoint (`stream=true`, TTFT ~0.6 s) — but the *offline
-  per-chunk* path we drive our pipeline with returns HTTP 200 and **empty text**
+  covers a 5-min window cleanly via whole-file offline **and** via the
+  streaming SSE endpoint (`stream=true`, TTFT ~1.4 s on a full meeting) — but
+  the *offline per-chunk* path we drive our pipeline with returns HTTP 200 and **empty text**
   on a big fraction of short (~25 s) VAD segments, silently dropping 15–45 % of a
   meeting in contiguous holes. Minimal repro: a 25 s clip from a dropped region
   comes back empty; the exact same audio inside a 150 s clip transcribes. Same

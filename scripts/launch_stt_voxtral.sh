@@ -21,7 +21,7 @@
 #   STT_GPU=0            GPU dédié (CUDA_VISIBLE_DEVICES — le JSON serveur vise
 #                        toujours device 0, index RELATIF au masque)
 #   STT_PORT=8024        port HTTP (hors llm_cleanup_ports ; distinct de qwen3asr)
-#   STT_MODEL            chemin du GGUF (défaut: runtimes/audiocpp/models/
+#   STT_MODEL            chemin du GGUF (défaut: runtimes/audiocpp/src/models/
 #                        Voxtral-Mini-4B-Realtime-2602-GGUF/…q8_0.gguf)
 #   STT_SERVED_NAME=voxtral-mini-4b-rt   id servi (doit matcher inference.stt.backends.voxtralrt.model)
 #
@@ -65,10 +65,14 @@ fi
 # Config serveur générée par le helper Python TESTABLE (pas de heredoc JSON bash).
 CFG_JSON="$AUDIOCPP_HOME/etc/server_${STT_PORT}.json"
 mkdir -p "$AUDIOCPP_HOME/etc"
-"$REPO_ROOT/venv/bin/python" -m transcria.installer.audiocpp_phase \
+if ! "$REPO_ROOT/venv/bin/python" -m transcria.installer.audiocpp_phase \
     --emit-config --port "$STT_PORT" --host "$STT_HOST" \
     --model-id "$STT_SERVED_NAME" --model-path "$STT_MODEL" \
-    --family "$STT_FAMILY" > "$CFG_JSON"
+    --family "$STT_FAMILY" > "$CFG_JSON"; then
+    echo "[$STT_LABEL] ERREUR : émission de la config serveur échouée (venv/import ?)." >&2
+    rm -f "$CFG_JSON"
+    exit 1
+fi
 
 STT_SERVE_CMD=("$AUDIOCPP_HOME/bin/audiocpp_server" --config "$CFG_JSON")
 STT_RESERVE_PORTS=("$STT_PORT")
