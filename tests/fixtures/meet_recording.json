@@ -1,0 +1,11 @@
+{
+  "name": "conferenceRecords/conf-abc/recordings/rec-xyz",
+  "state": "FILE_GENERATED",
+  "startTime": "2026-07-24T14:30:00Z",
+  "endTime": "2026-07-24T15:30:00Z",
+  "space": "spaces/space-777",
+  "driveDestination": {
+    "file": "drive-file-999",
+    "exportUri": "https://drive.google.com/file/d/drive-file-999/view"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "value": [
+    {
+      "subscriptionId": "sub-123",
+      "changeType": "created",
+      "resource": "communications/onlineMeetings('MSpORGmeeting')/recordings('REC-789')",
+      "resourceData": {
+        "@odata.type": "#microsoft.graph.callRecording",
+        "id": "REC-789",
+        "meetingId": "MSpORGmeeting",
+        "meetingOrganizerId": "org-aad-456"
+      }
+    }
+  ]
+}

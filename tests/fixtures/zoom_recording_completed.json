@@ -1,0 +1,44 @@
+{
+  "event": "recording.completed",
+  "event_ts": 1784918039000,
+  "download_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.sample.token",
+  "payload": {
+    "account_id": "acct-ABC123",
+    "object": {
+      "uuid": "aB3dEf9/gHiJkLmNoPq==",
+      "id": 89012345678,
+      "host_id": "host-XYZ789",
+      "topic": "Comité hebdomadaire",
+      "type": 2,
+      "start_time": "2026-07-24T14:30:00Z",
+      "timezone": "Europe/Paris",
+      "duration": 60,
+      "total_size": 20480000,
+      "recording_count": 2,
+      "recording_files": [
+        {
+          "id": "file-audio-001",
+          "meeting_id": "aB3dEf9/gHiJkLmNoPq==",
+          "recording_start": "2026-07-24T14:30:00Z",
+          "recording_end": "2026-07-24T15:30:00Z",
+          "file_type": "M4A",
+          "file_extension": "M4A",
+          "file_size": 5120000,
+          "download_url": "https://zoom.us/rec/download/file-audio-001",
+          "status": "completed",
+          "recording_type": "audio_only"
+        },
+        {
+          "id": "file-video-002",
+          "meeting_id": "aB3dEf9/gHiJkLmNoPq==",
+          "file_type": "MP4",
+          "file_extension": "MP4",
+          "file_size": 15360000,
+          "download_url": "https://zoom.us/rec/download/file-video-002",
+          "status": "completed",
+          "recording_type": "shared_screen_with_speaker_view"
+        }
+      ]
+    }
+  }
+}
