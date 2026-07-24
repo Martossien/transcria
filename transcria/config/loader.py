@@ -137,7 +137,14 @@ _DEFAULT_CONFIG = {
         # Façade STT keystone : POST /v1/audio/transcriptions (OpenAI-audio) +
         # ingestion fichier POST /v1/audio/ingest (→ job). false = endpoints absents
         # (404). Rend TranscrIA feedable par les connecteurs de réunion et le micro.
-        "facade": {"enabled": False},
+        "facade": {
+            "enabled": False,
+            # Plafond de l'endpoint STT SYNCHRONE (/v1/audio/transcriptions) : il
+            # occupe un worker gunicorn sync le temps de l'inférence, donc réservé
+            # aux extraits courts (dictée, fenêtre live). Au-delà → 413 + renvoi vers
+            # /v1/audio/ingest (asynchrone, mise en file). 25 Mo = défaut OpenAI.
+            "max_sync_audio_mb": 25,
+        },
     },
     "cohere": {
         "chunk_length_s": 30,

@@ -81,6 +81,20 @@ def facade_transcriptions():
     if not file or not file.filename:
         return jsonify({"error": "Aucun fichier fourni (champ 'file')"}), 400
 
+    # Garde-fou : l'inférence est SYNCHRONE (elle occupe un worker gunicorn sync).
+    # On borne l'endpoint aux extraits courts ; un enregistrement complet doit passer
+    # par /v1/audio/ingest (asynchrone). Taille lue sans charger le flux en mémoire.
+    max_mb = int(cfg.get("live", {}).get("facade", {}).get("max_sync_audio_mb", 25))
+    file.stream.seek(0, os.SEEK_END)
+    size_bytes = file.stream.tell()
+    file.stream.seek(0)
+    if size_bytes > max_mb * 1024 * 1024:
+        return jsonify({
+            "error": f"Fichier trop volumineux pour la transcription synchrone "
+                     f"({size_bytes // (1024 * 1024)} Mo > {max_mb} Mo). "
+                     f"Utilisez POST /v1/audio/ingest (asynchrone) pour un enregistrement complet.",
+        }), 413
+
     response_format = request.form.get("response_format") or facade_format.DEFAULT_RESPONSE_FORMAT
     if response_format not in facade_format.RESPONSE_FORMATS:
         return jsonify({

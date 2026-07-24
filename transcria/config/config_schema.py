@@ -71,6 +71,9 @@ def _check_live(cfg: dict, r: ValidationResult) -> None:
             r.add_error("live.facade: doit être un objet YAML")
         else:
             _check_bool(facade, "enabled", "live.facade.enabled", r)
+            if "max_sync_audio_mb" in facade:
+                _check_int_range(facade, "max_sync_audio_mb",
+                                 "live.facade.max_sync_audio_mb", 1, 500, r)
 
 
 # Codes de langue reconnus (allowlist volontairement restreinte : on ne veut pas de locale

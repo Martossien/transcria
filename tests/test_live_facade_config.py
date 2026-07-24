@@ -37,3 +37,19 @@ def test_section_live_absente_toleree():
     cfg = get_default_config()
     cfg.pop("live", None)
     assert _live_errors(cfg) == []
+
+
+def test_max_sync_audio_defaut_25():
+    assert get_default_config()["live"]["facade"]["max_sync_audio_mb"] == 25
+
+
+def test_max_sync_audio_hors_bornes_erreur():
+    cfg = get_default_config()
+    cfg["live"]["facade"]["max_sync_audio_mb"] = 0
+    assert _live_errors(cfg)
+
+
+def test_max_sync_audio_non_entier_erreur():
+    cfg = get_default_config()
+    cfg["live"]["facade"]["max_sync_audio_mb"] = "gros"
+    assert _live_errors(cfg)

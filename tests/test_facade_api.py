@@ -140,6 +140,16 @@ class TestTranscriptions:
         assert r.status_code == 200
         assert r.get_data(as_text=True).startswith("1\n00:00:00,000 -->")
 
+    def test_fichier_trop_gros_413_renvoie_vers_ingest(self, client, facade_on, op_token):
+        from transcria.config import get_config
+        get_config()["live"]["facade"]["max_sync_audio_mb"] = 1
+        big = io.BytesIO(b"\x00" * (2 * 1024 * 1024))  # 2 Mo > plafond 1 Mo
+        r = client.post("/v1/audio/transcriptions", headers=_auth(op_token),
+                        data={"file": (big, "reunion_complete.wav")},
+                        content_type="multipart/form-data")
+        assert r.status_code == 413
+        assert "/v1/audio/ingest" in r.get_json()["error"]
+
     def test_moteur_indisponible_503(self, client, facade_on, op_token, monkeypatch):
         def _boom(cfg, backend=None):
             raise RuntimeError("modèle absent")
